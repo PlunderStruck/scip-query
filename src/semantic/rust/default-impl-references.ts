@@ -17,6 +17,9 @@ const RUST_SIMPLE_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const DEFAULT_TRAIT_CALL = /\bDefault::default\b/g;
 const STRUCT_UPDATE_DEFAULT_CALL = /^\.\.\s*Default::default\b/;
 
+// scip-query: ignore-wrapper — bulk Default-reference resolution shares one
+// source-text cache across definitions and is the batch counterpart to the
+// public per-definition resolver.
 export function rustDefaultImplReferenceMap(
   db: ScipDatabase,
   definitions: readonly IndexedDefinition[],

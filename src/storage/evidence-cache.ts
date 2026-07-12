@@ -368,6 +368,8 @@ export function writeCachedFileEvidence(
   }
 }
 
+// scip-query: ignore-wrapper — transactional batch storage boundary; callers
+// receive the same disable-on-error cache contract as the single-entry writer.
 export function writeCachedFileEvidenceBatch(db: ScipDatabase, entries: readonly FileEvidenceCacheEntry[]): void {
   if (entries.length === 0) return;
   const connection = connectionFor(db);

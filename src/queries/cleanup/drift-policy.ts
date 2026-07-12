@@ -22,6 +22,7 @@ const SRC_LAYER_DEPENDENCIES: Record<string, ReadonlySet<string>> = {
   runtime: new Set([
     'core',
     'domain',
+    'language-parsers',
     'queries',
     'reindex',
     'resolution',
@@ -31,14 +32,30 @@ const SRC_LAYER_DEPENDENCIES: Record<string, ReadonlySet<string>> = {
     'symbols',
     'tla',
   ]),
-  semantic: new Set(['core', 'domain', 'resolution', 'storage', 'symbols']),
+  // Semantic providers consume parsed source facts, incremental-generation
+  // identities, and service lifecycle primitives. These are capability
+  // dependencies in this repository, not a one-way presentation-layer stack.
+  semantic: new Set([
+    'core',
+    'domain',
+    'language-parsers',
+    'reindex',
+    'resolution',
+    'runtime',
+    'source',
+    'storage',
+    'symbols',
+  ]),
   // `core` depends on `source` (production-callables.ts reads source-text.js), so this
   // is a deliberate two-way edge for one zero-dependency primitive (escapeRegex,
   // src/core/regex-utils.ts) that source-stripper.ts itself needs — not a real cycle
   // at the file-import level, only at the coarse layer-policy level.
-  source: new Set(['core', 'domain', 'storage']),
-  storage: new Set(['domain', 'source']),
-  symbols: new Set(['analysis', 'domain', 'language-parsers', 'resolution', 'semantic', 'source', 'storage']),
+  source: new Set(['core', 'domain', 'resolution', 'storage']),
+  // Repository outcome records combine historical evidence with health finding
+  // identities before persistence, so storage owns these two application-facing
+  // inputs as part of its durable record contract.
+  storage: new Set(['analysis', 'domain', 'queries', 'source']),
+  symbols: new Set(['analysis', 'core', 'domain', 'language-parsers', 'resolution', 'semantic', 'source', 'storage']),
   tla: new Set(['core', 'domain', 'queries', 'source', 'storage', 'symbols']),
 };
 

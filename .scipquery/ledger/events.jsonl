@@ -56,3 +56,12 @@
 {"ts":1783816356721,"check":"doc-reference","findingId":"SQF79C6862968E","event":"resolved","commit":"678a4f8c0bbb0d40ccf5b61b572c3af2ec5750c6"}
 {"ts":1783816356721,"check":"co-change-partner","findingId":"SQED73CEBDE24D","event":"resolved","commit":"678a4f8c0bbb0d40ccf5b61b572c3af2ec5750c6"}
 {"ts":1783816356721,"check":"co-change-partner","findingId":"SQ096CE29FEB6A","event":"resolved","commit":"678a4f8c0bbb0d40ccf5b61b572c3af2ec5750c6"}
+{"ts":1783816910394,"check":"twin-partner","findingId":"SQ5C2753A0F006","event":"resolved","commit":"320bbc98f2dba6ba4bbd2794c9f206ad1fcf43e5"}
+{"ts":1783816910394,"check":"doc-reference","findingId":"SQD988442A0245","event":"reopened","commit":"320bbc98f2dba6ba4bbd2794c9f206ad1fcf43e5"}
+{"ts":1783816910394,"check":"co-change-partner","findingId":"SQE648B66B7D21","event":"caught","commit":"320bbc98f2dba6ba4bbd2794c9f206ad1fcf43e5"}
+{"ts":1783816910394,"check":"co-change-partner","findingId":"SQ85EFF217D55A","event":"caught","commit":"320bbc98f2dba6ba4bbd2794c9f206ad1fcf43e5"}
+{"ts":1783816910394,"check":"doc-reference","findingId":"SQDA94458ECE45","event":"caught","commit":"320bbc98f2dba6ba4bbd2794c9f206ad1fcf43e5"}
+{"ts":1783816910394,"check":"doc-reference","findingId":"SQ984FA47AC933","event":"caught","commit":"320bbc98f2dba6ba4bbd2794c9f206ad1fcf43e5"}
+{"ts":1783816910394,"check":"doc-reference","findingId":"SQB320683E70CC","event":"caught","commit":"320bbc98f2dba6ba4bbd2794c9f206ad1fcf43e5"}
+{"ts":1783816910394,"check":"co-change-partner","findingId":"SQ95FA9596A6D2","event":"caught","commit":"320bbc98f2dba6ba4bbd2794c9f206ad1fcf43e5"}
+{"ts":1783816910394,"check":"co-change-partner","findingId":"SQ95FA9596A6D2","event":"suppressed","commit":"320bbc98f2dba6ba4bbd2794c9f206ad1fcf43e5"}

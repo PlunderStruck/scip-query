@@ -83,6 +83,8 @@ export function initializeProfileWorkloadIdentity(input: ProfileWorkloadIdentity
   return identity;
 }
 
+// scip-query: ignore-wrapper — canonical work-identity encoding shared by the
+// workload, subsystem, and evidence-product instrumentation boundaries.
 export function profileWorkIdentity(parts: readonly (string | number | boolean | null)[]): string {
   return createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 24);
 }

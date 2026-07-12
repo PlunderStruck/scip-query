@@ -34,6 +34,8 @@ export function rustScipOccurrenceReferenceMap(
   return result;
 }
 
+// scip-query: ignore-wrapper — public targeted lookup used independently by
+// accuracy tests and semantic fallback composition.
 export function rustScipOccurrenceReferencesForDefinition(
   db: ScipDatabase,
   definition: IndexedDefinition,

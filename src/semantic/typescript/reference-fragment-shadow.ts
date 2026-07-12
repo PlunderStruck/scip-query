@@ -147,6 +147,8 @@ function referencesWithinFiles(
   );
 }
 
+// scip-query: ignore-passthrough — public read side of the TypeScript reference
+// fragment product, paired with materialization and used by cache-contract tests.
 export function readTypeScriptReferenceFragment(
   db: ScipDatabase,
   relativePath: string,

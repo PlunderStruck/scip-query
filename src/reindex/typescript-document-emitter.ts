@@ -501,6 +501,8 @@ function normalizeRelativePath(value: string): string {
   return value.split(sep).join('/').replace(/^\.\//, '');
 }
 
+// scip-query: ignore-passthrough — canonical key operation used at every
+// TypeScript source-file map boundary; the name records why resolution occurs.
 function normalizedAbsolutePath(value: string): string {
   return resolve(value);
 }

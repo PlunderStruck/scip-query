@@ -16,6 +16,8 @@ export interface FileExclusionClassification {
  * sits inside a hard exclusion range. Range-based matching because SCIP
  * fields' start_line often points at the struct's opening line.
  */
+// scip-query: ignore-wrapper — public boolean view of the richer exclusion
+// classifier, retained for query composition and framework-policy tests.
 export function buildFileExclusionPredicate(
   db: ScipDatabase,
 ): (relativePath: string, startLine: number, symbol: string, parentTypeName: string | null) => boolean {

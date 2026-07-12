@@ -67,7 +67,7 @@ export function complexityHotspots(
         calleeMap: index.calleeMap(definitions, { semantic: useSemantic }),
         languageByFile: languages,
         clojureCallableIds: clojureCallableDefinitionIds(db, definitions, languages),
-        branchEstimates: branchEstimatesByDefinition(db, definitions),
+        branchEstimates: branchEstimatesForDefinitions(db, definitions),
       };
     },
     evaluate: (definition, maps) => complexityHotspotForDefinition(definition, maps, minLoc),
@@ -130,13 +130,6 @@ function complexityHotspotForDefinition(
     estimateBasis: branchEstimate.estimateBasis,
     score: Math.round((loc / 50) * (fanIn / 5) * Math.max(fanOut / 5, 1) * Math.max(cyclomatic / 5, 1) * 100) / 100,
   };
-}
-
-function branchEstimatesByDefinition(
-  db: ScipDatabase,
-  definitions: ReadonlyArray<IndexedDefinition>,
-): Map<number, { branches: number; estimateBasis: BranchEstimateBasis }> {
-  return branchEstimatesForDefinitions(db, definitions);
 }
 
 function languageByFile(db: ScipDatabase, definitions: ReadonlyArray<IndexedDefinition>): Map<string, string | null> {

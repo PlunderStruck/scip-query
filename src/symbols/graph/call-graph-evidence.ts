@@ -25,6 +25,7 @@ import type { SemanticCallee } from '../../semantic/types.js';
 import { semanticProviderLanguageForPath } from '../../semantic/provider-cache.js';
 import { rustSemanticEngineIdentity } from '../../semantic/rust/engine-identity.js';
 import { typeScriptSemanticIdentityForFile } from '../../semantic/typescript/semantic-identity-context.js';
+import { semanticDefinitionsByFile } from '../../semantic/definition-groups.js';
 import {
   prefetchedSemanticCalleesForDefinitions,
   semanticCalleeMap,
@@ -336,7 +337,7 @@ function cachedSemanticCalleeMap(
   profileSpan(
     'semantic.callees.cache-scan',
     () => {
-      for (const [relativePath, fileDefinitions] of semanticDefinitionsGroupedByFile(prefetched.misses)) {
+      for (const [relativePath, fileDefinitions] of semanticDefinitionsByFile(prefetched.misses)) {
         if (!semanticProviderLanguageForPath(relativePath)) {
           if (profiling) skippedUnsupportedLanguage += fileDefinitions.length;
           continue;
@@ -486,18 +487,6 @@ export function materializeSemanticCalleeCache(
   definitions: ReadonlyArray<IndexedDefinition | SymbolMatch>,
 ): Map<number, SemanticCallee[]> {
   return cachedSemanticCalleeMap(db, definitions);
-}
-
-function semanticDefinitionsGroupedByFile<T extends Pick<IndexedDefinition | SymbolMatch, 'relativePath'>>(
-  definitions: ReadonlyArray<T>,
-): Map<string, T[]> {
-  const result = new Map<string, T[]>();
-  for (const definition of definitions) {
-    const bucket = result.get(definition.relativePath) ?? [];
-    bucket.push(definition);
-    result.set(definition.relativePath, bucket);
-  }
-  return result;
 }
 
 const TYPESCRIPT_CALLEE_SCHEMA = 'typescript-callees-v1';

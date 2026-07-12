@@ -34,6 +34,7 @@ import {
   recordTypeScriptReferenceFragmentShadow,
 } from './typescript/reference-fragment-shadow.js';
 import { typeScriptSemanticIdentityForFile } from './typescript/semantic-identity-context.js';
+import { semanticDefinitionsByFile } from './definition-groups.js';
 
 export type SemanticEvidenceSlot =
   | 'semantic-references'
@@ -497,18 +498,6 @@ function materializeSemanticReferenceBatch(
     fragmentCacheMisses,
     fragmentComputedFiles,
   };
-}
-
-function semanticDefinitionsByFile<T extends Pick<IndexedDefinition, 'relativePath'>>(
-  definitions: ReadonlyArray<T>,
-): Map<string, T[]> {
-  const result = new Map<string, T[]>();
-  for (const definition of definitions) {
-    const bucket = result.get(definition.relativePath) ?? [];
-    bucket.push(definition);
-    result.set(definition.relativePath, bucket);
-  }
-  return result;
 }
 
 function semanticReferenceCacheFingerprint(

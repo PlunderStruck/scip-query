@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import type { SupportedLanguage } from '../domain/types.js';
+import type { ProjectConfig, SupportedLanguage } from '../domain/types.js';
 import type { HealthReport } from '../queries/index.js';
 import { getIndexerConfig } from '../reindex/indexers.js';
 import { getIndexerDependencyStatus, tryInstallIndexer } from '../reindex/install.js';
@@ -240,7 +240,6 @@ export function planGuidedProjectSetup(input: {
   return { actions };
 }
 
-// scip-query: ignore-extract - setup is a user-facing workflow transcript; the sequence is the behavior.
 export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<ProjectSetupReport> {
   const steps: ProjectSetupStep[] = [];
   const context = resolveCliProjectContext();
@@ -381,143 +380,29 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
   }
   const readyForIndexing = getProjectReadiness(projectRoot, config);
 
-  let reindexResult: ReindexResult | null = null;
-  let postReindexFreshness: IndexFreshness | null = null;
-  if (readyForIndexing.languages.length === 0 || configErrors.length > 0) {
-    addStep(steps, {
-      id: 'reindex',
-      label: 'Index refresh',
-      status: 'skipped',
-      message:
-        readyForIndexing.languages.length === 0
-          ? 'Skipped because no supported languages were detected.'
-          : 'Skipped because config validation has errors.',
-    });
-  } else {
-    const reindexMessages: string[] = [];
-    try {
-      let totalDurationMs = 0;
-      let rebuilt = false;
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        reindexResult = await reindex({
-          projectRoot,
-          languages: readyForIndexing.languages,
-          outputScip: paths.indexPath,
-          outputDb: paths.dbPath,
-          pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces,
-          typescriptProjectMode: config.indexer?.typescript?.projectMode,
-          typescriptProjects: config.indexer?.typescript?.projects,
-          clojureConfigPath: config.indexer?.clojure?.configPath,
-          skipIfUnchanged: true,
-          allowPartial: true,
-          indexerConcurrency: config.indexerConcurrency,
-          trigger: { kind: 'setup', detail: 'scip-query setup' },
-          onStatus: (message) => {
-            reindexMessages.push(message);
-            opts.onStatus?.(message);
-          },
-        });
-        totalDurationMs += reindexResult.durationMs;
-        rebuilt ||= !reindexResult.reused;
-        postReindexFreshness = getIndexFreshness(projectRoot, config, paths);
-        if (attempt === 0 && reindexResult.skipped.length === 0 && postReindexFreshness.state === 'stale') {
-          reindexMessages.push(
-            `Index inputs changed during the first build (${postReindexFreshness.reason}); running one settling refresh.`,
-          );
-          continue;
-        }
-        break;
-      }
-      if (!reindexResult) throw new Error('Setup index refresh produced no result.');
-      const completedReindex = reindexResult;
-      addStep(steps, {
-        id: 'reindex',
-        label: 'Index refresh',
-        status: completedReindex.skipped.length > 0 ? 'warn' : 'ok',
-        message: `${rebuilt ? 'Indexed' : 'Reused'} ${completedReindex.languages.join(', ')} in ${(
-          totalDurationMs / 1000
-        ).toFixed(1)}s.`,
-        details: [
-          ...reindexMessages,
-          ...completedReindex.skipped.map((entry) => `Skipped ${entry.language}: ${entry.reason}`),
-        ],
-      });
-    } catch (error) {
-      addStep(steps, {
-        id: 'reindex',
-        label: 'Index refresh',
-        status: 'failed',
-        message: errorMessage(error),
-        details: reindexMessages,
-      });
-    }
-  }
+  const refreshed = await refreshSetupIndex({
+    projectRoot,
+    paths,
+    config,
+    readiness: readyForIndexing,
+    configHasErrors: configErrors.length > 0,
+    steps,
+    onStatus: opts.onStatus,
+  });
+  const reindexResult = refreshed.reindexResult;
+  const postReindexFreshness = refreshed.freshness;
 
   const watchConfig = resolveWatchConfig(config);
-  let watchService: WatchServiceEnsureResult | null = null;
-  if (readyForIndexing.languages.length === 0) {
-    addStep(steps, {
-      id: 'watch-refresh',
-      label: 'Automatic indexing service',
-      status: 'skipped',
-      message: 'Skipped because no supported languages were detected.',
-    });
-  } else if (configErrors.length > 0) {
-    addStep(steps, {
-      id: 'watch-refresh',
-      label: 'Automatic indexing service',
-      status: 'skipped',
-      message: 'Skipped because config validation has errors.',
-    });
-  } else if (!watchConfig.enabled) {
-    addStep(steps, {
-      id: 'watch-refresh',
-      label: 'Automatic indexing service',
-      status: 'skipped',
-      message: 'Disabled by watch.enabled=false; setup left the explicit opt-out unchanged.',
-    });
-  } else if (reindexResult === null || reindexResult.skipped.length > 0 || postReindexFreshness?.state !== 'fresh') {
-    addStep(steps, {
-      id: 'watch-refresh',
-      label: 'Automatic indexing service',
-      status: 'skipped',
-      message: 'Skipped because the initial refresh did not produce a complete fresh generation.',
-    });
-  } else {
-    try {
-      watchService = ensureWatchService({
-        projectRoot,
-        cacheDir: paths.cacheDir,
-        cliVersion,
-        watchOverrides: watchConfig,
-      });
-      if (watchConfig.idleTimeoutMs > 0 && watchService.state.idleDeadlineAt === undefined) {
-        throw new Error('Automatic indexing service did not publish its configured clean-idle deadline.');
-      }
-      const idlePolicy =
-        watchConfig.idleTimeoutMs === 0
-          ? 'configured to remain running'
-          : `clean-idle exit scheduled for ${watchService.state.idleDeadlineAt}`;
-      addStep(steps, {
-        id: 'watch-refresh',
-        label: 'Automatic indexing service',
-        status: 'ok',
-        message: `${watchService.disposition} pid ${watchService.state.pid}; ${idlePolicy}.`,
-        details: [
-          `watcher=${watchService.state.watcher.state}`,
-          `autoRefresh=${watchConfig.autoRefresh}`,
-          `gitPollMs=${watchConfig.gitPollMs}`,
-        ],
-      });
-    } catch (error) {
-      addStep(steps, {
-        id: 'watch-refresh',
-        label: 'Automatic indexing service',
-        status: 'failed',
-        message: errorMessage(error),
-      });
-    }
-  }
+  const watchService = startSetupWatchService({
+    projectRoot,
+    cacheDir: paths.cacheDir,
+    watchConfig,
+    readiness: readyForIndexing,
+    configHasErrors: configErrors.length > 0,
+    reindexResult,
+    postReindexFreshness,
+    steps,
+  });
 
   const readiness = getProjectReadiness(projectRoot, config);
   const capabilities = getProjectCapabilities(readiness);
@@ -700,6 +585,161 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
   });
   report.verdict = setupVerdict(steps, readiness);
   return report;
+}
+
+interface SetupIndexRefreshInput {
+  projectRoot: string;
+  paths: ReturnType<typeof resolveCliProjectContext>['paths'];
+  config: ProjectConfig;
+  readiness: ProjectReadiness;
+  configHasErrors: boolean;
+  steps: ProjectSetupStep[];
+  onStatus?: (message: string) => void;
+}
+
+async function refreshSetupIndex(
+  input: SetupIndexRefreshInput,
+): Promise<{ reindexResult: ReindexResult | null; freshness: IndexFreshness | null }> {
+  if (input.readiness.languages.length === 0 || input.configHasErrors) {
+    addStep(input.steps, {
+      id: 'reindex',
+      label: 'Index refresh',
+      status: 'skipped',
+      message:
+        input.readiness.languages.length === 0
+          ? 'Skipped because no supported languages were detected.'
+          : 'Skipped because config validation has errors.',
+    });
+    return { reindexResult: null, freshness: null };
+  }
+
+  const messages: string[] = [];
+  let reindexResult: ReindexResult | null = null;
+  let freshness: IndexFreshness | null = null;
+  try {
+    let totalDurationMs = 0;
+    let rebuilt = false;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      reindexResult = await reindex({
+        projectRoot: input.projectRoot,
+        languages: input.readiness.languages,
+        outputScip: input.paths.indexPath,
+        outputDb: input.paths.dbPath,
+        pnpmWorkspaces: input.config.indexer?.typescript?.pnpmWorkspaces,
+        typescriptProjectMode: input.config.indexer?.typescript?.projectMode,
+        typescriptProjects: input.config.indexer?.typescript?.projects,
+        clojureConfigPath: input.config.indexer?.clojure?.configPath,
+        skipIfUnchanged: true,
+        allowPartial: true,
+        indexerConcurrency: input.config.indexerConcurrency,
+        trigger: { kind: 'setup', detail: 'scip-query setup' },
+        onStatus: (message) => {
+          messages.push(message);
+          input.onStatus?.(message);
+        },
+      });
+      totalDurationMs += reindexResult.durationMs;
+      rebuilt ||= !reindexResult.reused;
+      freshness = getIndexFreshness(input.projectRoot, input.config, input.paths);
+      if (attempt === 0 && reindexResult.skipped.length === 0 && freshness.state === 'stale') {
+        messages.push(
+          `Index inputs changed during the first build (${freshness.reason}); running one settling refresh.`,
+        );
+        continue;
+      }
+      break;
+    }
+    if (!reindexResult) throw new Error('Setup index refresh produced no result.');
+    addStep(input.steps, {
+      id: 'reindex',
+      label: 'Index refresh',
+      status: reindexResult.skipped.length > 0 ? 'warn' : 'ok',
+      message: `${rebuilt ? 'Indexed' : 'Reused'} ${reindexResult.languages.join(', ')} in ${(
+        totalDurationMs / 1000
+      ).toFixed(1)}s.`,
+      details: [...messages, ...reindexResult.skipped.map((entry) => `Skipped ${entry.language}: ${entry.reason}`)],
+    });
+  } catch (error) {
+    addStep(input.steps, {
+      id: 'reindex',
+      label: 'Index refresh',
+      status: 'failed',
+      message: errorMessage(error),
+      details: messages,
+    });
+  }
+  return { reindexResult, freshness };
+}
+
+interface SetupWatchServiceInput {
+  projectRoot: string;
+  cacheDir: string;
+  watchConfig: ReturnType<typeof resolveWatchConfig>;
+  readiness: ProjectReadiness;
+  configHasErrors: boolean;
+  reindexResult: ReindexResult | null;
+  postReindexFreshness: IndexFreshness | null;
+  steps: ProjectSetupStep[];
+}
+
+function startSetupWatchService(input: SetupWatchServiceInput): WatchServiceEnsureResult | null {
+  const skippedReason =
+    input.readiness.languages.length === 0
+      ? 'Skipped because no supported languages were detected.'
+      : input.configHasErrors
+        ? 'Skipped because config validation has errors.'
+        : !input.watchConfig.enabled
+          ? 'Disabled by watch.enabled=false; setup left the explicit opt-out unchanged.'
+          : input.reindexResult === null ||
+              input.reindexResult.skipped.length > 0 ||
+              input.postReindexFreshness?.state !== 'fresh'
+            ? 'Skipped because the initial refresh did not produce a complete fresh generation.'
+            : null;
+  if (skippedReason !== null) {
+    addStep(input.steps, {
+      id: 'watch-refresh',
+      label: 'Automatic indexing service',
+      status: 'skipped',
+      message: skippedReason,
+    });
+    return null;
+  }
+
+  try {
+    const watchService = ensureWatchService({
+      projectRoot: input.projectRoot,
+      cacheDir: input.cacheDir,
+      cliVersion,
+      watchOverrides: input.watchConfig,
+    });
+    if (input.watchConfig.idleTimeoutMs > 0 && watchService.state.idleDeadlineAt === undefined) {
+      throw new Error('Automatic indexing service did not publish its configured clean-idle deadline.');
+    }
+    const idlePolicy =
+      input.watchConfig.idleTimeoutMs === 0
+        ? 'configured to remain running'
+        : `clean-idle exit scheduled for ${watchService.state.idleDeadlineAt}`;
+    addStep(input.steps, {
+      id: 'watch-refresh',
+      label: 'Automatic indexing service',
+      status: 'ok',
+      message: `${watchService.disposition} pid ${watchService.state.pid}; ${idlePolicy}.`,
+      details: [
+        `watcher=${watchService.state.watcher.state}`,
+        `autoRefresh=${input.watchConfig.autoRefresh}`,
+        `gitPollMs=${input.watchConfig.gitPollMs}`,
+      ],
+    });
+    return watchService;
+  } catch (error) {
+    addStep(input.steps, {
+      id: 'watch-refresh',
+      label: 'Automatic indexing service',
+      status: 'failed',
+      message: errorMessage(error),
+    });
+    return null;
+  }
 }
 
 export function renderProjectSetupReport(report: ProjectSetupReport): void {

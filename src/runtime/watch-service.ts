@@ -286,6 +286,8 @@ export function readWatchServiceState(statePath: string): WatchServiceState | nu
   }
 }
 
+// scip-query: ignore-passthrough — protocol writer keeps watch-state callers
+// on the validated service contract instead of its JSON storage mechanism.
 export function writeWatchServiceState(statePath: string, state: WatchServiceState): void {
   writeJsonAtomic(statePath, state);
 }

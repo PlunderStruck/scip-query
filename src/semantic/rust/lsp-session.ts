@@ -277,6 +277,8 @@ export class RustAnalyzerSessionResolver
     }
   }
 
+  // scip-query: ignore-passthrough — lifecycle method fulfills the semantic
+  // resolver contract while the requester owns transport shutdown mechanics.
   dispose(): void {
     this.requester.shutdown();
   }
