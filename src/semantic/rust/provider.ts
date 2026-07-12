@@ -390,6 +390,7 @@ function createWorkerRustSignatureResolver(
   };
 }
 
+// scip-query: ignore-similar — worker operations share transport scaffolding but decode different evidence.
 function resolveReferencesWithWorker(
   projectRoot: string,
   status: (projectRoot: string) => RustSemanticStatus,
@@ -483,6 +484,7 @@ function resolveReferencesWithWorker(
   };
 }
 
+// scip-query: ignore-similar — worker operations share transport scaffolding but decode different evidence.
 function resolveCalleesWithWorker(
   projectRoot: string,
   status: (projectRoot: string) => RustSemanticStatus,

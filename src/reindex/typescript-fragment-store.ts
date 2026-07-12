@@ -513,6 +513,7 @@ function inputPackageVersion(input: { runtime?: TypeScriptDocumentRuntime; packa
   return packageVersion;
 }
 
+// scip-query: ignore-twin — fragment and overlay stores reject different path shapes.
 function validateRelativePath(value: string): string {
   if (!value || value.startsWith('/') || value.startsWith('\\') || value.includes('\\')) {
     throw new Error(`invalid TypeScript SCIP document path: ${value}`);

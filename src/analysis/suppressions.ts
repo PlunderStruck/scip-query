@@ -19,6 +19,7 @@ export type SuppressionCategory =
   | 'drift'
   | 'extract'
   | 'similar'
+  | 'twin'
   | 'uncategorized';
 
 export interface SuppressionInventory {
@@ -45,6 +46,7 @@ function scanSuppressions(db: ScipDatabase): SuppressionInventory {
     drift: 0,
     extract: 0,
     similar: 0,
+    twin: 0,
     uncategorized: 0,
   };
   const byFile = new Map<string, number>();

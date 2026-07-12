@@ -65,3 +65,15 @@
 {"ts":1783816910394,"check":"doc-reference","findingId":"SQB320683E70CC","event":"caught","commit":"320bbc98f2dba6ba4bbd2794c9f206ad1fcf43e5"}
 {"ts":1783816910394,"check":"co-change-partner","findingId":"SQ95FA9596A6D2","event":"caught","commit":"320bbc98f2dba6ba4bbd2794c9f206ad1fcf43e5"}
 {"ts":1783816910394,"check":"co-change-partner","findingId":"SQ95FA9596A6D2","event":"suppressed","commit":"320bbc98f2dba6ba4bbd2794c9f206ad1fcf43e5"}
+{"ts":1783817692510,"check":"doc-reference","findingId":"SQDA94458ECE45","event":"resolved","commit":"7bf94294232266a6d80b8f9b8f4abf63b73a76fc"}
+{"ts":1783817692510,"check":"doc-reference","findingId":"SQ984FA47AC933","event":"resolved","commit":"7bf94294232266a6d80b8f9b8f4abf63b73a76fc"}
+{"ts":1783817692510,"check":"doc-reference","findingId":"SQB320683E70CC","event":"resolved","commit":"7bf94294232266a6d80b8f9b8f4abf63b73a76fc"}
+{"ts":1783817692510,"check":"co-change-partner","findingId":"SQ85EFF217D55A","event":"resolved","commit":"7bf94294232266a6d80b8f9b8f4abf63b73a76fc"}
+{"ts":1783817692510,"check":"co-change-partner","findingId":"SQ95FA9596A6D2","event":"resolved","commit":"7bf94294232266a6d80b8f9b8f4abf63b73a76fc"}
+{"ts":1783817692510,"check":"co-change-partner","findingId":"SQED73CEBDE24D","event":"reopened","commit":"7bf94294232266a6d80b8f9b8f4abf63b73a76fc"}
+{"ts":1783817692510,"check":"co-change-partner","findingId":"SQ096CE29FEB6A","event":"reopened","commit":"7bf94294232266a6d80b8f9b8f4abf63b73a76fc"}
+{"ts":1783817692510,"check":"co-change-partner","findingId":"SQB1554B85DCB4","event":"caught","commit":"7bf94294232266a6d80b8f9b8f4abf63b73a76fc"}
+{"ts":1783817692510,"check":"doc-reference","findingId":"SQB3A7D012C812","event":"caught","commit":"7bf94294232266a6d80b8f9b8f4abf63b73a76fc"}
+{"ts":1783817692510,"check":"doc-reference","findingId":"SQB4B2EEA68C33","event":"caught","commit":"7bf94294232266a6d80b8f9b8f4abf63b73a76fc"}
+{"ts":1783817692510,"check":"doc-reference","findingId":"SQBC670C43066A","event":"caught","commit":"7bf94294232266a6d80b8f9b8f4abf63b73a76fc"}
+{"ts":1783817692510,"check":"doc-reference","findingId":"SQBC670C43066A","event":"suppressed","commit":"7bf94294232266a6d80b8f9b8f4abf63b73a76fc"}

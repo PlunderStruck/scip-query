@@ -219,6 +219,7 @@ export async function runWatchServiceServer(
   }
 }
 
+// scip-query: ignore-twin — independent process loops own their local timer primitive.
 function sleep(durationMs: number): Promise<void> {
   return new Promise((resolvePromise) => setTimeout(resolvePromise, durationMs));
 }

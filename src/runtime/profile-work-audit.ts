@@ -431,6 +431,7 @@ function countOutcome(observations: readonly WorkObservation[], outcome: Profile
   return observations.filter((observation) => observation.outcome === outcome).length;
 }
 
+// scip-query: ignore-twin — audit input and watch-state parsing enforce different fallback semantics.
 function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 }

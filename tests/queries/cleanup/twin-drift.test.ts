@@ -376,6 +376,7 @@ describe('twinDrift (db-backed)', () => {
         '}',
       ],
       'src/b.ts': [
+        '// scip-query: ignore-twin - reviewed near-name implementations are intentionally separate.',
         'export function escapeRegExp(value: string) {',
         "  return value.replace(/[.*+?^${}()\\\\]/g, '\\\\-');",
         '}',
@@ -404,12 +405,10 @@ describe('twinDrift (db-backed)', () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('flags the near-name escapeRegex/escapeRegExp family as divergent', () => {
+  it('suppresses a reviewed near-name family when one member carries ignore-twin', () => {
     const groups = twinDrift(db);
 
-    expect(groups).toHaveLength(1);
-    expect(groups[0]?.relationship).toBe('divergent');
-    expect(groups[0]?.members.map((m) => m.file).sort()).toEqual(['src/a.ts', 'src/b.ts']);
+    expect(groups).toHaveLength(0);
   });
 
   it('does not report a lone unrelated function as a twin', () => {

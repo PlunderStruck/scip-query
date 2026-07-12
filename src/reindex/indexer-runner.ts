@@ -225,6 +225,7 @@ function execFileBuffered(
   });
 }
 
+// scip-query: ignore-twin — indexer scheduling and Rust request scheduling have different failure policy.
 async function runWithConcurrency<T, R>(
   items: readonly T[],
   concurrency: number,

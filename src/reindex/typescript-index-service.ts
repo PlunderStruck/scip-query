@@ -50,6 +50,7 @@ export class TypeScriptIndexServiceHost {
     this.now = opts.now ?? Date.now;
   }
 
+  // scip-query: ignore-twin — protocol hosts share lifecycle names but serve different request schemas.
   handle(baseGeneration: string, request: TypeScriptIndexDocumentRequest): TypeScriptIndexDocumentResponse {
     const startedAt = this.now();
     try {
@@ -89,6 +90,7 @@ export class TypeScriptIndexServiceHost {
     }
   }
 
+  // scip-query: ignore-twin — each service reports its own protocol-specific status envelope.
   status(): TypeScriptIndexServiceStatus {
     const stats = this.active?.emitter.snapshotStats();
     return {
@@ -107,6 +109,7 @@ export class TypeScriptIndexServiceHost {
     };
   }
 
+  // scip-query: ignore-twin — lifecycle name is conventional; owned resources differ by service.
   close(): void {
     this.active = null;
   }

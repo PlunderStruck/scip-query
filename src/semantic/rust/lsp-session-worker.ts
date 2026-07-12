@@ -551,6 +551,7 @@ async function sessionForPaths(
   return session;
 }
 
+// scip-query: ignore-similar — definition and source readiness have different inputs and state transitions.
 async function openNewDefinitionDocuments(
   session: RustAnalyzerSessionState,
   request: RustReferenceWorkerRequest,

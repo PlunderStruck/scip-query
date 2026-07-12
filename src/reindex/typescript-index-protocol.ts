@@ -145,6 +145,7 @@ function isTypeScriptIndexRequest(value: unknown): value is TypeScriptIndexDocum
   );
 }
 
+// scip-query: ignore-twin — protocol validators intentionally stay beside their wire schemas.
 function stringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === 'string' && entry.length > 0);
 }

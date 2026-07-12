@@ -79,6 +79,7 @@ function writeFingerprintCache<Result, Fingerprint>(cachePath: string, fingerpri
   );
 }
 
+// scip-query: ignore-twin — stable encoders are local to independently versioned persisted identities.
 function stableJson(value: unknown): string {
   return JSON.stringify(value);
 }

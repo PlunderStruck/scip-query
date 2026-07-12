@@ -48,7 +48,7 @@ export function getSourceLines(db: ScipDatabase, relativePath: string): readonly
 }
 
 const SUPPRESS_COMMENT_RE =
-  /^\s*(?:\/\/|#|\/\*+|\*)\s*scip-query[\s:-]*ignore(?:[\s:-]+(dead(?:-code)?|stale|wrapper|passthrough|drift|extract|similar))?\b/i;
+  /^\s*(?:\/\/|#|\/\*+|\*)\s*scip-query[\s:-]*ignore(?:[\s:-]+(dead(?:-code)?|stale|wrapper|passthrough|drift|extract|similar|twin))?\b/i;
 
 export function suppressionCommentCategory(line: string): string | null {
   const match = SUPPRESS_COMMENT_RE.exec(line);
@@ -63,16 +63,37 @@ export function suppressionCommentCategory(line: string): string | null {
  * touching the detector.
  */
 export function hasSuppressionComment(db: ScipDatabase, relativePath: string, startLine: number): boolean {
-  if (startLine <= 0) return false;
+  return suppressionCommentsBeforeDefinition(db, relativePath, startLine).length > 0;
+}
+
+export function hasSuppressionCommentCategory(
+  db: ScipDatabase,
+  relativePath: string,
+  startLine: number,
+  category: string,
+): boolean {
+  const expected = category.toLowerCase();
+  return suppressionCommentsBeforeDefinition(db, relativePath, startLine).some(
+    (candidate) => candidate.toLowerCase() === expected,
+  );
+}
+
+function suppressionCommentsBeforeDefinition(db: ScipDatabase, relativePath: string, startLine: number): string[] {
+  if (startLine <= 0) return [];
   const lines = getSourceLines(db, relativePath);
-  if (lines.length === 0) return false;
+  if (lines.length === 0) return [];
+  const categories: string[] = [];
   // Walk upward through contiguous comment / blank / decorator lines so a
   // suppression comment placed two lines above (with a JSDoc in between, etc.)
   // still counts.
   for (let i = startLine - 1; i >= 0 && i >= startLine - 5; i -= 1) {
     const line = (lines[i] ?? '').trim();
     if (line === '') continue;
-    if (suppressionCommentCategory(line) !== null) return true;
+    const category = suppressionCommentCategory(line);
+    if (category !== null) {
+      categories.push(category);
+      continue;
+    }
     // Stop scanning once we hit a non-comment, non-decorator line.
     if (
       !line.startsWith('//') &&
@@ -81,8 +102,8 @@ export function hasSuppressionComment(db: ScipDatabase, relativePath: string, st
       !line.startsWith('@') &&
       !line.startsWith('#')
     ) {
-      return false;
+      return categories;
     }
   }
-  return false;
+  return categories;
 }

@@ -208,6 +208,7 @@ export function inspectWatchService(opts: WatchServiceControllerOptions): WatchS
   };
 }
 
+// scip-query: ignore-similar — starting and stopping share inspection but have opposite transitions.
 export function ensureWatchService(opts: WatchServiceControllerOptions): WatchServiceEnsureResult {
   const runtime = opts.runtime ?? DEFAULT_WATCH_SERVICE_RUNTIME;
   let inspection = inspectWatchService(opts);

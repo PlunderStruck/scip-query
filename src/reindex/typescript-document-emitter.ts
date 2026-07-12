@@ -265,6 +265,7 @@ export class TypeScriptDocumentEmitter {
     this.packages = new runtime.Packages(this.projectRoot);
   }
 
+  // scip-query: ignore-twin — initialization lifecycle belongs to this emitter's compiler state.
   initialize(): TypeScriptDocumentAdvanceResult {
     const startedAt = performance.now();
     const config = this.config ?? readTypeScriptConfig(this.runtime.typescript, this.tsconfigPath);
@@ -327,6 +328,7 @@ export class TypeScriptDocumentEmitter {
     return this.fragments.get(normalizeRelativePath(relativePath)) ?? null;
   }
 
+  // scip-query: ignore-twin — snapshot shape belongs to this emitter's mutable counters.
   snapshotStats(): TypeScriptDocumentEmitterStats {
     return { ...this.stats };
   }
@@ -497,6 +499,7 @@ function normalizedUniqueRelativePaths(paths: readonly string[]): string[] {
   return [...new Set(paths.map(normalizeRelativePath))].sort();
 }
 
+// scip-query: ignore-twin — emitter normalization is narrower than the shared path policy.
 function normalizeRelativePath(value: string): string {
   return value.split(sep).join('/').replace(/^\.\//, '');
 }

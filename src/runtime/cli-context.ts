@@ -122,6 +122,7 @@ export function formatStatus(status: WatcherStatus): string {
   }
 }
 
+// scip-query: ignore-twin — exhaustive guards belong to their individual discriminated unions.
 function assertNever(value: never): never {
   throw new Error(`Unhandled watcher status: ${JSON.stringify(value)}`);
 }

@@ -1713,6 +1713,7 @@ function renderSqliteGeneration(inspection: SqliteGenerationInspection): void {
   if (inspection.reason) console.log(`DB note:   ${inspection.reason}`);
 }
 
+// scip-query: ignore-twin — command rendering and readiness computation expose different views.
 function semanticReadinessEntries(
   readiness: ReturnType<typeof getProjectReadiness>,
 ): NonNullable<ReturnType<typeof getProjectReadiness>['semantics']> {
@@ -1720,6 +1721,7 @@ function semanticReadinessEntries(
   return readiness.semantic ? [readiness.semantic] : [];
 }
 
+// scip-query: ignore-twin — CLI labels and readiness labels have separate presentation contracts.
 function semanticProviderLabel(
   status: NonNullable<ReturnType<typeof getProjectReadiness>['semantics']>[number],
 ): string {

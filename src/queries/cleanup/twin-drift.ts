@@ -8,6 +8,7 @@ import { pathsResolveSame } from '../../source/path-normalization.js';
 import { classifyFile, isBarrel } from '../../analysis/file-classifier.js';
 import { profileSpan } from '../../instrumentation/profile.js';
 import { stripCommentsAndStrings } from '../../source/source-stripper.js';
+import { hasSuppressionCommentCategory } from '../../source/source-text.js';
 import { scipFunctionLikeKindNumbers } from '../../symbols/symbol-kind.js';
 import { applyScanLimit, definitionLoc } from '../query-utils.js';
 import { definitionSourceSnippet, extractImplementationBody } from './duplicate-bodies.js';
@@ -102,7 +103,10 @@ export function allTwinGroups(
 ): TwinGroup[] {
   const { scope, minSimilarity = 0.3, scanLimit } = opts;
   const records = twinDriftRecords(db, { scope, scanLimit });
-  return groupTwins(records, { minSimilarity, isDelegatePair: buildDelegationChecker(db) });
+  return groupTwins(records, { minSimilarity, isDelegatePair: buildDelegationChecker(db) }).filter(
+    (group) =>
+      !group.members.some((member) => hasSuppressionCommentCategory(db, member.file, member.startLine, 'twin')),
+  );
 }
 
 /**
@@ -112,6 +116,7 @@ export function allTwinGroups(
  *   - closest pair similarity in [minSimilarity, 1)                -> 'divergent' (the finding)
  *   - closest pair similarity < minSimilarity                      -> 'homonym' (coincidental name reuse)
  */
+// scip-query: ignore-similar — candidate selection and group classification are separate detector stages.
 export function groupTwins(
   records: readonly TwinDriftRecord[],
   opts: {

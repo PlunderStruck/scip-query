@@ -831,10 +831,12 @@ function positiveInteger(value: number | undefined, fallback: number): number {
   return Math.floor(value);
 }
 
+// scip-query: ignore-twin — local ordering policy is independent from semantic identity construction.
 function sortedUnique(values: Iterable<string>): string[] {
   return unique([...values]).sort((a, b) => a.localeCompare(b));
 }
 
+// scip-query: ignore-twin — generic collection helper is intentionally feature-local.
 function unique<T>(values: Iterable<T>): T[] {
   return [...new Set(values)];
 }

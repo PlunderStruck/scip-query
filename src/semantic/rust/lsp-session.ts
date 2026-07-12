@@ -92,6 +92,7 @@ export class RustAnalyzerSessionResolver
       createConfiguredRustAnalyzerSessionRequester(projectRoot, process.env['SCIP_RUST_SEMANTIC_DURABLE_SESSION']);
   }
 
+  // scip-query: ignore-twin — Rust and TypeScript providers implement different compiler protocols.
   referencesForDefinitions(definitions: readonly IndexedDefinition[]): RustReferenceResolution {
     const baseStatus = this.status(this.projectRoot);
     if (!baseStatus.available || !baseStatus.resolvedBinary) {
@@ -163,6 +164,7 @@ export class RustAnalyzerSessionResolver
     }
   }
 
+  // scip-query: ignore-similar — primary dispatch and fallback recovery share outputs but not control flow.
   referencesAndCalleesForDefinitions(
     referenceDefinitions: readonly IndexedDefinition[],
     calleeDefinitions: readonly IndexedDefinition[],
@@ -277,12 +279,14 @@ export class RustAnalyzerSessionResolver
     }
   }
 
+  // scip-query: ignore-twin — lifecycle name is shared while transport ownership differs by provider.
   // scip-query: ignore-passthrough — lifecycle method fulfills the semantic
   // resolver contract while the requester owns transport shutdown mechanics.
   dispose(): void {
     this.requester.shutdown();
   }
 
+  // scip-query: ignore-similar — general dispatch and import lookup carry different protocol payloads.
   private requestSession(
     rustAnalyzerBinary: string,
     definitions: readonly IndexedDefinition[],
@@ -800,18 +804,22 @@ function rustSessionFailoverReason(error: unknown): RustSessionFailoverReason {
   return 'request';
 }
 
+// scip-query: ignore-twin — typed empty maps are local protocol response constructors.
 function emptyReferenceMap(definitions: readonly IndexedDefinition[]): Map<number, SemanticReference[]> {
   return new Map(definitions.map((definition) => [definition.symbolId, []]));
 }
 
+// scip-query: ignore-twin — typed empty maps are local protocol response constructors.
 function emptyCalleeMap(definitions: readonly IndexedDefinition[]): Map<number, SemanticCallee[]> {
   return new Map(definitions.map((definition) => [definition.symbolId, []]));
 }
 
+// scip-query: ignore-twin — typed empty maps are local protocol response constructors.
 function emptySignatureMap(definitions: readonly IndexedDefinition[]): Map<number, string | null> {
   return new Map(definitions.map((definition) => [definition.symbolId, null]));
 }
 
+// scip-query: ignore-twin — session and worker completion preserve different response ownership.
 function completeCalleeMap(
   definitions: readonly IndexedDefinition[],
   callees: ReadonlyMap<number, SemanticCallee[]>,
@@ -819,6 +827,7 @@ function completeCalleeMap(
   return new Map(definitions.map((definition) => [definition.symbolId, callees.get(definition.symbolId) ?? []]));
 }
 
+// scip-query: ignore-twin — typed completion is intentionally local to signature responses.
 function completeSignatureMap(
   definitions: readonly IndexedDefinition[],
   signatures: ReadonlyMap<number, string | null>,
@@ -851,10 +860,12 @@ function rustSemanticSessionServerUrl(): URL {
   return new URL('./rust-semantic-session-server.js', import.meta.url);
 }
 
+// scip-query: ignore-twin — environment parsing remains beside each transport's defaults.
 function configuredPositiveInteger(value: string | undefined, fallback: number): number {
   return parsePositiveInteger(value) ?? fallback;
 }
 
+// scip-query: ignore-twin — provider and session values have different absence semantics.
 function configuredNonNegativeInteger(value: string | undefined, fallback: number): number {
   return parseNonNegativeInteger(value) ?? fallback;
 }

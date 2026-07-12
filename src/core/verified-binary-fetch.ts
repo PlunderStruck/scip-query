@@ -13,6 +13,7 @@ import { dirname, join } from 'node:path';
  * SQC47EF17D5097 for the prior reasoning.
  */
 
+// scip-query: ignore-twin — checksum helpers intentionally accept different binary input contracts.
 export function sha256(bytes: Buffer): string {
   return createHash('sha256').update(bytes).digest('hex');
 }

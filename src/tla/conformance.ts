@@ -1112,6 +1112,7 @@ export function collectReadsForRange(
   return collectSourceScanReads(db, file, startLine, endLine, aliases, resources, statements, orms);
 }
 
+// scip-query: ignore-similar — read and write collectors intentionally classify opposite effects.
 export function collectAstWrites(
   db: ScipDatabase,
   file: string,

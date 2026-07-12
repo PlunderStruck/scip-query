@@ -274,6 +274,7 @@ const REMIX_ROUTE_EXPORTS = new Set([
 const SVELTEKIT_ROUTE_EXPORTS = new Set(['load', 'actions', 'entries', ...HTTP_METHOD_EXPORTS]);
 const VITE_ROUTE_EXPORTS = new Set(['default']);
 
+// scip-query: ignore-similar — symbol and path entrypoint policies intentionally recognize different cases.
 function isFrameworkDiscoveredEntrypointSymbol(symbol: string, normalized: string): boolean {
   const name = leafName(symbol);
   if (name === '') return false;

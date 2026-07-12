@@ -45,6 +45,8 @@ describe('suppression inventory', () => {
           'export function dead(): string { return wrapper(); }',
           '/* scip-query: ignore-passthrough */',
           'export function passthrough(): string { return dead(); }',
+          '// scip-query: ignore-twin - reviewed same-name group.',
+          'export function twin(): string { return passthrough(); }',
         ].join('\n'),
       );
 
@@ -59,12 +61,13 @@ describe('suppression inventory', () => {
 
       const inventory = getSuppressionInventory(db);
 
-      expect(inventory.total).toBe(3);
-      expect(inventory.byFile.get('src/suppressions.ts')).toBe(3);
+      expect(inventory.total).toBe(4);
+      expect(inventory.byFile.get('src/suppressions.ts')).toBe(4);
       expect(inventory.byCategory.wrapper).toBe(1);
       expect(inventory.byCategory.dead).toBe(1);
       expect(inventory.byCategory.passthrough).toBe(1);
       expect(inventory.byCategory.stale).toBe(0);
+      expect(inventory.byCategory.twin).toBe(1);
     } finally {
       db?.close();
       rmSync(tempDir, { recursive: true, force: true });

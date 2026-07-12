@@ -57,6 +57,7 @@ export class TypeScriptIndexRequester {
     this.runtime = opts.runtime ?? DEFAULT_RUNTIME;
   }
 
+  // scip-query: ignore-twin — request clients target unrelated index, LSP, and semantic protocols.
   request(request: TypeScriptIndexDocumentRequest): RequestedTypeScriptDocuments {
     const servicePaths = watchServicePaths(this.cacheDir);
     const mailboxPaths = typeScriptIndexMailboxPaths(this.cacheDir);
@@ -104,6 +105,7 @@ export class TypeScriptIndexRequester {
   }
 }
 
+// scip-query: ignore-twin — service-state validators enforce different protocol versions and payloads.
 function usableServiceState(
   state: WatchServiceState | null,
   projectRoot: string,
@@ -122,6 +124,7 @@ function usableServiceState(
   );
 }
 
+// scip-query: ignore-twin — response parsers decode different mailbox protocols.
 function parseResponse(
   raw: string,
   id: string,
@@ -204,6 +207,7 @@ function decodeDocumentResponse(value: unknown, producerIdentity: string): Reque
   };
 }
 
+// scip-query: ignore-twin — wire-fragment validation and stored-fragment validation have different contracts.
 function isReferenceFragment(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false;
   const fragment = value as { targetSymbol?: unknown; location?: Record<string, unknown> };
@@ -222,6 +226,7 @@ function decodeBase64(value: string): Uint8Array {
   return bytes;
 }
 
+// scip-query: ignore-twin — timeout defaults belong to their individual transports.
 function configuredTimeoutMs(): number {
   const parsed = Number(process.env['SCIP_TYPESCRIPT_INDEX_TIMEOUT_MS']);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_REQUEST_TIMEOUT_MS;

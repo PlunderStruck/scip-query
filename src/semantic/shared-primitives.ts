@@ -179,6 +179,7 @@ export function semanticImportUsage(db: ScipDatabase, file: string): SemanticImp
   return semanticEvidenceProduct(db).importUsage(file);
 }
 
+// scip-query: ignore-similar — import usage and signatures occupy different semantic evidence slots.
 function buildSemanticImportUsage(db: ScipDatabase, file: string): SemanticImportUsage[] {
   if (semanticProviderLanguageForPath(file) === 'typescript') {
     let state = 'fallback';

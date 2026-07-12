@@ -69,6 +69,7 @@ export function seedTypeScriptReferenceFragments(
   return writes.length;
 }
 
+// scip-query: ignore-similar — shadow recording compares results; materialization produces them.
 export function recordTypeScriptReferenceFragmentShadow(
   db: ScipDatabase,
   definitions: readonly IndexedDefinition[],

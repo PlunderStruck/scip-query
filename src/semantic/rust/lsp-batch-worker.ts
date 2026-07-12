@@ -367,6 +367,7 @@ export async function referencesWithRetry(
   return (await referencesWithCompletion(client, params)).locations;
 }
 
+// scip-query: ignore-similar — retry orchestration and the retry operation have distinct responsibilities.
 export async function referencesWithCompletion(
   client: RustAnalyzerLspClient,
   params: Parameters<RustAnalyzerLspClient['references']>[0],

@@ -188,6 +188,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
     this.sourceFiles = createTypeScriptSourceFiles(db, projects);
   }
 
+  // scip-query: ignore-twin — providers report engine-specific capability evidence.
   availability(): SemanticAvailability {
     return {
       available: true,
@@ -209,6 +210,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
     });
   }
 
+  // scip-query: ignore-twin — providers resolve references through different compiler engines.
   referencesFor(definition: IndexedDefinition): SemanticReference[] {
     return cached(this.referencesCache, definition.symbolId, () => {
       const node = this.nodeForDefinition(definition);
@@ -451,6 +453,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
     visit(compilerSourceFile);
   }
 
+  // scip-query: ignore-similar — hierarchy discovery and reference emission are separate compiler passes.
   private hierarchyTargetsForDefinitions(
     definitions: readonly IndexedDefinition[],
   ): Map<string, Map<number, IndexedDefinition>> {

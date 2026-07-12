@@ -966,6 +966,7 @@ function coChangeHistoryCaveats(pair: { commitScope: CoChangeCommitScope; recenc
   return caveats;
 }
 
+// scip-query: ignore-twin — report-local date formatting is intentionally feature-owned.
 function formatUnixDate(timestampSeconds: number): string {
   if (timestampSeconds <= 0) return 'unknown';
   return new Date(timestampSeconds * 1000).toISOString().slice(0, 10);

@@ -371,6 +371,7 @@ function skipWhitespace(source: string, start: number): number {
   return index;
 }
 
+// scip-query: ignore-twin — Clojure reader masking preserves different syntax from generic source masking.
 function maskPreservingLines(segment: string): string {
   return segment.replace(/[^\r\n]/g, ' ');
 }

@@ -1183,6 +1183,7 @@ function addStep(steps: ProjectSetupStep[], step: ProjectSetupStep): void {
   });
 }
 
+// scip-query: ignore-twin — workflow-local error normalization avoids coupling unrelated modules.
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
