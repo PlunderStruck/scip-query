@@ -2,7 +2,7 @@
 
 Date: 2026-07-10
 Mode: CAMPAIGN
-Status: Core optimization complete; incremental producer follow-ups pending
+Status: Complete; incremental producer and multi-project follow-ups accepted
 
 ## Goal
 
@@ -169,7 +169,7 @@ SHA-256 `06916977b69d5a33e4191be8e19d9da7b26146046beed57cf008db6dabc71c61`.
 
 ### 5. Feed fragments from incremental TypeScript emission
 
-- [ ] **Files:** `src/reindex/typescript-document-emitter.ts`, TypeScript index
+- [x] **Files:** `src/reindex/typescript-document-emitter.ts`, TypeScript index
       protocol/service/requester, fragment generation store, and incremental index
       orchestrator
 - **Source:** `scip-query code tryMaterializeTypeScriptIncrementalIndex --json`.
@@ -187,7 +187,7 @@ SHA-256 `06916977b69d5a33e4191be8e19d9da7b26146046beed57cf008db6dabc71c61`.
 
 ### 6. Extend affected-file updates to multi-project workspaces
 
-- [ ] **Files:** `src/reindex/typescript-incremental-index.ts` and project/index
+- [x] **Files:** `src/reindex/typescript-incremental-index.ts` and project/index
       service fixtures
 - **Source:** `scip-query code planTypeScriptIncrementalUpdate --json`.
 - **Change:** Partition the change manifest by discovered TypeScript project,
@@ -224,8 +224,10 @@ SHA-256 `06916977b69d5a33e4191be8e19d9da7b26146046beed57cf008db6dabc71c61`.
 - Dependency declarations such as React lifecycle members are outside the
   indexed file-owned product and are ignored by `dead`; parity compares the
   project-owned caller-file facts the command can consume.
-- Multi-project incremental indexing is a later deployable phase. The exact
-  scan and exact fragments must not depend on it to ship safely.
+- Multi-project incremental indexing now accepts single-owned-project edits,
+  reuses untouched project documents, and falls back for cross-project or
+  ambiguous closures. Vega_2.0 proved a two-document warm update with 125ms of
+  compiler service work and exact fragment publication.
 
 ## Execution and Ship Order
 

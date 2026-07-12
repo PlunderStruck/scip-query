@@ -689,6 +689,17 @@ opt-out control preserved
 `watch.enabled: false` and did not start the service. The package contained 333
 files in 824,195 bytes at SHA-256 `6d967368…`.
 
+The 2026-07-11 closure added the human-facing terminal behavior that this
+setup path was missing: plain TTY `setup` now opens one arrow-key checklist,
+`--yes` applies recommended defaults without prompting, and full health is an
+explicit optional choice. Vega_2.0 accepted that path, enabled demand-started
+refresh, and then published a single-owned `apps/api` edit as two TypeScript
+documents while reusing its other configured projects. Exact reference
+fragments travel with protocol-v2 document responses and are keyed before the
+next generation is exposed. The installed Rust SCIP boundary remains
+whole-project-only; `scripts/probe-rust-scip-boundary.mjs` records that the
+compiler exposes no affected-document option.
+
 Setup closure passed 1,231 tests across 177 files, lint, typecheck, build,
 generated command docs, reindex, and diff-gate with zero findings or
 advisories.

@@ -1,7 +1,7 @@
 # Incremental Performance and Setup Closure
 
 Date: 2026-07-11
-Status: In progress
+Status: Complete
 
 ## Goal
 
@@ -207,7 +207,7 @@ Machine measurements are appended to
 
 ### 7. Close and publish the program evidence
 
-- [ ] **Files:** this plan, incremental roadmap, exact-reference follow-up,
+- [x] **Files:** this plan, incremental roadmap, exact-reference follow-up,
       benchmark ledger/JSONL, and required repository records.
 - **Source:** final status, benchmark, change-surface, reindex, and diff-gate
   outputs.
@@ -256,3 +256,24 @@ Machine measurements are appended to
 7. Reconcile roadmaps, run the full closure gate, and write the conductor
    self-report with before/after measurements, discriminating probes,
    deviations, and deferrals.
+
+## Closure Report
+
+All seven phases are complete. The setup wizard and Vega enablement shipped;
+exact TypeScript reference fragments now travel with protocol-v2 affected
+documents; single-owned projects in a multi-project workspace publish only
+their affected documents; and the Rust affected-document route was rejected
+because the installed compiler exposes only a whole-project SCIP output.
+
+The decisive warm Vega edit emitted two `apps/api` documents with 125ms of
+compiler-service work, 26ms of conversion, and a 659ms SQLite patch. The local
+settled exact-reference read hit 327/327 fragments in 148ms with byte-identical
+detector output. Post-change work-audit found zero measured avoidable
+milliseconds, so tsserver and another native process remain rejected.
+
+Final verification passed 1,324 tests in 189 files, typecheck, lint/format,
+build/declarations, package dry-run, packed installation (`0.15.0`), reindex,
+and diff-gate with zero blocking findings. The one advisory cites
+`docs/architecture/evidence-cache-invalidation.md`; its statement that
+cross-worktree shard-key reuse is out of scope remains accurate because this
+program changed neither that key nor that claim.

@@ -1095,17 +1095,19 @@ function publishFreshReindexArtifacts(
   });
 
   if (sqliteMaterialization.mode === 'incremental' && incrementalTypeScript) {
-    const candidateDb = new ScipDatabase({
-      projectRoot: opts.projectRoot,
-      dbPath: opts.tempPaths.tempOutputDb,
-      indexPath: opts.tempPaths.tempOutputScip,
-    });
-    const evidenceDb = new ScipDatabase({
-      projectRoot: opts.projectRoot,
-      dbPath: opts.paths.outputDb,
-      indexPath: opts.paths.outputScip,
-    });
+    let candidateDb: ScipDatabase | null = null;
+    let evidenceDb: ScipDatabase | null = null;
     try {
+      candidateDb = new ScipDatabase({
+        projectRoot: opts.projectRoot,
+        dbPath: opts.tempPaths.tempOutputDb,
+        indexPath: opts.tempPaths.tempOutputScip,
+      });
+      evidenceDb = new ScipDatabase({
+        projectRoot: opts.projectRoot,
+        dbPath: opts.paths.outputDb,
+        indexPath: opts.paths.outputScip,
+      });
       const written = seedTypeScriptReferenceFragments(
         candidateDb,
         opts.fingerprint,
@@ -1113,9 +1115,13 @@ function publishFreshReindexArtifacts(
         evidenceDb,
       );
       opts.onStatus(`Cached exact TypeScript reference fragments for ${written} affected document(s).`);
+    } catch (error) {
+      opts.onStatus(
+        `Exact TypeScript reference fragment prefill unavailable: ${error instanceof Error ? error.message : String(error)}.`,
+      );
     } finally {
-      candidateDb.close();
-      evidenceDb.close();
+      candidateDb?.close();
+      evidenceDb?.close();
     }
   }
 
