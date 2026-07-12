@@ -53,12 +53,21 @@ React and Vue repositories get additional framework-aware checks for repeated co
 
 ```bash
 npm install -g scip-query@latest
-scip-query setup           # opt-in: automatic indexing, skills, hooks, first index, health dossier
-scip-query check-deps
-scip-query reindex
+scip-query setup           # interactive checklist in a terminal
 ```
 
-Or without a global install: `npx scip-query@latest reindex`.
+The setup checklist detects the repository's languages and offers to install or
+repair the matching SCIP indexers, Tree-sitter AST parsers, agent skills, and
+checkout-local hooks. It enables demand-started automatic incremental indexing,
+builds the first index, verifies semantic and checker capabilities, and can run
+the optional full health audit. Use the arrow keys and Space to change the
+selection, then Enter to continue.
+
+For automation, use `scip-query setup --yes` to accept recommended defaults or
+`scip-query setup --json` for a non-interactive machine-readable report. Use
+`--no-hooks`, `--no-skills`, `--no-parsers`, or `--no-health` only when that
+scope is intentionally managed elsewhere. Or run without a global install:
+`npx scip-query@latest setup`.
 
 ### If npm warns about install scripts
 
@@ -133,7 +142,12 @@ Heuristic findings are candidates for inspection, not verdicts — the finding a
 
 Graph navigation works through supported [SCIP](https://github.com/sourcegraph/scip) indexers. Higher-confidence augmentation and verification vary by language and project toolchain. TypeScript currently has the richest semantic augmentation. React and Vue add built-in framework-aware maintainability checks on top of the core workflow.
 
-Rust projects are indexed through rust-analyzer's SCIP output. scip-query also registers Rust semantic-provider readiness so capability output can distinguish a reachable rust-analyzer backend from implemented semantic facts; Rust reference, callee, signature, and module/use semantic evidence are still future work.
+Rust projects are indexed through rust-analyzer's SCIP output. Compiler-backed
+Rust reference, callee, signature, and module/use evidence runs through a
+demand-started durable rust-analyzer session with bounded worker fallback.
+Capability and status output distinguish indexer readiness, semantic readiness,
+the selected transport, and whether the idle helper is currently stopped or
+live.
 
 Clojure projects are indexed through `scip-clojure`. Source fallback adds namespace imports, callable/callsite evidence, and protocol/record member evidence for `.clj`, `.cljs`, and `.cljc` files. When the project has `clj-kondo` available, cleanup-plan verification can use `clj-kondo --lint .`. Clojure does not currently have a scip-query semantic provider equivalent to TypeScript's `ts-morph` layer; capability output reports that boundary explicitly.
 
@@ -192,19 +206,17 @@ When verification _fails_, the errors name the exact references the static evide
 **8. Gate every diff.** `diff-gate` runs a defined set of checks scoped to what a change _introduces_ and exits nonzero with remediation text for each finding. Baseline regressions are included when you pass `--baseline`.
 
 <!-- BEGIN GENERATED DIFF-GATE CHECKS -->
-
-| Check                  | What it catches                                                                                                                   | When it runs                                                                                                                                            |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `echo`                 | Changed symbols that newly echo established code elsewhere.                                                                       | Default diff gate.                                                                                                                                      |
-| `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain.                                                | Default diff gate.                                                                                                                                      |
-| `co-change-partner`    | Historically coupled files that usually change together but are missing from this diff.                                           | Default diff gate.                                                                                                                                      |
-| `twin-partner`         | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched.            | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves.                                                               |
-| `coverage-contract`    | A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source. | Default diff gate, only when either side of a configured contract changed.                                                                              |
-| `doc-reference`        | Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy.     | Default diff gate. Advisory (21.2) for bare file-mention citations; blocking when the citation has a line anchor or the cited file was deleted/renamed. |
-| `unused-params`        | Fresh trailing parameters or options that no changed body uses.                                                                   | Default diff gate.                                                                                                                                      |
-| `new-dead`             | Changed production symbols with zero indexed consumers.                                                                           | Default diff gate.                                                                                                                                      |
-| `baseline`             | New health finding identities compared with the committed health baseline.                                                        | Only with `diff-gate --baseline`.                                                                                                                       |
-
+| Check | What it catches | When it runs |
+| --- | --- | --- |
+| `echo` | Changed symbols that newly echo established code elsewhere. | Default diff gate. |
+| `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain. | Default diff gate. |
+| `co-change-partner` | Historically coupled files that usually change together but are missing from this diff. | Default diff gate. |
+| `twin-partner` | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched. | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves. |
+| `coverage-contract` | A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source. | Default diff gate, only when either side of a configured contract changed. |
+| `doc-reference` | Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy. | Default diff gate. Advisory (21.2) for bare file-mention citations; blocking when the citation has a line anchor or the cited file was deleted/renamed. |
+| `unused-params` | Fresh trailing parameters or options that no changed body uses. | Default diff gate. |
+| `new-dead` | Changed production symbols with zero indexed consumers. | Default diff gate. |
+| `baseline` | New health finding identities compared with the committed health baseline. | Only with `diff-gate --baseline`. |
 <!-- END GENERATED DIFF-GATE CHECKS -->
 
 Illustrative output:
@@ -341,10 +353,12 @@ that wakes rust-analyzer, after which the helper exits on clean idle.
 It also installs/refreshes skills, configures project-local hooks unless
 skipped, checks indexer readiness, attempts configured indexer remediation,
 refreshes the index, smoke-tests representative command families, writes
-`docs/scip-query/health-dossier.md` and `.json`, reports the health score and
-items needing attention, and seeds AGENTS.md/CLAUDE.md guidance. Use
-`scip-query setup --guided` to accept or decline the recommended automatic
-indexing action and other project-local changes. After setup,
+`docs/scip-query/health-dossier.md` and `.json` when the optional health pass is
+selected, reports the health score and items needing attention, and seeds
+AGENTS.md/CLAUDE.md guidance. Use
+the default terminal checklist to accept or decline the recommended automatic
+indexing action and other project-local changes (`--guided` reopens it
+explicitly). After setup,
 `scip-cleanup-audit` confirms raw signals and `scip-cleanup-improve` keeps
 fixing the worst confirmed items until no safe confirmed cleanup remains. Use
 `scip-query setup --git-hook` when you also want a local pre-commit diff gate.
@@ -375,7 +389,8 @@ scip-query tla fetch-tools                           # download the pinned tla2t
 ## Quick Start
 
 ```bash
-scip-query setup --json      # bootstrap local skills, index, capabilities, guidance, and health dossier
+scip-query setup             # interactive: languages, indexers, parsers, hooks, indexing, capabilities
+scip-query status --capabilities
 
 scip-query stats
 scip-query system src/auth
@@ -432,6 +447,12 @@ never decide which indexer runs or which generation publishes.
 
 TypeScript monorepos can opt into project sharding with `indexer.typescript.projectMode: "workspace"`. In that mode, `scip-query` discovers repo-local TypeScript project roots, runs one `scip-typescript` process per project with bounded concurrency, merges the shard protobufs, and still publishes one TypeScript language index. Set `indexer.typescript.projects` to an explicit list of project directories or tsconfig paths when automatic discovery is too broad. When `projects` is set to a non-empty list, it is authoritative: only the listed projects are indexed, automatic discovery does not run, and the repo root is not re-added alongside them (even if the root tsconfig covers subdirectories) — files that are only covered by an excluded root tsconfig (e.g. shared ambient `.d.ts` files) drop out of the index, so pick the list deliberately. An empty or absent `projects` falls back to full discovery, unchanged. Workspace mode also caches each project shard: reindexing after an edit reruns only the changed projects and their dependents (workspace `package.json` dependencies and tsconfig `paths`/`references` targets count as dependencies), serves untouched projects from `language-indexes/typescript-projects/`, and reports every reuse decision in `reindex --json` shard diagnostics. Set `indexerConcurrency` when a repo needs a persistent worker cap; CLI `--indexer-concurrency` and `SCIP_QUERY_INDEXER_CONCURRENCY` still override ad hoc runs.
 Use `indexer.typescript.pnpmWorkspaces` only with the default single-project mode; workspace mode passes explicit projects instead.
+
+Do not enable workspace mode merely because a repository uses TypeScript. Use
+it when the repository has multiple real tsconfig/project boundaries and the
+setup/readiness evidence confirms them. Single-project repositories already
+reuse unchanged TypeScript documents and keep a persistent ts-morph Project in
+the demand-started service.
 
 Clojure projects can pass a project-local `scip-clojure` config file through `.scipquery.json`:
 

@@ -23,20 +23,18 @@ Use this skill to verify the actual diff. Verification is the evidence pass that
 Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 
 <!-- BEGIN GENERATED SKILL COMMANDS -->
-
 ## Commands for this skill
 
-| Command                              | Purpose                                                                                                                                                                                                         | When                                                                             |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `scip-query doctor`                  | Diagnose config, index freshness, dependency readiness, and project capabilities                                                                                                                                | Prove the workspace: index freshness and dependency readiness.                   |
-| `scip-query status --capabilities`   | Show index status for this project                                                                                                                                                                              | Prove the workspace: which evidence and verification capabilities are available. |
-| `scip-query diff-impact --json`      | Compute changed symbols and downstream consumers from current git diff                                                                                                                                          | Assess the diff: changed symbols and downstream consumers.                       |
-| `scip-query diff-gate --json`        | Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, unedited twin partners (advisory), uncited doc updates, unused params, new dead symbols; exit 1 on blocking findings | Run the gate: the primary blocker for diff-specific risk.                        |
-| `scip-query health --baseline`       | Composite codebase health report with prioritized action list                                                                                                                                                   | Check health: compare findings against the committed baseline.                   |
-| `scip-query doc-drift --json --full` | Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped                                                                                                            | Check docs: run when docs, AGENTS.md, or command surfaces changed.               |
+| Command | Purpose | When |
+| --- | --- | --- |
+| `scip-query doctor` | Diagnose config, index freshness, dependency readiness, and project capabilities | Prove the workspace: index freshness and dependency readiness. |
+| `scip-query status --capabilities` | Show index status for this project | Prove the workspace: which evidence and verification capabilities are available. |
+| `scip-query diff-impact --json` | Compute changed symbols and downstream consumers from current git diff | Assess the diff: changed symbols and downstream consumers. |
+| `scip-query diff-gate --json` | Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, unedited twin partners (advisory), uncited doc updates, unused params, new dead symbols; exit 1 on blocking findings | Run the gate: the primary blocker for diff-specific risk. |
+| `scip-query health --baseline` | Composite codebase health report with prioritized action list | Check health: compare findings against the committed baseline. |
+| `scip-query doc-drift --json --full` | Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped | Check docs: run when docs, AGENTS.md, or command surfaces changed. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
-
 <!-- END GENERATED SKILL COMMANDS -->
 
 ## Rules
