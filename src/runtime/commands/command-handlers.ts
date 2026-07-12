@@ -49,6 +49,7 @@ import {
   type ProjectSetupOptions,
 } from '../project-setup.js';
 import { promptSetupChecklist, type SetupWizardChoice } from '../setup-wizard.js';
+import { astParserLanguages } from '../ast-parser-setup.js';
 import { setupCiWorkflow } from '../setup-ci.js';
 import { installSkills, isScipInstalled, printScipInstallInstructions } from '../setup.js';
 import { runUninstall } from '../uninstall.js';
@@ -1166,6 +1167,7 @@ export async function handleSetup(rawOpts: unknown): Promise<void> {
       dossierDir: stringOptionValue(opts, 'dossierDir'),
       runHealth: booleanOptionValue(opts, 'yes') ? false : opts['health'] !== false,
       installSkills: opts['skills'] !== false,
+      installAstParsers: opts['parsers'] !== false,
       ...(booleanOptionValue(opts, 'yes') ? { automaticRefresh: true } : {}),
     };
     const json = booleanOptionValue(opts, 'json');
@@ -1216,6 +1218,7 @@ async function guidedProjectSetupOptions(
       selected: action.recommended,
     }),
   );
+  const parserLanguages = astParserLanguages(readiness.languages);
   actionChoices.push(
     {
       id: 'install-agent-skills',
@@ -1224,6 +1227,17 @@ async function guidedProjectSetupOptions(
       reason: 'Makes scip-query workflows available to local agents.',
       selected: true,
     },
+    ...(parserLanguages.length > 0
+      ? [
+          {
+            id: 'install-ast-parsers',
+            scope: 'user' as const,
+            label: `Install or repair AST parsers (${parserLanguages.join(', ')})`,
+            reason: 'Installs the Tree-sitter runtime and grammars used for source-level analysis.',
+            selected: true,
+          },
+        ]
+      : []),
     {
       id: 'run-health-analysis',
       scope: 'analysis',
@@ -1250,6 +1264,7 @@ async function guidedProjectSetupOptions(
     ...(indexerAction ? { installIndexers: selected.has('install-indexers') } : {}),
     languages: readiness.languages.filter((language) => selected.has(`language:${language}`)),
     installSkills: selected.has('install-agent-skills'),
+    installAstParsers: selected.has('install-ast-parsers'),
     runHealth: selected.has('run-health-analysis'),
   };
 }
@@ -1267,6 +1282,7 @@ function recommendedGuidedActions(actions: readonly ProjectSetupGuidedAction[]):
   return new Set([
     ...actions.filter((action) => action.recommended).map((action) => action.id),
     'install-agent-skills',
+    'install-ast-parsers',
   ]);
 }
 

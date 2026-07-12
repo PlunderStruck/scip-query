@@ -25,6 +25,7 @@ import { getIndexFreshness } from './index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from './project-readiness.js';
 import { installSkills, isScipInstalled } from './setup.js';
 import { ensureWatchService, type WatchServiceEnsureResult } from './watch-service.js';
+import { setupAstParsers, type AstParserSetupResult } from './ast-parser-setup.js';
 
 type HealthAction = HealthReport['actions'][number];
 type IndexFreshness = ReturnType<typeof getIndexFreshness>;
@@ -98,6 +99,7 @@ export interface ProjectSetupReport {
   languages: SupportedLanguage[];
   steps: ProjectSetupStep[];
   skills: InstallSkillsResult;
+  astParsers: AstParserSetupResult;
   initialReadiness: ProjectReadiness;
   indexerRemediation: ProjectSetupIndexerRemediation[];
   readiness: ProjectReadiness;
@@ -132,6 +134,7 @@ export interface ProjectSetupOptions {
   dossierDir?: string;
   languages?: readonly SupportedLanguage[];
   installSkills?: boolean;
+  installAstParsers?: boolean;
   runHealth?: boolean;
   onStatus?: (message: string) => void;
 }
@@ -337,6 +340,33 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
       const state = indexer.runnable ? 'OK' : indexer.installed ? 'WARN' : 'MISSING';
       return `${state} ${indexer.language}: ${indexer.binaryLabel}${indexer.note ? ` - ${indexer.note}` : ''}`;
     }),
+  });
+
+  const astParsers =
+    opts.installAstParsers === false
+      ? {
+          supportedLanguages: [],
+          availableBefore: [],
+          installed: [],
+          availableAfter: [],
+          unavailable: [],
+          attempted: false,
+        }
+      : setupAstParsers(initialReadiness.languages);
+  addStep(steps, {
+    id: 'ast-parsers',
+    label: 'AST parser packages',
+    status: opts.installAstParsers === false ? 'skipped' : astParsers.unavailable.length > 0 ? 'warn' : 'ok',
+    message:
+      opts.installAstParsers === false
+        ? 'Skipped by setup choice.'
+        : astParsers.supportedLanguages.length === 0
+          ? 'No selected language uses a bundled Tree-sitter parser.'
+          : `${astParsers.availableAfter.length}/${astParsers.supportedLanguages.length} selected language parser(s) available${astParsers.installed.length > 0 ? `; installed ${astParsers.installed.join(', ')}` : ''}.`,
+    details: [
+      ...(astParsers.unavailable.length > 0 ? [`Unavailable: ${astParsers.unavailable.join(', ')}`] : []),
+      ...(astParsers.error ? [astParsers.error] : []),
+    ],
   });
 
   const installIndexers = opts.installIndexers ?? true;
@@ -612,6 +642,7 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     ],
     user: [
       ...skills.installed,
+      ...astParsers.installed,
       ...indexerRemediation.filter((entry) => entry.attempted).map((entry) => `${entry.binaryLabel} installer`),
     ],
   };
@@ -623,6 +654,7 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     languages: readiness.languages,
     steps,
     skills,
+    astParsers,
     initialReadiness,
     indexerRemediation,
     readiness,

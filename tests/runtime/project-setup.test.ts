@@ -120,6 +120,14 @@ async function loadProjectSetup(
     warnings: [],
     skipped: [],
   }));
+  const setupAstParsers = vi.fn((selectedLanguages: string[]) => ({
+    supportedLanguages: selectedLanguages,
+    availableBefore: selectedLanguages,
+    installed: [],
+    availableAfter: selectedLanguages,
+    unavailable: [],
+    attempted: false,
+  }));
   const configureProjectAutomaticRefresh = vi.fn(
     (_projectRoot: string, config: Record<string, unknown>, enabled: boolean) => {
       if (overrides.automaticRefreshConfigThrows) throw new Error('config write failed');
@@ -167,6 +175,7 @@ async function loadProjectSetup(
   });
   vi.doMock('../../src/runtime/agent-setup.js', () => ({ setupAgent }));
   vi.doMock('../../src/runtime/agent-hooks.js', () => ({ installProjectAgentHooks }));
+  vi.doMock('../../src/runtime/ast-parser-setup.js', () => ({ setupAstParsers }));
   vi.doMock('../../src/runtime/cli-support.js', () => ({ cliVersion: '0.15.0', runIsolatedHealthReport }));
   vi.doMock('../../src/runtime/config.js', () => ({
     configureProjectAutomaticRefresh,
@@ -261,6 +270,7 @@ async function loadProjectSetup(
     ensureWatchService,
     rustSemanticSessionStatus,
     tryInstallIndexer,
+    setupAstParsers,
   };
 }
 
@@ -270,6 +280,18 @@ afterEach(() => {
 });
 
 describe('runProjectSetup', () => {
+  it('installs detected AST parsers unless the setup choice is declined', async () => {
+    const { module, setupAstParsers } = await loadProjectSetup({ languages: ['typescript', 'python'] });
+    const selected = await module.runProjectSetup({ runHealth: false });
+    expect(setupAstParsers).toHaveBeenCalledWith(['typescript', 'python']);
+    expect(selected.steps).toContainEqual(expect.objectContaining({ id: 'ast-parsers', status: 'ok' }));
+
+    setupAstParsers.mockClear();
+    const skipped = await module.runProjectSetup({ runHealth: false, installAstParsers: false });
+    expect(setupAstParsers).not.toHaveBeenCalled();
+    expect(skipped.steps).toContainEqual(expect.objectContaining({ id: 'ast-parsers', status: 'skipped' }));
+  });
+
   it('plans guided setup choices without creating agent docs by default', async () => {
     const { module } = await loadProjectSetup();
 

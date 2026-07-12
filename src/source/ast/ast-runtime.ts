@@ -123,6 +123,15 @@ function loadGrammar(lang: AstLanguage): unknown | null {
 
 const parserPool = new Map<AstLanguage, ParserInstance>();
 
+export function resetAstRuntimeProbeCache(): void {
+  parserCtor = null;
+  parserUnavailable = false;
+  grammarCache.clear();
+  failedLanguages.clear();
+  parserPool.clear();
+  queryCache.clear();
+}
+
 function getParser(lang: AstLanguage): ParserInstance | null {
   const cached = parserPool.get(lang);
   if (cached) return cached;

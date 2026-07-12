@@ -105,6 +105,7 @@ describe('CLI contract', () => {
       '--git-hook',
       '--no-hooks',
       '--no-skills',
+      '--no-parsers',
       '--no-health',
       '--dossier-dir <path>',
       '--json',

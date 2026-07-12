@@ -286,6 +286,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       option('--git-hook', 'Also install a git pre-commit hook that runs diff-gate'),
       option('--no-hooks', 'Skip Codex and Claude Code lifecycle hook installation'),
       option('--no-skills', 'Skip user-level agent skill installation'),
+      option('--no-parsers', 'Skip Tree-sitter AST parser installation and repair'),
       option('--no-health', 'Skip the optional full health audit and dossier'),
       option('--dossier-dir <path>', 'Directory for generated setup health dossier files'),
     ]),
