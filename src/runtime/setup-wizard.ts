@@ -52,7 +52,7 @@ export async function promptSetupChecklist(
   input.resume();
 
   const render = (first = false): void => {
-    if (!first) output.write(`\u001B[${choices.length + 4}A`);
+    if (!first) output.write(`\u001B[${choices.length + 3}A`);
     output.write('scip-query setup\n');
     output.write('Use ↑/↓ to move, space to toggle, enter to start. Ctrl-C cancels.\n\n');
     choices.forEach((choice, index) => {

@@ -43,7 +43,13 @@ describe('setup wizard state', () => {
     };
     input.resume = () => undefined;
     input.pause = () => undefined;
-    const output = { write: () => true } as unknown as WriteStream;
+    const writes: string[] = [];
+    const output = {
+      write: (value: string) => {
+        writes.push(value);
+        return true;
+      },
+    } as unknown as WriteStream;
 
     const resultPromise = promptSetupChecklist(choices, input as unknown as ReadStream, output);
     input.emit('keypress', '', { name: 'down' });
@@ -53,5 +59,7 @@ describe('setup wizard state', () => {
     await expect(resultPromise).resolves.toEqual(new Set(['typescript', 'health']));
     expect(rawModes).toEqual([true, false]);
     expect(input.listenerCount('keypress')).toBe(0);
+    expect(writes).toContain('\u001B[5A');
+    expect(writes).not.toContain('\u001B[6A');
   });
 });
