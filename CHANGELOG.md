@@ -2,6 +2,37 @@
 
 All notable changes to `scip-query` are documented here. This file starts at 0.11.0; everything below covers behavior changes made since the 0.10.12 release.
 
+## [0.16.0]
+
+### Notable (setup and automatic indexing)
+
+- **`setup` is now an interactive project wizard.** In a terminal, `scip-query setup` presents a keyboard-controlled checklist for detected language indexers, detected Tree-sitter AST parsers, bundled agent skills, checkout-local hooks, automatic refresh, and the optional initial health audit. `--yes` accepts the recommended defaults for automation, while `--json` remains non-interactive. The redraw logic keeps the checklist anchored while moving with the arrow keys.
+- **Detected AST parser packages can be installed by setup.** Setup installs the Tree-sitter runtime and detected language grammars using the versions pinned by `scip-query`, then probes them again and reports any recovery action. Developers no longer need to discover the package-specific npm commands themselves.
+- **Automatic indexing is demand-started and project-local.** Setup enables automatic refresh unless an existing project explicitly opted out, starts or reuses the checkout's watch service, and verifies the service deadline and language capabilities. The service wakes when the project is used, idles when there is no work, and keeps hook preferences in ignored checkout-local files rather than repository records.
+- **Setup guidance now describes the optimal TypeScript and Rust paths.** The bundled `scip-setup` skill and README cover TypeScript SCIP indexing, persistent `ts-morph` semantics, conditional workspace project shards, Rust SCIP indexing through `rust-analyzer`, durable demand-started Rust semantic sessions, Tree-sitter fallbacks, capability verification, and the distinction between committed records, checkout preferences, and user-environment changes.
+
+### Performance (eliminating repeated work)
+
+- **Incremental TypeScript SCIP documents and semantic fragments.** TypeScript indexing persists per-document SCIP fragments, computes a conservative affected-file closure, and republishes only affected documents into generation-based SQLite indexes. Shadow-mode measurements expose predicted versus actually changed documents before the affected-set optimization is trusted for a project.
+- **Persistent TypeScript semantic sessions.** Repeated semantic queries reuse loaded TypeScript projects and exact caller/reference fragments across requests and processes. Workspace mode updates only the owned project and invalidates dependent projects when necessary; a single-project repository continues to use the compiler project's own incremental behavior rather than being artificially split.
+- **Generation-based SQLite publication and repair.** Incremental index updates publish an immutable generation and atomically make it current, retain a recovery generation, and diagnose or repair damaged generation state instead of forcing every refresh through a full rebuild.
+- **Durable Rust semantic reuse.** Rust semantic queries reuse complete `rust-analyzer` responses through a readiness-aware durable session, with ordered protocol barriers, deadline-bounded synchronization, stale-response rejection, and worker fallback. A stopped durable session in `status` means demand-idle, not unavailable.
+- **Faster cold TypeScript dead analysis and `twin-drift`.** Exact TypeScript caller resolution is batched and cached, while full `twin-drift` scans prune impossible candidates earlier and use indexed lookup paths.
+- **New repeated-work instrumentation.** Work identities and `work-audit` profiles attribute repeated computation to subsystems so optimization candidates can be selected from measured reuse misses instead of command-level wall time alone.
+
+### Accuracy and credibility
+
+- **TypeScript detector certification.** Factual dead-code evidence and TypeScript graph, architecture, React, and Vue signals gained calibrated fixtures and evidence contracts. Vue reference identities are qualified correctly, navigation callers exclude reference-only edges, and capability output distinguishes syntax-only checks from semantic verification.
+- **Rust detector hardening.** Dead-code evidence now preserves implicit imports and excludes trait requirements, trait implementations, convention-driven twins, and trait wrappers where the apparent duplicate or unused symbol is part of Rust's language contract. Signature candidates are restricted to cases the available evidence can support.
+- **Python detector hardening.** Python liveness now preserves runtime exports, protocol hooks, and model/framework conventions that consume symbols indirectly.
+- **Investigatory health findings are labeled as candidates.** Composite health output discloses capability limits and keeps heuristic findings investigatory instead of presenting them as automatically actionable facts. Accuracy roadmaps now record which detector families were calibrated, certified, unsupported, or deliberately limited.
+
+### Fixes and maintenance
+
+- Setup now applies automatic-refresh defaults consistently and keeps local setup preferences separate from committed repository records.
+- Full-result query limits remain within SQLite's parameter limits instead of failing on large candidate sets.
+- The repository's own actionable health findings were resolved; remaining reviewed signals are recorded as explicit suppressions rather than silently ignored.
+
 ## [0.15.0]
 
 ### Breaking (behavior change for one command)
