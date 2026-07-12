@@ -24,44 +24,29 @@ import {
   type RustImportDefinitionResolver,
   type RustSourceImportUsageResolver,
 } from './import-usage.js';
+import type {
+  RustCalleeResolution,
+  RustCalleeResolver,
+  RustReferenceResolution,
+  RustReferenceResolver,
+  RustSignatureResolution,
+  RustSignatureResolver,
+} from './semantic-resolution.js';
+import { completeRustReferenceMap, configuredRustBatchTimeoutMs } from './semantic-resolution.js';
 
-export interface RustReferenceResolution {
-  available: boolean;
-  reason?: string;
-  resolvedBinary?: string;
-  references: Map<number, SemanticReference[]>;
-}
-
-export interface RustReferenceResolver {
-  referencesForDefinitions(definitions: readonly IndexedDefinition[]): RustReferenceResolution;
-}
-
-export interface RustCalleeResolution {
-  available: boolean;
-  reason?: string;
-  resolvedBinary?: string;
-  callees: Map<number, SemanticCallee[]>;
-}
-
-export interface RustCalleeResolver {
-  calleesForDefinitions(definitions: readonly IndexedDefinition[]): RustCalleeResolution;
-}
+export type {
+  RustCalleeResolution,
+  RustCalleeResolver,
+  RustReferenceResolution,
+  RustReferenceResolver,
+  RustSignatureResolution,
+  RustSignatureResolver,
+} from './semantic-resolution.js';
 
 export type RustCalleeSymbolResolver = (callee: SemanticCallee) => string;
 export type RustScipOccurrenceCalleeOracle = (
   definitions: readonly IndexedDefinition[],
 ) => Map<number, SemanticCallee[]>;
-
-export interface RustSignatureResolution {
-  available: boolean;
-  reason?: string;
-  resolvedBinary?: string;
-  signatures: Map<number, string | null>;
-}
-
-export interface RustSignatureResolver {
-  signaturesForDefinitions(definitions: readonly IndexedDefinition[]): RustSignatureResolution;
-}
 
 export interface RustImportUsageResolver {
   importUsage(file: string): SemanticImportUsage[];
@@ -144,7 +129,7 @@ export function createRustSemanticProvider(
       };
       return resolution.available
         ? new Map(resolution.references)
-        : completeReferenceMap(rustDefinitions, resolution.references);
+        : completeRustReferenceMap(rustDefinitions, resolution.references);
     } catch (error) {
       const baseAvailability = currentBaseAvailability();
       lastAvailability = {
@@ -240,7 +225,7 @@ export function createRustSemanticProvider(
       };
       const references = resolution.available
         ? new Map(resolution.references)
-        : completeReferenceMap(rustReferenceDefinitions, resolution.references);
+        : completeRustReferenceMap(rustReferenceDefinitions, resolution.references);
       for (const [symbolId, rows] of resolution.callees) resolvedCallees.set(symbolId, rows);
       const callees = completeCalleeMap(rustCalleeDefinitions, resolvedCallees, calleeSymbolResolver);
       for (const [symbolId, rows] of callees) prefetchedCallees.set(symbolId, rows);
@@ -465,7 +450,7 @@ function resolveReferencesWithWorker(
     input: JSON.stringify(request),
     encoding: 'utf8',
     maxBuffer: 50 * 1024 * 1024,
-    timeout: configuredBatchTimeoutMs(
+    timeout: configuredRustBatchTimeoutMs(
       definitions.length,
       rustSemanticRequestTimeoutBudgetMs(requestTimeoutMs, request.referenceRetryTimeoutMs),
       concurrency,
@@ -478,7 +463,7 @@ function resolveReferencesWithWorker(
       available: parsed.available,
       resolvedBinary: baseStatus.resolvedBinary,
       reason: parsed.reason,
-      references: completeReferenceMap(
+      references: completeRustReferenceMap(
         definitions,
         new Map(parsed.references),
         new Set(parsed.incompleteReferenceSymbolIds ?? []),
@@ -556,7 +541,7 @@ function resolveCalleesWithWorker(
     input: JSON.stringify(request),
     encoding: 'utf8',
     maxBuffer: 50 * 1024 * 1024,
-    timeout: configuredBatchTimeoutMs(definitions.length, requestTimeoutMs, concurrency),
+    timeout: configuredRustBatchTimeoutMs(definitions.length, requestTimeoutMs, concurrency),
   });
 
   const parsed = parseWorkerResponse(result.stdout);
@@ -641,7 +626,7 @@ function resolveSignaturesWithWorker(
     input: JSON.stringify(request),
     encoding: 'utf8',
     maxBuffer: 50 * 1024 * 1024,
-    timeout: configuredBatchTimeoutMs(definitions.length, requestTimeoutMs, concurrency),
+    timeout: configuredRustBatchTimeoutMs(definitions.length, requestTimeoutMs, concurrency),
   });
 
   const parsed = parseWorkerResponse(result.stdout);
@@ -707,19 +692,6 @@ function emptyCalleeMap(definitions: readonly IndexedDefinition[]): Map<number, 
 
 function emptySignatureMap(definitions: readonly IndexedDefinition[]): Map<number, string | null> {
   return new Map(definitions.map((definition) => [definition.symbolId, null]));
-}
-
-function completeReferenceMap(
-  definitions: readonly IndexedDefinition[],
-  references: ReadonlyMap<number, SemanticReference[]>,
-  incompleteSymbolIds: ReadonlySet<number> = new Set(),
-): Map<number, SemanticReference[]> {
-  const result = new Map<number, SemanticReference[]>();
-  for (const definition of definitions) {
-    if (incompleteSymbolIds.has(definition.symbolId)) continue;
-    result.set(definition.symbolId, references.get(definition.symbolId) ?? []);
-  }
-  return result;
 }
 
 function completeCalleeMap(
@@ -796,11 +768,4 @@ function configuredNonNegativeInteger(value: string | undefined, fallback: numbe
   if (!value) return fallback;
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
-}
-
-function configuredBatchTimeoutMs(definitionCount: number, requestTimeoutMs: number, concurrency: number): number {
-  const configured = configuredPositiveInteger(process.env['SCIP_RUST_SEMANTIC_BATCH_TIMEOUT_MS'], 0);
-  if (configured > 0) return configured;
-  const waves = Math.max(1, Math.ceil(definitionCount / Math.max(1, concurrency)));
-  return Math.max(120_000, 30_000 + waves * requestTimeoutMs);
 }

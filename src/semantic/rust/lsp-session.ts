@@ -8,15 +8,21 @@ import type { IndexedDefinition } from '../../domain/types.js';
 import { profileEnabled, profileSpan, writeProfileEvent } from '../../instrumentation/profile.js';
 import { isProcessAlive } from '../../runtime/process-liveness.js';
 import type { SemanticCallee, SemanticReference } from '../types.js';
-import type { RustImportDefinitionResolver } from './import-usage.js';
 import type {
+  RustAnalyzerSessionRequester,
   RustCalleeResolution,
   RustCalleeResolver,
+  RustImportDefinitionPosition,
+  RustImportDefinitionResolution,
+  RustImportDefinitionResolver,
+  RustImportDefinitionWorkerRequest,
+  RustImportDefinitionWorkerResponse,
   RustReferenceResolution,
   RustReferenceResolver,
   RustSignatureResolution,
   RustSignatureResolver,
-} from './provider.js';
+} from './semantic-resolution.js';
+import { completeRustReferenceMap, configuredRustBatchTimeoutMs } from './semantic-resolution.js';
 import type { RustSemanticStatus } from './status.js';
 import type { RustReferenceWorkerRequest, RustReferenceWorkerResponse } from './lsp-batch-worker.js';
 import {
@@ -26,46 +32,13 @@ import {
   readDurableRustSessionServerState,
 } from './durable-session.js';
 
-export interface RustAnalyzerSessionRequester {
-  requestSemantic(request: RustReferenceWorkerRequest, timeoutMs: number): RustReferenceWorkerResponse;
-  requestImportDefinitions(
-    request: RustImportDefinitionWorkerRequest,
-    timeoutMs: number,
-  ): RustImportDefinitionWorkerResponse;
-  shutdown(): void;
-}
-
-export interface RustImportDefinitionPosition {
-  id: string;
-  file: string;
-  line: number;
-  column: number;
-}
-
-export interface RustImportDefinitionWorkerRequest {
-  projectRoot: string;
-  rustAnalyzerBinary: string;
-  file: string;
-  positions: RustImportDefinitionPosition[];
-  requestTimeoutMs?: number;
-  readinessDeadlineMs?: number;
-  diagnosticsTimeoutMs?: number;
-  settleDelayMs?: number;
-  concurrency?: number;
-}
-
-export interface RustImportDefinitionWorkerResponse {
-  available: boolean;
-  reason?: string;
-  sourcePaths: Array<[string, string | null]>;
-}
-
-export interface RustImportDefinitionResolution {
-  available: boolean;
-  reason?: string;
-  resolvedBinary?: string;
-  sourcePaths: Map<string, string | null>;
-}
+export type {
+  RustAnalyzerSessionRequester,
+  RustImportDefinitionPosition,
+  RustImportDefinitionResolution,
+  RustImportDefinitionWorkerRequest,
+  RustImportDefinitionWorkerResponse,
+} from './semantic-resolution.js';
 
 export interface RustAnalyzerSessionResolverOptions {
   requester?: RustAnalyzerSessionRequester;
@@ -138,7 +111,7 @@ export class RustAnalyzerSessionResolver
         available: response.available,
         resolvedBinary: baseStatus.resolvedBinary,
         reason: response.reason,
-        references: completeReferenceMap(
+        references: completeRustReferenceMap(
           definitions,
           new Map(response.references),
           new Set(response.incompleteReferenceSymbolIds ?? []),
@@ -217,7 +190,7 @@ export class RustAnalyzerSessionResolver
         available: response.available,
         resolvedBinary: baseStatus.resolvedBinary,
         reason: response.reason,
-        references: completeReferenceMap(
+        references: completeRustReferenceMap(
           referenceDefinitions,
           new Map(response.references),
           new Set(response.incompleteReferenceSymbolIds ?? []),
@@ -358,7 +331,7 @@ export class RustAnalyzerSessionResolver
       () =>
         this.requester.requestSemantic(
           request,
-          configuredBatchTimeoutMs(
+          configuredRustBatchTimeoutMs(
             operationDefinitionCount,
             rustSemanticRequestTimeoutBudgetMs(requestTimeoutMs, request.referenceRetryTimeoutMs),
             concurrency,
@@ -398,7 +371,7 @@ export class RustAnalyzerSessionResolver
         resolvedBinary:
           referenceResolution.resolvedBinary ?? calleeResolution.resolvedBinary ?? baseStatus.resolvedBinary,
         reason: referenceResolution.reason ?? calleeResolution.reason,
-        references: completeReferenceMap(referenceDefinitions, referenceResolution.references),
+        references: completeRustReferenceMap(referenceDefinitions, referenceResolution.references),
         callees: completeCalleeMap(calleeDefinitions, calleeResolution.callees),
       };
     }
@@ -447,7 +420,7 @@ export class RustAnalyzerSessionResolver
       () =>
         this.requester.requestImportDefinitions(
           request,
-          configuredBatchTimeoutMs(positions.length, requestTimeoutMs, concurrency),
+          configuredRustBatchTimeoutMs(positions.length, requestTimeoutMs, concurrency),
         ),
       () => ({
         file,
@@ -837,19 +810,6 @@ function emptySignatureMap(definitions: readonly IndexedDefinition[]): Map<numbe
   return new Map(definitions.map((definition) => [definition.symbolId, null]));
 }
 
-function completeReferenceMap(
-  definitions: readonly IndexedDefinition[],
-  references: ReadonlyMap<number, SemanticReference[]>,
-  incompleteSymbolIds: ReadonlySet<number> = new Set(),
-): Map<number, SemanticReference[]> {
-  const result = new Map<number, SemanticReference[]>();
-  for (const definition of definitions) {
-    if (incompleteSymbolIds.has(definition.symbolId)) continue;
-    result.set(definition.symbolId, references.get(definition.symbolId) ?? []);
-  }
-  return result;
-}
-
 function completeCalleeMap(
   definitions: readonly IndexedDefinition[],
   callees: ReadonlyMap<number, SemanticCallee[]>,
@@ -901,11 +861,4 @@ function parseNonNegativeInteger(value: string | undefined): number | null {
   if (!value) return null;
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
-}
-
-function configuredBatchTimeoutMs(definitionCount: number, requestTimeoutMs: number, concurrency: number): number {
-  const configured = configuredPositiveInteger(process.env['SCIP_RUST_SEMANTIC_BATCH_TIMEOUT_MS'], 0);
-  if (configured > 0) return configured;
-  const waves = Math.max(1, Math.ceil(definitionCount / Math.max(1, concurrency)));
-  return Math.max(120_000, 30_000 + waves * requestTimeoutMs);
 }

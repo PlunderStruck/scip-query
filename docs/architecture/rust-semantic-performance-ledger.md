@@ -96,7 +96,9 @@ moving the whole product surface at once.
   `rust-analyzer` session by default behind the Rust provider, with an explicit
   per-command worker opt-out and automatic worker failover. It serves
   references, callees, hover-derived signatures, and compiler-backed
-  import-definition lookups.
+  import-definition lookups. Shared resolver contracts and batch-completion
+  primitives live in dependency-free `semantic-resolution.ts`, preventing the
+  provider, import-usage, and durable-session paths from importing each other.
 - `src/semantic/rust/import-usage.ts` combines source-fallback Rust `use`
   parsing with `rust-analyzer` definition answers for project-local import
   source paths.

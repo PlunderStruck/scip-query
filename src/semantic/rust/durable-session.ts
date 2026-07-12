@@ -8,7 +8,7 @@ import type {
   RustAnalyzerSessionRequester,
   RustImportDefinitionWorkerRequest,
   RustImportDefinitionWorkerResponse,
-} from './lsp-session.js';
+} from './semantic-resolution.js';
 import { profileEnabled, writeProfileEvent } from '../../instrumentation/profile.js';
 import { isProcessAlive } from '../../runtime/process-liveness.js';
 import { writeJsonAtomic } from '../../storage/atomic-json.js';

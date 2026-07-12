@@ -4,7 +4,8 @@ import { joinRustPath } from '../../language-parsers/languages/rust.js';
 import { getAst, type SyntaxNode } from '../../source/ast.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
 import type { SemanticImportUsage } from '../types.js';
-import type { RustImportDefinitionPosition, RustImportDefinitionResolution } from './lsp-session.js';
+import type { RustImportDefinitionPosition, RustImportDefinitionResolver } from './semantic-resolution.js';
+export type { RustImportDefinitionResolver } from './semantic-resolution.js';
 
 export interface RustSourceImportUsageFacts {
   usage: SemanticImportUsage[];
@@ -13,13 +14,6 @@ export interface RustSourceImportUsageFacts {
 
 export interface RustSourceImportUsageResolver {
   importUsageFacts(file: string): RustSourceImportUsageFacts;
-}
-
-export interface RustImportDefinitionResolver {
-  importDefinitionsForFile(
-    file: string,
-    positions: readonly RustImportDefinitionPosition[],
-  ): RustImportDefinitionResolution;
 }
 
 export function rustImportUsageFromSource(db: ScipDatabase, file: string): SemanticImportUsage[] {
