@@ -53,6 +53,7 @@ import { astParserLanguages } from '../ast-parser-setup.js';
 import { setupCiWorkflow } from '../setup-ci.js';
 import { installSkills, isScipInstalled, printScipInstallInstructions } from '../setup.js';
 import { runUninstall } from '../uninstall.js';
+import { inspectSharedCacheStatus, type SharedCacheStatus } from '../repository-cache-lifecycle.js';
 import { ALL_SOURCE_EXTENSIONS } from '../../source/source-fileset.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
 import { createTsMorphProvider } from '../../semantic/typescript/ts-morph-provider.js';
@@ -1072,13 +1073,13 @@ export function handleEffectiveness(rawOpts: unknown): void {
   const concluded = totalFixed + totalSuppressed;
   if (concluded > 0) {
     console.log(
-      `\n${totalFixed} finding(s) verified fixed before HEAD changed, ${totalSuppressed} suppressed, ${totalUnverified} disappeared without comparable evidence — overall precision ${Math.round(
+      `\n${totalFixed} finding(s) verified fixed against a stable comparison base, ${totalSuppressed} suppressed, ${totalUnverified} disappeared without comparable evidence — overall precision ${Math.round(
         (totalFixed / concluded) * 100,
       )}%.`,
     );
   } else if (totalUnverified > 0) {
     console.log(
-      `\n${totalUnverified} finding(s) disappeared without comparable same-HEAD evidence; precision is not available.`,
+      `\n${totalUnverified} finding(s) disappeared without comparable comparison-base evidence; precision is not available.`,
     );
   }
 }
@@ -1106,6 +1107,7 @@ function buildProjectDiagnosticReport(command: 'doctor' | 'status'): {
     readiness: ReturnType<typeof getProjectReadiness>;
     freshness: ReturnType<typeof getIndexFreshness>;
     capabilities: ReturnType<typeof getProjectCapabilities>;
+    sharedCache: SharedCacheStatus;
     ok: boolean;
   };
   hasIndexerProblems: boolean;
@@ -1119,6 +1121,7 @@ function buildProjectDiagnosticReport(command: 'doctor' | 'status'): {
   const capabilities = getProjectCapabilities(readiness, {
     hasIndexedGraph: exists && freshness.state !== 'missing',
   });
+  const sharedCache = inspectSharedCacheStatus(projectRoot, config, paths);
   const hasIndexerProblems = readiness.indexers.some((indexer) => !indexer.runnable);
   const hasAttention =
     configDiagnostics.some((diagnostic) => diagnostic.level === 'error') ||
@@ -1140,6 +1143,7 @@ function buildProjectDiagnosticReport(command: 'doctor' | 'status'): {
       readiness,
       freshness,
       capabilities,
+      sharedCache,
       ok: !hasAttention,
     },
     hasIndexerProblems,
@@ -1663,6 +1667,7 @@ function renderStatusReport(
     console.log(`Refresh:  ${formatLastRefresh(report.freshness.lastRefresh)}`);
   }
   renderWatchServiceReport(opts.watchService);
+  renderSharedCacheStatus(report.sharedCache);
   console.log(
     `Rust sess: ${opts.rustSemanticSession.transport}/${opts.rustSemanticSession.state} (${opts.rustSemanticSession.source}; worker fallback; opt out with ${opts.rustSemanticSession.optOut})`,
   );
@@ -1675,6 +1680,27 @@ function renderStatusReport(
   if (opts.capabilities) {
     console.log('');
     renderCapabilityReport(report.capabilities);
+  }
+}
+
+function renderSharedCacheStatus(status: SharedCacheStatus): void {
+  if (status.state !== 'managed') {
+    console.log(`Shared:   ${status.state}${status.reason ? ` (${status.reason})` : ''}`);
+    return;
+  }
+  const active = status.activeGenerationId?.slice(0, 12) ?? 'none';
+  const action = status.lastAction ?? 'none';
+  console.log(
+    `Shared:   ${action}, active ${active}, ${status.generations} generation(s), ${formatBytes(status.generationBytes)}`,
+  );
+  if (status.reason) console.log(`Share why: ${status.reason}`);
+  console.log(
+    `Share GC:  ${status.protectedGenerations} protected, ${status.unreferencedGenerations} unreferenced (${formatBytes(status.unreferencedBytes)}), ${status.temporaryGenerations} temporary`,
+  );
+  if (status.cleanup?.kind === 'swept') {
+    console.log(
+      `Cache GC: ${status.cleanup.deletedWorktrees ?? 0} worktree(s), ${status.cleanup.deletedGenerations ?? 0} generation(s), ${formatBytes(status.cleanup.deletedBytes ?? 0)} removed`,
+    );
   }
 }
 

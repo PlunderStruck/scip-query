@@ -1,12 +1,14 @@
 /**
  * Effectiveness stats over the committed outcome-event ledger
  * (.scipquery/events/*.json): per check, how many findings the gate
- * caught, how many disappeared on a comparable same-HEAD rerun, how many were
+ * caught, how many disappeared under a comparable Git-base rerun, how many were
  * suppressed as accepted/false findings, and how long verified fixes took.
  *
  * "Fixed" is strictly "the finding stopped matching without a suppression on
- * a later run against the same non-null HEAD". A changed or missing HEAD is
- * unverified because committing a finding also clears the current diff.
+ * a later run against the same resolved comparison commit". That can be a
+ * direct rerun or a clean cross-HEAD replay carrying explicit proof. A changed
+ * baseline without replay proof remains unverified because committing a
+ * finding also clears the default diff.
  * An agent suppressing a finding is a precision datapoint, not a fix.
  * Rename noise is reclassified at query time: a resolved finding whose
  * symbol was re-caught under the same check at the same commit is counted
@@ -17,7 +19,7 @@
  * the clock.
  */
 
-import type { OutcomeEvent } from '../../storage/outcome-events.js';
+import { latestOutcomeLifecycleAnchor, type OutcomeEvent } from '../../storage/outcome-events.js';
 
 export interface EffectivenessOptions {
   /** Only count findings first caught at/after this timestamp (ms). */
@@ -109,8 +111,10 @@ export function computeEffectiveness(
       if (terminal.event === 'resolved' && movedKeys.has(key)) {
         moved += 1;
       } else if (terminal.event === 'resolved') {
-        const anchor = resolutionAnchor(history.events);
-        if (anchor?.commit && terminal.commit === anchor.commit) {
+        const anchor = latestOutcomeLifecycleAnchor(history.events.slice(0, -1));
+        const comparisonBase = anchor?.comparisonBaseCommit ?? anchor?.commit;
+        const terminalBase = terminal.comparisonBaseCommit ?? terminal.commit;
+        if (comparisonBase && (terminalBase === comparisonBase || terminal.verifiedAgainstCommit === comparisonBase)) {
           fixed += 1;
           daysToFix.push((terminal.ts - history.caughtAt) / MS_PER_DAY);
         } else {
@@ -143,18 +147,6 @@ export function computeEffectiveness(
     windowStart: options.sinceMs ?? null,
     checks: checks.sort((left, right) => left.check.localeCompare(right.check)),
   };
-}
-
-/**
- * The observation that opened the current lifecycle. A same-HEAD clean rerun
- * can verify that cycle as fixed; a later commit cannot prove what happened.
- */
-function resolutionAnchor(events: readonly OutcomeEvent[]): OutcomeEvent | undefined {
-  for (let index = events.length - 2; index >= 0; index -= 1) {
-    const event = events[index];
-    if (event?.event === 'caught' || event?.event === 'reopened') return event;
-  }
-  return undefined;
 }
 
 /**

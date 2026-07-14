@@ -5,7 +5,7 @@ import { cliVersion, renderHeuristicNotice } from './cli-support.js';
 import { commandDescriptors } from './commands/command-descriptors.js';
 import { registerCommandDescriptors } from './commands/command-registry.js';
 import { loadProjectConfig, resolveIndexStoragePaths } from './config.js';
-import { resolveProjectRoot, withDb } from './cli-context.js';
+import { prepareWorktreeIndex, resolveProjectRoot, sharedCachePreparationEligible, withDb } from './cli-context.js';
 import { maybePrintUpdateNotice } from './update-notice.js';
 import { ensureWatchServiceForCommand, watchServiceAutoStartEligible } from './watch-service.js';
 import {
@@ -16,6 +16,7 @@ import {
   profileWorkloadIdentity,
 } from '../instrumentation/profile.js';
 import { projectEvidenceFingerprint } from '../storage/evidence-cache.js';
+import { maybeSweepRepositoryCache } from './repository-cache-lifecycle.js';
 
 program
   .name('scip-query')
@@ -27,10 +28,20 @@ program.hook('preAction', async (_thisCommand, actionCommand) => {
   initializeProfileContext();
   const commandName = actionCommand.name();
   await maybePrintUpdateNotice({ commandName });
-  if (!watchServiceAutoStartEligible(commandName)) return;
+  const prepareSharedCache = sharedCachePreparationEligible(commandName);
+  const startWatchService = watchServiceAutoStartEligible(commandName);
+  if (!prepareSharedCache && !startWatchService) return;
   const projectRoot = resolveProjectRoot();
   const config = loadProjectConfig(projectRoot);
   const paths = resolveIndexStoragePaths(projectRoot, config);
+  if (prepareSharedCache) {
+    const action = prepareWorktreeIndex(projectRoot, config, paths);
+    if (action.kind === 'failed' && process.env['SCIP_QUERY_DEBUG']) {
+      console.error(`shared-cache: ${action.reason}`);
+    }
+  }
+  maybeSweepRepositoryCache(projectRoot, cliVersion);
+  if (!startWatchService) return;
   const service = ensureWatchServiceForCommand({
     commandName,
     projectRoot,

@@ -13,7 +13,12 @@ import {
   SymbolInformationSchema,
   SymbolRole,
 } from '@c4312/scip';
-import { mergeAndSanitizeScipFiles, mergeScipFiles, mergeScipIndexes } from '../../src/reindex/merge.js';
+import {
+  mergeAndSanitizeScipFiles,
+  mergeScipFiles,
+  mergeScipIndexes,
+  rebaseScipProjectRoot,
+} from '../../src/reindex/merge.js';
 
 const tempDirs: string[] = [];
 
@@ -24,6 +29,15 @@ afterEach(() => {
 });
 
 describe('SCIP merge support', () => {
+  it('rebases only an index with the expected project root', () => {
+    const original = createFixtureIndex({});
+    const rebased = rebaseScipProjectRoot(original, 'file:///tmp/scip-query-fixture', 'file:///tmp/scip-query-linked');
+
+    expect(rebased.metadata?.projectRoot).toBe('file:///tmp/scip-query-linked');
+    expect(original.metadata?.projectRoot).toBe('file:///tmp/scip-query-fixture');
+    expect(() => rebaseScipProjectRoot(original, 'file:///wrong', 'file:///target')).toThrow('expected file:///wrong');
+  });
+
   it('merges overlapping documents and deduplicates external symbols', () => {
     const merged = mergeScipIndexes([
       createFixtureIndex({

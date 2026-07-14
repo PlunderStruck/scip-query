@@ -60,78 +60,51 @@ matched the same published project generation. When the project fingerprint is
 unavailable, the span remains unclassified instead of being treated as safely
 reusable.
 
-## Cross-checkout content-addressed sharing (Plan 6 6.6.2 — design only, not implemented)
+## Cross-worktree sharing
 
-Plan 6 6.6.1 (`docs/benchmarks/2026-07-02-performance-architecture-ledger.md`,
-"Retro-Gate Replay" section) replayed 5 real Vega commits, each in a brand-new
-temporary worktree, and found that `evidenceRows.file_evidence` counts
-recompute the same ~1,835 `file-definitions`/`source-facts` rows from zero on
-every single commit, purely because the cache directory (keyed by worktree
-path) is new every time — not because that much file content actually
-changed between adjacent commits. Because Plan 6 6.5.3 found no per-file or
-content-addressed mode in the upstream `scip-typescript` indexer (BLOCKED,
-see the ledger), and the reindex/SCIP-shard half of retro-gate cost was the
-(slightly) larger of the two roughly-comparable halves in that same replay,
-this design is recorded here as a gated future step rather than shipped now,
-per the seed doc's rule: "if reindex dominates and 6.5.3 was BLOCKED, scope
-6.6.2 to the design-doc section only."
+Cross-worktree sharing has two deliberately different layers.
 
-**Sharing ceiling is partial, not total.** Looking at the Product Matrix
-above, only products keyed _purely_ on `{kind, relative path, content hash,
-payload version}` — with **no** project fingerprint in the key — can be
-safely satisfied from a shared, path-independent store: `file:source-facts`,
-`file:definition-exclusions`, `file:react-component-behavior-profiles`, and
-(with the git-history-window caveat noted in its own row)
-`file:doc-path-evidence`. A file whose content is byte-identical across two
-different checkouts produces an identical row for these products regardless
-of which project root or commit indexed it. Products whose key includes the
-project fingerprint (`file:file-definitions`, `file:source-fingerprints`,
-`file:consumer-file-usage`, and the whole `project:file-dependency-graph`
-product) are _not_ safe cross-checkout sharing candidates under a
-content-only key, because their payload is "interpreted against the current
-project index" — the same file, indexed inside two different commits' SCIP
-shards, can legitimately produce different rows (a caller's symbol
-resolution changed elsewhere in the project). In the 6.6.1 replay data,
-`source-facts` and `file-definitions` were both ~1,835 rows per commit; a
-content-addressed shared store would only ever be able to eliminate the
-`source-facts`-shaped half of that fill, not the `file-definitions` half.
+An index generation is a complete immutable artifact set for one repository,
+Git tree, project-input fingerprint, indexed language set, artifact format, and
+producer version. The producer version identifies the scip-query/index-format
+implementation whose behavior created the files; including it makes an upgrade
+miss safely instead of adopting artifacts with incompatible semantics.
+Clean worktrees with that exact identity clone the generation into their own
+writable cache before opening SQLite. The clone is rebound to the target SCIP
+project root, then enters through the existing local atomic publication and
+generation-recovery boundary. Dirty or partial indexes are never published.
+Peer bootstrap validates the stable cache artifacts, not the peer checkout's
+current files: a dirty checkout may donate an older cache that still exactly
+describes the target `HEAD`, while a cache containing the dirty changes cannot.
+The implementation and its compiler-backed tests live in
+`src/reindex/shared-generation-store.ts` and
+`tests/reindex/shared-worktree-cache.integration.test.ts`.
 
-**If ever implemented, the first shipped step must be read-through only:**
+Shared evidence is a repository-level read-through database at
+`~/.cache/scip-query/repositories/<repository-id>/evidence.db`. The
+worktree-local `evidence.db` remains authoritative: reads try local first and
+writes commit locally before a best-effort shared write. A shared SQLite open,
+read, lock, corruption, or write failure becomes a miss or no-op and cannot
+fail a query.
 
-1. A separate, path-independent store (for example
-   `~/.cache/scip-query/shared-evidence/evidence.db`, or a location gated by
-   a new `SCIP_QUERY_SHARED_EVIDENCE_DIR` env var) holds only the
-   content-hash-only-keyed product kinds listed above, keyed on exactly the
-   same `{kind, relative path, content hash, payload version}` tuple already
-   used for the project-local read/write path — no project-root component in
-   the key at all.
-2. Read path: on a project-local `file_evidence` miss for one of the eligible
-   kinds, check the shared store with the identical key before recomputing.
-   The project-local `evidence.db` remains authoritative; a shared-store hit
-   is copied into the local DB (or served transiently) but the local DB is
-   never treated as stale because of the shared store.
-3. Write path: after a project-local compute+store for an eligible kind, also
-   upsert the same row into the shared store under the same content-hash key,
-   so a _different_ project root/worktree/clone can satisfy from it later.
-4. `SCIP_QUERY_SHARED_EVIDENCE_DIR=off` (or unset/absent shared store)
-   disables the read-through path entirely and restores today's
-   project-local-only behavior with no code branch removed — this is the
-   "migration path" the seed doc's one-way-door section requires.
-5. Mandatory before merge, per this doc's own contract: a staleness test that
-   first plants a shared-store row under a given content hash from one
-   simulated project root, proves a **different** project root with the
-   **same** content hash gets a hit (proving the sharing actually works),
-   then mutates the content hash and proves the same different project root
-   gets a miss (proving invalidation still holds once content diverges).
-6. Scope explicitly excludes the reindex/SCIP-shard layer: whole-project
-   fingerprint reuse across worktrees (i.e. "have we ever produced this exact
-   TypeScript shard before, under any path") is a materially different,
-   larger change to `src/reindex/index.ts`'s shard-caching key (today keyed
-   by project root + per-language fingerprint, plus per-tsconfig-project
-   fingerprints for TypeScript workspace mode as of
-   `docs/plans/2026-07-05-per-project-ts-shard-caching.md` — still always
-   path-bound, never cross-worktree, see
-   `docs/benchmarks/2026-07-02-performance-architecture-ledger.md`'s Reindex
-   Proportionality section) and is out of scope for this design note; it
-   would need its own gated plan and feasibility check, separate from this
-   evidence-layer proposal.
+The shipped allowlist is intentionally limited to products whose manifest
+dependencies are exactly content hash and tool version:
+
+- `file:source-facts`
+- `file:definition-exclusions`
+- `file:doc-path-tokens` (the typed storage-contract test product)
+- `file:react-component-behavior-profiles`
+
+The shared table key contains kind, relative path, content hash, and payload
+version, so two content versions of one path coexist. Project evidence,
+semantic callees/references, legacy rows, Git-history-shaped products, and the
+finding outcome ledger remain local. Products such as `file:file-definitions`
+and `file:consumer-file-usage` also remain local because their meaning depends
+on the project fingerprint, not source bytes alone.
+
+`tests/storage/evidence-cache.test.ts` proves a safe product written from one
+worktree is readable in another, two content hashes for one path coexist, and
+a non-allowlisted product misses. Shared rows are oldest-first bounded during
+repository cleanup. `SCIP_QUERY_SHARED_CACHE=0`, `SCIP_QUERY_CACHE_DIR`,
+`SCIP_QUERY_INDEX_DB`, or configured `dbPath` bypasses this layer together with
+shared index generations.

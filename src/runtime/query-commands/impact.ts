@@ -217,7 +217,7 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
   const budget = commandAnalysisBudget(db, 'diff-gate', full, {
     quiet: hookMode || booleanOptionValue(opts, 'json'),
   });
-  const result = queries.diffGate(db, {
+  const gateOptions = {
     base: stringOptionValue(opts, 'base'),
     minTogether: definedNumberOption(opts, 'minTogether', 6),
     maxEchoChecks: numberOptionValue(opts, 'maxEchoChecks'),
@@ -227,10 +227,13 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
     semantic: budget.semantic,
     historyMode: full ? 'full' : 'bounded',
     skip: parseSkipChecks(opts['skip']),
-  });
+  } as const;
+  const result = queries.diffGate(db, gateOptions);
   const blocking = queries.blockingFindings(result.findings);
   const gateFailed = queries.diffGateFailedClosed(result);
-  const outcomes = recordDiffGateOutcomes(db, result);
+  const outcomes = recordDiffGateOutcomes(db, result, {
+    replayGate: (baseCommit) => queries.diffGate(db, { ...gateOptions, base: baseCommit }),
+  });
   if (outcomes.warning) console.error(`note: ${outcomes.warning}`);
   if (!hookMode && booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('diff-gate', [], opts, {

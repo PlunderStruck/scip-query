@@ -1,4 +1,3 @@
-import { createRequire } from 'node:module';
 import { availableParallelism } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { IndexedDefinition } from '../domain/types.js';
@@ -28,9 +27,9 @@ import {
 import { render } from './render.js';
 import { detectorPrecision, readLedgerRecords } from '../queries/health/finding-outcome-ledger.js';
 import { healthReportCacheKey, readHealthReportCache, writeHealthReportCache } from './health-report-cache.js';
+import { cliVersion } from './cli-version.js';
 
-const require = createRequire(import.meta.url);
-export const { version: cliVersion } = loadCliPackageInfo();
+export { cliVersion } from './cli-version.js';
 export const HEALTH_PHASE_COMMAND = '__health-phase';
 export const DIFF_IMPACT_BATCH_COMMAND = '__diff-impact-batch';
 const DIFF_IMPACT_BATCH_SIZE = 10;
@@ -71,17 +70,6 @@ const HEALTH_SEMANTIC_PREWARM_CACHE = createProjectEvidenceProduct<HealthSemanti
   serialize: (value) => JSON.stringify(value),
   deserialize: parseHealthSemanticPrewarmMarker,
 });
-
-function loadCliPackageInfo(): { version: string } {
-  for (const path of ['../package.json', '../../package.json']) {
-    try {
-      return require(path) as { version: string };
-    } catch {
-      // Source runs from src/runtime; bundled CLI runs from dist.
-    }
-  }
-  return { version: '0.0.0' };
-}
 
 function parseHealthSemanticPrewarmMarker(payload: string): HealthSemanticPrewarmMarker | null {
   try {

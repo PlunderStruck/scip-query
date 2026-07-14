@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -22,6 +22,8 @@ import {
   writeCachedFileEvidence,
   writeFindingOutcomeLedger,
   FINDING_OUTCOME_LEDGER_CAP_PER_CHECK,
+  SHARED_FILE_EVIDENCE_KINDS,
+  maintainSharedEvidenceCache,
 } from '../../src/storage/evidence-cache.js';
 import { SOURCE_FACTS_PAYLOAD_VERSION, getSourceFacts } from '../../src/source/source-facts.js';
 import { getSourceLines, getSourceText } from '../../src/source/source-text.js';
@@ -163,6 +165,101 @@ describe('evidence cache', () => {
     } finally {
       db.close();
     }
+  });
+
+  it('reads proven content-addressed products across worktrees while keeping other evidence local', () => {
+    const sharedEvidenceDbPath = join(tempDir, 'repository-cache', 'evidence.db');
+    const firstDir = join(tempDir, 'worktree-cache-1');
+    const secondDir = join(tempDir, 'worktree-cache-2');
+    const thirdDir = join(tempDir, 'worktree-cache-3');
+    for (const directory of [firstDir, secondDir, thirdDir]) {
+      mkdirSync(directory, { recursive: true });
+      copyFileSync(dbPath, join(directory, 'index.db'));
+    }
+    const openWorktreeDb = (directory: string): ScipDatabase =>
+      new ScipDatabase({
+        projectRoot,
+        dbPath: join(directory, 'index.db'),
+        indexPath: join(directory, 'index.scip'),
+        sharedEvidenceDbPath,
+      });
+
+    const first = openWorktreeDb(firstDir);
+    try {
+      writeCachedFileEvidence(first, 'doc-path-tokens', 'docs/shared.md', 'hash-a', 'shared-a');
+      writeCachedFileEvidence(first, 'file-definitions', 'src/private.ts', 'hash-private', 'private');
+    } finally {
+      first.close();
+    }
+    const second = openWorktreeDb(secondDir);
+    try {
+      writeCachedFileEvidence(second, 'doc-path-tokens', 'docs/shared.md', 'hash-b', 'shared-b');
+      expect(readCachedFileEvidence(second, 'doc-path-tokens', 'docs/shared.md', 'hash-a')).toBe('shared-a');
+      expect(readCachedFileEvidence(second, 'file-definitions', 'src/private.ts', 'hash-private')).toBeNull();
+    } finally {
+      second.close();
+    }
+    const third = openWorktreeDb(thirdDir);
+    try {
+      expect(readCachedFileEvidence(third, 'doc-path-tokens', 'docs/shared.md', 'hash-a')).toBe('shared-a');
+      expect(readCachedFileEvidence(third, 'doc-path-tokens', 'docs/shared.md', 'hash-b')).toBe('shared-b');
+    } finally {
+      third.close();
+    }
+  });
+
+  it('keeps the shared evidence allowlist limited to content and tool-version dependencies', () => {
+    for (const kind of SHARED_FILE_EVIDENCE_KINDS) {
+      expect(evidenceProductInvalidation(kind).dependsOn).toEqual(
+        expect.arrayContaining(['content-hash', 'tool-version']),
+      );
+      expect(evidenceProductInvalidation(kind).dependsOn).toHaveLength(2);
+    }
+  });
+
+  it('evicts the oldest shared evidence rows above the maintenance bound', () => {
+    const path = join(tempDir, 'maintenance', 'evidence.db');
+    mkdirSync(join(tempDir, 'maintenance'), { recursive: true });
+    const evidence = new Database(path);
+    evidence.exec(`
+      CREATE TABLE file_evidence (
+        kind TEXT NOT NULL,
+        relative_path TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        version TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        last_accessed_at INTEGER NOT NULL,
+        PRIMARY KEY (kind, relative_path, content_hash, version)
+      )
+    `);
+    const insert = evidence.prepare('INSERT INTO file_evidence VALUES (?, ?, ?, ?, ?, ?)');
+    insert.run('doc-path-tokens', 'old', 'a', 'evidence-v1', 'old', 1);
+    insert.run('doc-path-tokens', 'middle', 'b', 'evidence-v1', 'middle', 2);
+    insert.run('doc-path-tokens', 'new', 'c', 'evidence-v1', 'new', 3);
+    evidence.close();
+
+    expect(maintainSharedEvidenceCache(path, { maxRows: 2, budgetBytes: Number.MAX_SAFE_INTEGER })).toEqual({
+      deletedRows: 1,
+      remainingRows: 2,
+    });
+    const verified = new Database(path, { readonly: true });
+    try {
+      expect(verified.prepare('SELECT relative_path FROM file_evidence ORDER BY last_accessed_at').all()).toEqual([
+        { relative_path: 'middle' },
+        { relative_path: 'new' },
+      ]);
+    } finally {
+      verified.close();
+    }
+
+    expect(maintainSharedEvidenceCache(path, { maxRows: 10, budgetBytes: 1 })).toEqual({
+      deletedRows: 2,
+      remainingRows: 0,
+    });
+    expect(maintainSharedEvidenceCache(path, { maxRows: 10, budgetBytes: 1 })).toEqual({
+      deletedRows: 0,
+      remainingRows: 0,
+    });
   });
 
   it('treats invalid file evidence product payloads as misses', () => {

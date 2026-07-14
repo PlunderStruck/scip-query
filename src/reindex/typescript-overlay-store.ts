@@ -7,7 +7,7 @@ import { assembleTypeScriptIndex } from './typescript-fragment-store.js';
 
 export const TYPESCRIPT_OVERLAY_STORE_VERSION = 1;
 export const TYPESCRIPT_DEFERRED_SCIP_THRESHOLD_BYTES = 64 * 1024 * 1024;
-const OVERLAY_DIRECTORY = 'typescript-scip-overlays';
+export const TYPESCRIPT_OVERLAY_STORE_DIRECTORY = 'typescript-scip-overlays';
 
 export interface TypeScriptOverlayRecord {
   relativePath: string;
@@ -200,7 +200,7 @@ function parseOverlayManifest(raw: string): TypeScriptOverlayManifest {
 }
 
 function overlayRoot(cacheDir: string): string {
-  return join(cacheDir, OVERLAY_DIRECTORY);
+  return join(cacheDir, TYPESCRIPT_OVERLAY_STORE_DIRECTORY);
 }
 
 function generationFile(generationIdentity: string): string {

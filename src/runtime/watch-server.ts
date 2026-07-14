@@ -32,6 +32,7 @@ import {
   type WatchServiceState,
   type WatchServiceWatchOverrides,
 } from './watch-service.js';
+import { maybeSweepRepositoryCache } from './repository-cache-lifecycle.js';
 
 const HEARTBEAT_INTERVAL_MS = 1_000;
 const ACTIVITY_POLL_INTERVAL_MS = 250;
@@ -68,6 +69,7 @@ export async function runWatchServiceServer(
   let lastRefreshRequestAtMs = 0;
   let lastHeartbeatAtMs = 0;
   let lastActivityPollAtMs = 0;
+  let lastCacheSweepAtMs = 0;
   let semanticBusyUntilMs: number | undefined;
   let indexBusyUntilMs: number | undefined;
   const semanticMailboxPaths = typeScriptSemanticMailboxPaths(indexPaths.cacheDir);
@@ -175,6 +177,10 @@ export async function runWatchServiceServer(
         },
       });
       const nowMs = Date.now();
+      if (nowMs - lastCacheSweepAtMs >= 60_000) {
+        lastCacheSweepAtMs = nowMs;
+        maybeSweepRepositoryCache(projectRoot, cliVersion);
+      }
       if (nowMs - lastActivityPollAtMs >= ACTIVITY_POLL_INTERVAL_MS) {
         lastActivityPollAtMs = nowMs;
         const activity = readWatchServiceActivity(servicePaths.activityPath);

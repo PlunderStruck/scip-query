@@ -2,12 +2,29 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync } from 'node:fs';
 import { isAbsolute, join, relative, sep } from 'node:path';
-import type { SupportedLanguage } from '../domain/types.js';
+import type { SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
 
 export interface ProjectFileFingerprint {
   path: string;
   size: number;
   hash: string;
+}
+
+export interface ProjectInputFingerprint {
+  version: 2;
+  languages: SupportedLanguage[];
+  pnpmWorkspaces: boolean;
+  typescriptProjectMode: TypeScriptProjectMode;
+  typescriptProjects: string[];
+  clojureConfigPath?: string;
+  files: ProjectFileFingerprint[];
+}
+
+export interface ProjectInputFingerprintOptions {
+  pnpmWorkspaces?: boolean;
+  typescriptProjectMode?: TypeScriptProjectMode;
+  typescriptProjects?: readonly string[];
+  clojureConfigPath?: string;
 }
 
 export type ProjectInputPathKind = 'source' | 'ambient' | 'config' | 'other';
@@ -90,6 +107,27 @@ export function fingerprintProjectFiles(
       };
     }
   });
+}
+
+export function buildProjectInputFingerprint(
+  projectRoot: string,
+  languages: readonly SupportedLanguage[],
+  opts: ProjectInputFingerprintOptions,
+): ProjectInputFingerprint {
+  return {
+    version: 2,
+    languages: [...languages].sort(),
+    pnpmWorkspaces: opts.typescriptProjectMode !== 'workspace' && opts.pnpmWorkspaces === true,
+    typescriptProjectMode: opts.typescriptProjectMode ?? 'single',
+    typescriptProjects: normalizeTypeScriptProjects(opts.typescriptProjects),
+    clojureConfigPath: normalizeOptionalPath(opts.clojureConfigPath),
+    files: fingerprintProjectFiles(projectRoot),
+  };
+}
+
+function normalizeOptionalPath(path: string | undefined): string | undefined {
+  const trimmed = path?.trim();
+  return trimmed || undefined;
 }
 
 function isLanguageRelevantPath(

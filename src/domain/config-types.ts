@@ -81,6 +81,8 @@ export interface ScipQueryConfig {
   indexPath: string;
   /** Project root directory */
   projectRoot: string;
+  /** Internal repository-level read-through cache for proven content-addressed evidence products. */
+  sharedEvidenceDbPath?: string;
   /** Project-specific externally-live roots for dead-code filtering */
   entryRoots?: EntryRootsConfig;
   /** Paths to .gitignore files to load for filtering */

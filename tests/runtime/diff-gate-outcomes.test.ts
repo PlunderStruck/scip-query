@@ -11,7 +11,7 @@ import { evidenceFixtureDb } from '../fixtures/evidence-fixture.js';
 
 const tempRoots: string[] = [];
 
-function finding(): DiffGateFinding {
+function finding(overrides: Partial<DiffGateFinding> = {}): DiffGateFinding {
   return {
     id: 'SQECHO1',
     check: 'echo',
@@ -20,15 +20,20 @@ function finding(): DiffGateFinding {
     message: 'Duplicated behavior changed.',
     why: ['The changed symbol has a structural twin.'],
     remediation: 'Update both implementations or consolidate them.',
+    ...overrides,
   };
 }
 
-function result(findings: DiffGateFinding[]): DiffGateResult {
+function result(
+  findings: DiffGateFinding[],
+  base = 'HEAD',
+  checksRun: DiffGateResult['checksRun'] = ['echo'],
+): DiffGateResult {
   return {
-    base: 'HEAD',
+    base,
     changedFiles: [],
     changedSymbols: 0,
-    checksRun: ['echo'],
+    checksRun,
     skipped: [],
     suppressed: [],
     findings,
@@ -69,7 +74,7 @@ describe('recordDiffGateOutcomes', () => {
     }
   });
 
-  it('records a cross-HEAD disappearance without crediting it as fixed', () => {
+  it('keeps a cross-HEAD disappearance open when no comparable replay is available', () => {
     const { db, root } = openDb();
     try {
       recordDiffGateOutcomes(db, result([finding()]), {
@@ -84,7 +89,160 @@ describe('recordDiffGateOutcomes', () => {
       expect(computeEffectiveness(readOutcomeEvents(root)).checks[0]).toMatchObject({
         caught: 1,
         fixed: 0,
-        unverified: 1,
+        unverified: 0,
+        open: 1,
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  it('credits a committed repair when a clean replay against the caught base stays clear', () => {
+    const { db, root } = openDb();
+    try {
+      recordDiffGateOutcomes(db, result([finding()]), {
+        now: () => 1_000,
+        headCommit: () => 'head-1',
+        resolveCommit: () => 'head-1',
+      });
+      recordDiffGateOutcomes(db, result([]), {
+        now: () => 2_000,
+        headCommit: () => 'head-2',
+        resolveCommit: () => 'head-2',
+        worktreeIsClean: () => true,
+        replayGate: (baseCommit) => result([], baseCommit),
+      });
+
+      const events = readOutcomeEvents(root);
+      expect(events.at(-1)).toMatchObject({
+        event: 'resolved',
+        commit: 'head-2',
+        comparisonBaseCommit: 'head-2',
+        verifiedAgainstCommit: 'head-1',
+      });
+      expect(computeEffectiveness(events).checks[0]).toMatchObject({ fixed: 1, unverified: 0, open: 0 });
+    } finally {
+      db.close();
+    }
+  });
+
+  it('keeps a committed defect open when the caught-base replay still reports it', () => {
+    const { db, root } = openDb();
+    try {
+      recordDiffGateOutcomes(db, result([finding()]), {
+        now: () => 1_000,
+        headCommit: () => 'head-1',
+        resolveCommit: () => 'head-1',
+      });
+      recordDiffGateOutcomes(db, result([]), {
+        now: () => 2_000,
+        headCommit: () => 'head-2',
+        resolveCommit: () => 'head-2',
+        worktreeIsClean: () => true,
+        replayGate: (baseCommit) => result([finding()], baseCommit),
+      });
+
+      expect(readOutcomeEvents(root).map((event) => event.event)).toEqual(['caught']);
+      expect(computeEffectiveness(readOutcomeEvents(root)).checks[0]).toMatchObject({ fixed: 0, open: 1 });
+    } finally {
+      db.close();
+    }
+  });
+
+  it('defers cross-HEAD verification while the worktree is dirty', () => {
+    const { db, root } = openDb();
+    try {
+      recordDiffGateOutcomes(db, result([finding()]), {
+        now: () => 1_000,
+        headCommit: () => 'head-1',
+        resolveCommit: () => 'head-1',
+      });
+      let replayed = false;
+      recordDiffGateOutcomes(db, result([]), {
+        now: () => 2_000,
+        headCommit: () => 'head-2',
+        resolveCommit: () => 'head-2',
+        worktreeIsClean: () => false,
+        replayGate: () => {
+          replayed = true;
+          return result([]);
+        },
+      });
+
+      expect(replayed).toBe(false);
+      expect(computeEffectiveness(readOutcomeEvents(root)).checks[0]).toMatchObject({ fixed: 0, open: 1 });
+    } finally {
+      db.close();
+    }
+  });
+
+  it('keeps the finding open when the stored-base replay cannot run its detector', () => {
+    const { db, root } = openDb();
+    try {
+      recordDiffGateOutcomes(db, result([finding()]), {
+        now: () => 1_000,
+        headCommit: () => 'head-1',
+        resolveCommit: () => 'head-1',
+      });
+      recordDiffGateOutcomes(db, result([]), {
+        now: () => 2_000,
+        headCommit: () => 'head-2',
+        resolveCommit: () => 'head-2',
+        worktreeIsClean: () => true,
+        replayGate: (baseCommit) => result([], baseCommit, []),
+      });
+
+      expect(readOutcomeEvents(root).map((event) => event.event)).toEqual(['caught']);
+      expect(computeEffectiveness(readOutcomeEvents(root)).checks[0]).toMatchObject({ fixed: 0, open: 1 });
+    } finally {
+      db.close();
+    }
+  });
+
+  it('uses an unchanged custom comparison base across HEAD changes without replay', () => {
+    const { db, root } = openDb();
+    try {
+      recordDiffGateOutcomes(db, result([finding()], 'origin/main'), {
+        now: () => 1_000,
+        headCommit: () => 'head-1',
+        resolveCommit: () => 'base-1',
+      });
+      recordDiffGateOutcomes(db, result([], 'origin/main'), {
+        now: () => 2_000,
+        headCommit: () => 'head-2',
+        resolveCommit: () => 'base-1',
+        replayGate: () => {
+          throw new Error('comparable bases must not replay');
+        },
+      });
+
+      expect(computeEffectiveness(readOutcomeEvents(root)).checks[0]).toMatchObject({ fixed: 1, open: 0 });
+    } finally {
+      db.close();
+    }
+  });
+
+  it('preserves move classification when replay finds the same symbol under a new id', () => {
+    const { db, root } = openDb();
+    try {
+      recordDiffGateOutcomes(db, result([finding({ symbol: 'sym#fn' })]), {
+        now: () => 1_000,
+        headCommit: () => 'head-1',
+        resolveCommit: () => 'head-1',
+      });
+      recordDiffGateOutcomes(db, result([]), {
+        now: () => 2_000,
+        headCommit: () => 'head-2',
+        resolveCommit: () => 'head-2',
+        worktreeIsClean: () => true,
+        replayGate: (baseCommit) => result([finding({ id: 'SQECHO2', symbol: 'sym#fn' })], baseCommit),
+      });
+
+      expect(computeEffectiveness(readOutcomeEvents(root)).checks[0]).toMatchObject({
+        caught: 2,
+        fixed: 0,
+        moved: 1,
+        open: 1,
       });
     } finally {
       db.close();

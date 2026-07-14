@@ -4,8 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runStopHookDiffGate } from '../../src/runtime/agent-hooks.js';
+import { diffGate } from '../../src/queries/impact/diff-gate.js';
 import { computeEffectiveness } from '../../src/queries/health/effectiveness.js';
-import { readOutcomeEvents } from '../../src/storage/outcome-events.js';
+import { readLedgerRecords } from '../../src/queries/health/finding-outcome-ledger.js';
+import { ScipDatabase } from '../../src/storage/db.js';
+import { gitWorktreeIsClean, readOutcomeEvents } from '../../src/storage/outcome-events.js';
 import { evidenceFixtureDb } from '../fixtures/evidence-fixture.js';
 
 // Regression coverage for the Stop-hook path: `resolveHookWorkspace` +
@@ -63,6 +66,7 @@ function buildRepo(): string {
       docs: { snapshotPaths: ['docs/benchmarks/**', 'docs/validation/**', 'docs/reviews/**', 'docs/plans/**'] },
     }),
   );
+  writeFile(join(repoRoot, '.gitignore'), '.scip-query/\n');
 
   const dbDir = join(repoRoot, '.scip-query');
   mkdirSync(dbDir, { recursive: true });
@@ -125,5 +129,65 @@ describe('Stop hook doc-reference snapshot-doc exemption', () => {
     const events = readOutcomeEvents(repoRoot).filter((event) => event.findingId === guideFinding?.id);
     expect(events.map((event) => event.event)).toEqual(['caught', 'resolved']);
     expect(computeEffectiveness(events).checks[0]).toMatchObject({ caught: 1, fixed: 1, open: 0 });
+  });
+
+  it('keeps a committed finding open, then verifies the later committed repair against its original base', () => {
+    const repoRoot = buildRepo();
+
+    const first = runStopHookDiffGate(hookInputFor(repoRoot));
+    const guideFinding = first?.findings.find(
+      (finding) => finding.check === 'doc-reference' && finding.file === 'docs/guide.md',
+    );
+    expect(guideFinding).toBeDefined();
+
+    gitIn(repoRoot, 'add', '-A');
+    gitIn(repoRoot, 'commit', '-m', 'commit defect', '--no-gpg-sign');
+    expect(gitWorktreeIsClean(repoRoot)).toBe(true);
+    const committedDefect = runStopHookDiffGate(hookInputFor(repoRoot));
+    expect(committedDefect?.findings).toEqual([]);
+    let events = readOutcomeEvents(repoRoot).filter((event) => event.findingId === guideFinding?.id);
+    expect(events.map((event) => event.event)).toEqual(['caught']);
+    expect(computeEffectiveness(events).checks[0]).toMatchObject({ fixed: 0, open: 1 });
+
+    writeFile(join(repoRoot, 'docs', 'guide.md'), 'General project guidance.\n');
+    gitIn(repoRoot, 'add', '-A');
+    gitIn(repoRoot, 'commit', '-m', 'repair citation', '--no-gpg-sign');
+    expect(gitWorktreeIsClean(repoRoot)).toBe(true);
+    const replayDb = new ScipDatabase({
+      projectRoot: repoRoot,
+      dbPath: join(repoRoot, '.scip-query', 'index.db'),
+      indexPath: join(repoRoot, '.scip-query', 'index.scip'),
+      docs: { snapshotPaths: ['docs/benchmarks/**', 'docs/validation/**', 'docs/reviews/**', 'docs/plans/**'] },
+    });
+    try {
+      const replay = diffGate(replayDb, { base: events[0]!.comparisonBaseCommit, minTogether: 6, skip: [] });
+      expect(replay.checksRun).toContain('doc-reference');
+      expect(replay.findings.some((finding) => finding.id === guideFinding?.id)).toBe(false);
+      expect(readLedgerRecords(replayDb).find((record) => record.findingId === guideFinding?.id)?.outcome).toBe(
+        'still-open',
+      );
+    } finally {
+      replayDb.close();
+    }
+    const committedRepair = runStopHookDiffGate(hookInputFor(repoRoot));
+    expect(committedRepair?.findings).toEqual([]);
+
+    const afterDb = new ScipDatabase({
+      projectRoot: repoRoot,
+      dbPath: join(repoRoot, '.scip-query', 'index.db'),
+      indexPath: join(repoRoot, '.scip-query', 'index.scip'),
+    });
+    try {
+      expect(readLedgerRecords(afterDb).find((record) => record.findingId === guideFinding?.id)?.outcome).toBe(
+        'resolved',
+      );
+    } finally {
+      afterDb.close();
+    }
+
+    events = readOutcomeEvents(repoRoot).filter((event) => event.findingId === guideFinding?.id);
+    expect(events.map((event) => event.event)).toEqual(['caught', 'resolved']);
+    expect(events.at(-1)).toEqual(expect.objectContaining({ verifiedAgainstCommit: events[0]?.comparisonBaseCommit }));
+    expect(computeEffectiveness(events).checks[0]).toMatchObject({ fixed: 1, unverified: 0, open: 0 });
   });
 });

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { fingerprintProjectFiles } from '../../src/reindex/project-files.js';
+import { buildProjectInputFingerprint, fingerprintProjectFiles } from '../../src/reindex/project-files.js';
 
 const tempDirs: string[] = [];
 
@@ -47,6 +47,27 @@ describe('project file fingerprints', () => {
       size: -1,
       hash: 'unreadable',
     });
+  });
+
+  it('normalizes indexing options into one stable whole-project fingerprint', () => {
+    const projectRoot = temporaryDirectory('scip-query-project-fingerprint-');
+    writeFileSync(join(projectRoot, 'value.ts'), 'export const value = 1;\n');
+
+    const first = buildProjectInputFingerprint(projectRoot, ['typescript'], {
+      pnpmWorkspaces: true,
+      typescriptProjects: [' packages/web ', 'packages/web'],
+      clojureConfigPath: ' ',
+    });
+    const reordered = buildProjectInputFingerprint(projectRoot, ['typescript'], {
+      pnpmWorkspaces: true,
+      typescriptProjects: ['packages/web'],
+    });
+
+    expect(first).toEqual(reordered);
+    expect(first.typescriptProjects).toEqual(['packages/web']);
+
+    writeFileSync(join(projectRoot, 'value.ts'), 'export const value = 2;\n');
+    expect(buildProjectInputFingerprint(projectRoot, ['typescript'], { pnpmWorkspaces: true })).not.toEqual(first);
   });
 });
 

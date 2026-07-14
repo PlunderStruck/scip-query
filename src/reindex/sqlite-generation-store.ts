@@ -14,7 +14,7 @@ import { basename, dirname, join, relative } from 'node:path';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 
 export const SQLITE_GENERATION_STORE_VERSION = 1;
-const SQLITE_GENERATION_DIRECTORY = '.scipquery-generations';
+export const SQLITE_GENERATION_DIRECTORY = '.scipquery-generations';
 
 export type SqliteGenerationHandoffStage =
   | 'after-recovery-retained'

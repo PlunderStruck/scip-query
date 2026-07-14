@@ -70,6 +70,18 @@ describe('recordFindingOutcomes (pure)', () => {
     expect(second).toEqual(first);
   });
 
+  it('leaves a missing record untouched while cross-HEAD verification is pending', () => {
+    const first = recordFindingOutcomes(
+      [],
+      [{ check: 'doc-reference', findingId: 'A', suppressed: false }],
+      ['doc-reference'],
+      1000,
+    );
+    const second = recordFindingOutcomes(first, [], ['doc-reference'], 2000, new Set(['doc-reference\0A']));
+
+    expect(second).toEqual(first);
+  });
+
   it('records suppressed findings with outcome suppressed', () => {
     const next = recordFindingOutcomes([], [{ check: 'echo', findingId: 'A', suppressed: true }], ['echo'], 1000);
 

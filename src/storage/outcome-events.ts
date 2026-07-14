@@ -40,8 +40,17 @@ export interface OutcomeEvent {
   event: OutcomeEventKind;
   /** HEAD commit at observation time; null when git is unavailable. */
   commit: string | null;
+  /** Resolved commit used as the gate's diff baseline for this observation. */
+  comparisonBaseCommit?: string;
+  /** Original comparison commit replayed to prove a cross-HEAD resolution. */
+  verifiedAgainstCommit?: string;
   /** SCIP symbol of the finding when known — enables rename ("moved") reclassification at query time. */
   symbol?: string;
+}
+
+export interface OutcomeEventEvidence {
+  comparisonBaseCommit?: string;
+  verifiedAgainstByFinding?: ReadonlyMap<string, string>;
 }
 
 function legacyLedgerDirPath(projectRoot: string): string {
@@ -67,18 +76,25 @@ export function deriveOutcomeEvents(
   symbolByFindingId: ReadonlyMap<string, string>,
   commit: string | null,
   now: number,
+  evidence: OutcomeEventEvidence = {},
 ): OutcomeEvent[] {
   const prevByKey = new Map(previous.map((record) => [ledgerKey(record.check, record.findingId), record]));
   const events: OutcomeEvent[] = [];
 
   const push = (record: FindingOutcomeRecord, event: OutcomeEventKind) => {
     const symbol = symbolByFindingId.get(record.findingId);
+    const verifiedAgainstCommit =
+      event === 'resolved'
+        ? evidence.verifiedAgainstByFinding?.get(ledgerKey(record.check, record.findingId))
+        : undefined;
     events.push({
       ts: now,
       check: record.check,
       findingId: record.findingId,
       event,
       commit,
+      ...(evidence.comparisonBaseCommit ? { comparisonBaseCommit: evidence.comparisonBaseCommit } : {}),
+      ...(verifiedAgainstCommit ? { verifiedAgainstCommit } : {}),
       ...(symbol ? { symbol } : {}),
     });
   };
@@ -101,11 +117,25 @@ export function deriveOutcomeEvents(
 
 /** HEAD commit sha for stamping events; null when the project is not a usable git repo. */
 export function headCommit(projectRoot: string): string | null {
+  return resolveGitCommit(projectRoot, 'HEAD');
+}
+
+/** Resolve a moving Git ref to the immutable commit actually compared by a gate run. */
+export function resolveGitCommit(projectRoot: string, ref: string): string | null {
   try {
-    const sha = runGit(projectRoot, ['rev-parse', 'HEAD']).trim();
+    const sha = runGit(projectRoot, ['rev-parse', '--verify', `${ref}^{commit}`]).trim();
     return /^[0-9a-f]{40}$/.test(sha) ? sha : null;
   } catch {
     return null;
+  }
+}
+
+/** True only when a replay against the working tree represents the current commit exactly. */
+export function gitWorktreeIsClean(projectRoot: string): boolean {
+  try {
+    return runGit(projectRoot, ['status', '--porcelain=v1', '--untracked-files=all']).trim() === '';
+  } catch {
+    return false;
   }
 }
 
@@ -135,6 +165,8 @@ function writeOutcomeEvent(dir: string, event: OutcomeEvent): void {
       findingId: event.findingId,
       event: event.event,
       commit: event.commit,
+      ...(event.comparisonBaseCommit ? { comparisonBaseCommit: event.comparisonBaseCommit } : {}),
+      ...(event.verifiedAgainstCommit ? { verifiedAgainstCommit: event.verifiedAgainstCommit } : {}),
       ...(event.symbol ? { symbol: event.symbol } : {}),
     },
     null,
@@ -217,9 +249,28 @@ export function dedupeEvents(events: readonly OutcomeEvent[]): OutcomeEvent[] {
   for (const event of events) {
     const key = `${event.check}\0${event.findingId}\0${event.event}\0${event.commit ?? ''}`;
     const existing = byKey.get(key);
-    if (!existing || event.ts < existing.ts) byKey.set(key, event);
+    if (
+      !existing ||
+      eventEvidenceScore(event) > eventEvidenceScore(existing) ||
+      (eventEvidenceScore(event) === eventEvidenceScore(existing) && event.ts < existing.ts)
+    ) {
+      byKey.set(key, event);
+    }
   }
   return [...byKey.values()].sort((left, right) => left.ts - right.ts);
+}
+
+/** The caught/reopened event that began the finding's current lifecycle. */
+export function latestOutcomeLifecycleAnchor(events: readonly OutcomeEvent[]): OutcomeEvent | undefined {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event?.event === 'caught' || event?.event === 'reopened') return event;
+  }
+  return undefined;
+}
+
+function eventEvidenceScore(event: OutcomeEvent): number {
+  return Number(event.comparisonBaseCommit !== undefined) + Number(event.verifiedAgainstCommit !== undefined) * 2;
 }
 
 const EVENT_KINDS: readonly OutcomeEventKind[] = ['caught', 'resolved', 'suppressed', 'reopened'];
@@ -233,6 +284,9 @@ function isOutcomeEvent(value: unknown): value is OutcomeEvent {
     typeof candidate['findingId'] === 'string' &&
     EVENT_KINDS.includes(candidate['event'] as OutcomeEventKind) &&
     (candidate['commit'] === null || typeof candidate['commit'] === 'string') &&
+    (candidate['comparisonBaseCommit'] === undefined || typeof candidate['comparisonBaseCommit'] === 'string') &&
+    (candidate['verifiedAgainstCommit'] === undefined ||
+      (candidate['event'] === 'resolved' && typeof candidate['verifiedAgainstCommit'] === 'string')) &&
     (candidate['symbol'] === undefined || typeof candidate['symbol'] === 'string')
   );
 }

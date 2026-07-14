@@ -8,7 +8,7 @@ import { writeJsonAtomic } from '../storage/atomic-json.js';
 import type { TypeScriptDocumentFragment, TypeScriptDocumentRuntime } from './typescript-document-emitter.js';
 
 export const TYPESCRIPT_FRAGMENT_STORE_VERSION = 1;
-const FRAGMENT_STORE_DIRECTORY = 'typescript-scip-fragments';
+export const TYPESCRIPT_FRAGMENT_STORE_DIRECTORY = 'typescript-scip-fragments';
 
 export interface TypeScriptFragmentRecord {
   relativePath: string;
@@ -110,7 +110,7 @@ export function assembleAffectedTypeScriptFragments(fragments: readonly TypeScri
 }
 
 export function typeScriptFragmentStorePaths(cacheDir: string): TypeScriptFragmentStorePaths {
-  const rootDir = join(cacheDir, FRAGMENT_STORE_DIRECTORY);
+  const rootDir = join(cacheDir, TYPESCRIPT_FRAGMENT_STORE_DIRECTORY);
   return {
     rootDir,
     blobDir: join(rootDir, 'blobs'),

@@ -242,7 +242,7 @@ scip-query suppress SQABC123DEF456 --check echo --reason "intentional compatibil
 
 This writes one file per suppression under `.scipquery/suppressions/` — commit it with your change. One-file-per-suppression means two branches suppressing different findings merge without conflict; the legacy `suppressions[]` array in `.scipquery.json` is still honored (read-only). Every suppression requires a reason plus either a stable finding id or a `check` (optionally narrowed by `file`). Check+file suppressions are allowed but warn because they waive every matching finding in that file. `diff-gate --json` reports both active and suppressed findings.
 
-**12. Measure whether the gate is earning its keep.** Every completed `diff-gate` run, including JSON and installed Stop-hook runs, writes each finding transition to its own committed `.scipquery/events/*.json` file. Independent branches add independent paths instead of editing one shared ledger file, so ordinary event writes do not create merge conflicts. A finding that disappears on a later run against the same non-null HEAD is a verified fix. If HEAD changed or Git evidence is unavailable, the disappearance is reported as `unverified` rather than credited as a fix. A suppressed finding was noise or an accepted trade-off:
+**12. Measure whether the gate is earning its keep.** Every completed `diff-gate` run, including JSON and installed Stop-hook runs, writes each finding transition to its own committed `.scipquery/events/*.json` file. Independent branches add independent paths instead of editing one shared ledger file, so ordinary event writes do not create merge conflicts. Each event stores the immutable Git commit used as its comparison base. A finding is a verified fix when it disappears under that same comparison—either directly or after scip-query cleanly replays the original base against a newer committed `HEAD`. Merely committing the finding cannot clear it: if replay still finds it, the outcome stays open; if the worktree is dirty or Git cannot reproduce the base, verification waits. A suppressed finding was noise or an accepted trade-off:
 
 ```bash
 scip-query effectiveness --since 30d
@@ -254,7 +254,7 @@ echo        14      10     2           1     0      1           83%        0.8
 new-dead    6       5      0           1     0      0           100%       0.3
 ```
 
-`precision` is verified fixed ÷ (verified fixed + suppressed). `moved` separates rename churn, while `unverified` prevents a commit or missing Git identity from masquerading as a confirmed repair. Run diff-gate once to record the finding and again after the repair, before committing, to earn same-HEAD verification. Filter with `--check <name>`, window with `--since 30d|12w|<ISO date>`, and get machine-readable output with `--json`. Because the event files are committed, the numbers survive re-clones and aggregate across every machine and agent working the repo. Legacy `.scipquery/ledger/events.jsonl` records remain readable and are migrated to individual files on the next gate write. Standalone health/cleanup commands are not yet outcome-tracked because they do not all expose a complete-scan contract.
+`precision` is verified fixed ÷ (verified fixed + suppressed). `moved` separates rename churn, while `unverified` is reserved for legacy or otherwise non-comparable resolutions that lack replay proof. Run diff-gate once to record the finding and again after the repair; a pre-commit rerun uses the same base directly, while a clean post-commit run automatically replays the stored base. Filter with `--check <name>`, window with `--since 30d|12w|<ISO date>`, and get machine-readable output with `--json`. Because the event files are committed, the numbers survive re-clones and aggregate across every machine and agent working the repo. Legacy `.scipquery/ledger/events.jsonl` records remain readable and are migrated to individual files on the next gate write. Historical cross-`HEAD` events without stored comparison evidence remain unverified rather than being reclassified speculatively. Standalone health/cleanup commands are not yet outcome-tracked because they do not all expose a complete-scan contract.
 
 Before any edit, `plan-context <target>` bundles the structural picture — definitions, references, call graph, blast radius — plus a HISTORY section: churn, fix-commit density, and the files that usually change together with the target ("editing this usually means editing these").
 
@@ -437,6 +437,36 @@ Vue single-file components are handled through the JavaScript/TypeScript indexer
 
 By default, indexes live in `~/.cache/scip-query/projects/<hash>/`, keeping project directories clean. Override paths with `.scipquery.json` or `SCIP_QUERY_*` environment variables. Reindexing writes per-language SCIP shards next to the SQLite index, so a mixed-language repo can reuse unchanged language outputs and rerun only the languages whose source/config inputs changed.
 
+Git worktrees in the same repository also share immutable generations under
+`~/.cache/scip-query/repositories/<repository-id>/`. A shared generation is a
+complete index for one exact committed tree, indexing configuration, artifact
+schema, and scip-query producer version; its immutability lets several
+worktrees trust it without sharing later writes.
+Before an index-reading command opens SQLite, a clean worktree with an exact
+generation clones it into that worktree's normal writable cache. Filesystem
+copy-on-write cloning is used when available, with an ordinary copy fallback;
+hard links are never used. Dirty edits, watcher refreshes, locks, and local
+`evidence.db` state therefore remain private to the worktree.
+
+The primary checkout is only a possible source of a generation, never an
+authority for a linked worktree. If its local cache already contains
+uncommitted changes that are absent from a new worktree's `HEAD`, the full
+source fingerprint differs and that cache is rejected. The new worktree uses
+an existing immutable generation for its own `HEAD` or performs the one clean
+build that creates it.
+
+The same behavior applies whether a worktree was created by Git, Conductor, or
+an agent. Concurrent cold worktrees at one snapshot coordinate one shared
+publication. A removed managed worktree cache is deleted by the next
+opportunistic sweep after its watcher, hydration, and index-build processes
+have exited; a shared generation stays while a live worktree or process
+references it, then remains for one unreferenced hour unless the 2 GiB
+repository budget requires earlier eviction. Ownership checksums and physical
+path containment prevent cleanup from following forged records or symlinks.
+Explicit `dbPath`, `SCIP_QUERY_CACHE_DIR`, and
+`SCIP_QUERY_INDEX_DB` locations are never shared or automatically deleted.
+Set `SCIP_QUERY_SHARED_CACHE=0` to restore worktree-local-only behavior.
+
 Each rebuilt generation also records an affected-set shadow beside the index:
 the files a future incremental writer would recompute, the normalized
 documents/facts that the authoritative full rebuild actually changed, recall,
@@ -555,13 +585,14 @@ dead and isolated cleanup detectors.
 
 Useful environment variables:
 
-| Variable                  | Purpose                                                                |
-| ------------------------- | ---------------------------------------------------------------------- |
-| `SCIP_QUERY_PROJECT_ROOT` | Override the project root directory                                    |
-| `SCIP_QUERY_INDEX_DB`     | Override the SQLite database path                                      |
-| `SCIP_QUERY_INDEX_SCIP`   | Override the SCIP protobuf path                                        |
-| `SCIP_QUERY_CACHE_DIR`    | Override the cache directory                                           |
-| `SCIP_QUERY_SCIP_BIN`     | Path to a local `scip` binary (overrides PATH and the Windows sidecar) |
+| Variable                  | Purpose                                                                 |
+| ------------------------- | ----------------------------------------------------------------------- |
+| `SCIP_QUERY_PROJECT_ROOT` | Override the project root directory                                     |
+| `SCIP_QUERY_INDEX_DB`     | Override the SQLite database path and bypass automatic worktree sharing |
+| `SCIP_QUERY_INDEX_SCIP`   | Override the SCIP protobuf path                                         |
+| `SCIP_QUERY_CACHE_DIR`    | Override the cache directory and bypass automatic worktree sharing      |
+| `SCIP_QUERY_SHARED_CACHE` | Set to `0` to disable shared generations, evidence, leases, and cleanup |
+| `SCIP_QUERY_SCIP_BIN`     | Path to a local `scip` binary (overrides PATH and the Windows sidecar)  |
 
 Query results are filtered through the project's `.gitignore`. If none exists, common generated directories such as `dist/`, `target/`, `node_modules/`, and `.venv/` are excluded by default.
 

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { rootIndexFallbackWarning } from '../../src/runtime/cli-context.js';
+import { rootIndexFallbackWarning, sharedCachePreparationEligible } from '../../src/runtime/cli-context.js';
 
 const tempDirs: string[] = [];
 
@@ -28,5 +28,13 @@ describe('cli context', () => {
     expect(warning).toContain(configuredPath);
     expect(warning).toContain('modified ');
     expect(warning).toContain("run 'scip-query reindex'");
+  });
+
+  it('prepares query, reindex, and watch commands but leaves setup lifecycle commands alone', () => {
+    expect(sharedCachePreparationEligible('status')).toBe(true);
+    expect(sharedCachePreparationEligible('reindex')).toBe(true);
+    expect(sharedCachePreparationEligible('watch')).toBe(true);
+    expect(sharedCachePreparationEligible('init')).toBe(false);
+    expect(sharedCachePreparationEligible('setup')).toBe(false);
   });
 });

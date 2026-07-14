@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, realpathSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
@@ -503,12 +503,38 @@ export function resolveCacheDir(projectRoot: string, config?: ProjectConfig): st
   if (config?.dbPath) return ensureDir(resolve(projectRoot, config.dbPath));
 
   // Default: XDG cache dir / fallback to ~/.cache
-  const xdgCache = process.env['XDG_CACHE_HOME'];
-  const cacheBase = xdgCache || join(homedir(), '.cache');
-  const projectHash = createHash('sha256').update(resolve(projectRoot)).digest('hex').slice(0, 12);
-
-  const dir = join(cacheBase, 'scip-query', 'projects', projectHash);
+  const dir = resolveDefaultCacheDir(projectRoot);
   return ensureDir(dir);
+}
+
+export function resolveScipQueryCacheRoot(): string {
+  const xdgCache = process.env['XDG_CACHE_HOME'];
+  return join(xdgCache || join(homedir(), '.cache'), 'scip-query');
+}
+
+export function resolveDefaultCacheDir(projectRoot: string): string {
+  let canonicalRoot = resolve(projectRoot);
+  try {
+    canonicalRoot = realpathSync(canonicalRoot);
+  } catch {
+    // Setup can resolve storage before the project directory exists.
+  }
+  const projectHash = createHash('sha256').update(canonicalRoot).digest('hex').slice(0, 12);
+  return join(resolveScipQueryCacheRoot(), 'projects', projectHash);
+}
+
+export function resolveRepositoryCacheDir(repositoryId: string): string {
+  if (!/^[a-f0-9]{24}$/.test(repositoryId)) throw new Error(`invalid repository cache identity: ${repositoryId}`);
+  return join(resolveScipQueryCacheRoot(), 'repositories', repositoryId);
+}
+
+export function automaticSharedCacheEnabled(config?: ProjectConfig): boolean {
+  return (
+    process.env['SCIP_QUERY_SHARED_CACHE'] !== '0' &&
+    !process.env['SCIP_QUERY_CACHE_DIR'] &&
+    !process.env['SCIP_QUERY_INDEX_DB'] &&
+    !config?.dbPath
+  );
 }
 
 /**

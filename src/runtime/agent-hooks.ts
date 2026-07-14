@@ -14,12 +14,15 @@ import { getProjectCapabilities, getProjectReadiness } from './project-readiness
 import { formatGateBlockReason, isStopHookReentry, readHookInput } from './agent-setup.js';
 import { cliVersion } from './cli-support.js';
 import { recordDiffGateOutcomes } from './diff-gate-outcomes.js';
+import { prepareWorktreeIndex } from './cli-context.js';
 import {
   ensureWatchServiceForCommand,
   requestWatchServiceRefresh,
   watchServicePaths,
   type WatchServiceAutoEnsureResult,
 } from './watch-service.js';
+import { findGitRoot } from './git-worktree.js';
+import { resolveSharedEvidenceDbPath } from '../reindex/shared-generation-store.js';
 
 const SKIP_HOOK_INSTALL_ENV = 'SCIP_QUERY_SKIP_HOOK_INSTALL';
 const STOP_HOOK_MODE_ENV = 'SCIP_QUERY_STOP_HOOK_MODE';
@@ -554,11 +557,14 @@ export function runStopHookDiffGate(hookInput: string): DiffGateResult | undefin
   if (!workspace || !existsSync(workspace.paths.dbPath)) return undefined;
 
   return withWorkspaceDb(workspace, (db) => {
-    const result = diffGate(db, {
+    const gateOptions = {
       minTogether: 6,
       skip: [],
+    } as const;
+    const result = diffGate(db, gateOptions);
+    const outcomes = recordDiffGateOutcomes(db, result, {
+      replayGate: (baseCommit) => diffGate(db, { ...gateOptions, base: baseCommit }),
     });
-    const outcomes = recordDiffGateOutcomes(db, result);
     if (outcomes.warning) console.error(`note: ${outcomes.warning}`);
     return result;
   });
@@ -626,6 +632,7 @@ export async function renderAgentHookContext(hookInput: string): Promise<unknown
 }
 
 interface HookRefreshDependencies {
+  prepare?: typeof prepareWorktreeIndex;
   ensureService: typeof ensureWatchServiceForCommand;
   freshness: typeof getIndexFreshness;
   requestRefresh: typeof requestWatchServiceRefresh;
@@ -633,6 +640,7 @@ interface HookRefreshDependencies {
 }
 
 const DEFAULT_HOOK_REFRESH_DEPENDENCIES: HookRefreshDependencies = {
+  prepare: prepareWorktreeIndex,
   ensureService: ensureWatchServiceForCommand,
   freshness: getIndexFreshness,
   requestRefresh: requestWatchServiceRefresh,
@@ -659,6 +667,7 @@ export async function refreshIndexForHookIfNeeded(
   const watch = resolveWatchConfig(workspace.config);
   if (watch.autoRefresh === false) return undefined;
 
+  dependencies.prepare?.(workspace.projectRoot, workspace.config, workspace.paths);
   const freshness = dependencies.freshness(workspace.projectRoot, workspace.config, workspace.paths);
   if (watch.enabled) {
     const service = dependencies.ensureService({
@@ -879,17 +888,6 @@ function resolveHookWorkspace(payload: HookPayload):
   }
 }
 
-function findGitRoot(cwd: string): string | undefined {
-  try {
-    return execFileSync('git', ['-C', cwd, 'rev-parse', '--show-toplevel'], {
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-  } catch {
-    return undefined;
-  }
-}
-
 function withWorkspaceDb<T>(
   workspace: { projectRoot: string; config: ProjectConfig; paths: ReturnType<typeof resolveIndexStoragePaths> },
   run: (db: ScipDatabase) => T,
@@ -898,6 +896,7 @@ function withWorkspaceDb<T>(
     dbPath: workspace.paths.dbPath,
     indexPath: workspace.paths.indexPath,
     projectRoot: workspace.projectRoot,
+    sharedEvidenceDbPath: resolveSharedEvidenceDbPath(workspace.projectRoot, workspace.config),
     entryRoots: workspace.config.entryRoots,
     semantic: workspace.config.semantic,
     suppressions: workspace.config.suppressions,

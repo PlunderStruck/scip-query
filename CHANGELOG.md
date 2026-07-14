@@ -2,6 +2,17 @@
 
 All notable changes to `scip-query` are documented here. This file starts at 0.11.0; everything below covers behavior changes made since the 0.10.12 release.
 
+## [Unreleased]
+
+### Performance (Git worktree warm starts)
+
+- Clean Git worktrees at the same repository snapshot now warm-start from one immutable shared index generation while retaining separate writable local caches. Concurrent cold worktrees coordinate one generation build, dirty edits stay isolated to their checkout, safe content-keyed evidence reads through a bounded repository database, and managed caches for removed worktrees are reclaimed automatically. `SCIP_QUERY_SHARED_CACHE=0` disables the behavior, and explicit cache/database overrides remain private.
+- Shared-generation reuse now verifies producer compatibility, complete peer artifacts, SQLite state, and full source stability. Hydration rolls back the complete prior local cache on failure; cleanup coordinates with lease writes and protects live watcher/build/hydration processes, ownership checksums, and physical path containment.
+
+### Accuracy (effectiveness verification)
+
+- Effectiveness events now preserve the resolved Git comparison commit. After `HEAD` advances, a clean gate run replays the original comparison before marking a finding fixed: committed defects remain open, committed repairs receive verified credit, moving refs cannot change the baseline retroactively, and dirty or unavailable replays remain pending. Legacy events stay readable and retain their existing conservative classification.
+
 ## [0.16.1]
 
 ### Fixes

@@ -87,8 +87,9 @@ scip-query suppress <id> --reason "<specific reason>"
 `suppress` writes one file per suppression under `.scipquery/suppressions/` —
 commit that file with your change. Suppressing is a real decision, not a
 bypass: every suppression counts against that detector's precision in
-`scip-query effectiveness`, while a same-HEAD clean rerun after fixing the
-finding earns verified credit. Prefer the fix whenever the finding is real.
+`scip-query effectiveness`, while a rerun against the same resolved comparison
+base earns verified credit. After `HEAD` advances, a clean run replays that
+stored base automatically. Prefer the fix whenever the finding is real.
 
 This step is complete only when `diff-gate` passes or every finding has a durable explanation.
 

@@ -4,6 +4,14 @@ import { ScipDatabase } from '../storage/db.js';
 import { createGitignoreFilter } from '../source/gitignore-filter.js';
 import { loadProjectConfig, resolveIndexStoragePaths } from './config.js';
 import type { ProjectConfig, ScipQueryConfig, WatcherStatus } from '../domain/types.js';
+import { getIndexFreshness } from './index-freshness.js';
+import {
+  prepareSharedGenerationForProject,
+  publishFreshLocalGenerationForProject,
+  type SharedCacheAction,
+  resolveSharedEvidenceDbPath,
+  touchExistingWorktreeLease,
+} from '../reindex/shared-generation-store.js';
 
 export function resolveProjectRoot(): string {
   return process.env['SCIP_QUERY_PROJECT_ROOT'] ?? process.cwd();
@@ -40,6 +48,37 @@ export function resolveActiveDbPath(projectRoot: string): string {
   return resolveCliProjectContext(projectRoot).dbPath;
 }
 
+export function prepareWorktreeIndex(
+  projectRoot: string,
+  config: ProjectConfig,
+  paths: ReturnType<typeof resolveIndexStoragePaths>,
+): SharedCacheAction {
+  if (existsSync(paths.dbPath) && touchExistingWorktreeLease(projectRoot, paths.cacheDir)) {
+    return { kind: 'local-fresh' };
+  }
+  const freshness = getIndexFreshness(projectRoot, config, paths);
+  if (freshness.state === 'fresh') return publishFreshLocalGenerationForProject(projectRoot, config, paths);
+  return prepareSharedGenerationForProject(projectRoot, config, paths);
+}
+
+export function sharedCachePreparationEligible(commandName: string): boolean {
+  return !commandName.startsWith('__') && !SHARED_CACHE_PREPARATION_EXCLUDED_COMMANDS.has(commandName);
+}
+
+const SHARED_CACHE_PREPARATION_EXCLUDED_COMMANDS = new Set([
+  'bench',
+  'config-validate',
+  'hook-context',
+  'hook-stop',
+  'init',
+  'setup',
+  'setup-agent',
+  'setup-ci',
+  'setup-hooks',
+  'uninstall',
+  'work-audit',
+]);
+
 export function openDb(): ScipDatabase {
   try {
     return openProjectDb(resolveProjectRoot(), { warnOnRootFallback: true });
@@ -60,6 +99,7 @@ export function openProjectDb(projectRoot: string, opts: { warnOnRootFallback?: 
     dbPath,
     indexPath: process.env['SCIP_QUERY_INDEX_SCIP'] ?? paths.indexPath,
     projectRoot,
+    sharedEvidenceDbPath: resolveSharedEvidenceDbPath(projectRoot, config),
     entryRoots: config.entryRoots,
     semantic: config.semantic,
     suppressions: config.suppressions,

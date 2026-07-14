@@ -15,7 +15,7 @@
  * process and every operation degrades to a miss/no-op.
  */
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import type { ScipDatabase } from './db.js';
@@ -55,6 +55,7 @@ export type ProjectEvidenceKind = (typeof PROJECT_EVIDENCE_KINDS)[number];
 
 interface EvidenceConnection {
   evidence: Database.Database;
+  shared: SharedEvidenceConnection | null;
   readFileEvidence: Database.Statement;
   readLegacyFileEvidence: Database.Statement;
   writeFileEvidence: Database.Statement;
@@ -77,6 +78,23 @@ interface EvidenceConnection {
   deleteFindingOutcomeLedgerForCheck: Database.Statement;
   writeFindingOutcomeLedgerRow: Database.Statement;
 }
+
+interface SharedEvidenceConnection {
+  evidence: Database.Database;
+  readFileEvidence: Database.Statement;
+  writeFileEvidence: Database.Statement;
+}
+
+export const SHARED_FILE_EVIDENCE_KINDS = [
+  'source-facts',
+  'definition-exclusions',
+  'doc-path-tokens',
+  'react-component-behavior-profiles',
+] as const satisfies readonly FileEvidenceKind[];
+
+const SHARED_FILE_EVIDENCE_KIND_SET = new Set<FileEvidenceKind>(SHARED_FILE_EVIDENCE_KINDS);
+export const DEFAULT_SHARED_EVIDENCE_MAX_ROWS = 250_000;
+export const DEFAULT_SHARED_EVIDENCE_BUDGET_BYTES = 512 * 1024 * 1024;
 
 /** Ledger rows are ids + timestamps only — no finding content, no prompt text. */
 export interface FindingOutcomeRow {
@@ -235,6 +253,7 @@ function connectionFor(db: ScipDatabase): EvidenceConnection | null {
     `);
     connection = {
       evidence,
+      shared: openSharedEvidenceConnection(db.config.sharedEvidenceDbPath),
       readFileEvidence: evidence.prepare(
         'SELECT payload FROM file_evidence WHERE kind = ? AND relative_path = ? AND content_hash = ? AND version = ?',
       ),
@@ -330,6 +349,98 @@ function disable(db: ScipDatabase, context: string, error: unknown): void {
   CONNECTIONS.set(db, null);
 }
 
+function openSharedEvidenceConnection(path: string | undefined): SharedEvidenceConnection | null {
+  if (!path) return null;
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    const evidence = new Database(path);
+    evidence.pragma('journal_mode = WAL');
+    evidence.pragma('busy_timeout = 250');
+    evidence.pragma('synchronous = NORMAL');
+    evidence.exec(`
+      CREATE TABLE IF NOT EXISTS file_evidence (
+        kind TEXT NOT NULL,
+        relative_path TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        version TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        last_accessed_at INTEGER NOT NULL,
+        PRIMARY KEY (kind, relative_path, content_hash, version)
+      );
+    `);
+    return {
+      evidence,
+      readFileEvidence: evidence.prepare(
+        'SELECT payload FROM file_evidence WHERE kind = ? AND relative_path = ? AND content_hash = ? AND version = ?',
+      ),
+      writeFileEvidence: evidence.prepare(
+        `INSERT INTO file_evidence (kind, relative_path, content_hash, version, payload, last_accessed_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(kind, relative_path, content_hash, version)
+         DO UPDATE SET payload = excluded.payload, last_accessed_at = excluded.last_accessed_at`,
+      ),
+    };
+  } catch (error) {
+    debugLog('shared cache disabled (open failed)', error);
+    return null;
+  }
+}
+
+function disableShared(connection: EvidenceConnection, context: string, error: unknown): void {
+  debugLog(`shared cache disabled (${context})`, error);
+  try {
+    connection.shared?.evidence.close();
+  } catch {
+    // The connection is already unusable.
+  }
+  connection.shared = null;
+}
+
+export function maintainSharedEvidenceCache(
+  path: string,
+  opts: { maxRows?: number; budgetBytes?: number } = {},
+): { deletedRows: number; remainingRows: number } | null {
+  if (!existsSync(path)) return null;
+  let evidence: Database.Database | undefined;
+  try {
+    evidence = new Database(path);
+    evidence.pragma('busy_timeout = 50');
+    evidence.pragma('wal_checkpoint(TRUNCATE)');
+    const count = (evidence.prepare('SELECT COUNT(*) AS count FROM file_evidence').get() as { count: number }).count;
+    const maxRows = opts.maxRows ?? DEFAULT_SHARED_EVIDENCE_MAX_ROWS;
+    const budgetBytes = opts.budgetBytes ?? DEFAULT_SHARED_EVIDENCE_BUDGET_BYTES;
+    const pageSize = Number(evidence.pragma('page_size', { simple: true }));
+    const pageCount = Number(evidence.pragma('page_count', { simple: true }));
+    const freePages = Number(evidence.pragma('freelist_count', { simple: true }));
+    const liveBytes = Math.max(0, pageCount - freePages) * pageSize;
+    const rowsForBudget =
+      count > 0 && liveBytes > budgetBytes
+        ? Math.min(count, Math.ceil((liveBytes - budgetBytes) / Math.max(1, liveBytes / count)))
+        : 0;
+    const deletedRows = Math.max(count - maxRows, rowsForBudget);
+    if (deletedRows > 0) {
+      evidence
+        .prepare(
+          `DELETE FROM file_evidence WHERE rowid IN (
+             SELECT rowid FROM file_evidence ORDER BY last_accessed_at ASC, rowid ASC LIMIT ?
+           )`,
+        )
+        .run(deletedRows);
+      evidence.pragma('wal_checkpoint(TRUNCATE)');
+    }
+    return { deletedRows, remainingRows: count - deletedRows };
+  } catch (error) {
+    debugLog('shared cache maintenance skipped', error);
+    return null;
+  } finally {
+    try {
+      evidence?.close();
+    } catch {
+      // Best-effort rebuildable cache maintenance.
+    }
+  }
+}
+
 // scip-query: ignore-wrapper — public storage boundary; callers get a
 // disable-on-error read, never a raw statement.
 export function readCachedFileEvidence(
@@ -343,7 +454,17 @@ export function readCachedFileEvidence(
   try {
     const row = (connection.readFileEvidence.get(kind, relativePath, contentHash, VERSION) ??
       connection.readLegacyFileEvidence.get(kind, relativePath, contentHash)) as { payload: string } | undefined;
-    return row?.payload ?? null;
+    if (row?.payload !== undefined) return row.payload;
+    if (!SHARED_FILE_EVIDENCE_KIND_SET.has(kind) || !connection.shared) return null;
+    try {
+      const shared = connection.shared.readFileEvidence.get(kind, relativePath, contentHash, VERSION) as
+        | { payload: string }
+        | undefined;
+      return shared?.payload ?? null;
+    } catch (error) {
+      disableShared(connection, 'file_evidence read', error);
+      return null;
+    }
   } catch (error) {
     disable(db, 'file_evidence read', error);
     return null;
@@ -363,6 +484,13 @@ export function writeCachedFileEvidence(
   if (!connection) return;
   try {
     connection.writeFileEvidence.run(kind, relativePath, contentHash, VERSION, payload);
+    if (SHARED_FILE_EVIDENCE_KIND_SET.has(kind) && connection.shared) {
+      try {
+        connection.shared.writeFileEvidence.run(kind, relativePath, contentHash, VERSION, payload, Date.now());
+      } catch (error) {
+        disableShared(connection, 'file_evidence write', error);
+      }
+    }
   } catch (error) {
     disable(db, 'file_evidence write', error);
   }
@@ -380,6 +508,25 @@ export function writeCachedFileEvidenceBatch(db: ScipDatabase, entries: readonly
         connection.writeFileEvidence.run(entry.kind, entry.relativePath, entry.contentHash, VERSION, entry.payload);
       }
     })();
+    const shareable = entries.filter((entry) => SHARED_FILE_EVIDENCE_KIND_SET.has(entry.kind));
+    if (shareable.length > 0 && connection.shared) {
+      try {
+        connection.shared.evidence.transaction(() => {
+          for (const entry of shareable) {
+            connection.shared!.writeFileEvidence.run(
+              entry.kind,
+              entry.relativePath,
+              entry.contentHash,
+              VERSION,
+              entry.payload,
+              Date.now(),
+            );
+          }
+        })();
+      } catch (error) {
+        disableShared(connection, 'file_evidence batch write', error);
+      }
+    }
   } catch (error) {
     disable(db, 'file_evidence batch write', error);
   }

@@ -44,6 +44,7 @@ export function recordFindingOutcomes(
   observed: readonly ObservedFinding[],
   checksRun: readonly string[],
   now: number,
+  retainedKeys: ReadonlySet<string> = new Set(),
 ): FindingOutcomeRecord[] {
   const byKey = new Map(previous.map((record) => [ledgerKey(record.check, record.findingId), record]));
   const observedKeys = new Set(observed.map((finding) => ledgerKey(finding.check, finding.findingId)));
@@ -71,6 +72,7 @@ export function recordFindingOutcomes(
     if (!runChecks.has(record.check)) continue;
     const key = ledgerKey(record.check, record.findingId);
     if (observedKeys.has(key)) continue;
+    if (retainedKeys.has(key)) continue;
     if (record.outcome === 'resolved') continue;
     byKey.set(key, { ...record, outcome: 'resolved' });
   }
@@ -223,9 +225,10 @@ export function updateFindingOutcomeLedger(
   observed: readonly ObservedFinding[],
   checksRun: readonly string[],
   now: number = Date.now(),
+  retainedKeys: ReadonlySet<string> = new Set(),
 ): FindingOutcomeRecord[] {
   const previous = readLedgerRecords(db);
-  const next = recordFindingOutcomes(previous, observed, checksRun, now);
+  const next = recordFindingOutcomes(previous, observed, checksRun, now, retainedKeys);
   writeFindingOutcomeLedger(db, next);
   return next;
 }

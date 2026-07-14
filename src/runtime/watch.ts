@@ -1,4 +1,4 @@
-import { execFileSync, fork } from 'node:child_process';
+import { fork } from 'node:child_process';
 import { statSync, watch } from 'node:fs';
 import { join, relative } from 'node:path';
 import ignore from 'ignore';
@@ -11,6 +11,7 @@ import type {
 } from '../domain/types.js';
 import { loadProjectConfig, resolveWatchConfig, resolveIndexStoragePaths } from './config.js';
 import { createGitignoreFilter } from '../source/gitignore-filter.js';
+import { gitOutput } from './git-worktree.js';
 
 export interface WatcherOptions {
   projectRoot: string;
@@ -382,17 +383,6 @@ export class Watcher {
       clearInterval(this.gitPollTimer);
       this.gitPollTimer = null;
     }
-  }
-}
-
-function gitOutput(projectRoot: string, args: readonly string[]): string | undefined {
-  try {
-    return execFileSync('git', ['-C', projectRoot, ...args], {
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-  } catch {
-    return undefined;
   }
 }
 

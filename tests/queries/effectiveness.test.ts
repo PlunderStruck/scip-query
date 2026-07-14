@@ -61,6 +61,53 @@ describe('computeEffectiveness', () => {
     });
   });
 
+  it('credits a committed fix when both runs preserve the same resolved comparison base', () => {
+    const events: OutcomeEvent[] = [
+      event({ ts: 0, findingId: 'SQCOMMITTED', commit: 'head-1', comparisonBaseCommit: 'base-1' }),
+      event({
+        ts: DAY,
+        findingId: 'SQCOMMITTED',
+        event: 'resolved',
+        commit: 'head-2',
+        comparisonBaseCommit: 'base-1',
+      }),
+    ];
+
+    expect(computeEffectiveness(events).checks[0]).toMatchObject({ fixed: 1, unverified: 0, precision: 1 });
+  });
+
+  it('credits a default-base committed fix only when a clean replay records proof', () => {
+    const events: OutcomeEvent[] = [
+      event({ ts: 0, findingId: 'SQREPLAYED', commit: 'head-1', comparisonBaseCommit: 'head-1' }),
+      event({
+        ts: DAY,
+        findingId: 'SQREPLAYED',
+        event: 'resolved',
+        commit: 'head-2',
+        comparisonBaseCommit: 'head-2',
+        verifiedAgainstCommit: 'head-1',
+      }),
+    ];
+
+    expect(computeEffectiveness(events).checks[0]).toMatchObject({ fixed: 1, unverified: 0, precision: 1 });
+  });
+
+  it('does not accept replay proof for a different comparison lifecycle', () => {
+    const events: OutcomeEvent[] = [
+      event({ ts: 0, findingId: 'SQWRONGBASE', commit: 'head-1', comparisonBaseCommit: 'base-1' }),
+      event({
+        ts: DAY,
+        findingId: 'SQWRONGBASE',
+        event: 'resolved',
+        commit: 'head-2',
+        comparisonBaseCommit: 'head-2',
+        verifiedAgainstCommit: 'other-base',
+      }),
+    ];
+
+    expect(computeEffectiveness(events).checks[0]).toMatchObject({ fixed: 0, unverified: 1 });
+  });
+
   it('does not verify a resolution without Git commit evidence', () => {
     const events: OutcomeEvent[] = [
       event({ ts: 0, findingId: 'SQNOGIT', commit: null }),

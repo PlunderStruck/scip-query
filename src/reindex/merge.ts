@@ -1,6 +1,13 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { create } from '@bufbuild/protobuf';
-import { deserializeSCIP, serializeSCIP, DocumentSchema, IndexSchema, SymbolInformationSchema } from '@c4312/scip';
+import {
+  deserializeSCIP,
+  serializeSCIP,
+  DocumentSchema,
+  IndexSchema,
+  MetadataSchema,
+  SymbolInformationSchema,
+} from '@c4312/scip';
 import type { Document, Index, Occurrence, Relationship, SymbolInformation } from '@c4312/scip';
 import { sanitizeScipIndex } from './sanitize.js';
 
@@ -74,6 +81,25 @@ export function mergeAndSanitizeScipFiles(
     removedDefinitionOccurrences: sanitized.removedDefinitionOccurrences,
     touchedDocuments: sanitized.touchedDocuments,
   };
+}
+
+export function rebaseScipProjectRoot(index: Index, expectedProjectRoot: string, targetProjectRoot: string): Index {
+  const metadata = index.metadata;
+  if (!metadata) throw new Error('Cannot rebase a SCIP index without metadata');
+  if (metadata.projectRoot !== expectedProjectRoot) {
+    throw new Error(`Cannot rebase SCIP project root: expected ${expectedProjectRoot}, got ${metadata.projectRoot}`);
+  }
+  return create(IndexSchema, {
+    metadata: create(MetadataSchema, { ...metadata, projectRoot: targetProjectRoot }),
+    documents: index.documents,
+    externalSymbols: index.externalSymbols,
+  });
+}
+
+export function rebaseScipFileProjectRoot(path: string, expectedProjectRoot: string, targetProjectRoot: string): void {
+  const index = deserializeSCIP(readFileSync(path));
+  const rebased = rebaseScipProjectRoot(index, expectedProjectRoot, targetProjectRoot);
+  writeFileSync(path, Buffer.from(serializeSCIP(rebased)));
 }
 
 function mergeMetadata(indexes: readonly Index[]): Index['metadata'] {

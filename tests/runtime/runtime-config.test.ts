@@ -639,7 +639,12 @@ describe('status config diagnostics', () => {
     try {
       handleStatus({ json: true });
       const payload = JSON.parse(log.mock.calls[0]![0] as string) as {
-        result: { affectedSetShadow: unknown; sqliteGeneration: unknown; rustSemanticSession: unknown };
+        result: {
+          affectedSetShadow: unknown;
+          sqliteGeneration: unknown;
+          rustSemanticSession: unknown;
+          sharedCache: unknown;
+        };
       };
       expect(payload.result.affectedSetShadow).toMatchObject({
         state: 'passing',
@@ -650,6 +655,9 @@ describe('status config diagnostics', () => {
         actualFiles: ['src/a.ts'],
       });
       expect(payload.result.sqliteGeneration).toEqual(expect.objectContaining({ state: 'legacy' }));
+      expect(payload.result.sharedCache).toEqual(
+        expect.objectContaining({ state: 'unavailable', reason: 'Git worktree identity is unavailable' }),
+      );
       expect(payload.result.rustSemanticSession).toEqual(
         expect.objectContaining({
           transport: 'durable',
@@ -665,6 +673,7 @@ describe('status config diagnostics', () => {
       const output = log.mock.calls.map((call) => String(call[0])).join('\n');
       expect(output).toContain('Shadow:   passing, 100.0% recall, 1 predicted / 1 changed, 25.0% of project');
       expect(output).toContain('DB gen:   legacy (no generation record)');
+      expect(output).toContain('Shared:   unavailable (Git worktree identity is unavailable)');
       expect(output).toContain(
         'Rust sess: durable/stopped (default; worker fallback; opt out with SCIP_RUST_SEMANTIC_DURABLE_SESSION=0)',
       );

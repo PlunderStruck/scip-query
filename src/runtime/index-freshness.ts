@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
-import type { LastRefreshMetadata, ProjectConfig, SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
+import type { LastRefreshMetadata, ProjectConfig, SupportedLanguage } from '../domain/types.js';
 import { detectLanguages } from '../reindex/detect.js';
-import { fingerprintProjectFiles, normalizeTypeScriptProjects } from '../reindex/project-files.js';
+import { buildProjectInputFingerprint, type ProjectInputFingerprint } from '../reindex/project-files.js';
 import { inspectSqliteGeneration } from '../reindex/sqlite-generation-store.js';
 
 export type IndexFreshnessState = 'fresh' | 'stale' | 'missing' | 'unknown';
@@ -23,16 +23,6 @@ interface ReindexMetadataLike {
   fingerprint?: unknown;
   indexedLanguages?: unknown;
   lastRefresh?: LastRefreshMetadata;
-}
-
-interface RuntimeFingerprint {
-  version: 2;
-  languages: SupportedLanguage[];
-  pnpmWorkspaces: boolean;
-  typescriptProjectMode: TypeScriptProjectMode;
-  typescriptProjects: string[];
-  clojureConfigPath?: string;
-  files: { path: string; size: number; hash: string }[];
 }
 
 export function getIndexFreshness(
@@ -97,24 +87,15 @@ export function getIndexFreshness(
   }
 }
 
-function runtimeFingerprint(
+export function runtimeFingerprint(
   projectRoot: string,
   languages: readonly SupportedLanguage[],
   config: ProjectConfig,
-): RuntimeFingerprint {
-  return {
-    version: 2,
-    languages: [...languages].sort(),
-    pnpmWorkspaces:
-      config.indexer?.typescript?.projectMode !== 'workspace' && config.indexer?.typescript?.pnpmWorkspaces === true,
-    typescriptProjectMode: config.indexer?.typescript?.projectMode ?? 'single',
-    typescriptProjects: normalizeTypeScriptProjects(config.indexer?.typescript?.projects),
-    clojureConfigPath: normalizeOptionalPath(config.indexer?.clojure?.configPath),
-    files: fingerprintProjectFiles(projectRoot),
-  };
-}
-
-function normalizeOptionalPath(path: string | undefined): string | undefined {
-  const trimmed = path?.trim();
-  return trimmed || undefined;
+): ProjectInputFingerprint {
+  return buildProjectInputFingerprint(projectRoot, languages, {
+    pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces,
+    typescriptProjectMode: config.indexer?.typescript?.projectMode,
+    typescriptProjects: config.indexer?.typescript?.projects,
+    clojureConfigPath: config.indexer?.clojure?.configPath,
+  });
 }

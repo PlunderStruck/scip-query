@@ -14,11 +14,13 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { basename, dirname, extname, join } from 'node:path';
+import { basename, dirname, extname, join, resolve } from 'node:path';
 import { platform } from 'node:os';
 import { profileAsyncSpan, profileSpan } from '../instrumentation/profile.js';
 import { resolveScipBinary, tryInstallScipCli } from '../runtime/scip-cli.js';
 import { isProcessAlive } from '../runtime/process-liveness.js';
+import { resolveGitWorktreeContext } from '../runtime/git-worktree.js';
+import { acquireProcessFileLock } from '../runtime/repository-cache-lock.js';
 import type { LastRefreshMetadata, RefreshTrigger, SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import { ScipDatabase } from '../storage/db.js';
@@ -37,8 +39,13 @@ import { getIndexerConfig } from './indexers.js';
 import { mergeAndSanitizeScipFiles, mergeScipFiles } from './merge.js';
 import { patchIncrementalSqliteGeneration } from './incremental-sqlite-publication.js';
 import { runPostIndexAugmentation } from './post-index-augmentation.js';
-import { fingerprintProjectFiles, normalizeTypeScriptProjects } from './project-files.js';
-import type { ProjectFileFingerprint } from './project-files.js';
+import {
+  buildProjectInputFingerprint,
+  fingerprintProjectFiles,
+  normalizeTypeScriptProjects,
+  type ProjectFileFingerprint,
+  type ProjectInputFingerprint,
+} from './project-files.js';
 import {
   assignFilesToProjects,
   computeProjectShardFingerprints,
@@ -47,6 +54,16 @@ import {
   readProjectManifestInputs,
 } from './project-shards.js';
 import { sanitizeScipFile } from './sanitize.js';
+import {
+  acquireSharedGenerationBuildLock,
+  buildSharedGenerationSnapshot,
+  hydrateSharedGeneration,
+  publishSharedGeneration,
+  readSharedGeneration,
+  sharedCacheBypassReason,
+  writeWorktreeLease,
+  type SharedGenerationSnapshot,
+} from './shared-generation-store.js';
 import {
   inspectSqliteGeneration,
   promoteReindexArtifacts,
@@ -274,16 +291,81 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
       }),
     { languages: languages.length },
   );
-  const releaseLock = await profileAsyncSpan(
-    'reindex.lock',
-    () =>
-      acquireReindexLock(join(dirname(paths.outputDb), 'index.lock'), {
-        projectRoot,
-        trigger: opts.trigger,
-        onStatus,
-      }),
-    { languages: languages.length },
-  );
+  let sharedSnapshot: SharedGenerationSnapshot | undefined;
+  let releaseSharedBuildLock: (() => void) | undefined;
+  if (
+    opts.skipIfUnchanged !== false &&
+    !sharedCacheBypassReason(projectRoot, paths.outputDb) &&
+    resolve(paths.outputScip) === resolve(join(dirname(paths.outputDb), 'index.scip'))
+  ) {
+    const context = resolveGitWorktreeContext(projectRoot);
+    sharedSnapshot = context ? buildSharedGenerationSnapshot(context, fingerprint) : undefined;
+    if (sharedSnapshot) {
+      const shared = readSharedGeneration(sharedSnapshot);
+      if (shared) {
+        if (!localArtifactsMatchFingerprint(paths, fingerprint)) {
+          try {
+            hydrateSharedGeneration({
+              snapshot: sharedSnapshot,
+              manifest: shared,
+              targetCacheDir: dirname(paths.outputDb),
+              targetProjectRoot: projectRoot,
+            });
+            onStatus(`Attached shared generation ${sharedSnapshot.generationId.slice(0, 12)}`);
+          } catch (error) {
+            onStatus(`Shared generation attach failed; continuing locally: ${errorMessage(error)}`);
+          }
+        }
+      } else {
+        const sharedLock = await acquireSharedGenerationBuildLock(sharedSnapshot);
+        if (sharedLock.kind === 'owner') {
+          releaseSharedBuildLock = sharedLock.release;
+        } else if (sharedLock.kind === 'generation-ready') {
+          const published = readSharedGeneration(sharedSnapshot);
+          if (published) {
+            try {
+              hydrateSharedGeneration({
+                snapshot: sharedSnapshot,
+                manifest: published,
+                targetCacheDir: dirname(paths.outputDb),
+                targetProjectRoot: projectRoot,
+                action: 'waited',
+              });
+              onStatus(`Attached shared generation ${sharedSnapshot.generationId.slice(0, 12)} after waiting`);
+            } catch (error) {
+              onStatus(`Shared generation attach failed after waiting; continuing locally: ${errorMessage(error)}`);
+            }
+          }
+        } else {
+          onStatus('Shared generation build lock timed out; continuing with an isolated local reindex');
+        }
+      }
+    }
+  }
+  const cacheLifecycleLock = acquireProcessFileLock(join(dirname(paths.outputDb), 'cache-lifecycle.lock'), {
+    waitMs: 30_000,
+  });
+  if (!cacheLifecycleLock) {
+    releaseSharedBuildLock?.();
+    throw new Error(`Could not acquire scip-query cache lifecycle lock for ${dirname(paths.outputDb)}.`);
+  }
+  let releaseLock: (() => void) | undefined;
+  try {
+    releaseLock = await profileAsyncSpan(
+      'reindex.lock',
+      () =>
+        acquireReindexLock(join(dirname(paths.outputDb), 'index.lock'), {
+          projectRoot,
+          trigger: opts.trigger,
+          onStatus,
+        }),
+      { languages: languages.length },
+    );
+  } catch (error) {
+    cacheLifecycleLock.release();
+    releaseSharedBuildLock?.();
+    throw error;
+  }
   let runDir: string | null = null;
 
   try {
@@ -303,7 +385,10 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
       },
       () => ({ languages: languages.length, reused: reuseObservation !== null }),
     );
-    if (reused) return reused;
+    if (reused) {
+      publishSharedReindexResult({ snapshot: sharedSnapshot, paths, projectRoot, fingerprint, onStatus });
+      return reused;
+    }
 
     await profileAsyncSpan('reindex.scip-cli-ready', () => ensureScipCliAvailable(skipAutoInstall, onStatus));
 
@@ -333,6 +418,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
         skipped: freshObservation?.skipped.length,
       }),
     );
+    publishSharedReindexResult({ snapshot: sharedSnapshot, paths, projectRoot, fingerprint, onStatus });
     return freshResult;
   } catch (error) {
     updateReindexLastRefresh(
@@ -350,7 +436,63 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
       rmSync(runDir, { recursive: true, force: true });
     }
     releaseLock();
+    cacheLifecycleLock.release();
+    releaseSharedBuildLock?.();
   }
+}
+
+function publishSharedReindexResult(input: {
+  snapshot: SharedGenerationSnapshot | undefined;
+  paths: ReindexOutputPaths;
+  projectRoot: string;
+  fingerprint: ReindexFingerprint;
+  onStatus: (message: string) => void;
+}): void {
+  if (!input.snapshot) return;
+  if (readSharedGeneration(input.snapshot)) {
+    writeWorktreeLease(input.snapshot, dirname(input.paths.outputDb), 'local-fresh');
+    return;
+  }
+  try {
+    const postContext = resolveGitWorktreeContext(input.projectRoot);
+    const postSnapshot = postContext ? buildSharedGenerationSnapshot(postContext, input.fingerprint) : undefined;
+    if (!postSnapshot || postSnapshot.generationId !== input.snapshot.generationId) {
+      input.onStatus('Skipped shared generation publication because the worktree changed during indexing');
+      return;
+    }
+    publishSharedGeneration({
+      snapshot: input.snapshot,
+      sourceCacheDir: dirname(input.paths.outputDb),
+      sourceProjectRoot: input.projectRoot,
+      sourceStillValid: () => {
+        const current = resolveGitWorktreeContext(input.projectRoot);
+        return (
+          (current ? buildSharedGenerationSnapshot(current, input.fingerprint) : undefined)?.generationId ===
+          input.snapshot?.generationId
+        );
+      },
+    });
+    writeWorktreeLease(input.snapshot, dirname(input.paths.outputDb), 'built');
+    input.onStatus(`Published shared generation ${input.snapshot.generationId.slice(0, 12)}`);
+  } catch (error) {
+    input.onStatus(`Shared generation publication failed; local index remains valid: ${errorMessage(error)}`);
+  }
+}
+
+function localArtifactsMatchFingerprint(paths: ReindexOutputPaths, fingerprint: ReindexFingerprint): boolean {
+  if (
+    !existsSync(paths.outputScip) ||
+    !existsSync(paths.outputDb) ||
+    !isUnchangedReindex(paths.metaPath, fingerprint)
+  ) {
+    return false;
+  }
+  const generation = inspectSqliteGeneration(paths.outputDb, paths.metaPath);
+  return generation.state !== 'invalid' && generation.state !== 'drifted';
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export { detectLanguages } from './detect.js';
@@ -1983,15 +2125,7 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
 }
 
-interface ReindexFingerprint {
-  version: 2;
-  languages: SupportedLanguage[];
-  pnpmWorkspaces: boolean;
-  typescriptProjectMode: TypeScriptProjectMode;
-  typescriptProjects: string[];
-  clojureConfigPath?: string;
-  files: { path: string; size: number; hash: string }[];
-}
+type ReindexFingerprint = ProjectInputFingerprint;
 
 function computeReindexFingerprint(
   projectRoot: string,
@@ -2003,15 +2137,7 @@ function computeReindexFingerprint(
     clojureConfigPath?: string;
   },
 ): ReindexFingerprint {
-  return {
-    version: 2,
-    languages: [...languages].sort(),
-    pnpmWorkspaces: effectivePnpmWorkspaces(opts),
-    typescriptProjectMode: opts.typescriptProjectMode ?? 'single',
-    typescriptProjects: normalizeTypeScriptProjects(opts.typescriptProjects),
-    clojureConfigPath: normalizeOptionalPath(opts.clojureConfigPath),
-    files: fingerprintProjectFiles(projectRoot),
-  };
+  return buildProjectInputFingerprint(projectRoot, languages, opts);
 }
 
 // scip-query: ignore-similar - per-language fingerprints intentionally reuse the project fingerprint inputs by language.

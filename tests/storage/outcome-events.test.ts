@@ -8,9 +8,11 @@ import {
   appendOutcomeEvents,
   dedupeEvents,
   deriveOutcomeEvents,
+  gitWorktreeIsClean,
   headCommit,
   OUTCOME_EVENTS_DIR,
   readOutcomeEvents,
+  resolveGitCommit,
   type OutcomeEvent,
 } from '../../src/storage/outcome-events.js';
 
@@ -75,6 +77,27 @@ describe('deriveOutcomeEvents', () => {
       ['SQAAA', 'resolved'],
       ['SQBBB', 'suppressed'],
       ['SQCCC', 'reopened'],
+    ]);
+  });
+
+  it('records the resolved comparison base and cross-HEAD verification proof', () => {
+    const previous = [record({})];
+    const next = [record({ outcome: 'resolved' })];
+    const events = deriveOutcomeEvents(previous, next, NO_SYMBOLS, 'head-2', 3_000, {
+      comparisonBaseCommit: 'head-2',
+      verifiedAgainstByFinding: new Map([['echo\0SQAAA', 'head-1']]),
+    });
+
+    expect(events).toEqual([
+      {
+        ts: 3_000,
+        check: 'echo',
+        findingId: 'SQAAA',
+        event: 'resolved',
+        commit: 'head-2',
+        comparisonBaseCommit: 'head-2',
+        verifiedAgainstCommit: 'head-1',
+      },
     ]);
   });
 });
@@ -177,6 +200,25 @@ describe('append/read round trip', () => {
     expect(deduped[0]).toMatchObject({ ts: 3, commit: 'c1' });
     expect(deduped[1]).toMatchObject({ ts: 5, commit: 'c2' });
   });
+
+  it('keeps the duplicate observation carrying stronger verification evidence', () => {
+    const deduped = dedupeEvents([
+      { ts: 1, check: 'echo', findingId: 'SQAAA', event: 'resolved', commit: 'c2' },
+      {
+        ts: 2,
+        check: 'echo',
+        findingId: 'SQAAA',
+        event: 'resolved',
+        commit: 'c2',
+        comparisonBaseCommit: 'c2',
+        verifiedAgainstCommit: 'c1',
+      },
+    ]);
+
+    expect(deduped).toEqual([
+      expect.objectContaining({ ts: 2, verifiedAgainstCommit: 'c1', comparisonBaseCommit: 'c2' }),
+    ]);
+  });
 });
 
 describe('headCommit', () => {
@@ -194,5 +236,12 @@ describe('headCommit', () => {
     );
     writeFileSync(join(root, 'file.txt'), 'x');
     expect(headCommit(root)).toMatch(/^[0-9a-f]{40}$/);
+    expect(resolveGitCommit(root, 'HEAD')).toBe(headCommit(root));
+    expect(gitWorktreeIsClean(root)).toBe(false);
+    execFileSync('git', ['add', 'file.txt'], { cwd: root });
+    execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-m', 'file', '--quiet'], {
+      cwd: root,
+    });
+    expect(gitWorktreeIsClean(root)).toBe(true);
   });
 });
