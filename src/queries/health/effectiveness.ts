@@ -1,6 +1,6 @@
 /**
  * Effectiveness stats over the committed outcome-event ledger
- * (.scipquery/ledger/events.jsonl): per check, how many findings the gate
+ * (.scipquery/events/*.json): per check, how many findings the gate
  * caught, how many disappeared on a comparable same-HEAD rerun, how many were
  * suppressed as accepted/false findings, and how long verified fixes took.
  *

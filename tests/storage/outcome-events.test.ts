@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -9,13 +9,16 @@ import {
   dedupeEvents,
   deriveOutcomeEvents,
   headCommit,
-  ledgerDirPath,
-  ledgerFilePath,
+  OUTCOME_EVENTS_DIR,
   readOutcomeEvents,
   type OutcomeEvent,
 } from '../../src/storage/outcome-events.js';
 
 const roots: string[] = [];
+
+function outcomeEventsDirPath(root: string): string {
+  return join(root, OUTCOME_EVENTS_DIR);
+}
 
 function createRoot(): string {
   const root = mkdtempSync(join(tmpdir(), 'scipq-events-'));
@@ -77,7 +80,7 @@ describe('deriveOutcomeEvents', () => {
 });
 
 describe('append/read round trip', () => {
-  it('persists events, creates the union-merge gitattributes, and reads them back', () => {
+  it('persists each event in its own JSON file and reads them back', () => {
     const root = createRoot();
     const events: OutcomeEvent[] = [
       { ts: 1, check: 'echo', findingId: 'SQAAA', event: 'caught', commit: 'c1', symbol: 'sym#a' },
@@ -86,31 +89,81 @@ describe('append/read round trip', () => {
     appendOutcomeEvents(root, events);
 
     expect(readOutcomeEvents(root)).toEqual(events);
-    expect(readFileSync(join(ledgerDirPath(root), '.gitattributes'), 'utf-8')).toContain('events.jsonl merge=union');
+    const files = readdirSync(outcomeEventsDirPath(root));
+    expect(files).toHaveLength(2);
+    expect(files.every((file) => /^\d+-[0-9A-F]{16}\.json$/.test(file))).toBe(true);
   });
 
   it('appending nothing writes nothing', () => {
     const root = createRoot();
     appendOutcomeEvents(root, []);
     expect(readOutcomeEvents(root)).toEqual([]);
+    expect(existsSync(outcomeEventsDirPath(root))).toBe(false);
   });
 
-  it('preserves an existing gitattributes and appends the union entry once', () => {
+  it('treats an exact replay as an idempotent write', () => {
     const root = createRoot();
-    appendOutcomeEvents(root, [{ ts: 1, check: 'echo', findingId: 'SQAAA', event: 'caught', commit: null }]);
-    appendOutcomeEvents(root, [{ ts: 2, check: 'echo', findingId: 'SQBBB', event: 'caught', commit: null }]);
-    const attributes = readFileSync(join(ledgerDirPath(root), '.gitattributes'), 'utf-8');
-    expect(attributes.match(/merge=union/g)).toHaveLength(1);
+    const event: OutcomeEvent = { ts: 1, check: 'echo', findingId: 'SQAAA', event: 'caught', commit: null };
+    appendOutcomeEvents(root, [event]);
+    appendOutcomeEvents(root, [event]);
+
+    expect(readdirSync(outcomeEventsDirPath(root))).toHaveLength(1);
+    expect(readOutcomeEvents(root)).toEqual([event]);
   });
 
-  it('skips malformed lines and unknown shapes on read', () => {
+  it('keeps separate files for distinct observations and dedupes the fact to the earliest timestamp', () => {
     const root = createRoot();
+    appendOutcomeEvents(root, [
+      { ts: 9, check: 'echo', findingId: 'SQAAA', event: 'caught', commit: 'c1' },
+      { ts: 3, check: 'echo', findingId: 'SQAAA', event: 'caught', commit: 'c1' },
+    ]);
+
+    expect(readdirSync(outcomeEventsDirPath(root))).toHaveLength(2);
+    expect(readOutcomeEvents(root)).toEqual([
+      { ts: 3, check: 'echo', findingId: 'SQAAA', event: 'caught', commit: 'c1' },
+    ]);
+  });
+
+  it('skips malformed JSON files and unknown shapes on read', () => {
+    const root = createRoot();
+    const dir = outcomeEventsDirPath(root);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'broken.json'), '{"half a file"');
+    writeFileSync(join(dir, 'wrong-shape.json'), '{"ts":"wrong types"}');
+    writeFileSync(join(dir, 'notes.txt'), 'ignored');
     appendOutcomeEvents(root, [{ ts: 1, check: 'echo', findingId: 'SQAAA', event: 'caught', commit: null }]);
-    appendFileSync(ledgerFilePath(root), 'not json\n{"ts":"wrong types"}\n{"half a line');
 
     const read = readOutcomeEvents(root);
     expect(read).toHaveLength(1);
     expect(read[0].findingId).toBe('SQAAA');
+  });
+
+  it('reads a mixed legacy/current ledger and migrates legacy records on the next append', () => {
+    const root = createRoot();
+    appendOutcomeEvents(root, [{ ts: 9, check: 'echo', findingId: 'SQAAA', event: 'caught', commit: 'c1' }]);
+
+    const legacyDir = join(root, '.scipquery', 'ledger');
+    const legacyPath = join(legacyDir, 'events.jsonl');
+    const attributesPath = join(legacyDir, '.gitattributes');
+    mkdirSync(legacyDir, { recursive: true });
+    writeFileSync(
+      legacyPath,
+      [
+        JSON.stringify({ ts: 3, check: 'echo', findingId: 'SQAAA', event: 'caught', commit: 'c1' }),
+        JSON.stringify({ ts: 5, check: 'new-dead', findingId: 'SQBBB', event: 'caught', commit: 'c2' }),
+        'not json',
+      ].join('\n'),
+    );
+    writeFileSync(attributesPath, '*.bin binary\nevents.jsonl merge=union\n');
+
+    expect(readOutcomeEvents(root).map((event) => event.ts)).toEqual([3, 5]);
+
+    appendOutcomeEvents(root, []);
+
+    expect(existsSync(legacyPath)).toBe(false);
+    expect(readFileSync(attributesPath, 'utf-8')).toBe('*.bin binary\n');
+    expect(readOutcomeEvents(root).map((event) => event.ts)).toEqual([3, 5]);
+    expect(readdirSync(outcomeEventsDirPath(root))).toHaveLength(3);
   });
 
   it('dedupes replayed events to the earliest timestamp', () => {

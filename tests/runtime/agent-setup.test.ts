@@ -28,7 +28,7 @@ describe('setupAgent', () => {
     const agentsMd = readFileSync(join(projectRoot, 'AGENTS.md'), 'utf-8');
     expect(agentsMd).toContain('scip-query diff-gate');
     expect(agentsMd).toContain('commit `.scipquery/suppressions/*.json`');
-    expect(agentsMd).toContain('`.scipquery/ledger/events.jsonl`');
+    expect(agentsMd).toContain('`.scipquery/events/*.json`');
     expect(agentsMd).toContain('`.codex/hooks.json` and `.claude/settings.local.json`');
     expect(agentsMd).toContain('must not be committed');
     expect(agentsMd).toContain('scip-query:agent-setup:begin');

@@ -1,0 +1,8 @@
+{
+  "ts": 1783800391974,
+  "check": "twin-partner",
+  "findingId": "SQCD168B3601CC",
+  "event": "caught",
+  "commit": "7cb1413d02ef9cb0b323df2d8fd2b5b5530b1de8",
+  "symbol": "scip-typescript npm scip-query 0.15.0 src/queries/cleanup/`similar-signatures.ts`/isCallableDefinition()."
+}

@@ -1,0 +1,8 @@
+{
+  "ts": 1783816304736,
+  "check": "twin-partner",
+  "findingId": "SQ5C2753A0F006",
+  "event": "caught",
+  "commit": "678a4f8c0bbb0d40ccf5b61b572c3af2ec5750c6",
+  "symbol": "scip-typescript npm scip-query 0.15.0 src/semantic/rust/`lsp-session.ts`/RustAnalyzerSessionResolver#referencesForDefinitions()."
+}

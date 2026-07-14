@@ -1,0 +1,8 @@
+{
+  "ts": 1784041987743,
+  "check": "echo",
+  "findingId": "SQ569C7A7A4272",
+  "event": "caught",
+  "commit": "9d757c218824901e53da45e856e592e8f19bcc7a",
+  "symbol": "scip-typescript npm scip-query 0.16.0 src/storage/`outcome-events.ts`/outcomeEventsDirPath()."
+}

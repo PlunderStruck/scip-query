@@ -120,8 +120,8 @@ diff-gate, per-detector precision is recomputed from real outcomes
 (`detectorPrecision` in `health --json`), and the committed event ledger
 makes those outcomes durable and queryable — `scip-query effectiveness
 --since 30d --json` reports per-check caught/same-HEAD-fixed/suppressed/open/
-unverified counts, precision, and median days-to-fix from
-`.scipquery/ledger/events.jsonl`. Run diff-gate before and after the repair,
+unverified counts, precision, and median days-to-fix from the individual
+records under `.scipquery/events/*.json`. Run diff-gate before and after the repair,
 before committing, so a changed HEAD cannot be mistaken for a verified fix.
 Re-run this protocol only after major detector upgrades or when the
 ledger's precision numbers drift from what you measured. Write the calibration report to

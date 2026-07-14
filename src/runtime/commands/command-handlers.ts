@@ -25,7 +25,7 @@ import {
   SUPPORTED_LANGUAGES,
 } from '../config.js';
 import { writeSuppressionFile } from '../../storage/suppression-store.js';
-import { LEDGER_DIR, LEDGER_FILENAME, readOutcomeEvents } from '../../storage/outcome-events.js';
+import { OUTCOME_EVENTS_DIR, readOutcomeEvents } from '../../storage/outcome-events.js';
 import { computeEffectiveness, parseSinceMs } from '../../queries/health/effectiveness.js';
 import { getIndexFreshness } from '../index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from '../project-readiness.js';
@@ -1033,7 +1033,7 @@ export function handleEffectiveness(rawOpts: unknown): void {
   if (report.checks.length === 0) {
     console.log(
       events.length === 0
-        ? `No outcome events recorded yet (${join(LEDGER_DIR, LEDGER_FILENAME)} is missing or empty). Events accrue as diff-gate runs; commit the ledger so history is shared.`
+        ? `No outcome events recorded yet (${join(OUTCOME_EVENTS_DIR, '*.json')} is missing or empty). Events accrue as diff-gate runs; commit the event files so history is shared.`
         : 'No findings match the requested window/check.',
     );
     return;

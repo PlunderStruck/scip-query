@@ -1,17 +1,17 @@
 /**
- * Committed outcome-event ledger: .scipquery/ledger/events.jsonl in the
- * target repo, one JSON event per line, append-only.
+ * Committed outcome-event ledger: one immutable JSON file per observation
+ * under .scipquery/events/ in the target repo.
  *
  * This is the durable, team-shared complement to the per-machine
  * finding_outcome_ledger in evidence.db (src/storage/evidence-cache.ts).
  * evidence.db answers "what has this machine seen"; the event ledger
  * answers "what happened to findings in this repository over time" — it
- * survives re-clones and aggregates across machines because it merges:
+ * survives re-clones and aggregates across machines because:
  *
- *   - append-only JSONL + a scoped .gitattributes `merge=union` entry means
- *     concurrent branch appends never conflict;
+ *   - independent observations create independent paths, so concurrent
+ *     branches do not edit a shared file;
  *   - events are idempotent facts keyed by (check, findingId, event, commit),
- *     so duplicated or reordered lines are absorbed by read-side dedupe.
+ *     so duplicated or reordered files are absorbed by read-side dedupe.
  *
  * Nothing here decides outcomes — deriveOutcomeEvents() is a pure diff of
  * two ledger snapshots produced by recordFindingOutcomes()
@@ -19,14 +19,16 @@
  * break a gate run; callers wrap appendOutcomeEvents in try/catch.
  */
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ledgerKey } from '../queries/health/finding-outcome-ledger.js';
 import type { FindingOutcomeRecord } from '../queries/health/finding-outcome-ledger.js';
 import { runGit } from '../analysis/git-history.js';
 
-export const LEDGER_DIR = join('.scipquery', 'ledger');
-export const LEDGER_FILENAME = 'events.jsonl';
+export const OUTCOME_EVENTS_DIR = join('.scipquery', 'events');
+const LEGACY_LEDGER_DIR = join('.scipquery', 'ledger');
+const LEGACY_LEDGER_FILENAME = 'events.jsonl';
 
 export type OutcomeEventKind = 'caught' | 'resolved' | 'suppressed' | 'reopened';
 
@@ -42,12 +44,12 @@ export interface OutcomeEvent {
   symbol?: string;
 }
 
-export function ledgerDirPath(projectRoot: string): string {
-  return join(projectRoot, LEDGER_DIR);
+function legacyLedgerDirPath(projectRoot: string): string {
+  return join(projectRoot, LEGACY_LEDGER_DIR);
 }
 
-export function ledgerFilePath(projectRoot: string): string {
-  return join(ledgerDirPath(projectRoot), LEDGER_FILENAME);
+function legacyLedgerFilePath(projectRoot: string): string {
+  return join(legacyLedgerDirPath(projectRoot), LEGACY_LEDGER_FILENAME);
 }
 
 /**
@@ -108,59 +110,105 @@ export function headCommit(projectRoot: string): string | null {
 }
 
 /**
- * Append events as one JSON object per line. Creates the ledger directory
- * and its scoped .gitattributes (merge=union) on first write so the file
- * is conflict-free from the first commit that contains it.
+ * Add events as independent JSON files. When a legacy JSONL ledger exists,
+ * migrate its valid records before removing the shared file and merge rule.
  */
 export function appendOutcomeEvents(projectRoot: string, events: readonly OutcomeEvent[]): void {
-  if (events.length === 0) return;
-  const dir = ledgerDirPath(projectRoot);
-  mkdirSync(dir, { recursive: true });
-  ensureLedgerGitattributes(dir);
-  const lines = events.map((event) => JSON.stringify(event)).join('\n') + '\n';
-  appendFileSync(ledgerFilePath(projectRoot), lines);
+  const legacyPath = legacyLedgerFilePath(projectRoot);
+  const hasLegacyLedger = existsSync(legacyPath);
+  const pending = [...(hasLegacyLedger ? readLegacyOutcomeEvents(legacyPath) : []), ...events];
+
+  if (pending.length > 0) {
+    const dir = join(projectRoot, OUTCOME_EVENTS_DIR);
+    mkdirSync(dir, { recursive: true });
+    for (const event of pending) writeOutcomeEvent(dir, event);
+  }
+
+  if (hasLegacyLedger) removeLegacyLedger(projectRoot);
+}
+
+function writeOutcomeEvent(dir: string, event: OutcomeEvent): void {
+  const contents = `${JSON.stringify(
+    {
+      ts: event.ts,
+      check: event.check,
+      findingId: event.findingId,
+      event: event.event,
+      commit: event.commit,
+      ...(event.symbol ? { symbol: event.symbol } : {}),
+    },
+    null,
+    2,
+  )}\n`;
+  const hash = createHash('sha256').update(contents).digest('hex').slice(0, 16).toUpperCase();
+  const path = join(dir, `${event.ts}-${hash}.json`);
+  try {
+    writeFileSync(path, contents, { flag: 'wx' });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    if (readFileSync(path, 'utf-8') !== contents) {
+      throw new Error(`outcome event filename collision: ${path}`, { cause: error });
+    }
+  }
+}
+
+function removeLegacyLedger(projectRoot: string): void {
+  rmSync(legacyLedgerFilePath(projectRoot));
+
+  const attributesPath = join(legacyLedgerDirPath(projectRoot), '.gitattributes');
+  if (!existsSync(attributesPath)) return;
+  const remaining = readFileSync(attributesPath, 'utf-8')
+    .split('\n')
+    .filter((line) => line.trim() !== `${LEGACY_LEDGER_FILENAME} merge=union`)
+    .join('\n')
+    .replace(/^\n+|\n+$/g, '');
+  if (remaining === '') {
+    rmSync(attributesPath);
+  } else {
+    writeFileSync(attributesPath, `${remaining}\n`);
+  }
 }
 
 /**
- * Scoped merge driver: `.scipquery/ledger/.gitattributes` marks the events
- * file merge=union so concurrent appends from different branches combine
- * instead of conflicting. Idempotent.
- */
-export function ensureLedgerGitattributes(ledgerDir: string): void {
-  const path = join(ledgerDir, '.gitattributes');
-  const entry = `${LEDGER_FILENAME} merge=union\n`;
-  if (!existsSync(path)) {
-    writeFileSync(path, entry);
-    return;
-  }
-  const current = readFileSync(path, 'utf-8');
-  if (!current.includes(`${LEDGER_FILENAME} merge=union`)) {
-    writeFileSync(path, current + (current.endsWith('\n') || current === '' ? '' : '\n') + entry);
-  }
-}
-
-/**
- * Read the committed event log. Malformed lines are skipped (a union merge
- * can in principle interleave partial writes); duplicates from replayed or
- * merged histories are collapsed to the earliest observation.
+ * Read committed event files plus a legacy JSONL ledger during migration.
+ * Malformed records are skipped; duplicates from replayed or merged histories
+ * are collapsed to the earliest observation.
  */
 export function readOutcomeEvents(projectRoot: string): OutcomeEvent[] {
-  const path = ledgerFilePath(projectRoot);
-  if (!existsSync(path)) return [];
+  const events: OutcomeEvent[] = [];
+
+  const dir = join(projectRoot, OUTCOME_EVENTS_DIR);
+  if (existsSync(dir)) {
+    for (const entry of readdirSync(dir).sort()) {
+      if (!entry.endsWith('.json')) continue;
+      const event = parseOutcomeEvent(readFileSync(join(dir, entry), 'utf-8'));
+      if (event) events.push(event);
+    }
+  }
+
+  const legacyPath = legacyLedgerFilePath(projectRoot);
+  if (existsSync(legacyPath)) events.push(...readLegacyOutcomeEvents(legacyPath));
+  return dedupeEvents(events);
+}
+
+function readLegacyOutcomeEvents(path: string): OutcomeEvent[] {
   const events: OutcomeEvent[] = [];
   for (const line of readFileSync(path, 'utf-8').split('\n')) {
-    const trimmed = line.trim();
-    if (trimmed === '') continue;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(trimmed);
-    } catch {
-      continue;
-    }
-    if (!isOutcomeEvent(parsed)) continue;
-    events.push(parsed);
+    const event = parseOutcomeEvent(line);
+    if (event) events.push(event);
   }
-  return dedupeEvents(events);
+  return events;
+}
+
+function parseOutcomeEvent(contents: string): OutcomeEvent | null {
+  if (contents.trim() === '') return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(contents);
+  } catch {
+    return null;
+  }
+  return isOutcomeEvent(parsed) ? parsed : null;
 }
 
 /** Collapse duplicate (check, findingId, event, commit) facts to the earliest ts, preserving time order. */

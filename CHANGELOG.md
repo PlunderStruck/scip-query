@@ -2,6 +2,12 @@
 
 All notable changes to `scip-query` are documented here. This file starts at 0.11.0; everything below covers behavior changes made since the 0.10.12 release.
 
+## [0.16.1]
+
+### Fixes
+
+- Outcome history now uses one committed `.scipquery/events/*.json` file per event instead of appending to `.scipquery/ledger/events.jsonl`. This makes concurrent branch writes touch independent paths. The reader remains backward compatible, and the next gate write migrates valid legacy records before removing the old file and its scoped merge rule.
+
 ## [0.16.0]
 
 ### Notable (setup and automatic indexing)
