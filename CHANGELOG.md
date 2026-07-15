@@ -4,6 +4,18 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+## [0.17.2]
+
+### Performance (agent command latency)
+
+- `code`, `outline`, and `refs` now load leaf command descriptors instead of initializing the complete command catalog, while invocation-scoped Git/worktree context and generation freshness are reused across command setup. The measured navigation campaign records stable output contracts across clean, dirty, and watcher-backed runs.
+- `affected` batches compiler-backed caller evidence once per breadth-first frontier. `plan-context` reuses those batched callers, single-file dependency edges already computed by `system`, and the invocation's resolved Git HEAD instead of repeating equivalent graph and Git work.
+- `diff-impact` derives changed names, line ranges, renames, and deletions from five shared Git reads instead of nine overlapping subprocesses. The final campaign snapshot reduced warmed medians from 1,722 ms to 802 ms for `plan-context`, 941 ms to 304 ms for `affected`, and 1,342 ms to 575 ms for `diff-impact`; same-build A/B runs preserve byte-identical output for each retained change.
+
+### Fixes (worktree freshness and watcher reuse)
+
+- Worktree identity, shared-generation leases, CLI preparation, and watch-service reuse now carry one resolved Git context through the invocation. Cache trust is rejected when committed trees or worktree ownership differ, while unchanged generations avoid redundant hashing and subprocess probes.
+
 ## [0.17.1]
 
 ### Fixes (worktree watcher isolation)
@@ -120,6 +132,7 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 - **Calibration retunes from external repo validation:** `duplicate-bodies`' default `--min-loc` raised from 1 to 3 (kills 1-line forwarding-stub noise); `twin-drift` excludes synthetic constructor-style leaves and test-only groups; `co-change` exempts locale/i18n sibling resource files from hidden-coupling findings; `stale-abstractions`/`wrapper-candidates` gained an explicit false-positive-rate caveat and were demoted from the default `cleanup-audit` sweep to an opt-in deep-dive.
 - Assorted smaller fixes: parameterized SQL in a scope filter (injection-shaped hygiene, no known exploit), fan-in/hotspot queries no longer counting a symbol's own defining file as a consumer, AST-based cyclomatic-complexity counting, nested `.gitignore` support, and Vue single-file-component script extraction unified across the codebase.
 
+[0.17.2]: https://github.com/PlunderStruck/scip-query/releases/tag/v0.17.2
 [0.17.1]: https://github.com/PlunderStruck/scip-query/releases/tag/v0.17.1
 [0.17.0]: https://github.com/PlunderStruck/scip-query/releases/tag/v0.17.0
 [0.11.0]: https://github.com/PlunderStruck/scip-query/releases/tag/v0.11.0

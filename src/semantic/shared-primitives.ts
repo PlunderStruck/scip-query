@@ -522,7 +522,7 @@ function semanticReferenceCacheFingerprint(
   return null;
 }
 
-function semanticReferenceMap(
+export function semanticReferenceMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<IndexedDefinition>,
   opts: SemanticReferenceMaterializationOptions = {},

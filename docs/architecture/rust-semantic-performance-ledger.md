@@ -106,6 +106,9 @@ moving the whole product surface at once.
   for TypeScript and Rust, plus Rust project-scoped import usage and signature
   products. It now materializes cached references through file-level bulk reads
   so full-mode detector passes do not issue one storage read per definition.
+  Targeted graph callers can also request references for a symbol batch, which
+  lets breadth-first affected traversal pay the compiler/provider setup cost
+  once per frontier instead of once per symbol.
   `dead --full` materializes versioned TypeScript caller fragments: file-owned
   semantic records whose hierarchy-aware facts preserve exact cross-file caller
   presence. Missing or uncertain fragment identities fall back to the precise
@@ -115,7 +118,9 @@ moving the whole product surface at once.
   metadata so TypeScript and Rust invalidation do not drift together.
 - `src/symbols/graph/call-graph-evidence.ts` persists semantic callees and now
   salts Rust callee cache identity with the same Rust semantic engine identity.
-  Cached callees are read in file-level batches for full-mode hot paths.
+  Cached callees are read in file-level batches for full-mode hot paths, and
+  targeted caller rows expose a bulk boundary while preserving each symbol's
+  resolved-reference-first result order.
 - `src/storage/evidence-cache.ts` accepts both complete and intentional partial
   project fingerprints. The cache key includes the index status, so complete and
   partial indexes do not share project-scoped rows accidentally. It exposes

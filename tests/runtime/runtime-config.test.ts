@@ -14,7 +14,14 @@ import {
 } from '../../src/runtime/config.js';
 import type { ProjectConfig } from '../../src/domain/types.js';
 import { resolveGitWorktreeIdentity } from '../../src/runtime/git-worktree.js';
-import { acquireWatchProcessLock, WATCH_LOCK_FILE } from '../../src/runtime/watch-service.js';
+import {
+  acquireWatchProcessLock,
+  WATCH_LOCK_FILE,
+  WATCH_SERVICE_PROTOCOL_VERSION,
+  watchServicePaths,
+  writeWatchServiceState,
+} from '../../src/runtime/watch-service.js';
+import { cliVersion } from '../../src/runtime/cli-support.js';
 
 const tempDirs: string[] = [];
 
@@ -760,6 +767,50 @@ describe('doctor diagnostics', () => {
 });
 
 describe('watch command config gate', () => {
+  it('exposes the idle watcher database generation in JSON and text status', () => {
+    const projectRoot = createProject();
+    execFileSync('git', ['-C', projectRoot, 'init', '-q']);
+    const dbPath = join(projectRoot, '.cache', 'index.db');
+    writeFileSync(join(projectRoot, '.scipquery.json'), `${JSON.stringify({ dbPath, watch: { enabled: true } })}\n`);
+    const identity = resolveGitWorktreeIdentity(projectRoot);
+    if (identity.kind !== 'worktree') throw new Error(`Expected Git worktree, received ${identity.kind}`);
+    const servicePaths = watchServicePaths(
+      resolveIndexStoragePaths(projectRoot, loadProjectConfig(projectRoot)).cacheDir,
+    );
+    const now = new Date().toISOString();
+    const indexGeneration = 'a'.repeat(64);
+    writeWatchServiceState(servicePaths.statePath, {
+      version: 1,
+      protocolVersion: WATCH_SERVICE_PROTOCOL_VERSION,
+      pid: process.pid,
+      projectRoot: realpathSync(projectRoot),
+      worktreeId: identity.identity.worktreeId,
+      cliVersion,
+      startedAt: now,
+      heartbeatAt: now,
+      lastActivityAt: now,
+      watcher: { state: 'idle' },
+      indexGeneration,
+    });
+    const previousProjectRoot = process.env['SCIP_QUERY_PROJECT_ROOT'];
+    process.env['SCIP_QUERY_PROJECT_ROOT'] = projectRoot;
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    try {
+      handleWatch({ status: true, json: true });
+      const payload = JSON.parse(String(log.mock.calls[0]?.[0])) as { result: Record<string, unknown> };
+      expect(payload.result.indexGeneration).toBe(indexGeneration);
+
+      log.mockClear();
+      handleWatch({ status: true });
+      expect(log.mock.calls.map((call) => String(call[0])).join('\n')).toContain('Index generation: aaaaaaaaaaaa');
+    } finally {
+      log.mockRestore();
+      if (previousProjectRoot === undefined) delete process.env['SCIP_QUERY_PROJECT_ROOT'];
+      else process.env['SCIP_QUERY_PROJECT_ROOT'] = previousProjectRoot;
+    }
+  });
+
   it('reports canonical worktree identity while only a foreground lock is live', () => {
     const projectRoot = createProject();
     execFileSync('git', ['-C', projectRoot, 'init', '-q']);

@@ -20,6 +20,7 @@
  * catalog and reference graph build on top.
  */
 import type { ScipDatabase } from '../storage/db.js';
+import { createPerDbCache } from '../storage/per-db-cache.js';
 import {
   isCallableSymbol,
   isFunctionLikeSymbol,
@@ -38,27 +39,31 @@ import { mergeMixedSymbolQueryRows } from './symbol-row-policy.js';
 // import them from this module.
 export { cleanSignature, extractSignature, type SymbolQueryRow } from '../storage/scip-rows.js';
 
+const SYMBOL_RESOLUTION_CACHE = createPerDbCache<string, SymbolResolution>('symbol-resolution', { clearGroups: [] });
+
 export function findFirstSymbolMatch(db: ScipDatabase, symbolPattern: string): SymbolMatch | null {
   return resolveSymbol(db, symbolPattern).match;
 }
 
 export function resolveSymbol(db: ScipDatabase, symbolPattern: string): SymbolResolution {
-  const exactRows = exactSymbolRows(db, symbolPattern.trim()).filter((row) => !db.isIgnored(row.relative_path));
-  if (exactRows.length > 0) {
-    return resolutionFromRows(db, exactRows);
-  }
+  return SYMBOL_RESOLUTION_CACHE.get(db, symbolPattern, () => {
+    const exactRows = exactSymbolRows(db, symbolPattern.trim()).filter((row) => !db.isIgnored(row.relative_path));
+    if (exactRows.length > 0) {
+      return resolutionFromRows(db, exactRows);
+    }
 
-  const fileLineRow = findFileLineSymbolRow(db, symbolPattern);
-  if (fileLineRow && !db.isIgnored(fileLineRow.relative_path)) {
-    return resolutionFromRows(db, [fileLineRow]);
-  }
+    const fileLineRow = findFileLineSymbolRow(db, symbolPattern);
+    if (fileLineRow && !db.isIgnored(fileLineRow.relative_path)) {
+      return resolutionFromRows(db, [fileLineRow]);
+    }
 
-  const pathQualifiedRows = pathQualifiedSymbolRows(db, symbolPattern);
-  if (pathQualifiedRows.length > 0) {
-    return resolutionFromRows(db, pathQualifiedRows);
-  }
+    const pathQualifiedRows = pathQualifiedSymbolRows(db, symbolPattern);
+    if (pathQualifiedRows.length > 0) {
+      return resolutionFromRows(db, pathQualifiedRows);
+    }
 
-  return fuzzySymbolResolution(db, symbolPattern);
+    return fuzzySymbolResolution(db, symbolPattern);
+  });
 }
 
 function pathQualifiedSymbolRows(db: ScipDatabase, symbolPattern: string): SymbolQueryRow[] {

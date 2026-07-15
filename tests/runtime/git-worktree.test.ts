@@ -19,6 +19,84 @@ afterEach(() => {
 });
 
 describe('Git worktree identity', () => {
+  it('reads complete worktree context with one metadata lookup and one status lookup', () => {
+    const root = temporaryDirectory('scip-query-batched-git-context-');
+    const gitDir = join(root, '.git');
+    mkdirSync(gitDir);
+    const headCommit = 'a'.repeat(40);
+    const treeOid = 'b'.repeat(40);
+    const calls: Array<{ method: 'run' | 'runResult'; args: readonly string[] }> = [];
+    const gitReader: GitReader = {
+      run: (_projectRoot, args) => {
+        calls.push({ method: 'run', args });
+        return ' M src/value.ts';
+      },
+      runResult: (_projectRoot, args) => {
+        calls.push({ method: 'runResult', args });
+        return { kind: 'success', output: [root, gitDir, '.git', headCommit, treeOid].join('\n') };
+      },
+    };
+
+    expect(resolveGitWorktreeContext(root, gitReader)).toEqual(
+      expect.objectContaining({
+        projectRoot: realpathSync(root),
+        gitDir: realpathSync(gitDir),
+        commonDir: realpathSync(gitDir),
+        headCommit,
+        treeOid,
+        clean: false,
+      }),
+    );
+    expect(calls).toEqual([
+      {
+        method: 'runResult',
+        args: ['rev-parse', '--show-toplevel', '--absolute-git-dir', '--git-common-dir', 'HEAD', 'HEAD^{tree}'],
+      },
+      { method: 'run', args: ['status', '--porcelain=v1', '-z', '--untracked-files=all'] },
+    ]);
+  });
+
+  it('falls back to individual lookups when batched metadata is ambiguous', () => {
+    const root = temporaryDirectory('scip-query-fallback-git-context-');
+    const gitDir = join(root, '.git');
+    mkdirSync(gitDir);
+    const headCommit = 'c'.repeat(40);
+    const treeOid = 'd'.repeat(40);
+    const gitReader: GitReader = {
+      run: (_projectRoot, args) => {
+        const command = args.join(' ');
+        if (command === 'rev-parse --absolute-git-dir') return gitDir;
+        if (command === 'rev-parse --git-common-dir') return '.git';
+        if (command === 'rev-parse --verify HEAD') return headCommit;
+        if (command === 'rev-parse --verify HEAD^{tree}') return treeOid;
+        if (command === 'status --porcelain=v1 -z --untracked-files=all') return '';
+        return undefined;
+      },
+      runResult: (_projectRoot, args) =>
+        args.length > 2
+          ? { kind: 'success', output: [root, gitDir, '.git', headCommit, treeOid, 'extra'].join('\n') }
+          : { kind: 'success', output: root },
+    };
+
+    expect(resolveGitWorktreeContext(root, gitReader)).toEqual(
+      expect.objectContaining({ headCommit, treeOid, clean: true }),
+    );
+  });
+
+  it('preserves worktree identity before the repository has a first commit', () => {
+    const root = temporaryDirectory('scip-query-unborn-git-context-');
+    git(root, ['init', '-q', '-b', 'main']);
+
+    expect(resolveGitWorktreeContext(root)).toEqual(
+      expect.objectContaining({
+        projectRoot: realpathSync(root),
+        headCommit: undefined,
+        treeOid: undefined,
+        clean: true,
+      }),
+    );
+  });
+
   it('gives linked worktrees one repository identity and distinct worktree identities', () => {
     const primary = createRepository();
     const linked = temporaryDirectory('scip-query-linked-');

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { WatcherStatus } from '../../src/domain/types.js';
+import type { GitWorktreeContext } from '../../src/runtime/git-worktree.js';
 import {
   WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS,
   WATCH_SERVICE_PROTOCOL_VERSION,
@@ -16,6 +17,7 @@ import {
   resolveWatchServiceIdentity,
   shouldStopWatchServiceForIdle,
   stopWatchService,
+  trustedWatchServiceIndexGeneration,
   watchServicePaths,
   watchServiceAutoStartEligible,
   writeWatchServiceState,
@@ -34,6 +36,11 @@ describe('watch service contract', () => {
     expect(parseWatchServiceState({ ...liveState(), worktreeId: '' })).toBeNull();
     expect(parseWatchServiceState({ ...liveState(), heartbeatAt: 'not-a-date' })).toBeNull();
     expect(parseWatchServiceState({ ...liveState(), watcher: { state: 'waiting' } })).toBeNull();
+    expect(parseWatchServiceState({ ...liveState(), indexGeneration: 'a'.repeat(64) })).toEqual({
+      ...liveState(),
+      indexGeneration: 'a'.repeat(64),
+    });
+    expect(parseWatchServiceState({ ...liveState(), indexGeneration: 'not-a-generation' })).toBeNull();
     expect(
       parseWatchServiceState({
         ...liveState(),
@@ -46,6 +53,34 @@ describe('watch service contract', () => {
         typescriptIndex: { ...liveState().typescriptIndex!, documentsEmitted: -1 },
       }),
     ).toBeNull();
+  });
+
+  it('trusts a watcher generation only while the matching live watcher is idle and error-free', () => {
+    const generation = 'a'.repeat(64);
+    const liveInspection = {
+      identity: IDENTITY,
+      classification: { kind: 'live', state: { ...liveState(), indexGeneration: generation } },
+      lock: null,
+      lockIsLive: false,
+      paths: watchServicePaths('/tmp/scip-query-watch-generation'),
+    } as const;
+
+    expect(trustedWatchServiceIndexGeneration(liveInspection)).toBe(generation);
+    expect(
+      trustedWatchServiceIndexGeneration({
+        ...liveInspection,
+        classification: {
+          kind: 'live',
+          state: { ...liveState(), indexGeneration: generation, watcher: { state: 'indexing', startedAt: NOW } },
+        },
+      }),
+    ).toBeUndefined();
+    expect(
+      trustedWatchServiceIndexGeneration({
+        ...liveInspection,
+        classification: { kind: 'stale', state: liveInspection.classification.state, reason: 'old-heartbeat' },
+      }),
+    ).toBeUndefined();
   });
 
   it('trusts only matching, recently-heartbeating live processes', () => {
@@ -111,6 +146,26 @@ describe('watch service contract', () => {
       expect(() => resolveWatchServiceIdentity(damagedGitRoot, IDENTITY.cliVersion)).toThrow(
         /Could not establish Git worktree identity.*not a git repository/i,
       );
+    });
+  });
+
+  it('projects a matching resolved Git context without another repository lookup', () => {
+    withTempCache((projectRoot) => {
+      const context: GitWorktreeContext = {
+        projectRoot,
+        gitDir: join(projectRoot, '.git'),
+        commonDir: join(projectRoot, '.git'),
+        repositoryId: 'a'.repeat(24),
+        worktreeId: 'worktree-from-context',
+        clean: false,
+      };
+
+      expect(resolveWatchServiceIdentity(projectRoot, IDENTITY.cliVersion, context)).toEqual({
+        projectRoot: realpathSync(projectRoot),
+        worktreeKind: 'git',
+        worktreeId: 'worktree-from-context',
+        cliVersion: IDENTITY.cliVersion,
+      });
     });
   });
 

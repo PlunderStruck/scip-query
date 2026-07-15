@@ -30,7 +30,7 @@ import {
   prefetchedSemanticCalleesForDefinitions,
   semanticCalleeMap,
   semanticEvidenceProduct,
-  semanticReferences,
+  semanticReferenceMap,
 } from '../../semantic/shared-primitives.js';
 import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
 import { getGlobalLeafIndex, pickAstCallCandidate, sameLanguageCandidates } from '../leaf-symbol-index.js';
@@ -82,10 +82,23 @@ export function getCallerRowsForSymbol(
   symbol: SymbolMatch,
   opts: { limit?: number; semantic?: boolean } = {},
 ): CallerRow[] {
-  const callers = shouldUseTargetedCallerRows(db)
-    ? targetedCallerRowsForSymbol(db, symbol, { semantic: opts.semantic !== false })
-    : (buildCallerRowsMap(db).get(symbol.symbolId) ?? []);
-  return typeof opts.limit === 'number' ? callers.slice(0, opts.limit) : callers;
+  return getCallerRowsMapForSymbols(db, [symbol], opts).get(symbol.symbolId) ?? [];
+}
+
+// scip-query: ignore-wrapper — bulk graph implementation stays behind the
+// caller-evidence facade, parallel to the scalar boundary above.
+export function getCallerRowsMapForSymbols(
+  db: ScipDatabase,
+  symbols: ReadonlyArray<SymbolMatch>,
+  opts: { limit?: number; semantic?: boolean } = {},
+): Map<number, CallerRow[]> {
+  const rows = shouldUseTargetedCallerRows(db)
+    ? targetedCallerRowsMapForSymbols(db, symbols, { semantic: opts.semantic !== false })
+    : buildCallerRowsMap(db);
+  if (typeof opts.limit !== 'number') {
+    return new Map(symbols.map((symbol) => [symbol.symbolId, rows.get(symbol.symbolId) ?? []]));
+  }
+  return new Map(symbols.map((symbol) => [symbol.symbolId, (rows.get(symbol.symbolId) ?? []).slice(0, opts.limit)]));
 }
 
 const CALLER_ROWS_CACHE = createPerDbValue<Map<number, CallerRow[]>>('caller-rows', {
@@ -144,40 +157,58 @@ export function buildCallerRowsMap(db: ScipDatabase): Map<number, CallerRow[]> {
 // scip-query: ignore-extract — this is the targeted single-symbol caller
 // fallback: resolved reference sites, indexed definition lookup, and file-edge
 // attribution intentionally form one query path.
-function targetedCallerRowsForSymbol(db: ScipDatabase, symbol: SymbolMatch, opts: { semantic: boolean }): CallerRow[] {
-  const rows: CallerRow[] = [];
-  const seen = new Set<string>();
-  const add = (row: CallerRow): void => {
-    if (row.symbol === symbol.symbol) return;
-    const key = `${row.symbol}|${row.file}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    rows.push(row);
-  };
+function targetedCallerRowsMapForSymbols(
+  db: ScipDatabase,
+  symbols: ReadonlyArray<SymbolMatch>,
+  opts: { semantic: boolean },
+): Map<number, CallerRow[]> {
+  const definitions = opts.semantic
+    ? symbols.flatMap((symbol) => {
+        const definition = indexedDefinitionForSymbol(db, symbol);
+        return definition ? [definition] : [];
+      })
+    : [];
+  const definitionBySymbolId = new Map(definitions.map((definition) => [definition.symbolId, definition]));
+  const semanticReferences = semanticReferenceMap(db, definitions);
+  const result = new Map<number, CallerRow[]>();
 
-  for (const site of getResolvedReferenceSites(db, symbol)) {
-    if (site.file === symbol.relativePath) continue;
-    add({
-      symbol: site.enclosingSymbol ?? site.file,
-      file: site.file,
-      source: 'resolved-reference',
-    });
-  }
+  for (const symbol of symbols) {
+    const rows: CallerRow[] = [];
+    const seen = new Set<string>();
+    const add = (row: CallerRow): void => {
+      if (row.symbol === symbol.symbol) return;
+      const key = `${row.symbol}|${row.file}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      rows.push(row);
+    };
 
-  const definition = opts.semantic ? indexedDefinitionForSymbol(db, symbol) : null;
-  if (definition) {
-    for (const reference of semanticReferences(db, definition)) {
-      if (reference.file === symbol.relativePath || db.isIgnored(reference.file)) continue;
-      const enclosing = findEnclosingDefinition(getDefinitionsForFile(db, reference.file), reference.line);
+    for (const site of getResolvedReferenceSites(db, symbol)) {
+      if (site.file === symbol.relativePath) continue;
       add({
-        symbol: enclosing?.symbol ?? reference.file,
-        file: reference.file,
-        source: 'semantic-reference',
+        symbol: site.enclosingSymbol ?? site.file,
+        file: site.file,
+        source: 'resolved-reference',
       });
     }
+
+    const definition = definitionBySymbolId.get(symbol.symbolId);
+    if (definition) {
+      for (const reference of semanticReferences.get(definition.symbolId) ?? []) {
+        if (reference.file === symbol.relativePath || db.isIgnored(reference.file)) continue;
+        const enclosing = findEnclosingDefinition(getDefinitionsForFile(db, reference.file), reference.line);
+        add({
+          symbol: enclosing?.symbol ?? reference.file,
+          file: reference.file,
+          source: 'semantic-reference',
+        });
+      }
+    }
+
+    result.set(symbol.symbolId, rows);
   }
 
-  return rows;
+  return result;
 }
 
 function indexedDefinitionForSymbol(db: ScipDatabase, symbol: SymbolMatch): IndexedDefinition | null {

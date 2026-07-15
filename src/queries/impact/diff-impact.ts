@@ -41,6 +41,13 @@ export interface DiffImpactPlan {
   note?: string;
 }
 
+interface GitDiffSnapshot {
+  changedFileLines: string[];
+  changedRanges: ChangedLineRange[];
+  renamedFiles: RenamedFile[];
+  deletedFiles: string[];
+}
+
 /** Plan note when git itself failed (not a repo, bad ref) — vs an empty diff. */
 export const GIT_DIFF_UNAVAILABLE_NOTE = 'Unable to compute git diff.';
 
@@ -102,14 +109,15 @@ export function diffImpact(db: ScipDatabase, opts: { base?: string; plan?: DiffI
 export function diffImpactPlan(db: ScipDatabase, opts: { base?: string } = {}): DiffImpactPlan {
   const { base = 'HEAD' } = opts;
   try {
-    const changedFileLines = getChangedFiles(db.config.projectRoot, base);
+    const snapshot = getGitDiffSnapshot(db.config.projectRoot, base);
+    const changedFileLines = snapshot.changedFileLines;
     const changedFiles = indexedChangedFiles(db, changedFileLines);
-    const changedRanges = indexedChangedRanges(db, getChangedLineRanges(db.config.projectRoot, base));
+    const changedRanges = indexedChangedRanges(db, snapshot.changedRanges);
     return {
       changedFileLines,
       changedFiles,
       changedRanges,
-      renamedFiles: detectRenamedFiles(db.config.projectRoot, base, changedFiles),
+      renamedFiles: detectRenamedFiles(db.config.projectRoot, base, changedFiles, snapshot),
       note: changedFileLines.length === 0 ? 'No changed files found.' : undefined,
     };
   } catch {
@@ -256,14 +264,14 @@ function unindexedChangedFilesResult(changedFiles: string[]): DiffImpactResult {
   };
 }
 
-function getChangedFiles(projectRoot: string, base: string): string[] {
-  const diff = execFileSync('git', ['diff', '--name-only', base], {
+function getGitDiffSnapshot(projectRoot: string, base: string): GitDiffSnapshot {
+  const diffNames = execFileSync('git', ['diff', '--name-status', '--find-renames', base], {
     encoding: 'utf-8',
     cwd: projectRoot,
     timeout: 30_000,
     maxBuffer: 64 * 1024 * 1024,
   });
-  const staged = execFileSync('git', ['diff', '--name-only', '--cached', base], {
+  const stagedNames = execFileSync('git', ['diff', '--name-status', '--find-renames', '--cached', base], {
     encoding: 'utf-8',
     cwd: projectRoot,
     timeout: 30_000,
@@ -275,18 +283,6 @@ function getChangedFiles(projectRoot: string, base: string): string[] {
     timeout: 30_000,
     maxBuffer: 64 * 1024 * 1024,
   });
-
-  return [
-    ...new Set(
-      [diff, staged, untracked]
-        .flatMap((chunk) => chunk.split('\n'))
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0),
-    ),
-  ];
-}
-
-function getChangedLineRanges(projectRoot: string, base: string): ChangedLineRange[] {
   const diff = execFileSync('git', ['diff', '--unified=0', base], {
     encoding: 'utf-8',
     cwd: projectRoot,
@@ -300,7 +296,13 @@ function getChangedLineRanges(projectRoot: string, base: string): ChangedLineRan
     maxBuffer: 64 * 1024 * 1024,
   });
 
-  return dedupeRanges([...parseChangedLineRanges(diff), ...parseChangedLineRanges(staged)]);
+  const nameStatuses = parseGitNameStatuses([diffNames, stagedNames]);
+  return {
+    changedFileLines: [...new Set([...nameStatuses.changedFiles, ...lines(untracked)])],
+    changedRanges: dedupeRanges([...parseChangedLineRanges(diff), ...parseChangedLineRanges(staged)]),
+    renamedFiles: nameStatuses.renamedFiles,
+    deletedFiles: nameStatuses.deletedFiles,
+  };
 }
 
 export function fileContentAtBase(projectRoot: string, base: string, relativePath: string): string | null {
@@ -397,18 +399,23 @@ function parseCatFileBatchOutput(output: Buffer, relativePaths: readonly string[
   return out;
 }
 
-function detectRenamedFiles(projectRoot: string, base: string, changedFiles: readonly string[]): RenamedFile[] {
+function detectRenamedFiles(
+  projectRoot: string,
+  base: string,
+  changedFiles: readonly string[],
+  snapshot: GitDiffSnapshot,
+): RenamedFile[] {
   if (changedFiles.length === 0) return [];
 
   const renamed = new Map<string, RenamedFile>();
   const claimedSources = new Set<string>();
-  for (const rename of gitReportedRenames(projectRoot, base)) {
+  for (const rename of snapshot.renamedFiles) {
     if (!changedFiles.includes(rename.to)) continue;
     renamed.set(rename.to, rename);
     claimedSources.add(rename.from);
   }
 
-  const deletedFiles = getDeletedFiles(projectRoot, base);
+  const deletedFiles = snapshot.deletedFiles;
   if (deletedFiles.length === 0) {
     return [...renamed.values()].sort((left, right) => left.to.localeCompare(right.to));
   }
@@ -438,45 +445,34 @@ function detectRenamedFiles(projectRoot: string, base: string, changedFiles: rea
   return [...renamed.values()].sort((left, right) => left.to.localeCompare(right.to));
 }
 
-function getDeletedFiles(projectRoot: string, base: string): string[] {
-  const diff = execFileSync('git', ['diff', '--name-only', '--diff-filter=D', base], {
-    encoding: 'utf-8',
-    cwd: projectRoot,
-    timeout: 30_000,
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  const staged = execFileSync('git', ['diff', '--name-only', '--diff-filter=D', '--cached', base], {
-    encoding: 'utf-8',
-    cwd: projectRoot,
-    timeout: 30_000,
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  return [...new Set([...lines(diff), ...lines(staged)])];
-}
-
-function gitReportedRenames(projectRoot: string, base: string): RenamedFile[] {
-  const unstaged = execFileSync('git', ['diff', '--name-status', '--find-renames', base], {
-    encoding: 'utf-8',
-    cwd: projectRoot,
-    timeout: 30_000,
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  const staged = execFileSync('git', ['diff', '--name-status', '--find-renames', '--cached', base], {
-    encoding: 'utf-8',
-    cwd: projectRoot,
-    timeout: 30_000,
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  return [...unstaged.split('\n'), ...staged.split('\n')]
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith('R'))
-    .map((line) => line.split('\t'))
-    .filter((parts): parts is [string, string, string] => parts.length >= 3)
-    .map(([status, from, to]) => ({
-      from,
-      to,
-      similarity: Number(status.slice(1)) / 100,
-    }));
+function parseGitNameStatuses(chunks: readonly string[]): {
+  changedFiles: string[];
+  renamedFiles: RenamedFile[];
+  deletedFiles: string[];
+} {
+  const changedFiles = new Set<string>();
+  const renamedFiles = new Map<string, RenamedFile>();
+  const deletedFiles = new Set<string>();
+  for (const line of chunks.flatMap((chunk) => lines(chunk))) {
+    const [status, firstPath, secondPath] = line.split('\t');
+    if (!status || !firstPath) continue;
+    if (status.startsWith('R') && secondPath) {
+      changedFiles.add(secondPath);
+      renamedFiles.set(secondPath, {
+        from: firstPath,
+        to: secondPath,
+        similarity: Number(status.slice(1)) / 100,
+      });
+      continue;
+    }
+    changedFiles.add(firstPath);
+    if (status.startsWith('D')) deletedFiles.add(firstPath);
+  }
+  return {
+    changedFiles: [...changedFiles],
+    renamedFiles: [...renamedFiles.values()],
+    deletedFiles: [...deletedFiles],
+  };
 }
 
 function sourceMoveSimilarity(left: string, right: string): number {

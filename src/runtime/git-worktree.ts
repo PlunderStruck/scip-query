@@ -49,6 +49,16 @@ export const DEFAULT_GIT_READER: GitReader = {
   runResult: runGitCommand,
 };
 
+const BATCHED_WORKTREE_CONTEXT_ARGS = [
+  'rev-parse',
+  '--show-toplevel',
+  '--absolute-git-dir',
+  '--git-common-dir',
+  'HEAD',
+  'HEAD^{tree}',
+] as const;
+const GIT_OBJECT_ID = /^[0-9a-f]{40,64}$/;
+
 export function findGitRoot(cwd: string, git: GitReader = DEFAULT_GIT_READER): string | undefined {
   const root = git.run(cwd, ['rev-parse', '--show-toplevel'])?.trim();
   return root ? canonicalPath(root) : undefined;
@@ -58,6 +68,56 @@ export function resolveGitWorktreeContext(
   projectRoot: string,
   git: GitReader = DEFAULT_GIT_READER,
 ): GitWorktreeContext | undefined {
+  const batchedResult = git.runResult(projectRoot, BATCHED_WORKTREE_CONTEXT_ARGS);
+  if (batchedResult.kind === 'success') {
+    const metadata = parseBatchedWorktreeContext(batchedResult.output);
+    if (metadata) return resolveGitWorktreeContextFromMetadata(metadata, git);
+  }
+  return resolveGitWorktreeContextIndividually(projectRoot, git);
+}
+
+interface GitWorktreeContextMetadata {
+  root: string;
+  gitDir: string;
+  commonDir: string;
+  headCommit: string;
+  treeOid: string;
+}
+
+function parseBatchedWorktreeContext(output: string): GitWorktreeContextMetadata | undefined {
+  const fields = output.split('\n').map((field) => field.trim());
+  if (fields.length !== 5) return undefined;
+  const [rootOutput, rawGitDir, rawCommonDir, headCommit, treeOid] = fields;
+  if (!rootOutput || !rawGitDir || !rawCommonDir || !headCommit || !treeOid) return undefined;
+  if (!GIT_OBJECT_ID.test(headCommit) || !GIT_OBJECT_ID.test(treeOid)) return undefined;
+  const root = canonicalPath(rootOutput);
+  return {
+    root,
+    gitDir: canonicalPath(resolveGitPath(root, rawGitDir)),
+    commonDir: canonicalPath(resolveGitPath(root, rawCommonDir)),
+    headCommit,
+    treeOid,
+  };
+}
+
+function resolveGitWorktreeContextFromMetadata(
+  metadata: GitWorktreeContextMetadata,
+  git: GitReader,
+): GitWorktreeContext | undefined {
+  const status = git.run(metadata.root, ['status', '--porcelain=v1', '-z', '--untracked-files=all']);
+  if (status === undefined) return undefined;
+  const identity = gitWorktreeIdentity(metadata.root, metadata.gitDir);
+  return {
+    ...identity,
+    commonDir: metadata.commonDir,
+    repositoryId: stablePathId('repository', metadata.commonDir),
+    headCommit: metadata.headCommit,
+    treeOid: metadata.treeOid,
+    clean: status.length === 0,
+  };
+}
+
+function resolveGitWorktreeContextIndividually(projectRoot: string, git: GitReader): GitWorktreeContext | undefined {
   const resolution = resolveGitWorktreeIdentity(projectRoot, git);
   if (resolution.kind !== 'worktree') return undefined;
   const identity = resolution.identity;
@@ -96,11 +156,15 @@ export function resolveGitWorktreeIdentity(
   const gitDir = canonicalPath(resolveGitPath(root, rawGitDir));
   return {
     kind: 'worktree',
-    identity: {
-      projectRoot: root,
-      gitDir,
-      worktreeId: stablePathId('worktree', `${root}\0${gitDir}`),
-    },
+    identity: gitWorktreeIdentity(root, gitDir),
+  };
+}
+
+function gitWorktreeIdentity(projectRoot: string, gitDir: string): GitWorktreeIdentity {
+  return {
+    projectRoot,
+    gitDir,
+    worktreeId: stablePathId('worktree', `${projectRoot}\0${gitDir}`),
   };
 }
 

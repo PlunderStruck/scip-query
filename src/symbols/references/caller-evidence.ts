@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition, SymbolMatch } from '../../domain/types.js';
-import { getCallerRowsForSymbol } from '../graph/call-graph-evidence.js';
+import { getCallerRowsForSymbol, getCallerRowsMapForSymbols } from '../graph/call-graph-evidence.js';
 import type { CallerRow } from '../graph/call-graph-evidence.js';
 import { findCallerFiles } from '../identifier-attribution.js';
 import { buildCrossFileCallerMap } from './reference-callers.js';
@@ -13,6 +13,16 @@ export function callerRowsForSymbol(
   opts: { limit?: number; semantic?: boolean } = {},
 ): CallerRow[] {
   return getCallerRowsForSymbol(db, symbol, opts);
+}
+
+// scip-query: ignore-passthrough — bulk caller-facing row evidence facade;
+// preserves the targeted-vs-inverted selection behind one query boundary.
+export function callerRowsMapForSymbols(
+  db: ScipDatabase,
+  symbols: ReadonlyArray<SymbolMatch>,
+  opts: { limit?: number; semantic?: boolean } = {},
+): Map<number, CallerRow[]> {
+  return getCallerRowsMapForSymbols(db, symbols, opts);
 }
 
 // scip-query: ignore-passthrough — caller-facing bulk evidence facade; callers

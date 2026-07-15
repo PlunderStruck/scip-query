@@ -1533,6 +1533,7 @@ function watchServiceReport(inspection: WatchServiceInspection, enabled = true) 
         lastActivityAt: classification.state.lastActivityAt,
         idleDeadlineAt: classification.state.idleDeadlineAt,
         watcher: classification.state.watcher,
+        indexGeneration: classification.state.indexGeneration,
         lastRefresh: classification.state.lastRefresh,
         lastError: classification.state.lastError,
         typescriptSemantic: classification.state.typescriptSemantic,
@@ -1550,6 +1551,7 @@ function watchServiceReport(inspection: WatchServiceInspection, enabled = true) 
         worktreeId: classification.state.worktreeId,
         heartbeatAt: classification.state.heartbeatAt,
         watcher: classification.state.watcher,
+        indexGeneration: classification.state.indexGeneration,
         lastRefresh: classification.state.lastRefresh,
         lastError: classification.state.lastError,
         typescriptSemantic: classification.state.typescriptSemantic,
@@ -1572,6 +1574,9 @@ function renderWatchServiceReport(report: ReturnType<typeof watchServiceReport>)
     console.log(`Worktree: ${report.projectRoot}${worktree}`);
   }
   if ('watcher' in report && report.watcher) console.log(`Watcher: ${formatStatus(report.watcher)}`);
+  if ('indexGeneration' in report && report.indexGeneration) {
+    console.log(`Index generation: ${report.indexGeneration.slice(0, 12)}`);
+  }
   if ('idleDeadlineAt' in report && report.idleDeadlineAt) console.log(`Idle exit: ${report.idleDeadlineAt}`);
   if ('reason' in report) console.log(`Reason: ${report.reason}`);
   if ('lastError' in report && report.lastError) console.log(`Last error: ${report.lastError.message}`);

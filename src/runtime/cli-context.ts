@@ -5,6 +5,8 @@ import { createGitignoreFilter } from '../source/gitignore-filter.js';
 import { loadProjectConfig, resolveIndexStoragePaths } from './config.js';
 import type { ProjectConfig, ScipQueryConfig, WatcherStatus } from '../domain/types.js';
 import { getIndexFreshness } from './index-freshness.js';
+import type { GitWorktreeContext } from './git-worktree.js';
+import { publishedGenerationIdentity } from '../semantic/typescript/session-protocol.js';
 import {
   prepareSharedGenerationForProject,
   publishFreshLocalGenerationForProject,
@@ -17,21 +19,36 @@ export function resolveProjectRoot(): string {
   return process.env['SCIP_QUERY_PROJECT_ROOT'] ?? process.cwd();
 }
 
-interface CliProjectContext {
+export interface CliProjectContext {
   projectRoot: string;
   config: ProjectConfig;
   paths: ReturnType<typeof resolveIndexStoragePaths>;
   dbPath: string;
   dbPathSource: 'env' | 'configured' | 'root-fallback';
   rootFallbackWarning?: string;
+  gitContext?: GitWorktreeContext;
 }
 
-export function resolveCliProjectContext(projectRoot = resolveProjectRoot()): CliProjectContext {
+let activeCliProjectContext: CliProjectContext | undefined;
+
+export function activateCliProjectContext(context: CliProjectContext | undefined): void {
+  activeCliProjectContext = context;
+}
+
+export function resolveCliProjectContext(
+  projectRoot = resolveProjectRoot(),
+  gitContext: GitWorktreeContext | undefined = undefined,
+): CliProjectContext {
+  if (gitContext === undefined && activeCliProjectContext?.projectRoot === projectRoot) {
+    return activeCliProjectContext;
+  }
   const config = loadProjectConfig(projectRoot);
   const paths = resolveIndexStoragePaths(projectRoot, config);
   const envDbPath = process.env['SCIP_QUERY_INDEX_DB'];
-  if (envDbPath) return { projectRoot, config, paths, dbPath: envDbPath, dbPathSource: 'env' };
-  if (existsSync(paths.dbPath)) return { projectRoot, config, paths, dbPath: paths.dbPath, dbPathSource: 'configured' };
+  if (envDbPath) return { projectRoot, config, paths, dbPath: envDbPath, dbPathSource: 'env', gitContext };
+  if (existsSync(paths.dbPath)) {
+    return { projectRoot, config, paths, dbPath: paths.dbPath, dbPathSource: 'configured', gitContext };
+  }
 
   const dbPath = join(projectRoot, 'index.db');
   return {
@@ -41,6 +58,7 @@ export function resolveCliProjectContext(projectRoot = resolveProjectRoot()): Cl
     dbPath,
     dbPathSource: 'root-fallback',
     rootFallbackWarning: rootIndexFallbackWarning(dbPath, paths.dbPath),
+    gitContext,
   };
 }
 
@@ -52,13 +70,23 @@ export function prepareWorktreeIndex(
   projectRoot: string,
   config: ProjectConfig,
   paths: ReturnType<typeof resolveIndexStoragePaths>,
+  opts: { gitContext?: GitWorktreeContext; watcherGeneration?: string } = {},
 ): SharedCacheAction {
-  if (existsSync(paths.dbPath) && touchExistingWorktreeLease(projectRoot, paths.cacheDir)) {
+  if (existsSync(paths.dbPath) && touchExistingWorktreeLease(projectRoot, paths.cacheDir, undefined, opts.gitContext)) {
     return { kind: 'local-fresh' };
   }
+  if (
+    opts.gitContext?.clean === false &&
+    opts.watcherGeneration !== undefined &&
+    publishedGenerationIdentity(paths.dbPath) === opts.watcherGeneration
+  ) {
+    return publishFreshLocalGenerationForProject(projectRoot, config, paths, opts.gitContext);
+  }
   const freshness = getIndexFreshness(projectRoot, config, paths);
-  if (freshness.state === 'fresh') return publishFreshLocalGenerationForProject(projectRoot, config, paths);
-  return prepareSharedGenerationForProject(projectRoot, config, paths);
+  if (freshness.state === 'fresh') {
+    return publishFreshLocalGenerationForProject(projectRoot, config, paths, opts.gitContext);
+  }
+  return prepareSharedGenerationForProject(projectRoot, config, paths, opts.gitContext);
 }
 
 export function sharedCachePreparationEligible(commandName: string): boolean {
@@ -89,7 +117,8 @@ export function openDb(): ScipDatabase {
 }
 
 export function openProjectDb(projectRoot: string, opts: { warnOnRootFallback?: boolean } = {}): ScipDatabase {
-  const { config, paths, dbPath, dbPathSource, rootFallbackWarning } = resolveCliProjectContext(projectRoot);
+  const { config, paths, dbPath, dbPathSource, rootFallbackWarning, gitContext } =
+    resolveCliProjectContext(projectRoot);
 
   if (!existsSync(dbPath)) throw new Error('No index.db found. Run: scip-query reindex');
   if (opts.warnOnRootFallback && dbPathSource === 'root-fallback' && rootFallbackWarning)
@@ -99,7 +128,7 @@ export function openProjectDb(projectRoot: string, opts: { warnOnRootFallback?: 
     dbPath,
     indexPath: process.env['SCIP_QUERY_INDEX_SCIP'] ?? paths.indexPath,
     projectRoot,
-    sharedEvidenceDbPath: resolveSharedEvidenceDbPath(projectRoot, config),
+    sharedEvidenceDbPath: resolveSharedEvidenceDbPath(projectRoot, config, gitContext),
     entryRoots: config.entryRoots,
     semantic: config.semantic,
     suppressions: config.suppressions,

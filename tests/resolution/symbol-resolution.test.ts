@@ -29,9 +29,11 @@ describe('symbol resolution metadata', () => {
           startLine: 0,
         }),
       ]);
+      expect(resolveSymbol(db, 'duplicateHelper')).toBe(ambiguous);
 
       const qualified = resolveSymbol(db, 'nested/duplicateHelper');
 
+      expect(qualified).not.toBe(ambiguous);
       expect(qualified.match?.relativePath).toBe('src/nested/b.ts');
       expect(qualified.total).toBe(1);
       expect(qualified.candidates).toEqual([]);

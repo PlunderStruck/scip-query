@@ -176,9 +176,13 @@ export function sharedCacheBypassReason(
   return undefined;
 }
 
-export function resolveSharedEvidenceDbPath(projectRoot: string, config?: ProjectConfig): string | undefined {
+export function resolveSharedEvidenceDbPath(
+  projectRoot: string,
+  config?: ProjectConfig,
+  resolvedContext?: GitWorktreeContext,
+): string | undefined {
   if (!automaticSharedCacheEnabled(config)) return undefined;
-  const context = resolveGitWorktreeContext(projectRoot);
+  const context = resolvedContext ?? resolveGitWorktreeContext(projectRoot);
   return context ? join(resolveRepositoryCacheDir(context.repositoryId), 'evidence.db') : undefined;
 }
 
@@ -365,11 +369,12 @@ export function prepareSharedGenerationForProject(
   projectRoot: string,
   config: ProjectConfig,
   paths: IndexStoragePaths,
+  resolvedContext?: GitWorktreeContext,
 ): SharedCacheAction {
   const bypass = sharedCacheBypassReason(projectRoot, paths.dbPath, config);
   if (bypass) return { kind: 'bypassed', reason: bypass };
   try {
-    const context = resolveGitWorktreeContext(projectRoot);
+    const context = resolvedContext ?? resolveGitWorktreeContext(projectRoot);
     if (!context) return { kind: 'missed', reason: 'Git worktree identity is unavailable' };
     if (!context.clean) {
       writeManagedWorktreeLease(context, paths.cacheDir, 'missed', undefined, 'worktree has uncommitted changes');
@@ -414,12 +419,23 @@ export function publishFreshLocalGenerationForProject(
   projectRoot: string,
   config: ProjectConfig,
   paths: IndexStoragePaths,
+  resolvedContext?: GitWorktreeContext,
 ): SharedCacheAction {
   const bypass = sharedCacheBypassReason(projectRoot, paths.dbPath, config);
   if (bypass) return { kind: 'bypassed', reason: bypass };
   try {
-    const context = resolveGitWorktreeContext(projectRoot);
+    const context = resolvedContext ?? resolveGitWorktreeContext(projectRoot);
     if (!context) return { kind: 'missed', reason: 'Git worktree identity is unavailable' };
+    if (!context.clean) {
+      writeManagedWorktreeLease(
+        context,
+        paths.cacheDir,
+        'missed',
+        undefined,
+        'worktree is not a clean committed snapshot',
+      );
+      return { kind: 'missed', reason: 'worktree is not a clean committed snapshot' };
+    }
     const languages = config.languages ?? detectLanguages(projectRoot);
     const fingerprint = buildProjectInputFingerprint(projectRoot, languages, configFingerprintOptions(config));
     const snapshot = buildSharedGenerationSnapshot(context, fingerprint);
@@ -597,6 +613,7 @@ export function touchExistingWorktreeLease(
   projectRoot: string,
   localCacheDir: string,
   now: (() => Date) | undefined = undefined,
+  resolvedContext?: GitWorktreeContext,
 ): WorktreeCacheLease | null {
   try {
     const pointer = JSON.parse(readFileSync(join(localCacheDir, WORKTREE_CACHE_POINTER), 'utf8')) as {
@@ -615,7 +632,7 @@ export function touchExistingWorktreeLease(
     }
     const leasePath = join(resolveRepositoryCacheDir(pointer.repositoryId), 'worktrees', `${pointer.worktreeId}.json`);
     const lease = JSON.parse(readFileSync(leasePath, 'utf8')) as WorktreeCacheLease;
-    const context = resolveGitWorktreeContext(projectRoot);
+    const context = resolvedContext ?? resolveGitWorktreeContext(projectRoot);
     if (
       !context?.clean ||
       !context.treeOid ||

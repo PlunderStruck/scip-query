@@ -4,9 +4,7 @@ import { doc, option, parseInteger, withJsonOption } from '../commands/command-s
 import {
   booleanOptionValue,
   budgetedDbCommand,
-  budgetedGroupedByFileCommand,
   budgetedListCommand,
-  dbCommand,
   definedLimitOption,
   definedNumberOption,
   printJsonEnvelope,
@@ -27,6 +25,7 @@ import {
   symbolResolutionEmptyMessage,
   withSymbolResolutionJson,
 } from './symbol-resolution.js';
+import { directNavigationQueryCommandDescriptors } from './direct-navigation.js';
 
 function traceSections(result: ReturnType<typeof queries.trace>): ReportSection[] {
   const definitionRows: string[] = [];
@@ -60,64 +59,10 @@ function traceSections(result: ReturnType<typeof queries.trace>): ReportSection[
   ];
 }
 
-const handleOutline = dbCommand(({ db, args, opts }) => {
-  const filePattern = stringArg(args, 0);
-  const showSignatures = booleanOptionValue(opts, 'signatures');
-  const roots = queries.outline(db, filePattern);
-  if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('outline', args, opts, roots);
-    return;
-  }
-  if (roots.length === 0) {
-    return render.empty(`No symbols found for "${filePattern}".`);
-  }
-
-  function printTree(nodes: typeof roots, indent: number): void {
-    for (const n of nodes) {
-      const prefix = '  '.repeat(indent);
-      const sig = showSignatures && n.signature ? `  - ${trimSignature(n.signature)}` : '';
-      console.log(`${prefix}${displayRange(n.startLine, n.endLine)}  ${n.shortName}${sig}`);
-      printTree(n.children, indent + 1);
-    }
-  }
-  printTree(roots, 0);
-});
-
-function trimSignature(signature: string): string {
-  const maxLength = 120;
-  return signature.length > maxLength ? `${signature.slice(0, maxLength - 3)}...` : signature;
-}
-
 const handleImports = budgetedListCommand('imports', {
   query: ({ db, args, budget }) => queries.imports(db, stringArg(args, 0), { semantic: budget.semantic }),
   format: (r) => `  ${r.shortName}  ← ${r.fromFile}`,
   emptyMessage: () => 'No imports found (indexer may not emit role=2 for this language).',
-});
-
-const handleRefs = budgetedGroupedByFileCommand('refs', {
-  query: ({ db, args, budget }) => queries.refs(db, stringArg(args, 0), { semantic: budget.semantic }),
-  format: (r) => `  line ${displayLine(r.line)}`,
-  before: (_rows, { db, args }) => symbolResolutionBefore(db, stringArg(args, 0)),
-  emptyMessage: ({ db, args }) => symbolResolutionEmptyMessage(db, stringArg(args, 0), 'No references found.'),
-  toJson: (rows, { db, args }) => withSymbolResolutionJson(db, stringArg(args, 0), rows, 'references'),
-});
-
-const handleCode = dbCommand(({ db, args, opts }) => {
-  const query = stringArg(args, 0);
-  const result = queries.code(db, query, { context: definedNumberOption(opts, 'context', 0) });
-  if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('code', args, opts, withSymbolResolutionJson(db, query, result, 'code'));
-    return;
-  }
-  if (!result) return render.empty(symbolResolutionEmptyMessage(db, query, 'Symbol found, but source was unreadable.'));
-  symbolResolutionBefore(db, query);
-  console.log(
-    `${displayPathRange(result.relativePath, result.startLine, result.endLine)}  ${result.shortName}  [${result.language ?? 'unknown'}]\n`,
-  );
-  const lines = result.source.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    console.log(`  ${String(displayLine(result.startLine + i)).padStart(4)}  ${lines[i]}`);
-  }
 });
 
 const handleDataflow = budgetedDbCommand('dataflow', ({ db, args, opts, budget }) => {
@@ -176,6 +121,7 @@ const handleSlice = budgetedDbCommand('slice', ({ db, args, opts, budget }) => {
 });
 
 export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
+  ...directNavigationQueryCommandDescriptors,
   listQueryCommand({
     id: 'files',
     command: 'files <pattern>',
@@ -192,19 +138,6 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     query: ({ db, args }) => queries.methods(db, stringArg(args, 0)),
     format: (r) => `  ${displayRange(r.startLine, r.endLine)}  ${r.name}`,
   }),
-  {
-    id: 'refs',
-    command: 'refs <symbol>',
-    description: 'Find all files referencing a symbol',
-    options: [
-      option('--full', 'Run unbounded semantic analysis on large indexes'),
-      option('--json', 'Output as JSON for programmatic consumption'),
-    ],
-    budget: 'semantic',
-    renderShape: 'grouped-by-file',
-    docs: doc('Navigation', ['scip-query refs login']),
-    handler: handleRefs,
-  },
   budgetedSectionedQueryCommand({
     id: 'trace',
     command: 'trace <symbol>',
@@ -282,15 +215,6 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     query: ({ db, args }) => queries.importedBy(db, stringArg(args, 0)),
     format: (r) => `  ${r.fromFile}`,
   }),
-  {
-    id: 'outline',
-    command: 'outline <file>',
-    description: 'Tree view of symbols in a file, with line ranges',
-    options: withJsonOption([option('--signatures', 'Show trimmed symbol signatures')]),
-    renderShape: 'custom',
-    docs: doc('Navigation'),
-    handler: handleOutline,
-  },
   listQueryCommand({
     id: 'members',
     command: 'members <symbol>',
@@ -343,15 +267,6 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     emptyMessage: ({ db, args }) => symbolResolutionEmptyMessage(db, stringArg(args, 0), 'Symbol not found.'),
     toJson: (rows, { db, args }) => withSymbolResolutionJson(db, stringArg(args, 0), rows, 'hierarchy'),
   }),
-  {
-    id: 'code',
-    command: 'code <symbol>',
-    description: 'Read the source code for a symbol (bounded to its definition range)',
-    options: withJsonOption([option('-C, --context <n>', 'Extra lines of context above/below', parseInteger, 0)]),
-    renderShape: 'custom',
-    docs: doc('Navigation'),
-    handler: handleCode,
-  },
   {
     id: 'dataflow',
     command: 'dataflow <symbol>',

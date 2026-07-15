@@ -6,7 +6,7 @@ import type { LastRefreshMetadata, ProjectConfig, WatchConfig, WatcherStatus } f
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import type { TypeScriptSemanticServiceStatus } from '../semantic/typescript/session-protocol.js';
 import type { TypeScriptIndexServiceStatus } from '../reindex/typescript-index-protocol.js';
-import { canonicalPath, resolveGitWorktreeIdentity } from './git-worktree.js';
+import { canonicalPath, resolveGitWorktreeIdentity, type GitWorktreeContext } from './git-worktree.js';
 import { isProcessAlive } from './process-liveness.js';
 
 export const WATCH_SERVICE_PROTOCOL_VERSION = 4;
@@ -45,6 +45,7 @@ export interface WatchServiceState {
   lastActivityAt: string;
   idleDeadlineAt?: string;
   watcher: WatcherStatus;
+  indexGeneration?: string;
   lastRefresh?: LastRefreshMetadata;
   lastError?: { at: string; message: string };
   typescriptSemantic?: TypeScriptSemanticServiceStatus;
@@ -119,6 +120,7 @@ export interface WatchServiceControllerOptions {
   projectRoot: string;
   cacheDir: string;
   cliVersion: string;
+  gitContext?: GitWorktreeContext;
   serverPath?: string;
   startupTimeoutMs?: number;
   stopTimeoutMs?: number;
@@ -134,6 +136,13 @@ export interface WatchServiceInspection {
   lock: WatchProcessLockMetadata | null;
   lockIsLive: boolean;
   paths: WatchServicePaths;
+}
+
+export function trustedWatchServiceIndexGeneration(inspection: WatchServiceInspection): string | undefined {
+  const classification = inspection.classification;
+  if (classification.kind !== 'live') return undefined;
+  const { state } = classification;
+  return state.watcher.state === 'idle' && state.lastError === undefined ? state.indexGeneration : undefined;
 }
 
 export interface WatchServiceEnsureResult {
@@ -168,6 +177,7 @@ export function ensureWatchServiceForCommand(opts: {
   cacheDir: string;
   cliVersion: string;
   config: ProjectConfig;
+  gitContext?: GitWorktreeContext;
   env?: Record<string, string | undefined>;
   runtime?: WatchServiceRuntime;
 }): WatchServiceAutoEnsureResult {
@@ -180,6 +190,7 @@ export function ensureWatchServiceForCommand(opts: {
       projectRoot: opts.projectRoot,
       cacheDir: opts.cacheDir,
       cliVersion: opts.cliVersion,
+      gitContext: opts.gitContext,
       runtime: opts.runtime,
     });
     return { kind: result.disposition, state: result.state };
@@ -196,8 +207,15 @@ export function watchServicePaths(cacheDir: string): WatchServicePaths {
   };
 }
 
-export function resolveWatchServiceIdentity(projectRootInput: string, cliVersion: string): WatchServiceIdentity {
+export function resolveWatchServiceIdentity(
+  projectRootInput: string,
+  cliVersion: string,
+  gitContext?: GitWorktreeContext,
+): WatchServiceIdentity {
   const projectRoot = canonicalPath(resolve(projectRootInput));
+  if (gitContext && canonicalPath(gitContext.projectRoot) === projectRoot) {
+    return { projectRoot, worktreeKind: 'git', worktreeId: gitContext.worktreeId, cliVersion };
+  }
   const resolution = resolveGitWorktreeIdentity(projectRoot);
   if (resolution.kind === 'error') {
     throw new Error(`Could not establish Git worktree identity for ${projectRoot}: ${resolution.message}`);
@@ -214,7 +232,10 @@ export function resolveWatchServiceIdentity(projectRootInput: string, cliVersion
 }
 
 export function inspectWatchService(opts: WatchServiceControllerOptions): WatchServiceInspection {
-  return inspectWatchServiceWithIdentity(opts, resolveWatchServiceIdentity(opts.projectRoot, opts.cliVersion));
+  return inspectWatchServiceWithIdentity(
+    opts,
+    resolveWatchServiceIdentity(opts.projectRoot, opts.cliVersion, opts.gitContext),
+  );
 }
 
 function inspectWatchServiceWithIdentity(
@@ -237,7 +258,7 @@ function inspectWatchServiceWithIdentity(
 // scip-query: ignore-similar — starting and stopping share inspection but have opposite transitions.
 export function ensureWatchService(opts: WatchServiceControllerOptions): WatchServiceEnsureResult {
   const runtime = opts.runtime ?? DEFAULT_WATCH_SERVICE_RUNTIME;
-  const identity = resolveWatchServiceIdentity(opts.projectRoot, opts.cliVersion);
+  const identity = resolveWatchServiceIdentity(opts.projectRoot, opts.cliVersion, opts.gitContext);
   let inspection = inspectWatchServiceWithIdentity(opts, identity);
   let action = planWatchServiceAction('ensure', inspection.classification);
 
@@ -487,6 +508,7 @@ export function parseWatchServiceState(value: unknown): WatchServiceState | null
     return null;
   }
   if (state.idleDeadlineAt !== undefined && !validTimestamp(state.idleDeadlineAt)) return null;
+  if (state.indexGeneration !== undefined && !/^[a-f0-9]{64}$/.test(state.indexGeneration)) return null;
   if (state.lastError !== undefined && !validLastError(state.lastError)) return null;
   if (state.lastRefresh !== undefined && !validLastRefresh(state.lastRefresh)) return null;
   if (state.typescriptSemantic !== undefined && !validTypeScriptSemanticStatus(state.typescriptSemantic)) return null;

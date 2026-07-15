@@ -13,6 +13,7 @@ import {
   buildSharedGenerationSnapshot,
   hydrateSharedGeneration,
   parseSharedGenerationManifest,
+  publishFreshLocalGenerationForProject,
   publishSharedGeneration,
   readSharedGeneration,
   sharedCacheBypassReason,
@@ -24,6 +25,7 @@ import {
 import { refreshSqliteGenerationMetadata } from '../../src/reindex/sqlite-generation-store.js';
 import { TYPESCRIPT_FRAGMENT_STORE_DIRECTORY } from '../../src/reindex/typescript-fragment-store.js';
 import { resolveGitWorktreeContext } from '../../src/runtime/git-worktree.js';
+import { resolveIndexStoragePaths, resolveRepositoryCacheDir } from '../../src/runtime/config.js';
 
 const tempDirs: string[] = [];
 
@@ -219,6 +221,51 @@ describe('shared generation store', () => {
       git(root, ['add', '.']);
       git(root, ['commit', '-qm', 'second']);
       expect(touchExistingWorktreeLease(root, localCache)).toBeNull();
+    } finally {
+      if (previousCacheHome === undefined) delete process.env['XDG_CACHE_HOME'];
+      else process.env['XDG_CACHE_HOME'] = previousCacheHome;
+    }
+  });
+
+  it('rejects dirty publication before inspecting project fingerprint inputs', () => {
+    const root = temporaryDirectory('scip-query-shared-dirty-');
+    const cacheHome = temporaryDirectory('scip-query-shared-dirty-cache-');
+    const previousCacheHome = process.env['XDG_CACHE_HOME'];
+    process.env['XDG_CACHE_HOME'] = cacheHome;
+    try {
+      git(root, ['init', '-q', '-b', 'main']);
+      git(root, ['config', 'user.email', 'test@example.com']);
+      git(root, ['config', 'user.name', 'Test User']);
+      writeFileSync(join(root, 'value.ts'), 'export const value = 1;\n');
+      git(root, ['add', '.']);
+      git(root, ['commit', '-qm', 'initial']);
+      writeFileSync(join(root, 'value.ts'), 'export const value = 2;\n');
+      const config = Object.defineProperty({}, 'languages', {
+        get(): never {
+          throw new Error('dirty publication inspected fingerprint inputs');
+        },
+      });
+      const paths = resolveIndexStoragePaths(root);
+
+      const context = resolveGitWorktreeContext(root)!;
+      rmSync(join(root, '.git'), { recursive: true, force: true });
+
+      expect(publishFreshLocalGenerationForProject(root, config, paths, context)).toEqual({
+        kind: 'missed',
+        reason: 'worktree is not a clean committed snapshot',
+      });
+
+      const leasePath = join(
+        resolveRepositoryCacheDir(context.repositoryId),
+        'worktrees',
+        `${context.worktreeId}.json`,
+      );
+      expect(JSON.parse(readFileSync(leasePath, 'utf8'))).toEqual(
+        expect.objectContaining({
+          lastAction: 'missed',
+          lastReason: 'worktree is not a clean committed snapshot',
+        }),
+      );
     } finally {
       if (previousCacheHome === undefined) delete process.env['XDG_CACHE_HOME'];
       else process.env['XDG_CACHE_HOME'] = previousCacheHome;

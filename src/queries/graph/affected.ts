@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { findExactSymbolMatch, findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { findEnclosingDefinition, getDefinitionsForFile } from '../../symbols/definition-catalog.js';
-import { callerRowsForSymbol } from '../../symbols/references/caller-evidence.js';
+import { callerRowsMapForSymbols } from '../../symbols/references/caller-evidence.js';
 import type { SymbolMatch } from '../../domain/types.js';
 import { leafSuffix, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { detectAstLanguage } from '../../source/ast.js';
@@ -37,9 +37,10 @@ export function affected(
     if (frontier.length === 0) break;
 
     const nextFrontier: typeof frontier = [];
+    const callerRows = callerRowsMapForSymbols(db, frontier, { limit: 500 });
 
     for (const current of frontier) {
-      for (const row of getDirectAffectedRows(db, current, scope)) {
+      for (const row of getDirectAffectedRows(db, current, scope, callerRows.get(current.symbolId) ?? [])) {
         const resultKey = `${row.file}|${row.shortName}`;
         if (row.symbolId !== null) {
           if (visited.has(row.symbolId)) continue;
@@ -76,7 +77,8 @@ export function affected(
 function getDirectAffectedRows(
   db: ScipDatabase,
   target: SymbolMatch,
-  scope?: string,
+  scope: string | undefined,
+  prefetchedCallerRows: ReadonlyArray<{ symbol: string; file: string }>,
 ): Array<{
   symbolId: number | null;
   symbol: string;
@@ -88,7 +90,7 @@ function getDirectAffectedRows(
   // call expressions) PLUS targeted file-level references from SCIP mentions
   // (catches type-annotation users — `function f(x: Target)` doesn't appear
   // as a call but the file IS affected if Target's API changes).
-  const callerRows = callerRowsForSymbol(db, target, { limit: 500 })
+  const callerRows = prefetchedCallerRows
     .filter((row) => !db.isIgnored(row.file))
     .filter((row) => !scope || row.file.includes(scope));
 

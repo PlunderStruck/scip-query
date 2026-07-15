@@ -76,6 +76,11 @@ generation-recovery boundary. Dirty or partial indexes are never published.
 Peer bootstrap validates the stable cache artifacts, not the peer checkout's
 current files: a dirty checkout may donate an older cache that still exactly
 describes the target `HEAD`, while a cache containing the dirty changes cannot.
+An idle-watcher generation proof is the matching 64-character digest written
+into live watch state after the watcher verifies the current published
+metadata. It lets a dirty checkout skip a second source scan for a local query
+only while that watcher is idle, error-free, and naming the same database
+generation; it never makes dirty files eligible for cross-worktree publication.
 The implementation and its compiler-backed tests live in
 `src/reindex/shared-generation-store.ts` and
 `tests/reindex/shared-worktree-cache.integration.test.ts`.

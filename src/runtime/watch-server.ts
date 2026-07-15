@@ -12,7 +12,10 @@ import {
   initializeTypeScriptSemanticMailbox,
   processTypeScriptSemanticMailbox,
 } from '../semantic/typescript/session-service.js';
-import { typeScriptSemanticMailboxPaths } from '../semantic/typescript/session-protocol.js';
+import {
+  publishedGenerationIdentity,
+  typeScriptSemanticMailboxPaths,
+} from '../semantic/typescript/session-protocol.js';
 import {
   TypeScriptIndexServiceHost,
   initializeTypeScriptIndexMailbox,
@@ -64,6 +67,7 @@ export async function runWatchServiceServer(
   const startedAtMs = Date.now();
   let lastActivityAtMs = startedAtMs;
   let watcherStatus: WatcherStatus = { state: 'idle' };
+  let indexGeneration: string | undefined;
   let lastRefresh: WatchServiceState['lastRefresh'];
   let lastError: WatchServiceState['lastError'];
   let stopping = false;
@@ -103,6 +107,7 @@ export async function runWatchServiceServer(
         ? {}
         : { idleDeadlineAt: new Date(lastActivityAtMs + watchConfig.idleTimeoutMs).toISOString() }),
       watcher: watcherStatus,
+      ...(watcherStatus.state === 'idle' && indexGeneration ? { indexGeneration } : {}),
       ...(lastRefresh ? { lastRefresh } : {}),
       ...(lastError ? { lastError } : {}),
       typescriptSemantic: {
@@ -126,17 +131,22 @@ export async function runWatchServiceServer(
     languages: config.languages,
     onStatus(status) {
       watcherStatus = status;
+      if (status.state !== 'idle') indexGeneration = undefined;
       if (status.state !== 'idle') recordActivity();
       persistState(true);
     },
     onReindexComplete() {
       recordActivity();
-      lastRefresh = getIndexFreshness(projectRoot, config, indexPaths).lastRefresh;
+      const freshness = getIndexFreshness(projectRoot, config, indexPaths);
+      lastRefresh = freshness.lastRefresh;
+      indexGeneration =
+        freshness.state === 'fresh' ? (publishedGenerationIdentity(indexPaths.dbPath) ?? undefined) : undefined;
       lastError = undefined;
       persistState(true);
     },
     onError(error) {
       recordActivity();
+      indexGeneration = undefined;
       lastError = { at: new Date().toISOString(), message: error.message };
       persistState(true);
     },
@@ -152,6 +162,8 @@ export async function runWatchServiceServer(
     watcher.start();
     const freshness = getIndexFreshness(projectRoot, config, indexPaths);
     lastRefresh = freshness.lastRefresh;
+    indexGeneration =
+      freshness.state === 'fresh' ? (publishedGenerationIdentity(indexPaths.dbPath) ?? undefined) : undefined;
     const startupTrigger = startupRefreshTrigger(freshness.state);
     if (startupTrigger) watcher.requestRefresh(startupTrigger, { immediate: true });
     recordActivity();

@@ -102,6 +102,8 @@ export function coChange(
     includeLinked?: boolean;
     maxFilesPerCommit?: number;
     historyMode?: GitHistoryMode;
+    /** Already-resolved invocation HEAD for snapshot-consistent Git evidence without another subprocess. */
+    head?: string;
     /**
      * Caps how many of the (already together-count-sorted) candidate pairs
      * get classified — the per-pair loop below does filesystem/graph lookups
@@ -115,7 +117,10 @@ export function coChange(
   } = {},
 ): CoChangeResult {
   const { minTogether = 4, minConfidence = 0.6, limit = 30, maxFilesPerCommit = 20 } = opts;
-  const git = gitEvidenceProduct(db, { historyMode: opts.historyMode });
+  const git = gitEvidenceProduct(db, {
+    historyMode: opts.historyMode,
+    ...(opts.head ? { head: opts.head } : {}),
+  });
   const history = git.commitHistory();
   const partnersMode = file !== undefined;
   const allPairs = git.coChangePairs({

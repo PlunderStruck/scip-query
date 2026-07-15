@@ -2,12 +2,23 @@ import { program } from 'commander';
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { cliVersion, renderHeuristicNotice } from './cli-support.js';
-import { commandDescriptors } from './commands/command-descriptors.js';
+import { loadInvocationCommandDescriptors } from './commands/invocation-command-descriptors.js';
 import { registerCommandDescriptors } from './commands/command-registry.js';
-import { loadProjectConfig, resolveIndexStoragePaths } from './config.js';
-import { prepareWorktreeIndex, resolveProjectRoot, sharedCachePreparationEligible, withDb } from './cli-context.js';
+import {
+  activateCliProjectContext,
+  prepareWorktreeIndex,
+  resolveCliProjectContext,
+  resolveProjectRoot,
+  sharedCachePreparationEligible,
+  withDb,
+} from './cli-context.js';
 import { maybePrintUpdateNotice } from './update-notice.js';
-import { ensureWatchServiceForCommand, watchServiceAutoStartEligible } from './watch-service.js';
+import {
+  ensureWatchServiceForCommand,
+  inspectWatchService,
+  trustedWatchServiceIndexGeneration,
+  watchServiceAutoStartEligible,
+} from './watch-service.js';
 import {
   initializeProfileWorkloadIdentity,
   profileCommand,
@@ -17,42 +28,67 @@ import {
 } from '../instrumentation/profile.js';
 import { projectEvidenceFingerprint } from '../storage/evidence-cache.js';
 import { maybeSweepRepositoryCache } from './repository-cache-lifecycle.js';
+import { resolveGitWorktreeContext } from './git-worktree.js';
 
 program
   .name('scip-query')
   .description('Language-agnostic code intelligence CLI powered by SCIP indexes')
   .version(cliVersion);
 
+const commandDescriptors = await loadInvocationCommandDescriptors(isCliEntrypoint() ? process.argv[2] : undefined);
 registerCommandDescriptors(program, commandDescriptors);
 program.hook('preAction', async (_thisCommand, actionCommand) => {
-  initializeProfileContext();
   const commandName = actionCommand.name();
-  await maybePrintUpdateNotice({ commandName });
   const prepareSharedCache = sharedCachePreparationEligible(commandName);
   const startWatchService = watchServiceAutoStartEligible(commandName);
-  if (!prepareSharedCache && !startWatchService) return;
+  if (!prepareSharedCache && !startWatchService) {
+    initializeProfileContext();
+    await maybePrintUpdateNotice({ commandName });
+    return;
+  }
   const projectRoot = resolveProjectRoot();
-  const config = loadProjectConfig(projectRoot);
-  const paths = resolveIndexStoragePaths(projectRoot, config);
+  const gitContext = resolveGitWorktreeContext(projectRoot);
+  const projectContext = resolveCliProjectContext(projectRoot, gitContext);
+  activateCliProjectContext(projectContext);
+  initializeProfileContext();
+  await maybePrintUpdateNotice({ commandName });
+  const { config, paths } = projectContext;
+  let watcherGeneration: string | undefined;
+  if (startWatchService && config.watch?.enabled === true) {
+    try {
+      watcherGeneration = trustedWatchServiceIndexGeneration(
+        inspectWatchService({ projectRoot, cacheDir: paths.cacheDir, cliVersion, gitContext }),
+      );
+    } catch {
+      // Watch service reuse is opportunistic; normal freshness validation remains the fallback.
+    }
+  }
   if (prepareSharedCache) {
-    const action = prepareWorktreeIndex(projectRoot, config, paths);
+    const action = prepareWorktreeIndex(projectRoot, config, paths, { gitContext, watcherGeneration });
     if (action.kind === 'failed' && process.env['SCIP_QUERY_DEBUG']) {
       console.error(`shared-cache: ${action.reason}`);
     }
   }
-  maybeSweepRepositoryCache(projectRoot, cliVersion);
-  if (!startWatchService) return;
+  if (!startWatchService) {
+    maybeSweepRepositoryCache(projectRoot, cliVersion);
+    return;
+  }
   const service = ensureWatchServiceForCommand({
     commandName,
     projectRoot,
     cacheDir: paths.cacheDir,
     cliVersion,
     config,
+    gitContext,
   });
   if (service.kind === 'failed') {
     console.error(`warning: scip-query watch service did not start: ${service.message}`);
   }
+  if (service.kind === 'failed' || service.kind === 'skipped') {
+    maybeSweepRepositoryCache(projectRoot, cliVersion);
+  }
 });
+program.hook('postAction', () => activateCliProjectContext(undefined));
 
 function initializeProfileContext(): void {
   profileRunId();

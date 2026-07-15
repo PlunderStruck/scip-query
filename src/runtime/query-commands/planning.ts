@@ -11,6 +11,7 @@ import {
   stringOptionValue,
 } from '../commands/command-execution.js';
 import { displayLine, displayPathRange, displayRange, render } from '../render.js';
+import { resolveCliProjectContext } from '../cli-context.js';
 import { symbolResolutionBefore, symbolResolutionEmptyMessage, symbolResolutionJson } from './symbol-resolution.js';
 
 interface LimitedRows {
@@ -20,11 +21,13 @@ interface LimitedRows {
 
 const handlePlanContext = budgetedDbCommand('plan-context', ({ db, args, opts, budget }) => {
   const limit = definedLimitOption(opts, 'limit', 20);
+  const gitHead = resolveCliProjectContext(db.config.projectRoot).gitContext?.headCommit;
   const result = queries.planContext(db, stringArg(args, 0), {
     semantic: budget.semantic,
     impactDepth: definedNumberOption(opts, 'impactDepth', 3),
     sliceDepth: definedNumberOption(opts, 'sliceDepth', 3),
     scope: stringOptionValue(opts, 'scope'),
+    ...(gitHead ? { gitHead } : {}),
   });
 
   if (result.warnings.length === 1 && result.warnings[0] === 'No symbol, file, or module matched target.') {

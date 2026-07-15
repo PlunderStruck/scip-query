@@ -180,6 +180,9 @@ even though its per-pair classification loop in `queries.coChange`
 candidate-pair count on a large repository. It now flows through `budgetedDbCommand` and
 `coChange` accepts a `scanLimit` option that truncates the (already priority-sorted) candidate
 pairs before classification, so the disclosed budget is truthful rather than cosmetic.
+Composite planning also passes its already-resolved invocation HEAD through `coChange`'s
+internal options, keeping history reads on one Git snapshot without another `rev-parse`
+subprocess; standalone command behavior is unchanged.
 The setup-scope follow-up rechecked this implementation citation; extracting
 shared hook outcome recording changed imports in the same runtime module but
 did not change the `co-change` budget boundary described here.
