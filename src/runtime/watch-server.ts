@@ -26,6 +26,7 @@ import {
   WATCH_SERVICE_PROTOCOL_VERSION,
   acquireWatchProcessLock,
   readWatchServiceActivity,
+  resolveWatchServiceIdentity,
   shouldStopWatchServiceForIdle,
   watchServicePaths,
   writeWatchServiceState,
@@ -47,7 +48,8 @@ export async function runWatchServiceServer(
   cliVersion: string,
   watchOverrides: WatchServiceWatchOverrides = {},
 ): Promise<void> {
-  const projectRoot = resolve(projectRootInput);
+  const serviceIdentity = resolveWatchServiceIdentity(projectRootInput, cliVersion);
+  const projectRoot = serviceIdentity.projectRoot;
   const config = loadProjectConfig(projectRoot);
   config.watch = { ...config.watch, ...watchOverrides };
   const watchConfig = resolveWatchConfig(config);
@@ -92,6 +94,7 @@ export async function runWatchServiceServer(
       protocolVersion: WATCH_SERVICE_PROTOCOL_VERSION,
       pid: process.pid,
       projectRoot,
+      ...(serviceIdentity.worktreeId ? { worktreeId: serviceIdentity.worktreeId } : {}),
       cliVersion,
       startedAt: new Date(startedAtMs).toISOString(),
       heartbeatAt: new Date(nowMs).toISOString(),

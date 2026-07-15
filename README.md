@@ -448,6 +448,22 @@ copy-on-write cloning is used when available, with an ordinary copy fallback;
 hard links are never used. Dirty edits, watcher refreshes, locks, and local
 `evidence.db` state therefore remain private to the worktree.
 
+Automatic refresh follows the same boundary. When `watch.enabled` is true,
+the first watcher-eligible command in each worktree starts or reuses a daemon
+identified by that checkout's Git worktree ID. A Git worktree ID is a checkout
+identifier derived from its filesystem path after symbolic-link redirects are
+resolved and its checkout-specific Git control directory; that combination
+distinguishes sibling worktrees even though they share repository objects. The
+daemon observes only that worktree's files and Git index, and every reindex
+child writes only to that worktree's writable `index.scip` and `index.db`. A
+cross-platform source watcher maintains the directory subscriptions needed to
+detect ordinary unstaged edits even when Node does not provide recursive
+filesystem events, while separate Git polling detects commit and staging-state
+changes. A
+shared generation is only a warm starting snapshot; it never implies a shared
+watcher or shared later writes. A daemon that exits after its configured idle
+timeout starts warm again when that worktree is next used.
+
 The primary checkout is only a possible source of a generation, never an
 authority for a linked worktree. If its local cache already contains
 uncommitted changes that are absent from a new worktree's `HEAD`, the full
@@ -465,6 +481,9 @@ repository budget requires earlier eviction. Ownership checksums and physical
 path containment prevent cleanup from following forged records or symlinks.
 Explicit `dbPath`, `SCIP_QUERY_CACHE_DIR`, and
 `SCIP_QUERY_INDEX_DB` locations are never shared or automatically deleted.
+Those explicit overrides also bypass default path isolation, so pointing two
+worktrees at the same mutable override is intentionally outside automatic
+per-worktree protection.
 Set `SCIP_QUERY_SHARED_CACHE=0` to restore worktree-local-only behavior.
 
 Each rebuilt generation also records an affected-set shadow beside the index:

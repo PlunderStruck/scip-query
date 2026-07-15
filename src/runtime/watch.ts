@@ -1,6 +1,7 @@
 import { fork } from 'node:child_process';
-import { statSync, watch } from 'node:fs';
-import { join, relative } from 'node:path';
+import { statSync } from 'node:fs';
+import { isAbsolute, join, relative } from 'node:path';
+import { watch, type FSWatcher } from 'chokidar';
 import ignore from 'ignore';
 import type {
   RefreshTrigger,
@@ -11,7 +12,7 @@ import type {
 } from '../domain/types.js';
 import { loadProjectConfig, resolveWatchConfig, resolveIndexStoragePaths } from './config.js';
 import { createGitignoreFilter } from '../source/gitignore-filter.js';
-import { gitOutput } from './git-worktree.js';
+import { gitOutput, resolveGitPath } from './git-worktree.js';
 
 export interface WatcherOptions {
   projectRoot: string;
@@ -64,8 +65,8 @@ export class Watcher {
   private reindexInFlight = false;
   private lastReindexEnd = 0;
 
-  // fs.watch watchers (one per watched directory)
-  private fsWatchers: ReturnType<typeof watch>[] = [];
+  // Chokidar maintains the platform-specific subscriptions beneath each root.
+  private fsWatchers: FSWatcher[] = [];
   private gitPollTimer: ReturnType<typeof setInterval> | null = null;
   private lastGitState: GitStateSnapshot | null = null;
   private gitignoreFilter: ReturnType<typeof createGitignoreFilter>;
@@ -103,30 +104,27 @@ export class Watcher {
     this.setStatus({ state: 'idle' });
     this.startGitStatePolling();
 
-    // Use recursive fs.watch on the project root
-    // This is supported on macOS (FSEvents) and Windows
-    // On Linux, falls back to inotify (may need per-directory watchers for large trees)
     try {
-      const watcher = watch(this.projectRoot, { recursive: true }, (_event, filename) => {
-        if (filename && !this.stopped) {
-          this.handleFileChange(filename);
-        }
+      const watcher = watch(this.projectRoot, {
+        ignoreInitial: true,
+        ignored: (path, stats) => this.isIgnoredWatchPath(path, stats?.isDirectory() ?? false),
+      });
+      watcher.on('all', (_event, path) => {
+        if (!this.stopped) this.handleFileChange(path);
+      });
+      watcher.on('error', (error) => {
+        this.onError(new Error(`Failed to watch ${this.projectRoot}: ${String(error)}`));
       });
       this.fsWatchers.push(watcher);
-    } catch {
-      this.onError(
-        new Error(
-          'Failed to start file watcher. On Linux, you may need to increase inotify limits: ' +
-            'sysctl -w fs.inotify.max_user_watches=524288',
-        ),
-      );
+    } catch (error) {
+      this.onError(new Error(`Failed to watch ${this.projectRoot}: ${String(error)}`));
     }
   }
 
   /** Stop watching and clean up */
   stop(): void {
     this.stopped = true;
-    for (const w of this.fsWatchers) w.close();
+    for (const w of this.fsWatchers) void w.close();
     this.fsWatchers = [];
     this.clearDebounceTimer();
     this.clearCooldownTimer();
@@ -148,19 +146,34 @@ export class Watcher {
 
   // ── Internal ─────────────────────────────────────────────
 
+  private isIgnoredWatchPath(path: string, isDirectory: boolean): boolean {
+    const relativePath = this.relativeWatchPath(path);
+    if (!relativePath) return false;
+
+    const candidate = isDirectory ? `${relativePath}/` : relativePath;
+    if (candidate === '.git/' || candidate.startsWith('.git/')) return true;
+    return this.gitignoreFilter.isIgnored(candidate) || this.extraIgnore.ignores(candidate);
+  }
+
   private handleFileChange(filename: string): void {
     // Filter: skip gitignored files and extra ignore patterns
-    const rel = relative(this.projectRoot, join(this.projectRoot, filename));
+    const rel = this.relativeWatchPath(filename);
+    if (!rel || rel === '..' || rel.startsWith('../')) return;
     if (rel === '.git' || rel.startsWith('.git/')) return;
     if (this.gitignoreFilter.isIgnored(rel)) return;
     if (this.extraIgnore.ignores(rel)) return;
 
     // Skip the index files themselves
-    if (filename.endsWith('index.db') || filename.endsWith('index.scip') || filename.endsWith('index.db.tmp')) {
+    if (rel.endsWith('index.db') || rel.endsWith('index.scip') || rel.endsWith('index.db.tmp')) {
       return;
     }
 
     this.scheduleReindex({ kind: 'watch-source', detail: rel });
+  }
+
+  private relativeWatchPath(path: string): string {
+    const absolutePath = isAbsolute(path) ? path : join(this.projectRoot, path);
+    return relative(this.projectRoot, absolutePath).replaceAll('\\', '/');
   }
 
   private scheduleReindex(trigger: RefreshTrigger): void {
@@ -358,8 +371,9 @@ export class Watcher {
   }
 
   private readGitState(): GitStateSnapshot | null {
-    const indexPath = gitOutput(this.projectRoot, ['rev-parse', '--git-path', 'index']);
-    if (!indexPath) return null;
+    const rawIndexPath = gitOutput(this.projectRoot, ['rev-parse', '--git-path', 'index']);
+    if (!rawIndexPath) return null;
+    const indexPath = resolveGitPath(this.projectRoot, rawIndexPath);
 
     const snapshot: GitStateSnapshot = {
       head: gitOutput(this.projectRoot, ['rev-parse', '--verify', 'HEAD']),

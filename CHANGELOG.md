@@ -4,6 +4,14 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+## [0.17.1]
+
+### Fixes (worktree watcher isolation)
+
+- Automatic refresh now persists and validates the Git worktree identity of each daemon. Every default-managed worktree starts or reuses its own watcher, watches only its own checkout, and sends reindex output only to its own writable cache; portable source subscriptions detect ordinary unstaged edits on Node 18 Linux, Git polling independently detects `HEAD` and index changes, and `watch --status` reports the bound root and worktree ID.
+
+## [0.17.0]
+
 ### Performance (Git worktree warm starts)
 
 - Clean Git worktrees at the same repository snapshot now warm-start from one immutable shared index generation while retaining separate writable local caches. Concurrent cold worktrees coordinate one generation build, dirty edits stay isolated to their checkout, safe content-keyed evidence reads through a bounded repository database, and managed caches for removed worktrees are reclaimed automatically. `SCIP_QUERY_SHARED_CACHE=0` disables the behavior, and explicit cache/database overrides remain private.
@@ -112,4 +120,6 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 - **Calibration retunes from external repo validation:** `duplicate-bodies`' default `--min-loc` raised from 1 to 3 (kills 1-line forwarding-stub noise); `twin-drift` excludes synthetic constructor-style leaves and test-only groups; `co-change` exempts locale/i18n sibling resource files from hidden-coupling findings; `stale-abstractions`/`wrapper-candidates` gained an explicit false-positive-rate caveat and were demoted from the default `cleanup-audit` sweep to an opt-in deep-dive.
 - Assorted smaller fixes: parameterized SQL in a scope filter (injection-shaped hygiene, no known exploit), fan-in/hotspot queries no longer counting a symbol's own defining file as a consumer, AST-based cyclomatic-complexity counting, nested `.gitignore` support, and Vue single-file-component script extraction unified across the codebase.
 
+[0.17.1]: https://github.com/PlunderStruck/scip-query/releases/tag/v0.17.1
+[0.17.0]: https://github.com/PlunderStruck/scip-query/releases/tag/v0.17.0
 [0.11.0]: https://github.com/PlunderStruck/scip-query/releases/tag/v0.11.0

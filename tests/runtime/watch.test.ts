@@ -121,6 +121,7 @@ describe('Watcher', () => {
     expect(captured.detached).toBe(true);
     expect(captured.env).toEqual(
       expect.objectContaining({
+        SCIP_REINDEX_PROJECT_ROOT: projectRoot,
         SCIP_REINDEX_OUTPUT_SCIP: join(projectRoot, '.cache/scip-query/index.scip'),
         SCIP_REINDEX_OUTPUT_DB: join(projectRoot, '.cache/scip-query/index.db'),
         SCIP_REINDEX_INDEXER_CONCURRENCY: '6',

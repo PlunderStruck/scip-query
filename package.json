@@ -1,6 +1,6 @@
 {
   "name": "scip-query",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "description": "Evidence and verification for AI coding agents: map code, reuse concepts, finish migrations, and gate diffs.",
   "type": "module",
   "main": "dist/index.js",
@@ -351,6 +351,7 @@
     "@vue/compiler-dom": "^3.5.38",
     "@vue/compiler-sfc": "^3.5.38",
     "better-sqlite3": "^12.9.0",
+    "chokidar": "^4.0.3",
     "commander": "^13.1.0",
     "ignore": "^7.0.3",
     "ts-morph": "^28.0.0"

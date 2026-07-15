@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
@@ -39,6 +39,7 @@ describe('TypeScript index service mailbox', () => {
     expect(availability.available).toBe(true);
     if (!availability.available) return;
     const fixture = serviceFixture();
+    const projectAlias = symbolicLinkTo(fixture.projectRoot, 'scip-query-index-mailbox-alias-');
     let generation = 'base-generation-1';
     const host = new TypeScriptIndexServiceHost({
       projectRoot: fixture.projectRoot,
@@ -65,7 +66,7 @@ describe('TypeScript index service mailbox', () => {
     writeLiveState(fixture.cacheDir, fixture.projectRoot, host.status());
     let processed = false;
     const requester = new TypeScriptIndexRequester(
-      { projectRoot: fixture.projectRoot, cacheDir: fixture.cacheDir, baseGeneration: generation },
+      { projectRoot: projectAlias, cacheDir: fixture.cacheDir, baseGeneration: generation },
       {
         timeoutMs: 1_000,
         runtime: {
@@ -220,6 +221,14 @@ function serviceFixture(): { projectRoot: string; cacheDir: string } {
   );
   writeFileSync(join(projectRoot, 'src/a.ts'), 'export const value = 1;\n');
   return { projectRoot, cacheDir };
+}
+
+function symbolicLinkTo(target: string, prefix: string): string {
+  const alias = mkdtempSync(join(tmpdir(), prefix));
+  tempDirs.push(alias);
+  rmSync(alias, { recursive: true, force: true });
+  symlinkSync(target, alias, 'dir');
+  return alias;
 }
 
 function indexRequest(producerIdentity: string): TypeScriptIndexDocumentRequest {

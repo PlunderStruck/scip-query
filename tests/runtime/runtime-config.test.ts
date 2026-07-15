@@ -1,4 +1,5 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -7,10 +8,13 @@ import {
   configureProjectAutomaticRefresh,
   initProjectConfig,
   loadProjectConfig,
+  resolveIndexStoragePaths,
   resolveWatchConfig,
   validateProjectConfig,
 } from '../../src/runtime/config.js';
 import type { ProjectConfig } from '../../src/domain/types.js';
+import { resolveGitWorktreeIdentity } from '../../src/runtime/git-worktree.js';
+import { acquireWatchProcessLock, WATCH_LOCK_FILE } from '../../src/runtime/watch-service.js';
 
 const tempDirs: string[] = [];
 
@@ -756,6 +760,44 @@ describe('doctor diagnostics', () => {
 });
 
 describe('watch command config gate', () => {
+  it('reports canonical worktree identity while only a foreground lock is live', () => {
+    const projectRoot = createProject();
+    execFileSync('git', ['-C', projectRoot, 'init', '-q']);
+    writeFileSync(join(projectRoot, '.scipquery.json'), '{ "watch": { "enabled": true } }\n');
+    const identity = resolveGitWorktreeIdentity(projectRoot);
+    if (identity.kind !== 'worktree') throw new Error(`Expected Git worktree, received ${identity.kind}`);
+    const paths = resolveIndexStoragePaths(projectRoot, loadProjectConfig(projectRoot));
+    const lock = acquireWatchProcessLock(join(paths.cacheDir, WATCH_LOCK_FILE), projectRoot);
+    const previousProjectRoot = process.env['SCIP_QUERY_PROJECT_ROOT'];
+    process.env['SCIP_QUERY_PROJECT_ROOT'] = projectRoot;
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    try {
+      expect(lock.acquired).toBe(true);
+      handleWatch({ status: true, json: true });
+      const payload = JSON.parse(String(log.mock.calls[0]?.[0])) as { result: Record<string, unknown> };
+      expect(payload.result).toEqual(
+        expect.objectContaining({
+          state: 'running',
+          mode: 'foreground-or-starting',
+          projectRoot: realpathSync(projectRoot),
+          worktreeId: identity.identity.worktreeId,
+        }),
+      );
+
+      log.mockClear();
+      handleWatch({ status: true });
+      expect(log.mock.calls.map((call) => String(call[0])).join('\n')).toContain(
+        `Worktree: ${realpathSync(projectRoot)} [${identity.identity.worktreeId.slice(0, 12)}]`,
+      );
+    } finally {
+      log.mockRestore();
+      lock.release();
+      if (previousProjectRoot === undefined) delete process.env['SCIP_QUERY_PROJECT_ROOT'];
+      else process.env['SCIP_QUERY_PROJECT_ROOT'] = previousProjectRoot;
+    }
+  });
+
   it('reports stopped service state even when watching is disabled', () => {
     const projectRoot = createProject();
     writeFileSync(join(projectRoot, '.scipquery.json'), '{ "watch": { "enabled": false } }\n');

@@ -12,6 +12,7 @@ import {
   type WatchServiceState,
 } from '../../runtime/watch-service.js';
 import { isProcessAlive } from '../../runtime/process-liveness.js';
+import { canonicalPath } from '../../runtime/git-worktree.js';
 import type {
   SemanticAvailability,
   SemanticCallee,
@@ -117,6 +118,7 @@ export class TypeScriptSemanticRequester {
   private readonly runtime: TypeScriptSemanticRequesterRuntime;
   private readonly timeoutMs: number;
   private readonly cacheDir: string;
+  private readonly projectRoot: string;
 
   constructor(
     private readonly db: ScipDatabase,
@@ -125,13 +127,14 @@ export class TypeScriptSemanticRequester {
     this.runtime = opts.runtime ?? DEFAULT_RUNTIME;
     this.timeoutMs = opts.timeoutMs ?? configuredTimeoutMs();
     this.cacheDir = dirname(db.config.dbPath);
+    this.projectRoot = canonicalPath(db.config.projectRoot);
   }
 
   request(request: TypeScriptSemanticRequest): unknown {
     const servicePaths = watchServicePaths(this.cacheDir);
     const mailboxPaths = typeScriptSemanticMailboxPaths(this.cacheDir);
     const state = readWatchServiceState(servicePaths.statePath);
-    if (!usableServiceState(state, this.db.config.projectRoot, this.runtime)) {
+    if (!usableServiceState(state, this.projectRoot, this.runtime)) {
       throw new Error('Compatible TypeScript semantic service is not running.');
     }
     const generation = publishedGenerationIdentity(this.db.config.dbPath);
@@ -158,7 +161,7 @@ export class TypeScriptSemanticRequester {
           return parseResponse(readFileSync(responsePath, 'utf8'), id, generation);
         }
         const liveState = readWatchServiceState(servicePaths.statePath);
-        if (!usableServiceState(liveState, this.db.config.projectRoot, this.runtime)) {
+        if (!usableServiceState(liveState, this.projectRoot, this.runtime)) {
           throw new Error('TypeScript semantic service stopped while processing a request.');
         }
         this.runtime.sleep(REQUEST_POLL_INTERVAL_MS);
@@ -183,7 +186,7 @@ function usableServiceState(
     runtime.now() <= Date.parse(state.typescriptSemantic.busyUntil);
   return (
     state !== null &&
-    state.projectRoot === resolve(projectRoot) &&
+    state.projectRoot === projectRoot &&
     state.typescriptSemantic?.protocolVersion === TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION &&
     runtime.isProcessAlive(state.pid) &&
     (heartbeatIsCurrent || requestIsBounded)

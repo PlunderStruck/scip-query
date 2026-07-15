@@ -1,6 +1,6 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { WatcherStatus } from '../../src/domain/types.js';
 import {
@@ -13,6 +13,7 @@ import {
   parseWatchServiceState,
   planWatchServiceAction,
   readWatchServiceActivityAt,
+  resolveWatchServiceIdentity,
   shouldStopWatchServiceForIdle,
   stopWatchService,
   watchServicePaths,
@@ -24,12 +25,13 @@ import {
 import { startupRefreshTrigger } from '../../src/runtime/watch-server.js';
 
 const NOW = Date.parse('2026-07-09T20:00:00.000Z');
-const IDENTITY = { projectRoot: '/repo', cliVersion: '0.15.0' };
+const IDENTITY = { projectRoot: tmpdir(), worktreeKind: 'non-git', cliVersion: '0.15.0' } as const;
 
 describe('watch service contract', () => {
   it('parses only complete versioned state', () => {
     expect(parseWatchServiceState(liveState())).toEqual(liveState());
     expect(parseWatchServiceState({ ...liveState(), pid: 0 })).toBeNull();
+    expect(parseWatchServiceState({ ...liveState(), worktreeId: '' })).toBeNull();
     expect(parseWatchServiceState({ ...liveState(), heartbeatAt: 'not-a-date' })).toBeNull();
     expect(parseWatchServiceState({ ...liveState(), watcher: { state: 'waiting' } })).toBeNull();
     expect(
@@ -68,9 +70,48 @@ describe('watch service contract', () => {
     expect(classifyWatchServiceState({ ...state, projectRoot: '/other' }, IDENTITY, NOW, () => true)).toEqual(
       expect.objectContaining({ kind: 'incompatible', reason: 'project' }),
     );
+    expect(
+      classifyWatchServiceState(
+        { ...state, worktreeId: 'worktree-a' },
+        { ...IDENTITY, worktreeKind: 'git', worktreeId: 'worktree-b' },
+        NOW,
+        () => true,
+      ),
+    ).toEqual(expect.objectContaining({ kind: 'incompatible', reason: 'worktree' }));
+    expect(classifyWatchServiceState({ ...state, worktreeId: 'unexpected' }, IDENTITY, NOW, () => true)).toEqual(
+      expect.objectContaining({ kind: 'incompatible', reason: 'worktree' }),
+    );
     expect(classifyWatchServiceState({ ...state, protocolVersion: 99 }, IDENTITY, NOW, () => true)).toEqual(
       expect.objectContaining({ kind: 'incompatible', reason: 'protocol' }),
     );
+  });
+
+  it('forms an ID-less identity only for a confirmed non-Git root and fails on lookup errors', () => {
+    withTempCache((nonGitRoot) => {
+      expect(resolveWatchServiceIdentity(nonGitRoot, IDENTITY.cliVersion)).toEqual({
+        projectRoot: realpathSync(nonGitRoot),
+        worktreeKind: 'non-git',
+        cliVersion: IDENTITY.cliVersion,
+      });
+    });
+    withTempCache((nonGitRoot) => {
+      withoutGit(() =>
+        expect(resolveWatchServiceIdentity(nonGitRoot, IDENTITY.cliVersion)).toEqual({
+          projectRoot: realpathSync(nonGitRoot),
+          worktreeKind: 'non-git',
+          cliVersion: IDENTITY.cliVersion,
+        }),
+      );
+    });
+    expect(() =>
+      resolveWatchServiceIdentity(join(tmpdir(), `scip-query-missing-${process.pid}-${NOW}`), IDENTITY.cliVersion),
+    ).toThrow(/Could not establish Git worktree identity/);
+    withTempCache((damagedGitRoot) => {
+      mkdirSync(join(damagedGitRoot, '.git'));
+      expect(() => resolveWatchServiceIdentity(damagedGitRoot, IDENTITY.cliVersion)).toThrow(
+        /Could not establish Git worktree identity.*not a git repository/i,
+      );
+    });
   });
 
   it('plans idempotent lifecycle actions', () => {
@@ -195,14 +236,51 @@ describe('watch service contract', () => {
     });
   });
 
-  it('signals a live service and removes its observation files on stop', () => {
+  it('stops, cleans, and replaces a live protocol-3 service', () => {
+    withTempCache((cacheDir) => {
+      const paths = watchServicePaths(cacheDir);
+      const runtime = fakeRuntime(paths.statePath);
+      runtime.alive.add(123);
+      writeFileSync(paths.statePath, `${JSON.stringify({ ...liveState(), protocolVersion: 3 })}\n`);
+      writeFileSync(
+        paths.lockPath,
+        `${JSON.stringify({
+          version: 1,
+          pid: 123,
+          projectRoot: IDENTITY.projectRoot,
+          startedAt: new Date(NOW - 60_000).toISOString(),
+        })}\n`,
+      );
+      writeFileSync(paths.activityPath, '{}\n');
+
+      const result = ensureWatchService(controllerOptions(cacheDir, runtime));
+
+      expect(runtime.signaled).toEqual([123]);
+      expect(runtime.spawned).toBe(1);
+      expect(runtime.filesAtSpawn).toEqual([{ state: false, lock: false, activity: false }]);
+      expect(result).toEqual(
+        expect.objectContaining({
+          disposition: 'started',
+          state: expect.objectContaining({ protocolVersion: WATCH_SERVICE_PROTOCOL_VERSION }),
+        }),
+      );
+      expect(result.state.pid).not.toBe(123);
+    });
+  });
+
+  it('signals a live service and removes its observation files after the project root disappears', () => {
     withTempCache((cacheDir) => {
       const paths = watchServicePaths(cacheDir);
       const runtime = fakeRuntime(paths.statePath);
       runtime.alive.add(123);
       writeWatchServiceState(paths.statePath, liveState());
 
-      expect(stopWatchService(controllerOptions(cacheDir, runtime))).toEqual({ disposition: 'stopped', pid: 123 });
+      expect(
+        stopWatchService({
+          ...controllerOptions(cacheDir, runtime),
+          projectRoot: join(tmpdir(), `scip-query-removed-${process.pid}-${NOW}`),
+        }),
+      ).toEqual({ disposition: 'stopped', pid: 123 });
       expect(runtime.signaled).toEqual([123]);
       expect(existsSync(paths.statePath)).toBe(false);
       expect(existsSync(paths.activityPath)).toBe(false);
@@ -259,9 +337,11 @@ interface FakeRuntime extends WatchServiceRuntime {
   alive: Set<number>;
   signaled: number[];
   spawned: number;
+  filesAtSpawn: Array<{ state: boolean; lock: boolean; activity: boolean }>;
 }
 
 function fakeRuntime(statePath: string): FakeRuntime {
+  const paths = watchServicePaths(dirname(statePath));
   const alive = new Set<number>();
   const signaled: number[] = [];
   let nextPid = 456;
@@ -269,10 +349,16 @@ function fakeRuntime(statePath: string): FakeRuntime {
     alive,
     signaled,
     spawned: 0,
+    filesAtSpawn: [],
     now: () => NOW,
     isProcessAlive: (pid) => alive.has(pid),
     spawnServer: (_serverPath, projectRoot, cliVersion) => {
       runtime.spawned += 1;
+      runtime.filesAtSpawn.push({
+        state: existsSync(paths.statePath),
+        lock: existsSync(paths.lockPath),
+        activity: existsSync(paths.activityPath),
+      });
       const pid = nextPid++;
       alive.add(pid);
       writeWatchServiceState(statePath, { ...liveState(), pid, projectRoot, cliVersion });
@@ -302,5 +388,16 @@ function withTempCache(run: (cacheDir: string) => void): void {
     run(cacheDir);
   } finally {
     rmSync(cacheDir, { recursive: true, force: true });
+  }
+}
+
+function withoutGit(run: () => void): void {
+  const originalPath = process.env['PATH'];
+  process.env['PATH'] = '';
+  try {
+    run();
+  } finally {
+    if (originalPath === undefined) delete process.env['PATH'];
+    else process.env['PATH'] = originalPath;
   }
 }

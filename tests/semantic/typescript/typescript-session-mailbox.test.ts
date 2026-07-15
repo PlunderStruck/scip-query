@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -102,7 +102,8 @@ describe('TypeScript semantic service mailbox', () => {
 
   it('lets a synchronous requester receive a response and rejects a mismatched response identity', () => {
     const fixture = serviceFixture(true);
-    const db = fixture.openDb();
+    const projectAlias = symbolicLinkTo(fixture.projectRoot, 'scip-query-ts-mailbox-alias-');
+    const db = fixture.openDb(projectAlias);
     const paths = typeScriptSemanticMailboxPaths(fixture.projectRoot);
     const statePath = join(fixture.projectRoot, 'watch-state.json');
     const generation = publishedGenerationIdentity(db.config.dbPath)!;
@@ -303,8 +304,11 @@ describe('TypeScript semantic service mailbox', () => {
   });
 });
 
-function serviceFixture(withMetadata = false): { projectRoot: string; openDb: () => ScipDatabase } {
-  const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-ts-mailbox-'));
+function serviceFixture(withMetadata = false): {
+  projectRoot: string;
+  openDb: (projectRootOverride?: string) => ScipDatabase;
+} {
+  const projectRoot = realpathSync(mkdtempSync(join(tmpdir(), 'scip-query-ts-mailbox-')));
   tempDirs.push(projectRoot);
   mkdirSync(join(projectRoot, 'src'), { recursive: true });
   writeFileSync(join(projectRoot, 'src/consumer.ts'), 'export const value = 1;\n');
@@ -325,8 +329,17 @@ function serviceFixture(withMetadata = false): { projectRoot: string; openDb: ()
   }
   return {
     projectRoot,
-    openDb: () => new ScipDatabase({ projectRoot, dbPath, indexPath: join(projectRoot, 'index.scip') }),
+    openDb: (projectRootOverride = projectRoot) =>
+      new ScipDatabase({ projectRoot: projectRootOverride, dbPath, indexPath: join(projectRoot, 'index.scip') }),
   };
+}
+
+function symbolicLinkTo(target: string, prefix: string): string {
+  const alias = mkdtempSync(join(tmpdir(), prefix));
+  tempDirs.push(alias);
+  rmSync(alias, { recursive: true, force: true });
+  symlinkSync(target, alias, 'dir');
+  return alias;
 }
 
 function fakeSemanticHost(db: ScipDatabase): TypeScriptSemanticHost {

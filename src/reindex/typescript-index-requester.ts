@@ -8,6 +8,7 @@ import {
   type WatchServiceState,
 } from '../runtime/watch-service.js';
 import { isProcessAlive } from '../runtime/process-liveness.js';
+import { canonicalPath } from '../runtime/git-worktree.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import type { TypeScriptDocumentFragment } from './typescript-document-emitter.js';
 import {
@@ -50,7 +51,7 @@ export class TypeScriptIndexRequester {
     input: { projectRoot: string; cacheDir: string; baseGeneration: string },
     opts: TypeScriptIndexRequesterOptions = {},
   ) {
-    this.projectRoot = resolve(input.projectRoot);
+    this.projectRoot = canonicalPath(input.projectRoot);
     this.cacheDir = input.cacheDir;
     this.baseGeneration = input.baseGeneration;
     this.timeoutMs = opts.timeoutMs ?? configuredTimeoutMs();

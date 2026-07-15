@@ -1,11 +1,17 @@
-import { execFileSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { realpathSync } from 'node:fs';
-import { isAbsolute, resolve } from 'node:path';
+import { existsSync, lstatSync, realpathSync } from 'node:fs';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 
 export interface GitReader {
   run(projectRoot: string, args: readonly string[]): string | undefined;
+  runResult(projectRoot: string, args: readonly string[]): GitCommandResult;
 }
+
+export type GitCommandResult =
+  | { kind: 'success'; output: string }
+  | { kind: 'not-repository' }
+  | { kind: 'error'; message: string };
 
 export interface GitWorktreeRecord {
   path: string;
@@ -28,18 +34,19 @@ export interface GitWorktreeContext {
   clean: boolean;
 }
 
+export type GitWorktreeIdentity = Pick<GitWorktreeContext, 'projectRoot' | 'gitDir' | 'worktreeId'>;
+
+export type GitWorktreeIdentityResolution =
+  | { kind: 'worktree'; identity: GitWorktreeIdentity }
+  | { kind: 'non-git' }
+  | { kind: 'error'; message: string };
+
 export const DEFAULT_GIT_READER: GitReader = {
   run(projectRoot, args) {
-    try {
-      return execFileSync('git', ['-C', projectRoot, ...args], {
-        encoding: 'utf-8',
-        maxBuffer: 50 * 1024 * 1024,
-        stdio: ['ignore', 'pipe', 'ignore'],
-      }).trimEnd();
-    } catch {
-      return undefined;
-    }
+    const result = runGitCommand(projectRoot, args);
+    return result.kind === 'success' ? result.output : undefined;
   },
+  runResult: runGitCommand,
 };
 
 export function findGitRoot(cwd: string, git: GitReader = DEFAULT_GIT_READER): string | undefined {
@@ -51,14 +58,13 @@ export function resolveGitWorktreeContext(
   projectRoot: string,
   git: GitReader = DEFAULT_GIT_READER,
 ): GitWorktreeContext | undefined {
-  const root = findGitRoot(projectRoot, git);
-  if (!root) return undefined;
-
-  const rawGitDir = git.run(root, ['rev-parse', '--absolute-git-dir'])?.trim();
+  const resolution = resolveGitWorktreeIdentity(projectRoot, git);
+  if (resolution.kind !== 'worktree') return undefined;
+  const identity = resolution.identity;
+  const root = identity.projectRoot;
   const rawCommonDir = git.run(root, ['rev-parse', '--git-common-dir'])?.trim();
-  if (!rawGitDir || !rawCommonDir) return undefined;
+  if (!rawCommonDir) return undefined;
 
-  const gitDir = canonicalPath(resolveGitPath(root, rawGitDir));
   const commonDir = canonicalPath(resolveGitPath(root, rawCommonDir));
   const headCommit = nonEmpty(git.run(root, ['rev-parse', '--verify', 'HEAD']));
   const treeOid = nonEmpty(git.run(root, ['rev-parse', '--verify', 'HEAD^{tree}']));
@@ -66,14 +72,35 @@ export function resolveGitWorktreeContext(
   if (status === undefined) return undefined;
 
   return {
-    projectRoot: root,
-    gitDir,
+    ...identity,
     commonDir,
     repositoryId: stablePathId('repository', commonDir),
-    worktreeId: stablePathId('worktree', `${root}\0${gitDir}`),
     headCommit,
     treeOid,
     clean: status.length === 0,
+  };
+}
+
+export function resolveGitWorktreeIdentity(
+  projectRoot: string,
+  git: GitReader = DEFAULT_GIT_READER,
+): GitWorktreeIdentityResolution {
+  const rootResult = git.runResult(projectRoot, ['rev-parse', '--show-toplevel']);
+  if (rootResult.kind === 'not-repository') return { kind: 'non-git' };
+  if (rootResult.kind === 'error') return rootResult;
+  const rootOutput = rootResult.output.trim();
+  if (!rootOutput) return { kind: 'error', message: 'Git returned an empty worktree root.' };
+  const root = canonicalPath(rootOutput);
+  const rawGitDir = git.run(root, ['rev-parse', '--absolute-git-dir'])?.trim();
+  if (!rawGitDir) return { kind: 'error', message: 'Git did not return an absolute worktree directory.' };
+  const gitDir = canonicalPath(resolveGitPath(root, rawGitDir));
+  return {
+    kind: 'worktree',
+    identity: {
+      projectRoot: root,
+      gitDir,
+      worktreeId: stablePathId('worktree', `${root}\0${gitDir}`),
+    },
   };
 }
 
@@ -125,11 +152,11 @@ export function gitOutput(
   return nonEmpty(git.run(projectRoot, args));
 }
 
-function resolveGitPath(projectRoot: string, path: string): string {
+export function resolveGitPath(projectRoot: string, path: string): string {
   return isAbsolute(path) ? path : resolve(projectRoot, path);
 }
 
-function canonicalPath(path: string): string {
+export function canonicalPath(path: string): string {
   try {
     return realpathSync(path);
   } catch {
@@ -144,4 +171,39 @@ function stablePathId(kind: string, value: string): string {
 function nonEmpty(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed || undefined;
+}
+
+function runGitCommand(projectRoot: string, args: readonly string[]): GitCommandResult {
+  const result = spawnSync('git', ['-C', projectRoot, ...args], {
+    encoding: 'utf-8',
+    env: { ...process.env, LC_ALL: 'C' },
+    maxBuffer: 50 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  if (result.status === 0) return { kind: 'success', output: result.stdout.trimEnd() };
+  const stderr = typeof result.stderr === 'string' ? result.stderr.trim() : '';
+  const message = stderr || result.error?.message || `git exited with status ${result.status ?? 'unknown'}`;
+  const errorCode = (result.error as NodeJS.ErrnoException | undefined)?.code;
+  const confirmsNonGit =
+    /not a git repository/i.test(message) || (errorCode === 'ENOENT' && existsSync(resolve(projectRoot)));
+  return confirmsNonGit && !gitControlMetadataMayExist(projectRoot)
+    ? { kind: 'not-repository' }
+    : { kind: 'error', message };
+}
+
+function gitControlMetadataMayExist(projectRoot: string): boolean {
+  if (process.env['GIT_DIR'] || process.env['GIT_COMMON_DIR']) return true;
+  let current = resolve(projectRoot);
+  while (true) {
+    try {
+      lstatSync(join(current, '.git'));
+      return true;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') return true;
+    }
+    const parent = dirname(current);
+    if (parent === current) return false;
+    current = parent;
+  }
 }

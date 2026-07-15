@@ -6,9 +6,10 @@ import type { LastRefreshMetadata, ProjectConfig, WatchConfig, WatcherStatus } f
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import type { TypeScriptSemanticServiceStatus } from '../semantic/typescript/session-protocol.js';
 import type { TypeScriptIndexServiceStatus } from '../reindex/typescript-index-protocol.js';
+import { canonicalPath, resolveGitWorktreeIdentity } from './git-worktree.js';
 import { isProcessAlive } from './process-liveness.js';
 
-export const WATCH_SERVICE_PROTOCOL_VERSION = 3;
+export const WATCH_SERVICE_PROTOCOL_VERSION = 4;
 export const WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS = 5_000;
 export const WATCH_LOCK_FILE = 'watch.lock';
 export const WATCH_STATE_FILE = 'watch-state.json';
@@ -37,6 +38,7 @@ export interface WatchServiceState {
   protocolVersion: typeof WATCH_SERVICE_PROTOCOL_VERSION;
   pid: number;
   projectRoot: string;
+  worktreeId?: string;
   cliVersion: string;
   startedAt: string;
   heartbeatAt: string;
@@ -49,16 +51,19 @@ export interface WatchServiceState {
   typescriptIndex?: TypeScriptIndexServiceStatus;
 }
 
-export interface WatchServiceIdentity {
-  projectRoot: string;
-  cliVersion: string;
-}
+export type WatchServiceIdentity =
+  | { projectRoot: string; worktreeKind: 'git'; worktreeId: string; cliVersion: string }
+  | { projectRoot: string; worktreeKind: 'non-git'; worktreeId?: undefined; cliVersion: string };
 
 export type WatchServiceClassification =
   | { kind: 'stopped' }
   | { kind: 'live'; state: WatchServiceState }
   | { kind: 'stale'; state: WatchServiceState; reason: 'dead-process' | 'old-heartbeat' }
-  | { kind: 'incompatible'; state: WatchServiceState; reason: 'protocol' | 'project' | 'cli-version' };
+  | {
+      kind: 'incompatible';
+      state: WatchServiceState;
+      reason: 'protocol' | 'project' | 'worktree' | 'cli-version';
+    };
 
 export type WatchServiceRequest = 'ensure' | 'status' | 'stop';
 
@@ -124,6 +129,7 @@ export interface WatchServiceControllerOptions {
 export type WatchServiceWatchOverrides = Pick<WatchConfig, 'debounceMs' | 'cooldownMs' | 'gitPollMs' | 'idleTimeoutMs'>;
 
 export interface WatchServiceInspection {
+  identity: WatchServiceIdentity;
   classification: WatchServiceClassification;
   lock: WatchProcessLockMetadata | null;
   lockIsLive: boolean;
@@ -190,18 +196,38 @@ export function watchServicePaths(cacheDir: string): WatchServicePaths {
   };
 }
 
+export function resolveWatchServiceIdentity(projectRootInput: string, cliVersion: string): WatchServiceIdentity {
+  const projectRoot = canonicalPath(resolve(projectRootInput));
+  const resolution = resolveGitWorktreeIdentity(projectRoot);
+  if (resolution.kind === 'error') {
+    throw new Error(`Could not establish Git worktree identity for ${projectRoot}: ${resolution.message}`);
+  }
+  if (resolution.kind === 'non-git') {
+    return { projectRoot, worktreeKind: 'non-git', cliVersion };
+  }
+  return {
+    projectRoot,
+    worktreeKind: 'git',
+    worktreeId: resolution.identity.worktreeId,
+    cliVersion,
+  };
+}
+
 export function inspectWatchService(opts: WatchServiceControllerOptions): WatchServiceInspection {
+  return inspectWatchServiceWithIdentity(opts, resolveWatchServiceIdentity(opts.projectRoot, opts.cliVersion));
+}
+
+function inspectWatchServiceWithIdentity(
+  opts: WatchServiceControllerOptions,
+  identity: WatchServiceIdentity,
+): WatchServiceInspection {
   const runtime = opts.runtime ?? DEFAULT_WATCH_SERVICE_RUNTIME;
   const paths = watchServicePaths(opts.cacheDir);
   const state = readWatchServiceState(paths.statePath);
   const lock = readWatchProcessLock(paths.lockPath);
   return {
-    classification: classifyWatchServiceState(
-      state,
-      { projectRoot: resolve(opts.projectRoot), cliVersion: opts.cliVersion },
-      runtime.now(),
-      runtime.isProcessAlive,
-    ),
+    identity,
+    classification: classifyWatchServiceState(state, identity, runtime.now(), runtime.isProcessAlive),
     lock,
     lockIsLive: lock !== null && runtime.isProcessAlive(lock.pid),
     paths,
@@ -211,7 +237,8 @@ export function inspectWatchService(opts: WatchServiceControllerOptions): WatchS
 // scip-query: ignore-similar — starting and stopping share inspection but have opposite transitions.
 export function ensureWatchService(opts: WatchServiceControllerOptions): WatchServiceEnsureResult {
   const runtime = opts.runtime ?? DEFAULT_WATCH_SERVICE_RUNTIME;
-  let inspection = inspectWatchService(opts);
+  const identity = resolveWatchServiceIdentity(opts.projectRoot, opts.cliVersion);
+  let inspection = inspectWatchServiceWithIdentity(opts, identity);
   let action = planWatchServiceAction('ensure', inspection.classification);
 
   if (action.kind === 'reuse') {
@@ -223,7 +250,12 @@ export function ensureWatchService(opts: WatchServiceControllerOptions): WatchSe
     cleanupWatchServiceFiles(inspection.paths, action.state.pid, runtime);
   } else if (action.kind === 'start') {
     if (inspection.lockIsLive) {
-      const concurrent = waitForWatchServiceState(opts, runtime, Math.min(opts.startupTimeoutMs ?? 1_000, 1_000));
+      const concurrent = waitForWatchServiceState(
+        opts,
+        identity,
+        runtime,
+        Math.min(opts.startupTimeoutMs ?? 1_000, 1_000),
+      );
       if (concurrent) {
         recordWatchServiceActivity(inspection.paths.activityPath, runtime.now());
         return { disposition: 'reused', state: concurrent };
@@ -239,7 +271,7 @@ export function ensureWatchService(opts: WatchServiceControllerOptions): WatchSe
     throw new Error(`Unexpected ensure action: ${action.kind}`);
   }
 
-  inspection = inspectWatchService(opts);
+  inspection = inspectWatchServiceWithIdentity(opts, identity);
   action = planWatchServiceAction('ensure', inspection.classification);
   if (action.kind === 'reuse') {
     recordWatchServiceActivity(inspection.paths.activityPath, runtime.now());
@@ -247,8 +279,13 @@ export function ensureWatchService(opts: WatchServiceControllerOptions): WatchSe
   }
 
   const serverPath = opts.serverPath ?? fileURLToPath(new URL('./watch-server.js', import.meta.url));
-  runtime.spawnServer(serverPath, resolve(opts.projectRoot), opts.cliVersion, opts.watchOverrides ?? {});
-  const state = waitForWatchServiceState(opts, runtime, opts.startupTimeoutMs ?? WATCH_SERVICE_STARTUP_TIMEOUT_MS);
+  runtime.spawnServer(serverPath, identity.projectRoot, opts.cliVersion, opts.watchOverrides ?? {});
+  const state = waitForWatchServiceState(
+    opts,
+    identity,
+    runtime,
+    opts.startupTimeoutMs ?? WATCH_SERVICE_STARTUP_TIMEOUT_MS,
+  );
   if (!state) {
     throw new Error(
       `scip-query watch service did not become ready within ${opts.startupTimeoutMs ?? WATCH_SERVICE_STARTUP_TIMEOUT_MS}ms.`,
@@ -260,21 +297,28 @@ export function ensureWatchService(opts: WatchServiceControllerOptions): WatchSe
 
 export function stopWatchService(opts: WatchServiceControllerOptions): WatchServiceStopResult {
   const runtime = opts.runtime ?? DEFAULT_WATCH_SERVICE_RUNTIME;
-  const inspection = inspectWatchService(opts);
-  const action = planWatchServiceAction('stop', inspection.classification);
+  const paths = watchServicePaths(opts.cacheDir);
+  const state = readWatchServiceState(paths.statePath);
+  const classification: WatchServiceClassification = !state
+    ? { kind: 'stopped' }
+    : runtime.isProcessAlive(state.pid)
+      ? { kind: 'live', state }
+      : { kind: 'stale', state, reason: 'dead-process' };
+  const action = planWatchServiceAction('stop', classification);
   if (action.kind === 'signal-stop') {
     stopLiveWatchProcess(action.state.pid, opts, runtime);
-    cleanupWatchServiceFiles(inspection.paths, action.state.pid, runtime);
+    cleanupWatchServiceFiles(paths, action.state.pid, runtime);
     return { disposition: 'stopped', pid: action.state.pid };
   }
   if (action.kind === 'clean-stale') {
-    cleanupWatchServiceFiles(inspection.paths, action.state.pid, runtime);
+    cleanupWatchServiceFiles(paths, action.state.pid, runtime);
     return { disposition: 'stopped', pid: action.state.pid };
   }
-  if (action.kind === 'already-stopped' && inspection.lockIsLive && inspection.lock) {
-    stopLiveWatchProcess(inspection.lock.pid, opts, runtime);
-    cleanupWatchServiceFiles(inspection.paths, inspection.lock.pid, runtime);
-    return { disposition: 'stopped', pid: inspection.lock.pid };
+  const lock = readWatchProcessLock(paths.lockPath);
+  if (action.kind === 'already-stopped' && lock && runtime.isProcessAlive(lock.pid)) {
+    stopLiveWatchProcess(lock.pid, opts, runtime);
+    cleanupWatchServiceFiles(paths, lock.pid, runtime);
+    return { disposition: 'stopped', pid: lock.pid };
   }
   return { disposition: 'already-stopped' };
 }
@@ -433,6 +477,7 @@ export function parseWatchServiceState(value: unknown): WatchServiceState | null
     !Number.isInteger(state.pid) ||
     state.pid <= 0 ||
     typeof state.projectRoot !== 'string' ||
+    (state.worktreeId !== undefined && (typeof state.worktreeId !== 'string' || state.worktreeId.length === 0)) ||
     typeof state.cliVersion !== 'string' ||
     !validTimestamp(state.startedAt) ||
     !validTimestamp(state.heartbeatAt) ||
@@ -461,6 +506,10 @@ export function classifyWatchServiceState(
   }
   if (state.projectRoot !== identity.projectRoot) {
     return { kind: 'incompatible', state, reason: 'project' };
+  }
+  const expectedWorktreeId = identity.worktreeKind === 'git' ? identity.worktreeId : undefined;
+  if (state.worktreeId !== expectedWorktreeId) {
+    return { kind: 'incompatible', state, reason: 'worktree' };
   }
   if (state.cliVersion !== identity.cliVersion) {
     return { kind: 'incompatible', state, reason: 'cli-version' };
@@ -526,12 +575,13 @@ export function shouldStopWatchServiceForIdle(opts: {
 
 function waitForWatchServiceState(
   opts: WatchServiceControllerOptions,
+  identity: WatchServiceIdentity,
   runtime: WatchServiceRuntime,
   timeoutMs: number,
 ): WatchServiceState | null {
   const deadline = runtime.now() + timeoutMs;
   while (runtime.now() <= deadline) {
-    const classification = inspectWatchService(opts).classification;
+    const classification = inspectWatchServiceWithIdentity(opts, identity).classification;
     if (classification.kind === 'live') return classification.state;
     runtime.sleep(WATCH_SERVICE_POLL_INTERVAL_MS);
   }

@@ -8,6 +8,7 @@ import {
   listGitWorktrees,
   parseGitWorktreeList,
   resolveGitWorktreeContext,
+  resolveGitWorktreeIdentity,
   type GitReader,
 } from '../../src/runtime/git-worktree.js';
 
@@ -26,12 +27,22 @@ describe('Git worktree identity', () => {
 
     const primaryContext = resolveGitWorktreeContext(primary);
     const linkedContext = resolveGitWorktreeContext(linked);
+    const primaryIdentity = resolveGitWorktreeIdentity(primary);
+    const linkedIdentity = resolveGitWorktreeIdentity(linked);
 
     expect(primaryContext).toEqual(expect.objectContaining({ clean: true }));
     expect(linkedContext).toEqual(expect.objectContaining({ clean: true }));
     expect(linkedContext?.repositoryId).toBe(primaryContext?.repositoryId);
     expect(linkedContext?.treeOid).toBe(primaryContext?.treeOid);
     expect(linkedContext?.worktreeId).not.toBe(primaryContext?.worktreeId);
+    expect(primaryIdentity).toEqual(expect.objectContaining({ kind: 'worktree' }));
+    expect(linkedIdentity).toEqual(expect.objectContaining({ kind: 'worktree' }));
+    expect(primaryIdentity.kind === 'worktree' ? primaryIdentity.identity.worktreeId : undefined).toBe(
+      primaryContext?.worktreeId,
+    );
+    expect(linkedIdentity.kind === 'worktree' ? linkedIdentity.identity.worktreeId : undefined).toBe(
+      linkedContext?.worktreeId,
+    );
     expect(findGitRoot(join(linked, 'src'))).toBe(realpathSync(linked));
     expect(listGitWorktrees(linked).map((record) => record.path)).toEqual(
       expect.arrayContaining([realpathSync(primary), realpathSync(linked)]),
@@ -42,10 +53,45 @@ describe('Git worktree identity', () => {
     expect(resolveGitWorktreeContext(linked)?.clean).toBe(true);
   });
 
-  it('returns undefined when required Git facts are unavailable', () => {
-    const gitReader: GitReader = { run: () => undefined };
+  it('distinguishes confirmed non-Git roots from Git lookup failures', () => {
+    const gitReader: GitReader = {
+      run: () => undefined,
+      runResult: () => ({ kind: 'error', message: 'git unavailable' }),
+    };
     expect(resolveGitWorktreeContext('/missing', gitReader)).toBeUndefined();
+    expect(resolveGitWorktreeIdentity('/missing', gitReader)).toEqual({ kind: 'error', message: 'git unavailable' });
     expect(findGitRoot('/missing', gitReader)).toBeUndefined();
+
+    const nonGitRoot = temporaryDirectory('scip-query-non-git-');
+    expect(resolveGitWorktreeIdentity(nonGitRoot)).toEqual({ kind: 'non-git' });
+
+    const damagedGitRoot = temporaryDirectory('scip-query-damaged-git-');
+    mkdirSync(join(damagedGitRoot, '.git'));
+    expect(resolveGitWorktreeIdentity(damagedGitRoot)).toEqual({
+      kind: 'error',
+      message: expect.stringMatching(/not a git repository/i),
+    });
+  });
+
+  it('keeps existing non-Git projects usable when the Git executable is unavailable', () => {
+    const nonGitRoot = temporaryDirectory('scip-query-non-git-without-git-');
+    withoutGit(() => expect(resolveGitWorktreeIdentity(nonGitRoot)).toEqual({ kind: 'non-git' }));
+
+    const damagedGitRoot = temporaryDirectory('scip-query-damaged-git-without-git-');
+    mkdirSync(join(damagedGitRoot, '.git'));
+    withoutGit(() =>
+      expect(resolveGitWorktreeIdentity(damagedGitRoot)).toEqual({
+        kind: 'error',
+        message: expect.stringMatching(/ENOENT/i),
+      }),
+    );
+
+    withoutGit(() =>
+      expect(resolveGitWorktreeIdentity(join(nonGitRoot, 'missing'))).toEqual({
+        kind: 'error',
+        message: expect.stringMatching(/ENOENT/i),
+      }),
+    );
   });
 
   it('parses NUL-delimited porcelain records without treating attributes as paths', () => {
@@ -81,4 +127,15 @@ function temporaryDirectory(prefix: string): string {
 
 function git(cwd: string, args: readonly string[]): string {
   return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf-8' }).trim();
+}
+
+function withoutGit(run: () => void): void {
+  const originalPath = process.env['PATH'];
+  process.env['PATH'] = '';
+  try {
+    run();
+  } finally {
+    if (originalPath === undefined) delete process.env['PATH'];
+    else process.env['PATH'] = originalPath;
+  }
 }

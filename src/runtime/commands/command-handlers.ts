@@ -1514,6 +1514,8 @@ function watchServiceReport(inspection: WatchServiceInspection, enabled = true) 
           state: 'running' as const,
           mode: 'foreground-or-starting' as const,
           pid: inspection.lock.pid,
+          projectRoot: inspection.identity.projectRoot,
+          worktreeId: inspection.identity.worktreeId,
           startedAt: inspection.lock.startedAt,
         };
       }
@@ -1524,6 +1526,8 @@ function watchServiceReport(inspection: WatchServiceInspection, enabled = true) 
         state: 'running' as const,
         mode: 'daemon' as const,
         pid: classification.state.pid,
+        projectRoot: classification.state.projectRoot,
+        worktreeId: classification.state.worktreeId,
         startedAt: classification.state.startedAt,
         heartbeatAt: classification.state.heartbeatAt,
         lastActivityAt: classification.state.lastActivityAt,
@@ -1542,6 +1546,8 @@ function watchServiceReport(inspection: WatchServiceInspection, enabled = true) 
         mode: 'daemon' as const,
         reason: classification.reason,
         pid: classification.state.pid,
+        projectRoot: classification.state.projectRoot,
+        worktreeId: classification.state.worktreeId,
         heartbeatAt: classification.state.heartbeatAt,
         watcher: classification.state.watcher,
         lastRefresh: classification.state.lastRefresh,
@@ -1561,6 +1567,10 @@ function renderWatchServiceReport(report: ReturnType<typeof watchServiceReport>)
   }
   const pid = 'pid' in report ? ` (pid ${report.pid})` : '';
   console.log(`Watch service: ${report.state} [${report.mode}]${pid}`);
+  if ('projectRoot' in report && report.projectRoot) {
+    const worktree = 'worktreeId' in report && report.worktreeId ? ` [${report.worktreeId.slice(0, 12)}]` : '';
+    console.log(`Worktree: ${report.projectRoot}${worktree}`);
+  }
   if ('watcher' in report && report.watcher) console.log(`Watcher: ${formatStatus(report.watcher)}`);
   if ('idleDeadlineAt' in report && report.idleDeadlineAt) console.log(`Idle exit: ${report.idleDeadlineAt}`);
   if ('reason' in report) console.log(`Reason: ${report.reason}`);
