@@ -3,6 +3,7 @@ import { existsSync, renameSync, rmSync, statSync } from 'node:fs';
 import { cpus } from 'node:os';
 import { join } from 'node:path';
 import type { IndexerConfig, SupportedLanguage } from '../domain/types.js';
+import { toPortableCommand } from '../runtime/binary.js';
 
 // scip-query: ignore-stale — exported handoff record between reindex planning
 // and the runner; inlining would smear indexer execution state across modules.
@@ -151,7 +152,8 @@ async function runPreparedIndexer(
   const startedAt = Date.now();
 
   try {
-    await execFileBuffered(run.binary, run.args, {
+    const spawnable = toPortableCommand(run.binary, run.args);
+    await execFileBuffered(spawnable.binary, spawnable.args, {
       cwd: projectRoot,
       env: run.env,
       maxBuffer: 50 * 1024 * 1024,

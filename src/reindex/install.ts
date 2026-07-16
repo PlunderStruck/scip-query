@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { platform } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { IndexerConfig } from '../domain/types.js';
-import { isBinaryAvailable } from '../runtime/binary.js';
+import { isBinaryAvailable, resolveSpawnableExecutable } from '../runtime/binary.js';
 
 const requireFromHere = createRequire(import.meta.url);
 
@@ -41,7 +41,12 @@ export function describeIndexerBinary(config: IndexerConfig): string {
  */
 export function resolveIndexerBinary(config: IndexerConfig): string | null {
   for (const candidate of getBinaryCandidates(config)) {
-    if (isBinaryAvailable(candidate)) {
+    if (platform() === 'win32') {
+      // `where` also reports npm's .cmd/extensionless shim scripts, which a
+      // shell-less spawn rejects with EFTYPE; only a real executable counts.
+      const spawnable = resolveSpawnableExecutable(candidate);
+      if (spawnable) return spawnable;
+    } else if (isBinaryAvailable(candidate)) {
       return candidate;
     }
   }
@@ -213,6 +218,9 @@ export function tryInstallIndexer(config: IndexerConfig, onStatus: (msg: string)
         stdio: 'inherit',
         timeout: 300_000,
         env: process.env,
+        // Installer binaries (npm) are .cmd shims on Windows, which execFile
+        // refuses without a shell; args here are fixed literals, never input.
+        shell: platform() === 'win32',
       });
 
       const resolvedBinary = resolveIndexerBinary(config);
