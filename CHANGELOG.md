@@ -4,6 +4,17 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+## [0.18.0]
+
+### Skills (semiformal reasoning certificates)
+
+- The skill suite now enforces a semiformal certificate discipline calibrated against a 14-ticket plan→implement→review retrospective: `scip-concrete-plan` produces contextual definitions, numbered premises with complete state-authority writer/reader enumeration, counterexample attacks with permanent `HOLE`/`HELD` outcomes, a coverage matrix, per-step deployability declarations, and a derived verdict with hole counts. `scip-verify` refutes a PASS with executed probes before claiming it; `scip-debug` requires a rival hypothesis and an executed discriminator for cross-file root causes; `scip-integrity-audit` attempts the defense before filing an accusation and derives a counted verdict; `scip-maintainability` requires a unifying definition plus a strongest-dissenter check before consolidation; `scip-cleanup-audit` refutes deletions against known blind spots; `scip-claim-audit` and `scip-api-impact` gain completeness counts and consumer disposition tables; `scip-explore` distinguishes descriptions (citations) from conclusions (discriminators).
+- New skill `scip-root-cause`: diagnose the design flaw behind a family of recurring bugs — source-traced bug-family table, falsifiable flaw hypothesis with a rival kill-list, retrodiction plus executed latent-instance hunts, and a four-rung minimal-invasiveness remedy ladder that hands off to `scip-concrete-plan`.
+
+### Fixes (Windows indexer spawn)
+
+- Language indexers no longer fail with `spawn EFTYPE` on Windows. Resolved `.js`/`.cjs`/`.mjs` bin targets (the bundled `@sourcegraph/scip-typescript` bin) now run through the current Node executable, Windows binary resolution only accepts real `.exe`/`.com` executables from `where` (npm's `.cmd`/sh shims fall through to the bundled bin), and npm auto-install runs through the shell on Windows. Mechanism-verified with unit tests and a macOS smoke run; not yet confirmed on a Windows machine.
+
 ## [0.17.2]
 
 ### Performance (agent command latency)
