@@ -44,6 +44,7 @@ Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only
 3. Run every postcheck that matches the actual edit, not only the check you expected to need.
 4. If `.scipquery.json` or suppressions changed, run `scip-query config-validate`.
 5. Prefer fixing findings. Suppress only intentional design, compatibility shims, framework entry points, or accepted false positives with a specific reason.
+6. A PASS ends scrutiny, so it must survive refutation first: construct the cheapest checks that could still break this diff and run them before claiming PASS. A FAIL needs no refutation — report it with the evidence.
 
 ## Flow
 
@@ -115,12 +116,24 @@ scip-query self-audit
 
 This step is complete only when changed documentation and config surfaces are checked or explicitly out of scope.
 
+### 6. Refute the PASS
+
+A PASS is the verdict nobody re-checks — attack it before making it. Construct at least two refutation attempts and run the cheapest check that would expose each. Prefer executed probes (run the consumer's test, invoke the command, feed the edge input) over argued ones. Pick attacks that fit the diff:
+
+- an unexercised consumer: a caller in `diff-impact` output whose tests did not run — run them, or trace the contract it depends on;
+- an unexercised input: an edge the changed code newly handles or newly rejects — execute it;
+- the intent gap: one case the stated goal implies that the diff does not visibly cover — find where it is handled or show it missing.
+
+Record every attempt; an attempt that breaks the diff converts the verdict to FAIL with a finding, and the attempt stays in the record either way.
+
+This step is complete only when every refutation attempt has an executed result.
+
 ## Report
 
 End with:
 
 ```markdown
-Verification: PASS/FAIL
+Verification: PASS/FAIL — <n> postchecks, <m> refutation attempts, <k> broke
 
 Environment:
 
@@ -144,11 +157,15 @@ Health/docs/config:
 
 - <commands and results>
 
+Refutation attempts:
+
+- R1: <attack> → survived (evidence) | broke (finding)
+
 Remaining risk:
 
 - <accepted findings, unavailable capabilities, or checks not run>
 ```
 
-Do not claim ready-to-ship unless freshness is `fresh` after the final edit and diff-gate is passed or fully explained.
+Do not claim ready-to-ship unless freshness is `fresh` after the final edit, diff-gate is passed or fully explained, and the PASS survived every refutation attempt.
 
 - `dead`/`new-dead` correctly resolve `import type` consumers, tsconfig `paths` aliases, pnpm/npm/yarn workspace cross-package imports, and Vue `<script setup>` composables. The one residual gap is a same-named symbol reached only through a re-exporting barrel file in a workspace package; that shape self-labels `unconfirmed (cross-package ambiguous-name resolution gap)` in the finding — treat only that label as unconfirmed until `refs` agrees. See the Detector Reliability section in `../_shared/SKILL.md`.

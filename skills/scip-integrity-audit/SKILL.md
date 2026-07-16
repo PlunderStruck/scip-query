@@ -43,6 +43,12 @@ validates (checkers, gates, verifiers, validators — find producers with
 an input that MUST fail — a wrong binding, a corrupt file, an impossible
 value — and run it. A checker that passes its should-fail input is
 decorative: file it as a defect, not a note.
+Before filing, attempt the defense: an accusation triggers a rewrite, so
+search for the failure exit the drill may have missed — a config-gated
+branch, an async rejection, one-hop delegation (the calibration's known
+noise archetypes). File the defect with the executed should-fail input
+attached and the defense attempt noted; a defense that succeeds clears the
+checker and stays in the record as its witness.
 Complete only when every checker in scope has been witnessed rejecting a
 constructed should-fail input, or is listed with a reason it cannot be.
 
@@ -120,6 +126,17 @@ the drill that exposed it, the should-fail input or real sample used, and
 the fix. The audit is complete only when every drill's exit criterion is
 met for the scope, and every defect found has a regression artifact — a
 test, fixture, or model that fails on the pre-fix behavior.
+
+End with a derived verdict, not an impression:
+
+```markdown
+Integrity: <scope> — <c> checkers witnessed failing, <a> adapters diffed
+against reality, <f> fallback primaries witnessed live, <m> metrics
+recomputed, <t> twins compared; <d> defects filed, <u> unverifiable (reasons)
+```
+
+A suspect scope that produces zero defects is itself a claim: state what
+made the suspicion wrong, or rerun the drill that should have caught it.
 
 A regression artifact that doesn't actually assert anything, or asserts the
 same literal it stubbed into its own mock, is a fake witness — the same

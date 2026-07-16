@@ -44,6 +44,7 @@ Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only
 3. Read source with `scip-query code`; do not describe what a function probably does.
 4. Follow the graph before trusting folder structure.
 5. Start wide, then narrow.
+6. Descriptions need citations; conclusions need discriminators. A conclusion — why something happens, what a unit is for, which intent explains a shape — states one rival explanation and the trace evidence that rules it out.
 
 ## Workflow
 
@@ -117,4 +118,4 @@ This step is complete only when the explanation includes the risky symbols or st
 
 ## Report
 
-Report overview, entry points, call flow, data flow, dependencies, consumers, risk areas, and the command citations that prove each claim. Exploration is complete only when the user can see what was proven and what remains unverified.
+Report overview, entry points, call flow, data flow, dependencies, consumers, risk areas, and the command citations that prove each claim. For each conclusion-bearing claim, name the rival explanation considered and the evidence that ruled it out. Exploration is complete only when the user can see what was proven, what remains unverified, and which conclusions rest on a discriminator rather than a single story.

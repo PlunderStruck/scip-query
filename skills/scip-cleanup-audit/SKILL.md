@@ -101,10 +101,14 @@ scip-query co-change <file> --json --full
 
 Classify every candidate as `confirmed fix target`, `intentional design`, `false positive`, or `blocked`.
 
+A deletion is this skill's scrutiny-ending verdict, so a `confirmed fix target` that deletes code must survive refutation first. Run the known blind-spot checks and record them on the entry: `rg` for the symbol name as a string (dynamic dispatch, config keys, serialized references, CLI/doc text), and the cross-package barrel re-export gap (the one shape `dead` self-labels `unconfirmed`). Record `refutation: survived — <checks run>` on the entry, or reclassify it; the note stays either way.
+
 ### 4. Report
 
 ```markdown
 Health score: N/100
+
+Classification counts: <n> confirmed / <i> intentional / <fp> false positive / <b> blocked (must cover every collected signal)
 
 Confirmed items:
 - [priority] finding - evidence - first safe action

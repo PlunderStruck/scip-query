@@ -21,6 +21,7 @@ export const BUILTIN_SKILLS = [
   'scip-conductor',
   'scip-debug',
   'scip-explore',
+  'scip-root-cause',
   'scip-triage-issue',
   'scip-diagram',
   'scip-doc-reconcile',

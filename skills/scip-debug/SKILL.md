@@ -43,6 +43,7 @@ Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only
 2. Use scip-query to find entry points, call paths, data flow, and blast radius.
 3. Prefer one narrow fix over broad cleanup.
 4. Verify with the narrowest repo test or smoke command, then invoke `scip-verify`.
+5. A root-cause claim whose fix crosses a file boundary requires a rival: state the next-most-plausible explanation for the same symptom and run the observation that separates them. A root cause with no rival considered is a guess with confidence.
 
 ## Workflow
 
@@ -82,6 +83,8 @@ scip-query slice <symbol-or-variable> --forward
 
 Stop expanding when the first code fact that can cause the symptom is found.
 
+When a candidate cause emerges, state it as a hypothesis alongside one rival — the next-most-plausible explanation for the same symptom. Name the observation that distinguishes them (a log line, a probe, a narrower test) and execute it. Choose the discriminator that is cheapest to run, not the one most likely to confirm.
+
 This step is complete only when the path explains the symptom or the missing evidence is explicit.
 
 ### 4. Compare nearby implementations
@@ -117,9 +120,11 @@ Run the reproduction, narrow test or smoke command, and invoke `scip-verify`.
 Bug:
 Entry point:
 Root cause:
+Rival considered:
+Discriminator: <the executed observation that separated them>
 Fix:
 Verification:
 Remaining risk:
 ```
 
-Do not present a guess as a root cause. If no root cause is proven, report the missing evidence.
+Do not present a guess as a root cause. A root cause with no rival considered and no executed discriminator is a guess. If no root cause is proven, report the missing evidence.

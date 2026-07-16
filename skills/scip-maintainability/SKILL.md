@@ -53,6 +53,8 @@ Essential variation is difference that must remain because the real units differ
 
 System compression is replacing several mechanisms that perform the same role, policy, lifecycle, or surface job with fewer named mechanisms that preserve behavior.
 
+A unifying definition is the single essential trait that makes several code sites one concept; what makes it a test is that failing to state it proves the sites are not one concept, and consolidating them anyway would package-deal essential variation into a false abstraction.
+
 ## Rules
 
 1. Ground claims in files, symbols, references, call graphs, dependencies, surfaces, and blast radius.
@@ -61,6 +63,7 @@ System compression is replacing several mechanisms that perform the same role, p
 4. Preserve essential variation.
 5. Add an abstraction only when it removes hidden policy, names a lifecycle, enforces a rule, or reduces concept count.
 6. Prefer deletion, inlining, merging, generation, or enforcement before broad frameworks.
+7. A scattered-concept or consolidation claim ships its unifying definition. If no single essential trait covers every cited site, the variation is essential: record it and do not consolidate.
 
 ## Workflow
 
@@ -100,7 +103,7 @@ This step is complete only when concrete units, consumers, tests, fallbacks, ada
 
 For each cluster, ask:
 
-- What one concept appears in several places?
+- What one concept appears in several places — and what single essential trait makes them one concept? If the trait cannot be stated, they are not one concept.
 - What policy is hidden?
 - What lifecycle is unnamed?
 - Which differences are essential?
@@ -143,6 +146,8 @@ This step is complete only when the chosen model removes a concept or policy dup
 For broad review, write a register under `docs/plans/` unless the user asks not to edit files. For implementation, write an atlas before editing.
 
 Use dispositions: `merge`, `delete`, `inline`, `extract`, `generate`, `enforce`, `supersede`, `defer`, `skip`.
+
+Every `merge`, `extract`, or `generate` entry carries its unifying definition and its strongest dissenter — the cited site most likely to differ essentially — with the evidence that it does not. A dissenter that survives moves the entry to `skip` with reason `essential variation`; the dissenter stays in the register either way.
 
 This step is complete only when each opportunity has evidence, disposition, dependency order, touch map, and validation plan.
 

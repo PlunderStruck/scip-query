@@ -44,6 +44,7 @@ The loop is complete only when `scip-verify` passes or each remaining finding ha
 | --- | --- | --- |
 | Understand a system before answering or editing | `scip-explore` | `system`, `trace`, `call-graph`, `dataflow` |
 | Root-cause a bug or regression | `scip-debug` | `trace`, `dataflow`, `change-surface` |
+| Diagnose the design flaw behind a family of recurring bugs | `scip-root-cause` | `co-change`, `similar`, `refs` |
 | Turn a report into a fix packet | `scip-triage-issue` | `files`, `trace`, `affected` |
 | Create a code flow, dependency, or blast-radius diagram | `scip-diagram` | `call-graph`, `dataflow`, `affected` |
 | Plan a feature, fix, or refactor | `scip-concrete-plan` | `plan-context` |
@@ -72,6 +73,7 @@ Routing is complete only when one owning skill is selected or the task is small 
 
 - "Is this implementation real / does it actually work" → `scip-integrity-audit`; "is this well-organized" → `scip-maintainability`; same-name drifted twins specifically → `scip-twin-drift`.
 - One change → `scip-concrete-plan`; a program of changes with delegation → `scip-conductor`.
+- One failing behavior → `scip-debug`; a family of similar bugs whose fixes keep recurring, or "what is really wrong with this system" backed by bug history → `scip-root-cause`; structure smells with no bug evidence → `scip-maintainability`.
 
 - Use `scip-cleanup-audit` for reports, ranking, confirmation, or recent AI-residue triage without edits.
 - Use `scip-cleanup-improve` when the user asks to fix, improve, continue cleaning, or raise health autonomously.
@@ -105,6 +107,7 @@ Top commands per routed skill, generated from each skill's own `commands:` front
 | `scip-maintainability` | `scip-query stats`, `scip-query system <scope>`, `scip-query surface <scope>` |
 | `scip-probe-reachability` | `scip-query outline <file> --signatures`, `scip-query code <symbol>`, `scip-query trace <symbol>` |
 | `scip-react-maintainability` | `scip-query react-component-duplicates --scope <scope> --full --json`, `scip-query react-hook-candidates --scope <scope> --full --json`, `scip-query react-large-component-pressure --scope <scope> --full --json` |
+| `scip-root-cause` | `scip-query trace <mechanism-symbol>`, `scip-query co-change <fix-site-file>`, `scip-query system <system-scope>` |
 | `scip-setup` | `scip-query setup --json`, `scip-query doctor`, `scip-query status --json` |
 | `scip-tla-model-system` | `scip-query tla scaffold <file>`, `scip-query tla verify <spec>`, `scip-query tla instrument <spec>` |
 | `scip-triage-issue` | `scip-query files <issue-term>`, `scip-query trace <entry-or-error-symbol>`, `scip-query code <entry-or-error-symbol>` |

@@ -93,6 +93,7 @@ Write the report under `docs/scip-query/` unless the user asked only for a conve
 ```markdown
 Scope:
 Status words inventoried: N
+Classified: <d> derived / <h> hedged / <a> asserted — must sum to N; a gap is an unfinished audit
 
 Claim table:
 | Claim | Producer | Classification | Fix |

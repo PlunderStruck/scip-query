@@ -107,7 +107,9 @@ This step is complete only when the migration shape explains deploy order, rollb
 
 ```markdown
 Surface:
-Consumers:
+Consumer dispositions:
+| Consumer | Kind (direct/transitive/doc/config/test) | Disposition (unchanged-safe/update/shim/defer) |
+| --- | --- | --- |
 Required co-changes:
 Migration:
 Verification:
@@ -117,6 +119,8 @@ Verification:
 - `scip-query doc-drift --json --full` when docs changed
 - `scip-query config-validate` when config changed
 ```
+
+Every consumer from `refs`/`affected` appears as a row — a blank disposition is unfinished analysis, and the plan is not complete while one exists. Non-indexed consumers (SQL, fixtures, dynamic strings, external callers) are checked with `rg` and rowed the same way.
 
 After editing, run routed checks from the shared reference and invoke `scip-verify`.
 
