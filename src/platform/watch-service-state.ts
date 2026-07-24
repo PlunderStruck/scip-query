@@ -58,6 +58,7 @@ export interface WatchServiceState {
   typescriptIndex?: TypeScriptIndexServiceStatusSnapshot;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; these paths are the watch-service filesystem boundary.
 export interface WatchServicePaths {
   lockPath: string;
   statePath: string;
@@ -116,6 +117,7 @@ export function parseWatchServiceState(value: unknown): WatchServiceState | null
   return state as WatchServiceState;
 }
 
+// scip-query: ignore-wrapper — reviewed W1 reused predicate; eleven validation sites share this timestamp rule.
 export function isValidWatchServiceTimestamp(value: unknown): value is string {
   return typeof value === 'string' && Number.isFinite(Date.parse(value));
 }

@@ -21,6 +21,7 @@ import { getSourceText } from '../source/source-text.js';
 
 export type ExclusionDisposition = 'exclude' | 'implicit-usage';
 
+// scip-query: ignore-stale — reviewed S1 owned contract; framework exclusion analysis constructs this evidence entry.
 export interface ExclusionEntry {
   startLine: number;
   endLine: number;

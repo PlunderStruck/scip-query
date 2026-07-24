@@ -75,6 +75,7 @@ export function complexity(
   };
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 export function branchEstimateForDefinition(db: ScipDatabase, definition: SymbolMatch): BranchEstimate {
   const ast = getAst(db, definition.relativePath);
   if (ast) {

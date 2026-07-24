@@ -88,6 +88,7 @@ interface MutableBoundaryEdge {
  * boundaries. This pure seam deliberately separates graph facts from the
  * repository-specific judgment recorded in ArchitectureConfig.
  */
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; mapping, edge policy, SCCs, and coverage define one report.
 export function analyzeArchitectureGraph(
   fileGraph: ReadonlyMap<string, ReadonlySet<string>>,
   indexedFiles: readonly string[],

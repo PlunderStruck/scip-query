@@ -1,0 +1,7 @@
+{
+  "id": "SQ97C246B0702F",
+  "check": "doc-reference",
+  "file": "docs/architecture/evidence-cache-invalidation.md",
+  "reason": "Verified after annotation-only source changes: the cache-invalidation examples still point to the intended implementation files.",
+  "createdAt": "2026-07-24T02:03:16.101Z"
+}

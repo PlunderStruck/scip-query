@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 
 export type ProfileWorkOutcome = 'computed' | 'cache-hit' | 'cache-miss' | 'reused' | 'skipped';
 
+// scip-query: ignore-stale — reviewed S1 owned contract; profile parsing materializes this event record.
 export interface ProfileEvent {
   [field: string]: unknown;
 }

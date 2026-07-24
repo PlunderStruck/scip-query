@@ -99,6 +99,7 @@ export function reactHookCandidates(
   });
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function compareReactHookProfiles(
   a: ReactBehaviorPairwiseProfile,
   b: ReactBehaviorPairwiseProfile,

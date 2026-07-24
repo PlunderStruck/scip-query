@@ -7,7 +7,11 @@ import { ScipDatabase } from '../../../src/storage/db.js';
 import { classifyFile, getLiveBarrelPaths, isEntrySurface } from '../../../src/analysis/file-classifier.js';
 import { dead } from '../../../src/queries/cleanup/dead.js';
 import { health } from '../../../src/queries/health/health.js';
-import { checkHealthBaseline, writeHealthBaseline } from '../../../src/queries/health/health-baseline.js';
+import {
+  checkHealthBaseline,
+  normalizeBaselineFindingIdentity,
+  writeHealthBaseline,
+} from '../../../src/queries/health/health-baseline.js';
 import { isolated } from '../../../src/queries/cleanup/isolated.js';
 import { selfAudit } from '../../../src/queries/quality/self-audit.js';
 import { redundantReexports } from '../../../src/queries/cleanup/redundant-reexports.js';
@@ -239,5 +243,28 @@ describe('debloat liveness regressions', () => {
     writeFileSync(written.path, JSON.stringify(baseline));
     const regressed = checkHealthBaseline(db);
     expect(regressed.newFindings).toEqual([removed]);
+  });
+
+  it('keeps pair identities stable across SCIP package versions and legacy baselines', () => {
+    const similar018 =
+      'similar:scip-typescript npm scip-query 0.18.0 src/a/`one.ts`/first().|scip-typescript npm scip-query 0.18.0 src/b/`two.ts`/second().';
+    const similar019 =
+      'similar:scip-typescript npm scip-query 0.19.0 src/a/`one.ts`/first().|scip-typescript npm scip-query 0.19.0 src/b/`two.ts`/second().';
+    const duplicate018 =
+      'duplicate-bodies:abc123:scip-typescript npm scip-query 0.18.0 src/a/`one.ts`/first().|scip-typescript npm scip-query 0.18.0 src/b/`two.ts`/second().';
+    const duplicate019 =
+      'duplicate-bodies:abc123:scip-typescript npm scip-query 0.19.0 src/a/`one.ts`/first().|scip-typescript npm scip-query 0.19.0 src/b/`two.ts`/second().';
+    const stableSimilar = 'similar:src:a:one:first()|src:b:two:second()';
+    const reversedSimilar019 =
+      'similar:scip-typescript npm scip-query 0.19.0 src/b/`two.ts`/second().|scip-typescript npm scip-query 0.19.0 src/a/`one.ts`/first().';
+
+    expect(normalizeBaselineFindingIdentity(similar018)).toBe(stableSimilar);
+    expect(normalizeBaselineFindingIdentity(similar019)).toBe(normalizeBaselineFindingIdentity(similar018));
+    expect(normalizeBaselineFindingIdentity(reversedSimilar019)).toBe(stableSimilar);
+    expect(normalizeBaselineFindingIdentity(stableSimilar)).toBe(stableSimilar);
+    expect(normalizeBaselineFindingIdentity(duplicate019)).toBe(normalizeBaselineFindingIdentity(duplicate018));
+    expect(normalizeBaselineFindingIdentity('architecture:forbidden:runtime>domain')).toBe(
+      'architecture:forbidden:runtime>domain',
+    );
   });
 });

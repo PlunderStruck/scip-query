@@ -55,6 +55,7 @@ export function processDurableRustSessionRequests(
   return processed;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 async function runDurableRustSessionServer(sessionDir: string, semanticWorkerPath: string): Promise<void> {
   mkdirSync(resolve(sessionDir, 'requests'), { recursive: true });
   mkdirSync(resolve(sessionDir, 'responses'), { recursive: true });

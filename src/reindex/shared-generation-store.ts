@@ -186,6 +186,7 @@ export function resolveSharedEvidenceDbPath(
   return context ? join(resolveRepositoryCacheDir(context.repositoryId), 'evidence.db') : undefined;
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 export function readSharedGeneration(
   snapshot: SharedGenerationSnapshot,
   verifyArtifacts = true,
@@ -219,6 +220,7 @@ export function readSharedGeneration(
   return manifest;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; staging, manifest publication, and lease updates are one transaction.
 export function publishSharedGeneration(input: {
   snapshot: SharedGenerationSnapshot;
   sourceCacheDir: string;
@@ -292,6 +294,7 @@ export function publishSharedGeneration(input: {
   }
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; validation, artifact hydration, and metadata updates stay atomic.
 export function hydrateSharedGeneration(input: {
   snapshot: SharedGenerationSnapshot;
   manifest: SharedGenerationManifest;
@@ -365,6 +368,7 @@ export function hydrateSharedGeneration(input: {
   }
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function prepareSharedGenerationForProject(
   projectRoot: string,
   config: ProjectConfig,
@@ -415,6 +419,8 @@ export function prepareSharedGenerationForProject(
   }
 }
 
+// scip-query: ignore-similar — reviewed M1 lifecycle variation; preparation reads/imports while publication creates and leases.
+// scip-query: ignore-extract — reviewed E1 workflow owner; fingerprinting, publication, and worktree leasing stay together.
 export function publishFreshLocalGenerationForProject(
   projectRoot: string,
   config: ProjectConfig,
@@ -493,6 +499,7 @@ export function publishFreshLocalGenerationForProject(
   }
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export async function acquireSharedGenerationBuildLock(
   snapshot: SharedGenerationSnapshot,
   opts: { timeoutMs?: number; pollMs?: number; now?: () => number } = {},
@@ -609,6 +616,7 @@ export function worktreeLeaseOwnershipChecksum(
   );
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function touchExistingWorktreeLease(
   projectRoot: string,
   localCacheDir: string,
@@ -730,6 +738,7 @@ export function cloneArtifactFile(source: string, target: string): void {
   }
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 function importPeerGeneration(
   snapshot: SharedGenerationSnapshot,
   targetProjectRoot: string,
@@ -989,6 +998,7 @@ function assertManifestMatchesSnapshot(manifest: SharedGenerationManifest, snaps
   }
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function validateSourceGeneration(
   cacheDir: string,
   projectRoot: string,

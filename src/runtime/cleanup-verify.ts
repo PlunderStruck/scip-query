@@ -51,6 +51,7 @@ export interface CleanupVerificationPolicy {
 const CHECK_TIMEOUT_MS = 300_000;
 const MAX_ERROR_LINES = 12;
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; patch validation, checker execution, and restoration stay together.
 export function verifyCleanupPlan(
   projectRoot: string,
   plan: CleanupPlanResult,
@@ -497,6 +498,7 @@ export function cleanupVerificationFailures(
  * range is extended downward until brackets balance (measured on
  * comment/string-stripped text) so a deletion never bisects a statement.
  */
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 export function deleteLineRanges(
   content: string,
   ranges: ReadonlyArray<{ start: number; end: number }>,

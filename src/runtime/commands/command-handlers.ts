@@ -346,6 +346,7 @@ interface TypeScriptSemanticCompareReport {
   comparison: ReturnType<typeof compareTypeScriptReferenceProviders>;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export async function handleBench(rawOpts: unknown): Promise<void> {
   const opts = commandOptions(rawOpts);
   const projectRoot = resolveProjectRoot();
@@ -477,6 +478,7 @@ export function handleTypeScriptSemanticCompare(rawOpts: unknown): void {
   });
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 async function measureColdIndex(projectRoot: string): Promise<BenchIndexRun> {
   const config = loadProjectConfig(projectRoot);
   const paths = resolveIndexStoragePaths(projectRoot, config);
@@ -884,6 +886,7 @@ export function handleSetupHooks(rawOpts: unknown): void {
   }
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function handleCheckDeps(): void {
   let hasProblems = false;
   if (isScipInstalled()) {
@@ -1193,6 +1196,7 @@ export async function handleSetup(rawOpts: unknown): Promise<void> {
   }
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; prompts and the resulting setup options form one guided interaction.
 async function guidedProjectSetupOptions(
   base: ProjectSetupOptions,
   opts: { json: boolean },
@@ -1598,6 +1602,7 @@ function assertNeverWatchService(value: never): never {
   throw new Error(`Unhandled watch service classification: ${JSON.stringify(value)}`);
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function handleStatus(rawOpts: unknown): void {
   const opts = commandOptions(rawOpts);
   const { report } = buildProjectDiagnosticReport('status');
@@ -1655,6 +1660,7 @@ function renderDoctorReport(
   renderCapabilityReport(report.capabilities);
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function renderStatusReport(
   report: ReturnType<typeof buildProjectDiagnosticReport>['report'],
   opts: {

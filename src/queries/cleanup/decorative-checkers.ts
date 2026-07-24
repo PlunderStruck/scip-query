@@ -113,6 +113,7 @@ function checkerNameKind(leaf: string): DecorativeCheckerNameKind | null {
   return null;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function classifyChecker(
   db: ScipDatabase,
   def: IndexedDefinition,

@@ -93,6 +93,7 @@ export function buildVueComponentBehaviorProfile(db: ScipDatabase, relativePath:
   return cloneVueComponentBehaviorProfile(cached);
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function buildVueComponentBehaviorProfileUncached(
   db: ScipDatabase,
   file: string,

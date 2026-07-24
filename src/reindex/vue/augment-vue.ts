@@ -56,6 +56,7 @@ export interface AugmentVueResolvedOptions {
   onStatus?: (message: string) => void;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; the Vue augmenter consumes this computation policy as one unit.
 interface VueReferenceComputationOptions {
   projectRoot: string;
   vueFiles: string[];
@@ -133,6 +134,7 @@ export function augmentVueResolvedReferences(opts: AugmentVueResolvedOptions): A
   }).result;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function augmentVueResolvedReferencesFromIndexedDocuments(opts: AugmentVueResolvedOptions): AugmentVueResolvedResult {
   const configPath = resolve(opts.projectRoot, opts.tsconfig);
   if (!existsSync(configPath)) {

@@ -59,6 +59,7 @@ export interface TlaScaffoldOptions {
 
 const TLA_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; system evidence, model generation, and validation stay together.
 export function scaffoldTlaModel(db: ScipDatabase, file: string, opts: TlaScaffoldOptions = {}): TlaScaffoldResult {
   const warnings: string[] = [];
   // K1 opt-in (docs/plans/2026-07-02-catalog-class-members.md): retain

@@ -240,6 +240,7 @@ export function resolveJavaScriptImportPath(db: ScipDatabase, importerPath: stri
  * only evidence it has left when scip-typescript itself emits zero
  * occurrences for a whole-statement `import type { ... }` clause.
  */
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function resolveTsconfigPathAliasImport(db: ScipDatabase, importerPath: string, specifier: string): string | null {
   const config = tsconfigAliasConfigForImporter(db, importerPath);
   if (!config) return null;
@@ -293,6 +294,7 @@ function matchTsconfigPathAlias(config: TsconfigAliasConfig, specifier: string):
  * `src/<subpath>` / `src/<subpath>/index` are tried directly as a
  * best-effort fallback.
  */
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function resolveWorkspacePackageImport(db: ScipDatabase, specifier: string): string | null {
   const match = matchWorkspacePackage(workspacePackagesFor(db), specifier);
   if (!match) return null;

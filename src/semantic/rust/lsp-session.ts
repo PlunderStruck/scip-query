@@ -357,6 +357,7 @@ export class RustAnalyzerSessionResolver
     );
   }
 
+  // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
   private fallbackReferencesAndCallees(
     baseStatus: RustSemanticStatus,
     referenceDefinitions: readonly IndexedDefinition[],
@@ -471,6 +472,7 @@ export interface RustSemanticSessionSelection {
   optOut: 'SCIP_RUST_SEMANTIC_DURABLE_SESSION=0';
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; this status is the session selection plus live readiness.
 export type RustSemanticSessionStatus = RustSemanticSessionSelection &
   (
     | { state: 'per-command' | 'stopped' }
@@ -610,6 +612,7 @@ export function createFailoverRustAnalyzerSessionRequester(
   };
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function createConfiguredRustAnalyzerSessionRequester(
   projectRoot: string,
   configuredValue: string | undefined,
@@ -630,6 +633,7 @@ export function createConfiguredRustAnalyzerSessionRequester(
     : factories.worker();
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; worker lifetime, request routing, and recovery stay together.
 export function createWorkerRustAnalyzerSessionRequester(
   opts: { semanticWorkerPath?: string; shareEnvironment?: boolean } = {},
 ): RustAnalyzerSessionRequester {

@@ -133,6 +133,7 @@ const FRONTEND_BEHAVIOR_MIN_SIMILARITY = 0.45;
  * Pairs where both sides are established are ordinary `similar` territory
  * and are skipped here.
  */
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 export function recentDuplicates(
   db: ScipDatabase,
   opts: {
@@ -185,6 +186,7 @@ export function recentDuplicates(
   };
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function collectRecentDuplicateCandidates(
   db: ScipDatabase,
   opts: RecentDuplicateCandidateOptions,
@@ -297,6 +299,7 @@ function reactComponentDuplicateCandidates(
   });
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function frontendDuplicateCandidates<TPair extends FrontendDuplicatePair>(
   db: ScipDatabase,
   opts: FrontendDuplicateOptions,

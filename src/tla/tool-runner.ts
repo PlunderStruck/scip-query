@@ -28,6 +28,7 @@ export interface TlaToolResult {
   stderr: string;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; these options define the TLC subprocess boundary.
 export interface TlaToolRunOptions {
   projectRoot: string;
   specPath: string;
@@ -128,6 +129,7 @@ export function runTlaTool(opts: TlaToolRunOptions): TlaToolResult {
   };
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function resolveTlaCommand(opts: TlaToolRunOptions, spawn: CommandAvailabilitySpawn): ResolvedCommand {
   const requested = opts.checker;
   if (requested === 'none') {

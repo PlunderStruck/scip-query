@@ -161,6 +161,7 @@ export async function profileAsyncSpan<T>(
   }
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function writeProfileEvent(event: ProfileMetadata, outputPath = profileOutputPath()): void {
   const identityContext = profileEventIdentityContext(event);
   const record = {

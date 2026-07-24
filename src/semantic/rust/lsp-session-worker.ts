@@ -60,6 +60,7 @@ type RustSessionWorkerMessage =
       sharedBuffer: SharedArrayBuffer;
     };
 
+// scip-query: ignore-stale — reviewed S1 owned contract; the worker owns and mutates this session state.
 interface RustAnalyzerSessionState {
   key: string;
   client: RustAnalyzerLspClient;
@@ -112,6 +113,7 @@ parentPort?.on('message', (message: RustSessionWorkerMessage) => {
   queue = queue.then(() => handleMessage(message)).catch(() => undefined);
 });
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 async function handleMessage(message: RustSessionWorkerMessage): Promise<void> {
   if (message.kind === 'shutdown') {
     await shutdownSessions();
@@ -153,6 +155,7 @@ async function handleMessage(message: RustSessionWorkerMessage): Promise<void> {
   }
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; import lookup request decoding and response construction stay together.
 async function runImportDefinitionRequest(
   request: RustImportDefinitionWorkerRequest,
 ): Promise<RustImportDefinitionWorkerResponse> {
@@ -228,6 +231,7 @@ async function runImportDefinitionRequest(
   };
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; session dispatch, readiness, fallback, and response policy stay together.
 async function runSessionRequest(request: RustReferenceWorkerRequest): Promise<RustReferenceWorkerResponse> {
   const requestOptions = { timeoutMs: request.requestTimeoutMs, deadlineMs: request.readinessDeadlineMs };
   const includeReferences = request.includeReferences !== false;
@@ -477,6 +481,7 @@ async function sessionFor(request: RustReferenceWorkerRequest): Promise<RustAnal
   );
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; project selection, readiness, and document opening form one session acquisition.
 async function sessionForPaths(
   projectRoot: string,
   rustAnalyzerBinary: string,
@@ -652,6 +657,7 @@ async function openNewDefinitionDocuments(
   return openedUris.length;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; document discovery, filtering, and ordered LSP opening stay together.
 async function openNewSourceDocuments(
   session: RustAnalyzerSessionState,
   projectRoot: string,

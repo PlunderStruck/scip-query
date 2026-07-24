@@ -1,0 +1,7 @@
+{
+  "id": "SQ9854E2819B04",
+  "check": "doc-reference",
+  "file": "docs/superpowers/specs/2026-07-09-bulk-rust-scip-reference-materialization-design.md",
+  "reason": "Verified after an annotation-only source change: the intentional engine-identity citation remains accurate.",
+  "createdAt": "2026-07-24T02:03:17.754Z"
+}

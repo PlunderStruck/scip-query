@@ -33,6 +33,7 @@ export function rustDefaultImplReferenceMap(
   return result;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; trait resolution and default-implementation reference policy stay together.
 export function rustDefaultImplReferencesForDefinition(
   db: ScipDatabase,
   definition: IndexedDefinition,

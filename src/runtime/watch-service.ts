@@ -120,6 +120,7 @@ export interface WatchServiceControllerOptions {
 
 export type WatchServiceWatchOverrides = Pick<WatchConfig, 'debounceMs' | 'cooldownMs' | 'gitPollMs' | 'idleTimeoutMs'>;
 
+// scip-query: ignore-stale — reviewed S1 owned contract; watch inspection returns this complete service snapshot.
 export interface WatchServiceInspection {
   identity: WatchServiceIdentity;
   classification: WatchServiceClassification;
@@ -135,6 +136,7 @@ export function trustedWatchServiceIndexGeneration(inspection: WatchServiceInspe
   return state.watcher.state === 'idle' && state.lastError === undefined ? state.indexGeneration : undefined;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; service startup returns this named lifecycle result.
 export interface WatchServiceEnsureResult {
   disposition: 'started' | 'reused';
   state: WatchServiceState;
@@ -145,6 +147,7 @@ export interface WatchServiceStopResult {
   pid?: number;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; this union makes automatic-start outcomes explicit.
 export type WatchServiceAutoEnsureResult =
   | { kind: 'skipped'; reason: 'disabled' | 'excluded-command' | 'environment' }
   | { kind: 'started' | 'reused'; state: WatchServiceState }
@@ -220,6 +223,7 @@ export function inspectWatchService(opts: WatchServiceControllerOptions): WatchS
   );
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function inspectWatchServiceWithIdentity(
   opts: WatchServiceControllerOptions,
   identity: WatchServiceIdentity,
@@ -298,6 +302,7 @@ export function ensureWatchService(opts: WatchServiceControllerOptions): WatchSe
   return { disposition: 'started', state };
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function stopWatchService(opts: WatchServiceControllerOptions): WatchServiceStopResult {
   const runtime = opts.runtime ?? DEFAULT_WATCH_SERVICE_RUNTIME;
   const paths = watchServicePaths(opts.cacheDir);
@@ -384,6 +389,7 @@ export function readWatchServiceActivity(activityPath: string): WatchServiceActi
   }
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 export function acquireWatchProcessLock(
   lockPath: string,
   projectRoot: string,

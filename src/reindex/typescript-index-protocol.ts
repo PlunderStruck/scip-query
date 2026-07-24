@@ -39,6 +39,7 @@ export interface TypeScriptIndexDocumentResponse {
   fragments: TypeScriptIndexResponseFragment[];
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; this protocol module defines and validates the service payload.
 export interface TypeScriptIndexServiceStatus {
   protocolVersion: typeof TYPESCRIPT_INDEX_PROTOCOL_VERSION;
   state: 'idle' | 'ready' | 'unavailable' | 'error';
@@ -55,6 +56,7 @@ export interface TypeScriptIndexServiceStatus {
   busyUntil?: string;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; these paths name the index-service mailbox boundary.
 export interface TypeScriptIndexMailboxPaths {
   rootDir: string;
   requestDir: string;

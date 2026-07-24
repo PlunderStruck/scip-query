@@ -183,6 +183,7 @@ function consolidationStrategyForSimilarRow(row: SimilarSymbolResult): string {
   return `Extract the ${row.sharedCallees.length} shared ${evidenceNoun}(s) into a common helper. Keep each function's unique logic outside that helper (${row.uniqueToA.length} item(s) in A, ${row.uniqueToB.length} in B).`;
 }
 
+// scip-query: ignore-extract — reviewed E3 feature-local pipeline; the helper cluster has no separate owner or consumer.
 function compareAgainstFingerprints(
   db: ScipDatabase,
   target: SymbolFingerprint,
@@ -251,6 +252,7 @@ interface PairCosine {
 
 // Exported for direct pure-pipeline testing (trim -> index -> compare)
 // without needing a database fixture.
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 export function comparePair(
   a: SymbolFingerprint,
   b: SymbolFingerprint,
@@ -335,6 +337,7 @@ function cosinePasses(cosine: PairCosine, opts: ComparePairOptions): boolean {
  * Find similar symbols across the entire codebase.
  * Uses TF-IDF weighted similarity to filter out infrastructure noise.
  */
+// scip-query: ignore-extract — reviewed E1 workflow owner; fingerprint indexing, pair scanning, ranking, and profiling stay together.
 export function similarAll(
   db: ScipDatabase,
   opts: {
@@ -1110,6 +1113,7 @@ function isInfrastructureCallee(callee: string): boolean {
   return INFRASTRUCTURE_CALLEE_FRAGMENTS.some((fragment) => callee.includes(fragment));
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; source-shape indexing, comparison, and ranking stay together.
 function similarBySourceShape(
   db: ScipDatabase,
   symbolPattern: string,
@@ -1525,6 +1529,7 @@ function sourceCandidatesFromIndex(target: SourceFingerprint, index: SourceFinge
   return index.corpus.filter((fingerprint) => fingerprint.symbol !== target.symbol);
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function targetPrunedSourceCandidatesForTarget(
   db: ScipDatabase,
   target: SourceFingerprint,
@@ -1631,6 +1636,7 @@ function buildSourceFingerprints(db: ScipDatabase, opts: { scanLimit?: number } 
   return sourceFingerprintsForDefinitions(db, definitions);
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function sourceFingerprintsForDefinitions(
   db: ScipDatabase,
   definitions: readonly IndexedDefinition[],

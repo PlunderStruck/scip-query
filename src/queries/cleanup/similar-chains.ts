@@ -153,6 +153,7 @@ function findSimilarChainPairs(
   return results;
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 function compareFilteredChains(a: FilteredChain, b: FilteredChain, minSimilarity: number): SimilarChainResult | null {
   if (!sharesNode(a.filtered, b.filtered)) return null;
 

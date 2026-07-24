@@ -28,6 +28,7 @@ export function acquireRepositoryCacheLock(
 }
 
 /** Acquires one token-owned process lock without ever unlinking a changed owner record. */
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 export function acquireProcessFileLock(
   lockPath: string,
   opts: { waitMs?: number; pollMs?: number; now?: () => number } = {},

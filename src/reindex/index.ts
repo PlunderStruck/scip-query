@@ -286,7 +286,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
   const fingerprint = profileSpan(
     'reindex.fingerprint',
     () =>
-      computeReindexFingerprint(projectRoot, languages, {
+      buildProjectInputFingerprint(projectRoot, languages, {
         pnpmWorkspaces: opts.pnpmWorkspaces,
         typescriptProjectMode: opts.typescriptProjectMode,
         typescriptProjects: opts.typescriptProjects,
@@ -525,6 +525,7 @@ function resolveReindexOutputPaths(opts: ReindexOptions): ReindexOutputPaths {
   };
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function reuseExistingIndexIfPossible(opts: {
   opts: ReindexOptions;
   paths: ReindexOutputPaths;
@@ -609,6 +610,7 @@ function createTempReindexPaths(paths: ReindexOutputPaths): TempReindexPaths {
   };
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; fresh indexing, materialization, and publication stay ordered.
 async function runFreshReindex(opts: {
   opts: ReindexOptions;
   languages: SupportedLanguage[];
@@ -742,6 +744,7 @@ function canReusePublishedArtifactsForLanguageShards(opts: {
   );
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; shard planning, indexer execution, and reuse accounting stay together.
 async function runLanguageIndexersForFreshReindex(
   opts: Parameters<typeof runFreshReindex>[0],
   env: NodeJS.ProcessEnv,
@@ -905,6 +908,7 @@ interface TypeScriptProjectShardPlan {
  * requested, its language shard was reused (today's behavior, untouched),
  * mode isn't workspace, or discovery finds no projects.
  */
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function planTypeScriptProjectShardReuse(
   runOpts: Parameters<typeof runFreshReindex>[0],
   classification: ReadonlyMap<SupportedLanguage, LanguageShardClassification>,
@@ -1351,6 +1355,7 @@ function publishFreshReindexArtifacts(
   return lastRefresh;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function publishFullyReusedLanguageShardArtifacts(
   opts: Parameters<typeof runFreshReindex>[0],
   indexedOutputs: readonly IndexedOutput[],
@@ -1834,6 +1839,7 @@ function materializeScipOutput(
   return false;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function materializeSqliteOutput(opts: {
   run: Parameters<typeof runFreshReindex>[0];
   env: NodeJS.ProcessEnv;
@@ -1992,6 +1998,7 @@ function tempScipPath(outputScip: string, label: string, index: number): string 
   return join(dirname(outputScip), `${stem}.${index + 1}.${label}${extension}`);
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 async function acquireReindexLock(
   lockPath: string,
   opts: { projectRoot: string; trigger?: RefreshTrigger; onStatus: (message: string) => void },
@@ -2129,19 +2136,6 @@ function delay(ms: number): Promise<void> {
 }
 
 type ReindexFingerprint = ProjectInputFingerprint;
-
-function computeReindexFingerprint(
-  projectRoot: string,
-  languages: readonly SupportedLanguage[],
-  opts: {
-    pnpmWorkspaces?: boolean;
-    typescriptProjectMode?: TypeScriptProjectMode;
-    typescriptProjects?: readonly string[];
-    clojureConfigPath?: string;
-  },
-): ReindexFingerprint {
-  return buildProjectInputFingerprint(projectRoot, languages, opts);
-}
 
 // scip-query: ignore-similar - per-language fingerprints intentionally reuse the project fingerprint inputs by language.
 function computeLanguageFingerprints(

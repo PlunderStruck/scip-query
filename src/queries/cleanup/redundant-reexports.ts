@@ -205,6 +205,7 @@ function sourceBarrelCandidates(db: ScipDatabase, scope?: string): string[] {
   );
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function sourceRedundantReexportsForBarrel(
   db: ScipDatabase,
   index: ProjectIndex,

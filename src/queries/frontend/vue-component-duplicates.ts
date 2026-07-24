@@ -198,6 +198,7 @@ function classifyVueComponentEvidence(parts: {
   });
 }
 
+// scip-query: ignore-similar — reviewed D1 product vocabulary; Vue component guidance must evolve independently.
 function vueComponentRecommendation(evidenceClass: FrontendBehaviorEvidenceClass): string {
   switch (evidenceClass) {
     case 'domain-behavior':

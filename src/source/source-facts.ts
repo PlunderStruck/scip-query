@@ -25,6 +25,7 @@ export type { SourceFacts } from './source-fact-types.js';
 
 export type SourceFactsUnavailableReason = 'parser-unavailable';
 
+// scip-query: ignore-stale — reviewed S1 owned contract; this payload explains unavailable source evidence.
 export interface SourceFactsUnavailable {
   language: AstLanguage;
   reason: SourceFactsUnavailableReason;

@@ -1,0 +1,7 @@
+{
+  "id": "SQFA1298ABEEF4",
+  "check": "co-change-partner",
+  "file": "src/semantic/rust/lsp-session-readiness.ts",
+  "reason": "Accepted annotation-only change: Rust readiness behavior is unchanged; the 34-case readiness suite passed in the 1,416-test full run.",
+  "createdAt": "2026-07-24T02:03:10.949Z"
+}

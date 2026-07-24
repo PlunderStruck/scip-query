@@ -297,6 +297,7 @@ function semanticFileImportEntries(db: ScipDatabase, importer: string): ImportEn
   return null;
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 function sourceFileImportEntries(db: ScipDatabase, importer: string): ImportEntry[] {
   const pythonExports = pythonRuntimeExportNames(importer, getSourceText(db, importer));
   return getSourceImports(db, importer).map((entry) => {

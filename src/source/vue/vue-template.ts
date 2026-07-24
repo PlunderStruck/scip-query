@@ -312,6 +312,7 @@ function walkTemplateChildren(
   }
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 function recordElement(
   element: ElementNode,
   lineOffset: number,

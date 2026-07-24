@@ -28,6 +28,7 @@ import { similarAll } from '../cleanup/similar.js';
 import { staleAbstractions } from '../cleanup/stale-abstractions.js';
 import { stats } from '../navigation/stats.js';
 import { wrapperCandidates } from '../cleanup/wrapper-candidates.js';
+import { shortenSymbol } from '../../symbols/symbol-parser.js';
 
 // Mirror health's large-index budget so baseline runs stay bounded.
 const LARGE_BASELINE_SYMBOL_THRESHOLD = 25_000;
@@ -54,6 +55,31 @@ export interface BaselineComparison {
   current: string[];
   newFindings: string[];
   fixedFindings: string[];
+}
+
+/**
+ * Convert legacy pair findings that embedded full SCIP package identities to
+ * repository-qualified symbol names. Other detector identities, including
+ * architecture findings, pass through unchanged.
+ */
+export function normalizeBaselineFindingIdentity(finding: string): string {
+  if (finding.startsWith('similar:')) {
+    const symbols = finding.slice('similar:'.length).split('|');
+    if (symbols.length !== 2) return finding;
+    return `similar:${symbols.map(shortenSymbol).sort().join('|')}`;
+  }
+
+  if (finding.startsWith('duplicate-bodies:')) {
+    const remainder = finding.slice('duplicate-bodies:'.length);
+    const hashSeparator = remainder.indexOf(':');
+    if (hashSeparator < 0) return finding;
+    const hash = remainder.slice(0, hashSeparator);
+    const symbols = remainder.slice(hashSeparator + 1).split('|');
+    if (symbols.length < 2) return finding;
+    return `duplicate-bodies:${hash}:${symbols.map(shortenSymbol).sort().join('|')}`;
+  }
+
+  return finding;
 }
 
 export function resolveBaselinePath(db: ScipDatabase, path?: string): string {
@@ -133,7 +159,7 @@ export function collectBaselineFindings(db: ScipDatabase, opts: { scope?: string
 
   findings.push(...architectureFindingIdentities(architecture(db, { scope })));
 
-  return [...new Set(findings)].sort();
+  return [...new Set(findings.map(normalizeBaselineFindingIdentity))].sort();
 }
 
 /** Rotate so the lexicographically smallest file leads — stable across runs. */
@@ -166,7 +192,7 @@ export function checkHealthBaseline(
     throw new Error(`No baseline found at ${path}. Create one with: scip-query health --write-baseline`);
   }
   const parsed = JSON.parse(readFileSync(path, 'utf-8')) as HealthBaselineFile;
-  const baseline = new Set(parsed.findings ?? []);
+  const baseline = new Set((parsed.findings ?? []).map(normalizeBaselineFindingIdentity));
   const current = collectBaselineFindings(db, { scope: opts.scope });
   const currentSet = new Set(current);
 
@@ -194,7 +220,9 @@ export function checkArchitectureBaseline(
   }
   const parsed = JSON.parse(readFileSync(path, 'utf-8')) as HealthBaselineFile;
   const baseline = new Set(
-    (parsed.findings ?? []).filter((finding) => finding.startsWith(ARCHITECTURE_BASELINE_PREFIX)),
+    (parsed.findings ?? [])
+      .map(normalizeBaselineFindingIdentity)
+      .filter((finding) => finding.startsWith(ARCHITECTURE_BASELINE_PREFIX)),
   );
   const current = architectureFindingIdentities(architecture(db, { scope: opts.scope }));
   const currentSet = new Set(current);

@@ -232,6 +232,7 @@ type DiffGateFindingDraft = Omit<DiffGateFinding, 'suppressionHint'>;
  *                       a half-wired feature.
  * - baseline:           optional full health-baseline ratchet.
  */
+// scip-query: ignore-extract — reviewed E1 workflow owner; all checks share one comparison base and exit-code policy.
 export function diffGate(
   db: ScipDatabase,
   opts: {
@@ -471,6 +472,7 @@ function recordFinding(result: DiffGateResult, finding: DiffGateFindingDraft): v
   });
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; echo selection, evidence classification, and remediation stay together.
 function runEchoCheck(
   db: ScipDatabase,
   changedSymbols: ReadonlyArray<{ symbol: string; shortName: string; file: string }>,
@@ -728,6 +730,7 @@ function runIncompleteMigrationCheck(
   }
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; history selection, exemptions, and partner findings stay together.
 function runCoChangePartnerCheck(
   db: ScipDatabase,
   changed: ReadonlySet<string>,
@@ -993,6 +996,7 @@ function formatUnixDate(timestampSeconds: number): string {
  */
 const DOC_REFERENCE_HUB_FILE_EXEMPLAR_LIMIT = 3;
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function runDocReferenceCheck(
   db: ScipDatabase,
   changed: ReadonlySet<string>,
@@ -1018,6 +1022,7 @@ function runDocReferenceCheck(
   }
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function buildDocReferenceFindingDraft(
   db: ScipDatabase,
   citation: ReturnType<typeof docsCitingFiles>[number],
@@ -1182,6 +1187,7 @@ function runUnusedParamsCheck(db: ScipDatabase, changedFiles: readonly string[],
   }
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function runNewDeadCheck(
   db: ScipDatabase,
   changedSymbols: ReadonlyArray<{ symbol: string; shortName: string; file: string; fanIn: number }>,

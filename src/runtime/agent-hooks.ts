@@ -48,6 +48,7 @@ export interface ClaudeHookJsonOutput {
   };
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; hook installation returns this named result.
 export interface InstallUserAgentHooksResult {
   installed: string[];
   updated: string[];
@@ -253,6 +254,7 @@ function removeProjectHookTarget(
   });
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 function ensureProjectHookGitExcludes(projectRoot: string, result: InstallUserAgentHooksResult, dryRun = false): void {
   const excludePath = gitInfoExcludePath(projectRoot);
   if (!excludePath) {
@@ -548,6 +550,7 @@ export async function handleAgentHookContext(): Promise<void> {
  * without `docs`, so `isSnapshotDoc` saw an empty `snapshotPaths` list and
  * every snapshot-doc citation surfaced as a live doc-reference finding.
  */
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function runStopHookDiffGate(hookInput: string): DiffGateResult | undefined {
   if (isStopHookReentry(hookInput)) {
     return undefined;
@@ -606,6 +609,7 @@ function formatGateAdvisoryReason(result: DiffGateResult): string {
   );
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export async function renderAgentHookContext(hookInput: string): Promise<unknown | undefined> {
   const payload = parseHookPayload(hookInput);
   const event = hookEventName(payload);

@@ -25,6 +25,7 @@ export interface TypeScriptSemanticMailboxEnvelope {
   request: TypeScriptSemanticRequest;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; this protocol module defines and validates the service payload.
 export interface TypeScriptSemanticServiceStatus {
   protocolVersion: typeof TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION;
   state: 'idle' | 'ready' | 'unavailable' | 'error';
@@ -39,6 +40,7 @@ export interface TypeScriptSemanticServiceStatus {
   projectsCreated: number;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; these paths name the semantic-service mailbox boundary.
 export interface TypeScriptSemanticMailboxPaths {
   rootDir: string;
   requestDir: string;

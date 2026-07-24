@@ -73,6 +73,7 @@ export function healthReportCacheKey(
   };
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function readHealthReportCache(
   db: ScipDatabase,
   key: HealthReportCacheKey,
@@ -99,6 +100,7 @@ export function readHealthReportCache(
   );
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function writeHealthReportCache(
   db: ScipDatabase,
   key: HealthReportCacheKey,

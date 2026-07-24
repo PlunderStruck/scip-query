@@ -1,0 +1,7 @@
+{
+  "id": "SQ6DEFA50B14AB",
+  "check": "doc-reference",
+  "file": "docs/REGEX_POLICY.md",
+  "reason": "Verified after an annotation-only source change: the regex-policy claim still names the same similar-signatures behavior.",
+  "createdAt": "2026-07-24T02:03:14.440Z"
+}

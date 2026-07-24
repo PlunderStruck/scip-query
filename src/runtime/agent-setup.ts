@@ -80,6 +80,7 @@ export interface SetupAgentResult {
   skipped: Array<{ target: string; reason: string }>;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; agent setup removal returns this named result.
 export interface RemoveAgentSetupResult {
   removed: string[];
   unchanged: string[];

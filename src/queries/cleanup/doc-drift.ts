@@ -146,6 +146,7 @@ const PATH_REFERENCE_PATTERN = /([A-Za-z0-9_@-]+(?:\/[A-Za-z0-9_.@-]+)+\.[A-Za-z
  * A stale standards doc is worse than none when agents read it before
  * implementing — they implement to a dead spec.
  */
+// scip-query: ignore-extract — reviewed E3 feature-local pipeline; document intent, citations, history, and ranking form one detector.
 export function docDrift(
   db: ScipDatabase,
   opts: {
@@ -374,6 +375,7 @@ function docDriftActionTier(
   return evidence === 'co-change' ? 'signal' : 'direct';
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function buildDocDriftScanIndex(db: ScipDatabase, historyMode: GitHistoryMode): DocDriftScanIndex | null {
   const git = gitEvidenceProduct(db, { historyMode });
   const history = git.commitHistory();

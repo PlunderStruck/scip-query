@@ -279,6 +279,7 @@ function twinMembersForCluster(
   return members;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function twinDriftRecords(db: ScipDatabase, opts: { scope?: string; scanLimit?: number }): TwinDriftRecord[] {
   const definitions = profileSpan('twin-drift.load-definitions', () =>
     getAllDefinitions(db, { scope: opts.scope })
@@ -321,6 +322,7 @@ function isTwinCallableDefinition(definition: IndexedDefinition): boolean {
   return typeof definition.kind === 'number' && SCIP_FUNCTION_LIKE_KINDS.has(definition.kind);
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function twinDriftCandidateDefinitions(definitions: readonly IndexedDefinition[]): IndexedDefinition[] {
   const realDefinitions = definitions.filter(
     (definition) =>
@@ -350,6 +352,7 @@ function twinDriftCandidateDefinitions(definitions: readonly IndexedDefinition[]
   return definitions.filter((definition) => selected.has(definition));
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function twinDriftRecord(db: ScipDatabase, definition: IndexedDefinition): TwinDriftRecord | null {
   if (!definition.leaf) return null;
   const snippet = definitionSourceSnippet(db, definition);

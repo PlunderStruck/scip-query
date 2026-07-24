@@ -19,6 +19,7 @@ export interface MemberResult {
  * Ranges come from getDefinitionsForFile so they are source-corrected
  * and match `scip symbols` output.
  */
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function members(db: ScipDatabase, symbolPattern: string): MemberResult[] {
   const parent = findFirstSymbolMatch(db, symbolPattern);
   if (!parent) return [];

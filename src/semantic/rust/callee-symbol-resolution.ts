@@ -7,6 +7,7 @@ export function resolveRustCalleeSymbol(db: ScipDatabase, callee: SemanticCallee
   return resolveRustCalleeSymbolFromIndex(createRustCalleeFileIndex(getDefinitionsForFile(db, callee.file)), callee);
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function createRustCalleeSymbolResolver(db: ScipDatabase): (callee: SemanticCallee) => string {
   const indexesByFile = new Map<string, RustCalleeFileIndex>();
   const projectDocuments = loadCalleeResolutionDocumentSet(db);

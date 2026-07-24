@@ -175,6 +175,7 @@ function loadOrBuildReactComponentBehaviorProfiles(
   return profiles;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function buildReactComponentBehaviorProfilesForFileUncached(
   db: ScipDatabase,
   file: string,
@@ -362,6 +363,7 @@ function collectReactCandidates(root: SyntaxNode, language: AstLanguage): ReactC
   return out;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function reactCandidateForNode(node: SyntaxNode): ReactCandidate | null {
   if (node.type === 'class_declaration') {
     const name = callableName(node);
@@ -487,6 +489,7 @@ function collectJsxFacts(root: SyntaxNode): JsxFacts {
   return facts;
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 function recordJsxElement(node: SyntaxNode, facts: JsxFacts): void {
   const tag = jsxTagName(node);
   let componentTag = false;
@@ -581,6 +584,7 @@ interface BehaviorFacts {
   handlerNames: Set<string>;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function collectBehaviorFacts(root: SyntaxNode, language: AstLanguage): BehaviorFacts {
   const facts: BehaviorFacts = {
     tokens: new Set(),

@@ -97,6 +97,7 @@ type DatabaseSchema = 'main' | 'incremental';
  * documents with rows from an official `scip expt-convert` mini database.
  * The accepted database is opened read-only and is never modified.
  */
+// scip-query: ignore-extract — reviewed E1 workflow owner; generation validation, patching, and publication are one transaction.
 export function patchIncrementalSqliteGeneration(
   input: PatchIncrementalSqliteGenerationInput,
 ): IncrementalSqlitePatchResult {

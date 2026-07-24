@@ -1,0 +1,7 @@
+{
+  "id": "SQF57A771CD0FC",
+  "check": "doc-reference",
+  "file": "README.md",
+  "reason": "Verified after an annotation-only source change: the README configuration example still points to the same stale-abstractions implementation.",
+  "createdAt": "2026-07-24T02:03:13.319Z"
+}

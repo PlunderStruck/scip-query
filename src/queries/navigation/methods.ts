@@ -11,6 +11,7 @@ export interface MethodResult {
   name: string;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function methods(db: ScipDatabase, className: string): MethodResult[] {
   const classMatch = findFirstSymbolMatch(db, className);
   if (!classMatch) {

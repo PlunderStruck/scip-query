@@ -131,6 +131,7 @@ function baselineAnalyzerActionTier(analyzer: string): DiffGateActionTier {
   }
 }
 
+// scip-query: ignore-similar — reviewed D1 product policy; baseline acceptance is distinct from echo remediation.
 function baselineRemediation(actionTier: DiffGateActionTier, analyzer: string): string {
   if (actionTier === 'direct') {
     return `Fix the new ${analyzer} baseline finding, or knowingly accept it via health --write-baseline.`;

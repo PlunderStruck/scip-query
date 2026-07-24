@@ -15,6 +15,7 @@ export type TypeScriptSemanticIdentityReason =
   | 'target-outside-project'
   | 'unreadable-input';
 
+// scip-query: ignore-stale — reviewed S1 owned contract; this identity binds semantic evidence to exact project inputs.
 export interface TypeScriptSemanticIdentity {
   version: 1;
   key: string | null;
@@ -39,6 +40,7 @@ export interface TypeScriptSemanticIdentityBuilderInput {
   engineIdentity: string;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; semantic caching depends on this identity-builder boundary.
 export interface TypeScriptSemanticIdentityBuilder {
   identityFor(targetFile: string, schemaVersion: string): TypeScriptSemanticIdentity;
 }
@@ -47,6 +49,7 @@ export function buildTypeScriptSemanticIdentity(input: TypeScriptSemanticIdentit
   return createTypeScriptSemanticIdentityBuilder(input).identityFor(input.targetFile, input.schemaVersion);
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function createTypeScriptSemanticIdentityBuilder(
   input: TypeScriptSemanticIdentityBuilderInput,
 ): TypeScriptSemanticIdentityBuilder {

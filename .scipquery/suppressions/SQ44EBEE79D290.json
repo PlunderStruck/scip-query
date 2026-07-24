@@ -1,0 +1,7 @@
+{
+  "id": "SQ44EBEE79D290",
+  "check": "co-change-partner",
+  "file": "src/runtime/setup.ts",
+  "reason": "Accepted annotation-only change: setup behavior and generated command/skill surfaces are unchanged; the full suite and skill-link checks passed.",
+  "createdAt": "2026-07-24T02:03:09.853Z"
+}

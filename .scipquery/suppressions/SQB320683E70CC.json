@@ -1,0 +1,7 @@
+{
+  "id": "SQB320683E70CC",
+  "check": "doc-reference",
+  "file": "skills/scip-hyper-optimization/SKILL.md",
+  "reason": "Verified after an annotation-only source change: the optimization skill's profiling claim still points to the same instrumentation implementation.",
+  "createdAt": "2026-07-24T02:03:18.872Z"
+}

@@ -92,6 +92,7 @@ const NOISE_FILE_PATTERN =
  * reports that file's co-change partners instead (including structurally
  * linked ones — exploration mode).
  */
+// scip-query: ignore-extract — reviewed E1 workflow owner; history evidence, structural links, ranking, and output stay together.
 export function coChange(
   db: ScipDatabase,
   file?: string,

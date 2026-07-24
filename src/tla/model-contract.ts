@@ -221,6 +221,7 @@ export interface TlaContractLoadResult {
   errors: string[];
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; model parsing constructs this module-facts record.
 export interface TlaModuleFacts {
   path: string;
   modelParse: 'sany' | 'regex-fallback';
@@ -372,6 +373,7 @@ export function dedupeTracePaths(projectRoot: string, paths: readonly string[]):
   return out;
 }
 
+// scip-query: ignore-extract — reviewed E3 feature-local pipeline; the helper cluster has no separate owner or consumer.
 function parseContract(raw: unknown, errors: string[]): TlaModelContract | null {
   if (!isRecord(raw)) {
     errors.push('map file must contain a JSON object');
@@ -507,6 +509,7 @@ function reportCollisions(
   }
 }
 
+// scip-query: ignore-extract — reviewed E3 feature-local pipeline; the helper cluster has no separate owner or consumer.
 function parseVariables(raw: unknown, errors: string[]): Record<string, TlaVariableMapping> {
   if (!isRecord(raw)) {
     errors.push('variables must be an object keyed by TLA+ variable name');

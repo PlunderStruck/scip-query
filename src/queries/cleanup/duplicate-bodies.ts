@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
-import { getSourceLines } from '../../source/source-text.js';
+import { getSourceLines, hasSuppressionCommentCategory } from '../../source/source-text.js';
 import { stripCommentsAndStrings } from '../../source/source-stripper.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { getFileAddRecords } from '../../analysis/git-history.js';
@@ -110,6 +110,12 @@ function duplicateBodyCandidates(
 ): IndexedDefinition[] {
   const definitions = getAllDefinitions(db, { scope: opts.scope })
     .filter((definition) => definition.isFunctionLike && !db.isIgnored(definition.relativePath))
+    // Exact bodies are the strongest form of similarity evidence. Reuse the
+    // existing ignore-similar source decision so accepted parallel product
+    // language is omitted from both duplicate and similarity detectors.
+    .filter(
+      (definition) => !hasSuppressionCommentCategory(db, definition.relativePath, definition.startLine, 'similar'),
+    )
     .filter((definition) => definitionLoc(definition) <= opts.maxLoc);
 
   definitions.sort(
@@ -118,6 +124,7 @@ function duplicateBodyCandidates(
   return applyScanLimit(definitions, opts.scanLimit);
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function duplicateBodyEntry(
   db: ScipDatabase,
   definition: IndexedDefinition,

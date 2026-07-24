@@ -102,6 +102,7 @@ export interface TypeScriptDocumentEmitterStats {
   symbolEntriesPruned: number;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; these options define document-emission policy.
 export interface TypeScriptDocumentEmitterOptions {
   workspaceRoot: string;
   tsconfigPath: string;
@@ -122,6 +123,7 @@ export interface TypeScriptDocumentAdvanceResult {
   stats: TypeScriptDocumentEmitterStats;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; this union makes emitter creation failure explicit.
 export type TypeScriptDocumentEmitterCreation =
   | { available: true; emitter: TypeScriptDocumentEmitter }
   | { available: false; reason: string };

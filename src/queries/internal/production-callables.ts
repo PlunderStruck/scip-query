@@ -15,6 +15,7 @@ import {
 } from '../../symbols/symbol-parser.js';
 import { hasSuppressionComment } from '../../source/source-text.js';
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; callable eligibility is one shared detector policy.
 export function productionCallableDefinitions(
   db: ScipDatabase,
   opts: {

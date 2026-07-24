@@ -110,6 +110,7 @@ export interface FindingOutcomeRow {
  * many checks and long history should not grow without bound. */
 export const FINDING_OUTCOME_LEDGER_CAP_PER_CHECK = 5_000;
 
+// scip-query: ignore-stale — reviewed S1 owned contract; this is the persisted semantic-callee cache row.
 export interface SemanticCalleeCacheEntry {
   relativePath: string;
   symbol: string;

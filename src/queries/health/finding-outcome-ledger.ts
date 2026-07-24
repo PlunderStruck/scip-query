@@ -72,6 +72,7 @@ export function recordFindingOutcomes(
   return [...byKey.values()];
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; the outcome ledger computes this detector precision record.
 export interface DetectorPrecisionStats {
   check: string;
   /** Distinct finding identities ever recorded for this check. */

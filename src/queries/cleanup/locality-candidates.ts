@@ -163,6 +163,7 @@ const DEFAULT_ARCHITECTURAL_BOUNDARY_SEGMENTS = new Set([
   'workflows',
 ]);
 
+// scip-query: ignore-extract — reviewed E3 feature-local pipeline; the helper cluster has no separate owner or consumer.
 export function localityCandidates(db: ScipDatabase, options: LocalityCandidatesOptions = {}): LocalityCandidate[] {
   const limit = positiveInteger(options.limit, DEFAULT_LIMIT);
   const minConsumers = positiveInteger(options.minConsumers, DEFAULT_MIN_CONSUMERS);
@@ -188,6 +189,7 @@ export function localityCandidates(db: ScipDatabase, options: LocalityCandidates
   return candidates.slice(0, limit);
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function resolveTargetSourceUnits(db: ScipDatabase, index: ProjectIndex, target: string): SourceUnitWithDefinition[] {
   const filePath = resolveIndexedFilePath(db, target);
   if (filePath) {
@@ -232,6 +234,7 @@ function scanFileSourceUnits(
   return docs.slice(0, limit).map((path) => fileSourceUnit(path));
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ownership evidence, counterevidence, and ranking form one candidate.
 function buildLocalityCandidate(
   db: ScipDatabase,
   index: ProjectIndex,

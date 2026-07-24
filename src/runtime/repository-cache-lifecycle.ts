@@ -30,6 +30,7 @@ export interface RepositoryCacheSweepPolicy {
   budgetBytes: number;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; cache lifecycle inspection constructs this lease inventory.
 export interface RepositoryCacheLeaseInventory {
   leasePath: string;
   lease: WorktreeCacheLease;
@@ -38,6 +39,7 @@ export interface RepositoryCacheLeaseInventory {
   managed: boolean;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; cache lifecycle inspection constructs this generation inventory.
 export interface RepositoryCacheGenerationInventory {
   generationId: string;
   path: string;
@@ -92,6 +94,7 @@ export interface RepositoryGcState {
   lastResult: RepositoryCacheSweepResult;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; this is the complete shared-cache status payload.
 export interface SharedCacheStatus {
   state: 'managed' | 'bypassed' | 'unavailable';
   reason?: string;
@@ -171,6 +174,7 @@ function protectedGenerationIds(
   return protectedIds;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; lease checks, safety policy, and deletion reporting stay together.
 export function maybeSweepRepositoryCache(
   projectRoot: string,
   cliVersion: string,
@@ -264,6 +268,7 @@ export function maybeSweepRepositoryCache(
   }
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; cache discovery and status derivation form one inspection.
 export function inspectSharedCacheStatus(
   projectRoot: string,
   config: ProjectConfig,
@@ -352,6 +357,7 @@ function databaseFootprint(path: string): number {
   }, 0);
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function buildSweepInventory(
   projectRoot: string,
   repositoryDir: string,

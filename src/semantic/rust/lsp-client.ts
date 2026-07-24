@@ -260,6 +260,7 @@ export class RustAnalyzerLspClient {
     }
   }
 
+  // scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
   private request<T>(method: string, params: unknown, opts: RustAnalyzerRequestOptions = {}): Promise<T> {
     const budget = rustAnalyzerOperationBudget(opts.timeoutMs ?? this.requestTimeoutMs, opts.deadlineMs);
     const id = this.nextId++;
@@ -312,6 +313,7 @@ export class RustAnalyzerLspClient {
     }
   }
 
+  // scip-query: ignore-extract — reviewed E3 feature-local pipeline; the helper cluster has no separate owner or consumer.
   private dispatchMessage(message: LspJsonMessage): void {
     this.recordDiagnosticNotification(message);
     this.recordServerStatusNotification(message);

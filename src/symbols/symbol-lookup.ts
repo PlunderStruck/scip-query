@@ -45,6 +45,7 @@ export function findFirstSymbolMatch(db: ScipDatabase, symbolPattern: string): S
   return resolveSymbol(db, symbolPattern).match;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function resolveSymbol(db: ScipDatabase, symbolPattern: string): SymbolResolution {
   return SYMBOL_RESOLUTION_CACHE.get(db, symbolPattern, () => {
     const exactRows = exactSymbolRows(db, symbolPattern.trim()).filter((row) => !db.isIgnored(row.relative_path));
@@ -76,6 +77,7 @@ function pathQualifiedSymbolRows(db: ScipDatabase, symbolPattern: string): Symbo
   return pathQualifiedCandidates(db, pathLike, leaf, cleaned);
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 function pathQualifiedCandidates(
   db: ScipDatabase,
   pathLike: string,
@@ -113,6 +115,7 @@ function pathQualifiedFallbackRows(db: ScipDatabase, pathLike: string, leaf: str
   });
 }
 
+// scip-query: ignore-extract — reviewed E3 feature-local pipeline; the helper cluster has no separate owner or consumer.
 function fuzzySymbolResolution(db: ScipDatabase, symbolPattern: string): SymbolResolution {
   const cleaned = normalizeLookupPattern(symbolPattern);
   const tokens = lookupTokens(symbolPattern);
@@ -443,6 +446,7 @@ function pathQualifiedDirectScore(row: SymbolQueryRow, cleanedPattern: string): 
   return parentTypeName(row.symbol) === null ? 3 : 2;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function nearestSymbolNames(db: ScipDatabase, symbolPattern: string, limit = 5): string[] {
   const normalized = normalizeNameForDistance(symbolPattern);
   if (!normalized) return [];

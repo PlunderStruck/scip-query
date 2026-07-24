@@ -124,6 +124,7 @@ const REGISTRY_LANGUAGE_BY_SUPPORTED_LANGUAGE: Partial<Record<SupportedLanguage,
   clojure: 'clojure',
 };
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function getProjectReadiness(projectRoot: string, config: ProjectConfig): ProjectReadiness {
   const languages = config.languages ?? detectLanguages(projectRoot);
   const indexers = languages.map((language) => {

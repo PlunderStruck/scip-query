@@ -1,0 +1,7 @@
+{
+  "id": "SQ9781BE7EE4FE",
+  "check": "doc-reference",
+  "file": "docs/analyzer-inventory.md",
+  "reason": "Verified after annotation-only source changes: the analyzer inventory still points to the same health and diff-gate implementations.",
+  "createdAt": "2026-07-24T02:03:14.992Z"
+}

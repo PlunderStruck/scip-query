@@ -15,6 +15,7 @@ export interface CallableParamFact {
   simple: boolean;
 }
 
+// scip-query: ignore-extract — reviewed E3 feature-local pipeline; the helper cluster has no separate owner or consumer.
 export function callableFactForNode(node: SyntaxNode, language: AstLanguage) {
   const named = namedCallableNode(node, language);
   if (named) {

@@ -42,6 +42,7 @@ export interface InstallSkillsResult {
   pruned: string[];
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; skill removal returns this named result.
 export interface UninstallSkillsResult {
   removed: string[];
   left: string[];

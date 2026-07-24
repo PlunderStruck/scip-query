@@ -71,6 +71,7 @@ export interface RustSemanticProviderOptions {
 const DEFAULT_RUST_REFERENCE_TIMEOUT_MS = 15_000;
 const DEFAULT_RUST_REFERENCE_CONCURRENCY = 8;
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; provider capability, worker transport, cache, and fallback policy stay together.
 export function createRustSemanticProvider(
   projectRoot: string,
   opts: RustSemanticProviderOptions = {},
@@ -568,6 +569,7 @@ function resolveCalleesWithWorker(
   };
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; worker request, decoding, and fallback signature resolution stay together.
 function resolveSignaturesWithWorker(
   projectRoot: string,
   status: (projectRoot: string) => RustSemanticStatus,

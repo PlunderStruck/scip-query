@@ -91,6 +91,7 @@ export function vueComposableCandidates(
   });
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function compareVueComposableProfiles(
   a: VueBehaviorPairwiseProfile,
   b: VueBehaviorPairwiseProfile,
@@ -195,6 +196,7 @@ function classifyVueComposableEvidence(parts: {
   });
 }
 
+// scip-query: ignore-similar — reviewed D1 product vocabulary; Vue composable/store guidance must evolve independently.
 function vueComposableRecommendation(evidenceClass: VueComposableEvidenceClass): string {
   switch (evidenceClass) {
     case 'domain-behavior':

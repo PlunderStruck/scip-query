@@ -12,6 +12,7 @@ export interface RustSourceImportUsageFacts {
   positions: RustImportDefinitionPosition[];
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; import analysis depends on this resolver boundary.
 export interface RustSourceImportUsageResolver {
   importUsageFacts(file: string): RustSourceImportUsageFacts;
 }

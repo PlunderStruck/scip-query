@@ -35,6 +35,12 @@ describe('duplicate bodies', () => {
         "  return input.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');",
         '}',
       ],
+      'src/d.ts': [
+        '// scip-query: ignore-similar — intentionally separate public vocabulary.',
+        'export function escapeLiteral(value: string) {',
+        "  return value.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');",
+        '}',
+      ],
     });
 
     const dbPath = join(tempDir, 'index.db');
@@ -42,12 +48,15 @@ describe('duplicate bodies', () => {
       .document(1, 'typescript', 'src/a.ts')
       .document(2, 'typescript', 'src/b.ts')
       .document(3, 'typescript', 'src/c.ts')
+      .document(4, 'typescript', 'src/d.ts')
       .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`a.ts`/escapeRegex().', 'escapeRegex', 12)
       .symbol(2, 'scip-typescript npm fixture 1.0.0 src/`b.ts`/escapeRegExp().', 'escapeRegExp', 12)
       .symbol(3, 'scip-typescript npm fixture 1.0.0 src/`c.ts`/escapePattern().', 'escapePattern', 12)
+      .symbol(4, 'scip-typescript npm fixture 1.0.0 src/`d.ts`/escapeLiteral().', 'escapeLiteral', 12)
       .definition(1, 1, 1, 0, 0, 2, 1)
       .definition(2, 2, 2, 0, 0, 3, 1)
       .definition(3, 3, 3, 0, 0, 2, 1)
+      .definition(4, 4, 4, 1, 0, 3, 1)
       .write();
 
     db = new ScipDatabase({ dbPath, projectRoot });

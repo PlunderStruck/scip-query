@@ -131,6 +131,7 @@ export function diffImpactPlan(db: ScipDatabase, opts: { base?: string } = {}): 
   }
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; partial diff attribution and affected-consumer assembly stay together.
 export function diffImpactPartial(
   db: ScipDatabase,
   filesToAnalyze: readonly string[],
@@ -589,6 +590,7 @@ function definitionTouchesChangedRange(
   );
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 export function attributeResidue(
   definitions: readonly IndexedDefinition[],
   changedRanges: readonly ChangedLineRange[],
@@ -639,6 +641,7 @@ export function attributeResidue(
   return { definitions: [...out.values()], notes };
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 function attributeChangedRangeResidue(
   db: ScipDatabase,
   definitions: readonly IndexedDefinition[],

@@ -59,6 +59,7 @@ export function referenceSitesForSymbol(
   }));
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 export function referenceEvidenceForSymbol(
   db: ScipDatabase,
   symbol: SymbolLocation,

@@ -1,0 +1,7 @@
+{
+  "id": "SQ814505E3948D",
+  "check": "doc-reference",
+  "file": "docs/COMMAND_REFERENCE.md",
+  "reason": "Verified after an annotation-only source change: the command guide still points to the same co-change implementation and command surface.",
+  "createdAt": "2026-07-24T02:03:13.884Z"
+}

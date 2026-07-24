@@ -1,0 +1,7 @@
+{
+  "id": "SQ8591A117DAD9",
+  "check": "doc-reference",
+  "file": "docs/architecture/scip-query-target-architecture.md",
+  "reason": "Verified after source annotations and a private facade inline: the architecture examples still point to the intended owner files and contracts.",
+  "createdAt": "2026-07-24T02:03:17.207Z"
+}

@@ -74,6 +74,7 @@ export interface MaterializeTypeScriptIncrementalInput {
   onStatus: (message: string) => void;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; this names the materialized incremental-index result.
 export interface MaterializedTypeScriptIncrementalIndex {
   scipPath: string;
   candidateScipPath: string;

@@ -40,6 +40,7 @@ interface CandidateAnalysis<TCandidate, TContext, TResult> {
  * bounded scan budget, prepare bulk evidence once, score candidates, sort, and
  * return the report slice.
  */
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function runCandidateAnalysis<TCandidate, TContext = undefined, TResult = never>(
   opts: CandidateAnalysis<TCandidate, TContext, TResult>,
 ): TResult[] {

@@ -138,6 +138,7 @@ export interface HealthSemanticPrewarmResult {
   error?: string;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; this interface is the injectable semantic-prewarm boundary.
 export interface HealthSemanticPrewarmRuntime {
   env?: NodeJS.ProcessEnv;
   projectFingerprint(db: ScipDatabase): string | null;
@@ -166,6 +167,7 @@ export function renderHeuristicNotice(label: string): void {
   console.log(`Heuristic ${label}: review before acting; these are candidates, not exact compiler facts.\n`);
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; this names the user-facing analysis-budget disclosure.
 export interface AnalysisBudgetDisclosure {
   scanLimit: number;
   semanticEnrichment: boolean;
@@ -267,6 +269,7 @@ export function prewarmHealthSemanticEvidence(
   );
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; capability checks, prewarm execution, and disclosure stay together.
 function runHealthSemanticPrewarm(
   db: ScipDatabase,
   opts: HealthCliOptions,
@@ -403,6 +406,7 @@ function healthSemanticPrewarmProfileMetadata(result: HealthSemanticPrewarmResul
   };
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export async function runIsolatedHealthReport(opts: HealthCliOptions): Promise<HealthReport> {
   const phaseTimeoutMs = healthPhaseTimeoutMs(opts);
   const cacheOptions = { ...opts, phaseTimeoutMs: phaseTimeoutMs ?? null };
@@ -779,6 +783,7 @@ function renderHealthAxes(report: HealthReport): void {
   }
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export async function runIsolatedDiffImpactReport(opts: DiffImpactCliOptions): Promise<DiffImpactResult> {
   const plan = withDb((db) => {
     const plan = queries.diffImpactPlan(db, { base: opts.base });

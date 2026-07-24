@@ -8,6 +8,7 @@ import {
 
 export type RustAnalyzerReadinessWorkerErrorEnvelope = { ok: false; error: string };
 
+// scip-query: ignore-stale — reviewed S1 owned contract; readiness probing depends on this client boundary.
 export interface RustAnalyzerReadinessClient {
   serverStatusGeneration(): number;
   serverStatusSnapshot(): RustAnalyzerServerStatusSnapshot | null;
@@ -68,6 +69,7 @@ export async function waitForRustAnalyzerInitialPostOpenReadiness(
   return postOpenStatus ?? initialStatus;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export async function waitForRustAnalyzerPostOpenReadiness(
   client: RustAnalyzerReadinessClient,
   checkpoint: RustAnalyzerServerStatusSnapshot | null,

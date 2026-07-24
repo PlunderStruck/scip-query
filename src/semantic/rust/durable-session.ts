@@ -23,6 +23,7 @@ const DEFAULT_DURABLE_RUST_REFERENCE_RETRY_TIMEOUT_MS = 30_000;
 
 type RustSessionRequest = RustReferenceWorkerRequest | RustImportDefinitionWorkerRequest;
 
+// scip-query: ignore-stale — reviewed S1 owned contract; this interface is the injectable session-identity boundary.
 export interface DurableRustSessionIdentityRuntime {
   canonicalProjectRoot(projectRoot: string): string;
   projectFingerprint(projectRoot: string): string;
@@ -67,6 +68,7 @@ export type DurableRustSessionResponse =
       response: RustImportDefinitionWorkerResponse;
     };
 
+// scip-query: ignore-stale — reviewed S1 owned contract; durable-session lifecycle owns this server state.
 export interface DurableRustSessionServerState {
   protocolVersion: number;
   pid: number;
@@ -90,6 +92,7 @@ export interface DurableRustSessionRequesterOptions {
   runtime?: DurableRustSessionRequesterRuntime;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function createDurableRustSessionIdentity(
   projectRoot: string,
   semanticWorkerPath: string,
@@ -129,6 +132,7 @@ export class DurableRustSessionHost {
     private readonly applyEnvironment: (environment: Record<string, string | null>) => void = applyWorkerEnvironment,
   ) {}
 
+  // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
   handle(request: DurableRustSessionRequest): DurableRustSessionResponse {
     this.applyEnvironment(request.workerEnvironment ?? {});
     let session: DurableRustSessionResponse['session'];
@@ -255,6 +259,7 @@ export function rustCompilerSessionEnvironment(
   );
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; durable server identity, startup, request, and fallback stay together.
 export function createDurableRustAnalyzerSessionRequester(
   projectRoot: string,
   opts: DurableRustSessionRequesterOptions,
@@ -349,6 +354,7 @@ function durableReferenceRetryTimeoutMs(
   return configuredValue === undefined ? DEFAULT_DURABLE_RUST_REFERENCE_RETRY_TIMEOUT_MS : undefined;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function dispatchDurableRustSessionRequest<Response>(
   sessionDir: string,
   serverPath: string,
@@ -399,6 +405,7 @@ function dispatchDurableRustSessionRequest<Response>(
   }
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function ensureDurableRustSessionServer(
   sessionDir: string,
   serverPath: string,

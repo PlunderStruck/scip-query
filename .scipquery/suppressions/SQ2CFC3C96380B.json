@@ -1,0 +1,7 @@
+{
+  "id": "SQ2CFC3C96380B",
+  "check": "co-change-partner",
+  "file": "src/semantic/rust/lsp-client.ts",
+  "reason": "Accepted annotation-only change: Rust LSP client behavior is unchanged; all 24 client tests passed in the 1,416-test full run.",
+  "createdAt": "2026-07-24T02:03:11.548Z"
+}

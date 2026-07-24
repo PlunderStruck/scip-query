@@ -70,6 +70,7 @@ export function byKind(
 }
 
 /** List all symbol kinds present in the index with counts */
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 export function kindCounts(
   db: ScipDatabase,
   opts: { scope?: string } = {},

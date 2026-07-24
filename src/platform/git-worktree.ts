@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 
+// scip-query: ignore-stale — reviewed S1 owned contract; worktree resolution uses this injectable Git boundary.
 export interface GitReader {
   run(projectRoot: string, args: readonly string[]): string | undefined;
   runResult(projectRoot: string, args: readonly string[]): GitCommandResult;
@@ -141,6 +142,7 @@ function resolveGitWorktreeContextIndividually(projectRoot: string, git: GitRead
   };
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function resolveGitWorktreeIdentity(
   projectRoot: string,
   git: GitReader = DEFAULT_GIT_READER,

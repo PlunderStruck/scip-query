@@ -63,6 +63,7 @@ interface TlaVerifyResult {
   exitCode: number;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 const handleTla: CommandHandler = async (...rawArgs: unknown[]) => {
   const { args, opts } = splitCommanderActionArgs(rawArgs);
   const operation = stringArg(args, 0);
@@ -306,6 +307,7 @@ function resolveMapArgForVerify(
   return { mapArg: defaultMapArg };
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; model resolution, verification, and CLI rendering stay together.
 function runTlaVerify(db: ScipDatabase, args: readonly unknown[], opts: CommandOptions, specArg: string): void {
   const projectRoot = db.config.projectRoot;
   const specPath = resolveProjectPath(projectRoot, specArg);

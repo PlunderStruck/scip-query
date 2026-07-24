@@ -69,6 +69,7 @@ export function similarSignatures(
   return limit ? results.slice(0, limit) : results;
 }
 
+// scip-query: ignore-similar — reviewed M1 detector semantics; signature comparison only shares definition-query scaffolding.
 function similarSignatureCandidates(
   db: ScipDatabase,
   opts: { scope?: string; minLoc: number; scanLimit?: number },
@@ -93,6 +94,7 @@ function isSimilarSignatureCallable(definition: IndexedDefinition): boolean {
   return definition.kind === null || SCIP_FUNCTION_LIKE_KINDS.has(definition.kind);
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 function groupDefinitionsBySignature(
   db: ScipDatabase,
   definitions: readonly IndexedDefinition[],

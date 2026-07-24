@@ -64,6 +64,7 @@ export interface SqlitePublicationRecord {
   fallbackReason?: string;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; this union names every generation-inspection outcome.
 export type SqliteGenerationInspection =
   | { state: 'legacy'; statePath: string }
   | { state: 'invalid'; statePath: string; reason: string }
@@ -85,6 +86,7 @@ export interface PromoteReindexArtifactsResult {
  * Retains the accepted database, then changes the stable artifact paths in a
  * fixed order. Each database path always names one complete SQLite file.
  */
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 export function promoteReindexArtifacts(input: PromoteReindexArtifactsInput): PromoteReindexArtifactsResult {
   const generationRoot = sqliteGenerationRoot(input.outputDb);
   const previousGeneration = retainPreviousGeneration(input, generationRoot);
@@ -132,6 +134,7 @@ export function readSqliteGenerationState(outputDb: string): SqliteGenerationSta
 }
 
 /** Refreshes the generation identity after metadata-only publication. */
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 export function refreshSqliteGenerationMetadata(
   outputDb: string,
   metaPath: string,

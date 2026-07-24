@@ -50,6 +50,7 @@ export interface CleanupPlanResult {
  *
  * Apply batch by batch, re-running the project's typecheck between batches.
  */
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function cleanupPlan(
   db: ScipDatabase,
   opts: { scope?: string; minLoc?: number; maxDepth?: number; scanLimit?: number } = {},

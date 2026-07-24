@@ -30,6 +30,7 @@ export interface TraceSpecGeneration {
 }
 
 /** Per-mapped-action step count for a trace (P5.6 / followup #15). */
+// scip-query: ignore-stale — reviewed S1 owned contract; trace checking computes this action-coverage record.
 export interface TraceActionCoverage {
   action: string;
   stepsObserved: number;
@@ -162,6 +163,7 @@ export function generateTraceSpec(
   return { moduleName, moduleText, cfgText, variables, skippedVariables, states: states.length, warnings };
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; model loading, action matching, coverage, and divergence stay together.
 export function runTraceCheck(opts: {
   specPath: string;
   baseModuleName: string;

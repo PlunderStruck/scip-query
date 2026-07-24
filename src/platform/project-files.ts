@@ -15,6 +15,7 @@ export interface ProjectInputFingerprint {
   files: ProjectFileFingerprint[];
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; these options define project-input fingerprint policy.
 export interface ProjectInputFingerprintOptions {
   pnpmWorkspaces?: boolean;
   typescriptProjectMode?: TypeScriptProjectMode;

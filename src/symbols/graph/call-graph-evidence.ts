@@ -21,6 +21,7 @@ import type { SymbolSemanticEvidencePort } from '../semantic-evidence-port.js';
 export type CalleeEvidenceSource = 'ast-callsite' | 'semantic-callee' | 'scip-chunk';
 export type CallerEvidenceSource = 'caller-map-inversion' | 'resolved-reference' | 'semantic-reference';
 
+// scip-query: ignore-stale — reviewed S1 owned contract; graph construction materializes this callee evidence row.
 export interface CalleeRow {
   symbol: string;
   file: string;

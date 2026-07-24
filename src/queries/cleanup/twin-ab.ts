@@ -83,6 +83,7 @@ export function twinAb(db: ScipDatabase, refA: string, refB: string, outFile: st
   return { ok: true, a: a.symbol, b: b.symbol, signatureCompatible, testSource };
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function resolveTwinAbSymbol(db: ScipDatabase, ref: string): { ok: true; symbol: TwinAbSymbol } | TwinAbRefusal {
   const resolution = resolveSymbol(db, ref);
   const match = resolution.match;

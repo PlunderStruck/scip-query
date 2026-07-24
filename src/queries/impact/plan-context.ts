@@ -64,6 +64,7 @@ export interface PlanContextResult {
   warnings: string[];
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; target resolution, evidence gathering, and plan rendering stay together.
 export function planContext(db: ScipDatabase, target: string, opts: PlanContextOptions = {}): PlanContextResult {
   const impactDepth = opts.impactDepth ?? 3;
   const sliceDepth = opts.sliceDepth ?? 3;

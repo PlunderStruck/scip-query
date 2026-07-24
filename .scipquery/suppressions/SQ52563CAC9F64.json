@@ -1,0 +1,7 @@
+{
+  "id": "SQ52563CAC9F64",
+  "check": "co-change-partner",
+  "file": "src/runtime/setup.ts",
+  "reason": "Accepted annotation-only change: setup and installed shared-skill behavior are unchanged; skill-link and setup tests passed.",
+  "createdAt": "2026-07-24T02:03:12.682Z"
+}

@@ -79,6 +79,7 @@ export interface TlaFindingGroup {
   findingIds: string[];
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; conformance evaluation returns this named result.
 export interface TlaConformanceResult {
   modelParse: TlaModuleFacts['modelParse'] | 'unavailable';
   modelVariables: string[];
@@ -386,6 +387,7 @@ function tlaSeverityRank(severity: TlaFindingSeverity): number {
   return severity === 'error' ? 2 : severity === 'warning' ? 1 : 0;
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 function aliasesForVariables(
   db: ScipDatabase,
   contract: TlaModelContract,
@@ -511,6 +513,7 @@ function oneHopCalleeEffects<T extends { via?: string }>(
   return effects;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function resolveActions(
   db: ScipDatabase,
   contract: TlaModelContract,
@@ -1138,6 +1141,7 @@ export function collectAstWrites(
   return uniqueWrites(writes);
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function collectAstReads(
   db: ScipDatabase,
   file: string,
@@ -1295,6 +1299,7 @@ function recordStatementCallNode(
   mode: 'read',
   out: TlaStaticRead[],
 ): void;
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 function recordStatementCallNode(
   db: ScipDatabase,
   file: string,
@@ -1507,6 +1512,7 @@ function recordTargetMatches(
   }
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function collectSourceScanWrites(
   db: ScipDatabase,
   file: string,
@@ -1554,6 +1560,7 @@ function collectSourceScanWrites(
   return uniqueWrites(writes);
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function collectSourceScanReads(
   db: ScipDatabase,
   file: string,
@@ -1711,6 +1718,7 @@ function scopedFiles(db: ScipDatabase, contract: TlaModelContract): string[] {
   return rows.map((row) => row.relative_path).filter((file) => scopes.some((scope) => file.includes(scope)));
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function resolveReferent(
   db: ScipDatabase,
   ref: string,

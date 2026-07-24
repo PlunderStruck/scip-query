@@ -37,6 +37,7 @@ export interface ComplexityHotspot {
  * replaces the previous per-symbol getCaller/CalleeRowsForSymbol calls
  * that were O(symbols × files) on large indexes.
  */
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function complexityHotspots(
   db: ScipDatabase,
   opts?: { scope?: string; minLoc?: number; limit?: number; scanLimit?: number; semantic?: boolean },

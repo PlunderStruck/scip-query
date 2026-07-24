@@ -600,6 +600,7 @@ function filesKey(files: ReadonlySet<string>): string {
   return [...files].sort().join('\x00');
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; pair counting, confidence, recency, and context define one result.
 function coChangePairsFromHistory(
   history: CommitHistory,
   opts: GitCoChangeOptions,
@@ -694,6 +695,7 @@ function coChangePairsFromHistory(
   return pairs;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function loadFocusedCommitHistory(
   projectRoot: string,
   head: string,

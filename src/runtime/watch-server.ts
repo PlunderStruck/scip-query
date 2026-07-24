@@ -49,6 +49,7 @@ export function startupRefreshTrigger(state: IndexFreshnessState): RefreshTrigge
   return state === 'fresh' ? null : { kind: 'watch-startup', detail: `index ${state} when watch service started` };
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; watcher lifecycle, refresh ordering, and failure recovery stay together.
 export async function runWatchServiceServer(
   projectRootInput: string,
   cliVersion: string,

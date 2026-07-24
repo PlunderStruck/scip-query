@@ -1,0 +1,7 @@
+{
+  "id": "SQ096CE29FEB6A",
+  "check": "co-change-partner",
+  "file": "src/semantic/rust/lsp-session-worker.ts",
+  "reason": "Accepted annotation-only change: the session worker lifecycle is unchanged; Rust readiness/session tests passed in the 1,416-test full run.",
+  "createdAt": "2026-07-24T02:03:12.108Z"
+}

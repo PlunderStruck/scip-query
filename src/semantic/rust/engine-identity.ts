@@ -4,6 +4,7 @@ import { getRustSemanticStatus } from './status.js';
 
 const VERSION_CACHE = new Map<string, string>();
 
+// scip-query: ignore-stale — reviewed S1 owned contract; this identity binds cached evidence to one compiler engine.
 export interface RustCompilerEngineIdentity {
   engine: 'rust-analyzer';
   resolvedBinary: string | null;

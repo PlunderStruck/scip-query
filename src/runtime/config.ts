@@ -650,6 +650,7 @@ export function initProjectConfig(projectRoot: string, languages: string[]): str
   return configPath;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; config persistence returns this named refresh result.
 export interface ProjectAutomaticRefreshConfigResult {
   configPath: string;
   config: ProjectConfig;

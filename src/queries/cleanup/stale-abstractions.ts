@@ -168,6 +168,7 @@ export function staleAbstractions(
   });
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function staleTypeCandidates(
   db: ScipDatabase,
   index: ProjectIndex,
@@ -378,6 +379,7 @@ function classifyStaleAction(
   };
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 function getSingletonBackedClassIds(
   db: ScipDatabase,
   index: ProjectIndex,

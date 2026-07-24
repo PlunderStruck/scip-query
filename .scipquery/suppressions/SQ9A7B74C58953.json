@@ -1,0 +1,7 @@
+{
+  "id": "SQ9A7B74C58953",
+  "check": "doc-reference",
+  "file": "docs/superpowers/specs/2026-07-09-semantic-prewarm-definition-bulk-load-design.md",
+  "reason": "Verified after an annotation-only source change: the semantic-prewarm guide still points to the same CLI support implementation.",
+  "createdAt": "2026-07-24T02:03:18.341Z"
+}

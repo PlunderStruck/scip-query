@@ -44,6 +44,7 @@ export interface TypeScriptSemanticRequesterOptions {
   runtime?: TypeScriptSemanticRequesterRuntime;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function createServiceBackedTypeScriptProvider(
   db: ScipDatabase,
   relativePath?: string,

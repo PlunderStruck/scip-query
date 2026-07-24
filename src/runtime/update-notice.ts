@@ -22,6 +22,7 @@ export interface UpdateNoticeOptions {
   writeNotice?: (message: string) => void;
 }
 
+// scip-query: ignore-extract — reviewed E3 feature-local pipeline; the helper cluster has no separate owner or consumer.
 export async function maybePrintUpdateNotice(opts: UpdateNoticeOptions = {}): Promise<void> {
   const env = opts.env ?? process.env;
   if (env['SCIP_QUERY_UPDATE_CHECK'] === '0' || env['NO_UPDATE_NOTIFIER']) return;

@@ -73,6 +73,7 @@ interface SignatureTaskResult {
   signature: string | null;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; batch setup, request execution, retry, and result assembly stay together.
 export async function runRustAnalyzerReferenceBatch(
   request: RustReferenceWorkerRequest,
 ): Promise<RustReferenceWorkerResponse> {
@@ -427,6 +428,7 @@ function isRustAnalyzerRequestTimeout(error: unknown): boolean {
   return message.includes('rust-analyzer LSP request') && message.includes('timed out after');
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 export async function calleesForDefinition(
   client: RustAnalyzerLspClient,
   projectRoot: string,

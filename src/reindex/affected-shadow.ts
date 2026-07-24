@@ -14,6 +14,7 @@ export const GLOBAL_FACTS_UNIT = '<global-symbols>';
 
 export type DocumentFactValue = string | number | null;
 
+// scip-query: ignore-stale — reviewed S1 owned contract; the shadow evaluator constructs and validates this document fact.
 export interface DocumentFactRecord {
   relativePath: string;
   kind: 'document' | 'chunk' | 'definition' | 'mention' | 'global-symbol';
@@ -54,6 +55,7 @@ interface AffectedSetShadowRecordBase {
   durationMs: number;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; this record is the persisted evaluated shadow result.
 export interface EvaluatedAffectedSetShadowRecord extends AffectedSetShadowRecordBase {
   status: 'evaluated';
   manifest: ProjectChangeManifest;
@@ -82,6 +84,7 @@ export type AffectedSetShadowStatusUnavailableReason =
   | 'telemetry-malformed'
   | 'unsupported-record-version';
 
+// scip-query: ignore-stale — reviewed S1 owned contract; the status union makes every shadow-read state explicit.
 export type AffectedSetShadowStatus =
   | {
       state: 'passing' | 'failing';
@@ -109,10 +112,12 @@ export type AffectedSetShadowStatus =
       error?: string;
     };
 
+// scip-query: ignore-stale — reviewed S1 owned contract; shadow evaluation owns this narrowed database boundary.
 export interface AffectedShadowDatabase extends DocumentFactQuery {
   close(): void;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; this interface is the injectable shadow-runtime boundary.
 export interface AffectedSetShadowRuntime {
   now(): number;
   databaseExists(path: string): boolean;
@@ -363,6 +368,7 @@ export function evaluateAffectedSetShadow(
   };
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function collectAffectedSetShadowRecord(
   options: CollectAffectedSetShadowOptions,
   runtime: AffectedSetShadowRuntime = defaultAffectedSetShadowRuntime,
@@ -448,6 +454,7 @@ export function affectedSetShadowPaths(outputDb: string): AffectedSetShadowPaths
   };
 }
 
+// scip-query: ignore-extract — reviewed E3 feature-local pipeline; validation and telemetry classify one shadow-status read.
 export function readAffectedSetShadowStatus(
   outputDb: string,
   readFile: (path: string) => string = (path) => readFileSync(path, 'utf-8'),

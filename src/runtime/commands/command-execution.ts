@@ -274,6 +274,7 @@ function renderRows<Row, Ctx extends DbCommandContext>(
   });
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function runCommandOutput<Output, Ctx extends DbCommandContext>(ctx: Ctx, spec: CommandOutputSpec<Output, Ctx>): void {
   const output = spec.query(ctx);
   if (booleanOptionValue(ctx.opts, 'json')) {

@@ -67,6 +67,7 @@ export function coupling(db: ScipDatabase, file1: string, file2: string): Coupli
 /**
  * Find the most coupled file pairs in the codebase.
  */
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 export function topCoupling(db: ScipDatabase, opts: { limit?: number; scope?: string } = {}): CouplingResult[] {
   const { limit = 20, scope } = opts;
   const scopeFilter = scope ? `AND def_d.relative_path LIKE ? AND ref_d.relative_path LIKE ?` : '';

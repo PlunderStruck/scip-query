@@ -41,6 +41,7 @@ export const symbolSemanticEvidence: SymbolSemanticEvidencePort = {
  * dependency key. Results are only written when the provider is available, so
  * "provider missing" is never frozen into the cache as an empty result.
  */
+// scip-query: ignore-extract — reviewed E1 workflow owner; provider batching, durable cache writes, and fallback stay together.
 export function materializeSemanticCalleeCache(
   db: ScipDatabase,
   definitions: ReadonlyArray<IndexedDefinition | SymbolMatch>,

@@ -105,6 +105,7 @@ export function partitionDefinitionConsumers(
   return classifyDefinitionConsumers(db, definition, consumerFiles).partition;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function buildDefinitionConsumerEvidence(
   db: ScipDatabase,
   index: ProjectIndex,
@@ -492,6 +493,7 @@ const NATIVE_CONSUMER_CLASSIFY_TIMEOUT_MS = 5_000;
 const NATIVE_CONSUMER_CLASSIFY_MAX_BUFFER = 64 * 1024 * 1024;
 let cachedNativeKernelBinary: string | null | undefined;
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 function classifyDefinitionConsumersNative(
   db: ScipDatabase,
   definitions: readonly IndexedDefinition[],
@@ -540,6 +542,7 @@ function classifyDefinitionConsumersNative(
   }
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function nativeConsumerClassifyPayload(
   db: ScipDatabase,
   definitions: readonly IndexedDefinition[],

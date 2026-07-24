@@ -218,6 +218,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
     });
   }
 
+  // scip-query: ignore-extract — reviewed E1 workflow owner; cache hits, exact scans, fallback scans, and publication stay together.
   referencesForDefinitions(
     definitions: readonly IndexedDefinition[],
     opts: { exact?: boolean } = {},
@@ -306,6 +307,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
     return referenceFragmentsFromDefinitionMap(definitions, references, availableFiles);
   }
 
+  // scip-query: ignore-extract — reviewed E1 workflow owner; compiler-symbol discovery and reference attribution stay together.
   private referencesForDefinitionsBySymbolScan(
     definitions: readonly IndexedDefinition[],
     originFiles?: readonly string[],
@@ -381,6 +383,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
     return result;
   }
 
+  // scip-query: ignore-extract — reviewed E3 feature-local pipeline; compiler traversal and attribution are one scan stage.
   private addReferencesFromSourceFileScan(
     sourceFile: SourceFile,
     relativePath: string,
@@ -500,6 +503,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
     return symbols;
   }
 
+  // scip-query: ignore-extract — reviewed E3 feature-local pipeline; the helper cluster has no separate owner or consumer.
   private addHierarchyMemberReferences(
     definitions: readonly IndexedDefinition[],
     result: Map<number, SemanticReference[]>,
@@ -744,6 +748,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
     });
   }
 
+  // scip-query: ignore-extract — reviewed E1 workflow owner; import classification and compiler-reference resolution stay together.
   private importUsageForSourceFile(
     importer: string,
     sourceFile: SourceFile,
@@ -1157,6 +1162,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
     );
   }
 
+  // scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
   private semanticCalleeForCallNode(
     checker: TypeScriptTypeChecker,
     sourceFile: ts.SourceFile,

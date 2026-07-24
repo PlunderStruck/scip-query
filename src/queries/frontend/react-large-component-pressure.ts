@@ -69,6 +69,7 @@ export function reactLargeComponentPressure(
     .slice(0, limit);
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 function reactPressureResult(
   profile: ReactComponentBehaviorProfile,
   thresholds: {

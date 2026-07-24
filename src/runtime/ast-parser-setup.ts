@@ -21,6 +21,7 @@ const GRAMMAR_PACKAGES: Partial<Record<SupportedLanguage, { ast: AstLanguage; pa
   php: { ast: 'php', packages: ['tree-sitter-php'] },
 };
 
+// scip-query: ignore-stale — reviewed S1 owned contract; parser setup returns this named result.
 export interface AstParserSetupResult {
   supportedLanguages: SupportedLanguage[];
   availableBefore: SupportedLanguage[];
@@ -55,6 +56,7 @@ export function astParserLanguages(languages: readonly SupportedLanguage[]): Sup
   return [...new Set(languages.filter((language) => GRAMMAR_PACKAGES[language] !== undefined))].sort();
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function setupAstParsers(
   languages: readonly SupportedLanguage[],
   opts: { packageRoot?: string; runtime?: AstParserSetupRuntime } = {},

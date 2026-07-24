@@ -11,6 +11,7 @@ export function shouldUseVueWorkers(vueFiles: readonly string[]): boolean {
   return vueFiles.length >= 8 && resolveVueWorkerCount(vueFiles.length) > 1;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function awaitVueReferenceWorkers(opts: {
   projectRoot: string;
   dbPath: string;

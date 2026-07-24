@@ -32,6 +32,7 @@ export interface UnusedParamsFinding {
  * - Externally-live (package surface / entryRoots) symbols are skipped —
  *   their signatures are API.
  */
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function unusedParams(
   db: ScipDatabase,
   opts: { scope?: string; limit?: number; scanLimit?: number; files?: readonly string[] } = {},

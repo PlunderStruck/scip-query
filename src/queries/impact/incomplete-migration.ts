@@ -87,6 +87,7 @@ const MAX_LEFTOVERS_PER_HELPER = 5;
  * Helpers with fewer than `minCallees` meaningful callees are skipped (and
  * reported as skipped): callee evidence is too thin to score tiny wrappers.
  */
+// scip-query: ignore-extract — reviewed E1 workflow owner; diff discovery, echo evidence, and migration classification stay together.
 export function incompleteMigration(
   db: ScipDatabase,
   opts: {

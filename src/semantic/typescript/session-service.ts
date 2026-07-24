@@ -54,6 +54,7 @@ export class TypeScriptSemanticServiceHost {
     this.now = opts.now ?? Date.now;
   }
 
+  // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
   handle(generation: string, request: TypeScriptSemanticRequest): unknown {
     try {
       this.syncGeneration(generation);
@@ -113,6 +114,7 @@ export class TypeScriptSemanticServiceHost {
     this.available = null;
   }
 
+  // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
   private syncGeneration(requestedGeneration: string): void {
     if (this.generation === requestedGeneration && this.host && this.db) return;
     const nextDb = this.openDb();
@@ -142,6 +144,7 @@ export function initializeTypeScriptSemanticMailbox(paths: TypeScriptSemanticMai
   mkdirSync(paths.responseDir, { recursive: true });
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function processTypeScriptSemanticMailbox(
   paths: TypeScriptSemanticMailboxPaths,
   host: TypeScriptSemanticServiceHost,

@@ -76,6 +76,7 @@ const MACRO_CALLS = new Set([
 
 const CALL_FALLBACK_STOP_WORDS = new Set(['catch', 'for', 'function', 'if', 'return', 'switch', 'while']);
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function buildVueScriptFacts(unit: VueSfcUnit): VueScriptFacts {
   const facts: VueScriptFacts = {
     imports: [],

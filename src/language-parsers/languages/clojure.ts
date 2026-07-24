@@ -271,6 +271,7 @@ function parseNamespaceForm(source: string): CollectionForm | null {
   return null;
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 function parseForm(source: string, start: number): { form: ClojureForm; index: number } | null {
   let index = skipWhitespace(source, start);
   if (source.startsWith('#?@', index) || source.startsWith('#?', index)) {

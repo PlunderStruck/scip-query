@@ -47,6 +47,7 @@ interface LanguageServiceBundle {
 const require = createRequire(import.meta.url);
 let typescriptModule: TypeScriptModule | null | undefined;
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function createTsServerProvider(db: ScipDatabase): SemanticProvider {
   const ts = loadTypeScript();
   if (!ts) return unavailableProvider('typescript is not installed');
@@ -65,6 +66,7 @@ export function createTsServerProvider(db: ScipDatabase): SemanticProvider {
   }
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 export function compareTypeScriptReferenceProviders(
   definitions: readonly IndexedDefinition[],
   baseline: SemanticProvider,

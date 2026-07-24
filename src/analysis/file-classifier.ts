@@ -146,6 +146,7 @@ export function isEntrySurface(db: ScipDatabase, file: string): boolean {
  * cannot see. Two sources, merged: the package surface derived from
  * package.json (exports/main/bin), and explicit `entryRoots` config.
  */
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function isRootedSymbol(db: ScipDatabase, symbol: string, file: string): boolean {
   const normalized = normalizePath(file);
   if (isPackageSurfaceFile(db, normalized)) return true;
@@ -187,6 +188,7 @@ function isTransitivelyPackageSurfaceSymbol(db: ScipDatabase, symbol: string, fi
   return visibility === null || visibility.has(leafName(symbol));
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function packageSurfaceReachability(db: ScipDatabase): Map<string, PackageSurfaceVisibility> {
   return packageSurfaceReachabilityCache.get(db, () => {
     const visibility = new Map<string, PackageSurfaceVisibility>();

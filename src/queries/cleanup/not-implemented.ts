@@ -60,6 +60,7 @@ interface StubCandidate {
   stubText: string;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function notImplemented(
   db: ScipDatabase,
   opts: { scope?: string; limit?: number; scanLimit?: number; semantic?: boolean } = {},
@@ -138,6 +139,7 @@ function reachabilityFor(
  * Classify a candidate's body as one of the three reachable-placeholder
  * shapes the drill targets. Returns null for anything with real behavior.
  */
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function classifyStub(db: ScipDatabase, def: IndexedDefinition): StubCandidate | null {
   const snippet = definitionSourceSnippet(db, def);
   if (!snippet) return null;

@@ -1,0 +1,7 @@
+{
+  "id": "SQE648B66B7D21",
+  "check": "co-change-partner",
+  "file": "src/runtime/watch-service.ts",
+  "reason": "Accepted annotation-only change: watcher behavior is unchanged; watch-service and linked-worktree integration tests passed in the 1,416-test full suite.",
+  "createdAt": "2026-07-24T02:03:10.392Z"
+}

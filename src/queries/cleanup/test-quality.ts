@@ -64,6 +64,7 @@ export interface TestQualityOptions {
 
 const DEFAULT_ROT_DAYS = 60;
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; test discovery, scoring, and report aggregation stay together.
 export function testQuality(db: ScipDatabase, opts: TestQualityOptions = {}): TestQualityReport {
   const { scope, limit = 30, scanLimit, rotDays = DEFAULT_ROT_DAYS } = opts;
 

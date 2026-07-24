@@ -34,6 +34,7 @@ export interface DiffGateOutcomeResult {
  * SQLite state and the append-only repository history. The repository append
  * is best-effort because recordkeeping must never change the gate decision.
  */
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function recordDiffGateOutcomes(
   db: ScipDatabase,
   result: DiffGateResult,

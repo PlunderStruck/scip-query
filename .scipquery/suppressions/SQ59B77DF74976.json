@@ -1,0 +1,7 @@
+{
+  "id": "SQ59B77DF74976",
+  "check": "doc-reference",
+  "file": "docs/analyzer-validation-ledger.md",
+  "reason": "Verified after annotation-only source changes: the validation ledger examples still point to the same health and diff-gate implementations.",
+  "createdAt": "2026-07-24T02:03:15.559Z"
+}

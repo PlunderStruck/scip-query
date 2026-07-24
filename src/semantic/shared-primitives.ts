@@ -258,6 +258,7 @@ export function semanticCallerMap(
 }
 
 /** Preserve exact cross-file caller semantics without materializing every reference location. */
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function exactSemanticCallerMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<IndexedDefinition>,
@@ -328,6 +329,7 @@ function buildSemanticCallerMap(
   return result;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; provider resolution, batching, cache writes, and evidence merge stay together.
 function materializeSemanticReferenceBatch(
   db: ScipDatabase,
   definitions: ReadonlyArray<IndexedDefinition>,
@@ -522,6 +524,7 @@ function semanticReferenceCacheFingerprint(
   return null;
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; cache lookup, materialization, and reference-map assembly stay together.
 export function semanticReferenceMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<IndexedDefinition>,
@@ -785,6 +788,7 @@ export function semanticSignature(db: ScipDatabase, definition: IndexedDefinitio
   return semanticEvidenceProduct(db).signature(definition);
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function buildSemanticSignature(db: ScipDatabase, definition: IndexedDefinition): string | null {
   if (semanticProviderLanguageForPath(definition.relativePath) === 'typescript') {
     let state = 'fallback';

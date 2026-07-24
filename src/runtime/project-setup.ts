@@ -126,6 +126,7 @@ export interface ProjectSetupChangeScopes {
   user: string[];
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; these options define the project-setup command boundary.
 export interface ProjectSetupOptions {
   gitHook?: boolean;
   noHooks?: boolean;
@@ -151,6 +152,7 @@ export type ProjectSetupGuidedActionId =
 
 export type ProjectSetupActionScope = 'repository' | 'checkout' | 'user';
 
+// scip-query: ignore-stale — reviewed S1 owned contract; guided setup constructs this file-selection payload.
 export interface ProjectSetupGuidedFiles {
   agentsMd: boolean;
   claudeMd: boolean;
@@ -158,6 +160,7 @@ export interface ProjectSetupGuidedFiles {
   claudeSettings: boolean;
 }
 
+// scip-query: ignore-stale — reviewed S1 owned contract; guided setup renders this discriminated action payload.
 export interface ProjectSetupGuidedAction {
   id: ProjectSetupGuidedActionId;
   scope: ProjectSetupActionScope;
@@ -241,6 +244,7 @@ export function planGuidedProjectSetup(input: {
   return { actions };
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; setup sequencing, recovery, and reporting stay together.
 export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<ProjectSetupReport> {
   const steps: ProjectSetupStep[] = [];
   const context = resolveCliProjectContext();
@@ -994,6 +998,7 @@ function cleanupVerificationSmokeEvidence(capabilities: ProjectCapabilityReport)
   return `${available} available, ${partial} partial, ${unavailable} unavailable cleanup-verification row(s).`;
 }
 
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; readiness, installation, and step reporting form one remediation.
 function remediateIndexers(
   projectRoot: string,
   readiness: ProjectReadiness,
@@ -1076,6 +1081,7 @@ function languageReadinessFromDependencyStatus(status: IndexerDependencyStatus):
   };
 }
 
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 async function runSetupHealth(dbPath: string, steps: ProjectSetupStep[]): Promise<ProjectSetupHealthSummary> {
   if (!existsSync(dbPath)) {
     const unavailableReason = 'Skipped because no SQLite index database exists yet.';
