@@ -23,7 +23,7 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md) when you
 | --- | --- | --- |
 | `scip-query status --capabilities` | Show index status for this project | Before routing: confirm the index is fresh. |
 | `scip-query plan-context <target>` | Pre-edit planning context for a symbol, file, or module | Default loop: anchor a plan for the routed skill. |
-| `scip-query diff-gate --json` | Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, unedited twin partners (advisory), uncited doc updates, unused params, new dead symbols; exit 1 on blocking findings | Default loop: the loop is complete only when this passes or is explained. |
+| `scip-query diff-gate --json` | Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | Default loop: the loop is complete only when this passes or is explained. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->

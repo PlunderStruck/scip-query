@@ -1,15 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { detectAstLanguage, getCallSites } from '../../source/ast.js';
-import { getSourceText } from '../../source/source-text.js';
 import { getSourceImports } from '../../language-parsers/index.js';
-import {
-  fileContentHash,
-  readCachedSemanticCalleesForFile,
-  sha256Hex,
-  writeCachedSemanticCalleesBatch,
-  type SemanticCalleeCacheEntry,
-} from '../../storage/evidence-cache.js';
-import { createPerDbCache, createPerDbValue } from '../../storage/per-db-cache.js';
+import { createPerDbValue } from '../../storage/per-db-cache.js';
 import { getIdentifiersByLine } from '../identifier-index.js';
 import { isCallableSymbol, leafName } from '../symbol-parser.js';
 import {
@@ -18,25 +10,13 @@ import {
   getAllDefinitions,
   getDefinitionsForFile,
 } from '../definition-catalog.js';
-import { buildFileDepGraph } from './file-dep-graph.js';
 import { getResolvedReferenceSites } from '../references/reference-sites.js';
 import type { IndexedDefinition, SymbolLocation, SymbolMatch } from '../../domain/types.js';
-import type { SemanticCallee } from '../../semantic/types.js';
-import { semanticProviderLanguageForPath } from '../../semantic/provider-cache.js';
-import { rustSemanticEngineIdentity } from '../../semantic/rust/engine-identity.js';
-import { typeScriptSemanticIdentityForFile } from '../../semantic/typescript/semantic-identity-context.js';
-import { semanticDefinitionsByFile } from '../../semantic/definition-groups.js';
-import {
-  prefetchedSemanticCalleesForDefinitions,
-  semanticCalleeMap,
-  semanticEvidenceProduct,
-  semanticReferenceMap,
-} from '../../semantic/shared-primitives.js';
-import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
 import { getGlobalLeafIndex, pickAstCallCandidate, sameLanguageCandidates } from '../leaf-symbol-index.js';
 import type { GlobalLeafCandidate } from '../leaf-symbol-index.js';
 import { scipFunctionLikeKindNumbers, scipTypeLikeKindNumbers } from '../symbol-kind.js';
-import { pathsResolveSame } from '../../source/path-normalization.js';
+import { pathsResolveSame } from '../../domain/path-normalization.js';
+import type { SymbolSemanticEvidencePort } from '../semantic-evidence-port.js';
 
 export type CalleeEvidenceSource = 'ast-callsite' | 'semantic-callee' | 'scip-chunk';
 export type CallerEvidenceSource = 'caller-map-inversion' | 'resolved-reference' | 'semantic-reference';
@@ -59,14 +39,24 @@ export interface CallerRow {
 export function getCalleeRowsForSymbol(
   db: ScipDatabase,
   symbol: SymbolMatch,
-  opts: { limit?: number; additive?: boolean; callableOnly?: boolean; semantic?: boolean } = {},
+  opts: {
+    limit?: number;
+    additive?: boolean;
+    callableOnly?: boolean;
+    semantic?: boolean;
+    semanticEvidence?: SymbolSemanticEvidencePort;
+  } = {},
 ): CalleeRow[] {
   // Delegates to the shared bulk path so callers automatically benefit from
   // tree-sitter call attribution, source-confirmation, and the merged AST +
   // SCIP results. Avoids the older per-symbol mention-scan that under-
   // attributed for AST-supported languages and missed call/callee shape
   // refinements that the bulk helper already handles.
-  const map = buildCalleeMap(db, [symbol], { additive: opts.additive, semantic: opts.semantic });
+  const map = buildCalleeMap(db, [symbol], {
+    additive: opts.additive,
+    semantic: opts.semantic,
+    semanticEvidence: opts.semanticEvidence,
+  });
   const callees = opts.callableOnly
     ? (map.get(symbol.symbolId) ?? []).filter(
         (callee) => isCallableSymbol(callee.symbol) || callee.source === 'ast-callsite',
@@ -80,7 +70,7 @@ export function getCalleeRowsForSymbol(
 export function getCallerRowsForSymbol(
   db: ScipDatabase,
   symbol: SymbolMatch,
-  opts: { limit?: number; semantic?: boolean } = {},
+  opts: { limit?: number; semantic?: boolean; semanticEvidence: SymbolSemanticEvidencePort },
 ): CallerRow[] {
   return getCallerRowsMapForSymbols(db, [symbol], opts).get(symbol.symbolId) ?? [];
 }
@@ -90,11 +80,14 @@ export function getCallerRowsForSymbol(
 export function getCallerRowsMapForSymbols(
   db: ScipDatabase,
   symbols: ReadonlyArray<SymbolMatch>,
-  opts: { limit?: number; semantic?: boolean } = {},
+  opts: { limit?: number; semantic?: boolean; semanticEvidence: SymbolSemanticEvidencePort },
 ): Map<number, CallerRow[]> {
   const rows = shouldUseTargetedCallerRows(db)
-    ? targetedCallerRowsMapForSymbols(db, symbols, { semantic: opts.semantic !== false })
-    : buildCallerRowsMap(db);
+    ? targetedCallerRowsMapForSymbols(db, symbols, {
+        semantic: opts.semantic !== false,
+        semanticEvidence: opts.semanticEvidence,
+      })
+    : buildCallerRowsMap(db, opts.semanticEvidence);
   if (typeof opts.limit !== 'number') {
     return new Map(symbols.map((symbol) => [symbol.symbolId, rows.get(symbol.symbolId) ?? []]));
   }
@@ -116,10 +109,13 @@ function shouldUseTargetedCallerRows(db: ScipDatabase): boolean {
  * caller's symbol + file under the callee's symbolId. Cached so the entire
  * inversion happens once per ScipDatabase instance.
  */
-export function buildCallerRowsMap(db: ScipDatabase): Map<number, CallerRow[]> {
+export function buildCallerRowsMap(
+  db: ScipDatabase,
+  semanticEvidence: SymbolSemanticEvidencePort,
+): Map<number, CallerRow[]> {
   return CALLER_ROWS_CACHE.get(db, () => {
     const allDefs = getAllDefinitions(db);
-    const calleeMap = buildCalleeMap(db, allDefs);
+    const calleeMap = buildCalleeMap(db, allDefs, { semanticEvidence });
 
     const symbolToId = new Map<string, number>();
     for (const def of allDefs) symbolToId.set(def.symbol, def.symbolId);
@@ -160,16 +156,17 @@ export function buildCallerRowsMap(db: ScipDatabase): Map<number, CallerRow[]> {
 function targetedCallerRowsMapForSymbols(
   db: ScipDatabase,
   symbols: ReadonlyArray<SymbolMatch>,
-  opts: { semantic: boolean },
+  opts: { semantic: boolean; semanticEvidence?: SymbolSemanticEvidencePort },
 ): Map<number, CallerRow[]> {
-  const definitions = opts.semantic
-    ? symbols.flatMap((symbol) => {
-        const definition = indexedDefinitionForSymbol(db, symbol);
-        return definition ? [definition] : [];
-      })
-    : [];
+  const definitions =
+    opts.semantic && opts.semanticEvidence
+      ? symbols.flatMap((symbol) => {
+          const definition = indexedDefinitionForSymbol(db, symbol);
+          return definition ? [definition] : [];
+        })
+      : [];
   const definitionBySymbolId = new Map(definitions.map((definition) => [definition.symbolId, definition]));
-  const semanticReferences = semanticReferenceMap(db, definitions);
+  const semanticReferences = opts.semanticEvidence?.referenceMap(db, definitions) ?? new Map();
   const result = new Map<number, CallerRow[]>();
 
   for (const symbol of symbols) {
@@ -271,7 +268,7 @@ function indexedDefinitionForSymbol(db: ScipDatabase, symbol: SymbolMatch): Inde
 export function buildCalleeMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<SymbolMatch>,
-  opts: { additive?: boolean; semantic?: boolean } = {},
+  opts: { additive?: boolean; semantic?: boolean; semanticEvidence?: SymbolSemanticEvidencePort } = {},
 ): Map<number, CalleeRow[]> {
   if (definitions.length === 0) return new Map();
   const additive = opts.additive ?? false;
@@ -310,256 +307,13 @@ export function buildCalleeMap(
   };
 
   if (astDefs.length > 0) addAll(buildAstCalleeMap(db, astDefs));
-  if (opts.semantic !== false) addAll(toCalleeRows(cachedSemanticCalleeMap(db, definitions)));
+  if (opts.semantic !== false && opts.semanticEvidence) {
+    addAll(toCalleeRows(opts.semanticEvidence.calleeMap(db, definitions)));
+  }
   // Chunk path runs for non-AST defs always; for AST defs only when additive.
   const chunkDefs = additive ? definitions : chunkOnlyDefs;
   if (chunkDefs.length > 0) addAll(buildChunkCalleeMap(db, chunkDefs));
   return merged;
-}
-
-/**
- * Persistent-cache wrapper around `semanticCalleeMap`. A full-hit batch is
- * served without touching the provider at all — provider construction (an
- * eager ts-morph project load) is the dominant cost this avoids on warm runs.
- * TypeScript rows are keyed by the same transitive semantic identity as the
- * other compiler-derived fragments. Rust retains its engine-qualified direct
- * dependency key. Results are only written when the provider is available, so
- * "provider missing" is never frozen into the cache as an empty result.
- */
-function cachedSemanticCalleeMap(
-  db: ScipDatabase,
-  definitions: ReadonlyArray<IndexedDefinition | SymbolMatch>,
-): Map<number, SemanticCallee[]> {
-  const profiling = profileEnabled();
-  const result = new Map<number, SemanticCallee[]>();
-  const prefetched = prefetchedSemanticCalleesForDefinitions(db, definitions);
-  const misses: Array<{ def: IndexedDefinition | SymbolMatch; contentHash: string; depsDigest: string }> = [];
-  const unkeyed: Array<IndexedDefinition | SymbolMatch> = [];
-  let skippedUnsupportedLanguage = 0;
-  let sourceMissing = 0;
-  let cacheHits = 0;
-  let parseFailures = 0;
-  let inMemoryHits = 0;
-  let inMemoryRows = 0;
-  let inMemoryCalleeCount = 0;
-
-  for (const { definition, callees } of prefetched.hits) {
-    inMemoryHits += 1;
-    if (callees.length > 0) {
-      inMemoryRows += 1;
-      inMemoryCalleeCount += callees.length;
-      result.set(definition.symbolId, callees);
-    }
-  }
-
-  const prefetchedCacheEntries = semanticCalleeCacheEntriesForPrefetchedRows(db, prefetched.hits);
-  if (prefetchedCacheEntries.entries.length > 0) {
-    profileSpan(
-      'semantic.callees.prefetch-cache-write',
-      () => writeCachedSemanticCalleesBatch(db, prefetchedCacheEntries.entries),
-      () => ({
-        entries: prefetchedCacheEntries.entries.length,
-        sourceMissing: prefetchedCacheEntries.sourceMissing,
-        skippedUnsupportedLanguage: prefetchedCacheEntries.skippedUnsupportedLanguage,
-      }),
-    );
-  }
-
-  profileSpan(
-    'semantic.callees.cache-scan',
-    () => {
-      for (const [relativePath, fileDefinitions] of semanticDefinitionsByFile(prefetched.misses)) {
-        if (!semanticProviderLanguageForPath(relativePath)) {
-          if (profiling) skippedUnsupportedLanguage += fileDefinitions.length;
-          continue;
-        }
-        const source = getSourceText(db, relativePath);
-        if (!source) {
-          if (profiling) sourceMissing += fileDefinitions.length;
-          unkeyed.push(...fileDefinitions);
-          continue;
-        }
-        const contentHash = fileContentHash(db, relativePath, source);
-        const depsDigest = semanticCalleeDepsDigest(db, relativePath);
-        if (!depsDigest) {
-          unkeyed.push(...fileDefinitions);
-          continue;
-        }
-        const cachedBySymbol = readCachedSemanticCalleesForFile(db, relativePath, contentHash, depsDigest);
-        for (const def of fileDefinitions) {
-          const cached = cachedBySymbol.get(def.symbol) ?? null;
-          if (cached !== null) {
-            const callees = parseCachedCallees(cached);
-            if (callees) {
-              if (profiling) cacheHits += 1;
-              if (callees.length > 0) result.set(def.symbolId, callees);
-              continue;
-            }
-            if (profiling) parseFailures += 1;
-          }
-          misses.push({ def, contentHash, depsDigest });
-        }
-      }
-    },
-    () => ({
-      definitions: definitions.length,
-      skippedUnsupportedLanguage,
-      sourceMissing,
-      cacheHits,
-      parseFailures,
-      misses: misses.length,
-      unkeyed: unkeyed.length,
-      inMemoryHits,
-      inMemoryRows,
-      inMemoryCalleeCount,
-      resultRows: result.size,
-    }),
-  );
-  if (misses.length === 0 && unkeyed.length === 0) return result;
-
-  const computeInput = [...unkeyed, ...misses.map((miss) => miss.def)];
-  let computedRows = 0;
-  const computed = profileSpan(
-    'semantic.callees.compute-misses',
-    () => {
-      const rows = semanticCalleeMap(db, computeInput);
-      computedRows = rows.size;
-      return rows;
-    },
-    () => ({
-      definitions: computeInput.length,
-      misses: misses.length,
-      unkeyed: unkeyed.length,
-      rows: computedRows,
-    }),
-  );
-  for (const [symbolId, callees] of computed) result.set(symbolId, callees);
-  const entries = misses
-    .filter((miss) => semanticEvidenceProduct(db).capability('semantic-callees', miss.def.relativePath).available)
-    .map((miss) => ({
-      relativePath: miss.def.relativePath,
-      symbol: miss.def.symbol,
-      contentHash: miss.contentHash,
-      depsDigest: miss.depsDigest,
-      payload: JSON.stringify(computed.get(miss.def.symbolId) ?? []),
-    }));
-  if (entries.length > 0) {
-    profileSpan(
-      'semantic.callees.cache-write',
-      () => writeCachedSemanticCalleesBatch(db, entries),
-      () => ({
-        entries: entries.length,
-      }),
-    );
-  } else {
-    profileSpan(
-      'semantic.callees.cache-write-skip',
-      () => undefined,
-      () => ({
-        reason: 'provider-unavailable',
-        misses: misses.length,
-      }),
-    );
-  }
-  return result;
-}
-
-function semanticCalleeCacheEntriesForPrefetchedRows(
-  db: ScipDatabase,
-  hits: ReadonlyArray<{
-    definition: IndexedDefinition | SymbolMatch;
-    callees: readonly SemanticCallee[];
-  }>,
-): { entries: SemanticCalleeCacheEntry[]; sourceMissing: number; skippedUnsupportedLanguage: number } {
-  const entries: SemanticCalleeCacheEntry[] = [];
-  const keyByPath = new Map<string, { contentHash: string; depsDigest: string } | null>();
-  let sourceMissing = 0;
-  let skippedUnsupportedLanguage = 0;
-
-  for (const { definition, callees } of hits) {
-    if (!semanticProviderLanguageForPath(definition.relativePath)) {
-      skippedUnsupportedLanguage += 1;
-      continue;
-    }
-    if (!keyByPath.has(definition.relativePath)) {
-      const source = getSourceText(db, definition.relativePath);
-      const depsDigest = source ? semanticCalleeDepsDigest(db, definition.relativePath) : null;
-      keyByPath.set(
-        definition.relativePath,
-        source && depsDigest
-          ? {
-              contentHash: fileContentHash(db, definition.relativePath, source),
-              depsDigest,
-            }
-          : null,
-      );
-    }
-    const key = keyByPath.get(definition.relativePath);
-    if (!key) {
-      sourceMissing += 1;
-      continue;
-    }
-    entries.push({
-      relativePath: definition.relativePath,
-      symbol: definition.symbol,
-      contentHash: key.contentHash,
-      depsDigest: key.depsDigest,
-      payload: JSON.stringify(callees),
-    });
-  }
-
-  return { entries, sourceMissing, skippedUnsupportedLanguage };
-}
-
-// scip-query: ignore-wrapper — runtime prewarm reaches the same durable
-// semantic-callee cache as buildCalleeMap without also doing AST/chunk work.
-export function materializeSemanticCalleeCache(
-  db: ScipDatabase,
-  definitions: ReadonlyArray<IndexedDefinition | SymbolMatch>,
-): Map<number, SemanticCallee[]> {
-  return cachedSemanticCalleeMap(db, definitions);
-}
-
-const TYPESCRIPT_CALLEE_SCHEMA = 'typescript-callees-v1';
-
-function semanticCalleeDepsDigest(db: ScipDatabase, relativePath: string): string | null {
-  const language = semanticProviderLanguageForPath(relativePath);
-  if (language === 'typescript') {
-    return typeScriptSemanticIdentityForFile(db, relativePath, TYPESCRIPT_CALLEE_SCHEMA)?.key ?? null;
-  }
-  const depsDigest = depsDigestFor(db, relativePath);
-  if (language === 'rust') {
-    return sha256Hex(
-      JSON.stringify({
-        kind: 'semantic-callees',
-        language,
-        engine: rustSemanticEngineIdentity(db.config.projectRoot),
-        positionMapping: 'nearby-leaf-v1',
-        depsDigest,
-      }),
-    );
-  }
-  return depsDigest;
-}
-
-function parseCachedCallees(payload: string): SemanticCallee[] | null {
-  try {
-    return JSON.parse(payload) as SemanticCallee[];
-  } catch {
-    return null; // corrupt payload — treat as a miss and recompute
-  }
-}
-
-const DEPS_DIGEST_CACHE = createPerDbCache<string, string>('semantic-deps-digest', {
-  clearGroups: ['whole-project', 'source-file'],
-});
-
-function depsDigestFor(db: ScipDatabase, relativePath: string): string {
-  return DEPS_DIGEST_CACHE.get(db, relativePath, () => {
-    const deps = [...(buildFileDepGraph(db).get(relativePath) ?? [])].sort();
-    const parts = deps.map((dep) => `${dep}:${fileContentHash(db, dep, getSourceText(db, dep))}`);
-    return sha256Hex(parts.join('|'));
-  });
 }
 
 /**

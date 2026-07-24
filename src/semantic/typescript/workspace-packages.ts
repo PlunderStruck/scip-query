@@ -1,4 +1,4 @@
-import type { WorkspacePackage } from '../../resolution/workspace-packages.js';
+import type { WorkspacePackage } from '../../platform/workspace-packages.js';
 
 export function workspacePackageNameForSpecifier(
   packages: ReadonlyArray<WorkspacePackage>,

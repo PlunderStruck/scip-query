@@ -6,6 +6,25 @@ import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../src/storage/db.js';
 
 describe('ScipDatabase path exclusions', () => {
+  it('accepts the minimal path-exclusion capability owned by storage', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-db-policy-'));
+    const dbPath = join(tempDir, 'index.db');
+    const sqliteDb = new Database(dbPath);
+    sqliteDb.exec('CREATE TABLE documents (id INTEGER PRIMARY KEY, language TEXT, relative_path TEXT NOT NULL UNIQUE)');
+    sqliteDb.close();
+
+    const db = new ScipDatabase(
+      { dbPath, indexPath: join(tempDir, 'index.scip'), projectRoot: tempDir },
+      { isIgnored: (relativePath) => relativePath === 'generated.ts' },
+    );
+    try {
+      expect(db.isIgnored('generated.ts')).toBe(true);
+      expect(db.isIgnored('src/index.ts')).toBe(false);
+    } finally {
+      db.close();
+    }
+  });
+
   it('filters nested build artifacts from SQL-level document scans', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-db-exclusions-'));
     const dbPath = join(tempDir, 'index.db');

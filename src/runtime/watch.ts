@@ -10,9 +10,10 @@ import type {
   SupportedLanguage,
   TypeScriptProjectMode,
 } from '../domain/types.js';
-import { loadProjectConfig, resolveWatchConfig, resolveIndexStoragePaths } from './config.js';
+import { resolveIndexStoragePaths } from '../platform/cache-layout.js';
+import { loadProjectConfig, resolveWatchConfig } from './config.js';
 import { createGitignoreFilter } from '../source/gitignore-filter.js';
-import { gitOutput, resolveGitPath } from './git-worktree.js';
+import { gitOutput, resolveGitPath } from '../platform/git-worktree.js';
 
 export interface WatcherOptions {
   projectRoot: string;

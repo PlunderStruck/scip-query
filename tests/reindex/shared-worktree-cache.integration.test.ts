@@ -5,16 +5,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import { loadProjectConfig, resolveIndexStoragePaths } from '../../src/runtime/config.js';
+import { resolveIndexStoragePaths } from '../../src/platform/cache-layout.js';
+import { loadProjectConfig } from '../../src/runtime/config.js';
 import { getIndexFreshness } from '../../src/runtime/index-freshness.js';
-import { resolveGitWorktreeContext } from '../../src/runtime/git-worktree.js';
+import { resolveGitWorktreeContext } from '../../src/platform/git-worktree.js';
 import { reindex } from '../../src/reindex/index.js';
 import {
   buildSharedGenerationSnapshot,
   prepareSharedGenerationForProject,
   readSharedGeneration,
 } from '../../src/reindex/shared-generation-store.js';
-import { buildProjectInputFingerprint } from '../../src/reindex/project-files.js';
+import { buildProjectInputFingerprint } from '../../src/platform/project-files.js';
 
 const tempDirs: string[] = [];
 const originalEnvironment = {

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { fingerprintProjectFiles } from '../../reindex/project-files.js';
+import { fingerprintProjectFiles } from '../../platform/project-files.js';
 
 const RUST_ANALYZER_INPUT_BASENAMES = new Set([
   'Cargo.lock',

@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { ProjectIndex } from '../../core/project-index.js';
-import { resolveIndexedPaths } from '../../resolution/path-resolver.js';
+import { ProjectIndex } from '../internal/project-index.js';
+import { resolveIndexedPaths } from '../internal/file-resolution.js';
 import { isCallableSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
 
 export interface SurfaceResult {

@@ -24,7 +24,7 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 | Command | Purpose | When |
 | --- | --- | --- |
 | `scip-query plan-context <target>` | Pre-edit planning context for a symbol, file, or module | Anchor each phase's step before delegating it. |
-| `scip-query diff-gate --json` | Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, unedited twin partners (advisory), uncited doc updates, unused params, new dead symbols; exit 1 on blocking findings | Verify a handoff before accepting it and before closing the program. |
+| `scip-query diff-gate --json` | Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | Verify a handoff before accepting it and before closing the program. |
 | `scip-query health --json` | Composite codebase health report with prioritized action list | Pre-register or check a program-level health benchmark. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.

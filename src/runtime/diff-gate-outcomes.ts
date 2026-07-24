@@ -1,22 +1,16 @@
 import { diffGateFailedClosed, type DiffGateResult } from '../queries/impact/diff-gate.js';
+import { readLedgerRecords, updateFindingOutcomeLedger } from '../queries/health/finding-outcome-ledger.js';
 import {
+  deriveOutcomeEvents,
+  latestOutcomeLifecycleAnchor,
   ledgerKey,
-  readLedgerRecords,
-  updateFindingOutcomeLedger,
   type FindingOutcomeRecord,
   type ObservedFinding,
-} from '../queries/health/finding-outcome-ledger.js';
-import type { ScipDatabase } from '../storage/db.js';
-import {
-  appendOutcomeEvents,
-  deriveOutcomeEvents,
-  gitWorktreeIsClean,
-  headCommit,
-  latestOutcomeLifecycleAnchor,
-  readOutcomeEvents,
-  resolveGitCommit,
   type OutcomeEvent,
-} from '../storage/outcome-events.js';
+} from '../domain/finding-outcomes.js';
+import type { ScipDatabase } from '../storage/db.js';
+import { appendOutcomeEvents, readOutcomeEvents } from '../storage/outcome-events.js';
+import { gitOutput, resolveGitWorktreeContext } from '../platform/git-worktree.js';
 
 export interface DiffGateOutcomeRuntime {
   now?: () => number;
@@ -49,8 +43,12 @@ export function recordDiffGateOutcomes(
   const observed = observationsForResult(result);
   const previous = readLedgerRecords(db);
   const projectRoot = db.config.projectRoot;
-  const commit = (runtime.headCommit ?? headCommit)(projectRoot);
-  const comparisonBaseCommit = (runtime.resolveCommit ?? resolveGitCommit)(projectRoot, result.base);
+  const commit = runtime.headCommit
+    ? runtime.headCommit(projectRoot)
+    : (resolveGitWorktreeContext(projectRoot)?.headCommit ?? null);
+  const comparisonBaseCommit = runtime.resolveCommit
+    ? runtime.resolveCommit(projectRoot, result.base)
+    : resolveCommit(projectRoot, result.base);
   const reconciliation = reconcileMissingFindings({
     previous,
     observed,
@@ -207,7 +205,8 @@ function reconcileMissingFindings(input: {
     };
   }
 
-  const clean = (input.runtime.worktreeIsClean ?? gitWorktreeIsClean)(input.projectRoot);
+  const clean =
+    input.runtime.worktreeIsClean?.(input.projectRoot) ?? resolveGitWorktreeContext(input.projectRoot)?.clean ?? false;
   debugOutcomeVerification(
     `replay groups=${replayByBase.size} clean=${clean} callback=${Boolean(input.runtime.replayGate)}`,
   );
@@ -280,6 +279,11 @@ function reconcileMissingFindings(input: {
     replaySymbols,
     ...(warnings.length > 0 ? { warning: warnings.join('; ') } : {}),
   };
+}
+
+function resolveCommit(projectRoot: string, ref: string): string | null {
+  const sha = gitOutput(projectRoot, ['rev-parse', '--verify', `${ref}^{commit}`]);
+  return sha && /^[0-9a-f]{40}$/.test(sha) ? sha : null;
 }
 
 function debugOutcomeVerification(message: string): void {

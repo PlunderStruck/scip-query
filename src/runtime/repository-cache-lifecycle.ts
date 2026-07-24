@@ -1,10 +1,16 @@
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
-import { automaticSharedCacheEnabled, resolveDefaultCacheDir, resolveScipQueryCacheRoot } from './config.js';
-import { listGitWorktrees, resolveGitWorktreeContext } from './git-worktree.js';
-import { isProcessAlive } from './process-liveness.js';
-import { stopWatchService, watchServicePaths } from './watch-service.js';
-import { acquireProcessFileLock, acquireRepositoryCacheLock } from './repository-cache-lock.js';
+import {
+  automaticSharedCacheEnabled,
+  resolveDefaultCacheDir,
+  resolveScipQueryCacheRoot,
+  type resolveIndexStoragePaths,
+} from '../platform/cache-layout.js';
+import { listGitWorktrees, resolveGitWorktreeContext } from '../platform/git-worktree.js';
+import { isProcessAlive } from '../platform/process-liveness.js';
+import { watchServicePaths } from '../platform/watch-service-state.js';
+import { stopWatchService } from './watch-service.js';
+import { acquireProcessFileLock, acquireRepositoryCacheLock } from '../platform/repository-cache-lock.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import { maintainSharedEvidenceCache } from '../storage/evidence-cache.js';
 import {
@@ -14,7 +20,6 @@ import {
   type WorktreeCacheLease,
 } from '../reindex/shared-generation-store.js';
 import type { ProjectConfig } from '../domain/types.js';
-import type { resolveIndexStoragePaths } from './config.js';
 
 export const DEFAULT_SHARED_GENERATION_TTL_MS = 60 * 60 * 1_000;
 export const DEFAULT_REPOSITORY_CACHE_BUDGET_BYTES = 2 * 1024 * 1024 * 1024;

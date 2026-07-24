@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
+import { stronglyConnectedComponents } from '../../analysis/strongly-connected-components.js';
 
 export interface DeepChainResult {
   /** Canonical representative file for each condensed dependency component. */
@@ -37,72 +38,9 @@ export function deepChains(
   const { limit = 10, scope, minDepth = 3 } = opts;
   const graph = buildFileDepGraph(db, scope);
 
-  // 1. Tarjan's SCC.
+  // 1. Condense mutually reachable files into dependency components.
   type SccId = number;
-  const sccOf = new Map<string, SccId>();
-  const sccs: string[][] = [];
-
-  // Iterative Tarjan to avoid stack overflow on big graphs.
-  const indices = new Map<string, number>();
-  const lowlink = new Map<string, number>();
-  const onStack = new Set<string>();
-  const stack: string[] = [];
-  let nextIndex = 0;
-
-  type Frame = { node: string; iter: Iterator<string>; pendingChild: string | null };
-  for (const start of graph.keys()) {
-    if (indices.has(start)) continue;
-    const callStack: Frame[] = [];
-    const startIter = (graph.get(start) ?? new Set<string>()).values();
-    indices.set(start, nextIndex);
-    lowlink.set(start, nextIndex);
-    nextIndex += 1;
-    stack.push(start);
-    onStack.add(start);
-    callStack.push({ node: start, iter: startIter, pendingChild: null });
-
-    while (callStack.length > 0) {
-      const frame = callStack[callStack.length - 1]!;
-      if (frame.pendingChild !== null) {
-        // We just returned from recursing into pendingChild.
-        const child = frame.pendingChild;
-        frame.pendingChild = null;
-        lowlink.set(frame.node, Math.min(lowlink.get(frame.node)!, lowlink.get(child)!));
-      }
-
-      const next = frame.iter.next();
-      if (next.done) {
-        // Pop SCC if root.
-        if (lowlink.get(frame.node) === indices.get(frame.node)) {
-          const component: string[] = [];
-          while (true) {
-            const w = stack.pop()!;
-            onStack.delete(w);
-            component.push(w);
-            sccOf.set(w, sccs.length);
-            if (w === frame.node) break;
-          }
-          sccs.push(component);
-        }
-        callStack.pop();
-        continue;
-      }
-
-      const child = next.value;
-      if (!indices.has(child)) {
-        indices.set(child, nextIndex);
-        lowlink.set(child, nextIndex);
-        nextIndex += 1;
-        stack.push(child);
-        onStack.add(child);
-        const childIter = (graph.get(child) ?? new Set<string>()).values();
-        frame.pendingChild = child;
-        callStack.push({ node: child, iter: childIter, pendingChild: null });
-      } else if (onStack.has(child)) {
-        lowlink.set(frame.node, Math.min(lowlink.get(frame.node)!, indices.get(child)!));
-      }
-    }
-  }
+  const { components: sccs, componentOf: sccOf } = stronglyConnectedComponents(graph);
 
   // 2. Build condensed DAG over SCCs.
   // sccs are emitted in reverse topological order by Tarjan.

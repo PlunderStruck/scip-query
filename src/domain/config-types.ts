@@ -95,6 +95,8 @@ export interface ScipQueryConfig {
   declaredCouplings?: DeclaredCouplingConfig[];
   /** Optional analyzer configuration. */
   locality?: LocalityConfig;
+  /** Project-owned architectural boundaries and dependency rules. */
+  architecture?: ArchitectureConfig;
   /** Enumeration-rot contracts: a declared key set that must track a ground-truth source. */
   coverageContracts?: CoverageContractConfig[];
   /** Documentation policy (snapshot-doc exemptions, ...). */
@@ -126,6 +128,8 @@ export interface ProjectConfig {
   declaredCouplings?: DeclaredCouplingConfig[];
   /** Optional locality analyzer configuration. */
   locality?: LocalityConfig;
+  /** Project-owned architectural boundaries and dependency rules. */
+  architecture?: ArchitectureConfig;
   /** Enumeration-rot contracts: a declared key set that must track a ground-truth source. */
   coverageContracts?: CoverageContractConfig[];
   /** Documentation policy (snapshot-doc exemptions, ...). */
@@ -167,6 +171,31 @@ export interface CoverageContractConfig {
 export interface LocalityConfig {
   /** Folder names that should be treated as architectural ownership boundaries. */
   architecturalBoundarySegments?: string[];
+}
+
+export interface ArchitectureBoundaryConfig {
+  /** Stable name used by dependency rules and reports. */
+  name: string;
+  /** Project-relative exact paths or trailing /* and /** patterns owned by this boundary. */
+  paths: string[];
+}
+
+export interface ArchitectureConfig {
+  /** Named code groups whose files serve one stable responsibility. */
+  boundaries: ArchitectureBoundaryConfig[];
+  /**
+   * Closed outgoing dependency rows. When a boundary has a row, cross-boundary
+   * targets omitted from that row are forbidden. A missing row remains
+   * descriptive and makes no allow/deny claim.
+   */
+  allowedDependencies?: Record<string, string[]>;
+  /**
+   * Require every configured boundary to have a closed outgoing dependency
+   * row. This prevents an omitted row from silently weakening enforcement.
+   */
+  requireCompletePolicy?: boolean;
+  /** Treat every multi-boundary dependency cycle as a declared violation. */
+  requireAcyclic?: boolean;
 }
 
 export interface DocsConfig {

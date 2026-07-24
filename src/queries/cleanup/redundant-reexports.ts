@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { ProjectIndex } from '../../core/project-index.js';
+import { ProjectIndex } from '../internal/project-index.js';
 import { isLiveBarrel } from '../../analysis/file-classifier.js';
 import { getReExports, getSourceExports, getSourceImports } from '../../language-parsers/index.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';

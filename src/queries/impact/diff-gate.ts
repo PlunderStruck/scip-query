@@ -5,7 +5,7 @@ import { isEntrySurface, isRootedSymbol } from '../../analysis/file-classifier.j
 import { gitEvidenceProduct } from '../../analysis/git-history.js';
 import type { CoChangeCommitScope, CoChangeRecency, CoChangeSubjectContext } from '../../analysis/git-history.js';
 import type { GitHistoryMode } from '../../analysis/git-history.js';
-import { ProjectIndex } from '../../core/project-index.js';
+import { ProjectIndex } from '../internal/project-index.js';
 import {
   classifyCoChangePartner,
   coChangeStructuralLinkChecker,
@@ -39,16 +39,17 @@ import {
   coverageContractTouchedByDiff,
   evaluateCoverageContract,
 } from '../cleanup/coverage-contracts.js';
-import { checkHealthBaseline, resolveBaselinePath } from '../health/health-baseline.js';
+import { checkArchitectureBaseline, checkHealthBaseline, resolveBaselinePath } from '../health/health-baseline.js';
+import { ARCHITECTURE_BASELINE_PREFIX, hasEnforceableArchitecturePolicy } from '../graph/architecture.js';
 import { incompleteMigration } from './incomplete-migration.js';
 import { similar } from '../cleanup/similar.js';
 import { unusedParams } from '../cleanup/unused-params.js';
-import { escapeRegex } from '../../core/regex-utils.js';
+import { escapeRegex } from '../../source/regex-utils.js';
 import type { FindingSuppression } from '../../domain/types.js';
 import { readSuppressionDir } from '../../storage/suppression-store.js';
 import { isCallableSymbol, leafName, leafSuffix } from '../../symbols/symbol-parser.js';
 import { getGlobalLeafIndex } from '../../symbols/leaf-symbol-index.js';
-import { discoverWorkspacePackages } from '../../resolution/workspace-packages.js';
+import { discoverWorkspacePackages } from '../../platform/workspace-packages.js';
 import { profileSpan } from '../../instrumentation/profile.js';
 
 export type DiffGateCheck =
@@ -57,6 +58,7 @@ export type DiffGateCheck =
   | 'co-change-partner'
   | 'twin-partner'
   | 'coverage-contract'
+  | 'architecture'
   | 'doc-reference'
   | 'unused-params'
   | 'new-dead'
@@ -69,6 +71,7 @@ export const DIFF_GATE_CHECKS: readonly DiffGateCheck[] = [
   'co-change-partner',
   'twin-partner',
   'coverage-contract',
+  'architecture',
   'doc-reference',
   'unused-params',
   'new-dead',
@@ -219,6 +222,8 @@ type DiffGateFindingDraft = Omit<DiffGateFinding, 'suppressionHint'>;
  * - coverage-contract:  a configured `coverageContracts` entry drifted —
  *                       its declared key set no longer matches its
  *                       ground-truth source (enumeration rot).
+ * - architecture:       a project-owned boundary rule now has a violation
+ *                       absent from the committed health baseline.
  * - doc-reference:      a doc cites a changed file but isn't updated in the
  *                       diff — the drift starts here.
  * - unused-params:      changed files now contain trailing parameters no body
@@ -321,6 +326,7 @@ export function diffGate(
   );
   runUnlessSkipped('twin-partner', () => runTwinPartnerCheck(db, impact.changedSymbols, changed, scanLimit, result));
   runUnlessSkipped('coverage-contract', () => runCoverageContractCheck(db, changedForCoordination, result));
+  runUnlessSkipped('architecture', () => runArchitectureCheck(db, result));
   runUnlessSkipped('doc-reference', () =>
     runDocReferenceCheck(db, changed, changedGitFiles, impactPlan.changedRanges, impactPlan.renamedFiles, result),
   );
@@ -885,8 +891,8 @@ function runTwinPartnerCheck(
 }
 
 /**
- * coverage-contract: closes the "enumeration rot" defect class (drift-policy
- * missing a src dir for a day, BUILTIN_SKILLS/skills/* drift, ...) — a
+ * coverage-contract: closes the "enumeration rot" defect class (for example,
+ * BUILTIN_SKILLS/skills/* drift) — a
  * declared key set (config-declared) checked against a ground-truth source
  * every time either side of the contract changes. Never silently green: an
  * unresolvable contract (e.g. tree-sitter unavailable) is its own finding.
@@ -1286,7 +1292,9 @@ function runBaselineCheck(db: ScipDatabase, result: DiffGateResult): void {
   }
   result.checksRun.push('baseline');
   const comparison = checkHealthBaseline(db);
-  for (const finding of comparison.newFindings) {
+  for (const finding of comparison.newFindings.filter(
+    (identity) => !identity.startsWith(ARCHITECTURE_BASELINE_PREFIX),
+  )) {
     const metadata = baselineFindingMetadata(finding);
     const id = findingId('baseline', finding);
     recordFinding(result, {
@@ -1308,6 +1316,48 @@ function runBaselineCheck(db: ScipDatabase, result: DiffGateResult): void {
         `Underlying analyzer: ${metadata.sourceAnalyzer}.`,
         `Inherited action tier: ${metadata.actionTier}.`,
         `Root cause key: ${metadata.rootCauseKey}.`,
+        ...metadata.why,
+      ],
+      remediation: metadata.remediation,
+    });
+  }
+}
+
+function runArchitectureCheck(db: ScipDatabase, result: DiffGateResult): void {
+  if (!hasEnforceableArchitecturePolicy(db.config.architecture)) {
+    result.skipped.push({
+      check: 'architecture',
+      reason: 'no closed architecture dependency rows, requireCompletePolicy rule, or requireAcyclic rule configured',
+    });
+    return;
+  }
+  if (!existsSync(resolveBaselinePath(db))) {
+    result.skipped.push({
+      check: 'architecture',
+      reason: 'no .scipquery-baseline.json — run health --write-baseline to enable',
+    });
+    return;
+  }
+
+  result.checksRun.push('architecture');
+  const comparison = checkArchitectureBaseline(db);
+  for (const finding of comparison.newFindings) {
+    const metadata = baselineFindingMetadata(finding);
+    const id = findingId('architecture', finding);
+    recordFinding(result, {
+      id,
+      groupKey: `architecture:${metadata.rootCauseKey}`,
+      check: 'architecture',
+      severity: 'error',
+      evidence: 'baseline',
+      actionTier: 'direct',
+      confidence: 1,
+      sourceAnalyzer: 'architecture',
+      rootCauseKey: metadata.rootCauseKey,
+      message: `new ${metadata.label} vs committed baseline: ${finding}`,
+      why: [
+        'The project declares an enforceable architecture rule.',
+        'The current boundary graph contains a violation not present in the committed baseline.',
         ...metadata.why,
       ],
       remediation: metadata.remediation,

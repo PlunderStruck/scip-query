@@ -391,7 +391,7 @@ describe('reindex reliability', () => {
   it('reports every shard as reused when the whole project index is unchanged (plan6 6.5.2)', async () => {
     const projectRoot = createProject('scip-query-reindex-shard-full-reuse-');
     // Use the real project-local cache directory name (matches
-    // PROJECT_ARTIFACT_DIRS in src/reindex/project-files.ts) so meta.json
+    // PROJECT_ARTIFACT_DIRS in src/platform/project-files.ts) so meta.json
     // and the language shard cache are excluded from the project
     // fingerprint, the same as a real `.scipquery-cache`-configured project.
     // A plain `.cache` dir (as most other fixtures in this file use) is not
@@ -1262,16 +1262,17 @@ async function loadReindexFixture(opts: {
     INDEXER_CONFIGS: Object.fromEntries(opts.languages.map((language) => [language, configFor(language)])),
     getIndexerConfig: (language: SupportedLanguage) => configFor(language),
   }));
-  vi.doMock('../../src/reindex/install.js', () => ({
+  vi.doMock('../../src/platform/indexer-toolchain.js', () => ({
     describeIndexerBinary: (config: { indexerBinary: string }) => config.indexerBinary,
     getIndexerExecutionEnv: (_config: unknown, env: NodeJS.ProcessEnv) => env,
-    isBinaryAvailable: () => true,
     isIndexerInstalled: () => true,
     resolveIndexerBinary: (config: { indexerBinary: string }) => config.indexerBinary,
     resolveProjectLocalIndexerBinary: () => null,
+  }));
+  vi.doMock('../../src/reindex/install.js', () => ({
     tryInstallIndexer: () => true,
   }));
-  vi.doMock('../../src/runtime/scip-cli.js', () => ({
+  vi.doMock('../../src/platform/scip-cli.js', () => ({
     resolveScipBinary: opts.scipCli?.resolveScipBinary ?? (() => 'scip'),
     tryInstallScipCli: opts.scipCli?.tryInstallScipCli ?? (() => true),
   }));

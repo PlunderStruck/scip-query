@@ -1,11 +1,12 @@
 import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { resolveIndexStoragePaths } from '../platform/cache-layout.js';
 import { ScipDatabase } from '../storage/db.js';
 import { createGitignoreFilter } from '../source/gitignore-filter.js';
-import { loadProjectConfig, resolveIndexStoragePaths } from './config.js';
+import { loadProjectConfig } from './config.js';
 import type { ProjectConfig, ScipQueryConfig, WatcherStatus } from '../domain/types.js';
 import { getIndexFreshness } from './index-freshness.js';
-import type { GitWorktreeContext } from './git-worktree.js';
+import type { GitWorktreeContext } from '../platform/git-worktree.js';
 import { publishedGenerationIdentity } from '../semantic/typescript/session-protocol.js';
 import {
   prepareSharedGenerationForProject,
@@ -134,6 +135,7 @@ export function openProjectDb(projectRoot: string, opts: { warnOnRootFallback?: 
     suppressions: config.suppressions,
     declaredCouplings: config.declaredCouplings,
     locality: config.locality,
+    architecture: config.architecture,
     coverageContracts: config.coverageContracts,
     docs: config.docs,
   };

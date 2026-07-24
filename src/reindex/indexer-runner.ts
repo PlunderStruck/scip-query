@@ -3,7 +3,7 @@ import { existsSync, renameSync, rmSync, statSync } from 'node:fs';
 import { cpus } from 'node:os';
 import { join } from 'node:path';
 import type { IndexerConfig, SupportedLanguage } from '../domain/types.js';
-import { toPortableCommand } from '../runtime/binary.js';
+import { toPortableCommand } from '../platform/binary.js';
 
 // scip-query: ignore-stale — exported handoff record between reindex planning
 // and the runner; inlining would smear indexer execution state across modules.

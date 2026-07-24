@@ -1,5 +1,9 @@
-import type { ProjectInputSnapshot, FileDependencyGraph } from '../../reindex/affected-set.js';
-import { classifyProjectInputPath, type ProjectFileFingerprint } from '../../reindex/project-files.js';
+import {
+  classifyProjectInputPath,
+  type FileDependencyGraph,
+  type ProjectFileFingerprint,
+  type ProjectInputSnapshot,
+} from '../../domain/project-input.js';
 import { sha256Hex } from '../../storage/evidence-cache.js';
 
 export type TypeScriptSemanticIdentityMode = 'dependency-closure' | 'whole-project' | 'unkeyed';

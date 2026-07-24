@@ -21,9 +21,9 @@ import {
 import {
   WATCH_SERVICE_PROTOCOL_VERSION,
   watchServicePaths,
-  writeWatchServiceState,
   type WatchServiceState,
-} from '../../src/runtime/watch-service.js';
+} from '../../src/platform/watch-service-state.js';
+import { writeWatchServiceState } from '../../src/runtime/watch-service.js';
 import { writeJsonAtomic } from '../../src/storage/atomic-json.js';
 
 const NOW = Date.parse('2026-07-10T08:00:00.000Z');

@@ -1,4 +1,5 @@
 import type { IndexedDefinition } from '../../domain/types.js';
+import type { ProjectInputSnapshot } from '../../domain/project-input.js';
 import { profileSpan } from '../../instrumentation/profile.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';
 import type { ScipDatabase } from '../../storage/db.js';
@@ -9,7 +10,6 @@ import { isTypeScriptLike } from './source-kinds.js';
 import { assembleReferenceFragments, compareReferenceFragmentMaps } from './reference-fragments.js';
 import { createTypeScriptSemanticIdentityBuilder } from './semantic-identity.js';
 import { typeScriptSemanticEngineIdentity } from './ts-morph-runtime.js';
-import type { ProjectInputSnapshot } from '../../reindex/affected-set.js';
 import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
 
 export const TYPESCRIPT_REFERENCE_FRAGMENT_SCHEMA = 'typescript-reference-fragment-v2';

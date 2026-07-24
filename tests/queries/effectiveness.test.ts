@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeEffectiveness, parseSinceMs } from '../../src/queries/health/effectiveness.js';
-import type { OutcomeEvent } from '../../src/storage/outcome-events.js';
+import type { OutcomeEvent } from '../../src/domain/finding-outcomes.js';
 
 const DAY = 86_400_000;
 

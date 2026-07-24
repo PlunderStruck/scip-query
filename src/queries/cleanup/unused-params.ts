@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { ProjectIndex } from '../../core/project-index.js';
+import { ProjectIndex } from '../internal/project-index.js';
 import { detectAstLanguage, getSourceFacts } from '../../source/ast.js';
 import { getIdentifierLineMap } from '../../symbols/identifier-index.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';

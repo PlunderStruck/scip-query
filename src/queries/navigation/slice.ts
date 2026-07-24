@@ -1,11 +1,12 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { ProjectIndex } from '../../core/project-index.js';
+import { ProjectIndex } from '../internal/project-index.js';
 import { findExactSymbolMatch, findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { findEnclosingDefinition } from '../../symbols/definition-catalog.js';
 import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
 import { referenceSitesForSymbol } from '../../symbols/references/reference-sites.js';
 import type { SymbolMatch } from '../../domain/types.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
+import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 
 export interface SliceResult {
   symbol: string;
@@ -67,7 +68,10 @@ function backwardSlice(
     const nextFrontier: SymbolMatch[] = [];
 
     for (const current of frontier) {
-      const callees = getCalleeRowsForSymbol(db, current, { semantic: opts.semantic });
+      const callees = getCalleeRowsForSymbol(db, current, {
+        semantic: opts.semantic,
+        semanticEvidence: symbolSemanticEvidence,
+      });
 
       for (const c of callees) {
         if (visited.has(c.symbol)) continue;
@@ -110,7 +114,10 @@ function forwardSlice(db: ScipDatabase, match: SymbolMatch, opts: { semantic: bo
   const connected: SliceResult['connectedSymbols'] = [];
   const index = new ProjectIndex(db);
 
-  for (const ref of referenceSitesForSymbol(db, match, { semantic: opts.semantic })) {
+  for (const ref of referenceSitesForSymbol(db, match, {
+    semantic: opts.semantic,
+    semanticEvidence: symbolSemanticEvidence,
+  })) {
     if (connected.length >= 30) break;
 
     // Enclosing symbol via corrected ranges. Reference-site evidence usually

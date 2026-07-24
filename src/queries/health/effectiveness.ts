@@ -19,7 +19,7 @@
  * the clock.
  */
 
-import { latestOutcomeLifecycleAnchor, type OutcomeEvent } from '../../storage/outcome-events.js';
+import { latestOutcomeLifecycleAnchor, type OutcomeEvent } from '../../domain/finding-outcomes.js';
 
 export interface EffectivenessOptions {
   /** Only count findings first caught at/after this timestamp (ms). */

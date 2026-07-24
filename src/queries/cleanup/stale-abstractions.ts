@@ -4,7 +4,7 @@ import { classifyFile, isRootedSymbol } from '../../analysis/file-classifier.js'
 import { leafName, parseSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { getSourceText } from '../../source/source-text.js';
 import { getTypeContainerMap } from '../../source/ast.js';
-import { ProjectIndex } from '../../core/project-index.js';
+import { ProjectIndex } from '../internal/project-index.js';
 import { mergeSetMaps } from '../../symbols/references/caller-evidence.js';
 import { runCandidateAnalysis } from '../internal/candidate-scan.js';
 import {

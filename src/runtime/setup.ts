@@ -202,7 +202,7 @@ export function postinstall(): void {
   console.log("scip-query installed -- run 'scip-query setup' in a repo to enable skills, hooks, and the index.");
 }
 
-export { isScipInstalled, getScipVersion, printScipInstallInstructions } from './scip-cli.js';
+export { isScipInstalled, getScipVersion, printScipInstallInstructions } from '../platform/scip-cli.js';
 export {
   installProjectAgentHooks,
   installUserAgentHooks,

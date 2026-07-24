@@ -182,7 +182,7 @@ const architectureTruthRules = {
   'doc-drift':
     'The doc currently cites or historically co-changed with the reported subject, the subject changed after the doc update, any broken reference is genuinely unresolved, and the staleness arithmetic agrees; updating prose is a separate recommendation.',
   drift:
-    'The reported dependency edge exists and the stated subtype is true: no accepted import use survived, a declared or inferred layer rule rejects the edge, or exactly one accepted sibling has the dependency; architectural harm is separate.',
+    'The reported dependency edge exists and the stated subtype is true: no accepted import use survived, an explicit project-owned architecture rule rejects the grouped boundary edge, or exactly one accepted sibling has the dependency; undeclared and inferred edges are not violations.',
   'wrapper-candidates':
     'The short production callable has exactly one production external caller file after test, entry, and barrel exclusions, and its enclosing caller or file has the reported fan-in after semantic and source fallback; removing the layer is separate.',
   'passthrough-candidates':

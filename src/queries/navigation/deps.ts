@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { resolveIndexedFile } from '../../resolution/path-resolver.js';
+import { resolveIndexedFile } from '../internal/file-resolution.js';
 
 export interface DepResult {
   relativePath: string;

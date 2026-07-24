@@ -1,0 +1,7 @@
+{
+  "id": "SQ356DE5D371D4",
+  "check": "co-change-partner",
+  "file": "src/queries/cleanup/similar.ts",
+  "reason": "Accepted historical benchmark co-change signal for ownership-only import rewrites to ProjectIndex and escapeRegex. Similarity behavior and benchmark claims did not change; the full 1,408-test suite passed.",
+  "createdAt": "2026-07-23T19:17:15.873Z"
+}

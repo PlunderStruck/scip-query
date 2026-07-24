@@ -503,16 +503,22 @@ export const handleDrift = budgetedReportCommand('drift', {
       minDeviation: definedNumberOption(opts, 'minDeviation', 5),
       semantic: budget.semantic,
       includePatternDeviations: booleanOptionValue(opts, 'patterns'),
+      includeArchitecture: booleanOptionValue(opts, 'architecture'),
       limit: definedLimitOption(opts, 'limit', 50),
     }),
-  emptyMessage: (summary) => (summary.results.length === 0 ? 'No drift detected.' : undefined),
+  emptyMessage: (summary) => (summary.results.length === 0 && !summary.architecture ? 'No drift detected.' : undefined),
   heuristicLabel: 'drift candidates',
   render: (summary) => {
     console.log('');
     render.groupedByFile(
       summary.results,
       (r) => {
-        const tag = r.kind === 'unused-import' ? 'UNUSED' : r.kind === 'layer-violation' ? 'LAYER' : 'UNIQUE';
+        const tag =
+          r.kind === 'unused-import'
+            ? 'UNUSED'
+            : r.kind === 'architecture-violation' || r.kind === 'layer-violation'
+              ? 'ARCH'
+              : 'UNIQUE';
         const policy = r.policyBasis ? `, policy: ${r.policyBasis}` : '';
         const lines = [
           `  [${tag}] ${r.description}`,
@@ -525,8 +531,30 @@ export const handleDrift = budgetedReportCommand('drift', {
       },
       (r) => r.file,
     );
+    if (summary.architecture) {
+      const architecture = summary.architecture;
+      const undeclaredEdges = architecture.edges.filter((edge) => edge.policyStatus === 'undeclared').length;
+      console.log(
+        `\nArchitecture context: ${architecture.coverage.mappedFiles}/${architecture.coverage.totalFiles} file(s) mapped; ` +
+          `${architecture.policyCoverage.declaredRows}/${architecture.policyCoverage.totalBoundaries} dependency row(s) declared; ` +
+          `${undeclaredEdges} undeclared boundary edge(s).`,
+      );
+      if (architecture.reciprocalPairs.length > 0) {
+        console.log(`  Reciprocal pairs (${architecture.reciprocalPairs.length}):`);
+        for (const pair of architecture.reciprocalPairs) {
+          console.log(`    ${pair.boundaries[0]} <-> ${pair.boundaries[1]}`);
+        }
+      }
+      if (architecture.cycles.length > 0) {
+        console.log(`  Connected boundary groups (${architecture.cycles.length}):`);
+        for (const cycle of architecture.cycles) {
+          const policy = cycle.violatesPolicy ? ' [violates requireAcyclic]' : ' [signal]';
+          console.log(`    { ${cycle.boundaries.join(', ')} }${policy}`);
+        }
+      }
+    }
     console.log(
-      `\n${summary.unusedImports} unused import(s), ${summary.layerViolations} layer violation(s), ${summary.patternDeviations} pattern deviation(s)${summary.totalResults ? ` — showing ${summary.results.length} of ${summary.totalResults} (use -n to change)` : ''}`,
+      `\n${summary.unusedImports} unused import(s), ${summary.architectureViolations} declared architecture violation(s), ${summary.patternDeviations} pattern deviation(s)${summary.totalResults ? ` — showing ${summary.results.length} of ${summary.totalResults} (use -n to change)` : ''}`,
     );
   },
 });

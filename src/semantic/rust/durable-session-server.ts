@@ -10,7 +10,7 @@ import {
 } from './durable-session.js';
 import { createWorkerRustAnalyzerSessionRequester } from './lsp-session.js';
 import { writeJsonAtomic } from '../../storage/atomic-json.js';
-import { isProcessAlive } from '../../runtime/process-liveness.js';
+import { isProcessAlive } from '../../platform/process-liveness.js';
 
 const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60_000;
 const POLL_INTERVAL_MS = 10;

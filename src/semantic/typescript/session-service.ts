@@ -1,18 +1,18 @@
 import { mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  buildProjectChangeManifest,
+  projectInputSnapshotOrNull,
+  type ProjectChangeManifest,
+  type ProjectInputSnapshot,
+} from '../../domain/project-input.js';
+import {
   applyProfileEnvironment,
   captureProfileEnvironment,
   type ProfileEnvironment,
 } from '../../instrumentation/profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { writeJsonAtomic } from '../../storage/atomic-json.js';
-import {
-  buildProjectChangeManifest,
-  projectInputSnapshotOrNull,
-  type ProjectChangeManifest,
-  type ProjectInputSnapshot,
-} from '../../reindex/affected-set.js';
 import { TypeScriptSemanticHost } from './session-host.js';
 import {
   TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,

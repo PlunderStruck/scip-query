@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
-import { ProjectIndex } from '../../core/project-index.js';
+import { ProjectIndex } from '../internal/project-index.js';
 import { semanticCallerMap } from '../../semantic/shared-primitives.js';
 import { sourceFallbackCallerEvidenceMap } from '../../symbols/references/caller-evidence.js';
 import { isCallableSymbol, isModuleLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';

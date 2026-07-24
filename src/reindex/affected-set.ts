@@ -1,52 +1,4 @@
-import type { SupportedLanguage } from '../domain/types.js';
-import { isRecord, stringArray } from '../storage/evidence-payload.js';
-import { classifyProjectInputPath, type ProjectFileFingerprint, type ProjectInputPathKind } from './project-files.js';
-
-export interface ProjectInputSnapshot {
-  version: number;
-  languages: readonly SupportedLanguage[];
-  pnpmWorkspaces: boolean;
-  typescriptProjectMode: string;
-  typescriptProjects: readonly string[];
-  clojureConfigPath?: string;
-  files: readonly ProjectFileFingerprint[];
-}
-
-interface ProjectFileChangeBase {
-  path: string;
-  inputKind: ProjectInputPathKind;
-}
-
-export interface AddedProjectFileChange extends ProjectFileChangeBase {
-  kind: 'added';
-  after: ProjectFileFingerprint;
-}
-
-export interface ModifiedProjectFileChange extends ProjectFileChangeBase {
-  kind: 'modified';
-  before: ProjectFileFingerprint;
-  after: ProjectFileFingerprint;
-}
-
-export interface DeletedProjectFileChange extends ProjectFileChangeBase {
-  kind: 'deleted';
-  before: ProjectFileFingerprint;
-}
-
-export type ProjectFileChange = AddedProjectFileChange | ModifiedProjectFileChange | DeletedProjectFileChange;
-
-export type ProjectChangeUncertainty =
-  | 'prior-snapshot-unavailable'
-  | 'snapshot-version-changed'
-  | 'duplicate-input-path'
-  | 'unreadable-input';
-
-export interface ProjectChangeManifest {
-  version: 1;
-  changes: ProjectFileChange[];
-  projectIdentityChanged: boolean;
-  uncertainty: ProjectChangeUncertainty[];
-}
+import type { FileDependencyGraph, ProjectChangeManifest } from '../domain/project-input.js';
 
 export type AffectedSetFallbackReason =
   | 'prior-snapshot-unavailable'
@@ -72,78 +24,6 @@ export interface AffectedFilePlan {
   changedFiles: string[];
   affectedFiles: string[];
   reasons: AffectedSetFallbackReason[];
-}
-
-export type FileDependencyGraph = ReadonlyMap<string, ReadonlySet<string>>;
-
-export function projectInputSnapshotOrNull(value: unknown): ProjectInputSnapshot | null {
-  if (!isRecord(value)) return null;
-  if (typeof value['version'] !== 'number') return null;
-  if (stringArray(value['languages']) === null) return null;
-  if (typeof value['pnpmWorkspaces'] !== 'boolean') return null;
-  if (typeof value['typescriptProjectMode'] !== 'string') return null;
-  if (stringArray(value['typescriptProjects']) === null) return null;
-  if (value['clojureConfigPath'] !== undefined && typeof value['clojureConfigPath'] !== 'string') return null;
-  if (!Array.isArray(value['files']) || !value['files'].every(isProjectFileFingerprint)) return null;
-
-  return value as unknown as ProjectInputSnapshot;
-}
-
-export function buildProjectChangeManifest(
-  previous: ProjectInputSnapshot | null,
-  current: ProjectInputSnapshot,
-): ProjectChangeManifest {
-  const previousFiles = new Map((previous?.files ?? []).map((file) => [file.path, file]));
-  const currentFiles = new Map(current.files.map((file) => [file.path, file]));
-  const paths = new Set([...previousFiles.keys(), ...currentFiles.keys()]);
-  const changes: ProjectFileChange[] = [];
-
-  for (const path of [...paths].sort()) {
-    const before = previousFiles.get(path);
-    const after = currentFiles.get(path);
-    const inputKind = classifyProjectInputPath(path, current.languages);
-    if (!before && after) {
-      changes.push({ kind: 'added', path, inputKind, after });
-    } else if (before && !after) {
-      changes.push({ kind: 'deleted', path, inputKind, before });
-    } else if (before && after && (before.hash !== after.hash || before.size !== after.size)) {
-      changes.push({ kind: 'modified', path, inputKind, before, after });
-    }
-  }
-
-  const uncertainty = new Set<ProjectChangeUncertainty>();
-  if (!previous) uncertainty.add('prior-snapshot-unavailable');
-  if (previous && previous.version !== current.version) uncertainty.add('snapshot-version-changed');
-  if (hasDuplicatePaths(previous?.files ?? []) || hasDuplicatePaths(current.files)) {
-    uncertainty.add('duplicate-input-path');
-  }
-  if ([...(previous?.files ?? []), ...current.files].some(isUnreadableFingerprint)) {
-    uncertainty.add('unreadable-input');
-  }
-
-  return {
-    version: 1,
-    changes,
-    projectIdentityChanged: previous ? !sameProjectIdentity(previous, current) : true,
-    uncertainty: [...uncertainty].sort(),
-  };
-}
-
-function hasDuplicatePaths(files: readonly ProjectFileFingerprint[]): boolean {
-  return new Set(files.map((file) => file.path)).size !== files.length;
-}
-
-function isProjectFileFingerprint(value: unknown): value is ProjectFileFingerprint {
-  return (
-    isRecord(value) &&
-    typeof value['path'] === 'string' &&
-    typeof value['size'] === 'number' &&
-    typeof value['hash'] === 'string'
-  );
-}
-
-function isUnreadableFingerprint(file: ProjectFileFingerprint): boolean {
-  return file.hash === 'unreadable' || file.size < 0;
 }
 
 export function classifyAffectedSetFallback(manifest: ProjectChangeManifest): AffectedSetFallbackDecision {
@@ -235,21 +115,4 @@ function reverseDependencyClosure(
     }
   }
   return [...affected].sort();
-}
-
-function sameProjectIdentity(left: ProjectInputSnapshot, right: ProjectInputSnapshot): boolean {
-  return (
-    sameStrings(left.languages, right.languages) &&
-    left.pnpmWorkspaces === right.pnpmWorkspaces &&
-    left.typescriptProjectMode === right.typescriptProjectMode &&
-    sameStrings(left.typescriptProjects, right.typescriptProjects) &&
-    left.clojureConfigPath === right.clojureConfigPath
-  );
-}
-
-function sameStrings(left: readonly string[], right: readonly string[]): boolean {
-  if (left.length !== right.length) return false;
-  const sortedLeft = [...left].sort();
-  const sortedRight = [...right].sort();
-  return sortedLeft.every((value, index) => value === sortedRight[index]);
 }

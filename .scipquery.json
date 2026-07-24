@@ -12,7 +12,102 @@
       "projectMode": "workspace"
     }
   },
+  "architecture": {
+    "boundaries": [
+      {
+        "name": "analysis",
+        "paths": ["src/analysis/**"]
+      },
+      {
+        "name": "platform",
+        "paths": ["src/platform/**"]
+      },
+      {
+        "name": "domain",
+        "paths": ["src/domain/**"]
+      },
+      {
+        "name": "instrumentation",
+        "paths": ["src/instrumentation/**"]
+      },
+      {
+        "name": "public-api",
+        "paths": ["src/index.ts"]
+      },
+      {
+        "name": "queries",
+        "paths": ["src/queries/**"]
+      },
+      {
+        "name": "reindex",
+        "paths": ["src/reindex/**"]
+      },
+      {
+        "name": "runtime",
+        "paths": ["src/runtime/**"]
+      },
+      {
+        "name": "rust-kernels",
+        "paths": ["crates/scip-query-kernels/**"]
+      },
+      {
+        "name": "semantic",
+        "paths": ["src/semantic/**"]
+      },
+      {
+        "name": "source",
+        "paths": ["src/source/**", "src/language-parsers/**"]
+      },
+      {
+        "name": "storage",
+        "paths": ["src/storage/**"]
+      },
+      {
+        "name": "symbols",
+        "paths": ["src/symbols/**"]
+      },
+      {
+        "name": "tla",
+        "paths": ["src/tla/**"]
+      }
+    ],
+    "allowedDependencies": {
+      "analysis": ["domain", "source", "storage", "symbols"],
+      "domain": [],
+      "instrumentation": [],
+      "platform": ["domain"],
+      "public-api": ["domain", "queries", "source", "storage", "symbols"],
+      "queries": ["analysis", "domain", "instrumentation", "platform", "semantic", "source", "storage", "symbols"],
+      "reindex": ["domain", "instrumentation", "platform", "semantic", "source", "storage", "symbols"],
+      "runtime": [
+        "domain",
+        "instrumentation",
+        "platform",
+        "queries",
+        "reindex",
+        "semantic",
+        "source",
+        "storage",
+        "symbols",
+        "tla"
+      ],
+      "rust-kernels": [],
+      "semantic": ["domain", "instrumentation", "platform", "source", "storage", "symbols"],
+      "source": ["domain", "platform", "storage"],
+      "storage": ["domain", "instrumentation"],
+      "symbols": ["domain", "instrumentation", "source", "storage"],
+      "tla": ["domain", "platform", "queries", "source", "storage", "symbols"]
+    },
+    "requireCompletePolicy": true,
+    "requireAcyclic": true
+  },
   "suppressions": [
+    {
+      "id": "SQ562715D7254A",
+      "check": "co-change-partner",
+      "file": "tests/runtime/runtime-config.test.ts",
+      "reason": "Accepted change-graph signal for the architecture-config validator tests: src/runtime/commands/command-handlers.ts consumes config diagnostics through the existing generic validation path and needs no architecture-specific branch. The historical relationship is 7 broad-sweep co-edits with 0 focused co-edits, and the detector classifies the pair as test-code rather than a proved coordination contract."
+    },
     {
       "id": "SQ1B9176E44C22",
       "check": "echo",
@@ -40,7 +135,7 @@
     {
       "id": "SQD2F5BC7ACF44",
       "check": "echo",
-      "file": "src/resolution/import-path-resolver.ts",
+      "file": "src/source/import-path-resolver.ts",
       "reason": "Accepted cache-declaration echo: both caches already share the per-DB cache factory; this one fingerprints indexed import-resolution paths."
     },
     {
@@ -52,6 +147,7 @@
       "reason": "Accepted cache-declaration echo: Vue behavior profiles intentionally use the same source-aware cache factory as Vue template facts; the cache name and value type are the product variation."
     },
     {
+      "id": "SQ58DA50428777",
       "check": "echo",
       "file": "src/source/react-profile.ts",
       "reason": "Accepted cache-declaration echo: React behavior profiles intentionally use the same source-aware cache factory as Vue profile/template facts; the cache name and value type are the product variation."
@@ -168,7 +264,7 @@
         "docs/validation/2026-06-22-doc-reference-citation-parser-result.md",
         "src/storage/evidence-cache.ts",
         "src/queries/cleanup/similar.ts",
-        "src/core/production-callables.ts"
+        "src/queries/internal/production-callables.ts"
       ]
     },
     {
@@ -187,19 +283,6 @@
     }
   ],
   "coverageContracts": [
-    {
-      "name": "drift layer policy covers src dirs",
-      "file": "src/queries/cleanup/drift-policy.ts",
-      "keys": {
-        "type": "object-literal-keys",
-        "identifier": "SRC_LAYER_DEPENDENCIES"
-      },
-      "mustEqual": {
-        "type": "top-level-dirs",
-        "path": "src"
-      },
-      "allowExtra": false
-    },
     {
       "name": "BUILTIN_SKILLS covers skills dirs",
       "file": "src/runtime/setup.ts",

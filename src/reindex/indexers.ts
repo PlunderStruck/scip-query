@@ -1,6 +1,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import type { SupportedLanguage, IndexerConfig } from '../domain/types.js';
+import { RUST_ANALYZER_TOOLCHAIN } from '../platform/indexer-toolchain.js';
 
 /**
  * Indexer configurations for each supported language.
@@ -85,18 +86,18 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
   },
 
   rust: {
-    language: 'rust',
-    indexerBinary: 'rust-analyzer',
-    checkCommand: 'rust-analyzer --version',
+    language: RUST_ANALYZER_TOOLCHAIN.language,
+    indexerBinary: RUST_ANALYZER_TOOLCHAIN.indexerBinary,
+    checkCommand: `${RUST_ANALYZER_TOOLCHAIN.indexerBinary} --version`,
     indexArgs: ({ outputPath }) => ({
-      binary: 'rust-analyzer',
+      binary: RUST_ANALYZER_TOOLCHAIN.indexerBinary,
       args: ['scip', '.', '--output', outputPath],
     }),
     markerFiles: ['Cargo.toml'],
     installMethods: [
       { label: 'rustup', prerequisite: 'rustup', binary: 'rustup', args: ['component', 'add', 'rust-analyzer'] },
     ],
-    installUrl: 'https://github.com/rust-lang/rust-analyzer',
+    installUrl: RUST_ANALYZER_TOOLCHAIN.installUrl,
   },
 
   python: {

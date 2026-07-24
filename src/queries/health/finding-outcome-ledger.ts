@@ -13,23 +13,15 @@
 
 import type { ScipDatabase } from '../../storage/db.js';
 import { readFindingOutcomeLedger, writeFindingOutcomeLedger } from '../../storage/evidence-cache.js';
+import {
+  ledgerKey,
+  type FindingOutcome,
+  type FindingOutcomeRecord,
+  type ObservedFinding,
+} from '../../domain/finding-outcomes.js';
 
-export type FindingOutcome = 'resolved' | 'suppressed' | 'still-open';
-
-export interface FindingOutcomeRecord {
-  check: string;
-  findingId: string;
-  firstSeen: number;
-  lastSeen: number;
-  timesShown: number;
-  outcome: FindingOutcome;
-}
-
-export interface ObservedFinding {
-  check: string;
-  findingId: string;
-  suppressed: boolean;
-}
+export { ledgerKey } from '../../domain/finding-outcomes.js';
+export type { FindingOutcome, FindingOutcomeRecord, ObservedFinding } from '../../domain/finding-outcomes.js';
 
 /**
  * Pure ledger transition for one diff-gate (or health) run.
@@ -195,11 +187,6 @@ export function formatLowResolutionNudges(
     );
   }
   return lines;
-}
-
-/** Composite ledger identity — shared with the committed event ledger (src/storage/outcome-events.ts). */
-export function ledgerKey(check: string, findingId: string): string {
-  return `${check}\0${findingId}`;
 }
 
 // ── Storage shell (side effects live here; math above stays pure) ──

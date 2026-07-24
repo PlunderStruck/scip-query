@@ -30,6 +30,10 @@ const DIFF_GATE_CHECK_DESCRIPTIONS: Record<DiffGateCheck, { description: string;
       'A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source.',
     when: 'Default diff gate, only when either side of a configured contract changed.',
   },
+  architecture: {
+    description: 'A declared architecture boundary rule has a violation absent from the committed health baseline.',
+    when: 'Default diff gate when closed dependency rows, requireCompletePolicy, or requireAcyclic are configured and a baseline exists.',
+  },
   'doc-reference': {
     description:
       'Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy.',

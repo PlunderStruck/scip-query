@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
@@ -35,11 +35,32 @@ describe('advanced queries', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-query-advanced-'));
     dbPath = join(tempDir, 'index.db');
     createAdvancedFixtureDb(dbPath);
+    mkdirSync(join(tempDir, 'app'), { recursive: true });
+    writeFileSync(
+      join(tempDir, advancedFixture.files.model),
+      "import '../infra/http.js';\nexport const model = true;\n",
+    );
 
     const config: ScipQueryConfig = {
       dbPath,
       indexPath: join(tempDir, 'index.scip'),
       projectRoot: tempDir,
+      architecture: {
+        boundaries: [
+          { name: 'app', paths: ['app/**'] },
+          { name: 'core', paths: ['core/**'] },
+          { name: 'infra', paths: ['infra/**'] },
+          { name: 'ui', paths: ['ui/**'] },
+          { name: 'shared', paths: ['shared/**'] },
+        ],
+        allowedDependencies: {
+          app: ['core', 'shared', 'ui'],
+          core: ['shared'],
+          infra: ['shared'],
+          ui: ['shared'],
+          shared: [],
+        },
+      },
     };
     db = new ScipDatabase(config);
   });
@@ -49,13 +70,13 @@ describe('advanced queries', () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('finds structural drift across layers and unique deps', () => {
+  it('finds declared architecture drift and unique deps', () => {
     // includePatternDeviations: true — 21.2 flipped the default to opt-in
     // (low precision at scale); this test asserts the opted-in behavior.
     const summary = queries.drift(db, { includePatternDeviations: true });
 
     expect(summary.results.length).toBeGreaterThan(0);
-    expect(summary.layerViolations).toBeGreaterThan(0);
+    expect(summary.architectureViolations).toBeGreaterThan(0);
     expect(summary.patternDeviations).toBeGreaterThan(0);
     expect(summary.results).toEqual(
       expect.arrayContaining([
@@ -69,8 +90,8 @@ describe('advanced queries', () => {
     expect(
       summary.results.some(
         (result) =>
-          result.kind === 'layer-violation' &&
-          result.file === advancedFixture.files.controller &&
+          result.kind === 'architecture-violation' &&
+          result.file === advancedFixture.files.model &&
           result.dep === advancedFixture.files.http,
       ),
     ).toBe(true);
@@ -80,7 +101,7 @@ describe('advanced queries', () => {
     const summary = queries.drift(db, { minDeviation: 6, includePatternDeviations: true });
 
     expect(summary.patternDeviations).toBe(0);
-    expect(summary.layerViolations).toBeGreaterThan(0);
+    expect(summary.architectureViolations).toBeGreaterThan(0);
   });
 
   it('does not include pattern deviations by default (21.2: opt-in via --patterns)', () => {
@@ -105,7 +126,7 @@ describe('advanced queries', () => {
         }),
       ]),
     );
-    expect(healthStyleSummary.layerViolations).toBe(publicSummary.layerViolations);
+    expect(healthStyleSummary.architectureViolations).toBe(publicSummary.architectureViolations);
     expect(healthStyleSummary.unusedImports).toBe(publicSummary.unusedImports);
   });
 
@@ -117,7 +138,7 @@ describe('advanced queries', () => {
     expect(capped.results).toHaveLength(1);
     expect(capped.totalResults).toBe(full.results.length);
     // Counts describe the full population, not just the shown slice.
-    expect(capped.layerViolations).toBe(full.layerViolations);
+    expect(capped.architectureViolations).toBe(full.architectureViolations);
     expect(capped.patternDeviations).toBe(full.patternDeviations);
   });
 

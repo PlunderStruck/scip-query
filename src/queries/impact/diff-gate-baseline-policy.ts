@@ -61,6 +61,42 @@ export function baselineFindingMetadata(finding: string): BaselineFindingMetadat
     });
   }
 
+  if (analyzer === 'architecture') {
+    const [architectureKind, rest] = splitFirst(payload, ':');
+    if (architectureKind === 'forbidden-edge') {
+      const [encodedFrom, encodedTo] = splitFirst(rest, ':');
+      const from = decodeIdentityPart(encodedFrom);
+      const to = decodeIdentityPart(encodedTo);
+      return base({
+        actionTier: 'direct',
+        rootCauseKey: payload,
+        label: 'architecture boundary violation',
+        why: [`Declared boundary rule rejects ${from} -> ${to}.`],
+        remediation: `Move the dependency behind an allowed boundary, or deliberately update the ${from} dependency rule and baseline.`,
+      });
+    }
+    if (architectureKind === 'cycle') {
+      const boundaries = rest.split('|').filter(Boolean).map(decodeIdentityPart);
+      return base({
+        actionTier: 'direct',
+        rootCauseKey: payload,
+        label: 'forbidden architecture cycle',
+        why: [`requireAcyclic rejects the connected boundary group: ${boundaries.join(', ')}.`],
+        remediation: 'Break the boundary cycle, or deliberately revise the acyclicity rule and baseline.',
+      });
+    }
+    if (architectureKind === 'missing-policy-row') {
+      const boundary = decodeIdentityPart(rest);
+      return base({
+        actionTier: 'direct',
+        rootCauseKey: payload,
+        label: 'incomplete architecture policy',
+        why: [`requireCompletePolicy rejects the missing outgoing dependency row for ${boundary}.`],
+        remediation: `Declare the allowed outgoing dependencies for ${boundary}, including an empty row when it must depend on nothing.`,
+      });
+    }
+  }
+
   if (analyzer === 'drift') {
     const [driftKind, rest] = splitFirst(payload, ':');
     const [file, dep] = splitFirst(rest, ':');
@@ -83,6 +119,7 @@ function baselineAnalyzerActionTier(analyzer: string): DiffGateActionTier {
     case 'isolated':
     case 'cycle':
     case 'passthrough':
+    case 'architecture':
       return 'direct';
     case 'similar':
     case 'extract':
@@ -105,4 +142,12 @@ function splitFirst(value: string, delimiter: string): [string, string] {
   const index = value.indexOf(delimiter);
   if (index < 0) return [value, ''];
   return [value.slice(0, index), value.slice(index + delimiter.length)];
+}
+
+function decodeIdentityPart(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }

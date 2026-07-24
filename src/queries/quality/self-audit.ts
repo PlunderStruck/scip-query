@@ -1,7 +1,8 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
-import { ProjectIndex } from '../../core/project-index.js';
+import { ProjectIndex } from '../internal/project-index.js';
 import { semanticCalleeMap, semanticEvidenceProduct, semanticReferences } from '../../semantic/shared-primitives.js';
+import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 import { referenceSitesForSymbol } from '../../symbols/references/reference-sites.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { detectAstLanguage, getSourceFacts } from '../../source/ast.js';
@@ -108,7 +109,7 @@ export function selfAudit(
 
     const cheapRefs = crossFileSet(
       definition,
-      referenceSitesForSymbol(db, definition).map((site) => site.file),
+      referenceSitesForSymbol(db, definition, { semanticEvidence: symbolSemanticEvidence }).map((site) => site.file),
     );
     const cheapCals = crossFileSet(
       definition,

@@ -4,6 +4,20 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+## [0.19.0]
+
+### Architecture coherence
+
+- New `architecture` query and CLI command evaluates compiler-resolved imports and reexports against a declared layer policy, reporting forbidden, undeclared, reciprocal, and cyclic dependencies with machine-readable evidence.
+- Architecture policy can require complete file classification and an acyclic layer graph. `diff-gate` now ratchets architecture findings so changed code cannot introduce new boundary violations.
+- The scip-query repository now enforces a complete 14-layer target architecture: all source files are classified, every allowed relationship is explicit, and architectural cycles and implicit dependencies are rejected.
+
+### Internal boundaries
+
+- Project inputs, indexer toolchains, cache layout, watcher state, file resolution, and semantic evidence now have focused domain, platform, source, query, and symbol contracts instead of depending on mixed runtime or resolution modules.
+- Git worktree-aware watcher behavior and shared-generation cache reuse retain their existing operational contracts while their host mechanisms move behind the platform boundary.
+- Architecture guidance, planning records, command documentation, skills, tests, and committed outcome/suppression records now describe and protect the target structure.
+
 ## [0.18.0]
 
 ### Skills (semiformal reasoning certificates)

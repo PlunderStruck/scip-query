@@ -28,7 +28,7 @@ import {
   pruneTypeScriptOverlays,
   readTypeScriptOverlay,
 } from '../../src/reindex/typescript-overlay-store.js';
-import { resolveScipBinary } from '../../src/runtime/scip-cli.js';
+import { resolveScipBinary } from '../../src/platform/scip-cli.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 
 const require = createRequire(import.meta.url);

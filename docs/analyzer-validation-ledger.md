@@ -72,7 +72,7 @@ The canonical source is `src/runtime/commands/query-command-specs.ts:11-78`, whe
 - Direct cleanup and deletion analyzers: `dead`, `isolated`, `unused-imports`, `cleanup-plan`, `unused-params`, `passthrough-candidates`, `redundant-reexports`
 - Similarity, reuse, extraction, and locality analyzers: `similar`, `similar-files`, `similar-chains`, `similar-signatures`, `recent-duplicates`, `duplicate-bodies`, `twin-drift`, `twin-ab`, `extract-candidates`, `locality-candidates`, `wrapper-candidates`, `stale-abstractions`, `doc-drift`, `drift`, `convergence`
 - Frontend analyzers: `react-component-duplicates`, `react-hook-candidates`, `react-large-component-pressure`, `vue-component-duplicates`, `vue-composable-candidates`, `vue-large-view-pressure`
-- Graph, risk, and complexity analyzers: `hotspots`, `fan-in`, `fan-out`, `coupling`, `cycles`, `bottlenecks`, `deep-chains`, `complexity-hotspots`, `complexity`
+- Graph, risk, and complexity analyzers: `architecture`, `hotspots`, `fan-in`, `fan-out`, `coupling`, `cycles`, `bottlenecks`, `deep-chains`, `complexity-hotspots`, `complexity`
 - Diff, impact, and planning analyzers: `affected`, `change-surface`, `co-change`, `diff-gate`, `incomplete-migration`, `plan-context`
 - Formal model verification: `tla`
 - Meta and action commands: `self-audit`, `cleanup-apply`
@@ -364,3 +364,14 @@ repository-dead candidates, while `file-internal`, other detector families,
 Rust, Python, and the aggregate health score retain independent status. The
 full evidence is in
 `docs/validation/2026-07-10-typescript-dead-certification.md`.
+
+## 2026-07-23 Architecture Coherence Follow-Up
+
+`src/runtime/commands/query-command-specs.ts` remains the canonical public
+query order after adding `architecture` to the graph family. The enforcement
+follow-up replaced drift's repository-specific policy with project-owned
+configuration and added stable boundary-pair identities to the shared health
+baseline. The default diff gate now blocks only new configured forbidden edges
+or explicitly forbidden cycles; accepted existing identities remain ratcheted.
+Reciprocal pairs, unmapped files, undeclared edges, and undeclared cycles remain
+contextual signals until external calibration.

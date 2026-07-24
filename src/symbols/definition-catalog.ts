@@ -44,7 +44,7 @@ import { isRecord } from '../storage/evidence-payload.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
 import type { IndexedDefinition, SymbolMatch } from '../domain/types.js';
 import { mergeMixedSymbolQueryRows } from './symbol-row-policy.js';
-import { escapeRegex } from '../core/regex-utils.js';
+import { escapeRegex } from '../source/regex-utils.js';
 
 export { parentTypeName } from './symbol-parser.js';
 

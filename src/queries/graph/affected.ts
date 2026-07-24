@@ -5,6 +5,7 @@ import { callerRowsMapForSymbols } from '../../symbols/references/caller-evidenc
 import type { SymbolMatch } from '../../domain/types.js';
 import { leafSuffix, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { detectAstLanguage } from '../../source/ast.js';
+import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 
 export interface AffectedResult {
   symbol: string;
@@ -37,7 +38,10 @@ export function affected(
     if (frontier.length === 0) break;
 
     const nextFrontier: typeof frontier = [];
-    const callerRows = callerRowsMapForSymbols(db, frontier, { limit: 500 });
+    const callerRows = callerRowsMapForSymbols(db, frontier, {
+      limit: 500,
+      semanticEvidence: symbolSemanticEvidence,
+    });
 
     for (const current of frontier) {
       for (const row of getDirectAffectedRows(db, current, scope, callerRows.get(current.symbolId) ?? [])) {

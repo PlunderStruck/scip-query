@@ -1,0 +1,9 @@
+{
+  "ts": 1784842049182,
+  "check": "echo",
+  "findingId": "SQ44BA6989012D",
+  "event": "caught",
+  "commit": "d82429b7e8826a61cdd5f33bdcdcea001d5ee927",
+  "comparisonBaseCommit": "d82429b7e8826a61cdd5f33bdcdcea001d5ee927",
+  "symbol": "scip-typescript npm scip-query 0.18.0 src/domain/`project-input.ts`/isRecord()."
+}

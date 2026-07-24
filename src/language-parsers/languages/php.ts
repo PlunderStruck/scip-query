@@ -4,7 +4,7 @@
  */
 import type { SyntaxNode, Tree } from '../../source/ast.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { PHP_EXTENSIONS, resolveQualifiedImportPath } from '../../resolution/import-path-resolver.js';
+import { PHP_EXTENSIONS, resolveQualifiedImportPath } from '../../source/import-path-resolver.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
 import {
   buildNamedImport,

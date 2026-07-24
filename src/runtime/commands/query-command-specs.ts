@@ -29,6 +29,7 @@ const queryCommandOrder = [
   'fan-out',
   'coupling',
   'cycles',
+  'architecture',
   'bottlenecks',
   'isolated',
   'by-kind',

@@ -3,7 +3,7 @@ import type { IndexedDefinition } from '../../domain/types.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
 import { getSourceLines, getSourceText } from '../../source/source-text.js';
-import { escapeRegex } from '../../core/regex-utils.js';
+import { escapeRegex } from '../../source/regex-utils.js';
 import {
   computeIdfFromDocFreq,
   difference,
@@ -14,13 +14,14 @@ import {
   weightedMagnitude,
 } from '../../analysis/similarity.js';
 import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
-import { ProjectIndex } from '../../core/project-index.js';
+import { ProjectIndex } from '../internal/project-index.js';
 import { createPerDbValue } from '../../storage/per-db-cache.js';
 import { applyScanLimit } from '../query-utils.js';
 import { fileContentHash } from '../../storage/evidence-cache.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';
 import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
+import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 
 export interface SimilarSymbolResult {
   symbolA: string;
@@ -742,7 +743,10 @@ function findCallees(db: ScipDatabase, symbolPattern: string, opts: { semantic: 
   if (!isFunctionLikeSymbol(target.symbol)) return null;
 
   const index = new ProjectIndex(db);
-  const calleeRows = getCalleeRowsForSymbol(db, target, { semantic: opts.semantic });
+  const calleeRows = getCalleeRowsForSymbol(db, target, {
+    semantic: opts.semantic,
+    semanticEvidence: symbolSemanticEvidence,
+  });
 
   return {
     symbol: target.symbol,

@@ -20,7 +20,8 @@ import {
   type DocumentFactRecord,
   type EvaluatedAffectedSetShadowRecord,
 } from '../../src/reindex/affected-shadow.js';
-import type { AffectedSetFallbackReason, ProjectInputSnapshot } from '../../src/reindex/affected-set.js';
+import type { ProjectInputSnapshot } from '../../src/domain/project-input.js';
+import type { AffectedSetFallbackReason } from '../../src/reindex/affected-set.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { createEvidenceSchema } from '../fixtures/evidence-fixture.js';
 

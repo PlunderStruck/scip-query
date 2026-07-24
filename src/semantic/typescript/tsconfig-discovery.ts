@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
-import { expandWorkspacePattern } from '../../resolution/workspace-packages.js';
+import { expandWorkspacePattern } from '../../platform/workspace-packages.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { TYPESCRIPT_SEMANTIC_EXTENSIONS } from './source-kinds.js';
 

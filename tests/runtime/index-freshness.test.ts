@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ProjectConfig, SupportedLanguage } from '../../src/domain/types.js';
-import { fingerprintProjectFiles } from '../../src/reindex/project-files.js';
+import { fingerprintProjectFiles } from '../../src/platform/project-files.js';
 import { getIndexFreshness } from '../../src/runtime/index-freshness.js';
 
 function writeMeta(

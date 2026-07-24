@@ -3,6 +3,7 @@ import { cleanSignature, extractSignature, findFirstSymbolMatch } from '../../sy
 import { referenceSitesForSymbol } from '../../symbols/references/reference-sites.js';
 import { getSourceText } from '../../source/source-text.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
+import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 
 export interface TraceResult {
   definitions: Array<{
@@ -46,7 +47,10 @@ export function trace(db: ScipDatabase, symbolPattern: string, opts: { semantic?
         },
       ];
 
-  const referencedBy = referenceSitesForSymbol(db, match, { semantic: opts.semantic }).map((site) => ({
+  const referencedBy = referenceSitesForSymbol(db, match, {
+    semantic: opts.semantic,
+    semanticEvidence: symbolSemanticEvidence,
+  }).map((site) => ({
     relativePath: site.file,
     line: site.line,
     enclosingSymbol: site.enclosingSymbol,

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import type { ProjectFileFingerprint } from '../../src/reindex/project-files.js';
+import type { ProjectFileFingerprint } from '../../src/domain/project-input.js';
 import {
   assignFilesToProjects,
   computeProjectShardFingerprints,

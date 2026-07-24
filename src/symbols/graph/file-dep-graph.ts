@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { getSourceImports } from '../../language-parsers/index.js';
+import { getReExports, getSourceImports } from '../../language-parsers/index.js';
 import { projectEvidenceFingerprint, sha256Hex } from '../../storage/evidence-cache.js';
 import { createProjectEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';
 import { createPerDbCache } from '../../storage/per-db-cache.js';
@@ -7,23 +7,25 @@ import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { profileSpan } from '../../instrumentation/profile.js';
 
 interface FileDependencyGraphPayload {
-  sourceImportFingerprint: string;
+  sourceDependencyFingerprint: string;
   sourceFileCount: number;
   sourceEdgeCount: number;
   scipEdgeCount: number;
   graph: Array<[string, string[]]>;
 }
 
-interface SourceImportEdge {
+interface SourceDependencyEdge {
   fromFile: string;
   toFile: string;
 }
 
-interface SourceImportEdgeSet {
+interface SourceDependencyEdgeSet {
   files: string[];
-  edges: SourceImportEdge[];
+  edges: SourceDependencyEdge[];
   fingerprint: string;
 }
+
+export type SourceDependencyEdgeMode = 'imports-only' | 'imports-and-reexports';
 
 const FILE_DEPENDENCY_GRAPH_PRODUCT = createProjectEvidenceProduct<FileDependencyGraphPayload>({
   kind: 'file-dependency-graph',
@@ -44,16 +46,20 @@ const FILE_DEP_GRAPH_CACHE = createPerDbCache<string, Map<string, Set<string>>>(
 export function buildFileDepGraph(
   db: ScipDatabase,
   scope?: string,
-  opts: { scipEdges?: 'all-references' | 'imports-only' } = {},
+  opts: {
+    scipEdges?: 'all-references' | 'imports-only';
+    sourceEdges?: SourceDependencyEdgeMode;
+  } = {},
 ): Map<string, Set<string>> {
   const scipEdges = opts.scipEdges ?? 'all-references';
-  return FILE_DEP_GRAPH_CACHE.get(db, `${scipEdges}:${scope ?? ''}`, () => {
+  const sourceEdges = opts.sourceEdges ?? 'imports-only';
+  const cacheKey = fileDependencyGraphCacheKey(scope, scipEdges, sourceEdges);
+  return FILE_DEP_GRAPH_CACHE.get(db, cacheKey, () => {
     const indexedFiles = new Set(indexedDocumentPaths(db, { includeIgnored: false }));
     const projectFingerprint = projectEvidenceFingerprint(db);
-    const cacheKey = fileDependencyGraphCacheKey(scope, scipEdges);
     let sourceFileCount = 0;
     let sourceEdgeCount = 0;
-    let sourceImportFingerprintValue: string | null = null;
+    let sourceDependencyFingerprintValue: string | null = null;
     let hit = false;
     let scipEdgeCount = 0;
     let graphFileCount = 0;
@@ -70,21 +76,21 @@ export function buildFileDepGraph(
             sourceEdgeCount = cached.sourceEdgeCount;
             scipEdgeCount = cached.scipEdgeCount;
             graphFileCount = graph.size;
-            sourceImportFingerprintValue = cached.sourceImportFingerprint;
+            sourceDependencyFingerprintValue = cached.sourceDependencyFingerprint;
             return graph;
           }
         }
 
-        const sourceImports = profileSpan(
+        const sourceDependencies = profileSpan(
           'file-dep-graph.source-imports',
           () => {
-            const collected = collectSourceImportEdges(db, indexedFiles, scope);
+            const collected = collectSourceDependencyEdges(db, indexedFiles, scope, sourceEdges);
             sourceFileCount = collected.files.length;
             sourceEdgeCount = collected.edges.length;
-            sourceImportFingerprintValue = collected.fingerprint;
+            sourceDependencyFingerprintValue = collected.fingerprint;
             return collected;
           },
-          () => ({ scope: scope ?? null, files: sourceFileCount, edges: sourceEdgeCount }),
+          () => ({ scope: scope ?? null, sourceEdges, files: sourceFileCount, edges: sourceEdgeCount }),
         );
 
         const graph = new Map<string, Set<string>>();
@@ -102,14 +108,14 @@ export function buildFileDepGraph(
           () => ({ scope: scope ?? null, edges: scipEdgeCount }),
         );
 
-        for (const edge of sourceImports.edges) addEdge(edge.fromFile, edge.toFile);
+        for (const edge of sourceDependencies.edges) addEdge(edge.fromFile, edge.toFile);
         graphFileCount = graph.size;
 
         if (projectFingerprint) {
           FILE_DEPENDENCY_GRAPH_PRODUCT.write(db, cacheKey, projectFingerprint, {
-            sourceImportFingerprint: sourceImports.fingerprint,
-            sourceFileCount: sourceImports.files.length,
-            sourceEdgeCount: sourceImports.edges.length,
+            sourceDependencyFingerprint: sourceDependencies.fingerprint,
+            sourceFileCount: sourceDependencies.files.length,
+            sourceEdgeCount: sourceDependencies.edges.length,
             scipEdgeCount,
             graph: graphPayloadFromGraph(graph),
           });
@@ -123,21 +129,23 @@ export function buildFileDepGraph(
         hit,
         files: sourceFileCount,
         sourceEdges: sourceEdgeCount,
+        sourceEdgeMode: sourceEdges,
         scipEdges: scipEdgeCount,
         graphFiles: graphFileCount,
-        sourceImportFingerprint: sourceImportFingerprintValue,
+        sourceDependencyFingerprint: sourceDependencyFingerprintValue,
       }),
     );
   });
 }
 
-function collectSourceImportEdges(
+function collectSourceDependencyEdges(
   db: ScipDatabase,
   indexedFiles: ReadonlySet<string>,
   scope: string | undefined,
-): SourceImportEdgeSet {
+  mode: SourceDependencyEdgeMode,
+): SourceDependencyEdgeSet {
   const files: string[] = [];
-  const edges: SourceImportEdge[] = [];
+  const edges: SourceDependencyEdge[] = [];
   for (const relativePath of indexedFiles) {
     if (scope && !relativePath.includes(scope)) continue;
     files.push(relativePath);
@@ -145,24 +153,34 @@ function collectSourceImportEdges(
       if (!entry.sourcePath) continue;
       edges.push({ fromFile: relativePath, toFile: entry.sourcePath });
     }
+    if (mode === 'imports-and-reexports') {
+      for (const entry of getReExports(db, relativePath)) {
+        if (!entry.sourcePath) continue;
+        edges.push({ fromFile: relativePath, toFile: entry.sourcePath });
+      }
+    }
   }
 
   return {
     files,
     edges,
-    fingerprint: sourceImportFingerprint(files, edges),
+    fingerprint: sourceDependencyFingerprint(files, edges),
   };
 }
 
-function sourceImportFingerprint(files: readonly string[], edges: readonly SourceImportEdge[]): string {
+function sourceDependencyFingerprint(files: readonly string[], edges: readonly SourceDependencyEdge[]): string {
   const sortedEdges = edges.map((edge) => `${edge.fromFile}\0${edge.toFile}`).sort();
   return sha256Hex(JSON.stringify({ files, edges: sortedEdges }));
 }
 
-function fileDependencyGraphCacheKey(scope: string | undefined, scipEdges: 'all-references' | 'imports-only'): string {
-  // v2 excludes ordinary cross-file symbol references from dependency edges;
-  // keep it out of v1's durable cache even when the project fingerprint is unchanged.
-  return `edge-mode-v2:${scipEdges}:${scope ?? '<all>'}`;
+function fileDependencyGraphCacheKey(
+  scope: string | undefined,
+  scipEdges: 'all-references' | 'imports-only',
+  sourceEdges: SourceDependencyEdgeMode,
+): string {
+  // v3 separates source import-only graphs from architecture's re-export-aware
+  // graph, so a warm result from either mode can never satisfy the other.
+  return `edge-mode-v3:${scipEdges}:${sourceEdges}:${scope ?? '<all>'}`;
 }
 
 function graphPayloadFromGraph(graph: Map<string, Set<string>>): Array<[string, string[]]> {
@@ -183,7 +201,7 @@ function isFileDependencyGraphPayload(value: unknown): value is FileDependencyGr
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<FileDependencyGraphPayload>;
   return (
-    typeof candidate.sourceImportFingerprint === 'string' &&
+    typeof candidate.sourceDependencyFingerprint === 'string' &&
     typeof candidate.sourceFileCount === 'number' &&
     typeof candidate.sourceEdgeCount === 'number' &&
     typeof candidate.scipEdgeCount === 'number' &&

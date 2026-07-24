@@ -12,8 +12,8 @@ commands:
     when: "Map evidence: exports, consumers, and blast-radius risk."
   - template: "scip-query affected <symbol>"
     when: "Map evidence: transitive consumers of a candidate symbol."
-  - template: "scip-query drift --patterns"
-    when: "Map evidence: layer violations and pattern deviations as probes (--patterns is off by default and near-zero precision; treat hits as leads, not findings)."
+  - template: "scip-query drift --patterns --architecture"
+    when: "Map evidence: declared architecture violations plus boundary and pattern signals; treat opt-in pattern hits as leads, not findings."
 ---
 
 # scip-maintainability
@@ -32,7 +32,7 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 | `scip-query surface <scope>` | What symbols consumers actually use from this module | Map evidence: what consumers actually use from the scope. |
 | `scip-query change-surface <file>` | Pre-change briefing: exports, consumers, and blast-radius risk | Map evidence: exports, consumers, and blast-radius risk. |
 | `scip-query affected <symbol>` | Transitive closure of symbols that could break if this symbol changes | Map evidence: transitive consumers of a candidate symbol. |
-| `scip-query drift --patterns` | Detect heuristic drift candidates: unused imports and layer violations by default; pass --patterns for pattern deviations too | Map evidence: layer violations and pattern deviations as probes (--patterns is off by default and near-zero precision; treat hits as leads, not findings). |
+| `scip-query drift --patterns --architecture` | Detect drift candidates: unused imports and declared architecture violations; pass --architecture for boundary context | Map evidence: declared architecture violations plus boundary and pattern signals; treat opt-in pattern hits as leads, not findings. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->

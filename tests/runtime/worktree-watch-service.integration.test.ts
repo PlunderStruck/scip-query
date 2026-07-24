@@ -5,15 +5,17 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync
 import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { resolveIndexStoragePaths } from '../../src/runtime/config.js';
-import { resolveGitWorktreeContext } from '../../src/runtime/git-worktree.js';
+import { resolveIndexStoragePaths } from '../../src/platform/cache-layout.js';
+import { resolveGitWorktreeContext } from '../../src/platform/git-worktree.js';
 import {
   WATCH_SERVICE_PROTOCOL_VERSION,
-  ensureWatchServiceForCommand,
   watchServicePaths,
+  type WatchServiceState,
+} from '../../src/platform/watch-service-state.js';
+import {
+  ensureWatchServiceForCommand,
   writeWatchServiceState,
   type WatchServiceRuntime,
-  type WatchServiceState,
 } from '../../src/runtime/watch-service.js';
 
 const NOW = Date.parse('2026-07-14T20:00:00.000Z');

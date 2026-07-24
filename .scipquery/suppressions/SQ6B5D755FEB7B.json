@@ -1,0 +1,7 @@
+{
+  "id": "SQ6B5D755FEB7B",
+  "check": "co-change-partner",
+  "file": "src/tla/model-contract.ts",
+  "reason": "Accepted import-only architecture move: model-contract now imports the unchanged project-path contract from domain instead of source. Its behavior is unchanged, and tests/tla/model-contract.test.ts passed in the 1,408-test full suite.",
+  "createdAt": "2026-07-23T19:16:53.693Z"
+}

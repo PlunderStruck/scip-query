@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
-import { isPathInsideProject } from '../source/path-normalization.js';
-import type { ProjectFileFingerprint } from './project-files.js';
+import { isPathInsideProject } from '../domain/path-normalization.js';
+import type { ProjectFileFingerprint } from '../domain/project-input.js';
 
 /**
  * Maps repo-wide file fingerprints (from `fingerprintProjectFiles`) onto the

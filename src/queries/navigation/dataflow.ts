@@ -4,6 +4,7 @@ import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.
 import { callerRowsForSymbol } from '../../symbols/references/caller-evidence.js';
 import { referenceSitesForSymbol } from '../../symbols/references/reference-sites.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
+import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 import { uniqueSymbolFileRows } from '../query-utils.js';
 
 export interface DataflowResult {
@@ -48,7 +49,10 @@ export function dataflow(
     },
   ];
 
-  const normalizedUsageSites = referenceSitesForSymbol(db, match, { semantic: opts.semantic }).map((site) => ({
+  const normalizedUsageSites = referenceSitesForSymbol(db, match, {
+    semantic: opts.semantic,
+    semanticEvidence: symbolSemanticEvidence,
+  }).map((site) => ({
     file: site.file,
     line: site.line,
     enclosingSymbol: site.enclosingSymbol ?? '(top-level)',
@@ -90,12 +94,22 @@ function collectFlowEndpoints(
   opts: { semantic: boolean },
 ): { producers: SymbolRow[]; consumers: SymbolRow[] } {
   const producers = uniqueSymbolFileRows(
-    getCalleeRowsForSymbol(db, match, { limit: 30, semantic: opts.semantic }).map((row) => ({
+    getCalleeRowsForSymbol(db, match, {
+      limit: 30,
+      semantic: opts.semantic,
+      semanticEvidence: symbolSemanticEvidence,
+    }).map((row) => ({
       symbol: row.symbol,
       file: row.file,
     })),
   );
-  const astConsumers = uniqueSymbolFileRows(callerRowsForSymbol(db, match, { limit: 30, semantic: opts.semantic }));
+  const astConsumers = uniqueSymbolFileRows(
+    callerRowsForSymbol(db, match, {
+      limit: 30,
+      semantic: opts.semantic,
+      semanticEvidence: symbolSemanticEvidence,
+    }),
+  );
   const consumers =
     astConsumers.length > 0
       ? astConsumers

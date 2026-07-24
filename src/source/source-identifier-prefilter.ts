@@ -1,4 +1,4 @@
-import { escapeRegex } from '../core/regex-utils.js';
+import { escapeRegex } from './regex-utils.js';
 
 const SOURCE_IDENTIFIER_RE = /[A-Za-z_$][A-Za-z0-9_$]*/g;
 const SIMPLE_IDENTIFIER_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/;

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { isPathInsideProject as isInsideProject } from '../source/path-normalization.js';
+import { isPathInsideProject as isInsideProject } from '../domain/path-normalization.js';
 
 const SKIP_DIR_NAMES = new Set([
   '.cache',

@@ -28,7 +28,7 @@ import {
 } from '../instrumentation/profile.js';
 import { projectEvidenceFingerprint } from '../storage/evidence-cache.js';
 import { maybeSweepRepositoryCache } from './repository-cache-lifecycle.js';
-import { resolveGitWorktreeContext } from './git-worktree.js';
+import { resolveGitWorktreeContext } from '../platform/git-worktree.js';
 
 program
   .name('scip-query')

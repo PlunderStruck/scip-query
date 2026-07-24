@@ -1,13 +1,13 @@
 import { posix } from 'node:path';
 
-import { ProjectIndex } from '../../core/project-index.js';
+import { ProjectIndex } from '../internal/project-index.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { consumerEvidenceProduct, consumerFileMapFromEvidence } from '../internal/consumer-evidence.js';
-import { normalizeRelativePath as normalizePath } from '../../source/path-normalization.js';
+import { normalizeRelativePath as normalizePath } from '../../domain/path-normalization.js';
 
 export type LocalityActionTier = 'signal';
 

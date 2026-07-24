@@ -11,7 +11,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { registerCacheClear } from '../storage/cache-registry.js';
 import { createPerDbSourceCache } from '../storage/per-db-cache.js';
-import { escapeRegex } from '../core/regex-utils.js';
+import { escapeRegex } from './regex-utils.js';
 
 /**
  * Replace every comment and string literal with spaces (preserving newlines)

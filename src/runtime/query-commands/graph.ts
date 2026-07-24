@@ -152,6 +152,78 @@ const handleCycles = reportCommand({
   },
 });
 
+const handleArchitecture = reportCommand({
+  commandName: 'architecture',
+  query: ({ db, opts }) => queries.architecture(db, { scope: stringOptionValue(opts, 'scope') }),
+  emptyMessage: (result) =>
+    result.configured
+      ? undefined
+      : 'No architecture boundaries configured. Add architecture.boundaries to .scipquery.json.',
+  render: (result) => {
+    console.log(
+      `Mapped ${result.coverage.mappedFiles}/${result.coverage.totalFiles} indexed file(s) across ` +
+        `${result.boundaries.length} boundary(ies); ${result.policyCoverage.declaredRows}/` +
+        `${result.policyCoverage.totalBoundaries} dependency row(s) declared.`,
+    );
+    if (result.policyCoverage.missingRows.length > 0) {
+      const policy = result.policyCoverage.requiresCompletePolicy ? ' [violates requireCompletePolicy]' : '';
+      console.log(`Missing dependency rows: ${result.policyCoverage.missingRows.join(', ')}${policy}`);
+    }
+    if (result.coverage.unmappedFiles.length > 0) {
+      console.log(`Unmapped files: ${result.coverage.unmappedFiles.length}`);
+    }
+    if (result.coverage.ambiguousFiles.length > 0) {
+      console.log(`Ambiguous files: ${result.coverage.ambiguousFiles.length}`);
+      for (const row of result.coverage.ambiguousFiles.slice(0, 5)) {
+        console.log(`  ${row.file} -> ${row.boundaries.join(', ')}`);
+      }
+    }
+
+    if (result.forbiddenEdges.length > 0) {
+      console.log(`\nForbidden boundary edges (${result.forbiddenEdges.length}):`);
+      for (const edge of result.forbiddenEdges) {
+        console.log(
+          `  ${edge.from} -> ${edge.to}: ${edge.fileEdgeCount} file edge(s), ` +
+            `${edge.importerCount} importer(s), ${edge.importedFileCount} imported file(s)`,
+        );
+        for (const example of edge.examples) console.log(`    ${example.fromFile} -> ${example.toFile}`);
+      }
+    } else {
+      console.log('\nNo declared boundary violations found.');
+    }
+
+    if (result.edges.length > 0) {
+      console.log(`\nBoundary graph (${result.edges.length} directed edge(s)):`);
+      for (const edge of result.edges) {
+        console.log(
+          `  ${edge.from} -> ${edge.to}  ${edge.policyStatus.padEnd(10)}  ` + `${edge.fileEdgeCount} file edge(s)`,
+        );
+      }
+    }
+
+    if (result.reciprocalPairs.length > 0) {
+      console.log(`\nReciprocal boundary pairs (${result.reciprocalPairs.length}):`);
+      for (const pair of result.reciprocalPairs) {
+        console.log(
+          `  ${pair.boundaries[0]} <-> ${pair.boundaries[1]}  ` +
+            `${pair.forward.fileEdgeCount}/${pair.reverse.fileEdgeCount} file edge(s)`,
+        );
+      }
+    }
+
+    if (result.cycles.length > 0) {
+      console.log(`\nStrongly connected boundary groups (${result.cycles.length}):`);
+      for (const cycle of result.cycles) {
+        const policy = cycle.violatesPolicy ? ' [violates requireAcyclic]' : '';
+        console.log(`  { ${cycle.boundaries.join(', ')} }${policy}`);
+        for (const edge of cycle.narrowestEdges) {
+          console.log(`    inspect ${edge.from} -> ${edge.to}: ${edge.fileEdgeCount} file edge(s)`);
+        }
+      }
+    }
+  },
+});
+
 const handleDeepChains = reportCommand({
   commandName: 'deep-chains',
   query: ({ db, opts }) =>
@@ -244,6 +316,16 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     renderShape: 'custom',
     docs: doc('Graph'),
     handler: handleCycles,
+  },
+  {
+    id: 'architecture',
+    command: 'architecture',
+    description: 'Evaluate project-owned architectural boundaries and dependency rules',
+    options: withJsonOption([option('-s, --scope <path>', 'Limit to files matching path')]),
+    evidence: 'mixed',
+    renderShape: 'custom',
+    docs: doc('Graph', ['scip-query architecture --json']),
+    handler: handleArchitecture,
   },
   {
     id: 'bottlenecks',

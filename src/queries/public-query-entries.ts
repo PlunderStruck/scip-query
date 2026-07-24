@@ -14,6 +14,7 @@
 /** Query modules published as `scip-query/queries/<name>` subpath exports. */
 export const PUBLIC_QUERY_ENTRIES = [
   'affected',
+  'architecture',
   'bottlenecks',
   'by-kind',
   'call-graph',
@@ -86,6 +87,7 @@ export type PublicQueryEntry = (typeof PUBLIC_QUERY_ENTRIES)[number];
 
 export const PUBLIC_QUERY_SOURCE_PATHS = {
   affected: 'src/queries/graph/affected.ts',
+  architecture: 'src/queries/graph/architecture.ts',
   bottlenecks: 'src/queries/graph/bottlenecks.ts',
   'by-kind': 'src/queries/navigation/by-kind.ts',
   'call-graph': 'src/queries/navigation/call-graph.ts',

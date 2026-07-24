@@ -1,0 +1,7 @@
+{
+  "id": "SQ13A5DE8C135B",
+  "check": "co-change-partner",
+  "file": "src/tla/model-contract.ts",
+  "reason": "Accepted cross-test co-change signal for an import-only path-contract relocation. No TLA conformance behavior changed, and both model-contract and conformance suites passed in the 1,408-test full run.",
+  "createdAt": "2026-07-23T19:17:04.769Z"
+}

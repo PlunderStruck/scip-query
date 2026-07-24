@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
+import type { ProjectChangeManifest, ProjectFileChange } from '../../domain/project-input.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import type { ProjectChangeManifest, ProjectFileChange } from '../../reindex/affected-set.js';
 import type { SemanticProvider } from '../types.js';
 import { createTsMorphProviderFromProjects } from './ts-morph-provider.js';
 import {

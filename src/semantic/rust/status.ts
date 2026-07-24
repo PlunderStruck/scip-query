@@ -1,5 +1,4 @@
-import { getIndexerConfig } from '../../reindex/indexers.js';
-import { getIndexerDependencyStatus } from '../../reindex/install.js';
+import { getIndexerDependencyStatus, RUST_ANALYZER_TOOLCHAIN } from '../../platform/indexer-toolchain.js';
 
 // scip-query: ignore-stale — named Rust semantic capability payload rendered
 // by status/doctor and used by the provider to report LSP availability.
@@ -11,7 +10,7 @@ export interface RustSemanticStatus {
 }
 
 export function getRustSemanticStatus(projectRoot: string): RustSemanticStatus {
-  const status = getIndexerDependencyStatus(getIndexerConfig('rust'), projectRoot);
+  const status = getIndexerDependencyStatus(RUST_ANALYZER_TOOLCHAIN, projectRoot);
   const dependencyAvailable = status.runnable;
   return {
     available: dependencyAvailable,

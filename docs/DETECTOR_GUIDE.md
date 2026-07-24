@@ -73,15 +73,16 @@ gaps:
 
 | Command | Watches the gap between | Evidence |
 |---|---|---|
-| `drift` | a file and its **siblings/architecture** | reference graph: unused imports, layer violations, "no sibling imports this" deviations |
+| `drift` | a file and its **siblings/declared architecture** | reference graph: unused imports, project-owned forbidden boundary edges, "no sibling imports this" deviations |
 | `doc-drift` | **docs** and the code they describe | doc file-citations + doc↔code co-change history; flags broken references and staleness scores |
 | `co-change` | two **files** with an invisible contract | git history: pairs that change together with no dependency edge |
 
 How to keep them straight: `drift` is structural and intra-code, `doc-drift`
 is prose-vs-code, `co-change` is code-vs-code where the connection exists only
 in commit history. The diff gate includes doc/code and hidden-coupling coverage
-through the `doc-reference` and `co-change-partner` checks; run `drift`
-directly when you need directory-pattern or layer-policy analysis.
+through the `doc-reference` and `co-change-partner` checks; run `drift
+--architecture` when you need direct dependency-rule findings beside boundary
+coverage, reciprocity, and connected-group signals.
 
 <!-- BEGIN GENERATED DIFF-GATE CHECKS -->
 | Check | What it catches | When it runs |
@@ -91,6 +92,7 @@ directly when you need directory-pattern or layer-policy analysis.
 | `co-change-partner` | Historically coupled files that usually change together but are missing from this diff. | Default diff gate. |
 | `twin-partner` | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched. | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves. |
 | `coverage-contract` | A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source. | Default diff gate, only when either side of a configured contract changed. |
+| `architecture` | A declared architecture boundary rule has a violation absent from the committed health baseline. | Default diff gate when closed dependency rows, requireCompletePolicy, or requireAcyclic are configured and a baseline exists. |
 | `doc-reference` | Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy. | Default diff gate. Advisory (21.2) for bare file-mention citations; blocking when the citation has a line anchor or the cited file was deleted/renamed. |
 | `unused-params` | Fresh trailing parameters or options that no changed body uses. | Default diff gate. |
 | `new-dead` | Changed production symbols with zero indexed consumers. | Default diff gate. |

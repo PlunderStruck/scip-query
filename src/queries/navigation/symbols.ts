@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { loadFileSymbols } from '../../symbols/definition-catalog.js';
-import { resolveIndexedPaths } from '../../resolution/path-resolver.js';
+import { resolveIndexedPaths } from '../internal/file-resolution.js';
 
 // scip-query: ignore-stale — public row contract returned by symbols() and
 // reused by system() for its nested symbol list.

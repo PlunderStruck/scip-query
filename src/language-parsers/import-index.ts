@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../storage/db.js';
-import { normalizeRelativePath } from '../source/path-normalization.js';
+import { normalizeRelativePath } from '../domain/path-normalization.js';
 import { createPerDbCache } from '../storage/per-db-cache.js';
 import { getSourceImports } from './index.js';
 

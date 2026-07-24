@@ -17,6 +17,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { isEntrySurface, isRootedSymbol } from '../../analysis/file-classifier.js';
 import { HEALTH_DETECTOR_PROFILES } from '../internal/health-detector-profiles.js';
 import { cycles } from '../graph/cycles.js';
+import { ARCHITECTURE_BASELINE_PREFIX, architecture, architectureFindingIdentities } from '../graph/architecture.js';
 import { dead } from '../cleanup/dead.js';
 import { drift } from '../cleanup/drift.js';
 import { duplicateBodies } from '../cleanup/duplicate-bodies.js';
@@ -126,8 +127,11 @@ export function collectBaselineFindings(db: ScipDatabase, opts: { scope?: string
     includePatternDeviations: false,
     limit: Number.POSITIVE_INFINITY,
   }).results) {
+    if (result.kind === 'architecture-violation') continue;
     findings.push(`drift:${result.kind}:${result.file}:${result.dep}`);
   }
+
+  findings.push(...architectureFindingIdentities(architecture(db, { scope })));
 
   return [...new Set(findings)].sort();
 }
@@ -164,6 +168,35 @@ export function checkHealthBaseline(
   const parsed = JSON.parse(readFileSync(path, 'utf-8')) as HealthBaselineFile;
   const baseline = new Set(parsed.findings ?? []);
   const current = collectBaselineFindings(db, { scope: opts.scope });
+  const currentSet = new Set(current);
+
+  return {
+    baselinePath: path,
+    baselineCount: baseline.size,
+    current,
+    newFindings: current.filter((finding) => !baseline.has(finding)),
+    fixedFindings: [...baseline].filter((finding) => !currentSet.has(finding)),
+  };
+}
+
+/**
+ * Compare only project-owned architecture failures against the shared health
+ * baseline. This keeps the default diff check narrow while preserving one
+ * baseline authority.
+ */
+export function checkArchitectureBaseline(
+  db: ScipDatabase,
+  opts: { path?: string; scope?: string } = {},
+): BaselineComparison {
+  const path = resolveBaselinePath(db, opts.path);
+  if (!existsSync(path)) {
+    throw new Error(`No baseline found at ${path}. Create one with: scip-query health --write-baseline`);
+  }
+  const parsed = JSON.parse(readFileSync(path, 'utf-8')) as HealthBaselineFile;
+  const baseline = new Set(
+    (parsed.findings ?? []).filter((finding) => finding.startsWith(ARCHITECTURE_BASELINE_PREFIX)),
+  );
+  const current = architectureFindingIdentities(architecture(db, { scope: opts.scope }));
   const currentSet = new Set(current);
 
   return {

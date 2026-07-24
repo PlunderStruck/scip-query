@@ -8,7 +8,8 @@ import { diffGate } from '../../src/queries/impact/diff-gate.js';
 import { computeEffectiveness } from '../../src/queries/health/effectiveness.js';
 import { readLedgerRecords } from '../../src/queries/health/finding-outcome-ledger.js';
 import { ScipDatabase } from '../../src/storage/db.js';
-import { gitWorktreeIsClean, readOutcomeEvents } from '../../src/storage/outcome-events.js';
+import { readOutcomeEvents } from '../../src/storage/outcome-events.js';
+import { resolveGitWorktreeContext } from '../../src/platform/git-worktree.js';
 import { evidenceFixtureDb } from '../fixtures/evidence-fixture.js';
 
 // Regression coverage for the Stop-hook path: `resolveHookWorkspace` +
@@ -142,7 +143,7 @@ describe('Stop hook doc-reference snapshot-doc exemption', () => {
 
     gitIn(repoRoot, 'add', '-A');
     gitIn(repoRoot, 'commit', '-m', 'commit defect', '--no-gpg-sign');
-    expect(gitWorktreeIsClean(repoRoot)).toBe(true);
+    expect(resolveGitWorktreeContext(repoRoot)?.clean).toBe(true);
     const committedDefect = runStopHookDiffGate(hookInputFor(repoRoot));
     expect(committedDefect?.findings).toEqual([]);
     let events = readOutcomeEvents(repoRoot).filter((event) => event.findingId === guideFinding?.id);
@@ -152,7 +153,7 @@ describe('Stop hook doc-reference snapshot-doc exemption', () => {
     writeFile(join(repoRoot, 'docs', 'guide.md'), 'General project guidance.\n');
     gitIn(repoRoot, 'add', '-A');
     gitIn(repoRoot, 'commit', '-m', 'repair citation', '--no-gpg-sign');
-    expect(gitWorktreeIsClean(repoRoot)).toBe(true);
+    expect(resolveGitWorktreeContext(repoRoot)?.clean).toBe(true);
     const replayDb = new ScipDatabase({
       projectRoot: repoRoot,
       dbPath: join(repoRoot, '.scip-query', 'index.db'),

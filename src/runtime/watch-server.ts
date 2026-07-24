@@ -3,7 +3,13 @@ import { rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { RefreshTrigger, WatcherStatus } from '../domain/types.js';
-import { loadProjectConfig, resolveIndexStoragePaths, resolveWatchConfig } from './config.js';
+import { resolveIndexStoragePaths } from '../platform/cache-layout.js';
+import {
+  WATCH_SERVICE_PROTOCOL_VERSION,
+  watchServicePaths,
+  type WatchServiceState,
+} from '../platform/watch-service-state.js';
+import { loadProjectConfig, resolveWatchConfig } from './config.js';
 import { getIndexFreshness, type IndexFreshnessState } from './index-freshness.js';
 import { Watcher } from './watch.js';
 import { openProjectDb } from './cli-context.js';
@@ -26,14 +32,11 @@ import {
   typeScriptIndexMailboxPaths,
 } from '../reindex/typescript-index-protocol.js';
 import {
-  WATCH_SERVICE_PROTOCOL_VERSION,
   acquireWatchProcessLock,
   readWatchServiceActivity,
   resolveWatchServiceIdentity,
   shouldStopWatchServiceForIdle,
-  watchServicePaths,
   writeWatchServiceState,
-  type WatchServiceState,
   type WatchServiceWatchOverrides,
 } from './watch-service.js';
 import { maybeSweepRepositoryCache } from './repository-cache-lifecycle.js';

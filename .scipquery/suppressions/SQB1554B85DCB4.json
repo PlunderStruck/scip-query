@@ -1,0 +1,7 @@
+{
+  "id": "SQB1554B85DCB4",
+  "check": "co-change-partner",
+  "file": "src/tla/conformance.ts",
+  "reason": "Accepted import-only architecture move: conformance now imports the unchanged regex primitive from its source owner. Its behavior is unchanged, and tests/tla/conformance.test.ts passed in the 1,408-test full suite.",
+  "createdAt": "2026-07-23T19:16:59.221Z"
+}

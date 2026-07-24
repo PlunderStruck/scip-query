@@ -59,6 +59,8 @@ export interface StaleSummary extends CountLocSummary {
 export interface DriftSummary {
   count: number;
   unusedImports: number;
+  architectureViolations: number;
+  /** @deprecated Use `architectureViolations`. */
   layerViolations: number;
   direct: number;
   signal: number;

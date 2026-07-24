@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
-import { ProjectIndex } from '../../../src/core/project-index.js';
+import { ProjectIndex } from '../../../src/queries/internal/project-index.js';
 import type { IndexedDefinition } from '../../../src/domain/types.js';
 import {
   consumerEvidenceProduct,

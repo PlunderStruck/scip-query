@@ -7,7 +7,7 @@
 import { basename } from 'node:path';
 import type { Tree } from '../../source/ast.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { resolveCLikeImportPath } from '../../resolution/import-path-resolver.js';
+import { resolveCLikeImportPath } from '../../source/import-path-resolver.js';
 import { hasIdentifierUsage } from '../../source/source-stripper.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
 import {

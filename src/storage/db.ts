@@ -1,6 +1,10 @@
 import Database from 'better-sqlite3';
-import type { PathFilter } from '../source/gitignore-filter.js';
 import type { ScipQueryConfig } from '../domain/types.js';
+
+/** The path-exclusion capability storage consumes from project source policy. */
+export interface PathExclusionPolicy {
+  isIgnored(relativePath: string): boolean;
+}
 
 const SQL_EXCLUDED_PATH_SEGMENTS = [
   'node_modules',
@@ -40,12 +44,12 @@ const SQL_EXCLUDED_PATH_SEGMENTS = [
 export class ScipDatabase {
   readonly db: Database.Database;
   readonly config: ScipQueryConfig;
-  private pathFilter: PathFilter | null;
+  private pathFilter: PathExclusionPolicy | null;
   private statementCache = new Map<string, Database.Statement>();
 
   // scip-query: ignore-wrapper — public storage boundary; callers construct
   // ScipDatabase, not better-sqlite3 connections plus pragma setup.
-  constructor(config: ScipQueryConfig, pathFilter?: PathFilter) {
+  constructor(config: ScipQueryConfig, pathFilter?: PathExclusionPolicy) {
     this.config = config;
     this.pathFilter = pathFilter ?? null;
     this.db = new Database(config.dbPath, { readonly: true });

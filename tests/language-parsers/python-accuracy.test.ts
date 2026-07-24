@@ -446,11 +446,11 @@ describe('python repo accuracy regressions', () => {
     expect(unusedImports(db, 'exports.py').map((result) => result.shortName)).toEqual(['json as unused_json']);
   });
 
-  it('does not invent layer violations for flat root-level Python modules or tests', () => {
+  it('does not invent architecture violations for an unconfigured flat Python project', () => {
     const result = drift(db);
 
     expect(result.layerViolations).toBe(0);
-    expect(result.results.some((entry) => entry.kind === 'layer-violation')).toBe(false);
+    expect(result.results.some((entry) => entry.kind === 'architecture-violation')).toBe(false);
   });
 
   it('resolves file-oriented commands to the exact Python file instead of fuzzy matches', () => {

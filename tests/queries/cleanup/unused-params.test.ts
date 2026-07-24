@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { productionCallableDefinitions } from '../../../src/core/production-callables.js';
+import { productionCallableDefinitions } from '../../../src/queries/internal/production-callables.js';
 import { unusedParams } from '../../../src/queries/cleanup/unused-params.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../../fixtures/evidence-fixture.js';

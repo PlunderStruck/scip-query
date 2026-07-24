@@ -110,7 +110,7 @@ scip-query cleanup-apply # Apply a compiler-verified cleanup-plan batch to the w
 scip-query recent-duplicates # Directional duplicate candidates: recent code that re-implements established callable, React, or Vue code
 scip-query doc-drift [doc] # Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped
 scip-query unused-params # Speculative-generality candidates: trailing parameters no body ever uses (TS/JS)
-scip-query drift [module] # Detect heuristic drift candidates: unused imports and layer violations by default; pass --patterns for pattern deviations too
+scip-query drift [module] # Detect drift candidates: unused imports and declared architecture violations; pass --architecture for boundary context
 scip-query wrapper-candidates # Find heuristic wrapper candidates only called by one consumer (high false-positive rate on codebases with intentional layering/ambient types — treat as exploration, not findings)
 scip-query passthrough-candidates # Find heuristic passthrough candidates that forward to one callee
 scip-query stale-abstractions # Find heuristic stale abstraction candidates with 0-1 consumers (high false-positive rate on codebases with intentional layering/ambient types — treat as exploration, not findings)
@@ -134,6 +134,7 @@ scip-query fan-in [symbol] # Count files referencing an exact symbol; top JSON r
 scip-query fan-out [file] # How many external symbols a file uses (or top fan-out across codebase)
 scip-query coupling [file1] [file2] # Coupling between two files, or top coupled pairs in codebase
 scip-query cycles # Detect circular dependency chains between files
+scip-query architecture # Evaluate project-owned architectural boundaries and dependency rules
 scip-query bottlenecks # Find coupling hubs: high fan-in AND high fan-out
 scip-query deep-chains # Find the longest condensed dependency-component chains
 scip-query call-graph <symbol> # Show incoming callers and outgoing callees for a symbol
@@ -145,7 +146,7 @@ scip-query call-graph <symbol> # Show incoming callers and outgoing callees for 
 scip-query affected <symbol> # Transitive closure of symbols that could break if this symbol changes
 scip-query change-surface <file> # Pre-change briefing: exports, consumers, and blast-radius risk
 scip-query co-change [file] # Files that change together in git history without a dependency edge — hidden coupling candidates
-scip-query diff-gate # Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, unedited twin partners (advisory), uncited doc updates, unused params, new dead symbols; exit 1 on blocking findings
+scip-query diff-gate # Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings
 scip-query incomplete-migration # Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain
 scip-query diff-impact # Compute changed symbols and downstream consumers from current git diff
 ```
@@ -211,7 +212,7 @@ measured precision, not by volume:
 
 ## Diff Gate Checks
 
-`diff-gate` runs nine checks (`--skip <check>` accepts any of these): `echo` (recent-duplicate-style echoes in the diff), `incomplete-migration`, `co-change-partner` (missing historically-paired file), `twin-partner` (advisory — unedited same-name twin), `coverage-contract` (a configured `coverageContracts` enumeration drifted from its ground truth — see `scip-setup`), `doc-reference` (uncited or stale doc claim), `unused-params`, `new-dead` (dead code introduced by this diff), and `baseline` (only with `--baseline`: compares against the committed `.scipquery-baseline.json`, distinct from `health --baseline`). Findings print grouped under a `Root-cause groups (N):` header before the flat list — a group's remediation usually clears every finding under it, and the same remediation may then repeat in the flat list below; that repetition is expected, not a separate issue. `--baseline` findings additionally carry an `actionTier`: `direct` (act on this finding alone), `signal` (corroborating evidence — read before acting), `support` (context only).
+`diff-gate` recognizes ten checks (`--skip <check>` accepts any of these): `echo` (recent-duplicate-style echoes in the diff), `incomplete-migration`, `co-change-partner` (missing historically-paired file), `twin-partner` (advisory — unedited same-name twin), `coverage-contract` (a configured `coverageContracts` enumeration drifted from its ground truth — see `scip-setup`), `architecture` (a declared boundary violation absent from the shared baseline), `doc-reference` (uncited or stale doc claim), `unused-params`, `new-dead` (dead code introduced by this diff), and `baseline` (only with `--baseline`: compares all non-architecture health identities against the committed `.scipquery-baseline.json`, distinct from `health --baseline`). The architecture check runs by default only when enforceable architecture rules and a baseline exist; it uses that same file without running the full health suite. Findings print grouped under a `Root-cause groups (N):` header before the flat list — a group's remediation usually clears every finding under it, and the same remediation may then repeat in the flat list below; that repetition is expected, not a separate issue. Baseline-backed findings additionally carry an `actionTier`: `direct` (act on this finding alone), `signal` (corroborating evidence — read before acting), `support` (context only).
 
 ## Postchecks
 

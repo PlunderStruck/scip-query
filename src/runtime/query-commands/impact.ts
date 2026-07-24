@@ -388,7 +388,7 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'diff-gate',
     command: 'diff-gate',
     description:
-      'Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, unedited twin partners (advisory), uncited doc updates, unused params, new dead symbols; exit 1 on blocking findings',
+      'Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings',
     options: [
       option('--base <ref>', 'Git ref to diff against (default: HEAD)'),
       option('--min-together <n>', 'Minimum historical co-changes for the partner check', parseInteger, 6),
@@ -398,7 +398,7 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
       option('--full', 'Run unbounded semantic and git-history analysis on large indexes'),
       option(
         '--skip <check>',
-        'Skip a check (repeatable): echo, incomplete-migration, co-change-partner, twin-partner, coverage-contract, doc-reference, unused-params, new-dead, baseline',
+        'Skip a check (repeatable): echo, incomplete-migration, co-change-partner, twin-partner, coverage-contract, architecture, doc-reference, unused-params, new-dead, baseline',
         collectValues,
         [],
       ),

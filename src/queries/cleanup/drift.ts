@@ -2,30 +2,38 @@ import path from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
 import { classifyFile } from '../../analysis/file-classifier.js';
 import { getSourceImports } from '../../language-parsers/index.js';
-import { ProjectIndex } from '../../core/project-index.js';
+import { ProjectIndex } from '../internal/project-index.js';
 import { semanticImportUsage } from '../../semantic/shared-primitives.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
-import {
-  getArchitecturalLayer,
-  isKnownProjectLayerDependency,
-  isUnknownSrcLayerEdge,
-  layerPolicyForEdge,
-} from './drift-policy.js';
+import { architecture } from '../graph/architecture.js';
+import type { ArchitectureBoundaryEdge, ArchitectureReport } from '../graph/architecture.js';
 
 export type DriftActionTier = 'direct' | 'signal';
+/** `inferred` and `unknown-layer` remain only for compatibility with older result consumers. */
 export type DriftPolicyBasis = 'explicit' | 'inferred' | 'unknown-layer';
+
+export interface DriftArchitectureEvidence {
+  fromBoundary: string;
+  toBoundary: string;
+  fileEdgeCount: number;
+  importerCount: number;
+  importedFileCount: number;
+  examples: ArchitectureBoundaryEdge['examples'];
+}
 
 export interface DriftResult {
   file: string;
-  kind: 'unused-import' | 'layer-violation' | 'pattern-deviation';
+  kind: 'unused-import' | 'architecture-violation' | 'layer-violation' | 'pattern-deviation';
   description: string;
   /** The dependency involved */
   dep: string;
-  /** For layer violations: the expected layer boundary */
+  /** For boundary violations: the expected dependency direction. */
   detail?: string;
   actionTier: DriftActionTier;
-  /** For layer violations: whether the rule was explicit or inferred from rare edges. */
+  /** Architecture violations are emitted only from explicit project rules. */
   policyBasis?: DriftPolicyBasis;
+  /** Grouped boundary evidence for declared architecture violations. */
+  architecture?: DriftArchitectureEvidence;
   evidenceReasons: string[];
   recommendation: string;
 }
@@ -33,8 +41,12 @@ export interface DriftResult {
 export interface DriftSummary {
   results: DriftResult[];
   unusedImports: number;
+  architectureViolations: number;
+  /** @deprecated Use `architectureViolations`. */
   layerViolations: number;
   patternDeviations: number;
+  /** Full boundary report, included only when `includeArchitecture` is true. */
+  architecture?: ArchitectureReport;
   /** Total results before `limit` was applied — set only when truncated. */
   totalResults?: number;
 }
@@ -47,9 +59,8 @@ export interface DriftSummary {
  * 1. **Unused imports** — file depends on a module but never references
  *    any of its symbols. Dead dependency, safe to remove.
  *
- * 2. **Layer violations** — file imports from a directory it shouldn't
- *    based on the project's directory structure (e.g., a query importing
- *    from reindex, a helper importing from CLI). Architectural decay.
+ * 2. **Architecture violations** — one or more files cross a project-owned
+ *    boundary whose declared dependency row rejects the target boundary.
  *
  * 3. **Pattern deviations** — file imports something no sibling does,
  *    suggesting it's reaching outside its expected scope. Only flagged
@@ -68,11 +79,13 @@ export function drift(
      * Pattern-deviation ("only sibling importing X") is opt-in as of the
      * 21.2 calibration retune — external calibration measured 0/10 and 1/8
      * actionable on Vega_2.0/Stable_Management respectively (894 and 233
-     * same-shaped findings drowning the accurate layer-violation channel).
+     * same-shaped findings drowning the direct structural-drift channel).
      * Default false. `includePatternDeviations: true` restores the old
      * always-on behavior for exploration/opt-in callers.
      */
     includePatternDeviations?: boolean;
+    /** Include the full architecture graph and report-only signals in the summary. */
+    includeArchitecture?: boolean;
     /** Cap on `results` after all three families are combined. Default 50. */
     limit?: number;
   },
@@ -84,12 +97,14 @@ export function drift(
 
   // Build file dep graph (which files depend on which)
   const depGraph = index.fileDependencyGraph(scope);
+  const architectureReport = architecture(db, { scope });
 
   const summary = summarizeDrift([
     ...unusedImportDrift(db, depGraph, { scope, semantic: includeSemantic }),
-    ...layerViolationDrift(depGraph),
+    ...architectureViolationDrift(architectureReport.forbiddenEdges),
     ...(includePatternDeviations ? patternDeviationDrift(depGraph, minDeviation) : []),
   ]);
+  if (opts?.includeArchitecture === true) summary.architecture = architectureReport;
   if (limit <= 0 || summary.results.length <= limit) return summary;
   return { ...summary, results: summary.results.slice(0, limit), totalResults: summary.results.length };
 }
@@ -161,63 +176,38 @@ function hasConservativeImportUse(db: ScipDatabase, file: string, dep: string, o
   return opts.semantic && hasSemanticImportUse(db, file, dep);
 }
 
-function layerViolationDrift(depGraph: Map<string, Set<string>>): DriftResult[] {
-  const results: DriftResult[] = [];
-  const layerRules = inferLayerRules(depGraph);
-
-  for (const [file, deps] of depGraph) {
-    if (shouldSkipDriftFile(file)) continue;
-
-    const fileLayer = getArchitecturalLayer(file);
-    for (const dep of deps) {
-      if (shouldSkipDriftFile(dep)) continue;
-
-      const depLayer = getArchitecturalLayer(dep);
-      if (fileLayer === depLayer) continue; // same layer, fine
-
-      const explicitPolicy = layerPolicyForEdge(fileLayer, depLayer);
-      const unknownSrcLayer = explicitPolicy === null && isUnknownSrcLayerEdge(fileLayer, depLayer);
-      const policyBasis: DriftPolicyBasis = explicitPolicy
-        ? 'explicit'
-        : unknownSrcLayer
-          ? 'unknown-layer'
-          : 'inferred';
-      const violation = unknownSrcLayer ? 'violation' : (explicitPolicy ?? layerRules.get(`${fileLayer}->${depLayer}`));
-      if (violation === 'violation') {
-        const actionTier: DriftActionTier = policyBasis === 'explicit' ? 'direct' : 'signal';
-        results.push({
-          file,
-          kind: 'layer-violation',
-          description: `Imports from ${depLayer}/ (${dep}) — may cross architectural boundary`,
-          dep,
-          detail: `${fileLayer}/ should not depend on ${depLayer}/`,
-          actionTier,
-          policyBasis,
-          evidenceReasons: [
-            `dependency edge exists from ${file} to ${dep}`,
-            layerEvidenceReason(policyBasis, fileLayer, depLayer),
-          ],
-          recommendation:
-            policyBasis === 'explicit'
-              ? 'Move the dependency behind an allowed layer boundary or document a policy change.'
-              : policyBasis === 'unknown-layer'
-                ? 'Add a layer policy entry before treating this as a boundary violation.'
-                : 'Review whether this is a real boundary break or an intentional exception before moving code.',
-        });
-      }
-    }
-  }
-  return results;
-}
-
-function layerEvidenceReason(policyBasis: DriftPolicyBasis, fileLayer: string, depLayer: string): string {
-  if (policyBasis === 'explicit') {
-    return `explicit layer policy rejects ${fileLayer}/ -> ${depLayer}/`;
-  }
-  if (policyBasis === 'unknown-layer') {
-    return `source layer policy has no entry for ${fileLayer}/ -> ${depLayer}/`;
-  }
-  return `rare cross-layer edge ${fileLayer}/ -> ${depLayer}/ is inferred as a violation`;
+function architectureViolationDrift(edges: readonly ArchitectureBoundaryEdge[]): DriftResult[] {
+  return edges.flatMap((edge) => {
+    const example = edge.examples[0];
+    if (!example) return [];
+    return [
+      {
+        file: example.fromFile,
+        kind: 'architecture-violation',
+        description:
+          `${edge.from} depends on forbidden boundary ${edge.to} ` + `through ${edge.fileEdgeCount} file edge(s)`,
+        dep: example.toFile,
+        detail: `${edge.from} may not depend on ${edge.to}`,
+        actionTier: 'direct',
+        policyBasis: 'explicit',
+        architecture: {
+          fromBoundary: edge.from,
+          toBoundary: edge.to,
+          fileEdgeCount: edge.fileEdgeCount,
+          importerCount: edge.importerCount,
+          importedFileCount: edge.importedFileCount,
+          examples: edge.examples,
+        },
+        evidenceReasons: [
+          `configured dependency row for ${edge.from} does not allow ${edge.to}`,
+          `${edge.fileEdgeCount} file edge(s) connect ${edge.importerCount} importer(s) to ${edge.importedFileCount} imported file(s)`,
+          ...edge.examples.map((item) => `${item.fromFile} imports ${item.toFile}`),
+        ],
+        recommendation:
+          'Move the dependency behind an allowed boundary, reverse the dependency through an owned interface, or deliberately update the project architecture rule.',
+      },
+    ];
+  });
 }
 
 // scip-query: ignore-extract — this is the sibling-pattern scoring pass; the
@@ -244,9 +234,6 @@ function patternDeviationDrift(depGraph: Map<string, Set<string>>, minDeviation:
         // from a sibling subdir is the common Rust submodule pattern, not
         // drift.
         if (path.dirname(dep) === path.dirname(dir)) continue;
-        // For projects with an explicit layer policy, an allowed edge is not
-        // drift just because only one sibling currently needs that adapter.
-        if (isKnownProjectLayerDependency(file, dep)) continue;
         results.push({
           file,
           kind: 'pattern-deviation',
@@ -267,10 +254,12 @@ function patternDeviationDrift(depGraph: Map<string, Set<string>>, minDeviation:
 }
 
 function summarizeDrift(results: DriftResult[]): DriftSummary {
+  const architectureViolations = results.filter((r) => r.kind === 'architecture-violation').length;
   return {
     results,
     unusedImports: results.filter((r) => r.kind === 'unused-import').length,
-    layerViolations: results.filter((r) => r.kind === 'layer-violation').length,
+    architectureViolations,
+    layerViolations: architectureViolations,
     patternDeviations: results.filter((r) => r.kind === 'pattern-deviation').length,
   };
 }
@@ -377,40 +366,6 @@ function addSymbolRefEdge(db: ScipDatabase, graph: Map<string, Set<string>>, fro
     graph.set(fromFile, bucket);
   }
   bucket.add(toFile);
-}
-
-/**
- * Infer layer boundary rules from the dependency graph.
- * If directory A never depends on directory B across the entire codebase,
- * then a new A→B dependency is a violation.
- */
-function inferLayerRules(depGraph: Map<string, Set<string>>): Map<string, 'ok' | 'violation'> {
-  const layerEdges = new Map<string, number>();
-
-  for (const [file, deps] of depGraph) {
-    if (shouldSkipDriftFile(file)) continue;
-
-    const fromLayer = getArchitecturalLayer(file);
-    for (const dep of deps) {
-      if (shouldSkipDriftFile(dep)) continue;
-
-      const toLayer = getArchitecturalLayer(dep);
-      if (fromLayer === toLayer) continue;
-      if (layerPolicyForEdge(fromLayer, toLayer)) continue;
-      const key = `${fromLayer}->${toLayer}`;
-      layerEdges.set(key, (layerEdges.get(key) ?? 0) + 1);
-    }
-  }
-
-  // An edge that appears only 1-2 times across the whole codebase
-  // is likely a violation (anomalous cross-layer dep).
-  // Edges that appear many times are established patterns.
-  const rules = new Map<string, 'ok' | 'violation'>();
-  for (const [edge, count] of layerEdges) {
-    rules.set(edge, count <= 2 ? 'violation' : 'ok');
-  }
-
-  return rules;
 }
 
 function isLikelyTypeOnlyDep(dep: string): boolean {

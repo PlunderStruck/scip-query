@@ -709,8 +709,7 @@ describe('runProjectSetup', () => {
             : 'https://github.com/sourcegraph/scip-java/releases',
       })),
     }));
-    vi.doMock('../../src/reindex/install.js', () => ({
-      tryInstallIndexer,
+    vi.doMock('../../src/platform/indexer-toolchain.js', () => ({
       getIndexerDependencyStatus: vi.fn((config: { language: string; indexerBinary: string; installUrl: string }) =>
         config.language === 'typescript'
           ? {
@@ -729,6 +728,9 @@ describe('runProjectSetup', () => {
               installUrl: config.installUrl,
             },
       ),
+    }));
+    vi.doMock('../../src/reindex/install.js', () => ({
+      tryInstallIndexer,
     }));
     vi.doMock('../../src/runtime/agent-setup.js', () => ({
       setupAgent: vi.fn(() => ({ written: [], unchanged: ['AGENTS.md'], skipped: [] })),

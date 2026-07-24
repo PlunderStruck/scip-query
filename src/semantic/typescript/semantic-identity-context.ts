@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { projectInputSnapshotOrNull } from '../../domain/project-input.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { createPerDbValue } from '../../storage/per-db-cache.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
-import { projectInputSnapshotOrNull } from '../../reindex/affected-set.js';
 import { isTypeScriptLike } from './source-kinds.js';
 import {
   createTypeScriptSemanticIdentityBuilder,

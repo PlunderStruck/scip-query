@@ -1,0 +1,7 @@
+{
+  "id": "SQBC04C2B3477B",
+  "check": "co-change-partner",
+  "file": "src/queries/cleanup/twin-drift.ts",
+  "reason": "Accepted import-only architecture move: twin-drift now imports the unchanged path-equivalence contract from domain. tests/queries/cleanup/twin-drift.test.ts passed without a behavioral test update.",
+  "createdAt": "2026-07-23T19:17:10.314Z"
+}

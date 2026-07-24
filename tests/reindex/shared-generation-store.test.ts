@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ProjectInputFingerprint } from '../../src/reindex/project-files.js';
+import type { ProjectInputFingerprint } from '../../src/platform/project-files.js';
 import {
   acquireSharedGenerationBuildLock,
   buildSharedGenerationSnapshot,
@@ -24,8 +24,8 @@ import {
 } from '../../src/reindex/shared-generation-store.js';
 import { refreshSqliteGenerationMetadata } from '../../src/reindex/sqlite-generation-store.js';
 import { TYPESCRIPT_FRAGMENT_STORE_DIRECTORY } from '../../src/reindex/typescript-fragment-store.js';
-import { resolveGitWorktreeContext } from '../../src/runtime/git-worktree.js';
-import { resolveIndexStoragePaths, resolveRepositoryCacheDir } from '../../src/runtime/config.js';
+import { resolveIndexStoragePaths, resolveRepositoryCacheDir } from '../../src/platform/cache-layout.js';
+import { resolveGitWorktreeContext } from '../../src/platform/git-worktree.js';
 
 const tempDirs: string[] = [];
 

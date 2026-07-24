@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { loadFileSymbols } from '../../symbols/definition-catalog.js';
-import { resolveIndexedPaths } from '../../resolution/path-resolver.js';
+import { resolveIndexedPaths } from '../internal/file-resolution.js';
 import { isAncestorSymbol } from '../../symbols/symbol-parser.js';
 
 export interface OutlineNode {

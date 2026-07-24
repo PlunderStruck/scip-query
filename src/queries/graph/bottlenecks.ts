@@ -3,8 +3,9 @@ import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.
 import { callerRowsForSymbol } from '../../symbols/references/caller-evidence.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
-import { ProjectIndex } from '../../core/project-index.js';
+import { ProjectIndex } from '../internal/project-index.js';
 import { applyScanLimit } from '../query-utils.js';
+import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 
 export interface BottleneckResult {
   symbol: string;
@@ -64,10 +65,20 @@ export function bottlenecks(
 
 function bottleneckRowFor(db: ScipDatabase, definition: IndexedDefinition, semantic: boolean): BottleneckResult {
   const callerFiles = [
-    ...new Set(callerRowsForSymbol(db, definition, { limit: 500, semantic }).map((row) => row.file)),
+    ...new Set(
+      callerRowsForSymbol(db, definition, {
+        limit: 500,
+        semantic,
+        semanticEvidence: symbolSemanticEvidence,
+      }).map((row) => row.file),
+    ),
   ].sort();
   const externalCalleeByIdentity = new Map<string, { symbol: string; shortName: string; file: string }>();
-  for (const row of getCalleeRowsForSymbol(db, definition, { limit: 500, semantic })) {
+  for (const row of getCalleeRowsForSymbol(db, definition, {
+    limit: 500,
+    semantic,
+    semanticEvidence: symbolSemanticEvidence,
+  })) {
     if (row.file === definition.relativePath) continue;
     const identity = `${row.symbol}|${row.file}`;
     if (!externalCalleeByIdentity.has(identity)) {

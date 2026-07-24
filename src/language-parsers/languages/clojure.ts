@@ -1,6 +1,6 @@
 import type { ParsedSourceImport } from '../../domain/types.js';
-import { resolveClojureImportPath } from '../../resolution/import-path-resolver.js';
-import { escapeRegex } from '../../core/regex-utils.js';
+import { resolveClojureImportPath } from '../../source/import-path-resolver.js';
+import { escapeRegex } from '../../source/regex-utils.js';
 import { isReaderMacroPrefix, isTokenDelimiter, skipLineComment, skipString } from '../../source/clojure-facts.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { buildUsedImport } from '../utils.js';

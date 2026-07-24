@@ -10,7 +10,7 @@ import type {
   RustImportDefinitionWorkerResponse,
 } from './semantic-resolution.js';
 import { profileEnabled, writeProfileEvent } from '../../instrumentation/profile.js';
-import { isProcessAlive } from '../../runtime/process-liveness.js';
+import { isProcessAlive } from '../../platform/process-liveness.js';
 import { writeJsonAtomic } from '../../storage/atomic-json.js';
 import { rustCompilerEngineIdentity, type RustCompilerEngineIdentity } from './engine-identity.js';
 import { rustAnalyzerProjectFingerprint } from './project-fingerprint.js';

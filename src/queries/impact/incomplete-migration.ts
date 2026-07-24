@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { containment } from '../../analysis/similarity.js';
-import { ProjectIndex } from '../../core/project-index.js';
-import { escapeRegex } from '../../core/regex-utils.js';
+import { ProjectIndex } from '../internal/project-index.js';
+import { escapeRegex } from '../../source/regex-utils.js';
 import { leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import {
   GIT_DIFF_UNAVAILABLE_NOTE,

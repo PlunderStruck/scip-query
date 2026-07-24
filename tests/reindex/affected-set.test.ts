@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { classifyAffectedSetFallback, planAffectedFiles } from '../../src/reindex/affected-set.js';
 import {
   buildProjectChangeManifest,
-  classifyAffectedSetFallback,
-  planAffectedFiles,
+  classifyProjectInputPath,
   projectInputSnapshotOrNull,
   type FileDependencyGraph,
+  type ProjectFileFingerprint,
   type ProjectInputSnapshot,
-} from '../../src/reindex/affected-set.js';
-import { classifyProjectInputPath, type ProjectFileFingerprint } from '../../src/reindex/project-files.js';
+} from '../../src/domain/project-input.js';
 
 function file(path: string, hash: string, size = hash.length): ProjectFileFingerprint {
   return { path, hash, size };
@@ -32,6 +32,8 @@ describe('affected-set change manifest', () => {
   it('accepts complete snapshots and rejects malformed persisted metadata', () => {
     const value = snapshot([file('src/a.ts', 'a')]);
     expect(projectInputSnapshotOrNull(value)).toEqual(value);
+    const arrayWithSnapshotFields = Object.assign([], value);
+    expect(projectInputSnapshotOrNull(arrayWithSnapshotFields)).toBe(arrayWithSnapshotFields);
     expect(projectInputSnapshotOrNull({ ...value, files: [{ path: 'src/a.ts', hash: 'a' }] })).toBeNull();
     expect(projectInputSnapshotOrNull({ ...value, languages: 'typescript' })).toBeNull();
   });

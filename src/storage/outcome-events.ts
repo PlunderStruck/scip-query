@@ -13,45 +13,21 @@
  *   - events are idempotent facts keyed by (check, findingId, event, commit),
  *     so duplicated or reordered files are absorbed by read-side dedupe.
  *
- * Nothing here decides outcomes — deriveOutcomeEvents() is a pure diff of
- * two ledger snapshots produced by recordFindingOutcomes()
- * (src/queries/health/finding-outcome-ledger.ts). Write failures must never
- * break a gate run; callers wrap appendOutcomeEvents in try/catch.
+ * Outcome meaning and transition rules live in src/domain/finding-outcomes.ts.
+ * Write failures must never break a gate run; callers wrap
+ * appendOutcomeEvents in try/catch.
  */
 
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ledgerKey } from '../queries/health/finding-outcome-ledger.js';
-import type { FindingOutcomeRecord } from '../queries/health/finding-outcome-ledger.js';
-import { runGit } from '../analysis/git-history.js';
+import type { OutcomeEvent, OutcomeEventKind } from '../domain/finding-outcomes.js';
+
+export type { OutcomeEvent } from '../domain/finding-outcomes.js';
 
 export const OUTCOME_EVENTS_DIR = join('.scipquery', 'events');
 const LEGACY_LEDGER_DIR = join('.scipquery', 'ledger');
 const LEGACY_LEDGER_FILENAME = 'events.jsonl';
-
-export type OutcomeEventKind = 'caught' | 'resolved' | 'suppressed' | 'reopened';
-
-export interface OutcomeEvent {
-  /** Wall-clock ms when the transition was observed. */
-  ts: number;
-  check: string;
-  findingId: string;
-  event: OutcomeEventKind;
-  /** HEAD commit at observation time; null when git is unavailable. */
-  commit: string | null;
-  /** Resolved commit used as the gate's diff baseline for this observation. */
-  comparisonBaseCommit?: string;
-  /** Original comparison commit replayed to prove a cross-HEAD resolution. */
-  verifiedAgainstCommit?: string;
-  /** SCIP symbol of the finding when known — enables rename ("moved") reclassification at query time. */
-  symbol?: string;
-}
-
-export interface OutcomeEventEvidence {
-  comparisonBaseCommit?: string;
-  verifiedAgainstByFinding?: ReadonlyMap<string, string>;
-}
 
 function legacyLedgerDirPath(projectRoot: string): string {
   return join(projectRoot, LEGACY_LEDGER_DIR);
@@ -59,84 +35,6 @@ function legacyLedgerDirPath(projectRoot: string): string {
 
 function legacyLedgerFilePath(projectRoot: string): string {
   return join(legacyLedgerDirPath(projectRoot), LEGACY_LEDGER_FILENAME);
-}
-
-/**
- * Pure transition diff: compare the ledger before and after one gate run
- * and emit the events that describe what changed.
- *
- *   new record                       -> caught (+ suppressed when it arrives suppressed)
- *   still-open|suppressed -> resolved -> resolved
- *   still-open -> suppressed          -> suppressed
- *   resolved|suppressed -> still-open -> reopened
- */
-export function deriveOutcomeEvents(
-  previous: readonly FindingOutcomeRecord[],
-  next: readonly FindingOutcomeRecord[],
-  symbolByFindingId: ReadonlyMap<string, string>,
-  commit: string | null,
-  now: number,
-  evidence: OutcomeEventEvidence = {},
-): OutcomeEvent[] {
-  const prevByKey = new Map(previous.map((record) => [ledgerKey(record.check, record.findingId), record]));
-  const events: OutcomeEvent[] = [];
-
-  const push = (record: FindingOutcomeRecord, event: OutcomeEventKind) => {
-    const symbol = symbolByFindingId.get(record.findingId);
-    const verifiedAgainstCommit =
-      event === 'resolved'
-        ? evidence.verifiedAgainstByFinding?.get(ledgerKey(record.check, record.findingId))
-        : undefined;
-    events.push({
-      ts: now,
-      check: record.check,
-      findingId: record.findingId,
-      event,
-      commit,
-      ...(evidence.comparisonBaseCommit ? { comparisonBaseCommit: evidence.comparisonBaseCommit } : {}),
-      ...(verifiedAgainstCommit ? { verifiedAgainstCommit } : {}),
-      ...(symbol ? { symbol } : {}),
-    });
-  };
-
-  for (const record of next) {
-    const before = prevByKey.get(ledgerKey(record.check, record.findingId));
-    if (!before) {
-      push(record, 'caught');
-      if (record.outcome === 'suppressed') push(record, 'suppressed');
-      continue;
-    }
-    if (before.outcome === record.outcome) continue;
-    if (record.outcome === 'resolved') push(record, 'resolved');
-    else if (record.outcome === 'suppressed') push(record, 'suppressed');
-    else if (record.outcome === 'still-open') push(record, 'reopened');
-  }
-
-  return events;
-}
-
-/** HEAD commit sha for stamping events; null when the project is not a usable git repo. */
-export function headCommit(projectRoot: string): string | null {
-  return resolveGitCommit(projectRoot, 'HEAD');
-}
-
-/** Resolve a moving Git ref to the immutable commit actually compared by a gate run. */
-export function resolveGitCommit(projectRoot: string, ref: string): string | null {
-  try {
-    const sha = runGit(projectRoot, ['rev-parse', '--verify', `${ref}^{commit}`]).trim();
-    return /^[0-9a-f]{40}$/.test(sha) ? sha : null;
-  } catch {
-    return null;
-  }
-}
-
-/** True only when a replay against the working tree represents the current commit exactly. */
-export function gitWorktreeIsClean(projectRoot: string): boolean {
-  try {
-    return runGit(projectRoot, ['status', '--porcelain=v1', '--untracked-files=all']).trim() === '';
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -258,15 +156,6 @@ export function dedupeEvents(events: readonly OutcomeEvent[]): OutcomeEvent[] {
     }
   }
   return [...byKey.values()].sort((left, right) => left.ts - right.ts);
-}
-
-/** The caught/reopened event that began the finding's current lifecycle. */
-export function latestOutcomeLifecycleAnchor(events: readonly OutcomeEvent[]): OutcomeEvent | undefined {
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const event = events[index];
-    if (event?.event === 'caught' || event?.event === 'reopened') return event;
-  }
-  return undefined;
 }
 
 function eventEvidenceScore(event: OutcomeEvent): number {

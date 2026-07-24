@@ -16,11 +16,29 @@ import {
 } from 'node:fs';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { platform } from 'node:os';
+import {
+  projectInputSnapshotOrNull,
+  type ProjectFileFingerprint,
+  type ProjectInputSnapshot,
+} from '../domain/project-input.js';
 import { profileAsyncSpan, profileSpan } from '../instrumentation/profile.js';
-import { resolveScipBinary, tryInstallScipCli } from '../runtime/scip-cli.js';
-import { isProcessAlive } from '../runtime/process-liveness.js';
-import { resolveGitWorktreeContext } from '../runtime/git-worktree.js';
-import { acquireProcessFileLock } from '../runtime/repository-cache-lock.js';
+import { resolveScipBinary, tryInstallScipCli } from '../platform/scip-cli.js';
+import { isProcessAlive } from '../platform/process-liveness.js';
+import { resolveGitWorktreeContext } from '../platform/git-worktree.js';
+import { acquireProcessFileLock } from '../platform/repository-cache-lock.js';
+import {
+  describeIndexerBinary,
+  getIndexerExecutionEnv,
+  isIndexerInstalled,
+  resolveIndexerBinary,
+  resolveProjectLocalIndexerBinary,
+} from '../platform/indexer-toolchain.js';
+import {
+  buildProjectInputFingerprint,
+  fingerprintProjectFiles,
+  normalizeTypeScriptProjects,
+  type ProjectInputFingerprint,
+} from '../platform/project-files.js';
 import type { LastRefreshMetadata, RefreshTrigger, SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import { ScipDatabase } from '../storage/db.js';
@@ -33,19 +51,11 @@ import {
   writeAffectedSetShadowRecord,
   type AffectedSetShadowRecord,
 } from './affected-shadow.js';
-import { projectInputSnapshotOrNull, type ProjectInputSnapshot } from './affected-set.js';
 import { detectLanguages } from './detect.js';
 import { getIndexerConfig } from './indexers.js';
 import { mergeAndSanitizeScipFiles, mergeScipFiles } from './merge.js';
 import { patchIncrementalSqliteGeneration } from './incremental-sqlite-publication.js';
 import { runPostIndexAugmentation } from './post-index-augmentation.js';
-import {
-  buildProjectInputFingerprint,
-  fingerprintProjectFiles,
-  normalizeTypeScriptProjects,
-  type ProjectFileFingerprint,
-  type ProjectInputFingerprint,
-} from './project-files.js';
 import {
   assignFilesToProjects,
   computeProjectShardFingerprints,
@@ -78,14 +88,7 @@ import {
 } from './typescript-incremental-index.js';
 import { runPreparedIndexers } from './indexer-runner.js';
 import type { PreparedIndexerRun, IndexerRunResult } from './indexer-runner.js';
-import {
-  describeIndexerBinary,
-  getIndexerExecutionEnv,
-  isIndexerInstalled,
-  resolveIndexerBinary,
-  resolveProjectLocalIndexerBinary,
-  tryInstallIndexer,
-} from './install.js';
+import { tryInstallIndexer } from './install.js';
 
 export interface ReindexOptions {
   projectRoot: string;
@@ -504,13 +507,13 @@ export { mergeScipFiles, mergeScipIndexes } from './merge.js';
 export {
   describeIndexerBinary,
   getIndexerExecutionEnv,
-  isBinaryAvailable,
   isIndexerInstalled,
   resolveIndexerBinary,
   resolveProjectLocalIndexerBinary,
-  tryInstallIndexer,
-} from './install.js';
-export { tryInstallScipCli } from '../runtime/scip-cli.js';
+} from '../platform/indexer-toolchain.js';
+export { isBinaryAvailable } from '../platform/binary.js';
+export { tryInstallIndexer } from './install.js';
+export { tryInstallScipCli } from '../platform/scip-cli.js';
 
 function resolveReindexOutputPaths(opts: ReindexOptions): ReindexOutputPaths {
   const outputScip = opts.outputScip ?? join(opts.projectRoot, 'index.scip');

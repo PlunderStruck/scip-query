@@ -16,7 +16,7 @@ import { buildFileDepGraph } from '../symbols/graph/file-dep-graph.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
 import { sourceEvidence } from '../source/source-evidence.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
-import { normalizePathSeparators as normalizePath } from '../source/path-normalization.js';
+import { normalizePathSeparators as normalizePath } from '../domain/path-normalization.js';
 import { leafName } from '../symbols/symbol-parser.js';
 import { getReExports } from '../language-parsers/index.js';
 import { isPackageSurfaceFile } from './package-surface.js';

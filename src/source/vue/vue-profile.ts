@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { createSourceFileCache } from '../../storage/per-db-cache.js';
-import { resolveImportPath } from '../../resolution/import-path-resolver.js';
+import { resolveImportPath } from '../import-path-resolver.js';
 import { getSourceFiles } from '../source-fileset.js';
 import { getSourceText } from '../source-text.js';
 import type { VueTemplateFacts } from './vue-template.js';

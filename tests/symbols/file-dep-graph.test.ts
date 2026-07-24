@@ -44,12 +44,14 @@ describe('file dependency graph evidence', () => {
     writeFixtureFiles(projectRoot, {
       'src/a.ts': "import { b } from './b';\nexport function a(): string { return b(); }\n",
       'src/b.ts': "export function b(): string { return 'b'; }\n",
+      'src/barrel.ts': "export { b } from './b';\n",
       'src/c.ts': "import { b } from './b';\nexport function c(): string { return b(); }\n",
     });
     evidenceFixtureDb(dbPath)
       .document(1, 'typescript', 'src/a.ts')
       .document(2, 'typescript', 'src/b.ts')
       .document(3, 'typescript', 'src/c.ts')
+      .document(4, 'typescript', 'src/barrel.ts')
       .symbol(1, sym('a.ts', 'a'), 'a', 6)
       .symbol(2, sym('b.ts', 'b'), 'b', 6)
       .symbol(3, sym('c.ts', 'c'), 'c', 6)
@@ -76,6 +78,7 @@ describe('file dependency graph evidence', () => {
           files: [
             { path: 'src/a.ts', size: 61, hash: 'a' },
             { path: 'src/b.ts', size: 43, hash: 'b' },
+            { path: 'src/barrel.ts', size: 28, hash: 'barrel' },
             { path: 'src/c.ts', size: 61, hash: 'c' },
           ],
         },
@@ -132,6 +135,36 @@ describe('file dependency graph evidence', () => {
       expect(productEvents[1]).toMatchObject({ hit: true, available: true, graphFiles: 2 });
       expect(events.filter((event) => event.name === 'file-dep-graph.source-imports')).toHaveLength(1);
       expect(events.filter((event) => event.name === 'file-dep-graph.scip-edges')).toHaveLength(1);
+    });
+  });
+
+  it('includes re-exports only in the opt-in source edge mode and isolates both cache identities', () => {
+    withFixture((openDb) => {
+      const db1 = openDb();
+      try {
+        expect(graphShape(buildFileDepGraph(db1))).toEqual([
+          ['src/a.ts', ['src/b.ts']],
+          ['src/c.ts', ['src/b.ts']],
+        ]);
+        expect(graphShape(buildFileDepGraph(db1, undefined, { sourceEdges: 'imports-and-reexports' }))).toEqual([
+          ['src/a.ts', ['src/b.ts']],
+          ['src/c.ts', ['src/b.ts']],
+          ['src/barrel.ts', ['src/b.ts']],
+        ]);
+      } finally {
+        db1.close();
+      }
+
+      const db2 = openDb();
+      try {
+        expect(graphShape(buildFileDepGraph(db2, undefined, { sourceEdges: 'imports-and-reexports' }))).toContainEqual([
+          'src/barrel.ts',
+          ['src/b.ts'],
+        ]);
+        expect(graphShape(buildFileDepGraph(db2))).not.toContainEqual(['src/barrel.ts', ['src/b.ts']]);
+      } finally {
+        db2.close();
+      }
     });
   });
 });

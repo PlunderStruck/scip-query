@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { isRecord, stringArray } from '../storage/evidence-payload.js';
-import { isPathInsideProject as isInsideProject } from '../source/path-normalization.js';
+import { isPathInsideProject as isInsideProject } from '../domain/path-normalization.js';
 import { parseSanyXmlFacts, type SanyActionFacts } from './sany-facts.js';
 
 export type TlaCheckerMode = 'auto' | 'sany' | 'tlc' | 'apalache' | 'none';

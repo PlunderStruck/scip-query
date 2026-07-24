@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
-import { ProjectIndex } from '../../core/project-index.js';
+import { ProjectIndex } from '../internal/project-index.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { applyScanLimit, definitionLoc } from '../query-utils.js';
 import { definitionSourceSnippet, extractImplementationBody } from './duplicate-bodies.js';
@@ -11,6 +11,7 @@ import { resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { getSourceFacts } from '../../source/source-facts.js';
 import { isFrameworkContractCallable } from './callable-contracts.js';
+import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 
 /**
  * decorative-checkers (D2): mechanizes scip-integrity-audit drill 1 for a
@@ -276,7 +277,11 @@ function resolveOneHopDelegate(
   db: ScipDatabase,
   def: IndexedDefinition,
 ): { body: string; snippet: string; shortName: string } | null {
-  const callees = getCalleeRowsForSymbol(db, def, { callableOnly: true, limit: 3 });
+  const callees = getCalleeRowsForSymbol(db, def, {
+    callableOnly: true,
+    limit: 3,
+    semanticEvidence: symbolSemanticEvidence,
+  });
   const uniqueTargets = [...new Set(callees.map((callee) => callee.symbol))].filter((symbol) => symbol !== def.symbol);
   if (uniqueTargets.length !== 1) return null;
 

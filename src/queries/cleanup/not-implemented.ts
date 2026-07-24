@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
-import { ProjectIndex } from '../../core/project-index.js';
+import { ProjectIndex } from '../internal/project-index.js';
 import { isEntrySurface, isRootedSymbol } from '../../analysis/file-classifier.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { applyScanLimit, definitionLoc } from '../query-utils.js';

@@ -1,0 +1,8 @@
+{
+  "ts": 1784828845175,
+  "check": "doc-reference",
+  "findingId": "SQ83CF165F67A2",
+  "event": "caught",
+  "commit": "d82429b7e8826a61cdd5f33bdcdcea001d5ee927",
+  "comparisonBaseCommit": "d82429b7e8826a61cdd5f33bdcdcea001d5ee927"
+}

@@ -4,6 +4,7 @@ import { referenceSitesForSymbol } from '../../symbols/references/reference-site
 import { getSourceText } from '../../source/source-text.js';
 import { isFunctionLikeSymbol } from '../../symbols/symbol-parser.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
+import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 
 export interface RefResult {
   relativePath: string;
@@ -20,7 +21,10 @@ export function refs(db: ScipDatabase, symbolPattern: string, opts: { semantic?:
       ? [{ relativePath: match.relativePath, line: match.startLine }]
       : [];
 
-  const referenceSites = referenceSitesForSymbol(db, match, { semantic: opts.semantic }).map((site) => ({
+  const referenceSites = referenceSitesForSymbol(db, match, {
+    semantic: opts.semantic,
+    semanticEvidence: symbolSemanticEvidence,
+  }).map((site) => ({
     relativePath: site.file,
     line: site.line,
   }));

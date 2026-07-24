@@ -6,7 +6,7 @@ import { SHARE_ENV, Worker } from 'node:worker_threads';
 import { parsePositiveInteger } from '../../domain/number-parsing.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { profileEnabled, profileSpan, writeProfileEvent } from '../../instrumentation/profile.js';
-import { isProcessAlive } from '../../runtime/process-liveness.js';
+import { isProcessAlive } from '../../platform/process-liveness.js';
 import type { SemanticCallee, SemanticReference } from '../types.js';
 import type {
   RustAnalyzerSessionRequester,

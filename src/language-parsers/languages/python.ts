@@ -6,7 +6,7 @@
  */
 import type { SyntaxNode, Tree } from '../../source/ast.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { resolvePythonImportPath } from '../../resolution/import-path-resolver.js';
+import { resolvePythonImportPath } from '../../source/import-path-resolver.js';
 import {
   buildUsageBody,
   collectNamespaceMembers,

@@ -5,6 +5,7 @@ import { leafName } from '../symbol-parser.js';
 import { mentionReferenceChunkRows } from '../../storage/scip-mentions.js';
 import { findReferences, materializeReferenceSites } from '../identifier-attribution.js';
 import type { ReferenceSite, SymbolLocation } from '../../domain/types.js';
+import type { SymbolSemanticEvidencePort } from '../semantic-evidence-port.js';
 
 interface ReferenceChunk {
   start_line: number;
@@ -49,7 +50,7 @@ export function getResolvedReferenceSites(db: ScipDatabase, symbol: SymbolLocati
 export function referenceSitesForSymbol(
   db: ScipDatabase,
   symbol: SymbolLocation,
-  opts: { semantic?: boolean; includeIgnored?: boolean } = {},
+  opts: { semantic?: boolean; includeIgnored?: boolean; semanticEvidence?: SymbolSemanticEvidencePort } = {},
 ): ReferenceSite[] {
   return referenceEvidenceForSymbol(db, symbol, opts).map((site) => ({
     file: site.file,
@@ -61,9 +62,12 @@ export function referenceSitesForSymbol(
 export function referenceEvidenceForSymbol(
   db: ScipDatabase,
   symbol: SymbolLocation,
-  opts: { semantic?: boolean; includeIgnored?: boolean } = {},
+  opts: { semantic?: boolean; includeIgnored?: boolean; semanticEvidence?: SymbolSemanticEvidencePort } = {},
 ): ReferenceEvidenceSite[] {
-  const sourceSites = findReferences(db, symbol, { semantic: opts.semantic });
+  const sourceSites = findReferences(db, symbol, {
+    semantic: opts.semantic,
+    semanticEvidence: opts.semanticEvidence,
+  });
   const sites =
     sourceSites.length > 0
       ? withReferenceProvenance(sourceSites, 'source-attribution')

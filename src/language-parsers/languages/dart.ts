@@ -4,7 +4,7 @@
  * `export 'pkg';` shapes.
  */
 import type { ScipDatabase } from '../../storage/db.js';
-import { resolveDartImportPath } from '../../resolution/import-path-resolver.js';
+import { resolveDartImportPath } from '../../source/import-path-resolver.js';
 import { buildUsageBody, collectNamespaceMembers, hasIdentifierUsage } from '../../source/source-stripper.js';
 import type { ParsedSourceExport, ParsedSourceImport } from '../../domain/types.js';
 

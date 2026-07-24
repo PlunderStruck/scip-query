@@ -1,12 +1,12 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { detectAstLanguage, frameworkSourceReferences, getCallSites } from '../../source/ast.js';
-import { semanticEvidenceProduct } from '../../semantic/shared-primitives.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { mentionReferenceChunkRows } from '../../storage/scip-mentions.js';
 import type { IndexedDefinition, SymbolLocation } from '../../domain/types.js';
 import { getAllDefinitions } from '../definition-catalog.js';
 import { getGlobalLeafIndex, pickAstCallCandidate, sameLanguageCandidates } from '../leaf-symbol-index.js';
 import type { GlobalLeafCandidate } from '../leaf-symbol-index.js';
+import type { SymbolSemanticEvidencePort } from '../semantic-evidence-port.js';
 import { leafName } from '../symbol-parser.js';
 
 interface ChunkMentionCallerRow {
@@ -29,7 +29,7 @@ interface DefinitionSelfRange {
 export function buildCrossFileCallerMap(
   db: ScipDatabase,
   definitions?: ReadonlyArray<SymbolLocation>,
-  opts: { semantic?: boolean } = {},
+  opts: { semantic?: boolean; semanticEvidence?: SymbolSemanticEvidencePort } = {},
 ): Map<number, Set<string>> {
   const map = new Map<number, Set<string>>();
   if (definitions && definitions.length === 0) {
@@ -44,9 +44,8 @@ export function buildCrossFileCallerMap(
   addAstCallsiteCallers(db, map, docs, leafIndex, targetSymbolIds, targetLeaves);
   addChunkMentionCallers(db, map, effectiveDefinitions, targetSymbolIds);
   addRustAttrCallers(db, map, docs, leafIndex, targetSymbolIds, targetLeaves);
-  if (opts.semantic !== false) {
-    const semantic = semanticEvidenceProduct(db);
-    mergeCallerSets(map, semantic.callerMap(indexedDefinitions(effectiveDefinitions)));
+  if (opts.semantic !== false && opts.semanticEvidence) {
+    mergeCallerSets(map, opts.semanticEvidence.callerMap(db, indexedDefinitions(effectiveDefinitions)));
   }
 
   return map;

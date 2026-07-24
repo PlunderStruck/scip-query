@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import type { LastRefreshMetadata, ProjectConfig, SupportedLanguage } from '../domain/types.js';
+import { buildProjectInputFingerprint, type ProjectInputFingerprint } from '../platform/project-files.js';
 import { detectLanguages } from '../reindex/detect.js';
-import { buildProjectInputFingerprint, type ProjectInputFingerprint } from '../reindex/project-files.js';
 import { inspectSqliteGeneration } from '../reindex/sqlite-generation-store.js';
 
 export type IndexFreshnessState = 'fresh' | 'stale' | 'missing' | 'unknown';

@@ -681,7 +681,7 @@ function summarizeCoverageContracts(db: ScipDatabase, budget: HealthBudget): Cou
 
 function summarizeHealthDrift(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): DriftSummary {
   return runHealthPhase(db, budget, 'drift', () => {
-    // Health always wants the full unused-import/layer-violation count for
+    // Health always wants the full unused-import/architecture-violation count for
     // scoring, not the CLI's 21.2 default display cap — pattern-deviation is
     // already excluded above, so there's no volume problem left to bound.
     const driftResult = drift(db, {
@@ -697,6 +697,7 @@ function summarizeHealthDrift(db: ScipDatabase, scope: string | undefined, budge
     return {
       count: healthVisible.length,
       unusedImports: driftResult.unusedImports,
+      architectureViolations: driftResult.architectureViolations,
       layerViolations: driftResult.layerViolations,
       direct,
       signal,

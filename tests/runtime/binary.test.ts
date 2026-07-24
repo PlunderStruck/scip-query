@@ -1,11 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { resolveSpawnableExecutable, toPortableCommand } from '../../src/runtime/binary.js';
+import { resolveSpawnableExecutable, toPortableCommand } from '../../src/platform/binary.js';
 
 describe('toPortableCommand', () => {
   it('runs .js bin targets through the current Node executable', () => {
-    const result = toPortableCommand('/x/node_modules/@sourcegraph/scip-typescript/dist/main.js', ['index', '--output', 'out.scip']);
+    const result = toPortableCommand('/x/node_modules/@sourcegraph/scip-typescript/dist/main.js', [
+      'index',
+      '--output',
+      'out.scip',
+    ]);
     expect(result.binary).toBe(process.execPath);
-    expect(result.args).toEqual(['/x/node_modules/@sourcegraph/scip-typescript/dist/main.js', 'index', '--output', 'out.scip']);
+    expect(result.args).toEqual([
+      '/x/node_modules/@sourcegraph/scip-typescript/dist/main.js',
+      'index',
+      '--output',
+      'out.scip',
+    ]);
   });
 
   it.each(['main.cjs', 'main.mjs', 'MAIN.JS'])('rewrites %s the same way', (file) => {

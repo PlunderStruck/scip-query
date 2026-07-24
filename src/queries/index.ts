@@ -15,6 +15,7 @@ export { members } from './navigation/members.js';
 export { fanIn, fanOut, topFanIn, topFanOut } from './graph/fan.js';
 export { coupling, topCoupling } from './graph/coupling.js';
 export { cycles, cycleSummary } from './graph/cycles.js';
+export { analyzeArchitectureGraph, architecture } from './graph/architecture.js';
 export { bottlenecks } from './graph/bottlenecks.js';
 export { isolated } from './cleanup/isolated.js';
 export { byKind, kindCounts } from './navigation/by-kind.js';
@@ -82,13 +83,30 @@ export type { MemberResult } from './navigation/members.js';
 export type { FanResult } from './graph/fan.js';
 export type { CouplingResult } from './graph/coupling.js';
 export type { CycleResult, CycleSummary } from './graph/cycles.js';
+export type {
+  ArchitectureAmbiguousFile,
+  ArchitectureBoundaryEdge,
+  ArchitectureBoundarySummary,
+  ArchitectureCoverage,
+  ArchitectureCycle,
+  ArchitectureFileEdge,
+  ArchitecturePolicyStatus,
+  ArchitectureReciprocalPair,
+  ArchitectureReport,
+} from './graph/architecture.js';
 export type { BottleneckResult } from './graph/bottlenecks.js';
 export type { IsolatedResult } from './cleanup/isolated.js';
 export type { ByKindResult } from './navigation/by-kind.js';
 export type { DeepChainResult } from './graph/deep-chains.js';
 export type { HierarchyNode } from './navigation/hierarchy.js';
 export type { CallGraphResult } from './navigation/call-graph.js';
-export type { DriftActionTier, DriftPolicyBasis, DriftResult, DriftSummary } from './cleanup/drift.js';
+export type {
+  DriftActionTier,
+  DriftArchitectureEvidence,
+  DriftPolicyBasis,
+  DriftResult,
+  DriftSummary,
+} from './cleanup/drift.js';
 export type { WrapperActionTier, WrapperCandidate } from './cleanup/wrapper-candidates.js';
 export type { PassthroughCandidate } from './cleanup/passthrough-candidates.js';
 export type { StaleAbstraction, StaleAbstractionActionTier, StalenessKind } from './cleanup/stale-abstractions.js';

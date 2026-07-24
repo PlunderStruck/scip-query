@@ -18,8 +18,8 @@ import {
   assembleReferenceFragments,
   compareReferenceFragmentMaps,
 } from '../../../src/semantic/typescript/reference-fragments.js';
-import { fingerprintProjectFiles } from '../../../src/reindex/project-files.js';
-import { materializeSemanticCalleeCache } from '../../../src/symbols/graph/call-graph-evidence.js';
+import { fingerprintProjectFiles } from '../../../src/platform/project-files.js';
+import { materializeSemanticCalleeCache } from '../../../src/semantic/symbol-evidence.js';
 import { EVIDENCE_DB_FILENAME } from '../../../src/storage/evidence-cache.js';
 import { typeScriptSemanticIdentityForFile } from '../../../src/semantic/typescript/semantic-identity-context.js';
 import {

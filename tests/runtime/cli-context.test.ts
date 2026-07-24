@@ -9,8 +9,8 @@ import {
   rootIndexFallbackWarning,
   sharedCachePreparationEligible,
 } from '../../src/runtime/cli-context.js';
-import type { GitWorktreeContext } from '../../src/runtime/git-worktree.js';
-import { resolveIndexStoragePaths } from '../../src/runtime/config.js';
+import type { GitWorktreeContext } from '../../src/platform/git-worktree.js';
+import { resolveIndexStoragePaths } from '../../src/platform/cache-layout.js';
 import { publishedGenerationIdentity } from '../../src/semantic/typescript/session-protocol.js';
 import type { ProjectConfig } from '../../src/domain/types.js';
 

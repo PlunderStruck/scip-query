@@ -1,19 +1,34 @@
 import { spawn } from 'node:child_process';
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { LastRefreshMetadata, ProjectConfig, WatchConfig, WatcherStatus } from '../domain/types.js';
+import type { ProjectConfig, WatchConfig, WatcherStatus } from '../domain/types.js';
+import { canonicalPath, resolveGitWorktreeIdentity, type GitWorktreeContext } from '../platform/git-worktree.js';
+import { isProcessAlive } from '../platform/process-liveness.js';
+import {
+  WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS,
+  WATCH_SERVICE_PROTOCOL_VERSION,
+  isValidWatchServiceTimestamp,
+  readWatchServiceState,
+  watchServicePaths,
+  type WatchServicePaths,
+  type WatchServiceState,
+} from '../platform/watch-service-state.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
-import type { TypeScriptSemanticServiceStatus } from '../semantic/typescript/session-protocol.js';
-import type { TypeScriptIndexServiceStatus } from '../reindex/typescript-index-protocol.js';
-import { canonicalPath, resolveGitWorktreeIdentity, type GitWorktreeContext } from './git-worktree.js';
-import { isProcessAlive } from './process-liveness.js';
 
-export const WATCH_SERVICE_PROTOCOL_VERSION = 4;
-export const WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS = 5_000;
-export const WATCH_LOCK_FILE = 'watch.lock';
-export const WATCH_STATE_FILE = 'watch-state.json';
-export const WATCH_ACTIVITY_FILE = 'watch-activity.json';
+export {
+  WATCH_ACTIVITY_FILE,
+  WATCH_LOCK_FILE,
+  WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS,
+  WATCH_SERVICE_PROTOCOL_VERSION,
+  WATCH_STATE_FILE,
+  parseWatchServiceState,
+  readWatchServiceState,
+  watchServicePaths,
+  type WatchServicePaths,
+  type WatchServiceState,
+} from '../platform/watch-service-state.js';
+
 const WATCH_SERVICE_STARTUP_TIMEOUT_MS = 5_000;
 const WATCH_SERVICE_STOP_TIMEOUT_MS = 2_000;
 const WATCH_SERVICE_POLL_INTERVAL_MS = 10;
@@ -32,25 +47,6 @@ const AUTO_START_EXCLUDED_COMMANDS = new Set([
   'watch',
   'work-audit',
 ]);
-
-export interface WatchServiceState {
-  version: 1;
-  protocolVersion: typeof WATCH_SERVICE_PROTOCOL_VERSION;
-  pid: number;
-  projectRoot: string;
-  worktreeId?: string;
-  cliVersion: string;
-  startedAt: string;
-  heartbeatAt: string;
-  lastActivityAt: string;
-  idleDeadlineAt?: string;
-  watcher: WatcherStatus;
-  indexGeneration?: string;
-  lastRefresh?: LastRefreshMetadata;
-  lastError?: { at: string; message: string };
-  typescriptSemantic?: TypeScriptSemanticServiceStatus;
-  typescriptIndex?: TypeScriptIndexServiceStatus;
-}
 
 export type WatchServiceIdentity =
   | { projectRoot: string; worktreeKind: 'git'; worktreeId: string; cliVersion: string }
@@ -76,12 +72,6 @@ export type WatchServiceAction =
   | { kind: 'clean-stale'; state: WatchServiceState }
   | { kind: 'report'; classification: WatchServiceClassification }
   | { kind: 'already-stopped' };
-
-export interface WatchServicePaths {
-  lockPath: string;
-  statePath: string;
-  activityPath: string;
-}
 
 export interface WatchServiceActivity {
   atMs: number;
@@ -197,14 +187,6 @@ export function ensureWatchServiceForCommand(opts: {
   } catch (error) {
     return { kind: 'failed', message: error instanceof Error ? error.message : String(error) };
   }
-}
-
-export function watchServicePaths(cacheDir: string): WatchServicePaths {
-  return {
-    lockPath: join(cacheDir, WATCH_LOCK_FILE),
-    statePath: join(cacheDir, WATCH_STATE_FILE),
-    activityPath: join(cacheDir, WATCH_ACTIVITY_FILE),
-  };
 }
 
 export function resolveWatchServiceIdentity(
@@ -344,14 +326,6 @@ export function stopWatchService(opts: WatchServiceControllerOptions): WatchServ
   return { disposition: 'already-stopped' };
 }
 
-export function readWatchServiceState(statePath: string): WatchServiceState | null {
-  try {
-    return parseWatchServiceState(JSON.parse(readFileSync(statePath, 'utf8')));
-  } catch {
-    return null;
-  }
-}
-
 // scip-query: ignore-passthrough — protocol writer keeps watch-state callers
 // on the validated service contract instead of its JSON storage mechanism.
 export function writeWatchServiceState(statePath: string, state: WatchServiceState): void {
@@ -393,8 +367,10 @@ export function readWatchServiceActivity(activityPath: string): WatchServiceActi
       refreshRequestedAt?: unknown;
       refreshDetail?: unknown;
     };
-    if (parsed.version !== 1 || !validTimestamp(parsed.at)) return null;
-    if (parsed.refreshRequestedAt !== undefined && !validTimestamp(parsed.refreshRequestedAt)) return null;
+    if (parsed.version !== 1 || !isValidWatchServiceTimestamp(parsed.at)) return null;
+    if (parsed.refreshRequestedAt !== undefined && !isValidWatchServiceTimestamp(parsed.refreshRequestedAt)) {
+      return null;
+    }
     if (parsed.refreshDetail !== undefined && typeof parsed.refreshDetail !== 'string') return null;
     return {
       atMs: Date.parse(parsed.at),
@@ -478,7 +454,7 @@ export function readWatchProcessLock(lockPath: string): WatchProcessLockMetadata
       !Number.isInteger(parsed.pid) ||
       parsed.pid <= 0 ||
       typeof parsed.projectRoot !== 'string' ||
-      !validTimestamp(parsed.startedAt)
+      !isValidWatchServiceTimestamp(parsed.startedAt)
     ) {
       return null;
     }
@@ -486,34 +462,6 @@ export function readWatchProcessLock(lockPath: string): WatchProcessLockMetadata
   } catch {
     return null;
   }
-}
-
-export function parseWatchServiceState(value: unknown): WatchServiceState | null {
-  if (!value || typeof value !== 'object') return null;
-  const state = value as Partial<WatchServiceState>;
-  if (
-    state.version !== 1 ||
-    typeof state.protocolVersion !== 'number' ||
-    typeof state.pid !== 'number' ||
-    !Number.isInteger(state.pid) ||
-    state.pid <= 0 ||
-    typeof state.projectRoot !== 'string' ||
-    (state.worktreeId !== undefined && (typeof state.worktreeId !== 'string' || state.worktreeId.length === 0)) ||
-    typeof state.cliVersion !== 'string' ||
-    !validTimestamp(state.startedAt) ||
-    !validTimestamp(state.heartbeatAt) ||
-    !validTimestamp(state.lastActivityAt) ||
-    !validWatcherStatus(state.watcher)
-  ) {
-    return null;
-  }
-  if (state.idleDeadlineAt !== undefined && !validTimestamp(state.idleDeadlineAt)) return null;
-  if (state.indexGeneration !== undefined && !/^[a-f0-9]{64}$/.test(state.indexGeneration)) return null;
-  if (state.lastError !== undefined && !validLastError(state.lastError)) return null;
-  if (state.lastRefresh !== undefined && !validLastRefresh(state.lastRefresh)) return null;
-  if (state.typescriptSemantic !== undefined && !validTypeScriptSemanticStatus(state.typescriptSemantic)) return null;
-  if (state.typescriptIndex !== undefined && !validTypeScriptIndexStatus(state.typescriptIndex)) return null;
-  return state as WatchServiceState;
 }
 
 export function classifyWatchServiceState(
@@ -663,97 +611,6 @@ const DEFAULT_WATCH_SERVICE_RUNTIME: WatchServiceRuntime = {
     Atomics.wait(signal, 0, 0, durationMs);
   },
 };
-
-function validTimestamp(value: unknown): value is string {
-  return typeof value === 'string' && Number.isFinite(Date.parse(value));
-}
-
-function validWatcherStatus(value: unknown): value is WatcherStatus {
-  if (!value || typeof value !== 'object' || !('state' in value)) return false;
-  const status = value as Partial<WatcherStatus>;
-  switch (status.state) {
-    case 'idle':
-      return true;
-    case 'waiting':
-      return finiteNumber(status.changedFiles) && finiteNumber(status.reindexAt);
-    case 'indexing':
-      return finiteNumber(status.startedAt);
-    case 'cooldown':
-      return finiteNumber(status.until) && typeof status.dirty === 'boolean';
-    default:
-      return false;
-  }
-}
-
-function validLastError(value: unknown): value is NonNullable<WatchServiceState['lastError']> {
-  if (!value || typeof value !== 'object') return false;
-  const error = value as Partial<NonNullable<WatchServiceState['lastError']>>;
-  return validTimestamp(error.at) && typeof error.message === 'string';
-}
-
-function validLastRefresh(value: unknown): value is LastRefreshMetadata {
-  if (!value || typeof value !== 'object') return false;
-  const refresh = value as Partial<LastRefreshMetadata>;
-  return (
-    typeof refresh.trigger?.kind === 'string' &&
-    typeof refresh.result === 'string' &&
-    validTimestamp(refresh.startedAt) &&
-    validTimestamp(refresh.completedAt) &&
-    finiteNumber(refresh.durationMs)
-  );
-}
-
-function validTypeScriptSemanticStatus(value: unknown): value is TypeScriptSemanticServiceStatus {
-  if (!value || typeof value !== 'object') return false;
-  const status = value as Partial<TypeScriptSemanticServiceStatus>;
-  return (
-    typeof status.protocolVersion === 'number' &&
-    (status.state === 'idle' ||
-      status.state === 'ready' ||
-      status.state === 'unavailable' ||
-      status.state === 'error') &&
-    finiteNumber(status.requests) &&
-    finiteNumber(status.sessionsCreated) &&
-    finiteNumber(status.sessionsReused) &&
-    finiteNumber(status.sessionsRefreshed) &&
-    finiteNumber(status.sessionsReplaced) &&
-    finiteNumber(status.projectsCreated) &&
-    (status.lastRequestAt === undefined || validTimestamp(status.lastRequestAt)) &&
-    (status.lastError === undefined || typeof status.lastError === 'string') &&
-    (status.busyUntil === undefined || validTimestamp(status.busyUntil))
-  );
-}
-
-function validTypeScriptIndexStatus(value: unknown): value is TypeScriptIndexServiceStatus {
-  if (!value || typeof value !== 'object') return false;
-  const status = value as Partial<TypeScriptIndexServiceStatus>;
-  return (
-    typeof status.protocolVersion === 'number' &&
-    (status.state === 'idle' ||
-      status.state === 'ready' ||
-      status.state === 'unavailable' ||
-      status.state === 'error') &&
-    nonNegativeInteger(status.requests) &&
-    nonNegativeInteger(status.sessionsCreated) &&
-    nonNegativeInteger(status.sessionsReplaced) &&
-    nonNegativeInteger(status.initializations) &&
-    nonNegativeInteger(status.programUpdates) &&
-    nonNegativeInteger(status.documentsEmitted) &&
-    nonNegativeInteger(status.documentsRemoved) &&
-    (status.lastRequestAt === undefined || validTimestamp(status.lastRequestAt)) &&
-    (status.lastDurationMs === undefined || (finiteNumber(status.lastDurationMs) && status.lastDurationMs >= 0)) &&
-    (status.lastError === undefined || typeof status.lastError === 'string') &&
-    (status.busyUntil === undefined || validTimestamp(status.busyUntil))
-  );
-}
-
-function finiteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
-
-function nonNegativeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
-}
 
 function assertNever(value: never): never {
   throw new Error(`Unhandled watch service value: ${JSON.stringify(value)}`);

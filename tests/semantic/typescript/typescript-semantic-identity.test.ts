@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { FileDependencyGraph, ProjectInputSnapshot } from '../../../src/reindex/affected-set.js';
+import type { FileDependencyGraph, ProjectInputSnapshot } from '../../../src/domain/project-input.js';
 import {
   buildTypeScriptSemanticIdentity,
   createTypeScriptSemanticIdentityBuilder,

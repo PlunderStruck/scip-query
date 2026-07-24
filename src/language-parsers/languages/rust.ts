@@ -9,7 +9,7 @@
  */
 import { getAst, type SyntaxNode, type Tree } from '../../source/ast.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { resolveRustImportPath } from '../../resolution/import-path-resolver.js';
+import { resolveRustImportPath } from '../../source/import-path-resolver.js';
 import type { ParsedSourceExport, ParsedSourceImport } from '../../domain/types.js';
 import {
   buildNamedImport,

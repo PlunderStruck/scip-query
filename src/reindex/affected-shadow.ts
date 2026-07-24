@@ -1,18 +1,14 @@
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { buildProjectChangeManifest } from '../domain/project-input.js';
+import type { FileDependencyGraph, ProjectChangeManifest, ProjectInputSnapshot } from '../domain/project-input.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import { ScipDatabase } from '../storage/db.js';
 import { isRecord, stringArray } from '../storage/evidence-payload.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import { buildFileDepGraph } from '../symbols/graph/file-dep-graph.js';
-import { buildProjectChangeManifest, classifyAffectedSetFallback, planAffectedFiles } from './affected-set.js';
-import type {
-  AffectedFilePlan,
-  FileDependencyGraph,
-  ProjectChangeManifest,
-  ProjectInputSnapshot,
-} from './affected-set.js';
+import { classifyAffectedSetFallback, planAffectedFiles, type AffectedFilePlan } from './affected-set.js';
 
 export const GLOBAL_FACTS_UNIT = '<global-symbols>';
 

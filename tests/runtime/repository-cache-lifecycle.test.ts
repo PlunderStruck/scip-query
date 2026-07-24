@@ -19,8 +19,8 @@ import {
   type RepositoryCacheGenerationInventory,
   type RepositoryCacheLeaseInventory,
 } from '../../src/runtime/repository-cache-lifecycle.js';
-import { resolveDefaultCacheDir } from '../../src/runtime/config.js';
-import { resolveGitWorktreeContext } from '../../src/runtime/git-worktree.js';
+import { resolveDefaultCacheDir } from '../../src/platform/cache-layout.js';
+import { resolveGitWorktreeContext } from '../../src/platform/git-worktree.js';
 import {
   SHARED_GENERATION_PRODUCER_IDENTITY,
   worktreeLeaseOwnershipChecksum,
@@ -28,8 +28,8 @@ import {
   type SharedGenerationSnapshot,
   type WorktreeCacheLease,
 } from '../../src/reindex/shared-generation-store.js';
-import type { ProjectInputFingerprint } from '../../src/reindex/project-files.js';
-import { acquireRepositoryCacheLock } from '../../src/runtime/repository-cache-lock.js';
+import type { ProjectInputFingerprint } from '../../src/platform/project-files.js';
+import { acquireRepositoryCacheLock } from '../../src/platform/repository-cache-lock.js';
 
 const HOUR = 60 * 60 * 1_000;
 const tempDirs: string[] = [];

@@ -9,7 +9,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { detectAstLanguage, getAst } from '../../source/ast.js';
 import type { AstLanguage, SyntaxNode, Tree } from '../../source/ast.js';
 import { getSourceText } from '../../source/source-text.js';
-import { escapeRegex } from '../../core/regex-utils.js';
+import { escapeRegex } from '../../source/regex-utils.js';
 import { listGlobMatches, matchesGlob } from '../../analysis/glob-match.js';
 
 /**
@@ -258,7 +258,7 @@ function listTopLevelDirs(absoluteDir: string): string[] {
 /**
  * The registered-command list ground truth is the generated command
  * reference itself, not a runtime import of the command descriptors: the
- * `queries` layer must not depend on `runtime` (see drift-policy), and the
+ * the query layer should not import runtime command registration, and the
  * generated doc is already kept in lockstep with the descriptors by the
  * "keeps command reference syntax generated from descriptors" CLI contract
  * test — reading it is equivalent to reading the registry.

@@ -3,24 +3,23 @@ import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { resolveIndexStoragePaths } from '../../src/platform/cache-layout.js';
 import { handleDoctor, handleStatus, handleWatch } from '../../src/runtime/commands/command-handlers.js';
 import {
   configureProjectAutomaticRefresh,
   initProjectConfig,
   loadProjectConfig,
-  resolveIndexStoragePaths,
   resolveWatchConfig,
   validateProjectConfig,
 } from '../../src/runtime/config.js';
 import type { ProjectConfig } from '../../src/domain/types.js';
-import { resolveGitWorktreeIdentity } from '../../src/runtime/git-worktree.js';
+import { resolveGitWorktreeIdentity } from '../../src/platform/git-worktree.js';
 import {
-  acquireWatchProcessLock,
   WATCH_LOCK_FILE,
   WATCH_SERVICE_PROTOCOL_VERSION,
   watchServicePaths,
-  writeWatchServiceState,
-} from '../../src/runtime/watch-service.js';
+} from '../../src/platform/watch-service-state.js';
+import { acquireWatchProcessLock, writeWatchServiceState } from '../../src/runtime/watch-service.js';
 import { cliVersion } from '../../src/runtime/cli-support.js';
 
 const tempDirs: string[] = [];
@@ -308,7 +307,7 @@ describe('validateProjectConfig', () => {
       coverageContracts: [
         {
           name: 'bad contract',
-          file: 'src/queries/cleanup/drift-policy.ts',
+          file: 'src/runtime/setup.ts',
           keys: { type: 'regex-scan', identifier: 'x' } as never,
           mustEqual: { type: 'live-registry-lookup' } as never,
         },
@@ -327,10 +326,10 @@ describe('validateProjectConfig', () => {
     const diagnostics = validateProjectConfig({
       coverageContracts: [
         {
-          name: 'drift layer policy covers src dirs',
-          file: 'src/queries/cleanup/drift-policy.ts',
-          keys: { type: 'object-literal-keys', identifier: 'SRC_LAYER_DEPENDENCIES' },
-          mustEqual: { type: 'top-level-dirs', path: 'src' },
+          name: 'built-in skills match skill directories',
+          file: 'src/runtime/setup.ts',
+          keys: { type: 'string-array', identifier: 'BUILTIN_SKILLS' },
+          mustEqual: { type: 'builtin-skills' },
           allowExtra: false,
         },
       ],
@@ -407,6 +406,81 @@ describe('validateProjectConfig', () => {
         level: 'error',
         path: 'locality.architecturalBoundarySegments[2]',
         message: 'Boundary segment must be a single folder name, not a path.',
+      }),
+    ]);
+  });
+
+  it('accepts a partially declared architecture policy', () => {
+    const diagnostics = validateProjectConfig({
+      architecture: {
+        boundaries: [
+          { name: 'domain', paths: ['src/domain/**'] },
+          { name: 'runtime', paths: ['src/runtime/**'] },
+        ],
+        allowedDependencies: {
+          domain: [],
+        },
+        requireCompletePolicy: false,
+        requireAcyclic: false,
+      },
+    });
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  it('validates architecture boundary and dependency references', () => {
+    const diagnostics = validateProjectConfig({
+      architecture: {
+        boundaries: [
+          { name: 'domain', paths: ['src/domain/**'] },
+          { name: 'domain', paths: ['src/domain/**'] },
+          { name: 'runtime', paths: ['../runtime/**', 'src/runtime/*/nested'] },
+        ],
+        allowedDependencies: {
+          missing: ['domain'],
+          domain: ['missing', 'missing'],
+        },
+        requireCompletePolicy: 'yes' as unknown as boolean,
+        requireAcyclic: 'yes' as unknown as boolean,
+        extra: true,
+      } as never,
+    });
+
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ level: 'warning', path: 'architecture.extra' }),
+        expect.objectContaining({ level: 'error', path: 'architecture.boundaries[1].name' }),
+        expect.objectContaining({ level: 'error', path: 'architecture.boundaries[1].paths[0]' }),
+        expect.objectContaining({ level: 'error', path: 'architecture.boundaries[2].paths[0]' }),
+        expect.objectContaining({ level: 'error', path: 'architecture.boundaries[2].paths[1]' }),
+        expect.objectContaining({ level: 'error', path: 'architecture.allowedDependencies.missing' }),
+        expect.objectContaining({ level: 'error', path: 'architecture.allowedDependencies.domain[0]' }),
+        expect.objectContaining({ level: 'error', path: 'architecture.allowedDependencies.domain[1]' }),
+        expect.objectContaining({ level: 'error', path: 'architecture.requireCompletePolicy' }),
+        expect.objectContaining({ level: 'error', path: 'architecture.requireAcyclic' }),
+      ]),
+    );
+  });
+
+  it('requires one dependency row per boundary when complete architecture policy is enabled', () => {
+    const diagnostics = validateProjectConfig({
+      architecture: {
+        boundaries: [
+          { name: 'domain', paths: ['src/domain/**'] },
+          { name: 'runtime', paths: ['src/runtime/**'] },
+        ],
+        allowedDependencies: {
+          domain: [],
+        },
+        requireCompletePolicy: true,
+      },
+    });
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        path: 'architecture.allowedDependencies.runtime',
+        message: 'A dependency row is required by architecture.requireCompletePolicy.',
       }),
     ]);
   });

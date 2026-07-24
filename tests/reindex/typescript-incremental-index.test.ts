@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import type { ProjectInputSnapshot } from '../../src/reindex/affected-set.js';
+import type { ProjectInputSnapshot } from '../../src/domain/project-input.js';
 import { planTypeScriptIncrementalUpdate } from '../../src/reindex/typescript-incremental-index.js';
 
 describe('TypeScript incremental index eligibility', () => {

@@ -1,13 +1,13 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
-import { resolveIndexedFile } from '../../resolution/path-resolver.js';
+import { resolveIndexedFile } from '../internal/file-resolution.js';
 import { getSourceImports } from '../../language-parsers/index.js';
 import { semanticImportUsage } from '../../semantic/shared-primitives.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
 import { isModuleLikeSymbol, leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { detectAstLanguage } from '../../source/ast.js';
-import { normalizePathSeparators as normalizePath } from '../../source/path-normalization.js';
+import { normalizePathSeparators as normalizePath } from '../../domain/path-normalization.js';
 import { getSourceText } from '../../source/source-text.js';
 
 export interface ImportResult {

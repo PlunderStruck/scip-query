@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
-import { ProjectIndex } from '../../core/project-index.js';
+import { ProjectIndex } from '../internal/project-index.js';
 import { runCandidateAnalysis } from '../internal/candidate-scan.js';
 import { definitionLoc } from '../query-utils.js';
 

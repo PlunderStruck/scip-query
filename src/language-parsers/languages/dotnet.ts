@@ -9,7 +9,7 @@ import {
   DOTNET_EXTENSIONS,
   isVisualBasicSourcePath,
   resolveQualifiedImportPath,
-} from '../../resolution/import-path-resolver.js';
+} from '../../source/import-path-resolver.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
 import {
   buildNamedImport,

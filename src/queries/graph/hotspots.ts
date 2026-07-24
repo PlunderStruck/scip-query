@@ -3,6 +3,7 @@ import { getAllDefinitions } from '../../symbols/definition-catalog.js';
 import { callerRowsForSymbol } from '../../symbols/references/caller-evidence.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
+import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 
 export interface HotspotResult {
   symbol: string;
@@ -86,7 +87,10 @@ function hotspotsByDefinitionFallback(db: ScipDatabase, scope: string | undefine
 }
 
 function hotspotRowFor(db: ScipDatabase, definition: IndexedDefinition): HotspotResult {
-  const callerRows = callerRowsForSymbol(db, definition, { limit: 500 });
+  const callerRows = callerRowsForSymbol(db, definition, {
+    limit: 500,
+    semanticEvidence: symbolSemanticEvidence,
+  });
   const crossFileCallers = callerRows.filter((row) => row.file !== definition.relativePath);
   return {
     symbol: definition.symbol,

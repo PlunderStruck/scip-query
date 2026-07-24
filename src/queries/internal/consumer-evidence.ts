@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { ProjectIndex } from '../../core/project-index.js';
+import type { ProjectIndex } from './project-index.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
 import { semanticCallerMap } from '../../semantic/shared-primitives.js';

@@ -3,6 +3,7 @@ import type { IndexedDefinition, SymbolMatch } from '../../domain/types.js';
 import { getCallerRowsForSymbol, getCallerRowsMapForSymbols } from '../graph/call-graph-evidence.js';
 import type { CallerRow } from '../graph/call-graph-evidence.js';
 import { findCallerFiles } from '../identifier-attribution.js';
+import type { SymbolSemanticEvidencePort } from '../semantic-evidence-port.js';
 import { buildCrossFileCallerMap } from './reference-callers.js';
 
 // scip-query: ignore-passthrough — caller-facing row evidence facade; hides
@@ -10,7 +11,7 @@ import { buildCrossFileCallerMap } from './reference-callers.js';
 export function callerRowsForSymbol(
   db: ScipDatabase,
   symbol: SymbolMatch,
-  opts: { limit?: number; semantic?: boolean } = {},
+  opts: { limit?: number; semantic?: boolean; semanticEvidence: SymbolSemanticEvidencePort },
 ): CallerRow[] {
   return getCallerRowsForSymbol(db, symbol, opts);
 }
@@ -20,7 +21,7 @@ export function callerRowsForSymbol(
 export function callerRowsMapForSymbols(
   db: ScipDatabase,
   symbols: ReadonlyArray<SymbolMatch>,
-  opts: { limit?: number; semantic?: boolean } = {},
+  opts: { limit?: number; semantic?: boolean; semanticEvidence: SymbolSemanticEvidencePort },
 ): Map<number, CallerRow[]> {
   return getCallerRowsMapForSymbols(db, symbols, opts);
 }
@@ -30,7 +31,7 @@ export function callerRowsMapForSymbols(
 export function crossFileCallerEvidenceMap(
   db: ScipDatabase,
   definitions?: ReadonlyArray<SymbolMatch>,
-  opts: { semantic?: boolean } = {},
+  opts: { semantic?: boolean; semanticEvidence?: SymbolSemanticEvidencePort } = {},
 ): Map<number, Set<string>> {
   return buildCrossFileCallerMap(db, definitions, opts);
 }
@@ -50,9 +51,12 @@ export function sourceFallbackCallerEvidenceMap(
 export function callerFileEvidenceMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<IndexedDefinition>,
-  opts: { semantic?: boolean; sourceFallback?: boolean } = {},
+  opts: { semantic?: boolean; sourceFallback?: boolean; semanticEvidence?: SymbolSemanticEvidencePort } = {},
 ): Map<number, Set<string>> {
-  const callerMap = crossFileCallerEvidenceMap(db, definitions, { semantic: opts.semantic });
+  const callerMap = crossFileCallerEvidenceMap(db, definitions, {
+    semantic: opts.semantic,
+    semanticEvidence: opts.semanticEvidence,
+  });
   return opts.sourceFallback === false
     ? callerMap
     : mergeSetMaps(callerMap, sourceFallbackCallerEvidenceMap(db, definitions));

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
-import { resolveIndexedFile } from '../../resolution/path-resolver.js';
+import { resolveIndexedFile } from '../internal/file-resolution.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 
 export interface CodeResult {

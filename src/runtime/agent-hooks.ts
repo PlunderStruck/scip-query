@@ -3,12 +3,14 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import type { ProjectConfig, ScipQueryConfig } from '../domain/types.js';
+import { resolveIndexStoragePaths } from '../platform/cache-layout.js';
+import { watchServicePaths } from '../platform/watch-service-state.js';
 import { diffGate } from '../queries/impact/diff-gate.js';
 import type { DiffGateResult } from '../queries/impact/diff-gate.js';
 import { createGitignoreFilter } from '../source/gitignore-filter.js';
-import { escapeRegex } from '../core/regex-utils.js';
+import { escapeRegex } from '../source/regex-utils.js';
 import { ScipDatabase } from '../storage/db.js';
-import { loadProjectConfig, resolveIndexStoragePaths, resolveWatchConfig } from './config.js';
+import { loadProjectConfig, resolveWatchConfig } from './config.js';
 import { getIndexFreshness } from './index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from './project-readiness.js';
 import { formatGateBlockReason, isStopHookReentry, readHookInput } from './agent-setup.js';
@@ -18,10 +20,9 @@ import { prepareWorktreeIndex } from './cli-context.js';
 import {
   ensureWatchServiceForCommand,
   requestWatchServiceRefresh,
-  watchServicePaths,
   type WatchServiceAutoEnsureResult,
 } from './watch-service.js';
-import { findGitRoot } from './git-worktree.js';
+import { findGitRoot } from '../platform/git-worktree.js';
 import { resolveSharedEvidenceDbPath } from '../reindex/shared-generation-store.js';
 
 const SKIP_HOOK_INSTALL_ENV = 'SCIP_QUERY_SKIP_HOOK_INSTALL';
@@ -902,6 +903,7 @@ function withWorkspaceDb<T>(
     suppressions: workspace.config.suppressions,
     declaredCouplings: workspace.config.declaredCouplings,
     locality: workspace.config.locality,
+    architecture: workspace.config.architecture,
     coverageContracts: workspace.config.coverageContracts,
     docs: workspace.config.docs,
   };

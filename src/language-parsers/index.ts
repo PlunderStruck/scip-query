@@ -10,7 +10,7 @@
  * AST. The cache makes repeat queries on the same file effectively free.
  */
 import type { ScipDatabase } from '../storage/db.js';
-import { importResolutionFingerprint, normalizePath } from '../resolution/import-path-resolver.js';
+import { importResolutionFingerprint, normalizePath } from '../source/import-path-resolver.js';
 import { fileContentHash } from '../storage/evidence-cache.js';
 import { isRecord } from '../storage/evidence-payload.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';

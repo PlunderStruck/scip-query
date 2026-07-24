@@ -4,8 +4,8 @@ import { dirname, join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import type { TlaCheckerMode } from './model-contract.js';
-import { binaryAvailable, type CommandAvailabilitySpawn } from '../core/command-availability.js';
-import { fetchVerifiedBinary, resolveScipQueryCachePath } from '../core/verified-binary-fetch.js';
+import { binaryAvailable, type CommandAvailabilitySpawn } from '../platform/binary.js';
+import { fetchVerifiedBinary, resolveScipQueryCachePath } from '../platform/verified-binary-fetch.js';
 
 export type TlaToolStatus = 'passed' | 'failed' | 'skipped' | 'timed-out';
 export type TlaResolvedChecker = Exclude<TlaCheckerMode, 'auto'>;

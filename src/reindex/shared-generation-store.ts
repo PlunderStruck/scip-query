@@ -23,16 +23,21 @@ import { pathToFileURL } from 'node:url';
 import { deserializeSCIP } from '@c4312/scip';
 import Database from 'better-sqlite3';
 import type { ProjectConfig } from '../domain/types.js';
-import { cliVersion } from '../runtime/cli-version.js';
-import { isProcessAlive } from '../runtime/process-liveness.js';
-import { acquireProcessFileLock, acquireRepositoryCacheLock } from '../runtime/repository-cache-lock.js';
+import { cliVersion } from '../platform/cli-version.js';
+import { isProcessAlive } from '../platform/process-liveness.js';
+import { acquireProcessFileLock, acquireRepositoryCacheLock } from '../platform/repository-cache-lock.js';
 import {
   automaticSharedCacheEnabled,
   resolveDefaultCacheDir,
   resolveRepositoryCacheDir,
   type resolveIndexStoragePaths,
-} from '../runtime/config.js';
-import { listGitWorktrees, resolveGitWorktreeContext, type GitWorktreeContext } from '../runtime/git-worktree.js';
+} from '../platform/cache-layout.js';
+import { listGitWorktrees, resolveGitWorktreeContext, type GitWorktreeContext } from '../platform/git-worktree.js';
+import {
+  buildProjectInputFingerprint,
+  type ProjectInputFingerprint,
+  type ProjectInputFingerprintOptions,
+} from '../platform/project-files.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import { detectLanguages } from './detect.js';
 import {
@@ -43,11 +48,6 @@ import {
   LANGUAGE_INDEX_DIRECTORY,
 } from './index-artifacts.js';
 import { rebaseScipFileProjectRoot } from './merge.js';
-import {
-  buildProjectInputFingerprint,
-  type ProjectInputFingerprint,
-  type ProjectInputFingerprintOptions,
-} from './project-files.js';
 import {
   inspectSqliteGeneration,
   promoteReindexArtifacts,

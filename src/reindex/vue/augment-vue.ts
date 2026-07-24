@@ -1,13 +1,13 @@
 import Database from 'better-sqlite3';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { fingerprintProjectFiles } from '../../platform/project-files.js';
 import { auxiliaryDocumentsAugmentationStage } from '../augment.js';
 import {
   runFingerprintCachedPostIndexAugmentation,
   runPostIndexAugmentation,
   type PostIndexAugmentationStage,
 } from '../post-index-augmentation.js';
-import { fingerprintProjectFiles } from '../project-files.js';
 import { awaitVueReferenceWorkers, shouldUseVueWorkers } from './augment-vue-workers.js';
 import {
   createSymbolLookup,

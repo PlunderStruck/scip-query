@@ -1,8 +1,9 @@
 import { existsSync } from 'node:fs';
 import type { ProjectConfig, SupportedLanguage } from '../domain/types.js';
 import type { HealthReport } from '../queries/index.js';
+import { getIndexerDependencyStatus } from '../platform/indexer-toolchain.js';
 import { getIndexerConfig } from '../reindex/indexers.js';
-import { getIndexerDependencyStatus, tryInstallIndexer } from '../reindex/install.js';
+import { tryInstallIndexer } from '../reindex/install.js';
 import { reindex, type ReindexResult } from '../reindex/index.js';
 import { rustSemanticSessionStatus, type RustSemanticSessionStatus } from '../semantic/rust/lsp-session.js';
 import { setupAgent } from './agent-setup.js';

@@ -1,19 +1,17 @@
-import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { FindingOutcomeRecord } from '../../src/queries/health/finding-outcome-ledger.js';
+import {
+  deriveOutcomeEvents,
+  type FindingOutcomeRecord,
+  type OutcomeEvent,
+} from '../../src/domain/finding-outcomes.js';
 import {
   appendOutcomeEvents,
   dedupeEvents,
-  deriveOutcomeEvents,
-  gitWorktreeIsClean,
-  headCommit,
   OUTCOME_EVENTS_DIR,
   readOutcomeEvents,
-  resolveGitCommit,
-  type OutcomeEvent,
 } from '../../src/storage/outcome-events.js';
 
 const roots: string[] = [];
@@ -218,30 +216,5 @@ describe('append/read round trip', () => {
     expect(deduped).toEqual([
       expect.objectContaining({ ts: 2, verifiedAgainstCommit: 'c1', comparisonBaseCommit: 'c2' }),
     ]);
-  });
-});
-
-describe('headCommit', () => {
-  it('returns the HEAD sha inside a git repo and null outside one', () => {
-    const root = createRoot();
-    expect(headCommit(root)).toBeNull();
-
-    execFileSync('git', ['init', '--quiet'], { cwd: root });
-    execFileSync(
-      'git',
-      ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '--allow-empty', '-m', 'init', '--quiet'],
-      {
-        cwd: root,
-      },
-    );
-    writeFileSync(join(root, 'file.txt'), 'x');
-    expect(headCommit(root)).toMatch(/^[0-9a-f]{40}$/);
-    expect(resolveGitCommit(root, 'HEAD')).toBe(headCommit(root));
-    expect(gitWorktreeIsClean(root)).toBe(false);
-    execFileSync('git', ['add', 'file.txt'], { cwd: root });
-    execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-m', 'file', '--quiet'], {
-      cwd: root,
-    });
-    expect(gitWorktreeIsClean(root)).toBe(true);
   });
 });

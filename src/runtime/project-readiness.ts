@@ -1,8 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import type { ProjectConfig, SupportedLanguage } from '../domain/types.js';
+import { getIndexerDependencyStatus } from '../platform/indexer-toolchain.js';
 import { detectLanguages } from '../reindex/detect.js';
 import { getIndexerConfig } from '../reindex/indexers.js';
-import { getIndexerDependencyStatus } from '../reindex/install.js';
 import type { SemanticProviderLanguage } from '../semantic/types.js';
 import { getRustSemanticStatus } from '../semantic/rust/status.js';
 import { getTypeScriptSemanticStatus } from '../semantic/typescript/status.js';

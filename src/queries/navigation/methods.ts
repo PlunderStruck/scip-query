@@ -1,6 +1,6 @@
 import { basename } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
-import { ProjectIndex } from '../../core/project-index.js';
+import { ProjectIndex } from '../internal/project-index.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { detectAstLanguage, getSourceFacts } from '../../source/ast.js';
 import { isCallableSymbol, leafName } from '../../symbols/symbol-parser.js';

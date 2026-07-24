@@ -392,7 +392,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'drift',
     command: 'drift [module]',
     description:
-      'Detect heuristic drift candidates: unused imports and layer violations by default; pass --patterns for pattern deviations too',
+      'Detect drift candidates: unused imports and declared architecture violations; pass --architecture for boundary context',
     options: withJsonOption([
       option(
         '--min-deviation <n>',
@@ -403,6 +403,12 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       option(
         '--patterns',
         'Also include pattern-deviation findings ("only sibling importing X") — off by default: low precision at scale (21.2 calibration)',
+        undefined,
+        false,
+      ),
+      option(
+        '--architecture',
+        'Include boundary coverage, undeclared edges, reciprocal pairs, and connected groups',
         undefined,
         false,
       ),

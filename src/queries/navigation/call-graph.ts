@@ -3,6 +3,7 @@ import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
 import { callerRowsForSymbol } from '../../symbols/references/caller-evidence.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
+import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 import { uniqueSymbolFileRows } from '../query-utils.js';
 
 export interface CallGraphResult {
@@ -35,7 +36,10 @@ export function callGraph(
   // Reference evidence also contains imports, type annotations, and module
   // ownership rows. Those belong in refs/dataflow, not in a graph whose
   // contract says every incoming row is a symbol that calls the target.
-  const callerRows = callerRowsForSymbol(db, target, { semantic: includeSemantic })
+  const callerRows = callerRowsForSymbol(db, target, {
+    semantic: includeSemantic,
+    semanticEvidence: symbolSemanticEvidence,
+  })
     .filter((caller) => isFunctionLikeSymbol(caller.symbol))
     .slice(0, 50);
 
@@ -46,6 +50,7 @@ export function callGraph(
       additive: true,
       callableOnly: true,
       semantic: includeSemantic,
+      semanticEvidence: symbolSemanticEvidence,
     }),
   );
 

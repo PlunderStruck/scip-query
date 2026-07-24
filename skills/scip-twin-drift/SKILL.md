@@ -29,7 +29,7 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 | `scip-query duplicate-bodies --json --full` | Find exact duplicate small-body candidates across files | Cross-check: IDENTICAL groups are duplicate-bodies' job, not this skill's. |
 | `scip-query code <symbol>` | Read the source code for a symbol (bounded to its definition range) | Classify a divergent group: read every member's body. |
 | `scip-query refs <symbol>` | Find all files referencing a symbol | Pick the canonical twin: consumer count per member. |
-| `scip-query diff-gate --json` | Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, unedited twin partners (advisory), uncited doc updates, unused params, new dead symbols; exit 1 on blocking findings | Verify: the twin-partner check must not flag a one-sided fix. |
+| `scip-query diff-gate --json` | Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | Verify: the twin-partner check must not flag a one-sided fix. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->

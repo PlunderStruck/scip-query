@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { escapeRegex } from '../../core/regex-utils.js';
+import { escapeRegex } from '../../source/regex-utils.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { mentionReferenceChunkRows } from '../../storage/scip-mentions.js';

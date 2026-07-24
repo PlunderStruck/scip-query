@@ -11,9 +11,10 @@ import { symbols } from '../../src/queries/navigation/symbols.js';
 import { trace } from '../../src/queries/navigation/trace.js';
 import { byKind, kindCounts } from '../../src/queries/navigation/by-kind.js';
 import { complexityHotspots } from '../../src/queries/quality/complexity-hotspots.js';
-import { buildAstCalleeMap, buildChunkCalleeMap } from '../../src/symbols/graph/call-graph-evidence.js';
+import { buildAstCalleeMap, buildCalleeMap, buildChunkCalleeMap } from '../../src/symbols/graph/call-graph-evidence.js';
 import { buildCrossFileCallerMap } from '../../src/symbols/references/reference-callers.js';
 import type { ScipQueryConfig } from '../../src/domain/types.js';
+import type { SymbolSemanticEvidencePort } from '../../src/symbols/semantic-evidence-port.js';
 
 function createSchema(sqliteDb: Database.Database): void {
   sqliteDb.exec(`
@@ -103,6 +104,65 @@ function withFixture(
 }
 
 describe('source-backed accuracy regressions', () => {
+  it('consumes compiler-resolved symbol facts only through the injected semantic-evidence port', () => {
+    withFixture(
+      'semantic-evidence-port',
+      {
+        'src/target.custom': 'def target\nend\n',
+      },
+      (sqliteDb) => {
+        sqliteDb.exec(`
+          INSERT INTO documents (id, language, relative_path) VALUES
+            (1, 'text', 'src/target.custom');
+
+          INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
+            (1, 'custom src/\`target.custom\`/target().', 'target', 12, 'target');
+
+          INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+            (1, 1, 1, 0, 0, 1, 3);
+
+          INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+            (1, 1, 0, 0, 1, X'00');
+
+          INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+            (1, 1, 1);
+        `);
+      },
+      (db) => {
+        const definition = {
+          documentId: 1,
+          startLine: 0,
+          endLine: 1,
+          symbolId: 1,
+          symbol: 'custom src/`target.custom`/target().',
+          relativePath: 'src/target.custom',
+        };
+        const semanticEvidence: SymbolSemanticEvidencePort = {
+          references: () => [],
+          referenceMap: () => new Map(),
+          callerMap: () => new Map([[definition.symbolId, new Set(['src/semantic-caller.ts'])]]),
+          calleeMap: () =>
+            new Map([
+              [
+                definition.symbolId,
+                [{ symbol: 'custom src/`helper.custom`/helper().', file: 'src/helper.custom', line: 4 }],
+              ],
+            ]),
+        };
+
+        expect(buildCalleeMap(db, [definition], { semanticEvidence }).get(definition.symbolId)).toContainEqual({
+          symbol: 'custom src/`helper.custom`/helper().',
+          file: 'src/helper.custom',
+          chunkId: -1,
+          source: 'semantic-callee',
+        });
+        expect(buildCrossFileCallerMap(db, [definition], { semanticEvidence }).get(definition.symbolId)).toContain(
+          'src/semantic-caller.ts',
+        );
+      },
+    );
+  });
+
   it('attributes AST callsites to the innermost containing definition', () => {
     withFixture(
       'ast-line-owner',

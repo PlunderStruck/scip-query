@@ -202,18 +202,18 @@ describe('markdown-list extraction', () => {
 
 describe('coverageContractTouchedByDiff', () => {
   const contract: CoverageContractConfig = {
-    name: 'drift layer policy covers src dirs',
-    file: 'src/queries/cleanup/drift-policy.ts',
-    keys: { type: 'object-literal-keys', identifier: 'SRC_LAYER_DEPENDENCIES' },
-    mustEqual: { type: 'top-level-dirs', path: 'src' },
+    name: 'built-in skills cover skill directories',
+    file: 'src/runtime/setup.ts',
+    keys: { type: 'string-array', identifier: 'BUILTIN_SKILLS' },
+    mustEqual: { type: 'builtin-skills' },
   };
 
   it('is touched when the declared file changed', () => {
-    expect(coverageContractTouchedByDiff(contract, new Set(['src/queries/cleanup/drift-policy.ts']))).toBe(true);
+    expect(coverageContractTouchedByDiff(contract, new Set(['src/runtime/setup.ts']))).toBe(true);
   });
 
   it('is touched when a file under the ground-truth directory changed', () => {
-    expect(coverageContractTouchedByDiff(contract, new Set(['src/tla/new-module.ts']))).toBe(true);
+    expect(coverageContractTouchedByDiff(contract, new Set(['skills/scip-new-skill/SKILL.md']))).toBe(true);
   });
 
   it('is not touched by unrelated changes', () => {

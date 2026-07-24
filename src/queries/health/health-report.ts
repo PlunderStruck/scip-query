@@ -528,13 +528,15 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
   if (analyses.drift.count > 0) {
     const parts: string[] = [];
     if (analyses.drift.unusedImports > 0) parts.push(`${analyses.drift.unusedImports} unused imports`);
-    if (analyses.drift.layerViolations > 0) parts.push(`${analyses.drift.layerViolations} layer violations`);
+    if (analyses.drift.architectureViolations > 0) {
+      parts.push(`${analyses.drift.architectureViolations} declared architecture violations`);
+    }
     actions.push({
       category: 'Structural drift',
       evidence: 'heuristic',
-      description: `${parts.join(', ')} — verify direct rows and review inferred layer signals against declared ownership`,
-      effort: analyses.drift.layerViolations > 0 ? 'medium' : 'low',
-      impact: analyses.drift.layerViolations > 0 ? 'medium' : 'low',
+      description: `${parts.join(', ')} — repair direct dependency-rule breaks; inspect boundary signals with \`drift --architecture\``,
+      effort: analyses.drift.architectureViolations > 0 ? 'medium' : 'low',
+      impact: analyses.drift.architectureViolations > 0 ? 'medium' : 'low',
       count: analyses.drift.count,
       locRecoverable: 0,
     });

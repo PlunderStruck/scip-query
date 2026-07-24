@@ -3,6 +3,8 @@ import { performance } from 'node:perf_hooks';
 import { existsSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join, resolve } from 'node:path';
 import type { IndexedDefinition, SupportedLanguage } from '../../domain/types.js';
+import { resolveIndexStoragePaths } from '../../platform/cache-layout.js';
+import { WATCH_LOCK_FILE } from '../../platform/watch-service-state.js';
 import * as queries from '../../queries/index.js';
 import {
   augmentAuxiliaryDocuments,
@@ -18,7 +20,6 @@ import {
 import { inspectSqliteGeneration, type SqliteGenerationInspection } from '../../reindex/sqlite-generation-store.js';
 import {
   loadProjectConfig,
-  resolveIndexStoragePaths,
   resolveWatchConfig,
   initProjectConfig,
   validateProjectConfig,
@@ -35,7 +36,6 @@ import {
   ensureWatchService,
   inspectWatchService,
   stopWatchService,
-  WATCH_LOCK_FILE,
   type WatchServiceInspection,
 } from '../watch-service.js';
 import { setupAgent } from '../agent-setup.js';

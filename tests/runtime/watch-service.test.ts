@@ -3,26 +3,27 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { WatcherStatus } from '../../src/domain/types.js';
-import type { GitWorktreeContext } from '../../src/runtime/git-worktree.js';
+import type { GitWorktreeContext } from '../../src/platform/git-worktree.js';
 import {
   WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS,
   WATCH_SERVICE_PROTOCOL_VERSION,
+  watchServicePaths,
+  type WatchServiceState,
+} from '../../src/platform/watch-service-state.js';
+import {
   acquireWatchProcessLock,
   classifyWatchServiceState,
   ensureWatchService,
   ensureWatchServiceForCommand,
-  parseWatchServiceState,
   planWatchServiceAction,
   readWatchServiceActivityAt,
   resolveWatchServiceIdentity,
   shouldStopWatchServiceForIdle,
   stopWatchService,
   trustedWatchServiceIndexGeneration,
-  watchServicePaths,
   watchServiceAutoStartEligible,
   writeWatchServiceState,
   type WatchServiceRuntime,
-  type WatchServiceState,
 } from '../../src/runtime/watch-service.js';
 import { startupRefreshTrigger } from '../../src/runtime/watch-server.js';
 
@@ -30,31 +31,6 @@ const NOW = Date.parse('2026-07-09T20:00:00.000Z');
 const IDENTITY = { projectRoot: tmpdir(), worktreeKind: 'non-git', cliVersion: '0.15.0' } as const;
 
 describe('watch service contract', () => {
-  it('parses only complete versioned state', () => {
-    expect(parseWatchServiceState(liveState())).toEqual(liveState());
-    expect(parseWatchServiceState({ ...liveState(), pid: 0 })).toBeNull();
-    expect(parseWatchServiceState({ ...liveState(), worktreeId: '' })).toBeNull();
-    expect(parseWatchServiceState({ ...liveState(), heartbeatAt: 'not-a-date' })).toBeNull();
-    expect(parseWatchServiceState({ ...liveState(), watcher: { state: 'waiting' } })).toBeNull();
-    expect(parseWatchServiceState({ ...liveState(), indexGeneration: 'a'.repeat(64) })).toEqual({
-      ...liveState(),
-      indexGeneration: 'a'.repeat(64),
-    });
-    expect(parseWatchServiceState({ ...liveState(), indexGeneration: 'not-a-generation' })).toBeNull();
-    expect(
-      parseWatchServiceState({
-        ...liveState(),
-        typescriptSemantic: { ...liveState().typescriptSemantic!, state: 'mystery' },
-      }),
-    ).toBeNull();
-    expect(
-      parseWatchServiceState({
-        ...liveState(),
-        typescriptIndex: { ...liveState().typescriptIndex!, documentsEmitted: -1 },
-      }),
-    ).toBeNull();
-  });
-
   it('trusts a watcher generation only while the matching live watcher is idle and error-free', () => {
     const generation = 'a'.repeat(64);
     const liveInspection = {

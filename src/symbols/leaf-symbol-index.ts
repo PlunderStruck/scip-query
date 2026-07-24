@@ -3,7 +3,7 @@ import { detectAstLanguage } from '../source/ast.js';
 import { getSourceImports } from '../language-parsers/index.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
 import { leafName } from './symbol-parser.js';
-import { pathsResolveSame } from '../source/path-normalization.js';
+import { pathsResolveSame } from '../domain/path-normalization.js';
 
 export function sameLanguageCandidates<T extends { file: string }>(sourceFile: string, candidates: T[]): T[] {
   const sourceFamily = astLanguageFamily(sourceFile);

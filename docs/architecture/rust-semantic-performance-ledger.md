@@ -116,11 +116,13 @@ moving the whole product surface at once.
   from the caller-specific product.
   Rust cache identity is salted with language and `rust-analyzer` engine
   metadata so TypeScript and Rust invalidation do not drift together.
-- `src/symbols/graph/call-graph-evidence.ts` persists semantic callees and now
-  salts Rust callee cache identity with the same Rust semantic engine identity.
-  Cached callees are read in file-level batches for full-mode hot paths, and
-  targeted caller rows expose a bulk boundary while preserving each symbol's
-  resolved-reference-first result order.
+- `src/semantic/symbol-evidence.ts` persists semantic callees and salts Rust
+  callee cache identity with the same Rust semantic engine identity. Cached
+  callees are read in file-level batches for full-mode hot paths.
+  `src/symbols/graph/call-graph-evidence.ts` consumes those optional facts
+  through the symbols-owned semantic-evidence port; targeted caller rows expose
+  a bulk boundary while preserving each symbol's resolved-reference-first
+  result order.
 - `src/storage/evidence-cache.ts` accepts both complete and intentional partial
   project fingerprints. The cache key includes the index status, so complete and
   partial indexes do not share project-scoped rows accidentally. It exposes

@@ -5,14 +5,15 @@ import { getScopedDefinitionsMatchingSymbols } from '../../symbols/definition-ca
 import type { DeadOptions, IndexedDefinition } from '../../domain/types.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { callerRowsForSymbol } from '../../symbols/references/caller-evidence.js';
-import { ProjectIndex } from '../../core/project-index.js';
+import { ProjectIndex } from '../internal/project-index.js';
 import { clearSourceFileEvidenceCaches } from '../internal/cache-invalidation.js';
 import { deadCandidateDecision, looksValueLikeDefinition } from '../internal/dead-candidate-gate.js';
 import { getSourceImports } from '../../language-parsers/index.js';
 import { applyScanLimit } from '../query-utils.js';
-import { pathsResolveSame } from '../../source/path-normalization.js';
+import { pathsResolveSame } from '../../domain/path-normalization.js';
 import { sourceImportPathsByLocalName } from '../../language-parsers/import-index.js';
 import { exactSemanticCallerMap } from '../../semantic/shared-primitives.js';
+import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 import { indexedDocumentPaths as listIndexedDocumentPaths } from '../../storage/scip-documents.js';
 import {
   emptyReferenceCounts,
@@ -618,7 +619,10 @@ function supplementReferencesFromCallerMap(
       'dead.caller-map.per-symbol-non-semantic',
       () => {
         for (const definition of definitions) {
-          const callers = callerRowsForSymbol(db, definition, { semantic: false });
+          const callers = callerRowsForSymbol(db, definition, {
+            semantic: false,
+            semanticEvidence: symbolSemanticEvidence,
+          });
           for (const caller of callers) recordCallerFile(definition, caller.file);
         }
       },
@@ -629,7 +633,10 @@ function supplementReferencesFromCallerMap(
       'dead.caller-map.per-symbol',
       () => {
         for (const definition of definitions) {
-          const callers = callerRowsForSymbol(db, definition, { semantic: canUseSemantic });
+          const callers = callerRowsForSymbol(db, definition, {
+            semantic: canUseSemantic,
+            semanticEvidence: symbolSemanticEvidence,
+          });
           if (callers.length === 0) continue;
           for (const caller of callers) {
             recordCallerFile(definition, caller.file);

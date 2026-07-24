@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ProjectChangeManifest, ProjectFileChange } from '../../../src/reindex/affected-set.js';
+import type { ProjectChangeManifest, ProjectFileChange } from '../../../src/domain/project-input.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import {
   TypeScriptSemanticHost,

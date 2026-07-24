@@ -10,9 +10,9 @@ import {
   readWatchServiceState,
   watchServicePaths,
   type WatchServiceState,
-} from '../../runtime/watch-service.js';
-import { isProcessAlive } from '../../runtime/process-liveness.js';
-import { canonicalPath } from '../../runtime/git-worktree.js';
+} from '../../platform/watch-service-state.js';
+import { isProcessAlive } from '../../platform/process-liveness.js';
+import { canonicalPath } from '../../platform/git-worktree.js';
 import type {
   SemanticAvailability,
   SemanticCallee,

@@ -5,7 +5,7 @@ import { getIdentifierLineMap } from '../../symbols/identifier-index.js';
 import { leafName } from '../../symbols/symbol-parser.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { isInRustTestModule, shortenSymbol } from '../../symbols/symbol-parser.js';
-import { ProjectIndex } from '../../core/project-index.js';
+import { ProjectIndex } from '../internal/project-index.js';
 import { compareDefinitionsBySmallestLoc, definitionLoc } from '../query-utils.js';
 import { runCandidateAnalysis } from '../internal/candidate-scan.js';
 import {

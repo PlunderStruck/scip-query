@@ -164,8 +164,8 @@ function withCycleChainFixture(run: (db: ScipDatabase) => void): void {
   }
 }
 
-function withDriftPolicyFixture(run: (db: ScipDatabase) => void): void {
-  const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-drift-policy-'));
+function withArchitecturePolicyFixture(run: (db: ScipDatabase) => void): void {
+  const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-architecture-policy-'));
   const dbPath = join(tempDir, 'index.db');
   try {
     writeFixtureFiles(tempDir, {
@@ -201,6 +201,17 @@ function withDriftPolicyFixture(run: (db: ScipDatabase) => void): void {
       dbPath,
       indexPath: join(tempDir, 'index.scip'),
       projectRoot: tempDir,
+      architecture: {
+        boundaries: [
+          { name: 'domain', paths: ['src/domain/**'] },
+          { name: 'runtime', paths: ['src/runtime/**'] },
+          { name: 'feature', paths: ['features/**'] },
+          { name: 'infra', paths: ['infra/**'] },
+        ],
+        allowedDependencies: {
+          domain: [],
+        },
+      },
     });
     try {
       run(db);
@@ -303,27 +314,22 @@ describe('graph-risk output classification', () => {
     });
   });
 
-  it('splits drift direct cleanup from inferred boundary signals', () => {
-    withDriftPolicyFixture((db) => {
+  it('reports declared boundary violations without inventing undeclared ones', () => {
+    withArchitecturePolicyFixture((db) => {
       const summary = drift(db, { minDeviation: 5 });
       const explicit = summary.results.find(
-        (result) => result.file === 'src/domain/model.ts' && result.kind === 'layer-violation',
+        (result) => result.file === 'src/domain/model.ts' && result.kind === 'architecture-violation',
       );
-      const inferred = summary.results.find(
-        (result) => result.file === 'features/orders/a.ts' && result.kind === 'layer-violation',
+      const undeclared = summary.results.find(
+        (result) => result.file === 'features/orders/a.ts' && result.kind === 'architecture-violation',
       );
 
       expect(explicit).toMatchObject({
         actionTier: 'direct',
         policyBasis: 'explicit',
       });
-      expect(explicit?.recommendation).toContain('allowed layer boundary');
-
-      expect(inferred).toMatchObject({
-        actionTier: 'signal',
-        policyBasis: 'inferred',
-      });
-      expect(inferred?.recommendation).toContain('intentional exception');
+      expect(explicit?.recommendation).toContain('allowed boundary');
+      expect(undeclared).toBeUndefined();
     });
   });
 

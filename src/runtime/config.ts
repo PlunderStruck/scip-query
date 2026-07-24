@@ -1,7 +1,5 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, realpathSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
-import { createHash } from 'node:crypto';
-import { homedir } from 'node:os';
 import type { ProjectConfig, SupportedLanguage, WatchConfig } from '../domain/types.js';
 
 const CONFIG_FILENAME = '.scipquery.json';
@@ -56,6 +54,7 @@ const ROOT_CONFIG_KEYS = new Set([
   'suppressions',
   'declaredCouplings',
   'locality',
+  'architecture',
   'coverageContracts',
   'docs',
 ]);
@@ -77,6 +76,13 @@ const RUST_SEMANTIC_CONFIG_KEYS = new Set(['rustAnalyzerPath']);
 const INDEXER_CONFIG_KEYS = new Set(SUPPORTED_LANGUAGES);
 const INDEXER_OVERRIDE_CONFIG_KEYS = new Set(['pnpmWorkspaces', 'projectMode', 'projects', 'configPath']);
 const LOCALITY_CONFIG_KEYS = new Set(['architecturalBoundarySegments']);
+const ARCHITECTURE_CONFIG_KEYS = new Set([
+  'boundaries',
+  'allowedDependencies',
+  'requireCompletePolicy',
+  'requireAcyclic',
+]);
+const ARCHITECTURE_BOUNDARY_CONFIG_KEYS = new Set(['name', 'paths']);
 const DOCS_CONFIG_KEYS = new Set(['snapshotPaths']);
 const DECLARED_COUPLING_CONFIG_KEYS = new Set(['name', 'files', 'reason']);
 const SUPPRESSION_CONFIG_KEYS = new Set(['id', 'check', 'file', 'reason', 'expiresAt', 'createdAt']);
@@ -274,6 +280,7 @@ export function validateProjectConfig(
       }
     }
   }
+  validateArchitectureConfig(config, diagnostics);
   if (config.declaredCouplings !== undefined && !Array.isArray(config.declaredCouplings)) {
     diagnostics.push({ level: 'error', path: 'declaredCouplings', message: 'Must be an array.' });
   } else {
@@ -366,6 +373,137 @@ export function validateProjectConfig(
   validateCoverageContracts(config, diagnostics, opts);
   validateDocsConfig(config, diagnostics);
   return diagnostics;
+}
+
+function validateArchitectureConfig(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
+  if (config.architecture === undefined) return;
+  if (!isConfigObject(config.architecture)) {
+    diagnostics.push({ level: 'error', path: 'architecture', message: 'Must be an object.' });
+    return;
+  }
+
+  const rawBoundaries = config.architecture.boundaries as unknown;
+  if (!Array.isArray(rawBoundaries) || rawBoundaries.length === 0) {
+    diagnostics.push({
+      level: 'error',
+      path: 'architecture.boundaries',
+      message: 'Must be a non-empty array.',
+    });
+    return;
+  }
+
+  const boundaryNames = new Set<string>();
+  const boundaryPaths = new Set<string>();
+  for (const [index, rawBoundary] of rawBoundaries.entries()) {
+    const path = `architecture.boundaries[${index}]`;
+    if (!isConfigObject(rawBoundary)) {
+      diagnostics.push({ level: 'error', path, message: 'Architecture boundary must be an object.' });
+      continue;
+    }
+
+    const name = rawBoundary.name;
+    if (typeof name !== 'string' || name.trim() === '') {
+      diagnostics.push({ level: 'error', path: `${path}.name`, message: 'Boundary name is required.' });
+    } else if (boundaryNames.has(name)) {
+      diagnostics.push({ level: 'error', path: `${path}.name`, message: `Duplicate boundary name: ${name}` });
+    } else {
+      boundaryNames.add(name);
+    }
+
+    const paths = rawBoundary.paths;
+    if (!Array.isArray(paths) || paths.length === 0) {
+      diagnostics.push({
+        level: 'error',
+        path: `${path}.paths`,
+        message: 'Boundary paths must be a non-empty array.',
+      });
+      continue;
+    }
+    for (const [pathIndex, pattern] of paths.entries()) {
+      const patternPath = `${path}.paths[${pathIndex}]`;
+      if (typeof pattern !== 'string' || pattern.trim() === '') {
+        diagnostics.push({ level: 'error', path: patternPath, message: 'Boundary path must be a non-empty string.' });
+        continue;
+      }
+      if (!isSupportedArchitecturePath(pattern)) {
+        diagnostics.push({
+          level: 'error',
+          path: patternPath,
+          message: 'Boundary path must be project-relative and may use only one trailing /* or /** glob.',
+        });
+      }
+      if (boundaryPaths.has(pattern)) {
+        diagnostics.push({ level: 'error', path: patternPath, message: `Duplicate boundary path: ${pattern}` });
+      } else {
+        boundaryPaths.add(pattern);
+      }
+    }
+  }
+
+  const allowedDependencies = config.architecture.allowedDependencies as unknown;
+  if (allowedDependencies !== undefined && !isConfigObject(allowedDependencies)) {
+    diagnostics.push({
+      level: 'error',
+      path: 'architecture.allowedDependencies',
+      message: 'Must be an object keyed by boundary name.',
+    });
+  } else if (isConfigObject(allowedDependencies)) {
+    for (const [fromBoundary, rawTargets] of Object.entries(allowedDependencies)) {
+      const rowPath = `architecture.allowedDependencies.${fromBoundary}`;
+      if (!boundaryNames.has(fromBoundary)) {
+        diagnostics.push({
+          level: 'error',
+          path: rowPath,
+          message: `Unknown source boundary: ${fromBoundary}`,
+        });
+      }
+      if (!Array.isArray(rawTargets)) {
+        diagnostics.push({ level: 'error', path: rowPath, message: 'Dependency row must be an array.' });
+        continue;
+      }
+      const seenTargets = new Set<string>();
+      for (const [targetIndex, target] of rawTargets.entries()) {
+        const targetPath = `${rowPath}[${targetIndex}]`;
+        if (typeof target !== 'string' || target.trim() === '') {
+          diagnostics.push({ level: 'error', path: targetPath, message: 'Target boundary name is required.' });
+        } else if (!boundaryNames.has(target)) {
+          diagnostics.push({ level: 'error', path: targetPath, message: `Unknown target boundary: ${target}` });
+        } else if (seenTargets.has(target)) {
+          diagnostics.push({ level: 'error', path: targetPath, message: `Duplicate target boundary: ${target}` });
+        } else {
+          seenTargets.add(target);
+        }
+      }
+    }
+  }
+
+  if (config.architecture.requireAcyclic !== undefined && typeof config.architecture.requireAcyclic !== 'boolean') {
+    diagnostics.push({ level: 'error', path: 'architecture.requireAcyclic', message: 'Must be a boolean.' });
+  }
+  if (
+    config.architecture.requireCompletePolicy !== undefined &&
+    typeof config.architecture.requireCompletePolicy !== 'boolean'
+  ) {
+    diagnostics.push({ level: 'error', path: 'architecture.requireCompletePolicy', message: 'Must be a boolean.' });
+  } else if (config.architecture.requireCompletePolicy === true) {
+    const declaredRows = isConfigObject(allowedDependencies) ? allowedDependencies : {};
+    for (const boundaryName of [...boundaryNames].sort()) {
+      if (Object.hasOwn(declaredRows, boundaryName)) continue;
+      diagnostics.push({
+        level: 'error',
+        path: `architecture.allowedDependencies.${boundaryName}`,
+        message: 'A dependency row is required by architecture.requireCompletePolicy.',
+      });
+    }
+  }
+}
+
+function isSupportedArchitecturePath(pattern: string): boolean {
+  const normalized = pattern.replace(/\\/g, '/');
+  if (normalized.startsWith('/') || normalized === '.' || normalized === '..') return false;
+  if (normalized.split('/').includes('..')) return false;
+  const literalPrefix = normalized.replace(/\/\*\*?$/, '');
+  return literalPrefix.length > 0 && !/[*?[\]]/.test(literalPrefix);
 }
 
 function validateDocsConfig(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
@@ -486,83 +624,6 @@ export function resolveWatchConfig(config: ProjectConfig): Required<WatchConfig>
 }
 
 /**
- * Resolve the cache directory for a project's SCIP index.
- *
- * Default: ~/.cache/scip-query/projects/<hash>/
- * Override: project config dbPath, or SCIP_QUERY_DB_PATH env var
- *
- * The hash is derived from the absolute project path so each
- * project gets its own isolated index storage.
- */
-export function resolveCacheDir(projectRoot: string, config?: ProjectConfig): string {
-  // CLI/env override
-  const envOverride = process.env['SCIP_QUERY_CACHE_DIR'];
-  if (envOverride) return ensureDir(envOverride);
-
-  // Project config override
-  if (config?.dbPath) return ensureDir(resolve(projectRoot, config.dbPath));
-
-  // Default: XDG cache dir / fallback to ~/.cache
-  const dir = resolveDefaultCacheDir(projectRoot);
-  return ensureDir(dir);
-}
-
-export function resolveScipQueryCacheRoot(): string {
-  const xdgCache = process.env['XDG_CACHE_HOME'];
-  return join(xdgCache || join(homedir(), '.cache'), 'scip-query');
-}
-
-export function resolveDefaultCacheDir(projectRoot: string): string {
-  let canonicalRoot = resolve(projectRoot);
-  try {
-    canonicalRoot = realpathSync(canonicalRoot);
-  } catch {
-    // Setup can resolve storage before the project directory exists.
-  }
-  const projectHash = createHash('sha256').update(canonicalRoot).digest('hex').slice(0, 12);
-  return join(resolveScipQueryCacheRoot(), 'projects', projectHash);
-}
-
-export function resolveRepositoryCacheDir(repositoryId: string): string {
-  if (!/^[a-f0-9]{24}$/.test(repositoryId)) throw new Error(`invalid repository cache identity: ${repositoryId}`);
-  return join(resolveScipQueryCacheRoot(), 'repositories', repositoryId);
-}
-
-export function automaticSharedCacheEnabled(config?: ProjectConfig): boolean {
-  return (
-    process.env['SCIP_QUERY_SHARED_CACHE'] !== '0' &&
-    !process.env['SCIP_QUERY_CACHE_DIR'] &&
-    !process.env['SCIP_QUERY_INDEX_DB'] &&
-    !config?.dbPath
-  );
-}
-
-/**
- * Resolve all storage paths for a project's index files (cache dir, SQLite
- * db, .scip index, meta.json). Distinct from resolution/path-resolver.ts's
- * resolveIndexedPaths, which resolves a file-pattern query against the
- * already-indexed documents table -- a different job that happens to share
- * "resolve" + "index" + "paths" vocabulary.
- */
-export function resolveIndexStoragePaths(
-  projectRoot: string,
-  config?: ProjectConfig,
-): {
-  cacheDir: string;
-  dbPath: string;
-  indexPath: string;
-  metaPath: string;
-} {
-  const cacheDir = resolveCacheDir(projectRoot, config);
-  return {
-    cacheDir,
-    dbPath: join(cacheDir, 'index.db'),
-    indexPath: join(cacheDir, 'index.scip'),
-    metaPath: join(cacheDir, 'meta.json'),
-  };
-}
-
-/**
  * Scaffold a default .scipquery.json in the project root.
  * Does not overwrite an existing config.
  */
@@ -631,11 +692,6 @@ export function configureProjectAutomaticRefresh(
   return { configPath, config: nextConfig, changed };
 }
 
-function ensureDir(dir: string): string {
-  mkdirSync(dir, { recursive: true });
-  return dir;
-}
-
 function reportUnknownConfigKeys(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
   if (!isConfigObject(config as unknown)) return;
   const typedConfig = config as ProjectConfig;
@@ -652,7 +708,19 @@ function reportUnknownConfigKeys(config: ProjectConfig, diagnostics: ConfigDiagn
   );
   reportUnknownObjectKeys(diagnostics, typedConfig.semantic?.rust, 'semantic.rust', RUST_SEMANTIC_CONFIG_KEYS);
   reportUnknownObjectKeys(diagnostics, typedConfig.locality, 'locality', LOCALITY_CONFIG_KEYS);
+  reportUnknownObjectKeys(diagnostics, typedConfig.architecture, 'architecture', ARCHITECTURE_CONFIG_KEYS);
   reportUnknownObjectKeys(diagnostics, typedConfig.docs, 'docs', DOCS_CONFIG_KEYS);
+
+  if (Array.isArray(typedConfig.architecture?.boundaries)) {
+    for (const [index, boundary] of typedConfig.architecture.boundaries.entries()) {
+      reportUnknownObjectKeys(
+        diagnostics,
+        boundary,
+        `architecture.boundaries[${index}]`,
+        ARCHITECTURE_BOUNDARY_CONFIG_KEYS,
+      );
+    }
+  }
 
   if (isConfigObject(typedConfig.indexer)) {
     reportUnknownObjectKeys(diagnostics, typedConfig.indexer, 'indexer', INDEXER_CONFIG_KEYS);

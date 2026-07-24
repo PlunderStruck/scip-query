@@ -24,10 +24,10 @@ import { findIdentifierLines, getFileIdentifiers } from './identifier-index.js';
 import { createCandidateNameMatcher, sourceMayContainCandidateName } from '../source/source-identifier-prefilter.js';
 import { getSourceText } from '../source/source-text.js';
 import { getSourceFiles } from '../source/source-fileset.js';
-import { semanticReferences } from '../semantic/shared-primitives.js';
 import { leafName } from './symbol-parser.js';
-import { pathsResolveSame } from '../source/path-normalization.js';
+import { pathsResolveSame } from '../domain/path-normalization.js';
 import { sourceImportPathsByLocalName } from '../language-parsers/import-index.js';
+import type { SymbolSemanticEvidencePort } from './semantic-evidence-port.js';
 
 // ── Public types ─────────────────────────────────────────────────
 
@@ -139,15 +139,15 @@ export function attributeIdentifierPermissive(db: ScipDatabase, file: string, id
 export function findReferences(
   db: ScipDatabase,
   symbol: SymbolLocation,
-  opts: { semantic?: boolean } = {},
+  opts: { semantic?: boolean; semanticEvidence?: SymbolSemanticEvidencePort } = {},
 ): ReferenceSite[] {
   const match = getFullSymbolMatch(db, symbol);
   if (!match) return [];
   const identifier = leafName(match.symbol);
   if (!identifier) return [];
 
-  if (opts.semantic !== false) {
-    const semanticSites = semanticReferences(db, {
+  if (opts.semantic !== false && opts.semanticEvidence) {
+    const semanticSites = opts.semanticEvidence.references(db, {
       ...match,
       leaf: identifier,
       parentTypeName: null,

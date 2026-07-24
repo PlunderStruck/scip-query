@@ -64,7 +64,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | `recent-duplicates` | Directional duplicate candidates: recent code that re-implements established callable, React, or Vue code | `--window <n>`<br>`--min-similarity <n>`<br>`-n, --limit <n>`<br>`-s, --scope <path>`<br>`--full`<br>`--json` |
 | `doc-drift [doc]` | Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped | `-n, --limit <n>`<br>`--min-coupling <n>`<br>`--full`<br>`--json` |
 | `unused-params` | Speculative-generality candidates: trailing parameters no body ever uses (TS/JS) | `-s, --scope <path>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
-| `drift [module]` | Detect heuristic drift candidates: unused imports and layer violations by default; pass --patterns for pattern deviations too | `--min-deviation <n>`<br>`--patterns`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
+| `drift [module]` | Detect drift candidates: unused imports and declared architecture violations; pass --architecture for boundary context | `--min-deviation <n>`<br>`--patterns`<br>`--architecture`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
 | `wrapper-candidates` | Find heuristic wrapper candidates only called by one consumer (high false-positive rate on codebases with intentional layering/ambient types — treat as exploration, not findings) | `-s, --scope <path>`<br>`--max-loc <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
 | `passthrough-candidates` | Find heuristic passthrough candidates that forward to one callee | `-s, --scope <path>`<br>`--max-loc <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
 | `stale-abstractions` | Find heuristic stale abstraction candidates with 0-1 consumers (high false-positive rate on codebases with intentional layering/ambient types — treat as exploration, not findings) | `-s, --scope <path>`<br>`--min-loc <n>`<br>`-n, --limit <n>`<br>`--include-low-confidence`<br>`--full`<br>`--json` |
@@ -88,6 +88,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | `fan-out [file]` | How many external symbols a file uses (or top fan-out across codebase) | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--full`<br>`--json` |
 | `coupling [file1] [file2]` | Coupling between two files, or top coupled pairs in codebase | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--full`<br>`--json` |
 | `cycles` | Detect circular dependency chains between files | `-s, --scope <path>`<br>`--max-depth <n>`<br>`--json` |
+| `architecture` | Evaluate project-owned architectural boundaries and dependency rules | `-s, --scope <path>`<br>`--json` |
 | `bottlenecks` | Find coupling hubs: high fan-in AND high fan-out | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-fan-in <n>`<br>`--min-fan-out <n>`<br>`--full`<br>`--json` |
 | `deep-chains` | Find the longest condensed dependency-component chains | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-depth <n>`<br>`--full`<br>`--json` |
 | `call-graph <symbol>` | Show incoming callers and outgoing callees for a symbol | `--full`<br>`--json` |
@@ -99,7 +100,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | `affected <symbol>` | Transitive closure of symbols that could break if this symbol changes | `--max-depth <n>`<br>`-s, --scope <path>`<br>`--json` |
 | `change-surface <file>` | Pre-change briefing: exports, consumers, and blast-radius risk | `--full`<br>`--json` |
 | `co-change [file]` | Files that change together in git history without a dependency edge — hidden coupling candidates | `--min-together <n>`<br>`-n, --limit <n>`<br>`--all`<br>`--full`<br>`--json` |
-| `diff-gate` | Gate the current diff: echo candidates, incomplete migrations, missing co-change partners, unedited twin partners (advisory), uncited doc updates, unused params, new dead symbols; exit 1 on blocking findings | `--base <ref>`<br>`--min-together <n>`<br>`--max-echo-checks <n>`<br>`--max-helpers <n>`<br>`--baseline`<br>`--full`<br>`--skip <check>`<br>`--hook`<br>`--json` |
+| `diff-gate` | Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | `--base <ref>`<br>`--min-together <n>`<br>`--max-echo-checks <n>`<br>`--max-helpers <n>`<br>`--baseline`<br>`--full`<br>`--skip <check>`<br>`--hook`<br>`--json` |
 | `incomplete-migration` | Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain | `--base <ref>`<br>`--min-containment <n>`<br>`--max-helpers <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |
 | `diff-impact` | Compute changed symbols and downstream consumers from current git diff | `--base <ref>`<br>`--json` |
 

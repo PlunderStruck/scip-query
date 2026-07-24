@@ -1,20 +1,20 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  buildProjectChangeManifest,
+  classifyProjectInputPath,
+  type FileDependencyGraph,
+  type ProjectChangeManifest,
+  type ProjectInputSnapshot,
+} from '../domain/project-input.js';
 import type { TypeScriptProjectMode } from '../domain/types.js';
 import { createTypeScriptSemanticIdentityBuilder } from '../semantic/typescript/semantic-identity.js';
 import { isTypeScriptLike } from '../semantic/typescript/source-kinds.js';
 import { ScipDatabase } from '../storage/db.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import { buildFileDepGraph } from '../symbols/graph/file-dep-graph.js';
-import {
-  buildProjectChangeManifest,
-  planAffectedFiles,
-  type AffectedFilePlan,
-  type FileDependencyGraph,
-  type ProjectChangeManifest,
-  type ProjectInputSnapshot,
-} from './affected-set.js';
+import { planAffectedFiles, type AffectedFilePlan } from './affected-set.js';
 import { inspectTypeScriptDocumentProducer } from './typescript-document-emitter.js';
 import {
   assembleAffectedTypeScriptFragments,
@@ -29,7 +29,6 @@ import {
 } from './typescript-overlay-store.js';
 import { publishedTypeScriptIndexGeneration } from './typescript-index-protocol.js';
 import { TypeScriptIndexRequester } from './typescript-index-requester.js';
-import { classifyProjectInputPath } from './project-files.js';
 import { discoverTypeScriptProjectRoots } from './typescript-projects.js';
 import type { SemanticReferenceFragment } from '../semantic/types.js';
 

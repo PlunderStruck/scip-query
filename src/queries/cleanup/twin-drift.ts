@@ -4,7 +4,7 @@ import { getAllDefinitions } from '../../symbols/definition-catalog.js';
 import { isCallableSymbol, isRustTraitImplMember, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { getCallSites } from '../../source/ast/ast-facts.js';
 import { getSourceImports } from '../../language-parsers/index.js';
-import { pathsResolveSame } from '../../source/path-normalization.js';
+import { pathsResolveSame } from '../../domain/path-normalization.js';
 import { classifyFile, isBarrel } from '../../analysis/file-classifier.js';
 import { profileSpan } from '../../instrumentation/profile.js';
 import { stripCommentsAndStrings } from '../../source/source-stripper.js';

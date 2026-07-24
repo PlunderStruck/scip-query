@@ -1,7 +1,7 @@
 import { availableParallelism } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { IndexedDefinition } from '../domain/types.js';
-import { ProjectIndex } from '../core/project-index.js';
+import { ProjectIndex } from '../queries/internal/project-index.js';
 import type { ScipDatabase } from '../storage/db.js';
 import * as queries from '../queries/index.js';
 import { profileSpan } from '../instrumentation/profile.js';
@@ -12,8 +12,8 @@ import {
   type SemanticReferenceMaterializationOptions,
   type SemanticReferenceMaterializationResult,
 } from '../semantic/shared-primitives.js';
+import { materializeSemanticCalleeCache } from '../semantic/symbol-evidence.js';
 import { sourceFrameworkApplicability } from '../source/source-fileset.js';
-import { materializeSemanticCalleeCache } from '../symbols/graph/call-graph-evidence.js';
 import { projectEvidenceFingerprint, sha256Hex } from '../storage/evidence-cache.js';
 import { createProjectEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
 import { formatBytes, withDb } from './cli-context.js';
@@ -27,9 +27,9 @@ import {
 import { render } from './render.js';
 import { detectorPrecision, readLedgerRecords } from '../queries/health/finding-outcome-ledger.js';
 import { healthReportCacheKey, readHealthReportCache, writeHealthReportCache } from './health-report-cache.js';
-import { cliVersion } from './cli-version.js';
+import { cliVersion } from '../platform/cli-version.js';
 
-export { cliVersion } from './cli-version.js';
+export { cliVersion } from '../platform/cli-version.js';
 export const HEALTH_PHASE_COMMAND = '__health-phase';
 export const DIFF_IMPACT_BATCH_COMMAND = '__diff-impact-batch';
 const DIFF_IMPACT_BATCH_SIZE = 10;
@@ -599,7 +599,18 @@ export function deferredHealthPhaseResult(
     case 'stale-abstractions':
       return { phase, stale: { count: 0, loc: 0, files: [], unused: 0, singleUse: 0 }, ...meta };
     case 'drift':
-      return { phase, drift: { count: 0, unusedImports: 0, layerViolations: 0, direct: 0, signal: 0 }, ...meta };
+      return {
+        phase,
+        drift: {
+          count: 0,
+          unusedImports: 0,
+          architectureViolations: 0,
+          layerViolations: 0,
+          direct: 0,
+          signal: 0,
+        },
+        ...meta,
+      };
     case 'complexity-hotspots':
       return { phase, complexity: { top: [], extremeCount: 0 }, ...meta };
     case 'git-evidence':

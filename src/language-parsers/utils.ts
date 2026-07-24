@@ -13,7 +13,7 @@
  *   that every per-language parser performs.
  */
 import type { ScipDatabase } from '../storage/db.js';
-import { extensionFamilyFor, resolveQualifiedImportPath } from '../resolution/import-path-resolver.js';
+import { extensionFamilyFor, resolveQualifiedImportPath } from '../source/import-path-resolver.js';
 import { buildUsageBody, hasIdentifierUsage } from '../source/source-stripper.js';
 import { detectAstLanguage, getAst, type SyntaxNode, type Tree } from '../source/ast.js';
 import type { ParsedSourceImport } from '../domain/types.js';
