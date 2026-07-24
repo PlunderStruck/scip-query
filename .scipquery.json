@@ -103,6 +103,18 @@
   },
   "suppressions": [
     {
+      "id": "SQ85EFF217D55A",
+      "check": "co-change-partner",
+      "file": "src/runtime/watch-service.ts",
+      "reason": "Accepted broad-sweep-only change-graph signal for the watch activity permission fix. command-handlers.ts delegates watcher reuse to ensureWatchServiceForCommand and neither writes nor interprets the optional activity timestamp; the complete production change is contained in watch-service.ts. Historical evidence is 7 broad-sweep co-edits and 0 focused co-edits, so it does not establish a coordination contract."
+    },
+    {
+      "id": "SQ0DAFA56EA95B",
+      "check": "co-change-partner",
+      "file": "tests/runtime/watch-service.test.ts",
+      "reason": "Accepted broad-sweep-only test-code signal for the focused watch-service regression tests. command-handlers.ts does not own the activity timestamp write or its permission-error policy, and the tests exercise the existing controller seam directly. Historical evidence is 6 broad-sweep co-edits and 0 focused co-edits."
+    },
+    {
       "id": "SQ562715D7254A",
       "check": "co-change-partner",
       "file": "tests/runtime/runtime-config.test.ts",

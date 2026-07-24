@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { buildProjectChangeManifest } from '../domain/project-input.js';
 import type { FileDependencyGraph, ProjectChangeManifest, ProjectInputSnapshot } from '../domain/project-input.js';
@@ -71,6 +71,32 @@ export interface UnavailableAffectedSetShadowRecord extends AffectedSetShadowRec
 }
 
 export type AffectedSetShadowRecord = EvaluatedAffectedSetShadowRecord | UnavailableAffectedSetShadowRecord;
+
+interface AffectedSetShadowHistoryRecordBase {
+  historyVersion: 1;
+  sourceVersion: 1;
+  refreshResult: 'rebuilt' | 'reused';
+  recordedAt: string;
+  durationMs: number;
+}
+
+export type AffectedSetShadowHistoryRecord =
+  | (AffectedSetShadowHistoryRecordBase & {
+      status: 'evaluated';
+      mode: AffectedFilePlan['mode'];
+      passed: boolean;
+      recall: number;
+      affectedRatio: number;
+      predictedFileCount: number;
+      actualFileCount: number;
+      missingFileCount: number;
+      fallbackReasons: string[];
+    })
+  | (AffectedSetShadowHistoryRecordBase & {
+      status: 'unavailable';
+      reason: AffectedSetShadowUnavailableReason;
+      error?: string;
+    });
 
 export interface AffectedSetShadowPaths {
   latestPath: string;
@@ -571,6 +597,61 @@ export function writeAffectedSetShadowRecord(
   return paths;
 }
 
+export const AFFECTED_SET_SHADOW_HISTORY_MAX_BYTES = 8 * 1024 * 1024;
+export const AFFECTED_SET_SHADOW_HISTORY_PREVIOUS_SUFFIX = '.previous';
+
+export function summarizeAffectedSetShadowRecord(record: AffectedSetShadowRecord): AffectedSetShadowHistoryRecord {
+  const base: AffectedSetShadowHistoryRecordBase = {
+    historyVersion: 1,
+    sourceVersion: record.version,
+    refreshResult: record.refreshResult,
+    recordedAt: record.recordedAt,
+    durationMs: record.durationMs,
+  };
+  if (record.status === 'unavailable') {
+    return {
+      ...base,
+      status: 'unavailable',
+      reason: record.reason,
+      ...(record.error ? { error: record.error } : {}),
+    };
+  }
+  return {
+    ...base,
+    status: 'evaluated',
+    mode: record.plan.mode,
+    passed: record.evaluation.passed,
+    recall: record.evaluation.recall,
+    affectedRatio: record.evaluation.affectedRatio,
+    predictedFileCount: record.evaluation.predictedFiles.length,
+    actualFileCount: record.evaluation.actualFiles.length,
+    missingFileCount: record.evaluation.missingFiles.length,
+    fallbackReasons: [...record.plan.reasons],
+  };
+}
+
+export function appendAffectedSetShadowHistory(
+  path: string,
+  record: AffectedSetShadowRecord,
+  maxBytes = AFFECTED_SET_SHADOW_HISTORY_MAX_BYTES,
+): void {
+  const line = `${JSON.stringify(summarizeAffectedSetShadowRecord(record))}\n`;
+  const segmentLimit = Math.max(1, Math.floor(maxBytes));
+  const previousPath = `${path}${AFFECTED_SET_SHADOW_HISTORY_PREVIOUS_SUFFIX}`;
+  mkdirSync(dirname(path), { recursive: true });
+  if (existsSync(path)) {
+    const currentBytes = statSync(path).size;
+    if (currentBytes > segmentLimit) {
+      rmSync(path, { force: true });
+      rmSync(previousPath, { force: true });
+    } else if (currentBytes + Buffer.byteLength(line) > segmentLimit) {
+      rmSync(previousPath, { force: true });
+      renameSync(path, previousPath);
+    }
+  }
+  appendFileSync(path, line);
+}
+
 function symbolValues(row: GlobalSymbolRow, prefix: readonly DocumentFactValue[] = []): DocumentFactValue[] {
   const values: DocumentFactValue[] = [];
   for (const value of prefix) values.push(value);
@@ -596,10 +677,7 @@ const defaultAffectedSetShadowRuntime: AffectedSetShadowRuntime = {
 };
 
 const defaultAffectedSetShadowTelemetryRuntime: AffectedSetShadowTelemetryRuntime = {
-  appendHistory: (path, record) => {
-    mkdirSync(dirname(path), { recursive: true });
-    appendFileSync(path, `${JSON.stringify(record)}\n`);
-  },
+  appendHistory: appendAffectedSetShadowHistory,
   writeLatest: (path, record) => writeJsonAtomic(path, record, { spacing: 2, trailingNewline: true }),
 };
 

@@ -214,6 +214,65 @@ describe('watch service contract', () => {
     });
   });
 
+  it.each(['EPERM', 'EACCES', 'EROFS'])(
+    'reuses a live service when the activity mailbox is blocked with %s',
+    (code) => {
+      withTempCache((cacheDir) => {
+        const paths = watchServicePaths(cacheDir);
+        const runtime = fakeRuntime(paths.statePath);
+        runtime.alive.add(123);
+        runtime.recordActivity = () => {
+          throw Object.assign(new Error('activity mailbox is not writable'), { code });
+        };
+        writeWatchServiceState(paths.statePath, {
+          ...liveState(),
+          projectRoot: realpathSync(IDENTITY.projectRoot),
+        });
+
+        expect(
+          ensureWatchServiceForCommand({
+            commandName: 'status',
+            projectRoot: IDENTITY.projectRoot,
+            cacheDir,
+            cliVersion: IDENTITY.cliVersion,
+            config: { watch: { enabled: true } },
+            env: {},
+            runtime,
+          }),
+        ).toEqual(expect.objectContaining({ kind: 'reused', state: expect.objectContaining({ pid: 123 }) }));
+        expect(runtime.spawned).toBe(0);
+      });
+    },
+  );
+
+  it('surfaces a non-permission activity mailbox failure', () => {
+    withTempCache((cacheDir) => {
+      const paths = watchServicePaths(cacheDir);
+      const runtime = fakeRuntime(paths.statePath);
+      runtime.alive.add(123);
+      runtime.recordActivity = () => {
+        throw Object.assign(new Error('activity mailbox I/O failed'), { code: 'EIO' });
+      };
+      writeWatchServiceState(paths.statePath, {
+        ...liveState(),
+        projectRoot: realpathSync(IDENTITY.projectRoot),
+      });
+
+      expect(
+        ensureWatchServiceForCommand({
+          commandName: 'status',
+          projectRoot: IDENTITY.projectRoot,
+          cacheDir,
+          cliVersion: IDENTITY.cliVersion,
+          config: { watch: { enabled: true } },
+          env: {},
+          runtime,
+        }),
+      ).toEqual({ kind: 'failed', message: 'activity mailbox I/O failed' });
+      expect(runtime.spawned).toBe(0);
+    });
+  });
+
   it('auto-starts only eligible commands in enabled projects', () => {
     expect(watchServiceAutoStartEligible('status', {})).toBe(true);
     expect(watchServiceAutoStartEligible('watch', {})).toBe(false);

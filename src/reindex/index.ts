@@ -372,6 +372,14 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
   let runDir: string | null = null;
 
   try {
+    const staleRunCleanup = pruneStaleReindexRunDirectories(dirname(paths.outputDb));
+    if (staleRunCleanup.removed > 0) {
+      onStatus(`Removed ${staleRunCleanup.removed} abandoned reindex workspace(s)`);
+    }
+    for (const error of staleRunCleanup.errors) {
+      onStatus(`Could not remove abandoned reindex workspace: ${error}`);
+    }
+
     let reuseObservation: ReindexResult | null = null;
     const reused = profileSpan(
       'reindex.reuse-check',
@@ -608,6 +616,28 @@ function createTempReindexPaths(paths: ReindexOutputPaths): TempReindexPaths {
     tempOutputDb: join(runDir, basename(paths.outputDb)),
     tempMetaPath: join(runDir, basename(paths.metaPath)),
   };
+}
+
+function pruneStaleReindexRunDirectories(cacheDir: string): { removed: number; errors: string[] } {
+  const errors: string[] = [];
+  let entries;
+  try {
+    entries = readdirSync(cacheDir, { withFileTypes: true });
+  } catch (error) {
+    return { removed: 0, errors: [errorMessage(error)] };
+  }
+
+  let removed = 0;
+  for (const entry of entries) {
+    if (!entry.name.startsWith('reindex-') || !entry.isDirectory()) continue;
+    try {
+      rmSync(join(cacheDir, entry.name), { recursive: true, force: true });
+      removed += 1;
+    } catch (error) {
+      errors.push(`${entry.name}: ${errorMessage(error)}`);
+    }
+  }
+  return { removed, errors };
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; fresh indexing, materialization, and publication stay ordered.

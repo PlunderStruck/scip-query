@@ -1,10 +1,11 @@
 import Database from 'better-sqlite3';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   affectedSetShadowPaths,
+  appendAffectedSetShadowHistory,
   collectAffectedSetShadowRecord,
   compareDocumentFactDigests,
   digestDocumentFacts,
@@ -13,6 +14,7 @@ import {
   GLOBAL_FACTS_UNIT,
   readAffectedSetShadowStatus,
   readDocumentFactDigests,
+  summarizeAffectedSetShadowRecord,
   writeAffectedSetShadowRecord,
   type AffectedShadowDatabase,
   type AffectedSetShadowRecord,
@@ -395,6 +397,71 @@ describe('affected-set document fact oracle', () => {
     });
     expect(paths).toEqual(affectedSetShadowPaths('/cache/index.db'));
     expect(calls).toEqual(['history:/cache/affected-shadow.jsonl', 'latest:/cache/affected-shadow-latest.json']);
+  });
+
+  it('stores a compact history summary while retaining calibration evidence', () => {
+    expect(
+      summarizeAffectedSetShadowRecord(
+        evaluatedRecord({
+          passed: false,
+          recall: 0.5,
+          affectedRatio: 0.75,
+          predictedFiles: ['src/a.ts', 'src/b.ts', 'src/c.ts'],
+          actualFiles: ['src/a.ts', 'src/d.ts'],
+          missingFiles: ['src/d.ts'],
+          fallbackReasons: ['configuration-changed'],
+        }),
+      ),
+    ).toEqual({
+      historyVersion: 1,
+      sourceVersion: 1,
+      status: 'evaluated',
+      refreshResult: 'rebuilt',
+      recordedAt: '2026-07-10T00:00:00.000Z',
+      durationMs: 12,
+      mode: 'closure',
+      passed: false,
+      recall: 0.5,
+      affectedRatio: 0.75,
+      predictedFileCount: 3,
+      actualFileCount: 2,
+      missingFileCount: 1,
+      fallbackReasons: ['configuration-changed'],
+    });
+  });
+
+  it('rotates compact history without rewriting the retained segment', () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'scip-query-shadow-history-'));
+    tempDirs.push(cacheDir);
+    const historyPath = join(cacheDir, 'affected-shadow.jsonl');
+    const previousPath = `${historyPath}.previous`;
+    const record = evaluatedRecord();
+
+    appendAffectedSetShadowHistory(historyPath, record, 1_024);
+    const firstSegment = readFileSync(historyPath, 'utf-8');
+    writeFileSync(previousPath, 'older segment\n');
+    appendAffectedSetShadowHistory(historyPath, record, Buffer.byteLength(firstSegment));
+
+    expect(readFileSync(previousPath, 'utf-8')).toBe(firstSegment);
+    expect(JSON.parse(readFileSync(historyPath, 'utf-8'))).toEqual(summarizeAffectedSetShadowRecord(record));
+  });
+
+  it('discards oversized legacy history instead of retaining it as an archive', () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'scip-query-shadow-legacy-history-'));
+    tempDirs.push(cacheDir);
+    const historyPath = join(cacheDir, 'affected-shadow.jsonl');
+    const previousPath = `${historyPath}.previous`;
+    writeFileSync(historyPath, 'x'.repeat(1_025));
+    writeFileSync(previousPath, 'older segment\n');
+
+    appendAffectedSetShadowHistory(historyPath, evaluatedRecord(), 1_024);
+
+    expect(existsSync(previousPath)).toBe(false);
+    expect(readFileSync(historyPath, 'utf-8')).not.toContain('"manifest"');
+    expect(JSON.parse(readFileSync(historyPath, 'utf-8'))).toMatchObject({
+      historyVersion: 1,
+      status: 'evaluated',
+    });
   });
 
   it('reads and formats a passing status summary', () => {

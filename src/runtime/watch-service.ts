@@ -96,6 +96,7 @@ export interface WatchProcessLockResult {
 export interface WatchServiceRuntime {
   now(): number;
   isProcessAlive(pid: number): boolean;
+  recordActivity?(activityPath: string, nowMs: number): void;
   spawnServer(
     serverPath: string,
     projectRoot: string,
@@ -249,7 +250,7 @@ export function ensureWatchService(opts: WatchServiceControllerOptions): WatchSe
   let action = planWatchServiceAction('ensure', inspection.classification);
 
   if (action.kind === 'reuse') {
-    recordWatchServiceActivity(inspection.paths.activityPath, runtime.now());
+    recordWatchServiceActivityBestEffort(inspection.paths.activityPath, runtime);
     return { disposition: 'reused', state: action.state };
   }
   if (action.kind === 'replace') {
@@ -264,7 +265,7 @@ export function ensureWatchService(opts: WatchServiceControllerOptions): WatchSe
         Math.min(opts.startupTimeoutMs ?? 1_000, 1_000),
       );
       if (concurrent) {
-        recordWatchServiceActivity(inspection.paths.activityPath, runtime.now());
+        recordWatchServiceActivityBestEffort(inspection.paths.activityPath, runtime);
         return { disposition: 'reused', state: concurrent };
       }
       throw new Error(
@@ -281,7 +282,7 @@ export function ensureWatchService(opts: WatchServiceControllerOptions): WatchSe
   inspection = inspectWatchServiceWithIdentity(opts, identity);
   action = planWatchServiceAction('ensure', inspection.classification);
   if (action.kind === 'reuse') {
-    recordWatchServiceActivity(inspection.paths.activityPath, runtime.now());
+    recordWatchServiceActivityBestEffort(inspection.paths.activityPath, runtime);
     return { disposition: 'reused', state: action.state };
   }
 
@@ -298,7 +299,7 @@ export function ensureWatchService(opts: WatchServiceControllerOptions): WatchSe
       `scip-query watch service did not become ready within ${opts.startupTimeoutMs ?? WATCH_SERVICE_STARTUP_TIMEOUT_MS}ms.`,
     );
   }
-  recordWatchServiceActivity(inspection.paths.activityPath, runtime.now());
+  recordWatchServiceActivityBestEffort(inspection.paths.activityPath, runtime);
   return { disposition: 'started', state };
 }
 
@@ -593,6 +594,15 @@ function runningWatchMessage(lockPath: string, projectRoot: string, existing: Wa
 
 function errorCode(error: unknown): string | undefined {
   return typeof error === 'object' && error && 'code' in error ? (error as { code?: string }).code : undefined;
+}
+
+function recordWatchServiceActivityBestEffort(activityPath: string, runtime: WatchServiceRuntime): void {
+  try {
+    (runtime.recordActivity ?? recordWatchServiceActivity)(activityPath, runtime.now());
+  } catch (error) {
+    const code = errorCode(error);
+    if (code !== 'EPERM' && code !== 'EACCES' && code !== 'EROFS') throw error;
+  }
 }
 
 const DEFAULT_WATCH_SERVICE_RUNTIME: WatchServiceRuntime = {

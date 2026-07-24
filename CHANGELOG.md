@@ -4,6 +4,17 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+## [0.19.2]
+
+### Fixes
+
+- Watch-service reuse no longer reports a startup warning when a sandboxed
+  client cannot update the optional activity timestamp in the user cache.
+- Reindexing now removes abandoned staging workspaces under the exclusive
+  reindex lock. Affected-set history stores compact calibration summaries and
+  rotates at 8 MiB with one previous segment instead of appending unbounded
+  full records; the complete latest status record is unchanged.
+
 ## [0.19.0]
 
 ### Architecture coherence

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import type * as NodeFs from 'node:fs';
 import { dirname, join } from 'node:path';
 import { cpus, tmpdir } from 'node:os';
@@ -52,6 +52,41 @@ describe('resolveIndexerConcurrency', () => {
     process.env['SCIP_QUERY_INDEXER_CONCURRENCY'] = '5';
 
     expect(resolveIndexerConcurrency(10)).toBe(5);
+  });
+});
+
+describe('reindex cache cleanup', () => {
+  it('removes only abandoned real reindex workspaces while holding the reindex lock', async () => {
+    const projectRoot = createProject('scip-query-reindex-stale-workspaces-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    const staleDir = join(cacheDir, 'reindex-stale');
+    const unrelatedDir = join(cacheDir, 'language-indexes');
+    const prefixedFile = join(cacheDir, 'reindex-not-a-directory');
+    const symlinkTarget = mkdtempSync(join(tmpdir(), 'scip-query-reindex-symlink-target-'));
+    tempDirs.push(symlinkTarget);
+    const prefixedSymlink = join(cacheDir, 'reindex-symlink');
+    mkdirSync(staleDir);
+    mkdirSync(unrelatedDir);
+    writeFileSync(join(staleDir, 'partial-index.db'), 'partial');
+    writeFileSync(prefixedFile, 'keep');
+    symlinkSync(symlinkTarget, prefixedSymlink);
+    const statuses: string[] = [];
+    const { reindex } = await loadReindexFixture({ languages: ['typescript'] });
+
+    await reindex({
+      projectRoot,
+      outputScip: join(cacheDir, 'index.scip'),
+      outputDb: join(cacheDir, 'index.db'),
+      onStatus: (message) => statuses.push(message),
+      indexerConcurrency: 1,
+    });
+
+    expect(existsSync(staleDir)).toBe(false);
+    expect(existsSync(unrelatedDir)).toBe(true);
+    expect(existsSync(prefixedFile)).toBe(true);
+    expect(existsSync(prefixedSymlink)).toBe(true);
+    expect(statuses).toContain('Removed 1 abandoned reindex workspace(s)');
   });
 });
 
@@ -500,7 +535,16 @@ describe('reindex reliability', () => {
       refreshResult: 'reused',
       reason: 'oracle-error',
     });
-    expect(readFileSync(join(cacheDir, 'affected-shadow.jsonl'), 'utf-8').trim().split('\n')).toHaveLength(2);
+    const history = readFileSync(join(cacheDir, 'affected-shadow.jsonl'), 'utf-8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    expect(history).toHaveLength(2);
+    expect(history).toEqual([
+      expect.objectContaining({ historyVersion: 1, sourceVersion: 1 }),
+      expect.objectContaining({ historyVersion: 1, sourceVersion: 1 }),
+    ]);
+    expect(history.every((record) => !('manifest' in record))).toBe(true);
   });
 
   it('indexes TypeScript workspace project shards and publishes one language output', async () => {
