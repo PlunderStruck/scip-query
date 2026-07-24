@@ -17,7 +17,7 @@ import type { ScipDatabase } from '../storage/db.js';
 import { fileContentHash } from '../storage/evidence-cache.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
 import { detectAstLanguage, getAst, type SyntaxNode, type Tree } from '../source/ast.js';
-import { getSourceText } from '../source/source-text.js';
+import { getSourceText } from '../source/primitives/source-text.js';
 
 export type ExclusionDisposition = 'exclude' | 'implicit-usage';
 

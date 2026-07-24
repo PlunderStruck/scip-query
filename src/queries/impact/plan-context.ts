@@ -6,7 +6,7 @@ import { getSuppressionInventory } from '../../analysis/suppressions.js';
 import { affected, type AffectedResult } from '../graph/affected.js';
 import { callGraph, type CallGraphResult } from '../navigation/call-graph.js';
 import { changeSurface, type ChangeSurfaceResult } from './change-surface.js';
-import { coChange } from './co-change.js';
+import { coChange } from '../cleanup/co-change.js';
 import { complexity, type ComplexityResult } from '../quality/complexity.js';
 import { dataflow, type DataflowResult } from '../navigation/dataflow.js';
 import { deps, rdeps, type DepResult } from '../navigation/deps.js';

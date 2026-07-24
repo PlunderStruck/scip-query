@@ -196,6 +196,20 @@ export interface ArchitectureConfig {
   requireCompletePolicy?: boolean;
   /** Treat every multi-boundary dependency cycle as a declared violation. */
   requireAcyclic?: boolean;
+  /**
+   * Treat a boundary that hides an internal dependency cycle as a declared
+   * violation.
+   *
+   * `requireAcyclic` only sees the graph *between* boundaries: every edge whose
+   * endpoints share a boundary is discarded before the check runs. A boundary
+   * coarse enough to contain both sides of a cycle therefore passes while
+   * saying nothing about the code inside it. This rule closes that gap by
+   * quotienting each boundary by its sub-directories and requiring that
+   * quotient to be acyclic too.
+   *
+   * Defaults to false so upgrading does not tighten an existing project's gate.
+   */
+  requireResolvedBoundaries?: boolean;
 }
 
 export interface DocsConfig {

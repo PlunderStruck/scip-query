@@ -1,6 +1,6 @@
 import * as queries from '../../queries/index.js';
-import type { CommandDescriptor } from '../commands/command-descriptor-types.js';
-import { doc, option, parseInteger, withJsonOption } from '../commands/command-spec-builders.js';
+import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
+import { doc, option, parseInteger, withJsonOption } from '../command-kit/command-spec-builders.js';
 import {
   budgetedTableCommand,
   booleanOptionValue,
@@ -11,8 +11,8 @@ import {
   printJsonEnvelope,
   reportCommand,
   stringOptionValue,
-} from '../commands/command-execution.js';
-import { budgetedSectionedQueryCommand, tableQueryCommand } from '../commands/query-command-builders.js';
+} from '../command-kit/command-execution.js';
+import { budgetedSectionedQueryCommand, tableQueryCommand } from '../command-kit/query-command-builders.js';
 import { render } from '../render.js';
 import { symbolResolutionBefore, symbolResolutionEmptyMessage, withSymbolResolutionJson } from './symbol-resolution.js';
 
@@ -190,6 +190,23 @@ const handleArchitecture = reportCommand({
       }
     } else {
       console.log('\nNo declared boundary violations found.');
+    }
+
+    if (result.coarseBoundaries.length > 0) {
+      console.log(
+        `\nBoundaries too coarse to check (${result.coarseBoundaries.length}): ` +
+          'these own an internal dependency cycle that the boundary graph cannot express, ' +
+          'so requireAcyclic reports nothing about the code inside them.',
+      );
+      for (const finding of result.coarseBoundaries) {
+        console.log(`  ${finding.boundary}: ${finding.subUnits.join(' <-> ')}`);
+        for (const edge of finding.narrowestEdges) {
+          console.log(`    narrowest: ${edge.from} -> ${edge.to} (${edge.fileEdgeCount} file edge(s))`);
+          for (const example of edge.examples.slice(0, 3)) {
+            console.log(`      ${example.fromFile} -> ${example.toFile}`);
+          }
+        }
+      }
     }
 
     if (result.edges.length > 0) {

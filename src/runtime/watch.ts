@@ -12,7 +12,7 @@ import type {
 } from '../domain/types.js';
 import { resolveIndexStoragePaths } from '../platform/cache-layout.js';
 import { loadProjectConfig, resolveWatchConfig } from './config.js';
-import { createGitignoreFilter } from '../source/gitignore-filter.js';
+import { createGitignoreFilter } from '../source/primitives/gitignore-filter.js';
 import { gitOutput, resolveGitPath } from '../platform/git-worktree.js';
 import { REINDEX_ACTIVITY_FILE } from '../reindex/reindex-activity.js';
 

@@ -7,10 +7,10 @@ import { createSourceFileCache } from '../storage/per-db-cache.js';
 import { getAst } from './ast/ast-core.js';
 import type { SyntaxNode } from './ast/ast-types.js';
 import { detectAstLanguage, type AstLanguage } from './ast/ast-language.js';
-import { callSiteForNode } from './source-calls.js';
-import { isFrontendIdentifierStopWord } from './frontend-identifier-stoplist.js';
-import { getSourceFiles } from './source-fileset.js';
-import { getSourceLines, getSourceText } from './source-text.js';
+import { callSiteForNode } from './facts/source-calls.js';
+import { isFrontendIdentifierStopWord } from './primitives/frontend-identifier-stoplist.js';
+import { getSourceFiles } from './primitives/source-fileset.js';
+import { getSourceLines, getSourceText } from './primitives/source-text.js';
 
 export interface ReactComponentBehaviorProfile {
   file: string;

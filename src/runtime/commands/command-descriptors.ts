@@ -1,4 +1,4 @@
-import type { CommandDescriptor } from './command-descriptor-types.js';
+import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
 import {
   collectValues,
   doc,
@@ -6,7 +6,7 @@ import {
   parseIntegerLoose,
   parsePositiveInteger,
   withJsonOption,
-} from './command-spec-builders.js';
+} from '../command-kit/command-spec-builders.js';
 import { DIFF_IMPACT_BATCH_COMMAND, HEALTH_PHASE_COMMAND } from '../cli-support.js';
 import { handleAgentHookContext, handleAgentHookStop } from '../agent-hooks.js';
 import { BUILTIN_SKILLS } from '../setup.js';

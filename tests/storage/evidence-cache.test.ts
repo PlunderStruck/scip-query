@@ -25,8 +25,8 @@ import {
   SHARED_FILE_EVIDENCE_KINDS,
   maintainSharedEvidenceCache,
 } from '../../src/storage/evidence-cache.js';
-import { SOURCE_FACTS_PAYLOAD_VERSION, getSourceFacts } from '../../src/source/source-facts.js';
-import { getSourceLines, getSourceText } from '../../src/source/source-text.js';
+import { SOURCE_FACTS_PAYLOAD_VERSION, getSourceFacts } from '../../src/source/facts/source-facts.js';
+import { getSourceLines, getSourceText } from '../../src/source/primitives/source-text.js';
 import { getReExports } from '../../src/language-parsers/index.js';
 import {
   createFileEvidenceProduct,

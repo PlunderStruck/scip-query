@@ -16,7 +16,7 @@ import { evidenceFixtureDb } from '../fixtures/evidence-fixture.js';
 // `withWorkspaceDb` (src/runtime/agent-hooks.ts) load .scipquery.json and
 // build a ScipQueryConfig for diff-gate independently of the CLI's
 // openDb() (src/runtime/cli-context.ts). `withWorkspaceDb` omitted the
-// `docs` field, so `isSnapshotDoc` (src/queries/impact/diff-gate-doc-policy.ts)
+// `docs` field, so `isSnapshotDoc` (src/queries/cleanup/diff-gate-doc-policy.ts)
 // saw an empty `docs.snapshotPaths` list in the live Stop hook even though
 // .scipquery.json configures it — every snapshot-doc citation (docs/benchmarks/**,
 // docs/validation/**, docs/reviews/**, docs/plans/**) surfaced as a live

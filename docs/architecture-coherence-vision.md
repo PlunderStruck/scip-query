@@ -87,6 +87,22 @@ row for a boundary that may depend on nothing. `requireAcyclic` independently
 forbids multi-boundary strongly connected components. A project should enable
 both only after the observed graph has been classified and repaired.
 
+`requireResolvedBoundaries` closes the gap those two leave open. Same-boundary
+dependencies are always allowed, so every edge inside a boundary is discarded
+before `requireAcyclic` runs — which means a boundary coarse enough to contain
+both sides of a cycle passes the check while saying nothing about the code
+inside it. The rule quotients each boundary by its sub-directories and requires
+that quotient to be acyclic too, so "no cycles" keeps its meaning as boundaries
+grow. It reports the narrowest internal edge as the inspection point, because a
+hidden cycle is usually one import against a dominant direction rather than a
+tangle.
+
+The failure it prevents is specific: this repository's own configuration
+declared 14 boundaries with `requireAcyclic: true` and reported zero cycles,
+while six of those boundaries — holding 85% of all files — each contained an
+internal cycle. The clean result was an artifact of granularity, not a property
+of the code.
+
 ## What the Analyzer Should Report
 
 The report should preserve both policy truth and graph evidence:

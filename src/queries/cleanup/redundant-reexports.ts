@@ -4,7 +4,7 @@ import { isLiveBarrel } from '../../analysis/file-classifier.js';
 import { getReExports, getSourceExports, getSourceImports } from '../../language-parsers/index.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
-import { getSourceText } from '../../source/source-text.js';
+import { getSourceText } from '../../source/primitives/source-text.js';
 import { isPackageSurfaceFile } from '../../analysis/package-surface.js';
 
 export type RedundantReexportActionTier = 'direct' | 'signal';

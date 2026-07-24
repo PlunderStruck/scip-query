@@ -4,7 +4,7 @@ import { getInactiveBarrelPaths, isEntrySurface, isRootedSymbol } from '../../an
 import { getScopedDefinitionsMatchingSymbols } from '../../symbols/definition-catalog.js';
 import type { DeadOptions, IndexedDefinition } from '../../domain/types.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
-import { callerRowsForSymbol } from '../../symbols/references/caller-evidence.js';
+import { getCallerRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
 import { ProjectIndex } from '../internal/project-index.js';
 import { clearSourceFileEvidenceCaches } from '../internal/cache-invalidation.js';
 import { deadCandidateDecision, looksValueLikeDefinition } from '../internal/dead-candidate-gate.js';
@@ -27,7 +27,7 @@ import {
 } from '../internal/reference-counts.js';
 import { profileSpan } from '../../instrumentation/profile.js';
 import { getAst } from '../../source/ast.js';
-import { getSourceLines } from '../../source/source-text.js';
+import { getSourceLines } from '../../source/primitives/source-text.js';
 import { isFrameworkContractCallable } from './callable-contracts.js';
 
 export interface DeadSymbolResult {
@@ -619,7 +619,7 @@ function supplementReferencesFromCallerMap(
       'dead.caller-map.per-symbol-non-semantic',
       () => {
         for (const definition of definitions) {
-          const callers = callerRowsForSymbol(db, definition, {
+          const callers = getCallerRowsForSymbol(db, definition, {
             semantic: false,
             semanticEvidence: symbolSemanticEvidence,
           });
@@ -633,7 +633,7 @@ function supplementReferencesFromCallerMap(
       'dead.caller-map.per-symbol',
       () => {
         for (const definition of definitions) {
-          const callers = callerRowsForSymbol(db, definition, {
+          const callers = getCallerRowsForSymbol(db, definition, {
             semantic: canUseSemantic,
             semanticEvidence: symbolSemanticEvidence,
           });

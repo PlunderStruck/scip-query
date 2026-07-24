@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createCandidateNameMatcher,
   sourceMayContainCandidateName,
-} from '../../src/source/source-identifier-prefilter.js';
+} from '../../src/source/primitives/source-identifier-prefilter.js';
 
 describe('source identifier prefilter', () => {
   it('treats empty candidate sets as an unconstrained match', () => {

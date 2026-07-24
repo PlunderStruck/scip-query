@@ -1,14 +1,14 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { createSourceFileCache } from '../../storage/per-db-cache.js';
-import { resolveImportPath } from '../import-path-resolver.js';
-import { getSourceFiles } from '../source-fileset.js';
-import { getSourceText } from '../source-text.js';
+import { resolveImportPath } from '../primitives/import-path-resolver.js';
+import { getSourceFiles } from '../primitives/source-fileset.js';
+import { getSourceText } from '../primitives/source-text.js';
 import type { VueTemplateFacts } from './vue-template.js';
 import { getVueTemplateFacts } from './vue-template.js';
 import type { VueScriptFacts } from './vue-script-facts.js';
 import { buildVueScriptFacts } from './vue-script-facts.js';
-import type { VueSfcUnit } from './vue-sfc.js';
-import { getVueSfcUnit, vueBlockLineCount } from './vue-sfc.js';
+import type { VueSfcUnit } from '../ast/vue-sfc.js';
+import { getVueSfcUnit, vueBlockLineCount } from '../ast/vue-sfc.js';
 
 export interface VueComponentBehaviorProfile {
   file: string;

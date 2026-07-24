@@ -1,7 +1,7 @@
 import type { Command } from 'commander';
-import type { CommandDescriptor } from './command-descriptor-types.js';
-import { setCommandEvidenceMap } from './command-execution.js';
-import { descriptorEvidenceTier } from './command-docs.js';
+import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
+import { setCommandEvidenceMap } from '../command-kit/command-execution.js';
+import { descriptorEvidenceTier } from '../command-kit/command-docs.js';
 
 type PlainCommanderDefault = string | boolean | string[] | undefined;
 

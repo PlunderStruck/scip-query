@@ -9,7 +9,7 @@ import {
   DOTNET_EXTENSIONS,
   isVisualBasicSourcePath,
   resolveQualifiedImportPath,
-} from '../../source/import-path-resolver.js';
+} from '../../source/primitives/import-path-resolver.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
 import {
   buildNamedImport,
@@ -17,7 +17,7 @@ import {
   collectIdentifiersOutside,
   parseImportLineMatches,
   parseWithAstLanguageDispatch,
-} from '../utils.js';
+} from './utils.js';
 
 export function parseDotNetImports(db: ScipDatabase, importerPath: string, source: string): ParsedSourceImport[] {
   return parseWithAstLanguageDispatch(

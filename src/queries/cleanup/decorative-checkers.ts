@@ -5,11 +5,11 @@ import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { applyScanLimit, definitionLoc } from '../query-utils.js';
 import { definitionSourceSnippet, extractImplementationBody } from './duplicate-bodies.js';
 import { isThinForwarderBody } from './twin-drift.js';
-import { stripComments } from '../../source/source-stripper.js';
+import { stripComments } from '../../source/primitives/source-stripper.js';
 import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
 import { resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
-import { getSourceFacts } from '../../source/source-facts.js';
+import { getSourceFacts } from '../../source/facts/source-facts.js';
 import { isFrameworkContractCallable } from './callable-contracts.js';
 import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 

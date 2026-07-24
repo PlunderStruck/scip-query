@@ -1,30 +1,8 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition, SymbolMatch } from '../../domain/types.js';
-import { getCallerRowsForSymbol, getCallerRowsMapForSymbols } from '../graph/call-graph-evidence.js';
-import type { CallerRow } from '../graph/call-graph-evidence.js';
 import { findCallerFiles } from '../identifier-attribution.js';
 import type { SymbolSemanticEvidencePort } from '../semantic-evidence-port.js';
 import { buildCrossFileCallerMap } from './reference-callers.js';
-
-// scip-query: ignore-passthrough — caller-facing row evidence facade; hides
-// targeted-vs-bulk caller selection from query modules.
-export function callerRowsForSymbol(
-  db: ScipDatabase,
-  symbol: SymbolMatch,
-  opts: { limit?: number; semantic?: boolean; semanticEvidence: SymbolSemanticEvidencePort },
-): CallerRow[] {
-  return getCallerRowsForSymbol(db, symbol, opts);
-}
-
-// scip-query: ignore-passthrough — bulk caller-facing row evidence facade;
-// preserves the targeted-vs-inverted selection behind one query boundary.
-export function callerRowsMapForSymbols(
-  db: ScipDatabase,
-  symbols: ReadonlyArray<SymbolMatch>,
-  opts: { limit?: number; semantic?: boolean; semanticEvidence: SymbolSemanticEvidencePort },
-): Map<number, CallerRow[]> {
-  return getCallerRowsMapForSymbols(db, symbols, opts);
-}
 
 // scip-query: ignore-passthrough — caller-facing bulk evidence facade; callers
 // should not depend on the reference-callers adapter directly.

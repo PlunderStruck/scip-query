@@ -10,8 +10,8 @@ import { createPerDbSourceCache } from '../../storage/per-db-cache.js';
 import { detectAstLanguage, isVueSfcPath } from './ast-language.js';
 import { parseAstSource } from './ast-runtime.js';
 import type { Tree } from './ast-types.js';
-import { getSourceText } from '../source-text.js';
-import { extractVueScriptBlock } from '../vue/vue-script.js';
+import { getSourceText } from '../primitives/source-text.js';
+import { extractVueScriptBlock } from './vue-script.js';
 
 const TREE_CACHE = createPerDbSourceCache<Tree | null>('ast-trees', {
   clearGroups: ['whole-project', 'source-file'],

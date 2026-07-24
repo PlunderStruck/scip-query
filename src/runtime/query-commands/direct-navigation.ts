@@ -1,8 +1,8 @@
 import { code } from '../../queries/navigation/code.js';
 import { outline } from '../../queries/navigation/outline.js';
 import { refs } from '../../queries/navigation/refs.js';
-import type { CommandDescriptor } from '../commands/command-descriptor-types.js';
-import { doc, option, parseInteger, withJsonOption } from '../commands/command-spec-builders.js';
+import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
+import { doc, option, parseInteger, withJsonOption } from '../command-kit/command-spec-builders.js';
 import {
   booleanOptionValue,
   budgetedGroupedByFileCommand,
@@ -10,7 +10,7 @@ import {
   definedNumberOption,
   printJsonEnvelope,
   stringArg,
-} from '../commands/command-execution.js';
+} from '../command-kit/command-execution.js';
 import { displayLine, displayPathRange, displayRange, render } from '../render.js';
 import { symbolResolutionBefore, symbolResolutionEmptyMessage, withSymbolResolutionJson } from './symbol-resolution.js';
 

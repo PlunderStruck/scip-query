@@ -1,4 +1,4 @@
-import type { CommandDescriptor } from './command-descriptor-types.js';
+import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
 
 const DIRECT_NAVIGATION_COMMANDS = new Set(['code', 'outline', 'refs']);
 

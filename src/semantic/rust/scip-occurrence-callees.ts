@@ -3,7 +3,7 @@ import { deserializeSCIP, SymbolRole } from '@c4312/scip';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { profileSpan } from '../../instrumentation/profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { getSourceFacts } from '../../source/source-facts.js';
+import { getSourceFacts } from '../../source/facts/source-facts.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
 import { isRustTraitImplMember } from '../../symbols/symbol-parser.js';
 import type { SemanticCallee } from '../types.js';

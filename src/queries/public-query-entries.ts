@@ -93,7 +93,7 @@ export const PUBLIC_QUERY_SOURCE_PATHS = {
   'call-graph': 'src/queries/navigation/call-graph.ts',
   'change-surface': 'src/queries/impact/change-surface.ts',
   'cleanup-plan': 'src/queries/cleanup/cleanup-plan.ts',
-  'co-change': 'src/queries/impact/co-change.ts',
+  'co-change': 'src/queries/cleanup/co-change.ts',
   code: 'src/queries/navigation/code.ts',
   complexity: 'src/queries/quality/complexity.ts',
   'complexity-hotspots': 'src/queries/quality/complexity-hotspots.ts',

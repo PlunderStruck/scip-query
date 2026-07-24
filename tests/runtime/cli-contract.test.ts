@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { program, renderHeuristicNotice } from '../../src/runtime/cli.js';
 import { commandDescriptors } from '../../src/runtime/commands/command-descriptors.js';
-import { commandDocEntries, renderCommandReferenceMarkdown } from '../../src/runtime/commands/command-docs.js';
-import { commandOptions, definedLimitOption, printJsonEnvelope } from '../../src/runtime/commands/command-execution.js';
+import { commandDocEntries, renderCommandReferenceMarkdown } from '../../src/runtime/command-kit/command-docs.js';
+import { commandOptions, definedLimitOption, printJsonEnvelope } from '../../src/runtime/command-kit/command-execution.js';
 import { PUBLIC_QUERY_ENTRIES, PUBLIC_QUERY_SOURCE_PATHS } from '../../src/queries/public-query-entries.js';
 
 const PRIVATE_QUERY_MODULES = [
@@ -14,8 +14,6 @@ const PRIVATE_QUERY_MODULES = [
   'dead-exclusions',
   'diff-gate-baseline-policy',
   'diff-gate-doc-policy',
-  'diff-gate-types',
-  'diff-ranges',
   'doc-citation-context',
   'doc-terms',
   'effectiveness',
@@ -34,9 +32,7 @@ const PRIVATE_QUERY_SOURCE_PATHS = {
   'coverage-contracts': 'src/queries/cleanup/coverage-contracts.ts',
   'dead-exclusions': 'src/queries/cleanup/dead-exclusions.ts',
   'diff-gate-baseline-policy': 'src/queries/impact/diff-gate-baseline-policy.ts',
-  'diff-gate-doc-policy': 'src/queries/impact/diff-gate-doc-policy.ts',
-  'diff-gate-types': 'src/queries/impact/diff-gate-types.ts',
-  'diff-ranges': 'src/queries/impact/diff-ranges.ts',
+  'diff-gate-doc-policy': 'src/queries/cleanup/diff-gate-doc-policy.ts',
   'doc-citation-context': 'src/queries/cleanup/doc-citation-context.ts',
   'doc-terms': 'src/queries/cleanup/doc-terms.ts',
   effectiveness: 'src/queries/health/effectiveness.ts',

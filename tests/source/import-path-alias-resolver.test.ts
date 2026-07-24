@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../src/storage/db.js';
 import type { ScipQueryConfig } from '../../src/domain/types.js';
-import { resolveJavaScriptImportPath } from '../../src/source/import-path-resolver.js';
+import { resolveJavaScriptImportPath } from '../../src/source/primitives/import-path-resolver.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
 function withAliasFixture(files: Record<string, readonly string[] | string>, run: (db: ScipDatabase) => void): void {

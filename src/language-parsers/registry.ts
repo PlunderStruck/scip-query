@@ -28,7 +28,7 @@ import {
   PYTHON_EXTENSIONS,
   RUBY_EXTENSIONS,
   RUST_EXTENSIONS,
-} from '../source/import-path-resolver.js';
+} from '../source/primitives/import-path-resolver.js';
 import { importOnlyLanguageParser, type LanguageParser, type LanguageParserCapabilities } from './types.js';
 import { selectParser } from './types.js';
 

@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { registerCacheClear } from '../storage/cache-registry.js';
 import { detectAstLanguage } from '../source/ast/ast-language.js';
-import { getSourceFacts } from '../source/source-facts.js';
+import { getSourceFacts } from '../source/facts/source-facts.js';
 import { createRustCalleeSymbolResolver } from './rust/callee-symbol-resolution.js';
 import { rustImportUsageFactsFromSource } from './rust/import-usage.js';
 import { createRustSemanticProvider } from './rust/provider.js';

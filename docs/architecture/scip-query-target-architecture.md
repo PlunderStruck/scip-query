@@ -271,7 +271,7 @@ produce the same kind of result.
 | `semantic <-> symbols`        | Keep `semantic -> symbols`       | Semantic providers translate compiler results into repository symbol identities and graphs; symbol facts need optional compiler evidence without provider knowledge. | Complete: the symbols-owned port is implemented in `semantic` and passed by query orchestration. `symbols -> semantic` is empty, and no reciprocal pair remains. |
 
 Evidence: `node dist/cli.js architecture --json`;
-`node dist/cli.js imports src/source/source-evidence.ts --json`;
+`node dist/cli.js imports src/language-parsers/source-evidence.ts --json`;
 `node dist/cli.js imports src/reindex/index.ts --json`;
 `node dist/cli.js imports src/reindex/shared-generation-store.ts --json`;
 `node dist/cli.js system src/semantic --json`;

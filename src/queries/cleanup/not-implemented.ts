@@ -7,8 +7,8 @@ import { applyScanLimit, definitionLoc } from '../query-utils.js';
 import { consumerEvidenceProduct } from '../internal/consumer-evidence.js';
 import { definitionSourceSnippet, extractImplementationBody } from './duplicate-bodies.js';
 import { isExportedDefinition } from './passthrough-candidates.js';
-import { stripComments, stripCommentsAndStrings } from '../../source/source-stripper.js';
-import { getSourceText } from '../../source/source-text.js';
+import { stripComments, stripCommentsAndStrings } from '../../source/primitives/source-stripper.js';
+import { getSourceText } from '../../source/primitives/source-text.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 
 /**

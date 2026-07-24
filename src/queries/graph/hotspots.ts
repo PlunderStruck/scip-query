@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
-import { callerRowsForSymbol } from '../../symbols/references/caller-evidence.js';
+import { getCallerRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
@@ -87,7 +87,7 @@ function hotspotsByDefinitionFallback(db: ScipDatabase, scope: string | undefine
 }
 
 function hotspotRowFor(db: ScipDatabase, definition: IndexedDefinition): HotspotResult {
-  const callerRows = callerRowsForSymbol(db, definition, {
+  const callerRows = getCallerRowsForSymbol(db, definition, {
     limit: 500,
     semanticEvidence: symbolSemanticEvidence,
   });

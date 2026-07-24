@@ -13,7 +13,7 @@ import {
   type SemanticReferenceMaterializationResult,
 } from '../semantic/shared-primitives.js';
 import { materializeSemanticCalleeCache } from '../semantic/symbol-evidence.js';
-import { sourceFrameworkApplicability } from '../source/source-fileset.js';
+import { sourceFrameworkApplicability } from '../source/primitives/source-fileset.js';
 import { projectEvidenceFingerprint, sha256Hex } from '../storage/evidence-cache.js';
 import { createProjectEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
 import { formatBytes, withDb } from './cli-context.js';

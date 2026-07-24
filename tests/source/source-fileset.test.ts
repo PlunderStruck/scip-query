@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { getSourceFiles, sourceFrameworkApplicability } from '../../src/source/source-fileset.js';
+import { getSourceFiles, sourceFrameworkApplicability } from '../../src/source/primitives/source-fileset.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { evidenceFixtureDb } from '../fixtures/evidence-fixture.js';
 

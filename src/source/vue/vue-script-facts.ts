@@ -1,9 +1,9 @@
 import type { SyntaxNode } from '../ast/ast-types.js';
 import { parseAstSource } from '../ast/ast-runtime.js';
-import { callableFactForNode } from '../source-callables.js';
-import { callSiteForNode } from '../source-calls.js';
-import type { VueSfcScriptBlock, VueSfcUnit } from './vue-sfc.js';
-import { vueBlockLineCount } from './vue-sfc.js';
+import { callableFactForNode } from '../facts/source-callables.js';
+import { callSiteForNode } from '../facts/source-calls.js';
+import type { VueSfcScriptBlock, VueSfcUnit } from '../ast/vue-sfc.js';
+import { vueBlockLineCount } from '../ast/vue-sfc.js';
 
 export type VueScriptCallCategory = 'call' | 'composable' | 'store' | 'reactivity' | 'lifecycle' | 'request' | 'macro';
 

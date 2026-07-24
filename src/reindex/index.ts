@@ -43,7 +43,7 @@ import type { LastRefreshMetadata, RefreshTrigger, SupportedLanguage, TypeScript
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import { ScipDatabase } from '../storage/db.js';
 import { seedTypeScriptReferenceFragments } from '../semantic/typescript/reference-fragment-shadow.js';
-import { auxiliaryDocumentsAugmentationStage } from './augment.js';
+import { auxiliaryDocumentsAugmentationStage } from './augmentation/augment.js';
 import {
   collectAffectedSetShadowRecord,
   createUnavailableAffectedSetShadowRecord,
@@ -55,7 +55,7 @@ import { detectLanguages } from './detect.js';
 import { getIndexerConfig } from './indexers.js';
 import { mergeAndSanitizeScipFiles, mergeScipFiles } from './merge.js';
 import { patchIncrementalSqliteGeneration } from './incremental-sqlite-publication.js';
-import { runPostIndexAugmentation } from './post-index-augmentation.js';
+import { runPostIndexAugmentation } from './augmentation/post-index-augmentation.js';
 import { recordFailedReindexActivity, recordReindexRunActivity } from './reindex-activity.js';
 import {
   assignFilesToProjects,
@@ -509,8 +509,8 @@ function errorMessage(error: unknown): string {
 }
 
 export { detectLanguages } from './detect.js';
-export { augmentAuxiliaryDocuments, auxiliaryDocumentsAugmentationStage } from './augment.js';
-export { runPostIndexAugmentation } from './post-index-augmentation.js';
+export { augmentAuxiliaryDocuments, auxiliaryDocumentsAugmentationStage } from './augmentation/augment.js';
+export { runPostIndexAugmentation } from './augmentation/post-index-augmentation.js';
 export { augmentVueResolvedReferences, vueResolvedReferencesAugmentationStage } from './vue/augment-vue.js';
 export { getIndexerConfig, INDEXER_CONFIGS } from './indexers.js';
 export { mergeScipFiles, mergeScipIndexes } from './merge.js';

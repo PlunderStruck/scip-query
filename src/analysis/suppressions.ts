@@ -8,8 +8,8 @@
  */
 import type { ScipDatabase } from '../storage/db.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
-import { getSourceFiles } from '../source/source-fileset.js';
-import { getSourceText, suppressionCommentCategory } from '../source/source-text.js';
+import { getSourceFiles } from '../source/primitives/source-fileset.js';
+import { getSourceText, suppressionCommentCategory } from '../source/primitives/source-text.js';
 
 export type SuppressionCategory =
   | 'dead'

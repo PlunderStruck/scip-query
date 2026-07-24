@@ -10,13 +10,13 @@
  * AST. The cache makes repeat queries on the same file effectively free.
  */
 import type { ScipDatabase } from '../storage/db.js';
-import { importResolutionFingerprint, normalizePath } from '../source/import-path-resolver.js';
+import { importResolutionFingerprint, normalizePath } from '../source/primitives/import-path-resolver.js';
 import { fileContentHash } from '../storage/evidence-cache.js';
 import { isRecord } from '../storage/evidence-payload.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
 import { createPerDbCache } from '../storage/per-db-cache.js';
 import type { ParsedReExport, ParsedSourceExport, ParsedSourceImport } from '../domain/types.js';
-import { getSourceText } from '../source/source-text.js';
+import { getSourceText } from '../source/primitives/source-text.js';
 import { getParserForPath } from './registry.js';
 
 const PARSER_CACHE_GROUPS = { clearGroups: ['whole-project', 'source-file'] } as const;

@@ -177,7 +177,7 @@ enforce (see `docs/plans/2026-07-02-followups.md` items 6 and 9).
 Followup #6 closed the one confirmed gap in an otherwise-wired battery command: `co-change`
 (`src/runtime/query-commands/impact.ts`) used the plain `dbCommand` and never disclosed a budget,
 even though its per-pair classification loop in `queries.coChange`
-(`src/queries/impact/co-change.ts`) does real filesystem/graph work whose cost scales with
+(`src/queries/cleanup/co-change.ts`) does real filesystem/graph work whose cost scales with
 candidate-pair count on a large repository. It now flows through `budgetedDbCommand` and
 `coChange` accepts a `scanLimit` option that truncates the (already priority-sorted) candidate
 pairs before classification, so the disclosed budget is truthful rather than cosmetic.

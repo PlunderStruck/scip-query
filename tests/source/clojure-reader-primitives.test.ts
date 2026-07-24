@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
-import { isReaderMacroPrefix, isTokenDelimiter, skipString } from '../../src/source/clojure-facts.js';
+import { isReaderMacroPrefix, isTokenDelimiter, skipString } from '../../src/source/facts/clojure-facts.js';
 import { getSourceImports } from '../../src/language-parsers/index.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';

@@ -1,6 +1,6 @@
 import * as queries from '../../queries/index.js';
-import type { CommandDescriptor } from '../commands/command-descriptor-types.js';
-import { doc, option, parseInteger, withJsonOption } from '../commands/command-spec-builders.js';
+import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
+import { doc, option, parseInteger, withJsonOption } from '../command-kit/command-spec-builders.js';
 import {
   booleanOptionValue,
   budgetedDbCommand,
@@ -9,7 +9,7 @@ import {
   printJsonEnvelope,
   stringArg,
   stringOptionValue,
-} from '../commands/command-execution.js';
+} from '../command-kit/command-execution.js';
 import { displayPathRange, render } from '../render.js';
 import { symbolResolutionBefore, symbolResolutionEmptyMessage, withSymbolResolutionJson } from './symbol-resolution.js';
 

@@ -4,12 +4,12 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../src/storage/db.js';
-import { augmentAuxiliaryDocuments, auxiliaryDocumentsAugmentationStage } from '../../src/reindex/augment.js';
+import { augmentAuxiliaryDocuments, auxiliaryDocumentsAugmentationStage } from '../../src/reindex/augmentation/augment.js';
 import {
   augmentVueResolvedReferences,
   vueResolvedReferencesAugmentationStage,
 } from '../../src/reindex/vue/augment-vue.js';
-import { runPostIndexAugmentation } from '../../src/reindex/post-index-augmentation.js';
+import { runPostIndexAugmentation } from '../../src/reindex/augmentation/post-index-augmentation.js';
 import * as queries from '../../src/queries/index.js';
 
 function createDocumentsOnlyDb(dbPath: string): void {

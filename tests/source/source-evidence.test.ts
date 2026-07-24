@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { sourceEvidence } from '../../src/source/source-evidence.js';
+import { sourceEvidence } from '../../src/language-parsers/source-evidence.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
@@ -84,7 +84,7 @@ describe('source evidence facade', () => {
     vi.doMock('../../src/source/ast/ast-runtime.js', () => ({
       parseAstSource: () => null,
     }));
-    const { sourceEvidence: mockedSourceEvidence } = await import('../../src/source/source-evidence.js');
+    const { sourceEvidence: mockedSourceEvidence } = await import('../../src/language-parsers/source-evidence.js');
 
     const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-source-evidence-unavailable-'));
     try {

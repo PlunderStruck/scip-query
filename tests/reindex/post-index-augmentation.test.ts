@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import {
   runFingerprintCachedPostIndexAugmentation,
   runPostIndexAugmentation,
-} from '../../src/reindex/post-index-augmentation.js';
+} from '../../src/reindex/augmentation/post-index-augmentation.js';
 
 describe('post-index augmentation', () => {
   it('returns stage metadata around the stage result', () => {

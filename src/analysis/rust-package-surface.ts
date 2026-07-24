@@ -11,7 +11,7 @@ import { dirname, join } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
 import { getDefinitionsForFile } from '../symbols/definition-catalog.js';
-import { getSourceLines } from '../source/source-text.js';
+import { getSourceLines } from '../source/primitives/source-text.js';
 import { packagePath } from './package-surface.js';
 
 export interface RustLibrarySurface {

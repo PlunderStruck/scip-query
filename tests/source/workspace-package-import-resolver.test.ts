@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../src/storage/db.js';
 import type { ScipQueryConfig } from '../../src/domain/types.js';
 import { discoverWorkspacePackages, parsePnpmWorkspacePackagesField } from '../../src/platform/workspace-packages.js';
-import { resolveJavaScriptImportPath } from '../../src/source/import-path-resolver.js';
+import { resolveJavaScriptImportPath } from '../../src/source/primitives/import-path-resolver.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
 function withWorkspaceFixture(

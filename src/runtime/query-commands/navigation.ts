@@ -1,6 +1,6 @@
 import * as queries from '../../queries/index.js';
-import type { CommandDescriptor } from '../commands/command-descriptor-types.js';
-import { doc, option, parseInteger, withJsonOption } from '../commands/command-spec-builders.js';
+import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
+import { doc, option, parseInteger, withJsonOption } from '../command-kit/command-spec-builders.js';
 import {
   booleanOptionValue,
   budgetedDbCommand,
@@ -10,13 +10,13 @@ import {
   printJsonEnvelope,
   stringArg,
   stringOptionValue,
-} from '../commands/command-execution.js';
+} from '../command-kit/command-execution.js';
 import {
   budgetedSectionedQueryCommand,
   listQueryCommand,
   sectionedQueryCommand,
   tableQueryCommand,
-} from '../commands/query-command-builders.js';
+} from '../command-kit/query-command-builders.js';
 import { displayLine, displayPathRange, displayRange, render } from '../render.js';
 import type { ReportSection } from '../render.js';
 import {

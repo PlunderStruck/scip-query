@@ -195,3 +195,100 @@ describe('architecture graph analysis', () => {
     expect(hasEnforceableArchitecturePolicy({ ...baseConfig, requireAcyclic: true })).toBe(true);
   });
 });
+
+describe('coarse boundary detection', () => {
+  // One boundary owning two sub-directories that depend on each other. The
+  // boundary graph cannot express this: both endpoints resolve to `app`, so
+  // the edge is discarded before the acyclicity check runs.
+  const coarseConfig: ArchitectureConfig = {
+    boundaries: [{ name: 'app', paths: ['src/app/**'] }],
+    requireAcyclic: true,
+  };
+  const cyclicFiles = ['src/app/reader/read.ts', 'src/app/writer/write.ts'];
+  const cyclicGraph = graph([
+    ['src/app/reader/read.ts', ['src/app/writer/write.ts']],
+    ['src/app/writer/write.ts', ['src/app/reader/read.ts']],
+  ]);
+
+  it('reports a cycle hidden inside a single boundary', () => {
+    const report = analyzeArchitectureGraph(cyclicGraph, cyclicFiles, coarseConfig);
+
+    expect(report.cycles).toEqual([]); // the boundary graph sees nothing
+    expect(report.coarseBoundaries).toHaveLength(1);
+    expect(report.coarseBoundaries[0]).toMatchObject({
+      boundary: 'app',
+      subUnits: ['src/app/reader', 'src/app/writer'],
+    });
+    expect(report.coarseBoundaries[0]!.narrowestEdges).toHaveLength(2);
+  });
+
+  it('stays silent when the boundary owns a single sub-unit', () => {
+    const report = analyzeArchitectureGraph(
+      graph([['src/app/a.ts', ['src/app/b.ts']]]),
+      ['src/app/a.ts', 'src/app/b.ts'],
+      coarseConfig,
+    );
+
+    expect(report.coarseBoundaries).toEqual([]);
+  });
+
+  it('ignores files the caller classifies as module-hierarchy bookkeeping', () => {
+    const report = analyzeArchitectureGraph(cyclicGraph, cyclicFiles, coarseConfig, {
+      isModuleHierarchyFile: (file) => file === 'src/app/writer/write.ts',
+    });
+
+    expect(report.coarseBoundaries).toEqual([]);
+  });
+
+  // Regression: a path-based barrel rule treats every `index.ts` as
+  // bookkeeping, which hides real cycles whose back edge targets a module
+  // that merely happens to be named `index.ts` while carrying real logic.
+  // The classifier is injected so "is this a barrel" stays content-aware.
+  it('still reports a cycle whose back edge targets a logic-bearing index.ts', () => {
+    const files = ['src/app/core/evidence.ts', 'src/app/parsers/index.ts'];
+    const report = analyzeArchitectureGraph(
+      graph([
+        ['src/app/core/evidence.ts', ['src/app/parsers/index.ts']],
+        ['src/app/parsers/index.ts', ['src/app/core/evidence.ts']],
+      ]),
+      files,
+      coarseConfig,
+      { isModuleHierarchyFile: () => false },
+    );
+
+    expect(report.coarseBoundaries).toHaveLength(1);
+    expect(report.coarseBoundaries[0]!.subUnits).toEqual(['src/app/core', 'src/app/parsers']);
+  });
+
+  // Directory nesting alone must not suppress: a boundary's root files
+  // depending on one of its own sub-directories (and back) is the most common
+  // real intra-boundary cycle. Only re-export bookkeeping is excluded, and
+  // that is decided per file by the injected classifier.
+  it('reports a cycle between a boundary root and its own sub-directory', () => {
+    const report = analyzeArchitectureGraph(
+      graph([
+        ['src/app/registry.ts', ['src/app/child/leaf.ts']],
+        ['src/app/child/leaf.ts', ['src/app/registry.ts']],
+      ]),
+      ['src/app/registry.ts', 'src/app/child/leaf.ts'],
+      coarseConfig,
+    );
+
+    expect(report.coarseBoundaries).toHaveLength(1);
+    expect(report.coarseBoundaries[0]!.subUnits).toEqual(['src/app', 'src/app/child']);
+  });
+
+  it('excludes a pure re-export module declaration from the quotient', () => {
+    const report = analyzeArchitectureGraph(
+      graph([
+        ['src/app/mod.ts', ['src/app/child/leaf.ts']],
+        ['src/app/child/leaf.ts', ['src/app/mod.ts']],
+      ]),
+      ['src/app/mod.ts', 'src/app/child/leaf.ts'],
+      coarseConfig,
+      { isModuleHierarchyFile: (file) => file === 'src/app/mod.ts' },
+    );
+
+    expect(report.coarseBoundaries).toEqual([]);
+  });
+});

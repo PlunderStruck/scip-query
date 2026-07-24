@@ -9,8 +9,8 @@ import { createFileEvidenceProduct, evidenceProductInvalidation } from '../../st
 import { markdownCitationContext } from './doc-citation-context.js';
 import { matchingDocTerms } from './doc-terms.js';
 import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
-import { docReferencePolicy, isSnapshotDoc } from '../impact/diff-gate-doc-policy.js';
-import type { DocCitationKind } from '../impact/diff-gate-types.js';
+import { docReferencePolicy, isSnapshotDoc } from './diff-gate-doc-policy.js';
+import type { DocCitationKind } from '../internal/diff-gate-types.js';
 
 export type DocDriftIntent = 'current-guidance' | 'historical-note' | 'unknown';
 export type DocDriftActionTier = 'direct' | 'signal' | 'support';

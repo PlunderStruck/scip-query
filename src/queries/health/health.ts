@@ -19,7 +19,7 @@ import { staleAbstractions } from '../cleanup/stale-abstractions.js';
 import { drift } from '../cleanup/drift.js';
 import { complexityHotspots } from '../quality/complexity-hotspots.js';
 import { stats } from '../navigation/stats.js';
-import { coChange, type CoChangeFinding } from '../impact/co-change.js';
+import { coChange, type CoChangeFinding } from '../cleanup/co-change.js';
 import { gitEvidenceProduct } from '../../analysis/git-history.js';
 import type { GitHistoryMode } from '../../analysis/git-history.js';
 import { getSuppressionInventory } from '../../analysis/suppressions.js';

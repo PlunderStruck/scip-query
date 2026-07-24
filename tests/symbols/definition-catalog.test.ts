@@ -9,7 +9,7 @@ import {
   readCachedFileEvidence,
 } from '../../src/storage/evidence-cache.js';
 import { ScipDatabase } from '../../src/storage/db.js';
-import { getSourceText } from '../../src/source/source-text.js';
+import { getSourceText } from '../../src/source/primitives/source-text.js';
 import { findEnclosingDefinition, getDefinitionsForFile } from '../../src/symbols/definition-catalog.js';
 import type { IndexedDefinition } from '../../src/domain/types.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';

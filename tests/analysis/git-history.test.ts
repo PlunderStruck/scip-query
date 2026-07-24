@@ -14,7 +14,7 @@ import {
   getFileAddRecords,
   getFileChurn,
 } from '../../src/analysis/git-history.js';
-import { coChange } from '../../src/queries/impact/co-change.js';
+import { coChange } from '../../src/queries/cleanup/co-change.js';
 import { docDrift } from '../../src/queries/cleanup/doc-drift.js';
 import type { ScipQueryConfig } from '../../src/domain/types.js';
 import { fileContentHash, readCachedFileEvidence } from '../../src/storage/evidence-cache.js';

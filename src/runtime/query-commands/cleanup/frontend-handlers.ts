@@ -7,7 +7,7 @@ import {
   optionalStringArg,
   optionValueSource,
   stringOptionValue,
-} from '../../commands/command-execution.js';
+} from '../../command-kit/command-execution.js';
 import { render } from '../../render.js';
 
 export const handleReactComponentDuplicates = budgetedReportCommand('react-component-duplicates', {

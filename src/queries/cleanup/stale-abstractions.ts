@@ -2,7 +2,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { classifyFile, isRootedSymbol } from '../../analysis/file-classifier.js';
 import { leafName, parseSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
-import { getSourceText } from '../../source/source-text.js';
+import { getSourceText } from '../../source/primitives/source-text.js';
 import { getTypeContainerMap } from '../../source/ast.js';
 import { ProjectIndex } from '../internal/project-index.js';
 import { mergeSetMaps } from '../../symbols/references/caller-evidence.js';

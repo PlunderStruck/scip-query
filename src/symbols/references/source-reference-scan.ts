@@ -1,8 +1,8 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { detectAstLanguage, frameworkSourceReferences, isVueSfcPath } from '../../source/ast.js';
 import type { FrameworkSourceReferenceKind } from '../../source/ast.js';
-import { createCandidateNameMatcher, sourceMayContainCandidateName } from '../../source/source-identifier-prefilter.js';
-import { getSourceText } from '../../source/source-text.js';
+import { createCandidateNameMatcher, sourceMayContainCandidateName } from '../../source/primitives/source-identifier-prefilter.js';
+import { getSourceText } from '../../source/primitives/source-text.js';
 import { attributeIdentifier, attributeIdentifierPermissive } from '../identifier-attribution.js';
 import { getIdentifierLineMap } from '../identifier-index.js';
 import { profileSpan } from '../../instrumentation/profile.js';

@@ -8,7 +8,7 @@ import type { IndexedDefinition } from '../../domain/types.js';
 import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
 import { semanticCallerMap } from '../../semantic/shared-primitives.js';
 import { detectAstLanguage, type SyntaxNode, type Tree } from '../../source/ast.js';
-import { sourceEvidence } from '../../source/source-evidence.js';
+import { sourceEvidence } from '../../language-parsers/source-evidence.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { fileContentHash, projectEvidenceFingerprint } from '../../storage/evidence-cache.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';

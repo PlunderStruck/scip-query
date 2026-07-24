@@ -4,7 +4,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../internal/project-index.js';
-import { stripCommentsAndStrings } from '../../source/source-stripper.js';
+import { stripCommentsAndStrings } from '../../source/primitives/source-stripper.js';
 import { getAst, type SyntaxNode } from '../../source/ast.js';
 import type { SymbolMatch } from '../../domain/symbol-types.js';
 

@@ -55,7 +55,7 @@ import { setupCiWorkflow } from '../setup-ci.js';
 import { installSkills, isScipInstalled, printScipInstallInstructions } from '../setup.js';
 import { runUninstall } from '../uninstall.js';
 import { inspectSharedCacheStatus, type SharedCacheStatus } from '../repository-cache-lifecycle.js';
-import { ALL_SOURCE_EXTENSIONS } from '../../source/source-fileset.js';
+import { ALL_SOURCE_EXTENSIONS } from '../../source/primitives/source-fileset.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
 import { createTsMorphProvider } from '../../semantic/typescript/ts-morph-provider.js';
 import {
@@ -91,7 +91,7 @@ import {
   printJsonEnvelope,
   stringArrayOptionValue,
   stringOptionValue,
-} from './command-execution.js';
+} from '../command-kit/command-execution.js';
 
 // Descriptor-backed query commands live under runtime/query-commands/*.
 // This file owns side-effect lifecycles such as reindex, setup, watch, and

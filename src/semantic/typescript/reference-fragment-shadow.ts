@@ -3,8 +3,7 @@ import type { ProjectInputSnapshot } from '../../domain/project-input.js';
 import { profileSpan } from '../../instrumentation/profile.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { getSemanticProvider } from '../provider-cache.js';
-import type { SemanticReference, SemanticReferenceFragment } from '../types.js';
+import type { SemanticProvider, SemanticReference, SemanticReferenceFragment } from '../types.js';
 import { indexedTypeScriptFiles, typeScriptSemanticIdentityForFile } from './semantic-identity-context.js';
 import { isTypeScriptLike } from './source-kinds.js';
 import { assembleReferenceFragments, compareReferenceFragmentMaps } from './reference-fragments.js';
@@ -13,6 +12,12 @@ import { typeScriptSemanticEngineIdentity } from './ts-morph-runtime.js';
 import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
 
 export const TYPESCRIPT_REFERENCE_FRAGMENT_SCHEMA = 'typescript-reference-fragment-v2';
+
+/**
+ * Resolves the semantic provider for a file. Injected so this module stays
+ * below the provider registry that constructs TypeScript providers.
+ */
+export type SemanticProviderResolver = (relativePath: string) => SemanticProvider;
 
 export interface TypeScriptReferenceFragmentShadowResult {
   state: 'passing' | 'failing' | 'unavailable';
@@ -74,6 +79,7 @@ export function recordTypeScriptReferenceFragmentShadow(
   db: ScipDatabase,
   definitions: readonly IndexedDefinition[],
   expected: ReadonlyMap<number, readonly SemanticReference[]>,
+  resolveProvider: SemanticProviderResolver,
 ): TypeScriptReferenceFragmentShadowResult {
   const typeScriptDefinitions = definitions.filter((definition) => isTypeScriptLike(definition.relativePath));
   if (typeScriptDefinitions.length === 0) return unavailable('no TypeScript definitions');
@@ -83,7 +89,7 @@ export function recordTypeScriptReferenceFragmentShadow(
     'typescript.reference-fragments.shadow',
     () => {
       try {
-        const provider = getSemanticProvider(db, typeScriptDefinitions[0]!.relativePath);
+        const provider = resolveProvider(typeScriptDefinitions[0]!.relativePath);
         if (!provider.availability().available || !provider.referenceFragmentsForFiles) {
           result = unavailable('TypeScript reference fragment provider is unavailable');
           return result;
@@ -161,6 +167,7 @@ export function readTypeScriptReferenceFragment(
 export function materializeTypeScriptReferenceFragments(
   db: ScipDatabase,
   definitions: readonly IndexedDefinition[],
+  resolveProvider: SemanticProviderResolver,
 ): TypeScriptReferenceFragmentMaterialization | null {
   if (definitions.length === 0) {
     return { references: new Map(), files: 0, cacheHits: 0, cacheMisses: 0, computedFiles: 0 };
@@ -203,7 +210,7 @@ export function materializeTypeScriptReferenceFragments(
           };
         }
 
-        const provider = getSemanticProvider(db, definitions[0]!.relativePath);
+        const provider = resolveProvider(definitions[0]!.relativePath);
         if (!provider.availability().available || !provider.referenceFragmentsForFiles) return null;
         const computed = provider.referenceFragmentsForFiles(missingFiles);
         if (missingFiles.some((file) => !computed.has(file))) return null;

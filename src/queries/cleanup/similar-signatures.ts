@@ -1,8 +1,8 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
-import { getSourceText } from '../../source/source-text.js';
-import { escapeRegex } from '../../source/regex-utils.js';
-import { parenBalance } from '../../source/source-stripper.js';
+import { getSourceText } from '../../source/primitives/source-text.js';
+import { escapeRegex } from '../../source/primitives/regex-utils.js';
+import { parenBalance } from '../../source/primitives/source-stripper.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { semanticSignature } from '../../semantic/shared-primitives.js';
 import { isRustTraitImplMember, shortenSymbol } from '../../symbols/symbol-parser.js';

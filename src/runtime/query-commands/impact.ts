@@ -1,6 +1,6 @@
 import * as queries from '../../queries/index.js';
 import type { DiffGateCheck } from '../../queries/impact/diff-gate.js';
-import type { CommandDescriptor } from '../commands/command-descriptor-types.js';
+import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
 import {
   collectValues,
   doc,
@@ -8,7 +8,7 @@ import {
   parseInteger,
   parseNumber,
   withJsonOption,
-} from '../commands/command-spec-builders.js';
+} from '../command-kit/command-spec-builders.js';
 import {
   budgetedDbCommand,
   booleanOptionValue,
@@ -19,7 +19,7 @@ import {
   printJsonEnvelope,
   stringArg,
   stringOptionValue,
-} from '../commands/command-execution.js';
+} from '../command-kit/command-execution.js';
 import { formatGateBlockReason, isStopHookReentry, readHookInput } from '../agent-setup.js';
 import { formatLowResolutionNudges, formatUnresolvedStreakLine } from '../../queries/health/finding-outcome-ledger.js';
 import { recordDiffGateOutcomes } from '../diff-gate-outcomes.js';

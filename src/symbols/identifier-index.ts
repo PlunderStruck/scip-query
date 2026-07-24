@@ -19,8 +19,8 @@
 import { getSourceFacts } from '../source/ast.js';
 import type { ScipDatabase } from '../storage/db.js';
 import { createPerDbCache } from '../storage/per-db-cache.js';
-import { stripCommentsAndStrings } from '../source/source-stripper.js';
-import { getSourceText } from '../source/source-text.js';
+import { stripCommentsAndStrings } from '../source/primitives/source-stripper.js';
+import { getSourceText } from '../source/primitives/source-text.js';
 
 /**
  * Lines in `relativePath` where `identifier` appears (0-indexed). Excludes

@@ -1,6 +1,6 @@
 import type { IndexedDefinition, SymbolMatch } from '../domain/types.js';
 import { profileEnabled, profileSpan } from '../instrumentation/profile.js';
-import { getSourceText } from '../source/source-text.js';
+import { getSourceText } from '../source/primitives/source-text.js';
 import type { ScipDatabase } from '../storage/db.js';
 import {
   fileContentHash,

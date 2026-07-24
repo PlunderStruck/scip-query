@@ -8,7 +8,7 @@ import type { ParsedSourceImport } from '../../domain/types.js';
 import { isModuleLikeSymbol, leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { detectAstLanguage } from '../../source/ast.js';
 import { normalizePathSeparators as normalizePath } from '../../domain/path-normalization.js';
-import { getSourceText } from '../../source/source-text.js';
+import { getSourceText } from '../../source/primitives/source-text.js';
 
 export interface ImportResult {
   symbol: string;

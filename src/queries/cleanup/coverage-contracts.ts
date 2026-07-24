@@ -8,8 +8,8 @@ import type {
 import type { ScipDatabase } from '../../storage/db.js';
 import { detectAstLanguage, getAst } from '../../source/ast.js';
 import type { AstLanguage, SyntaxNode, Tree } from '../../source/ast.js';
-import { getSourceText } from '../../source/source-text.js';
-import { escapeRegex } from '../../source/regex-utils.js';
+import { getSourceText } from '../../source/primitives/source-text.js';
+import { escapeRegex } from '../../source/primitives/regex-utils.js';
 import { listGlobMatches, matchesGlob } from '../../analysis/glob-match.js';
 
 /**

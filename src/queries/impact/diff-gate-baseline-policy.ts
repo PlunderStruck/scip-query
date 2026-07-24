@@ -1,4 +1,4 @@
-import type { DiffGateActionTier } from './diff-gate-types.js';
+import type { DiffGateActionTier } from '../internal/diff-gate-types.js';
 
 export interface BaselineFindingMetadata {
   sourceAnalyzer: string;

@@ -28,7 +28,7 @@ import {
   reportCommand,
   stringArg,
   stringOptionValue,
-} from '../../commands/command-execution.js';
+} from '../../command-kit/command-execution.js';
 import { displayPathRange, displayRange, displaySnippet, render } from '../../render.js';
 import { renderDeadGroup } from './renderers.js';
 

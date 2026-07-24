@@ -9,7 +9,7 @@ import {
   writeCachedFileEvidence,
 } from '../../../src/storage/evidence-cache.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
-import { getSourceText } from '../../../src/source/source-text.js';
+import { getSourceText } from '../../../src/source/primitives/source-text.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../../fixtures/evidence-fixture.js';
 
 const A_FILE = 'src/a.ts';

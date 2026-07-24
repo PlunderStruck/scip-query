@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import type { ScipDatabase } from '../../storage/db.js';
-import type { CommandDescriptor } from '../commands/command-descriptor-types.js';
-import type { CommandHandler } from '../commands/command-descriptor-types.js';
+import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
+import type { CommandHandler } from '../command-kit/command-descriptor-types.js';
 import {
   collectValues,
   doc,
@@ -9,7 +9,7 @@ import {
   parseInteger,
   parsePositiveInteger,
   withJsonOption,
-} from '../commands/command-spec-builders.js';
+} from '../command-kit/command-spec-builders.js';
 import {
   booleanOptionValue,
   definedNumberOption,
@@ -21,7 +21,7 @@ import {
   stringArrayOptionValue,
   stringOptionValue,
   type CommandOptions,
-} from '../commands/command-execution.js';
+} from '../command-kit/command-execution.js';
 import { withDb } from '../cli-context.js';
 import { displayPathRange } from '../render.js';
 import {

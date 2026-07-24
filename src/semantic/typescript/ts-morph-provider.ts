@@ -2,7 +2,7 @@ import { performance } from 'node:perf_hooks';
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { discoverWorkspacePackages, type WorkspacePackage } from '../../platform/workspace-packages.js';
-import { resolveImportPath } from '../../source/import-path-resolver.js';
+import { resolveImportPath } from '../../source/primitives/import-path-resolver.js';
 import { getAllDefinitions, getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { cached } from './cache.js';
 import { definitionNodesForSourceFile } from './definition-node-matcher.js';

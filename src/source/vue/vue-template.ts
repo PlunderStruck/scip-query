@@ -12,10 +12,10 @@ import {
 import { parse as parseSfc } from '@vue/compiler-sfc';
 import type { ScipDatabase } from '../../storage/db.js';
 import { createSourceFileCache } from '../../storage/per-db-cache.js';
-import { isFrontendIdentifierStopWord } from '../frontend-identifier-stoplist.js';
-import { pascalCaseSeparated } from '../name-normalization.js';
-import { getSourceText } from '../source-text.js';
-import { getVueSfcUnit, type VueSfcResolvedBlock } from './vue-sfc.js';
+import { isFrontendIdentifierStopWord } from '../primitives/frontend-identifier-stoplist.js';
+import { pascalCaseSeparated } from '../primitives/name-normalization.js';
+import { getSourceText } from '../primitives/source-text.js';
+import { getVueSfcUnit, type VueSfcResolvedBlock } from '../ast/vue-sfc.js';
 
 export interface VueTemplateBlock {
   body: string;

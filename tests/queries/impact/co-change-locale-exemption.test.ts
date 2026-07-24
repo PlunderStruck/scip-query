@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
-import { coChange } from '../../../src/queries/impact/co-change.js';
+import { coChange } from '../../../src/queries/cleanup/co-change.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { evidenceFixtureDb } from '../../fixtures/evidence-fixture.js';
 

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { Identifier, Node, ReferencedSymbol, SourceFile } from 'ts-morph';
 import type { IndexedDefinition } from '../../domain/types.js';
-import { escapeRegex as escapeRegExp } from '../../source/regex-utils.js';
+import { escapeRegex as escapeRegExp } from '../../source/primitives/regex-utils.js';
 import type { SemanticLocation, SemanticReference } from '../types.js';
 
 function referenceLocations(ref: ReferencedSymbol, projectRoot: string): SemanticReference[] {

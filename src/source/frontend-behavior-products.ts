@@ -5,7 +5,7 @@ import {
   type ReactComponentBehaviorProfile,
   type ReactComponentProfileOptions,
 } from './react-profile.js';
-import { getVueSfcUnit } from './vue/vue-sfc.js';
+import { getVueSfcUnit } from './ast/vue-sfc.js';
 import { buildVueScriptFacts, type VueScriptFacts } from './vue/vue-script-facts.js';
 import { getVueTemplateFacts, type VueTemplateFacts } from './vue/vue-template.js';
 import {

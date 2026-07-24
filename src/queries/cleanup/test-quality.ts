@@ -1,8 +1,8 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { classifyFile } from '../../analysis/file-classifier.js';
-import { getSourceFiles } from '../../source/source-fileset.js';
-import { getSourceText } from '../../source/source-text.js';
-import { stripCommentsAndStringsTsSafe } from '../../source/source-stripper.js';
+import { getSourceFiles } from '../../source/primitives/source-fileset.js';
+import { getSourceText } from '../../source/primitives/source-text.js';
+import { stripCommentsAndStringsTsSafe } from '../../source/primitives/source-stripper.js';
 import { runGit } from '../../analysis/git-history.js';
 import { applyScanLimit } from '../query-utils.js';
 

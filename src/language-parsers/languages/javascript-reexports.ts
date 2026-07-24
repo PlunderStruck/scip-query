@@ -6,9 +6,9 @@
  */
 import { getAst, type SyntaxNode, type Tree } from '../../source/ast.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { resolveImportPath } from '../../source/import-path-resolver.js';
+import { resolveImportPath } from '../../source/primitives/import-path-resolver.js';
 import type { ParsedReExport } from '../../domain/types.js';
-import { firstChildOfType, splitTopLevel } from '../utils.js';
+import { firstChildOfType, splitTopLevel } from './utils.js';
 
 export function parseReExports(db: ScipDatabase, relativePath: string, source: string): ParsedReExport[] {
   const tree = getAst(db, relativePath);

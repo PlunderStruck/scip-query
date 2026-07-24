@@ -1,8 +1,10 @@
+import { classifyFile } from '../../analysis/file-classifier.js';
 import { matchesGlob } from '../../analysis/glob-match.js';
 import { stronglyConnectedComponents } from '../../analysis/strongly-connected-components.js';
 import type { ArchitectureConfig } from '../../domain/config-types.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
+import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
 
 export type ArchitecturePolicyStatus = 'allowed' | 'forbidden' | 'undeclared';
@@ -62,6 +64,31 @@ export interface ArchitecturePolicyCoverage {
   requiresCompletePolicy: boolean;
 }
 
+/** One directed dependency between two sub-units inside a single boundary. */
+export interface ArchitectureSubUnitEdge {
+  from: string;
+  to: string;
+  fileEdgeCount: number;
+  examples: ArchitectureFileEdge[];
+}
+
+/**
+ * A boundary whose own members form a dependency cycle.
+ *
+ * `requireAcyclic` quotients the file graph by boundary and discards every
+ * intra-boundary edge, so a cycle wholly inside one boundary is reported as
+ * absent. Such a boundary is "too coarse to check": its clean status carries
+ * no information about the code it contains.
+ */
+export interface ArchitectureCoarseBoundary {
+  boundary: string;
+  violatesPolicy: boolean;
+  subUnits: string[];
+  internalEdges: ArchitectureSubUnitEdge[];
+  /** Least-broad internal edge(s) — the cheapest inspection points. */
+  narrowestEdges: ArchitectureSubUnitEdge[];
+}
+
 export interface ArchitectureReport {
   configured: boolean;
   boundaries: ArchitectureBoundarySummary[];
@@ -69,6 +96,8 @@ export interface ArchitectureReport {
   forbiddenEdges: ArchitectureBoundaryEdge[];
   reciprocalPairs: ArchitectureReciprocalPair[];
   cycles: ArchitectureCycle[];
+  /** Boundaries hiding an internal cycle that the boundary graph cannot express. */
+  coarseBoundaries: ArchitectureCoarseBoundary[];
   coverage: ArchitectureCoverage;
   policyCoverage: ArchitecturePolicyCoverage;
 }
@@ -93,6 +122,7 @@ export function analyzeArchitectureGraph(
   fileGraph: ReadonlyMap<string, ReadonlySet<string>>,
   indexedFiles: readonly string[],
   config?: ArchitectureConfig,
+  opts: { isModuleHierarchyFile?: (file: string) => boolean } = {},
 ): ArchitectureReport {
   const allFiles = allGraphFiles(fileGraph, indexedFiles);
   if (!config || config.boundaries.length === 0) {
@@ -103,6 +133,7 @@ export function analyzeArchitectureGraph(
       forbiddenEdges: [],
       reciprocalPairs: [],
       cycles: [],
+      coarseBoundaries: [],
       coverage: {
         totalFiles: allFiles.length,
         mappedFiles: 0,
@@ -206,6 +237,12 @@ export function analyzeArchitectureGraph(
     forbiddenEdges: edges.filter((edge) => edge.policyStatus === 'forbidden'),
     reciprocalPairs,
     cycles,
+    coarseBoundaries: detectCoarseBoundaries(
+      fileGraph,
+      filesByBoundary,
+      opts.isModuleHierarchyFile,
+      config.requireResolvedBoundaries === true,
+    ),
     coverage: {
       totalFiles: allFiles.length,
       mappedFiles: resolved.size,
@@ -230,7 +267,26 @@ export function architecture(db: ScipDatabase, opts: { scope?: string } = {}): A
   const files = indexedDocumentPaths(db, { includeIgnored: false }).filter(
     (file) => !opts.scope || file.includes(opts.scope),
   );
-  return analyzeArchitectureGraph(graph, files, db.config.architecture);
+  return analyzeArchitectureGraph(graph, files, db.config.architecture, {
+    isModuleHierarchyFile: (file) => isModuleHierarchyFile(db, file),
+  });
+}
+
+/**
+ * True when a file exists to wire modules together rather than to hold logic:
+ * a test, a structural entry point, or a barrel that only re-exports.
+ *
+ * The barrel test is deliberately content-aware. `classifyFile` decides
+ * "barrel" from the path alone, which labels any `index.ts` a barrel — including
+ * modules like `src/language-parsers/index.ts` that carry real caching logic.
+ * Excluding those by name hides genuine cycles, so a barrel only counts as
+ * bookkeeping when the index records no definitions of its own inside it.
+ */
+function isModuleHierarchyFile(db: ScipDatabase, file: string): boolean {
+  const kind = classifyFile(file);
+  if (kind === 'test' || kind === 'entry') return true;
+  if (kind !== 'barrel') return false;
+  return getDefinitionsForFile(db, file).length === 0;
 }
 
 /**
@@ -247,6 +303,15 @@ export function architectureFindingIdentities(report: ArchitectureReport): strin
     for (const boundary of report.policyCoverage.missingRows) {
       identities.push(`${ARCHITECTURE_BASELINE_PREFIX}missing-policy-row:${encodeURIComponent(boundary)}`);
     }
+  }
+  for (const finding of report.coarseBoundaries) {
+    if (!finding.violatesPolicy) continue;
+    identities.push(
+      `${ARCHITECTURE_BASELINE_PREFIX}coarse-boundary:${encodeURIComponent(finding.boundary)}:${finding.subUnits
+        .map((unit) => encodeURIComponent(unit))
+        .sort()
+        .join('|')}`,
+    );
   }
   for (const cycle of report.cycles) {
     if (!cycle.violatesPolicy) continue;
@@ -266,7 +331,8 @@ export function hasEnforceableArchitecturePolicy(config?: ArchitectureConfig): b
     !!config &&
     (Object.keys(config.allowedDependencies ?? {}).length > 0 ||
       config.requireCompletePolicy === true ||
-      config.requireAcyclic === true)
+      config.requireAcyclic === true ||
+      config.requireResolvedBoundaries === true)
   );
 }
 
@@ -320,6 +386,92 @@ function architectureCycle(
     narrowestEdges: internalEdges.filter((edge) => edge.fileEdgeCount === minimumBreadth),
     violatesPolicy: requireAcyclic,
   };
+}
+
+/**
+ * Find boundaries whose members form a cycle the boundary graph cannot show.
+ *
+ * Works on the *quotient by sub-unit* (a file's containing directory), not the
+ * file graph: `cycles` reports no file-level loop in this repository's large
+ * boundaries even though several of them are internally cyclic, because a
+ * quotient can be cyclic while the graph it quotients is acyclic.
+ *
+ * `isModuleHierarchyFile` removes re-export bookkeeping (barrels, entries,
+ * tests) so normal parent/child module structure is not reported as debt.
+ * Rust `mod.rs` and `index.ts` module declarations fall out through that rule
+ * because a pure re-export file defines nothing of its own.
+ *
+ * Directory nesting alone is deliberately *not* a suppression signal: a
+ * boundary's root files and one of its sub-directories depending on each other
+ * is the most common real cycle, not module bookkeeping.
+ */
+export function detectCoarseBoundaries(
+  fileGraph: ReadonlyMap<string, ReadonlySet<string>>,
+  filesByBoundary: ReadonlyMap<string, ReadonlySet<string>>,
+  isModuleHierarchyFile: (file: string) => boolean = () => false,
+  violatesPolicy = false,
+): ArchitectureCoarseBoundary[] {
+  const findings: ArchitectureCoarseBoundary[] = [];
+
+  for (const [boundary, members] of filesByBoundary) {
+    const considered = [...members].filter((file) => !isModuleHierarchyFile(file));
+    if (considered.length < 2) continue;
+    const inBoundary = new Set(considered);
+
+    const edges = new Map<string, { from: string; to: string; fileEdges: ArchitectureFileEdge[] }>();
+    const subGraph = new Map<string, Set<string>>();
+    for (const file of considered) subGraph.set(subUnitOf(file), new Set());
+
+    for (const fromFile of considered) {
+      for (const toFile of fileGraph.get(fromFile) ?? []) {
+        if (!inBoundary.has(toFile)) continue;
+        const from = subUnitOf(fromFile);
+        const to = subUnitOf(toFile);
+        if (from === to) continue;
+        const key = boundaryEdgeKey(from, to);
+        let edge = edges.get(key);
+        if (!edge) {
+          edge = { from, to, fileEdges: [] };
+          edges.set(key, edge);
+        }
+        edge.fileEdges.push({ fromFile, toFile });
+        subGraph.get(from)!.add(to);
+      }
+    }
+
+    const { components } = stronglyConnectedComponents(subGraph);
+    for (const component of components) {
+      if (component.length < 2) continue;
+      const members = new Set(component);
+      const internalEdges = [...edges.values()]
+        .filter((edge) => members.has(edge.from) && members.has(edge.to))
+        .map((edge) => ({
+          from: edge.from,
+          to: edge.to,
+          fileEdgeCount: edge.fileEdges.length,
+          examples: edge.fileEdges.slice(0, 5),
+        }))
+        .sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to));
+      const minimum = Math.min(...internalEdges.map((edge) => edge.fileEdgeCount));
+      findings.push({
+        boundary,
+        violatesPolicy,
+        subUnits: [...component].sort(),
+        internalEdges,
+        narrowestEdges: internalEdges.filter((edge) => edge.fileEdgeCount === minimum),
+      });
+    }
+  }
+
+  return findings.sort(
+    (a, b) => b.subUnits.length - a.subUnits.length || a.boundary.localeCompare(b.boundary),
+  );
+}
+
+/** A file's sub-unit is its containing directory. */
+function subUnitOf(file: string): string {
+  const cut = file.lastIndexOf('/');
+  return cut === -1 ? '.' : file.slice(0, cut);
 }
 
 function boundaryEdgeKey(from: string, to: string): string {

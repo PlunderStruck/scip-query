@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { getSourceLines, suppressionCommentCategory } from '../../source/source-text.js';
+import { getSourceLines, suppressionCommentCategory } from '../../source/primitives/source-text.js';
 
 export interface BoundaryEvidenceSurface {
   label: string;

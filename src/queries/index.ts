@@ -38,7 +38,7 @@ export { changeSurface } from './impact/change-surface.js';
 export { cleanupPlan } from './cleanup/cleanup-plan.js';
 export { DIFF_GATE_CHECKS, diffGate, blockingFindings, diffGateFailedClosed } from './impact/diff-gate.js';
 export { incompleteMigration } from './impact/incomplete-migration.js';
-export { coChange } from './impact/co-change.js';
+export { coChange } from './cleanup/co-change.js';
 export { docDrift } from './cleanup/doc-drift.js';
 export { duplicateBodies, exactDuplicateBodyMatches, normalizeBody, groupByHash } from './cleanup/duplicate-bodies.js';
 export { twinDrift, groupTwins, allTwinGroups } from './cleanup/twin-drift.js';
@@ -172,7 +172,7 @@ export type {
   DiffGateResult,
   DocCitationKind,
 } from './impact/diff-gate.js';
-export type { CoChangeFinding, CoChangeResult } from './impact/co-change.js';
+export type { CoChangeFinding, CoChangeResult } from './cleanup/co-change.js';
 export type { DocDriftFinding, DocDriftResult, DocDriftSubject, DocFileCitation } from './cleanup/doc-drift.js';
 export type { DuplicateBodyEntry, DuplicateBodyGroup } from './cleanup/duplicate-bodies.js';
 export type { TwinGroup, TwinMember, TwinRelationship, TwinDriftRecord } from './cleanup/twin-drift.js';

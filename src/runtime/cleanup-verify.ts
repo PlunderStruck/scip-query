@@ -15,9 +15,9 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CleanupBatch, CleanupPlanResult } from '../queries/cleanup/cleanup-plan.js';
-import { stripCommentsAndStrings } from '../source/source-stripper.js';
+import { stripCommentsAndStrings } from '../source/primitives/source-stripper.js';
 import { binaryAvailable } from '../platform/binary.js';
-import { CLOJURE_EXTENSIONS } from '../source/import-path-resolver.js';
+import { CLOJURE_EXTENSIONS } from '../source/primitives/import-path-resolver.js';
 
 export interface BatchVerification {
   depth: number;

@@ -1329,7 +1329,7 @@ async function loadReindexFixture(opts: {
     resolveScipBinary: opts.scipCli?.resolveScipBinary ?? (() => 'scip'),
     tryInstallScipCli: opts.scipCli?.tryInstallScipCli ?? (() => true),
   }));
-  vi.doMock('../../src/reindex/augment.js', () => ({
+  vi.doMock('../../src/reindex/augmentation/augment.js', () => ({
     augmentAuxiliaryDocuments: () => ({ scanned: 0, inserted: 0, existing: 0 }),
     auxiliaryDocumentsAugmentationStage: () => ({
       id: 'auxiliary-documents',

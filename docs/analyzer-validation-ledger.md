@@ -368,10 +368,56 @@ full evidence is in
 ## 2026-07-23 Architecture Coherence Follow-Up
 
 `src/runtime/commands/query-command-specs.ts` remains the canonical public
-query order after adding `architecture` to the graph family. The enforcement
+query order after adding `architecture` to the graph family. (The file moved to
+`src/runtime/query-commands/` in the 2026-07-24 boundary-resolution pass; the
+public query order itself is unchanged.) The enforcement
 follow-up replaced drift's repository-specific policy with project-owned
 configuration and added stable boundary-pair identities to the shared health
 baseline. The default diff gate now blocks only new configured forbidden edges
 or explicitly forbidden cycles; accepted existing identities remain ratcheted.
 Reciprocal pairs, unmapped files, undeclared edges, and undeclared cycles remain
 contextual signals until external calibration.
+
+## 2026-07-24 Boundary Resolution and Coarse-Boundary Detection
+
+`architecture` gained a second enforceable rule, `requireResolvedBoundaries`,
+and a corresponding finding class `architecture:coarse-boundary:<boundary>`
+carried through the same health-baseline ratchet as forbidden edges and cycles.
+
+The rule exists because `requireAcyclic` had a structural blind spot rather than
+a precision problem. `analyzeArchitectureGraph` discards every dependency whose
+endpoints share a boundary before running SCC, so a boundary coarse enough to
+contain both sides of a cycle passes while asserting nothing about the code it
+holds. This repository was the demonstrating case: 14 declared boundaries with
+`requireAcyclic: true` reported zero cycles while six of them — holding 295 of
+348 files — each contained an internal cycle.
+
+**Validation.** The detector was run against the pre-change tree in an isolated
+worktree, using the original 14-boundary configuration. `requireAcyclic`
+reported 0 cycles; `detectCoarseBoundaries` reported exactly the 6 boundaries
+identified by manual analysis (`queries`, `runtime`, `semantic`, `source`,
+`reindex`, `symbols`), and its `narrowestEdges` named the precise imports the
+repair pass then removed. On the repaired tree it reports 0. Both directions are
+covered, so the result is not an artifact of a permanently-firing check.
+
+**Precision decision.** Module-hierarchy suppression is content-aware, not
+path-based. `classifyFile` decides "barrel" from the filename, which labels
+every `index.ts` bookkeeping — including `src/language-parsers/index.ts`, a
+130-line cache module that was the *target* of the narrowest real back edge in
+the repository. A path-based rule therefore produced a false negative on the
+single most important finding. A barrel is now excluded only when the index
+records no definitions of its own inside it.
+
+Directory nesting alone is deliberately not a suppression signal. An earlier
+draft suppressed any component whose sub-units shared an ancestor directory,
+which silently hid the `queries` and `semantic` findings — a boundary's root
+files depending on one of its own sub-directories is the most common real
+intra-boundary cycle, not module bookkeeping.
+
+**Known limits, not yet calibrated.** Sub-units are one directory level, so a
+layer inversion *inside* a single directory is invisible; the `src/source`
+primitives/facts/products tangle had to be derived by hand and was fixed by
+splitting the directory. Test files are not SCIP-indexed and are therefore
+outside boundary enforcement entirely. `requireCompletePolicy` checks that a
+dependency row exists, not that it is minimal, so an allowance can outlive the
+edge that justified it.

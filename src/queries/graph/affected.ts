@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { findExactSymbolMatch, findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { findEnclosingDefinition, getDefinitionsForFile } from '../../symbols/definition-catalog.js';
-import { callerRowsMapForSymbols } from '../../symbols/references/caller-evidence.js';
+import { getCallerRowsMapForSymbols } from '../../symbols/graph/call-graph-evidence.js';
 import type { SymbolMatch } from '../../domain/types.js';
 import { leafSuffix, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { detectAstLanguage } from '../../source/ast.js';
@@ -38,7 +38,7 @@ export function affected(
     if (frontier.length === 0) break;
 
     const nextFrontier: typeof frontier = [];
-    const callerRows = callerRowsMapForSymbols(db, frontier, {
+    const callerRows = getCallerRowsMapForSymbols(db, frontier, {
       limit: 500,
       semanticEvidence: symbolSemanticEvidence,
     });

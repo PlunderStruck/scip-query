@@ -27,7 +27,7 @@
  */
 import type { ScipDatabase } from '../storage/db.js';
 import { getCallableSites } from '../source/ast.js';
-import { sourceEvidence } from '../source/source-evidence.js';
+import { sourceEvidence } from '../language-parsers/source-evidence.js';
 import {
   isFunctionLikeSymbol,
   leafName,
@@ -44,7 +44,7 @@ import { isRecord } from '../storage/evidence-payload.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
 import type { IndexedDefinition, SymbolMatch } from '../domain/types.js';
 import { mergeMixedSymbolQueryRows } from './symbol-row-policy.js';
-import { escapeRegex } from '../source/regex-utils.js';
+import { escapeRegex } from '../source/primitives/regex-utils.js';
 
 export { parentTypeName } from './symbol-parser.js';
 

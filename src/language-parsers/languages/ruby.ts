@@ -7,9 +7,9 @@
 import { basename } from 'node:path';
 import type { Tree } from '../../source/ast.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { resolveRubyImportPath } from '../../source/import-path-resolver.js';
-import { pascalCaseSeparated } from '../../source/name-normalization.js';
-import { hasIdentifierUsage } from '../../source/source-stripper.js';
+import { resolveRubyImportPath } from '../../source/primitives/import-path-resolver.js';
+import { pascalCaseSeparated } from '../../source/primitives/name-normalization.js';
+import { hasIdentifierUsage } from '../../source/primitives/source-stripper.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
 import {
   buildNamedImport,
@@ -18,7 +18,7 @@ import {
   collectIdentifiersOutside,
   parseImportLineMatches,
   parseWithAstFallback,
-} from '../utils.js';
+} from './utils.js';
 
 export function parseRubyImports(db: ScipDatabase, importerPath: string, source: string): ParsedSourceImport[] {
   return parseWithAstFallback(

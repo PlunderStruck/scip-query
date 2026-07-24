@@ -1,4 +1,4 @@
-import type { CommandDescriptor } from './command-descriptor-types.js';
+import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
 import { cleanupQueryCommandDescriptors } from '../query-commands/cleanup.js';
 import { coreQueryCommandDescriptors } from '../query-commands/core.js';
 import { graphQueryCommandDescriptors } from '../query-commands/graph.js';

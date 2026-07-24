@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { gitEvidenceProduct, type FileAddRecord, type GitHistoryMode } from '../../analysis/git-history.js';
-import { sourceFrameworkApplicability } from '../../source/source-fileset.js';
+import { sourceFrameworkApplicability } from '../../source/primitives/source-fileset.js';
 import { reactComponentDuplicates } from '../frontend/react-component-duplicates.js';
 import { reactHookCandidates } from '../frontend/react-hook-candidates.js';
 import { similarAll } from './similar.js';

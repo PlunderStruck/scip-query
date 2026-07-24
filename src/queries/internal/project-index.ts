@@ -11,9 +11,9 @@ import {
   sourceFallbackCallerEvidenceMap,
 } from '../../symbols/references/caller-evidence.js';
 import { detectAstLanguage, frameworkSourceReferences } from '../../source/ast.js';
-import { sourceEvidence } from '../../source/source-evidence.js';
-import { getSourceFiles } from '../../source/source-fileset.js';
-import { hasSuppressionComment } from '../../source/source-text.js';
+import { sourceEvidence } from '../../language-parsers/source-evidence.js';
+import { getSourceFiles } from '../../source/primitives/source-fileset.js';
+import { hasSuppressionComment } from '../../source/primitives/source-text.js';
 import { scanSourceReferences } from '../../symbols/references/source-reference-scan.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';

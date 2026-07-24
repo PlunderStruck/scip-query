@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
-import { callerRowsForSymbol } from '../../symbols/references/caller-evidence.js';
+import { getCallerRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 import { uniqueSymbolFileRows } from '../query-utils.js';
@@ -36,7 +36,7 @@ export function callGraph(
   // Reference evidence also contains imports, type annotations, and module
   // ownership rows. Those belong in refs/dataflow, not in a graph whose
   // contract says every incoming row is a symbol that calls the target.
-  const callerRows = callerRowsForSymbol(db, target, {
+  const callerRows = getCallerRowsForSymbol(db, target, {
     semantic: includeSemantic,
     semanticEvidence: symbolSemanticEvidence,
   })

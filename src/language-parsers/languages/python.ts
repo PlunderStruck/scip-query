@@ -6,15 +6,15 @@
  */
 import type { SyntaxNode, Tree } from '../../source/ast.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { resolvePythonImportPath } from '../../source/import-path-resolver.js';
+import { resolvePythonImportPath } from '../../source/primitives/import-path-resolver.js';
 import {
   buildUsageBody,
   collectNamespaceMembers,
   hasIdentifierUsage,
   parenBalance,
-} from '../../source/source-stripper.js';
+} from '../../source/primitives/source-stripper.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
-import { collectIdentifiersOutside, firstChildOfType, parseWithAstFallback, splitTopLevel } from '../utils.js';
+import { collectIdentifiersOutside, firstChildOfType, parseWithAstFallback, splitTopLevel } from './utils.js';
 
 export function parsePythonImports(db: ScipDatabase, importerPath: string, source: string): ParsedSourceImport[] {
   return parseWithAstFallback(

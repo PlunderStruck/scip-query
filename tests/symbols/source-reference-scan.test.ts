@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sourceMayContainCandidateName } from '../../src/source/source-identifier-prefilter.js';
+import { sourceMayContainCandidateName } from '../../src/source/primitives/source-identifier-prefilter.js';
 
 describe('sourceMayContainCandidateName', () => {
   it('matches simple identifier candidates as exact tokens', () => {

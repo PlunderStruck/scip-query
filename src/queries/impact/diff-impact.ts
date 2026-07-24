@@ -1,3 +1,5 @@
+import type { ChangedLineRange } from '../internal/diff-gate-types.js';
+export type { ChangedLineRange };
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { basename } from 'node:path';
@@ -8,7 +10,7 @@ import { semanticCallerMap } from '../../semantic/shared-primitives.js';
 import { sourceFallbackCallerEvidenceMap } from '../../symbols/references/caller-evidence.js';
 import { isCallableSymbol, isModuleLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { getAst, type SyntaxNode } from '../../source/ast.js';
-import { rangesByFile } from './diff-ranges.js';
+import { rangesByFile } from '../internal/diff-ranges.js';
 
 export interface DiffImpactResult {
   changedFiles: string[];
@@ -50,12 +52,6 @@ interface GitDiffSnapshot {
 
 /** Plan note when git itself failed (not a repo, bad ref) — vs an empty diff. */
 export const GIT_DIFF_UNAVAILABLE_NOTE = 'Unable to compute git diff.';
-
-export interface ChangedLineRange {
-  file: string;
-  startLine: number;
-  endLine: number;
-}
 
 export interface RenamedFile {
   from: string;

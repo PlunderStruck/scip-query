@@ -11,8 +11,8 @@ import {
   coChangeStructuralLinkChecker,
   declaredCouplingSuggestionForPair,
   isCoChangeNoiseFile,
-} from './co-change.js';
-import type { CoChangePartnerClass, DeclaredCouplingSuggestion } from './co-change.js';
+} from '../cleanup/co-change.js';
+import type { CoChangePartnerClass, DeclaredCouplingSuggestion } from '../cleanup/co-change.js';
 import {
   GIT_DIFF_UNAVAILABLE_NOTE,
   baseContentPathsForDiffPlan,
@@ -28,8 +28,8 @@ import type {
   RenamedFile,
 } from './diff-impact.js';
 import { baselineFindingMetadata } from './diff-gate-baseline-policy.js';
-import { docReferencePolicy, isSnapshotDoc } from './diff-gate-doc-policy.js';
-import type { DiffGateActionTier, DocCitationKind } from './diff-gate-types.js';
+import { docReferencePolicy, isSnapshotDoc } from '../cleanup/diff-gate-doc-policy.js';
+import type { DiffGateActionTier, DocCitationKind } from '../internal/diff-gate-types.js';
 import { docsCitingFiles } from '../cleanup/doc-drift.js';
 import { exactDuplicateBodyMatches } from '../cleanup/duplicate-bodies.js';
 import { allTwinGroups } from '../cleanup/twin-drift.js';
@@ -44,7 +44,7 @@ import { ARCHITECTURE_BASELINE_PREFIX, hasEnforceableArchitecturePolicy } from '
 import { incompleteMigration } from './incomplete-migration.js';
 import { similar } from '../cleanup/similar.js';
 import { unusedParams } from '../cleanup/unused-params.js';
-import { escapeRegex } from '../../source/regex-utils.js';
+import { escapeRegex } from '../../source/primitives/regex-utils.js';
 import type { FindingSuppression } from '../../domain/types.js';
 import { readSuppressionDir } from '../../storage/suppression-store.js';
 import { isCallableSymbol, leafName, leafSuffix } from '../../symbols/symbol-parser.js';
@@ -82,7 +82,7 @@ export type DiffGateEvidence = 'graph-fact' | 'semantic' | 'heuristic' | 'change
 
 export type DiffGateSeverity = 'info' | 'warning' | 'error';
 
-export type { DiffGateActionTier, DocCitationKind } from './diff-gate-types.js';
+export type { DiffGateActionTier, DocCitationKind } from '../internal/diff-gate-types.js';
 
 export interface DiffGateFinding {
   id: string;

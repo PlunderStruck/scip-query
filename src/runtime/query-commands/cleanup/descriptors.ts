@@ -1,6 +1,6 @@
 import * as queries from '../../../queries/index.js';
-import type { CommandDescriptor } from '../../commands/command-descriptor-types.js';
-import { definedLimitOption, stringOptionValue } from '../../commands/command-execution.js';
+import type { CommandDescriptor } from '../../command-kit/command-descriptor-types.js';
+import { definedLimitOption, stringOptionValue } from '../../command-kit/command-execution.js';
 import {
   doc,
   option,
@@ -8,8 +8,8 @@ import {
   parseNumber,
   parsePositiveInteger,
   withJsonOption,
-} from '../../commands/command-spec-builders.js';
-import { groupedQueryCommand } from '../../commands/query-command-builders.js';
+} from '../../command-kit/command-spec-builders.js';
+import { groupedQueryCommand } from '../../command-kit/query-command-builders.js';
 import {
   handleUnusedParams,
   handleCleanupPlan,

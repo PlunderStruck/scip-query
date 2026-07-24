@@ -2,8 +2,8 @@ import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DIFF_GATE_CHECKS, type DiffGateCheck } from '../src/queries/impact/diff-gate.js';
 import { commandDescriptors } from '../src/runtime/commands/command-descriptors.js';
-import { commandDocEntries, renderCommandReferenceMarkdown } from '../src/runtime/commands/command-docs.js';
-import type { CommandDescriptor } from '../src/runtime/commands/command-descriptor-types.js';
+import { commandDocEntries, renderCommandReferenceMarkdown } from '../src/runtime/command-kit/command-docs.js';
+import type { CommandDescriptor } from '../src/runtime/command-kit/command-descriptor-types.js';
 
 const generated = renderCommandReferenceMarkdown(commandDescriptors);
 

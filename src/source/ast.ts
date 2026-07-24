@@ -8,25 +8,25 @@
 export { detectAstLanguage, isVueSfcPath } from './ast/ast-language.js';
 export { callableBodyNodeTypesForLanguage } from './ast/ast-callables.js';
 export { getAst } from './ast/ast-core.js';
-export { extractCallLeaf, getCallableSites, getCallSites, getTypeContainerMap } from './ast/ast-facts.js';
+export { extractCallLeaf, getCallableSites, getCallSites, getTypeContainerMap } from './facts/ast-facts.js';
 export {
   getCrossLanguageDispatchNames,
   getRustAttrReferencedNames,
   getSourceFacts,
   isClojureMacroDefinition,
   isLiteralPassthrough,
-} from './source-facts.js';
+} from './facts/source-facts.js';
 export { extractVueTemplateBlock, getVueTemplateFacts } from './vue/vue-template.js';
-export { getVueSfcUnit } from './vue/vue-sfc.js';
+export { getVueSfcUnit } from './ast/vue-sfc.js';
 export { buildVueComponentBehaviorProfile, buildVueComponentBehaviorProfiles } from './vue/vue-profile.js';
 export { buildReactComponentBehaviorProfiles, buildReactComponentBehaviorProfilesForFile } from './react-profile.js';
 export { frontendBehaviorProduct } from './frontend-behavior-products.js';
-export { frameworkSourceReferences } from './source-references.js';
+export { frameworkSourceReferences } from './facts/source-references.js';
 export { compileQuery } from './ast/ast-runtime.js';
 export type { AstLanguage } from './ast/ast-language.js';
-export type { CallSite } from './ast/ast-facts.js';
-export type { FrameworkSourceReference, FrameworkSourceReferenceKind } from './source-references.js';
-export type { SourceFacts } from './source-facts.js';
+export type { CallSite } from './facts/ast-facts.js';
+export type { FrameworkSourceReference, FrameworkSourceReferenceKind } from './facts/source-references.js';
+export type { SourceFacts } from './facts/source-facts.js';
 export type {
   VueTemplateBindingFact,
   VueTemplateBlock,
@@ -34,7 +34,7 @@ export type {
   VueTemplateIdentifierFact,
   VueTemplateTagFact,
 } from './vue/vue-template.js';
-export type { VueSfcBlockKind, VueSfcResolvedBlock, VueSfcScriptBlock, VueSfcUnit } from './vue/vue-sfc.js';
+export type { VueSfcBlockKind, VueSfcResolvedBlock, VueSfcScriptBlock, VueSfcUnit } from './ast/vue-sfc.js';
 export type { VueComponentBehaviorProfile } from './vue/vue-profile.js';
 export type { ReactComponentBehaviorProfile } from './react-profile.js';
 export type {

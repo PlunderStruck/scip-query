@@ -81,6 +81,7 @@ const ARCHITECTURE_CONFIG_KEYS = new Set([
   'allowedDependencies',
   'requireCompletePolicy',
   'requireAcyclic',
+  'requireResolvedBoundaries',
 ]);
 const ARCHITECTURE_BOUNDARY_CONFIG_KEYS = new Set(['name', 'paths']);
 const DOCS_CONFIG_KEYS = new Set(['snapshotPaths']);
@@ -479,6 +480,16 @@ function validateArchitectureConfig(config: ProjectConfig, diagnostics: ConfigDi
 
   if (config.architecture.requireAcyclic !== undefined && typeof config.architecture.requireAcyclic !== 'boolean') {
     diagnostics.push({ level: 'error', path: 'architecture.requireAcyclic', message: 'Must be a boolean.' });
+  }
+  if (
+    config.architecture.requireResolvedBoundaries !== undefined &&
+    typeof config.architecture.requireResolvedBoundaries !== 'boolean'
+  ) {
+    diagnostics.push({
+      level: 'error',
+      path: 'architecture.requireResolvedBoundaries',
+      message: 'Must be a boolean.',
+    });
   }
   if (
     config.architecture.requireCompletePolicy !== undefined &&
