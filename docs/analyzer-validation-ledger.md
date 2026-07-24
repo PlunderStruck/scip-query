@@ -421,3 +421,40 @@ splitting the directory. Test files are not SCIP-indexed and are therefore
 outside boundary enforcement entirely. `requireCompletePolicy` checks that a
 dependency row exists, not that it is minimal, so an allowance can outlive the
 edge that justified it.
+
+## 2026-07-24 Boundary Enforcement Gap Closure
+
+Five rules were added to `architecture` after auditing what boundary
+enforcement still could not see. Each is opt-in and defaults to off, so
+upgrading tightens no existing project's gate.
+
+| Rule | Closes | Finding identity |
+| --- | --- | --- |
+| `requireMinimalPolicy` | A declared allowance outliving the edge that justified it. `requireCompletePolicy` checks a row *exists*, never that it is *minimal*, so policy widens silently. | `architecture:stale-allowance:<from>:<to>` |
+| `maxBoundaryFanOut` / `maxBoundaryFiles` | A boundary growing until it is coupled to most of the system. Coarseness was previously caught only when it *hid a cycle*, never when it merely got large. | `architecture:boundary-limit:<kind>:<boundary>` |
+| `testPaths` | Test files are excluded from the compiler project and therefore from the index, leaving them outside every boundary rule. | `architecture:test-boundary:<test>:<boundary>` |
+| `subUnits: 'file'` | A layer inversion *inside* one directory, invisible when sub-units are directories. | (reuses `coarse-boundary`) |
+| `fragileEdges` (report-only) | No signal distinguishing a load-bearing dependency from one resting on a single import. 60 of 251 edges here are single-import. | none — advisory |
+
+**Test-boundary calibration.** The first rule shape — "a test may import only what
+its subject's boundary may import" — produced 91 findings, nearly all
+legitimate: a test for `analysis/git-history` drives it *through*
+`queries/cleanup/co-change`, which is composition, not coupling. The shipped
+rule allows the subject's **transitive** reach plus any boundary that reaches
+the subject (a consumer is the natural driver). That yields 0 findings here,
+and a planted violation (`source-vue` test importing `reindex-vue`, which is
+unrelated in both directions) is caught. Subject resolution requires the
+mirrored path to be a **real file**: boundary globs match paths that do not
+exist, so trusting them attributed cross-cutting tests to whichever directory
+they sat in and produced 4 false positives.
+
+**One audited gap was not real.** "Dynamic `import()` counts as a static edge"
+was measured with `scip-query deps`, which builds its graph with
+`scipEdges: 'all-references'`. `architecture` builds with
+`scipEdges: 'imports-only'`, which never includes dynamic import edges — zero
+boundary edges in this repository are backed by the file whose only
+`query-commands` reference is an `await import()`. The dynamic-import detector
+written against that premise was removed rather than shipped, since it guarded
+a case the code path cannot produce and cost a source scan per file. Recorded
+here because the two graph configurations are easy to conflate when reasoning
+about architecture from `deps` output.

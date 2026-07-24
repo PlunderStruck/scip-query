@@ -192,6 +192,47 @@ const handleArchitecture = reportCommand({
       console.log('\nNo declared boundary violations found.');
     }
 
+    if (result.staleAllowances.length > 0) {
+      console.log(
+        `\nStale dependency allowances (${result.staleAllowances.length}): declared but unused, ` +
+          'so the policy is wider than the code requires.',
+      );
+      for (const row of result.staleAllowances) console.log(`  ${row.from} -> ${row.to}`);
+    }
+
+    if (result.boundaryLimits.length > 0) {
+      console.log(`\nBoundaries over configured limits (${result.boundaryLimits.length}):`);
+      for (const limit of result.boundaryLimits) {
+        console.log(`  ${limit.boundary}: ${limit.kind} ${limit.observed} exceeds limit ${limit.limit}`);
+      }
+    }
+
+    if (result.testBoundaryViolations.length > 0) {
+      console.log(
+        `\nTest boundary violations (${result.testBoundaryViolations.length}): a test reaches further ` +
+          'than the boundary of the code it covers is allowed to reach.',
+      );
+      for (const row of result.testBoundaryViolations.slice(0, 20)) {
+        const owner = row.ownerBoundary ?? '(no subject found)';
+        console.log(`  ${row.testFile} [${owner}] -> ${row.importedBoundary} (${row.importedFile})`);
+      }
+      if (result.testBoundaryViolations.length > 20) {
+        console.log(`  ... +${result.testBoundaryViolations.length - 20} more`);
+      }
+    }
+
+    if (result.fragileEdges.length > 0) {
+      console.log(
+        `\nFragile boundary edges (${result.fragileEdges.length} of ${result.edges.length}): the whole ` +
+          'dependency rests on one import, so it is incidental rather than load-bearing.',
+      );
+      for (const edge of result.fragileEdges.slice(0, 10)) {
+        const example = edge.examples[0];
+        console.log(`  ${edge.from} -> ${edge.to}${example ? `  (${example.fromFile} -> ${example.toFile})` : ''}`);
+      }
+      if (result.fragileEdges.length > 10) console.log(`  ... +${result.fragileEdges.length - 10} more`);
+    }
+
     if (result.coarseBoundaries.length > 0) {
       console.log(
         `\nBoundaries too coarse to check (${result.coarseBoundaries.length}): ` +

@@ -1,0 +1,8 @@
+{
+  "ts": 1784919885902,
+  "check": "new-dead",
+  "findingId": "SQ565F56F71C0C",
+  "event": "resolved",
+  "commit": "29f9e650dd56f1a6d7e537446b24dd074e181784",
+  "comparisonBaseCommit": "29f9e650dd56f1a6d7e537446b24dd074e181784"
+}

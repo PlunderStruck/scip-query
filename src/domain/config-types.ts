@@ -178,6 +178,17 @@ export interface ArchitectureBoundaryConfig {
   name: string;
   /** Project-relative exact paths or trailing /* and /** patterns owned by this boundary. */
   paths: string[];
+  /**
+   * Granularity used when checking this boundary's internal structure under
+   * `requireResolvedBoundaries`.
+   *
+   * `directory` (the default) groups members by their containing directory, so
+   * a boundary that *is* one directory has a single sub-unit and no internal
+   * structure to check. `file` treats every member as its own sub-unit, which
+   * makes a cycle between files in the same directory visible. Use `file` for
+   * a large single-directory boundary whose members form layers.
+   */
+  subUnits?: 'directory' | 'file';
 }
 
 export interface ArchitectureConfig {
@@ -210,6 +221,46 @@ export interface ArchitectureConfig {
    * Defaults to false so upgrading does not tighten an existing project's gate.
    */
   requireResolvedBoundaries?: boolean;
+  /**
+   * Treat a declared dependency allowance that no real edge uses as a
+   * violation.
+   *
+   * `requireCompletePolicy` checks that a row *exists*, not that it is
+   * *minimal*. An allowance therefore outlives the edge that justified it: the
+   * import is deleted, the row stays, and the policy silently widens until it
+   * permits something nobody reviewed. This rule keeps the declared matrix and
+   * the observed graph converged in both directions.
+   *
+   * Defaults to false so upgrading does not tighten an existing project's gate.
+   */
+  requireMinimalPolicy?: boolean;
+  /**
+   * Maximum number of distinct boundaries one boundary may depend on.
+   *
+   * Guards the failure mode that coarse boundaries otherwise hide: a boundary
+   * that keeps accumulating dependencies until it is coupled to most of the
+   * system. Unset means no limit.
+   */
+  maxBoundaryFanOut?: number;
+  /**
+   * Maximum number of files one boundary may own. Unset means no limit.
+   *
+   * A boundary large enough to hold unrelated responsibilities stops being a
+   * useful policy unit even when it is internally acyclic.
+   */
+  maxBoundaryFiles?: number;
+  /**
+   * Globs for test roots, e.g. `["tests/**"]`.
+   *
+   * Test files are usually excluded from the compiler project and therefore
+   * from the index, which puts them outside every boundary rule. Declaring the
+   * roots turns that back on: each test is judged against the boundary of the
+   * code it covers (found by path mirroring) and may not import beyond what
+   * that boundary is allowed to reach.
+   *
+   * Unset means tests stay unchecked, which is the historical behavior.
+   */
+  testPaths?: string[];
 }
 
 export interface DocsConfig {

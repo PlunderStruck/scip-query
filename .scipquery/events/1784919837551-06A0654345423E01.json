@@ -1,0 +1,9 @@
+{
+  "ts": 1784919837551,
+  "check": "new-dead",
+  "findingId": "SQ565F56F71C0C",
+  "event": "caught",
+  "commit": "29f9e650dd56f1a6d7e537446b24dd074e181784",
+  "comparisonBaseCommit": "29f9e650dd56f1a6d7e537446b24dd074e181784",
+  "symbol": "scip-typescript npm scip-query 0.19.3 src/queries/graph/`test-boundary-policy.ts`/isDeclaredTestPath()."
+}

@@ -24,6 +24,7 @@ const PRIVATE_QUERY_MODULES = [
   'health-types',
   'public-query-entries',
   'query-utils',
+  'test-boundary-policy',
 ] as const;
 
 const PRIVATE_QUERY_SOURCE_PATHS = {
@@ -43,6 +44,7 @@ const PRIVATE_QUERY_SOURCE_PATHS = {
   'health-types': 'src/queries/health/health-types.ts',
   'public-query-entries': 'src/queries/public-query-entries.ts',
   'query-utils': 'src/queries/query-utils.ts',
+  'test-boundary-policy': 'src/queries/graph/test-boundary-policy.ts',
 } as const satisfies Record<(typeof PRIVATE_QUERY_MODULES)[number], string>;
 
 const QUERY_SOURCE_PATHS = {

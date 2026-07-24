@@ -106,6 +106,7 @@ describe('architecture graph analysis', () => {
       totalBoundaries: 2,
       missingRows: ['runtime'],
       requiresCompletePolicy: false,
+      requiresMinimalPolicy: false,
     });
   });
 
@@ -290,5 +291,87 @@ describe('coarse boundary detection', () => {
     );
 
     expect(report.coarseBoundaries).toEqual([]);
+  });
+});
+
+describe('policy minimality, limits, and edge fragility', () => {
+  const twoBoundaries: ArchitectureConfig = {
+    boundaries: [
+      { name: 'app', paths: ['src/app/**'] },
+      { name: 'lib', paths: ['src/lib/**'] },
+    ],
+  };
+  const oneEdge = graph([['src/app/a.ts', ['src/lib/b.ts']]]);
+  const files = ['src/app/a.ts', 'src/lib/b.ts'];
+
+  it('reports a declared allowance that no observed edge uses', () => {
+    const report = analyzeArchitectureGraph(oneEdge, files, {
+      ...twoBoundaries,
+      allowedDependencies: { app: ['lib'], lib: ['app'] },
+      requireMinimalPolicy: true,
+    });
+
+    expect(report.staleAllowances).toEqual([{ from: 'lib', to: 'app' }]);
+    expect(architectureFindingIdentities(report)).toContain('architecture:stale-allowance:lib:app');
+  });
+
+  it('does not treat a missing row as a stale allowance', () => {
+    const report = analyzeArchitectureGraph(oneEdge, files, {
+      ...twoBoundaries,
+      allowedDependencies: { app: ['lib'] },
+      requireMinimalPolicy: true,
+    });
+
+    expect(report.staleAllowances).toEqual([]);
+  });
+
+  it('keeps stale allowances out of the baseline until the rule is enabled', () => {
+    const report = analyzeArchitectureGraph(oneEdge, files, {
+      ...twoBoundaries,
+      allowedDependencies: { app: ['lib'], lib: ['app'] },
+    });
+
+    expect(report.staleAllowances).toHaveLength(1);
+    expect(architectureFindingIdentities(report)).toEqual([]);
+  });
+
+  it('reports boundaries over the configured fan-out and file limits', () => {
+    const report = analyzeArchitectureGraph(
+      graph([['src/app/a.ts', ['src/lib/b.ts', 'src/app/c.ts']]]),
+      ['src/app/a.ts', 'src/app/c.ts', 'src/lib/b.ts'],
+      { ...twoBoundaries, maxBoundaryFanOut: 0, maxBoundaryFiles: 1 },
+    );
+
+    expect(report.boundaryLimits).toEqual([
+      { boundary: 'app', kind: 'fan-out', observed: 1, limit: 0 },
+      { boundary: 'app', kind: 'files', observed: 2, limit: 1 },
+    ]);
+  });
+
+  it('marks a boundary dependency resting on a single import as fragile', () => {
+    const report = analyzeArchitectureGraph(oneEdge, files, twoBoundaries);
+
+    expect(report.fragileEdges).toHaveLength(1);
+    expect(report.fragileEdges[0]).toMatchObject({ from: 'app', to: 'lib', fileEdgeCount: 1 });
+  });
+
+
+  it('checks a single-directory boundary at file granularity when asked', () => {
+    const inner = graph([
+      ['src/app/a.ts', ['src/app/b.ts']],
+      ['src/app/b.ts', ['src/app/a.ts']],
+    ]);
+    const members = ['src/app/a.ts', 'src/app/b.ts'];
+
+    const byDirectory = analyzeArchitectureGraph(inner, members, {
+      boundaries: [{ name: 'app', paths: ['src/app/**'] }],
+    });
+    expect(byDirectory.coarseBoundaries).toEqual([]); // one directory, one sub-unit
+
+    const byFile = analyzeArchitectureGraph(inner, members, {
+      boundaries: [{ name: 'app', paths: ['src/app/**'], subUnits: 'file' }],
+    });
+    expect(byFile.coarseBoundaries).toHaveLength(1);
+    expect(byFile.coarseBoundaries[0]!.subUnits).toEqual(['src/app/a.ts', 'src/app/b.ts']);
   });
 });

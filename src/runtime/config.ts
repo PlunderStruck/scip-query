@@ -82,8 +82,12 @@ const ARCHITECTURE_CONFIG_KEYS = new Set([
   'requireCompletePolicy',
   'requireAcyclic',
   'requireResolvedBoundaries',
+  'requireMinimalPolicy',
+  'maxBoundaryFanOut',
+  'maxBoundaryFiles',
+  'testPaths',
 ]);
-const ARCHITECTURE_BOUNDARY_CONFIG_KEYS = new Set(['name', 'paths']);
+const ARCHITECTURE_BOUNDARY_CONFIG_KEYS = new Set(['name', 'paths', 'subUnits']);
 const DOCS_CONFIG_KEYS = new Set(['snapshotPaths']);
 const DECLARED_COUPLING_CONFIG_KEYS = new Set(['name', 'files', 'reason']);
 const SUPPRESSION_CONFIG_KEYS = new Set(['id', 'check', 'file', 'reason', 'expiresAt', 'createdAt']);
@@ -481,15 +485,20 @@ function validateArchitectureConfig(config: ProjectConfig, diagnostics: ConfigDi
   if (config.architecture.requireAcyclic !== undefined && typeof config.architecture.requireAcyclic !== 'boolean') {
     diagnostics.push({ level: 'error', path: 'architecture.requireAcyclic', message: 'Must be a boolean.' });
   }
-  if (
-    config.architecture.requireResolvedBoundaries !== undefined &&
-    typeof config.architecture.requireResolvedBoundaries !== 'boolean'
-  ) {
-    diagnostics.push({
-      level: 'error',
-      path: 'architecture.requireResolvedBoundaries',
-      message: 'Must be a boolean.',
-    });
+  for (const flag of ['requireResolvedBoundaries', 'requireMinimalPolicy'] as const) {
+    if (config.architecture[flag] !== undefined && typeof config.architecture[flag] !== 'boolean') {
+      diagnostics.push({ level: 'error', path: `architecture.${flag}`, message: 'Must be a boolean.' });
+    }
+  }
+  for (const limit of ['maxBoundaryFanOut', 'maxBoundaryFiles'] as const) {
+    const value = config.architecture[limit];
+    if (value !== undefined && (typeof value !== 'number' || !Number.isInteger(value) || value < 0)) {
+      diagnostics.push({ level: 'error', path: `architecture.${limit}`, message: 'Must be a non-negative integer.' });
+    }
+  }
+  const testPaths = config.architecture.testPaths as unknown;
+  if (testPaths !== undefined && (!Array.isArray(testPaths) || testPaths.some((p) => typeof p !== 'string'))) {
+    diagnostics.push({ level: 'error', path: 'architecture.testPaths', message: 'Must be an array of strings.' });
   }
   if (
     config.architecture.requireCompletePolicy !== undefined &&

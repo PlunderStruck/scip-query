@@ -32,7 +32,7 @@ const DIFF_GATE_CHECK_DESCRIPTIONS: Record<DiffGateCheck, { description: string;
   },
   architecture: {
     description: 'A declared architecture boundary rule has a violation absent from the committed health baseline.',
-    when: 'Default diff gate when closed dependency rows, requireCompletePolicy, or requireAcyclic are configured and a baseline exists.',
+    when: 'Default diff gate when closed dependency rows, requireCompletePolicy, requireAcyclic, requireResolvedBoundaries, requireMinimalPolicy, maxBoundaryFanOut/maxBoundaryFiles, or testPaths are configured and a baseline exists.',
   },
   'doc-reference': {
     description:

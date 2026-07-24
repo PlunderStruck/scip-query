@@ -97,6 +97,17 @@ grow. It reports the narrowest internal edge as the inspection point, because a
 hidden cycle is usually one import against a dominant direction rather than a
 tangle.
 
+Four narrower rules close the remaining holes. `requireMinimalPolicy` rejects a
+declared allowance no edge uses, because `requireCompletePolicy` checks only
+that a row exists and a stale row widens the policy silently.
+`maxBoundaryFanOut` and `maxBoundaryFiles` bound growth, since coarseness was
+otherwise caught only when it hid a cycle. `testPaths` brings test files back
+under enforcement — they are excluded from the compiler project and so from the
+index, which put them outside every rule — judging each test against the
+boundary of the code it covers, while still allowing it to reach anything that
+subject transitively reaches or that reaches the subject. And a boundary may set
+`subUnits: "file"` when its members form layers inside one directory.
+
 The failure it prevents is specific: this repository's own configuration
 declared 14 boundaries with `requireAcyclic: true` and reported zero cycles,
 while six of those boundaries — holding 85% of all files — each contained an

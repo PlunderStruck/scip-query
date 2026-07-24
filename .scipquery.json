@@ -349,6 +349,7 @@
       "queries-graph": [
         "analysis",
         "domain",
+        "language-parsers",
         "queries-internal",
         "queries-utils",
         "semantic-core",
@@ -611,7 +612,13 @@
     },
     "requireCompletePolicy": true,
     "requireAcyclic": true,
-    "requireResolvedBoundaries": true
+    "requireResolvedBoundaries": true,
+    "requireMinimalPolicy": true,
+    "testPaths": [
+      "tests/**"
+    ],
+    "maxBoundaryFanOut": 20,
+    "maxBoundaryFiles": 40
   },
   "suppressions": [
     {
