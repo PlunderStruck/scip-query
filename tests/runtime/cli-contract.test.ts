@@ -4,7 +4,11 @@ import { describe, it, expect, vi } from 'vitest';
 import { program, renderHeuristicNotice } from '../../src/runtime/cli.js';
 import { commandDescriptors } from '../../src/runtime/commands/command-descriptors.js';
 import { commandDocEntries, renderCommandReferenceMarkdown } from '../../src/runtime/command-kit/command-docs.js';
-import { commandOptions, definedLimitOption, printJsonEnvelope } from '../../src/runtime/command-kit/command-execution.js';
+import {
+  commandOptions,
+  definedLimitOption,
+  printJsonEnvelope,
+} from '../../src/runtime/command-kit/command-execution.js';
 import { PUBLIC_QUERY_ENTRIES, PUBLIC_QUERY_SOURCE_PATHS } from '../../src/queries/public-query-entries.js';
 
 const PRIVATE_QUERY_MODULES = [
@@ -24,6 +28,7 @@ const PRIVATE_QUERY_MODULES = [
   'health-types',
   'public-query-entries',
   'query-utils',
+  'architecture-baseline',
   'test-boundary-policy',
 ] as const;
 
@@ -44,6 +49,7 @@ const PRIVATE_QUERY_SOURCE_PATHS = {
   'health-types': 'src/queries/health/health-types.ts',
   'public-query-entries': 'src/queries/public-query-entries.ts',
   'query-utils': 'src/queries/query-utils.ts',
+  'architecture-baseline': 'src/queries/graph/architecture-baseline.ts',
   'test-boundary-policy': 'src/queries/graph/test-boundary-policy.ts',
 } as const satisfies Record<(typeof PRIVATE_QUERY_MODULES)[number], string>;
 

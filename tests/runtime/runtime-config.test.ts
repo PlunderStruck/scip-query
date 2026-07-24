@@ -428,6 +428,56 @@ describe('validateProjectConfig', () => {
     expect(diagnostics).toEqual([]);
   });
 
+  // A typo here is silent by construction: detection treats every value other
+  // than 'file' as directory granularity, so an unvalidated `subUnits: "files"`
+  // would disable the same-directory cycle enforcement it was meant to enable.
+  it('rejects a subUnits value outside the supported set', () => {
+    const diagnostics = validateProjectConfig({
+      architecture: {
+        boundaries: [{ name: 'app', paths: ['src/app/**'], subUnits: 'files' as unknown as 'file' }],
+      },
+    });
+
+    expect(diagnostics).toContainEqual(
+      expect.objectContaining({ level: 'error', path: 'architecture.boundaries[0].subUnits' }),
+    );
+  });
+
+  it('accepts the supported subUnits values and an omitted one', () => {
+    const diagnostics = validateProjectConfig({
+      architecture: {
+        boundaries: [
+          { name: 'app', paths: ['src/app/**'], subUnits: 'file' },
+          { name: 'lib', paths: ['src/lib/**'], subUnits: 'directory' },
+          { name: 'util', paths: ['src/util/**'] },
+        ],
+      },
+    });
+
+    expect(diagnostics.filter((entry) => entry.path.includes('subUnits'))).toEqual([]);
+  });
+
+  it('validates the boundary growth limits and test roots', () => {
+    const diagnostics = validateProjectConfig({
+      architecture: {
+        boundaries: [{ name: 'app', paths: ['src/app/**'] }],
+        maxBoundaryFanOut: -1,
+        maxBoundaryFiles: 1.5 as unknown as number,
+        testPaths: [7] as unknown as string[],
+        requireMinimalPolicy: 'yes' as unknown as boolean,
+      },
+    });
+
+    for (const path of [
+      'architecture.maxBoundaryFanOut',
+      'architecture.maxBoundaryFiles',
+      'architecture.testPaths',
+      'architecture.requireMinimalPolicy',
+    ]) {
+      expect(diagnostics).toContainEqual(expect.objectContaining({ level: 'error', path }));
+    }
+  });
+
   it('validates architecture boundary and dependency references', () => {
     const diagnostics = validateProjectConfig({
       architecture: {

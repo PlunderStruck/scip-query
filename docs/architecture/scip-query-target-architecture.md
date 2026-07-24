@@ -250,13 +250,21 @@ always carried but the import-only view could not observe. The opt-in mode has
 separate memory and durable cache identities; every other
 `buildFileDepGraph` caller keeps the import-only default.
 
-The measured graph then supplied the exact outgoing targets for all 14
-remaining boundaries. `.scipquery.json` closes every row,
-`requireCompletePolicy` prevents a future omitted row from silently reopening
-one boundary, and `requireAcyclic` prevents a future multi-boundary cycle.
-After reindex, all 347 files are mapped, all 56 relationships are allowed, and
-the graph has zero forbidden edges, undeclared edges, reciprocal pairs, or
-cycles.
+The measured graph then supplied the exact outgoing targets for every
+boundary. `.scipquery.json` closes every row, `requireCompletePolicy` prevents
+a future omitted row from silently reopening one boundary, and `requireAcyclic`
+prevents a future multi-boundary cycle.
+
+**Superseded 2026-07-24.** The 14-boundary configuration described above
+reported zero cycles, but that result was an artifact of granularity rather
+than a property of the code: same-boundary dependencies are always allowed, so
+every edge inside a boundary was discarded before the check ran. Six of the 14
+boundaries — holding 295 of 348 files — each contained an internal cycle the
+policy could not express. The configuration is now **34 boundaries over 351
+files with 205 allowed relationships**, and `requireResolvedBoundaries` keeps
+each boundary's own sub-directory quotient acyclic so the guarantee survives
+future growth. Zero forbidden edges, undeclared edges, reciprocal pairs,
+cycles, or coarse boundaries.
 
 ## Ownership Decisions for Evidence Direction
 
@@ -267,7 +275,7 @@ produce the same kind of result.
 
 | Original pair                 | Target decision                  | Reason                                                                                                                                                               | Migration status                                                                                                                                                 |
 | ----------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `language-parsers <-> source` | Merge into the `source` boundary | Both directories derive syntactic facts from source text. Fourteen parser files use source primitives, while the source evidence facade invokes the parser registry. | Complete in configuration: the `source` boundary covers both directory trees; the directories remain separate implementation namespaces.                         |
+| `language-parsers <-> source` | Merge into the `source` boundary | Both directories derive syntactic facts from source text. Fourteen parser files use source primitives, while the source evidence facade invokes the parser registry. | Complete, and the merge now holds without a reciprocal dependency. `source-evidence.ts` — the one file importing the parser registry from the source side — moved into `src/language-parsers/`, its true owner. `src/source` was then layered into `primitives/ -> ast/ -> facts/ -> vue/` with the products facade at the root, so the merged boundary is internally acyclic and the directory names still distinguish shared primitives from language-specific strategies. |
 | `semantic <-> symbols`        | Keep `semantic -> symbols`       | Semantic providers translate compiler results into repository symbol identities and graphs; symbol facts need optional compiler evidence without provider knowledge. | Complete: the symbols-owned port is implemented in `semantic` and passed by query orchestration. `symbols -> semantic` is empty, and no reciprocal pair remains. |
 
 Evidence: `node dist/cli.js architecture --json`;
@@ -298,6 +306,11 @@ observed without a reverse import.
 - Do not re-split `source` and `language-parsers` merely to force a layer
   direction. They form one source-fact subsystem; their directory names still
   usefully distinguish shared primitives from language-specific strategies.
+  This rule was tested on 2026-07-24: the subsystem did contain a real cycle,
+  and the repair was an ownership correction inside the merged boundary
+  (relocating `source-evidence.ts`, then layering `src/source`), not a split.
+  `requireResolvedBoundaries` now enforces the internal structure directly, so
+  a future cycle here surfaces without needing separate boundaries.
 - Do not bulk-move files based only on locality candidates. The current
   locality report mostly withholds exact destinations because consumers are
   repository-wide.

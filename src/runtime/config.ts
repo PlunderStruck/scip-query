@@ -415,6 +415,18 @@ function validateArchitectureConfig(config: ProjectConfig, diagnostics: ConfigDi
       boundaryNames.add(name);
     }
 
+    // Validated as a closed set: detection treats every unrecognized value as
+    // directory granularity, so an unchecked typo (`"files"`) would silently
+    // disable the same-directory cycle enforcement this option exists to turn on.
+    const subUnits = rawBoundary.subUnits;
+    if (subUnits !== undefined && subUnits !== 'directory' && subUnits !== 'file') {
+      diagnostics.push({
+        level: 'error',
+        path: `${path}.subUnits`,
+        message: "Must be 'directory' or 'file'.",
+      });
+    }
+
     const paths = rawBoundary.paths;
     if (!Array.isArray(paths) || paths.length === 0) {
       diagnostics.push({

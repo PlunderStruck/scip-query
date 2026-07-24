@@ -21,7 +21,10 @@ import { getFullSymbolMatch } from './symbol-lookup.js';
 import { getGlobalLeafIndex } from './leaf-symbol-index.js';
 import type { IndexedDefinition, ReferenceSite, SymbolLocation } from '../domain/types.js';
 import { findIdentifierLines, getFileIdentifiers } from './identifier-index.js';
-import { createCandidateNameMatcher, sourceMayContainCandidateName } from '../source/primitives/source-identifier-prefilter.js';
+import {
+  createCandidateNameMatcher,
+  sourceMayContainCandidateName,
+} from '../source/primitives/source-identifier-prefilter.js';
 import { getSourceText } from '../source/primitives/source-text.js';
 import { getSourceFiles } from '../source/primitives/source-fileset.js';
 import { leafName } from './symbol-parser.js';

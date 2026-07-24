@@ -7,11 +7,8 @@ import { ScipDatabase } from '../../../src/storage/db.js';
 import { classifyFile, getLiveBarrelPaths, isEntrySurface } from '../../../src/analysis/file-classifier.js';
 import { dead } from '../../../src/queries/cleanup/dead.js';
 import { health } from '../../../src/queries/health/health.js';
-import {
-  checkHealthBaseline,
-  normalizeBaselineFindingIdentity,
-  writeHealthBaseline,
-} from '../../../src/queries/health/health-baseline.js';
+import { checkHealthBaseline, writeHealthBaseline } from '../../../src/queries/health/health-baseline.js';
+import { normalizeBaselineFindingIdentity } from '../../../src/queries/internal/baseline-file.js';
 import { isolated } from '../../../src/queries/cleanup/isolated.js';
 import { selfAudit } from '../../../src/queries/quality/self-audit.js';
 import { redundantReexports } from '../../../src/queries/cleanup/redundant-reexports.js';

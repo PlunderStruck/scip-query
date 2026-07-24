@@ -4,7 +4,10 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../src/storage/db.js';
-import { augmentAuxiliaryDocuments, auxiliaryDocumentsAugmentationStage } from '../../src/reindex/augmentation/augment.js';
+import {
+  augmentAuxiliaryDocuments,
+  auxiliaryDocumentsAugmentationStage,
+} from '../../src/reindex/augmentation/augment.js';
 import {
   augmentVueResolvedReferences,
   vueResolvedReferencesAugmentationStage,

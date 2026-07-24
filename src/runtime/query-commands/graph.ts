@@ -223,8 +223,9 @@ const handleArchitecture = reportCommand({
 
     if (result.fragileEdges.length > 0) {
       console.log(
-        `\nFragile boundary edges (${result.fragileEdges.length} of ${result.edges.length}): the whole ` +
-          'dependency rests on one import, so it is incidental rather than load-bearing.',
+        `\nSingle-import boundary edges (${result.fragileEdges.length} of ${result.edges.length}): ` +
+          'the whole boundary dependency is carried by one file-level import. ' +
+          'Breadth alone does not establish importance -- inspect before concluding either way.',
       );
       for (const edge of result.fragileEdges.slice(0, 10)) {
         const example = edge.examples[0];

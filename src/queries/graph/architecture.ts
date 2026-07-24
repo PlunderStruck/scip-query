@@ -385,12 +385,11 @@ export function architectureFindingIdentities(report: ArchitectureReport): strin
   }
   for (const finding of report.coarseBoundaries) {
     if (!finding.violatesPolicy) continue;
-    identities.push(
-      `${ARCHITECTURE_BASELINE_PREFIX}coarse-boundary:${encodeURIComponent(finding.boundary)}:${finding.subUnits
-        .map((unit) => encodeURIComponent(unit))
-        .sort()
-        .join('|')}`,
-    );
+    // Keyed by boundary alone. Sub-unit membership shifts as files move, and
+    // this string is the persistent baseline comparison key -- including the
+    // members would turn one continuing problem into an apparent fix plus a
+    // new finding on every reorganization.
+    identities.push(`${ARCHITECTURE_BASELINE_PREFIX}coarse-boundary:${encodeURIComponent(finding.boundary)}`);
   }
   for (const cycle of report.cycles) {
     if (!cycle.violatesPolicy) continue;
@@ -492,7 +491,7 @@ function architectureCycle(
 export function detectCoarseBoundaries(
   fileGraph: ReadonlyMap<string, ReadonlySet<string>>,
   filesByBoundary: ReadonlyMap<string, ReadonlySet<string>>,
-  isModuleHierarchyFile: (file: string) => boolean = () => false,
+  isModuleHierarchyFile: (file: string) => boolean = pathModuleHierarchyFile,
   violatesPolicy = false,
   granularityFor: (boundary: string) => 'directory' | 'file' = () => 'directory',
 ): ArchitectureCoarseBoundary[] {
@@ -549,9 +548,7 @@ export function detectCoarseBoundaries(
     }
   }
 
-  return findings.sort(
-    (a, b) => b.subUnits.length - a.subUnits.length || a.boundary.localeCompare(b.boundary),
-  );
+  return findings.sort((a, b) => b.subUnits.length - a.subUnits.length || a.boundary.localeCompare(b.boundary));
 }
 
 /**
@@ -605,6 +602,20 @@ function boundaryLimits(
     }
   }
   return limits.sort((a, b) => a.boundary.localeCompare(b.boundary) || a.kind.localeCompare(b.kind));
+}
+
+/**
+ * Path-only module-hierarchy test, used when a caller supplies no classifier.
+ *
+ * Conservative by construction: it treats every `index.ts`/`mod.rs` as a
+ * barrel, so a direct caller gets fewer findings rather than bookkeeping noise.
+ * `architecture(db)` overrides it with a content-aware version, because the
+ * path rule also hides real cycles whose back edge targets a logic-bearing
+ * module that merely happens to be named `index.ts`.
+ */
+function pathModuleHierarchyFile(file: string): boolean {
+  const kind = classifyFile(file);
+  return kind === 'test' || kind === 'entry' || kind === 'barrel';
 }
 
 /** A file's default sub-unit is its containing directory. */

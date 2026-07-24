@@ -11,13 +11,19 @@
  * Detector options come from HEALTH_DETECTOR_PROFILES — the same constants
  * health uses, so the ratchet and the report always describe the same runs.
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { isAbsolute, join } from 'node:path';
+import { writeFileSync } from 'node:fs';
 import type { ScipDatabase } from '../../storage/db.js';
 import { isEntrySurface, isRootedSymbol } from '../../analysis/file-classifier.js';
 import { HEALTH_DETECTOR_PROFILES } from '../internal/health-detector-profiles.js';
+import {
+  compareAgainstBaseline,
+  normalizeBaselineFindingIdentity,
+  resolveBaselinePath,
+  type BaselineComparison,
+  type HealthBaselineFile,
+} from '../internal/baseline-file.js';
+import { architecture, architectureFindingIdentities } from '../graph/architecture.js';
 import { cycles } from '../graph/cycles.js';
-import { ARCHITECTURE_BASELINE_PREFIX, architecture, architectureFindingIdentities } from '../graph/architecture.js';
 import { dead } from '../cleanup/dead.js';
 import { drift } from '../cleanup/drift.js';
 import { duplicateBodies } from '../cleanup/duplicate-bodies.js';
@@ -28,7 +34,6 @@ import { similarAll } from '../cleanup/similar.js';
 import { staleAbstractions } from '../cleanup/stale-abstractions.js';
 import { stats } from '../navigation/stats.js';
 import { wrapperCandidates } from '../cleanup/wrapper-candidates.js';
-import { shortenSymbol } from '../../symbols/symbol-parser.js';
 
 // Mirror health's large-index budget so baseline runs stay bounded.
 const LARGE_BASELINE_SYMBOL_THRESHOLD = 25_000;
@@ -40,51 +45,6 @@ function baselineScanLimit(db: ScipDatabase): number | undefined {
   const isLarge =
     overview.symbols >= LARGE_BASELINE_SYMBOL_THRESHOLD || overview.documents >= LARGE_BASELINE_DOCUMENT_THRESHOLD;
   return isLarge ? LARGE_BASELINE_SCAN_LIMIT : undefined;
-}
-
-export const DEFAULT_BASELINE_FILENAME = '.scipquery-baseline.json';
-
-export interface HealthBaselineFile {
-  version: 1;
-  findings: string[];
-}
-
-export interface BaselineComparison {
-  baselinePath: string;
-  baselineCount: number;
-  current: string[];
-  newFindings: string[];
-  fixedFindings: string[];
-}
-
-/**
- * Convert legacy pair findings that embedded full SCIP package identities to
- * repository-qualified symbol names. Other detector identities, including
- * architecture findings, pass through unchanged.
- */
-export function normalizeBaselineFindingIdentity(finding: string): string {
-  if (finding.startsWith('similar:')) {
-    const symbols = finding.slice('similar:'.length).split('|');
-    if (symbols.length !== 2) return finding;
-    return `similar:${symbols.map(shortenSymbol).sort().join('|')}`;
-  }
-
-  if (finding.startsWith('duplicate-bodies:')) {
-    const remainder = finding.slice('duplicate-bodies:'.length);
-    const hashSeparator = remainder.indexOf(':');
-    if (hashSeparator < 0) return finding;
-    const hash = remainder.slice(0, hashSeparator);
-    const symbols = remainder.slice(hashSeparator + 1).split('|');
-    if (symbols.length < 2) return finding;
-    return `duplicate-bodies:${hash}:${symbols.map(shortenSymbol).sort().join('|')}`;
-  }
-
-  return finding;
-}
-
-export function resolveBaselinePath(db: ScipDatabase, path?: string): string {
-  if (path && isAbsolute(path)) return path;
-  return join(db.config.projectRoot, path ?? DEFAULT_BASELINE_FILENAME);
 }
 
 export function collectBaselineFindings(db: ScipDatabase, opts: { scope?: string } = {}): string[] {
@@ -187,51 +147,5 @@ export function checkHealthBaseline(
   db: ScipDatabase,
   opts: { path?: string; scope?: string } = {},
 ): BaselineComparison {
-  const path = resolveBaselinePath(db, opts.path);
-  if (!existsSync(path)) {
-    throw new Error(`No baseline found at ${path}. Create one with: scip-query health --write-baseline`);
-  }
-  const parsed = JSON.parse(readFileSync(path, 'utf-8')) as HealthBaselineFile;
-  const baseline = new Set((parsed.findings ?? []).map(normalizeBaselineFindingIdentity));
-  const current = collectBaselineFindings(db, { scope: opts.scope });
-  const currentSet = new Set(current);
-
-  return {
-    baselinePath: path,
-    baselineCount: baseline.size,
-    current,
-    newFindings: current.filter((finding) => !baseline.has(finding)),
-    fixedFindings: [...baseline].filter((finding) => !currentSet.has(finding)),
-  };
-}
-
-/**
- * Compare only project-owned architecture failures against the shared health
- * baseline. This keeps the default diff check narrow while preserving one
- * baseline authority.
- */
-export function checkArchitectureBaseline(
-  db: ScipDatabase,
-  opts: { path?: string; scope?: string } = {},
-): BaselineComparison {
-  const path = resolveBaselinePath(db, opts.path);
-  if (!existsSync(path)) {
-    throw new Error(`No baseline found at ${path}. Create one with: scip-query health --write-baseline`);
-  }
-  const parsed = JSON.parse(readFileSync(path, 'utf-8')) as HealthBaselineFile;
-  const baseline = new Set(
-    (parsed.findings ?? [])
-      .map(normalizeBaselineFindingIdentity)
-      .filter((finding) => finding.startsWith(ARCHITECTURE_BASELINE_PREFIX)),
-  );
-  const current = architectureFindingIdentities(architecture(db, { scope: opts.scope }));
-  const currentSet = new Set(current);
-
-  return {
-    baselinePath: path,
-    baselineCount: baseline.size,
-    current,
-    newFindings: current.filter((finding) => !baseline.has(finding)),
-    fixedFindings: [...baseline].filter((finding) => !currentSet.has(finding)),
-  };
+  return compareAgainstBaseline(db, collectBaselineFindings(db, { scope: opts.scope }), { path: opts.path });
 }

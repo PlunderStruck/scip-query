@@ -39,7 +39,9 @@ import {
   coverageContractTouchedByDiff,
   evaluateCoverageContract,
 } from '../cleanup/coverage-contracts.js';
-import { checkArchitectureBaseline, checkHealthBaseline, resolveBaselinePath } from '../health/health-baseline.js';
+import { checkHealthBaseline } from '../health/health-baseline.js';
+import { resolveBaselinePath } from '../internal/baseline-file.js';
+import { checkArchitectureBaseline } from '../graph/architecture-baseline.js';
 import { ARCHITECTURE_BASELINE_PREFIX, hasEnforceableArchitecturePolicy } from '../graph/architecture.js';
 import { incompleteMigration } from './incomplete-migration.js';
 import { similar } from '../cleanup/similar.js';

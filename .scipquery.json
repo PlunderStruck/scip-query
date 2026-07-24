@@ -16,144 +16,91 @@
     "boundaries": [
       {
         "name": "analysis",
-        "paths": [
-          "src/analysis/**"
-        ]
+        "paths": ["src/analysis/**"]
       },
       {
         "name": "domain",
-        "paths": [
-          "src/domain/**"
-        ]
+        "paths": ["src/domain/**"]
       },
       {
         "name": "instrumentation",
-        "paths": [
-          "src/instrumentation/**"
-        ]
-      },
-      {
-        "name": "language-parsers",
-        "paths": [
-          "src/language-parsers/**"
-        ]
+        "paths": ["src/instrumentation/**"]
       },
       {
         "name": "platform",
-        "paths": [
-          "src/platform/**"
-        ]
+        "paths": ["src/platform/**"]
       },
       {
         "name": "public-api",
-        "paths": [
-          "src/index.ts"
-        ]
+        "paths": ["src/index.ts"]
       },
       {
         "name": "queries-cleanup",
-        "paths": [
-          "src/queries/cleanup/**"
-        ]
+        "paths": ["src/queries/cleanup/**"]
       },
       {
         "name": "queries-facade",
-        "paths": [
-          "src/queries/index.ts",
-          "src/queries/public-query-entries.ts"
-        ]
+        "paths": ["src/queries/index.ts", "src/queries/public-query-entries.ts"]
       },
       {
         "name": "queries-frontend",
-        "paths": [
-          "src/queries/frontend/**"
-        ]
+        "paths": ["src/queries/frontend/**"]
       },
       {
         "name": "queries-graph",
-        "paths": [
-          "src/queries/graph/**"
-        ]
+        "paths": ["src/queries/graph/**"]
       },
       {
         "name": "queries-health",
-        "paths": [
-          "src/queries/health/**"
-        ]
+        "paths": ["src/queries/health/**"]
       },
       {
         "name": "queries-impact",
-        "paths": [
-          "src/queries/impact/**"
-        ]
+        "paths": ["src/queries/impact/**"]
       },
       {
         "name": "queries-internal",
-        "paths": [
-          "src/queries/internal/**"
-        ]
+        "paths": ["src/queries/internal/**"]
       },
       {
         "name": "queries-navigation",
-        "paths": [
-          "src/queries/navigation/**"
-        ]
+        "paths": ["src/queries/navigation/**"]
       },
       {
         "name": "queries-quality",
-        "paths": [
-          "src/queries/quality/**"
-        ]
+        "paths": ["src/queries/quality/**"]
       },
       {
         "name": "queries-utils",
-        "paths": [
-          "src/queries/query-utils.ts"
-        ]
+        "paths": ["src/queries/query-utils.ts"]
       },
       {
         "name": "reindex",
-        "paths": [
-          "src/reindex/*"
-        ]
+        "paths": ["src/reindex/*"]
       },
       {
         "name": "reindex-augmentation",
-        "paths": [
-          "src/reindex/augmentation/**"
-        ]
+        "paths": ["src/reindex/augmentation/**"]
       },
       {
         "name": "reindex-vue",
-        "paths": [
-          "src/reindex/vue/**"
-        ]
+        "paths": ["src/reindex/vue/**"]
       },
       {
         "name": "runtime-command-kit",
-        "paths": [
-          "src/runtime/command-kit/**"
-        ]
+        "paths": ["src/runtime/command-kit/**"]
       },
       {
         "name": "runtime-commands",
-        "paths": [
-          "src/runtime/commands/**"
-        ]
+        "paths": ["src/runtime/commands/**"]
       },
       {
         "name": "runtime-entry",
-        "paths": [
-          "src/runtime/cli.ts",
-          "src/runtime/index.ts",
-          "src/runtime/postinstall.ts"
-        ]
+        "paths": ["src/runtime/cli.ts", "src/runtime/index.ts", "src/runtime/postinstall.ts"]
       },
       {
         "name": "runtime-query-commands",
-        "paths": [
-          "src/runtime/query-commands/**"
-        ]
+        "paths": ["src/runtime/query-commands/**"]
       },
       {
         "name": "runtime-services",
@@ -188,15 +135,11 @@
       },
       {
         "name": "rust-kernels",
-        "paths": [
-          "crates/scip-query-kernels/**"
-        ]
+        "paths": ["crates/scip-query-kernels/**"]
       },
       {
         "name": "semantic-contracts",
-        "paths": [
-          "src/semantic/types.ts"
-        ]
+        "paths": ["src/semantic/types.ts"]
       },
       {
         "name": "semantic-core",
@@ -211,120 +154,53 @@
       },
       {
         "name": "semantic-rust",
-        "paths": [
-          "src/semantic/rust/**"
-        ]
+        "paths": ["src/semantic/rust/**"]
       },
       {
         "name": "semantic-typescript",
-        "paths": [
-          "src/semantic/typescript/**"
-        ]
+        "paths": ["src/semantic/typescript/**"]
       },
       {
-        "name": "source-ast",
-        "paths": [
-          "src/source/ast/**"
-        ]
-      },
-      {
-        "name": "source-facts",
-        "paths": [
-          "src/source/facts/**"
-        ]
-      },
-      {
-        "name": "source-primitives",
-        "paths": [
-          "src/source/primitives/**"
-        ]
-      },
-      {
-        "name": "source-products",
-        "paths": [
-          "src/source/*"
-        ]
-      },
-      {
-        "name": "source-vue",
-        "paths": [
-          "src/source/vue/**"
-        ]
+        "name": "source",
+        "paths": ["src/source/**", "src/language-parsers/**"]
       },
       {
         "name": "storage",
-        "paths": [
-          "src/storage/**"
-        ]
+        "paths": ["src/storage/**"]
       },
       {
         "name": "symbols-core",
-        "paths": [
-          "src/symbols/*"
-        ]
+        "paths": ["src/symbols/*"]
       },
       {
         "name": "symbols-graph",
-        "paths": [
-          "src/symbols/graph/**"
-        ]
+        "paths": ["src/symbols/graph/**"]
       },
       {
         "name": "symbols-references",
-        "paths": [
-          "src/symbols/references/**"
-        ]
+        "paths": ["src/symbols/references/**"]
       },
       {
         "name": "tla",
-        "paths": [
-          "src/tla/**"
-        ]
+        "paths": ["src/tla/**"]
       }
     ],
     "allowedDependencies": {
-      "analysis": [
-        "domain",
-        "language-parsers",
-        "source-primitives",
-        "source-products",
-        "storage",
-        "symbols-core",
-        "symbols-graph"
-      ],
+      "analysis": ["domain", "source", "storage", "symbols-core", "symbols-graph"],
       "domain": [],
       "instrumentation": [],
-      "language-parsers": [
-        "domain",
-        "source-ast",
-        "source-facts",
-        "source-primitives",
-        "source-products",
-        "storage"
-      ],
-      "platform": [
-        "domain"
-      ],
-      "public-api": [
-        "domain",
-        "queries-internal",
-        "source-primitives",
-        "storage",
-        "symbols-core"
-      ],
+      "platform": ["domain"],
+      "public-api": ["domain", "queries-internal", "source", "storage", "symbols-core"],
       "queries-cleanup": [
         "analysis",
         "domain",
         "instrumentation",
-        "language-parsers",
         "queries-frontend",
         "queries-graph",
         "queries-internal",
         "queries-utils",
         "semantic-core",
-        "source-facts",
-        "source-primitives",
-        "source-products",
+        "source",
         "storage",
         "symbols-core",
         "symbols-graph",
@@ -336,24 +212,18 @@
         "queries-graph",
         "queries-health",
         "queries-impact",
+        "queries-internal",
         "queries-navigation",
         "queries-quality"
       ],
-      "queries-frontend": [
-        "analysis",
-        "queries-internal",
-        "source-products",
-        "source-vue",
-        "storage"
-      ],
+      "queries-frontend": ["analysis", "queries-internal", "source", "storage"],
       "queries-graph": [
         "analysis",
         "domain",
-        "language-parsers",
         "queries-internal",
         "queries-utils",
         "semantic-core",
-        "source-products",
+        "source",
         "storage",
         "symbols-core",
         "symbols-graph"
@@ -367,8 +237,7 @@
         "queries-internal",
         "queries-navigation",
         "queries-quality",
-        "storage",
-        "symbols-core"
+        "storage"
       ],
       "queries-impact": [
         "analysis",
@@ -382,8 +251,7 @@
         "queries-navigation",
         "queries-quality",
         "semantic-core",
-        "source-primitives",
-        "source-products",
+        "source",
         "storage",
         "symbols-core",
         "symbols-references"
@@ -392,11 +260,9 @@
         "analysis",
         "domain",
         "instrumentation",
-        "language-parsers",
         "queries-utils",
         "semantic-core",
-        "source-primitives",
-        "source-products",
+        "source",
         "storage",
         "symbols-core",
         "symbols-graph",
@@ -404,12 +270,10 @@
       ],
       "queries-navigation": [
         "domain",
-        "language-parsers",
         "queries-internal",
         "queries-utils",
         "semantic-core",
-        "source-primitives",
-        "source-products",
+        "source",
         "storage",
         "symbols-core",
         "symbols-graph",
@@ -419,16 +283,12 @@
         "domain",
         "queries-internal",
         "semantic-core",
-        "source-primitives",
-        "source-products",
+        "source",
         "storage",
         "symbols-core",
         "symbols-references"
       ],
-      "queries-utils": [
-        "domain",
-        "symbols-core"
-      ],
+      "queries-utils": ["domain", "symbols-core"],
       "reindex": [
         "domain",
         "instrumentation",
@@ -440,17 +300,9 @@
         "storage",
         "symbols-graph"
       ],
-      "reindex-augmentation": [
-        "source-primitives"
-      ],
-      "reindex-vue": [
-        "platform",
-        "reindex-augmentation"
-      ],
-      "runtime-command-kit": [
-        "runtime-services",
-        "storage"
-      ],
+      "reindex-augmentation": ["source"],
+      "reindex-vue": ["platform", "reindex-augmentation"],
+      "runtime-command-kit": ["runtime-services", "storage"],
       "runtime-commands": [
         "domain",
         "instrumentation",
@@ -463,17 +315,11 @@
         "runtime-services",
         "semantic-rust",
         "semantic-typescript",
-        "source-primitives",
+        "source",
         "storage",
         "symbols-core"
       ],
-      "runtime-entry": [
-        "instrumentation",
-        "platform",
-        "runtime-commands",
-        "runtime-services",
-        "storage"
-      ],
+      "runtime-entry": ["instrumentation", "platform", "runtime-commands", "runtime-services", "storage"],
       "runtime-query-commands": [
         "domain",
         "queries-facade",
@@ -489,7 +335,6 @@
       "runtime-services": [
         "domain",
         "instrumentation",
-        "language-parsers",
         "platform",
         "queries-cleanup",
         "queries-facade",
@@ -501,23 +346,18 @@
         "semantic-core",
         "semantic-rust",
         "semantic-typescript",
-        "source-ast",
-        "source-primitives",
+        "source",
         "storage"
       ],
       "rust-kernels": [],
-      "semantic-contracts": [
-        "domain"
-      ],
+      "semantic-contracts": ["domain"],
       "semantic-core": [
         "domain",
         "instrumentation",
         "semantic-contracts",
         "semantic-rust",
         "semantic-typescript",
-        "source-ast",
-        "source-facts",
-        "source-primitives",
+        "source",
         "storage",
         "symbols-core",
         "symbols-graph"
@@ -525,12 +365,9 @@
       "semantic-rust": [
         "domain",
         "instrumentation",
-        "language-parsers",
         "platform",
         "semantic-contracts",
-        "source-facts",
-        "source-primitives",
-        "source-products",
+        "source",
         "storage",
         "symbols-core"
       ],
@@ -539,86 +376,25 @@
         "instrumentation",
         "platform",
         "semantic-contracts",
-        "source-primitives",
+        "source",
         "storage",
         "symbols-core",
         "symbols-graph"
       ],
-      "source-ast": [
-        "source-primitives",
-        "storage"
-      ],
-      "source-facts": [
-        "domain",
-        "source-ast",
-        "source-primitives",
-        "storage"
-      ],
-      "source-primitives": [
-        "domain",
-        "platform",
-        "storage"
-      ],
-      "source-products": [
-        "source-ast",
-        "source-facts",
-        "source-primitives",
-        "source-vue",
-        "storage"
-      ],
-      "source-vue": [
-        "source-ast",
-        "source-facts",
-        "source-primitives",
-        "storage"
-      ],
-      "storage": [
-        "domain",
-        "instrumentation"
-      ],
-      "symbols-core": [
-        "domain",
-        "language-parsers",
-        "source-primitives",
-        "source-products",
-        "storage"
-      ],
-      "symbols-graph": [
-        "domain",
-        "instrumentation",
-        "language-parsers",
-        "source-products",
-        "storage",
-        "symbols-core",
-        "symbols-references"
-      ],
-      "symbols-references": [
-        "domain",
-        "instrumentation",
-        "source-primitives",
-        "source-products",
-        "storage",
-        "symbols-core"
-      ],
-      "tla": [
-        "domain",
-        "platform",
-        "queries-navigation",
-        "source-primitives",
-        "source-products",
-        "storage",
-        "symbols-core"
-      ]
+      "source": ["domain", "platform", "storage"],
+      "storage": ["domain", "instrumentation"],
+      "symbols-core": ["domain", "source", "storage"],
+      "symbols-graph": ["domain", "instrumentation", "source", "storage", "symbols-core", "symbols-references"],
+      "symbols-references": ["domain", "instrumentation", "source", "storage", "symbols-core"],
+      "tla": ["domain", "platform", "queries-navigation", "source", "storage", "symbols-core"]
     },
     "requireCompletePolicy": true,
     "requireAcyclic": true,
     "requireResolvedBoundaries": true,
     "requireMinimalPolicy": true,
-    "testPaths": [
-      "tests/**"
-    ],
+    "testPaths": ["tests/**"],
     "maxBoundaryFanOut": 20,
-    "maxBoundaryFiles": 40
+    "maxBoundaryFiles": 60
   },
   "suppressions": [
     {
@@ -716,6 +492,12 @@
       "check": "co-change-partner",
       "file": "src/queries/public-query-entries.ts",
       "reason": "Accepted config-code co-change signal for the architecture boundary refinement. public-query-entries.ts changed one path string (src/queries/impact/co-change.ts -> src/queries/cleanup/co-change.ts) as part of moving the co-change detector out of the diff-gate layer. The published query surface is byte-identical: same entry names, same count. package.json exports map is unaffected."
+    },
+    {
+      "id": "SQ9C454C0840F4",
+      "check": "co-change-partner",
+      "file": "src/queries/index.ts",
+      "reason": "Accepted doc-code co-change signal for completing plan step B1.6. src/queries/index.ts changed only because baseline ratchet infrastructure moved to its correct layer: the shared file format, path resolution, and comparison went to queries/internal/baseline-file.ts, and checkArchitectureBaseline went to queries/graph/architecture-baseline.ts beside the report it reads. No CLI command was added, removed, or renamed; npm run docs:commands regenerates docs/COMMAND_REFERENCE.md unchanged, and neither checkHealthBaseline nor checkArchitectureBaseline appears in the command reference or in package.json exports. The historical index.ts/COMMAND_REFERENCE.md coupling tracks public command-surface changes, which this relocation is not."
     }
   ],
   "declaredCouplings": [
@@ -744,10 +526,7 @@
     {
       "name": "diff-gate validation ledger",
       "reason": "docs/analyzer-validation-ledger.md is explicitly anchored to src/queries/impact/diff-gate.ts (its own 'Source Anchors' table cites diffGate() and DIFF_GATE_CHECKS by file:line) -- it exists specifically to track diff-gate's check validation status, so the two changing together is the ledger doing its job, not a hidden coupling.",
-      "files": [
-        "docs/analyzer-validation-ledger.md",
-        "src/queries/impact/diff-gate.ts"
-      ]
+      "files": ["docs/analyzer-validation-ledger.md", "src/queries/impact/diff-gate.ts"]
     },
     {
       "name": "cleanup detector family",
@@ -768,35 +547,22 @@
     {
       "name": "graph summary query family",
       "reason": "These query files report related fan-in, fan-out, hotspot, and bottleneck graph summaries.",
-      "files": [
-        "src/queries/graph/bottlenecks.ts",
-        "src/queries/graph/fan.ts",
-        "src/queries/graph/hotspots.ts"
-      ]
+      "files": ["src/queries/graph/bottlenecks.ts", "src/queries/graph/fan.ts", "src/queries/graph/hotspots.ts"]
     },
     {
       "name": "reference navigation query family",
       "reason": "These query files expose nearby views of definition and reference navigation.",
-      "files": [
-        "src/queries/navigation/refs.ts",
-        "src/queries/navigation/trace.ts"
-      ]
+      "files": ["src/queries/navigation/refs.ts", "src/queries/navigation/trace.ts"]
     },
     {
       "name": "package build surface",
       "reason": "Package metadata and bundle entrypoints intentionally move together when the published CLI surface changes.",
-      "files": [
-        "package.json",
-        "tsup.config.ts"
-      ]
+      "files": ["package.json", "tsup.config.ts"]
     },
     {
       "name": "command reference documentation",
       "reason": "The generated command reference and query implementations move together when public command behavior changes.",
-      "files": [
-        "docs/COMMAND_REFERENCE.md",
-        "src/queries/cleanup/doc-drift.ts"
-      ]
+      "files": ["docs/COMMAND_REFERENCE.md", "src/queries/cleanup/doc-drift.ts"]
     },
     {
       "name": "2026-06-28 optimization evidence ledger",
@@ -838,10 +604,7 @@
     {
       "name": "runtime command dispatch",
       "reason": "Command descriptors and command execution intentionally move together when CLI registration or dispatch behavior changes.",
-      "files": [
-        "src/runtime/commands/command-descriptors.ts",
-        "src/runtime/command-kit/command-execution.ts"
-      ]
+      "files": ["src/runtime/commands/command-descriptors.ts", "src/runtime/command-kit/command-execution.ts"]
     }
   ],
   "coverageContracts": [
@@ -860,11 +623,6 @@
     }
   ],
   "docs": {
-    "snapshotPaths": [
-      "docs/benchmarks/**",
-      "docs/validation/**",
-      "docs/reviews/**",
-      "docs/plans/**"
-    ]
+    "snapshotPaths": ["docs/benchmarks/**", "docs/validation/**", "docs/reviews/**", "docs/plans/**"]
   }
 }

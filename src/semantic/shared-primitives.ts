@@ -277,13 +277,16 @@ export function exactSemanticCallerMap(
     recordCallerFilesFromReferences(db, result, definition, buildSemanticReferences(db, definition));
   }
   for (const [provider, groupedDefinitions] of typescriptGroups) {
-    const fragments = materializeTypeScriptReferenceFragments(db, groupedDefinitions, (p) => getSemanticProvider(db, p));
+    const fragments = materializeTypeScriptReferenceFragments(db, groupedDefinitions, (p) =>
+      getSemanticProvider(db, p),
+    );
     const references =
       fragments?.references ??
       (provider.referencesForDefinitions
         ? provider.referencesForDefinitions(groupedDefinitions, { exact: true })
         : new Map(groupedDefinitions.map((definition) => [definition.symbolId, provider.referencesFor(definition)])));
-    if (!fragments && profileEnabled()) recordTypeScriptReferenceFragmentShadow(db, groupedDefinitions, references, (p) => getSemanticProvider(db, p));
+    if (!fragments && profileEnabled())
+      recordTypeScriptReferenceFragmentShadow(db, groupedDefinitions, references, (p) => getSemanticProvider(db, p));
     for (const definition of groupedDefinitions) {
       recordCallerFilesFromReferences(db, result, definition, references.get(definition.symbolId) ?? []);
     }
@@ -362,7 +365,9 @@ function materializeSemanticReferenceBatch(
       !materializedReferences.has(definition.symbolId) &&
       !incompleteReferences.has(definition.symbolId),
   );
-  const fragmentMaterialization = materializeTypeScriptReferenceFragments(db, fragmentCandidates, (p) => getSemanticProvider(db, p));
+  const fragmentMaterialization = materializeTypeScriptReferenceFragments(db, fragmentCandidates, (p) =>
+    getSemanticProvider(db, p),
+  );
   if (fragmentMaterialization) {
     fragmentDefinitions = fragmentCandidates.length;
     fragmentCacheHits = fragmentMaterialization.cacheHits;

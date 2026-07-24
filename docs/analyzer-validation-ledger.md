@@ -458,3 +458,50 @@ written against that premise was removed rather than shipped, since it guarded
 a case the code path cannot produce and cost a source scan per file. Recorded
 here because the two graph configurations are easy to conflate when reasoning
 about architecture from `deps` output.
+
+## 2026-07-24 Review Remediation (boundary resolution)
+
+Seven review findings against the boundary work were resolved. Recorded because
+three changed a decision rather than a line.
+
+**The `source` / `language-parsers` split was reverted.** The target
+architecture forbids re-splitting them "merely to force a layer direction," and
+that is exactly what the split did once the underlying cycle was repaired. The
+merged `source` boundary is now internally acyclic and is verified as such by
+`requireResolvedBoundaries`, so the enforcement goal is met without
+contradicting the normative decision. This is the better outcome: the rule and
+the enforcement now agree instead of competing. `docs/architecture/scip-query-target-architecture.md`
+records the 14-boundary configuration as superseded, with current counts.
+
+**`subUnits` was unvalidated — the highest-risk defect.** Detection treats every
+value other than `'file'` as directory granularity, so `subUnits: "files"`
+passed validation and silently disabled the same-directory enforcement the
+option exists to turn on. A config option whose typo mode is "quietly do
+nothing" is worse than no option. Now validated as a closed set, with a
+regression test, alongside tests for the growth limits and `testPaths`.
+
+**The coarse-boundary identity encoded its members.** The identity is the
+persistent baseline comparison key, so including the current SCC membership
+meant adding one file to a tangle read as the old finding being fixed plus a
+new one appearing — ratchet churn on a problem that never went away. Now keyed
+by boundary alone.
+
+**Plan step B1.6 was completed rather than abandoned.** The plan called for
+moving the baseline checks into `queries/internal`; the literal move is
+impossible, because `checkHealthBaseline` runs every health detector and would
+create `internal -> cleanup` against the existing `cleanup -> internal`. The
+shared parts — file format, path resolution, identity normalization, and the
+new-versus-fixed comparison — moved to `queries/internal/baseline-file.ts`, and
+`checkArchitectureBaseline` moved to `queries/graph/architecture-baseline.ts`
+beside the report it reads. `checkHealthBaseline` stays in health because
+collecting findings is intrinsically a detector-layer concern. The relocation
+immediately produced the `requireMinimalPolicy` rule's first real finding: a
+`queries-health -> symbols-core` allowance left stale by the moved import.
+
+**Two smaller corrections.** `detectCoarseBoundaries` defaulted its classifier
+to `() => false`, so a direct caller reported barrel and entry bookkeeping; it
+now defaults to the path-based `classifyFile` test, with `architecture(db)`
+still overriding it with the content-aware version. And the report described a
+single-import edge as "incidental rather than load-bearing" — the graph
+establishes edge breadth, not importance, so it now reports the measurement and
+says explicitly that breadth alone settles nothing.

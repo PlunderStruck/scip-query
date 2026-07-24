@@ -152,7 +152,10 @@ function subjectFor(db: ScipDatabase, testFile: string, isSourceFile: (file: str
   // Directories are reorganized more often than files are renamed, so fall back
   // to the unique source file sharing the test's basename. Ambiguity means no
   // subject: two candidates cannot both be the thing under test.
-  const base = testFile.split('/').pop()!.replace(/\.(test|spec)\.(\w+)$/, '.$2');
+  const base = testFile
+    .split('/')
+    .pop()!
+    .replace(/\.(test|spec)\.(\w+)$/, '.$2');
   const matches = getSourceImports(db, testFile)
     .map((parsed) => parsed.sourcePath)
     .filter((path): path is string => !!path && isSourceFile(path) && path.split('/').pop() === base);

@@ -5,7 +5,11 @@
  */
 import type { ScipDatabase } from '../../storage/db.js';
 import { resolveDartImportPath } from '../../source/primitives/import-path-resolver.js';
-import { buildUsageBody, collectNamespaceMembers, hasIdentifierUsage } from '../../source/primitives/source-stripper.js';
+import {
+  buildUsageBody,
+  collectNamespaceMembers,
+  hasIdentifierUsage,
+} from '../../source/primitives/source-stripper.js';
 import type { ParsedSourceExport, ParsedSourceImport } from '../../domain/types.js';
 
 export function parseDartImports(db: ScipDatabase, importerPath: string, source: string): ParsedSourceImport[] {

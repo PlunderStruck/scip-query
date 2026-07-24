@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ArchitectureConfig } from '../../../src/domain/config-types.js';
 import {
   analyzeArchitectureGraph,
+  detectCoarseBoundaries,
   architectureFindingIdentities,
   hasEnforceableArchitecturePolicy,
 } from '../../../src/queries/graph/architecture.js';
@@ -355,7 +356,6 @@ describe('policy minimality, limits, and edge fragility', () => {
     expect(report.fragileEdges[0]).toMatchObject({ from: 'app', to: 'lib', fileEdgeCount: 1 });
   });
 
-
   it('checks a single-directory boundary at file granularity when asked', () => {
     const inner = graph([
       ['src/app/a.ts', ['src/app/b.ts']],
@@ -373,5 +373,55 @@ describe('policy minimality, limits, and edge fragility', () => {
     });
     expect(byFile.coarseBoundaries).toHaveLength(1);
     expect(byFile.coarseBoundaries[0]!.subUnits).toEqual(['src/app/a.ts', 'src/app/b.ts']);
+  });
+});
+
+describe('coarse-boundary baseline identity stability', () => {
+  const config: ArchitectureConfig = {
+    boundaries: [{ name: 'app', paths: ['src/app/**'] }],
+    requireResolvedBoundaries: true,
+  };
+
+  // The identity is the persistent baseline comparison key. If it encoded the
+  // cycle's current members, adding one file to the tangle would read as the
+  // old finding being fixed plus a new one appearing — churn on a problem that
+  // never went away.
+  it('keeps one identity per boundary as the cycle membership grows', () => {
+    const twoUnits = analyzeArchitectureGraph(
+      graph([
+        ['src/app/a/x.ts', ['src/app/b/y.ts']],
+        ['src/app/b/y.ts', ['src/app/a/x.ts']],
+      ]),
+      ['src/app/a/x.ts', 'src/app/b/y.ts'],
+      config,
+    );
+    const threeUnits = analyzeArchitectureGraph(
+      graph([
+        ['src/app/a/x.ts', ['src/app/b/y.ts']],
+        ['src/app/b/y.ts', ['src/app/c/z.ts']],
+        ['src/app/c/z.ts', ['src/app/a/x.ts']],
+      ]),
+      ['src/app/a/x.ts', 'src/app/b/y.ts', 'src/app/c/z.ts'],
+      config,
+    );
+
+    expect(twoUnits.coarseBoundaries[0]!.subUnits).toHaveLength(2);
+    expect(threeUnits.coarseBoundaries[0]!.subUnits).toHaveLength(3);
+    expect(architectureFindingIdentities(twoUnits)).toEqual(['architecture:coarse-boundary:app']);
+    expect(architectureFindingIdentities(threeUnits)).toEqual(architectureFindingIdentities(twoUnits));
+  });
+
+  it('defaults the exported detector to path-based module-hierarchy classification', () => {
+    // index.ts is a barrel by path, so the default classifier excludes it and
+    // the parent/child re-export loop is not reported as a cycle.
+    const findings = detectCoarseBoundaries(
+      new Map([
+        ['src/app/index.ts', new Set(['src/app/child/leaf.ts'])],
+        ['src/app/child/leaf.ts', new Set(['src/app/index.ts'])],
+      ]),
+      new Map([['app', new Set(['src/app/index.ts', 'src/app/child/leaf.ts'])]]),
+    );
+
+    expect(findings).toEqual([]);
   });
 });
