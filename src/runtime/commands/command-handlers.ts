@@ -17,6 +17,7 @@ import {
   readAffectedSetShadowStatus,
   type AffectedSetShadowStatus,
 } from '../../reindex/affected-shadow.js';
+import { recordSuppressedReindexActivity } from '../../reindex/reindex-activity.js';
 import { inspectSqliteGeneration, type SqliteGenerationInspection } from '../../reindex/sqlite-generation-store.js';
 import {
   loadProjectConfig,
@@ -1486,6 +1487,11 @@ export function handleWatch(rawOpts: unknown): void {
     },
     onReindexComplete: (durationMs) => {
       console.log(`\nReindex complete in ${(durationMs / 1000).toFixed(1)}s`);
+      return getIndexFreshness(projectRoot, config, paths).state === 'fresh';
+    },
+    onRefreshSuppressed: (trigger) => {
+      recordSuppressedReindexActivity(paths.dbPath, trigger);
+      console.log('\nSkipped redundant refresh; the completed index already includes the queued changes.');
     },
     onError: (err) => {
       console.error(`\nWatch error: ${err.message}`);
@@ -1540,6 +1546,7 @@ function watchServiceReport(inspection: WatchServiceInspection, enabled = true) 
         indexGeneration: classification.state.indexGeneration,
         lastRefresh: classification.state.lastRefresh,
         lastError: classification.state.lastError,
+        reindexActivity: classification.state.reindexActivity,
         typescriptSemantic: classification.state.typescriptSemantic,
         typescriptIndex: classification.state.typescriptIndex,
       };
@@ -1558,6 +1565,7 @@ function watchServiceReport(inspection: WatchServiceInspection, enabled = true) 
         indexGeneration: classification.state.indexGeneration,
         lastRefresh: classification.state.lastRefresh,
         lastError: classification.state.lastError,
+        reindexActivity: classification.state.reindexActivity,
         typescriptSemantic: classification.state.typescriptSemantic,
         typescriptIndex: classification.state.typescriptIndex,
       };
@@ -1584,6 +1592,15 @@ function renderWatchServiceReport(report: ReturnType<typeof watchServiceReport>)
   if ('idleDeadlineAt' in report && report.idleDeadlineAt) console.log(`Idle exit: ${report.idleDeadlineAt}`);
   if ('reason' in report) console.log(`Reason: ${report.reason}`);
   if ('lastError' in report && report.lastError) console.log(`Last error: ${report.lastError.message}`);
+  if ('reindexActivity' in report && report.reindexActivity) {
+    const activity = report.reindexActivity;
+    console.log(
+      `Reindex activity (24h): ${activity.runs} run(s) ` +
+        `(${activity.rebuilt} rebuilt, ${activity.reused} reused, ${activity.failed} failed), ` +
+        `${activity.suppressed} redundant refresh(es) suppressed, ` +
+        `${formatBytes(activity.estimatedLogicalOutputBytes)} estimated logical output`,
+    );
+  }
   if ('typescriptSemantic' in report && report.typescriptSemantic) {
     const semantic = report.typescriptSemantic;
     console.log(

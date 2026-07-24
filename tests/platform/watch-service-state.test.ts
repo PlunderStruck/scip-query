@@ -22,6 +22,12 @@ describe('watch service persisted state', () => {
     expect(parseWatchServiceState({ ...liveState(), worktreeId: '' })).toBeNull();
     expect(parseWatchServiceState({ ...liveState(), heartbeatAt: 'not-a-date' })).toBeNull();
     expect(parseWatchServiceState({ ...liveState(), watcher: { state: 'waiting' } })).toBeNull();
+    expect(
+      parseWatchServiceState({
+        ...liveState(),
+        reindexActivity: { ...liveState().reindexActivity!, runs: -1 },
+      }),
+    ).toBeNull();
     expect(parseWatchServiceState({ ...liveState(), indexGeneration: 'a'.repeat(64) })).toEqual({
       ...liveState(),
       indexGeneration: 'a'.repeat(64),
@@ -76,6 +82,17 @@ function liveState(): WatchServiceState {
     lastActivityAt: '2026-07-09T19:59:58.000Z',
     idleDeadlineAt: '2026-07-09T20:09:58.000Z',
     watcher: { state: 'idle' },
+    reindexActivity: {
+      windowStartedAt: '2026-07-08T20:00:00.000Z',
+      windowEndedAt: '2026-07-09T20:00:00.000Z',
+      runs: 3,
+      rebuilt: 1,
+      reused: 2,
+      failed: 0,
+      suppressed: 4,
+      estimatedLogicalOutputBytes: 1024,
+      byTrigger: { 'watch-source': 7 },
+    },
     typescriptSemantic: {
       protocolVersion: 1,
       state: 'idle',

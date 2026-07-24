@@ -56,6 +56,7 @@ import { getIndexerConfig } from './indexers.js';
 import { mergeAndSanitizeScipFiles, mergeScipFiles } from './merge.js';
 import { patchIncrementalSqliteGeneration } from './incremental-sqlite-publication.js';
 import { runPostIndexAugmentation } from './post-index-augmentation.js';
+import { recordFailedReindexActivity, recordReindexRunActivity } from './reindex-activity.js';
 import {
   assignFilesToProjects,
   computeProjectShardFingerprints,
@@ -398,6 +399,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
     );
     if (reused) {
       publishSharedReindexResult({ snapshot: sharedSnapshot, paths, projectRoot, fingerprint, onStatus });
+      recordReindexRunActivity(paths.outputDb, reused);
       return reused;
     }
 
@@ -430,17 +432,17 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
       }),
     );
     publishSharedReindexResult({ snapshot: sharedSnapshot, paths, projectRoot, fingerprint, onStatus });
+    recordReindexRunActivity(paths.outputDb, freshResult);
     return freshResult;
   } catch (error) {
-    updateReindexLastRefresh(
-      paths.metaPath,
-      buildLastRefresh({
-        trigger: opts.trigger,
-        result: 'failed',
-        start,
-        error: error instanceof Error ? error.message : String(error),
-      }),
-    );
+    const lastRefresh = buildLastRefresh({
+      trigger: opts.trigger,
+      result: 'failed',
+      start,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    updateReindexLastRefresh(paths.metaPath, lastRefresh);
+    recordFailedReindexActivity(paths.outputDb, lastRefresh);
     throw error;
   } finally {
     if (runDir) {

@@ -31,6 +31,7 @@ import {
   publishedTypeScriptIndexGeneration,
   typeScriptIndexMailboxPaths,
 } from '../reindex/typescript-index-protocol.js';
+import { readReindexActivitySummary, recordSuppressedReindexActivity } from '../reindex/reindex-activity.js';
 import {
   acquireWatchProcessLock,
   readWatchServiceActivity,
@@ -74,6 +75,7 @@ export async function runWatchServiceServer(
   let indexGeneration: string | undefined;
   let lastRefresh: WatchServiceState['lastRefresh'];
   let lastError: WatchServiceState['lastError'];
+  let reindexActivity = readReindexActivitySummary(indexPaths.dbPath);
   let stopping = false;
   let ready = false;
   let lastRefreshRequestAtMs = 0;
@@ -114,6 +116,7 @@ export async function runWatchServiceServer(
       ...(watcherStatus.state === 'idle' && indexGeneration ? { indexGeneration } : {}),
       ...(lastRefresh ? { lastRefresh } : {}),
       ...(lastError ? { lastError } : {}),
+      reindexActivity,
       typescriptSemantic: {
         ...semanticHost.status(),
         ...(semanticBusyUntilMs === undefined ? {} : { busyUntil: new Date(semanticBusyUntilMs).toISOString() }),
@@ -145,8 +148,14 @@ export async function runWatchServiceServer(
       lastRefresh = freshness.lastRefresh;
       indexGeneration =
         freshness.state === 'fresh' ? (publishedGenerationIdentity(indexPaths.dbPath) ?? undefined) : undefined;
+      reindexActivity = readReindexActivitySummary(indexPaths.dbPath);
       lastError = undefined;
       persistState(true);
+      return freshness.state === 'fresh';
+    },
+    onRefreshSuppressed(trigger) {
+      recordSuppressedReindexActivity(indexPaths.dbPath, trigger);
+      reindexActivity = readReindexActivitySummary(indexPaths.dbPath);
     },
     onError(error) {
       recordActivity();

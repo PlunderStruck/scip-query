@@ -14,13 +14,15 @@ import { resolveIndexStoragePaths } from '../platform/cache-layout.js';
 import { loadProjectConfig, resolveWatchConfig } from './config.js';
 import { createGitignoreFilter } from '../source/gitignore-filter.js';
 import { gitOutput, resolveGitPath } from '../platform/git-worktree.js';
+import { REINDEX_ACTIVITY_FILE } from '../reindex/reindex-activity.js';
 
 export interface WatcherOptions {
   projectRoot: string;
   config: ProjectConfig;
   languages?: SupportedLanguage[];
   onStatus?: (status: WatcherStatus) => void;
-  onReindexComplete?: (durationMs: number) => void;
+  onReindexComplete?: (durationMs: number) => boolean | void;
+  onRefreshSuppressed?: (trigger: RefreshTrigger) => void;
   onError?: (error: Error) => void;
 }
 
@@ -53,7 +55,8 @@ export class Watcher {
   private indexerConcurrency?: number;
 
   private onStatus: (status: WatcherStatus) => void;
-  private onReindexComplete: (durationMs: number) => void;
+  private onReindexComplete: (durationMs: number) => boolean | void;
+  private onRefreshSuppressed: (trigger: RefreshTrigger) => void;
   private onError: (error: Error) => void;
 
   // State machine
@@ -68,6 +71,7 @@ export class Watcher {
 
   // Chokidar maintains the platform-specific subscriptions beneath each root.
   private fsWatchers: FSWatcher[] = [];
+  private sourcePollingFallbackStarted = false;
   private gitPollTimer: ReturnType<typeof setInterval> | null = null;
   private lastGitState: GitStateSnapshot | null = null;
   private gitignoreFilter: ReturnType<typeof createGitignoreFilter>;
@@ -87,6 +91,7 @@ export class Watcher {
 
     this.onStatus = opts.onStatus ?? (() => {});
     this.onReindexComplete = opts.onReindexComplete ?? (() => {});
+    this.onRefreshSuppressed = opts.onRefreshSuppressed ?? (() => {});
     this.onError = opts.onError ?? ((e) => console.error(e.message));
 
     this.gitignoreFilter = createGitignoreFilter(opts.projectRoot);
@@ -102,21 +107,12 @@ export class Watcher {
   // one runtime boundary.
   start(): void {
     this.stopped = false;
+    this.sourcePollingFallbackStarted = false;
     this.setStatus({ state: 'idle' });
     this.startGitStatePolling();
 
     try {
-      const watcher = watch(this.projectRoot, {
-        ignoreInitial: true,
-        ignored: (path, stats) => this.isIgnoredWatchPath(path, stats?.isDirectory() ?? false),
-      });
-      watcher.on('all', (_event, path) => {
-        if (!this.stopped) this.handleFileChange(path);
-      });
-      watcher.on('error', (error) => {
-        this.onError(new Error(`Failed to watch ${this.projectRoot}: ${String(error)}`));
-      });
-      this.fsWatchers.push(watcher);
+      this.startSourceWatcher();
     } catch (error) {
       this.onError(new Error(`Failed to watch ${this.projectRoot}: ${String(error)}`));
     }
@@ -147,6 +143,36 @@ export class Watcher {
 
   // ── Internal ─────────────────────────────────────────────
 
+  private startSourceWatcher(usePolling = false): void {
+    const watcher = watch(this.projectRoot, {
+      ignoreInitial: true,
+      ignored: (path, stats) => this.isIgnoredWatchPath(path, stats?.isDirectory() ?? false),
+      usePolling,
+      ...(usePolling ? { interval: 500, binaryInterval: 1_000 } : {}),
+    });
+    watcher.on('all', (_event, path) => {
+      if (!this.stopped) this.handleFileChange(path);
+    });
+    watcher.on('error', (error) => this.handleSourceWatcherError(watcher, error, usePolling));
+    this.fsWatchers.push(watcher);
+  }
+
+  private handleSourceWatcherError(watcher: FSWatcher, error: unknown, usePolling: boolean): void {
+    if (usePolling || this.sourcePollingFallbackStarted || !isFileDescriptorLimitError(error) || this.stopped) {
+      this.onError(new Error(`Failed to watch ${this.projectRoot}: ${String(error)}`));
+      return;
+    }
+
+    this.sourcePollingFallbackStarted = true;
+    this.fsWatchers = this.fsWatchers.filter((candidate) => candidate !== watcher);
+    void watcher.close();
+    try {
+      this.startSourceWatcher(true);
+    } catch (fallbackError) {
+      this.onError(new Error(`Failed to watch ${this.projectRoot}: ${String(fallbackError)}`));
+    }
+  }
+
   private isIgnoredWatchPath(path: string, isDirectory: boolean): boolean {
     const relativePath = this.relativeWatchPath(path);
     if (!relativePath) return false;
@@ -165,7 +191,13 @@ export class Watcher {
     if (this.extraIgnore.ignores(rel)) return;
 
     // Skip the index files themselves
-    if (rel.endsWith('index.db') || rel.endsWith('index.scip') || rel.endsWith('index.db.tmp')) {
+    if (
+      rel.endsWith('index.db') ||
+      rel.endsWith('index.scip') ||
+      rel.endsWith('index.db.tmp') ||
+      rel.endsWith(REINDEX_ACTIVITY_FILE) ||
+      rel.endsWith(`${REINDEX_ACTIVITY_FILE}.previous`)
+    ) {
       return;
     }
 
@@ -247,9 +279,23 @@ export class Watcher {
       .then((durationMs) => {
         this.reindexInFlight = false;
         this.lastReindexEnd = Date.now();
-        this.onReindexComplete(durationMs);
+        let completedIndexIsFresh = false;
+        try {
+          completedIndexIsFresh = this.onReindexComplete(durationMs) === true;
+        } catch (error) {
+          this.onError(error instanceof Error ? error : new Error(String(error)));
+        }
 
         if (this.dirty && !this.stopped) {
+          if (completedIndexIsFresh) {
+            const suppressedTrigger = this.pendingTrigger ?? { kind: 'unknown' };
+            this.dirty = false;
+            this.changedFiles = 0;
+            this.pendingTrigger = null;
+            this.onRefreshSuppressed(suppressedTrigger);
+            this.setStatus({ state: 'idle' });
+            return;
+          }
           // Changes arrived during reindex — enter cooldown then reindex again
           const until = Date.now() + this.watchConfig.cooldownMs;
           this.setStatus({ state: 'cooldown', until, dirty: true });
@@ -408,4 +454,11 @@ function mergeRefreshTrigger(current: RefreshTrigger | null, next: RefreshTrigge
     return { kind: current.kind, detail: 'multiple changes' };
   }
   return { kind: 'watch-git-state', detail: `${current.kind}, ${next.kind}` };
+}
+
+function isFileDescriptorLimitError(error: unknown): boolean {
+  return (
+    (error instanceof Error && 'code' in error && error.code === 'EMFILE') ||
+    String(error).includes('EMFILE: too many open files')
+  );
 }

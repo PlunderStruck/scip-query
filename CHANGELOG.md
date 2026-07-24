@@ -4,6 +4,20 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+## [0.19.3]
+
+### Performance and operations
+
+- Watchers now suppress a queued cooldown reindex when the completed index's
+  fingerprint proves the queued file events are already represented. Stale or
+  unavailable freshness still preserves the follow-up refresh.
+- A bounded two-segment activity ledger powers rolling 24-hour watch status
+  counts for rebuilt, reused, failed, and suppressed refreshes plus estimated
+  logical artifact bytes. The estimate is explicitly not physical SSD writes.
+- Source watching retries with 500 ms polling only when the host refuses an
+  event-backed subscription with `EMFILE`, preserving refresh correctness
+  without adding polling I/O to the normal path.
+
 ## [0.19.2]
 
 ### Fixes

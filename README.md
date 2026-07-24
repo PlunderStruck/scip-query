@@ -461,7 +461,13 @@ child writes only to that worktree's writable `index.scip` and `index.db`. A
 cross-platform source watcher maintains the directory subscriptions needed to
 detect ordinary unstaged edits even when Node does not provide recursive
 filesystem events, while separate Git polling detects commit and staging-state
-changes. A
+changes. File events that arrive during a reindex still mark the watcher dirty,
+but the queued rerun is suppressed when the completed index's source
+fingerprint proves those events are already represented; a stale or unreadable
+fingerprint always preserves the rerun. If the host refuses an event-backed
+subscription because its open-file allowance is exhausted, that project
+retries with 500 ms file polling; ordinary event-backed watchers do not pay
+that polling cost. A
 shared generation is only a warm starting snapshot; it never implies a shared
 watcher or shared later writes. A daemon that exits after its configured idle
 timeout starts warm again when that worktree is next used.
@@ -572,6 +578,11 @@ the first command that needs ts-morph semantics. Separate CLI processes reuse
 that session through a repository-local atomic mailbox; source-only index
 generations refresh the existing Projects, while configuration or uncertain
 changes replace them. `watch --status` reports Project/session/request counts.
+It also reports a rolling 24-hour reindex activity summary: rebuilt, reused,
+failed, and freshness-proven suppressed refreshes plus estimated logical output
+bytes. The estimate counts scip-query artifacts emitted by rebuilt refreshes;
+it is not a measurement of physical SSD writes. The underlying
+`reindex-activity.jsonl` history uses two bounded 1 MiB segments.
 If the service is stopped, incompatible, busy beyond its bound, or returns an
 invalid response, the command falls back to the existing in-process ts-morph
 provider.

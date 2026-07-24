@@ -36,3 +36,15 @@ export interface LastRefreshMetadata {
   skipped?: { language: SupportedLanguage; reason: string }[];
   error?: string;
 }
+
+export interface ReindexActivitySummary {
+  windowStartedAt: string;
+  windowEndedAt: string;
+  runs: number;
+  rebuilt: number;
+  reused: number;
+  failed: number;
+  suppressed: number;
+  estimatedLogicalOutputBytes: number;
+  byTrigger: Partial<Record<RefreshTriggerKind, number>>;
+}

@@ -1,0 +1,6 @@
+{"date":"2026-07-24","workload":"vega-historical-affected-shadow","windowDays":13.86,"runs":4676,"runsPerDay":337.4,"telemetryBytes":2140000000,"status":"baseline","provenance":"pre-0.19.2 affected-shadow inventory"}
+{"date":"2026-07-24","workload":"global-cache-inventory","totalKiB":18059676,"projectsKiB":16885116,"repositoriesKiB":1170300,"projectDirectories":1616,"abandonedReindexDirectories":3,"abandonedReindexBytes":430924305,"oversizedHistoryFiles":2,"oversizedHistoryBytes":38142850,"status":"baseline"}
+{"date":"2026-07-24","workload":"late-duplicate-watcher-event","baselineReindexes":2,"targetReindexes":1,"targetSuppressions":1,"status":"constructed-baseline"}
+{"date":"2026-07-24","workload":"late-duplicate-watcher-event","freshCompletionReindexes":1,"freshCompletionSuppressions":1,"unknownCompletionReindexes":2,"status":"passed","test":"tests/runtime/watch.test.ts"}
+{"date":"2026-07-24","workload":"global-cache-cleanup","cutoffDays":7,"removedDirectories":1392,"removedBytes":14122279064,"preservedDirectories":224,"preservedLiveDirectories":2,"beforeKiB":18059676,"afterKiB":4454736,"status":"passed"}
+{"date":"2026-07-24","workload":"worktree-source-watch-under-emfile","eventBackedErrors":2,"pollingFallbackIntervalMs":500,"sourceRefreshesObserved":2,"status":"passed","test":"tests/runtime/worktree-watch-service.integration.test.ts"}

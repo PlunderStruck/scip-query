@@ -906,6 +906,14 @@ describe('reindex reliability', () => {
         trigger: { kind: 'watch-source', detail: 'src/main.ts' },
       }),
     );
+    const activity = readFileSync(join(cacheDir, 'reindex-activity.jsonl'), 'utf-8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    expect(activity).toEqual([
+      expect.objectContaining({ event: 'run', result: 'rebuilt', estimatedLogicalOutputBytes: expect.any(Number) }),
+      expect.objectContaining({ event: 'run', result: 'reused', estimatedLogicalOutputBytes: 0 }),
+    ]);
   });
 
   it('records failed refresh provenance without replacing the previous artifacts', async () => {
@@ -951,6 +959,7 @@ describe('reindex reliability', () => {
         trigger: { kind: 'watch-git-head', detail: 'HEAD changed' },
       }),
     );
+    expect(readFileSync(join(cacheDir, 'reindex-activity.jsonl'), 'utf-8')).toContain('"result":"failed"');
   });
 
   it('lets manual refresh replace a stale watcher-owned lock', async () => {

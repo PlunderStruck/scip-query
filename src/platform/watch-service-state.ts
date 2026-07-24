@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { LastRefreshMetadata, WatcherStatus } from '../domain/types.js';
+import type { LastRefreshMetadata, ReindexActivitySummary, WatcherStatus } from '../domain/types.js';
 
 export const WATCH_SERVICE_PROTOCOL_VERSION = 4;
 export const WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS = 5_000;
@@ -54,6 +54,7 @@ export interface WatchServiceState {
   indexGeneration?: string;
   lastRefresh?: LastRefreshMetadata;
   lastError?: { at: string; message: string };
+  reindexActivity?: ReindexActivitySummary;
   typescriptSemantic?: TypeScriptSemanticServiceStatusSnapshot;
   typescriptIndex?: TypeScriptIndexServiceStatusSnapshot;
 }
@@ -108,6 +109,7 @@ export function parseWatchServiceState(value: unknown): WatchServiceState | null
   }
   if (state.lastError !== undefined && !validLastError(state.lastError)) return null;
   if (state.lastRefresh !== undefined && !validLastRefresh(state.lastRefresh)) return null;
+  if (state.reindexActivity !== undefined && !validReindexActivitySummary(state.reindexActivity)) return null;
   if (state.typescriptSemantic !== undefined && !validTypeScriptSemanticStatus(state.typescriptSemantic)) {
     return null;
   }
@@ -155,6 +157,27 @@ function validLastRefresh(value: unknown): value is LastRefreshMetadata {
     isValidWatchServiceTimestamp(refresh.completedAt) &&
     finiteNumber(refresh.durationMs)
   );
+}
+
+function validReindexActivitySummary(value: unknown): value is ReindexActivitySummary {
+  if (!value || typeof value !== 'object') return false;
+  const summary = value as Partial<ReindexActivitySummary>;
+  if (
+    !isValidWatchServiceTimestamp(summary.windowStartedAt) ||
+    !isValidWatchServiceTimestamp(summary.windowEndedAt) ||
+    !nonNegativeInteger(summary.runs) ||
+    !nonNegativeInteger(summary.rebuilt) ||
+    !nonNegativeInteger(summary.reused) ||
+    !nonNegativeInteger(summary.failed) ||
+    !nonNegativeInteger(summary.suppressed) ||
+    !finiteNumber(summary.estimatedLogicalOutputBytes) ||
+    summary.estimatedLogicalOutputBytes! < 0 ||
+    !summary.byTrigger ||
+    typeof summary.byTrigger !== 'object'
+  ) {
+    return false;
+  }
+  return Object.values(summary.byTrigger).every((count) => count === undefined || nonNegativeInteger(count));
 }
 
 function validTypeScriptSemanticStatus(value: unknown): value is TypeScriptSemanticServiceStatusSnapshot {

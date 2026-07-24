@@ -65,6 +65,65 @@ describe('Watcher', () => {
     watcher.stop();
   });
 
+  it('suppresses a dirty rerun when the completed index is proven fresh', async () => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    const suppressed: unknown[] = [];
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { debounceMs: 250, cooldownMs: 1_000, gitPollMs: 60_000 } },
+      languages: ['typescript'],
+      onReindexComplete: () => true,
+      onRefreshSuppressed: (trigger) => suppressed.push(trigger),
+    });
+    const completions: Array<(durationMs: number) => void> = [];
+    const runReindex = vi
+      .spyOn(watcher as unknown as { runReindex(trigger: unknown): Promise<number> }, 'runReindex')
+      .mockImplementation(() => new Promise((resolvePromise) => completions.push(resolvePromise)));
+
+    watcher.requestRefresh({ kind: 'watch-source', detail: 'src/a.ts' });
+    await vi.advanceTimersByTimeAsync(250);
+    watcher.requestRefresh({ kind: 'watch-source', detail: 'src/a.ts' });
+    completions[0]?.(100);
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(runReindex).toHaveBeenCalledTimes(1);
+    expect(suppressed).toEqual([{ kind: 'watch-source', detail: 'src/a.ts' }]);
+    expect((watcher as unknown as { pendingTrigger: unknown }).pendingTrigger).toBeNull();
+    watcher.stop();
+  });
+
+  it('preserves a dirty rerun when completion freshness cannot be observed', async () => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    const errors: string[] = [];
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { debounceMs: 250, cooldownMs: 1_000, gitPollMs: 60_000 } },
+      languages: ['typescript'],
+      onReindexComplete: () => {
+        throw new Error('freshness unavailable');
+      },
+      onError: (error) => errors.push(error.message),
+    });
+    const completions: Array<(durationMs: number) => void> = [];
+    const runReindex = vi
+      .spyOn(watcher as unknown as { runReindex(trigger: unknown): Promise<number> }, 'runReindex')
+      .mockImplementation(() => new Promise((resolvePromise) => completions.push(resolvePromise)));
+
+    watcher.requestRefresh({ kind: 'watch-source', detail: 'src/a.ts' });
+    await vi.advanceTimersByTimeAsync(250);
+    watcher.requestRefresh({ kind: 'watch-source', detail: 'src/b.ts' });
+    completions[0]?.(100);
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(runReindex).toHaveBeenCalledTimes(2);
+    expect(errors).toEqual(['freshness unavailable']);
+    watcher.stop();
+  });
+
   it('can request an immediate startup refresh without waiting for debounce', async () => {
     const projectRoot = createProject();
     const statuses: string[] = [];
@@ -145,6 +204,24 @@ describe('Watcher', () => {
     });
 
     (watcher as unknown as { handleFileChange(filename: string): void }).handleFileChange('.git/index');
+
+    expect((watcher as unknown as { changedFiles: number }).changedFiles).toBe(0);
+    expect((watcher as unknown as { pendingTrigger: unknown }).pendingTrigger).toBeNull();
+  });
+
+  it('ignores reindex activity files in the source watcher path', async () => {
+    const projectRoot = createProject();
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { gitPollMs: 60_000 } },
+      languages: ['typescript'],
+    });
+
+    (watcher as unknown as { handleFileChange(filename: string): void }).handleFileChange('reindex-activity.jsonl');
+    (watcher as unknown as { handleFileChange(filename: string): void }).handleFileChange(
+      'reindex-activity.jsonl.previous',
+    );
 
     expect((watcher as unknown as { changedFiles: number }).changedFiles).toBe(0);
     expect((watcher as unknown as { pendingTrigger: unknown }).pendingTrigger).toBeNull();
