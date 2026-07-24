@@ -869,12 +869,20 @@ The detector was run against the pre-change tree in an isolated git worktree usi
 the 6 boundaries of P7, and `narrowestEdges` named the exact imports Phase B removed. On the
 repaired tree it reports 0. Both directions covered.
 
-### Remaining gaps (not addressed here)
+### Remaining gaps — closed in follow-up (commit `05a7304`)
 
-1. Test files are not SCIP-indexed, so ~200 test files sit outside boundary enforcement entirely.
-2. Sub-units are one directory level; a layer inversion inside a single directory is invisible.
-3. `requireCompletePolicy` checks a row exists, not that it is minimal — an allowance can outlive
-   the edge that justified it.
-4. Dynamic `await import()` counts as a static edge, so a deliberate lazy boundary is
-   indistinguishable from a hard dependency.
-5. No growth limits: nothing flags a boundary reaching 17 of 39 boundaries or holding 32 files.
+The five gaps this plan left open were audited immediately afterward. Four were
+real and are now enforced; one was not real.
+
+| Gap | Outcome |
+| --- | --- |
+| Test files outside enforcement | Closed by `testPaths`. The check needs no index — `getSourceText` reads from disk — and judges each test against the boundary of the code it covers, allowing the subject's transitive reach plus any boundary that reaches the subject. |
+| Layer inversion inside one directory | Closed by per-boundary `subUnits: 'file'`. |
+| Policy minimality unchecked | Closed by `requireMinimalPolicy`. |
+| Dynamic `import()` counted as a static edge | **Not real.** Measured with `deps`, which uses `scipEdges: 'all-references'`; `architecture` uses `'imports-only'`, which never includes dynamic edges. The detector written against that premise was removed rather than shipped. |
+| No growth limits | Closed by `maxBoundaryFanOut` and `maxBoundaryFiles`. |
+
+A sixth signal was added along the way: `fragileEdges` reports a boundary
+dependency resting on a single import (61 of 251 here). It is advisory — a
+fragile edge is incidental rather than wrong — so it carries no finding
+identity and cannot block a diff.
