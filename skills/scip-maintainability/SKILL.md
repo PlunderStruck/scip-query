@@ -2,18 +2,18 @@
 name: scip-maintainability
 description: Review maintainability with scip-query evidence. Use for hidden policies, scattered concepts, accidental variation, weak boundaries, system compression, architecture smells, structural refactors, or maintainability improvements beyond health scores.
 commands:
-  - template: "scip-query stats"
-    when: "Map evidence: repo-wide size before bounding the review."
-  - template: "scip-query system <scope>"
-    when: "Map evidence: files, symbols, deps in/out for the scope."
-  - template: "scip-query surface <scope>"
-    when: "Map evidence: what consumers actually use from the scope."
-  - template: "scip-query change-surface <file>"
-    when: "Map evidence: exports, consumers, and blast-radius risk."
-  - template: "scip-query affected <symbol>"
-    when: "Map evidence: transitive consumers of a candidate symbol."
-  - template: "scip-query drift --patterns --architecture"
-    when: "Map evidence: declared architecture violations plus boundary and pattern signals; treat opt-in pattern hits as leads, not findings."
+  - template: 'scip-query stats'
+    when: 'Map evidence: repo-wide size before bounding the review.'
+  - template: 'scip-query system <scope>'
+    when: 'Map evidence: files, symbols, deps in/out for the scope.'
+  - template: 'scip-query surface <scope>'
+    when: 'Map evidence: what consumers actually use from the scope.'
+  - template: 'scip-query change-surface <file>'
+    when: 'Map evidence: exports, consumers, and blast-radius risk.'
+  - template: 'scip-query affected <symbol>'
+    when: 'Map evidence: transitive consumers of a candidate symbol.'
+  - template: 'scip-query drift --patterns --architecture'
+    when: 'Map evidence: declared architecture violations plus boundary and pattern signals; treat opt-in pattern hits as leads, not findings.'
 ---
 
 # scip-maintainability
@@ -25,14 +25,14 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 <!-- BEGIN GENERATED SKILL COMMANDS -->
 ## Commands for this skill
 
-| Command | Purpose | When |
-| --- | --- | --- |
-| `scip-query stats` | Show index statistics | Map evidence: repo-wide size before bounding the review. |
-| `scip-query system <scope>` | Full module map: files, symbols, deps in/out | Map evidence: files, symbols, deps in/out for the scope. |
-| `scip-query surface <scope>` | What symbols consumers actually use from this module | Map evidence: what consumers actually use from the scope. |
-| `scip-query change-surface <file>` | Pre-change briefing: exports, consumers, and blast-radius risk | Map evidence: exports, consumers, and blast-radius risk. |
-| `scip-query affected <symbol>` | Transitive closure of symbols that could break if this symbol changes | Map evidence: transitive consumers of a candidate symbol. |
-| `scip-query drift --patterns --architecture` | Detect drift candidates: unused imports and declared architecture violations; pass --architecture for boundary context | Map evidence: declared architecture violations plus boundary and pattern signals; treat opt-in pattern hits as leads, not findings. |
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query stats` | Show index statistics | document, symbol, definition, reference, size, and build-time totals | `complete` | Map evidence: repo-wide size before bounding the review. |
+| `scip-query system <scope>` | Full module map: files, symbols, deps in/out | module file paths; exported symbols with line ranges; internal dependencies; reverse dependencies | `complete` | Map evidence: files, symbols, deps in/out for the scope. |
+| `scip-query surface <scope>` | What symbols consumers actually use from this module | consumer paths and consumed symbol identities | `complete` | Map evidence: what consumers actually use from the scope. |
+| `scip-query change-surface <file>` | Pre-change briefing: exports, consumers, and blast-radius risk | defined symbols, external consumer counts, and risk levels | `bounded` | Map evidence: exports, consumers, and blast-radius risk. |
+| `scip-query affected <symbol>` | Transitive closure of symbols that could break if this symbol changes | affected symbol identities, files, and traversal depths | `bounded` | Map evidence: transitive consumers of a candidate symbol. |
+| `scip-query drift --patterns --architecture` | Detect drift candidates: unused imports and declared architecture violations; pass --architecture for boundary context | drifted symbol families, files, and evidence | `bounded` | Map evidence: declared architecture violations plus boundary and pattern signals; treat opt-in pattern hits as leads, not findings. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -153,6 +153,6 @@ This step is complete only when each opportunity has evidence, disposition, depe
 
 ### 7. Implement and verify when asked
 
-Implement the smallest named mechanism that matches the real concept. Keep essential variation near the adapter or domain code that knows it. After changes, run focused tests and routed postchecks from the shared reference, then invoke `scip-verify`.
+Implement the smallest named mechanism that matches the real concept. Keep essential variation near the adapter or domain code that knows it. After changes, run focused tests and the routed postchecks in `scip-verify`, then complete that verification skill.
 
 Report the smell addressed, mechanism introduced or removed, what was deliberately not compressed, and verification results.

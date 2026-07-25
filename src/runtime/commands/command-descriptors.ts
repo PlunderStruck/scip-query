@@ -1,5 +1,6 @@
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
 import {
+  agentContract,
   collectValues,
   doc,
   option,
@@ -8,7 +9,7 @@ import {
   withJsonOption,
 } from '../command-kit/command-spec-builders.js';
 import { DIFF_IMPACT_BATCH_COMMAND, HEALTH_PHASE_COMMAND } from '../cli-support.js';
-import { handleAgentHookContext, handleAgentHookStop } from '../agent-hooks.js';
+import { handleAgentHookContext, handleAgentHookPreToolUse, handleAgentHookStop } from '../agent-hooks.js';
 import { BUILTIN_SKILLS } from '../setup.js';
 import * as handlers from './command-handlers.js';
 import { orderedQueryCommandDescriptors } from './query-command-specs.js';
@@ -28,6 +29,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'reindex',
     command: 'reindex',
+    agent: agentContract(
+      'Can the repository index be refreshed, and which language shards succeeded?',
+      'index generation, shard statuses, reuse diagnostics, and failures',
+      [],
+      'complete',
+      'repository',
+    ),
     description: 'Index the codebase and convert to SQLite',
     options: [
       option('-l, --language <lang>', 'Index only this language (can be repeated)', collectValues, []),
@@ -44,6 +52,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'augment-sources',
     command: 'augment-sources',
+    agent: agentContract(
+      'Can source files omitted by upstream indexers be added to the index?',
+      'added document counts and augmentation status',
+      [],
+      'complete',
+      'repository',
+    ),
     description: 'Add source files skipped by upstream SCIP indexers to the SQLite documents table',
     renderShape: 'custom',
     docs: doc('Indexing'),
@@ -52,6 +67,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'augment-vue',
     command: 'augment-vue',
+    agent: agentContract(
+      'Can Vue SFC references be compiler-resolved and added to the index?',
+      'Vue augmentation counts, project, and diagnostics',
+      [],
+      'complete',
+      'repository',
+    ),
     description: 'Add compiler-resolved Vue SFC references to the SQLite index using Volar',
     options: [option('--project <tsconfig>', 'Vue tsconfig path', undefined, 'frontend/tsconfig.scip.json')],
     renderShape: 'custom',
@@ -71,6 +93,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'diff-impact',
     command: 'diff-impact',
+    agent: agentContract(
+      'Which symbols changed in this diff and which downstream consumers are affected?',
+      'changed symbols, downstream consumer identities, and impact paths',
+      [],
+      'bounded',
+      'diff',
+    ),
     description: 'Compute changed symbols and downstream consumers from current git diff',
     options: withJsonOption([option('--base <ref>', 'Git ref to diff against (default: HEAD)')]),
     renderShape: 'custom',
@@ -94,6 +123,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'health',
     command: 'health',
+    agent: agentContract(
+      'What are the highest-priority verified health problems in this codebase?',
+      'health score, findings, priorities, baselines, and coverage notes',
+      [],
+      'bounded',
+      'repository',
+    ),
     description: 'Composite codebase health report with prioritized action list',
     options: [
       option('-s, --scope <path>', 'Limit to files matching path'),
@@ -109,6 +145,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'bench',
     command: 'bench',
+    agent: agentContract(
+      'How fast are indexing and selected commands under this benchmark matrix?',
+      'timings, command outcomes, environment, and optional profiles',
+      [],
+      'sampled',
+      'repository',
+    ),
     description: 'Benchmark indexing and command runtimes for this repository',
     options: [
       option('--json', 'Output as JSON for programmatic consumption'),
@@ -127,6 +170,12 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'work-audit',
     command: 'work-audit <profile>',
+    agent: agentContract(
+      'Which repeated computations in this profile waste the most measured time?',
+      'ranked repeated-work groups, counts, and avoidable duration',
+      ['path'],
+      'bounded',
+    ),
     description: 'Rank exact repeated computations in a profiling JSONL file by measured avoidable time',
     options: [
       option('--top <n>', 'Maximum repeated-work groups to show', parsePositiveInteger, 20),
@@ -157,6 +206,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'install-skills',
     command: 'install-skills',
+    agent: agentContract(
+      'Which scip-query skills were installed, updated, skipped, or conflicted?',
+      'skill target paths and install outcomes',
+      [],
+      'complete',
+      'repository',
+    ),
     description: `Install skills (${BUILTIN_SKILLS.join(', ')}) into Claude Code, Codex, and shared agent roots`,
     renderShape: 'custom',
     docs: doc('Maintenance'),
@@ -165,6 +221,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'setup-hooks',
     command: 'setup-hooks',
+    agent: agentContract(
+      'Were project-local agent hooks installed or removed safely?',
+      'hook config targets, changes, skips, and warnings',
+      [],
+      'complete',
+      'repository',
+    ),
     description: 'Install or refresh project-local Codex and Claude Code lifecycle hooks',
     options: [
       option('--shared', 'Deprecated compatibility flag; hooks remain checkout-local and untracked'),
@@ -185,6 +248,14 @@ export const commandDescriptors: CommandDescriptor[] = [
     handler: handleAgentHookContext,
   },
   {
+    id: 'hook-pretool',
+    command: 'hook-pretool',
+    description: 'Internal Claude PreToolUse evidence-integrity guard',
+    hidden: true,
+    renderShape: 'custom',
+    handler: handleAgentHookPreToolUse,
+  },
+  {
     id: 'hook-stop',
     command: 'hook-stop',
     description: 'Internal agent Stop hook wrapper for diff-gate',
@@ -195,6 +266,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'check-deps',
     command: 'check-deps',
+    agent: agentContract(
+      'Which scip-query and language-indexer dependencies are runnable?',
+      'dependency readiness statuses and remediation',
+      [],
+      'complete',
+      'repository',
+    ),
     description: 'Check whether scip-query and the detected language indexers are actually runnable',
     renderShape: 'custom',
     docs: doc('Maintenance'),
@@ -203,6 +281,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'capabilities',
     command: 'capabilities',
+    agent: agentContract(
+      'Which evidence and verification capabilities are available here?',
+      'capability matrix with availability and reasons',
+      [],
+      'complete',
+      'repository',
+    ),
     description: 'Report which evidence and verification capabilities are available in this project',
     options: [
       option('--matrix', 'Render the project capability matrix (default output)'),
@@ -215,6 +300,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'capability-matrix',
     command: 'capability-matrix',
+    agent: agentContract(
+      'Which evidence and verification capabilities are available here?',
+      'deprecated alias of the capability matrix',
+      [],
+      'complete',
+      'repository',
+    ),
     description: 'Deprecated alias for capabilities --matrix',
     options: [option('--json', 'Output as JSON for programmatic consumption')],
     renderShape: 'custom',
@@ -225,6 +317,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'init',
     command: 'init',
+    agent: agentContract(
+      'Can a starter scip-query configuration be created for this project?',
+      'configuration path and creation outcome',
+      [],
+      'complete',
+      'repository',
+    ),
     description: 'Create a .scipquery.json config file for this project',
     renderShape: 'custom',
     docs: doc('Maintenance'),
@@ -233,6 +332,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'config-validate',
     command: 'config-validate',
+    agent: agentContract(
+      'Is this project configuration valid and internally consistent?',
+      'validation diagnostics with config paths',
+      [],
+      'complete',
+      'repository',
+    ),
     description: 'Validate .scipquery.json, including structured suppressions and declared coupling groups',
     options: [option('--json', 'Output as JSON for programmatic consumption')],
     renderShape: 'custom',
@@ -242,6 +348,12 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'suppress',
     command: 'suppress <id>',
+    agent: agentContract(
+      'Can this accepted finding be recorded with an auditable reason?',
+      'suppression identity, path, scope, and expiry',
+      ['finding'],
+      'complete',
+    ),
     description: 'Record an accepted finding as a file under .scipquery/suppressions/ with a required reason',
     options: withJsonOption([
       option('--reason <text>', 'Required human reason for accepting the finding'),
@@ -256,6 +368,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'effectiveness',
     command: 'effectiveness',
+    agent: agentContract(
+      'Which diff-gate checks catch actionable findings with verified outcomes?',
+      'per-check caught, fixed, suppressed, unresolved, and precision counts',
+      [],
+      'complete',
+      'repository',
+    ),
     description:
       'Per-check effectiveness from the committed outcome ledger: caught, comparison-verified fixes, suppressed, unverified disappearances, and precision',
     options: withJsonOption([
@@ -269,6 +388,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'doctor',
     command: 'doctor',
+    agent: agentContract(
+      'Why is scip-query unhealthy or unavailable in this project?',
+      'config, freshness, dependency, and capability diagnostics',
+      [],
+      'complete',
+      'repository',
+    ),
     description: 'Diagnose config, index freshness, dependency readiness, and project capabilities',
     options: [option('--json', 'Output as JSON for programmatic consumption')],
     renderShape: 'custom',
@@ -278,6 +404,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'setup',
     command: 'setup',
+    agent: agentContract(
+      'Can scip-query be bootstrapped end to end in this project?',
+      'setup step outcomes, files, capabilities, smoke tests, and warnings',
+      [],
+      'complete',
+      'repository',
+    ),
     description:
       'Bootstrap this project: enable automatic indexing, install agent skills, refresh the index, verify capabilities, and report health',
     options: withJsonOption([
@@ -297,6 +430,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'setup-agent',
     command: 'setup-agent',
+    agent: agentContract(
+      'Can project agent guidance and optional git enforcement be seeded?',
+      'written, unchanged, and skipped agent files or hooks',
+      [],
+      'complete',
+      'repository',
+    ),
     description:
       'Seed agent guidance for this project: AGENTS.md/CLAUDE.md block pointing agents at the scip-query skills and diff gate, plus an optional git pre-commit backstop',
     options: [option('--git-hook', 'Also install a git pre-commit hook that runs diff-gate')],
@@ -307,6 +447,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'setup-ci',
     command: 'setup-ci',
+    agent: agentContract(
+      'Can a CI workflow enforce reindex and diff-gate on pull requests?',
+      'workflow path, rendered content, and write outcome',
+      [],
+      'complete',
+      'repository',
+    ),
     description: 'Write a GitHub Actions workflow that runs scip-query reindex and diff-gate on pull requests',
     options: [
       option('--force', 'Overwrite an existing workflow'),
@@ -319,6 +466,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'uninstall',
     command: 'uninstall',
+    agent: agentContract(
+      'Which scip-query-owned integrations can be removed without touching user-owned files?',
+      'removed, retained, skipped, and dry-run targets',
+      [],
+      'complete',
+      'repository',
+    ),
     description: 'Remove scip-query-owned skill links, project hooks, and managed agent setup blocks',
     options: withJsonOption([
       option('--global', 'Remove scip-query-owned skill symlinks from user-level agent skill roots'),
@@ -332,6 +486,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'watch',
     command: 'watch',
+    agent: agentContract(
+      'What is the watcher doing, or can its background service be started or stopped?',
+      'watcher/service state, generation, activity, and errors',
+      [],
+      'complete',
+      'repository',
+    ),
     description: 'Watch in the foreground or manage the per-project background refresh service',
     options: withJsonOption([
       option('--daemon', 'Ensure the demand-started background service is running'),
@@ -358,6 +519,13 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'status',
     command: 'status',
+    agent: agentContract(
+      'Is the index fresh, complete, and usable for this project?',
+      'freshness, generation, language shards, watcher, and optional capabilities',
+      [],
+      'complete',
+      'repository',
+    ),
     description: 'Show index status for this project',
     options: [
       option('--json', 'Output as JSON for programmatic consumption'),

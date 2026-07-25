@@ -1,6 +1,10 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import type { CommandHandler } from './command-descriptor-types.js';
-import type { CommandEvidenceTier } from './command-descriptor-types.js';
+import type {
+  CommandAgentContract,
+  CommandEvidenceTier,
+  CommandHandler,
+  InvocationCoverage,
+} from './command-descriptor-types.js';
 import { withDb } from '../cli-context.js';
 import { commandAnalysisBudget, renderHeuristicNotice, type AnalysisBudgetDisclosure } from '../cli-support.js';
 import { render } from '../render.js';
@@ -13,9 +17,14 @@ type CommandOptionsWithSources = CommandOptions & {
 };
 
 let commandEvidenceById = new Map<string, CommandEvidenceTier>();
+let commandAgentContractById = new Map<string, CommandAgentContract>();
 
 export function setCommandEvidenceMap(entries: ReadonlyMap<string, CommandEvidenceTier>): void {
   commandEvidenceById = new Map(entries);
+}
+
+export function setCommandAgentContractMap(entries: ReadonlyMap<string, CommandAgentContract>): void {
+  commandAgentContractById = new Map(entries);
 }
 
 export interface DbCommandContext {
@@ -36,6 +45,8 @@ interface RowCommandSpec<Row, Ctx extends DbCommandContext> {
   heuristicLabel?: string;
   before?: (rows: readonly Row[], ctx: Ctx) => void;
   toJson?: (rows: readonly Row[], ctx: Ctx) => unknown;
+  coverage?: (rows: readonly Row[], ctx: Ctx) => InvocationCoverage;
+  agentResult?: (rows: readonly Row[], ctx: Ctx) => unknown;
   after?: (rows: readonly Row[], ctx: Ctx) => void;
 }
 
@@ -52,6 +63,8 @@ export interface ReportCommandSpec<Result, Ctx extends DbCommandContext = DbComm
   before?: (result: Result, ctx: Ctx) => void;
   render: (result: Result, ctx: Ctx) => void;
   toJson?: (result: Result, ctx: Ctx) => unknown;
+  coverage?: (result: Result, ctx: Ctx) => InvocationCoverage;
+  agentResult?: (result: Result, ctx: Ctx) => unknown;
   after?: (result: Result, ctx: Ctx) => void;
 }
 
@@ -63,6 +76,8 @@ export interface SectionedReportCommandSpec<Result, Ctx extends DbCommandContext
   before?: (result: Result, ctx: Ctx) => void;
   sections: (result: Result, ctx: Ctx) => readonly ReportSection[];
   toJson?: (result: Result, ctx: Ctx) => unknown;
+  coverage?: (result: Result, ctx: Ctx) => InvocationCoverage;
+  agentResult?: (result: Result, ctx: Ctx) => unknown;
   after?: (result: Result, ctx: Ctx) => void;
 }
 
@@ -74,6 +89,8 @@ interface CommandOutputSpec<Output, Ctx extends DbCommandContext> {
   before?: (output: Output, ctx: Ctx) => void;
   render: (output: Output, ctx: Ctx) => void;
   toJson?: (output: Output, ctx: Ctx) => unknown;
+  coverage?: (output: Output, ctx: Ctx) => InvocationCoverage;
+  agentResult?: (output: Output, ctx: Ctx) => unknown;
   after?: (output: Output, ctx: Ctx) => void;
 }
 
@@ -129,6 +146,8 @@ export function sectionedReportCommand<Result>(spec: SectionedReportCommandSpec<
     before: spec.before,
     render: (result, ctx) => render.sectionedReport(spec.sections(result, ctx)),
     toJson: spec.toJson,
+    coverage: spec.coverage,
+    agentResult: spec.agentResult,
     after: spec.after,
   });
 }
@@ -154,6 +173,8 @@ export function budgetedSectionedReportCommand<Result>(
     before: spec.before,
     render: (result, ctx) => render.sectionedReport(spec.sections(result, ctx)),
     toJson: spec.toJson,
+    coverage: spec.coverage,
+    agentResult: spec.agentResult,
     after: spec.after,
   });
 }
@@ -269,6 +290,8 @@ function renderRows<Row, Ctx extends DbCommandContext>(
       }
     },
     toJson: spec.toJson,
+    coverage: spec.coverage,
+    agentResult: spec.agentResult,
     before: spec.before,
     after: spec.after,
   });
@@ -280,6 +303,8 @@ function runCommandOutput<Output, Ctx extends DbCommandContext>(ctx: Ctx, spec: 
   if (booleanOptionValue(ctx.opts, 'json')) {
     printJsonEnvelope(spec.commandName, ctx.args, ctx.opts, spec.toJson ? spec.toJson(output, ctx) : output, {
       analysisBudget: budgetedContextAnalysisBudget(ctx),
+      coverage: spec.coverage?.(output, ctx),
+      agentResult: spec.agentResult?.(output, ctx),
     });
     return;
   }
@@ -311,9 +336,16 @@ export function printJsonEnvelope(
   args: readonly unknown[],
   options: CommandOptions,
   result: unknown,
-  extra: { analysisBudget?: AnalysisBudgetDisclosure } = {},
+  extra: {
+    analysisBudget?: AnalysisBudgetDisclosure;
+    coverage?: InvocationCoverage;
+    agentResult?: unknown;
+  } = {},
 ): void {
   const evidence = command ? commandEvidenceById.get(command) : undefined;
+  const contract = command ? commandAgentContractById.get(command) : undefined;
+  const coverage = extra.coverage ?? defaultInvocationCoverage(contract, result, extra.analysisBudget);
+  if (coverage) validateInvocationCoverage(coverage);
   console.log(
     JSON.stringify(
       {
@@ -323,11 +355,65 @@ export function printJsonEnvelope(
         args: jsonPositionals(args),
         options,
         result,
+        ...(coverage ? { coverage } : {}),
+        ...(extra.agentResult !== undefined ? { agentResult: extra.agentResult } : {}),
       },
       null,
-      2,
+      booleanOptionValue(options, 'compact') ? 0 : 2,
     ),
   );
+}
+
+export function validateInvocationCoverage(coverage: InvocationCoverage): void {
+  if (!Number.isSafeInteger(coverage.returned) || coverage.returned < 0) {
+    throw new Error('Invocation coverage returned count must be a non-negative safe integer.');
+  }
+  if (coverage.complete === true && !coverage.totalKnown) {
+    throw new Error('Complete invocation coverage must know its total.');
+  }
+  if (coverage.totalKnown) {
+    if (!Number.isSafeInteger(coverage.total) || (coverage.total ?? -1) < coverage.returned) {
+      throw new Error('Known invocation coverage total must be a safe integer at least as large as returned.');
+    }
+    const omitted = coverage.total! - coverage.returned;
+    if (coverage.omitted !== omitted) {
+      throw new Error('Known invocation coverage omitted count must equal total minus returned.');
+    }
+  } else if (coverage.total !== undefined || coverage.omitted !== undefined) {
+    throw new Error('Unknown invocation coverage cannot claim a total or omitted count.');
+  }
+  if (coverage.omittedIdentities && coverage.omittedIdentities.length !== coverage.omitted) {
+    throw new Error('Omitted identity count must equal the disclosed omitted count.');
+  }
+}
+
+function defaultInvocationCoverage(
+  contract: CommandAgentContract | undefined,
+  result: unknown,
+  analysisBudget: AnalysisBudgetDisclosure | undefined,
+): InvocationCoverage | undefined {
+  if (!contract) return undefined;
+  const returned = countReturnedUnits(result);
+  if (contract.coverage === 'complete') {
+    return { complete: true, totalKnown: true, returned, total: returned, omitted: 0 };
+  }
+  if (contract.coverage === 'sampled') {
+    return { complete: false, totalKnown: false, returned };
+  }
+  if (contract.coverage === 'bounded' && analysisBudget) {
+    return { complete: false, totalKnown: false, returned };
+  }
+  return { complete: null, totalKnown: false, returned };
+}
+
+function countReturnedUnits(result: unknown): number {
+  if (Array.isArray(result)) return result.length;
+  if (!result || typeof result !== 'object') return result === undefined || result === null ? 0 : 1;
+  const record = result as Record<string, unknown>;
+  if (Array.isArray(record['rows'])) return record['rows'].length;
+  const topLevelArrays = Object.values(record).filter(Array.isArray);
+  if (topLevelArrays.length > 0) return topLevelArrays.reduce((sum, rows) => sum + rows.length, 0);
+  return 1;
 }
 
 function jsonPositionals(args: readonly unknown[]): readonly unknown[] {

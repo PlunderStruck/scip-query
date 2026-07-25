@@ -2,26 +2,26 @@
 name: scip-directory-architecture
 description: Review directory architecture with scip-query evidence. Use to evaluate, design, reorganize, or migrate folder structure, ownership boundaries, locality config, messy repos, AI-generated layout, or safe file-move slices.
 commands:
-  - template: "scip-query system <scope>"
-    when: "Inventory evidence: files, symbols, deps in/out for the scope."
-  - template: "scip-query locality-candidates --json --full"
-    when: "Inventory evidence: directory-locality candidates from consumer ownership."
-  - template: "scip-query similar-files --full --json"
-    when: "Inventory evidence: files with overlapping dependency profiles."
-  - template: "scip-query cycles"
-    when: "Inventory evidence: circular dependency chains between files."
-  - template: "scip-query architecture --json"
-    when: "Measure configured boundaries, actual dependency traffic, forbidden edges, reciprocal pairs, and boundary cycles."
-  - template: "scip-query drift --architecture"
-    when: "Review direct drift findings together with boundary coverage and architecture signals."
-  - template: "scip-query co-change --json --full"
-    when: "Inventory evidence: hidden file-level coupling from git history."
-  - template: "scip-query health --write-baseline"
-    when: "Record reviewed existing debt before enabling architecture regression enforcement."
-  - template: "scip-query diff-gate"
-    when: "Verify that the current diff introduces no new declared architecture violation."
-  - template: "scip-query config-validate --json"
-    when: "Implement a slice: validate locality config after a move."
+  - template: 'scip-query system <scope>'
+    when: 'Inventory evidence: files, symbols, deps in/out for the scope.'
+  - template: 'scip-query locality-candidates --json --full'
+    when: 'Inventory evidence: directory-locality candidates from consumer ownership.'
+  - template: 'scip-query similar-files --full --json'
+    when: 'Inventory evidence: files with overlapping dependency profiles.'
+  - template: 'scip-query cycles'
+    when: 'Inventory evidence: circular dependency chains between files.'
+  - template: 'scip-query architecture --json'
+    when: 'Measure configured boundaries, actual dependency traffic, forbidden edges, reciprocal pairs, and boundary cycles.'
+  - template: 'scip-query drift --architecture'
+    when: 'Review direct drift findings together with boundary coverage and architecture signals.'
+  - template: 'scip-query co-change --json --full'
+    when: 'Inventory evidence: hidden file-level coupling from git history.'
+  - template: 'scip-query health --write-baseline'
+    when: 'Record reviewed existing debt before enabling architecture regression enforcement.'
+  - template: 'scip-query diff-gate'
+    when: 'Verify that the current diff introduces no new declared architecture violation.'
+  - template: 'scip-query config-validate --json'
+    when: 'Implement a slice: validate locality config after a move.'
 ---
 
 # scip-directory-architecture
@@ -33,18 +33,18 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 <!-- BEGIN GENERATED SKILL COMMANDS -->
 ## Commands for this skill
 
-| Command | Purpose | When |
-| --- | --- | --- |
-| `scip-query system <scope>` | Full module map: files, symbols, deps in/out | Inventory evidence: files, symbols, deps in/out for the scope. |
-| `scip-query locality-candidates --json --full` | Find directory-locality and ancestry candidates from consumer ownership | Inventory evidence: directory-locality candidates from consumer ownership. |
-| `scip-query similar-files --full --json` | Find heuristic similar-file candidates from dependency profiles | Inventory evidence: files with overlapping dependency profiles. |
-| `scip-query cycles` | Detect circular dependency chains between files | Inventory evidence: circular dependency chains between files. |
-| `scip-query architecture --json` | Evaluate project-owned architectural boundaries and dependency rules | Measure configured boundaries, actual dependency traffic, forbidden edges, reciprocal pairs, and boundary cycles. |
-| `scip-query drift --architecture` | Detect drift candidates: unused imports and declared architecture violations; pass --architecture for boundary context | Review direct drift findings together with boundary coverage and architecture signals. |
-| `scip-query co-change --json --full` | Files that change together in git history without a dependency edge — hidden coupling candidates | Inventory evidence: hidden file-level coupling from git history. |
-| `scip-query health --write-baseline` | Composite codebase health report with prioritized action list | Record reviewed existing debt before enabling architecture regression enforcement. |
-| `scip-query diff-gate` | Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | Verify that the current diff introduces no new declared architecture violation. |
-| `scip-query config-validate --json` | Validate .scipquery.json, including structured suppressions and declared coupling groups | Implement a slice: validate locality config after a move. |
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query system <scope>` | Full module map: files, symbols, deps in/out | module file paths; exported symbols with line ranges; internal dependencies; reverse dependencies | `complete` | Inventory evidence: files, symbols, deps in/out for the scope. |
+| `scip-query locality-candidates --json --full` | Find directory-locality and ancestry candidates from consumer ownership | symbols, current homes, consumer locality, and suggested homes | `bounded` | Inventory evidence: directory-locality candidates from consumer ownership. |
+| `scip-query similar-files --full --json` | Find heuristic similar-file candidates from dependency profiles | file pairs with similarity scores and shared symbols | `bounded` | Inventory evidence: files with overlapping dependency profiles. |
+| `scip-query cycles` | Detect circular dependency chains between files | dependency-cycle file chains | `bounded` | Inventory evidence: circular dependency chains between files. |
+| `scip-query architecture --json` | Evaluate project-owned architectural boundaries and dependency rules | boundary coverage and dependency-rule violations | `complete` | Measure configured boundaries, actual dependency traffic, forbidden edges, reciprocal pairs, and boundary cycles. |
+| `scip-query drift --architecture` | Detect drift candidates: unused imports and declared architecture violations; pass --architecture for boundary context | drifted symbol families, files, and evidence | `bounded` | Review direct drift findings together with boundary coverage and architecture signals. |
+| `scip-query co-change --json --full` | Files that change together in git history without a dependency edge — hidden coupling candidates | file pairs, co-change counts, confidence, and history context | `bounded` | Inventory evidence: hidden file-level coupling from git history. |
+| `scip-query health --write-baseline` | Composite codebase health report with prioritized action list | health score, findings, priorities, baselines, and coverage notes | `bounded` | Record reviewed existing debt before enabling architecture regression enforcement. |
+| `scip-query diff-gate` | Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | blocking findings with check id, message, and remediation; advisory findings; root-cause groups; changed file and symbol counts; process exit status (1 when blocking findings exist) | `bounded` | Verify that the current diff introduces no new declared architecture violation. |
+| `scip-query config-validate --json` | Validate .scipquery.json, including structured suppressions and declared coupling groups | validation diagnostics with config paths | `complete` | Implement a slice: validate locality config after a move. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -191,17 +191,29 @@ Use this shape:
 # Directory Architecture Review
 
 ## Scope
+
 ## Current Structure Map
+
 ## Boundary Maturity
+
 ## Descriptive Architecture Model
+
 ## Dependency Rules
+
 ## Forbidden-Edge Ledger
+
 ## Reciprocal and Cycle Review
+
 ## Target Structure
+
 ## Move Ledger
+
 ## Locality Config
+
 ## No-Move Decisions
+
 ## Deferred Decisions
+
 ## Migration Order
 ```
 

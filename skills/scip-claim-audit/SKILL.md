@@ -2,16 +2,16 @@
 name: scip-claim-audit
 description: Audit output-facing status claims for evidence with scip-query. Use to classify whether an "available", "verified", "safe", "PASS", or "complete" status word is derived from a real check, hedged as a candidate, or merely asserted without being probed.
 commands:
-  - template: "scip-query files <pattern>"
-    when: "Inventory: locate the renderer or status-producing module for a claim."
-  - template: "scip-query refs <symbol>"
-    when: "Classify: find every producer and consumer of a status-bearing function."
-  - template: "scip-query code <symbol>"
-    when: "Classify: read the producing function to see whether it computes or asserts."
-  - template: "scip-query trace <symbol>"
-    when: "Classify: definition plus every reference for a status field or constant."
-  - template: "scip-query capabilities --matrix --json"
-    when: "Spot-check: an already-known example of a fixed derived-status surface."
+  - template: 'scip-query files <pattern>'
+    when: 'Inventory: locate the renderer or status-producing module for a claim.'
+  - template: 'scip-query refs <symbol>'
+    when: 'Classify: find every producer and consumer of a status-bearing function.'
+  - template: 'scip-query code <symbol>'
+    when: 'Classify: read the producing function to see whether it computes or asserts.'
+  - template: 'scip-query trace <symbol>'
+    when: 'Classify: definition plus every reference for a status field or constant.'
+  - template: 'scip-query capabilities --matrix --json'
+    when: 'Spot-check: an already-known example of a fixed derived-status surface.'
 ---
 
 # scip-claim-audit
@@ -23,13 +23,13 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 <!-- BEGIN GENERATED SKILL COMMANDS -->
 ## Commands for this skill
 
-| Command | Purpose | When |
-| --- | --- | --- |
-| `scip-query files <pattern>` | Find files matching a pattern | Inventory: locate the renderer or status-producing module for a claim. |
-| `scip-query refs <symbol>` | Find all files referencing a symbol | Classify: find every producer and consumer of a status-bearing function. |
-| `scip-query code <symbol>` | Read the source code for a symbol (bounded to its definition range) | Classify: read the producing function to see whether it computes or asserts. |
-| `scip-query trace <symbol>` | Trace a symbol: definition + all references | Classify: definition plus every reference for a status field or constant. |
-| `scip-query capabilities --matrix --json` | Report which evidence and verification capabilities are available in this project | Spot-check: an already-known example of a fixed derived-status surface. |
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query files <pattern>` | Find files matching a pattern | matching file paths | `complete` | Inventory: locate the renderer or status-producing module for a claim. |
+| `scip-query refs <symbol>` | Find all files referencing a symbol | referencing file paths; reference line numbers grouped by file | `bounded` | Classify: find every producer and consumer of a status-bearing function. |
+| `scip-query code <symbol>` | Read the source code for a symbol (bounded to its definition range) | definition identity, source, and line range | `complete` | Classify: read the producing function to see whether it computes or asserts. |
+| `scip-query trace <symbol>` | Trace a symbol: definition + all references | definition sites with source and signature; referencing files with line numbers | `bounded` | Classify: definition plus every reference for a status field or constant. |
+| `scip-query capabilities --matrix --json` | Report which evidence and verification capabilities are available in this project | capability matrix with availability and reasons | `complete` | Spot-check: an already-known example of a fixed derived-status surface. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -100,6 +100,7 @@ Claim table:
 | --- | --- | --- | --- |
 
 Fixed since last audit:
+
 - <claim> — now derived via <probe>, no longer a finding.
 ```
 

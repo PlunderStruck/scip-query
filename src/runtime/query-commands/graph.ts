@@ -1,6 +1,6 @@
 import * as queries from '../../queries/index.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
-import { doc, option, parseInteger, withJsonOption } from '../command-kit/command-spec-builders.js';
+import { agentContract, doc, option, parseInteger, withJsonOption } from '../command-kit/command-spec-builders.js';
 import {
   budgetedTableCommand,
   booleanOptionValue,
@@ -311,6 +311,13 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'hotspots',
     command: 'hotspots',
     description: 'Most-referenced symbols in the codebase (choke points)',
+    agent: agentContract(
+      'Which symbols are the largest reference choke points?',
+      'ranked symbol identities with reference and file counts',
+      [],
+      'bounded',
+      'repository',
+    ),
     options: [
       option('-n, --limit <n>', 'Number of results', parseInteger, 30),
       option('-s, --scope <path>', 'Limit to files matching path'),
@@ -329,6 +336,13 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'fan-in',
     command: 'fan-in [symbol]',
     description: 'Count files referencing an exact symbol; top JSON rows include exact symbol identity',
+    agent: agentContract(
+      'How many files reference this symbol, or which symbols have highest fan-in?',
+      'exact symbols with referencing-file counts',
+      ['symbol'],
+      'bounded',
+      'repository',
+    ),
     options: withJsonOption([
       option('-n, --limit <n>', 'Number of results for top mode', parseInteger, 30),
       option('-s, --scope <path>', 'Limit to files matching path'),
@@ -342,6 +356,13 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'fan-out',
     command: 'fan-out [file]',
     description: 'How many external symbols a file uses (or top fan-out across codebase)',
+    agent: agentContract(
+      'How many external symbols does this file use, or which files have highest fan-out?',
+      'files with external-symbol counts',
+      ['file'],
+      'bounded',
+      'repository',
+    ),
     options: withJsonOption([
       option('-n, --limit <n>', 'Number of results for top mode', parseInteger, 30),
       option('-s, --scope <path>', 'Limit to files matching path'),
@@ -355,6 +376,13 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'coupling',
     command: 'coupling [file1] [file2]',
     description: 'Coupling between two files, or top coupled pairs in codebase',
+    agent: agentContract(
+      'How strongly are these files coupled, or which pairs are most coupled?',
+      'file pairs with coupling evidence and scores',
+      ['file', 'file'],
+      'bounded',
+      'repository',
+    ),
     options: withJsonOption([
       option('-n, --limit <n>', 'Number of results for top mode', parseInteger, 20),
       option('-s, --scope <path>', 'Limit to files matching path'),
@@ -368,6 +396,13 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'cycles',
     command: 'cycles',
     description: 'Detect circular dependency chains between files',
+    agent: agentContract(
+      'Which file dependency cycles exist?',
+      'dependency-cycle file chains',
+      [],
+      'bounded',
+      'repository',
+    ),
     options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--max-depth <n>', 'Bound DFS search depth', parseInteger, 10),
@@ -380,6 +415,13 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'architecture',
     command: 'architecture',
     description: 'Evaluate project-owned architectural boundaries and dependency rules',
+    agent: agentContract(
+      'Does the repository obey its declared architecture boundaries?',
+      'boundary coverage and dependency-rule violations',
+      [],
+      'complete',
+      'repository',
+    ),
     options: withJsonOption([option('-s, --scope <path>', 'Limit to files matching path')]),
     evidence: 'mixed',
     renderShape: 'custom',
@@ -390,6 +432,13 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'bottlenecks',
     command: 'bottlenecks',
     description: 'Find coupling hubs: high fan-in AND high fan-out',
+    agent: agentContract(
+      'Which files are high-connectivity coupling hubs?',
+      'ranked files with fan-in and fan-out counts',
+      [],
+      'bounded',
+      'repository',
+    ),
     options: withJsonOption([
       option('-n, --limit <n>', 'Number of results', parseInteger, 20),
       option('-s, --scope <path>', 'Limit to files matching path'),
@@ -406,6 +455,13 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'deep-chains',
     command: 'deep-chains',
     description: 'Find the longest condensed dependency-component chains',
+    agent: agentContract(
+      'Which dependency chains are deepest and riskiest?',
+      'ranked component chains with depth, risk, and recommendation',
+      [],
+      'bounded',
+      'repository',
+    ),
     options: withJsonOption([
       option('-n, --limit <n>', 'Number of chains to show', parseInteger, 10),
       option('-s, --scope <path>', 'Limit to files matching path'),
@@ -420,6 +476,12 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'call-graph',
     command: 'call-graph <symbol>',
     description: 'Show incoming callers and outgoing callees for a symbol',
+    agent: agentContract(
+      'Who calls this symbol and what does it call?',
+      'caller and callee symbol identities with files',
+      ['symbol'],
+      'bounded',
+    ),
     options: [option('--full', 'Run unbounded semantic analysis on large indexes')],
     budget: 'semantic',
     docs: doc('Graph'),

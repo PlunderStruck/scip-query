@@ -2,6 +2,7 @@ import * as queries from '../../../queries/index.js';
 import type { CommandDescriptor } from '../../command-kit/command-descriptor-types.js';
 import { definedLimitOption, stringOptionValue } from '../../command-kit/command-execution.js';
 import {
+  agentContract,
   doc,
   option,
   parseInteger,
@@ -76,6 +77,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'unused-params',
     command: 'unused-params',
+    agent: agentContract(
+      'Which trailing parameters are never read by their bodies?',
+      'candidate parameters with callable and file identities',
+      [],
+      'bounded',
+      'repository',
+    ),
     description: 'Speculative-generality candidates: trailing parameters no body ever uses (TS/JS)',
     options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
@@ -91,6 +99,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'cleanup-plan',
     command: 'cleanup-plan',
+    agent: agentContract(
+      'What code can be deleted safely, and in what dependency order?',
+      'ordered cleanup batches, evidence, and optional verification outcomes',
+      [],
+      'bounded',
+      'repository',
+    ),
     description: 'Ordered, batched deletion plan: graph-fact dead code plus the cascade candidates it unlocks',
     options: [
       option('-s, --scope <path>', 'Limit to files matching path'),
@@ -109,6 +124,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'cleanup-apply',
     command: 'cleanup-apply',
+    agent: agentContract(
+      'Can a compiler-verified cleanup batch be applied to this working tree?',
+      'applied files, deletions, verification, and refusal reasons',
+      [],
+      'bounded',
+      'repository',
+    ),
     description: 'Apply a compiler-verified cleanup-plan batch to the working tree',
     options: [
       option('-s, --scope <path>', 'Limit to files matching path'),
@@ -128,6 +150,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'recent-duplicates',
     command: 'recent-duplicates',
+    agent: agentContract(
+      'Did recent code reimplement established code?',
+      'recent and established symbol pairs with similarity evidence',
+      [],
+      'bounded',
+      'repository',
+    ),
     description:
       'Directional duplicate candidates: recent code that re-implements established callable, React, or Vue code',
     options: withJsonOption([
@@ -146,6 +175,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'doc-drift',
     command: 'doc-drift [doc]',
+    agent: agentContract(
+      'Which documentation may be stale relative to changing code?',
+      'document paths, coupled code subjects, and history evidence',
+      ['path'],
+      'bounded',
+      'repository',
+    ),
     description: 'Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped',
     options: withJsonOption([
       option('-n, --limit <n>', 'Maximum docs to report', parseInteger, 20),
@@ -160,6 +196,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'dead',
     command: 'dead [scope]',
+    agent: agentContract(
+      'Which symbols have no repository use or only file-internal use?',
+      'symbol identities, ranges, liveness classes, and evidence',
+      ['path'],
+      'bounded',
+      'repository',
+    ),
     description: 'Find repository-dead code, file-internal symbols, and implicit-usage signals',
     options: withJsonOption([
       option('--min-loc <n>', 'Only show symbols >= N lines', parseInteger, 1),
@@ -178,6 +221,12 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'unused-imports',
     command: 'unused-imports <file>',
+    agent: agentContract(
+      'Which imports in this file are unused?',
+      'import symbol identities and source ranges',
+      ['file'],
+      'bounded',
+    ),
     description: 'Find imports not referenced in the same file',
     options: withJsonOption([option('--full', 'Run unbounded semantic analysis on large indexes')]),
     budget: 'semantic',
@@ -187,6 +236,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'isolated',
     command: 'isolated',
+    agent: agentContract(
+      'Which symbols are disconnected from the repository reference graph?',
+      'isolated symbol identities and files',
+      [],
+      'bounded',
+      'repository',
+    ),
     description: 'Find completely orphaned symbols (no references at all)',
     options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
@@ -200,6 +256,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'similar',
     command: 'similar [symbol] [other]',
+    agent: agentContract(
+      'Which callable resembles this one, or how similar are these two?',
+      'symbol pairs, similarity scores, and shared evidence',
+      ['symbol', 'symbol'],
+      'bounded',
+      'repository',
+    ),
     description: 'Find heuristic function similarity candidates from callee fingerprints',
     options: withJsonOption([
       option('--min-similarity <n>', 'Minimum weighted-cosine similarity (0-1)', parseNumber, 0.4),
@@ -218,6 +281,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'similar-files',
     command: 'similar-files [file]',
+    agent: agentContract(
+      'Which files have similar callable structure?',
+      'file pairs with similarity scores and shared symbols',
+      ['file'],
+      'bounded',
+      'repository',
+    ),
     description: 'Find heuristic similar-file candidates from dependency profiles',
     options: withJsonOption([
       option('--min-similarity <n>', 'Minimum Jaccard similarity (0-1)', parseNumber, 0.5),
@@ -233,6 +303,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'react-component-duplicates',
     command: 'react-component-duplicates [file]',
+    agent: agentContract(
+      'Which React components appear to duplicate one another?',
+      'component pairs with structural similarity evidence',
+      ['file'],
+      'bounded',
+      'repository',
+    ),
     description:
       'Find heuristic duplicated React component structure candidates from JSX tags, props, events, and bindings',
     options: withJsonOption([
@@ -250,6 +327,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'react-hook-candidates',
     command: 'react-hook-candidates [file]',
+    agent: agentContract(
+      'Which repeated React logic could become a custom hook?',
+      'component groups and shared hook-shaped behavior',
+      ['file'],
+      'bounded',
+      'repository',
+    ),
     description: 'Find heuristic React hook extraction candidates from shared state, effects, requests, and handlers',
     options: withJsonOption([
       option('--min-similarity <n>', 'Minimum behavior similarity (0-1)', parseNumber, 0.45),
@@ -266,6 +350,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'react-large-component-pressure',
     command: 'react-large-component-pressure [file]',
+    agent: agentContract(
+      'Which React components have evidence of being too large or overloaded?',
+      'component identities with size and responsibility pressure',
+      ['file'],
+      'bounded',
+      'repository',
+    ),
     description:
       'Find heuristic large React component pressure candidates from component lines, JSX structure, and hook behavior',
     options: withJsonOption([
@@ -285,6 +376,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'vue-component-duplicates',
     command: 'vue-component-duplicates [file]',
+    agent: agentContract(
+      'Which Vue components appear to duplicate one another?',
+      'component pairs with structural similarity evidence',
+      ['file'],
+      'bounded',
+      'repository',
+    ),
     description:
       'Find heuristic duplicated Vue component structure candidates from template tags, bindings, slots, and directives',
     options: withJsonOption([
@@ -302,6 +400,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'vue-composable-candidates',
     command: 'vue-composable-candidates [file]',
+    agent: agentContract(
+      'Which repeated Vue logic could become a composable?',
+      'component groups and shared composable-shaped behavior',
+      ['file'],
+      'bounded',
+      'repository',
+    ),
     description:
       'Find heuristic Vue composable extraction candidates from shared state, effects, requests, and template bindings',
     options: withJsonOption([
@@ -319,6 +424,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'vue-large-view-pressure',
     command: 'vue-large-view-pressure [file]',
+    agent: agentContract(
+      'Which Vue views have evidence of being too large or overloaded?',
+      'view identities with size and responsibility pressure',
+      ['file'],
+      'bounded',
+      'repository',
+    ),
     description:
       'Find heuristic large Vue view pressure candidates from template, script, style, and external script line counts',
     options: withJsonOption([
@@ -339,6 +451,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'similar-chains',
     command: 'similar-chains',
+    agent: agentContract(
+      'Which transitive chains of similar symbols suggest repeated designs?',
+      'similarity-connected symbol chains and scores',
+      [],
+      'bounded',
+      'repository',
+    ),
     description: 'Find heuristic similar-chain candidates from dependency flows',
     options: withJsonOption([
       option('--min-similarity <n>', 'Minimum chain similarity (0-1)', parseNumber, 0.5),
@@ -355,6 +474,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'extract-candidates',
     command: 'extract-candidates',
+    agent: agentContract(
+      'Which cohesive code regions are strong extraction candidates?',
+      'symbol identities with cohesion, reuse, and extraction evidence',
+      [],
+      'bounded',
+      'repository',
+    ),
     description: 'Find heuristic extraction candidates from isolated callee clusters',
     options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
@@ -371,6 +497,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'locality-candidates',
     command: 'locality-candidates [symbol-or-file]',
+    agent: agentContract(
+      'Which definitions live far from most of their consumers?',
+      'symbols, current homes, consumer locality, and suggested homes',
+      [['symbol', 'file']],
+      'bounded',
+      'repository',
+    ),
     description: 'Find directory-locality and ancestry candidates from consumer ownership',
     options: withJsonOption([
       option('-s, --scope <path>', 'Limit scan mode to files matching path'),
@@ -391,6 +524,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'drift',
     command: 'drift [module]',
+    agent: agentContract(
+      'Where has a module or abstraction drifted across parallel implementations?',
+      'drifted symbol families, files, and evidence',
+      ['module'],
+      'bounded',
+      'repository',
+    ),
     description:
       'Detect drift candidates: unused imports and declared architecture violations; pass --architecture for boundary context',
     options: withJsonOption([
@@ -423,6 +563,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'wrapper-candidates',
     command: 'wrapper-candidates',
+    agent: agentContract(
+      'Which callables are unnecessary forwarding wrappers?',
+      'wrapper identities, targets, and forwarding evidence',
+      [],
+      'bounded',
+      'repository',
+    ),
     description:
       'Find heuristic wrapper candidates only called by one consumer (high false-positive rate on codebases with intentional layering/ambient types — treat as exploration, not findings)',
     options: withJsonOption([
@@ -439,6 +586,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'passthrough-candidates',
     command: 'passthrough-candidates',
+    agent: agentContract(
+      'Which parameters are passed through layers without local use?',
+      'parameter paths across call chains',
+      [],
+      'bounded',
+      'repository',
+    ),
     description: 'Find heuristic passthrough candidates that forward to one callee',
     options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
@@ -454,6 +608,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'stale-abstractions',
     command: 'stale-abstractions',
+    agent: agentContract(
+      'Which abstractions no longer earn their indirection?',
+      'abstraction identities with usage, change, and replacement evidence',
+      [],
+      'bounded',
+      'repository',
+    ),
     description:
       'Find heuristic stale abstraction candidates with 0-1 consumers (high false-positive rate on codebases with intentional layering/ambient types — treat as exploration, not findings)',
     options: withJsonOption([
@@ -476,6 +637,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'complexity-hotspots',
     command: 'complexity-hotspots',
+    agent: agentContract(
+      'Which symbols combine high complexity with high change pressure?',
+      'ranked symbols with complexity and churn evidence',
+      [],
+      'bounded',
+      'repository',
+    ),
     description: 'Find heuristic complexity hotspot candidates from LOC x fan-in x fan-out',
     options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
@@ -491,6 +659,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'convergence',
     command: 'convergence <symbol1> <symbol2>',
+    agent: agentContract(
+      'How should these two similar symbols converge?',
+      'deprecated alias result for a two-symbol similarity plan',
+      ['symbol', 'symbol'],
+      'bounded',
+    ),
+    evidence: 'heuristic',
     description: 'Deprecated alias for similar <symbol1> <symbol2> --plan',
     options: withJsonOption([option('--full', 'Run unbounded semantic analysis on large indexes')]),
     budget: 'semantic',
@@ -500,6 +675,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   groupedQueryCommand({
     id: 'redundant-reexports',
     command: 'redundant-reexports',
+    agent: agentContract(
+      'Which re-exports add no useful API boundary?',
+      're-export sites, original definitions, and consumer evidence',
+      [],
+      'bounded',
+      'repository',
+    ),
     description: 'Find barrel re-exports that nobody imports through',
     options: [
       option('-s, --scope <path>', 'Limit to files matching path'),
@@ -524,6 +706,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'duplicate-bodies',
     command: 'duplicate-bodies',
+    agent: agentContract(
+      'Which callable bodies are exact duplicates?',
+      'callable groups with exact normalized-body identity',
+      [],
+      'bounded',
+      'repository',
+    ),
     description: 'Find exact duplicate small-body candidates across files',
     options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
@@ -540,6 +729,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'twin-drift',
     command: 'twin-drift',
+    agent: agentContract(
+      'Which same-concept twin implementations have drifted?',
+      'twin symbol pairs, history, and divergence evidence',
+      [],
+      'bounded',
+      'repository',
+    ),
     description: 'Twin drift candidates: same-name (or near-name) functions across files with diverged bodies',
     options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
@@ -562,6 +758,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'not-implemented',
     command: 'not-implemented',
+    agent: agentContract(
+      'Which callables are placeholders rather than real implementations?',
+      'callable identities and placeholder evidence',
+      [],
+      'bounded',
+      'repository',
+    ),
     description:
       "Reachable placeholder stub candidates (throw-stub, TODO+return-default, empty body) — production callers can actually reach these; an unreachable stub is dead's job, not this one's",
     options: withJsonOption([
@@ -578,6 +781,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'decorative-checkers',
     command: 'decorative-checkers',
+    agent: agentContract(
+      'Which validation checks cannot meaningfully fail?',
+      'checker identities, call sites, and decorative behavior evidence',
+      [],
+      'bounded',
+      'repository',
+    ),
     description:
       'Decorative checker candidates: validate*/verify*/check*/assert*/is*/has* callables with no reachable failure exit anywhere in their body',
     options: withJsonOption([
@@ -594,6 +804,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'test-quality',
     command: 'test-quality',
+    agent: agentContract(
+      'Which tests have weak assertions or poor production-code reach?',
+      'test identities with assertion and reachability evidence',
+      [],
+      'bounded',
+      'repository',
+    ),
     description:
       'Test-quality candidates: assertion-free it/test bodies, a skipped-test ledger with git-blame age, and mock-echo tests that assert the same literal they stubbed into a mock',
     options: withJsonOption([
@@ -611,6 +828,12 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'twin-ab',
     command: 'twin-ab <symbolA> <symbolB>',
+    agent: agentContract(
+      'How do these two twin implementations differ in structure and behavior?',
+      'side-by-side symbol evidence and divergence classification',
+      ['symbol', 'symbol'],
+      'complete',
+    ),
     description:
       'Generate a behavioral A/B scaffold comparing two same-concept twins (scip-integrity-audit drill 5) — a ready-to-fill vitest file, not an auto-executor',
     options: withJsonOption([
@@ -628,6 +851,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'similar-signatures',
     command: 'similar-signatures',
+    agent: agentContract(
+      'Which callables have suspiciously similar signatures?',
+      'callable pairs with signature similarity evidence',
+      [],
+      'bounded',
+      'repository',
+    ),
     description: 'Find functions with near-identical type signatures (same shape)',
     options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),

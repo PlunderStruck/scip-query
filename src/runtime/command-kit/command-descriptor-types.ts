@@ -25,6 +25,97 @@ export type CommandBudgetPolicy = 'none' | 'semantic' | 'candidate-scan';
 export type CommandRenderShape = 'custom' | 'empty' | 'list' | 'grouped-by-file' | 'sectioned-report' | 'table';
 export type CommandEvidenceTier = 'graph-fact' | 'heuristic' | 'mixed';
 
+/**
+ * How much of the available answer a command examines by default.
+ *
+ * Independent of `CommandEvidenceTier`, which says how a result was *derived*.
+ * A heuristic scan can be `complete`; a graph-fact query can be `bounded`.
+ * `heuristic` is therefore not a coverage value — keep the two fields separate.
+ *
+ * This is the DEFAULT policy only. What actually happened on one invocation
+ * depends on `--full`, index size, and analysis budgets, so it is reported at
+ * runtime by the handler (see `InvocationCoverage`) rather than inferred here.
+ */
+export type CoveragePolicy =
+  /** The default result is the whole answer. */
+  | 'complete'
+  /** A cap may engage; the invocation must disclose whether it did. */
+  | 'bounded'
+  /** Deliberately examines a subset (sampling is the point of the command). */
+  | 'sampled'
+  /** The command cannot currently determine its own coverage. Honest, not a placeholder. */
+  | 'unknown';
+
+/**
+ * Positional input kinds, in declaration order. A list rather than one target
+ * union because the command set does not fit a single value: `similar <a> <b>`
+ * is two symbols, `coupling <f1> <f2>` two files, `tla <operation> [spec]` an
+ * action plus a path, and `hotspots` takes nothing.
+ */
+export type CommandInputKind = 'symbol' | 'file' | 'module' | 'pattern' | 'path' | 'action' | 'finding';
+
+/**
+ * What a command reads when it is given no target: the working-tree diff, or
+ * the whole index. Kept separate from `CommandInputKind` because these are not
+ * positional — `diff-gate` names no argument yet plainly operates on something,
+ * and collapsing the two makes the arity of a signature unstateable.
+ */
+export type CommandScope = 'diff' | 'repository';
+
+/** What one invocation can prove about the result it returned. */
+export interface InvocationCoverage {
+  /** True for the complete answer, false for a known subset, null when unknowable. */
+  complete: boolean | null;
+  /** Whether `total` names the full available answer rather than only examined rows. */
+  totalKnown: boolean;
+  /** Number of result units returned by this invocation. */
+  returned: number;
+  /** Full available unit count, when known. */
+  total?: number;
+  /** Units not returned, when the full count is known. */
+  omitted?: number;
+  /** Stable omitted identities, only when the complete identity set was materialized. */
+  omittedIdentities?: readonly string[];
+  /** Resume token bound to the exact index generation that produced it. */
+  continuation?: { cursor: string; indexGeneration: string };
+}
+
+/**
+ * One positional slot. An array means the slot accepts any of those kinds —
+ * `plan-context <target>` takes a symbol, a file, or a module.
+ *
+ * Arity is deliberately not encoded here: `command` already distinguishes
+ * `<required>` from `[optional]`, and duplicating it would let the two drift.
+ */
+export type CommandInputSlot = CommandInputKind | readonly CommandInputKind[];
+
+/**
+ * What an agent needs to know before choosing this command: which questions it
+ * settles, what units come back, and how complete the default answer is.
+ *
+ * Distinct from `description` (human prose) and `evidence` (provenance). This
+ * is the source the generated skill tables read, so agents and docs cannot
+ * drift from each other.
+ */
+export interface CommandAgentContract {
+  /** Task questions this command settles, phrased as an agent would ask them. */
+  answers: readonly string[];
+  /** Concrete units in the result (e.g. 'referencing file paths'). */
+  returns: readonly string[];
+  /** Positional input slots, in order. Must match the arity declared in `command`. */
+  inputs: readonly CommandInputSlot[];
+  /**
+   * What the command reads with no target given. Required when `inputs` is
+   * empty, and also set on commands whose target is optional (`co-change
+   * [file]` falls back to repository-wide).
+   */
+  scope?: CommandScope;
+  /** Default coverage policy; the invocation reports what actually happened. */
+  coverage: CoveragePolicy;
+  /** Neighbouring commands this one is commonly confused with. */
+  contrasts?: readonly { command: string; distinction: string }[];
+}
+
 export interface CommandDescriptor {
   id: string;
   command: string;
@@ -33,6 +124,8 @@ export interface CommandDescriptor {
   arguments?: readonly CommandArgumentDescriptor[];
   options?: readonly CommandOptionDescriptor[];
   evidence?: CommandEvidenceTier;
+  /** Agent-facing return/coverage contract. Required for public commands — see cli-contract. */
+  agent?: CommandAgentContract;
   heuristic?: CommandHeuristicNotice;
   budget?: CommandBudgetPolicy;
   renderShape: CommandRenderShape;

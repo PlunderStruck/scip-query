@@ -2,18 +2,18 @@
 name: scip-cleanup-audit
 description: Audit and rank scip-query cleanup signals without editing code. Use for health reports, de-bloat reports, recent AI residue audits, score-framed cleanup queues, confirming raw findings, or preparing a cleanup plan.
 commands:
-  - template: "scip-query health --json"
-    when: "Establish evidence: composite score and prioritized action list."
-  - template: "scip-query cleanup-plan --verify --json"
-    when: "Sweep signals: compiler-verified deletion plan, batched."
-  - template: "scip-query duplicate-bodies --json --full"
-    when: "Sweep signals: exact duplicate small-body candidates."
-  - template: "scip-query recent-duplicates --json --full"
-    when: "Sweep signals: recent code that re-implements established code."
-  - template: "scip-query incomplete-migration --json --full"
-    when: "Sweep signals: partially-completed extractions."
-  - template: "scip-query doc-drift --json --full"
-    when: "Sweep signals: stale docs referencing changed code."
+  - template: 'scip-query health --json'
+    when: 'Establish evidence: composite score and prioritized action list.'
+  - template: 'scip-query cleanup-plan --verify --json'
+    when: 'Sweep signals: compiler-verified deletion plan, batched.'
+  - template: 'scip-query duplicate-bodies --json --full'
+    when: 'Sweep signals: exact duplicate small-body candidates.'
+  - template: 'scip-query recent-duplicates --json --full'
+    when: 'Sweep signals: recent code that re-implements established code.'
+  - template: 'scip-query incomplete-migration --json --full'
+    when: 'Sweep signals: partially-completed extractions.'
+  - template: 'scip-query doc-drift --json --full'
+    when: 'Sweep signals: stale docs referencing changed code.'
 ---
 
 # scip-cleanup-audit
@@ -25,14 +25,14 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 <!-- BEGIN GENERATED SKILL COMMANDS -->
 ## Commands for this skill
 
-| Command | Purpose | When |
-| --- | --- | --- |
-| `scip-query health --json` | Composite codebase health report with prioritized action list | Establish evidence: composite score and prioritized action list. |
-| `scip-query cleanup-plan --verify --json` | Ordered, batched deletion plan: graph-fact dead code plus the cascade candidates it unlocks | Sweep signals: compiler-verified deletion plan, batched. |
-| `scip-query duplicate-bodies --json --full` | Find exact duplicate small-body candidates across files | Sweep signals: exact duplicate small-body candidates. |
-| `scip-query recent-duplicates --json --full` | Directional duplicate candidates: recent code that re-implements established callable, React, or Vue code | Sweep signals: recent code that re-implements established code. |
-| `scip-query incomplete-migration --json --full` | Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain | Sweep signals: partially-completed extractions. |
-| `scip-query doc-drift --json --full` | Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped | Sweep signals: stale docs referencing changed code. |
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query health --json` | Composite codebase health report with prioritized action list | health score, findings, priorities, baselines, and coverage notes | `bounded` | Establish evidence: composite score and prioritized action list. |
+| `scip-query cleanup-plan --verify --json` | Ordered, batched deletion plan: graph-fact dead code plus the cascade candidates it unlocks | ordered cleanup batches, evidence, and optional verification outcomes | `bounded` | Sweep signals: compiler-verified deletion plan, batched. |
+| `scip-query duplicate-bodies --json --full` | Find exact duplicate small-body candidates across files | callable groups with exact normalized-body identity | `bounded` | Sweep signals: exact duplicate small-body candidates. |
+| `scip-query recent-duplicates --json --full` | Directional duplicate candidates: recent code that re-implements established callable, React, or Vue code | recent and established symbol pairs with similarity evidence | `bounded` | Sweep signals: recent code that re-implements established code. |
+| `scip-query incomplete-migration --json --full` | Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain | new helpers and similar unmigrated call sites | `bounded` | Sweep signals: partially-completed extractions. |
+| `scip-query doc-drift --json --full` | Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped | document paths, coupled code subjects, and history evidence | `bounded` | Sweep signals: stale docs referencing changed code. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -111,15 +111,19 @@ Health score: N/100
 Classification counts: <n> confirmed / <i> intentional / <fp> false positive / <b> blocked (must cover every collected signal)
 
 Confirmed items:
+
 - [priority] finding - evidence - first safe action
 
 Unconfirmed signals:
+
 - signal - evidence still needed
 
 Unavailable or blocked checks:
+
 - check - reason
 
 Recommended first cleanup batch:
+
 - batch - why safe now
 ```
 

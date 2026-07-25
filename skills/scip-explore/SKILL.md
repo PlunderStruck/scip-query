@@ -1,19 +1,19 @@
 ---
 name: scip-explore
-description: Explore codebases with scip-query evidence. Use to explain how a system, feature, module, call path, dependency graph, data flow, architecture, or change risk works before answering or editing.
+description: Explain how code works, where a feature is implemented, what calls or consumes it, how data flows, or what a change could affect. Uses scip-query to explore an unfamiliar system before answering or editing.
 commands:
-  - template: "scip-query stats"
-    when: "Orient: repo-wide size and shape before naming a scope."
-  - template: "scip-query system <module-or-scope>"
-    when: "Orient: map files, symbols, deps in/out for the scope."
-  - template: "scip-query trace <entry-symbol>"
-    when: "Trace entry points: definition plus every reference."
-  - template: "scip-query call-graph <entry-symbol>"
-    when: "Trace entry points: callers and callees for the path."
-  - template: "scip-query dataflow <symbol-or-variable>"
-    when: "Follow data and state through producers and consumers."
-  - template: "scip-query affected <symbol> --json"
-    when: "Map dependencies and consumers: downstream blast radius."
+  - template: 'scip-query stats'
+    when: 'Orient: repo-wide size and shape before naming a scope.'
+  - template: 'scip-query system <module-or-scope>'
+    when: 'Orient: map files, symbols, deps in/out for the scope.'
+  - template: 'scip-query trace <entry-symbol>'
+    when: 'Trace entry points: definition plus every reference.'
+  - template: 'scip-query call-graph <entry-symbol>'
+    when: 'Trace entry points: callers and callees for the path.'
+  - template: 'scip-query dataflow <symbol-or-variable>'
+    when: 'Follow data and state through producers and consumers.'
+  - template: 'scip-query affected <symbol> --json'
+    when: 'Map dependencies and consumers: downstream blast radius.'
 ---
 
 # scip-explore
@@ -25,14 +25,14 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 <!-- BEGIN GENERATED SKILL COMMANDS -->
 ## Commands for this skill
 
-| Command | Purpose | When |
-| --- | --- | --- |
-| `scip-query stats` | Show index statistics | Orient: repo-wide size and shape before naming a scope. |
-| `scip-query system <module-or-scope>` | Full module map: files, symbols, deps in/out | Orient: map files, symbols, deps in/out for the scope. |
-| `scip-query trace <entry-symbol>` | Trace a symbol: definition + all references | Trace entry points: definition plus every reference. |
-| `scip-query call-graph <entry-symbol>` | Show incoming callers and outgoing callees for a symbol | Trace entry points: callers and callees for the path. |
-| `scip-query dataflow <symbol-or-variable>` | Reference-level dataflow: definition sites, usage sites, producers, consumers | Follow data and state through producers and consumers. |
-| `scip-query affected <symbol> --json` | Transitive closure of symbols that could break if this symbol changes | Map dependencies and consumers: downstream blast radius. |
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query stats` | Show index statistics | document, symbol, definition, reference, size, and build-time totals | `complete` | Orient: repo-wide size and shape before naming a scope. |
+| `scip-query system <module-or-scope>` | Full module map: files, symbols, deps in/out | module file paths; exported symbols with line ranges; internal dependencies; reverse dependencies | `complete` | Orient: map files, symbols, deps in/out for the scope. |
+| `scip-query trace <entry-symbol>` | Trace a symbol: definition + all references | definition sites with source and signature; referencing files with line numbers | `bounded` | Trace entry points: definition plus every reference. |
+| `scip-query call-graph <entry-symbol>` | Show incoming callers and outgoing callees for a symbol | caller and callee symbol identities with files | `bounded` | Trace entry points: callers and callees for the path. |
+| `scip-query dataflow <symbol-or-variable>` | Reference-level dataflow: definition sites, usage sites, producers, consumers | definition sites, usage sites, producer symbols, and consumer symbols | `bounded` | Follow data and state through producers and consumers. |
+| `scip-query affected <symbol> --json` | Transitive closure of symbols that could break if this symbol changes | affected symbol identities, files, and traversal depths | `bounded` | Map dependencies and consumers: downstream blast radius. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -40,8 +40,8 @@ Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only
 ## Rules
 
 1. Use a current index before trusting graph facts.
-2. Every behavior, path, consumer, and risk claim cites a scip-query command.
-3. Read source with `scip-query code`; do not describe what a function probably does.
+2. Relationship, consumer, and completeness claims cite scip-query; literal local-source claims may cite a native file read.
+3. Resolve ambiguous symbols before describing behavior. `scip-query code` is useful but not mandatory when an exact native range is already known.
 4. Follow the graph before trusting folder structure.
 5. Start wide, then narrow.
 6. Descriptions need citations; conclusions need discriminators. A conclusion — why something happens, what a unit is for, which intent explains a shape — states one rival explanation and the trace evidence that rules it out.

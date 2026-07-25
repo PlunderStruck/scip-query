@@ -2,18 +2,18 @@
 name: scip-root-cause
 description: Diagnose the design flaw behind a family of related bugs with scip-query evidence. Use when similar bugs keep recurring, the same subsystem keeps needing patches, or the user lists fixed/observed bugs and asks what is really wrong; produces a falsifiable flaw diagnosis, a latent-instance hunt, and the least invasive remedy that kills the class.
 commands:
-  - template: "scip-query trace <mechanism-symbol>"
-    when: "Assemble the family: mechanism and violated invariant for each bug."
-  - template: "scip-query co-change <fix-site-file>"
-    when: "Assemble the family: files that historically changed with each fix site."
-  - template: "scip-query system <system-scope>"
-    when: "Define the system: real responsibilities, files, dependencies in and out."
-  - template: "scip-query similar <fixed-symbol> --json --full"
-    when: "Predict: hunt latent instances among sibling implementations of the fixed code."
-  - template: "scip-query refs <invariant-carrier>"
+  - template: 'scip-query trace <mechanism-symbol>'
+    when: 'Assemble the family: mechanism and violated invariant for each bug.'
+  - template: 'scip-query co-change <fix-site-file>'
+    when: 'Assemble the family: files that historically changed with each fix site.'
+  - template: 'scip-query system <system-scope>'
+    when: 'Define the system: real responsibilities, files, dependencies in and out.'
+  - template: 'scip-query similar <fixed-symbol> --json --full'
+    when: 'Predict: hunt latent instances among sibling implementations of the fixed code.'
+  - template: 'scip-query refs <invariant-carrier>'
     when: "Predict: every site that touches the violated invariant's state."
-  - template: "scip-query affected <remedy-symbol> --json"
-    when: "Choose the rung: blast radius of the candidate remedy."
+  - template: 'scip-query affected <remedy-symbol> --json'
+    when: 'Choose the rung: blast radius of the candidate remedy.'
 ---
 
 # scip-root-cause
@@ -25,14 +25,14 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 <!-- BEGIN GENERATED SKILL COMMANDS -->
 ## Commands for this skill
 
-| Command | Purpose | When |
-| --- | --- | --- |
-| `scip-query trace <mechanism-symbol>` | Trace a symbol: definition + all references | Assemble the family: mechanism and violated invariant for each bug. |
-| `scip-query co-change <fix-site-file>` | Files that change together in git history without a dependency edge — hidden coupling candidates | Assemble the family: files that historically changed with each fix site. |
-| `scip-query system <system-scope>` | Full module map: files, symbols, deps in/out | Define the system: real responsibilities, files, dependencies in and out. |
-| `scip-query similar <fixed-symbol> --json --full` | Find heuristic function similarity candidates from callee fingerprints | Predict: hunt latent instances among sibling implementations of the fixed code. |
-| `scip-query refs <invariant-carrier>` | Find all files referencing a symbol | Predict: every site that touches the violated invariant's state. |
-| `scip-query affected <remedy-symbol> --json` | Transitive closure of symbols that could break if this symbol changes | Choose the rung: blast radius of the candidate remedy. |
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query trace <mechanism-symbol>` | Trace a symbol: definition + all references | definition sites with source and signature; referencing files with line numbers | `bounded` | Assemble the family: mechanism and violated invariant for each bug. |
+| `scip-query co-change <fix-site-file>` | Files that change together in git history without a dependency edge — hidden coupling candidates | file pairs, co-change counts, confidence, and history context | `bounded` | Assemble the family: files that historically changed with each fix site. |
+| `scip-query system <system-scope>` | Full module map: files, symbols, deps in/out | module file paths; exported symbols with line ranges; internal dependencies; reverse dependencies | `complete` | Define the system: real responsibilities, files, dependencies in and out. |
+| `scip-query similar <fixed-symbol> --json --full` | Find heuristic function similarity candidates from callee fingerprints | symbol pairs, similarity scores, and shared evidence | `bounded` | Predict: hunt latent instances among sibling implementations of the fixed code. |
+| `scip-query refs <invariant-carrier>` | Find all files referencing a symbol | referencing file paths; reference line numbers grouped by file | `bounded` | Predict: every site that touches the violated invariant's state. |
+| `scip-query affected <remedy-symbol> --json` | Transitive closure of symbols that could break if this symbol changes | affected symbol identities, files, and traversal depths | `bounded` | Choose the rung: blast radius of the candidate remedy. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -67,7 +67,7 @@ For each reported or fixed bug, fill one row:
 
 ```markdown
 | Bug | Symptom | Mechanism (file:symbol) | Invariant violated | Fix applied | Source |
-| --- | --- | --- | --- | --- | --- |
+| --- | ------- | ----------------------- | ------------------ | ----------- | ------ |
 ```
 
 Evidence: the user's description, fix commits (`git log --follow`, `git show`), `scip-query trace`/`code` on the mechanism symbols, `scip-query co-change` on fix sites to find members the user forgot.
@@ -90,6 +90,7 @@ responsibilities include <Y> (Source: <citation>); every family member is an
 instance of the X∧Y collision.
 
 Rivals:
+
 - R1. Coincidence — the members have unrelated causes. Killed by: <evidence> | ALIVE
 - R2. Misuse — callers hold the bug, the design is sound. Killed by: <evidence> | ALIVE
 - R3. <next-most-plausible> — Killed by: <evidence> | ALIVE

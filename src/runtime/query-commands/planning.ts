@@ -1,6 +1,6 @@
 import * as queries from '../../queries/index.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
-import { doc, option, parseInteger, withJsonOption } from '../command-kit/command-spec-builders.js';
+import { doc, option, parseInteger, withCompactJsonOptions } from '../command-kit/command-spec-builders.js';
 import {
   booleanOptionValue,
   budgetedDbCommand,
@@ -37,7 +37,11 @@ const handlePlanContext = budgetedDbCommand('plan-context', ({ db, args, opts, b
         args,
         opts,
         { ...symbolResolutionJson(db, stringArg(args, 0)), ...result },
-        { analysisBudget: budget.analysisBudget },
+        {
+          analysisBudget: budget.analysisBudget,
+          coverage: planContextCoverage(result),
+          agentResult: planContextAgentResult(result),
+        },
       );
       return;
     }
@@ -50,7 +54,11 @@ const handlePlanContext = budgetedDbCommand('plan-context', ({ db, args, opts, b
       args,
       opts,
       result.matched.symbol ? { ...symbolResolutionJson(db, stringArg(args, 0)), ...result } : result,
-      { analysisBudget: budget.analysisBudget },
+      {
+        analysisBudget: budget.analysisBudget,
+        coverage: planContextCoverage(result),
+        agentResult: planContextAgentResult(result),
+      },
     );
     return;
   }
@@ -78,7 +86,7 @@ export const planningQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'plan-context',
     command: 'plan-context <target>',
     description: 'Pre-edit planning context for a symbol, file, or module',
-    options: withJsonOption([
+    options: withCompactJsonOptions([
       option('--impact-depth <n>', 'Maximum affected traversal depth', parseInteger, 3),
       option('--slice-depth <n>', 'Maximum backward slice depth', parseInteger, 3),
       option('-s, --scope <path>', 'Limit downstream impact to files matching path'),
@@ -86,11 +94,110 @@ export const planningQueryCommandDescriptors: CommandDescriptor[] = [
       option('--full', 'Run unbounded semantic analysis on large indexes'),
     ]),
     budget: 'semantic',
+    agent: {
+      answers: [
+        'What must I know before editing this target?',
+        'Who consumes it, and what breaks if I change it?',
+        'Has this target historically changed together with anything else?',
+      ],
+      returns: [
+        'definitions and references',
+        'callers and callees',
+        'dataflow producers and consumers',
+        'backward and forward slices',
+        'affected symbols',
+        'change-surface risk',
+        'dependencies and reverse dependencies',
+        'module files and exports',
+        'external surface use',
+        'complexity',
+        'churn',
+        'co-change partners',
+        'active suppressions',
+      ],
+      inputs: [['symbol', 'file', 'module']],
+      // Every section is capped by --limit (default 20), and traversal by
+      // --impact-depth / --slice-depth (default 3). Always disclose the caps.
+      coverage: 'bounded',
+      contrasts: [
+        {
+          command: 'change-surface',
+          distinction:
+            'change-surface is the exports/consumers/risk briefing alone; plan-context embeds it alongside flow, slices, history, and reuse signals.',
+        },
+      ],
+    },
     renderShape: 'custom',
     docs: doc('Planning', ['scip-query plan-context parseSymbol']),
     handler: handlePlanContext,
   },
 ];
+
+function planContextCoverage(result: queries.PlanContextResult) {
+  return {
+    complete: false,
+    totalKnown: false,
+    returned: planContextReturnedUnits(result),
+  } as const;
+}
+
+function planContextReturnedUnits(result: queries.PlanContextResult): number {
+  return (
+    result.trace.definitions.length +
+    result.trace.referencedBy.length +
+    (result.callGraph?.callers.length ?? 0) +
+    (result.callGraph?.callees.length ?? 0) +
+    (result.dataflow?.producers.length ?? 0) +
+    (result.dataflow?.consumers.length ?? 0) +
+    (result.dataflow?.usageSites.length ?? 0) +
+    (result.backwardSlice?.connectedSymbols.length ?? 0) +
+    (result.forwardSlice?.connectedSymbols.length ?? 0) +
+    result.affected.length +
+    result.deps.length +
+    result.rdeps.length +
+    result.system.files.length +
+    result.system.symbols.length +
+    result.system.dependsOn.length +
+    result.system.dependedOnBy.length +
+    result.surface.length
+  );
+}
+
+function planContextAgentResult(result: queries.PlanContextResult) {
+  return {
+    target: result.target,
+    matched: result.matched,
+    counts: {
+      definitions: result.trace.definitions.length,
+      references: result.trace.referencedBy.length,
+      callers: result.callGraph?.callers.length ?? 0,
+      callees: result.callGraph?.callees.length ?? 0,
+      producers: result.dataflow?.producers.length ?? 0,
+      consumers: result.dataflow?.consumers.length ?? 0,
+      backwardSlice: result.backwardSlice?.connectedSymbols.length ?? 0,
+      forwardSlice: result.forwardSlice?.connectedSymbols.length ?? 0,
+      affected: result.affected.length,
+      dependencies: result.deps.length,
+      reverseDependencies: result.rdeps.length,
+      moduleFiles: result.system.files.length,
+      externalSurfaceUses: result.surface.length,
+      coChangePartners: result.history.coChangePartners.length,
+    },
+    warnings: result.warnings,
+    changeSurface: result.changeSurface
+      ? {
+          file: result.changeSurface.file,
+          totalExternalConsumers: result.changeSurface.totalExternalConsumers,
+          riskCounts: {
+            high: result.changeSurface.symbols.filter((symbol) => symbol.riskLevel === 'high').length,
+            medium: result.changeSurface.symbols.filter((symbol) => symbol.riskLevel === 'medium').length,
+            low: result.changeSurface.symbols.filter((symbol) => symbol.riskLevel === 'low').length,
+          },
+        }
+      : null,
+    history: result.history,
+  };
+}
 
 function targetRows(result: queries.PlanContextResult): string[] {
   return [

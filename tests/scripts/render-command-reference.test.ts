@@ -126,6 +126,8 @@ describe('renderSkillCommandsMarkdown', () => {
     expect(markdown).toContain('<!-- END GENERATED SKILL COMMANDS -->');
     expect(markdown).toContain('`scip-query refs <symbol>`');
     expect(markdown).toContain('Find all files referencing a symbol');
+    expect(markdown).toContain('referencing file paths; reference line numbers grouped by file');
+    expect(markdown).toContain('`bounded`');
     expect(markdown).toContain('Find consumers before editing.');
     expect(markdown).toContain('Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.');
   });

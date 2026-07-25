@@ -2,6 +2,7 @@ import * as queries from '../../queries/index.js';
 import type { DiffGateCheck } from '../../queries/impact/diff-gate.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
 import {
+  agentContract,
   collectValues,
   doc,
   option,
@@ -236,13 +237,50 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
   });
   if (outcomes.warning) console.error(`note: ${outcomes.warning}`);
   if (!hookMode && booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('diff-gate', [], opts, {
-      exitCode: blocking.length > 0 || gateFailed ? 1 : 0,
-      ...(gateFailed ? { gateError: 'git diff unavailable - zero checks ran; the gate fails closed' } : {}),
-      advisoryFindingCount: result.findings.length - blocking.length,
-      ...(budget.analysisBudget ? { analysisBudget: budget.analysisBudget } : {}),
-      ...result,
-    });
+    const exitCode = blocking.length > 0 || gateFailed ? 1 : 0;
+    printJsonEnvelope(
+      'diff-gate',
+      [],
+      opts,
+      {
+        exitCode,
+        ...(gateFailed ? { gateError: 'git diff unavailable - zero checks ran; the gate fails closed' } : {}),
+        advisoryFindingCount: result.findings.length - blocking.length,
+        ...(budget.analysisBudget ? { analysisBudget: budget.analysisBudget } : {}),
+        ...result,
+      },
+      {
+        analysisBudget: budget.analysisBudget,
+        coverage:
+          full && !gateFailed
+            ? {
+                complete: true,
+                totalKnown: true,
+                returned: result.findings.length,
+                total: result.findings.length,
+                omitted: 0,
+              }
+            : { complete: false, totalKnown: false, returned: result.findings.length },
+        agentResult: {
+          outcome: exitCode === 0 ? 'pass' : 'fail',
+          exitCode,
+          changedFileCount: result.changedFiles.length,
+          changedSymbolCount: result.changedSymbols,
+          checksRun: result.checksRun,
+          skippedChecks: result.skipped,
+          blockingFindings: blocking.map((finding) => ({
+            id: finding.id,
+            check: finding.check,
+            severity: finding.severity,
+            file: finding.file,
+            symbol: finding.symbol,
+            message: finding.message,
+            remediation: finding.remediation,
+          })),
+          advisoryFindingCount: result.findings.length - blocking.length,
+        },
+      },
+    );
     if (blocking.length > 0 || gateFailed) process.exitCode = 1;
     return;
   }
@@ -366,6 +404,12 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'affected',
     command: 'affected <symbol>',
     description: 'Transitive closure of symbols that could break if this symbol changes',
+    agent: agentContract(
+      'Which downstream symbols could break if this symbol changes?',
+      'affected symbol identities, files, and traversal depths',
+      ['symbol'],
+      'bounded',
+    ),
     options: withJsonOption([
       option('--max-depth <n>', 'Maximum traversal depth', parseInteger, 5),
       option('-s, --scope <path>', 'Limit to files matching path'),
@@ -378,6 +422,12 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'change-surface',
     command: 'change-surface <file>',
     description: 'Pre-change briefing: exports, consumers, and blast-radius risk',
+    agent: agentContract(
+      'What public surface and consumers make this file risky to change?',
+      'defined symbols, external consumer counts, and risk levels',
+      ['file'],
+      'bounded',
+    ),
     options: withJsonOption([option('--full', 'Run unbounded semantic analysis on large indexes')]),
     budget: 'semantic',
     renderShape: 'list',
@@ -404,8 +454,34 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
       ),
       option('--hook', 'Agent Stop-hook mode: silent on pass, exit 2 with findings on stderr to block the stop'),
       option('--json', 'Output as JSON for programmatic consumption'),
+      option('--compact', 'Emit minified one-line JSON (use with --json)'),
     ],
     heuristic: { label: 'diff gate candidates' },
+    agent: {
+      answers: [
+        'Does my current diff introduce something this repo blocks on?',
+        'What must I fix or explicitly accept before reporting the work done?',
+      ],
+      returns: [
+        'blocking findings with check id, message, and remediation',
+        'advisory findings',
+        'root-cause groups',
+        'changed file and symbol counts',
+        'process exit status (1 when blocking findings exist)',
+      ],
+      inputs: [],
+      scope: 'diff',
+      // Semantic and git-history analysis are budgeted on large indexes
+      // (--full lifts it); --max-echo-checks / --max-helpers default to all.
+      coverage: 'bounded',
+      contrasts: [
+        {
+          command: 'diff-impact',
+          distinction:
+            'diff-impact reports what the diff touches downstream; diff-gate judges the diff against repo policy and exits non-zero.',
+        },
+      ],
+    },
     renderShape: 'custom',
     docs: doc('Impact', ['scip-query diff-gate', 'scip-query diff-gate --base origin/main']),
     handler: handleDiffGate,
@@ -415,6 +491,13 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     command: 'incomplete-migration',
     description:
       'Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain',
+    agent: agentContract(
+      'Did this diff leave a helper extraction only partly migrated?',
+      'new helpers and similar unmigrated call sites',
+      [],
+      'bounded',
+      'diff',
+    ),
     options: withJsonOption([
       option('--base <ref>', 'Git ref to diff against (default: HEAD)'),
       option('--min-containment <n>', 'Minimum share of helper callees a site must contain (0-1)', parseNumber, 0.7),
@@ -431,6 +514,13 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'co-change',
     command: 'co-change [file]',
     description: 'Files that change together in git history without a dependency edge — hidden coupling candidates',
+    agent: agentContract(
+      'Which files repeatedly change together without a declared dependency?',
+      'file pairs, co-change counts, confidence, and history context',
+      ['file'],
+      'bounded',
+      'repository',
+    ),
     options: withJsonOption([
       option('--min-together <n>', 'Minimum commits where both files changed', parseInteger, 4),
       option('-n, --limit <n>', 'Maximum pairs to report', parseInteger, 30),

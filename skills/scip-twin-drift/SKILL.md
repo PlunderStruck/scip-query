@@ -2,16 +2,16 @@
 name: scip-twin-drift
 description: Find and resolve twin drift with scip-query. Use for same-name or near-name functions across files with diverged bodies, drifted policy thresholds, one-sided fixes, or consolidating a duplicated concept into one canonical helper.
 commands:
-  - template: "scip-query twin-drift --json --full"
-    when: "Run the detector: every DIVERGENT and near-name group in scope."
-  - template: "scip-query duplicate-bodies --json --full"
+  - template: 'scip-query twin-drift --json --full'
+    when: 'Run the detector: every DIVERGENT and near-name group in scope.'
+  - template: 'scip-query duplicate-bodies --json --full'
     when: "Cross-check: IDENTICAL groups are duplicate-bodies' job, not this skill's."
-  - template: "scip-query code <symbol>"
+  - template: 'scip-query code <symbol>'
     when: "Classify a divergent group: read every member's body."
-  - template: "scip-query refs <symbol>"
-    when: "Pick the canonical twin: consumer count per member."
-  - template: "scip-query diff-gate --json"
-    when: "Verify: the twin-partner check must not flag a one-sided fix."
+  - template: 'scip-query refs <symbol>'
+    when: 'Pick the canonical twin: consumer count per member.'
+  - template: 'scip-query diff-gate --json'
+    when: 'Verify: the twin-partner check must not flag a one-sided fix.'
 ---
 
 # scip-twin-drift
@@ -23,13 +23,13 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 <!-- BEGIN GENERATED SKILL COMMANDS -->
 ## Commands for this skill
 
-| Command | Purpose | When |
-| --- | --- | --- |
-| `scip-query twin-drift --json --full` | Twin drift candidates: same-name (or near-name) functions across files with diverged bodies | Run the detector: every DIVERGENT and near-name group in scope. |
-| `scip-query duplicate-bodies --json --full` | Find exact duplicate small-body candidates across files | Cross-check: IDENTICAL groups are duplicate-bodies' job, not this skill's. |
-| `scip-query code <symbol>` | Read the source code for a symbol (bounded to its definition range) | Classify a divergent group: read every member's body. |
-| `scip-query refs <symbol>` | Find all files referencing a symbol | Pick the canonical twin: consumer count per member. |
-| `scip-query diff-gate --json` | Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | Verify: the twin-partner check must not flag a one-sided fix. |
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query twin-drift --json --full` | Twin drift candidates: same-name (or near-name) functions across files with diverged bodies | twin symbol pairs, history, and divergence evidence | `bounded` | Run the detector: every DIVERGENT and near-name group in scope. |
+| `scip-query duplicate-bodies --json --full` | Find exact duplicate small-body candidates across files | callable groups with exact normalized-body identity | `bounded` | Cross-check: IDENTICAL groups are duplicate-bodies' job, not this skill's. |
+| `scip-query code <symbol>` | Read the source code for a symbol (bounded to its definition range) | definition identity, source, and line range | `complete` | Classify a divergent group: read every member's body. |
+| `scip-query refs <symbol>` | Find all files referencing a symbol | referencing file paths; reference line numbers grouped by file | `bounded` | Pick the canonical twin: consumer count per member. |
+| `scip-query diff-gate --json` | Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | blocking findings with check id, message, and remediation; advisory findings; root-cause groups; changed file and symbol counts; process exit status (1 when blocking findings exist) | `bounded` | Verify: the twin-partner check must not flag a one-sided fix. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -81,7 +81,7 @@ This step is complete only when every DIVERGENT group is either consolidated (wi
 
 ### 4. Verify
 
-Rerun the detector to confirm consolidated groups no longer appear as DIVERGENT, then run the routed postchecks from the shared reference and:
+Rerun the detector to confirm consolidated groups no longer appear as DIVERGENT, then run the routed postchecks from `scip-verify` and:
 
 ```bash
 scip-query diff-gate --json
@@ -98,10 +98,12 @@ Scope:
 Groups found: N (M divergent, K suppressed homonyms)
 
 Divergent groups:
+
 - <leaf name> (<files>) — classification: intentional variation / drifted policy / one-sided fix
   - action: consolidated into <canonical file:symbol> / reason kept separate
 
 Verification:
+
 - `scip-query twin-drift --json --full`: <result>
 - `scip-query diff-gate --json`: <result>
 ```

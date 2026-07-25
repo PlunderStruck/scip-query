@@ -2,18 +2,18 @@
 name: scip-triage-issue
 description: Triage issues with scip-query evidence. Use for bug reports, GitHub issues, failing tests, support reports, TODOs, vague defects, root-cause packets, issue bodies, or test-first fix plans.
 commands:
-  - template: "scip-query files <issue-term>"
-    when: "Map ownership: locate files for the reported term."
-  - template: "scip-query trace <entry-or-error-symbol>"
-    when: "Trace the failing path: definition plus every reference."
-  - template: "scip-query code <entry-or-error-symbol>"
-    when: "Trace the failing path: read the exact source."
-  - template: "scip-query call-graph <entry-symbol>"
-    when: "Trace the failing path: callers and callees."
-  - template: "scip-query similar <suspect-symbol> --json --full"
-    when: "Compare and bound: nearby implementations for missing handling."
-  - template: "scip-query affected <symbol> --json"
-    when: "Compare and bound: transitive impact bound for the fix plan."
+  - template: 'scip-query files <issue-term>'
+    when: 'Map ownership: locate files for the reported term.'
+  - template: 'scip-query trace <entry-or-error-symbol>'
+    when: 'Trace the failing path: definition plus every reference.'
+  - template: 'scip-query code <entry-or-error-symbol>'
+    when: 'Trace the failing path: read the exact source.'
+  - template: 'scip-query call-graph <entry-symbol>'
+    when: 'Trace the failing path: callers and callees.'
+  - template: 'scip-query similar <suspect-symbol> --json --full'
+    when: 'Compare and bound: nearby implementations for missing handling.'
+  - template: 'scip-query affected <symbol> --json'
+    when: 'Compare and bound: transitive impact bound for the fix plan.'
 ---
 
 # scip-triage-issue
@@ -25,14 +25,14 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 <!-- BEGIN GENERATED SKILL COMMANDS -->
 ## Commands for this skill
 
-| Command | Purpose | When |
-| --- | --- | --- |
-| `scip-query files <issue-term>` | Find files matching a pattern | Map ownership: locate files for the reported term. |
-| `scip-query trace <entry-or-error-symbol>` | Trace a symbol: definition + all references | Trace the failing path: definition plus every reference. |
-| `scip-query code <entry-or-error-symbol>` | Read the source code for a symbol (bounded to its definition range) | Trace the failing path: read the exact source. |
-| `scip-query call-graph <entry-symbol>` | Show incoming callers and outgoing callees for a symbol | Trace the failing path: callers and callees. |
-| `scip-query similar <suspect-symbol> --json --full` | Find heuristic function similarity candidates from callee fingerprints | Compare and bound: nearby implementations for missing handling. |
-| `scip-query affected <symbol> --json` | Transitive closure of symbols that could break if this symbol changes | Compare and bound: transitive impact bound for the fix plan. |
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query files <issue-term>` | Find files matching a pattern | matching file paths | `complete` | Map ownership: locate files for the reported term. |
+| `scip-query trace <entry-or-error-symbol>` | Trace a symbol: definition + all references | definition sites with source and signature; referencing files with line numbers | `bounded` | Trace the failing path: definition plus every reference. |
+| `scip-query code <entry-or-error-symbol>` | Read the source code for a symbol (bounded to its definition range) | definition identity, source, and line range | `complete` | Trace the failing path: read the exact source. |
+| `scip-query call-graph <entry-symbol>` | Show incoming callers and outgoing callees for a symbol | caller and callee symbol identities with files | `bounded` | Trace the failing path: callers and callees. |
+| `scip-query similar <suspect-symbol> --json --full` | Find heuristic function similarity candidates from callee fingerprints | symbol pairs, similarity scores, and shared evidence | `bounded` | Compare and bound: nearby implementations for missing handling. |
+| `scip-query affected <symbol> --json` | Transitive closure of symbols that could break if this symbol changes | affected symbol identities, files, and traversal depths | `bounded` | Compare and bound: transitive impact bound for the fix plan. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -98,28 +98,35 @@ This step is complete only when the packet has a narrow test shape and impact bo
 
 ```markdown
 ## Issue
+
 <one-sentence mismatch>
 
 ## Reproduction
+
 <steps, command, failing test, or missing data>
 
 ## Evidence
+
 - <scip-query command>: <fact>
 
 ## Suspected Root Cause
+
 <earliest code fact that explains the symptom>
 
 ## Impact
+
 - users/surfaces affected
 - blast radius
 
 ## Fix Plan
+
 1. Add or update failing test/smoke check.
 2. Make the smallest code change.
 3. Run targeted test.
 4. Invoke `scip-verify`.
 
 ## Open Questions
+
 - <product intent or external state only>
 ```
 

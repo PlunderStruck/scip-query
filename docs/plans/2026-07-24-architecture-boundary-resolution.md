@@ -836,9 +836,9 @@ Remaining known risks, carried into implementation rather than resolved on paper
 
 ## Execution Outcome (2026-07-24)
 
-**Result: complete.** 39 boundaries, 348/348 files mapped, 0 unmapped, 0 ambiguous,
-39/39 dependency rows, 0 forbidden edges, 0 cycles, 0 coarse boundaries.
-`diff-gate` passes (2 advisory doc-reference findings, none blocking). 1437/1437 tests pass.
+**Result after review remediation: complete.** 34 boundaries, 351/351 files
+mapped, 0 unmapped, 0 ambiguous, 34/34 dependency rows, 0 forbidden edges,
+0 cycles, and 0 coarse boundaries. `diff-gate` passes.
 
 ### Deviations from the plan
 
@@ -861,6 +861,24 @@ Remaining known risks, carried into implementation rather than resolved on paper
   directory-nesting suppression and silently hid the `queries` and `semantic` findings. Rust
   `mod.rs` files fall out through the content-aware barrel rule instead, because a pure
   `pub mod x;` file defines nothing of its own.
+- **A1.1's source split was reverted after review.** Once
+  `source-evidence.ts` moved to its actual owner, `source` plus
+  `language-parsers` was internally acyclic. Keeping them split would only
+  force a layer direction, contrary to the target architecture's explicit
+  rule against re-splitting a cohesive source-fact subsystem. The merged
+  boundary uses a reviewed local `maxFiles: 60`; the project-wide
+  `maxBoundaryFiles` remains 40.
+- **B1.6 was divided by ownership rather than moved wholesale.** Baseline file
+  format, path resolution, normalization, and comparison moved to
+  `queries-internal`; architecture-baseline checking moved beside the graph
+  report in `queries-graph`; health-baseline collection remains in
+  `queries-health`, where detector orchestration belongs.
+- **The coarse-boundary ratchet preserves stable membership-independent
+  identities without hiding additional components.** The first component is
+  keyed by boundary, while additional independent components add stable
+  cardinality suffixes. The path-only detector default no longer assumes every
+  `index.ts` or `mod.rs` is a pure barrel; production continues to inject the
+  content-aware classifier.
 
 ### Validation performed
 

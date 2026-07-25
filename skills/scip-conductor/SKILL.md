@@ -2,17 +2,17 @@
 name: scip-conductor
 description: Plan and conduct multi-step engineering programs like a skeptical principal engineer. Use for writing executable multi-phase plans, delegating implementation, reviewing another agent's work, or carrying a large change end to end with verification at every handoff.
 commands:
-  - template: "scip-query plan-context <target>"
+  - template: 'scip-query plan-context <target>'
     when: "Anchor each phase's step before delegating it."
-  - template: "scip-query diff-gate --json"
-    when: "Verify a handoff before accepting it and before closing the program."
-  - template: "scip-query health --json"
-    when: "Pre-register or check a program-level health benchmark."
+  - template: 'scip-query diff-gate --json'
+    when: 'Verify a handoff before accepting it and before closing the program.'
+  - template: 'scip-query health --json'
+    when: 'Pre-register or check a program-level health benchmark.'
 ---
 
 # scip-conductor
 
-This skill is how to run a *program* of work — planning, delegation, review,
+This skill is how to run a _program_ of work — planning, delegation, review,
 and closure — not how to write one change plan (use a dedicated planning
 skill such as `scip-concrete-plan` for individual changes when one is available).
 
@@ -21,11 +21,11 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 <!-- BEGIN GENERATED SKILL COMMANDS -->
 ## Commands for this skill
 
-| Command | Purpose | When |
-| --- | --- | --- |
-| `scip-query plan-context <target>` | Pre-edit planning context for a symbol, file, or module | Anchor each phase's step before delegating it. |
-| `scip-query diff-gate --json` | Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | Verify a handoff before accepting it and before closing the program. |
-| `scip-query health --json` | Composite codebase health report with prioritized action list | Pre-register or check a program-level health benchmark. |
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query plan-context <target>` | Pre-edit planning context for a symbol, file, or module | definitions and references; callers and callees; dataflow producers and consumers; backward and forward slices; affected symbols; change-surface risk; dependencies and reverse dependencies; module files and exports; external surface use; complexity; churn; co-change partners; active suppressions | `bounded` | Anchor each phase's step before delegating it. |
+| `scip-query diff-gate --json` | Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | blocking findings with check id, message, and remediation; advisory findings; root-cause groups; changed file and symbol counts; process exit status (1 when blocking findings exist) | `bounded` | Verify a handoff before accepting it and before closing the program. |
+| `scip-query health --json` | Composite codebase health report with prioritized action list | health score, findings, priorities, baselines, and coverage notes | `bounded` | Pre-register or check a program-level health benchmark. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -53,7 +53,7 @@ Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only
 - **Every step carries five fields**: file anchor with verified current
   behavior (cite how you know); the exact change; the validation command
   with expected output; testability design (pure core, injected effects);
-  why this step is safe *in this order*. "Update X" with no current/target
+  why this step is safe _in this order_. "Update X" with no current/target
   behavior is a wish, not a step.
 - **Order phases by information gain and risk**: blockers and
   evidence-integrity first; cheap discriminating probes before expensive
@@ -82,7 +82,7 @@ Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only
   If a collision happens anyway: stop racing, apply-verify-commit
   atomically in one action, and re-sequence to a single writer.
 - **Never accept a report — reproduce its evidence.** On every handoff,
-  choose the *minimal discriminating probe*: the one command most likely to
+  choose the _minimal discriminating probe_: the one command most likely to
   expose the report being wrong (a mutation input, a hand count, the
   benchmark number), and run it yourself. A report verified by reading it
   is not verified.
@@ -123,7 +123,7 @@ the pre-registered benchmarks and their before/after values; each handoff's
 discriminating probe and its OBSERVED result (a probe listed but not run
 counts as not run); the deviation ledger; the DEFER list;
 which learnings were folded back and where. A reviewer must be able to
-audit the *conduct*, not just the artifact.
+audit the _conduct_, not just the artifact.
 
 ## Completion
 

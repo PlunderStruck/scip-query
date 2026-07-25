@@ -25,14 +25,14 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 <!-- BEGIN GENERATED SKILL COMMANDS -->
 ## Commands for this skill
 
-| Command | Purpose | When |
-| --- | --- | --- |
-| `scip-query doctor` | Diagnose config, index freshness, dependency readiness, and project capabilities | Prove the workspace: index freshness and dependency readiness. |
-| `scip-query status --capabilities` | Show index status for this project | Prove the workspace: which evidence and verification capabilities are available. |
-| `scip-query diff-impact --json` | Compute changed symbols and downstream consumers from current git diff | Assess the diff: changed symbols and downstream consumers. |
-| `scip-query diff-gate --json` | Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | Run the gate: the primary blocker for diff-specific risk. |
-| `scip-query health --baseline` | Composite codebase health report with prioritized action list | Check health: compare findings against the committed baseline. |
-| `scip-query doc-drift --json --full` | Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped | Check docs: run when docs, AGENTS.md, or command surfaces changed. |
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query doctor` | Diagnose config, index freshness, dependency readiness, and project capabilities | config, freshness, dependency, and capability diagnostics | `complete` | Prove the workspace: index freshness and dependency readiness. |
+| `scip-query status --capabilities` | Show index status for this project | freshness, generation, language shards, watcher, and optional capabilities | `complete` | Prove the workspace: which evidence and verification capabilities are available. |
+| `scip-query diff-impact --json` | Compute changed symbols and downstream consumers from current git diff | changed symbols, downstream consumer identities, and impact paths | `bounded` | Assess the diff: changed symbols and downstream consumers. |
+| `scip-query diff-gate --json` | Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | blocking findings with check id, message, and remediation; advisory findings; root-cause groups; changed file and symbol counts; process exit status (1 when blocking findings exist) | `bounded` | Run the gate: the primary blocker for diff-specific risk. |
+| `scip-query health --baseline` | Composite codebase health report with prioritized action list | health score, findings, priorities, baselines, and coverage notes | `bounded` | Check health: compare findings against the committed baseline. |
+| `scip-query doc-drift --json --full` | Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped | document paths, coupled code subjects, and history evidence | `bounded` | Check docs: run when docs, AGENTS.md, or command surfaces changed. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -69,7 +69,23 @@ This step is complete only when the diff shape is understood.
 
 ### 3. Run routed postchecks
 
-Use the postcheck table in the shared reference. Run all rows that apply to the change type.
+Run every row matching what the diff actually did — not only the check you expected to need:
+
+| Change made                                                                                             | Check                                                                            |
+| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Extracted a helper or abstraction                                                                       | `scip-query incomplete-migration`                                                |
+| Added a helper, module, component, hook, composable, or adapter                                         | `scip-query recent-duplicates` (and `similar <symbol>`)                          |
+| Added parameters, options, props, config flags, or option objects                                       | `scip-query unused-params`                                                       |
+| Added a wrapper, facade, forwarding layer, alias, or re-export                                          | `scip-query wrapper-candidates`, `passthrough-candidates`, `redundant-reexports` |
+| Added an interface, base class, adapter contract, or type alias                                         | `scip-query stale-abstractions`                                                  |
+| Changed schema, config, generated files, public contracts, command descriptors, or docs-backed behavior | `scip-query co-change <file>` and `doc-drift`                                    |
+| Deleted code                                                                                            | `scip-query cleanup-plan --verify`                                               |
+| Changed React components or hooks                                                                       | the React commands in the shared reference                                       |
+| Changed Vue SFCs or composables                                                                         | the Vue commands in the shared reference                                         |
+
+Add `--json --full` when you need an unbounded machine-readable result rather than the default.
+This is the authoritative edit-to-postcheck mapping; the shared reference links here instead of
+duplicating it.
 
 This step is complete only when each applicable postcheck has a result and every actionable finding is fixed, accepted with evidence, or blocked by a named constraint.
 

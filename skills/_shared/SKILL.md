@@ -26,7 +26,7 @@ If freshness is `fresh`, continue. If it is `stale`, `missing`, or `unknown`, ru
 scip-query reindex
 ```
 
-Every file path, line number, symbol relationship, and behavior claim in a plan, report, or review must cite the command that produced it. If `scip-query` cannot answer a question because the target is not indexed, say so and use the narrowest other evidence available.
+Match evidence to the claim. Native search and file reads establish literal text, exact local source, and unambiguous local logic. Use scip-query for compiler-resolved identity and whenever you claim a relationship set is complete — definitions, references, callers, dependencies, consumers, affected units, or public surface. State when a bounded result does not establish completeness.
 
 ## Lookup
 
@@ -216,19 +216,7 @@ measured precision, not by volume:
 
 ## Postchecks
 
-Run the rows that match the actual edit:
-
-| Change made                                                                                             | Check                                                                                                                                                       |
-| ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Extracted a helper or abstraction                                                                       | `scip-query incomplete-migration --json --full`                                                                                                             |
-| Added a helper, module, component, hook, composable, or adapter                                         | `scip-query similar <symbol> --json --full` and `scip-query recent-duplicates --json --full`                                                                |
-| Added parameters, options, props, config flags, or broad option objects                                 | `scip-query unused-params --json --full`                                                                                                                    |
-| Added a wrapper, facade, forwarding layer, alias, or re-export                                          | `scip-query wrapper-candidates --json --full`, `scip-query passthrough-candidates --json --full`, and `scip-query redundant-reexports` when exports changed |
-| Added an interface, base class, adapter contract, or type alias                                         | `scip-query stale-abstractions --json --full`                                                                                                               |
-| Changed schema, config, generated files, public contracts, command descriptors, or docs-backed behavior | `scip-query co-change <file> --json --full` and `scip-query doc-drift --json --full`                                                                        |
-| Deleted code                                                                                            | `scip-query cleanup-plan --verify --json`                                                                                                                   |
-| Changed React components or hooks                                                                       | the React frontend commands above                                                                                                                           |
-| Changed Vue SFCs or composables                                                                         | the Vue frontend commands above                                                                                                                             |
+The authoritative edit-to-postcheck table lives in [`../scip-verify/SKILL.md`](../scip-verify/SKILL.md). Invoke that skill after editing; do not maintain a second copy here.
 
 Every implemented change ends with:
 
@@ -244,7 +232,9 @@ Fix findings or record a specific acceptance reason. Do not report success while
 When a subagent is used for scip-query evidence, include these rules in its prompt:
 
 ```text
-Use scip-query for all code references. Do not use grep, rg, cat, or file reads as evidence for code behavior. Every file path, line number, and behavioral claim must cite the exact scip-query command that produced it. If scip-query cannot verify a claim, say so.
+Use scip-query for compiler-resolved identity and for completeness claims. Native search and file reads are valid evidence for literal source content and local logic, including an unambiguous helper you can see in the same file. Use scip-query when you assert which symbol something resolves to, or that a set is complete — definitions, references, callers, dependencies, consumers, or affected units. Cite the evidence source appropriate to each claim, and say so when neither source establishes it completely.
 ```
 
-Reject subagent findings that cite text search or raw file reads as code evidence when graph facts were required.
+The trigger is resolution or completeness, not whether execution crosses a call boundary. Asserting what `handler(x)` does without resolving `handler` is a resolution claim; reading a helper defined two lines down is not.
+
+Reject subagent findings that source a resolution or completeness claim from text search. Do not reject a literal-content claim for citing a file read.

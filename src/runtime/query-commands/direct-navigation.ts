@@ -2,15 +2,26 @@ import { code } from '../../queries/navigation/code.js';
 import { outline } from '../../queries/navigation/outline.js';
 import { refs } from '../../queries/navigation/refs.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
-import { doc, option, parseInteger, withJsonOption } from '../command-kit/command-spec-builders.js';
+import {
+  doc,
+  agentContract,
+  option,
+  parseInteger,
+  parsePositiveInteger,
+  withCompactJsonOptions,
+  withJsonOption,
+} from '../command-kit/command-spec-builders.js';
 import {
   booleanOptionValue,
-  budgetedGroupedByFileCommand,
+  budgetedDbCommand,
   dbCommand,
   definedNumberOption,
+  numberOptionValue,
   printJsonEnvelope,
   stringArg,
+  stringOptionValue,
 } from '../command-kit/command-execution.js';
+import { decodeResultCursor, encodeResultCursor, indexGenerationIdentity } from '../result-pagination.js';
 import { displayLine, displayPathRange, displayRange, render } from '../render.js';
 import { symbolResolutionBefore, symbolResolutionEmptyMessage, withSymbolResolutionJson } from './symbol-resolution.js';
 
@@ -42,12 +53,48 @@ function trimSignature(signature: string): string {
   return signature.length > maxLength ? `${signature.slice(0, maxLength - 3)}...` : signature;
 }
 
-const handleRefs = budgetedGroupedByFileCommand('refs', {
-  query: ({ db, args, budget }) => refs(db, stringArg(args, 0), { semantic: budget.semantic }),
-  format: (reference) => `  line ${displayLine(reference.line)}`,
-  before: (_rows, { db, args }) => symbolResolutionBefore(db, stringArg(args, 0)),
-  emptyMessage: ({ db, args }) => symbolResolutionEmptyMessage(db, stringArg(args, 0), 'No references found.'),
-  toJson: (rows, { db, args }) => withSymbolResolutionJson(db, stringArg(args, 0), rows, 'references'),
+const handleRefs = budgetedDbCommand('refs', ({ db, args, opts, budget }) => {
+  const target = stringArg(args, 0);
+  const allRows = refs(db, target, { semantic: budget.semantic }).sort(
+    (left, right) => left.relativePath.localeCompare(right.relativePath) || left.line - right.line,
+  );
+  const cursor = stringOptionValue(opts, 'cursor');
+  const requestedLimit = numberOptionValue(opts, 'limit');
+  const limit = requestedLimit ?? (cursor ? 50 : allRows.length);
+  const indexGeneration = indexGenerationIdentity(db);
+  const offset = cursor ? decodeResultCursor(cursor, { command: 'refs', target, indexGeneration }).offset : 0;
+  if (offset > allRows.length) {
+    throw new Error('This cursor points past the current result set. Run again without --cursor.');
+  }
+  const rows = allRows.slice(offset, offset + limit);
+  const nextOffset = offset + rows.length;
+  const continuation =
+    nextOffset < allRows.length
+      ? {
+          cursor: encodeResultCursor({ command: 'refs', target, offset: nextOffset, indexGeneration }),
+          indexGeneration,
+        }
+      : undefined;
+  const coverage = {
+    complete: offset === 0 && rows.length === allRows.length,
+    totalKnown: true,
+    returned: rows.length,
+    total: allRows.length,
+    omitted: allRows.length - rows.length,
+    ...(continuation ? { continuation } : {}),
+  } as const;
+
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('refs', args, opts, withSymbolResolutionJson(db, target, rows, 'references'), {
+      analysisBudget: budget.analysisBudget,
+      coverage,
+    });
+    return;
+  }
+  if (rows.length === 0) return render.empty(symbolResolutionEmptyMessage(db, target, 'No references found.'));
+  symbolResolutionBefore(db, target);
+  render.groupedByFile(rows, (reference) => `  line ${displayLine(reference.line)}`);
+  if (continuation) console.log(`\n${coverage.omitted} omitted; continue with --cursor ${continuation.cursor}`);
 });
 
 const handleCode = dbCommand(({ db, args, opts }) => {
@@ -78,11 +125,30 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'refs',
     command: 'refs <symbol>',
     description: 'Find all files referencing a symbol',
-    options: [
+    options: withCompactJsonOptions([
       option('--full', 'Run unbounded semantic analysis on large indexes'),
-      option('--json', 'Output as JSON for programmatic consumption'),
-    ],
+      option('-n, --limit <n>', 'Maximum reference sites to return', parsePositiveInteger),
+      option('--cursor <cursor>', 'Continue a prior bounded result (implies --limit 50 when omitted)'),
+    ]),
     budget: 'semantic',
+    agent: {
+      answers: ['Which files reference this symbol?', 'Is this symbol used anywhere, or only defined?'],
+      returns: ['referencing file paths', 'reference line numbers grouped by file'],
+      inputs: ['symbol'],
+      // Semantic analysis is budgeted on large indexes; --full lifts the cap.
+      coverage: 'bounded',
+      contrasts: [
+        {
+          command: 'imported-by',
+          distinction:
+            'imported-by lists files importing the symbol; refs covers every reference site, imported or not.',
+        },
+        {
+          command: 'affected',
+          distinction: 'refs is one hop out; affected is the transitive closure of what could break.',
+        },
+      ],
+    },
     renderShape: 'grouped-by-file',
     docs: doc('Navigation', ['scip-query refs login']),
     handler: handleRefs,
@@ -91,6 +157,12 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'outline',
     command: 'outline <file>',
     description: 'Tree view of symbols in a file, with line ranges',
+    agent: agentContract(
+      'What symbols and nesting exist in this file?',
+      'symbol names, nesting, and line ranges',
+      ['file'],
+      'complete',
+    ),
     options: withJsonOption([option('--signatures', 'Show trimmed symbol signatures')]),
     renderShape: 'custom',
     docs: doc('Navigation'),
@@ -100,6 +172,12 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'code',
     command: 'code <symbol>',
     description: 'Read the source code for a symbol (bounded to its definition range)',
+    agent: agentContract(
+      'What is the compiler-resolved definition source for this symbol?',
+      'definition identity, source, and line range',
+      ['symbol'],
+      'complete',
+    ),
     options: withJsonOption([option('-C, --context <n>', 'Extra lines of context above/below', parseInteger, 0)]),
     renderShape: 'custom',
     docs: doc('Navigation'),

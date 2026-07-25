@@ -178,6 +178,8 @@ export interface ArchitectureBoundaryConfig {
   name: string;
   /** Project-relative exact paths or trailing /* and /** patterns owned by this boundary. */
   paths: string[];
+  /** File ceiling for this boundary, overriding `architecture.maxBoundaryFiles`. */
+  maxFiles?: number;
   /**
    * Granularity used when checking this boundary's internal structure under
    * `requireResolvedBoundaries`.

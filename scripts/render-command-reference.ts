@@ -195,13 +195,15 @@ export function renderSkillCommandsMarkdown(commands: readonly SkillCommandEntry
     SKILL_COMMANDS_BEGIN,
     '## Commands for this skill',
     '',
-    '| Command | Purpose | When |',
-    '| --- | --- | --- |',
+    '| Command | Purpose | Returns | Coverage | When |',
+    '| --- | --- | --- | --- | --- |',
     ...commands.map((entry) => {
       const commandId = skillCommandTokens(entry.template)[0] ?? '';
       const descriptor = findDescriptorForCommandId(commandId);
       const purpose = descriptor?.description ?? '';
-      return `| \`${entry.template}\` | ${escapeSkillTableCell(purpose)} | ${escapeSkillTableCell(entry.when)} |`;
+      const returns = descriptor?.agent?.returns.join('; ') ?? 'Undeclared';
+      const coverage = descriptor?.agent?.coverage ?? 'unknown';
+      return `| \`${entry.template}\` | ${escapeSkillTableCell(purpose)} | ${escapeSkillTableCell(returns)} | \`${coverage}\` | ${escapeSkillTableCell(entry.when)} |`;
     }),
     '',
     'Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.',

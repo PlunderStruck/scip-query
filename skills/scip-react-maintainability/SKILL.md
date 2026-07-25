@@ -2,18 +2,18 @@
 name: scip-react-maintainability
 description: Review React maintainability with scip-query. Use for React, TSX, JSX, Next.js, duplicated components, hook candidates, large components, frontend health pressure, or verifying reuse after refactors.
 commands:
-  - template: "scip-query react-component-duplicates --scope <scope> --full --json"
-    when: "Bound and scan: duplicated JSX structure candidates."
-  - template: "scip-query react-hook-candidates --scope <scope> --full --json"
-    when: "Bound and scan: shared state/effect/request extraction candidates."
-  - template: "scip-query react-large-component-pressure --scope <scope> --full --json"
-    when: "Bound and scan: components carrying several reasons to change."
-  - template: "scip-query recent-duplicates --scope <scope> --full --json"
-    when: "Bound and scan: recent code re-implementing established components."
-  - template: "scip-query similar <closest-existing-component-or-hook>"
-    when: "Cross-check candidates: existing component or hook to reuse instead."
-  - template: "scip-query health --scope <scope> --json"
-    when: "Bound and scan: frontend health pressure for the scope."
+  - template: 'scip-query react-component-duplicates --scope <scope> --full --json'
+    when: 'Bound and scan: duplicated JSX structure candidates.'
+  - template: 'scip-query react-hook-candidates --scope <scope> --full --json'
+    when: 'Bound and scan: shared state/effect/request extraction candidates.'
+  - template: 'scip-query react-large-component-pressure --scope <scope> --full --json'
+    when: 'Bound and scan: components carrying several reasons to change.'
+  - template: 'scip-query recent-duplicates --scope <scope> --full --json'
+    when: 'Bound and scan: recent code re-implementing established components.'
+  - template: 'scip-query similar <closest-existing-component-or-hook>'
+    when: 'Cross-check candidates: existing component or hook to reuse instead.'
+  - template: 'scip-query health --scope <scope> --json'
+    when: 'Bound and scan: frontend health pressure for the scope.'
 ---
 
 # scip-react-maintainability
@@ -25,14 +25,14 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 <!-- BEGIN GENERATED SKILL COMMANDS -->
 ## Commands for this skill
 
-| Command | Purpose | When |
-| --- | --- | --- |
-| `scip-query react-component-duplicates --scope <scope> --full --json` | Find heuristic duplicated React component structure candidates from JSX tags, props, events, and bindings | Bound and scan: duplicated JSX structure candidates. |
-| `scip-query react-hook-candidates --scope <scope> --full --json` | Find heuristic React hook extraction candidates from shared state, effects, requests, and handlers | Bound and scan: shared state/effect/request extraction candidates. |
-| `scip-query react-large-component-pressure --scope <scope> --full --json` | Find heuristic large React component pressure candidates from component lines, JSX structure, and hook behavior | Bound and scan: components carrying several reasons to change. |
-| `scip-query recent-duplicates --scope <scope> --full --json` | Directional duplicate candidates: recent code that re-implements established callable, React, or Vue code | Bound and scan: recent code re-implementing established components. |
-| `scip-query similar <closest-existing-component-or-hook>` | Find heuristic function similarity candidates from callee fingerprints | Cross-check candidates: existing component or hook to reuse instead. |
-| `scip-query health --scope <scope> --json` | Composite codebase health report with prioritized action list | Bound and scan: frontend health pressure for the scope. |
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query react-component-duplicates --scope <scope> --full --json` | Find heuristic duplicated React component structure candidates from JSX tags, props, events, and bindings | component pairs with structural similarity evidence | `bounded` | Bound and scan: duplicated JSX structure candidates. |
+| `scip-query react-hook-candidates --scope <scope> --full --json` | Find heuristic React hook extraction candidates from shared state, effects, requests, and handlers | component groups and shared hook-shaped behavior | `bounded` | Bound and scan: shared state/effect/request extraction candidates. |
+| `scip-query react-large-component-pressure --scope <scope> --full --json` | Find heuristic large React component pressure candidates from component lines, JSX structure, and hook behavior | component identities with size and responsibility pressure | `bounded` | Bound and scan: components carrying several reasons to change. |
+| `scip-query recent-duplicates --scope <scope> --full --json` | Directional duplicate candidates: recent code that re-implements established callable, React, or Vue code | recent and established symbol pairs with similarity evidence | `bounded` | Bound and scan: recent code re-implementing established components. |
+| `scip-query similar <closest-existing-component-or-hook>` | Find heuristic function similarity candidates from callee fingerprints | symbol pairs, similarity scores, and shared evidence | `bounded` | Cross-check candidates: existing component or hook to reuse instead. |
+| `scip-query health --scope <scope> --json` | Composite codebase health report with prioritized action list | health score, findings, priorities, baselines, and coverage notes | `bounded` | Bound and scan: frontend health pressure for the scope. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -88,7 +88,7 @@ This step is complete only when the chosen action reduces future drift without c
 
 ### 4. Verify
 
-Run routed postchecks from the shared reference, including React commands, `incomplete-migration`, `recent-duplicates`, `unused-params`, and wrapper/passthrough/stale checks, then invoke `scip-verify`.
+Invoke `scip-verify` and use its authoritative postcheck table, including the applicable React, extraction, duplicate, parameter, wrapper, passthrough, and stale-abstraction checks.
 
 The work is complete only when acted-on candidate pairs disappear, weaken materially, or are explicitly accepted as essential variation.
 

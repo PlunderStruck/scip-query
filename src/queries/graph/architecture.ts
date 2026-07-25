@@ -383,13 +383,20 @@ export function architectureFindingIdentities(report: ArchitectureReport): strin
       `${ARCHITECTURE_BASELINE_PREFIX}boundary-limit:${limit.kind}:${encodeURIComponent(limit.boundary)}`,
     );
   }
+  const coarseCounts = new Map<string, number>();
   for (const finding of report.coarseBoundaries) {
     if (!finding.violatesPolicy) continue;
-    // Keyed by boundary alone. Sub-unit membership shifts as files move, and
-    // this string is the persistent baseline comparison key -- including the
-    // members would turn one continuing problem into an apparent fix plus a
-    // new finding on every reorganization.
-    identities.push(`${ARCHITECTURE_BASELINE_PREFIX}coarse-boundary:${encodeURIComponent(finding.boundary)}`);
+    coarseCounts.set(finding.boundary, (coarseCounts.get(finding.boundary) ?? 0) + 1);
+  }
+  for (const [boundary, count] of coarseCounts) {
+    const base = `${ARCHITECTURE_BASELINE_PREFIX}coarse-boundary:${encodeURIComponent(boundary)}`;
+    // Membership shifts as files move, so the first component remains keyed
+    // only by boundary. Cardinality suffixes make an additional independent
+    // component visible without encoding the unstable component membership.
+    identities.push(base);
+    for (let component = 2; component <= count; component += 1) {
+      identities.push(`${base}:component:${component}`);
+    }
   }
   for (const cycle of report.cycles) {
     if (!cycle.violatesPolicy) continue;
@@ -414,6 +421,7 @@ export function hasEnforceableArchitecturePolicy(config?: ArchitectureConfig): b
       config.requireMinimalPolicy === true ||
       config.maxBoundaryFanOut !== undefined ||
       config.maxBoundaryFiles !== undefined ||
+      config.boundaries.some((boundary) => boundary.maxFiles !== undefined) ||
       (config.testPaths?.length ?? 0) > 0)
   );
 }
@@ -594,10 +602,11 @@ function boundaryLimits(
         limits.push({ boundary: boundary.name, kind: 'fan-out', observed, limit: config.maxBoundaryFanOut });
       }
     }
-    if (config.maxBoundaryFiles !== undefined) {
+    const fileLimit = boundary.maxFiles ?? config.maxBoundaryFiles;
+    if (fileLimit !== undefined) {
       const observed = filesByBoundary.get(boundary.name)?.size ?? 0;
-      if (observed > config.maxBoundaryFiles) {
-        limits.push({ boundary: boundary.name, kind: 'files', observed, limit: config.maxBoundaryFiles });
+      if (observed > fileLimit) {
+        limits.push({ boundary: boundary.name, kind: 'files', observed, limit: fileLimit });
       }
     }
   }
@@ -607,15 +616,14 @@ function boundaryLimits(
 /**
  * Path-only module-hierarchy test, used when a caller supplies no classifier.
  *
- * Conservative by construction: it treats every `index.ts`/`mod.rs` as a
- * barrel, so a direct caller gets fewer findings rather than bookkeeping noise.
- * `architecture(db)` overrides it with a content-aware version, because the
- * path rule also hides real cycles whose back edge targets a logic-bearing
- * module that merely happens to be named `index.ts`.
+ * Path shape can establish tests and entry points, but it cannot establish
+ * that `index.ts` or `mod.rs` contains only re-exports. `architecture(db)`
+ * overrides this with a content-aware version that can safely remove pure
+ * barrels as well.
  */
 function pathModuleHierarchyFile(file: string): boolean {
   const kind = classifyFile(file);
-  return kind === 'test' || kind === 'entry' || kind === 'barrel';
+  return kind === 'test' || kind === 'entry';
 }
 
 /** A file's default sub-unit is its containing directory. */

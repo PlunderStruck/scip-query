@@ -100,8 +100,10 @@ tangle.
 Four narrower rules close the remaining holes. `requireMinimalPolicy` rejects a
 declared allowance no edge uses, because `requireCompletePolicy` checks only
 that a row exists and a stale row widens the policy silently.
-`maxBoundaryFanOut` and `maxBoundaryFiles` bound growth, since coarseness was
-otherwise caught only when it hid a cycle. `testPaths` brings test files back
+`maxBoundaryFanOut` and global `maxBoundaryFiles` bound growth, since coarseness
+was otherwise caught only when it hid a cycle. A boundary-specific `maxFiles`
+overrides the global file ceiling only for that reviewed responsibility.
+`testPaths` brings test files back
 under enforcement — they are excluded from the compiler project and so from the
 index, which put them outside every rule — judging each test against the
 boundary of the code it covers, while still allowing it to reach anything that

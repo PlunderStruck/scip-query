@@ -2,18 +2,18 @@
 name: scip-diagram
 description: Diagram code with scip-query evidence. Use for code flow diagrams, architecture diagrams, data-flow maps, dependency maps, blast-radius visuals, module maps, or HTML artifacts explaining a system.
 commands:
-  - template: "scip-query system <module>"
-    when: "Collect evidence: module map for a dependency or architecture diagram."
-  - template: "scip-query trace <symbol>"
-    when: "Collect evidence: definition plus references for a call-flow diagram."
-  - template: "scip-query call-graph <symbol>"
-    when: "Collect evidence: callers/callees for a call-flow diagram."
-  - template: "scip-query dataflow <symbol>"
-    when: "Collect evidence: producers/consumers for a data-flow diagram."
-  - template: "scip-query affected <symbol> --json"
-    when: "Collect evidence: blast-radius nodes and edges."
-  - template: "scip-query change-surface <file> --json --full"
-    when: "Collect evidence: exports and consumers for a change-surface map."
+  - template: 'scip-query system <module>'
+    when: 'Collect evidence: module map for a dependency or architecture diagram.'
+  - template: 'scip-query trace <symbol>'
+    when: 'Collect evidence: definition plus references for a call-flow diagram.'
+  - template: 'scip-query call-graph <symbol>'
+    when: 'Collect evidence: callers/callees for a call-flow diagram.'
+  - template: 'scip-query dataflow <symbol>'
+    when: 'Collect evidence: producers/consumers for a data-flow diagram.'
+  - template: 'scip-query affected <symbol> --json'
+    when: 'Collect evidence: blast-radius nodes and edges.'
+  - template: 'scip-query change-surface <file> --json --full'
+    when: 'Collect evidence: exports and consumers for a change-surface map.'
 ---
 
 # scip-diagram
@@ -25,14 +25,14 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 <!-- BEGIN GENERATED SKILL COMMANDS -->
 ## Commands for this skill
 
-| Command | Purpose | When |
-| --- | --- | --- |
-| `scip-query system <module>` | Full module map: files, symbols, deps in/out | Collect evidence: module map for a dependency or architecture diagram. |
-| `scip-query trace <symbol>` | Trace a symbol: definition + all references | Collect evidence: definition plus references for a call-flow diagram. |
-| `scip-query call-graph <symbol>` | Show incoming callers and outgoing callees for a symbol | Collect evidence: callers/callees for a call-flow diagram. |
-| `scip-query dataflow <symbol>` | Reference-level dataflow: definition sites, usage sites, producers, consumers | Collect evidence: producers/consumers for a data-flow diagram. |
-| `scip-query affected <symbol> --json` | Transitive closure of symbols that could break if this symbol changes | Collect evidence: blast-radius nodes and edges. |
-| `scip-query change-surface <file> --json --full` | Pre-change briefing: exports, consumers, and blast-radius risk | Collect evidence: exports and consumers for a change-surface map. |
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query system <module>` | Full module map: files, symbols, deps in/out | module file paths; exported symbols with line ranges; internal dependencies; reverse dependencies | `complete` | Collect evidence: module map for a dependency or architecture diagram. |
+| `scip-query trace <symbol>` | Trace a symbol: definition + all references | definition sites with source and signature; referencing files with line numbers | `bounded` | Collect evidence: definition plus references for a call-flow diagram. |
+| `scip-query call-graph <symbol>` | Show incoming callers and outgoing callees for a symbol | caller and callee symbol identities with files | `bounded` | Collect evidence: callers/callees for a call-flow diagram. |
+| `scip-query dataflow <symbol>` | Reference-level dataflow: definition sites, usage sites, producers, consumers | definition sites, usage sites, producer symbols, and consumer symbols | `bounded` | Collect evidence: producers/consumers for a data-flow diagram. |
+| `scip-query affected <symbol> --json` | Transitive closure of symbols that could break if this symbol changes | affected symbol identities, files, and traversal depths | `bounded` | Collect evidence: blast-radius nodes and edges. |
+| `scip-query change-surface <file> --json --full` | Pre-change briefing: exports, consumers, and blast-radius risk | defined symbols, external consumer counts, and risk levels | `bounded` | Collect evidence: exports and consumers for a change-surface map. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -49,14 +49,14 @@ Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only
 
 ### 1. Pick diagram type
 
-| User wants | Diagram |
-| --- | --- |
-| Feature flow | Call flow |
-| Value origin or mutation | Data flow |
-| Dependents | Blast radius |
-| Module architecture | Dependency map |
+| User wants                 | Diagram                          |
+| -------------------------- | -------------------------------- |
+| Feature flow               | Call flow                        |
+| Value origin or mutation   | Data flow                        |
+| Dependents                 | Blast radius                     |
+| Module architecture        | Dependency map                   |
 | Hard-to-change explanation | Change surface or bottleneck map |
-| Classes or ownership | Hierarchy and surface map |
+| Classes or ownership       | Hierarchy and surface map        |
 
 This step is complete only when the diagram's node and edge types are chosen.
 

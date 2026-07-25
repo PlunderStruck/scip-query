@@ -457,6 +457,24 @@ describe('validateProjectConfig', () => {
     expect(diagnostics.filter((entry) => entry.path.includes('subUnits'))).toEqual([]);
   });
 
+  it('validates a boundary-specific file ceiling', () => {
+    const invalid = validateProjectConfig({
+      architecture: {
+        boundaries: [{ name: 'app', paths: ['src/app/**'], maxFiles: 1.5 }],
+      },
+    });
+    expect(invalid).toContainEqual(
+      expect.objectContaining({ level: 'error', path: 'architecture.boundaries[0].maxFiles' }),
+    );
+
+    const valid = validateProjectConfig({
+      architecture: {
+        boundaries: [{ name: 'app', paths: ['src/app/**'], maxFiles: 2 }],
+      },
+    });
+    expect(valid.filter((entry) => entry.path.endsWith('.maxFiles'))).toEqual([]);
+  });
+
   it('validates the boundary growth limits and test roots', () => {
     const diagnostics = validateProjectConfig({
       architecture: {

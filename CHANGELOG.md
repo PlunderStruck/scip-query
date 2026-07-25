@@ -4,6 +4,33 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+## [0.19.5]
+
+### Agent evidence and workflows
+
+- Every public command now declares an agent-facing contract describing its
+  inputs, returned units, evidence class, and default coverage. JSON envelopes
+  report whether results are complete, bounded, sampled, or unknown; compact
+  summaries preserve the identities agents need without blind line clipping.
+- `refs` supports stable, index-generation-bound pagination with explicit
+  totals and continuation cursors. Heavy navigation, planning, and diff-gate
+  commands expose compact machine-readable output and concise agent summaries.
+- Claude Code hooks reject unsafe `head`, `tail`, and line-range truncation when
+  a compact or paginated alternative exists, and provide one context-window
+  reminder to reconsider native text search for relationship and completeness
+  questions. Shared guidance is expressed as moment-based evidence gates.
+- The bundled planning workflow now has a short ordinary path and a separate
+  high-assurance certificate. Skill descriptions use problem-language trigger
+  phrases, and native file reads remain available for literal source facts.
+
+### Architecture and release operations
+
+- Architecture enforcement distinguishes production ownership from tests,
+  preserves boundary-specific file ceilings, and detects additional coarse
+  cycles without weakening the repository's declared layer policy.
+- The main npm publish lifecycle invokes the Windows sidecar publisher directly
+  while keeping dry runs and validation paths registry-safe.
+
 ## [0.19.3]
 
 ### Performance and operations

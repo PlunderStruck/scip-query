@@ -2,18 +2,18 @@
 name: scip-vue-maintainability
 description: Review Vue maintainability with scip-query. Use for Vue, Nuxt, SFCs, duplicated templates, composable candidates, large views, frontend health pressure, or verifying Vue reuse after refactors.
 commands:
-  - template: "scip-query augment-vue --project <path-to-tsconfig>"
-    when: "Bound and augment: add compiler-resolved Vue SFC references first."
-  - template: "scip-query vue-component-duplicates --scope <scope> --full --json"
-    when: "Scan: duplicated template structure candidates."
-  - template: "scip-query vue-composable-candidates --scope <scope> --full --json"
-    when: "Scan: shared state/lifecycle extraction candidates."
-  - template: "scip-query vue-large-view-pressure --scope <scope> --full --json"
-    when: "Scan: SFCs carrying several reasons to change."
-  - template: "scip-query recent-duplicates --scope <scope> --full --json"
-    when: "Scan: recent code re-implementing established components."
-  - template: "scip-query health --json"
-    when: "Scan: frontend health pressure baseline."
+  - template: 'scip-query augment-vue --project <path-to-tsconfig>'
+    when: 'Bound and augment: add compiler-resolved Vue SFC references first.'
+  - template: 'scip-query vue-component-duplicates --scope <scope> --full --json'
+    when: 'Scan: duplicated template structure candidates.'
+  - template: 'scip-query vue-composable-candidates --scope <scope> --full --json'
+    when: 'Scan: shared state/lifecycle extraction candidates.'
+  - template: 'scip-query vue-large-view-pressure --scope <scope> --full --json'
+    when: 'Scan: SFCs carrying several reasons to change.'
+  - template: 'scip-query recent-duplicates --scope <scope> --full --json'
+    when: 'Scan: recent code re-implementing established components.'
+  - template: 'scip-query health --json'
+    when: 'Scan: frontend health pressure baseline.'
 ---
 
 # scip-vue-maintainability
@@ -25,14 +25,14 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 <!-- BEGIN GENERATED SKILL COMMANDS -->
 ## Commands for this skill
 
-| Command | Purpose | When |
-| --- | --- | --- |
-| `scip-query augment-vue --project <path-to-tsconfig>` | Add compiler-resolved Vue SFC references to the SQLite index using Volar | Bound and augment: add compiler-resolved Vue SFC references first. |
-| `scip-query vue-component-duplicates --scope <scope> --full --json` | Find heuristic duplicated Vue component structure candidates from template tags, bindings, slots, and directives | Scan: duplicated template structure candidates. |
-| `scip-query vue-composable-candidates --scope <scope> --full --json` | Find heuristic Vue composable extraction candidates from shared state, effects, requests, and template bindings | Scan: shared state/lifecycle extraction candidates. |
-| `scip-query vue-large-view-pressure --scope <scope> --full --json` | Find heuristic large Vue view pressure candidates from template, script, style, and external script line counts | Scan: SFCs carrying several reasons to change. |
-| `scip-query recent-duplicates --scope <scope> --full --json` | Directional duplicate candidates: recent code that re-implements established callable, React, or Vue code | Scan: recent code re-implementing established components. |
-| `scip-query health --json` | Composite codebase health report with prioritized action list | Scan: frontend health pressure baseline. |
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query augment-vue --project <path-to-tsconfig>` | Add compiler-resolved Vue SFC references to the SQLite index using Volar | Vue augmentation counts, project, and diagnostics | `complete` | Bound and augment: add compiler-resolved Vue SFC references first. |
+| `scip-query vue-component-duplicates --scope <scope> --full --json` | Find heuristic duplicated Vue component structure candidates from template tags, bindings, slots, and directives | component pairs with structural similarity evidence | `bounded` | Scan: duplicated template structure candidates. |
+| `scip-query vue-composable-candidates --scope <scope> --full --json` | Find heuristic Vue composable extraction candidates from shared state, effects, requests, and template bindings | component groups and shared composable-shaped behavior | `bounded` | Scan: shared state/lifecycle extraction candidates. |
+| `scip-query vue-large-view-pressure --scope <scope> --full --json` | Find heuristic large Vue view pressure candidates from template, script, style, and external script line counts | view identities with size and responsibility pressure | `bounded` | Scan: SFCs carrying several reasons to change. |
+| `scip-query recent-duplicates --scope <scope> --full --json` | Directional duplicate candidates: recent code that re-implements established callable, React, or Vue code | recent and established symbol pairs with similarity evidence | `bounded` | Scan: recent code re-implementing established components. |
+| `scip-query health --json` | Composite codebase health report with prioritized action list | health score, findings, priorities, baselines, and coverage notes | `bounded` | Scan: frontend health pressure baseline. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -94,7 +94,7 @@ This step is complete only when each top candidate is reuse, extract, split, ski
 
 Prefer reuse before extraction. Extract components for repeated template structure, props, slots, states, or design-system composition. Extract composables for repeated state, lifecycle, requests, validation, persistence, derived data, or event policy. Keep essential variation at the call site.
 
-Run routed postchecks from the shared reference, including Vue commands, `incomplete-migration`, `recent-duplicates`, `unused-params`, and wrapper/passthrough/stale checks, then invoke `scip-verify`.
+Invoke `scip-verify` and use its authoritative postcheck table, including the applicable Vue, extraction, duplicate, parameter, wrapper, passthrough, and stale-abstraction checks.
 
 The work is complete only when acted-on candidate pairs disappear, weaken materially, or are explicitly accepted as essential variation.
 

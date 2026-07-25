@@ -1,19 +1,19 @@
 ---
 name: scip-debug
-description: Debug bugs and regressions with scip-query evidence. Use for failing behavior, wrong data flow, confusing runtime paths, broken tests, root-cause analysis, reproduction, tracing, or minimal fixes.
+description: Debug why something is broken, does not work, crashes, fails a test, returns wrong data, or regressed. Uses scip-query to trace the runtime path and data flow, separate rival causes, and make the smallest verified fix.
 commands:
-  - template: "scip-query files <feature-or-error-term>"
-    when: "Find the entry point from a feature name or error term."
-  - template: "scip-query trace <candidate-symbol>"
-    when: "Find the entry point: definition plus every reference."
-  - template: "scip-query call-graph <entry-symbol>"
-    when: "Follow execution: callers and callees along the failing path."
-  - template: "scip-query dataflow <symbol-or-variable>"
-    when: "Follow data: producers, consumers, and usage sites."
-  - template: "scip-query similar <suspect-symbol> --json --full"
-    when: "Compare nearby implementations for missing guards or handling."
-  - template: "scip-query change-surface <suspect-file> --json --full"
-    when: "Bound the fix: exports, consumers, and blast-radius risk."
+  - template: 'scip-query files <feature-or-error-term>'
+    when: 'Find the entry point from a feature name or error term.'
+  - template: 'scip-query trace <candidate-symbol>'
+    when: 'Find the entry point: definition plus every reference.'
+  - template: 'scip-query call-graph <entry-symbol>'
+    when: 'Follow execution: callers and callees along the failing path.'
+  - template: 'scip-query dataflow <symbol-or-variable>'
+    when: 'Follow data: producers, consumers, and usage sites.'
+  - template: 'scip-query similar <suspect-symbol> --json --full'
+    when: 'Compare nearby implementations for missing guards or handling.'
+  - template: 'scip-query change-surface <suspect-file> --json --full'
+    when: 'Bound the fix: exports, consumers, and blast-radius risk.'
 ---
 
 # scip-debug
@@ -25,14 +25,14 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 <!-- BEGIN GENERATED SKILL COMMANDS -->
 ## Commands for this skill
 
-| Command | Purpose | When |
-| --- | --- | --- |
-| `scip-query files <feature-or-error-term>` | Find files matching a pattern | Find the entry point from a feature name or error term. |
-| `scip-query trace <candidate-symbol>` | Trace a symbol: definition + all references | Find the entry point: definition plus every reference. |
-| `scip-query call-graph <entry-symbol>` | Show incoming callers and outgoing callees for a symbol | Follow execution: callers and callees along the failing path. |
-| `scip-query dataflow <symbol-or-variable>` | Reference-level dataflow: definition sites, usage sites, producers, consumers | Follow data: producers, consumers, and usage sites. |
-| `scip-query similar <suspect-symbol> --json --full` | Find heuristic function similarity candidates from callee fingerprints | Compare nearby implementations for missing guards or handling. |
-| `scip-query change-surface <suspect-file> --json --full` | Pre-change briefing: exports, consumers, and blast-radius risk | Bound the fix: exports, consumers, and blast-radius risk. |
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query files <feature-or-error-term>` | Find files matching a pattern | matching file paths | `complete` | Find the entry point from a feature name or error term. |
+| `scip-query trace <candidate-symbol>` | Trace a symbol: definition + all references | definition sites with source and signature; referencing files with line numbers | `bounded` | Find the entry point: definition plus every reference. |
+| `scip-query call-graph <entry-symbol>` | Show incoming callers and outgoing callees for a symbol | caller and callee symbol identities with files | `bounded` | Follow execution: callers and callees along the failing path. |
+| `scip-query dataflow <symbol-or-variable>` | Reference-level dataflow: definition sites, usage sites, producers, consumers | definition sites, usage sites, producer symbols, and consumer symbols | `bounded` | Follow data: producers, consumers, and usage sites. |
+| `scip-query similar <suspect-symbol> --json --full` | Find heuristic function similarity candidates from callee fingerprints | symbol pairs, similarity scores, and shared evidence | `bounded` | Compare nearby implementations for missing guards or handling. |
+| `scip-query change-surface <suspect-file> --json --full` | Pre-change briefing: exports, consumers, and blast-radius risk | defined symbols, external consumer counts, and risk levels | `bounded` | Bound the fix: exports, consumers, and blast-radius risk. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->

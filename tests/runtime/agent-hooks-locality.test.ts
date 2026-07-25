@@ -28,6 +28,14 @@ describe('checkout-local project hooks', () => {
     expect(first.installed).toEqual(['.codex/hooks.json', '.claude/settings.local.json']);
     expect(first.gitExcluded).toEqual(['.codex/hooks.json', '.claude/settings.local.json']);
     expect(second.unchanged).toEqual(['.codex/hooks.json', '.claude/settings.local.json']);
+    const claude = JSON.parse(readFileSync(join(root, '.claude', 'settings.local.json'), 'utf-8')) as {
+      hooks?: Record<string, Array<{ matcher?: string; hooks?: Array<{ command?: string }> }>>;
+    };
+    expect(claude.hooks?.['PreToolUse']?.[0]).toMatchObject({
+      matcher: 'Bash|Grep|Glob',
+      hooks: [{ command: expect.stringContaining('hook-pretool') }],
+    });
+    expect(claude.hooks?.['PostCompact']?.[0]?.hooks?.[0]?.command).toContain('hook-context');
     expect(readFileSync(join(root, '.git', 'info', 'exclude'), 'utf-8')).toContain(
       '# scip-query:local-hooks:begin\n/.codex/hooks.json\n/.claude/settings.local.json\n# scip-query:local-hooks:end',
     );

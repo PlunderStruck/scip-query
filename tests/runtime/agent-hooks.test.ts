@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { DiffGateResult } from '../../src/queries/impact/diff-gate.js';
 import {
+  evaluatePreToolUse,
   renderAgentHookContext,
   refreshIndexForHookIfNeeded,
   renderStopHookOutput,
@@ -94,6 +95,42 @@ describe('agent hook context', () => {
 
     expect(context).toContain('scip-cleanup-audit');
     expect(context).toContain('scip-cleanup-improve');
+  });
+
+  it('blocks blind truncation for commands with compact or paginated alternatives', () => {
+    expect(
+      evaluatePreToolUse(
+        { tool_name: 'Bash', tool_input: { command: 'scip-query refs login --json | head -50' } },
+        true,
+      ),
+    ).toMatchObject({ kind: 'deny', reason: expect.stringContaining('--limit') });
+    expect(
+      evaluatePreToolUse(
+        { tool_name: 'Bash', tool_input: { command: "scip-query diff-gate --json | sed -n '1,80p'" } },
+        true,
+      ),
+    ).toMatchObject({ kind: 'deny', reason: expect.stringContaining('--compact') });
+    expect(
+      evaluatePreToolUse(
+        {
+          tool_name: 'Bash',
+          tool_input: { command: '/repo/node_modules/.bin/scip-query system auth --json | tail -20' },
+        },
+        true,
+      ),
+    ).toMatchObject({ kind: 'deny' });
+    expect(
+      evaluatePreToolUse({ tool_name: 'Bash', tool_input: { command: 'scip-query health --json | head -50' } }, true),
+    ).toEqual({ kind: 'allow' });
+  });
+
+  it('interrupts native search only once per context window', () => {
+    const payload = { tool_name: 'Grep', tool_input: { pattern: 'login' } };
+    expect(evaluatePreToolUse(payload, false)).toMatchObject({
+      kind: 'reconsider',
+      reason: expect.stringContaining('retry the same search unchanged'),
+    });
+    expect(evaluatePreToolUse(payload, true)).toEqual({ kind: 'allow' });
   });
 
   it('provides non-error stop feedback by default', () => {

@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
-import { setCommandEvidenceMap } from '../command-kit/command-execution.js';
+import { setCommandAgentContractMap, setCommandEvidenceMap } from '../command-kit/command-execution.js';
 import { descriptorEvidenceTier } from '../command-kit/command-docs.js';
 
 type PlainCommanderDefault = string | boolean | string[] | undefined;
@@ -15,6 +15,11 @@ export function registerCommandDescriptors(
   descriptors: readonly CommandDescriptor[],
 ): RegisteredCommandDescriptor[] {
   setCommandEvidenceMap(new Map(descriptors.map((descriptor) => [descriptor.id, descriptorEvidenceTier(descriptor)])));
+  setCommandAgentContractMap(
+    new Map(
+      descriptors.flatMap((descriptor) => (descriptor.agent ? [[descriptor.id, descriptor.agent] as const] : [])),
+    ),
+  );
   return descriptors.map((descriptor) => {
     const command = descriptor.hidden
       ? program.command(descriptor.command, { hidden: true })

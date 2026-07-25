@@ -1,6 +1,6 @@
 import * as queries from '../../queries/index.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
-import { doc, jsonOption } from '../command-kit/command-spec-builders.js';
+import { agentContract, doc, jsonOption } from '../command-kit/command-spec-builders.js';
 import { booleanOptionValue, dbCommand, printJsonEnvelope } from '../command-kit/command-execution.js';
 import { formatBytes } from '../cli-context.js';
 
@@ -25,6 +25,13 @@ export const coreQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'stats',
     command: 'stats',
     description: 'Show index statistics',
+    agent: agentContract(
+      'How large and fresh is the current index?',
+      'document, symbol, definition, reference, size, and build-time totals',
+      [],
+      'complete',
+      'repository',
+    ),
     options: [jsonOption()],
     renderShape: 'custom',
     docs: doc('Core'),

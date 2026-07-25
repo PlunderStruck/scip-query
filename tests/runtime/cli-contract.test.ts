@@ -8,6 +8,7 @@ import {
   commandOptions,
   definedLimitOption,
   printJsonEnvelope,
+  validateInvocationCoverage,
 } from '../../src/runtime/command-kit/command-execution.js';
 import { PUBLIC_QUERY_ENTRIES, PUBLIC_QUERY_SOURCE_PATHS } from '../../src/queries/public-query-entries.js';
 
@@ -80,6 +81,64 @@ describe('CLI contract', () => {
     for (const descriptor of commandDescriptors.filter((entry) => !entry.hidden)) {
       expect(command(descriptor.id).description()).toBe(descriptor.description);
       expect(optionFlags(descriptor.id)).toEqual((descriptor.options ?? []).map((option) => option.flags));
+    }
+  });
+
+  it('requires an agent contract on every public command', () => {
+    const missing = commandDescriptors
+      .filter((descriptor) => !descriptor.hidden && !descriptor.agent)
+      .map((descriptor) => descriptor.id);
+
+    expect(missing, `${missing.length} public command(s) have no \`agent\` contract: ${missing.join(', ')}`).toEqual(
+      [],
+    );
+  });
+
+  it('keeps every declared agent contract well-formed', () => {
+    const coveragePolicies = new Set(['complete', 'bounded', 'sampled', 'unknown']);
+    const inputKinds = new Set(['symbol', 'file', 'module', 'pattern', 'path', 'action', 'finding']);
+    const scopes = new Set(['diff', 'repository']);
+    const commandIds = new Set(commandDescriptors.map((descriptor) => descriptor.id));
+
+    for (const descriptor of commandDescriptors) {
+      const contract = descriptor.agent;
+      if (!contract) continue;
+      const where = `agent contract for ${descriptor.id}`;
+
+      expect(contract.answers.length, `${where}: needs at least one answerable question`).toBeGreaterThan(0);
+      expect(contract.returns.length, `${where}: needs at least one returned unit`).toBeGreaterThan(0);
+      expect(coveragePolicies.has(contract.coverage), `${where}: bad coverage "${contract.coverage}"`).toBe(true);
+
+      for (const slot of contract.inputs) {
+        for (const kind of Array.isArray(slot) ? slot : [slot]) {
+          expect(inputKinds.has(kind as string), `${where}: bad input kind "${kind}"`).toBe(true);
+        }
+      }
+
+      // Arity lives in `command` (`<required>` vs `[optional]`); the contract
+      // declares kinds only. Slot count must still match the arity declared
+      // there, or the two descriptions of the same signature can drift.
+      const positionals = descriptor.command.match(/[<[][^>\]]+[>\]]/g) ?? [];
+      expect(contract.inputs.length, `${where}: ${contract.inputs.length} slot(s) for "${descriptor.command}"`).toBe(
+        positionals.length,
+      );
+
+      if (contract.scope !== undefined) {
+        expect(scopes.has(contract.scope), `${where}: bad scope "${contract.scope}"`).toBe(true);
+      }
+      // A command with no positional target must say what it reads instead,
+      // or an agent cannot tell repository-wide from diff-scoped.
+      const hasOptionalTarget = positionals.some((positional) => positional.startsWith('['));
+      if (contract.inputs.length === 0 || hasOptionalTarget) {
+        expect(contract.scope, `${where}: no positional target, so scope is required`).toBeDefined();
+      }
+
+      for (const contrast of contract.contrasts ?? []) {
+        expect(commandIds.has(contrast.command), `${where}: contrasts unknown command "${contrast.command}"`).toBe(
+          true,
+        );
+        expect(contrast.command, `${where}: contrasts itself`).not.toBe(descriptor.id);
+      }
     }
   });
 
@@ -205,6 +264,7 @@ describe('CLI contract', () => {
       args: ['symbolName'],
       options: { json: true },
       result: { rows: [] },
+      coverage: { complete: null, totalKnown: false, returned: 0 },
     });
   });
 
@@ -241,7 +301,31 @@ describe('CLI contract', () => {
     });
     // Same field the sibling `result` key sits at — not nested inside result,
     // so it survives regardless of whether `result` is an array or object.
-    expect(Object.keys(capped)).toEqual(['command', 'evidence', 'analysisBudget', 'args', 'options', 'result']);
+    expect(Object.keys(capped)).toEqual([
+      'command',
+      'evidence',
+      'analysisBudget',
+      'args',
+      'options',
+      'result',
+      'coverage',
+    ]);
+  });
+
+  it('rejects internally inconsistent invocation coverage', () => {
+    expect(() =>
+      validateInvocationCoverage({ complete: false, totalKnown: true, returned: 3, total: 7, omitted: 3 }),
+    ).toThrow(/total minus returned/);
+    expect(() =>
+      validateInvocationCoverage({
+        complete: false,
+        totalKnown: true,
+        returned: 3,
+        total: 7,
+        omitted: 4,
+        omittedIdentities: ['one'],
+      }),
+    ).toThrow(/identity count/);
   });
 
   it('treats --full as an unbounded result limit unless --limit is explicit', () => {

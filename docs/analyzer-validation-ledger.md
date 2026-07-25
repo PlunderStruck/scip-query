@@ -431,7 +431,7 @@ upgrading tightens no existing project's gate.
 | Rule | Closes | Finding identity |
 | --- | --- | --- |
 | `requireMinimalPolicy` | A declared allowance outliving the edge that justified it. `requireCompletePolicy` checks a row *exists*, never that it is *minimal*, so policy widens silently. | `architecture:stale-allowance:<from>:<to>` |
-| `maxBoundaryFanOut` / `maxBoundaryFiles` | A boundary growing until it is coupled to most of the system. Coarseness was previously caught only when it *hid a cycle*, never when it merely got large. | `architecture:boundary-limit:<kind>:<boundary>` |
+| `maxBoundaryFanOut` / global `maxBoundaryFiles` / per-boundary `maxFiles` | A boundary growing until it is coupled to most of the system. A local file ceiling overrides the global default only for its reviewed boundary. Coarseness was previously caught only when it *hid a cycle*, never when it merely got large. | `architecture:boundary-limit:<kind>:<boundary>` |
 | `testPaths` | Test files are excluded from the compiler project and therefore from the index, leaving them outside every boundary rule. | `architecture:test-boundary:<test>:<boundary>` |
 | `subUnits: 'file'` | A layer inversion *inside* one directory, invisible when sub-units are directories. | (reuses `coarse-boundary`) |
 | `fragileEdges` (report-only) | No signal distinguishing a load-bearing dependency from one resting on a single import. 60 of 251 edges here are single-import. | none — advisory |

@@ -1,13 +1,13 @@
 ---
 name: scip-query
-description: Route codebase work in scip-query-indexed projects. Use when exploring, planning, implementing, refactoring, debugging, verifying, cleaning up, reconciling docs, improving health, or when unsure which scip-* skill should own the workflow.
+description: Use scip-query effectively in an indexed repository. Routes questions like "how does this work?", "what will break?", "why is this broken?", "make a plan", "review this diff", or "clean this up" to the focused scip-* skill and command family.
 commands:
-  - template: "scip-query status --capabilities"
-    when: "Before routing: confirm the index is fresh."
-  - template: "scip-query plan-context <target>"
-    when: "Default loop: anchor a plan for the routed skill."
-  - template: "scip-query diff-gate --json"
-    when: "Default loop: the loop is complete only when this passes or is explained."
+  - template: 'scip-query status --capabilities'
+    when: 'Before routing: confirm the index is fresh.'
+  - template: 'scip-query plan-context <target>'
+    when: 'Default loop: anchor a plan for the routed skill.'
+  - template: 'scip-query diff-gate --json'
+    when: 'Default loop: the loop is complete only when this passes or is explained.'
 ---
 
 # scip-query Router
@@ -19,11 +19,11 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md) when you
 <!-- BEGIN GENERATED SKILL COMMANDS -->
 ## Commands for this skill
 
-| Command | Purpose | When |
-| --- | --- | --- |
-| `scip-query status --capabilities` | Show index status for this project | Before routing: confirm the index is fresh. |
-| `scip-query plan-context <target>` | Pre-edit planning context for a symbol, file, or module | Default loop: anchor a plan for the routed skill. |
-| `scip-query diff-gate --json` | Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | Default loop: the loop is complete only when this passes or is explained. |
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query status --capabilities` | Show index status for this project | freshness, generation, language shards, watcher, and optional capabilities | `complete` | Before routing: confirm the index is fresh. |
+| `scip-query plan-context <target>` | Pre-edit planning context for a symbol, file, or module | definitions and references; callers and callees; dataflow producers and consumers; backward and forward slices; affected symbols; change-surface risk; dependencies and reverse dependencies; module files and exports; external surface use; complexity; churn; co-change partners; active suppressions | `bounded` | Default loop: anchor a plan for the routed skill. |
+| `scip-query diff-gate --json` | Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | blocking findings with check id, message, and remediation; advisory findings; root-cause groups; changed file and symbol counts; process exit status (1 when blocking findings exist) | `bounded` | Default loop: the loop is complete only when this passes or is explained. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -32,7 +32,7 @@ Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only
 
 For non-trivial code changes:
 
-1. Invoke `scip-concrete-plan`; the plan starts from `scip-query plan-context <target>` and designs for testability.
+1. Invoke `scip-concrete-plan`, anchored by `scip-query plan-context <target>`. It picks its own mode: ordinary planning by default, high-assurance only for security, money, destructive or irreversible operations, data migration, shared-state concurrency, or broad public API change. Do not demand the high-assurance certificate for routine work.
 2. Implement the plan in the smallest coherent slice.
 3. Invoke `scip-verify`.
 
@@ -40,32 +40,32 @@ The loop is complete only when `scip-verify` passes or each remaining finding ha
 
 ## Routes
 
-| Work | Skill | Anchor |
-| --- | --- | --- |
-| Understand a system before answering or editing | `scip-explore` | `system`, `trace`, `call-graph`, `dataflow` |
-| Root-cause a bug or regression | `scip-debug` | `trace`, `dataflow`, `change-surface` |
-| Diagnose the design flaw behind a family of recurring bugs | `scip-root-cause` | `co-change`, `similar`, `refs` |
-| Turn a report into a fix packet | `scip-triage-issue` | `files`, `trace`, `affected` |
-| Create a code flow, dependency, or blast-radius diagram | `scip-diagram` | `call-graph`, `dataflow`, `affected` |
-| Plan a feature, fix, or refactor | `scip-concrete-plan` | `plan-context` |
-| Run a multi-phase program: plan, delegate, verify handoffs, close | `scip-conductor` | `plan-context`, `diff-gate`, `health` |
-| Assess public API, route, config, schema, CLI, or export changes | `scip-api-impact` | `surface`, `affected`, `co-change` |
-| Pick language-specific high-signal commands | `scip-language-playbook` | language row |
-| Benchmark and optimize a command, workflow, or hot path | `scip-hyper-optimization` | `bench`, `plan-context`, profiles |
-| Adopt or repair scip-query setup in a repo | `scip-setup` | `setup`, `doctor`, `capabilities` |
-| Verify any finished change | `scip-verify` | `status`, `diff-impact`, final gate |
-| Audit, rank, or confirm cleanup findings | `scip-cleanup-audit` | `health`, `cleanup-plan`, cleanup detectors |
-| Autonomously fix confirmed cleanup findings | `scip-cleanup-improve` | `health`, `cleanup-plan`, verified batches |
-| Find or resolve same-name twins that have diverged | `scip-twin-drift` | `twin-drift`, `duplicate-bodies`, `refs` |
-| Faked or half-implemented features, checkers that never fail, dead paths behind fallbacks, lying metrics | `scip-integrity-audit` |
-| Audit whether a status claim is derived, hedged, or merely asserted | `scip-claim-audit` | `refs`, `code`, `trace` |
-| Prove whether a parser/AST branch is actually reachable | `scip-probe-reachability` | `outline --signatures`, `code`, scratch probes |
-| Reconcile living docs with code | `scip-doc-reconcile` | `doc-drift` |
-| Review or migrate folder ownership | `scip-directory-architecture` | `locality-candidates`, `similar-files` |
-| Review deeper maintainability and system compression | `scip-maintainability` | `bottlenecks`, `similar-chains`, `change-surface` |
-| Review React reuse and component/hook pressure | `scip-react-maintainability` | React duplicate and pressure commands |
-| Review Vue reuse and SFC/composable pressure | `scip-vue-maintainability` | Vue duplicate and pressure commands |
-| Model a TypeScript system with TLA+ | `scip-tla-model-system` | `plan-context`, `tla verify` |
+| Work                                                                                                     | Skill                         | Anchor                                            |
+| -------------------------------------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------- |
+| Understand a system before answering or editing                                                          | `scip-explore`                | `system`, `trace`, `call-graph`, `dataflow`       |
+| Root-cause a bug or regression                                                                           | `scip-debug`                  | `trace`, `dataflow`, `change-surface`             |
+| Diagnose the design flaw behind a family of recurring bugs                                               | `scip-root-cause`             | `co-change`, `similar`, `refs`                    |
+| Turn a report into a fix packet                                                                          | `scip-triage-issue`           | `files`, `trace`, `affected`                      |
+| Create a code flow, dependency, or blast-radius diagram                                                  | `scip-diagram`                | `call-graph`, `dataflow`, `affected`              |
+| Plan a feature, fix, or refactor                                                                         | `scip-concrete-plan`          | `plan-context`                                    |
+| Run a multi-phase program: plan, delegate, verify handoffs, close                                        | `scip-conductor`              | `plan-context`, `diff-gate`, `health`             |
+| Assess public API, route, config, schema, CLI, or export changes                                         | `scip-api-impact`             | `surface`, `affected`, `co-change`                |
+| Pick language-specific high-signal commands                                                              | `scip-language-playbook`      | language row                                      |
+| Benchmark and optimize a command, workflow, or hot path                                                  | `scip-hyper-optimization`     | `bench`, `plan-context`, profiles                 |
+| Adopt or repair scip-query setup in a repo                                                               | `scip-setup`                  | `setup`, `doctor`, `capabilities`                 |
+| Verify any finished change                                                                               | `scip-verify`                 | `status`, `diff-impact`, final gate               |
+| Audit, rank, or confirm cleanup findings                                                                 | `scip-cleanup-audit`          | `health`, `cleanup-plan`, cleanup detectors       |
+| Autonomously fix confirmed cleanup findings                                                              | `scip-cleanup-improve`        | `health`, `cleanup-plan`, verified batches        |
+| Find or resolve same-name twins that have diverged                                                       | `scip-twin-drift`             | `twin-drift`, `duplicate-bodies`, `refs`          |
+| Faked or half-implemented features, checkers that never fail, dead paths behind fallbacks, lying metrics | `scip-integrity-audit`        |
+| Audit whether a status claim is derived, hedged, or merely asserted                                      | `scip-claim-audit`            | `refs`, `code`, `trace`                           |
+| Prove whether a parser/AST branch is actually reachable                                                  | `scip-probe-reachability`     | `outline --signatures`, `code`, scratch probes    |
+| Reconcile living docs with code                                                                          | `scip-doc-reconcile`          | `doc-drift`                                       |
+| Review or migrate folder ownership                                                                       | `scip-directory-architecture` | `locality-candidates`, `similar-files`            |
+| Review deeper maintainability and system compression                                                     | `scip-maintainability`        | `bottlenecks`, `similar-chains`, `change-surface` |
+| Review React reuse and component/hook pressure                                                           | `scip-react-maintainability`  | React duplicate and pressure commands             |
+| Review Vue reuse and SFC/composable pressure                                                             | `scip-vue-maintainability`    | Vue duplicate and pressure commands               |
+| Model a TypeScript system with TLA+                                                                      | `scip-tla-model-system`       | `plan-context`, `tla verify`                      |
 
 Routing is complete only when one owning skill is selected or the task is small enough for the default loop alone.
 

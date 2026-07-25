@@ -1,4 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
@@ -48,6 +49,14 @@ export interface ClaudeHookJsonOutput {
   };
 }
 
+export interface ClaudePreToolHookJsonOutput {
+  hookSpecificOutput: {
+    hookEventName: 'PreToolUse';
+    permissionDecision: 'deny';
+    permissionDecisionReason: string;
+  };
+}
+
 // scip-query: ignore-stale — reviewed S1 owned contract; hook installation returns this named result.
 export interface InstallUserAgentHooksResult {
   installed: string[];
@@ -75,18 +84,21 @@ interface HookGroup {
   [key: string]: unknown;
 }
 
-type HookEventName = 'SessionStart' | 'UserPromptSubmit' | 'Stop';
+type HookEventName = 'SessionStart' | 'UserPromptSubmit' | 'PostCompact' | 'PreToolUse' | 'Stop';
 
 type HookConfig = Record<string, unknown> & {
   hooks?: Partial<Record<HookEventName, HookGroup[]>>;
 };
 
-interface HookPayload {
+export interface HookPayload {
   hook_event_name?: unknown;
   hookEventName?: unknown;
   cwd?: unknown;
   prompt?: unknown;
   source?: unknown;
+  session_id?: unknown;
+  tool_name?: unknown;
+  tool_input?: unknown;
 }
 
 interface ProjectHookOptions {
@@ -377,7 +389,7 @@ function removeProviderHooks(opts: {
   const nextHooks: HookConfig['hooks'] = { ...hooks };
   let changed = false;
 
-  for (const event of ['SessionStart', 'UserPromptSubmit', 'Stop'] as const) {
+  for (const event of ['SessionStart', 'UserPromptSubmit', 'PostCompact', 'PreToolUse', 'Stop'] as const) {
     const groups = Array.isArray(hooks[event]) ? hooks[event] : [];
     const pruned = pruneScipHookGroups(groups);
     if (pruned.length !== groups.length || JSON.stringify(pruned) !== JSON.stringify(groups)) {
@@ -462,7 +474,11 @@ export function mergeScipHookConfig(
     delete next['scipQueryHooks'];
   }
 
-  for (const event of ['SessionStart', 'UserPromptSubmit', 'Stop'] as const) {
+  const events: HookEventName[] =
+    provider === 'claude'
+      ? ['SessionStart', 'UserPromptSubmit', 'PostCompact', 'PreToolUse', 'Stop']
+      : ['SessionStart', 'UserPromptSubmit', 'Stop'];
+  for (const event of events) {
     const groups = Array.isArray(hooks[event]) ? hooks[event] : [];
     next.hooks![event] = [...pruneScipHookGroups(groups), scipHookGroup(provider, event, commandPrefix)];
   }
@@ -515,6 +531,33 @@ function scipHookGroup(_provider: HookProvider, event: HookEventName, commandPre
     };
   }
 
+  if (event === 'PostCompact') {
+    return {
+      hooks: [
+        {
+          type: 'command',
+          command: `${commandPrefix} hook-context`,
+          timeout: 10,
+          statusMessage: 'Resetting scip-query context reminder',
+        },
+      ],
+    };
+  }
+
+  if (event === 'PreToolUse') {
+    return {
+      matcher: 'Bash|Grep|Glob',
+      hooks: [
+        {
+          type: 'command',
+          command: `${commandPrefix} hook-pretool`,
+          timeout: 10,
+          statusMessage: 'Checking scip-query evidence integrity',
+        },
+      ],
+    };
+  }
+
   return {
     hooks: [
       {
@@ -537,6 +580,80 @@ export async function handleAgentHookContext(): Promise<void> {
   if (output) {
     console.log(JSON.stringify(output));
   }
+}
+
+export function handleAgentHookPreToolUse(): void {
+  const payload = parseHookPayload(readHookInput());
+  const workspace = resolveHookWorkspace(payload);
+  if (!workspace || !existsSync(workspace.paths.dbPath)) return;
+  const markerPath = preToolReminderMarker(workspace.paths.cacheDir, payload);
+  const decision = evaluatePreToolUse(payload, markerPath ? existsSync(markerPath) : true);
+  if (decision.kind === 'allow') return;
+  if (decision.kind === 'reconsider' && markerPath) {
+    mkdirSync(dirname(markerPath), { recursive: true });
+    writeFileSync(markerPath, 'shown\n');
+  }
+  const output: ClaudePreToolHookJsonOutput = {
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'deny',
+      permissionDecisionReason: decision.reason,
+    },
+  };
+  console.log(JSON.stringify(output));
+}
+
+type PreToolDecision = { kind: 'allow' } | { kind: 'deny' | 'reconsider'; reason: string };
+
+const PAGINATED_OR_COMPACT_COMMANDS = ['refs', 'trace', 'system', 'plan-context', 'diff-gate'] as const;
+
+export function evaluatePreToolUse(payload: HookPayload, alreadyReminded: boolean): PreToolDecision {
+  const tool = typeof payload.tool_name === 'string' ? payload.tool_name : '';
+  const input =
+    payload.tool_input && typeof payload.tool_input === 'object' ? (payload.tool_input as Record<string, unknown>) : {};
+  const shellCommand = tool === 'Bash' && typeof input['command'] === 'string' ? input['command'] : '';
+
+  if (shellCommand && blindlyTruncatesScipQuery(shellCommand)) {
+    return {
+      kind: 'deny',
+      reason:
+        'Do not pipe scip-query output through head, tail, or a line-range sed selector: that hides whether evidence was omitted. Re-run with --json --compact; for refs, use --limit and the returned coverage.continuation.cursor.',
+    };
+  }
+
+  const nativeSearch =
+    tool === 'Grep' || tool === 'Glob' || (tool === 'Bash' && /(?:^|[;&|]\s*)(?:rg|grep)(?:\s|$)/.test(shellCommand));
+  if (!nativeSearch || alreadyReminded) return { kind: 'allow' };
+  return {
+    kind: 'reconsider',
+    reason:
+      'Pause once before native search in this indexed repository. If you need compiler-resolved identity or a complete set of definitions, references, callers, consumers, dependencies, or affected units, use scip-query. If you only need literal text, filenames, or local source, retry the same search unchanged; it will be allowed for the rest of this context window.',
+  };
+}
+
+function blindlyTruncatesScipQuery(command: string): boolean {
+  const names = PAGINATED_OR_COMPACT_COMMANDS.join('|');
+  const scipQuery = new RegExp(`(?:^|[;&(]\\s*|\\s)(?:\\S*/)?scip-query\\s+(?:${names})(?:\\s|$)`);
+  if (!scipQuery.test(command)) return false;
+  return (
+    /\|\s*(?:head|tail)(?:\s|$)/.test(command) ||
+    /\|\s*sed\s+(?:-[A-Za-z]+\s+)*(?:['"])?\d+\s*,\s*\d+\s*p/.test(command)
+  );
+}
+
+function preToolReminderMarker(cacheDir: string, payload: HookPayload): string | null {
+  const sessionId = typeof payload.session_id === 'string' ? payload.session_id : null;
+  if (!sessionId) return null;
+  const identity = createHash('sha256').update(sessionId).digest('hex').slice(0, 24);
+  return join(cacheDir, 'agent-hooks', `native-search-${identity}`);
+}
+
+function resetPreToolReminder(
+  workspace: { paths: ReturnType<typeof resolveIndexStoragePaths> },
+  payload: HookPayload,
+): void {
+  const marker = preToolReminderMarker(workspace.paths.cacheDir, payload);
+  if (marker) rmSync(marker, { force: true });
 }
 
 /**
@@ -613,12 +730,14 @@ function formatGateAdvisoryReason(result: DiffGateResult): string {
 export async function renderAgentHookContext(hookInput: string): Promise<unknown | undefined> {
   const payload = parseHookPayload(hookInput);
   const event = hookEventName(payload);
-  if (event !== 'SessionStart' && event !== 'UserPromptSubmit') {
+  if (event !== 'SessionStart' && event !== 'UserPromptSubmit' && event !== 'PostCompact') {
     return undefined;
   }
 
   const workspace = resolveHookWorkspace(payload);
   if (!workspace) return undefined;
+  if (event === 'SessionStart' || event === 'PostCompact') resetPreToolReminder(workspace, payload);
+  if (event === 'PostCompact') return undefined;
 
   const refreshNote = await refreshIndexForHookIfNeeded(workspace, event);
   const context =
@@ -746,7 +865,7 @@ function renderSessionStartContext(
       ? `Unavailable or partial capabilities: ${unavailable.join(', ')}.`
       : 'Core capabilities are available.',
     'Use the scip-query router skill when exploring, planning, verifying, debugging, diagramming, or cleaning up code.',
-    'For non-trivial edits, plan with scip-concrete-plan anchored by `scip-query plan-context <target>`, then verify with scip-verify.',
+    'Before a non-trivial edit, establish the current entry-to-effect flow, affected consumers, and reuse options with scip-concrete-plan; then verify the finished diff with scip-verify.',
   ]
     .filter((line): line is string => line !== undefined)
     .join('\n');
@@ -781,7 +900,19 @@ const PROMPT_ROUTES: PromptRoute[] = [
   {
     id: 'debug',
     skillNames: ['scip-debug', 'scip-triage-issue'],
-    keywords: ['debug', 'bug', 'regression', 'failing', 'fails', 'error', 'wrong'],
+    keywords: [
+      'debug',
+      'bug',
+      'regression',
+      'failing',
+      'fails',
+      'error',
+      'wrong',
+      'broken',
+      "doesn't work",
+      'not working',
+      'crash',
+    ],
     message: 'Debug or bug request: use scip-debug. For issue-quality triage, use scip-triage-issue.',
   },
   {
@@ -796,7 +927,7 @@ const PROMPT_ROUTES: PromptRoute[] = [
     skillNames: ['scip-concrete-plan', 'scip-verify'],
     keywords: ['implement', 'build', 'change', 'refactor', 'fix', 'add', 'update'],
     message:
-      'Implementation request: plan first with scip-concrete-plan and `scip-query plan-context <target>`, then verify with scip-verify.',
+      'Before editing: use scip-concrete-plan and `scip-query plan-context <target>` to establish the current flow, affected consumers, and reuse options. After editing: use scip-verify.',
   },
   {
     id: 'exploration',

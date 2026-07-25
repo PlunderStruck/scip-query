@@ -35,15 +35,16 @@ producer's larger concrete interface or directory.
 
 The working-tree architecture command reports:
 
-- 347 of 347 indexed files mapped, with no ambiguous files;
-- 14 enforced boundaries;
-- 56 observed cross-boundary dependency relationships;
-- 14 of 14 closed dependency rows;
-- 56 allowed, 0 forbidden, and 0 undeclared relationships;
+- 351 of 351 indexed files mapped, with no ambiguous files;
+- 34 enforced boundaries;
+- 205 observed cross-boundary dependency relationships;
+- 34 of 34 closed dependency rows;
+- 0 forbidden relationships;
 - 0 reciprocal boundary pairs;
-- 0 strongly connected multi-boundary groups.
+- 0 strongly connected multi-boundary groups;
+- 0 unresolved coarse boundaries.
 
-Source: `node dist/cli.js architecture --json` on 2026-07-23.
+Source: `scip-query architecture --json` on 2026-07-24.
 
 The mapping and policy are complete. `requireCompletePolicy` rejects a missing
 outgoing dependency row, while `requireAcyclic` rejects a multi-boundary
@@ -52,32 +53,52 @@ for architecture; the shared dependency graph retains its import-only default,
 so navigation, incremental indexing, similarity, and semantic consumers keep
 their established work profile.
 
-## Boundary Maturity
+## Enforced Boundary Responsibilities
 
-| Boundary          | Responsibility                                                                                                                                                  | Maturity                     | Decision                                                                                 |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------- |
-| `domain`          | Dependency-free values, configuration shapes, stable identities, and project-input transitions                                                                  | Mature                       | Keep closed and dependency-free                                                          |
-| `instrumentation` | Dependency-free profiling primitives                                                                                                                            | Mature                       | Keep closed and dependency-free                                                          |
-| `platform`        | Host executable/toolchain discovery, project-file fingerprinting, process portability, cache identity, service-state contracts, and verified binary acquisition | Mature leaf mechanism        | Keep closed; depend only on stable domain contracts                                      |
-| `rust-kernels`    | Native package implementation                                                                                                                                   | Mature package               | Keep closed at the TypeScript graph boundary                                             |
-| `storage`         | SQLite, cache, and repository-file persistence mechanisms                                                                                                       | Mature, first leaks removed  | Keep closed; admit only persistence dependencies                                         |
-| `source`          | Source-text, AST, language-specific import resolution and parsing, and framework fact extraction                                                                | Mature, closed subsystem     | Govern `source` and `language-parsers` as one source-fact boundary                       |
-| `symbols`         | Symbol catalogs, reference attribution, and graph construction                                                                                                  | Mature, closed subsystem     | Keep compiler-provider mechanics outside this boundary                                   |
-| `semantic`        | Compiler- and language-server-resolved semantic evidence                                                                                                        | Mature, closed subsystem     | Preserve the one-way `semantic -> symbols` relationship                                  |
-| `analysis`        | Cross-cutting evidence interpretation such as Git history and file classification                                                                               | Classified, closed boundary  | Keep generic evidence interpretation separate from feature workflows                     |
-| `queries`         | User-facing analysis and cleanup use cases, including user file-pattern resolution                                                                              | Mature, closed application boundary | May depend on evidence mechanisms, never the reverse                               |
-| `reindex`         | Index construction and generation lifecycle                                                                                                                     | Mature, closed application subsystem | Keep pure input transitions and host mechanisms in lower owners                  |
-| `tla`             | Formal-model use cases and tooling                                                                                                                              | Mature, closed optional subsystem | Keep its explicit query dependency visible                                          |
-| `runtime`         | CLI, hooks, setup, process lifecycle, and delivery orchestration                                                                                                | Mature, closed delivery boundary | Continue extracting reusable host mechanisms when evidence supports it              |
-| `public-api`      | Published library entry point and its re-export surface                                                                                                         | Mature, closed delivery boundary | Treat every resolved public re-export as a governed dependency                       |
+| Boundary | Stable responsibility |
+| --- | --- |
+| `analysis` | Cross-cutting evidence interpretation, including history and file classification |
+| `domain` | Dependency-free values, configuration shapes, identities, and project-input transitions |
+| `instrumentation` | Dependency-free profiling primitives |
+| `platform` | Host, toolchain, process, cache, and verified-binary mechanisms |
+| `public-api` | Published library exports |
+| `queries-cleanup` | Cleanup detectors and candidate production |
+| `queries-facade` | Public query aggregation and export registration |
+| `queries-frontend` | Framework-specific analysis products |
+| `queries-graph` | Architecture and graph reports |
+| `queries-health` | Composite health collection and health-baseline orchestration |
+| `queries-impact` | Change-impact and diff-gate workflows |
+| `queries-internal` | Shared query evidence, policy, and baseline-file primitives |
+| `queries-navigation` | File and symbol navigation |
+| `queries-quality` | Complexity and self-audit queries |
+| `queries-utils` | Common query result normalization and formatting |
+| `reindex` | Index construction and generation orchestration |
+| `reindex-augmentation` | Post-index source augmentation |
+| `reindex-vue` | Vue-specific index augmentation |
+| `runtime-command-kit` | Reusable command definition and execution machinery |
+| `runtime-commands` | Top-level command catalog, registry, and handlers |
+| `runtime-entry` | CLI and package executable entry points |
+| `runtime-query-commands` | Query command adapters and renderers |
+| `runtime-services` | Watch, setup, diagnostic, and delivery services |
+| `rust-kernels` | Native package implementation |
+| `semantic-contracts` | Provider-neutral semantic contracts |
+| `semantic-core` | Provider selection, caching, and shared semantic orchestration |
+| `semantic-rust` | rust-analyzer-backed semantic evidence |
+| `semantic-typescript` | TypeScript-compiler-backed semantic evidence |
+| `source` | Source text, AST, import parsing, language adapters, and framework facts |
+| `storage` | SQLite, cache, and repository-file persistence |
+| `symbols-core` | Symbol catalog, identity, and attribution |
+| `symbols-graph` | File and call dependency graph construction |
+| `symbols-references` | Reference and caller discovery |
+| `tla` | Formal-model use cases and tooling |
 
 ## Target Responsibility Flow
 
 Dependencies should normally move downward through these responsibility bands:
 
-1. **Delivery** — `public-api`, CLI and agent-facing parts of `runtime`.
-2. **Use cases** — `queries`, `reindex`, and `tla`.
-3. **Evidence engines** — `analysis`, `semantic`, and `symbols`.
+1. **Delivery** — `public-api` and the `runtime-*` boundaries.
+2. **Use cases** — the `queries-*`, `reindex*`, and `tla` boundaries.
+3. **Evidence engines** — `analysis`, `semantic-*`, and `symbols-*`.
 4. **Adapters and persistence** — `source` and `storage`.
 5. **Stable contracts and leaf mechanisms** — `domain`, `instrumentation`,
    `platform`, and native package boundaries.

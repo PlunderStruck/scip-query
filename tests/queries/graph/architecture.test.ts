@@ -190,11 +190,16 @@ describe('architecture graph analysis', () => {
     expect(architectureFindingIdentities(moved)).toEqual(architectureFindingIdentities(first));
   });
 
-  it('treats only closed rows and explicit completeness or acyclicity as enforceable policy', () => {
+  it('treats closed rows and explicit architecture rules as enforceable policy', () => {
     expect(hasEnforceableArchitecturePolicy(baseConfig)).toBe(false);
     expect(hasEnforceableArchitecturePolicy({ ...baseConfig, allowedDependencies: { domain: [] } })).toBe(true);
     expect(hasEnforceableArchitecturePolicy({ ...baseConfig, requireCompletePolicy: true })).toBe(true);
     expect(hasEnforceableArchitecturePolicy({ ...baseConfig, requireAcyclic: true })).toBe(true);
+    expect(
+      hasEnforceableArchitecturePolicy({
+        boundaries: [{ name: 'domain', paths: ['src/domain/**'], maxFiles: 10 }],
+      }),
+    ).toBe(true);
   });
 });
 
@@ -349,6 +354,18 @@ describe('policy minimality, limits, and edge fragility', () => {
     ]);
   });
 
+  it('uses a boundary-specific file limit without weakening the global limit', () => {
+    const report = analyzeArchitectureGraph(new Map(), ['src/app/a.ts', 'src/app/b.ts', 'src/lib/c.ts'], {
+      boundaries: [
+        { name: 'app', paths: ['src/app/**'], maxFiles: 2 },
+        { name: 'lib', paths: ['src/lib/**'] },
+      ],
+      maxBoundaryFiles: 0,
+    });
+
+    expect(report.boundaryLimits).toEqual([{ boundary: 'lib', kind: 'files', observed: 1, limit: 0 }]);
+  });
+
   it('marks a boundary dependency resting on a single import as fragile', () => {
     const report = analyzeArchitectureGraph(oneEdge, files, twoBoundaries);
 
@@ -411,9 +428,25 @@ describe('coarse-boundary baseline identity stability', () => {
     expect(architectureFindingIdentities(threeUnits)).toEqual(architectureFindingIdentities(twoUnits));
   });
 
-  it('defaults the exported detector to path-based module-hierarchy classification', () => {
-    // index.ts is a barrel by path, so the default classifier excludes it and
-    // the parent/child re-export loop is not reported as a cycle.
+  it('adds a stable cardinality identity for a second independent cycle', () => {
+    const report = analyzeArchitectureGraph(
+      graph([
+        ['src/app/a/x.ts', ['src/app/b/y.ts']],
+        ['src/app/b/y.ts', ['src/app/a/x.ts']],
+        ['src/app/c/x.ts', ['src/app/d/y.ts']],
+        ['src/app/d/y.ts', ['src/app/c/x.ts']],
+      ]),
+      ['src/app/a/x.ts', 'src/app/b/y.ts', 'src/app/c/x.ts', 'src/app/d/y.ts'],
+      config,
+    );
+
+    expect(architectureFindingIdentities(report)).toEqual([
+      'architecture:coarse-boundary:app',
+      'architecture:coarse-boundary:app:component:2',
+    ]);
+  });
+
+  it('does not classify a logic-bearing index file as a barrel by path alone', () => {
     const findings = detectCoarseBoundaries(
       new Map([
         ['src/app/index.ts', new Set(['src/app/child/leaf.ts'])],
@@ -422,6 +455,7 @@ describe('coarse-boundary baseline identity stability', () => {
       new Map([['app', new Set(['src/app/index.ts', 'src/app/child/leaf.ts'])]]),
     );
 
-    expect(findings).toEqual([]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.subUnits).toEqual(['src/app', 'src/app/child']);
   });
 });

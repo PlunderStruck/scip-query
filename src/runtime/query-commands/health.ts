@@ -1,6 +1,6 @@
 import * as queries from '../../queries/index.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
-import { doc, option, parseInteger, withJsonOption } from '../command-kit/command-spec-builders.js';
+import { agentContract, doc, option, parseInteger, withJsonOption } from '../command-kit/command-spec-builders.js';
 import {
   booleanOptionValue,
   budgetedDbCommand,
@@ -74,6 +74,13 @@ export const healthQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'self-audit',
     command: 'self-audit',
     description: 'Score cheap evidence paths against the best available semantic/source oracle on sampled symbols',
+    agent: agentContract(
+      'How accurate are the fast evidence paths on a sample?',
+      'sample coverage, agreement scores, and disagreements',
+      [],
+      'sampled',
+      'repository',
+    ),
     options: withJsonOption([
       option('--samples <n>', 'Number of symbols to sample', parseInteger, 50),
       option('-s, --scope <path>', 'Limit sampling to files matching path'),
@@ -86,6 +93,12 @@ export const healthQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'complexity',
     command: 'complexity <symbol>',
     description: 'Per-symbol complexity: branches, cyclomatic estimate, fan-in/out, callees',
+    agent: agentContract(
+      'How structurally complex and connected is this symbol?',
+      'LOC, branch, complexity, callee, fan-in, and fan-out counts',
+      ['symbol'],
+      'bounded',
+    ),
     options: withJsonOption([option('--full', 'Run unbounded semantic analysis on large indexes')]),
     budget: 'semantic',
     renderShape: 'custom',

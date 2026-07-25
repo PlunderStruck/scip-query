@@ -162,7 +162,8 @@
       },
       {
         "name": "source",
-        "paths": ["src/source/**", "src/language-parsers/**"]
+        "paths": ["src/source/**", "src/language-parsers/**"],
+        "maxFiles": 60
       },
       {
         "name": "storage",
@@ -394,7 +395,7 @@
     "requireMinimalPolicy": true,
     "testPaths": ["tests/**"],
     "maxBoundaryFanOut": 20,
-    "maxBoundaryFiles": 60
+    "maxBoundaryFiles": 40
   },
   "suppressions": [
     {

@@ -2,11 +2,11 @@
 name: scip-probe-reachability
 description: Prove whether a parser/AST branch is actually reachable by running the real parser on minimal inputs. Use for unreachable or dead node-type/shape branches, wrong node-type strings, tree-sitter grammar mismatches, or any conditional written for an AST or parser output that has never been checked against the real parser.
 commands:
-  - template: "scip-query outline <file> --signatures"
-    when: "Enumerate branches: symbol tree with signatures for the target file."
-  - template: "scip-query code <symbol>"
+  - template: 'scip-query outline <file> --signatures'
+    when: 'Enumerate branches: symbol tree with signatures for the target file.'
+  - template: 'scip-query code <symbol>'
     when: "Enumerate branches: read each branch condition's exact node-type check."
-  - template: "scip-query trace <symbol>"
+  - template: 'scip-query trace <symbol>'
     when: "Enumerate branches: confirm the function's only caller/entry point."
 ---
 
@@ -19,11 +19,11 @@ Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
 <!-- BEGIN GENERATED SKILL COMMANDS -->
 ## Commands for this skill
 
-| Command | Purpose | When |
-| --- | --- | --- |
-| `scip-query outline <file> --signatures` | Tree view of symbols in a file, with line ranges | Enumerate branches: symbol tree with signatures for the target file. |
-| `scip-query code <symbol>` | Read the source code for a symbol (bounded to its definition range) | Enumerate branches: read each branch condition's exact node-type check. |
-| `scip-query trace <symbol>` | Trace a symbol: definition + all references | Enumerate branches: confirm the function's only caller/entry point. |
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query outline <file> --signatures` | Tree view of symbols in a file, with line ranges | symbol names, nesting, and line ranges | `complete` | Enumerate branches: symbol tree with signatures for the target file. |
+| `scip-query code <symbol>` | Read the source code for a symbol (bounded to its definition range) | definition identity, source, and line range | `complete` | Enumerate branches: read each branch condition's exact node-type check. |
+| `scip-query trace <symbol>` | Trace a symbol: definition + all references | definition sites with source and signature; referencing files with line numbers | `bounded` | Enumerate branches: confirm the function's only caller/entry point. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -86,6 +86,7 @@ Branches:
 | --- | --- | --- | --- |
 
 Findings:
+
 - <branch> — dead branch / wrong node-type string — fix: <direction>
 ```
 

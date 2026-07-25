@@ -21,6 +21,8 @@ export function listQueryCommand<Row>({
   heuristicLabel,
   before,
   toJson,
+  coverage,
+  agentResult,
   after,
   ...metadata
 }: QueryCommandMetadata & Parameters<typeof listCommand<Row>>[0]): CommandDescriptor {
@@ -36,6 +38,8 @@ export function listQueryCommand<Row>({
       heuristicLabel,
       before,
       toJson,
+      coverage,
+      agentResult,
       after,
     }),
   };
@@ -48,6 +52,8 @@ export function tableQueryCommand<Row>({
   heuristicLabel,
   before,
   toJson,
+  coverage,
+  agentResult,
   after,
   headers,
   dashWidths,
@@ -65,6 +71,8 @@ export function tableQueryCommand<Row>({
       heuristicLabel,
       before,
       toJson,
+      coverage,
+      agentResult,
       after,
       headers,
       dashWidths,
@@ -79,6 +87,8 @@ export function groupedQueryCommand<Row>({
   heuristicLabel,
   before,
   toJson,
+  coverage,
+  agentResult,
   after,
   key,
   ...metadata
@@ -95,6 +105,8 @@ export function groupedQueryCommand<Row>({
       heuristicLabel,
       before,
       toJson,
+      coverage,
+      agentResult,
       after,
       key,
     }),
@@ -108,6 +120,8 @@ export function sectionedQueryCommand<Result>({
   sections,
   before,
   toJson,
+  coverage,
+  agentResult,
   after,
   ...metadata
 }: QueryCommandMetadata & Parameters<typeof sectionedReportCommand<Result>>[0]): CommandDescriptor {
@@ -123,6 +137,8 @@ export function sectionedQueryCommand<Result>({
       before,
       sections,
       toJson,
+      coverage,
+      agentResult,
       after,
     }),
   };
@@ -135,6 +151,8 @@ export function budgetedSectionedQueryCommand<Result>({
   sections,
   before,
   toJson,
+  coverage,
+  agentResult,
   after,
   ...metadata
 }: QueryCommandMetadata & Parameters<typeof budgetedSectionedReportCommand<Result>>[1]): CommandDescriptor {
@@ -151,6 +169,8 @@ export function budgetedSectionedQueryCommand<Result>({
       before,
       sections,
       toJson,
+      coverage,
+      agentResult,
       after,
     }),
   };

@@ -87,7 +87,7 @@ const ARCHITECTURE_CONFIG_KEYS = new Set([
   'maxBoundaryFiles',
   'testPaths',
 ]);
-const ARCHITECTURE_BOUNDARY_CONFIG_KEYS = new Set(['name', 'paths', 'subUnits']);
+const ARCHITECTURE_BOUNDARY_CONFIG_KEYS = new Set(['name', 'paths', 'subUnits', 'maxFiles']);
 const DOCS_CONFIG_KEYS = new Set(['snapshotPaths']);
 const DECLARED_COUPLING_CONFIG_KEYS = new Set(['name', 'files', 'reason']);
 const SUPPRESSION_CONFIG_KEYS = new Set(['id', 'check', 'file', 'reason', 'expiresAt', 'createdAt']);
@@ -424,6 +424,14 @@ function validateArchitectureConfig(config: ProjectConfig, diagnostics: ConfigDi
         level: 'error',
         path: `${path}.subUnits`,
         message: "Must be 'directory' or 'file'.",
+      });
+    }
+    const maxFiles = rawBoundary.maxFiles;
+    if (maxFiles !== undefined && (typeof maxFiles !== 'number' || !Number.isInteger(maxFiles) || maxFiles < 0)) {
+      diagnostics.push({
+        level: 'error',
+        path: `${path}.maxFiles`,
+        message: 'Must be a non-negative integer.',
       });
     }
 

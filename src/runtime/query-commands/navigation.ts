@@ -1,6 +1,13 @@
 import * as queries from '../../queries/index.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
-import { doc, option, parseInteger, withJsonOption } from '../command-kit/command-spec-builders.js';
+import {
+  agentContract,
+  compactOption,
+  doc,
+  option,
+  parseInteger,
+  withJsonOption,
+} from '../command-kit/command-spec-builders.js';
 import {
   booleanOptionValue,
   budgetedDbCommand,
@@ -126,6 +133,12 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'files',
     command: 'files <pattern>',
     description: 'Find files matching a pattern',
+    agent: agentContract(
+      'Which indexed files match this text pattern?',
+      'matching file paths',
+      ['pattern'],
+      'complete',
+    ),
     docs: doc('Navigation', ['scip-query files auth']),
     query: ({ db, args }) => queries.files(db, stringArg(args, 0)),
     format: (r) => r.relativePath,
@@ -134,6 +147,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'methods',
     command: 'methods <className>',
     description: 'List methods of a class (with line ranges)',
+    agent: agentContract('Which methods belong to this class?', 'method names and line ranges', ['symbol'], 'complete'),
     docs: doc('Navigation'),
     query: ({ db, args }) => queries.methods(db, stringArg(args, 0)),
     format: (r) => `  ${displayRange(r.startLine, r.endLine)}  ${r.name}`,
@@ -142,8 +156,24 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'trace',
     command: 'trace <symbol>',
     description: 'Trace a symbol: definition + all references',
-    options: [option('--full', 'Run unbounded semantic analysis on large indexes')],
+    options: [option('--full', 'Run unbounded semantic analysis on large indexes'), compactOption()],
     budget: 'semantic',
+    agent: {
+      answers: ['Where is this symbol defined, and everywhere is it referenced?'],
+      returns: ['definition sites with source and signature', 'referencing files with line numbers'],
+      inputs: ['symbol'],
+      coverage: 'bounded',
+      contrasts: [
+        {
+          command: 'refs',
+          distinction: 'refs returns reference sites only; trace adds the definition and its source.',
+        },
+        {
+          command: 'call-graph',
+          distinction: 'trace lists reference sites flat; call-graph separates incoming callers from outgoing callees.',
+        },
+      ],
+    },
     docs: doc('Navigation', ['scip-query trace parseSymbol']),
     query: ({ db, args, budget }) => queries.trace(db, stringArg(args, 0), { semantic: budget.semantic }),
     emptyMessage: (result, { db, args }) =>
@@ -152,12 +182,32 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
         : undefined,
     before: (_result, { db, args }) => symbolResolutionBefore(db, stringArg(args, 0)),
     toJson: (result, { db, args }) => ({ ...symbolResolutionJson(db, stringArg(args, 0)), ...result }),
+    coverage: (result, { budget }) => {
+      const returned = result.definitions.length + result.referencedBy.length;
+      return budget.analysisBudget
+        ? { complete: false, totalKnown: false, returned }
+        : { complete: true, totalKnown: true, returned, total: returned, omitted: 0 };
+    },
+    agentResult: (result) => ({
+      definitionCount: result.definitions.length,
+      referenceCount: result.referencedBy.length,
+      definitionIdentities: result.definitions.map(
+        (definition) => `${definition.relativePath}:${definition.startLine}-${definition.endLine}`,
+      ),
+      referenceIdentities: result.referencedBy.map((reference) => `${reference.relativePath}:${reference.line}`),
+    }),
     sections: traceSections,
   }),
   listQueryCommand({
     id: 'deps',
     command: 'deps <file>',
     description: 'Files this file depends on (internal)',
+    agent: agentContract(
+      'Which internal files does this file depend on?',
+      'dependency file paths',
+      ['file'],
+      'complete',
+    ),
     docs: doc('Navigation'),
     query: ({ db, args }) => queries.deps(db, stringArg(args, 0)),
     format: (r) => r.relativePath,
@@ -166,6 +216,12 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'rdeps',
     command: 'rdeps <file>',
     description: 'Files that depend on this file/module',
+    agent: agentContract(
+      'Which internal files depend on this file?',
+      'reverse-dependency file paths',
+      ['file'],
+      'complete',
+    ),
     docs: doc('Navigation'),
     query: ({ db, args }) => queries.rdeps(db, stringArg(args, 0)),
     format: (r) => r.relativePath,
@@ -174,8 +230,48 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'system',
     command: 'system <module>',
     description: 'Full module map: files, symbols, deps in/out',
+    options: [compactOption()],
+    agent: {
+      answers: ['What is in this module?', 'What does this module depend on, and what depends on it?'],
+      returns: [
+        'module file paths',
+        'exported symbols with line ranges',
+        'internal dependencies',
+        'reverse dependencies',
+      ],
+      inputs: ['module'],
+      // No budget and no row cap: every section is the whole set.
+      coverage: 'complete',
+      contrasts: [
+        {
+          command: 'surface',
+          distinction: 'system lists everything the module exports; surface lists only what consumers actually use.',
+        },
+        { command: 'outline', distinction: 'system is module-scoped; outline covers a single file.' },
+      ],
+    },
     docs: doc('Navigation', ['scip-query system queries']),
     query: ({ db, args }) => queries.system(db, stringArg(args, 0)),
+    coverage: (result) => {
+      const returned =
+        result.files.length + result.symbols.length + result.dependsOn.length + result.dependedOnBy.length;
+      return { complete: true, totalKnown: true, returned, total: returned, omitted: 0 };
+    },
+    agentResult: (result) => ({
+      counts: {
+        files: result.files.length,
+        symbols: result.symbols.length,
+        dependencies: result.dependsOn.length,
+        consumers: result.dependedOnBy.length,
+      },
+      files: result.files,
+      dependsOn: result.dependsOn,
+      dependedOnBy: result.dependedOnBy,
+      detail: {
+        location: 'result',
+        symbolUnits: 'result.symbols contains every exported symbol with its line range',
+      },
+    }),
     sections: (result) => [
       { title: 'FILES', rows: result.files },
       {
@@ -190,6 +286,12 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'surface',
     command: 'surface <module>',
     description: 'What symbols consumers actually use from this module',
+    agent: agentContract(
+      'Which exported symbols do external consumers actually use?',
+      'consumer paths and consumed symbol identities',
+      ['module'],
+      'complete',
+    ),
     docs: doc('Navigation'),
     query: ({ db, args }) => queries.surface(db, stringArg(args, 0)),
     format: (r) => `  ${r.consumer} → ${r.shortName}`,
@@ -198,6 +300,12 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'imports',
     command: 'imports <file>',
     description: 'What symbols does this file import?',
+    agent: agentContract(
+      'Which symbols does this file import?',
+      'imported symbol identities and source files',
+      ['file'],
+      'bounded',
+    ),
     options: [
       option('--full', 'Run unbounded semantic analysis on large indexes'),
       option('--json', 'Output as JSON for programmatic consumption'),
@@ -211,6 +319,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'imported-by',
     command: 'imported-by <symbol>',
     description: 'Which files import this symbol?',
+    agent: agentContract('Which files import this symbol?', 'importing file paths', ['symbol'], 'complete'),
     docs: doc('Navigation'),
     query: ({ db, args }) => queries.importedBy(db, stringArg(args, 0)),
     format: (r) => `  ${r.fromFile}`,
@@ -219,6 +328,12 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'members',
     command: 'members <symbol>',
     description: 'All children of a symbol (methods, fields, nested types)',
+    agent: agentContract(
+      'Which members or nested symbols belong to this symbol?',
+      'child symbol identities, kinds, and ranges',
+      ['symbol'],
+      'complete',
+    ),
     docs: doc('Navigation'),
     query: ({ db, args }) => queries.members(db, stringArg(args, 0)),
     format: (r) => `  ${displayRange(r.startLine, r.endLine)}  [${r.kind}]  ${r.shortName}`,
@@ -230,6 +345,12 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'by-kind',
     command: 'by-kind <kind>',
     description: 'Find symbols by SCIP kind (class, interface, enum, function, etc.)',
+    agent: agentContract(
+      'Which symbols have this SCIP kind?',
+      'symbol identities, kinds, files, and ranges',
+      ['pattern'],
+      'bounded',
+    ),
     options: [
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('-n, --limit <n>', 'Number of results', parseInteger, 100),
@@ -250,6 +371,13 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'kind-counts',
     command: 'kind-counts',
     description: 'Histogram of symbol kinds in the codebase',
+    agent: agentContract(
+      'How many indexed symbols exist for each kind?',
+      'symbol-kind counts',
+      [],
+      'complete',
+      'repository',
+    ),
     options: [option('-s, --scope <path>', 'Limit to files matching path')],
     docs: doc('Navigation'),
     headers: ['count', 'kind'],
@@ -260,6 +388,12 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'hierarchy',
     command: 'hierarchy <symbol>',
     description: "Show a symbol's ancestry chain (method → class → module)",
+    agent: agentContract(
+      'What lexical ownership chain contains this symbol?',
+      'ancestor symbol identities and depths',
+      ['symbol'],
+      'complete',
+    ),
     docs: doc('Navigation'),
     query: ({ db, args }) => queries.hierarchy(db, stringArg(args, 0)),
     format: (node) => `${'  '.repeat(node.depth)}${node.shortName}`,
@@ -271,6 +405,12 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'dataflow',
     command: 'dataflow <symbol>',
     description: 'Reference-level dataflow: definition sites, usage sites, producers, consumers',
+    agent: agentContract(
+      'What defines, uses, produces, and consumes this symbol?',
+      'definition sites, usage sites, producer symbols, and consumer symbols',
+      ['symbol'],
+      'bounded',
+    ),
     options: withJsonOption([option('--full', 'Run unbounded semantic analysis on large indexes')]),
     budget: 'semantic',
     renderShape: 'custom',
@@ -281,6 +421,12 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'slice',
     command: 'slice <symbol>',
     description: 'Reference-level program slice: what affects this (backward) or what this affects (forward)',
+    agent: agentContract(
+      'What transitively affects this symbol, or what does it affect?',
+      'connected symbols with relationship and depth',
+      ['symbol'],
+      'bounded',
+    ),
     options: withJsonOption([
       option('--forward', 'Forward slice (what does this affect). Default is backward.'),
       option('--depth <n>', 'Max transitive depth for backward slice', parseInteger, 3),

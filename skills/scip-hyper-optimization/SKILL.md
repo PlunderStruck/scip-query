@@ -2,20 +2,20 @@
 name: scip-hyper-optimization
 description: Optimize performance scientifically with scip-query evidence. Use for benchmarking, profiling, speeding up commands, workflows, indexers, detectors, app paths, cold/warm regressions, memory/cost reduction, or comparing current-pipeline tuning with alternative designs.
 commands:
-  - template: "scip-query bench --json"
-    when: "Target and harness: baseline timings for a scip-query command target."
-  - template: "scip-query bench --json --cold-index --include-heavy --timeout-ms 600000"
-    when: "Target and harness: cold-path and heavy-detector timings."
-  - template: "scip-query work-audit <profile> --json"
-    when: "Profile the chain: rank exact repeated computations by measured avoidable time."
-  - template: "scip-query plan-context <entry-symbol-or-file>"
-    when: "Trace behavior: pre-edit context for the profiled entry point."
-  - template: "scip-query call-graph <entry-symbol>"
-    when: "Trace behavior: callers/callees for the pipeline under test."
-  - template: "scip-query complexity <hot-symbol>"
-    when: "Diagnose: branches, cyclomatic estimate, fan-in/out for a hot symbol."
-  - template: "scip-query change-surface <touched-file> --json --full"
-    when: "Verify and report: blast radius of the optimization change."
+  - template: 'scip-query bench --json'
+    when: 'Target and harness: baseline timings for a scip-query command target.'
+  - template: 'scip-query bench --json --cold-index --include-heavy --timeout-ms 600000'
+    when: 'Target and harness: cold-path and heavy-detector timings.'
+  - template: 'scip-query work-audit <profile> --json'
+    when: 'Profile the chain: rank exact repeated computations by measured avoidable time.'
+  - template: 'scip-query plan-context <entry-symbol-or-file>'
+    when: 'Trace behavior: pre-edit context for the profiled entry point.'
+  - template: 'scip-query call-graph <entry-symbol>'
+    when: 'Trace behavior: callers/callees for the pipeline under test.'
+  - template: 'scip-query complexity <hot-symbol>'
+    when: 'Diagnose: branches, cyclomatic estimate, fan-in/out for a hot symbol.'
+  - template: 'scip-query change-surface <touched-file> --json --full'
+    when: 'Verify and report: blast radius of the optimization change.'
 ---
 
 # scip-hyper-optimization
@@ -38,15 +38,15 @@ One sentence to decide: if you can already name the one function you expect to f
 <!-- BEGIN GENERATED SKILL COMMANDS -->
 ## Commands for this skill
 
-| Command | Purpose | When |
-| --- | --- | --- |
-| `scip-query bench --json` | Benchmark indexing and command runtimes for this repository | Target and harness: baseline timings for a scip-query command target. |
-| `scip-query bench --json --cold-index --include-heavy --timeout-ms 600000` | Benchmark indexing and command runtimes for this repository | Target and harness: cold-path and heavy-detector timings. |
-| `scip-query work-audit <profile> --json` | Rank exact repeated computations in a profiling JSONL file by measured avoidable time | Profile the chain: rank exact repeated computations by measured avoidable time. |
-| `scip-query plan-context <entry-symbol-or-file>` | Pre-edit planning context for a symbol, file, or module | Trace behavior: pre-edit context for the profiled entry point. |
-| `scip-query call-graph <entry-symbol>` | Show incoming callers and outgoing callees for a symbol | Trace behavior: callers/callees for the pipeline under test. |
-| `scip-query complexity <hot-symbol>` | Per-symbol complexity: branches, cyclomatic estimate, fan-in/out, callees | Diagnose: branches, cyclomatic estimate, fan-in/out for a hot symbol. |
-| `scip-query change-surface <touched-file> --json --full` | Pre-change briefing: exports, consumers, and blast-radius risk | Verify and report: blast radius of the optimization change. |
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query bench --json` | Benchmark indexing and command runtimes for this repository | timings, command outcomes, environment, and optional profiles | `sampled` | Target and harness: baseline timings for a scip-query command target. |
+| `scip-query bench --json --cold-index --include-heavy --timeout-ms 600000` | Benchmark indexing and command runtimes for this repository | timings, command outcomes, environment, and optional profiles | `sampled` | Target and harness: cold-path and heavy-detector timings. |
+| `scip-query work-audit <profile> --json` | Rank exact repeated computations in a profiling JSONL file by measured avoidable time | ranked repeated-work groups, counts, and avoidable duration | `bounded` | Profile the chain: rank exact repeated computations by measured avoidable time. |
+| `scip-query plan-context <entry-symbol-or-file>` | Pre-edit planning context for a symbol, file, or module | definitions and references; callers and callees; dataflow producers and consumers; backward and forward slices; affected symbols; change-surface risk; dependencies and reverse dependencies; module files and exports; external surface use; complexity; churn; co-change partners; active suppressions | `bounded` | Trace behavior: pre-edit context for the profiled entry point. |
+| `scip-query call-graph <entry-symbol>` | Show incoming callers and outgoing callees for a symbol | caller and callee symbol identities with files | `bounded` | Trace behavior: callers/callees for the pipeline under test. |
+| `scip-query complexity <hot-symbol>` | Per-symbol complexity: branches, cyclomatic estimate, fan-in/out, callees | LOC, branch, complexity, callee, fan-in, and fan-out counts | `bounded` | Diagnose: branches, cyclomatic estimate, fan-in/out for a hot symbol. |
+| `scip-query change-surface <touched-file> --json --full` | Pre-change briefing: exports, consumers, and blast-radius risk | defined symbols, external consumer counts, and risk levels | `bounded` | Verify and report: blast radius of the optimization change. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->

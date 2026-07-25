@@ -13,4 +13,13 @@ describe('Windows SCIP sidecar documentation', () => {
       expect(content).not.toContain('GitHub release asset');
     }
   });
+
+  it('preserves the main publish lifecycle when invoking the sidecar release check', () => {
+    const packageJson = JSON.parse(readFileSync('package.json', 'utf8')) as {
+      scripts?: Record<string, string>;
+    };
+    const prepublishOnly = packageJson.scripts?.['prepublishOnly'];
+
+    expect(prepublishOnly).toBe('vite-node scripts/publish-scip-windows.ts && npm run build');
+  });
 });
