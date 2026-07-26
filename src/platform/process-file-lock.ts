@@ -1,5 +1,15 @@
 import { randomUUID } from 'node:crypto';
-import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, statSync, unlinkSync, writeSync } from 'node:fs';
+import {
+  closeSync,
+  fsyncSync,
+  linkSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+  writeSync,
+} from 'node:fs';
 import { dirname } from 'node:path';
 import { isDirectorySyncUnsupported, writeFileCompletely } from '../filesystem/file-descriptor.js';
 import {
@@ -12,6 +22,7 @@ import { isProcessAlive } from './process-liveness.js';
 
 export const PROCESS_FILE_LOCK_PROTOCOL = 'scip-query-process-lock';
 export const PROCESS_FILE_LOCK_VERSION = 1;
+/** @deprecated Complete candidate publication made malformed-record age recovery unsafe and unnecessary. */
 export const PROCESS_FILE_LOCK_CREATION_GRACE_MS = 5_000;
 
 export interface ProcessFileLockRecord {
@@ -62,6 +73,7 @@ export interface ProcessFileLockRuntime {
   writeFile(fd: number, bytes: Buffer, offset: number, length: number): number;
   syncFile(fd: number): void;
   closeFile(fd: number): void;
+  linkFile(existingPath: string, newPath: string): void;
   readFile(path: string): string;
   statFile(path: string): LockFileIdentity;
   removeFile(path: string): void;
@@ -77,6 +89,7 @@ export const NODE_PROCESS_FILE_LOCK_RUNTIME: ProcessFileLockRuntime = Object.fre
   writeFile: (fd: number, bytes: Buffer, offset: number, length: number) => writeSync(fd, bytes, offset, length),
   syncFile: (fd: number) => fsyncSync(fd),
   closeFile: (fd: number) => closeSync(fd),
+  linkFile: (existingPath: string, newPath: string) => linkSync(existingPath, newPath),
   readFile: (path: string) => readFileSync(path, 'utf8'),
   statFile: (path: string) => {
     const stat = statSync(path);
@@ -92,6 +105,7 @@ export interface TryAcquireProcessFileLockOptions {
   detail?: Record<string, unknown>;
   pid?: number;
   processIdentity?: ProcessIdentity | null;
+  /** @deprecated Accepted for source compatibility; malformed public locks now fail closed. */
   creationGraceMs?: number;
   parseLegacy?: LegacyProcessLockDecoder;
   runtime?: ProcessFileLockRuntime;
@@ -102,9 +116,11 @@ export type TryAcquireProcessFileLockResult =
   | { kind: 'contended'; observation: ProcessFileLockObservation };
 
 /**
- * Attempts one exclusive lock acquisition. A stale or old-enough malformed
- * observation is reclaimed only while holding a token-owned reclaim guard and
- * only after raw bytes plus file identity still match.
+ * Attempts one exclusive lock acquisition. A stale, attributable owner is
+ * reclaimed only while holding a token-owned reclaim guard and only after raw
+ * bytes plus file identity still match. Malformed public records fail closed:
+ * complete records are assembled privately before exclusive publication, so
+ * civil-clock age is neither necessary nor sufficient reclamation evidence.
  */
 export function tryAcquireProcessFileLock(
   path: string,
@@ -216,13 +232,12 @@ export function reclaimProcessFileLock(
   } = {},
 ): boolean {
   const runtime = options.runtime ?? NODE_PROCESS_FILE_LOCK_RUNTIME;
-  const creationGraceMs = options.creationGraceMs ?? PROCESS_FILE_LOCK_CREATION_GRACE_MS;
-  if (!isReclaimable(observed, runtime, creationGraceMs)) return false;
-  const guard = acquireReclaimGuard(`${path}.reclaim`, runtime, creationGraceMs);
+  if (!isReclaimable(observed, runtime)) return false;
+  const guard = acquireReclaimGuard(`${path}.reclaim`, runtime);
   if (!guard) return false;
   try {
     const current = readProcessFileLock(path, { parseLegacy: options.parseLegacy, runtime });
-    if (!sameObservation(observed, current) || !isReclaimable(current, runtime, creationGraceMs)) return false;
+    if (!sameObservation(observed, current) || !isReclaimable(current, runtime)) return false;
     return removeLockFile(path, runtime);
   } finally {
     guard.release();
@@ -248,7 +263,8 @@ function createOwnedLock(
     startedAt: new Date(runtime.wallNow()).toISOString(),
     ...(options.detail ? { detail: options.detail } : {}),
   };
-  const fd = runtime.openFile(path, 'wx', 0o600);
+  const candidatePath = `${path}.${token}.candidate`;
+  const fd = runtime.openFile(candidatePath, 'wx', 0o600);
   let publicationError: unknown;
   try {
     writeFileCompletely(fd, Buffer.from(`${JSON.stringify(record)}\n`), runtime, 'process lock');
@@ -262,12 +278,19 @@ function createOwnedLock(
     publicationError ??= error;
   }
   if (publicationError !== undefined) {
-    // A process crash cannot run this cleanup and leaves a malformed record
-    // for guarded grace recovery. A caught filesystem failure makes one
-    // best-effort removal without masking its primary error.
-    removeLockFile(path, runtime);
+    removeCandidateFile(candidatePath, runtime);
     throw publicationError;
   }
+  try {
+    // Hard-link publication is exclusive on every supported platform: it
+    // cannot replace an existing owner, and the public name never exposes the
+    // candidate's partially written bytes.
+    runtime.linkFile(candidatePath, path);
+  } catch (error) {
+    removeCandidateFile(candidatePath, runtime);
+    throw error;
+  }
+  removeCandidateFile(candidatePath, runtime);
   try {
     syncLockDirectory(dirname(path), runtime);
   } catch (error) {
@@ -303,18 +326,14 @@ export function releaseOwnedProcessFileLock(
   return removeLockFile(path, runtime);
 }
 
-function acquireReclaimGuard(
-  path: string,
-  runtime: ProcessFileLockRuntime,
-  creationGraceMs: number,
-): ProcessFileLock | null {
+function acquireReclaimGuard(path: string, runtime: ProcessFileLockRuntime): ProcessFileLock | null {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       return createOwnedLock(path, { kind: 'reclaim-guard', runtime }, runtime);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') return null;
       const observed = readProcessFileLock(path, { runtime });
-      if (attempt > 0 || !isReclaimable(observed, runtime, creationGraceMs)) return null;
+      if (attempt > 0 || !isReclaimable(observed, runtime)) return null;
       const current = readProcessFileLock(path, { runtime });
       if (!sameObservation(observed, current)) return null;
       if (!removeLockFile(path, runtime)) return null;
@@ -323,11 +342,7 @@ function acquireReclaimGuard(
   return null;
 }
 
-function isReclaimable(
-  observed: ProcessFileLockObservation,
-  runtime: ProcessFileLockRuntime,
-  creationGraceMs: number,
-): boolean {
+function isReclaimable(observed: ProcessFileLockObservation, runtime: ProcessFileLockRuntime): boolean {
   if (observed.state === 'missing') return false;
   if (observed.owner) {
     if (!runtime.isProcessAlive(observed.owner.pid)) return true;
@@ -335,11 +350,7 @@ function isReclaimable(
     const current = runtime.readProcessIdentity(observed.owner.pid);
     return current !== null && !sameProcessIdentity(observed.owner.processIdentity, current);
   }
-  return (
-    observed.state === 'malformed' &&
-    observed.identity !== undefined &&
-    runtime.wallNow() - observed.identity.mtimeMs >= creationGraceMs
-  );
+  return false;
 }
 
 function sameObservation(left: ProcessFileLockObservation, right: ProcessFileLockObservation): boolean {
@@ -386,5 +397,14 @@ function removeLockFile(path: string, runtime: ProcessFileLockRuntime): boolean 
     return true;
   } catch {
     return false;
+  }
+}
+
+function removeCandidateFile(path: string, runtime: ProcessFileLockRuntime): void {
+  try {
+    runtime.removeFile(path);
+  } catch {
+    // A candidate name is unique and never consulted for ownership. Leaving a
+    // private orphan is safer than deleting or weakening a published owner.
   }
 }

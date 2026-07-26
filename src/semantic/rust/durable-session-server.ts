@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { monotonicNowMs } from '../../domain/time.js';
 import {
   DURABLE_RUST_SESSION_PROTOCOL_VERSION,
   DurableRustSessionHost,
@@ -30,6 +31,8 @@ import {
   type ProcessFileLock,
   tryAcquireProcessFileLock,
 } from '../../platform/process-file-lock.js';
+import { readProcessIdentity } from '../../platform/process-identity.js';
+import { isProcessAlive } from '../../platform/process-liveness.js';
 
 const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60_000;
 const POLL_INTERVAL_MS = 10;
@@ -41,6 +44,7 @@ export function processDurableRustSessionRequests(
   opts: {
     beforeRequest?: (request: DurableRustSessionRequest) => void;
     nowMs?: number;
+    monotonicNowMs?: number;
     ownerId?: string;
     limits?: Partial<BoundedMailboxLimits>;
   } = {},
@@ -52,6 +56,8 @@ export function processDurableRustSessionRequests(
     ownerId: opts.ownerId ?? DURABLE_RUST_MAILBOX_OWNER,
     nowMs,
     limits: opts.limits,
+    owner: DURABLE_RUST_MAILBOX_PROCESS_OWNER,
+    liveness: DURABLE_RUST_MAILBOX_LIVENESS,
   });
   let processed = 0;
   for (const claim of claims) {
@@ -64,8 +70,9 @@ export function processDurableRustSessionRequests(
       if (message.deadlineAtMs < nowMs) {
         throw new Error('Durable Rust semantic request expired before processing.');
       }
-      opts.beforeRequest?.(message.request);
-      const result = host.handle(message.request);
+      const localRequest = withLocalReadinessDeadline(message.request, opts.monotonicNowMs ?? monotonicNowMs());
+      opts.beforeRequest?.(localRequest);
+      const result = host.handle(localRequest);
       completeBoundedMailboxClaim(
         paths,
         claim,
@@ -98,6 +105,20 @@ export function processDurableRustSessionRequests(
   return processed;
 }
 
+function withLocalReadinessDeadline(
+  request: DurableRustSessionRequest,
+  nowMonotonicMs: number,
+): DurableRustSessionRequest {
+  const readinessDeadlineMs = nowMonotonicMs + Math.max(1, request.timeoutMs - 1_000);
+  return {
+    ...request,
+    request: {
+      ...request.request,
+      readinessDeadlineMs,
+    },
+  } as DurableRustSessionRequest;
+}
+
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 async function runDurableRustSessionServer(sessionDir: string, semanticWorkerPath: string): Promise<void> {
   const mailboxPaths = boundedMailboxPaths(sessionDir);
@@ -110,9 +131,10 @@ async function runDurableRustSessionServer(sessionDir: string, semanticWorkerPat
     createWorkerRustAnalyzerSessionRequester({ semanticWorkerPath, shareEnvironment: true }),
   );
   let stopping = false;
-  let lastActivityAtMs = Date.now();
-  let lastHeartbeatAtMs = 0;
+  let lastActivityAtMonotonicMs = monotonicNowMs();
+  let lastHeartbeatAtMonotonicMs = Number.NEGATIVE_INFINITY;
   let busyUntilMs: number | undefined;
+  const processIdentity = readProcessIdentity(process.pid);
   const stop = (): void => {
     stopping = true;
   };
@@ -121,11 +143,13 @@ async function runDurableRustSessionServer(sessionDir: string, semanticWorkerPat
 
   const writeState = (force = false): void => {
     const now = Date.now();
-    if (!force && now - lastHeartbeatAtMs < HEARTBEAT_INTERVAL_MS) return;
-    lastHeartbeatAtMs = now;
+    const nowMonotonic = monotonicNowMs();
+    if (!force && nowMonotonic - lastHeartbeatAtMonotonicMs < HEARTBEAT_INTERVAL_MS) return;
+    lastHeartbeatAtMonotonicMs = nowMonotonic;
     writeJsonDurable(resolve(sessionDir, 'server.json'), {
       protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
       pid: process.pid,
+      ...(processIdentity ? { processIdentity } : {}),
       heartbeatAtMs: now,
       ...(busyUntilMs === undefined ? {} : { busyUntilMs }),
       mailbox: inspectBoundedMailbox(mailboxPaths),
@@ -135,7 +159,7 @@ async function runDurableRustSessionServer(sessionDir: string, semanticWorkerPat
   try {
     writeState(true);
     const idleTimeoutMs = configuredIdleTimeoutMs();
-    while (!stopping && Date.now() - lastActivityAtMs < idleTimeoutMs) {
+    while (!stopping && monotonicNowMs() - lastActivityAtMonotonicMs < idleTimeoutMs) {
       const processed = processDurableRustSessionRequests(sessionDir, host, {
         beforeRequest(request) {
           busyUntilMs = Date.now() + request.timeoutMs + 5_000;
@@ -143,7 +167,7 @@ async function runDurableRustSessionServer(sessionDir: string, semanticWorkerPat
         },
       });
       if (processed > 0) {
-        lastActivityAtMs = Date.now();
+        lastActivityAtMonotonicMs = monotonicNowMs();
         busyUntilMs = undefined;
         writeState(true);
       } else {
@@ -238,3 +262,9 @@ if (invokedPath === import.meta.url) {
 }
 
 const DURABLE_RUST_MAILBOX_OWNER = `rust-semantic-${process.pid}-${randomUUID()}`;
+const DURABLE_RUST_PROCESS_IDENTITY = readProcessIdentity(process.pid);
+const DURABLE_RUST_MAILBOX_PROCESS_OWNER = {
+  pid: process.pid,
+  ...(DURABLE_RUST_PROCESS_IDENTITY ? { processIdentity: DURABLE_RUST_PROCESS_IDENTITY } : {}),
+};
+const DURABLE_RUST_MAILBOX_LIVENESS = { isProcessAlive, readProcessIdentity };

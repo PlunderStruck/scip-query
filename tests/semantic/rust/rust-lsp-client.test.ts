@@ -578,21 +578,64 @@ describe('RustAnalyzerLspClient', () => {
     expect(transport.isKilled()).toBe(false);
   });
 
-  it('bounds initialization by an absolute readiness deadline', async () => {
+  it('bounds initialization by a monotonic readiness deadline', async () => {
     const transport = new ScriptedTransport(() => undefined);
-    const client = new RustAnalyzerLspClient(transport, { requestTimeoutMs: 100 });
+    let monotonicNow = 1_000;
+    const client = new RustAnalyzerLspClient(transport, {
+      requestTimeoutMs: 100,
+      monotonicNow: () => monotonicNow,
+    });
 
     const initialization = client.initialize(
       { rootUri: 'file:///repo' },
-      { timeoutMs: 50, deadlineMs: Date.now() + 5 },
+      { timeoutMs: 50, deadlineMs: monotonicNow + 5 },
     );
+    monotonicNow += 5;
 
     await expect(initialization).rejects.toBeInstanceOf(RustAnalyzerReadinessError);
     await expect(initialization).rejects.toThrow(/readiness deadline expired during LSP request initialize/);
     expect(transport.writes.map((message) => message.method)).toEqual(['initialize']);
   });
 
-  it('rejects a successful semantic response delivered after its absolute deadline before timers flush', async () => {
+  it('accepts an in-budget response across forward and backward civil-clock jumps', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(1_000);
+      let monotonicNow = 100;
+      const transport = new ScriptedTransport((message, server) => {
+        if (message.method === 'initialize') {
+          server.send({ jsonrpc: '2.0', id: message.id, result: { capabilities: { referencesProvider: true } } });
+        }
+        if (message.method === 'shutdown') server.send({ jsonrpc: '2.0', id: message.id, result: null });
+      });
+      const client = new RustAnalyzerLspClient(transport, {
+        requestTimeoutMs: 100,
+        monotonicNow: () => monotonicNow,
+      });
+      await client.initialize({ rootUri: 'file:///repo' });
+      const response = client.references(
+        {
+          textDocument: { uri: 'file:///repo/src/lib.rs' },
+          position: { line: 1, character: 7 },
+          context: { includeDeclaration: false },
+        },
+        { timeoutMs: 100, deadlineMs: 110 },
+      );
+      const requestId = transport.writes.at(-1)?.id;
+
+      vi.setSystemTime(86_401_000);
+      vi.setSystemTime(-86_399_000);
+      monotonicNow = 105;
+      transport.send({ jsonrpc: '2.0', id: requestId, result: [] });
+
+      await expect(response).resolves.toEqual([]);
+      await client.shutdown();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rejects a successful semantic response delivered after its monotonic deadline before timers flush', async () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(1_000);
@@ -604,9 +647,13 @@ describe('RustAnalyzerLspClient', () => {
           server.send({ jsonrpc: '2.0', id: message.id, result: null });
         }
       });
-      const client = new RustAnalyzerLspClient(transport, { requestTimeoutMs: 100 });
+      let monotonicNow = 1_000;
+      const client = new RustAnalyzerLspClient(transport, {
+        requestTimeoutMs: 100,
+        monotonicNow: () => monotonicNow,
+      });
       await client.initialize({ rootUri: 'file:///repo' });
-      const deadlineMs = Date.now() + 10;
+      const deadlineMs = monotonicNow + 10;
       const request = client.references(
         {
           textDocument: { uri: 'file:///repo/src/lib.rs' },
@@ -622,6 +669,7 @@ describe('RustAnalyzerLspClient', () => {
       );
 
       vi.setSystemTime(deadlineMs + 1);
+      monotonicNow = deadlineMs + 1;
       transport.send({ jsonrpc: '2.0', id: requestId, result: [] });
 
       const result = await outcome;
@@ -639,7 +687,7 @@ describe('RustAnalyzerLspClient', () => {
     }
   });
 
-  it('rejects and kills shutdown when its success response arrives after the absolute deadline', async () => {
+  it('rejects and kills shutdown when its success response arrives after the monotonic deadline', async () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(2_000);
@@ -648,9 +696,13 @@ describe('RustAnalyzerLspClient', () => {
           server.send({ jsonrpc: '2.0', id: message.id, result: { capabilities: {} } });
         }
       });
-      const client = new RustAnalyzerLspClient(transport, { requestTimeoutMs: 100 });
+      let monotonicNow = 2_000;
+      const client = new RustAnalyzerLspClient(transport, {
+        requestTimeoutMs: 100,
+        monotonicNow: () => monotonicNow,
+      });
       await client.initialize({ rootUri: 'file:///repo' });
-      const deadlineMs = Date.now() + 10;
+      const deadlineMs = monotonicNow + 10;
       const shutdown = client.shutdown({ timeoutMs: 100, deadlineMs });
       const shutdownId = transport.writes.at(-1)?.id;
       const outcome = shutdown.then(
@@ -659,6 +711,7 @@ describe('RustAnalyzerLspClient', () => {
       );
 
       vi.setSystemTime(deadlineMs + 1);
+      monotonicNow = deadlineMs + 1;
       transport.send({ jsonrpc: '2.0', id: shutdownId, result: null });
 
       const result = await outcome;

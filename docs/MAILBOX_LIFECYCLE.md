@@ -31,19 +31,20 @@ Each mailbox root has this layout:
 <mailbox>/
   pending/
   inflight/<encoded-owner>/
+    .owner.json             # process-instance evidence for claim recovery
   responses/
   dead-letter/
   requests/                 # legacy v2 overlap reads only
-  .admission.lock/          # short-lived quota coordinator
+  .admission.lock           # complete, exclusively published quota coordinator
 ```
 
-| State     | Real file state                                                                  | Authority and transition                                                                  |
-| --------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Pending   | `pending/<operation-id>.json`                                                    | The immutable request was admitted but no service owns it.                                |
-| Inflight  | `inflight/<owner>/<request>.<claim-expiry>.claim`                                | Atomic rename transferred this request to exactly one claim owner for a bounded lease.    |
-| Completed | `responses/<operation-id>.json`                                                  | A response was durably and exclusively published before claim release.                    |
-| Rejected  | Error response, with a bounded record under `dead-letter/` when capacity permits | The service explicitly refused malformed, expired, oversized, mismatched, or failed work. |
-| Expired   | Deadline has passed; the next bounded service batch rejects and collects it      | Expiry prevents abandoned requests from authorizing expensive work indefinitely.          |
+| State     | Real file state                                                                  | Authority and transition                                                                     |
+| --------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Pending   | `pending/<operation-id>.json`                                                    | The immutable request was admitted but no service owns it.                                   |
+| Inflight  | `inflight/<owner>/<request>.<claim-expiry>.claim` plus `.owner.json`             | Atomic rename transferred this request to one recorded process instance for a bounded lease. |
+| Completed | `responses/<operation-id>.json`                                                  | A response was durably and exclusively published before claim release.                       |
+| Rejected  | Error response, with a bounded record under `dead-letter/` when capacity permits | The service explicitly refused malformed, expired, oversized, mismatched, or failed work.    |
+| Expired   | Deadline has passed; the next bounded service batch rejects and collects it      | Expiry prevents abandoned requests from authorizing expensive work indefinitely.             |
 
 The `requests/` directory is not a second current queue. It exists so a new
 service can drain flat requests left by protocol v2. Current writers publish
@@ -78,24 +79,25 @@ replace a newer response.
 
 Admission is the act of adding one immutable operation after proving the
 mailbox remains within its retained-resource budget. A short-lived,
-token-checked admission directory serializes the count-and-publish decision,
-which prevents two processes from both observing the last free slot and
-oversubscribing it.
+token-checked admission file serializes the count-and-publish decision, which
+prevents two processes from both observing the last free slot and
+oversubscribing it. Its complete owner record is flushed under a private name
+and hard-linked exclusively into the public name; an ownerless or malformed
+public record fails closed and is never deleted from civil-clock age alone.
 
 Default bounds are:
 
-| Bound                                     |                                                     Default |
-| ----------------------------------------- | ----------------------------------------------------------: |
-| Retained files per mailbox                |                                                       1,024 |
-| Retained bytes per mailbox                |                                                     512 MiB |
-| One request or response                   |                                                      64 MiB |
-| Work claimed per service-loop pass        |                                                          16 |
-| Claim lease                               | 5 minutes, extended through request deadline plus 5 seconds |
-| Admission partial-creation recovery grace |                                                   5 seconds |
-| Response/idempotency retention            |                                                  10 minutes |
-| Dead-letter retention                     |                                                    24 hours |
-| Orphan temporary-file retention           |                                                    1 minute |
-| Maintenance actions per pass              |                                                          64 |
+| Bound                              |                                                     Default |
+| ---------------------------------- | ----------------------------------------------------------: |
+| Retained files per mailbox         |                                                       1,024 |
+| Retained bytes per mailbox         |                                                     512 MiB |
+| One request or response            |                                                      64 MiB |
+| Work claimed per service-loop pass |                                                          16 |
+| Claim lease                        | 5 minutes, extended through request deadline plus 5 seconds |
+| Response/idempotency retention     |                                                  10 minutes |
+| Dead-letter retention              |                                                    24 hours |
+| Orphan temporary-file retention    |                                                    1 minute |
+| Maintenance actions per pass       |                                                          64 |
 
 `MailboxBackpressureError` is the typed overload result. Its code distinguishes
 `item-too-large`, `item-capacity`, `byte-capacity`, and `admission-busy`, and
@@ -113,26 +115,30 @@ boundaries.
 A claim is a time-bounded service ownership record made real by renaming one
 pending file into an owner-specific inflight directory. Rename is the
 ownership compare-and-set: only the process whose rename succeeds owns that
-file.
+file. The directory's owner record binds the random owner ID to a PID and,
+when the operating system exposes it, a process-start identity. A process-start
+identity is the operating-system fact that distinguishes successive
+executions occupying the same numeric PID slot.
 
 The recovery rules are:
 
-| Failure point                                         | Surviving evidence                       | Recovery                                                                                                       |
-| ----------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Client exits after admission                          | Pending file                             | A later service batch claims it or explicitly expires it. The client does not delete shared work in `finally`. |
-| Service exits before claim                            | Pending file                             | Another owner can claim immediately.                                                                           |
-| Service exits after claim, before response            | Inflight file with owner and expiry      | After the claim lease, maintenance atomically returns it to pending.                                           |
-| Service publishes response, then exits before release | Response plus inflight file              | Maintenance treats the response as completion and removes the stale claim without re-execution.                |
-| Old owner finishes after reclamation                  | Competing exclusive response publication | The first response remains authoritative; the late owner cannot replace it.                                    |
-| Same logical request is retried                       | Same deterministic operation ID          | The caller joins pending/inflight/completed state.                                                             |
-| Malformed, expired, or oversized file                 | Claimed input                            | The service emits an explicit error response and a bounded rejection record.                                   |
+| Failure point                                         | Surviving evidence                               | Recovery                                                                                                               |
+| ----------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| Client exits after admission                          | Pending file                                     | A later service batch claims it or explicitly expires it. The client does not delete shared work in `finally`.         |
+| Service exits before claim                            | Pending file                                     | Another owner can claim immediately.                                                                                   |
+| Service exits after claim, before response            | Inflight file, expiry, and dead process identity | After lease expiry and proof that the recorded process instance is gone, maintenance atomically returns it to pending. |
+| Service publishes response, then exits before release | Response plus inflight file                      | Maintenance treats the response as completion and removes the stale claim without re-execution.                        |
+| Old owner finishes after reclamation                  | Competing exclusive response publication         | The first response remains authoritative; the late owner cannot replace it.                                            |
+| Same logical request is retried                       | Same deterministic operation ID                  | The caller joins pending/inflight/completed state.                                                                     |
+| Malformed, expired, or oversized file                 | Claimed input                                    | The service emits an explicit error response and a bounded rejection record.                                           |
 
-These are at-least-once claim semantics with first-completion idempotency.
-Service work may begin twice only after an ownership lease expires while the
-old owner is still running. The answer-affecting operations are read-only or
-rebuildable, the response identity is stable, and exclusive completion
-prevents two observable answers. The lease extends past the request deadline
-to make concurrent execution exceptional rather than routine.
+These are crash-recoverable claim semantics with first-completion
+idempotency. Civil-clock lease expiry is only a durable recovery hint: it does
+not authorize reclamation while the recorded process instance is live or
+unverifiable. Work can be retried after both lease expiry and owner death. The
+answer-affecting operations are read-only or rebuildable, the response
+identity is stable, and exclusive completion remains a final defense against
+two observable answers.
 
 ## Fairness and maintenance
 
@@ -147,7 +153,8 @@ run unrelated maintenance even when a mailbox was flooded.
 
 Maintenance:
 
-- reclaims expired inflight ownership;
+- reclaims expired inflight ownership only after the recorded process instance
+  is dead or its PID has been reused by a different process instance;
 - removes a claim whose response proves it already completed;
 - removes expired responses and dead-letter records;
 - removes abandoned atomic-write staging files after their retention window;
@@ -168,8 +175,10 @@ snapshot. It contains:
 This snapshot identifies current retained pressure; it is not a cumulative
 success counter. A rising pending count with a live heartbeat indicates
 service throughput pressure. Inflight work older than its valid lease is
-reclaimed on the next loop. Responses are expected during the ten-minute
-idempotency window.
+reclaimed on the next loop only when the owner record proves the process
+instance is gone. Responses are expected during the ten-minute idempotency
+window. Clock-domain rules for these records are documented in
+[Time Semantics](TIME_SEMANTICS.md).
 
 Focused contract coverage lives in:
 

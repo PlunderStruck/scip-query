@@ -40,8 +40,15 @@ import {
 import { loadTsMorph } from '../../../src/semantic/typescript/ts-morph-runtime.js';
 import { evidenceFixtureDb } from '../../fixtures/evidence-fixture.js';
 import { promoteReindexArtifacts } from '../../../src/reindex/sqlite-generation-store.js';
+import type { ProcessIdentity } from '../../../src/platform/process-identity.js';
 
 const NOW = Date.parse('2026-07-09T23:00:00.000Z');
+const SERVICE_PROCESS_IDENTITY: ProcessIdentity = {
+  version: 1,
+  pid: 123,
+  platform: 'linux',
+  startToken: 'service-owner',
+};
 const tempDirs: string[] = [];
 
 afterEach(() => {
@@ -49,6 +56,28 @@ afterEach(() => {
 });
 
 describe('TypeScript semantic service mailbox', () => {
+  it('rejects a reused service PID even when civil heartbeat time appears current', () => {
+    const fixture = serviceFixture(true);
+    const db = fixture.openDb(fixture.projectRoot);
+    const statePath = join(fixture.projectRoot, 'watch-state.json');
+    writeLiveState(statePath, fixture.projectRoot, SERVICE_PROCESS_IDENTITY);
+    const requester = new TypeScriptSemanticRequester(db, {
+      timeoutMs: 20,
+      runtime: {
+        now: () => NOW - 365 * 86_400_000,
+        randomId: () => 'reused-pid',
+        isProcessAlive: () => true,
+        readProcessIdentity: () => ({ ...SERVICE_PROCESS_IDENTITY, startToken: 'successor' }),
+        sleep: () => {
+          throw new Error('request should not be admitted');
+        },
+      },
+    });
+
+    expect(() => requester.request({ kind: 'availability' })).toThrow('not running');
+    db.close();
+  });
+
   it('processes atomic requests and refreshes its host when the publication changes', () => {
     const fixture = serviceFixture();
     let generation = 'generation-1';
@@ -263,18 +292,22 @@ describe('TypeScript semantic service mailbox', () => {
 
     writeLiveState(statePath, fixture.projectRoot);
     let nowMs = NOW;
+    let monotonicNowMs = 0;
     const timedOut = new TypeScriptSemanticRequester(db, {
       timeoutMs: 20,
       runtime: {
         now: () => nowMs,
+        monotonicNow: () => monotonicNowMs,
         randomId: () => 'request-timeout',
         isProcessAlive: () => true,
         sleep: (durationMs) => {
-          nowMs += durationMs;
+          monotonicNowMs += durationMs;
+          nowMs = nowMs === NOW ? NOW - 86_400_000 : NOW + 86_400_000;
         },
       },
     });
     expect(() => timedOut.request({ kind: 'import-usage', file: 'src/timeout.ts' })).toThrow('timed out');
+    expect(monotonicNowMs).toBeGreaterThanOrEqual(20);
     expect(readdirSync(paths.pendingDir).filter((entry) => entry.endsWith('.json'))).toHaveLength(2);
     db.close();
   });
@@ -518,11 +551,12 @@ function readResponse(responseDir: string, id: string): Record<string, unknown> 
   return JSON.parse(readFileSync(join(responseDir, `${id}.json`), 'utf8')) as Record<string, unknown>;
 }
 
-function writeLiveState(statePath: string, projectRoot: string): void {
+function writeLiveState(statePath: string, projectRoot: string, processIdentity?: ProcessIdentity): void {
   writeWatchServiceState(statePath, {
     version: 1,
     protocolVersion: WATCH_SERVICE_PROTOCOL_VERSION,
     pid: 123,
+    ...(processIdentity ? { processIdentity } : {}),
     projectRoot,
     cliVersion: '0.15.0',
     startedAt: new Date(NOW - 1_000).toISOString(),

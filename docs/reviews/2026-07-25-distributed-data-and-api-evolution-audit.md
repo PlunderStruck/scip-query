@@ -539,9 +539,10 @@ and per-item limits. Each request carries a recomputed SHA-256 operation key,
 deterministic request ID, client identity, enqueue time, and deadline.
 Services claim a bounded enqueue-ordered batch by atomically renaming work into
 an owner-specific `inflight/` directory whose filename records claim expiry.
-Expired ownership is reclaimed; a response is durably and exclusively
-published before claim release; a retained response makes retry idempotent and
-also closes the crash-after-response window without re-execution.
+Expired ownership is reclaimed after its recorded process instance is gone; a
+response is durably and exclusively published before claim release; a retained
+response makes retry idempotent and also closes the crash-after-response
+window without re-execution.
 
 Response, dead-letter, and atomic-staging history is collected under bounded
 per-pass maintenance. Malformed, expired, oversized, and failed work receives
@@ -556,7 +557,7 @@ orphan reclaim, malformed/oversized input, retention, and protocol integration
 are covered by the shared and three transport suites. The operational
 contract and default limits are in `docs/MAILBOX_LIFECYCLE.md`.
 
-### DD-11 — S3 — Wall-clock jumps can distort ownership, timeout, and heartbeat decisions
+### DD-11 — S3 — Wall-clock jumps can distort ownership, timeout, and heartbeat decisions — resolved in Slice 17
 
 **Evidence:** hardening gap.
 
@@ -575,6 +576,35 @@ A forward clock jump can expire valid requests or classify a healthy service sta
 **Required tests:** inject forward and backward jumps around every deadline and heartbeat boundary.
 
 **Acceptance condition:** clock adjustment cannot cause an unrelated process signal, an unbounded local wait, or silent acceptance of an incompatible session.
+
+**Resolution:** `src/domain/time.ts` now names the two clock domains.
+Process-local waits and elapsed measurements use monotonic readings; persisted
+heartbeats, request times, retention times, and diagnostic dates remain civil
+timestamps. Repository-cache and revision locks, shared-generation waits,
+watch debounce/cooldown/start/stop/idle control, TypeScript and Rust response
+polling, rust-analyzer readiness, reindex phase durations, heartbeat
+throttling, activity polling, and cache sweeps no longer derive elapsed
+control from `Date.now()`.
+
+Cross-process ownership no longer follows timestamp age alone. Process locks
+assemble and flush a private complete record before an exclusive hard-link
+publication; malformed public locks therefore fail closed instead of becoming
+deletable after a wall-clock grace period. Watch startup refuses to replace or
+signal a live owner merely because its heartbeat appears old. TypeScript and
+Rust requesters match a recorded process-start identity when one is available,
+so PID reuse is not accepted as the same service. Each inflight mailbox owner
+directory also records its process instance; an expired claim is returned to
+pending only after that instance is dead or replaced. An ownerless or
+unverifiable claim remains inflight.
+
+Portable Rust requests no longer carry an absolute readiness deadline from a
+different process clock. The durable server converts the relative request
+budget into its own monotonic deadline before dispatching to its worker
+thread. Injected tests move civil time forward and backward independently,
+advance monotonic time through bounded waits, reuse live PID slots with a new
+start identity, hold a live claim beyond an apparent civil lease, and verify
+that only the ownership evidence changes the result. The complete decision
+table and compatibility policy are in `docs/TIME_SEMANTICS.md`.
 
 ### DD-12 — S4 — Rotating operational JSONL files can lose records under concurrent writers
 

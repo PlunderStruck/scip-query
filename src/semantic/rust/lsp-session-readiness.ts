@@ -5,6 +5,7 @@ import {
   type RustAnalyzerServerStatus,
   type RustAnalyzerServerStatusSnapshot,
 } from './lsp-client.js';
+import { monotonicNowMs } from '../../domain/time.js';
 
 export type RustAnalyzerReadinessWorkerErrorEnvelope = { ok: false; error: string };
 
@@ -20,7 +21,7 @@ export async function waitForRustAnalyzerReadiness(
   client: RustAnalyzerReadinessClient,
   afterGeneration: number,
   deadlineMs: number,
-  now: () => number = Date.now,
+  now: () => number = monotonicNowMs,
 ): Promise<RustAnalyzerServerStatus> {
   const remainingMs = deadlineMs - now();
   if (remainingMs <= 0) {
@@ -48,7 +49,7 @@ export async function waitForRustAnalyzerInitialPostOpenReadiness(
   openedDocumentCount: number,
   deadlineMs: number,
   settleDelayMs: number,
-  now: () => number = Date.now,
+  now: () => number = monotonicNowMs,
   settle: (delayMs: number) => Promise<void> = sleep,
 ): Promise<RustAnalyzerServerStatus> {
   const initialStatus = await waitForRustAnalyzerReadiness(client, initializationGeneration, deadlineMs, now);
@@ -76,7 +77,7 @@ export async function waitForRustAnalyzerPostOpenReadiness(
   openedDocumentCount: number,
   deadlineMs: number,
   settleDelayMs: number,
-  now: () => number = Date.now,
+  now: () => number = monotonicNowMs,
   settle: (delayMs: number) => Promise<void> = sleep,
 ): Promise<RustAnalyzerServerStatus | null> {
   if (openedDocumentCount === 0) return null;
@@ -111,7 +112,7 @@ export async function waitForRustAnalyzerDiagnosticsWithinDeadline(
   waitForDiagnostics: (timeoutMs: number) => Promise<void>,
   diagnosticsTimeoutMs: number,
   deadlineMs: number,
-  now: () => number = Date.now,
+  now: () => number = monotonicNowMs,
 ): Promise<void> {
   const budget = rustAnalyzerOperationBudget(diagnosticsTimeoutMs, deadlineMs, now);
   await waitForDiagnostics(budget.timeoutMs);
@@ -121,7 +122,7 @@ export async function waitForRustAnalyzerDiagnosticsWithinDeadline(
 export async function waitForRustAnalyzerDelayWithinDeadline(
   delayMs: number,
   deadlineMs: number,
-  now: () => number = Date.now,
+  now: () => number = monotonicNowMs,
   wait: (delayMs: number) => Promise<void> = sleep,
 ): Promise<void> {
   if (delayMs <= 0) return;

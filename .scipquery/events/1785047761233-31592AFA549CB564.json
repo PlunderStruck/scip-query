@@ -1,0 +1,9 @@
+{
+  "ts": 1785047761233,
+  "check": "incomplete-migration",
+  "findingId": "SQ386F74EB68A5",
+  "event": "caught",
+  "commit": "d577a2051bf8a1fe25c77abe064deb2c23e86dd9",
+  "comparisonBaseCommit": "d577a2051bf8a1fe25c77abe064deb2c23e86dd9",
+  "symbol": "scip-typescript npm scip-query 0.19.5 src/storage/`bounded-mailbox.ts`/tryPublishAdmissionLock()."
+}

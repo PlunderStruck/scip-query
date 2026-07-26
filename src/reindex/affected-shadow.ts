@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { buildProjectChangeManifest } from '../domain/project-input.js';
+import { monotonicNowMs } from '../domain/time.js';
 import type { FileDependencyGraph, ProjectChangeManifest, ProjectInputSnapshot } from '../domain/project-input.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import { ScipDatabase } from '../storage/db.js';
@@ -145,7 +146,10 @@ export interface AffectedShadowDatabase extends DocumentFactQuery {
 
 // scip-query: ignore-stale — reviewed S1 owned contract; this interface is the injectable shadow-runtime boundary.
 export interface AffectedSetShadowRuntime {
+  /** @deprecated Use wallNow and monotonicNow when the clocks must be tested independently. */
   now(): number;
+  wallNow?(): number;
+  monotonicNow?(): number;
   databaseExists(path: string): boolean;
   openDatabase(projectRoot: string, dbPath: string, indexPath: string): AffectedShadowDatabase;
   indexedPaths(db: AffectedShadowDatabase): string[];
@@ -399,22 +403,28 @@ export function collectAffectedSetShadowRecord(
   options: CollectAffectedSetShadowOptions,
   runtime: AffectedSetShadowRuntime = defaultAffectedSetShadowRuntime,
 ): AffectedSetShadowRecord {
-  const startedAt = runtime.now();
-  if (!runtime.databaseExists(options.previousDbPath)) {
+  const legacyClock = runtime.wallNow === undefined && runtime.monotonicNow === undefined;
+  const monotonicNow = runtime.monotonicNow ?? runtime.now;
+  const wallNow = runtime.wallNow ?? runtime.now;
+  const startedAt = monotonicNow();
+  const finishUnavailable = (
+    reason: AffectedSetShadowUnavailableReason,
+    error?: string,
+  ): UnavailableAffectedSetShadowRecord => {
+    const finishedAt = monotonicNow();
     return unavailableAffectedSetShadowRecord(
       options.refreshResult,
-      'prior-index-unavailable',
-      startedAt,
-      runtime.now(),
+      reason,
+      legacyClock ? finishedAt : wallNow(),
+      Math.max(0, finishedAt - startedAt),
+      error,
     );
+  };
+  if (!runtime.databaseExists(options.previousDbPath)) {
+    return finishUnavailable('prior-index-unavailable');
   }
   if (!runtime.databaseExists(options.candidateDbPath)) {
-    return unavailableAffectedSetShadowRecord(
-      options.refreshResult,
-      'candidate-index-unavailable',
-      startedAt,
-      runtime.now(),
-    );
+    return finishUnavailable('candidate-index-unavailable');
   }
 
   let previousDb: AffectedShadowDatabase | null = null;
@@ -437,12 +447,12 @@ export function collectAffectedSetShadowRecord(
       projectFiles,
     );
     const comparison = compareDocumentFactDigests(runtime.factDigests(previousDb), runtime.factDigests(candidateDb));
-    const finishedAt = runtime.now();
+    const finishedAt = monotonicNow();
     return {
       version: 1,
       status: 'evaluated',
       refreshResult: options.refreshResult,
-      recordedAt: new Date(finishedAt).toISOString(),
+      recordedAt: new Date(legacyClock ? finishedAt : wallNow()).toISOString(),
       durationMs: Math.max(0, finishedAt - startedAt),
       manifest,
       plan,
@@ -450,13 +460,7 @@ export function collectAffectedSetShadowRecord(
       evaluation: evaluateAffectedSetShadow(plan, comparison, projectFiles.length),
     };
   } catch (error) {
-    return unavailableAffectedSetShadowRecord(
-      options.refreshResult,
-      'oracle-error',
-      startedAt,
-      runtime.now(),
-      error instanceof Error ? error.message : String(error),
-    );
+    return finishUnavailable('oracle-error', error instanceof Error ? error.message : String(error));
   } finally {
     closeShadowDatabase(previousDb);
     closeShadowDatabase(candidateDb);
@@ -469,7 +473,7 @@ export function createUnavailableAffectedSetShadowRecord(
   error?: string,
   now = Date.now(),
 ): UnavailableAffectedSetShadowRecord {
-  return unavailableAffectedSetShadowRecord(refreshResult, reason, now, now, error);
+  return unavailableAffectedSetShadowRecord(refreshResult, reason, now, 0, error);
 }
 
 export function affectedSetShadowPaths(outputDb: string): AffectedSetShadowPaths {
@@ -669,6 +673,8 @@ function symbolValues(row: GlobalSymbolRow, prefix: readonly DocumentFactValue[]
 
 const defaultAffectedSetShadowRuntime: AffectedSetShadowRuntime = {
   now: () => Date.now(),
+  wallNow: () => Date.now(),
+  monotonicNow: monotonicNowMs,
   databaseExists: (path) => existsSync(path),
   openDatabase: (projectRoot, dbPath, indexPath) => new ScipDatabase({ projectRoot, dbPath, indexPath }),
   indexedPaths: (db) => indexedDocumentPaths(db as ScipDatabase),
@@ -684,16 +690,16 @@ const defaultAffectedSetShadowTelemetryRuntime: AffectedSetShadowTelemetryRuntim
 function unavailableAffectedSetShadowRecord(
   refreshResult: 'rebuilt' | 'reused',
   reason: AffectedSetShadowUnavailableReason,
-  startedAt: number,
-  finishedAt: number,
+  recordedAtMs: number,
+  durationMs: number,
   error?: string,
 ): UnavailableAffectedSetShadowRecord {
   return {
     version: 1,
     status: 'unavailable',
     refreshResult,
-    recordedAt: new Date(finishedAt).toISOString(),
-    durationMs: Math.max(0, finishedAt - startedAt),
+    recordedAt: new Date(recordedAtMs).toISOString(),
+    durationMs,
     reason,
     ...(error ? { error } : {}),
   };

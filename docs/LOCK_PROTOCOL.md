@@ -50,36 +50,37 @@ that protocol's diagnostic metadata; it is not ownership evidence. Ownership
 is the combination of PID, random token, and process identity when the host can
 obtain one.
 
-The creator uses exclusive descriptor creation, writes the complete record,
-flushes the file, closes it, and flushes the containing directory where the
-platform supports directory handles. A failure before the complete record is
-written can leave an empty or truncated path; recovery treats that as an
-observable state rather than an eternal lock.
+The creator writes the complete record to a token-unique private candidate,
+flushes and closes that candidate, then publishes the complete inode under the
+public lock name with an exclusive hard link. The link either creates the
+public name or reports that another owner already has it; it never replaces an
+owner. A crash before the link can leave a private candidate, but it cannot
+expose an empty or truncated public lock. Successful publication removes the
+private name and flushes the containing directory where supported.
 
 ## Observation and Recovery
 
-| Observed state | Recovery decision |
-| --- | --- |
-| Current record; process instance is live and matches | Contended; never remove |
-| Current record; PID is dead | Reclaim after guarded unchanged recheck |
-| Current record; PID is live but its process-start identity differs | Reclaim the old record without signaling the new PID occupant |
-| Current record; PID is live but identity cannot be read | Contended; fail closed |
-| Supported legacy record; PID is live | Contended because the process instance cannot be verified |
-| Supported legacy record; PID is dead | Reclaim after guarded unchanged recheck |
-| Empty, truncated, or malformed record younger than five seconds | Contended during creation grace |
-| Empty, truncated, or malformed record at least five seconds old | Reclaim after guarded byte-and-file-identity recheck |
-| Record changes before the guarded recheck | Do not remove; report contention |
-| Empty or malformed reclaim guard younger than grace | Do not remove |
-| Empty or malformed reclaim guard older than grace | Recover the guard conservatively, then retry once |
+| Observed state                                                     | Recovery decision                                                       |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| Current record; process instance is live and matches               | Contended; never remove                                                 |
+| Current record; PID is dead                                        | Reclaim after guarded unchanged recheck                                 |
+| Current record; PID is live but its process-start identity differs | Reclaim the old record without signaling the new PID occupant           |
+| Current record; PID is live but identity cannot be read            | Contended; fail closed                                                  |
+| Supported legacy record; PID is live                               | Contended because the process instance cannot be verified               |
+| Supported legacy record; PID is dead                               | Reclaim after guarded unchanged recheck                                 |
+| Empty, truncated, or malformed public record                       | Contended; fail closed because civil-clock age cannot identify an owner |
+| Record changes before the guarded recheck                          | Do not remove; report contention                                        |
+| Empty or malformed reclaim guard                                   | Do not remove                                                           |
+| Valid reclaim guard whose process instance is dead                 | Recover the guard, then retry once                                      |
 
 The unchanged recheck compares the original bytes, device, inode, size, and
 modification time. Recovery is limited to one retry: persistent ambiguity
 remains contention instead of becoming an unbounded delete loop.
 
-The five-second creation grace protects a creator that has exclusively opened
-the path but has not yet completed its durable ownership write. It is a
-wall-clock age rule for malformed files, not a lease: valid locks never expire
-because of age.
+Malformed public records from a legacy writer, external damage, or manual
+editing require operator review. A civil timestamp is not causal ownership
+evidence: moving the system clock forward cannot prove which process created
+the bytes or whether that process still owns the resource.
 
 ## Release
 
@@ -112,8 +113,8 @@ legacy owner.
 
 ## Diagnostics and Manual Recovery
 
-Successful reindex recovery reports that it recovered an abandoned or
-incomplete lock. A manual refresh that encounters an already-stale
+Successful reindex recovery reports that it recovered an abandoned lock. A
+manual refresh that encounters an already-stale
 watcher-owned reindex record retains the existing “preempting watcher refresh”
 diagnostic while stating that the prior owner was already stale.
 
@@ -122,8 +123,10 @@ resource-specific lock path. If a lock remains contended:
 
 1. inspect the JSON without editing it;
 2. verify whether its PID and process-start identity name the current process;
-3. wait at least the creation-grace interval for a malformed record;
-4. retry the operation so the guarded recovery path can run.
+3. for a malformed record, establish ownership outside scip-query and move the
+   record aside rather than asking wall-clock age to authorize deletion;
+4. retry the operation so the guarded recovery path can run for attributable
+   dead owners.
 
 Do not manually delete a valid lock whose process instance is live. If host
 permissions prevent process-identity verification, stop the owning process or

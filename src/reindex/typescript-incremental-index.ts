@@ -9,6 +9,7 @@ import {
   type ProjectInputSnapshot,
 } from '../domain/project-input.js';
 import type { TypeScriptProjectMode } from '../domain/types.js';
+import { monotonicNowMs } from '../domain/time.js';
 import { createTypeScriptSemanticIdentityBuilder } from '../semantic/typescript/semantic-identity.js';
 import { isTypeScriptLike } from '../semantic/typescript/source-kinds.js';
 import { ScipDatabase } from '../storage/db.js';
@@ -194,7 +195,7 @@ function ownedWorkspaceProject(files: readonly string[], projects: readonly stri
 export function tryMaterializeTypeScriptIncrementalIndex(
   input: MaterializeTypeScriptIncrementalInput,
 ): MaterializedTypeScriptIncrementalIndex | null {
-  const startedAt = Date.now();
+  const startedAt = monotonicNowMs();
   try {
     if (!existsSync(input.previousDbPath) || !existsSync(input.previousShardPath)) {
       throw new Error('prior TypeScript graph or language shard unavailable');
@@ -307,7 +308,7 @@ export function tryMaterializeTypeScriptIncrementalIndex(
       candidateScipPath: input.candidateShardPath,
       affectedScipPath: input.candidateAffectedScipPath,
       completeScipUpdated: !deferCompleteScip,
-      durationMs: Date.now() - startedAt,
+      durationMs: monotonicNowMs() - startedAt,
       cold: response.cold,
       changedFiles: eligibility.plan.changedFiles,
       affectedFiles: eligibility.plan.affectedFiles,

@@ -35,6 +35,7 @@ import {
 } from '../../src/platform/watch-service-state.js';
 import { writeWatchServiceState } from '../../src/runtime/watch-service.js';
 import { writeJsonAtomic } from '../../src/storage/atomic-json.js';
+import type { ProcessIdentity } from '../../src/platform/process-identity.js';
 import {
   BOUNDED_MAILBOX_VERSION,
   boundedMailboxOperationKey,
@@ -42,6 +43,12 @@ import {
 } from '../../src/storage/bounded-mailbox.js';
 
 const NOW = Date.parse('2026-07-10T08:00:00.000Z');
+const SERVICE_PROCESS_IDENTITY: ProcessIdentity = {
+  version: 1,
+  pid: 123,
+  platform: 'linux',
+  startToken: 'service-owner',
+};
 const tempDirs: string[] = [];
 
 afterEach(() => {
@@ -49,6 +56,27 @@ afterEach(() => {
 });
 
 describe('TypeScript index service mailbox', () => {
+  test('rejects a reused service PID when the recorded process instance changed', () => {
+    const fixture = serviceFixture();
+    const host = new TypeScriptIndexServiceHost({
+      projectRoot: fixture.projectRoot,
+      currentGeneration: () => 'base',
+      now: () => NOW,
+    });
+    writeLiveState(fixture.cacheDir, fixture.projectRoot, host.status(), SERVICE_PROCESS_IDENTITY);
+    const requester = requesterWithRuntime(fixture, {
+      now: () => NOW + 365 * 86_400_000,
+      randomId: () => 'reused-pid',
+      isProcessAlive: () => true,
+      readProcessIdentity: () => ({ ...SERVICE_PROCESS_IDENTITY, startToken: 'successor' }),
+      sleep: () => {
+        throw new Error('request should not be admitted');
+      },
+    });
+
+    expect(() => requester.request(indexRequest('producer'))).toThrow('Compatible TypeScript index service');
+  });
+
   test('processes a cold request and a warm requester update with exact identities', () => {
     const availability = loadTypeScriptDocumentRuntime();
     expect(availability.available).toBe(true);
@@ -202,19 +230,23 @@ describe('TypeScript index service mailbox', () => {
 
     writeLiveState(fixture.cacheDir, fixture.projectRoot, host.status());
     let nowMs = NOW;
+    let monotonicNowMs = 0;
     const timedOut = requesterWithRuntime(
       fixture,
       {
         now: () => nowMs,
+        monotonicNow: () => monotonicNowMs,
         randomId: () => 'timeout',
         isProcessAlive: () => true,
         sleep: (durationMs) => {
-          nowMs += durationMs;
+          monotonicNowMs += durationMs;
+          nowMs = nowMs === NOW ? NOW - 86_400_000 : NOW + 86_400_000;
         },
       },
       20,
     );
     expect(() => timedOut.request(indexRequest('producer-timeout'))).toThrow('timed out');
+    expect(monotonicNowMs).toBeGreaterThanOrEqual(20);
     expect(readdirSync(paths.pendingDir).filter((entry) => entry.endsWith('.json'))).toHaveLength(2);
   });
 
@@ -319,11 +351,13 @@ function writeLiveState(
   cacheDir: string,
   projectRoot: string,
   typescriptIndex: ReturnType<TypeScriptIndexServiceHost['status']>,
+  processIdentity?: ProcessIdentity,
 ): void {
   const state: WatchServiceState = {
     version: 1,
     protocolVersion: WATCH_SERVICE_PROTOCOL_VERSION,
     pid: 123,
+    ...(processIdentity ? { processIdentity } : {}),
     projectRoot,
     cliVersion: '0.15.0',
     startedAt: new Date(NOW - 1_000).toISOString(),

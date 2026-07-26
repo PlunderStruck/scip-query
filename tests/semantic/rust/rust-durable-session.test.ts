@@ -594,7 +594,13 @@ describe('durable Rust semantic readiness', () => {
 });
 
 describe('durable Rust semantic server state', () => {
-  it('trusts only current-protocol, recently-heartbeating, live processes', () => {
+  it('trusts only current-protocol live processes and treats civil heartbeat age as diagnostic', () => {
+    const processIdentity = {
+      version: 1 as const,
+      pid: 123,
+      platform: 'linux' as const,
+      startToken: 'service-owner',
+    };
     const live = {
       protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
       pid: 123,
@@ -603,8 +609,25 @@ describe('durable Rust semantic server state', () => {
 
     expect(isDurableRustSessionStateLive(live, 10_000, (pid) => pid === 123)).toBe(true);
     expect(isDurableRustSessionStateLive({ ...live, protocolVersion: 0 }, 10_000, () => true)).toBe(false);
-    expect(isDurableRustSessionStateLive({ ...live, heartbeatAtMs: 1_000 }, 10_000, () => true)).toBe(false);
+    expect(isDurableRustSessionStateLive({ ...live, heartbeatAtMs: 1_000 }, 10_000, () => true)).toBe(true);
+    expect(isDurableRustSessionStateLive({ ...live, heartbeatAtMs: 99_000 }, -10_000, () => true)).toBe(true);
     expect(isDurableRustSessionStateLive(live, 10_000, () => false)).toBe(false);
+    expect(
+      isDurableRustSessionStateLive(
+        { ...live, processIdentity },
+        10_000,
+        () => true,
+        () => ({ ...processIdentity, startToken: 'successor' }),
+      ),
+    ).toBe(false);
+    expect(
+      isDurableRustSessionStateLive(
+        { ...live, processIdentity },
+        10_000,
+        () => true,
+        () => processIdentity,
+      ),
+    ).toBe(true);
   });
 
   it('scopes mailbox state to the canonical project and helper installation', () => {
@@ -632,7 +655,7 @@ describe('durable Rust semantic server state', () => {
 });
 
 describe('durable Rust semantic requester', () => {
-  it('copies semantic requests with the injected-clock readiness margin and preserves the request settle', () => {
+  it('keeps civil-clock deadlines out of portable semantic requests and preserves the request settle', () => {
     const previousSettle = process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'];
     const previousRetry = process.env['SCIP_RUST_SEMANTIC_REFERENCE_RETRY_TIMEOUT_MS'];
     delete process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'];
@@ -649,8 +672,7 @@ describe('durable Rust semantic requester', () => {
 
       expect(captured.kind).toBe('semantic');
       expect(captured.request).toEqual({
-        ...request,
-        readinessDeadlineMs: 14_000,
+        ...semanticRequest,
         settleDelayMs: 4_000,
         referenceRetryTimeoutMs: 30_000,
       });
@@ -675,7 +697,7 @@ describe('durable Rust semantic requester', () => {
     }
   });
 
-  it('copies import-definition requests with the same margin and explicit durable settle policy', () => {
+  it('keeps civil-clock deadlines out of portable import requests and applies the durable settle policy', () => {
     const previousSettle = process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'];
     process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'] = '2500';
     const request: RustImportDefinitionWorkerRequest = {
@@ -690,8 +712,7 @@ describe('durable Rust semantic requester', () => {
 
       expect(captured.kind).toBe('import-definitions');
       expect(captured.request).toEqual({
-        ...request,
-        readinessDeadlineMs: 20_001,
+        ...importDefinitionRequest,
         settleDelayMs: 2_500,
       });
       expect(request).toEqual(original);
@@ -799,6 +820,50 @@ describe('durable Rust semantic requester', () => {
       rmSync(tempRoot, { recursive: true, force: true });
     }
   });
+
+  it('bounds requester waits with monotonic time while civil time jumps', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'scip-query-durable-session-clock-test-'));
+    let wallNowMs = 10_000;
+    let monotonicNowMs = 0;
+    let spawnCount = 0;
+    const serverPid = 123;
+    const runtime = {
+      now: () => wallNowMs,
+      monotonicNow: () => monotonicNowMs,
+      randomId: () => 'clock-jump-request',
+      isProcessAlive: (pid: number) => pid === serverPid,
+      spawnServer: (_serverPath: string, sessionDir: string) => {
+        spawnCount += 1;
+        writeFileSync(
+          join(sessionDir, 'server.json'),
+          JSON.stringify({
+            protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
+            pid: serverPid,
+            heartbeatAtMs: wallNowMs,
+          }),
+        );
+      },
+      sleep: (durationMs: number) => {
+        monotonicNowMs += durationMs;
+        wallNowMs = wallNowMs === 10_000 ? -86_390_000 : 86_410_000;
+      },
+    };
+
+    try {
+      const requester = createDurableRustAnalyzerSessionRequester('/repo', {
+        serverPath: '/dist/server.js',
+        semanticWorkerPath: '/dist/worker.js',
+        tempRoot,
+        identityRuntime: identityRuntime(),
+        runtime,
+      });
+      expect(() => requester.requestSemantic(semanticRequest, 20)).toThrow('timed out');
+      expect(monotonicNowMs).toBeGreaterThanOrEqual(20);
+      expect(spawnCount).toBeGreaterThan(0);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('durable Rust semantic helper shell', () => {
@@ -821,10 +886,21 @@ describe('durable Rust semantic helper shell', () => {
       }),
     );
     const events: string[] = [];
-    const host = new DurableRustSessionHost(() => fakeRequester(1, events));
+    let forwardedDeadlineMs: number | undefined;
+    const host = new DurableRustSessionHost(() => ({
+      ...fakeRequester(1, events),
+      requestSemantic(request) {
+        forwardedDeadlineMs = request.readinessDeadlineMs;
+        return {
+          available: true,
+          references: request.definitions.map((entry) => [entry.symbolId, []]),
+        };
+      },
+    }));
 
     try {
-      expect(processDurableRustSessionRequests(sessionDir, host)).toBe(1);
+      expect(processDurableRustSessionRequests(sessionDir, host, { monotonicNowMs: 500 })).toBe(1);
+      expect(forwardedDeadlineMs).toBe(501);
       expect(readdirSync(requestDir)).toEqual([]);
       expect(JSON.parse(readFileSync(join(responseDir, 'request-1.json'), 'utf8'))).toEqual(
         expect.objectContaining({

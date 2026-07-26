@@ -7,6 +7,7 @@ import { parsePositiveInteger } from '../../domain/number-parsing.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { profileEnabled, profileSpan, writeProfileEvent } from '../../instrumentation/profile.js';
 import { isProcessAlive } from '../../platform/process-liveness.js';
+import { readProcessIdentity } from '../../platform/process-identity.js';
 import type { SemanticCallee, SemanticReference } from '../types.js';
 import type {
   RustAnalyzerSessionRequester,
@@ -516,7 +517,7 @@ export function rustSemanticSessionStatus(
   if (!state) return { ...selection, state: 'stopped' };
   return {
     ...selection,
-    state: isDurableRustSessionStateLive(state, Date.now(), isProcessAlive) ? 'live' : 'stale',
+    state: isDurableRustSessionStateLive(state, Date.now(), isProcessAlive, readProcessIdentity) ? 'live' : 'stale',
     pid: state.pid,
     heartbeatAtMs: state.heartbeatAtMs,
     ...(state.busyUntilMs === undefined ? {} : { busyUntilMs: state.busyUntilMs }),
@@ -569,11 +570,11 @@ export function createFailoverRustAnalyzerSessionRequester(
     if (disposed) throw new Error('Rust semantic failover session was already disposed.');
     if (failedOver) return requestFallback(currentFallback());
 
-    const startedAtMs = Date.now();
+    const startedAtMs = performance.now();
     try {
       return requestPrimary(primary);
     } catch (error) {
-      activateFailover(error, kind, Date.now() - startedAtMs);
+      activateFailover(error, kind, performance.now() - startedAtMs);
     }
     return requestFallback(currentFallback());
   };

@@ -18,6 +18,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import { deserializeSCIP } from '@c4312/scip';
 import Database from 'better-sqlite3';
+import { monotonicNowMs } from '../domain/time.js';
 import type { ProjectConfig } from '../domain/types.js';
 import { cliVersion } from '../platform/cli-version.js';
 import { acquireProcessFileLock, acquireRepositoryCacheLock } from '../platform/repository-cache-lock.js';
@@ -510,7 +511,7 @@ export async function acquireSharedGenerationBuildLock(
 ): Promise<SharedBuildLockResult> {
   const timeoutMs = opts.timeoutMs ?? 30_000;
   const pollMs = opts.pollMs ?? 100;
-  const now = opts.now ?? Date.now;
+  const now = opts.now ?? monotonicNowMs;
   const deadline = now() + timeoutMs;
   const locksDir = join(snapshot.repositoryCacheDir, 'locks');
   const lockPath = join(locksDir, `${snapshot.generationId}.lock`);

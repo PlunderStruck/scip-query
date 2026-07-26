@@ -3,6 +3,8 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync
 import { basename, dirname, join } from 'node:path';
 
 import { stableJson } from '../domain/stable-json.js';
+import { monotonicNowMs } from '../domain/time.js';
+import { parseProcessIdentity, sameProcessIdentity, type ProcessIdentity } from '../domain/process-identity.js';
 import { createFileAtomicExclusive, syncDirectoryDurable } from './atomic-file.js';
 import { writeJsonDurable } from './atomic-json.js';
 
@@ -33,7 +35,6 @@ export interface BoundedMailboxLimits {
   maxItemBytes: number;
   maxBatch: number;
   claimLeaseMs: number;
-  admissionCreationGraceMs: number;
   responseRetentionMs: number;
   deadLetterRetentionMs: number;
   temporaryRetentionMs: number;
@@ -46,7 +47,6 @@ export const DEFAULT_BOUNDED_MAILBOX_LIMITS: Readonly<BoundedMailboxLimits> = Ob
   maxItemBytes: 64 * 1024 * 1024,
   maxBatch: 16,
   claimLeaseMs: 5 * 60_000,
-  admissionCreationGraceMs: 5_000,
   responseRetentionMs: 10 * 60_000,
   deadLetterRetentionMs: 24 * 60 * 60_000,
   temporaryRetentionMs: 60_000,
@@ -130,6 +130,29 @@ interface PendingCandidate {
   legacy: boolean;
 }
 
+interface MailboxOwnerRecord {
+  version: 1;
+  ownerId: string;
+  pid: number;
+  processIdentity?: ProcessIdentity;
+}
+
+export interface MailboxClaimOwner {
+  pid: number;
+  processIdentity?: ProcessIdentity;
+}
+
+export interface MailboxLivenessRuntime {
+  isProcessAlive(pid: number): boolean;
+  readProcessIdentity(pid: number): ProcessIdentity | null;
+}
+
+const MAILBOX_OWNER_FILE = '.owner.json';
+const DEFAULT_MAILBOX_LIVENESS_RUNTIME: MailboxLivenessRuntime = {
+  isProcessAlive: () => true,
+  readProcessIdentity: () => null,
+};
+
 export function boundedMailboxPaths(rootDir: string): BoundedMailboxPaths {
   return {
     rootDir,
@@ -191,45 +214,52 @@ export function enqueueBoundedMailboxRequest(
     nowMs?: number;
     onBeforePublish?: () => void;
     admissionLockTimeoutMs?: number;
+    monotonicNow?: () => number;
   } = {},
 ): EnqueueBoundedMailboxResult {
   const limits = resolveBoundedMailboxLimits(options.limits);
   const nowMs = options.nowMs ?? Date.now();
   initializeBoundedMailbox(paths);
   validateRequestIdentity(request);
-  return withMailboxAdmissionLock(paths, limits, options.admissionLockTimeoutMs ?? 2_000, () => {
-    maintainBoundedMailboxUnlocked(paths, nowMs, limits);
-    const requestPath = join(paths.pendingDir, `${request.id}.json`);
-    const responsePath = join(paths.responseDir, `${request.id}.json`);
-    const existing = existingOperation(paths, request.id);
-    if (existing) {
-      assertMatchingOperation(existing, request.operationKey, request.id);
-      return { disposition: 'duplicate', requestId: request.id, responsePath };
-    }
-    const serialized = `${JSON.stringify(request)}\n`;
-    const requestBytes = Buffer.byteLength(serialized);
-    const status = inspectBoundedMailbox(paths);
-    if (requestBytes > limits.maxItemBytes) {
-      throw new MailboxBackpressureError('item-too-large', status, limits, requestBytes);
-    }
-    if (status.totalItems + 1 > limits.maxItems) {
-      throw new MailboxBackpressureError('item-capacity', status, limits, requestBytes);
-    }
-    if (status.totalBytes + requestBytes > limits.maxBytes) {
-      throw new MailboxBackpressureError('byte-capacity', status, limits, requestBytes);
-    }
-    options.onBeforePublish?.();
-    try {
-      createFileAtomicExclusive(requestPath, serialized, { durability: 'durable' });
-      return { disposition: 'accepted', requestId: request.id, responsePath };
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-      const competing = existingOperation(paths, request.id);
-      if (!competing) throw error;
-      assertMatchingOperation(competing, request.operationKey, request.id);
-      return { disposition: 'duplicate', requestId: request.id, responsePath };
-    }
-  });
+  return withMailboxAdmissionLock(
+    paths,
+    limits,
+    options.admissionLockTimeoutMs ?? 2_000,
+    options.monotonicNow ?? monotonicNowMs,
+    () => {
+      maintainBoundedMailboxUnlocked(paths, nowMs, limits);
+      const requestPath = join(paths.pendingDir, `${request.id}.json`);
+      const responsePath = join(paths.responseDir, `${request.id}.json`);
+      const existing = existingOperation(paths, request.id);
+      if (existing) {
+        assertMatchingOperation(existing, request.operationKey, request.id);
+        return { disposition: 'duplicate', requestId: request.id, responsePath };
+      }
+      const serialized = `${JSON.stringify(request)}\n`;
+      const requestBytes = Buffer.byteLength(serialized);
+      const status = inspectBoundedMailbox(paths);
+      if (requestBytes > limits.maxItemBytes) {
+        throw new MailboxBackpressureError('item-too-large', status, limits, requestBytes);
+      }
+      if (status.totalItems + 1 > limits.maxItems) {
+        throw new MailboxBackpressureError('item-capacity', status, limits, requestBytes);
+      }
+      if (status.totalBytes + requestBytes > limits.maxBytes) {
+        throw new MailboxBackpressureError('byte-capacity', status, limits, requestBytes);
+      }
+      options.onBeforePublish?.();
+      try {
+        createFileAtomicExclusive(requestPath, serialized, { durability: 'durable' });
+        return { disposition: 'accepted', requestId: request.id, responsePath };
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+        const competing = existingOperation(paths, request.id);
+        if (!competing) throw error;
+        assertMatchingOperation(competing, request.operationKey, request.id);
+        return { disposition: 'duplicate', requestId: request.id, responsePath };
+      }
+    },
+  );
 }
 
 /**
@@ -243,15 +273,33 @@ export function claimBoundedMailboxRequests(
     ownerId: string;
     nowMs?: number;
     limits?: Partial<BoundedMailboxLimits>;
+    monotonicNow?: () => number;
+    liveness?: MailboxLivenessRuntime;
+    owner?: MailboxClaimOwner;
   },
 ): BoundedMailboxClaim[] {
   if (!options.ownerId.trim()) throw new Error('Mailbox claim owner identity is required.');
+  if (
+    options.owner &&
+    (!Number.isSafeInteger(options.owner.pid) ||
+      options.owner.pid <= 0 ||
+      (options.owner.processIdentity !== undefined && options.owner.processIdentity.pid !== options.owner.pid))
+  ) {
+    throw new Error('Mailbox claim process identity is invalid.');
+  }
   const nowMs = options.nowMs ?? Date.now();
   const limits = resolveBoundedMailboxLimits(options.limits);
   initializeBoundedMailbox(paths);
   try {
-    return withMailboxAdmissionLock(paths, limits, 2_000, () =>
-      claimBoundedMailboxRequestsUnlocked(paths, options.ownerId, nowMs, limits),
+    return withMailboxAdmissionLock(paths, limits, 2_000, options.monotonicNow ?? monotonicNowMs, () =>
+      claimBoundedMailboxRequestsUnlocked(
+        paths,
+        options.ownerId,
+        nowMs,
+        limits,
+        options.liveness ?? DEFAULT_MAILBOX_LIVENESS_RUNTIME,
+        options.owner ?? { pid: process.pid },
+      ),
     );
   } catch (error) {
     if (error instanceof MailboxBackpressureError && error.code === 'admission-busy') return [];
@@ -264,10 +312,11 @@ function claimBoundedMailboxRequestsUnlocked(
   ownerId: string,
   nowMs: number,
   limits: BoundedMailboxLimits,
+  liveness: MailboxLivenessRuntime,
+  owner: MailboxClaimOwner,
 ): BoundedMailboxClaim[] {
-  maintainBoundedMailboxUnlocked(paths, nowMs, limits);
+  maintainBoundedMailboxUnlocked(paths, nowMs, limits, liveness);
   const ownerDirectory = join(paths.inflightDir, encodeSegment(ownerId));
-  mkdirSync(ownerDirectory, { recursive: true });
   const candidates = [
     ...pendingCandidates(paths.pendingDir, false),
     ...pendingCandidates(paths.legacyRequestDir, true),
@@ -277,6 +326,10 @@ function claimBoundedMailboxRequestsUnlocked(
       left.header.id.localeCompare(right.header.id) ||
       left.path.localeCompare(right.path),
   );
+  if (candidates.length > 0) {
+    mkdirSync(ownerDirectory, { recursive: true });
+    ensureMailboxOwnerRecord(ownerDirectory, ownerId, owner);
+  }
   const claims: BoundedMailboxClaim[] = [];
   for (const candidate of candidates) {
     if (claims.length >= limits.maxBatch) break;
@@ -424,18 +477,23 @@ export function maintainBoundedMailbox(
   options: {
     nowMs?: number;
     limits?: Partial<BoundedMailboxLimits> | BoundedMailboxLimits;
+    monotonicNow?: () => number;
+    liveness?: MailboxLivenessRuntime;
   } = {},
 ): MailboxMaintenanceResult {
   const nowMs = options.nowMs ?? Date.now();
   const limits = resolveBoundedMailboxLimits(options.limits);
   initializeBoundedMailbox(paths);
-  return withMailboxAdmissionLock(paths, limits, 2_000, () => maintainBoundedMailboxUnlocked(paths, nowMs, limits));
+  return withMailboxAdmissionLock(paths, limits, 2_000, options.monotonicNow ?? monotonicNowMs, () =>
+    maintainBoundedMailboxUnlocked(paths, nowMs, limits, options.liveness ?? DEFAULT_MAILBOX_LIVENESS_RUNTIME),
+  );
 }
 
 function maintainBoundedMailboxUnlocked(
   paths: BoundedMailboxPaths,
   nowMs: number,
   limits: BoundedMailboxLimits,
+  liveness: MailboxLivenessRuntime = DEFAULT_MAILBOX_LIVENESS_RUNTIME,
 ): MailboxMaintenanceResult {
   const result: MailboxMaintenanceResult = {
     reclaimed: 0,
@@ -454,7 +512,7 @@ function maintainBoundedMailboxUnlocked(
       remaining--;
       continue;
     }
-    if (claim.claimExpiresAtMs > nowMs) continue;
+    if (claim.claimExpiresAtMs > nowMs || mailboxOwnerState(paths, claim.ownerId, liveness) !== 'dead') continue;
     const target = join(paths.pendingDir, claim.originalFile);
     try {
       renameSync(claim.path, target);
@@ -565,38 +623,27 @@ function withMailboxAdmissionLock<T>(
   paths: BoundedMailboxPaths,
   limits: BoundedMailboxLimits,
   timeoutMs: number,
+  now: () => number,
   operation: () => T,
 ): T {
-  const lockDirectory = join(paths.rootDir, '.admission.lock');
-  const ownerPath = join(lockDirectory, 'owner.json');
+  const lockPath = join(paths.rootDir, '.admission.lock');
   const ownerToken = `${process.pid}-${randomUUID()}`;
-  const deadline = Date.now() + Math.max(0, timeoutMs);
+  const deadline = now() + Math.max(0, timeoutMs);
   for (;;) {
-    try {
-      mkdirSync(lockDirectory);
-      try {
-        writeJsonDurable(ownerPath, { ownerToken, pid: process.pid, acquiredAtMs: Date.now() });
-      } catch (error) {
-        rmSync(lockDirectory, { recursive: true, force: true });
-        throw error;
-      }
-      break;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-      reclaimAbandonedAdmissionLock(lockDirectory, limits.admissionCreationGraceMs);
-      if (Date.now() >= deadline) {
-        throw new MailboxBackpressureError('admission-busy', inspectBoundedMailbox(paths), limits, 0);
-      }
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
+    if (tryPublishAdmissionLock(paths.rootDir, lockPath, ownerToken)) break;
+    reclaimAbandonedAdmissionLock(lockPath);
+    if (now() >= deadline) {
+      throw new MailboxBackpressureError('admission-busy', inspectBoundedMailbox(paths), limits, 0);
     }
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
   }
   try {
     return operation();
   } finally {
     try {
-      const owner = JSON.parse(readFileSync(ownerPath, 'utf8')) as { ownerToken?: unknown };
+      const owner = readAdmissionLockOwner(lockPath);
       if (owner.ownerToken === ownerToken) {
-        rmSync(lockDirectory, { recursive: true, force: true });
+        rmSync(lockPath, { recursive: true, force: true });
         syncDirectoryDurable(paths.rootDir);
       }
     } catch {
@@ -606,37 +653,66 @@ function withMailboxAdmissionLock<T>(
   }
 }
 
-function reclaimAbandonedAdmissionLock(lockDirectory: string, creationGraceMs: number): void {
-  let modifiedAtMs: number;
+function tryPublishAdmissionLock(rootDirectory: string, lockPath: string, ownerToken: string): boolean {
+  const serialized = `${JSON.stringify({
+    ownerToken,
+    pid: process.pid,
+    acquiredAtMs: Date.now(),
+  })}\n`;
   try {
-    modifiedAtMs = lstatSync(lockDirectory).mtimeMs;
-  } catch {
-    return;
+    createFileAtomicExclusive(lockPath, serialized, { durability: 'durable' });
+    return true;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'EEXIST') return false;
+    try {
+      if (readAdmissionLockOwner(lockPath).ownerToken === ownerToken) {
+        rmSync(lockPath, { force: true });
+        syncDirectoryDurable(rootDirectory);
+      }
+    } catch {
+      // Keep the publication failure as the primary error.
+    }
+    throw error;
   }
+}
+
+function reclaimAbandonedAdmissionLock(lockPath: string): void {
   let ownerPid: number | null = null;
   try {
-    const owner = JSON.parse(readFileSync(join(lockDirectory, 'owner.json'), 'utf8')) as {
-      ownerToken?: unknown;
-      pid?: unknown;
-    };
+    const owner = readAdmissionLockOwner(lockPath);
     if (typeof owner.ownerToken === 'string' && Number.isSafeInteger(owner.pid) && Number(owner.pid) > 0) {
       ownerPid = Number(owner.pid);
     }
   } catch {
-    // An interrupted creator may leave only the directory. It receives a
-    // conservative grace period before unchanged-name reclamation.
+    // Legacy directory locks and externally damaged files remain ambiguous.
   }
-  if (ownerPid !== null && processIsAlive(ownerPid)) return;
-  if (ownerPid === null && modifiedAtMs + creationGraceMs > Date.now()) return;
-  const stalePath = `${lockDirectory}.stale-${randomUUID()}`;
+  // Current writers publish a complete candidate file atomically.
+  // An ownerless public path can only be legacy or externally damaged;
+  // civil-clock age cannot prove it abandoned, so recovery fails closed.
+  if (ownerPid === null || processIsAlive(ownerPid)) return;
+  const stalePath = `${lockPath}.stale-${randomUUID()}`;
   try {
-    renameSync(lockDirectory, stalePath);
+    renameSync(lockPath, stalePath);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === 'ENOENT' || code === 'EEXIST') return;
     throw error;
   }
   rmSync(stalePath, { recursive: true, force: true });
+}
+
+function readAdmissionLockOwner(lockPath: string): { ownerToken?: unknown; pid?: unknown } {
+  try {
+    return JSON.parse(readFileSync(lockPath, 'utf8')) as { ownerToken?: unknown; pid?: unknown };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EISDIR') throw error;
+    // Compatibility with the v1 directory-shaped admission lock.
+    return JSON.parse(readFileSync(join(lockPath, 'owner.json'), 'utf8')) as {
+      ownerToken?: unknown;
+      pid?: unknown;
+    };
+  }
 }
 
 function processIsAlive(pid: number): boolean {
@@ -646,6 +722,70 @@ function processIsAlive(pid: number): boolean {
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     return code === 'EPERM' || code !== 'ESRCH';
+  }
+}
+
+function ensureMailboxOwnerRecord(ownerDirectory: string, ownerId: string, owner: MailboxClaimOwner): void {
+  const path = join(ownerDirectory, MAILBOX_OWNER_FILE);
+  const processIdentity = owner.processIdentity;
+  const current = readMailboxOwnerRecord(path);
+  if (
+    current &&
+    current.ownerId === ownerId &&
+    current.pid === owner.pid &&
+    ((!current.processIdentity && !processIdentity) ||
+      (current.processIdentity && processIdentity && sameProcessIdentity(current.processIdentity, processIdentity)))
+  ) {
+    return;
+  }
+  if (regularFiles(ownerDirectory).some((entry) => entry.endsWith('.claim'))) {
+    throw new Error(`Mailbox owner identity ${ownerId} collides with retained work from another process instance.`);
+  }
+  writeJsonDurable(path, {
+    version: 1,
+    ownerId,
+    pid: owner.pid,
+    ...(processIdentity ? { processIdentity } : {}),
+  } satisfies MailboxOwnerRecord);
+}
+
+function mailboxOwnerState(
+  paths: BoundedMailboxPaths,
+  ownerId: string,
+  runtime: MailboxLivenessRuntime,
+): 'live' | 'dead' | 'unknown' {
+  const record = readMailboxOwnerRecord(join(paths.inflightDir, encodeSegment(ownerId), MAILBOX_OWNER_FILE));
+  if (!record) return 'unknown';
+  if (!runtime.isProcessAlive(record.pid)) return 'dead';
+  if (!record.processIdentity) return 'live';
+  const actualIdentity = runtime.readProcessIdentity(record.pid);
+  if (!actualIdentity) return 'unknown';
+  return sameProcessIdentity(record.processIdentity, actualIdentity) ? 'live' : 'dead';
+}
+
+function readMailboxOwnerRecord(path: string): MailboxOwnerRecord | null {
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as Partial<MailboxOwnerRecord>;
+    if (
+      parsed.version !== 1 ||
+      typeof parsed.ownerId !== 'string' ||
+      !parsed.ownerId ||
+      typeof parsed.pid !== 'number' ||
+      !Number.isSafeInteger(parsed.pid) ||
+      parsed.pid <= 0
+    ) {
+      return null;
+    }
+    const processIdentity = parsed.processIdentity === undefined ? null : parseProcessIdentity(parsed.processIdentity);
+    if (parsed.processIdentity !== undefined && (!processIdentity || processIdentity.pid !== parsed.pid)) return null;
+    return {
+      version: 1,
+      ownerId: parsed.ownerId,
+      pid: parsed.pid,
+      ...(processIdentity ? { processIdentity } : {}),
+    };
+  } catch {
+    return null;
   }
 }
 
@@ -812,7 +952,7 @@ function removeEmptyOwnerDirectories(directory: string): void {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const path = join(directory, entry.name);
-    if (readdirSync(path).length === 0) rmSync(path, { recursive: true, force: true });
+    if (!readdirSync(path).some((name) => name.endsWith('.claim'))) rmSync(path, { recursive: true, force: true });
   }
 }
 

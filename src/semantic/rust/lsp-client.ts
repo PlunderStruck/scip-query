@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { monotonicNowMs } from '../../domain/time.js';
 import type {
   LspCallHierarchyItem,
   LspCallHierarchyOutgoingCall,
@@ -41,6 +42,8 @@ export interface RustAnalyzerLspClientOptions {
   configuration?: Record<string, unknown>;
   maxHeaderBytes?: number;
   maxMessageBytes?: number;
+  /** Process-local elapsed clock. Deadlines passed to this client use this domain. */
+  monotonicNow?: () => number;
 }
 
 export interface RustAnalyzerRequestOptions {
@@ -111,6 +114,7 @@ export class RustAnalyzerLspClient {
   private readonly configuration: Record<string, unknown>;
   private readonly maxHeaderBytes: number;
   private readonly maxMessageBytes: number;
+  private readonly monotonicNow: () => number;
   private readonly headerBuffer: Buffer;
   private headerLength = 0;
   private bodyBuffer: Buffer | null = null;
@@ -130,6 +134,7 @@ export class RustAnalyzerLspClient {
     const limits = rustAnalyzerLspFrameLimits(opts.maxHeaderBytes, opts.maxMessageBytes);
     this.maxHeaderBytes = limits.maxHeaderBytes;
     this.maxMessageBytes = limits.maxMessageBytes;
+    this.monotonicNow = opts.monotonicNow ?? monotonicNowMs;
     this.headerBuffer = Buffer.allocUnsafe(this.maxHeaderBytes + LSP_HEADER_DELIMITER.length);
     this.transport.onData((chunk) => this.handleData(chunk));
     this.transport.onClose((code, signal) => this.failTransport(new Error(closeMessage(code, signal)), false));
@@ -285,7 +290,11 @@ export class RustAnalyzerLspClient {
   // scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
   private request<T>(method: string, params: unknown, opts: RustAnalyzerRequestOptions = {}): Promise<T> {
     if (this.transportFailure) return Promise.reject(this.transportFailure);
-    const budget = rustAnalyzerOperationBudget(opts.timeoutMs ?? this.requestTimeoutMs, opts.deadlineMs);
+    const budget = rustAnalyzerOperationBudget(
+      opts.timeoutMs ?? this.requestTimeoutMs,
+      opts.deadlineMs,
+      this.monotonicNow,
+    );
     const id = this.nextId++;
     const message: LspJsonMessage = { jsonrpc: '2.0', id, method, params };
     return new Promise((resolve, reject) => {
@@ -417,7 +426,7 @@ export class RustAnalyzerLspClient {
       pending.reject(new RustAnalyzerResponseError(message.error.code, pending.method, message.error.message));
       return;
     }
-    if (pending.deadlineMs !== undefined && Date.now() >= pending.deadlineMs) {
+    if (pending.deadlineMs !== undefined && this.monotonicNow() >= pending.deadlineMs) {
       pending.reject(
         new RustAnalyzerReadinessError(`rust-analyzer readiness deadline expired during LSP request ${pending.method}`),
       );
@@ -571,7 +580,7 @@ function parseContentLength(header: string, maxMessageBytes: number): number {
 export function rustAnalyzerOperationBudget(
   configuredTimeoutMs: number,
   deadlineMs: number | undefined,
-  now: () => number = Date.now,
+  now: () => number = monotonicNowMs,
 ): { timeoutMs: number; deadlineLimited: boolean } {
   if (deadlineMs === undefined) return { timeoutMs: configuredTimeoutMs, deadlineLimited: false };
   const remainingMs = deadlineMs - now();

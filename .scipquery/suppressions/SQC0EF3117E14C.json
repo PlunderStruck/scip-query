@@ -1,0 +1,7 @@
+{
+  "id": "SQC0EF3117E14C",
+  "check": "co-change-partner",
+  "file": "src/semantic/rust/lsp-session-readiness.ts",
+  "reason": "Accepted after explicit consumer review: lsp-session-worker imports and calls the readiness helpers without supplying a clock, so their new monotonic default applies automatically. The worker request already carries a monotonic deadline created in lsp-session.ts; its wire shape and orchestration require no edit. The 34-case readiness suite, 21-case worker/session suite, focused matrix, and full suite exercised this path.",
+  "createdAt": "2026-07-26T06:43:15.243Z"
+}

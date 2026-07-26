@@ -697,6 +697,9 @@ closes every source subscription, and waits for the worker to exit after
 subscription cannot close or worker exit cannot be established, the service
 keeps an explicit degraded draining record and its ownership files instead of
 advertising a clean stop; the reported reason is the recovery evidence.
+Elapsed waits and idle control use a process-local monotonic clock; shared
+heartbeats remain civil-time diagnostics and never authorize replacement or a
+process signal by age alone. See [Time Semantics](docs/TIME_SEMANTICS.md).
 
 The same demand-started service lazily owns TypeScript compiler Projects after
 the first command that needs ts-morph semantics. Separate CLI processes reuse

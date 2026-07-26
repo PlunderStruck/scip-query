@@ -2,6 +2,7 @@ import { chmodSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, wr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { tryAcquireProcessFileLock } from '../../src/platform/process-file-lock.js';
 import { FileRevisionConflictError, mutateTextFileRevisionAware } from '../../src/runtime/revisioned-file.js';
 
 const fixtureDirectories = new Set<string>();
@@ -93,6 +94,34 @@ describe('revision-aware file mutation', () => {
     expect(readdirSync(root)).toEqual(['state.json']);
     expect(mutateTextFileRevisionAware(target, () => ({ kind: 'write', text: 'recovered\n' })).changed).toBe(true);
     expect(readFileSync(target, 'utf8')).toBe('recovered\n');
+  });
+
+  it('bounds lock contention with monotonic time', () => {
+    const { target } = fixture('original\n');
+    const lockPath = `${target}.scip-query-write.lock`;
+    const acquired = tryAcquireProcessFileLock(lockPath, {
+      kind: 'revisioned-file-mutation',
+      detail: { target },
+    });
+    expect(acquired.kind).toBe('acquired');
+    if (acquired.kind !== 'acquired') throw new Error('test lock acquisition failed');
+    let monotonicNow = 0;
+
+    try {
+      expect(() =>
+        mutateTextFileRevisionAware(target, () => ({ kind: 'write', text: 'ours\n' }), {
+          lockTimeoutMs: 15,
+          monotonicNow: () => {
+            const observed = monotonicNow;
+            monotonicNow += 10;
+            return observed;
+          },
+        }),
+      ).toThrow(/Timed out after 15ms/);
+      expect(readFileSync(target, 'utf8')).toBe('original\n');
+    } finally {
+      acquired.lock.release();
+    }
   });
 
   it('preserves an existing file mode across atomic replacement', () => {

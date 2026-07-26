@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -48,7 +48,7 @@ describe('process file lock protocol', () => {
       openFile(path, flags, mode) {
         const fd = NODE_PROCESS_FILE_LOCK_RUNTIME.openFile(path, flags, mode);
         fileDescriptors.set(fd, path);
-        events.push(`open:${path === lockPath ? 'lock' : 'directory'}`);
+        events.push(`open:${path === lockPath ? 'lock' : path.endsWith('.candidate') ? 'candidate' : 'directory'}`);
         return fd;
       },
       writeFile(fd, bytes, offset, length) {
@@ -56,15 +56,19 @@ describe('process file lock protocol', () => {
         return NODE_PROCESS_FILE_LOCK_RUNTIME.writeFile(fd, bytes, offset, length);
       },
       syncFile(fd) {
-        events.push(`sync:${fileDescriptors.get(fd) === lockPath ? 'lock' : 'directory'}`);
+        events.push(`sync:${fileDescriptors.get(fd)?.endsWith('.candidate') ? 'lock' : 'directory'}`);
         NODE_PROCESS_FILE_LOCK_RUNTIME.syncFile(fd);
       },
       closeFile(fd) {
         NODE_PROCESS_FILE_LOCK_RUNTIME.closeFile(fd);
         fileDescriptors.delete(fd);
       },
+      linkFile(existingPath, newPath) {
+        events.push('publish');
+        NODE_PROCESS_FILE_LOCK_RUNTIME.linkFile(existingPath, newPath);
+      },
       removeFile(path) {
-        events.push('remove');
+        events.push(`remove:${path.endsWith('.candidate') ? 'candidate' : 'lock'}`);
         NODE_PROCESS_FILE_LOCK_RUNTIME.removeFile(path);
       },
     });
@@ -87,9 +91,17 @@ describe('process file lock protocol', () => {
         processIdentity: OWNER_IDENTITY,
       }),
     );
-    expect(events).toEqual(['open:lock', 'write', 'sync:lock', 'open:directory', 'sync:directory']);
+    expect(events).toEqual([
+      'open:candidate',
+      'write',
+      'sync:lock',
+      'publish',
+      'remove:candidate',
+      'open:directory',
+      'sync:directory',
+    ]);
     if (result.kind === 'acquired') expect(result.lock.release()).toBe(true);
-    expect(events.slice(-3)).toEqual(['remove', 'open:directory', 'sync:directory']);
+    expect(events.slice(-3)).toEqual(['remove:lock', 'open:directory', 'sync:directory']);
   });
 
   it('removes an exclusively created record when a synchronous ownership write fails', () => {
@@ -111,20 +123,22 @@ describe('process file lock protocol', () => {
     ).toThrow(/write failure/);
     expect(injected).toBe(true);
     expect(existsSync(lockPath)).toBe(false);
+    expect(candidateNames(lockPath)).toEqual([]);
   });
 
-  it('recovers an empty record left by a process crash after exclusive create', () => {
+  it('never publishes an incomplete record when a process crashes before exclusive publication', () => {
     const lockPath = temporaryLockPath();
-    writeFileSync(lockPath, '');
+    const candidatePath = `${lockPath}.abandoned.candidate`;
+    writeFileSync(candidatePath, '');
 
     const recovered = tryAcquireProcessFileLock(lockPath, {
       kind: 'test',
       processIdentity: null,
-      creationGraceMs: 0,
-      runtime: lockRuntime({ wallNow: () => Date.now() + 1_000 }),
     });
 
     expect(recovered.kind).toBe('acquired');
+    expect(readProcessFileLock(lockPath).state).toBe('valid');
+    expect(existsSync(candidatePath)).toBe(true);
     if (recovered.kind === 'acquired') recovered.lock.release();
   });
 
@@ -144,9 +158,29 @@ describe('process file lock protocol', () => {
       }),
     ).toThrow(/flush failure/);
     expect(existsSync(lockPath)).toBe(false);
+    expect(candidateNames(lockPath)).toEqual([]);
   });
 
-  it('does not reclaim truncated JSON during creation grace and does reclaim it afterward', () => {
+  it('leaves no public owner when exclusive link publication is unsupported', () => {
+    const lockPath = temporaryLockPath();
+    const runtime = lockRuntime({
+      linkFile() {
+        throw Object.assign(new Error('simulated hard-link failure'), { code: 'EPERM' });
+      },
+    });
+
+    expect(() =>
+      tryAcquireProcessFileLock(lockPath, {
+        kind: 'test',
+        processIdentity: null,
+        runtime,
+      }),
+    ).toThrow(/hard-link failure/);
+    expect(existsSync(lockPath)).toBe(false);
+    expect(candidateNames(lockPath)).toEqual([]);
+  });
+
+  it('does not reclaim truncated public JSON after a forward civil-clock jump', () => {
     const lockPath = temporaryLockPath();
     writeFileSync(lockPath, '{"protocol":');
 
@@ -159,21 +193,21 @@ describe('process file lock protocol', () => {
     expect(duringGrace.kind).toBe('contended');
     expect(readFileSync(lockPath, 'utf8')).toBe('{"protocol":');
 
-    const afterGrace = tryAcquireProcessFileLock(lockPath, {
+    const afterJump = tryAcquireProcessFileLock(lockPath, {
       kind: 'test',
       processIdentity: null,
       creationGraceMs: 60_000,
-      runtime: lockRuntime({ wallNow: () => Date.now() + 60_001 }),
+      runtime: lockRuntime({ wallNow: () => Date.now() + 86_400_000 }),
     });
-    expect(afterGrace.kind).toBe('acquired');
-    if (afterGrace.kind === 'acquired') afterGrace.lock.release();
+    expect(afterJump.kind).toBe('contended');
+    expect(readFileSync(lockPath, 'utf8')).toBe('{"protocol":');
   });
 
-  it('serializes malformed recovery so only one reclaimer becomes owner', () => {
+  it('fails closed for an ownerless public record regardless of civil age', () => {
     const lockPath = temporaryLockPath();
     writeFileSync(lockPath, '');
     const runtime = lockRuntime({
-      wallNow: () => Date.now() + 1_000,
+      wallNow: () => Date.now() + 365 * 86_400_000,
       isProcessAlive: () => true,
       readProcessIdentity: () => null,
     });
@@ -191,21 +225,20 @@ describe('process file lock protocol', () => {
       runtime,
     });
 
-    expect(first.kind).toBe('acquired');
+    expect(first.kind).toBe('contended');
     expect(second.kind).toBe('contended');
-    if (first.kind === 'acquired') first.lock.release();
+    expect(readFileSync(lockPath, 'utf8')).toBe('');
   });
 
-  it('recovers an abandoned malformed reclaim guard before reclaiming the target', () => {
+  it('recovers a reclaim guard only when its recorded process is dead', () => {
     const lockPath = temporaryLockPath();
-    writeFileSync(lockPath, '');
-    writeFileSync(`${lockPath}.reclaim`, '');
+    writeFileSync(lockPath, `${JSON.stringify(record('dead-owner', OWNER_IDENTITY))}\n`);
+    writeFileSync(`${lockPath}.reclaim`, `${JSON.stringify(record('dead-guard', OWNER_IDENTITY))}\n`);
 
     const result = tryAcquireProcessFileLock(lockPath, {
       kind: 'test',
       processIdentity: null,
-      creationGraceMs: 0,
-      runtime: lockRuntime({ wallNow: () => Date.now() + 1_000 }),
+      runtime: lockRuntime({ isProcessAlive: () => false }),
     });
 
     expect(result.kind).toBe('acquired');
@@ -304,7 +337,7 @@ describe('process file lock protocol', () => {
 
   it('retains a successor that appears between stale observation and guarded recheck', () => {
     const lockPath = temporaryLockPath();
-    writeFileSync(lockPath, '');
+    writeFileSync(lockPath, `${JSON.stringify(record('old-token', OWNER_IDENTITY))}\n`);
     const observed = readProcessFileLock(lockPath);
     let targetReads = 0;
     const successor = `${JSON.stringify(record('successor-token', SUCCESSOR_IDENTITY))}\n`;
@@ -317,7 +350,7 @@ describe('process file lock protocol', () => {
         }
         return NODE_PROCESS_FILE_LOCK_RUNTIME.readFile(path);
       },
-      isProcessAlive: () => true,
+      isProcessAlive: (pid) => pid === SUCCESSOR_IDENTITY.pid,
       readProcessIdentity: () => SUCCESSOR_IDENTITY,
     });
 
@@ -335,6 +368,11 @@ function temporaryLockPath(): string {
   const directory = mkdtempSync(join(tmpdir(), 'scip-query-process-lock-'));
   tempDirs.push(directory);
   return join(directory, 'owner.lock');
+}
+
+function candidateNames(lockPath: string): string[] {
+  const directory = lockPath.slice(0, lockPath.lastIndexOf('/'));
+  return readdirSync(directory).filter((name) => name.endsWith('.candidate'));
 }
 
 function lockRuntime(overrides: Partial<ProcessFileLockRuntime> = {}): ProcessFileLockRuntime {

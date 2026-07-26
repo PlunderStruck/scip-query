@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { monotonicNowMs } from '../../domain/time.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { captureProfileEnvironment } from '../../instrumentation/profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
@@ -12,12 +13,12 @@ import {
   type BoundedMailboxLimits,
 } from '../../storage/bounded-mailbox.js';
 import {
-  WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS,
   readWatchServiceState,
   watchServicePaths,
   type WatchServiceState,
 } from '../../platform/watch-service-state.js';
 import { isProcessAlive } from '../../platform/process-liveness.js';
+import { readProcessIdentity, sameProcessIdentity, type ProcessIdentity } from '../../platform/process-identity.js';
 import { canonicalPath } from '../../platform/git-worktree.js';
 import type {
   SemanticAvailability,
@@ -38,10 +39,14 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 120_000;
 const REQUEST_POLL_INTERVAL_MS = 5;
 
 interface TypeScriptSemanticRequesterRuntime {
+  /** Civil time used only in persisted cross-process request records. */
   now(): number;
+  /** Process-local elapsed clock; defaults to performance.now(). */
+  monotonicNow?(): number;
   randomId(): string;
   sleep(durationMs: number): void;
   isProcessAlive(pid: number): boolean;
+  readProcessIdentity?(pid: number): ProcessIdentity | null;
 }
 
 export interface TypeScriptSemanticRequesterOptions {
@@ -151,6 +156,7 @@ export class TypeScriptSemanticRequester {
 
     const enqueuedAtMs = this.runtime.now();
     const deadlineAtMs = enqueuedAtMs + this.timeoutMs;
+    const monotonicDeadlineAtMs = (this.runtime.monotonicNow ?? monotonicNowMs)() + this.timeoutMs;
     const profileEnvironment = captureProfileEnvironment();
     const operationKey = boundedMailboxOperationKey('typescript-semantic-v3', {
       generation,
@@ -175,7 +181,7 @@ export class TypeScriptSemanticRequester {
       { nowMs: enqueuedAtMs, limits: this.mailboxLimits },
     );
 
-    while (this.runtime.now() <= deadlineAtMs) {
+    while ((this.runtime.monotonicNow ?? monotonicNowMs)() <= monotonicDeadlineAtMs) {
       if (existsSync(admitted.responsePath)) {
         return parseResponse(readFileSync(admitted.responsePath, 'utf8'), id, generation, operationKey);
       }
@@ -194,17 +200,13 @@ function usableServiceState(
   projectRoot: string,
   runtime: TypeScriptSemanticRequesterRuntime,
 ): state is WatchServiceState {
-  const heartbeatIsCurrent =
-    state !== null && runtime.now() - Date.parse(state.heartbeatAt) <= WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS;
-  const requestIsBounded =
-    state?.typescriptSemantic?.busyUntil !== undefined &&
-    runtime.now() <= Date.parse(state.typescriptSemantic.busyUntil);
+  const actualIdentity = state?.processIdentity ? runtime.readProcessIdentity?.(state.pid) : null;
   return (
     state !== null &&
     state.projectRoot === projectRoot &&
     state.typescriptSemantic?.protocolVersion === TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION &&
     runtime.isProcessAlive(state.pid) &&
-    (heartbeatIsCurrent || requestIsBounded)
+    (!state.processIdentity || (actualIdentity != null && sameProcessIdentity(state.processIdentity, actualIdentity)))
   );
 }
 
@@ -265,10 +267,12 @@ function configuredTimeoutMs(): number {
 
 const DEFAULT_RUNTIME: TypeScriptSemanticRequesterRuntime = {
   now: Date.now,
+  monotonicNow: monotonicNowMs,
   randomId: randomUUID,
   sleep(durationMs) {
     const signal = new Int32Array(new SharedArrayBuffer(4));
     Atomics.wait(signal, 0, 0, durationMs);
   },
   isProcessAlive,
+  readProcessIdentity,
 };

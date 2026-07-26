@@ -1,12 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import {
-  WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS,
-  readWatchServiceState,
-  watchServicePaths,
-  type WatchServiceState,
-} from '../platform/watch-service-state.js';
+import { monotonicNowMs } from '../domain/time.js';
+import { readWatchServiceState, watchServicePaths, type WatchServiceState } from '../platform/watch-service-state.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
+import { readProcessIdentity, sameProcessIdentity, type ProcessIdentity } from '../platform/process-identity.js';
 import { canonicalPath } from '../platform/git-worktree.js';
 import {
   BOUNDED_MAILBOX_VERSION,
@@ -27,10 +24,14 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 120_000;
 const REQUEST_POLL_INTERVAL_MS = 5;
 
 export interface TypeScriptIndexRequesterRuntime {
+  /** Civil time used only in persisted cross-process request records. */
   now(): number;
+  /** Process-local elapsed clock; defaults to performance.now(). */
+  monotonicNow?(): number;
   randomId(): string;
   sleep(durationMs: number): void;
   isProcessAlive(pid: number): boolean;
+  readProcessIdentity?(pid: number): ProcessIdentity | null;
 }
 
 export interface TypeScriptIndexRequesterOptions {
@@ -77,6 +78,7 @@ export class TypeScriptIndexRequester {
 
     const enqueuedAtMs = this.runtime.now();
     const deadlineAtMs = enqueuedAtMs + this.timeoutMs;
+    const monotonicDeadlineAtMs = (this.runtime.monotonicNow ?? monotonicNowMs)() + this.timeoutMs;
     const operationKey = boundedMailboxOperationKey('typescript-index-v3', {
       baseGeneration: this.baseGeneration,
       request,
@@ -98,7 +100,7 @@ export class TypeScriptIndexRequester {
       { nowMs: enqueuedAtMs, limits: this.mailboxLimits },
     );
 
-    while (this.runtime.now() <= deadlineAtMs) {
+    while ((this.runtime.monotonicNow ?? monotonicNowMs)() <= monotonicDeadlineAtMs) {
       if (existsSync(admitted.responsePath)) {
         return parseResponse(
           readFileSync(admitted.responsePath, 'utf8'),
@@ -125,16 +127,13 @@ function usableServiceState(
   projectRoot: string,
   runtime: TypeScriptIndexRequesterRuntime,
 ): state is WatchServiceState {
-  const heartbeatIsCurrent =
-    state !== null && runtime.now() - Date.parse(state.heartbeatAt) <= WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS;
-  const requestIsBounded =
-    state?.typescriptIndex?.busyUntil !== undefined && runtime.now() <= Date.parse(state.typescriptIndex.busyUntil);
+  const actualIdentity = state?.processIdentity ? runtime.readProcessIdentity?.(state.pid) : null;
   return (
     state !== null &&
     state.projectRoot === projectRoot &&
     state.typescriptIndex?.protocolVersion === TYPESCRIPT_INDEX_PROTOCOL_VERSION &&
     runtime.isProcessAlive(state.pid) &&
-    (heartbeatIsCurrent || requestIsBounded)
+    (!state.processIdentity || (actualIdentity != null && sameProcessIdentity(state.processIdentity, actualIdentity)))
   );
 }
 
@@ -251,10 +250,12 @@ function configuredTimeoutMs(): number {
 
 const DEFAULT_RUNTIME: TypeScriptIndexRequesterRuntime = {
   now: Date.now,
+  monotonicNow: monotonicNowMs,
   randomId: randomUUID,
   sleep(durationMs) {
     const signal = new Int32Array(new SharedArrayBuffer(4));
     Atomics.wait(signal, 0, 0, durationMs);
   },
   isProcessAlive,
+  readProcessIdentity,
 };

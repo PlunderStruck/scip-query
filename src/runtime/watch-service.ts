@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { monotonicNowMs } from '../domain/time.js';
 import type { ProjectConfig, WatchConfig, WatcherStatus } from '../domain/types.js';
 import { canonicalPath, resolveGitWorktreeIdentity, type GitWorktreeContext } from '../platform/git-worktree.js';
 import {
@@ -89,6 +90,7 @@ export type WatchServiceAction =
   | { kind: 'replace'; state: WatchServiceState }
   | { kind: 'signal-stop'; state: WatchServiceState }
   | { kind: 'clean-stale'; state: WatchServiceState }
+  | { kind: 'refuse-replace'; state: WatchServiceState; reason: 'old-heartbeat' }
   | { kind: 'report'; classification: WatchServiceClassification }
   | { kind: 'already-stopped' };
 
@@ -115,7 +117,10 @@ export interface WatchProcessLockResult {
 }
 
 export interface WatchServiceRuntime {
+  /** Civil time for persisted activity and heartbeat diagnostics. */
   now(): number;
+  /** Process-local elapsed clock; defaults to performance.now(). */
+  monotonicNow?(): number;
   isProcessAlive(pid: number): boolean;
   readProcessIdentity(pid: number): ProcessIdentity | null;
   recordActivity?(activityPath: string, nowMs: number): void;
@@ -275,6 +280,12 @@ export function ensureWatchService(opts: WatchServiceControllerOptions): WatchSe
     recordWatchServiceActivityBestEffort(inspection.paths.activityPath, runtime);
     return { disposition: 'reused', state: action.state };
   }
+  if (action.kind === 'refuse-replace') {
+    throw new Error(
+      `scip-query watch service pid ${action.state.pid} is still alive but its heartbeat is old. ` +
+        'Refusing automatic replacement because civil-clock age alone cannot authorize a process signal.',
+    );
+  }
   if (action.kind === 'replace') {
     stopLiveWatchProcess(action.state, opts, runtime);
     cleanupWatchServiceFiles(inspection.paths, action.state.pid, runtime);
@@ -306,6 +317,12 @@ export function ensureWatchService(opts: WatchServiceControllerOptions): WatchSe
   if (action.kind === 'reuse') {
     recordWatchServiceActivityBestEffort(inspection.paths.activityPath, runtime);
     return { disposition: 'reused', state: action.state };
+  }
+  if (action.kind === 'refuse-replace') {
+    throw new Error(
+      `scip-query watch service pid ${action.state.pid} remains alive with an old heartbeat; ` +
+        'automatic replacement is not authorized.',
+    );
   }
 
   const serverPath = opts.serverPath ?? fileURLToPath(new URL('./watch-server.js', import.meta.url));
@@ -553,7 +570,7 @@ export function planWatchServiceAction(
           return { kind: 'start' };
         case 'stale':
           return classification.reason === 'old-heartbeat'
-            ? { kind: 'replace', state: classification.state }
+            ? { kind: 'refuse-replace', state: classification.state, reason: 'old-heartbeat' }
             : { kind: 'start' };
         case 'live':
           // A live `draining` watcher still owns its subscriptions, child, and
@@ -600,8 +617,9 @@ function waitForWatchServiceState(
   runtime: WatchServiceRuntime,
   timeoutMs: number,
 ): WatchServiceState | null {
-  const deadline = runtime.now() + timeoutMs;
-  while (runtime.now() <= deadline) {
+  const monotonicNow = runtime.monotonicNow ?? monotonicNowMs;
+  const deadline = monotonicNow() + timeoutMs;
+  while (monotonicNow() <= deadline) {
     const classification = inspectWatchServiceWithIdentity(opts, identity).classification;
     if (classification.kind === 'live') return classification.state;
     runtime.sleep(WATCH_SERVICE_POLL_INTERVAL_MS);
@@ -619,8 +637,9 @@ function stopLiveWatchProcess(
   assertSameProcessInstance(owner, runtime);
   runtime.signalProcess(pid);
   const timeoutMs = opts.stopTimeoutMs ?? WATCH_SERVICE_STOP_TIMEOUT_MS;
-  const deadline = runtime.now() + timeoutMs;
-  while (runtime.now() <= deadline) {
+  const monotonicNow = runtime.monotonicNow ?? monotonicNowMs;
+  const deadline = monotonicNow() + timeoutMs;
+  while (monotonicNow() <= deadline) {
     if (!runtime.isProcessAlive(pid)) return;
     runtime.sleep(WATCH_SERVICE_POLL_INTERVAL_MS);
   }
@@ -670,6 +689,7 @@ function errorCode(error: unknown): string | undefined {
 
 const DEFAULT_WATCH_SERVICE_RUNTIME: WatchServiceRuntime = {
   now: Date.now,
+  monotonicNow: monotonicNowMs,
   isProcessAlive,
   readProcessIdentity,
   spawnServer(serverPath, projectRoot, cliVersion, watchOverrides) {

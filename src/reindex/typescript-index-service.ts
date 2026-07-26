@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { monotonicNowMs } from '../domain/time.js';
+import { readProcessIdentity } from '../platform/process-identity.js';
+import { isProcessAlive } from '../platform/process-liveness.js';
 import { resolve } from 'node:path';
 import {
   claimBoundedMailboxRequests,
@@ -29,7 +32,10 @@ export interface TypeScriptIndexServiceHostOptions {
   projectRoot: string;
   currentGeneration: () => string | null;
   createEmitter?: (opts: TypeScriptDocumentEmitterOptions) => TypeScriptDocumentEmitterCreation;
+  /** @deprecated Use wallNow and monotonicNow to test the clock domains independently. */
   now?: () => number;
+  wallNow?: () => number;
+  monotonicNow?: () => number;
 }
 
 interface ActiveEmitter {
@@ -42,7 +48,8 @@ export class TypeScriptIndexServiceHost {
   private readonly projectRoot: string;
   private readonly currentGeneration: () => string | null;
   private readonly createEmitter: (opts: TypeScriptDocumentEmitterOptions) => TypeScriptDocumentEmitterCreation;
-  private readonly now: () => number;
+  private readonly wallNow: () => number;
+  private readonly monotonicNow: () => number;
   private active: ActiveEmitter | null = null;
   private requests = 0;
   private sessionsCreated = 0;
@@ -56,12 +63,13 @@ export class TypeScriptIndexServiceHost {
     this.projectRoot = resolve(opts.projectRoot);
     this.currentGeneration = opts.currentGeneration;
     this.createEmitter = opts.createEmitter ?? createTypeScriptDocumentEmitter;
-    this.now = opts.now ?? Date.now;
+    this.wallNow = opts.wallNow ?? opts.now ?? Date.now;
+    this.monotonicNow = opts.monotonicNow ?? opts.now ?? monotonicNowMs;
   }
 
   // scip-query: ignore-twin — protocol hosts share lifecycle names but serve different request schemas.
   handle(baseGeneration: string, request: TypeScriptIndexDocumentRequest): TypeScriptIndexDocumentResponse {
-    const startedAt = this.now();
+    const startedAt = this.monotonicNow();
     try {
       if (this.currentGeneration() !== baseGeneration) {
         throw new Error('TypeScript index request does not match the currently published generation.');
@@ -75,9 +83,9 @@ export class TypeScriptIndexServiceHost {
         modifiedFiles: request.modifiedFiles,
         affectedFiles: request.affectedFiles,
       });
-      const durationMs = this.now() - startedAt;
+      const durationMs = this.monotonicNow() - startedAt;
       this.requests += 1;
-      this.lastRequestAtMs = this.now();
+      this.lastRequestAtMs = this.wallNow();
       this.lastDurationMs = durationMs;
       this.lastError = null;
       this.unavailable = false;
@@ -170,6 +178,8 @@ export function processTypeScriptIndexMailbox(
     ownerId: opts.ownerId ?? TYPESCRIPT_INDEX_MAILBOX_OWNER,
     nowMs,
     limits: opts.limits,
+    owner: TYPESCRIPT_INDEX_MAILBOX_PROCESS_OWNER,
+    liveness: TYPESCRIPT_INDEX_MAILBOX_LIVENESS,
   });
   let processed = 0;
   for (const claim of claims) {
@@ -224,3 +234,9 @@ export function typeScriptIndexMailboxStatus(paths: TypeScriptIndexMailboxPaths)
 }
 
 const TYPESCRIPT_INDEX_MAILBOX_OWNER = `typescript-index-${process.pid}-${randomUUID()}`;
+const TYPESCRIPT_INDEX_PROCESS_IDENTITY = readProcessIdentity(process.pid);
+const TYPESCRIPT_INDEX_MAILBOX_PROCESS_OWNER = {
+  pid: process.pid,
+  ...(TYPESCRIPT_INDEX_PROCESS_IDENTITY ? { processIdentity: TYPESCRIPT_INDEX_PROCESS_IDENTITY } : {}),
+};
+const TYPESCRIPT_INDEX_MAILBOX_LIVENESS = { isProcessAlive, readProcessIdentity };

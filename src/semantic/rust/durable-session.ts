@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
+import { monotonicNowMs } from '../../domain/time.js';
 import type { RustReferenceWorkerRequest, RustReferenceWorkerResponse } from './lsp-batch-worker.js';
 import type {
   RustAnalyzerSessionRequester,
@@ -12,6 +13,12 @@ import type {
 import { stableJson } from '../../domain/stable-json.js';
 import { profileEnabled, writeProfileEvent } from '../../instrumentation/profile.js';
 import { isProcessAlive } from '../../platform/process-liveness.js';
+import {
+  parseProcessIdentity,
+  readProcessIdentity,
+  sameProcessIdentity,
+  type ProcessIdentity,
+} from '../../platform/process-identity.js';
 import {
   BOUNDED_MAILBOX_VERSION,
   boundedMailboxOperationKey,
@@ -26,7 +33,6 @@ import { rustCompilerEngineIdentity, type RustCompilerEngineIdentity } from './e
 import { rustAnalyzerProjectFingerprint } from './project-fingerprint.js';
 
 export const DURABLE_RUST_SESSION_PROTOCOL_VERSION = 3;
-const DURABLE_RUST_SESSION_MAX_HEARTBEAT_AGE_MS = 5_000;
 const DURABLE_RUST_SESSION_STARTUP_TIMEOUT_MS = 5_000;
 const DURABLE_RUST_SESSION_POLL_INTERVAL_MS = 10;
 const DEFAULT_DURABLE_RUST_REFERENCE_RETRY_TIMEOUT_MS = 30_000;
@@ -82,6 +88,7 @@ export type DurableRustSessionResponse =
 export interface DurableRustSessionServerState {
   protocolVersion: number;
   pid: number;
+  processIdentity?: ProcessIdentity;
   heartbeatAtMs: number;
   busyUntilMs?: number;
   mailbox?: BoundedMailboxStatus;
@@ -93,9 +100,13 @@ export interface DurableRustMailboxEnvelope extends BoundedMailboxRequestIdentit
 }
 
 export interface DurableRustSessionRequesterRuntime {
+  /** Civil time used only in persisted cross-process records. */
   now(): number;
+  /** Process-local elapsed clock; defaults to performance.now(). */
+  monotonicNow?(): number;
   randomId(): string;
   isProcessAlive(pid: number): boolean;
+  readProcessIdentity?(pid: number): ProcessIdentity | null;
   spawnServer(serverPath: string, sessionDir: string, semanticWorkerPath: string): void;
   sleep(durationMs: number): void;
 }
@@ -236,14 +247,20 @@ function writeDurableSemanticResponseCacheProfile(hit: boolean, definitions: num
 
 export function isDurableRustSessionStateLive(
   state: DurableRustSessionServerState,
-  nowMs: number,
+  _nowMs: number,
   isProcessAlive: (pid: number) => boolean,
+  readIdentity?: (pid: number) => ProcessIdentity | null,
 ): boolean {
+  // A civil timestamp is useful to diagnose a silent helper, but clock age
+  // cannot prove that a live process lost ownership. The caller's bounded
+  // monotonic request/startup deadline remains the availability limit.
+  if (state.protocolVersion !== DURABLE_RUST_SESSION_PROTOCOL_VERSION || !isProcessAlive(state.pid)) return false;
+  if (!state.processIdentity) return true;
+  const actualIdentity = readIdentity?.(state.pid);
   return (
-    state.protocolVersion === DURABLE_RUST_SESSION_PROTOCOL_VERSION &&
-    (nowMs - state.heartbeatAtMs <= DURABLE_RUST_SESSION_MAX_HEARTBEAT_AGE_MS ||
-      (state.busyUntilMs !== undefined && nowMs <= state.busyUntilMs)) &&
-    isProcessAlive(state.pid)
+    actualIdentity !== undefined &&
+    actualIdentity !== null &&
+    sameProcessIdentity(state.processIdentity, actualIdentity)
   );
 }
 
@@ -305,15 +322,14 @@ export function createDurableRustAnalyzerSessionRequester(
   return {
     requestSemantic(request, timeoutMs) {
       const identity = createDurableRustSessionIdentity(projectRoot, opts.semanticWorkerPath, request, identityRuntime);
-      const readinessDeadlineMs = runtime.now() + Math.max(1, timeoutMs - 1_000);
+      const { readinessDeadlineMs: _callerDeadline, ...portableRequest } = request;
       return dispatch<RustReferenceWorkerResponse>(
         {
           kind: 'semantic',
           identityKey: identity.key,
           workerEnvironment: currentWorkerEnvironment(),
           request: {
-            ...request,
-            readinessDeadlineMs,
+            ...portableRequest,
             referenceRetryTimeoutMs: durableReferenceRetryTimeoutMs(
               process.env['SCIP_RUST_SEMANTIC_REFERENCE_RETRY_TIMEOUT_MS'],
               request.referenceRetryTimeoutMs,
@@ -330,15 +346,14 @@ export function createDurableRustAnalyzerSessionRequester(
     },
     requestImportDefinitions(request, timeoutMs) {
       const identity = createDurableRustSessionIdentity(projectRoot, opts.semanticWorkerPath, request, identityRuntime);
-      const readinessDeadlineMs = runtime.now() + Math.max(1, timeoutMs - 1_000);
+      const { readinessDeadlineMs: _callerDeadline, ...portableRequest } = request;
       return dispatch<RustImportDefinitionWorkerResponse>(
         {
           kind: 'import-definitions',
           identityKey: identity.key,
           workerEnvironment: currentWorkerEnvironment(),
           request: {
-            ...request,
-            readinessDeadlineMs,
+            ...portableRequest,
             settleDelayMs:
               process.env['SCIP_RUST_SEMANTIC_SETTLE_MS'] === undefined
                 ? request.settleDelayMs
@@ -384,6 +399,8 @@ function dispatchDurableRustSessionRequest<Response>(
 ): Response {
   const startedAtMs = runtime.now();
   const deadline = startedAtMs + timeoutMs;
+  const monotonicStartedAtMs = (runtime.monotonicNow ?? monotonicNowMs)();
+  const monotonicDeadline = monotonicStartedAtMs + timeoutMs;
   const operationKey = boundedMailboxOperationKey('rust-semantic-v3', request);
   const requestId = boundedMailboxRequestId(operationKey);
   const mailboxPaths = boundedMailboxPaths(sessionDir);
@@ -402,8 +419,8 @@ function dispatchDurableRustSessionRequest<Response>(
     { nowMs: startedAtMs, limits: mailboxLimits },
   );
 
-  ensureDurableRustSessionServer(sessionDir, serverPath, semanticWorkerPath, deadline, runtime);
-  while (runtime.now() <= deadline) {
+  ensureDurableRustSessionServer(sessionDir, serverPath, semanticWorkerPath, monotonicDeadline, runtime);
+  while ((runtime.monotonicNow ?? monotonicNowMs)() <= monotonicDeadline) {
     if (existsSync(admitted.responsePath)) {
       const payload = parseDurableResponse(readFileSync(admitted.responsePath, 'utf8'), requestId, operationKey);
       if (!payload.ok) throw new Error(payload.error);
@@ -411,7 +428,7 @@ function dispatchDurableRustSessionRequest<Response>(
         writeProfileEvent({
           type: 'span',
           name: 'rust.semantic.durable-session.request',
-          durationMs: runtime.now() - startedAtMs,
+          durationMs: (runtime.monotonicNow ?? monotonicNowMs)() - monotonicStartedAtMs,
           ok: true,
           session: payload.session,
           kind: request.kind,
@@ -420,8 +437,11 @@ function dispatchDurableRustSessionRequest<Response>(
       return payload.response as Response;
     }
     const state = readDurableRustSessionServerState(sessionDir);
-    if (!state || !isDurableRustSessionStateLive(state, runtime.now(), runtime.isProcessAlive)) {
-      ensureDurableRustSessionServer(sessionDir, serverPath, semanticWorkerPath, deadline, runtime);
+    if (
+      !state ||
+      !isDurableRustSessionStateLive(state, runtime.now(), runtime.isProcessAlive, runtime.readProcessIdentity)
+    ) {
+      ensureDurableRustSessionServer(sessionDir, serverPath, semanticWorkerPath, monotonicDeadline, runtime);
     }
     runtime.sleep(DURABLE_RUST_SESSION_POLL_INTERVAL_MS);
   }
@@ -433,18 +453,29 @@ function ensureDurableRustSessionServer(
   sessionDir: string,
   serverPath: string,
   semanticWorkerPath: string,
-  requestDeadline: number,
+  requestMonotonicDeadline: number,
   runtime: DurableRustSessionRequesterRuntime,
 ): void {
   const current = readDurableRustSessionServerState(sessionDir);
-  if (current && isDurableRustSessionStateLive(current, runtime.now(), runtime.isProcessAlive)) return;
+  if (
+    current &&
+    isDurableRustSessionStateLive(current, runtime.now(), runtime.isProcessAlive, runtime.readProcessIdentity)
+  ) {
+    return;
+  }
 
   rmSync(resolve(sessionDir, 'server.json'), { force: true });
   runtime.spawnServer(serverPath, sessionDir, semanticWorkerPath);
-  const startupDeadline = Math.min(requestDeadline, runtime.now() + DURABLE_RUST_SESSION_STARTUP_TIMEOUT_MS);
-  while (runtime.now() <= startupDeadline) {
+  const monotonicNow = runtime.monotonicNow ?? monotonicNowMs;
+  const startupDeadline = Math.min(requestMonotonicDeadline, monotonicNow() + DURABLE_RUST_SESSION_STARTUP_TIMEOUT_MS);
+  while (monotonicNow() <= startupDeadline) {
     const state = readDurableRustSessionServerState(sessionDir);
-    if (state && isDurableRustSessionStateLive(state, runtime.now(), runtime.isProcessAlive)) return;
+    if (
+      state &&
+      isDurableRustSessionStateLive(state, runtime.now(), runtime.isProcessAlive, runtime.readProcessIdentity)
+    ) {
+      return;
+    }
     runtime.sleep(DURABLE_RUST_SESSION_POLL_INTERVAL_MS);
   }
   throw new Error('Durable Rust semantic session helper did not become ready within 5s.');
@@ -464,9 +495,12 @@ export function readDurableRustSessionServerState(sessionDir: string): DurableRu
     ) {
       return null;
     }
+    const processIdentity = parsed.processIdentity === undefined ? null : parseProcessIdentity(parsed.processIdentity);
+    if (parsed.processIdentity !== undefined && (!processIdentity || processIdentity.pid !== parsed.pid)) return null;
     return {
       protocolVersion: parsed.protocolVersion,
       pid: parsed.pid,
+      ...(processIdentity ? { processIdentity } : {}),
       heartbeatAtMs: parsed.heartbeatAtMs,
       ...(parsed.busyUntilMs === undefined ? {} : { busyUntilMs: parsed.busyUntilMs }),
       ...(parsed.mailbox === undefined ? {} : { mailbox: parsed.mailbox }),
@@ -598,8 +632,10 @@ const DEFAULT_IDENTITY_RUNTIME: DurableRustSessionIdentityRuntime = {
 
 const DEFAULT_REQUESTER_RUNTIME: DurableRustSessionRequesterRuntime = {
   now: Date.now,
+  monotonicNow: monotonicNowMs,
   randomId: randomUUID,
   isProcessAlive,
+  readProcessIdentity,
   spawnServer(serverPath, sessionDir, semanticWorkerPath) {
     if (!existsSync(serverPath)) {
       throw new Error(`Durable Rust semantic session helper was not found at ${serverPath}. Run npm run build first.`);

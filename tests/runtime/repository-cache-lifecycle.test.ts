@@ -72,6 +72,30 @@ describe('repository cache lifecycle policy', () => {
     expect(existsSync(repositoryLockPath)).toBe(false);
   });
 
+  it('bounds a contended lock wait with the injected monotonic source', () => {
+    const repositoryDir = temporaryDirectory('scip-query-monotonic-process-lock-');
+    const owner = acquireRepositoryCacheLock(repositoryDir);
+    expect(owner).not.toBeNull();
+    let monotonicNow = 0;
+
+    try {
+      expect(
+        acquireRepositoryCacheLock(repositoryDir, {
+          waitMs: 15,
+          pollMs: 1,
+          now: () => {
+            const observed = monotonicNow;
+            monotonicNow += 10;
+            return observed;
+          },
+        }),
+      ).toBeNull();
+      expect(monotonicNow).toBeGreaterThan(15);
+    } finally {
+      owner!.release();
+    }
+  });
+
   it('protects live leases and immediately schedules disappeared managed worktrees', () => {
     const plan = planRepositoryCacheSweep({
       nowMs: 2 * HOUR,

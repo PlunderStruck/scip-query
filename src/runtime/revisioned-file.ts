@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { closeSync, fstatSync, openSync, readFileSync, rmSync } from 'node:fs';
 import type { Stats } from 'node:fs';
 import { dirname } from 'node:path';
+import { monotonicNowMs } from '../domain/time.js';
 import { tryAcquireProcessFileLock, type ProcessFileLock } from '../platform/process-file-lock.js';
 import { createFileAtomicExclusive, replaceFileAtomic, syncDirectoryDurable } from '../storage/atomic-file.js';
 
@@ -37,6 +38,8 @@ export type RevisionedTextMutation =
 export interface RevisionedFileMutationOptions {
   maxRetries?: number;
   lockTimeoutMs?: number;
+  /** @internal process-local elapsed clock used by deterministic timeout tests. */
+  monotonicNow?: () => number;
   /** @internal deterministic concurrency/fault-injection boundary. */
   onBeforeCommit?: (context: {
     attempt: number;
@@ -96,7 +99,11 @@ export function mutateTextFileRevisionAware(
   transform: (snapshot: RevisionedTextSnapshot, attempt: number) => RevisionedTextMutation,
   options: RevisionedFileMutationOptions = {},
 ): RevisionedFileMutationResult {
-  const lock = acquireMutationLock(path, options.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS);
+  const lock = acquireMutationLock(
+    path,
+    options.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS,
+    options.monotonicNow ?? monotonicNowMs,
+  );
   try {
     const maxRetries = Math.max(0, Math.floor(options.maxRetries ?? DEFAULT_MUTATION_RETRIES));
     for (let attempt = 0; ; attempt += 1) {
@@ -163,16 +170,16 @@ export function readStableTextSnapshot(path: string): RevisionedTextSnapshot {
   throw new Error(`Could not read a stable revision of ${path}; the file is changing continuously.`);
 }
 
-function acquireMutationLock(path: string, timeoutMs: number): ProcessFileLock {
+function acquireMutationLock(path: string, timeoutMs: number, now: () => number): ProcessFileLock {
   const lockPath = `${path}.scip-query-write.lock`;
-  const deadline = Date.now() + Math.max(0, timeoutMs);
+  const deadline = now() + Math.max(0, timeoutMs);
   for (;;) {
     const result = tryAcquireProcessFileLock(lockPath, {
       kind: 'revisioned-file-mutation',
       detail: { target: path },
     });
     if (result.kind === 'acquired') return result.lock;
-    if (Date.now() >= deadline) {
+    if (now() >= deadline) {
       throw new Error(`Timed out after ${timeoutMs}ms waiting to update ${path}; the file was left untouched.`);
     }
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, DEFAULT_LOCK_RETRY_MS);

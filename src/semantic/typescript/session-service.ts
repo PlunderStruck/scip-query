@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { readProcessIdentity } from '../../platform/process-identity.js';
+import { isProcessAlive } from '../../platform/process-liveness.js';
 import {
   buildProjectChangeManifest,
   projectInputSnapshotOrNull,
@@ -172,6 +174,8 @@ export function processTypeScriptSemanticMailbox(
     ownerId: opts.ownerId ?? TYPESCRIPT_SEMANTIC_MAILBOX_OWNER,
     nowMs,
     limits: opts.limits,
+    owner: TYPESCRIPT_SEMANTIC_MAILBOX_PROCESS_OWNER,
+    liveness: TYPESCRIPT_SEMANTIC_MAILBOX_LIVENESS,
   });
   let processed = 0;
   for (const claim of claims) {
@@ -277,3 +281,9 @@ function assertNever(value: never): never {
 }
 
 const TYPESCRIPT_SEMANTIC_MAILBOX_OWNER = `typescript-semantic-${process.pid}-${randomUUID()}`;
+const TYPESCRIPT_SEMANTIC_PROCESS_IDENTITY = readProcessIdentity(process.pid);
+const TYPESCRIPT_SEMANTIC_MAILBOX_PROCESS_OWNER = {
+  pid: process.pid,
+  ...(TYPESCRIPT_SEMANTIC_PROCESS_IDENTITY ? { processIdentity: TYPESCRIPT_SEMANTIC_PROCESS_IDENTITY } : {}),
+};
+const TYPESCRIPT_SEMANTIC_MAILBOX_LIVENESS = { isProcessAlive, readProcessIdentity };

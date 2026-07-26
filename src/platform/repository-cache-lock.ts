@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { monotonicNowMs } from '../domain/time.js';
 import { tryAcquireProcessFileLock, type LegacyProcessLockDecoder, type ProcessFileLock } from './process-file-lock.js';
 
 export interface RepositoryCacheLock {
@@ -31,7 +32,7 @@ export function acquireProcessFileLock(
 ): RepositoryCacheLock | null {
   const waitMs = opts.waitMs ?? 0;
   const pollMs = opts.pollMs ?? 10;
-  const now = opts.now ?? Date.now;
+  const now = opts.now ?? monotonicNowMs;
   const deadline = now() + waitMs;
 
   do {
@@ -54,7 +55,7 @@ export async function acquireProcessFileLockAsync(
 ): Promise<RepositoryCacheLock | null> {
   const waitMs = opts.waitMs ?? 0;
   const pollMs = opts.pollMs ?? 10;
-  const now = opts.now ?? Date.now;
+  const now = opts.now ?? monotonicNowMs;
   const deadline = now() + waitMs;
 
   do {

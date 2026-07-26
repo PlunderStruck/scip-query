@@ -24,12 +24,12 @@ export function runPostIndexAugmentation<Result>(
   stage: PostIndexAugmentationStage<Result>,
   context: PostIndexAugmentationContext,
 ): { stageId: string; facts: readonly PostIndexAugmentationFact[]; durationMs: number; result: Result } {
-  const start = Date.now();
+  const start = performance.now();
   const result = stage.run(context);
   return {
     stageId: stage.id,
     facts: stage.facts,
-    durationMs: Date.now() - start,
+    durationMs: performance.now() - start,
     result,
   };
 }

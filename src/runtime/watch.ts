@@ -9,6 +9,7 @@ import type {
   SupportedLanguage,
   TypeScriptProjectMode,
 } from '../domain/types.js';
+import { monotonicNowMs } from '../domain/time.js';
 import { resolveIndexStoragePaths } from '../platform/cache-layout.js';
 import { loadProjectConfig, resolveWatchConfig } from './config.js';
 import { createGitignoreFilter } from '../source/primitives/gitignore-filter.js';
@@ -89,7 +90,10 @@ export type WatchSubscriptionFactory = (projectRoot: string, options: WatchSubsc
 type WatchTimer = ReturnType<typeof setTimeout>;
 
 export interface WatchClock {
+  /** Process-local elapsed clock used for debounce/cooldown control. */
   now(): number;
+  /** Civil clock used only in externally visible status timestamps. */
+  wallNow?(): number;
   setTimeout(callback: () => void, delayMs: number): WatchTimer;
   clearTimeout(timer: WatchTimer): void;
   setInterval(callback: () => void, intervalMs: number): WatchTimer;
@@ -217,7 +221,7 @@ export class Watcher {
     if (operation) {
       this.setStatus({
         state: 'draining',
-        startedAt: this.clock.now(),
+        startedAt: this.wallNow(),
         reason: 'waiting for the active reindex worker to exit',
       });
     }
@@ -332,7 +336,7 @@ export class Watcher {
     // Reset the debounce timer — every new change pushes the trigger out
     this.clearDebounceTimer();
 
-    const reindexAt = this.clock.now() + this.watchConfig.debounceMs;
+    const reindexAt = this.wallNow() + this.watchConfig.debounceMs;
     this.setStatus({ state: 'waiting', changedFiles: this.changedFiles, reindexAt });
 
     this.debounceTimer = this.clock.setTimeout(() => {
@@ -352,7 +356,7 @@ export class Watcher {
     if (this.lastReindexEnd > 0 && timeSinceLastReindex < this.watchConfig.cooldownMs) {
       const remaining = this.watchConfig.cooldownMs - timeSinceLastReindex;
       this.dirty = true;
-      const until = this.clock.now() + remaining;
+      const until = this.wallNow() + remaining;
       this.setStatus({ state: 'cooldown', until, dirty: true });
 
       this.cooldownTimer = this.clock.setTimeout(() => {
@@ -370,7 +374,7 @@ export class Watcher {
     this.changedFiles = 0;
     const trigger = this.pendingTrigger ?? { kind: 'watch-source' };
     this.pendingTrigger = null;
-    const startedAt = this.clock.now();
+    const startedAt = this.wallNow();
     this.setStatus({ state: 'indexing', startedAt });
 
     // Run reindex in a child process so it doesn't block the watcher
@@ -399,7 +403,7 @@ export class Watcher {
             return;
           }
           // Changes arrived during reindex — enter cooldown then reindex again
-          const until = this.clock.now() + this.watchConfig.cooldownMs;
+          const until = this.wallNow() + this.watchConfig.cooldownMs;
           this.setStatus({ state: 'cooldown', until, dirty: true });
 
           this.cooldownTimer = this.clock.setTimeout(() => {
@@ -454,13 +458,17 @@ export class Watcher {
     if (reasons.length > 0) {
       this.setStatus({
         state: 'draining',
-        startedAt: this.clock.now(),
+        startedAt: this.wallNow(),
         reason: reasons.join('; '),
       });
       return { state: 'degraded', reasons };
     }
     this.setStatus({ state: 'idle' });
     return { state: 'stopped' };
+  }
+
+  private wallNow(): number {
+    return this.clock.wallNow?.() ?? this.clock.now();
   }
 
   private reindexRequest(trigger: RefreshTrigger): ReindexRunRequest {
@@ -597,7 +605,8 @@ export function resolveReindexWorkerLaunch(request: ReindexRunRequest): ReindexW
 }
 
 const SYSTEM_WATCH_CLOCK: WatchClock = {
-  now: () => Date.now(),
+  now: monotonicNowMs,
+  wallNow: () => Date.now(),
   setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
   clearTimeout: (timer) => clearTimeout(timer),
   setInterval: (callback, intervalMs) => setInterval(callback, intervalMs),

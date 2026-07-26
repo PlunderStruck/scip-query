@@ -1,17 +1,9 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { platform as hostPlatform } from 'node:os';
+import type { ProcessIdentity } from '../domain/process-identity.js';
 
-/**
- * One operating-system process instance. A PID alone names a reusable slot;
- * the start token distinguishes successive processes that occupy that slot.
- */
-export interface ProcessIdentity {
-  version: 1;
-  pid: number;
-  platform: NodeJS.Platform;
-  startToken: string;
-}
+export { parseProcessIdentity, sameProcessIdentity, type ProcessIdentity } from '../domain/process-identity.js';
 
 export interface ProcessIdentityRuntime {
   platform: NodeJS.Platform;
@@ -21,20 +13,6 @@ export interface ProcessIdentityRuntime {
 
 const PROCESS_IDENTITY_COMMAND_TIMEOUT_MS = 1_000;
 const PROCESS_IDENTITY_MAX_OUTPUT_BYTES = 16 * 1024;
-const NODE_PLATFORMS = new Set<NodeJS.Platform>([
-  'aix',
-  'android',
-  'darwin',
-  'freebsd',
-  'haiku',
-  'linux',
-  'openbsd',
-  'sunos',
-  'win32',
-  'cygwin',
-  'netbsd',
-]);
-
 export function readProcessIdentity(
   pid: number,
   runtime: ProcessIdentityRuntime = DEFAULT_PROCESS_IDENTITY_RUNTIME,
@@ -46,38 +24,6 @@ export function readProcessIdentity(
   } catch {
     return null;
   }
-}
-
-export function parseProcessIdentity(value: unknown): ProcessIdentity | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const identity = value as Partial<ProcessIdentity>;
-  if (
-    identity.version !== 1 ||
-    typeof identity.pid !== 'number' ||
-    !Number.isSafeInteger(identity.pid) ||
-    identity.pid <= 0 ||
-    typeof identity.platform !== 'string' ||
-    !NODE_PLATFORMS.has(identity.platform as NodeJS.Platform) ||
-    typeof identity.startToken !== 'string' ||
-    identity.startToken.trim() === ''
-  ) {
-    return null;
-  }
-  return {
-    version: 1,
-    pid: identity.pid,
-    platform: identity.platform as NodeJS.Platform,
-    startToken: identity.startToken,
-  };
-}
-
-export function sameProcessIdentity(expected: ProcessIdentity, actual: ProcessIdentity): boolean {
-  return (
-    expected.version === actual.version &&
-    expected.pid === actual.pid &&
-    expected.platform === actual.platform &&
-    expected.startToken === actual.startToken
-  );
 }
 
 function processStartToken(pid: number, runtime: ProcessIdentityRuntime): string | null {

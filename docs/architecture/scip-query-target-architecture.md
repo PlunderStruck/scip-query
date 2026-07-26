@@ -200,6 +200,16 @@ mailbox host for its current snapshot when it durably publishes watch state.
 This keeps cross-process lifecycle policy in storage/runtime while preserving
 platform as a process-neutral decoder.
 
+Each owner-specific inflight directory records a process instance: a PID plus
+the operating-system start token that distinguishes successive processes
+reusing that PID. Storage owns the pure record parser and equality rule;
+service coordinators supply host liveness observations from `platform`.
+Expired civil-clock lease age therefore permits reclamation only when the
+recorded process is proven dead or now has a different start token. A live or
+unverifiable owner fails closed. Admission and claim waits use monotonic time,
+while persisted enqueue, expiry, retention, and diagnostic fields remain civil
+timestamps.
+
 The state union includes `draining`, the live interval in which the owner has
 stopped accepting refreshes but has not yet closed every subscription and
 reaped its active reindex child. Runtime persists the reason and continues to

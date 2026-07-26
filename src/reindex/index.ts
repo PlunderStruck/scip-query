@@ -18,6 +18,7 @@ import {
   type ProjectFileFingerprint,
   type ProjectInputSnapshot,
 } from '../domain/project-input.js';
+import { monotonicNowMs } from '../domain/time.js';
 import { profileAsyncSpan, profileSpan } from '../instrumentation/profile.js';
 import { resolveScipBinary, tryInstallScipCli } from '../platform/scip-cli.js';
 import {
@@ -283,6 +284,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
 
   const paths = resolveReindexOutputPaths(opts);
   const start = Date.now();
+  const monotonicStart = monotonicNowMs();
   mkdirSync(dirname(paths.outputScip), { recursive: true });
   mkdirSync(dirname(paths.outputDb), { recursive: true });
 
@@ -405,6 +407,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
           languages,
           fingerprint,
           start,
+          monotonicStart,
           onStatus,
         });
         return reuseObservation;
@@ -433,6 +436,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
           tempPaths,
           fingerprint,
           start,
+          monotonicStart,
           maxHeapMb,
           skipAutoInstall,
           onStatus,
@@ -453,6 +457,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
       trigger: opts.trigger,
       result: 'failed',
       start,
+      monotonicStart,
       error: error instanceof Error ? error.message : String(error),
     });
     updateReindexLastRefresh(paths.metaPath, lastRefresh);
@@ -560,6 +565,7 @@ function reuseExistingIndexIfPossible(opts: {
   languages: SupportedLanguage[];
   fingerprint: ReindexFingerprint;
   start: number;
+  monotonicStart: number;
   onStatus: (message: string) => void;
 }): ReindexResult | null {
   const generation = inspectSqliteGeneration(opts.paths.outputDb, opts.paths.metaPath);
@@ -580,11 +586,12 @@ function reuseExistingIndexIfPossible(opts: {
     onStatus: opts.onStatus,
   });
 
-  const durationMs = Date.now() - opts.start;
+  const durationMs = monotonicNowMs() - opts.monotonicStart;
   const lastRefresh = buildLastRefresh({
     trigger: opts.opts.trigger,
     result: 'reused',
     start: opts.start,
+    monotonicStart: opts.monotonicStart,
     languages: opts.languages,
     skipped: [],
   });
@@ -669,6 +676,7 @@ async function runFreshReindex(opts: {
   tempPaths: TempReindexPaths;
   fingerprint: ReindexFingerprint;
   start: number;
+  monotonicStart: number;
   maxHeapMb: number;
   skipAutoInstall: boolean;
   onStatus: (message: string) => void;
@@ -1343,6 +1351,7 @@ function publishFreshReindexArtifacts(
     trigger: opts.opts.trigger,
     result: 'rebuilt',
     start: opts.start,
+    monotonicStart: opts.monotonicStart,
     languages: indexedOutputs.map((o) => o.language),
     skipped: [...skippedLanguages],
   });
@@ -1447,6 +1456,7 @@ function publishFullyReusedLanguageShardArtifacts(
     trigger: opts.opts.trigger,
     result: 'reused',
     start: opts.start,
+    monotonicStart: opts.monotonicStart,
     languages: indexedOutputs.map((o) => o.language),
     skipped: [...skippedLanguages],
   });
@@ -1974,7 +1984,7 @@ function buildIncrementalAffectedSetShadowRecord(
   incremental: MaterializedTypeScriptIncrementalIndex,
   changedDocumentPaths: readonly string[],
 ): AffectedSetShadowRecord {
-  const startedAt = Date.now();
+  const startedAt = monotonicNowMs();
   const modifiedFiles = [...changedDocumentPaths].sort();
   const changed = new Set(modifiedFiles);
   const comparison = {
@@ -1989,7 +1999,7 @@ function buildIncrementalAffectedSetShadowRecord(
     status: 'evaluated',
     refreshResult: 'rebuilt',
     recordedAt: new Date().toISOString(),
-    durationMs: Date.now() - startedAt,
+    durationMs: monotonicNowMs() - startedAt,
     manifest: incremental.manifest,
     plan: incremental.plan,
     comparison,
@@ -2228,8 +2238,8 @@ function sendSignal(owner: ReindexLockMetadata, signal: NodeJS.Signals): void {
 }
 
 async function waitForProcessExit(owner: ReindexLockMetadata, timeoutMs: number): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
+  const deadline = monotonicNowMs() + timeoutMs;
+  while (monotonicNowMs() < deadline) {
     if (reindexOwnerExited(owner)) return true;
     await delay(50);
   }
@@ -2365,6 +2375,7 @@ function buildLastRefresh(opts: {
   trigger?: RefreshTrigger;
   result: LastRefreshMetadata['result'];
   start: number;
+  monotonicStart: number;
   languages?: readonly SupportedLanguage[];
   skipped?: readonly { language: SupportedLanguage; reason: string }[];
   error?: string;
@@ -2374,7 +2385,7 @@ function buildLastRefresh(opts: {
     result: opts.result,
     startedAt: new Date(opts.start).toISOString(),
     completedAt: new Date().toISOString(),
-    durationMs: Date.now() - opts.start,
+    durationMs: monotonicNowMs() - opts.monotonicStart,
     indexedLanguages: opts.languages ? [...opts.languages] : undefined,
     skipped: opts.skipped ? [...opts.skipped] : undefined,
     error: opts.error,

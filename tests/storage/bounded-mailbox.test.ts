@@ -55,8 +55,12 @@ describe('bounded filesystem mailbox', () => {
     expect(
       claimBoundedMailboxRequests(paths, {
         ownerId: 'server-b',
-        nowMs: NOW + 50,
+        nowMs: NOW + 365 * 86_400_000,
         limits: { claimLeaseMs: 100 },
+        liveness: {
+          isProcessAlive: () => true,
+          readProcessIdentity: () => null,
+        },
       }),
     ).toEqual([]);
 
@@ -64,6 +68,10 @@ describe('bounded filesystem mailbox', () => {
       ownerId: 'server-b',
       nowMs: NOW + 15_001,
       limits: { claimLeaseMs: 100 },
+      liveness: {
+        isProcessAlive: () => false,
+        readProcessIdentity: () => null,
+      },
     });
     expect(reclaimed).toEqual(expect.objectContaining({ requestId: request.id, ownerId: 'server-b', legacy: false }));
 
@@ -110,6 +118,10 @@ describe('bounded filesystem mailbox', () => {
       ownerId: 'new-owner',
       nowMs: NOW + 5_101,
       limits: { claimLeaseMs: 10 },
+      liveness: {
+        isProcessAlive: () => false,
+        readProcessIdentity: () => null,
+      },
     });
 
     completeBoundedMailboxClaim(
@@ -193,6 +205,49 @@ describe('bounded filesystem mailbox', () => {
         nowMs: NOW,
       }).disposition,
     ).toBe('accepted');
+  });
+
+  it('bounds admission contention with monotonic time', () => {
+    const paths = fixture();
+    initializeBoundedMailbox(paths);
+    const lockPath = join(paths.rootDir, '.admission.lock');
+    mkdirSync(lockPath);
+    writeFileSync(
+      join(lockPath, 'owner.json'),
+      JSON.stringify({ ownerToken: 'live-owner', pid: process.pid, acquiredAtMs: NOW }),
+    );
+    let monotonicNow = 0;
+
+    expect(() =>
+      enqueueBoundedMailboxRequest(paths, operation('blocked', NOW, NOW + 1_000), {
+        nowMs: NOW + 86_400_000,
+        admissionLockTimeoutMs: 15,
+        monotonicNow: () => {
+          const observed = monotonicNow;
+          monotonicNow += 10;
+          return observed;
+        },
+      }),
+    ).toThrow(expect.objectContaining({ code: 'admission-busy' }));
+    expect(monotonicNow).toBeGreaterThan(15);
+  });
+
+  it('does not reclaim an ownerless public lock from civil-clock age alone', () => {
+    const paths = fixture();
+    initializeBoundedMailbox(paths);
+    const lockPath = join(paths.rootDir, '.admission.lock');
+    writeFileSync(lockPath, '');
+    const old = new Date(0);
+    utimesSync(lockPath, old, old);
+
+    expect(() =>
+      enqueueBoundedMailboxRequest(paths, operation('ownerless', NOW, NOW + 1_000), {
+        nowMs: NOW + 365 * 24 * 60 * 60_000,
+        admissionLockTimeoutMs: 0,
+        monotonicNow: () => 0,
+      }),
+    ).toThrow(expect.objectContaining({ code: 'admission-busy' }));
+    expect(existsSync(lockPath)).toBe(true);
   });
 
   it('orders by enqueue time, bounds each batch, and leaves later work pending for heartbeat fairness', () => {

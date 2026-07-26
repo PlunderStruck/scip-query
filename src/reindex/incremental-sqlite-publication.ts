@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import Database from 'better-sqlite3';
+import { monotonicNowMs } from '../domain/time.js';
 
 export type IncrementalSqlitePatchStage =
   | 'after-delete'
@@ -101,7 +102,7 @@ type DatabaseSchema = 'main' | 'incremental';
 export function patchIncrementalSqliteGeneration(
   input: PatchIncrementalSqliteGenerationInput,
 ): IncrementalSqlitePatchResult {
-  const startedAt = Date.now();
+  const startedAt = monotonicNowMs();
   const affectedFiles = validateAffectedFiles(input.affectedFiles);
   assertDistinctPaths(input.previousDbPath, input.miniDbPath, input.candidateDbPath);
   rmSync(input.candidateDbPath, { force: true });
@@ -156,7 +157,7 @@ export function patchIncrementalSqliteGeneration(
       candidateDbPath: input.candidateDbPath,
       affectedDocumentCount: affectedFiles.length,
       changedDocumentPaths,
-      durationMs: Date.now() - startedAt,
+      durationMs: monotonicNowMs() - startedAt,
     };
   } catch (error) {
     try {

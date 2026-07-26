@@ -2,6 +2,7 @@ import process from 'node:process';
 import { rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { monotonicNowMs } from '../domain/time.js';
 import type { RefreshTrigger, WatcherStatus } from '../domain/types.js';
 import { resolveIndexStoragePaths } from '../platform/cache-layout.js';
 import { readProcessIdentity } from '../platform/process-identity.js';
@@ -81,7 +82,9 @@ export async function runWatchServiceServer(
   refreshCoordinator.initializeAfterOwnershipAcquired();
 
   const startedAtMs = Date.now();
+  const startedAtMonotonicMs = monotonicNowMs();
   let lastActivityAtMs = startedAtMs;
+  let lastActivityAtMonotonicMs = startedAtMonotonicMs;
   let watcherStatus: WatcherStatus = { state: 'idle' };
   let indexGeneration: string | undefined;
   let lastRefresh: WatchServiceState['lastRefresh'];
@@ -90,9 +93,9 @@ export async function runWatchServiceServer(
   let stopping = false;
   let ready = false;
   let lastRefreshRequestAtMs = 0;
-  let lastHeartbeatAtMs = 0;
-  let lastActivityPollAtMs = 0;
-  let lastCacheSweepAtMs = 0;
+  let lastHeartbeatAtMonotonicMs = Number.NEGATIVE_INFINITY;
+  let lastActivityPollAtMonotonicMs = Number.NEGATIVE_INFINITY;
+  let lastCacheSweepAtMonotonicMs = Number.NEGATIVE_INFINITY;
   let semanticBusyUntilMs: number | undefined;
   let indexBusyUntilMs: number | undefined;
   const semanticMailboxPaths = typeScriptSemanticMailboxPaths(indexPaths.cacheDir);
@@ -108,8 +111,9 @@ export async function runWatchServiceServer(
   const persistState = (force = false): void => {
     if (!ready) return;
     const nowMs = Date.now();
-    if (!force && nowMs - lastHeartbeatAtMs < HEARTBEAT_INTERVAL_MS) return;
-    lastHeartbeatAtMs = nowMs;
+    const nowMonotonicMs = monotonicNowMs();
+    if (!force && nowMonotonicMs - lastHeartbeatAtMonotonicMs < HEARTBEAT_INTERVAL_MS) return;
+    lastHeartbeatAtMonotonicMs = nowMonotonicMs;
     writeWatchServiceState(servicePaths.statePath, {
       version: 1,
       protocolVersion: WATCH_SERVICE_PROTOCOL_VERSION,
@@ -143,6 +147,7 @@ export async function runWatchServiceServer(
 
   const recordActivity = (): void => {
     lastActivityAtMs = Date.now();
+    lastActivityAtMonotonicMs = monotonicNowMs();
   };
 
   const watcher = new Watcher({
@@ -224,16 +229,17 @@ export async function runWatchServiceServer(
           persistState(true);
         },
       });
-      const nowMs = Date.now();
-      if (nowMs - lastCacheSweepAtMs >= 60_000) {
-        lastCacheSweepAtMs = nowMs;
+      const nowMonotonicMs = monotonicNowMs();
+      if (nowMonotonicMs - lastCacheSweepAtMonotonicMs >= 60_000) {
+        lastCacheSweepAtMonotonicMs = nowMonotonicMs;
         maybeSweepRepositoryCache(projectRoot, cliVersion);
       }
-      if (nowMs - lastActivityPollAtMs >= ACTIVITY_POLL_INTERVAL_MS) {
-        lastActivityPollAtMs = nowMs;
+      if (nowMonotonicMs - lastActivityPollAtMonotonicMs >= ACTIVITY_POLL_INTERVAL_MS) {
+        lastActivityPollAtMonotonicMs = nowMonotonicMs;
         const activity = readWatchServiceActivity(servicePaths.activityPath);
         if (activity && activity.atMs > lastActivityAtMs) {
           lastActivityAtMs = activity.atMs;
+          lastActivityAtMonotonicMs = nowMonotonicMs;
         }
         if (activity?.refreshRequestedAtMs !== undefined && activity.refreshRequestedAtMs > lastRefreshRequestAtMs) {
           lastRefreshRequestAtMs = activity.refreshRequestedAtMs;
@@ -255,8 +261,8 @@ export async function runWatchServiceServer(
       if (
         shouldStopWatchServiceForIdle({
           watcher: watcherStatus,
-          lastActivityAtMs,
-          nowMs: Date.now(),
+          lastActivityAtMs: lastActivityAtMonotonicMs,
+          nowMs: monotonicNowMs(),
           idleTimeoutMs: watchConfig.idleTimeoutMs,
         })
       ) {

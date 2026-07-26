@@ -2,6 +2,7 @@ import { existsSync, renameSync, rmSync, statSync } from 'node:fs';
 import { cpus } from 'node:os';
 import { join } from 'node:path';
 import type { IndexerConfig, SupportedLanguage } from '../domain/types.js';
+import { monotonicNowMs } from '../domain/time.js';
 import { toPortableCommand } from '../platform/binary.js';
 import { BoundedProcessError, PROCESS_TIMEOUT_MS, runBoundedProcess } from '../platform/bounded-process.js';
 
@@ -154,7 +155,7 @@ async function runPreparedIndexer(
   rmSync(run.scipPath, { force: true });
   const defaultOutputBackup = takeDefaultOutputBackup(run.config, projectRoot, run.scipPath);
   const command = [run.binary, ...run.args].join(' ');
-  const startedAt = Date.now();
+  const startedAt = monotonicNowMs();
 
   try {
     const spawnable = toPortableCommand(run.binary, run.args);
@@ -185,7 +186,7 @@ async function runPreparedIndexer(
         label: run.label,
         scipPath: run.scipPath,
         outputScipPath: run.outputScipPath,
-        durationMs: Date.now() - startedAt,
+        durationMs: monotonicNowMs() - startedAt,
         command,
         skipped: { language: run.language, reason: skippedReason },
       },
@@ -206,7 +207,7 @@ async function runPreparedIndexer(
         label: run.label,
         scipPath: run.scipPath,
         outputScipPath: run.outputScipPath,
-        durationMs: Date.now() - startedAt,
+        durationMs: monotonicNowMs() - startedAt,
         command,
         skipped: { language: run.language, reason: skippedReason },
       },
@@ -226,7 +227,7 @@ async function runPreparedIndexer(
       label: run.label,
       scipPath: run.scipPath,
       outputScipPath: run.outputScipPath,
-      durationMs: Date.now() - startedAt,
+      durationMs: monotonicNowMs() - startedAt,
       command,
       outputBytes,
     },

@@ -397,6 +397,18 @@ fixture/schema audit rather than duplicating those lifecycle mechanics.
 **Dependencies:** Slice 01.  
 **Rollback:** durable wall timestamps remain present.
 
+**Implemented shape:** the domain time boundary now separates persisted civil
+timestamps from process-local monotonic deadlines. All cited lock, watch,
+reindex, mailbox, Rust readiness/session, worker, throttle, sweep, and duration
+paths use the appropriate clock. Cross-process replacement and reclamation
+require protocol/project identity plus process liveness and matching
+process-start identity when recorded. Complete process/admission lock records
+are privately flushed before exclusive hard-link publication, malformed
+public ownership fails closed, live old-heartbeat watch state cannot authorize
+replacement, and inflight mailbox lease expiry cannot reclaim a live or
+unverifiable owner. Durable Rust work carries a relative budget and creates
+its readiness deadline in the receiving process's monotonic domain.
+
 ### Slice 18 — DD-12 — Serialize or segment JSONL rotation
 
 **Invariant:** every successfully appended complete operational record remains discoverable across concurrent rotation.
@@ -630,8 +642,8 @@ fixture/schema audit rather than duplicating those lifecycle mechanics.
 |    13 | DD-06   | complete | `5bc743ed` | 39 focused; 1,598 full-suite tests  | Exclusive create, idempotent replay, compare-and-replace, schema decoding, and crash boundaries verified                          |
 |    14 | DD-07   | complete | `5fd33ab0` | 24 focused; 1,603 full-suite tests  | G2 publication, deletion/recreation, ownership, and touch ordering verified                                                       |
 |    15 | DD-09   | complete | `adfded36` | 48 focused; 1,606 full-suite tests  | Serialized UPSERT, exact retry, collision, timeout, and suppression verified                                                      |
-|    16 | DD-10   | complete | this slice | 68 focused mailbox/identity tests   | Atomic claims, first-completion fencing, retry, quotas, crash recovery, legacy overlap, fairness, cleanup, and telemetry verified |
-|    17 | DD-11   | pending  |            |                                     |                                                                                                                                   |
+|    16 | DD-10   | complete | `d577a205` | 68 focused mailbox/identity tests   | Atomic claims, first-completion fencing, retry, quotas, crash recovery, legacy overlap, fairness, cleanup, and telemetry verified |
+|    17 | DD-11   | complete |            | 244 focused; 1,625 full-suite tests | Monotonic waits, conservative ownership, PID reuse, civil jumps, relative Rust budget, and atomic lock publication verified       |
 |    18 | DD-12   | pending  |            |                                     |                                                                                                                                   |
 |    19 | API-04  | pending  |            |                                     |                                                                                                                                   |
 |    20 | API-01  | pending  |            |                                     |                                                                                                                                   |
@@ -818,6 +830,47 @@ fixture/schema audit rather than duplicating those lifecycle mechanics.
   repo-local wrapper links are the only remaining full-lint failure. These
   integration failures must be closed and the full suite/gate rerun before
   the durable-coordination phase gate.
+
+### Slice 17 verification record
+
+- `src/domain/time.ts` is the shared control-time boundary: process-local
+  deadlines and elapsed measurements use a monotonic clock, while persisted
+  civil timestamps remain available for diagnostics, retention, and
+  conservative cross-process expiry hints.
+- Lock, watch, reindex, TypeScript mailbox, Rust mailbox/LSP, cache sweep,
+  debounce, heartbeat throttle, and duration consumers were followed
+  end-to-end. A relative Rust readiness budget crosses the process boundary;
+  the receiver constructs its own monotonic deadline.
+- Cross-process destruction now requires evidence beyond wall age. Process and
+  admission locks first flush a private complete candidate and publish it
+  exclusively. Watch replacement requires the recorded process-start identity.
+  Inflight mailbox reclaim requires lease expiry plus proof that the recorded
+  process instance is dead or replaced; a live or unverifiable owner remains
+  authoritative.
+- The final 18-file affected matrix passes 244 tests, including forward and
+  backward civil-clock jumps, independent monotonic advance, PID reuse,
+  malformed ownership, live expired claims, admission interleavings, and
+  response/readiness timeout bounds. Typecheck and the production build pass.
+- With `XDG_CACHE_HOME` redirected to an isolated writable directory, the full
+  suite passes 215 of 216 files and 1,625 tests, with 2 intentional skips. The
+  only 2 failures are the concurrently edited skill router's command-catalog
+  assertions (`is` plus 40 uncovered public commands); they execute no DD-11
+  source and remain assigned to the skill owner in `HEY.md`.
+- Formatting and ESLint pass. Full lint stops only on the same concurrent skill
+  consolidation's two broken `.agents` wrapper links.
+- The first full diff gate caught two forbidden dependency directions and a
+  duplicated exclusive-publication mechanism. Process identity parsing moved
+  into the pure domain boundary, service coordinators now inject host liveness,
+  post-index augmentation uses its native monotonic clock directly, and mailbox
+  admission reuses `createFileAtomicExclusive`. The final source gate has no
+  unsuppressed blocking finding. One Rust worker co-change was reviewed and
+  narrowly suppressed because the worker already consumes the readiness
+  helper's monotonic default and its complete worker/readiness suites pass.
+  The remaining blocking gate findings are solely the uncommitted skill router.
+- `health --baseline` reports 65 accumulated heuristic deltas from the
+  remediation program. DD-11-related entries are extraction pressure in
+  cohesive ownership/readiness workflows, public cross-process contracts, and
+  thin adapters; no baseline ratchet or heuristic suppression was written.
 
 ### Slice 09 verification note
 

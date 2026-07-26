@@ -164,7 +164,8 @@ describe('watch service contract', () => {
     expect(planWatchServiceAction('ensure', live)).toEqual({ kind: 'reuse', state: live.state });
     expect(planWatchServiceAction('ensure', stale)).toEqual({ kind: 'start' });
     expect(planWatchServiceAction('ensure', { kind: 'stale', state: liveState(), reason: 'old-heartbeat' })).toEqual({
-      kind: 'replace',
+      kind: 'refuse-replace',
+      reason: 'old-heartbeat',
       state: liveState(),
     });
     expect(planWatchServiceAction('ensure', incompatible)).toEqual({ kind: 'replace', state: incompatible.state });
@@ -369,21 +370,51 @@ describe('watch service contract', () => {
     });
   });
 
-  it('replaces a live service with an old heartbeat before spawning', () => {
+  it('refuses to replace a live owner from civil-clock heartbeat age alone', () => {
     withTempCache((cacheDir) => {
       const paths = watchServicePaths(cacheDir);
       const runtime = fakeRuntime(paths.statePath);
       runtime.alive.add(123);
       writeWatchServiceState(paths.statePath, {
         ...liveState(),
+        projectRoot: realpathSync(IDENTITY.projectRoot),
         heartbeatAt: new Date(NOW - WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS - 1).toISOString(),
       });
 
-      const result = ensureWatchService(controllerOptions(cacheDir, runtime));
+      expect(() => ensureWatchService(controllerOptions(cacheDir, runtime))).toThrow(
+        /civil-clock age alone cannot authorize a process signal/,
+      );
+      expect(runtime.signaled).toEqual([]);
+      expect(runtime.spawned).toBe(0);
+    });
+  });
 
-      expect(result.disposition).toBe('started');
+  it('bounds stop waits with monotonic time while the civil clock jumps', () => {
+    withTempCache((cacheDir) => {
+      const paths = watchServicePaths(cacheDir);
+      const runtime = fakeRuntime(paths.statePath);
+      runtime.alive.add(123);
+      writeWatchServiceState(paths.statePath, {
+        ...liveState(),
+        projectRoot: realpathSync(IDENTITY.projectRoot),
+      });
+      let wallNow = NOW;
+      let monotonicNow = 0;
+      runtime.now = () => wallNow;
+      runtime.monotonicNow = () => monotonicNow;
+      runtime.signalProcess = (pid) => {
+        runtime.signaled.push(pid);
+      };
+      runtime.sleep = (durationMs) => {
+        monotonicNow += durationMs;
+        wallNow = wallNow === NOW ? NOW - 86_400_000 : NOW + 86_400_000;
+      };
+
+      expect(() => stopWatchService({ ...controllerOptions(cacheDir, runtime), stopTimeoutMs: 20 })).toThrow(
+        /did not stop within 20ms/,
+      );
       expect(runtime.signaled).toEqual([123]);
-      expect(result.state.pid).not.toBe(123);
+      expect(monotonicNow).toBeGreaterThanOrEqual(20);
     });
   });
 
