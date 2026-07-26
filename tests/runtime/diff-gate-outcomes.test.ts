@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -8,6 +8,7 @@ import { recordDiffGateOutcomes } from '../../src/runtime/diff-gate-outcomes.js'
 import { ScipDatabase } from '../../src/storage/db.js';
 import { readOutcomeEvents } from '../../src/storage/outcome-events.js';
 import { evidenceFixtureDb } from '../fixtures/evidence-fixture.js';
+import { summarizeRecordCompatibility } from '../../src/domain/record-compatibility.js';
 
 const tempRoots: string[] = [];
 
@@ -66,7 +67,7 @@ describe('recordDiffGateOutcomes', () => {
         headCommit: () => 'commit-1',
       });
 
-      const events = readOutcomeEvents(root);
+      const events = readOutcomeEvents(root).events;
       expect(events.map((event) => event.event)).toEqual(['caught', 'resolved']);
       expect(computeEffectiveness(events).checks[0]).toMatchObject({ caught: 1, fixed: 1, open: 0 });
     } finally {
@@ -88,7 +89,7 @@ describe('recordDiffGateOutcomes', () => {
       expect(first.ledger[0]?.timesShown).toBe(1);
       expect(retry.ledger[0]?.timesShown).toBe(1);
       expect(retry.warning).toBeUndefined();
-      expect(readOutcomeEvents(root).map((event) => event.event)).toEqual(['caught']);
+      expect(readOutcomeEvents(root).events.map((event) => event.event)).toEqual(['caught']);
     } finally {
       db.close();
     }
@@ -106,7 +107,7 @@ describe('recordDiffGateOutcomes', () => {
         headCommit: () => 'commit-2',
       });
 
-      expect(computeEffectiveness(readOutcomeEvents(root)).checks[0]).toMatchObject({
+      expect(computeEffectiveness(readOutcomeEvents(root).events).checks[0]).toMatchObject({
         caught: 1,
         fixed: 0,
         unverified: 0,
@@ -133,7 +134,7 @@ describe('recordDiffGateOutcomes', () => {
         replayGate: (baseCommit) => result([], baseCommit),
       });
 
-      const events = readOutcomeEvents(root);
+      const events = readOutcomeEvents(root).events;
       expect(events.at(-1)).toMatchObject({
         event: 'resolved',
         commit: 'head-2',
@@ -162,8 +163,8 @@ describe('recordDiffGateOutcomes', () => {
         replayGate: (baseCommit) => result([finding()], baseCommit),
       });
 
-      expect(readOutcomeEvents(root).map((event) => event.event)).toEqual(['caught']);
-      expect(computeEffectiveness(readOutcomeEvents(root)).checks[0]).toMatchObject({ fixed: 0, open: 1 });
+      expect(readOutcomeEvents(root).events.map((event) => event.event)).toEqual(['caught']);
+      expect(computeEffectiveness(readOutcomeEvents(root).events).checks[0]).toMatchObject({ fixed: 0, open: 1 });
     } finally {
       db.close();
     }
@@ -190,7 +191,7 @@ describe('recordDiffGateOutcomes', () => {
       });
 
       expect(replayed).toBe(false);
-      expect(computeEffectiveness(readOutcomeEvents(root)).checks[0]).toMatchObject({ fixed: 0, open: 1 });
+      expect(computeEffectiveness(readOutcomeEvents(root).events).checks[0]).toMatchObject({ fixed: 0, open: 1 });
     } finally {
       db.close();
     }
@@ -212,8 +213,8 @@ describe('recordDiffGateOutcomes', () => {
         replayGate: (baseCommit) => result([], baseCommit, []),
       });
 
-      expect(readOutcomeEvents(root).map((event) => event.event)).toEqual(['caught']);
-      expect(computeEffectiveness(readOutcomeEvents(root)).checks[0]).toMatchObject({ fixed: 0, open: 1 });
+      expect(readOutcomeEvents(root).events.map((event) => event.event)).toEqual(['caught']);
+      expect(computeEffectiveness(readOutcomeEvents(root).events).checks[0]).toMatchObject({ fixed: 0, open: 1 });
     } finally {
       db.close();
     }
@@ -236,7 +237,7 @@ describe('recordDiffGateOutcomes', () => {
         },
       });
 
-      expect(computeEffectiveness(readOutcomeEvents(root)).checks[0]).toMatchObject({ fixed: 1, open: 0 });
+      expect(computeEffectiveness(readOutcomeEvents(root).events).checks[0]).toMatchObject({ fixed: 1, open: 0 });
     } finally {
       db.close();
     }
@@ -258,7 +259,7 @@ describe('recordDiffGateOutcomes', () => {
         replayGate: (baseCommit) => result([finding({ id: 'SQECHO2', symbol: 'sym#fn' })], baseCommit),
       });
 
-      expect(computeEffectiveness(readOutcomeEvents(root)).checks[0]).toMatchObject({
+      expect(computeEffectiveness(readOutcomeEvents(root).events).checks[0]).toMatchObject({
         caught: 2,
         fixed: 0,
         moved: 1,
@@ -282,6 +283,68 @@ describe('recordDiffGateOutcomes', () => {
 
       expect(recorded.ledger).toHaveLength(1);
       expect(recorded.warning).toBe('outcome event ledger not updated: read-only checkout');
+    } finally {
+      db.close();
+    }
+  });
+
+  it('defers every missing-finding resolution when committed event history is incomplete', () => {
+    const { db, root } = openDb();
+    try {
+      recordDiffGateOutcomes(db, result([finding()]), {
+        now: () => 1_000,
+        headCommit: () => 'head-1',
+        resolveCommit: () => 'head-1',
+      });
+      let replayed = false;
+      const recorded = recordDiffGateOutcomes(db, result([]), {
+        now: () => 2_000,
+        headCommit: () => 'head-2',
+        resolveCommit: () => 'head-2',
+        worktreeIsClean: () => true,
+        replayGate: () => {
+          replayed = true;
+          return result([]);
+        },
+        readEvents: () => ({
+          events: [],
+          compatibility: summarizeRecordCompatibility([
+            {
+              path: '.scipquery/events/future.json',
+              state: 'unsupported-future',
+              reason: 'unsupported schemaVersion 2',
+            },
+          ]),
+          warnings: ['future record omitted'],
+        }),
+      });
+
+      expect(replayed).toBe(false);
+      expect(recorded.warning).toContain('cross-HEAD outcome verification deferred');
+      expect(recorded.warning).toContain('omitted 1');
+      expect(computeEffectiveness(readOutcomeEvents(root).events).checks[0]).toMatchObject({ fixed: 0, open: 1 });
+    } finally {
+      db.close();
+    }
+  });
+
+  it('records new events while surfacing an incompatible preserved legacy ledger', () => {
+    const { db, root } = openDb();
+    try {
+      const legacyDir = join(root, '.scipquery', 'ledger');
+      mkdirSync(legacyDir, { recursive: true });
+      writeFileSync(join(legacyDir, 'events.jsonl'), '{"schemaVersion":2,"event":"future"}\n');
+
+      const recorded = recordDiffGateOutcomes(db, result([finding()]), {
+        now: () => 1_000,
+        headCommit: () => 'head-1',
+      });
+
+      expect(recorded.warning).toContain('legacy outcome ledger preserved');
+      expect(readOutcomeEvents(root)).toMatchObject({
+        events: [expect.objectContaining({ findingId: 'SQECHO1', event: 'caught' })],
+        compatibility: { complete: false, unsupportedFuture: 1, omitted: 1 },
+      });
     } finally {
       db.close();
     }

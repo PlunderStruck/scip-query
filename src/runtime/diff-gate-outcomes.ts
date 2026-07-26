@@ -10,8 +10,10 @@ import {
   type OutcomeEvent,
 } from '../domain/finding-outcomes.js';
 import type { ScipDatabase } from '../storage/db.js';
-import { appendOutcomeEvents, readOutcomeEvents } from '../storage/outcome-events.js';
+import { appendOutcomeEvents, readOutcomeEvents, type OutcomeEventReadResult } from '../storage/outcome-events.js';
 import { gitOutput, resolveGitWorktreeContext } from '../platform/git-worktree.js';
+import { cliVersion } from '../platform/cli-version.js';
+import { formatRecordCompatibilityWarning } from '../domain/record-compatibility.js';
 
 export interface DiffGateOutcomeRuntime {
   /** Stable across retries of one logical gate observation; retries also reuse its captured `now`. */
@@ -20,7 +22,7 @@ export interface DiffGateOutcomeRuntime {
   headCommit?: (projectRoot: string) => string | null;
   resolveCommit?: (projectRoot: string, ref: string) => string | null;
   worktreeIsClean?: (projectRoot: string) => boolean;
-  readEvents?: (projectRoot: string) => OutcomeEvent[];
+  readEvents?: (projectRoot: string) => OutcomeEventReadResult;
   replayGate?: (baseCommit: string) => DiffGateResult;
   appendEvents?: (projectRoot: string, events: readonly OutcomeEvent[]) => void;
 }
@@ -94,12 +96,17 @@ export function recordDiffGateOutcomes(
       ...(comparisonBaseCommit ? { comparisonBaseCommit } : {}),
       verifiedAgainstByFinding: reconciliation.verifiedAgainstByFinding,
     });
-    (runtime.appendEvents ?? appendOutcomeEvents)(projectRoot, events);
+    let appendWarning: string | undefined;
+    if (runtime.appendEvents) {
+      runtime.appendEvents(projectRoot, events);
+    } else {
+      appendWarning = appendOutcomeEvents(projectRoot, events, { toolVersion: cliVersion }).warning;
+    }
     return {
       ledger,
       observed,
       now,
-      ...withOutcomeWarning(reconciliation.warning, ledgerWarning),
+      ...withOutcomeWarning(reconciliation.warning, ledgerWarning, appendWarning),
     };
   } catch (error) {
     return {
@@ -168,9 +175,9 @@ function reconcileMissingFindings(input: {
       replaySymbols,
     };
 
-  let history: OutcomeEvent[];
+  let historyResult: OutcomeEventReadResult;
   try {
-    history = (input.runtime.readEvents ?? readOutcomeEvents)(input.projectRoot);
+    historyResult = (input.runtime.readEvents ?? readOutcomeEvents)(input.projectRoot);
   } catch (error) {
     for (const record of missing) retainedKeys.add(ledgerKey(record.check, record.findingId));
     return {
@@ -182,6 +189,21 @@ function reconcileMissingFindings(input: {
       warning: `cross-HEAD outcome verification deferred: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
+  if (!historyResult.compatibility.complete) {
+    for (const record of missing) retainedKeys.add(ledgerKey(record.check, record.findingId));
+    return {
+      ledgerObserved,
+      checksRun: [...effectiveChecksRun],
+      retainedKeys,
+      verifiedAgainstByFinding,
+      replaySymbols,
+      warning: `cross-HEAD outcome verification deferred: ${formatRecordCompatibilityWarning(
+        'committed outcome history',
+        historyResult.compatibility,
+      )}`,
+    };
+  }
+  const history = historyResult.events;
   const historyByKey = new Map<string, OutcomeEvent[]>();
   for (const event of history) {
     const key = ledgerKey(event.check, event.findingId);

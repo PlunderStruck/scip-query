@@ -17,11 +17,19 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import type { FindingSuppression } from '../domain/config-types.js';
+import {
+  summarizeRecordCompatibility,
+  type RecordCompatibilityObservation,
+  type RecordCompatibilityState,
+  type RecordCompatibilitySummary,
+} from '../domain/record-compatibility.js';
 
 export const SUPPRESSION_DIR = join('.scipquery', 'suppressions');
+export const SUPPRESSION_FILE_KIND = 'scip-query-suppression';
 export const SUPPRESSION_FILE_SCHEMA_VERSION = 1;
 
 export interface SuppressionFileRecordV1 extends FindingSuppression {
+  kind: typeof SUPPRESSION_FILE_KIND;
   schemaVersion: typeof SUPPRESSION_FILE_SCHEMA_VERSION;
   suppressionIdentity: string;
   writer: {
@@ -33,14 +41,21 @@ export interface SuppressionFileRecordV1 extends FindingSuppression {
 }
 
 export interface DecodedSuppressionFile {
+  state: 'legacy' | 'current';
   suppression: FindingSuppression;
-  record: FindingSuppression | SuppressionFileRecordV1;
+  record: FindingSuppression | (Omit<SuppressionFileRecordV1, 'kind'> & { kind?: typeof SUPPRESSION_FILE_KIND });
   schemaVersion: 0 | typeof SUPPRESSION_FILE_SCHEMA_VERSION;
+}
+
+export interface RejectedSuppressionFile {
+  state: Exclude<RecordCompatibilityState, 'legacy' | 'current'>;
+  error: string;
 }
 
 export interface SuppressionDirReadResult {
   suppressions: FindingSuppression[];
-  /** Human-readable notes for files that could not be used (malformed JSON, missing reason). */
+  compatibility: RecordCompatibilitySummary;
+  /** Human-readable notes corresponding one-to-one with omitted record candidates. */
   warnings: string[];
 }
 
@@ -67,30 +82,47 @@ export function suppressionIdentity(suppression: FindingSuppression): string {
 export function decodeSuppressionFile(
   value: unknown,
   expectedIdentity?: string,
-): DecodedSuppressionFile | { error: string } {
+): DecodedSuppressionFile | RejectedSuppressionFile {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return { error: 'not a suppression object' };
+    return { state: 'malformed', error: 'not a suppression object' };
   }
-  const candidate = value as Partial<SuppressionFileRecordV1>;
-  if (candidate.schemaVersion !== undefined && candidate.schemaVersion !== SUPPRESSION_FILE_SCHEMA_VERSION) {
-    return { error: `unsupported schemaVersion ${String(candidate.schemaVersion)}` };
+  const candidate = value as Partial<SuppressionFileRecordV1> & Record<string, unknown>;
+  if (
+    candidate.schemaVersion === undefined &&
+    (candidate.kind !== undefined || candidate.suppressionIdentity !== undefined || candidate.writer !== undefined)
+  ) {
+    return { state: 'malformed', error: 'suppression envelope metadata requires schemaVersion' };
+  }
+  if (candidate.schemaVersion !== undefined) {
+    if (!Number.isSafeInteger(candidate.schemaVersion)) {
+      return { state: 'malformed', error: 'schemaVersion must be a positive safe integer' };
+    }
+    if (candidate.schemaVersion !== SUPPRESSION_FILE_SCHEMA_VERSION) {
+      return {
+        state: candidate.schemaVersion > SUPPRESSION_FILE_SCHEMA_VERSION ? 'unsupported-future' : 'unsupported-older',
+        error: `unsupported schemaVersion ${String(candidate.schemaVersion)}`,
+      };
+    }
+    if (candidate.kind !== undefined && candidate.kind !== SUPPRESSION_FILE_KIND) {
+      return { state: 'malformed', error: `kind must be ${SUPPRESSION_FILE_KIND}` };
+    }
   }
   if (typeof candidate.reason !== 'string' || candidate.reason.trim() === '') {
-    return { error: 'missing reason' };
+    return { state: 'malformed', error: 'missing reason' };
   }
   if (!candidate.id && !candidate.check) {
-    return { error: 'needs an id or a check' };
+    return { state: 'malformed', error: 'needs an id or a check' };
   }
   const suppression = suppressionFromRecord(candidate as FindingSuppression);
   if (candidate.schemaVersion === undefined) {
-    return { suppression, record: candidate as FindingSuppression, schemaVersion: 0 };
+    return { state: 'legacy', suppression, record: candidate as FindingSuppression, schemaVersion: 0 };
   }
   const identity = suppressionIdentity(suppression);
   if (
     candidate.suppressionIdentity !== identity ||
     (expectedIdentity !== undefined && candidate.suppressionIdentity !== expectedIdentity)
   ) {
-    return { error: 'suppressionIdentity does not match the suppression target or filename' };
+    return { state: 'malformed', error: 'suppressionIdentity does not match the suppression target or filename' };
   }
   if (
     !candidate.writer ||
@@ -98,48 +130,58 @@ export function decodeSuppressionFile(
     typeof candidate.writer.version !== 'string' ||
     candidate.writer.version.trim() === ''
   ) {
-    return { error: 'missing valid writer metadata' };
+    return { state: 'malformed', error: 'missing valid writer metadata' };
   }
   if (typeof candidate.createdAt !== 'string' || !Number.isFinite(Date.parse(candidate.createdAt))) {
-    return { error: 'missing valid createdAt timestamp' };
+    return { state: 'malformed', error: 'missing valid createdAt timestamp' };
   }
   if (
     candidate.updatedAt !== undefined &&
     (typeof candidate.updatedAt !== 'string' || !Number.isFinite(Date.parse(candidate.updatedAt)))
   ) {
-    return { error: 'invalid updatedAt timestamp' };
+    return { state: 'malformed', error: 'invalid updatedAt timestamp' };
   }
   return {
+    state: 'current',
     suppression,
-    record: candidate as SuppressionFileRecordV1,
+    record: candidate as Omit<SuppressionFileRecordV1, 'kind'> & { kind?: typeof SUPPRESSION_FILE_KIND },
     schemaVersion: SUPPRESSION_FILE_SCHEMA_VERSION,
   };
 }
 
 export function readSuppressionDir(projectRoot: string): SuppressionDirReadResult {
   const dir = suppressionDirPath(projectRoot);
-  if (!existsSync(dir)) return { suppressions: [], warnings: [] };
+  if (!existsSync(dir)) {
+    return { suppressions: [], compatibility: summarizeRecordCompatibility([]), warnings: [] };
+  }
 
   const suppressions: FindingSuppression[] = [];
-  const warnings: string[] = [];
+  const observations: RecordCompatibilityObservation[] = [];
   for (const entry of readdirSync(dir).sort()) {
     if (!entry.endsWith('.json')) continue;
     const path = join(dir, entry);
+    const recordPath = `${SUPPRESSION_DIR}/${entry}`;
     let parsed: unknown;
     try {
       parsed = JSON.parse(readFileSync(path, 'utf-8'));
     } catch {
-      warnings.push(`${SUPPRESSION_DIR}/${entry}: malformed JSON — ignored`);
+      observations.push({ path: recordPath, state: 'malformed', reason: 'malformed JSON' });
       continue;
     }
     const decoded = decodeSuppressionFile(parsed, entry.slice(0, -'.json'.length));
     if ('error' in decoded) {
-      warnings.push(`${SUPPRESSION_DIR}/${entry}: ${decoded.error} — ignored`);
+      observations.push({ path: recordPath, state: decoded.state, reason: decoded.error });
       continue;
     }
+    observations.push({ path: recordPath, state: decoded.state });
     suppressions.push(decoded.suppression);
   }
-  return { suppressions, warnings };
+  const compatibility = summarizeRecordCompatibility(observations);
+  return {
+    suppressions,
+    compatibility,
+    warnings: compatibility.issues.map((issue) => `${issue.path}: ${issue.reason} — ignored`),
+  };
 }
 
 function suppressionFromRecord(record: FindingSuppression): FindingSuppression {

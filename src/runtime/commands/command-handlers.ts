@@ -28,6 +28,7 @@ import {
 } from '../config.js';
 import { OUTCOME_EVENTS_DIR, readOutcomeEvents } from '../../storage/outcome-events.js';
 import { computeEffectiveness, parseSinceMs } from '../../queries/health/effectiveness.js';
+import { formatRecordCompatibilityWarning } from '../../domain/record-compatibility.js';
 import { getIndexFreshness } from '../index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from '../project-readiness.js';
 import { Watcher } from '../watch.js';
@@ -1039,17 +1040,22 @@ export function handleEffectiveness(rawOpts: unknown): void {
   }
 
   const projectRoot = resolveProjectRoot();
-  const events = readOutcomeEvents(projectRoot);
-  const report = computeEffectiveness(events, { sinceMs, check: stringOptionValue(opts, 'check') });
+  const eventStore = readOutcomeEvents(projectRoot);
+  const report = computeEffectiveness(eventStore.events, { sinceMs, check: stringOptionValue(opts, 'check') });
+  const compatibilityWarning = formatRecordCompatibilityWarning('Committed outcome history', eventStore.compatibility);
 
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('effectiveness', [], opts, report);
+    printJsonEnvelope('effectiveness', [], opts, {
+      ...report,
+      recordCompatibility: { outcomeEvents: eventStore.compatibility },
+    });
     return;
   }
 
+  if (compatibilityWarning) console.log(`WARN: ${compatibilityWarning}`);
   if (report.checks.length === 0) {
     console.log(
-      events.length === 0
+      eventStore.events.length === 0
         ? `No outcome events recorded yet (${join(OUTCOME_EVENTS_DIR, '*.json')} is missing or empty). Events accrue as diff-gate runs; commit the event files so history is shared.`
         : 'No findings match the requested window/check.',
     );

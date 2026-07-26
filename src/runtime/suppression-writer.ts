@@ -3,6 +3,7 @@ import type { FindingSuppression } from '../domain/config-types.js';
 import { cliVersion } from '../platform/cli-version.js';
 import {
   decodeSuppressionFile,
+  SUPPRESSION_FILE_KIND,
   SUPPRESSION_FILE_SCHEMA_VERSION,
   suppressionDirPath,
   suppressionFileName,
@@ -139,6 +140,7 @@ function createRecord(
 ): SuppressionFileRecordV1 {
   const timestamp = now.toISOString();
   return {
+    kind: SUPPRESSION_FILE_KIND,
     schemaVersion: SUPPRESSION_FILE_SCHEMA_VERSION,
     suppressionIdentity: suppressionIdentity(suppression),
     writer: { tool: 'scip-query', version: toolVersion },

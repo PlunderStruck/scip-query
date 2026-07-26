@@ -1,0 +1,31 @@
+{
+  "acceptedAt": "2026-07-26T09:04:40.183Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "1e1c3f6d3d4f341b1a326269214fc265a1670afa2354474ad6e249c6ffaeb5b6",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "DiffGateResult changed from interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s... to interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s....",
+      "target": "./queries:DiffGateResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "DiffGateResult changed from interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s... to interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s....",
+      "target": "./queries/diff-gate:DiffGateResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "DiffGateResult changed from interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s... to interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s....",
+      "target": "./queries/index:DiffGateResult"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.19.5",
+  "previousDigest": "fe238d8ffe284634133cbe3a2204631aa73424d2f19ac79df5908234b57ea3e4",
+  "reason": "Expose optional committed suppression record compatibility so diff-gate consumers can distinguish complete policy coverage from accepted partial reads.",
+  "schemaVersion": 1
+}

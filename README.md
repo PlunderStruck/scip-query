@@ -280,8 +280,12 @@ scip-query suppress SQABC123DEF456 --check echo \
 
 If another writer changes the record first, the stale replacement is rejected
 and the newer bytes remain intact. New records declare their schema version,
-stable suppression identity, and writer version. Older unversioned records
-remain readable and are upgraded only by an explicit replacement.
+record kind, stable suppression identity, and writer version. Older
+unversioned and pre-discriminator v1 records remain readable and are upgraded
+only by an explicit replacement. If a malformed or future record cannot be
+used, `diff-gate` reports exact incomplete-coverage counts and keeps findings
+conservatively unsuppressed. The wire schemas and merge rules are documented
+in [`docs/COMMITTED_RECORD_COMPATIBILITY.md`](docs/COMMITTED_RECORD_COMPATIBILITY.md).
 
 **12. Measure whether the gate is earning its keep.** Every completed `diff-gate` run, including JSON and installed Stop-hook runs, writes each finding transition to its own committed `.scipquery/events/*.json` file. Independent branches add independent paths instead of editing one shared ledger file, so ordinary event writes do not create merge conflicts. Each event stores the immutable Git commit used as its comparison base. A finding is a verified fix when it disappears under that same comparison—either directly or after scip-query cleanly replays the original base against a newer committed `HEAD`. Merely committing the finding cannot clear it: if replay still finds it, the outcome stays open; if the worktree is dirty or Git cannot reproduce the base, verification waits. A suppressed finding was noise or an accepted trade-off:
 
@@ -295,7 +299,7 @@ echo        14      10     2           1     0      1           83%        0.8
 new-dead    6       5      0           1     0      0           100%       0.3
 ```
 
-`precision` is verified fixed ÷ (verified fixed + suppressed). `moved` separates rename churn, while `unverified` is reserved for legacy or otherwise non-comparable resolutions that lack replay proof. Run diff-gate once to record the finding and again after the repair; a pre-commit rerun uses the same base directly, while a clean post-commit run automatically replays the stored base. Filter with `--check <name>`, window with `--since 30d|12w|<ISO date>`, and get machine-readable output with `--json`. Because the event files are committed, the numbers survive re-clones and aggregate across every machine and agent working the repo. Legacy `.scipquery/ledger/events.jsonl` records remain readable and are migrated to individual files on the next gate write. Historical cross-`HEAD` events without stored comparison evidence remain unverified rather than being reclassified speculatively. Standalone health/cleanup commands are not yet outcome-tracked because they do not all expose a complete-scan contract.
+`precision` is verified fixed ÷ (verified fixed + suppressed). `moved` separates rename churn, while `unverified` is reserved for legacy or otherwise non-comparable resolutions that lack replay proof. Run diff-gate once to record the finding and again after the repair; a pre-commit rerun uses the same base directly, while a clean post-commit run automatically replays the stored base. Filter with `--check <name>`, window with `--since 30d|12w|<ISO date>`, and get machine-readable output with `--json`. Because the event files are committed, the numbers survive re-clones and aggregate across every machine and agent working the repo. Current event files carry an additive v1 discriminator, stable semantic identity, and writer version; existing unversioned files remain readable. `effectiveness` reports accepted and omitted record counts when history is partial, and cross-HEAD verification defers fixes rather than trusting an incomplete lifecycle. Legacy `.scipquery/ledger/events.jsonl` records remain readable and are migrated to individual files on the next gate write only when every non-empty line is compatible; otherwise the source ledger is preserved. Historical cross-`HEAD` events without stored comparison evidence remain unverified rather than being reclassified speculatively. Standalone health/cleanup commands are not yet outcome-tracked because they do not all expose a complete-scan contract.
 
 The health report also keeps a worktree-local repeat counter in `evidence.db`.
 A logical observation is one completed detector evaluation named by an

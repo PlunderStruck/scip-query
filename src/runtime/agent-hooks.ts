@@ -30,6 +30,7 @@ import {
 } from './watch-service.js';
 import { findGitRoot } from '../platform/git-worktree.js';
 import { resolveSharedEvidenceDbPath } from '../reindex/shared-generation-store.js';
+import { formatRecordCompatibilityWarning } from '../domain/record-compatibility.js';
 
 const SKIP_HOOK_INSTALL_ENV = 'SCIP_QUERY_SKIP_HOOK_INSTALL';
 const STOP_HOOK_MODE_ENV = 'SCIP_QUERY_STOP_HOOK_MODE';
@@ -743,14 +744,18 @@ export function runStopHookDiffGate(hookInput: string): DiffGateResult | undefin
 
 export function handleAgentHookStop(): void {
   const result = runStopHookDiffGate(readHookInput());
-  if (!result || result.findings.length === 0) return;
+  if (!result || (result.findings.length === 0 && !suppressionCoverageWarning(result))) return;
   console.log(JSON.stringify(renderStopHookOutput(result, resolveStopHookMode())));
 }
 
 export function renderStopHookOutput(result: DiffGateResult, mode: StopHookMode = 'feedback'): ClaudeHookJsonOutput {
-  const blockMessage = formatGateBlockReason(result);
+  const coverageWarning = suppressionCoverageWarning(result);
+  const findingMessage = result.findings.length > 0 ? formatGateBlockReason(result) : undefined;
+  const blockMessage = [coverageWarning, findingMessage]
+    .filter((value): value is string => Boolean(value))
+    .join('\n\n');
   const advisoryMessage = formatGateAdvisoryReason(result);
-  if (mode === 'block') {
+  if (mode === 'block' && result.findings.length > 0) {
     return {
       decision: 'block',
       reason: blockMessage,
@@ -770,10 +775,22 @@ export function renderStopHookOutput(result: DiffGateResult, mode: StopHookMode 
 }
 
 function formatGateAdvisoryReason(result: DiffGateResult): string {
-  return formatGateBlockReason(result).replace(
-    ' — fix or knowingly accept them before finishing:',
-    ' — review these findings when relevant:',
-  );
+  const findingMessage =
+    result.findings.length > 0
+      ? formatGateBlockReason(result).replace(
+          ' — fix or knowingly accept them before finishing:',
+          ' — review these findings when relevant:',
+        )
+      : undefined;
+  return [suppressionCoverageWarning(result), findingMessage]
+    .filter((value): value is string => Boolean(value))
+    .join('\n\n');
+}
+
+function suppressionCoverageWarning(result: DiffGateResult): string | undefined {
+  return result.recordCompatibility
+    ? formatRecordCompatibilityWarning('Committed suppression', result.recordCompatibility.suppressions)
+    : undefined;
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.

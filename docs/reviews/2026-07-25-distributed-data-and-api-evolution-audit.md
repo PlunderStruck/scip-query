@@ -1073,6 +1073,39 @@ The immutable one-file-per-event design is excellent for Git merging and replay 
 
 **Acceptance condition:** readers can distinguish “no event” from “event exists but this binary cannot interpret it.”
 
+**Resolution:** Slice 13 had already moved suppression files to a v1 writer
+with an unversioned overlap reader, stable identity, producer metadata, and
+compare-and-replace. API-05 retained that protocol and added the
+`scip-query-suppression` discriminator as an additive v1 field; current
+readers continue to accept unversioned records and pre-discriminator v1
+records.
+
+Outcome events now use an additive v1 envelope containing the
+`scip-query-outcome-event` discriminator, stable semantic event identity, and
+producer metadata while retaining the old semantic fields at the root. The
+immediately prior permissive reader can therefore consume new files, and the
+current reader accepts all 484 existing unversioned repository events without
+rewriting them.
+
+Both stores classify every JSON candidate as readable legacy/current,
+unsupported older/future, or malformed. Their exact summaries conserve
+`accepted + omitted = total` and carry path-specific issues. `diff-gate`
+includes suppression compatibility even for an empty source diff and surfaces
+partial policy coverage in JSON, human output, and Stop-hook feedback without
+letting an incompatible file authorize suppression. `effectiveness` publishes
+outcome compatibility beside partial metrics. Cross-HEAD verification retains
+missing findings whenever event history is incomplete, so an omitted event
+can delay a verified repair but cannot manufacture one.
+
+Legacy JSONL migration now copies compatible rows idempotently but preserves
+the source ledger and reports a warning if any non-empty line is incompatible;
+the merge attribute is removed only after complete migration. The schemas,
+overlap window, merge rules, and recovery process are documented in
+`docs/COMMITTED_RECORD_COMPATIBILITY.md` and the two packaged schemas under
+`docs/schemas/`. Mixed old/current/future, unknown-kind, malformed-identity,
+partial-migration, empty-diff disclosure, dedupe, rollback-shape, and
+fail-closed reconciliation tests cover the acceptance condition.
+
 ### API-06 — S3 — Rust mailbox needs a complete session-identity and compatibility contract
 
 **Evidence:** pre-Slice-16 contract gap, partially resolved by the shared

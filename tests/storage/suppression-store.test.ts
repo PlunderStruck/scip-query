@@ -7,6 +7,7 @@ import { SuppressionWriteConflictError, writeSuppressionFile } from '../../src/r
 import {
   decodeSuppressionFile,
   readSuppressionDir,
+  SUPPRESSION_FILE_KIND,
   SUPPRESSION_FILE_SCHEMA_VERSION,
   suppressionDirPath,
   suppressionFileName,
@@ -35,6 +36,7 @@ function readRaw(path: string): SuppressionFileRecordV1 {
 
 function record(id: string, reason: string): SuppressionFileRecordV1 {
   return {
+    kind: SUPPRESSION_FILE_KIND,
     schemaVersion: SUPPRESSION_FILE_SCHEMA_VERSION,
     suppressionIdentity: id,
     writer: { tool: 'scip-query', version: TEST_VERSION },
@@ -79,6 +81,7 @@ describe('writeSuppressionFile', () => {
     });
     expect(result.revision).toMatch(/^[0-9a-f]{64}$/);
     expect(readRaw(result.path)).toEqual({
+      kind: SUPPRESSION_FILE_KIND,
       schemaVersion: 1,
       suppressionIdentity: 'SQABC123DEF456',
       writer: { tool: 'scip-query', version: TEST_VERSION },
@@ -90,6 +93,18 @@ describe('writeSuppressionFile', () => {
 
     expect(readSuppressionDir(root)).toEqual({
       warnings: [],
+      compatibility: {
+        complete: true,
+        total: 1,
+        accepted: 1,
+        legacy: 0,
+        current: 1,
+        unsupportedOlder: 0,
+        unsupportedFuture: 0,
+        malformed: 0,
+        omitted: 0,
+        issues: [],
+      },
       suppressions: [
         {
           id: 'SQABC123DEF456',
@@ -208,7 +223,11 @@ describe('writeSuppressionFile', () => {
     expect(() => writeSuppressionFile(root, { id: 'SQAAA', reason: 'valid' }, { expectedRevision: 'short' })).toThrow(
       /64-character SHA-256/,
     );
-    expect(readSuppressionDir(root)).toEqual({ suppressions: [], warnings: [] });
+    expect(readSuppressionDir(root)).toMatchObject({
+      suppressions: [],
+      compatibility: { complete: true, total: 0, accepted: 0, omitted: 0 },
+      warnings: [],
+    });
   });
 
   it('refuses malformed or future-schema records without changing their bytes', () => {
@@ -301,15 +320,39 @@ describe('writeSuppressionFile', () => {
 
 describe('decodeSuppressionFile / readSuppressionDir', () => {
   it('returns empty for a missing directory', () => {
-    expect(readSuppressionDir(createRoot())).toEqual({ suppressions: [], warnings: [] });
+    expect(readSuppressionDir(createRoot())).toMatchObject({
+      suppressions: [],
+      compatibility: { complete: true, total: 0, accepted: 0, omitted: 0 },
+      warnings: [],
+    });
   });
 
-  it('rejects identity drift and future schema versions', () => {
+  it('accepts pre-discriminator v1 and distinguishes malformed, older, and future records', () => {
+    const { kind: _kind, ...preDiscriminatorV1 } = record('SQAAA', 'valid');
+    expect(decodeSuppressionFile(preDiscriminatorV1, 'SQAAA')).toMatchObject({
+      state: 'current',
+      schemaVersion: 1,
+      suppression: { id: 'SQAAA', reason: 'valid' },
+    });
     expect(decodeSuppressionFile(record('SQAAA', 'valid'), 'SQBBB')).toEqual({
+      state: 'malformed',
       error: 'suppressionIdentity does not match the suppression target or filename',
     });
+    expect(decodeSuppressionFile({ ...record('SQAAA', 'older'), schemaVersion: 0 })).toEqual({
+      state: 'unsupported-older',
+      error: 'unsupported schemaVersion 0',
+    });
     expect(decodeSuppressionFile({ ...record('SQAAA', 'future'), schemaVersion: 2 })).toEqual({
+      state: 'unsupported-future',
       error: 'unsupported schemaVersion 2',
+    });
+    expect(decodeSuppressionFile({ ...record('SQAAA', 'wrong kind'), kind: 'other' })).toEqual({
+      state: 'malformed',
+      error: `kind must be ${SUPPRESSION_FILE_KIND}`,
+    });
+    expect(decodeSuppressionFile({ id: 'SQAAA', reason: 'partial envelope', kind: SUPPRESSION_FILE_KIND })).toEqual({
+      state: 'malformed',
+      error: 'suppression envelope metadata requires schemaVersion',
     });
   });
 
@@ -328,10 +371,36 @@ describe('decodeSuppressionFile / readSuppressionDir', () => {
     const read = readSuppressionDir(root);
     expect(read.suppressions.map((suppression) => suppression.id)).toEqual(['SQCCC']);
     expect(read.warnings).toHaveLength(5);
+    expect(read.compatibility).toMatchObject({
+      complete: false,
+      total: 6,
+      accepted: 1,
+      current: 1,
+      unsupportedFuture: 1,
+      malformed: 4,
+      omitted: 5,
+    });
     expect(read.warnings.join('\n')).toMatch(/malformed JSON/);
     expect(read.warnings.join('\n')).toMatch(/missing reason/);
     expect(read.warnings.join('\n')).toMatch(/id or a check/);
     expect(read.warnings.join('\n')).toMatch(/does not match/);
     expect(read.warnings.join('\n')).toMatch(/unsupported schemaVersion 9/);
+  });
+
+  it('keeps the packaged JSON Schema aligned with the runtime envelope', () => {
+    const schema = JSON.parse(
+      readFileSync(join(process.cwd(), 'docs', 'schemas', 'suppression-record.schema.json'), 'utf-8'),
+    ) as {
+      required: string[];
+      properties: Record<string, { const?: unknown }>;
+      additionalProperties: boolean;
+    };
+
+    expect(schema.properties['kind']?.const).toBe(SUPPRESSION_FILE_KIND);
+    expect(schema.properties['schemaVersion']?.const).toBe(SUPPRESSION_FILE_SCHEMA_VERSION);
+    expect(schema.required).toEqual(
+      expect.arrayContaining(['kind', 'schemaVersion', 'suppressionIdentity', 'writer', 'reason', 'createdAt']),
+    );
+    expect(schema.additionalProperties).toBe(true);
   });
 });

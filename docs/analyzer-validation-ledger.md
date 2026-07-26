@@ -12,12 +12,12 @@ The companion documents are:
 
 The ledger is anchored to the current tool surface, not memory.
 
-| Surface                   | Source                                                                                                                                                                                                                                                                                                        | Why it anchors the ledger                                                                     |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Repo-wide health analysis | `scip-query code health --json` reported `src/queries/health/health.ts:218`, where `health()` runs `runHealthAnalyses()` and `buildHealthReport()` through the health budget that carries full-vs-bounded semantic enrichment.                                                                                | Every repo-wide analyzer validation must eventually reconcile with health output and scoring. |
-| Change-time gate analysis | `scip-query code diffGate --json` reported `src/queries/impact/diff-gate.ts:228`, where `diffGate()` runs the default diff-scoped checks: `echo`, `incomplete-migration`, `co-change-partner`, `doc-reference`, `unused-params`, and `new-dead`. The baseline ratchet is explicit because it is repo-wide.    | Every diff-only analyzer needs a separate validation path from repo-wide health.              |
-| Public command registry   | `scip-query trace queryCommandOrder --json` reported `src/runtime/commands/query-command-specs.ts:11`, where the public query command order starts. `scip-query code queryCommandDescriptor --json` reported `src/runtime/commands/query-command-specs.ts:104`, where command descriptors are resolved by id. | The ledger must not silently miss a public analyzer command.                                  |
-| Diff-gate check list      | `scip-query trace DIFF_GATE_CHECKS --json` reported `src/queries/impact/diff-gate.ts:64`, where the canonical diff-gate check list is exported.                                                                                                                                                               | The ledger must cover every change-time check that can block a diff.                          |
+| Surface                   | Source                                                                                                                                                                                                                                                                                                                                                             | Why it anchors the ledger                                                                     |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| Repo-wide health analysis | `scip-query code health --json` reported `src/queries/health/health.ts:218`, where `health()` runs `runHealthAnalyses()` and `buildHealthReport()` through the health budget that carries full-vs-bounded semantic enrichment.                                                                                                                                     | Every repo-wide analyzer validation must eventually reconcile with health output and scoring. |
+| Change-time gate analysis | `scip-query trace diffGate --json` resolves `diffGate()` in `src/queries/impact/diff-gate.ts`, where it runs the default diff-scoped checks: `echo`, `incomplete-migration`, `co-change-partner`, `twin-partner`, `coverage-contract`, `architecture`, `doc-reference`, `unused-params`, and `new-dead`. The baseline ratchet is explicit because it is repo-wide. | Every diff-only analyzer needs a separate validation path from repo-wide health.              |
+| Public command registry   | `scip-query trace queryCommandOrder --json` reported `src/runtime/commands/query-command-specs.ts:11`, where the public query command order starts. `scip-query code queryCommandDescriptor --json` reported `src/runtime/commands/query-command-specs.ts:104`, where command descriptors are resolved by id.                                                      | The ledger must not silently miss a public analyzer command.                                  |
+| Diff-gate check list      | `scip-query trace DIFF_GATE_CHECKS --json` resolves the canonical exported check list in `src/queries/impact/diff-gate.ts`.                                                                                                                                                                                                                                        | The ledger must cover every change-time check that can block a diff.                          |
 
 ## Core Concepts
 
@@ -337,13 +337,14 @@ budget choice.
 
 ## 2026-07-02 Doc-Reference Hub-Cascade Follow-Up
 
-The `diffGate()` and `DIFF_GATE_CHECKS` citations were refreshed (line anchors
-`diff-gate.ts:205` -> `:228` and `:62` -> `:64`) after followup #8 added
-hub-file cascade damping to the doc-reference check: when more than 3 docs
-cite the same changed hub file in one gate run, their findings collapse into
-one clustered finding carrying `citationCount`, up to 3 `citationExemplars`,
-and an explicit `suppressedCount`. Default diff-gate still runs the same
-check family through the same entry point; per-doc findings under the
+The `diffGate()` and `DIFF_GATE_CHECKS` citations were refreshed after
+followup #8 added hub-file cascade damping to the doc-reference check: when
+more than 3 docs cite the same changed hub file in one gate run, their
+findings collapse into one clustered finding carrying `citationCount`, up to
+3 `citationExemplars`, and an explicit `suppressedCount`. Slice 23 removed the
+historical line numbers from these source anchors because the exported symbol
+identities are stable while repeated additive checks made the numbers stale.
+The current table names every default check; per-doc findings under the
 threshold are unchanged.
 
 ## 2026-07-10 TypeScript Dead-Code Certification Follow-Up
@@ -403,7 +404,7 @@ covered, so the result is not an artifact of a permanently-firing check.
 **Precision decision.** Module-hierarchy suppression is content-aware, not
 path-based. `classifyFile` decides "barrel" from the filename, which labels
 every `index.ts` bookkeeping — including `src/language-parsers/index.ts`, a
-130-line cache module that was the *target* of the narrowest real back edge in
+130-line cache module that was the _target_ of the narrowest real back edge in
 the repository. A path-based rule therefore produced a false negative on the
 single most important finding. A barrel is now excluded only when the index
 records no definitions of its own inside it.
@@ -415,7 +416,7 @@ files depending on one of its own sub-directories is the most common real
 intra-boundary cycle, not module bookkeeping.
 
 **Known limits, not yet calibrated.** Sub-units are one directory level, so a
-layer inversion *inside* a single directory is invisible; the `src/source`
+layer inversion _inside_ a single directory is invisible; the `src/source`
 primitives/facts/products tangle had to be derived by hand and was fixed by
 splitting the directory. Test files are not SCIP-indexed and are therefore
 outside boundary enforcement entirely. `requireCompletePolicy` checks that a
@@ -428,17 +429,17 @@ Five rules were added to `architecture` after auditing what boundary
 enforcement still could not see. Each is opt-in and defaults to off, so
 upgrading tightens no existing project's gate.
 
-| Rule | Closes | Finding identity |
-| --- | --- | --- |
-| `requireMinimalPolicy` | A declared allowance outliving the edge that justified it. `requireCompletePolicy` checks a row *exists*, never that it is *minimal*, so policy widens silently. | `architecture:stale-allowance:<from>:<to>` |
-| `maxBoundaryFanOut` / global `maxBoundaryFiles` / per-boundary `maxFiles` | A boundary growing until it is coupled to most of the system. A local file ceiling overrides the global default only for its reviewed boundary. Coarseness was previously caught only when it *hid a cycle*, never when it merely got large. | `architecture:boundary-limit:<kind>:<boundary>` |
-| `testPaths` | Test files are excluded from the compiler project and therefore from the index, leaving them outside every boundary rule. | `architecture:test-boundary:<test>:<boundary>` |
-| `subUnits: 'file'` | A layer inversion *inside* one directory, invisible when sub-units are directories. | (reuses `coarse-boundary`) |
-| `fragileEdges` (report-only) | No signal distinguishing a load-bearing dependency from one resting on a single import. 60 of 251 edges here are single-import. | none — advisory |
+| Rule                                                                      | Closes                                                                                                                                                                                                                                       | Finding identity                                |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `requireMinimalPolicy`                                                    | A declared allowance outliving the edge that justified it. `requireCompletePolicy` checks a row _exists_, never that it is _minimal_, so policy widens silently.                                                                             | `architecture:stale-allowance:<from>:<to>`      |
+| `maxBoundaryFanOut` / global `maxBoundaryFiles` / per-boundary `maxFiles` | A boundary growing until it is coupled to most of the system. A local file ceiling overrides the global default only for its reviewed boundary. Coarseness was previously caught only when it _hid a cycle_, never when it merely got large. | `architecture:boundary-limit:<kind>:<boundary>` |
+| `testPaths`                                                               | Test files are excluded from the compiler project and therefore from the index, leaving them outside every boundary rule.                                                                                                                    | `architecture:test-boundary:<test>:<boundary>`  |
+| `subUnits: 'file'`                                                        | A layer inversion _inside_ one directory, invisible when sub-units are directories.                                                                                                                                                          | (reuses `coarse-boundary`)                      |
+| `fragileEdges` (report-only)                                              | No signal distinguishing a load-bearing dependency from one resting on a single import. 60 of 251 edges here are single-import.                                                                                                              | none — advisory                                 |
 
 **Test-boundary calibration.** The first rule shape — "a test may import only what
 its subject's boundary may import" — produced 91 findings, nearly all
-legitimate: a test for `analysis/git-history` drives it *through*
+legitimate: a test for `analysis/git-history` drives it _through_
 `queries/cleanup/co-change`, which is composition, not coupling. The shipped
 rule allows the subject's **transitive** reach plus any boundary that reaches
 the subject (a consumer is the natural driver). That yields 0 findings here,

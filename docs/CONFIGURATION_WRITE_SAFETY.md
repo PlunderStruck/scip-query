@@ -90,10 +90,14 @@ created. Replacement succeeds only if those exact reviewed bytes still occupy
 the path. A stale token, a malformed record, an unsupported future schema, or
 an edit at the commit boundary leaves the latest bytes untouched.
 
-New records use suppression schema version 1 and include their stable identity
-plus the `scip-query` writer version. Unversioned legacy records remain
-readable. They remain byte-for-byte unchanged on an idempotent replay and are
-upgraded only by an explicit compare-and-replace policy change.
+New records use suppression schema version 1 and include the
+`scip-query-suppression` discriminator, their stable identity, and the
+`scip-query` writer version. Unversioned legacy records and v1 records written
+before the discriminator was added remain readable. They remain byte-for-byte
+unchanged on an idempotent replay and are upgraded only by an explicit
+compare-and-replace policy change. Incompatible files are counted and reported
+by `diff-gate`; they never authorize a suppression. See
+[`COMMITTED_RECORD_COMPATIBILITY.md`](COMMITTED_RECORD_COMPATIBILITY.md).
 
 ## Managed text rules
 

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { DiffGateResult } from '../../src/queries/impact/diff-gate.js';
+import { summarizeRecordCompatibility } from '../../src/domain/record-compatibility.js';
 import {
   evaluatePreToolUse,
   renderAgentHookContext,
@@ -172,6 +173,28 @@ describe('agent hook context', () => {
 
   it('treats unknown truthy stop mode values as feedback, not block', () => {
     expect(resolveStopHookMode({ SCIP_QUERY_STOP_HOOK_MODE: 'true' })).toBe('feedback');
+  });
+
+  it('surfaces incomplete suppression coverage without blocking a finding-free stop', () => {
+    const result = {
+      ...diffGateResult(),
+      findings: [],
+      recordCompatibility: {
+        suppressions: summarizeRecordCompatibility([
+          {
+            path: '.scipquery/suppressions/future.json',
+            state: 'unsupported-future',
+            reason: 'unsupported schemaVersion 2',
+          },
+        ]),
+      },
+    };
+
+    const output = renderStopHookOutput(result, 'block');
+    expect(output).not.toHaveProperty('decision');
+    expect(output).toMatchObject({
+      systemMessage: expect.stringContaining('Committed suppression coverage is incomplete'),
+    });
   });
 });
 

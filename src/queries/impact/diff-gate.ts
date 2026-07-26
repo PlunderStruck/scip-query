@@ -49,6 +49,7 @@ import { unusedParams } from '../cleanup/unused-params.js';
 import { escapeRegex } from '../../source/primitives/regex-utils.js';
 import type { FindingSuppression } from '../../domain/types.js';
 import { readSuppressionDir } from '../../storage/suppression-store.js';
+import type { RecordCompatibilitySummary } from '../../domain/record-compatibility.js';
 import { isCallableSymbol, leafName, leafSuffix } from '../../symbols/symbol-parser.js';
 import { getGlobalLeafIndex } from '../../symbols/leaf-symbol-index.js';
 import { discoverWorkspacePackages } from '../../platform/workspace-packages.js';
@@ -198,6 +199,10 @@ export interface DiffGateResult {
   attributionNotes: AttributionNote[];
   /** Root-cause review items derived from unsuppressed findings. */
   rootCauseGroups?: DiffGateRootCauseGroup[];
+  /** Coverage of committed policy records consulted by this result. */
+  recordCompatibility?: {
+    suppressions: RecordCompatibilitySummary;
+  };
   note?: string;
 }
 
@@ -264,6 +269,7 @@ export function diffGate(
   const semantic = opts.semantic !== false;
   const historyMode = opts.historyMode ?? 'bounded';
   const skip = new Set(opts.skip ?? []);
+  const suppressionStore = readSuppressionDir(db.config.projectRoot);
 
   const impactPlan = diffImpactPlan(db, { base });
   const impact = diffImpact(db, { base, plan: impactPlan });
@@ -287,6 +293,7 @@ export function diffGate(
     findings: [],
     attributionNotes: impact.attributionNotes,
     rootCauseGroups: [],
+    recordCompatibility: { suppressions: suppressionStore.compatibility },
     note: impact.summary.note,
   };
   if (changedFiles.length === 0) return result;
@@ -339,10 +346,7 @@ export function diffGate(
   // Suppressions come from two stores: the legacy .scipquery.json array
   // (read-only since 0.15.0) and the conflict-free per-file directory the
   // `suppress` command writes. Matching semantics are identical.
-  applyStructuredSuppressions(result, [
-    ...(db.config.suppressions ?? []),
-    ...readSuppressionDir(db.config.projectRoot).suppressions,
-  ]);
+  applyStructuredSuppressions(result, [...(db.config.suppressions ?? []), ...suppressionStore.suppressions]);
   result.rootCauseGroups = diffGateRootCauseGroups(result.findings);
 
   return result;

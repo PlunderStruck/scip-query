@@ -743,6 +743,219 @@ coverage rows.
 **Dependencies:** Slices 13 and 19's decoder pattern.  
 **Rollback:** current writers' records remain readable through a compatibility adapter retained in the revert window.
 
+**Plan revision after Slice 13:** suppression records are no longer
+unversioned-only. Slice 13 shipped an unversioned-v0 reader, a v1 writer and
+validator, stable suppression identity, writer metadata, and explicit
+compare-and-replace. This slice must retain that work rather than introduce a
+second suppression protocol. It will add a discriminator to new compatible-v1
+writes, keep v0 and already-written v1 readable, and add explicit
+compatibility accounting. Outcome-event records remain unversioned and are
+the primary schema migration in this slice.
+
+#### Slice 23 high-assurance certificate
+
+**Goal.** Make every committed suppression or outcome file either contribute
+to a result or contribute to an explicit incomplete-coverage count, without
+changing the Git-distributed one-file identities that make branch merges safe.
+
+**Definitions and invariants.**
+
+A committed evidence record is a repository-owned JSON fact or policy whose
+bytes are shared through Git and interpreted by multiple versions of the CLI;
+what distinguishes it from a local cache row is that an incompatible reader
+cannot rebuild or silently discard the team-shared observation. Referents:
+`.scipquery/suppressions/*.json`, `.scipquery/events/*.json`, and the legacy
+`.scipquery/ledger/events.jsonl`.
+
+Record compatibility is the classification of one persisted candidate as
+readable legacy, readable current, unsupported older, unsupported future, or
+malformed; what makes it an operational contract is that every candidate is
+counted before accepted records are used to claim complete suppression or
+effectiveness history.
+
+An outcome-event identity is the stable tuple of detector, finding, transition,
+and observed commit; what distinguishes it from an observation file is that
+timestamps, producer metadata, and verification evidence may vary while
+read-side deduplication still recognizes the same underlying transition fact.
+
+- Every JSON record candidate must always produce one compatibility
+  classification.
+- A reader may report complete coverage iff every candidate is readable
+  legacy or current.
+- Unsupported or malformed records must never authorize a suppression,
+  verified fix, or legacy-ledger deletion.
+- New suppression and event writes must identify their record kind and schema
+  while remaining readable by the immediately prior permissive readers.
+- Adding wire metadata must never change suppression filename identity,
+  outcome dedupe identity, exclusive-create behavior, or immutable event
+  history.
+- Accepted partial reads may support conservative output only when their
+  incomplete counts and path-specific reasons are returned with that output.
+
+**Premises.**
+
+- **P1.** Suppression writes are current schema v1 and reads accept
+  unversioned v0 plus v1, but v1 has no record-kind discriminator and
+  `readSuppressionDir` returns only free-text warnings, not accepted/omitted
+  counts. Sources: `src/storage/suppression-store.ts:20-153`,
+  `src/runtime/suppression-writer.ts:53-177`.
+- **P2.** All 30 committed suppression files in this repository are
+  unversioned v0, proving that overlap support is a live compatibility
+  requirement rather than a fixture-only concern. Source:
+  `.scipquery/suppressions/*.json`.
+- **P3.** Outcome-event writers serialize the semantic `OutcomeEvent` object
+  directly. All 484 committed event files are unversioned, and the parser
+  collapses invalid JSON, unknown event kinds, and incompatible shapes to
+  `null`. Sources: `src/storage/outcome-events.ts:43-180`,
+  `.scipquery/events/*.json`.
+- **P4.** The complete production suppression reader set is the diff gate;
+  the complete writer is `handleSuppress` through `writeSuppressionFile`.
+  Sources: complete `refs` results for `readSuppressionDir` and
+  `writeSuppressionFile`.
+- **P5.** The complete production outcome reader set is the effectiveness
+  command and cross-HEAD reconciliation; the sole writer path is
+  `recordDiffGateOutcomes` through `appendOutcomeEvents`. Sources: complete
+  `refs` results for `readOutcomeEvents` and `appendOutcomeEvents`.
+- **P6.** Event deduplication intentionally keys
+  `(check, findingId, event, commit)` and prefers stronger verification
+  evidence, then the earliest timestamp. Wire metadata must not enter this
+  identity. Source: `src/storage/outcome-events.ts:144-162`.
+- **P7.** Legacy JSONL migration currently parses only recognized events,
+  writes that subset as independent files, and then removes the shared ledger.
+  A future or malformed line can therefore be erased on the next append.
+  Source: `src/storage/outcome-events.ts:43-99`.
+- **P8.** Cross-HEAD reconciliation uses committed history to decide whether
+  an apparently missing finding may resolve. It currently cannot distinguish
+  a genuinely absent anchor from an omitted incompatible event. Source:
+  `src/runtime/diff-gate-outcomes.ts:161-289`.
+
+**Current state.** Suppression conflict safety and v0/v1 overlap already hold
+(P1, P2), so replacing that protocol would add risk without closing a gap.
+The remaining systemic defect is missing compatibility accounting: both
+stores can return a plausible subset, effectiveness can present it as the
+whole history, and reconciliation or legacy cleanup can act on an omitted
+record (P3, P7, P8).
+
+**Reuse audit.**
+
+- Extend `decodeSuppressionFile`, `readSuppressionDir`, and the current v1
+  writer. Add the discriminator as an optional-compatible v1 field so old v1
+  binaries continue accepting new files; do not mint an unnecessary v2.
+- Keep semantic `OutcomeEvent`, `deriveOutcomeEvents`, and
+  `latestOutcomeLifecycleAnchor` independent of persistence metadata. Add one
+  pure outcome-record decoder/encoder beside that domain model.
+- Keep `appendOutcomeEvents`, exclusive filenames, and `dedupeEvents`; define
+  the stable event identity once and reuse it for envelope validation and
+  dedupe.
+- Add one dependency-free compatibility-summary type shared by both stores.
+  Storage modules classify candidates; commands and hooks decide how to
+  disclose incomplete results.
+- Extend the current diff-gate result and effectiveness JSON rather than
+  creating a separate diagnostic command.
+
+**Testability design.**
+
+| Behavior                      | Test seam                                             | Dependencies            | Pure core                                  | Side-effect shell                          | Contract                                               |
+| ----------------------------- | ----------------------------------------------------- | ----------------------- | ------------------------------------------ | ------------------------------------------ | ------------------------------------------------------ |
+| Classify persisted candidates | suppression and event decoders                        | none                    | version/kind/shape/identity classification | none                                       | one classification per candidate                       |
+| Summarize compatibility       | shared summary function                               | none                    | exact counts and issue paths               | directory/JSONL enumeration                | `complete` iff omitted count is zero                   |
+| Write current records         | existing suppression/event writers                    | clock/tool version      | canonical compatible envelope              | revision-aware replace or exclusive create | new bytes carry kind/version without changing identity |
+| Preserve distributed identity | `suppressionFileName`, event identity, `dedupeEvents` | none                    | target/fact identity                       | immutable paths                            | v0/current duplicates collapse under existing rules    |
+| Prevent unsafe cleanup        | legacy-ledger append fixture                          | temporary filesystem    | compatibility decision                     | migrate/remove                             | incompatible legacy bytes survive                      |
+| Fail closed in reconciliation | `recordDiffGateOutcomes` injected event reader        | injected history result | missing-finding decision                   | replay/append shell                        | incomplete history cannot prove a fix                  |
+| Disclose partial conclusions  | diff-gate, Stop hook, effectiveness handler           | captured output         | compatibility renderer                     | JSON/text/hook output                      | counts and paths are visible                           |
+
+**Design phases.**
+
+1. **23.1 — Define compatible record envelopes.** Add the shared compatibility
+   summary and pure outcome-event record decoder. Add a record-kind field to
+   new suppression v1 records while accepting existing v1 without it; add a
+   kind/schema/identity/writer envelope to new outcome v1 records while
+   accepting unversioned v0. **Deployable:** yes; previous readers ignore
+   additive fields and current readers accept both generations. Premises:
+   P1-P3, P6.
+2. **23.2 — Make store reads complete-by-construction.** Return accepted
+   records plus exact legacy/current/unsupported/malformed counts and
+   path-specific issues. Keep non-JSON side files outside the candidate set.
+   Preserve a legacy JSONL file whenever any non-empty line is incompatible.
+   **Deployable:** yes; writers and identities remain unchanged. Premises:
+   P2, P3, P7.
+3. **23.3 — Route every conclusion through compatibility.** Attach
+   suppression completeness to diff-gate JSON/text/hook feedback. Attach event
+   completeness to effectiveness results. Make cross-HEAD reconciliation
+   retain missing findings rather than resolve them when event history is
+   incomplete. **Deployable:** yes. Premises: P4, P5, P8.
+4. **23.4 — Publish and prove the contract.** Add current-record JSON Schemas,
+   a compatibility/merge guide, mixed real-format tests, and API acceptance
+   if the additive diff-gate result field reaches public declarations. Do not
+   rewrite the 514 committed legacy files merely to make counters look
+   current. **Deployable:** yes. Premises: P2, P3.
+
+**Attack record.**
+
+- **A1 — Future suppression.** A newer branch adds a suppression schema this
+  binary cannot interpret. The current reader ignores it and the gate appears
+  complete. **Outcome: HOLE — repaired by 23.2 and 23.3** with an unsupported
+  future count and visible path; the finding remains conservatively
+  unsuppressed (P1, P4).
+- **A2 — Unknown event kind.** A future producer adds a transition and an
+  older effectiveness reader returns `null`, lowering totals. **Outcome: HOLE
+  — repaired by 23.1-23.3**: the record is omitted but explicitly counted and
+  the report is incomplete (P3, P5).
+- **A3 — Future legacy-ledger line.** A mixed branch retains JSONL and contains
+  one unfamiliar record; a new event triggers migration and deletes the
+  source. **Outcome: HOLE — repaired by 23.2**: accepted rows may be copied,
+  but any incompatible row fences deletion and produces a warning (P7).
+- **A4 — Cross-HEAD false resolution.** The lifecycle anchor exists only in an
+  incompatible event file, so reconciliation treats a missing finding as
+  resolved. **Outcome: HOLE — repaired by 23.3**: incomplete history retains
+  all missing ledger rows and defers proof (P8).
+- **A5 — v0/v1 duplicate fact.** The same outcome exists in a legacy object and
+  a current envelope with different timestamps or writer versions.
+  **Outcome: HELD by 23.1 and P6**: envelope fields are excluded from identity,
+  stronger proof wins, then earliest time.
+- **A6 — Old reader, new writer.** The immediately prior CLI encounters a new
+  event envelope or suppression discriminator. **Outcome: HELD** because both
+  are additive fields on shapes whose old validators permit unknown members;
+  suppression stays schema v1 and event semantic fields remain at the root
+  (P1, P3).
+- **A7 — Malformed current identity.** A record claims the current schema but
+  its stable identity does not match its body. **Outcome: HOLE — repaired by
+  23.1** with deterministic identity validation and a malformed count (P6).
+- **A8 — Partial metric mistaken for an oracle.** Effectiveness has valid
+  events plus one future record and still prints exact-looking precision.
+  **Outcome: HOLE — repaired by 23.3** with `complete: false`, accepted and
+  omitted totals, and human/hook warnings beside the metric.
+- **A9 — Metadata changes filenames.** Producer version or schema metadata
+  causes suppression conflicts or changes event dedupe. **Outcome: HELD**:
+  suppression filenames remain policy-target based; event filenames remain
+  immutable content hashes, while semantic dedupe uses P6.
+
+**Coverage matrix.**
+
+| Surface or lens                  | Attacks                |
+| -------------------------------- | ---------------------- |
+| Suppression decoder/store/writer | A1, A6, A7, A9         |
+| Outcome decoder/store/writer     | A2, A3, A5, A6, A7, A9 |
+| Diff gate and Stop hook          | A1, A8                 |
+| Effectiveness command            | A2, A5, A8             |
+| Cross-HEAD reconciliation        | A2, A4, A5             |
+| Legacy repository records        | A3, A5, A6             |
+| Concurrent Git branches          | A1, A5, A9             |
+| Failure/data preservation        | A3, A4, A7             |
+| Rollback/old client              | A6, A9                 |
+| Observability                    | A1-A4, A7, A8          |
+
+**Execution and ship order.** Phases 23.1 and 23.2 land together so no current
+writer produces a format the current reader cannot classify. Phase 23.3 must
+land in the same slice so accepted subsets are never presented without their
+coverage. Schemas and docs ship with those bytes. Rollback remains able to
+read new records because the envelope is additive and semantic fields stay
+at their established locations.
+
+**Verdict.** `PLANNED-COMPLETE` — 9 attacks, 7 holes repaired, 0 holes
+accepted, every production reader/writer and state authority covered.
+
 ### Slice 24 — API-06 — Version and correlate Rust mailbox envelopes
 
 **Invariant:** a Rust response is accepted only when protocol, request ID, operation ID, session identity, and deadline match.
@@ -879,8 +1092,8 @@ coverage rows.
 |    19 | API-04  | complete | `e6637774` | 179 focused; 1,671 full-suite tests | Shared v2/v3 matrix, malformed fields, partial policy, v4 rejection, identity, reuse, publication, and additive fields verified              |
 |    20 | API-01  | complete | `bbb0db24` | 126 focused passing tests           | v0/v1 decode, future rejection, result versions, all JSON descriptors, private protocol, config/metadata reuse, schema, and package verified |
 |    21 | API-02  | complete | `80cb260d` | 13 contract + consumer compile      | 72 paths, 871 exports, shared declaration closure, conservative classification, immutable acceptance, and release gate verified              |
-|    22 | API-03  | complete |            | 95 config/API/revision assertions   | Legacy/current/future/malformed decoding, no-op migration, unknown-field preservation, conflict safety, and packaged schema verified         |
-|    23 | API-05  | pending  |            |                                     |                                                                                                                                              |
+|    22 | API-03  | complete | `777d09c9` | 95 config/API/revision assertions   | Legacy/current/future/malformed decoding, no-op migration, unknown-field preservation, conflict safety, and packaged schema verified         |
+|    23 | API-05  | complete |            | 65 focused; 1,717 full-suite tests  | Exact compatibility accounting, overlap readers, safe migration, incomplete-history fencing, disclosure, schemas, and package verified       |
 |    24 | API-06  | pending  |            |                                     |                                                                                                                                              |
 |    25 | REL-01  | pending  |            |                                     |                                                                                                                                              |
 |    26 | REL-02  | pending  |            |                                     |                                                                                                                                              |
@@ -1303,6 +1516,68 @@ coverage rows.
   concurrent skill consolidation. One exact echo finding is suppressed by
   stable ID with the domain-separation rationale above; no broad suppression
   or health-baseline ratchet was written.
+
+### Slice 23 verification record
+
+- One dependency-free compatibility summary classifies every persisted
+  candidate as readable legacy/current, unsupported older/future, or
+  malformed. Its exact accounting conserves `accepted + omitted = total` and
+  retains a path and reason for every omission.
+- Suppression writes retain schema v1 and add the
+  `scip-query-suppression` discriminator. The reader accepts unversioned v0,
+  pre-discriminator v1, and current v1, while malformed or unsupported records
+  cannot authorize a suppression. `diff-gate` consults the store even for an
+  empty source diff and includes the compatibility summary in its public
+  result.
+- Outcome writes use an additive v1 envelope with a discriminator, semantic
+  event identity, and producer metadata while keeping the prior semantic
+  fields at the root. The previous permissive reader can consume the new
+  shape, the current reader accepts all existing unversioned records, and
+  producer metadata does not change semantic deduplication.
+- Legacy JSONL migration copies compatible lines through exclusive,
+  content-addressed writes but retains the source ledger and reports a warning
+  if any non-empty line is incompatible. A retry does not create duplicate
+  files. Cross-HEAD reconciliation retains all missing findings when committed
+  event history is incomplete, so partial history can delay a verified repair
+  but cannot manufacture one.
+- Human diff-gate/effectiveness output, JSON results, and Stop-hook feedback
+  disclose incomplete coverage without making record incompatibility alone a
+  detector failure. `effectiveness --json` carries the exact accepted and
+  omitted event counts beside its partial metrics.
+- The 65-test focused matrix covers count conservation, old/current/future
+  records, partial envelopes, unknown event kinds, mismatched identities,
+  mixed repositories, prior-reader visibility, dedupe across versions,
+  repeated partial migration, empty-diff disclosure, non-blocking hook
+  feedback, and fail-closed cross-HEAD behavior. Typecheck and scoped ESLint
+  pass.
+- The additive `DiffGateResult` declaration change has immutable acceptance
+  digest `1e1c3f6d3d4f341b`, a reviewed reason, a successful 72-path
+  `api:check`, and a passing downstream consumer compilation.
+- With an isolated `XDG_CACHE_HOME`, the full suite passes 223 of 224 files
+  and 1,717 tests, with 2 intentional skips. The only 2 failures are Claude's
+  concurrently edited skill catalog (`is` and 40 commands not yet covered);
+  every Slice 23 test passes.
+- `npm pack --dry-run` reports 360 entries and includes
+  `docs/COMMITTED_RECORD_COMPATIBILITY.md`,
+  `docs/schemas/suppression-record.schema.json`, and
+  `docs/schemas/outcome-event-record.schema.json`. No existing legacy record
+  was rewritten merely to change its compatibility label.
+- The first source diff gate caught two real implementation defects: a
+  duplicated record-object validator and a stale analyzer-validation contract
+  that still described the old diff-gate check set. The shared validator now
+  owns that boundary, the ledger names the complete current check family
+  without fragile line anchors, and the final source gate reports neither
+  finding.
+- The final gate's only blockers are the command-reference and `_shared`
+  co-change signals for Claude's concurrently edited
+  `skills/scip-query/SKILL.md`. Two advisory bare-file citations were reviewed:
+  `docs/COMMAND_REFERENCE.md` still points to the runtime command surface and
+  `docs/analyzer-inventory.md` still points to `DIFF_GATE_CHECKS`; neither
+  claim changed in this slice.
+- `scip-query health --baseline` reports 79 accumulated heuristic deltas from
+  the full 23-slice working history rather than Slice 23 regressions. The only
+  Slice 23 entries are expected extraction/single-consumer signals around the
+  cohesive event append/read result contracts; no baseline was ratcheted.
 
 ### Slice 09 verification note
 

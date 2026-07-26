@@ -127,7 +127,7 @@ describe('Stop hook doc-reference snapshot-doc exemption', () => {
     const second = runStopHookDiffGate(hookInputFor(repoRoot));
     expect(second?.findings.some((finding) => finding.id === guideFinding?.id)).toBe(false);
 
-    const events = readOutcomeEvents(repoRoot).filter((event) => event.findingId === guideFinding?.id);
+    const events = readOutcomeEvents(repoRoot).events.filter((event) => event.findingId === guideFinding?.id);
     expect(events.map((event) => event.event)).toEqual(['caught', 'resolved']);
     expect(computeEffectiveness(events).checks[0]).toMatchObject({ caught: 1, fixed: 1, open: 0 });
   });
@@ -146,7 +146,7 @@ describe('Stop hook doc-reference snapshot-doc exemption', () => {
     expect(resolveGitWorktreeContext(repoRoot)?.clean).toBe(true);
     const committedDefect = runStopHookDiffGate(hookInputFor(repoRoot));
     expect(committedDefect?.findings).toEqual([]);
-    let events = readOutcomeEvents(repoRoot).filter((event) => event.findingId === guideFinding?.id);
+    let events = readOutcomeEvents(repoRoot).events.filter((event) => event.findingId === guideFinding?.id);
     expect(events.map((event) => event.event)).toEqual(['caught']);
     expect(computeEffectiveness(events).checks[0]).toMatchObject({ fixed: 0, open: 1 });
 
@@ -186,7 +186,7 @@ describe('Stop hook doc-reference snapshot-doc exemption', () => {
       afterDb.close();
     }
 
-    events = readOutcomeEvents(repoRoot).filter((event) => event.findingId === guideFinding?.id);
+    events = readOutcomeEvents(repoRoot).events.filter((event) => event.findingId === guideFinding?.id);
     expect(events.map((event) => event.event)).toEqual(['caught', 'resolved']);
     expect(events.at(-1)).toEqual(expect.objectContaining({ verifiedAgainstCommit: events[0]?.comparisonBaseCommit }));
     expect(computeEffectiveness(events).checks[0]).toMatchObject({ fixed: 1, unverified: 0, open: 0 });

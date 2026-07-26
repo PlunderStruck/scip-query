@@ -27,6 +27,7 @@ import { recordDiffGateOutcomes } from '../diff-gate-outcomes.js';
 import { commandAnalysisBudget, formatAnalysisBudgetDisclosure, renderHeuristicNotice } from '../cli-support.js';
 import { displayRange, displaySnippet, render } from '../render.js';
 import { symbolResolutionBefore, symbolResolutionEmptyMessage, withSymbolResolutionJson } from './symbol-resolution.js';
+import { formatRecordCompatibilityWarning } from '../../domain/record-compatibility.js';
 
 const handleAffected = dbCommand(({ db, args, opts }) => {
   const query = stringArg(args, 0);
@@ -232,6 +233,9 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
   const result = queries.diffGate(db, gateOptions);
   const blocking = queries.blockingFindings(result.findings);
   const gateFailed = queries.diffGateFailedClosed(result);
+  const suppressionCoverageWarning = result.recordCompatibility
+    ? formatRecordCompatibilityWarning('Committed suppression', result.recordCompatibility.suppressions)
+    : undefined;
   const outcomes = recordDiffGateOutcomes(db, result, {
     replayGate: (baseCommit) => queries.diffGate(db, { ...gateOptions, base: baseCommit }),
   });
@@ -298,6 +302,7 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
       process.exitCode = 2;
       return;
     }
+    if (suppressionCoverageWarning) console.error(`note: ${suppressionCoverageWarning}`);
     if (blocking.length === 0) return;
     const streakLine = formatUnresolvedStreakLine(ledger, observed, now);
     const nudgeLines = formatLowResolutionNudges(ledger, result.checksRun);
@@ -319,6 +324,7 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
     process.exitCode = 1;
     return;
   }
+  if (suppressionCoverageWarning) console.log(`WARN: ${suppressionCoverageWarning}`);
   if (result.changedFiles.length === 0) {
     return render.empty(result.note ?? `No changes vs ${result.base}.`);
   }

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/scip-query/docs/schemas/suppression-record.schema.json",
+  "title": "scip-query suppression record v1",
+  "description": "A repository-owned policy decision stored as one file under .scipquery/suppressions/.",
+  "type": "object",
+  "required": ["kind", "schemaVersion", "suppressionIdentity", "writer", "reason", "createdAt"],
+  "properties": {
+    "kind": { "const": "scip-query-suppression" },
+    "schemaVersion": { "const": 1 },
+    "suppressionIdentity": { "type": "string", "minLength": 1 },
+    "writer": {
+      "type": "object",
+      "required": ["tool", "version"],
+      "properties": {
+        "tool": { "const": "scip-query" },
+        "version": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "id": { "type": "string", "minLength": 1 },
+    "check": { "type": "string", "minLength": 1 },
+    "file": { "type": "string", "minLength": 1 },
+    "reason": { "type": "string", "minLength": 1 },
+    "expiresAt": { "type": "string", "format": "date-time" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "anyOf": [{ "required": ["id"] }, { "required": ["check"] }],
+  "additionalProperties": true
+}

@@ -21,13 +21,41 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { OutcomeEvent, OutcomeEventKind } from '../domain/finding-outcomes.js';
+import type { OutcomeEvent } from '../domain/finding-outcomes.js';
+import {
+  createOutcomeEventRecord,
+  decodeOutcomeEventRecord,
+  outcomeEventIdentity,
+} from '../domain/outcome-event-record.js';
+import {
+  summarizeRecordCompatibility,
+  type RecordCompatibilityObservation,
+  type RecordCompatibilitySummary,
+} from '../domain/record-compatibility.js';
 
 export type { OutcomeEvent } from '../domain/finding-outcomes.js';
 
 export const OUTCOME_EVENTS_DIR = join('.scipquery', 'events');
 const LEGACY_LEDGER_DIR = join('.scipquery', 'ledger');
 const LEGACY_LEDGER_FILENAME = 'events.jsonl';
+
+export interface OutcomeEventReadResult {
+  events: OutcomeEvent[];
+  compatibility: RecordCompatibilitySummary;
+  warnings: string[];
+}
+
+export interface AppendOutcomeEventOptions {
+  toolVersion: string;
+}
+
+export interface AppendOutcomeEventsResult {
+  warning?: string;
+}
+
+interface OutcomeEventCandidateRead extends OutcomeEventReadResult {
+  observations: RecordCompatibilityObservation[];
+}
 
 function legacyLedgerDirPath(projectRoot: string): string {
   return join(projectRoot, LEGACY_LEDGER_DIR);
@@ -39,37 +67,38 @@ function legacyLedgerFilePath(projectRoot: string): string {
 
 /**
  * Add events as independent JSON files. When a legacy JSONL ledger exists,
- * migrate its valid records before removing the shared file and merge rule.
+ * migrate its compatible records. The shared source is removed only when
+ * every non-empty line was understood; otherwise accepted rows are copied
+ * idempotently and the incompatible source bytes remain for a newer reader.
  */
-export function appendOutcomeEvents(projectRoot: string, events: readonly OutcomeEvent[]): void {
+export function appendOutcomeEvents(
+  projectRoot: string,
+  events: readonly OutcomeEvent[],
+  options: AppendOutcomeEventOptions,
+): AppendOutcomeEventsResult {
   const legacyPath = legacyLedgerFilePath(projectRoot);
   const hasLegacyLedger = existsSync(legacyPath);
-  const pending = [...(hasLegacyLedger ? readLegacyOutcomeEvents(legacyPath) : []), ...events];
+  const legacy = hasLegacyLedger ? readLegacyOutcomeEvents(legacyPath) : emptyOutcomeEventCandidateRead();
+  const pending = [...legacy.events, ...events];
 
   if (pending.length > 0) {
     const dir = join(projectRoot, OUTCOME_EVENTS_DIR);
     mkdirSync(dir, { recursive: true });
-    for (const event of pending) writeOutcomeEvent(dir, event);
+    for (const event of pending) writeOutcomeEvent(dir, event, options.toolVersion);
   }
 
-  if (hasLegacyLedger) removeLegacyLedger(projectRoot);
+  if (hasLegacyLedger && legacy.compatibility.complete) {
+    removeLegacyLedger(projectRoot);
+  } else if (hasLegacyLedger) {
+    return {
+      warning: `legacy outcome ledger preserved because ${legacy.compatibility.omitted} of ${legacy.compatibility.total} non-empty record(s) are incompatible: ${legacy.warnings.join('; ')}`,
+    };
+  }
+  return {};
 }
 
-function writeOutcomeEvent(dir: string, event: OutcomeEvent): void {
-  const contents = `${JSON.stringify(
-    {
-      ts: event.ts,
-      check: event.check,
-      findingId: event.findingId,
-      event: event.event,
-      commit: event.commit,
-      ...(event.comparisonBaseCommit ? { comparisonBaseCommit: event.comparisonBaseCommit } : {}),
-      ...(event.verifiedAgainstCommit ? { verifiedAgainstCommit: event.verifiedAgainstCommit } : {}),
-      ...(event.symbol ? { symbol: event.symbol } : {}),
-    },
-    null,
-    2,
-  )}\n`;
+function writeOutcomeEvent(dir: string, event: OutcomeEvent, toolVersion: string): void {
+  const contents = `${JSON.stringify(createOutcomeEventRecord(event, toolVersion), null, 2)}\n`;
   const hash = createHash('sha256').update(contents).digest('hex').slice(0, 16).toUpperCase();
   const path = join(dir, `${event.ts}-${hash}.json`);
   try {
@@ -101,51 +130,69 @@ function removeLegacyLedger(projectRoot: string): void {
 
 /**
  * Read committed event files plus a legacy JSONL ledger during migration.
- * Malformed records are skipped; duplicates from replayed or merged histories
- * are collapsed to the earliest observation.
+ * Every candidate is classified before accepted duplicates are collapsed.
  */
-export function readOutcomeEvents(projectRoot: string): OutcomeEvent[] {
+export function readOutcomeEvents(projectRoot: string): OutcomeEventReadResult {
   const events: OutcomeEvent[] = [];
+  const observations: RecordCompatibilityObservation[] = [];
 
   const dir = join(projectRoot, OUTCOME_EVENTS_DIR);
   if (existsSync(dir)) {
     for (const entry of readdirSync(dir).sort()) {
       if (!entry.endsWith('.json')) continue;
-      const event = parseOutcomeEvent(readFileSync(join(dir, entry), 'utf-8'));
-      if (event) events.push(event);
+      const path = `${OUTCOME_EVENTS_DIR}/${entry}`;
+      const decoded = parseOutcomeEventRecord(readFileSync(join(dir, entry), 'utf-8'));
+      observations.push({
+        path,
+        state: decoded.state,
+        ...('error' in decoded ? { reason: decoded.error } : {}),
+      });
+      if ('event' in decoded) events.push(decoded.event);
     }
   }
 
   const legacyPath = legacyLedgerFilePath(projectRoot);
-  if (existsSync(legacyPath)) events.push(...readLegacyOutcomeEvents(legacyPath));
-  return dedupeEvents(events);
-}
-
-function readLegacyOutcomeEvents(path: string): OutcomeEvent[] {
-  const events: OutcomeEvent[] = [];
-  for (const line of readFileSync(path, 'utf-8').split('\n')) {
-    const event = parseOutcomeEvent(line);
-    if (event) events.push(event);
+  if (existsSync(legacyPath)) {
+    const legacy = readLegacyOutcomeEvents(legacyPath);
+    events.push(...legacy.events);
+    observations.push(...legacy.observations);
   }
-  return events;
+  return outcomeEventReadResult(events, observations);
 }
 
-function parseOutcomeEvent(contents: string): OutcomeEvent | null {
-  if (contents.trim() === '') return null;
+function readLegacyOutcomeEvents(path: string): OutcomeEventCandidateRead {
+  const events: OutcomeEvent[] = [];
+  const observations: RecordCompatibilityObservation[] = [];
+  const recordPath = `${LEGACY_LEDGER_DIR}/${LEGACY_LEDGER_FILENAME}`;
+  for (const [index, line] of readFileSync(path, 'utf-8').split('\n').entries()) {
+    if (line.trim() === '') continue;
+    const decoded = parseOutcomeEventRecord(line);
+    observations.push({
+      path: `${recordPath}:${index + 1}`,
+      state: decoded.state,
+      ...('error' in decoded ? { reason: decoded.error } : {}),
+    });
+    if ('event' in decoded) events.push(decoded.event);
+  }
+  return { ...outcomeEventReadResult(events, observations), observations };
+}
+
+function parseOutcomeEventRecord(contents: string): ReturnType<typeof decodeOutcomeEventRecord> {
+  if (contents.trim() === '') return { state: 'malformed', error: 'empty record' };
   let parsed: unknown;
   try {
     parsed = JSON.parse(contents);
   } catch {
-    return null;
+    return { state: 'malformed', error: 'malformed JSON' };
   }
-  return isOutcomeEvent(parsed) ? parsed : null;
+  return decodeOutcomeEventRecord(parsed);
 }
 
 /** Collapse duplicate (check, findingId, event, commit) facts to the earliest ts, preserving time order. */
 export function dedupeEvents(events: readonly OutcomeEvent[]): OutcomeEvent[] {
   const byKey = new Map<string, OutcomeEvent>();
   for (const event of events) {
-    const key = `${event.check}\0${event.findingId}\0${event.event}\0${event.commit ?? ''}`;
+    const key = outcomeEventIdentity(event);
     const existing = byKey.get(key);
     if (
       !existing ||
@@ -162,20 +209,18 @@ function eventEvidenceScore(event: OutcomeEvent): number {
   return Number(event.comparisonBaseCommit !== undefined) + Number(event.verifiedAgainstCommit !== undefined) * 2;
 }
 
-const EVENT_KINDS: readonly OutcomeEventKind[] = ['caught', 'resolved', 'suppressed', 'reopened'];
+function outcomeEventReadResult(
+  events: readonly OutcomeEvent[],
+  observations: readonly RecordCompatibilityObservation[],
+): OutcomeEventReadResult {
+  const compatibility = summarizeRecordCompatibility(observations);
+  return {
+    events: dedupeEvents(events),
+    compatibility,
+    warnings: compatibility.issues.map((issue) => `${issue.path}: ${issue.reason} — ignored`),
+  };
+}
 
-function isOutcomeEvent(value: unknown): value is OutcomeEvent {
-  if (typeof value !== 'object' || value === null) return false;
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate['ts'] === 'number' &&
-    typeof candidate['check'] === 'string' &&
-    typeof candidate['findingId'] === 'string' &&
-    EVENT_KINDS.includes(candidate['event'] as OutcomeEventKind) &&
-    (candidate['commit'] === null || typeof candidate['commit'] === 'string') &&
-    (candidate['comparisonBaseCommit'] === undefined || typeof candidate['comparisonBaseCommit'] === 'string') &&
-    (candidate['verifiedAgainstCommit'] === undefined ||
-      (candidate['event'] === 'resolved' && typeof candidate['verifiedAgainstCommit'] === 'string')) &&
-    (candidate['symbol'] === undefined || typeof candidate['symbol'] === 'string')
-  );
+function emptyOutcomeEventCandidateRead(): OutcomeEventCandidateRead {
+  return { ...outcomeEventReadResult([], []), observations: [] };
 }

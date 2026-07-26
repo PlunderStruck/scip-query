@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/scip-query/docs/schemas/outcome-event-record.schema.json",
+  "title": "scip-query outcome event record v1",
+  "description": "One immutable repository-owned finding transition stored under .scipquery/events/.",
+  "type": "object",
+  "required": ["kind", "schemaVersion", "eventIdentity", "writer", "ts", "check", "findingId", "event", "commit"],
+  "properties": {
+    "kind": { "const": "scip-query-outcome-event" },
+    "schemaVersion": { "const": 1 },
+    "eventIdentity": { "type": "string", "minLength": 1 },
+    "writer": {
+      "type": "object",
+      "required": ["tool", "version"],
+      "properties": {
+        "tool": { "const": "scip-query" },
+        "version": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "ts": { "type": "number" },
+    "check": { "type": "string", "minLength": 1 },
+    "findingId": { "type": "string", "minLength": 1 },
+    "event": { "enum": ["caught", "resolved", "suppressed", "reopened"] },
+    "commit": {
+      "oneOf": [{ "type": "string" }, { "type": "null" }]
+    },
+    "comparisonBaseCommit": { "type": "string" },
+    "verifiedAgainstCommit": { "type": "string" },
+    "symbol": { "type": "string" }
+  },
+  "allOf": [
+    {
+      "if": { "required": ["verifiedAgainstCommit"] },
+      "then": { "properties": { "event": { "const": "resolved" } } }
+    }
+  ],
+  "additionalProperties": true
+}
