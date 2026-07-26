@@ -164,6 +164,10 @@ export class ScipDatabase {
 }
 
 function assertSafeIndexedDocumentPaths(db: Database.Database): void {
+  const documentsTable = db
+    .prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'documents'")
+    .get() as { present: 1 } | undefined;
+  if (!documentsTable) return;
   const documents = db.prepare('SELECT relative_path FROM documents').iterate() as Iterable<{
     relative_path: string;
   }>;
