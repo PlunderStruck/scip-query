@@ -1,0 +1,7 @@
+{
+  "id": "SQ766F8D66A935",
+  "check": "twin-partner",
+  "file": "src/domain/record-validation.ts",
+  "reason": "The Vue worker wire decoder keeps its equivalent scalar guard locally because the enforced architecture forbids reindex-vue -> domain; the domain predicate serves only boundary-allowed consumers.",
+  "createdAt": "2026-07-26T09:47:04.423Z"
+}

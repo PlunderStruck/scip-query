@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { isStringOrNullRecord } from '../../domain/record-validation.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import type { ProfileEnvironment } from '../../instrumentation/profile.js';
 import { stringArray } from '../../storage/evidence-payload.js';
@@ -77,7 +78,7 @@ export function parseTypeScriptSemanticEnvelope(raw: string): TypeScriptSemantic
     typeof parsed.generation !== 'string' ||
     typeof parsed.deadlineAtMs !== 'number' ||
     !Number.isFinite(parsed.deadlineAtMs) ||
-    (parsed.profileEnvironment !== undefined && !isProfileEnvironment(parsed.profileEnvironment)) ||
+    (parsed.profileEnvironment !== undefined && !isStringOrNullRecord(parsed.profileEnvironment)) ||
     !parsed.request ||
     !isTypeScriptSemanticRequest(parsed.request) ||
     (!legacy &&
@@ -122,15 +123,6 @@ export function parseTypeScriptSemanticEnvelope(raw: string): TypeScriptSemantic
     ...(parsed.profileEnvironment ? { profileEnvironment: parsed.profileEnvironment } : {}),
     request: parsed.request,
   };
-}
-
-function isProfileEnvironment(value: unknown): value is ProfileEnvironment {
-  return (
-    !!value &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    Object.values(value).every((entry) => typeof entry === 'string' || entry === null)
-  );
 }
 
 function isTypeScriptSemanticRequest(value: unknown): value is TypeScriptSemanticRequest {

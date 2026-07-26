@@ -8,8 +8,10 @@ import {
   DurableRustSessionHost,
   createDurableRustAnalyzerSessionRequester,
   createDurableRustSessionIdentity,
+  durableRustMailboxSessionIdentity,
   durableRustSessionDirectory,
   isDurableRustSessionStateLive,
+  readDurableRustSessionServerState,
   rustCompilerSessionEnvironment,
   durableSettleDelayMs,
   type DurableRustSessionRequest,
@@ -25,6 +27,13 @@ import {
   acquireDurableRustSessionServerLock,
   processDurableRustSessionRequests,
 } from '../../../src/semantic/rust/durable-session-server.js';
+import {
+  BOUNDED_MAILBOX_VERSION,
+  boundedMailboxOperationKey,
+  boundedMailboxPaths,
+  boundedMailboxRequestId,
+  enqueueBoundedMailboxRequest,
+} from '../../../src/storage/bounded-mailbox.js';
 
 const definition: IndexedDefinition = {
   symbolId: 1,
@@ -652,6 +661,53 @@ describe('durable Rust semantic server state', () => {
       rmSync(tempRoot, { recursive: true, force: true });
     }
   });
+
+  it('validates an echoed server namespace while retaining the prior v3 state shape', () => {
+    const sessionDir = mkdtempSync(join(tmpdir(), 'scip-query-durable-session-state-identity-test-'));
+    const statePath = join(sessionDir, 'server.json');
+    try {
+      writeFileSync(
+        statePath,
+        JSON.stringify({
+          protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
+          sessionIdentity: durableRustMailboxSessionIdentity(sessionDir),
+          pid: 123,
+          heartbeatAtMs: 1_000,
+        }),
+      );
+      expect(readDurableRustSessionServerState(sessionDir)).toEqual(
+        expect.objectContaining({
+          sessionIdentity: durableRustMailboxSessionIdentity(sessionDir),
+          pid: 123,
+        }),
+      );
+
+      writeFileSync(
+        statePath,
+        JSON.stringify({
+          protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
+          sessionIdentity: durableRustMailboxSessionIdentity('/tmp/other-session'),
+          pid: 123,
+          heartbeatAtMs: 1_000,
+        }),
+      );
+      expect(readDurableRustSessionServerState(sessionDir)).toBeNull();
+
+      writeFileSync(
+        statePath,
+        JSON.stringify({
+          protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
+          pid: 123,
+          heartbeatAtMs: 1_000,
+        }),
+      );
+      expect(readDurableRustSessionServerState(sessionDir)).toEqual(
+        expect.objectContaining({ protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION, pid: 123 }),
+      );
+    } finally {
+      rmSync(sessionDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('durable Rust semantic requester', () => {
@@ -739,15 +795,21 @@ describe('durable Rust semantic requester', () => {
         const message = JSON.parse(readFileSync(join(requestDir, file), 'utf8')) as {
           id: string;
           operationKey: string;
+          sessionIdentity: string;
+          deadlineAtMs: number;
           request: { request: RustReferenceWorkerRequest };
         };
         writeFileSync(
           join(responseDir, `${message.id}.json`),
           JSON.stringify({
             ok: true,
+            mailboxVersion: BOUNDED_MAILBOX_VERSION,
             protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
             id: message.id,
             operationKey: message.operationKey,
+            sessionIdentity: message.sessionIdentity,
+            deadlineAtMs: message.deadlineAtMs,
+            completedAtMs: nowMs,
             session: 'reused',
             response: {
               available: true,
@@ -920,23 +982,88 @@ describe('durable Rust semantic helper shell', () => {
     }
   });
 
+  it('rejects a result that finishes after the absolute request deadline', () => {
+    const sessionDir = mkdtempSync(join(tmpdir(), 'scip-query-durable-session-server-expiry-test-'));
+    const request = {
+      kind: 'semantic',
+      identityKey: 'identity-a',
+      request: semanticRequest,
+      timeoutMs: 1_000,
+    } as const;
+    const operationKey = boundedMailboxOperationKey('rust-semantic-v3', request);
+    const id = boundedMailboxRequestId(operationKey);
+    const paths = boundedMailboxPaths(sessionDir);
+    let nowMs = 1_000;
+    enqueueBoundedMailboxRequest(
+      paths,
+      {
+        mailboxVersion: BOUNDED_MAILBOX_VERSION,
+        protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
+        id,
+        operationKey,
+        clientId: 'deadline-client',
+        enqueuedAtMs: nowMs,
+        deadlineAtMs: 2_000,
+        sessionIdentity: durableRustMailboxSessionIdentity(sessionDir),
+        request,
+      },
+      { nowMs },
+    );
+    const events: string[] = [];
+    const host = new DurableRustSessionHost(() => fakeRequester(1, events));
+
+    try {
+      expect(
+        processDurableRustSessionRequests(sessionDir, host, {
+          now: () => nowMs,
+          beforeRequest() {
+            nowMs = 2_001;
+          },
+        }),
+      ).toBe(1);
+      expect(events).toEqual(['request:1']);
+      expect(JSON.parse(readFileSync(join(paths.responseDir, `${id}.json`), 'utf8'))).toEqual(
+        expect.objectContaining({
+          ok: false,
+          errorCode: 'expired-request',
+          sessionIdentity: durableRustMailboxSessionIdentity(sessionDir),
+          deadlineAtMs: 2_000,
+          completedAtMs: 2_001,
+          error: expect.stringContaining('expired while'),
+        }),
+      );
+    } finally {
+      host.shutdown();
+      rmSync(sessionDir, { recursive: true, force: true });
+    }
+  });
+
   it('rejects explicit future and oversized mailbox input without killing the service loop', () => {
     const sessionDir = mkdtempSync(join(tmpdir(), 'scip-query-durable-session-server-reject-test-'));
     const requestDir = join(sessionDir, 'requests');
     const responseDir = join(sessionDir, 'responses');
     mkdirSync(requestDir, { recursive: true });
     mkdirSync(responseDir, { recursive: true });
+    const futureRequest = {
+      kind: 'semantic',
+      identityKey: 'identity-a',
+      request: semanticRequest,
+      timeoutMs: 1_000,
+    } as const;
+    const futureOperationKey = boundedMailboxOperationKey('rust-semantic-v4', futureRequest);
+    const futureId = boundedMailboxRequestId(futureOperationKey);
     writeFileSync(
       join(requestDir, 'future.json'),
       JSON.stringify({
+        mailboxVersion: BOUNDED_MAILBOX_VERSION,
         protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION + 1,
-        id: 'future',
-        request: {
-          kind: 'semantic',
-          identityKey: 'identity-a',
-          request: semanticRequest,
-          timeoutMs: 1_000,
-        },
+        id: futureId,
+        operationKey: futureOperationKey,
+        clientId: 'future-client',
+        enqueuedAtMs: 1_000,
+        deadlineAtMs: 2_000,
+        sessionIdentity: durableRustMailboxSessionIdentity(sessionDir),
+        request: futureRequest,
       }),
     );
     writeFileSync(join(requestDir, 'oversized.json'), 'x'.repeat(2_000));
@@ -949,8 +1076,14 @@ describe('durable Rust semantic helper shell', () => {
           limits: { maxItemBytes: 1_024 },
         }),
       ).toBe(2);
-      expect(JSON.parse(readFileSync(join(responseDir, 'future.json'), 'utf8'))).toEqual(
-        expect.objectContaining({ ok: false, error: expect.stringContaining('does not support mailbox protocol') }),
+      expect(JSON.parse(readFileSync(join(responseDir, `${futureId}.json`), 'utf8'))).toEqual(
+        expect.objectContaining({
+          ok: false,
+          errorCode: 'unsupported-protocol',
+          error: expect.stringContaining('does not support mailbox protocol'),
+          sessionIdentity: durableRustMailboxSessionIdentity(sessionDir),
+          deadlineAtMs: 2_000,
+        }),
       );
       expect(JSON.parse(readFileSync(join(responseDir, 'oversized.json'), 'utf8'))).toEqual(
         expect.objectContaining({ ok: false, error: expect.stringContaining('per-item limit') }),
@@ -1050,6 +1183,8 @@ function captureDurableMailboxRequest(
       const message = JSON.parse(readFileSync(requestPath, 'utf8')) as {
         id: string;
         operationKey: string;
+        sessionIdentity: string;
+        deadlineAtMs: number;
         request: DurableRustSessionRequest;
       };
       captured = message.request;
@@ -1061,9 +1196,13 @@ function captureDurableMailboxRequest(
         join(sessionDir, 'responses', `${message.id}.json`),
         JSON.stringify({
           ok: true,
+          mailboxVersion: BOUNDED_MAILBOX_VERSION,
           protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
           id: message.id,
           operationKey: message.operationKey,
+          sessionIdentity: message.sessionIdentity,
+          deadlineAtMs: message.deadlineAtMs,
+          completedAtMs: nowMs,
           session: 'reused',
           response,
         }),

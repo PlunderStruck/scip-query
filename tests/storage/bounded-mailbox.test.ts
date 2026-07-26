@@ -33,12 +33,22 @@ describe('bounded filesystem mailbox', () => {
     const paths = fixture();
     const request = operation('alpha', NOW, NOW + 10_000);
 
-    expect(enqueueBoundedMailboxRequest(paths, request, { nowMs: NOW }).disposition).toBe('accepted');
+    expect(enqueueBoundedMailboxRequest(paths, request, { nowMs: NOW })).toEqual(
+      expect.objectContaining({
+        disposition: 'accepted',
+        authoritativeDeadlineAtMs: NOW + 10_000,
+      }),
+    );
     expect(
       enqueueBoundedMailboxRequest(paths, operation('alpha', NOW + 1, NOW + 10_001), {
         nowMs: NOW + 1,
-      }).disposition,
-    ).toBe('duplicate');
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        disposition: 'duplicate',
+        authoritativeDeadlineAtMs: NOW + 10_000,
+      }),
+    );
     expect(inspectBoundedMailbox(paths)).toEqual(expect.objectContaining({ pending: 1, inflight: 0, responses: 0 }));
 
     const [abandoned] = claimBoundedMailboxRequests(paths, {
@@ -101,8 +111,13 @@ describe('bounded filesystem mailbox', () => {
     expect(
       enqueueBoundedMailboxRequest(paths, operation('alpha', NOW + 20_000, NOW + 30_000), {
         nowMs: NOW + 20_000,
-      }).disposition,
-    ).toBe('duplicate');
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        disposition: 'duplicate',
+        authoritativeDeadlineAtMs: NOW + 10_000,
+      }),
+    );
   });
 
   it('keeps the first completion authoritative when an expired owner finishes late', () => {

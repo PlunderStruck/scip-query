@@ -110,8 +110,18 @@ export interface MailboxMaintenanceResult {
 }
 
 export type EnqueueBoundedMailboxResult =
-  | { disposition: 'accepted'; requestId: string; responsePath: string }
-  | { disposition: 'duplicate'; requestId: string; responsePath: string };
+  | {
+      disposition: 'accepted';
+      requestId: string;
+      responsePath: string;
+      authoritativeDeadlineAtMs: number;
+    }
+  | {
+      disposition: 'duplicate';
+      requestId: string;
+      responsePath: string;
+      authoritativeDeadlineAtMs: number;
+    };
 
 interface RequestHeader {
   id: string;
@@ -232,8 +242,13 @@ export function enqueueBoundedMailboxRequest(
       const responsePath = join(paths.responseDir, `${request.id}.json`);
       const existing = existingOperation(paths, request.id);
       if (existing) {
-        assertMatchingOperation(existing, request.operationKey, request.id);
-        return { disposition: 'duplicate', requestId: request.id, responsePath };
+        const header = assertMatchingOperation(existing, request.operationKey, request.id);
+        return {
+          disposition: 'duplicate',
+          requestId: request.id,
+          responsePath,
+          authoritativeDeadlineAtMs: header.deadlineAtMs ?? request.deadlineAtMs,
+        };
       }
       const serialized = `${JSON.stringify(request)}\n`;
       const requestBytes = Buffer.byteLength(serialized);
@@ -250,13 +265,23 @@ export function enqueueBoundedMailboxRequest(
       options.onBeforePublish?.();
       try {
         createFileAtomicExclusive(requestPath, serialized, { durability: 'durable' });
-        return { disposition: 'accepted', requestId: request.id, responsePath };
+        return {
+          disposition: 'accepted',
+          requestId: request.id,
+          responsePath,
+          authoritativeDeadlineAtMs: request.deadlineAtMs,
+        };
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
         const competing = existingOperation(paths, request.id);
         if (!competing) throw error;
-        assertMatchingOperation(competing, request.operationKey, request.id);
-        return { disposition: 'duplicate', requestId: request.id, responsePath };
+        const header = assertMatchingOperation(competing, request.operationKey, request.id);
+        return {
+          disposition: 'duplicate',
+          requestId: request.id,
+          responsePath,
+          authoritativeDeadlineAtMs: header.deadlineAtMs ?? request.deadlineAtMs,
+        };
       }
     },
   );
@@ -415,6 +440,7 @@ export function completeBoundedMailboxClaim(
     mailboxVersion: BOUNDED_MAILBOX_VERSION,
     operationKey: claim.operationKey ?? `legacy-${claim.requestId}`,
     clientId: claim.clientId ?? 'legacy',
+    ...(claim.deadlineAtMs === undefined ? {} : { deadlineAtMs: claim.deadlineAtMs }),
     completedAtMs: nowMs,
     expiresAtMs: nowMs + limits.responseRetentionMs,
   };
@@ -803,11 +829,12 @@ function existingOperation(paths: BoundedMailboxPaths, requestId: string): strin
   return null;
 }
 
-function assertMatchingOperation(path: string, operationKey: string, requestId: string): void {
+function assertMatchingOperation(path: string, operationKey: string, requestId: string): RequestHeader {
   const header = readRequestHeader(path);
   if (!header || header.operationKey !== operationKey) {
     throw new Error(`Mailbox operation ${requestId} conflicts with an existing retained record.`);
   }
+  return header;
 }
 
 function validateRequestIdentity(request: BoundedMailboxRequestIdentity): void {

@@ -976,6 +976,177 @@ accepted, every production reader/writer and state authority covered.
 **Dependencies:** Slice 16.  
 **Rollback:** overlap server accepts the immediately prior request format and clients understand an explicit incompatible response.
 
+#### Slice 24 high-assurance certificate
+
+**Goal.** Make a Rust helper result usable only when the bytes prove which
+validated request, logical operation, helper namespace, protocol, and
+absolute processing interval produced it, without losing Slice 16's
+first-completion idempotency.
+
+**Definitions and invariants.**
+
+A durable Rust message is a filesystem request or response shared by the CLI
+and the reusable rust-analyzer owner; what distinguishes it from an
+in-process call is that either process can restart, upgrade, or observe
+retained bytes independently.
+
+A mailbox-session identity is the stable SHA-256 of one absolute durable
+session directory and protocol. That directory is already separated by
+canonical project and helper-binary fingerprint; echoing the identity makes
+that namespace an inspected message fact rather than a pathname assumption.
+
+An authoritative operation deadline is the absolute deadline carried by the
+first admitted copy of one content-derived operation. Exact retries are units
+of the same operation, so they must validate that retained deadline rather
+than replace it with a later attempt's proposed deadline.
+
+- A current request must validate its mailbox version, protocol, path-derived
+  request ID, operation ID, client, enqueue/deadline pair, session identity,
+  kind, inner payload, and timeout/deadline congruence before work.
+- A current response must match protocol, mailbox, request, operation,
+  session, and authoritative deadline before either data or an error is
+  exposed.
+- A success must be produced and observed no later than the operation
+  deadline; expiration can delay or reject work but cannot manufacture a
+  result.
+- A semantic request cannot consume an import-definition response or the
+  reverse.
+- Exact retries retain one operation ID and first completion; correlation
+  metadata must not create duplicate logical work.
+- Former unversioned and immediately prior v3 requests remain readable during
+  overlap. Partial version metadata and explicit future versions are never
+  downgraded to legacy.
+- An uncorrelatable malformed record may produce bounded diagnostic evidence
+  but can never produce a client-accepted response.
+
+**Premises.**
+
+- **P1.** Slice 16 established current protocol v3, bounded mailbox lifecycle
+  v1, deterministic operation/request IDs, absolute request deadlines,
+  first-completion publication, and an unversioned request overlap reader.
+  Sources: `src/semantic/rust/durable-session.ts`,
+  `src/storage/bounded-mailbox.ts`.
+- **P2.** The durable directory is content-addressed by project, helper path,
+  and helper bytes, but that namespace was not present in request, response,
+  or server-state records. Source: `durableRustSessionDirectory`.
+- **P3.** The helper's former parser validated outer lifecycle fields and
+  then cast the nested union. Wrong kinds and malformed nested definitions or
+  positions could reach the host. Source:
+  `src/semantic/rust/durable-session-server.ts`.
+- **P4.** The former response parser checked protocol, request ID, and
+  operation key but not mailbox-session identity, request deadline,
+  completion/observation expiry, or kind-specific response shape. Source:
+  `parseDurableResponse` in `src/semantic/rust/durable-session.ts`.
+- **P5.** The helper checked expiry before `host.handle` but not after it.
+  Rust work that crossed the absolute deadline could still publish success.
+- **P6.** Exact retry intentionally joins a retained operation. A new
+  attempt's proposed deadline can differ from the first request's deadline,
+  so enforcing deadline equality requires the mailbox to return the
+  authoritative retained value rather than putting civil time into the
+  operation hash.
+- **P7.** Complete symbol references show the request envelope is produced
+  only by the durable requester and consumed only by the durable helper;
+  protocol state is also exposed by Rust session status and the server-state
+  file.
+- **P8.** The immediately prior v3 request lacks the new session field, while
+  its response lacks the new session/deadline proof. Rollback therefore needs
+  asymmetric overlap: accept the prior request additively, but have the
+  current client reject an uncorrelated prior response explicitly.
+
+**Reuse audit.**
+
+- Keep `boundedMailboxOperationKey`, deterministic IDs, atomic admission,
+  claims, first-completion publication, quotas, retention, and dead letters.
+- Extend `EnqueueBoundedMailboxResult` with the authoritative retained
+  deadline rather than inventing a Rust-only duplicate scanner.
+- Put request/response wire decoding in one pure protocol module; keep process
+  lifecycle, filesystem I/O, rust-analyzer ownership, and monotonic waits in
+  their existing shells.
+- Derive the mailbox-session identity with the existing stable JSON and
+  SHA-256 conventions. Do not reuse the compiler-session identity: it
+  identifies answer-affecting compiler inputs, not the transport namespace.
+- Preserve the current numeric protocol version because the new request and
+  response fields are additive for the immediately prior reader; classify
+  the missing-field request as `prior-v3`.
+
+**Testability design.**
+
+| Behavior                | Pure seam                             | Side-effect seam                                 | Contract                                                       |
+| ----------------------- | ------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------- |
+| Namespace identity      | `durableRustMailboxSessionIdentity`   | directory derivation                             | same directory stable; different directory distinct            |
+| Request decoding        | `decodeDurableRustMailboxRequest`     | claim reader                                     | current/prior/legacy/future/malformed are explicit             |
+| Domain-kind validation  | semantic/import request guards        | `DurableRustSessionHost.handle`                  | host sees only validated unions                                |
+| Absolute expiry         | request/response deadline comparisons | injected civil clock around host work            | checked before work, after work, and before client acceptance  |
+| Retry deadline identity | authoritative deadline result         | pending/inflight/response header reads           | duplicate uses first admitted deadline                         |
+| Response correlation    | `decodeDurableRustMailboxResponse`    | requester response polling                       | protocol/request/operation/session/deadline all match          |
+| Explicit rejection      | typed error-code union                | response/dead-letter publication                 | safe correlation is preserved; unsafe bytes cannot be accepted |
+| Compatibility           | old/current/future fixtures           | current helper shell and previous-reader fixture | additive request overlap; incompatible response is explicit    |
+
+**Design phases.**
+
+1. **24.1 — Extract and strengthen the pure wire contract.** Move the v3
+   types and constant into a protocol module, derive session identity, and
+   strictly decode both domain request kinds. **Deployable:** only with 24.2,
+   because the writer must publish the required field. Premises P1-P4.
+2. **24.2 — Correlate producer, helper, and response.** Publish and echo
+   session identity and deadline, validate kind-specific response shapes, and
+   emit typed errors when outer correlation is safe. **Deployable:** yes with
+   the overlap decoder. Premises P2-P5, P8.
+3. **24.3 — Preserve retry identity while enforcing time.** Return the
+   authoritative deadline from bounded-mailbox duplicate admission, retain it
+   on every completion, and check expiry after helper work and before
+   response acceptance. **Deployable:** yes. Premises P5-P6.
+4. **24.4 — Publish the compatibility oracle.** Add the mutation matrix,
+   server-shell expiry/future tests, prior-reader fixture, protocol guide, and
+   audit resolution. **Deployable:** yes. Premises P7-P8.
+
+**Attack record.**
+
+- **A1 — Malformed domain kind.** A v3 lifecycle wraps `kind: "unknown"` or a
+  malformed definition and reaches the host through a cast. **Outcome: HOLE —
+  repaired by 24.1** with strict union and nested-field validation.
+- **A2 — Cross-session request replay.** Valid operation bytes are copied into
+  another durable directory. **Outcome: HOLE — repaired by 24.1/24.2**:
+  independently derived session identity must match.
+- **A3 — Future request downgraded.** A versioned future envelope is treated
+  like unversioned v2. **Outcome: HELD and made explicit**: only an absent
+  protocol with no partial lifecycle metadata is legacy; a correlatable
+  future request gets `unsupported-protocol`.
+- **A4 — Response replay by ID.** A response has the expected file/request ID
+  but a different operation or session. **Outcome: HOLE — repaired by 24.2**
+  through exact operation and namespace checks before payload parsing.
+- **A5 — Deadline substitution.** An exact retry joins retained work but
+  expects its later proposed deadline, either rejecting valid retained bytes
+  or silently relabeling them. **Outcome: HOLE discovered during
+  implementation — repaired by 24.3** with the authoritative retained
+  deadline returned from admission.
+- **A6 — Request expires in queue.** The helper claims abandoned work after
+  its absolute deadline. **Outcome: HELD by Slice 16 and retained**; the pure
+  decoder now returns typed `expired-request`.
+- **A7 — Work crosses deadline.** The request was live before `host.handle`
+  but rust-analyzer returns after expiry. **Outcome: HOLE — repaired by 24.3**
+  with a second civil-time check before success publication.
+- **A8 — Stale response observed late.** Completion occurred before the
+  deadline but a caller reads retained bytes afterward. **Outcome: HOLE —
+  repaired by 24.2/24.3**: observation time is checked before data exposure.
+- **A9 — Wrong response kind.** Import-definition data is cast as semantic
+  data under correct outer IDs. **Outcome: HOLE — repaired by 24.1/24.2**
+  with kind-specific response validators.
+- **A10 — Prior v3 client.** Its valid request has no session field.
+  **Outcome: HELD by 24.1**: it is classified `prior-v3`, the server derives
+  the field, and the additive response retains prior root fields.
+- **A11 — Prior v3 server.** Its response lacks session/deadline proof.
+  **Outcome: accepted limitation, fail closed**: the current client returns an
+  explicit incompatible-response error. Helper-byte fingerprinting normally
+  selects a new directory before this pairing occurs.
+- **A12 — Uncorrelatable garbage.** Oversized or malformed JSON cannot prove
+  operation/session/deadline. **Outcome: HELD**: bounded rejection/dead-letter
+  evidence remains, while current response decoding refuses the file.
+
+**Verdict.** `PLANNED-COMPLETE` — 12 attacks, 6 pre-existing holes and 1
+implementation-discovered retry/deadline hole repaired, 1 fail-closed overlap
+limitation accepted, no path remains that exposes uncorrelated result data.
+
 ### Slice 25 — REL-01 — Bind Windows binaries to reproducible provenance
 
 **Invariant:** binary presence never authorizes publication; hashes, target architecture, and source/build provenance must match.
@@ -1093,8 +1264,8 @@ accepted, every production reader/writer and state authority covered.
 |    20 | API-01  | complete | `bbb0db24` | 126 focused passing tests           | v0/v1 decode, future rejection, result versions, all JSON descriptors, private protocol, config/metadata reuse, schema, and package verified |
 |    21 | API-02  | complete | `80cb260d` | 13 contract + consumer compile      | 72 paths, 871 exports, shared declaration closure, conservative classification, immutable acceptance, and release gate verified              |
 |    22 | API-03  | complete | `777d09c9` | 95 config/API/revision assertions   | Legacy/current/future/malformed decoding, no-op migration, unknown-field preservation, conflict safety, and packaged schema verified         |
-|    23 | API-05  | complete |            | 65 focused; 1,717 full-suite tests  | Exact compatibility accounting, overlap readers, safe migration, incomplete-history fencing, disclosure, schemas, and package verified       |
-|    24 | API-06  | pending  |            |                                     |                                                                                                                                              |
+|    23 | API-05  | complete | `9c812746` | 65 focused; 1,717 full-suite tests  | Exact compatibility accounting, overlap readers, safe migration, incomplete-history fencing, disclosure, schemas, and package verified       |
+|    24 | API-06  | complete |            | 99 focused; 1,730 full-suite tests  | Strict Rust request/response decoding, session/deadline correlation, retry authority, overlap behavior, and expiry verified                  |
 |    25 | REL-01  | pending  |            |                                     |                                                                                                                                              |
 |    26 | REL-02  | pending  |            |                                     |                                                                                                                                              |
 |    27 | REL-03  | pending  |            |                                     |                                                                                                                                              |
@@ -1578,6 +1749,68 @@ accepted, every production reader/writer and state authority covered.
   the full 23-slice working history rather than Slice 23 regressions. The only
   Slice 23 entries are expected extraction/single-consumer signals around the
   cohesive event append/read result contracts; no baseline was ratcheted.
+
+### Slice 24 verification record
+
+- `src/semantic/rust/durable-session-protocol.ts` is the dependency-light
+  authority for the Rust wire protocol. It derives the mailbox-session
+  identity and strictly classifies current v3, immediately prior v3, legacy
+  unversioned, unsupported, malformed, and expired requests without casting a
+  nested payload.
+- Current request validation covers mailbox/protocol versions, deterministic
+  request and operation identities, client, enqueue/deadline order, session
+  namespace, request kind, nested semantic/import payloads, and
+  timeout/deadline congruence. Partial lifecycle metadata cannot fall through
+  to the legacy decoder.
+- Current response validation requires the expected mailbox, protocol,
+  request, operation, session, authoritative deadline, completion and
+  observation times, session disposition, and kind-specific result shape
+  before exposing data. A prior server response without the new proof is
+  rejected as incompatible rather than accepted under a weak overlap rule.
+- The helper derives session identity independently, validates before
+  rust-analyzer work, checks civil expiry again after work, and emits typed
+  `unsupported-protocol`, `malformed-request`, `expired-request`, or
+  `handler-error` results only when the outer correlation is safe.
+  Uncorrelatable bytes remain bounded diagnostic/dead-letter evidence and
+  cannot become a client-accepted result.
+- Implementation exposed a retry/deadline invariant absent from the original
+  issue description: exact retries keep one content-derived operation ID but
+  may propose later civil deadlines. `EnqueueBoundedMailboxResult` now returns
+  the first admitted pending, inflight, or completed record's authoritative
+  deadline, and every completion preserves it. This keeps first-completion
+  idempotency while preventing deadline substitution.
+- The final 11-file affected matrix passes 99 tests. It covers stable and
+  distinct session identities; current/prior/legacy/future requests; every
+  correlation field; wrong kind and malformed nested fields; replay; queue,
+  work, response, and observation expiry; first-completion retry; current and
+  prior server state; typed helper failures; and a previous-reader additive
+  response fixture.
+- Typecheck, scoped ESLint, formatting, the production build, all 72 package
+  API paths, and downstream compilation pass. The additive mailbox return
+  field does not change any package export or accepted public declaration.
+- With an isolated `XDG_CACHE_HOME`, the full suite passes 225 of 226 files
+  and 1,730 tests, with 2 intentional skips. The only 2 failures are Claude's
+  concurrently edited `skills/scip-query/SKILL.md` command token and
+  40-command coverage assertions; every API-06 and shared-validator test
+  passes.
+- The first source gate caught five duplicated scalar/hash validators. All
+  boundary-allowed consumers now reuse `src/domain/record-validation.ts`.
+  Importing that domain module from the Vue reindex worker correctly failed
+  the enforced architecture gate, so the worker-local wire validator remains
+  separate. The final source gate has no unsuppressed API-06 blocker or
+  advisory.
+- Exact suppressions `SQ1306716AFD68`, `SQ680D48C2E363`, and
+  `SQ766F8D66A935` document that architectural boundary and the semantic
+  difference between positive and nonnegative integers. The gate's only two
+  remaining blockers are Claude's concurrent skill-router co-change signals.
+- `scip-query health --baseline` reports 82 accumulated heuristic deltas from
+  the full 24-slice working history. API-06 adds expected extraction pressure
+  for the cohesive request/response decoders and server transaction, plus one
+  single-consumer expectation type; no baseline was ratcheted.
+- `docs/RUST_DURABLE_SESSION_PROTOCOL.md`,
+  `docs/MAILBOX_LIFECYCLE.md`, and the architecture/metadata compatibility
+  records define the overlap matrix, authority, replay, retry, expiry,
+  recovery, and shared validation boundaries.
 
 ### Slice 09 verification note
 

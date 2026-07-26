@@ -745,6 +745,10 @@ is reclaimable, while a response published before a crash prevents
 re-execution. The precise state machine, default limits, legacy overlap, and
 failure matrix are documented in
 [`docs/MAILBOX_LIFECYCLE.md`](docs/MAILBOX_LIFECYCLE.md).
+Rust v3 additionally binds every accepted response to its request ID,
+operation ID, mailbox-session identity, and authoritative absolute deadline;
+its old/current/future compatibility matrix is in
+[`docs/RUST_DURABLE_SESSION_PROTOCOL.md`](docs/RUST_DURABLE_SESSION_PROTOCOL.md).
 It also reports a rolling 24-hour reindex activity summary: rebuilt, reused,
 failed, and freshness-proven suppressed refreshes plus estimated logical output
 bytes. The estimate counts scip-query artifacts emitted by rebuilt refreshes;

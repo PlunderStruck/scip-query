@@ -1,0 +1,7 @@
+{
+  "id": "SQ680D48C2E363",
+  "check": "echo",
+  "file": "src/domain/record-validation.ts",
+  "reason": "Positive integer validation rejects zero while the compared Vue count validator accepts zero; their product contracts differ despite token similarity, and reindex-vue also cannot import domain under the enforced architecture.",
+  "createdAt": "2026-07-26T09:47:04.434Z"
+}

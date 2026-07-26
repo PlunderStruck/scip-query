@@ -1134,6 +1134,36 @@ unsupported future behavior an explicit compatibility fixture.
 
 **Acceptance condition:** a Rust response is accepted only when it proves which request and protocol produced it.
 
+**Resolution:** Slice 24 moved the Rust wire contract into a dependency-light
+decoder shared by the requester and helper. A current request is accepted only
+after mailbox version, protocol version, request ID, operation key, client,
+enqueue/deadline pair, mailbox-session identity, request kind, inner payload,
+and timeout/deadline congruence validate. The helper derives the namespace
+identity independently from its absolute session directory and recomputes the
+operation key from the validated request before calling rust-analyzer.
+
+The response now echoes the mailbox-session identity and authoritative
+deadline. The client checks protocol, mailbox, request, operation, session,
+deadline, completion time, observation time, session disposition, and
+kind-specific response shape before exposing a result. `unsupported-protocol`,
+`malformed-request`, `expired-request`, and `handler-error` make safely
+correlated rejections executable rather than free-text casts. Work is checked
+against the absolute deadline both before and after the host call.
+
+Exact retries still converge on one logical operation. The bounded mailbox now
+returns the deadline from the authoritative pending, inflight, or completed
+record, and every current completion preserves that deadline, so a duplicate
+caller cannot substitute its later attempt deadline. This retained Slice 16's
+idempotency contract while making deadline equality enforceable.
+
+The overlap reader accepts the former unversioned request and the immediately
+prior v3 request without a session field; partial version metadata is
+rejected, explicit future versions are never treated as legacy, and a prior
+v3 server response is rejected by the current client as uncorrelated. The
+compatibility and recovery matrix is documented in
+`docs/RUST_DURABLE_SESSION_PROTOCOL.md`. Pure request/response mutation tests,
+server-shell tests, and the shared mailbox suite cover every required case.
+
 ---
 
 ## 7. Windows sidecar release findings

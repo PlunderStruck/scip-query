@@ -1,0 +1,7 @@
+{
+  "id": "SQ1306716AFD68",
+  "check": "echo",
+  "file": "src/domain/record-validation.ts",
+  "reason": "The identical nonnegative-integer predicate is intentionally local in the Vue worker decoder because the enforced architecture forbids reindex-vue -> domain; all allowed platform, reindex, and semantic consumers reuse the domain predicate.",
+  "createdAt": "2026-07-26T09:47:04.418Z"
+}

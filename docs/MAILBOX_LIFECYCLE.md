@@ -67,13 +67,20 @@ durable-session protocol is also version 3. Current readers recompute the
 operation key, require the ID derived from it, and retain the existing
 generation/base-generation response checks. TypeScript services accept the
 supported flat version-2 request shape during the overlap window. The Rust
-service accepts its former unversioned `{id, request}` shape; an explicitly
-versioned unknown Rust envelope is not treated as legacy.
+service accepts its former unversioned `{id, request}` shape and the
+immediately prior v3 envelope without a mailbox-session identity; an
+explicitly versioned unknown Rust envelope is not treated as legacy.
 
 Responses repeat the domain protocol, request ID, operation key, completion
-time, and retention expiry. The first response published for an operation is
-authoritative. An old owner that finishes after its lease was reclaimed cannot
-replace a newer response.
+time, authoritative request deadline, and retention expiry. The first
+response published for an operation is authoritative. An old owner that
+finishes after its lease was reclaimed cannot replace a newer response.
+Duplicate admission returns the deadline from that authoritative pending,
+inflight, or completed record, so a retry cannot relabel retained work with a
+new time identity. Rust responses additionally echo the mailbox-session
+identity and are accepted only when protocol, request, operation, session, and
+deadline all match. See
+[Durable Rust session protocol](RUST_DURABLE_SESSION_PROTOCOL.md).
 
 ## Admission and bounds
 
@@ -185,5 +192,6 @@ Focused contract coverage lives in:
 - `tests/storage/bounded-mailbox.test.ts`;
 - `tests/semantic/typescript/typescript-session-mailbox.test.ts`;
 - `tests/reindex/typescript-index-mailbox.test.ts`;
+- `tests/semantic/rust/durable-session-protocol.test.ts`;
 - `tests/semantic/rust/rust-durable-session.test.ts`; and
 - `tests/platform/watch-service-state.test.ts`.

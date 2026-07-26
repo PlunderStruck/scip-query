@@ -7,17 +7,18 @@ import { monotonicNowMs } from '../../domain/time.js';
 import {
   DURABLE_RUST_SESSION_PROTOCOL_VERSION,
   DurableRustSessionHost,
+  decodeDurableRustMailboxRequest,
+  durableRustMailboxSessionIdentity,
   type DurableRustMailboxEnvelope,
+  type DurableRustMailboxErrorCode,
+  type DurableRustMailboxResponseIdentity,
   type DurableRustSessionRequest,
   type DurableRustSessionServerState,
 } from './durable-session.js';
 import { createWorkerRustAnalyzerSessionRequester } from './lsp-session.js';
 import { writeJsonDurable } from '../../storage/atomic-json.js';
 import {
-  BOUNDED_MAILBOX_VERSION,
-  boundedMailboxOperationKey,
   boundedMailboxPaths,
-  boundedMailboxRequestId,
   claimBoundedMailboxRequests,
   completeBoundedMailboxClaim,
   initializeBoundedMailbox,
@@ -43,6 +44,7 @@ export function processDurableRustSessionRequests(
   host: DurableRustSessionHost,
   opts: {
     beforeRequest?: (request: DurableRustSessionRequest) => void;
+    now?: () => number;
     nowMs?: number;
     monotonicNowMs?: number;
     ownerId?: string;
@@ -51,10 +53,12 @@ export function processDurableRustSessionRequests(
 ): number {
   const paths = boundedMailboxPaths(sessionDir);
   initializeBoundedMailbox(paths);
-  const nowMs = opts.nowMs ?? Date.now();
+  const now = opts.now ?? (opts.nowMs === undefined ? Date.now : () => opts.nowMs as number);
+  const claimNowMs = now();
+  const sessionIdentity = durableRustMailboxSessionIdentity(sessionDir);
   const claims = claimBoundedMailboxRequests(paths, {
     ownerId: opts.ownerId ?? DURABLE_RUST_MAILBOX_OWNER,
-    nowMs,
+    nowMs: claimNowMs,
     limits: opts.limits,
     owner: DURABLE_RUST_MAILBOX_PROCESS_OWNER,
     liveness: DURABLE_RUST_MAILBOX_LIVENESS,
@@ -62,17 +66,41 @@ export function processDurableRustSessionRequests(
   let processed = 0;
   for (const claim of claims) {
     let message: DurableRustMailboxEnvelope | null = null;
+    let responseIdentity: DurableRustMailboxResponseIdentity | undefined;
+    let errorCode: DurableRustMailboxErrorCode = 'handler-error';
     try {
-      message = parseMailboxRequest(readBoundedMailboxClaim(claim, opts.limits), nowMs);
-      if (message.id !== claim.requestId) {
-        throw new Error('Durable Rust semantic request identity does not match its mailbox path.');
+      const raw = readBoundedMailboxClaim(claim, opts.limits);
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        errorCode = 'malformed-request';
+        throw new Error('Durable Rust semantic helper received malformed request JSON.');
       }
-      if (message.deadlineAtMs < nowMs) {
-        throw new Error('Durable Rust semantic request expired before processing.');
+      const decoded = decodeDurableRustMailboxRequest(parsed, {
+        claimRequestId: claim.requestId,
+        sessionIdentity,
+        nowMs: now(),
+      });
+      if (!decoded.ok) {
+        errorCode = decoded.code;
+        responseIdentity = decoded.responseIdentity;
+        throw new Error(decoded.error);
       }
+      message = decoded.value;
+      responseIdentity = {
+        id: message.id,
+        sessionIdentity: message.sessionIdentity,
+        deadlineAtMs: message.deadlineAtMs,
+      };
       const localRequest = withLocalReadinessDeadline(message.request, opts.monotonicNowMs ?? monotonicNowMs());
       opts.beforeRequest?.(localRequest);
       const result = host.handle(localRequest);
+      const completedAtMs = now();
+      if (message.deadlineAtMs < completedAtMs) {
+        errorCode = 'expired-request';
+        throw new Error('Durable Rust semantic request expired while the helper was processing it.');
+      }
       completeBoundedMailboxClaim(
         paths,
         claim,
@@ -80,12 +108,23 @@ export function processDurableRustSessionRequests(
           ok: true,
           protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
           id: message.id,
+          sessionIdentity: message.sessionIdentity,
+          deadlineAtMs: message.deadlineAtMs,
           ...result,
         },
-        { nowMs, limits: opts.limits },
+        { nowMs: completedAtMs, limits: opts.limits },
       );
     } catch (error) {
-      const id = message?.id ?? claim.requestId;
+      const completedAtMs = now();
+      const identity =
+        responseIdentity ??
+        (message
+          ? {
+              id: message.id,
+              sessionIdentity: message.sessionIdentity,
+              deadlineAtMs: message.deadlineAtMs,
+            }
+          : undefined);
       const reason = error instanceof Error ? error.message : String(error);
       rejectBoundedMailboxClaim(
         paths,
@@ -93,11 +132,18 @@ export function processDurableRustSessionRequests(
         {
           ok: false,
           protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
-          id,
+          id: identity?.id ?? claim.requestId,
+          ...(identity
+            ? {
+                sessionIdentity: identity.sessionIdentity,
+                deadlineAtMs: identity.deadlineAtMs,
+              }
+            : {}),
+          errorCode,
           error: reason,
         },
         reason,
-        { nowMs, limits: opts.limits },
+        { nowMs: completedAtMs, limits: opts.limits },
       );
     }
     processed += 1;
@@ -135,6 +181,7 @@ async function runDurableRustSessionServer(sessionDir: string, semanticWorkerPat
   let lastHeartbeatAtMonotonicMs = Number.NEGATIVE_INFINITY;
   let busyUntilMs: number | undefined;
   const processIdentity = readProcessIdentity(process.pid);
+  const sessionIdentity = durableRustMailboxSessionIdentity(sessionDir);
   const stop = (): void => {
     stopping = true;
   };
@@ -148,6 +195,7 @@ async function runDurableRustSessionServer(sessionDir: string, semanticWorkerPat
     lastHeartbeatAtMonotonicMs = nowMonotonic;
     writeJsonDurable(resolve(sessionDir, 'server.json'), {
       protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
+      sessionIdentity,
       pid: process.pid,
       ...(processIdentity ? { processIdentity } : {}),
       heartbeatAtMs: now,
@@ -193,51 +241,6 @@ export function acquireDurableRustSessionServerLock(lockPath: string): ProcessFi
     parseLegacy: decodeLegacyRustServerLock,
   });
   return result.kind === 'acquired' ? result.lock : null;
-}
-
-function parseMailboxRequest(raw: string, nowMs: number): DurableRustMailboxEnvelope {
-  const parsed = JSON.parse(raw) as Partial<DurableRustMailboxEnvelope> & { protocolVersion?: unknown };
-  if (typeof parsed.id !== 'string' || !parsed.request || typeof parsed.request !== 'object') {
-    throw new Error('Durable Rust semantic helper received an invalid mailbox request.');
-  }
-  if (parsed.protocolVersion === DURABLE_RUST_SESSION_PROTOCOL_VERSION) {
-    if (
-      parsed.mailboxVersion !== BOUNDED_MAILBOX_VERSION ||
-      typeof parsed.operationKey !== 'string' ||
-      !/^[a-f0-9]{64}$/.test(parsed.operationKey) ||
-      parsed.id !== boundedMailboxRequestId(parsed.operationKey) ||
-      typeof parsed.clientId !== 'string' ||
-      !parsed.clientId ||
-      typeof parsed.enqueuedAtMs !== 'number' ||
-      !Number.isFinite(parsed.enqueuedAtMs) ||
-      typeof parsed.deadlineAtMs !== 'number' ||
-      !Number.isFinite(parsed.deadlineAtMs) ||
-      parsed.deadlineAtMs < parsed.enqueuedAtMs
-    ) {
-      throw new Error('Durable Rust semantic helper received an invalid mailbox lifecycle.');
-    }
-    const current = parsed as DurableRustMailboxEnvelope;
-    if (current.operationKey !== boundedMailboxOperationKey('rust-semantic-v3', current.request)) {
-      throw new Error('Durable Rust semantic helper received a mismatched mailbox operation identity.');
-    }
-    return current;
-  }
-  if (parsed.protocolVersion !== undefined) {
-    throw new Error(
-      `Durable Rust semantic helper does not support mailbox protocol ${String(parsed.protocolVersion)}.`,
-    );
-  }
-  const request = parsed.request as DurableRustSessionRequest;
-  return {
-    mailboxVersion: BOUNDED_MAILBOX_VERSION,
-    protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
-    id: parsed.id,
-    operationKey: boundedMailboxOperationKey('rust-semantic-v2', { id: parsed.id, request }),
-    clientId: 'legacy-v2',
-    enqueuedAtMs: nowMs,
-    deadlineAtMs: nowMs + Math.max(1, request.timeoutMs ?? 120_000),
-    request,
-  };
 }
 
 function configuredIdleTimeoutMs(): number {

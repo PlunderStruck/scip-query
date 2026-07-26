@@ -7,7 +7,7 @@ import type {
   RefreshTriggerKind,
   ReindexActivitySummary,
 } from '../domain/types.js';
-import { isValidRecordTimestamp } from '../domain/record-validation.js';
+import { isNonNegativeFiniteNumber, isValidRecordTimestamp } from '../domain/record-validation.js';
 import type { ReindexResult } from './index.js';
 import {
   appendRotatingJsonlRecord,
@@ -193,8 +193,8 @@ function parseReindexActivityRecord(line: string): ReindexActivityRecord | null 
     if (
       record.event !== 'run' ||
       (record.result !== 'rebuilt' && record.result !== 'reused' && record.result !== 'failed') ||
-      !nonNegativeNumber(record.durationMs) ||
-      !nonNegativeNumber(record.estimatedLogicalOutputBytes)
+      !isNonNegativeFiniteNumber(record.durationMs) ||
+      !isNonNegativeFiniteNumber(record.estimatedLogicalOutputBytes)
     ) {
       return null;
     }
@@ -216,10 +216,6 @@ function isRefreshTriggerKind(value: unknown): value is RefreshTriggerKind {
     value === 'watch-git-state' ||
     value === 'unknown'
   );
-}
-
-function nonNegativeNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
 function fileSize(path: string): number {

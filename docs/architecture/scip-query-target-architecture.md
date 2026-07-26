@@ -186,9 +186,10 @@ checkout-local `watch-refresh-requests/` path. The authoritative request,
 claim, and completion records belong to `storage`; the runtime watch
 coordinator couples those records to watcher transitions, while `platform`
 continues to own only the process-neutral state schema and paths. Persisted
-record decoders share the dependency-free timestamp predicate in
-`domain/record-validation.ts` rather than creating cross-dependencies between
-storage, reindex, and platform.
+record decoders share dependency-free object, timestamp, scalar-number, and
+string-or-null-record predicates in `domain/record-validation.ts` rather than
+creating cross-dependencies between storage, reindex, platform, and semantic
+protocols.
 
 The nested TypeScript semantic and index snapshots now also expose the
 bounded-mailbox state owned by `storage/bounded-mailbox.ts`: pending,
@@ -199,6 +200,12 @@ cleanup policy. Runtime remains the service coordinator that asks each
 mailbox host for its current snapshot when it durably publishes watch state.
 This keeps cross-process lifecycle policy in storage/runtime while preserving
 platform as a process-neutral decoder.
+
+Admission also returns the deadline from the authoritative pending, inflight,
+or completed operation, and completion records retain it. Domain protocols
+such as durable Rust can therefore require an exact response deadline without
+putting civil time into the content-derived logical-operation identity or
+breaking first-completion retry convergence.
 
 Each owner-specific inflight directory records a process instance: a PID plus
 the operating-system start token that distinguishes successive processes

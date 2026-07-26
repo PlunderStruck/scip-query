@@ -1,0 +1,9 @@
+{
+  "ts": 1785059355312,
+  "check": "echo",
+  "findingId": "SQ680D48C2E363",
+  "event": "suppressed",
+  "commit": "9c812746ce27ee01ceabb7df436c22649eb49f22",
+  "comparisonBaseCommit": "9c812746ce27ee01ceabb7df436c22649eb49f22",
+  "symbol": "scip-typescript npm scip-query 0.19.5 src/domain/`record-validation.ts`/isPositiveInteger()."
+}

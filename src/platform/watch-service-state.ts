@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { LastRefreshMetadata, ReindexActivitySummary, WatcherStatus } from '../domain/types.js';
-import { isValidRecordTimestamp } from '../domain/record-validation.js';
+import { isNonNegativeInteger, isValidRecordTimestamp } from '../domain/record-validation.js';
 import { parseProcessIdentity, type ProcessIdentity } from './process-identity.js';
 
 export const WATCH_SERVICE_PROTOCOL_VERSION = 5;
@@ -203,11 +203,11 @@ function validReindexActivitySummary(value: unknown): value is ReindexActivitySu
   if (
     !isValidWatchServiceTimestamp(summary.windowStartedAt) ||
     !isValidWatchServiceTimestamp(summary.windowEndedAt) ||
-    !nonNegativeInteger(summary.runs) ||
-    !nonNegativeInteger(summary.rebuilt) ||
-    !nonNegativeInteger(summary.reused) ||
-    !nonNegativeInteger(summary.failed) ||
-    !nonNegativeInteger(summary.suppressed) ||
+    !isNonNegativeInteger(summary.runs) ||
+    !isNonNegativeInteger(summary.rebuilt) ||
+    !isNonNegativeInteger(summary.reused) ||
+    !isNonNegativeInteger(summary.failed) ||
+    !isNonNegativeInteger(summary.suppressed) ||
     !finiteNumber(summary.estimatedLogicalOutputBytes) ||
     summary.estimatedLogicalOutputBytes! < 0 ||
     !summary.byTrigger ||
@@ -215,18 +215,18 @@ function validReindexActivitySummary(value: unknown): value is ReindexActivitySu
   ) {
     return false;
   }
-  return Object.values(summary.byTrigger).every((count) => count === undefined || nonNegativeInteger(count));
+  return Object.values(summary.byTrigger).every((count) => count === undefined || isNonNegativeInteger(count));
 }
 
 function validWatchRefreshRequestStatus(value: unknown): value is WatchRefreshRequestStatusSnapshot {
   if (!value || typeof value !== 'object') return false;
   const status = value as Partial<WatchRefreshRequestStatusSnapshot>;
   return (
-    nonNegativeInteger(status.pending) &&
-    nonNegativeInteger(status.claimed) &&
-    nonNegativeInteger(status.completed) &&
-    nonNegativeInteger(status.expired) &&
-    nonNegativeInteger(status.invalid) &&
+    isNonNegativeInteger(status.pending) &&
+    isNonNegativeInteger(status.claimed) &&
+    isNonNegativeInteger(status.completed) &&
+    isNonNegativeInteger(status.expired) &&
+    isNonNegativeInteger(status.invalid) &&
     (status.oldestPendingAt === undefined || isValidWatchServiceTimestamp(status.oldestPendingAt))
   );
 }
@@ -262,13 +262,13 @@ function validTypeScriptIndexStatus(value: unknown): value is TypeScriptIndexSer
       status.state === 'ready' ||
       status.state === 'unavailable' ||
       status.state === 'error') &&
-    nonNegativeInteger(status.requests) &&
-    nonNegativeInteger(status.sessionsCreated) &&
-    nonNegativeInteger(status.sessionsReplaced) &&
-    nonNegativeInteger(status.initializations) &&
-    nonNegativeInteger(status.programUpdates) &&
-    nonNegativeInteger(status.documentsEmitted) &&
-    nonNegativeInteger(status.documentsRemoved) &&
+    isNonNegativeInteger(status.requests) &&
+    isNonNegativeInteger(status.sessionsCreated) &&
+    isNonNegativeInteger(status.sessionsReplaced) &&
+    isNonNegativeInteger(status.initializations) &&
+    isNonNegativeInteger(status.programUpdates) &&
+    isNonNegativeInteger(status.documentsEmitted) &&
+    isNonNegativeInteger(status.documentsRemoved) &&
     (status.lastRequestAt === undefined || isValidWatchServiceTimestamp(status.lastRequestAt)) &&
     (status.lastDurationMs === undefined || (finiteNumber(status.lastDurationMs) && status.lastDurationMs >= 0)) &&
     (status.lastError === undefined || typeof status.lastError === 'string') &&
@@ -281,12 +281,12 @@ function validBoundedMailboxStatus(value: unknown): value is BoundedMailboxStatu
   if (!value || typeof value !== 'object') return false;
   const status = value as Partial<BoundedMailboxStatusSnapshot>;
   return (
-    nonNegativeInteger(status.pending) &&
-    nonNegativeInteger(status.inflight) &&
-    nonNegativeInteger(status.responses) &&
-    nonNegativeInteger(status.deadLetters) &&
-    nonNegativeInteger(status.invalid) &&
-    nonNegativeInteger(status.totalItems) &&
+    isNonNegativeInteger(status.pending) &&
+    isNonNegativeInteger(status.inflight) &&
+    isNonNegativeInteger(status.responses) &&
+    isNonNegativeInteger(status.deadLetters) &&
+    isNonNegativeInteger(status.invalid) &&
+    isNonNegativeInteger(status.totalItems) &&
     finiteNumber(status.totalBytes) &&
     status.totalBytes! >= 0 &&
     status.totalItems === status.pending! + status.inflight! + status.responses! + status.deadLetters! &&
@@ -296,8 +296,4 @@ function validBoundedMailboxStatus(value: unknown): value is BoundedMailboxStatu
 
 function finiteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
-}
-
-function nonNegativeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
 }

@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
+import { isNonNegativeInteger } from '../../domain/record-validation.js';
 import { monotonicNowMs } from '../../domain/time.js';
 import type { RustReferenceWorkerRequest, RustReferenceWorkerResponse } from './lsp-batch-worker.js';
 import type {
@@ -26,13 +27,36 @@ import {
   boundedMailboxRequestId,
   enqueueBoundedMailboxRequest,
   type BoundedMailboxLimits,
-  type BoundedMailboxRequestIdentity,
   type BoundedMailboxStatus,
 } from '../../storage/bounded-mailbox.js';
 import { rustCompilerEngineIdentity, type RustCompilerEngineIdentity } from './engine-identity.js';
 import { rustAnalyzerProjectFingerprint } from './project-fingerprint.js';
+import {
+  DURABLE_RUST_SESSION_PROTOCOL_VERSION,
+  decodeDurableRustMailboxResponse,
+  durableRustMailboxSessionIdentity,
+  type DurableRustMailboxEnvelope,
+  type DurableRustSessionRequest,
+  type DurableRustSessionResponse,
+} from './durable-session-protocol.js';
 
-export const DURABLE_RUST_SESSION_PROTOCOL_VERSION = 3;
+export {
+  DURABLE_RUST_SESSION_PROTOCOL_VERSION,
+  decodeDurableRustMailboxRequest,
+  decodeDurableRustMailboxResponse,
+  durableRustMailboxSessionIdentity,
+} from './durable-session-protocol.js';
+export type {
+  DurableRustMailboxEnvelope,
+  DurableRustMailboxErrorCode,
+  DurableRustMailboxRequestDecodeResult,
+  DurableRustMailboxResponseDecodeResult,
+  DurableRustMailboxResponseExpectation,
+  DurableRustMailboxResponseIdentity,
+  DurableRustSessionRequest,
+  DurableRustSessionResponse,
+} from './durable-session-protocol.js';
+
 const DURABLE_RUST_SESSION_STARTUP_TIMEOUT_MS = 5_000;
 const DURABLE_RUST_SESSION_POLL_INTERVAL_MS = 10;
 const DEFAULT_DURABLE_RUST_REFERENCE_RETRY_TIMEOUT_MS = 30_000;
@@ -58,45 +82,16 @@ export interface DurableRustSessionIdentity {
   environment: Record<string, string | null>;
 }
 
-export type DurableRustSessionRequest =
-  | {
-      kind: 'semantic';
-      identityKey: string;
-      workerEnvironment?: Record<string, string | null>;
-      request: RustReferenceWorkerRequest;
-      timeoutMs: number;
-    }
-  | {
-      kind: 'import-definitions';
-      identityKey: string;
-      workerEnvironment?: Record<string, string | null>;
-      request: RustImportDefinitionWorkerRequest;
-      timeoutMs: number;
-    };
-
-export type DurableRustSessionResponse =
-  | {
-      session: 'created' | 'reused' | 'invalidated';
-      response: RustReferenceWorkerResponse;
-    }
-  | {
-      session: 'created' | 'reused' | 'invalidated';
-      response: RustImportDefinitionWorkerResponse;
-    };
-
 // scip-query: ignore-stale — reviewed S1 owned contract; durable-session lifecycle owns this server state.
 export interface DurableRustSessionServerState {
   protocolVersion: number;
+  /** Absent only on the immediately prior v3 helper during overlap. */
+  sessionIdentity?: string;
   pid: number;
   processIdentity?: ProcessIdentity;
   heartbeatAtMs: number;
   busyUntilMs?: number;
   mailbox?: BoundedMailboxStatus;
-}
-
-export interface DurableRustMailboxEnvelope extends BoundedMailboxRequestIdentity {
-  protocolVersion: typeof DURABLE_RUST_SESSION_PROTOCOL_VERSION;
-  request: DurableRustSessionRequest;
 }
 
 export interface DurableRustSessionRequesterRuntime {
@@ -404,6 +399,7 @@ function dispatchDurableRustSessionRequest<Response>(
   const operationKey = boundedMailboxOperationKey('rust-semantic-v3', request);
   const requestId = boundedMailboxRequestId(operationKey);
   const mailboxPaths = boundedMailboxPaths(sessionDir);
+  const sessionIdentity = durableRustMailboxSessionIdentity(sessionDir);
   const admitted = enqueueBoundedMailboxRequest(
     mailboxPaths,
     {
@@ -414,6 +410,7 @@ function dispatchDurableRustSessionRequest<Response>(
       clientId: runtime.randomId(),
       enqueuedAtMs: startedAtMs,
       deadlineAtMs: deadline,
+      sessionIdentity,
       request,
     } satisfies DurableRustMailboxEnvelope,
     { nowMs: startedAtMs, limits: mailboxLimits },
@@ -422,7 +419,14 @@ function dispatchDurableRustSessionRequest<Response>(
   ensureDurableRustSessionServer(sessionDir, serverPath, semanticWorkerPath, monotonicDeadline, runtime);
   while ((runtime.monotonicNow ?? monotonicNowMs)() <= monotonicDeadline) {
     if (existsSync(admitted.responsePath)) {
-      const payload = parseDurableResponse(readFileSync(admitted.responsePath, 'utf8'), requestId, operationKey);
+      const payload = parseDurableResponse(readFileSync(admitted.responsePath, 'utf8'), {
+        requestId,
+        operationKey,
+        sessionIdentity,
+        deadlineAtMs: admitted.authoritativeDeadlineAtMs,
+        requestKind: request.kind,
+        nowMs: runtime.now(),
+      });
       if (!payload.ok) throw new Error(payload.error);
       if (profileEnabled()) {
         writeProfileEvent({
@@ -488,6 +492,9 @@ export function readDurableRustSessionServerState(sessionDir: string): DurableRu
     ) as Partial<DurableRustSessionServerState>;
     if (
       typeof parsed.protocolVersion !== 'number' ||
+      (parsed.sessionIdentity !== undefined &&
+        (typeof parsed.sessionIdentity !== 'string' ||
+          parsed.sessionIdentity !== durableRustMailboxSessionIdentity(sessionDir))) ||
       typeof parsed.pid !== 'number' ||
       typeof parsed.heartbeatAtMs !== 'number' ||
       (parsed.busyUntilMs !== undefined && typeof parsed.busyUntilMs !== 'number') ||
@@ -499,6 +506,7 @@ export function readDurableRustSessionServerState(sessionDir: string): DurableRu
     if (parsed.processIdentity !== undefined && (!processIdentity || processIdentity.pid !== parsed.pid)) return null;
     return {
       protocolVersion: parsed.protocolVersion,
+      ...(parsed.sessionIdentity === undefined ? {} : { sessionIdentity: parsed.sessionIdentity }),
       pid: parsed.pid,
       ...(processIdentity ? { processIdentity } : {}),
       heartbeatAtMs: parsed.heartbeatAtMs,
@@ -512,48 +520,14 @@ export function readDurableRustSessionServerState(sessionDir: string): DurableRu
 
 function parseDurableResponse(
   raw: string,
-  requestId: string,
-  operationKey: string,
-):
-  | {
-      ok: true;
-      session: DurableRustSessionResponse['session'];
-      response: RustReferenceWorkerResponse | RustImportDefinitionWorkerResponse;
-    }
-  | { ok: false; error: string } {
+  expected: Parameters<typeof decodeDurableRustMailboxResponse>[1],
+): ReturnType<typeof decodeDurableRustMailboxResponse> {
   try {
-    const parsed = JSON.parse(raw) as {
-      ok?: unknown;
-      protocolVersion?: unknown;
-      id?: unknown;
-      operationKey?: unknown;
-      session?: unknown;
-      response?: unknown;
-      error?: unknown;
-    };
-    if (
-      parsed.protocolVersion !== DURABLE_RUST_SESSION_PROTOCOL_VERSION ||
-      parsed.id !== requestId ||
-      parsed.operationKey !== operationKey
-    ) {
-      return { ok: false, error: 'helper wrote an incompatible response identity' };
-    }
-    if (
-      parsed.ok === true &&
-      (parsed.session === 'created' || parsed.session === 'reused' || parsed.session === 'invalidated') &&
-      parsed.response &&
-      typeof parsed.response === 'object'
-    ) {
-      return {
-        ok: true,
-        session: parsed.session,
-        response: parsed.response as RustReferenceWorkerResponse | RustImportDefinitionWorkerResponse,
-      };
-    }
-    return { ok: false, error: typeof parsed.error === 'string' ? parsed.error : 'helper wrote an invalid response' };
+    return decodeDurableRustMailboxResponse(JSON.parse(raw), expected);
   } catch (error) {
     return {
       ok: false,
+      code: 'malformed-response',
       error: `helper wrote malformed JSON: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
@@ -563,21 +537,17 @@ function isBoundedMailboxStatus(value: unknown): value is BoundedMailboxStatus {
   if (!value || typeof value !== 'object') return false;
   const status = value as Partial<BoundedMailboxStatus>;
   return (
-    nonNegativeInteger(status.pending) &&
-    nonNegativeInteger(status.inflight) &&
-    nonNegativeInteger(status.responses) &&
-    nonNegativeInteger(status.deadLetters) &&
-    nonNegativeInteger(status.invalid) &&
-    nonNegativeInteger(status.totalItems) &&
+    isNonNegativeInteger(status.pending) &&
+    isNonNegativeInteger(status.inflight) &&
+    isNonNegativeInteger(status.responses) &&
+    isNonNegativeInteger(status.deadLetters) &&
+    isNonNegativeInteger(status.invalid) &&
+    isNonNegativeInteger(status.totalItems) &&
     typeof status.totalBytes === 'number' &&
     Number.isFinite(status.totalBytes) &&
     status.totalBytes >= 0 &&
     (status.oldestPendingAt === undefined || Number.isFinite(Date.parse(status.oldestPendingAt)))
   );
-}
-
-function nonNegativeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
 }
 
 function currentWorkerEnvironment(): Record<string, string | null> {
