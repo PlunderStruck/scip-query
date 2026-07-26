@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -34,6 +34,7 @@ import {
   evidenceProductInvalidation,
 } from '../../src/storage/evidence-products.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
+import { FUTURE_REINDEX_METADATA } from '../fixtures/reindex-metadata.js';
 
 const FILE = 'src/sample.ts';
 const REEXPORT_FILE = 'src/barrel.ts';
@@ -685,6 +686,20 @@ describe('evidence cache', () => {
       );
     } finally {
       dbAfterChange.close();
+    }
+  });
+
+  it('does not derive evidence keys from a future metadata version', () => {
+    const metaPath = join(tempDir, 'meta.json');
+    const previous = existsSync(metaPath) ? readFileSync(metaPath, 'utf8') : null;
+    writeFileSync(metaPath, JSON.stringify(FUTURE_REINDEX_METADATA));
+    const db = openDb();
+    try {
+      expect(projectEvidenceFingerprint(db)).toBeNull();
+    } finally {
+      db.close();
+      if (previous === null) rmSync(metaPath, { force: true });
+      else writeFileSync(metaPath, previous);
     }
   });
 

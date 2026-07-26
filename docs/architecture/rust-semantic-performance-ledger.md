@@ -131,6 +131,9 @@ moving the whole product surface at once.
 - `src/storage/evidence-cache.ts` accepts both complete and intentional partial
   project fingerprints. The cache key includes the index status, so complete and
   partial indexes do not share project-scoped rows accidentally. It exposes
+  this policy through the shared reindex-metadata decoder's
+  `usableForEvidenceCache` capability, so malformed and future versions fail
+  closed while v2/v3 completeness remains intentional. The cache also exposes
   semantic callee/reference bulk readers that preserve the same current and
   legacy key semantics as the single-row readers. Database-backed fingerprint
   construction now uses the metadata snapshot retained by the open SQLite

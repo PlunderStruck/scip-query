@@ -448,6 +448,16 @@ and 8 MiB limits remain compatible.
 **Dependencies:** none; land before other format version slices.  
 **Rollback:** decoder accepts every currently supported record.
 
+**Implemented shape:** `src/domain/reindex-metadata.ts` is the one
+dependency-free v2/v3 decoding and capability boundary, with v4 reserved as an
+explicit unsupported migration. Freshness, evidence and semantic cache
+identity, TypeScript service/index identity, SQLite stable identity,
+incremental shard reuse, last-refresh mutation, and shared-generation
+admission consume decoded records. A shared fixture matrix and boundary
+mutations cover partial/complete policy, wrong fields, stable canonical
+identity, and future-version rejection. The compatibility table is in
+`docs/REINDEX_METADATA_COMPATIBILITY.md`.
+
 ### Slice 20 — API-01 — Version the CLI JSON envelope
 
 **Invariant:** every public `--json` response identifies envelope schema and producer version through the shared renderer.
@@ -652,8 +662,8 @@ and 8 MiB limits remain compatible.
 |    15 | DD-09   | complete | `adfded36` | 48 focused; 1,606 full-suite tests  | Serialized UPSERT, exact retry, collision, timeout, and suppression verified                                                      |
 |    16 | DD-10   | complete | `d577a205` | 68 focused mailbox/identity tests   | Atomic claims, first-completion fencing, retry, quotas, crash recovery, legacy overlap, fairness, cleanup, and telemetry verified |
 |    17 | DD-11   | complete | `7c00267c` | 244 focused; 1,625 full-suite tests | Monotonic waits, conservative ownership, PID reuse, civil jumps, relative Rust budget, and atomic lock publication verified       |
-|    18 | DD-12   | complete |            | 92 focused; 1,637 full-suite tests  | Locked tail repair, two-segment rotation, deterministic reads, contention, crash phases, and watch exclusions verified            |
-|    19 | API-04  | pending  |            |                                     |                                                                                                                                   |
+|    18 | DD-12   | complete | `45676dd4` | 92 focused; 1,637 full-suite tests  | Locked tail repair, two-segment rotation, deterministic reads, contention, crash phases, and watch exclusions verified            |
+|    19 | API-04  | complete |            | 179 focused; 1,671 full-suite tests | Shared v2/v3 matrix, malformed fields, partial policy, v4 rejection, identity, reuse, publication, and additive fields verified   |
 |    20 | API-01  | pending  |            |                                     |                                                                                                                                   |
 |    21 | API-02  | pending  |            |                                     |                                                                                                                                   |
 |    22 | API-03  | pending  |            |                                     |                                                                                                                                   |
@@ -915,6 +925,45 @@ and 8 MiB limits remain compatible.
   locking, crash, completeness, and durability limits. Successful writes are
   process-visible complete records; the files remain bounded operational
   evidence rather than authoritative or fsync-durable state.
+
+### Slice 19 verification record
+
+- `src/domain/reindex-metadata.ts` is the single dependency-free decoder for
+  every `meta.json` consumer. It distinguishes readable legacy v2, current v3,
+  unsupported older/future versions, and malformed records; version 4 is an
+  explicit reserved migration boundary.
+- The shared fixture matrix covers complete and partial v2/v3 records,
+  identity-only records, opaque legacy producer keys, object fingerprints,
+  v3 language/project shard capabilities, and future v4. Field mutations
+  cover JSON/version/status/timestamp/language/skipped/companion/shard errors.
+- The final 13-file affected matrix passes 179 tests. Boundary cases prove v4
+  cannot drive freshness, evidence keys, TypeScript generation identity,
+  reindex shard reuse, or shared publication. Complete/partial evidence keys
+  remain distinct, stable identities use one canonical projection, and an
+  additive producer field survives a refresh-only metadata rewrite.
+- The first full run exposed that the original evidence-cache contract treated
+  a fingerprint as an opaque JSON identity; several Rust fixtures use a
+  string. The decoder now preserves that v2/v3 evidence and stable-identity
+  compatibility while requiring an object fingerprint for freshness and
+  publication. The focused Rust cache gate and the second full run confirm
+  the correction.
+- Typecheck and the production build pass. With an isolated cache, the second
+  full suite passes 218 of 219 files and 1,671 tests, with 2 intentional skips.
+  The only 2 failures are the concurrent skill router's `is` token and 40
+  uncovered-command catalog assertions; no API-04 source executes in them.
+- Formatting and ESLint pass. Full lint stops only on the same concurrent
+  skill consolidation's two removed `.agents` wrapper links.
+- The complete source diff gate has zero blocking or advisory findings. Its
+  only two blockers are the uncommitted `skills/scip-query/SKILL.md`
+  co-change records owned by Claude.
+- `health --baseline` reports 70 accumulated heuristic deltas. API-04 adds
+  extraction pressure for the cohesive metadata validator and shard reuse,
+  plus public-contract/thin-validator signals for the decoded union and shared
+  project-file predicate. They are intentional contract boundaries; no
+  baseline ratchet or heuristic suppression was written.
+- `docs/REINDEX_METADATA_COMPATIBILITY.md` records the version table,
+  capability matrix, consumer policies, unknown-field preservation, and the
+  reviewed procedure required to enable v4.
 
 ### Slice 09 verification note
 

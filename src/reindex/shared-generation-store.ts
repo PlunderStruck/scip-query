@@ -18,6 +18,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import { deserializeSCIP } from '@c4312/scip';
 import Database from 'better-sqlite3';
+import { decodeReindexMetadata, type ReindexMetadata } from '../domain/reindex-metadata.js';
 import { monotonicNowMs } from '../domain/time.js';
 import type { ProjectConfig } from '../domain/types.js';
 import { cliVersion } from '../platform/cli-version.js';
@@ -474,9 +475,9 @@ export function publishFreshLocalGenerationForProject(
       });
       return { kind: 'attached', generationId: snapshot.generationId };
     }
-    const metadata = readReindexMetadata(paths.cacheDir);
+    const metadata = readPublishableReindexMetadata(paths.cacheDir);
     if (
-      metadata?.status !== 'complete' ||
+      !metadata ||
       JSON.stringify(metadata.fingerprint) !== JSON.stringify(fingerprint) ||
       JSON.stringify([...(metadata.indexedLanguages ?? [])].sort()) !== JSON.stringify([...languages].sort())
     ) {
@@ -650,7 +651,7 @@ export function touchExistingWorktreeLease(
       ) {
         return null;
       }
-      const metadata = readReindexMetadata(localCacheDir);
+      const metadata = readPublishableReindexMetadata(localCacheDir);
       if (!isProjectInputFingerprint(metadata?.fingerprint)) return null;
       const snapshot = buildSharedGenerationSnapshot(context, metadata.fingerprint);
       if (
@@ -738,9 +739,9 @@ function importPeerGeneration(
   for (const record of listGitWorktrees(targetProjectRoot)) {
     if (resolve(record.path) === resolve(targetProjectRoot)) continue;
     const cacheDir = resolveDefaultCacheDir(record.path);
-    const metadata = readReindexMetadata(cacheDir);
+    const metadata = readPublishableReindexMetadata(cacheDir);
     if (
-      metadata?.status !== 'complete' ||
+      !metadata ||
       JSON.stringify(metadata.fingerprint) !== JSON.stringify(snapshot.fingerprint) ||
       JSON.stringify([...(metadata.indexedLanguages ?? [])].sort()) !==
         JSON.stringify([...snapshot.fingerprint.languages].sort())
@@ -785,15 +786,12 @@ function sourceGenerationSignature(cacheDir: string): string | null {
   }
 }
 
-function readReindexMetadata(
-  cacheDir: string,
-): { status?: string; fingerprint?: unknown; indexedLanguages?: string[] } | undefined {
+function readPublishableReindexMetadata(cacheDir: string): ReindexMetadata | undefined {
   try {
-    return JSON.parse(readFileSync(join(cacheDir, 'meta.json'), 'utf8')) as {
-      status?: string;
-      fingerprint?: unknown;
-      indexedLanguages?: string[];
-    };
+    const decoded = decodeReindexMetadata(readFileSync(join(cacheDir, 'meta.json'), 'utf8'));
+    return (decoded.kind === 'legacy' || decoded.kind === 'supported') && decoded.capabilities.publishableGeneration
+      ? decoded.metadata
+      : undefined;
   } catch {
     return undefined;
   }
@@ -974,9 +972,9 @@ function validateSourceGeneration(
   deepSqliteIntegrity = true,
 ): boolean {
   try {
-    const metadata = readReindexMetadata(cacheDir);
+    const metadata = readPublishableReindexMetadata(cacheDir);
     if (
-      metadata?.status !== 'complete' ||
+      !metadata ||
       JSON.stringify(metadata.fingerprint) !== JSON.stringify(expectedFingerprint) ||
       JSON.stringify([...(metadata.indexedLanguages ?? [])].sort()) !==
         JSON.stringify([...expectedFingerprint.languages].sort())

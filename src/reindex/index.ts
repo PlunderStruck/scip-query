@@ -18,6 +18,14 @@ import {
   type ProjectFileFingerprint,
   type ProjectInputSnapshot,
 } from '../domain/project-input.js';
+import {
+  acceptedReindexMetadata,
+  CURRENT_REINDEX_METADATA_VERSION,
+  decodeReindexMetadata,
+  reindexMetadataCapabilities,
+  type ReindexMetadata as DecodedReindexMetadata,
+  type ReindexMetadataV3,
+} from '../domain/reindex-metadata.js';
 import { monotonicNowMs } from '../domain/time.js';
 import { profileAsyncSpan, profileSpan } from '../instrumentation/profile.js';
 import { resolveScipBinary, tryInstallScipCli } from '../platform/scip-cli.js';
@@ -181,12 +189,11 @@ interface PreparedIndexerPlan {
   languageOutputScipPaths: Partial<Record<SupportedLanguage, string>>;
 }
 
-interface ReindexMetadata {
-  version: 2 | 3;
+type PublishedReindexMetadata = ReindexMetadataV3 & {
   status: 'complete' | 'partial';
   updatedAt: string;
   fingerprint: ReindexFingerprint;
-  languageFingerprints?: Partial<Record<SupportedLanguage, ReindexFingerprint>>;
+  languageFingerprints: Partial<Record<SupportedLanguage, ReindexFingerprint>>;
   /** Whether index.scip is exact or reconstructible from changed-document overlays. */
   scipCompanion?: 'current' | 'deferred';
   /**
@@ -200,7 +207,7 @@ interface ReindexMetadata {
   indexedLanguages: SupportedLanguage[];
   skipped: { language: SupportedLanguage; reason: string }[];
   lastRefresh?: LastRefreshMetadata;
-}
+};
 
 interface ReindexOutputPaths {
   outputScip: string;
@@ -1003,7 +1010,7 @@ function planTypeScriptProjectShardReuse(
 // (meta.typescriptProjectShards, current per-project fingerprints,
 // shardExists) — no filesystem access beyond the injected callback.
 function classifyTypeScriptProjectShardReuse(
-  meta: Partial<ReindexMetadata> | null,
+  meta: DecodedReindexMetadata | null,
   current: Record<string, ProjectShardFingerprint>,
   shardExists: (project: string) => boolean,
 ): Map<string, TypeScriptProjectShardClassification> {
@@ -1014,7 +1021,10 @@ function classifyTypeScriptProjectShardReuse(
       result.set(project, { reused: false, reason: 'no reindex metadata found', fingerprint });
       continue;
     }
-    const cached = meta.typescriptProjectShards?.[project];
+    const cached =
+      meta.version === CURRENT_REINDEX_METADATA_VERSION && reindexMetadataCapabilities(meta).typescriptProjectShardReuse
+        ? meta.typescriptProjectShards?.[project]
+        : undefined;
     if (!cached) {
       result.set(project, { reused: false, reason: 'no cached fingerprint for this project', fingerprint });
       continue;
@@ -1106,7 +1116,7 @@ function classifyLanguageShardReuse(opts: {
       result.set(language, { reused: false, reason: 'no reindex metadata found', fingerprint, scipPath });
       continue;
     }
-    if (meta.version !== 3) {
+    if (meta.version !== CURRENT_REINDEX_METADATA_VERSION) {
       result.set(language, {
         reused: false,
         reason: `metadata version ${String(meta.version ?? 'unknown')} predates per-language shard caching`,
@@ -1124,7 +1134,7 @@ function classifyLanguageShardReuse(opts: {
       });
       continue;
     }
-    if (!meta.languageFingerprints) {
+    if (!reindexMetadataCapabilities(meta).languageShardReuse || !meta.languageFingerprints) {
       result.set(language, {
         reused: false,
         reason: 'no per-language fingerprints recorded in metadata',
@@ -1508,7 +1518,7 @@ function buildPublishedReindexMetadata(opts: {
   languageFingerprints: Partial<Record<SupportedLanguage, ReindexFingerprint>>;
   typescriptProjectShardContext: TypeScriptProjectShardContext | undefined;
   lastRefresh: LastRefreshMetadata;
-}): { metadata: ReindexMetadata; pruneProjects: readonly string[] | null } {
+}): { metadata: PublishedReindexMetadata; pruneProjects: readonly string[] | null } {
   const typescriptProjectShards = resolveTypeScriptProjectShardsField({
     mode: opts.run.opts.typescriptProjectMode,
     skippedLanguages: opts.skippedLanguages,
@@ -1518,7 +1528,7 @@ function buildPublishedReindexMetadata(opts: {
   });
   return {
     metadata: {
-      version: 3,
+      version: CURRENT_REINDEX_METADATA_VERSION,
       status: opts.skippedLanguages.length === 0 ? 'complete' : 'partial',
       updatedAt: new Date().toISOString(),
       fingerprint: opts.run.fingerprint,
@@ -1560,7 +1570,9 @@ function resolveTypeScriptProjectShardsField(opts: {
     return { field: undefined, pruneProjects: null };
   }
   if (opts.reusedLanguages.includes('typescript')) {
-    const existing = readReindexMetaOrNull(opts.metaPath)?.typescriptProjectShards;
+    const metadata = readReindexMetaOrNull(opts.metaPath);
+    const existing =
+      metadata?.version === CURRENT_REINDEX_METADATA_VERSION ? metadata.typescriptProjectShards : undefined;
     return { field: existing, pruneProjects: existing ? Object.keys(existing) : [] };
   }
   if (opts.context) {
@@ -2335,9 +2347,9 @@ function typescriptProjectShardPath(outputDb: string, project: string): string {
   return join(typescriptProjectShardCacheDir(outputDb), `${projectShardSlug(project)}.scip`);
 }
 
-function readReindexMetaOrNull(metaPath: string): Partial<ReindexMetadata> | null {
+function readReindexMetaOrNull(metaPath: string): DecodedReindexMetadata | null {
   try {
-    return JSON.parse(readFileSync(metaPath, 'utf-8')) as Partial<ReindexMetadata>;
+    return acceptedReindexMetadata(decodeReindexMetadata(readFileSync(metaPath, 'utf-8')));
   } catch {
     return null;
   }
@@ -2345,10 +2357,11 @@ function readReindexMetaOrNull(metaPath: string): Partial<ReindexMetadata> | nul
 
 function isUnchangedReindex(metaPath: string, fingerprint: ReindexFingerprint): boolean {
   try {
-    const meta = JSON.parse(readFileSync(metaPath, 'utf-8')) as Partial<ReindexMetadata>;
+    const decoded = decodeReindexMetadata(readFileSync(metaPath, 'utf-8'));
+    if (decoded.kind !== 'legacy' && decoded.kind !== 'supported') return false;
+    const meta = decoded.metadata;
     return (
-      (meta.version === 2 || meta.version === 3) &&
-      meta.status === 'complete' &&
+      decoded.capabilities.publishableGeneration &&
       stableJson(meta.fingerprint) === stableJson(fingerprint) &&
       stableJson([...(meta.indexedLanguages ?? [])].sort()) === stableJson(fingerprint.languages)
     );
@@ -2357,14 +2370,14 @@ function isUnchangedReindex(metaPath: string, fingerprint: ReindexFingerprint): 
   }
 }
 
-function writeReindexMeta(metaPath: string, metadata: ReindexMetadata): void {
+function writeReindexMeta(metaPath: string, metadata: DecodedReindexMetadata): void {
   writeJsonDurable(metaPath, metadata, { spacing: 2, trailingNewline: true });
 }
 
 function updateReindexLastRefresh(metaPath: string, lastRefresh: LastRefreshMetadata): void {
   try {
-    const metadata = JSON.parse(readFileSync(metaPath, 'utf-8')) as ReindexMetadata;
-    if (metadata.version !== 2 && metadata.version !== 3) return;
+    const metadata = acceptedReindexMetadata(decodeReindexMetadata(readFileSync(metaPath, 'utf-8')));
+    if (!metadata) return;
     writeReindexMeta(metaPath, { ...metadata, lastRefresh });
   } catch {
     // Best-effort operational metadata must never mask the reindex result.

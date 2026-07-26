@@ -365,6 +365,14 @@ publication. Lease attachment, touch, and cleanup use that same lock, so no
 reverse `platform -> reindex` or `storage -> reindex` dependency is needed to
 prevent a stale touch from restoring an older generation.
 
+The reindex-metadata direction was reverified on 2026-07-25.
+`src/domain/reindex-metadata.ts` is the dependency-free version, validation,
+and capability boundary. Reindex, runtime services, semantic sessions, and
+storage identity/cache consumers depend inward on it; the domain decoder
+depends only on domain language, timestamp, and project-file validators. This
+keeps future-version rejection identical without introducing a reverse
+domain dependency.
+
 The immutable SQLite generation handoff was reverified on 2026-07-25.
 `src/reindex/index.ts` coordinates publication, but durable directory flushing
 is owned by `src/storage/atomic-file.ts`; the reindex layer does not depend on

@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { decodeReindexMetadata } from '../domain/reindex-metadata.js';
 import type { LastRefreshMetadata, ProjectConfig, SupportedLanguage } from '../domain/types.js';
 import { buildProjectInputFingerprint, type ProjectInputFingerprint } from '../platform/project-files.js';
 import { detectLanguages } from '../reindex/detect.js';
@@ -13,15 +14,6 @@ export interface IndexFreshness {
   reason: string;
   remedy?: string;
   updatedAt?: string;
-  lastRefresh?: LastRefreshMetadata;
-}
-
-interface ReindexMetadataLike {
-  version?: number;
-  status?: string;
-  updatedAt?: string;
-  fingerprint?: unknown;
-  indexedLanguages?: unknown;
   lastRefresh?: LastRefreshMetadata;
 }
 
@@ -51,13 +43,31 @@ export function getIndexFreshness(
   }
 
   try {
-    const metadata = JSON.parse(readFileSync(paths.metaPath, 'utf-8')) as ReindexMetadataLike;
+    const decoded = decodeReindexMetadata(readFileSync(paths.metaPath, 'utf-8'));
+    if (decoded.kind === 'unsupported') {
+      return {
+        state: 'unknown',
+        checkedAt,
+        metaPath: paths.metaPath,
+        reason: `Reindex metadata version ${decoded.version} is unsupported by this scip-query build.`,
+        remedy: 'Upgrade scip-query or run: scip-query reindex',
+      };
+    }
+    if (decoded.kind === 'malformed') {
+      return {
+        state: 'unknown',
+        checkedAt,
+        metaPath: paths.metaPath,
+        reason: `Could not decode reindex metadata: ${decoded.reason}`,
+        remedy: 'Run: scip-query reindex',
+      };
+    }
+    const metadata = decoded.metadata;
     const languages = config.languages ?? detectLanguages(projectRoot);
     const current = runtimeFingerprint(projectRoot, languages, config);
-    const metadataLanguages = Array.isArray(metadata.indexedLanguages) ? [...metadata.indexedLanguages].sort() : [];
+    const metadataLanguages = [...(metadata.indexedLanguages ?? [])].sort();
     const fresh =
-      (metadata.version === 2 || metadata.version === 3) &&
-      metadata.status === 'complete' &&
+      decoded.capabilities.publishableGeneration &&
       JSON.stringify(metadata.fingerprint) === JSON.stringify(current) &&
       JSON.stringify(metadataLanguages) === JSON.stringify(current.languages);
     const generation = inspectSqliteGeneration(paths.dbPath, paths.metaPath);

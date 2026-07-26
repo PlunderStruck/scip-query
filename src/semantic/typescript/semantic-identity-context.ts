@@ -1,3 +1,4 @@
+import { decodeReindexMetadata } from '../../domain/reindex-metadata.js';
 import { projectInputSnapshotOrNull } from '../../domain/project-input.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { createPerDbValue } from '../../storage/per-db-cache.js';
@@ -43,10 +44,11 @@ export function indexedTypeScriptFiles(db: ScipDatabase): string[] {
 function readIdentityContext(db: ScipDatabase): TypeScriptSemanticIdentityContext | null {
   try {
     if (!db.generation.metadataRaw) return null;
-    const metadata = JSON.parse(db.generation.metadataRaw) as {
-      fingerprint?: unknown;
-    };
-    const snapshot = projectInputSnapshotOrNull(metadata.fingerprint);
+    const decoded = decodeReindexMetadata(db.generation.metadataRaw);
+    if ((decoded.kind !== 'legacy' && decoded.kind !== 'supported') || !decoded.capabilities.usableForEvidenceCache) {
+      return null;
+    }
+    const snapshot = projectInputSnapshotOrNull(decoded.metadata.fingerprint);
     if (!snapshot) return null;
     return {
       builder: createTypeScriptSemanticIdentityBuilder({

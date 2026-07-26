@@ -1,0 +1,9 @@
+{
+  "ts": 1785050478307,
+  "check": "twin-partner",
+  "findingId": "SQ72C5C9A17F54",
+  "event": "caught",
+  "commit": "45676dd46d7bae37c123ec0066e098bad2581bda",
+  "comparisonBaseCommit": "45676dd46d7bae37c123ec0066e098bad2581bda",
+  "symbol": "scip-typescript npm scip-query 0.19.5 src/domain/`reindex-metadata.ts`/isProjectFileFingerprint()."
+}

@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ProjectInputFingerprint } from '../../src/platform/project-files.js';
+import { buildProjectInputFingerprint, type ProjectInputFingerprint } from '../../src/platform/project-files.js';
 import {
   acquireSharedGenerationBuildLock,
   buildSharedGenerationSnapshot,
@@ -375,6 +375,32 @@ describe('shared generation store', () => {
       else process.env['XDG_CACHE_HOME'] = previousCacheHome;
     }
   });
+
+  it('rejects future reindex metadata before shared-generation publication', () => {
+    const root = temporaryDirectory('scip-query-shared-future-metadata-');
+    const cacheHome = temporaryDirectory('scip-query-shared-future-metadata-cache-');
+    const previousCacheHome = process.env['XDG_CACHE_HOME'];
+    process.env['XDG_CACHE_HOME'] = cacheHome;
+    try {
+      git(root, ['init', '-q', '-b', 'main']);
+      git(root, ['config', 'user.email', 'test@example.com']);
+      git(root, ['config', 'user.name', 'Test User']);
+      writeFileSync(join(root, 'value.ts'), 'export const value = 1;\n');
+      git(root, ['add', '.']);
+      git(root, ['commit', '-qm', 'initial']);
+      const paths = resolveIndexStoragePaths(root);
+      const currentFingerprint = buildProjectInputFingerprint(root, ['typescript'], {});
+      createCache(paths.cacheDir, root, 'future', { fingerprint: currentFingerprint, metadataVersion: 4 });
+
+      expect(publishFreshLocalGenerationForProject(root, { languages: ['typescript'] }, paths)).toEqual({
+        kind: 'missed',
+        reason: 'local metadata does not match the clean worktree snapshot',
+      });
+    } finally {
+      if (previousCacheHome === undefined) delete process.env['XDG_CACHE_HOME'];
+      else process.env['XDG_CACHE_HOME'] = previousCacheHome;
+    }
+  });
 });
 
 function withWarmLeaseFixture(
@@ -439,7 +465,12 @@ function fingerprint(): ProjectInputFingerprint {
   };
 }
 
-function createCache(cacheDir: string, projectRoot: string, value: string): void {
+function createCache(
+  cacheDir: string,
+  projectRoot: string,
+  value: string,
+  options: { fingerprint?: ProjectInputFingerprint; metadataVersion?: number } = {},
+): void {
   mkdirSync(cacheDir, { recursive: true });
   const db = new Database(join(cacheDir, 'index.db'));
   db.exec('CREATE TABLE fixture (value TEXT NOT NULL)');
@@ -460,10 +491,10 @@ function createCache(cacheDir: string, projectRoot: string, value: string): void
   writeFileSync(
     join(cacheDir, 'meta.json'),
     `${JSON.stringify({
-      version: 3,
+      version: options.metadataVersion ?? 3,
       status: 'complete',
       updatedAt: '2026-07-14T00:00:00.000Z',
-      fingerprint: fingerprint(),
+      fingerprint: options.fingerprint ?? fingerprint(),
       indexedLanguages: ['typescript'],
     })}\n`,
   );

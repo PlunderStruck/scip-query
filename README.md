@@ -515,6 +515,11 @@ cursor identities and semantic requests attached to the same rows even during
 a concurrent reindex. The publication, crash, legacy-overlap, and retention
 rules are documented in [Local Index Generations](docs/INDEX_GENERATIONS.md).
 
+All `meta.json` consumers share one version decoder and an explicit capability
+matrix. Version 2 remains readable, version 3 is current, and version 4 is a
+reserved unsupported migration boundary. See
+[Reindex Metadata Compatibility](docs/REINDEX_METADATA_COMPATIBILITY.md).
+
 Git worktrees in the same repository also share immutable generations under
 `~/.cache/scip-query/repositories/<repository-id>/`. A shared generation is a
 complete index for one exact committed tree, indexing configuration, artifact

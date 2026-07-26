@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { ProjectConfig, SupportedLanguage } from '../../src/domain/types.js';
 import { fingerprintProjectFiles } from '../../src/platform/project-files.js';
 import { getIndexFreshness } from '../../src/runtime/index-freshness.js';
+import { FUTURE_REINDEX_METADATA } from '../fixtures/reindex-metadata.js';
 
 function writeMeta(
   root: string,
@@ -49,6 +50,32 @@ function writeMeta(
 }
 
 describe('index freshness', () => {
+  it('reports a future metadata version explicitly instead of treating it as a stale current record', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-freshness-future-'));
+    try {
+      const dbPath = join(root, 'index.db');
+      const metaPath = join(root, 'meta.json');
+      writeFileSync(dbPath, '');
+      writeFileSync(metaPath, JSON.stringify(FUTURE_REINDEX_METADATA));
+      const config: ProjectConfig = {
+        dbPath,
+        indexPath: join(root, 'index.scip'),
+        projectRoot: root,
+        languages: ['typescript'],
+      };
+
+      expect(getIndexFreshness(root, config, { dbPath, metaPath })).toEqual(
+        expect.objectContaining({
+          state: 'unknown',
+          reason: expect.stringContaining('version 4 is unsupported'),
+          remedy: expect.stringContaining('Upgrade scip-query'),
+        }),
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('reports missing when no SQLite index exists', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-freshness-missing-'));
     try {

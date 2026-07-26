@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { canonicalReindexMetadataIdentity, decodeReindexMetadata } from '../domain/reindex-metadata.js';
 import type { SemanticReferenceFragment } from '../semantic/types.js';
 import {
   BOUNDED_MAILBOX_VERSION,
@@ -137,32 +138,10 @@ export function parseTypeScriptIndexEnvelope(raw: string): TypeScriptIndexEnvelo
 
 export function publishedTypeScriptIndexGeneration(dbPath: string): string | null {
   try {
-    const metadata = JSON.parse(readFileSync(join(dirname(dbPath), 'meta.json'), 'utf8')) as {
-      version?: unknown;
-      status?: unknown;
-      updatedAt?: unknown;
-      fingerprint?: unknown;
-      indexedLanguages?: unknown;
-    };
-    if (
-      (metadata.version !== 2 && metadata.version !== 3) ||
-      metadata.status !== 'complete' ||
-      typeof metadata.updatedAt !== 'string' ||
-      metadata.fingerprint === undefined
-    ) {
-      return null;
-    }
-    return createHash('sha256')
-      .update(
-        JSON.stringify({
-          version: metadata.version,
-          status: metadata.status,
-          updatedAt: metadata.updatedAt,
-          fingerprint: metadata.fingerprint,
-          indexedLanguages: metadata.indexedLanguages,
-        }),
-      )
-      .digest('hex');
+    const canonical = canonicalReindexMetadataIdentity(
+      decodeReindexMetadata(readFileSync(join(dirname(dbPath), 'meta.json'), 'utf8')),
+    );
+    return canonical ? createHash('sha256').update(canonical).digest('hex') : null;
   } catch {
     return null;
   }

@@ -19,6 +19,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
+import { decodeReindexMetadata } from '../domain/reindex-metadata.js';
 import type { ScipDatabase } from './db.js';
 import { createPerDbCache } from './per-db-cache.js';
 
@@ -161,13 +162,6 @@ export interface FileEvidenceCacheEntry {
   payload: string;
 }
 
-interface ReindexEvidenceMetadata {
-  version?: number;
-  status?: string;
-  fingerprint?: unknown;
-  indexedLanguages?: unknown;
-}
-
 // Connection handle, not evidence: lives for the ScipDatabase's lifetime and
 // holds no per-file state, so it registers with no cache-clear groups.
 // `null` = permanently disabled for this process.
@@ -198,14 +192,13 @@ export function fileContentHash(db: ScipDatabase, relativePath: string, content:
 export function projectEvidenceFingerprint(db: ScipDatabase): string | null {
   return PROJECT_FINGERPRINT_CACHE.get(db, 'current', () => {
     try {
-      const metadata = db.generation.metadataRaw
-        ? (JSON.parse(db.generation.metadataRaw) as ReindexEvidenceMetadata)
-        : null;
-      if (!metadata) return null;
-      if (metadata.version !== 2 && metadata.version !== 3) return null;
-      if (metadata.status !== 'complete' && metadata.status !== 'partial') return null;
-      if (metadata.fingerprint === undefined) return null;
-      const indexedLanguages = Array.isArray(metadata.indexedLanguages) ? [...metadata.indexedLanguages].sort() : [];
+      if (!db.generation.metadataRaw) return null;
+      const decoded = decodeReindexMetadata(db.generation.metadataRaw);
+      if ((decoded.kind !== 'legacy' && decoded.kind !== 'supported') || !decoded.capabilities.usableForEvidenceCache) {
+        return null;
+      }
+      const metadata = decoded.metadata;
+      const indexedLanguages = [...(metadata.indexedLanguages ?? [])].sort();
       return sha256Hex(
         JSON.stringify({
           fingerprint: metadata.fingerprint,

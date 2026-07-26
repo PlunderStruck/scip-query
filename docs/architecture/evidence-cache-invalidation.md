@@ -110,6 +110,12 @@ worktree lease, local pointer, reindex metadata, and SQLite generation state
 use crash-durable file replacement; the wider multi-file generation handoff
 remains a distinct publication protocol. See `docs/DURABILITY.md` for that
 classification. Dirty or partial indexes are never published.
+Before any fingerprint or language comparison,
+`src/domain/reindex-metadata.ts` validates the `meta.json` version and common
+fields and grants the named `publishableGeneration` capability.
+`src/reindex/shared-generation-store.ts` therefore rejects malformed,
+partial, and future-version records before artifact validation; version 4
+cannot be adopted accidentally by an older process.
 Generation attachment, worktree-lease liveness updates, and repository cleanup
 also share the repository-cache lock. A liveness update uses its first pointer
 observation only to select that lock, then rereads and validates the current

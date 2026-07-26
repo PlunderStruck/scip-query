@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
+import { SUPPORTED_LANGUAGES } from '../domain/config-types.js';
 import type { ProjectConfig, SupportedLanguage, WatchConfig } from '../domain/types.js';
 import {
   FileContentConflictError,
@@ -22,24 +23,7 @@ const DEFAULT_WATCH: Required<WatchConfig> = {
   ignore: [],
 };
 
-export const SUPPORTED_LANGUAGES: readonly SupportedLanguage[] = [
-  'typescript',
-  'javascript',
-  'java',
-  'scala',
-  'kotlin',
-  'rust',
-  'python',
-  'ruby',
-  'go',
-  'cpp',
-  'c',
-  'csharp',
-  'vb',
-  'dart',
-  'php',
-  'clojure',
-];
+export { SUPPORTED_LANGUAGES };
 
 export interface ConfigDiagnostic {
   level: 'error' | 'warning';

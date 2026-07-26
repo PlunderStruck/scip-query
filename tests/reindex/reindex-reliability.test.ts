@@ -263,6 +263,26 @@ describe('reindex reliability', () => {
     expect(statuses.join('\n')).toContain('Reusing cached python SCIP shard');
   });
 
+  it('does not reuse a future metadata version as current reindex state', async () => {
+    const projectRoot = createProject('scip-query-reindex-future-metadata-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+    const metaPath = join(cacheDir, 'meta.json');
+    const { reindex, attempts } = await loadReindexFixture({
+      languages: ['typescript', 'python'],
+    });
+
+    await reindex({ projectRoot, outputScip, outputDb, onStatus: () => undefined });
+    const metadata = JSON.parse(readFileSync(metaPath, 'utf8')) as Record<string, unknown>;
+    writeFileSync(metaPath, JSON.stringify({ ...metadata, version: 4 }));
+    await reindex({ projectRoot, outputScip, outputDb, onStatus: () => undefined });
+
+    expect(attempts.get('typescript')).toBe(2);
+    expect(attempts.get('python')).toBe(2);
+  });
+
   it('reports shard diagnostics distinguishing reused and rerun languages (plan6 6.5.2)', async () => {
     const projectRoot = createProject('scip-query-reindex-shard-diagnostics-');
     const cacheDir = join(projectRoot, '.cache');
@@ -914,6 +934,7 @@ describe('reindex reliability', () => {
         trigger: { kind: 'manual-cli', detail: 'first' },
       }),
     );
+    writeFileSync(metaPath, JSON.stringify({ ...firstMeta, additiveProducerField: { mustRemain: true } }, null, 2));
 
     const second = await reindex({
       projectRoot,
@@ -927,6 +948,7 @@ describe('reindex reliability', () => {
     expect(second.reused).toBe(true);
     expect(second.lastRefresh).toEqual(expect.objectContaining({ result: 'reused' }));
     expect(secondMeta.updatedAt).toBe(firstMeta.updatedAt);
+    expect(secondMeta.additiveProducerField).toEqual({ mustRemain: true });
     expect(secondMeta.lastRefresh).toEqual(
       expect.objectContaining({
         result: 'reused',

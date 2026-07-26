@@ -148,12 +148,13 @@ function hasDuplicatePaths(files: readonly ProjectFileFingerprint[]): boolean {
   return new Set(files.map((file) => file.path)).size !== files.length;
 }
 
-function isProjectFileFingerprint(value: unknown): value is ProjectFileFingerprint {
+export function isProjectFileFingerprint(value: unknown): value is ProjectFileFingerprint {
   if (typeof value !== 'object' || value === null) return false;
   const fingerprint = value as Record<string, unknown>;
   return (
     typeof fingerprint['path'] === 'string' &&
     typeof fingerprint['size'] === 'number' &&
+    Number.isFinite(fingerprint['size']) &&
     typeof fingerprint['hash'] === 'string'
   );
 }

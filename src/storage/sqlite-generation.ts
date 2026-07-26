@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
+import { canonicalReindexMetadataIdentity, decodeReindexMetadata } from '../domain/reindex-metadata.js';
 import type { ScipQueryConfig } from '../domain/types.js';
 
 export const SQLITE_GENERATION_STORE_VERSION = 1;
@@ -146,34 +147,7 @@ export function generationMetadata<T>(generation: SqliteGenerationHandle): T | n
 }
 
 export function stableMetadataIdentity(raw: string): string {
-  try {
-    const metadata = JSON.parse(raw) as {
-      version?: unknown;
-      status?: unknown;
-      updatedAt?: unknown;
-      fingerprint?: unknown;
-      indexedLanguages?: unknown;
-      scipCompanion?: unknown;
-    };
-    if (
-      (metadata.version === 2 || metadata.version === 3) &&
-      metadata.status === 'complete' &&
-      typeof metadata.updatedAt === 'string' &&
-      metadata.fingerprint !== undefined
-    ) {
-      return JSON.stringify({
-        version: metadata.version,
-        status: metadata.status,
-        updatedAt: metadata.updatedAt,
-        fingerprint: metadata.fingerprint,
-        indexedLanguages: metadata.indexedLanguages,
-        scipCompanion: metadata.scipCompanion,
-      });
-    }
-  } catch {
-    // Legacy/non-JSON metadata keeps its exact byte identity.
-  }
-  return raw;
+  return canonicalReindexMetadataIdentity(decodeReindexMetadata(raw)) ?? raw;
 }
 
 function readImmutableGeneration(config: ScipQueryConfig, identity: string): SqliteGenerationHandle | null {

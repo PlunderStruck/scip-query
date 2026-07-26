@@ -31,6 +31,25 @@ export type SupportedLanguage =
   | 'php'
   | 'clojure';
 
+export const SUPPORTED_LANGUAGES: readonly SupportedLanguage[] = [
+  'typescript',
+  'javascript',
+  'java',
+  'scala',
+  'kotlin',
+  'rust',
+  'python',
+  'ruby',
+  'go',
+  'cpp',
+  'c',
+  'csharp',
+  'vb',
+  'dart',
+  'php',
+  'clojure',
+];
+
 export type TypeScriptProjectMode = 'single' | 'workspace';
 
 export interface IndexerConfig {

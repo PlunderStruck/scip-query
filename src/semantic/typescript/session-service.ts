@@ -7,13 +7,13 @@ import {
   type ProjectChangeManifest,
   type ProjectInputSnapshot,
 } from '../../domain/project-input.js';
+import { decodeReindexMetadata } from '../../domain/reindex-metadata.js';
 import {
   applyProfileEnvironment,
   captureProfileEnvironment,
   type ProfileEnvironment,
 } from '../../instrumentation/profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { generationMetadata } from '../../storage/sqlite-generation.js';
 import {
   claimBoundedMailboxRequests,
   completeBoundedMailboxClaim,
@@ -259,8 +259,12 @@ function resolveCalleeMap(
 }
 
 function readPublishedSnapshot(db: ScipDatabase): ProjectInputSnapshot | null {
-  const metadata = generationMetadata<{ fingerprint?: unknown }>(db.generation);
-  return projectInputSnapshotOrNull(metadata?.fingerprint);
+  if (!db.generation.metadataRaw) return null;
+  const decoded = decodeReindexMetadata(db.generation.metadataRaw);
+  if ((decoded.kind !== 'legacy' && decoded.kind !== 'supported') || !decoded.capabilities.usableForEvidenceCache) {
+    return null;
+  }
+  return projectInputSnapshotOrNull(decoded.metadata.fingerprint);
 }
 
 function transitionManifest(

@@ -941,7 +941,7 @@ Mixed-version teams cannot distinguish a typo from a valid field introduced by a
 
 **Acceptance condition:** config meaning changes only through an explicit versioned migration.
 
-### API-04 — S2 — Reindex metadata compatibility logic is duplicated across at least seven consumers
+### API-04 — S2 — Reindex metadata compatibility logic is duplicated across at least seven consumers — resolved in Slice 19
 
 **Evidence:** source-confirmed contract drift.
 
@@ -968,6 +968,25 @@ A future version 4 can therefore make freshness accept a generation that semanti
 **Required tests:** a matrix of every supported metadata version/status against every consumer capability, plus an unsupported-future-version case.
 
 **Acceptance condition:** adding a metadata version requires one decoder update and one reviewed capability matrix, not edits to scattered readers.
+
+**Resolution:** `src/domain/reindex-metadata.ts` now classifies raw metadata as
+legacy v2, supported v3, unsupported older/future, or malformed. It validates
+status, timestamps, unique supported language sets,
+skipped-language rows, SCIP companion state, and v3 shard maps before a
+consumer receives a typed record. Version 4 is reserved and remains visibly
+unsupported.
+
+Named capabilities preserve the intentional policy differences: evidence and
+semantic cache identities can use complete or partial records with a
+fingerprint; freshness, unchanged reuse, and shared publication require a
+complete object fingerprint plus indexed languages; stable service/generation
+identities additionally require `updatedAt`; v3 shard maps separately enable
+language and project reuse. Freshness, evidence cache, TypeScript semantic
+identity/session state, TypeScript index generation, SQLite generation
+identity, reindex reuse, and shared-generation admission now enter through the
+decoder. The shared fixture matrix, wrong-field mutations, future-version
+consumer tests, and compatibility policy are in
+`docs/REINDEX_METADATA_COMPATIBILITY.md`.
 
 ### API-05 — S2 — Committed suppression and outcome records are unversioned
 

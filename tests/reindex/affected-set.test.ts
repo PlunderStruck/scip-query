@@ -35,6 +35,9 @@ describe('affected-set change manifest', () => {
     const arrayWithSnapshotFields = Object.assign([], value);
     expect(projectInputSnapshotOrNull(arrayWithSnapshotFields)).toBe(arrayWithSnapshotFields);
     expect(projectInputSnapshotOrNull({ ...value, files: [{ path: 'src/a.ts', hash: 'a' }] })).toBeNull();
+    expect(
+      projectInputSnapshotOrNull({ ...value, files: [{ path: 'src/a.ts', size: Number.NaN, hash: 'a' }] }),
+    ).toBeNull();
     expect(projectInputSnapshotOrNull({ ...value, languages: 'typescript' })).toBeNull();
   });
 
