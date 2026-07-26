@@ -16,6 +16,7 @@ import {
   WINDOWS_SIDECAR_PROVENANCE_VERSION,
 } from '../../scripts/scip-windows-provenance.mjs';
 import { runWindowsSidecarRelease, type WindowsSidecarReleaseRuntime } from '../../scripts/scip-windows-release.js';
+import { writeNpmPackFixture } from './scip-windows-package-fixture.js';
 
 const SOURCE_COMMIT = 'bf70486060b71bed40f3d6dd19c96da4b3239ead';
 
@@ -28,7 +29,7 @@ describe('Windows sidecar provenance', () => {
     const regenerated = createWindowsSidecarProvenance({
       sidecarDir,
       packageName: 'scip-query-scip-windows',
-      packageVersion: '0.13.0',
+      packageVersion: '0.13.1',
       sourceCommit: SOURCE_COMMIT,
     });
 
@@ -140,7 +141,7 @@ describe('Windows sidecar provenance', () => {
     await withTempDir(async (root) => {
       const sidecarDir = writeSyntheticSidecar(root);
       const packageRecord = JSON.parse(readFileSync(join(sidecarDir, 'package.json'), 'utf8'));
-      packageRecord.version = '0.13.1';
+      packageRecord.version = '0.13.2';
       writeFileSync(join(sidecarDir, 'package.json'), JSON.stringify(packageRecord));
       expectProvenanceFailure(() => verifyWindowsSidecarProvenance({ sidecarDir }), 'package version mismatch');
     });
@@ -150,7 +151,7 @@ describe('Windows sidecar provenance', () => {
         createWindowsSidecarProvenance({
           sidecarDir: '/unused',
           packageName: 'scip-query-scip-windows',
-          packageVersion: '0.13.0',
+          packageVersion: '0.13.1',
           sourceCommit: 'short',
         }),
       'full 40-character Git commit',
@@ -177,7 +178,7 @@ describe('Windows sidecar provenance', () => {
       mkdirSync(sidecarDir, { recursive: true });
       writeFileSync(
         join(sidecarDir, 'package.json'),
-        JSON.stringify({ name: 'scip-query-scip-windows', version: '0.13.0' }),
+        JSON.stringify({ name: 'scip-query-scip-windows', version: '0.13.1' }),
       );
       const commands: string[] = [];
       const runtime = fakeBuildRuntime(root, commands);
@@ -199,7 +200,7 @@ describe('Windows sidecar provenance', () => {
       mkdirSync(sidecarDir, { recursive: true });
       writeFileSync(
         join(sidecarDir, 'package.json'),
-        JSON.stringify({ name: 'scip-query-scip-windows', version: '0.13.0' }),
+        JSON.stringify({ name: 'scip-query-scip-windows', version: '0.13.1' }),
       );
       writeFileSync(join(sidecarDir, 'README.md'), 'retained\n');
       const runtime = fakeBuildRuntime(root, []);
@@ -224,7 +225,7 @@ describe('Windows sidecar provenance', () => {
       mkdirSync(sidecarDir, { recursive: true });
       writeFileSync(
         join(sidecarDir, 'package.json'),
-        JSON.stringify({ name: 'scip-query-scip-windows', version: '0.13.0' }),
+        JSON.stringify({ name: 'scip-query-scip-windows', version: '0.13.1' }),
       );
       const commands: string[] = [];
       const runtime = fakeBuildRuntime(root, commands);
@@ -245,25 +246,35 @@ describe('Windows sidecar provenance', () => {
         JSON.stringify({
           name: 'scip-query',
           version: '0.19.5',
-          optionalDependencies: { 'scip-query-scip-windows': '0.13.0' },
+          optionalDependencies: { 'scip-query-scip-windows': '0.13.1' },
         }),
       );
       const logs: string[] = [];
       const commands: string[] = [];
+      const provenanceBytes = readFileSync(join(sidecarDir, WINDOWS_SIDECAR_PROVENANCE_FILE));
       const runtime: WindowsSidecarReleaseRuntime = {
         cwd: () => root,
         env: {},
         log: (message) => logs.push(message),
+        makeTempDirectory: mkdtempSync,
+        mkdir: (path) => mkdirSync(path, { recursive: true }),
         readFile: readFileSync,
-        run: (binary, args) => {
+        removeTree: (path) => rmSync(path, { recursive: true, force: true }),
+        run: (binary, args, options) => {
           commands.push(`${binary} ${args.join(' ')}`);
-          return '';
+          if (binary === 'npm' && args[0] === 'pack' && options.cwd === sidecarDir) {
+            const destination = args[args.indexOf('--pack-destination') + 1];
+            return writeNpmPackFixture({ directory: destination, provenanceBytes }).output;
+          }
+          throw new Error(`unexpected command: ${binary} ${args.join(' ')}`);
         },
+        tempDirectory: () => root,
       };
 
       runWindowsSidecarRelease(runtime);
-      expect(commands).toEqual([]);
-      expect(logs.join('\n')).toContain('Verified scip-query-scip-windows@0.13.0 provenance');
+      expect(commands).toHaveLength(1);
+      expect(commands[0]).toContain('npm pack --json --pack-destination');
+      expect(logs.join('\n')).toContain('Verified scip-query-scip-windows@0.13.1 provenance');
 
       const binary = join(sidecarDir, 'scip-win32-x64.exe');
       const bytes = readFileSync(binary);
@@ -272,7 +283,7 @@ describe('Windows sidecar provenance', () => {
       runtime.env = { npm_lifecycle_event: 'prepublishOnly' };
 
       expect(() => runWindowsSidecarRelease(runtime)).toThrow('SHA-256 mismatch');
-      expect(commands).toEqual([]);
+      expect(commands).toHaveLength(1);
     });
   });
 
@@ -288,7 +299,7 @@ function writeSyntheticSidecar(root: string, options: { writeManifest?: boolean 
   mkdirSync(sidecarDir, { recursive: true });
   writeFileSync(
     join(sidecarDir, 'package.json'),
-    JSON.stringify({ name: 'scip-query-scip-windows', version: '0.13.0' }),
+    JSON.stringify({ name: 'scip-query-scip-windows', version: '0.13.1' }),
   );
   writeFileSync(join(sidecarDir, 'scip-win32-x64.exe'), syntheticPe(0x8664));
   writeFileSync(join(sidecarDir, 'scip-win32-arm64.exe'), syntheticPe(0xaa64));
@@ -296,7 +307,7 @@ function writeSyntheticSidecar(root: string, options: { writeManifest?: boolean 
     const manifest = createWindowsSidecarProvenance({
       sidecarDir,
       packageName: 'scip-query-scip-windows',
-      packageVersion: '0.13.0',
+      packageVersion: '0.13.1',
       sourceCommit: SOURCE_COMMIT,
     });
     writeFileSync(join(sidecarDir, WINDOWS_SIDECAR_PROVENANCE_FILE), `${JSON.stringify(manifest, null, 2)}\n`);

@@ -22,6 +22,9 @@ describe('Windows SCIP sidecar documentation', () => {
 
     expect(prepublishOnly).toBe('npm run api:check && vite-node scripts/publish-scip-windows.ts');
     expect(packageJson.scripts?.['verify:scip-windows']).toBe('node scripts/verify-scip-windows.mjs');
+    expect(packageJson.scripts?.['verify:scip-windows-registry']).toBe(
+      'vite-node scripts/verify-scip-windows-registry.ts',
+    );
   });
 
   it('verifies provenance again when the sidecar itself is packed', () => {

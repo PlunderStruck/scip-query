@@ -1293,6 +1293,148 @@ uses one verifier.
 **Dependencies:** Slices 02 and 25.  
 **Rollback:** no registry mutation in tests; release script remains retryable.
 
+#### Slice 26 high-assurance certificate
+
+**Goal.** Permit an existing sidecar version to satisfy a release only when
+the published npm tarball is exactly the locally reviewed package, and make
+absence, ambiguity, immutable drift, and a concurrent publisher observably
+different states.
+
+**Definitions and invariants.**
+
+A packed package identity is the coordinate, exact tarball digests and size,
+and decoded provenance bytes observed from one npm tar archive; what
+distinguishes it from a version string is that equal identities prove equal
+installable bytes for every release-decision field.
+
+A registry absence is the explicit npm `E404` returned for one exact package
+coordinate; what distinguishes it from a failed lookup is evidence that the
+version is not present rather than merely evidence that the client could not
+observe it.
+
+- Local provenance and binaries are verified before any registry command.
+- The local sidecar is packed once; the verified tarball path is the publish
+  input.
+- npm-reported size and digests are never trusted without recomputing them
+  from the tarball bytes.
+- Packed provenance must decode, name the packed coordinate, and equal the
+  reviewed local manifest bytes.
+- An existing registry version must agree across `dist` metadata, downloaded
+  tarball hashes, package coordinate, local tarball hashes, and provenance.
+- Only an explicit `E404` authorizes first publication.
+- Registry, pack, and publish processes have finite deadlines and captured
+  output limits; timeout, output overflow, spawn, exit, and invalid-data
+  failures remain distinct evidence.
+- A publish conflict is retryable only after the winning registry bytes are
+  downloaded and proven identical.
+- A same-version identity difference is immutable drift and requires a new
+  sidecar version.
+
+**Premises.**
+
+- **P1.** npm package versions are immutable; changed local bytes cannot
+  replace an existing coordinate.
+- **P2.** The former release path checked only whether a version string
+  existed, so any bytes under that coordinate were accepted.
+- **P3.** npm `dist.shasum` and `dist.integrity` describe published tarball
+  bytes, but the client must compare them to a downloaded tarball rather than
+  treating registry JSON as the bytes themselves.
+- **P4.** `npm pack --json` describes a local or downloaded archive, but
+  lifecycle output can precede the JSON and every reported digest can be
+  dishonest or stale. The archive must be reread and hashed.
+- **P5.** Equal package contents require more than equal provenance: README,
+  license, package metadata, or executable packaging may differ while the
+  manifest stays equal. Exact tarball digests therefore remain authoritative.
+- **P6.** Equal tarball hashes without a decoded manifest would preserve the
+  REL-01 gap for older packages. The manifest is independently required and
+  bound to the package coordinate.
+- **P7.** A registry timeout, authentication error, proxy message, corrupt
+  response, or server failure cannot prove absence.
+- **P8.** Two publishers can both observe absence. npm makes one winner
+  durable; the loser must reconcile that new fact instead of assuming either
+  success or conflict.
+- **P9.** Published `scip-query-scip-windows@0.13.0` has five entries and no
+  provenance, while the reviewed local provenance-bearing archive has six.
+  The immutable coordinate cannot be reused, so `0.13.1` is required.
+
+**Reuse and boundary design.**
+
+- `scripts/scip-windows-package-identity.ts` owns package-report decoding,
+  byte hashing, strict registry metadata decoding, bounded tar extraction,
+  packed-provenance decoding, and complete local/remote comparison.
+- `scripts/scip-windows-release.ts` retains the Slice 25 injected
+  command/filesystem boundary and now owns bounded command classification,
+  registry lookup, absent/existing decisions, publication, and conflict
+  reconciliation.
+- `scripts/scip-windows-provenance.mjs` remains the one manifest decoder; the
+  package-identity layer composes it rather than creating a second provenance
+  schema.
+- `scripts/verify-scip-windows-registry.ts` creates the same production
+  runtime with an explicit verification-only option. It exercises real pack
+  and registry reads without giving the absent branch mutation authority or
+  letting inherited environment suppress an authorized publish.
+- Sidecar `prepack` remains the last local-byte fence. Existing registry
+  downloads use `--ignore-scripts`, so untrusted published lifecycle code is
+  not executed for comparison.
+
+**Testability design.**
+
+| Behavior                | Pure/injected seam                         | Acceptance evidence                                              |
+| ----------------------- | ------------------------------------------ | ---------------------------------------------------------------- |
+| Local pack truth        | `decodeNpmPackTarball`                     | honest/dishonest hash, size, filename, and noisy-output fixtures |
+| Packed provenance       | `decodeNpmPackIdentity`                    | exact, missing, duplicate, malformed, future, wrong-coordinate   |
+| Archive resource bounds | `readTarEntry`                             | gzip, checksum, truncation, duplicate, missing, 64 MiB ceiling   |
+| Registry metadata       | `decodeRegistryDistIdentity`               | valid, malformed, wrong digest algorithm, non-HTTPS URL          |
+| Complete equality       | `verifyRegistryTarballIdentity`            | same bytes, different bytes, missing manifest, corrupt download  |
+| Absence/ambiguity       | injected `lookupRegistryDist` command port | `E404`, auth, timeout, generic not-found, corrupt JSON           |
+| First publication       | injected release runtime                   | only the verified `.tgz`; every command has finite bounds        |
+| Concurrent publication  | injected second registry observation       | matching winner continues; different winner stops                |
+| Read-only live check    | verification-only production runtime       | real absent `0.13.1` returns ready without publish               |
+| Process containment     | real bounded runner                        | exit, timeout, and output-overflow classification                |
+
+**Attack record.**
+
+- **A1 — npm's local pack report lies.** **HOLE repaired:** the named safe
+  tarball is reread and its size and digests are recomputed.
+- **A2 — Lifecycle stdout corrupts JSON parsing.** **HOLE repaired:** the
+  decoder first accepts pure JSON, then searches complete root arrays from the
+  end without accepting an arbitrary nested fragment.
+- **A3 — Registry metadata lies or a proxy substitutes bytes.** **HOLE
+  repaired:** downloaded bytes must match both `dist` digests before local
+  comparison.
+- **A4 — Equal provenance hides different package contents.** **HOLE
+  repaired:** complete tarball SHA-1 and SHA-512 must also equal local.
+- **A5 — Equal hashes hide missing or wrong provenance.** **HOLE repaired:**
+  provenance is independently extracted, decoded, coordinate-bound, and
+  byte-compared.
+- **A6 — A gzip bomb, malformed tar, duplicate entry, or unsafe filename
+  exhausts or redirects the checker.** **HOLE repaired:** decompression is
+  capped, headers/checksums/bounds are validated, duplicate/missing entries
+  fail, and npm filenames must be safe basenames.
+- **A7 — Authentication, timeout, corruption, or generic “not found” becomes
+  absence.** **HOLE repaired:** only typed command failure containing npm
+  `E404` enters the absent branch; every other case fails closed.
+- **A8 — Local files change after the decision.** **HOLE repaired:** the
+  release publishes the verified staged tarball path, not a directory subject
+  to repacking.
+- **A9 — A concurrent publisher wins after absence.** **HOLE repaired:** any
+  publish failure triggers a fresh registry lookup and complete identity
+  comparison.
+- **A10 — An older immutable coordinate lacks the new evidence.** **HOLE
+  repaired:** missing provenance is same-version drift, and the observed
+  `0.13.0` package forced the `0.13.1` patch bump.
+- **A11 — A command hangs or floods captured output.** **HOLE repaired:**
+  pack, lookup, download, and publish have explicit time budgets; captured
+  commands have a 4 MiB buffer ceiling and typed failure.
+- **A12 — A read-only operator check accidentally publishes.** **HOLE
+  repaired:** an explicit in-process verification-only option returns at
+  confirmed absence before the publish port; inherited environment cannot
+  select that option.
+
+**Verdict.** `PLANNED-COMPLETE` — 12 attacks fenced; existing-version
+acceptance now depends on complete byte identity, and every ambiguous state
+stops before publication.
+
 ### Slice 27 — REL-03 — Preflight and record the two-package release workflow
 
 **Invariant:** both packages are built, tested, and packed before the first publish; every partial registry state is explicit and safely retryable.
@@ -1376,8 +1518,8 @@ uses one verifier.
 |    22 | API-03  | complete | `777d09c9` | 95 config/API/revision assertions   | Legacy/current/future/malformed decoding, no-op migration, unknown-field preservation, conflict safety, and packaged schema verified         |
 |    23 | API-05  | complete | `9c812746` | 65 focused; 1,717 full-suite tests  | Exact compatibility accounting, overlap readers, safe migration, incomplete-history fencing, disclosure, schemas, and package verified       |
 |    24 | API-06  | complete | `57bcc65e` | 99 focused; 1,730 full-suite tests  | Strict Rust request/response decoding, session/deadline correlation, retry authority, overlap behavior, and expiry verified                  |
-|    25 | REL-01  | complete |            | 16 focused tests                    | Versioned manifest, PE/hash inspection, pinned inputs, staging, pack, and prepublish fence verified                                          |
-|    26 | REL-02  | pending  |            |                                     |                                                                                                                                              |
+|    25 | REL-01  | complete | `251dde89` | 16 focused tests                    | Versioned manifest, PE/hash inspection, pinned inputs, staging, pack, and prepublish fence verified                                          |
+|    26 | REL-02  | complete |            | 37 focused; 1,765 full-suite tests  | Recomputed pack/registry identity, bounded ambiguity, immutable drift, exact conflict, and read-only verification proven                     |
 |    27 | REL-03  | pending  |            |                                     |                                                                                                                                              |
 
 ### Slice 10 verification record
@@ -1973,6 +2115,71 @@ uses one verifier.
   evidence authority, trusted-build limit, version policy, rebuild steps, and
   recovery table. They explicitly do not claim cryptographic attestation or
   registry equality; those remain REL-02/REL-03.
+
+### Slice 26 verification record
+
+- The release flow packs the sidecar once before registry work, rereads that
+  `.tgz`, recomputes its SHA-1/SHA-512/size, extracts provenance under a
+  bounded gzip/tar parser, and requires the packed manifest bytes to equal the
+  reviewed local file. It publishes that verified tarball path rather than
+  repacking a mutable directory.
+- For an existing coordinate, npm `dist` metadata is strictly decoded and the
+  registry tarball is downloaded with lifecycle scripts disabled. Downloaded
+  bytes must match registry SHA-1/SHA-512 before the package coordinate,
+  complete local tarball hashes, and provenance bytes are compared.
+- Only an explicit npm `E404` authorizes absence. Authentication, timeout,
+  output overflow, generic “not found,” corrupt JSON/metadata, download
+  substitution, missing provenance, and same-version content drift all stop
+  before publication. Every external command carries a finite timeout and
+  output budget.
+- A failed publish triggers one new registry observation. An identical
+  concurrent winner is accepted after complete reconciliation; a different
+  or unverifiable winner stops the main release.
+- A real read-only registry check first demonstrated bounded failure by timing
+  out under the restricted sandbox without publishing. With approved network
+  access, the same production verifier proved
+  `scip-query-scip-windows@0.13.1` explicitly absent and ready for first
+  publication; its explicit verification-only mode returned before the
+  publish port.
+- The check also reproduced the original defect against the live immutable
+  `0.13.0`: the published five-entry tarball lacks provenance, while the
+  reviewed local package has six entries. The gate required the patch bump,
+  and package metadata, provenance, optional-dependency pin, lockfile, and
+  fixtures now agree on `0.13.1`.
+- The real `0.13.1` sidecar pack runs `prepack`, contains six entries, and
+  reports 13,724,691 packed bytes, SHA-1
+  `4f79806b3dc2b681a882ff3fc542ab4f5e16b2ed`, and SHA-512
+  `sha512-nucZotX6lwnhfutXetAHptYWb5ScSBPopU5byeShyY6P3TF3hFJbCDH7Focm3iunlBoS0cJuLch1IRBVxs1rLg==`.
+  Direct `npm run publish:scip-windows` makes only this local pack and no
+  registry request.
+- The main-package dry-run contains 365 entries including the release guide,
+  provenance schema, and local verifier. `npm run typecheck`, formatting,
+  scoped ESLint, production build, all 72 public API paths, and downstream
+  consumer compilation pass.
+- The 37 focused assertions comprise 21 registry-identity/release cases, 13
+  provenance/build cases, and 3 package-lifecycle documentation cases. They
+  cover dishonest reports, archive corruption/resource bounds, all registry
+  decision classes, exact/missing/different identities, conflict winners,
+  explicit verify-only authority, inherited-environment isolation, and real
+  subprocess exit/timeout/output-limit classification.
+- With an isolated cache, the complete suite passes 227 of 228 files and
+  1,765 tests, with 2 intentional skips. The only 2 failures are Claude's
+  concurrent skill-router command token and uncovered-command assertions; all
+  36 REL-02 tests pass.
+- Full lint passes formatting, ESLint, build, API compatibility, and
+  downstream compilation, then stops only on Claude's two concurrently stale
+  `scip-maintainability` wrapper links.
+- The first diff gate caught the audit/README historical co-change and
+  behavioral citation. README now documents the registry identity gate and
+  read-only verifier; the final gate has no REL-02 finding or advisory. Its
+  only two blockers are Claude's concurrent `skills/scip-query/SKILL.md`
+  co-change signals.
+- The gate records both caught and resolved transitions for the audit/README
+  co-change and behavioral citation, so four generated event files remain
+  with the slice that produced and repaired the findings.
+- `scip-query health --baseline` remains at 82 accumulated source findings.
+  REL-02 changes no indexed production source, so it adds no health delta and
+  writes no baseline ratchet or suppression.
 
 ### Slice 09 verification note
 

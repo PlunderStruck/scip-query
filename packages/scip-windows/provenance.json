@@ -3,7 +3,7 @@
   "schemaVersion": 1,
   "package": {
     "name": "scip-query-scip-windows",
-    "version": "0.13.0"
+    "version": "0.13.1"
   },
   "source": {
     "repository": "https://github.com/scip-code/scip.git",

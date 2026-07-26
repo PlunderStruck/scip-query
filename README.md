@@ -478,7 +478,16 @@ scip-query health --write-baseline   # start the ratchet
 - `scip` CLI, from [Sourcegraph SCIP releases](https://github.com/sourcegraph/scip/releases)
 - A language-specific SCIP indexer for your project
 
-On Windows, the `scip` binary is installed automatically from npm: `scip-query-scip-windows` is an os-gated optional dependency (universal package, x64 + arm64) that only Windows installs fetch. Resolution order: `scip` on PATH, then `SCIP_QUERY_SCIP_BIN`, then the sidecar package. Run `scip-query check-deps` for platform-specific install instructions. The [Windows sidecar release guide](docs/WINDOWS_SIDECAR_RELEASE.md) defines its executable provenance and fail-closed build/pack checks.
+On Windows, the `scip` binary is installed automatically from npm:
+`scip-query-scip-windows` is an OS-gated optional dependency (universal
+package, x64 + ARM64) that only Windows installs fetch. Resolution order:
+`scip` on PATH, then `SCIP_QUERY_SCIP_BIN`, then the sidecar package. Run
+`scip-query check-deps` for platform-specific install instructions. The
+[Windows sidecar release guide](docs/WINDOWS_SIDECAR_RELEASE.md) defines its
+executable provenance, fail-closed build/pack checks, and registry identity
+gate. Release operators can run `npm run verify:scip-windows-registry` to
+prove an existing sidecar tarball equals the reviewed local package, or that
+the intended version is explicitly absent, without publishing it.
 
 | Language                      | Indexer          | Install                                                                                                                       |
 | ----------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |

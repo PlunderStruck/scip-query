@@ -88,7 +88,7 @@ Severity:
 | Outcome events              | One immutable committed JSON file per event       | Diff gate                                | Reports and reconciliation                        | Content-derived name, exclusive create, read dedupe       | Good merge model; schema is unversioned                                    |
 | CLI JSON                    | Printed process output                            | Current CLI                              | Agents, scripts, external callers                 | Descriptor metadata and coverage validation               | Shape is useful but unversioned                                            |
 | npm TypeScript API          | Exported `.d.ts` surface                          | Package releases                         | Library consumers                                 | Export membership tests                                   | No signature compatibility baseline                                        |
-| Windows sidecar             | Published npm tarball containing two PE binaries  | Release script                           | Windows installations                             | Version pin and file-presence checks                      | Byte provenance and registry identity are not verified                     |
+| Windows sidecar             | Published npm tarball containing two PE binaries  | Release script                           | Windows installations                             | Provenance, exact pack identity, bounded registry compare | Local/registry identity is verified; cross-package recovery remains        |
 
 ---
 
@@ -1243,6 +1243,38 @@ If local package bytes differ from the already-published immutable npm version, 
 **Required tests:** same version/same bytes, same version/different bytes, 404, auth error, timeout, and registry response corruption.
 
 **Acceptance condition:** an existing version is accepted only when its published content is the intended content.
+
+**Resolution (Slice 26):** `scripts/scip-windows-package-identity.ts` now
+decodes one npm pack report, rereads the named tarball, recomputes its
+SHA-1/SHA-512/size, extracts and decodes the packed provenance under a bounded
+gzip/tar reader, and binds the manifest's package coordinate to the tarball
+coordinate. `scripts/scip-windows-release.ts` packs the local sidecar before
+registry work, verifies that the packed manifest bytes equal the reviewed
+local manifest, reads exact npm `dist` metadata under a finite deadline, and
+downloads an existing tarball with lifecycle scripts disabled. It skips only
+when registry metadata, downloaded hashes, local hashes, package coordinate,
+and manifest bytes all agree.
+
+Only an explicit npm `E404` is absence. Authentication, timeout, output-limit,
+spawn, generic “not found,” corrupt JSON, invalid metadata, and downloaded
+hash mismatches fail closed. The absent branch publishes the already verified
+local `.tgz`; a publish failure rereads registry state and continues only
+when a concurrent winner has the identical complete identity.
+
+The implementation found this exact defect in current release state:
+published `scip-query-scip-windows@0.13.0` contains five entries and no
+`provenance.json`, while the reviewed local pack contains six entries. The
+gate rejected same-version reuse, so the first provenance-bearing package and
+the main optional-dependency pin are now `0.13.1`. A read-only live npm check
+then proved `0.13.1` absent and ready for its first publish; direct and npm
+dry-run paths pack locally without reading or mutating the registry.
+
+The 21 identity/release tests plus 13 provenance and 3 package-lifecycle
+assertions cover honest and dishonest npm reports, same/different/missing
+provenance, corrupt downloads, bounded gzip/tar parsing, exact `E404`,
+ambiguous failures, absent publication, identical/different conflict winners,
+explicit verification-only authority, inherited-environment isolation, and
+real subprocess exit/timeout/output-limit classification.
 
 ### REL-03 — S3 — Main and sidecar publication is an ordered workflow, not one atomic release
 

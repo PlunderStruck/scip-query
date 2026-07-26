@@ -3,7 +3,7 @@
  *
  * This entry point verifies the optional-dependency pin and complete local
  * binary provenance before making any registry decision. Registry identity
- * and partial-release recovery are strengthened by REL-02 and REL-03.
+ * is proven here; REL-03 adds the cross-package preflight and recovery record.
  */
 import { createWindowsSidecarReleaseRuntime, runWindowsSidecarRelease } from './scip-windows-release.js';
 
