@@ -484,6 +484,19 @@ This affects detector-effectiveness metrics and local history, not source or ind
 
 **Acceptance condition:** distinct observations commute without loss, and retry semantics are declared.
 
+**Resolution:** Slice 15 removes the read/replace writer. Each logical
+diff-gate observation now has a stable ID, a fingerprint of its normalized
+findings/checks/retained identities and captured time, and an additive record
+in `finding_outcome_observations`. SQLite claims that ID, derives the
+transition from the latest committed rows, applies count deltas with
+`INSERT ... ON CONFLICT DO UPDATE`, and enforces the per-check recency cap
+inside one immediate transaction. An exact retry is a no-op, ID reuse for
+different evidence is a reported conflict, and transient writer-lock timeout
+does not consume the ID or disable the rest of the evidence cache. Two real
+connections reproduce the former stale-read interleaving and retain both
+increments; additional tests cover retry, collision, suppression, duplicate
+findings within one run, lock timeout, and successful retry after lock release.
+
 ### DD-10 — S3 — File mailboxes have no claim state, orphan collection, or backpressure
 
 **Evidence:** source-confirmed lifecycle gap.

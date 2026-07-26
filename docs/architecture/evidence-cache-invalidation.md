@@ -36,6 +36,34 @@ from current evidence.
 the health semantic-prewarm product, its cache key, or its invalidation
 triggers.
 
+## Finding-outcome observation ledger
+
+The finding-outcome ledger is a worktree-local observational product: its rows
+summarize how often one stable detector finding was shown and its latest
+open, suppressed, or resolved state. Its companion observation table names
+each completed logical run by a caller-owned ID and fingerprints that run's
+normalized findings, checks, retained identities, and captured observation
+time.
+
+Both tables live in `evidence.db`. One `BEGIN IMMEDIATE` transaction claims the
+observation ID, derives the transition from the latest committed ledger, and
+applies count deltas with SQLite `UPSERT`. Distinct transactions therefore
+have one database-defined commit order and cannot replace one another's
+increments. An identical ID/fingerprint retry is a no-op; an ID with a
+different fingerprint is a conflict. The observation ID omits attempt
+identity: every retry of one logical run must reuse it, while a new detector
+evaluation must use a new ID. Observation records are retained with the local
+database because exact retry deduplication requires remembering every accepted
+ID. Removing the rebuildable database resets both the metric and that memory.
+
+Writer-lock timeout is an unavailable observation, not evidence that the
+detector ran zero times. The gate result remains authoritative and the local
+metric write is skipped with a warning. `tests/queries/health/finding-outcome-ledger.test.ts`
+interleaves two independent connections at the old stale-read boundary and
+tests exact retry, ID collision, distinct increments, and suppression.
+`tests/storage/evidence-cache.test.ts` verifies the recency cap and lock-timeout
+rollback.
+
 ## Sidecar Product Matrix
 
 Sidecar products are stored cache files that do not live in an evidence table.

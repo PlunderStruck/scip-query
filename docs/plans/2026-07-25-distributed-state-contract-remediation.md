@@ -616,8 +616,8 @@ Rollback is commit-scoped. Durable-format slices additionally retain legacy read
 |    11 | DD-03   | complete | `a13f6808` | 120 focused; 1,574 full-suite tests | Immutable admission, exclusive claims, completion receipts, retry, expiry, and status verified |
 |    12 | DD-05   | complete | `aff8685c` | 53 focused; 1,590 full-suite tests  | Revision checks, narrow merges, exclusive create, strict Markdown conflicts, and crash boundaries verified |
 |    13 | DD-06   | complete | `5bc743ed` | 39 focused; 1,598 full-suite tests  | Exclusive create, idempotent replay, compare-and-replace, schema decoding, and crash boundaries verified |
-|    14 | DD-07   | complete | this slice | 24 focused; 1,603 full-suite tests  | G2 publication, deletion/recreation, ownership, and touch ordering verified |
-|    15 | DD-09   | pending  |            |                                     |                                                                 |
+|    14 | DD-07   | complete | `5fd33ab0` | 24 focused; 1,603 full-suite tests  | G2 publication, deletion/recreation, ownership, and touch ordering verified |
+|    15 | DD-09   | complete | this slice | 48 focused; 1,606 full-suite tests  | Serialized UPSERT, exact retry, collision, timeout, and suppression verified |
 |    16 | DD-10   | pending  |            |                                     |                                                                 |
 |    17 | DD-11   | pending  |            |                                     |                                                                 |
 |    18 | DD-12   | pending  |            |                                     |                                                                 |
@@ -727,6 +727,29 @@ Rollback is commit-scoped. Durable-format slices additionally retain legacy read
   diff gate identified two architecture documents that cite the changed shared
   generation owner; both lease/ownership claims were reconciled, and the final
   gate reports zero blocking and zero advisory findings.
+
+### Slice 15 verification record
+
+- `finding_outcome_observations` is the exact-retry memory for the local
+  metric. A logical run claims one ID and fingerprint in the same immediate
+  transaction that derives and publishes its ledger transition.
+- Existing findings increment through SQLite `UPSERT`; state-only resolutions
+  use identity-scoped updates. The transition callback runs only after SQLite
+  reserves the writer, so it cannot derive from the former stale pre-lock
+  snapshot.
+- Two independent `ScipDatabase` connections interleave at the former
+  read/write gap and retain both increments. Exact retry, different-evidence
+  ID collision, distinct-run increment, duplicate-in-one-run normalization,
+  suppression, recency eviction, writer-lock timeout, and post-timeout retry
+  are deterministic tests.
+- Runtime event derivation compares the previous/current pair returned by the
+  committed transaction. A retried logical run therefore emits neither a
+  second counter increment nor a second caught event.
+- The 48-test focused matrix passes. The full suite passes with 213 files,
+  1,606 tests, and 2 intentional skips when `XDG_CACHE_HOME` is redirected to
+  a writable temporary root; the unredirected sandbox run reached all changed
+  tests but denied eight unrelated `~/.cache` directory creations.
+- Typecheck, lint, production build, and whitespace validation pass.
 
 ### Slice 09 verification note
 

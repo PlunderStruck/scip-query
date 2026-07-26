@@ -1,15 +1,33 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { ScipDatabase } from '../../../src/storage/db.js';
+import { evidenceFixtureDb } from '../../fixtures/evidence-fixture.js';
 import {
   detectorPrecision,
   formatLowResolutionNudges,
   formatUnresolvedStreakLine,
   recordFindingOutcomes,
+  readLedgerRecords,
   trailingResolutionRate,
+  updateFindingOutcomeLedger,
   type FindingOutcomeRecord,
   type ObservedFinding,
 } from '../../../src/queries/health/finding-outcome-ledger.js';
 
 const DAY = 86_400_000;
+
+function openLedgerPair(): { first: ScipDatabase; second: ScipDatabase; root: string } {
+  const root = mkdtempSync(join(tmpdir(), 'scip-finding-outcome-ledger-'));
+  const dbPath = join(root, 'index.db');
+  evidenceFixtureDb(dbPath).write();
+  return {
+    first: new ScipDatabase({ projectRoot: root, dbPath }),
+    second: new ScipDatabase({ projectRoot: root, dbPath }),
+    root,
+  };
+}
 
 describe('recordFindingOutcomes (pure)', () => {
   it('creates a still-open record for a newly observed finding', () => {
@@ -199,5 +217,130 @@ describe('formatLowResolutionNudges (pure)', () => {
     ];
 
     expect(formatLowResolutionNudges(ledger, ['doc-reference'])).toEqual([]);
+  });
+});
+
+describe('finding-outcome ledger storage shell', () => {
+  it('does not lose either increment when two connections interleave at the former read/write gap', () => {
+    const { first, second, root } = openLedgerPair();
+    try {
+      const staleFirstRead = readLedgerRecords(first);
+      expect(staleFirstRead).toEqual([]);
+
+      const secondRun = updateFindingOutcomeLedger(
+        second,
+        [{ check: 'echo', findingId: 'A', suppressed: false }],
+        ['echo'],
+        1_000,
+        new Set(),
+        'connection-b',
+      );
+      const firstRun = updateFindingOutcomeLedger(
+        first,
+        [{ check: 'echo', findingId: 'A', suppressed: false }],
+        ['echo'],
+        1_000,
+        new Set(),
+        'connection-a',
+      );
+
+      expect(secondRun.status).toBe('applied');
+      expect(firstRun.status).toBe('applied');
+      expect(readLedgerRecords(first)).toEqual([
+        {
+          check: 'echo',
+          findingId: 'A',
+          firstSeen: 1_000,
+          lastSeen: 1_000,
+          timesShown: 2,
+          outcome: 'still-open',
+        },
+      ]);
+    } finally {
+      first.close();
+      second.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('applies an exact run retry once and rejects the same id for different evidence', () => {
+    const { first, second, root } = openLedgerPair();
+    try {
+      const args = [
+        [{ check: 'echo', findingId: 'A', suppressed: false }],
+        ['echo'],
+        2_000,
+        new Set<string>(),
+        'stable-run-id',
+      ] as const;
+      expect(updateFindingOutcomeLedger(first, ...args).status).toBe('applied');
+      expect(updateFindingOutcomeLedger(second, ...args).status).toBe('duplicate');
+      expect(
+        updateFindingOutcomeLedger(
+          second,
+          [{ check: 'echo', findingId: 'B', suppressed: false }],
+          ['echo'],
+          2_001,
+          new Set(),
+          'stable-run-id',
+        ).status,
+      ).toBe('conflict');
+
+      expect(readLedgerRecords(first)).toEqual([
+        {
+          check: 'echo',
+          findingId: 'A',
+          firstSeen: 2_000,
+          lastSeen: 2_000,
+          timesShown: 1,
+          outcome: 'still-open',
+        },
+      ]);
+    } finally {
+      first.close();
+      second.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('counts a distinct run once and commits its suppression transition', () => {
+    const { first, second, root } = openLedgerPair();
+    try {
+      updateFindingOutcomeLedger(
+        first,
+        [{ check: 'echo', findingId: 'A', suppressed: false }],
+        ['echo'],
+        3_000,
+        new Set(),
+        'open-run',
+      );
+      const suppressed = updateFindingOutcomeLedger(
+        second,
+        [
+          { check: 'echo', findingId: 'A', suppressed: true },
+          { check: 'echo', findingId: 'A', suppressed: false },
+        ],
+        ['echo'],
+        3_001,
+        new Set(),
+        'suppressed-run',
+      );
+
+      expect(suppressed.status).toBe('applied');
+      expect(suppressed.current).toEqual([
+        {
+          check: 'echo',
+          findingId: 'A',
+          firstSeen: 3_000,
+          lastSeen: 3_001,
+          timesShown: 2,
+          outcome: 'suppressed',
+        },
+      ]);
+    } finally {
+      first.close();
+      second.close();
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

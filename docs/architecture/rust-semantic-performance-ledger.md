@@ -130,7 +130,10 @@ moving the whole product surface at once.
   legacy key semantics as the single-row readers. Database-backed fingerprint
   construction now uses the metadata snapshot retained by the open SQLite
   generation handle, so a concurrent publication cannot attribute old cache
-  rows to a new index identity.
+  rows to a new index identity. The same file now serializes worktree-local
+  finding-outcome observations under one immediate SQLite transaction: stable
+  run IDs deduplicate exact retries, distinct runs add their count deltas, and
+  a lock timeout skips only that best-effort metric update.
 - `crates/scip-query-kernels` is a first native-kernel experiment. It proves
   SCIP symbol leaf extraction can match TypeScript fixture behavior, but the
   helper-binary benchmark is slower for 100k symbols because process and

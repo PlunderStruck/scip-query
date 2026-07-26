@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { diffGateFailedClosed, type DiffGateResult } from '../queries/impact/diff-gate.js';
 import { readLedgerRecords, updateFindingOutcomeLedger } from '../queries/health/finding-outcome-ledger.js';
 import {
@@ -13,6 +14,8 @@ import { appendOutcomeEvents, readOutcomeEvents } from '../storage/outcome-event
 import { gitOutput, resolveGitWorktreeContext } from '../platform/git-worktree.js';
 
 export interface DiffGateOutcomeRuntime {
+  /** Stable across retries of one logical gate observation; retries also reuse its captured `now`. */
+  observationId?: string;
   now?: () => number;
   headCommit?: (projectRoot: string) => string | null;
   resolveCommit?: (projectRoot: string, ref: string) => string | null;
@@ -41,8 +44,9 @@ export function recordDiffGateOutcomes(
   runtime: DiffGateOutcomeRuntime = {},
 ): DiffGateOutcomeResult {
   const now = (runtime.now ?? Date.now)();
+  const observationId = runtime.observationId ?? randomUUID();
   const observed = observationsForResult(result);
-  const previous = readLedgerRecords(db);
+  const reconciliationPrevious = readLedgerRecords(db);
   const projectRoot = db.config.projectRoot;
   const commit = runtime.headCommit
     ? runtime.headCommit(projectRoot)
@@ -51,7 +55,7 @@ export function recordDiffGateOutcomes(
     ? runtime.resolveCommit(projectRoot, result.base)
     : resolveCommit(projectRoot, result.base);
   const reconciliation = reconcileMissingFindings({
-    previous,
+    previous: reconciliationPrevious,
     observed,
     result,
     projectRoot,
@@ -59,13 +63,23 @@ export function recordDiffGateOutcomes(
     comparisonBaseCommit,
     runtime,
   });
-  const ledger = updateFindingOutcomeLedger(
+  const update = updateFindingOutcomeLedger(
     db,
     reconciliation.ledgerObserved,
     reconciliation.checksRun,
     now,
     reconciliation.retainedKeys,
+    observationId,
   );
+  const ledger = update.current;
+  const ledgerWarning =
+    update.status === 'busy'
+      ? 'finding outcome ledger not updated: evidence database remained busy'
+      : update.status === 'unavailable'
+        ? 'finding outcome ledger not updated: evidence database unavailable'
+        : update.status === 'conflict'
+          ? `finding outcome ledger not updated: observation id ${observationId} names different evidence`
+          : undefined;
 
   try {
     const symbolByFindingId = new Map<string, string>();
@@ -76,7 +90,7 @@ export function recordDiffGateOutcomes(
       if (entry.finding.symbol) symbolByFindingId.set(entry.finding.id, entry.finding.symbol);
     }
     for (const [findingId, symbol] of reconciliation.replaySymbols) symbolByFindingId.set(findingId, symbol);
-    const events = deriveOutcomeEvents(previous, ledger, symbolByFindingId, commit, now, {
+    const events = deriveOutcomeEvents(update.previous, ledger, symbolByFindingId, commit, now, {
       ...(comparisonBaseCommit ? { comparisonBaseCommit } : {}),
       verifiedAgainstByFinding: reconciliation.verifiedAgainstByFinding,
     });
@@ -85,21 +99,25 @@ export function recordDiffGateOutcomes(
       ledger,
       observed,
       now,
-      ...(reconciliation.warning ? { warning: reconciliation.warning } : {}),
+      ...withOutcomeWarning(reconciliation.warning, ledgerWarning),
     };
   } catch (error) {
     return {
       ledger,
       observed,
       now,
-      warning: [
+      ...withOutcomeWarning(
         reconciliation.warning,
+        ledgerWarning,
         `outcome event ledger not updated: ${error instanceof Error ? error.message : String(error)}`,
-      ]
-        .filter(Boolean)
-        .join('; '),
+      ),
     };
   }
+}
+
+function withOutcomeWarning(...warnings: Array<string | undefined>): { warning?: string } {
+  const warning = warnings.filter((value): value is string => Boolean(value)).join('; ');
+  return warning ? { warning } : {};
 }
 
 interface MissingFindingReconciliation {

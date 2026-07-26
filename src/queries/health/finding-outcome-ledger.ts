@@ -11,8 +11,14 @@
  * depend on wall time.
  */
 
+import { createHash, randomUUID } from 'node:crypto';
 import type { ScipDatabase } from '../../storage/db.js';
-import { readFindingOutcomeLedger, writeFindingOutcomeLedger } from '../../storage/evidence-cache.js';
+import {
+  applyFindingOutcomeLedgerTransition,
+  readFindingOutcomeLedger,
+  type FindingOutcomeApplyStatus,
+  type FindingOutcomeRow,
+} from '../../storage/evidence-cache.js';
 import {
   ledgerKey,
   type FindingOutcome,
@@ -193,20 +199,20 @@ export function formatLowResolutionNudges(
 // ── Storage shell (side effects live here; math above stays pure) ──
 
 export function readLedgerRecords(db: ScipDatabase): FindingOutcomeRecord[] {
-  return readFindingOutcomeLedger(db).map((row) => ({
-    check: row.check,
-    findingId: row.findingId,
-    firstSeen: row.firstSeen,
-    lastSeen: row.lastSeen,
-    timesShown: row.timesShown,
-    outcome: row.outcome as FindingOutcome,
-  }));
+  return readFindingOutcomeLedger(db).map(toFindingOutcomeRecord);
+}
+
+export interface FindingOutcomeLedgerUpdate {
+  observationId: string;
+  status: FindingOutcomeApplyStatus;
+  previous: FindingOutcomeRecord[];
+  current: FindingOutcomeRecord[];
 }
 
 /**
- * Read-transition-write in one call — the shell diff-gate's hook mode
- * invokes once per run. Returns the next ledger state so the caller can
- * immediately format the hook nudge lines from it without a second read.
+ * Apply one logical detector observation. SQLite acquires an immediate writer
+ * transaction before this function's pure transition runs, so concurrent
+ * processes derive from one committed order instead of stale snapshots.
  */
 export function updateFindingOutcomeLedger(
   db: ScipDatabase,
@@ -214,9 +220,70 @@ export function updateFindingOutcomeLedger(
   checksRun: readonly string[],
   now: number = Date.now(),
   retainedKeys: ReadonlySet<string> = new Set(),
-): FindingOutcomeRecord[] {
-  const previous = readLedgerRecords(db);
-  const next = recordFindingOutcomes(previous, observed, checksRun, now, retainedKeys);
-  writeFindingOutcomeLedger(db, next);
-  return next;
+  observationId: string = randomUUID(),
+  busyTimeoutMs?: number,
+): FindingOutcomeLedgerUpdate {
+  const normalizedObserved = normalizeObservedFindings(observed);
+  const normalizedChecks = [...new Set(checksRun)].sort();
+  const normalizedRetainedKeys = new Set([...retainedKeys].sort());
+  const fingerprint = createHash('sha256')
+    .update(
+      JSON.stringify({
+        checksRun: normalizedChecks,
+        observed: normalizedObserved,
+        observedAt: now,
+        retainedKeys: [...normalizedRetainedKeys],
+      }),
+    )
+    .digest('hex');
+  const applied = applyFindingOutcomeLedgerTransition(
+    db,
+    { observationId, fingerprint, observedAt: now },
+    (previous) =>
+      recordFindingOutcomes(
+        previous.map(toFindingOutcomeRecord),
+        normalizedObserved,
+        normalizedChecks,
+        now,
+        normalizedRetainedKeys,
+      ),
+    busyTimeoutMs === undefined ? {} : { busyTimeoutMs },
+  );
+  return {
+    observationId,
+    status: applied.status,
+    previous: applied.previous.map(toFindingOutcomeRecord),
+    current: applied.current.map(toFindingOutcomeRecord),
+  };
+}
+
+function normalizeObservedFindings(observed: readonly ObservedFinding[]): ObservedFinding[] {
+  const byKey = new Map<string, ObservedFinding>();
+  for (const finding of observed) {
+    const key = ledgerKey(finding.check, finding.findingId);
+    const existing = byKey.get(key);
+    byKey.set(key, {
+      check: finding.check,
+      findingId: finding.findingId,
+      suppressed: finding.suppressed || (existing?.suppressed ?? false),
+    });
+  }
+  return [...byKey.values()].sort(
+    (left, right) => compareStableText(left.check, right.check) || compareStableText(left.findingId, right.findingId),
+  );
+}
+
+function compareStableText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function toFindingOutcomeRecord(row: FindingOutcomeRow): FindingOutcomeRecord {
+  return {
+    check: row.check,
+    findingId: row.findingId,
+    firstSeen: row.firstSeen,
+    lastSeen: row.lastSeen,
+    timesShown: row.timesShown,
+    outcome: row.outcome as FindingOutcome,
+  };
 }

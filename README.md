@@ -280,6 +280,19 @@ new-dead    6       5      0           1     0      0           100%       0.3
 
 `precision` is verified fixed ÷ (verified fixed + suppressed). `moved` separates rename churn, while `unverified` is reserved for legacy or otherwise non-comparable resolutions that lack replay proof. Run diff-gate once to record the finding and again after the repair; a pre-commit rerun uses the same base directly, while a clean post-commit run automatically replays the stored base. Filter with `--check <name>`, window with `--since 30d|12w|<ISO date>`, and get machine-readable output with `--json`. Because the event files are committed, the numbers survive re-clones and aggregate across every machine and agent working the repo. Legacy `.scipquery/ledger/events.jsonl` records remain readable and are migrated to individual files on the next gate write. Historical cross-`HEAD` events without stored comparison evidence remain unverified rather than being reclassified speculatively. Standalone health/cleanup commands are not yet outcome-tracked because they do not all expose a complete-scan contract.
 
+The health report also keeps a worktree-local repeat counter in `evidence.db`.
+A logical observation is one completed detector evaluation named by an
+observation ID; unlike a process attempt, a retry of that evaluation reuses the
+same ID. SQLite serializes these observations before deriving their
+transitions. Two different IDs that report the same finding therefore add two
+to `timesShown`, while an exact retry with the same ID and evidence adds
+nothing. Reusing an ID for different evidence is rejected and reported. A
+writer-lock timeout skips the local counter update rather than delaying or
+changing the gate decision, and the next distinct run may try again. The
+dedupe records live as long as that rebuildable `evidence.db`; deleting the
+database resets both the counters and their retry memory. These local counters
+feed detector-precision hints, not the committed `effectiveness` totals above.
+
 Before any edit, `plan-context <target>` bundles the structural picture — definitions, references, call graph, blast radius — plus a HISTORY section: churn, fix-commit density, and the files that usually change together with the target ("editing this usually means editing these").
 
 ## A Health Score You Can Argue With

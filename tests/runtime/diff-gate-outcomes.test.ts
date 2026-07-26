@@ -74,6 +74,26 @@ describe('recordDiffGateOutcomes', () => {
     }
   });
 
+  it('records one local increment and one event when the same logical observation is retried', () => {
+    const { db, root } = openDb();
+    try {
+      const runtime = {
+        observationId: 'stable-observation',
+        now: () => 1_000,
+        headCommit: () => 'commit-1',
+      };
+      const first = recordDiffGateOutcomes(db, result([finding()]), runtime);
+      const retry = recordDiffGateOutcomes(db, result([finding()]), runtime);
+
+      expect(first.ledger[0]?.timesShown).toBe(1);
+      expect(retry.ledger[0]?.timesShown).toBe(1);
+      expect(retry.warning).toBeUndefined();
+      expect(readOutcomeEvents(root).map((event) => event.event)).toEqual(['caught']);
+    } finally {
+      db.close();
+    }
+  });
+
   it('keeps a cross-HEAD disappearance open when no comparable replay is available', () => {
     const { db, root } = openDb();
     try {
