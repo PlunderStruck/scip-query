@@ -7,6 +7,8 @@ import { localityCandidates } from '../../../src/queries/cleanup/locality-candid
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../../fixtures/evidence-fixture.js';
 
+const SQLITE_FIXTURE_TIMEOUT_MS = 15_000;
+
 function withLocalityFixture(run: (db: ScipDatabase) => void): void {
   const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-locality-candidates-'));
   const projectRoot = join(tempDir, 'project');
@@ -354,7 +356,9 @@ function withLocalityFixture(run: (db: ScipDatabase) => void): void {
   }
 }
 
-describe('localityCandidates', () => {
+// Every case builds and queries a complete SQLite fixture. Keep the budget local
+// so parallel full-suite I/O contention cannot be mistaken for a product hang.
+describe('localityCandidates', { timeout: SQLITE_FIXTURE_TIMEOUT_MS }, () => {
   it('reports symbol-level directory ancestry and feature-local ownership', () => {
     withLocalityFixture((db) => {
       const results = localityCandidates(db, { target: 'formatHorseName', semantic: false });
