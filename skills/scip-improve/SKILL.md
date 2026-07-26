@@ -50,7 +50,7 @@ with its evidence and disposition.
 | --- | --- | --- | --- | --- |
 | `scip-query cleanup-plan --verify --json` | Ordered, batched deletion plan: graph-fact dead code plus the cascade candidates it unlocks | ordered cleanup batches, evidence, and optional verification outcomes | `bounded` | Build compiler-checked deletion batches from confirmed dead-code findings. |
 | `scip-query cleanup-apply --verified --batch <n>` | Apply a compiler-verified cleanup-plan batch to the working tree | applied files, deletions, verification, and refusal reasons | `bounded` | Apply one already verified cleanup batch. |
-| `scip-query diff-gate --json --compact` | Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | blocking findings with check id, message, and remediation; advisory findings; root-cause groups; changed file and symbol counts; process exit status (1 when blocking findings exist) | `bounded` | Gate each implemented improvement slice before declaring it complete. |
+| `scip-query diff-gate --json --compact` | Runtime-bounded, single-flight gate for the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | blocking findings with check id, message, and remediation; advisory findings; root-cause groups; changed file and symbol counts; process exit status (1 when blocking findings exist) | `bounded` | Gate each implemented improvement slice before declaring it complete. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->

@@ -270,6 +270,81 @@ describe('recordDiffGateOutcomes', () => {
     }
   });
 
+  it('bounds cross-HEAD replay to one historical base and discloses retained work', () => {
+    const { db, root } = openDb();
+    try {
+      const caught = [
+        { head: 'head-1', finding: finding({ id: 'SQECHO1' }) },
+        { head: 'head-2', finding: finding({ id: 'SQECHO2' }) },
+        { head: 'head-3', finding: finding({ id: 'SQECHO3' }) },
+      ];
+      for (const [index, observation] of caught.entries()) {
+        recordDiffGateOutcomes(db, result([observation.finding]), {
+          now: () => 1_000 + index,
+          headCommit: () => observation.head,
+          resolveCommit: () => observation.head,
+          worktreeIsClean: () => false,
+        });
+      }
+
+      const replayed: Array<{ base: string; checks: readonly string[] }> = [];
+      const recorded = recordDiffGateOutcomes(db, result([]), {
+        now: () => 2_000,
+        headCommit: () => 'head-4',
+        resolveCommit: () => 'head-4',
+        worktreeIsClean: () => true,
+        replayGate: (base, checks) => {
+          replayed.push({ base, checks });
+          return result([], base);
+        },
+      });
+
+      expect(replayed).toHaveLength(1);
+      expect(replayed[0]?.checks).toEqual(['echo']);
+      expect(recorded.warning).toContain('bounded to 1 of 3 historical base(s)');
+      expect(recorded.warning).toContain('retained 2 finding(s) across 2 base(s)');
+      expect(computeEffectiveness(readOutcomeEvents(root).events).checks[0]).toMatchObject({
+        caught: 3,
+        fixed: 1,
+        open: 2,
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  it('requests only the detectors needed by the selected replay base', () => {
+    const { db } = openDb();
+    try {
+      const architectureFinding = finding({
+        id: 'SQARCH1',
+        check: 'architecture',
+        message: 'Architecture boundary changed.',
+      });
+      recordDiffGateOutcomes(db, result([finding(), architectureFinding], 'HEAD', ['echo', 'architecture']), {
+        now: () => 1_000,
+        headCommit: () => 'head-1',
+        resolveCommit: () => 'head-1',
+      });
+
+      let requestedChecks: readonly string[] = [];
+      recordDiffGateOutcomes(db, result([], 'HEAD', ['echo', 'architecture']), {
+        now: () => 2_000,
+        headCommit: () => 'head-2',
+        resolveCommit: () => 'head-2',
+        worktreeIsClean: () => true,
+        replayGate: (base, checks) => {
+          requestedChecks = checks;
+          return result([], base, ['echo', 'architecture']);
+        },
+      });
+
+      expect(requestedChecks).toEqual(['architecture', 'echo']);
+    } finally {
+      db.close();
+    }
+  });
+
   it('keeps the gate result usable when the repository ledger append fails', () => {
     const { db } = openDb();
     try {

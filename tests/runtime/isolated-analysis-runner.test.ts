@@ -99,7 +99,7 @@ describe('analysis scheduler', () => {
         args: ['alpha', 'beta'],
         label: 'Scheduler child',
       }),
-    ).resolves.toEqual({ command: 'probe', args: ['alpha', 'beta'] });
+    ).resolves.toEqual({ command: 'probe', args: ['--json', 'alpha', 'beta'] });
   });
 
   it('rejects an unsupported isolated-analysis protocol version before using the result', async () => {

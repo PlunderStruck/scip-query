@@ -8,6 +8,7 @@ import {
   evaluatePreToolUse,
   renderAgentHookContext,
   refreshIndexForHookIfNeeded,
+  renderStopHookExecutionFailure,
   renderStopHookOutput,
   renderUserPromptContext,
   resolveStopHookMode,
@@ -171,6 +172,19 @@ describe('agent hook context', () => {
     expect(output).toMatchObject({
       decision: 'block',
       reason: expect.stringContaining('fix or knowingly accept them before finishing'),
+    });
+  });
+
+  it('turns an incomplete gate execution into explicit stop feedback', () => {
+    expect(renderStopHookExecutionFailure('timed out after 60000ms', 'feedback')).toMatchObject({
+      hookSpecificOutput: {
+        hookEventName: 'Stop',
+        additionalContext: expect.stringContaining('cannot certify this turn'),
+      },
+    });
+    expect(renderStopHookExecutionFailure('another diff-gate is already running', 'block')).toMatchObject({
+      decision: 'block',
+      reason: expect.stringContaining('already running'),
     });
   });
 

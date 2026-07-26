@@ -1,4 +1,5 @@
 import * as queries from '../../queries/index.js';
+import { dirname } from 'node:path';
 import type { DiffGateCheck } from '../../queries/impact/diff-gate.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
 import {
@@ -23,8 +24,8 @@ import {
 } from '../command-kit/command-execution.js';
 import { formatGateBlockReason, isStopHookReentry, readHookInput } from '../agent-setup.js';
 import { formatLowResolutionNudges, formatUnresolvedStreakLine } from '../../queries/health/finding-outcome-ledger.js';
-import { recordDiffGateOutcomes } from '../diff-gate-outcomes.js';
-import { commandAnalysisBudget, formatAnalysisBudgetDisclosure, renderHeuristicNotice } from '../cli-support.js';
+import { formatAnalysisBudgetDisclosure, renderHeuristicNotice } from '../cli-support.js';
+import { runIsolatedDiffGate } from '../diff-gate-execution.js';
 import { displayRange, displaySnippet, render } from '../render.js';
 import { symbolResolutionBefore, symbolResolutionEmptyMessage, withSymbolResolutionJson } from './symbol-resolution.js';
 import { formatRecordCompatibilityWarning } from '../../domain/record-compatibility.js';
@@ -216,29 +217,76 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
     return; // this turn was already continued by a previous block — don't loop
   }
   const full = booleanOptionValue(opts, 'full');
-  const budget = commandAnalysisBudget(db, 'diff-gate', full, {
-    quiet: hookMode || booleanOptionValue(opts, 'json'),
-  });
-  const gateOptions = {
-    base: stringOptionValue(opts, 'base'),
-    minTogether: definedNumberOption(opts, 'minTogether', 6),
-    maxEchoChecks: numberOptionValue(opts, 'maxEchoChecks'),
-    maxHelpers: numberOptionValue(opts, 'maxHelpers'),
-    includeBaseline: booleanOptionValue(opts, 'baseline'),
-    scanLimit: budget.scanLimit,
-    semantic: budget.semantic,
-    historyMode: full ? 'full' : 'bounded',
-    skip: parseSkipChecks(opts['skip']),
-  } as const;
-  const result = queries.diffGate(db, gateOptions);
+  let execution: ReturnType<typeof runIsolatedDiffGate>;
+  try {
+    execution = runIsolatedDiffGate(
+      {
+        base: stringOptionValue(opts, 'base'),
+        minTogether: definedNumberOption(opts, 'minTogether', 6),
+        maxEchoChecks: numberOptionValue(opts, 'maxEchoChecks'),
+        maxHelpers: numberOptionValue(opts, 'maxHelpers'),
+        includeBaseline: booleanOptionValue(opts, 'baseline'),
+        includeOutcomeLedger: hookMode,
+        full,
+        skip: parseSkipChecks(opts['skip']),
+      },
+      {
+        projectRoot: db.config.projectRoot,
+        cacheDir: dirname(db.config.dbPath),
+      },
+    );
+  } catch (error) {
+    const gateError = error instanceof Error ? error.message : String(error);
+    if (hookMode) {
+      console.error(`diff gate FAILED CLOSED: ${gateError}`);
+      process.exitCode = 2;
+      return;
+    }
+    if (booleanOptionValue(opts, 'json')) {
+      printJsonEnvelope(
+        'diff-gate',
+        [],
+        opts,
+        {
+          exitCode: 1,
+          gateError,
+          advisoryFindingCount: 0,
+          base: stringOptionValue(opts, 'base') ?? 'HEAD',
+          changedFiles: [],
+          changedSymbols: 0,
+          checksRun: [],
+          skipped: [],
+          suppressed: [],
+          findings: [],
+          attributionNotes: [],
+        },
+        {
+          coverage: { complete: false, totalKnown: false, returned: 0 },
+          agentResult: {
+            outcome: 'fail',
+            exitCode: 1,
+            gateError,
+            changedFileCount: 0,
+            changedSymbolCount: 0,
+            checksRun: [],
+            skippedChecks: [],
+            blockingFindings: [],
+            advisoryFindingCount: 0,
+          },
+        },
+      );
+    } else {
+      console.error(`FAIL (gate error): ${gateError}`);
+    }
+    process.exitCode = 1;
+    return;
+  }
+  const { result, outcomes, analysisBudget } = execution;
   const blocking = queries.blockingFindings(result.findings);
   const gateFailed = queries.diffGateFailedClosed(result);
   const suppressionCoverageWarning = result.recordCompatibility
     ? formatRecordCompatibilityWarning('Committed suppression', result.recordCompatibility.suppressions)
     : undefined;
-  const outcomes = recordDiffGateOutcomes(db, result, {
-    replayGate: (baseCommit) => queries.diffGate(db, { ...gateOptions, base: baseCommit }),
-  });
   if (outcomes.warning) console.error(`note: ${outcomes.warning}`);
   if (!hookMode && booleanOptionValue(opts, 'json')) {
     const exitCode = blocking.length > 0 || gateFailed ? 1 : 0;
@@ -250,11 +298,11 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
         exitCode,
         ...(gateFailed ? { gateError: 'git diff unavailable - zero checks ran; the gate fails closed' } : {}),
         advisoryFindingCount: result.findings.length - blocking.length,
-        ...(budget.analysisBudget ? { analysisBudget: budget.analysisBudget } : {}),
+        ...(analysisBudget ? { analysisBudget } : {}),
         ...result,
       },
       {
-        analysisBudget: budget.analysisBudget,
+        analysisBudget,
         coverage:
           full && !gateFailed
             ? {
@@ -289,7 +337,8 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
     return;
   }
   if (hookMode) {
-    const { ledger, observed, now } = outcomes;
+    const { observed, now } = outcomes;
+    const ledger = outcomes.ledger ?? [];
 
     // Hook contract (Claude Code and Codex): silent exit 0 = allow stop,
     // exit 2 with stderr = block and feed the reason back to the agent.
@@ -306,7 +355,7 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
     if (blocking.length === 0) return;
     const streakLine = formatUnresolvedStreakLine(ledger, observed, now);
     const nudgeLines = formatLowResolutionNudges(ledger, result.checksRun);
-    const budgetLine = formatAnalysisBudgetDisclosure(budget.analysisBudget);
+    const budgetLine = formatAnalysisBudgetDisclosure(analysisBudget);
     const lines = [
       ...(streakLine ? [streakLine] : []),
       formatGateBlockReason(result),
@@ -444,7 +493,7 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'diff-gate',
     command: 'diff-gate',
     description:
-      'Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings',
+      'Runtime-bounded, single-flight gate for the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings',
     options: [
       option('--base <ref>', 'Git ref to diff against (default: HEAD)'),
       option('--min-together <n>', 'Minimum historical co-changes for the partner check', parseInteger, 6),

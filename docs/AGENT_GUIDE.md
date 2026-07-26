@@ -469,9 +469,11 @@ Numeric thresholds below are recommended starting points for review sessions; co
   source changes. After edits, let an active watcher or pending hook refresh
   finish. Run `scip-query reindex` only when freshness is `stale`, `missing`,
   or `unknown` and no responsible watcher is available.
-- **Retrieve complete output**: never pipe scip-query through `head`, `tail`,
-  or a line-range `sed`. Run every emitted `Continue exactly:` command
-  unchanged until `complete: true`. The universal `--output-cursor` pages the
+- **Retrieve complete output**: an incomplete page is not evidence. Before
+  making a conclusion, changing to another evidence command, or reporting
+  completion, run every emitted `Continue exactly:` command unchanged until
+  `complete: true`. Never pipe scip-query through `head`, `tail`, or a
+  line-range `sed`. The universal `--output-cursor` pages the
   rendered output; a result cursor such as `refs --cursor` advances logical
   query coverage and is a separate obligation.
 - **Use `--json` on `health`** for programmatic consumption — parse the JSON to make decisions

@@ -92,6 +92,12 @@ describe('CLI contract', () => {
     );
   });
 
+  it('marks private JSON workers so transport pagination cannot wrap their envelopes', () => {
+    for (const name of ['__diff-gate-run', '__diff-impact-batch', '__health-phase']) {
+      expect(optionFlags(name), name).toContain('--json');
+    }
+  });
+
   it('requires an agent contract on every public command', () => {
     const missing = commandDescriptors
       .filter((descriptor) => !descriptor.hidden && !descriptor.agent)

@@ -89,6 +89,7 @@ describe('universal CLI output pagination', () => {
       schemaVersion: 1,
       command: 'demo',
       contentType: 'application/json',
+      agentInstruction: expect.stringContaining('do not draw conclusions'),
       page: {
         offset: 0,
         returnedCharacters: 256,
@@ -105,6 +106,7 @@ describe('universal CLI output pagination', () => {
       remainingCharacters: 0,
       complete: true,
     });
+    expect(pages[2]!.agentInstruction).toContain('OUTPUT COMPLETE');
   });
 
   it('automatically pages oversized human output with the continuation at both boundaries', async () => {
@@ -115,6 +117,7 @@ describe('universal CLI output pagination', () => {
     expect(result.stdout).toContain('a'.repeat(100));
     expect(result.stdout).not.toContain('TAIL');
     expect(result.stdout.match(/Continue exactly:/gu)).toHaveLength(2);
+    expect(result.stdout.match(/INCOMPLETE EVIDENCE/gu)).toHaveLength(2);
     expect(result.stdout).toContain("scip-query demo 'target with spaces' --output-page-size 12000 --output-cursor");
   });
 
@@ -127,6 +130,7 @@ describe('universal CLI output pagination', () => {
 
     expect(result.stdout).toBe(payload);
     expect(result.stderr).toContain('JSON output exceeds 12000 characters');
+    expect(result.stderr).toContain('Do not use possibly partial client output as evidence');
     expect(result.stderr).toContain('Read every page with: scip-query demo --json --compact --output-page-size 12000');
     expect(result.stderr.match(/Read every page with:/gu)).toHaveLength(2);
   });
@@ -161,6 +165,7 @@ describe('universal CLI output pagination', () => {
 
     expect(parsePage(result.stdout)).toMatchObject({
       kind: CLI_OUTPUT_PAGE_KIND,
+      agentInstruction: expect.stringContaining('OUTPUT COMPLETE'),
       page: {
         offset: 0,
         returnedCharacters: 6,
@@ -291,6 +296,7 @@ describe('universal CLI output pagination', () => {
 
     expect(schema.properties['kind']?.['const']).toBe(CLI_OUTPUT_PAGE_KIND);
     expect(schema.properties['schemaVersion']?.['const']).toBe(CLI_OUTPUT_PAGE_SCHEMA_VERSION);
+    expect(schema.properties['agentInstruction']?.['type']).toBe('string');
     expect(schema.required).toEqual(
       expect.arrayContaining(['kind', 'schemaVersion', 'producer', 'command', 'contentType', 'page', 'content']),
     );

@@ -1,0 +1,16 @@
+{
+  "ts": 1785100667461,
+  "check": "new-dead",
+  "findingId": "SQ202DD62CCF2C",
+  "event": "caught",
+  "commit": "7a08f71da1894e40b2a579616f4a3f14d804670c",
+  "comparisonBaseCommit": "7a08f71da1894e40b2a579616f4a3f14d804670c",
+  "symbol": "scip-typescript npm scip-query 0.19.7 src/runtime/`diff-gate-execution.ts`/isDiffGateTimeout().",
+  "kind": "scip-query-outcome-event",
+  "schemaVersion": 1,
+  "eventIdentity": "[\"new-dead\",\"SQ202DD62CCF2C\",\"caught\",\"7a08f71da1894e40b2a579616f4a3f14d804670c\"]",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.19.7"
+  }
+}

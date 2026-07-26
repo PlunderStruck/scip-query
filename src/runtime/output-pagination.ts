@@ -61,6 +61,8 @@ export interface CliOutputPageEnvelopeV1 {
   producer: { name: 'scip-query'; version: string };
   command: string;
   contentType: 'text/plain' | 'application/json';
+  /** Direct model-facing obligation; incomplete pages are not usable as complete evidence. */
+  agentInstruction?: string;
   page: {
     offset: number;
     returnedCharacters: number;
@@ -209,6 +211,9 @@ export async function runWithCliOutputPagination(
     producer: { name: 'scip-query', version: options.producerVersion },
     command: options.command,
     contentType: options.json ? 'application/json' : 'text/plain',
+    agentInstruction: continuation
+      ? 'INCOMPLETE EVIDENCE: do not draw conclusions or report completion from this partial page. Run page.continuation.command exactly, then repeat until page.complete is true.'
+      : "OUTPUT COMPLETE: all rendered characters have been retrieved. Evaluate the command result's own coverage separately.",
     page: {
       offset,
       returnedCharacters: completed.content.length,
@@ -262,7 +267,7 @@ async function runJsonWithOversizeWarning(
   const originalWrite = process.stdout.write;
   let warningWritten = false;
   const warning = `${sanitizeTerminalLine(
-    `scip-query: JSON output exceeds ${DEFAULT_OUTPUT_PAGE_SIZE} characters and may be truncated by the client. Read every page with: ${renderInitialPageCommand(
+    `scip-query: JSON output exceeds ${DEFAULT_OUTPUT_PAGE_SIZE} characters and may be truncated by the client. Do not use possibly partial client output as evidence. Read every page with: ${renderInitialPageCommand(
       withoutOutputPaginationArgs(options.argv),
       DEFAULT_OUTPUT_PAGE_SIZE,
     )}`,
@@ -713,13 +718,19 @@ function renderHumanOutputPage(envelope: CliOutputPageEnvelopeV1): string {
   const continuation = envelope.page.continuation;
   const header = [
     `[scip-query output page: characters ${envelope.page.offset}-${envelope.page.offset + envelope.page.returnedCharacters - 1} of ${envelope.page.totalCharacters}]`,
-    ...(continuation ? [`Continue exactly: ${continuation.command}`] : []),
+    ...(continuation
+      ? [
+          'INCOMPLETE EVIDENCE — do not draw conclusions or report completion from this partial page.',
+          `Continue exactly: ${continuation.command}`,
+        ]
+      : []),
     '',
   ];
   const footer = continuation
     ? [
         '',
         `[${envelope.page.remainingCharacters} output characters remain]`,
+        'INCOMPLETE EVIDENCE — retrieve the remaining pages before using this output as evidence.',
         `Continue exactly: ${continuation.command}`,
       ]
     : ['', '[scip-query output complete]'];

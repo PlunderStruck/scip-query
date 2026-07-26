@@ -1,0 +1,15 @@
+{
+  "ts": 1785101024589,
+  "check": "co-change-partner",
+  "findingId": "SQA94DC3F07D49",
+  "event": "resolved",
+  "commit": "7a08f71da1894e40b2a579616f4a3f14d804670c",
+  "comparisonBaseCommit": "7a08f71da1894e40b2a579616f4a3f14d804670c",
+  "kind": "scip-query-outcome-event",
+  "schemaVersion": 1,
+  "eventIdentity": "[\"co-change-partner\",\"SQA94DC3F07D49\",\"resolved\",\"7a08f71da1894e40b2a579616f4a3f14d804670c\"]",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.19.7"
+  }
+}

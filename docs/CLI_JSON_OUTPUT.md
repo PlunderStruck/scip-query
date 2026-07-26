@@ -13,7 +13,7 @@ The current envelope is schema version 1:
 {
   "kind": "scip-query-result",
   "schemaVersion": 1,
-  "producer": { "name": "scip-query", "version": "0.19.7" },
+  "producer": { "name": "scip-query", "version": "0.19.8" },
   "command": "refs",
   "resultSchemaVersion": 1,
   "evidence": "graph-fact",
@@ -68,9 +68,10 @@ exact command that opts into output pages. The paged command returns:
 {
   "kind": "scip-query-output-page",
   "schemaVersion": 1,
-  "producer": { "name": "scip-query", "version": "0.19.7" },
+  "producer": { "name": "scip-query", "version": "0.19.8" },
   "command": "architecture",
   "contentType": "application/json",
+  "agentInstruction": "INCOMPLETE EVIDENCE: do not draw conclusions or report completion from this partial page. Run page.continuation.command exactly, then repeat until page.complete is true.",
   "page": {
     "offset": 0,
     "returnedCharacters": 12000,
@@ -96,6 +97,10 @@ reliability. A continuation reads the immutable snapshot rather than re-running
 the command, so timestamps, durations, edits, or reindexes cannot mix
 different result generations between pages. Missing, expired, or changed
 snapshot data is rejected with the exact command that restarts at page one.
+Every incomplete machine-readable page also carries a direct
+`agentInstruction`. A partial page is not sufficient evidence for a conclusion
+or completion claim; consumers must follow `page.continuation.command` until
+`page.complete` is `true`.
 
 Output pages and result coverage answer different questions:
 

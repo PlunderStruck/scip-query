@@ -86,8 +86,29 @@ page-one restart command.
 
 Continue until `page.complete` is `true`. Do not pipe output through `head`,
 `tail`, or a line-range `sed`; those programs discard data without creating a
-resumable position. See [CLI JSON output](CLI_JSON_OUTPUT.md) and the
+resumable position. Every incomplete JSON page repeats this obligation in
+`agentInstruction`; an incomplete page must not support a conclusion or
+completion claim. See [CLI JSON output](CLI_JSON_OUTPUT.md) and the
 [output-page schema](schemas/cli-output-page.schema.json).
+
+## Diff-gate process containment
+
+A diff-gate lease is one live process identity permitted to evaluate a
+project's current diff, distinguished from an ordinary lock file by recording
+and validating the owner's PID, process start, and project identity. CLI and
+Stop-hook gates share this lease, so an overlapping request reports the live
+owner instead of multiplying detector work.
+
+The public gate owns an isolated child process. Its default deadline is 60
+seconds, or 180 seconds with `--full`. On timeout, failure, or interruption the
+parent terminates and reaps that child before releasing the lease. An operator
+may set `SCIP_QUERY_DIFF_GATE_TIMEOUT_MS` to a positive millisecond value; the
+runtime caps it at 10 minutes.
+
+Outcome reconciliation rechecks at most one historical comparison base per
+gate. Deferred bases remain open and the result reports their exact base and
+finding counts, so accumulated event history cannot silently multiply one
+foreground gate into an unbounded replay batch.
 
 ## Terminal and JSON output
 

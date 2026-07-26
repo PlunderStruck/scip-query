@@ -1,5 +1,10 @@
-import { randomUUID } from 'node:crypto';
-import { diffGateFailedClosed, type DiffGateResult } from '../queries/impact/diff-gate.js';
+import { createHash, randomUUID } from 'node:crypto';
+import {
+  DIFF_GATE_CHECKS,
+  diffGateFailedClosed,
+  type DiffGateCheck,
+  type DiffGateResult,
+} from '../queries/impact/diff-gate.js';
 import { readLedgerRecords, updateFindingOutcomeLedger } from '../queries/health/finding-outcome-ledger.js';
 import {
   deriveOutcomeEvents,
@@ -23,7 +28,9 @@ export interface DiffGateOutcomeRuntime {
   resolveCommit?: (projectRoot: string, ref: string) => string | null;
   worktreeIsClean?: (projectRoot: string) => boolean;
   readEvents?: (projectRoot: string) => OutcomeEventReadResult;
-  replayGate?: (baseCommit: string) => DiffGateResult;
+  replayGate?: (baseCommit: string, checks: readonly DiffGateCheck[]) => DiffGateResult;
+  /** Maximum historical comparison bases reconciled by one foreground gate. */
+  maxReplayBases?: number;
   appendEvents?: (projectRoot: string, events: readonly OutcomeEvent[]) => void;
 }
 
@@ -265,10 +272,28 @@ function reconcileMissingFindings(input: {
   }
 
   const warnings: string[] = [];
+  const replayGroups = selectReplayGroups(replayByBase, input.commit, input.runtime.maxReplayBases);
+  const selectedBases = new Set(replayGroups.map(([baseCommit]) => baseCommit));
+  let deferredBases = 0;
+  let deferredFindings = 0;
   for (const [baseCommit, records] of replayByBase) {
+    if (selectedBases.has(baseCommit)) continue;
+    deferredBases += 1;
+    deferredFindings += records.length;
+    for (const record of records) retainedKeys.add(ledgerKey(record.check, record.findingId));
+  }
+  if (deferredBases > 0) {
+    warnings.push(
+      `cross-HEAD outcome verification bounded to ${replayGroups.length} of ${replayByBase.size} historical base(s); retained ${deferredFindings} finding(s) across ${deferredBases} base(s) for later verification`,
+    );
+  }
+  for (const [baseCommit, records] of replayGroups) {
     let replay: DiffGateResult;
     try {
-      replay = input.runtime.replayGate(baseCommit);
+      const checks = [...new Set(records.map((record) => record.check))]
+        .filter((check): check is DiffGateCheck => DIFF_GATE_CHECKS.includes(check as DiffGateCheck))
+        .sort();
+      replay = input.runtime.replayGate(baseCommit, checks);
       debugOutcomeVerification(
         `replay base=${baseCommit} checks=${replay.checksRun.join(',')} findings=${replay.findings.length} suppressed=${replay.suppressed.length}`,
       );
@@ -320,6 +345,29 @@ function reconcileMissingFindings(input: {
     replaySymbols,
     ...(warnings.length > 0 ? { warning: warnings.join('; ') } : {}),
   };
+}
+
+const DEFAULT_MAX_REPLAY_BASES = 1;
+
+function selectReplayGroups(
+  replayByBase: ReadonlyMap<string, FindingOutcomeRecord[]>,
+  commit: string | null,
+  configuredLimit: number | undefined,
+): Array<[string, FindingOutcomeRecord[]]> {
+  const groups = [...replayByBase.entries()].sort(([left], [right]) => left.localeCompare(right));
+  if (groups.length <= 1) return groups;
+  const requestedLimit =
+    configuredLimit === undefined || !Number.isSafeInteger(configuredLimit) || configuredLimit < 0
+      ? DEFAULT_MAX_REPLAY_BASES
+      : configuredLimit;
+  const limit = Math.min(groups.length, requestedLimit);
+  if (limit === 0) return [];
+  if (limit >= groups.length) return groups;
+  const digest = createHash('sha256')
+    .update(commit ?? 'unresolved-head')
+    .digest();
+  const start = digest.readUInt32BE(0) % groups.length;
+  return Array.from({ length: limit }, (_, offset) => groups[(start + offset) % groups.length]!);
 }
 
 function resolveCommit(projectRoot: string, ref: string): string | null {

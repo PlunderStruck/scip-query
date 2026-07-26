@@ -25,6 +25,11 @@ interface IsolatedJsonProcessOptions {
   timeoutMs?: number;
 }
 
+function isolatedJsonArgs(args: readonly string[] | undefined): string[] {
+  const values = [...(args ?? [])];
+  return values.includes('--json') ? values : ['--json', ...values];
+}
+
 export class IsolatedProcessTimeoutError extends Error {
   readonly timedOut = true;
 
@@ -53,14 +58,18 @@ export function printIsolatedAnalysisResult(command: string, result: unknown): v
 // health phases and diff-impact batches.
 export function runIsolatedJsonProcess<T>(opts: IsolatedJsonProcessOptions): T {
   const timeoutMs = opts.timeoutMs ?? PROCESS_TIMEOUT_MS.analysis;
-  const result = spawnSync(process.execPath, [...process.execArgv, opts.cliPath, opts.command, ...(opts.args ?? [])], {
-    cwd: process.cwd(),
-    env: opts.env ?? process.env,
-    encoding: 'utf8',
-    maxBuffer: opts.maxBuffer ?? 10 * 1024 * 1024,
-    timeout: timeoutMs,
-    killSignal: 'SIGKILL',
-  });
+  const result = spawnSync(
+    process.execPath,
+    [...process.execArgv, opts.cliPath, opts.command, ...isolatedJsonArgs(opts.args)],
+    {
+      cwd: process.cwd(),
+      env: opts.env ?? process.env,
+      encoding: 'utf8',
+      maxBuffer: opts.maxBuffer ?? 10 * 1024 * 1024,
+      timeout: timeoutMs,
+      killSignal: 'SIGKILL',
+    },
+  );
   if (result.error && (result.error as NodeJS.ErrnoException).code === 'ETIMEDOUT') {
     throw new IsolatedProcessTimeoutError(opts.label, timeoutMs);
   }
@@ -86,7 +95,7 @@ export function runIsolatedJsonProcessAsync<T>(opts: IsolatedJsonProcessOptions)
   const maxBuffer = opts.maxBuffer ?? 10 * 1024 * 1024;
   return runBoundedProcess({
     command: process.execPath,
-    args: [...process.execArgv, opts.cliPath, opts.command, ...(opts.args ?? [])],
+    args: [...process.execArgv, opts.cliPath, opts.command, ...isolatedJsonArgs(opts.args)],
     cwd: process.cwd(),
     env: opts.env ?? process.env,
     label: opts.label,

@@ -7,7 +7,7 @@ import type { ProjectConfig, ScipQueryConfig } from '../domain/types.js';
 import { isPathInsideProject } from '../domain/path-normalization.js';
 import { resolveIndexStoragePaths } from '../platform/cache-layout.js';
 import { watchServicePaths } from '../platform/watch-service-state.js';
-import { diffGate } from '../queries/impact/diff-gate.js';
+import { DIFF_GATE_CHECKS, diffGate } from '../queries/impact/diff-gate.js';
 import type { DiffGateResult } from '../queries/impact/diff-gate.js';
 import { createGitignoreFilter } from '../source/primitives/gitignore-filter.js';
 import { escapeRegex } from '../source/primitives/regex-utils.js';
@@ -35,6 +35,7 @@ import { resolveSharedEvidenceDbPath } from '../reindex/shared-generation-store.
 import { formatRecordCompatibilityWarning } from '../domain/record-compatibility.js';
 import { resolveSpawnableExecutable, toPortableCommand } from '../platform/binary.js';
 import { writeSerializedJson } from '../platform/terminal-output.js';
+import { runIsolatedDiffGate } from './diff-gate-execution.js';
 
 const SKIP_HOOK_INSTALL_ENV = 'SCIP_QUERY_SKIP_HOOK_INSTALL';
 const STOP_HOOK_MODE_ENV = 'SCIP_QUERY_STOP_HOOK_MODE';
@@ -759,7 +760,15 @@ export function runStopHookDiffGate(hookInput: string): DiffGateResult | undefin
     } as const;
     const result = diffGate(db, gateOptions);
     const outcomes = recordDiffGateOutcomes(db, result, {
-      replayGate: (baseCommit) => diffGate(db, { ...gateOptions, base: baseCommit }),
+      replayGate: (baseCommit, checks) => {
+        const required = new Set(checks);
+        return diffGate(db, {
+          ...gateOptions,
+          base: baseCommit,
+          includeBaseline: required.has('baseline'),
+          skip: DIFF_GATE_CHECKS.filter((check) => !required.has(check)),
+        });
+      },
     });
     if (outcomes.warning) console.error(`note: ${outcomes.warning}`);
     return result;
@@ -767,9 +776,57 @@ export function runStopHookDiffGate(hookInput: string): DiffGateResult | undefin
 }
 
 export function handleAgentHookStop(): void {
-  const result = runStopHookDiffGate(readHookInput());
+  const hookInput = readHookInput();
+  let result: DiffGateResult | undefined;
+  try {
+    result = runIsolatedStopHookDiffGate(hookInput);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    writeStopHookJson(renderStopHookExecutionFailure(message, resolveStopHookMode()));
+    return;
+  }
   if (!result || (result.findings.length === 0 && !suppressionCoverageWarning(result))) return;
-  writeSerializedJson(JSON.stringify(renderStopHookOutput(result, resolveStopHookMode())));
+  writeStopHookJson(renderStopHookOutput(result, resolveStopHookMode()));
+}
+
+function writeStopHookJson(output: ClaudeHookJsonOutput): void {
+  writeSerializedJson(JSON.stringify(output));
+}
+
+function runIsolatedStopHookDiffGate(hookInput: string): DiffGateResult | undefined {
+  if (isStopHookReentry(hookInput)) return undefined;
+  const payload = parseHookPayload(hookInput);
+  const workspace = resolveHookWorkspace(payload);
+  if (!workspace || !existsSync(workspace.paths.dbPath)) return undefined;
+  return runIsolatedDiffGate(
+    {
+      minTogether: 6,
+      includeBaseline: false,
+      includeOutcomeLedger: false,
+      full: false,
+      skip: [],
+    },
+    {
+      projectRoot: workspace.projectRoot,
+      cacheDir: workspace.paths.cacheDir,
+    },
+  ).result;
+}
+
+export function renderStopHookExecutionFailure(message: string, mode: StopHookMode = 'feedback'): ClaudeHookJsonOutput {
+  const reason = `Diff gate could not complete and therefore cannot certify this turn: ${message}`;
+  if (mode === 'block') return { decision: 'block', reason };
+  if (mode === 'feedback') {
+    return {
+      hookSpecificOutput: {
+        hookEventName: 'Stop',
+        additionalContext: `${reason}\n\nWait for an existing gate or investigate the timeout before declaring the work complete.`,
+      },
+    };
+  }
+  return {
+    systemMessage: `${reason}\n\nStop-hook warn mode allowed the turn to finish, but the diff was not certified.`,
+  };
 }
 
 export function renderStopHookOutput(result: DiffGateResult, mode: StopHookMode = 'feedback'): ClaudeHookJsonOutput {

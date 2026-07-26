@@ -4,6 +4,43 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+## [0.19.8]
+
+### Complete agent evidence
+
+- Every descriptor-backed command now supports resumable output pages backed
+  by one immutable private snapshot. Pages report exact character totals,
+  bind cursors to the original invocation and content hash, and emit the exact
+  continuation command without rerunning a nondeterministic query.
+- Incomplete machine-readable and human pages identify themselves as
+  incomplete evidence. Generated project guidance requires agents to retrieve
+  every page before drawing a conclusion, changing evidence commands, or
+  reporting completion.
+
+### Diff-gate containment
+
+- CLI and Stop-hook gates now share a per-project single-flight lease, so
+  overlapping agents report the live owner instead of multiplying detector
+  work.
+- Gate evaluation runs in an owned child with a finite 60-second deadline, or
+  180 seconds with `--full`. Timeout terminates and reaps the child and fails
+  closed.
+- Historical finding reconciliation replays at most one comparison base per
+  foreground gate, runs only the detectors needed for that base, and leaves
+  deferred findings open with exact counts.
+
+### Security and operational hardening
+
+- Repository-controlled paths, tools, regular expressions, persisted records,
+  subprocesses, and output now cross explicit containment, size, time, and
+  trust boundaries. Terminal text is rendered inert, and destructive cache
+  operations require verified ownership.
+- Watchers and semantic mailboxes back off while idle, suppress redundant
+  refreshes, and preserve one canonical source identity across filesystem
+  aliases.
+- Production dependency audit and release preflight now reject high-severity
+  production advisories; the shipped production dependency tree is clean.
+
 ## [0.19.6]
 
 ### State and process resilience

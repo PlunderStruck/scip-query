@@ -9,6 +9,7 @@ import {
   withJsonOption,
 } from '../command-kit/command-spec-builders.js';
 import { DIFF_IMPACT_BATCH_COMMAND, HEALTH_PHASE_COMMAND } from '../cli-support.js';
+import { DIFF_GATE_RUN_COMMAND } from '../diff-gate-execution.js';
 import { handleAgentHookContext, handleAgentHookPreToolUse, handleAgentHookStop } from '../agent-hooks.js';
 import { BUILTIN_SKILLS } from '../setup.js';
 import * as handlers from './command-handlers.js';
@@ -84,11 +85,23 @@ export const commandDescriptors: CommandDescriptor[] = [
   },
   ...queryCommandsBeforeDiffImpact,
   {
+    id: DIFF_GATE_RUN_COMMAND,
+    command: DIFF_GATE_RUN_COMMAND,
+    description: 'Internal bounded diff-gate worker',
+    hidden: true,
+    options: [option('--json', 'Emit the private worker envelope without transport pagination')],
+    renderShape: 'custom',
+    handler: handlers.handleDiffGateRun,
+  },
+  {
     id: DIFF_IMPACT_BATCH_COMMAND,
     command: DIFF_IMPACT_BATCH_COMMAND,
     description: 'Internal diff-impact batch worker',
     hidden: true,
-    options: [option('--base <ref>', 'Git ref to diff against (default: HEAD)')],
+    options: [
+      option('--json', 'Emit the private worker envelope without transport pagination'),
+      option('--base <ref>', 'Git ref to diff against (default: HEAD)'),
+    ],
     renderShape: 'custom',
     handler: handlers.handleDiffImpactBatch,
   },
@@ -116,6 +129,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     hidden: true,
     arguments: [{ name: '<phase>' }],
     options: [
+      option('--json', 'Emit the private worker envelope without transport pagination'),
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--full', 'Run unbounded candidate analyses on large indexes'),
     ],

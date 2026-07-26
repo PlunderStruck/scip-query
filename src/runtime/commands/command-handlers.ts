@@ -106,6 +106,12 @@ import {
   stringOptionValue,
 } from '../command-kit/command-execution.js';
 import { printIsolatedAnalysisResult } from '../isolated-analysis-runner.js';
+import {
+  DIFF_GATE_REQUEST_ENV,
+  DIFF_GATE_RUN_COMMAND,
+  executeDiffGate,
+  parseDiffGateExecutionRequest,
+} from '../diff-gate-execution.js';
 import { sanitizeTerminalLine, sanitizeTerminalText } from '../../platform/terminal-output.js';
 
 // Descriptor-backed query commands live under runtime/query-commands/*.
@@ -239,6 +245,13 @@ export function handleDiffImpactBatch(rawOpts: unknown): void {
     const plan = queries.diffImpactPlan(db, { base: stringOptionValue(opts, 'base') });
     const result = queries.diffImpactPartial(db, files, plan.changedFiles, plan.changedRanges);
     printIsolatedAnalysisResult(DIFF_IMPACT_BATCH_COMMAND, result);
+  });
+}
+
+export function handleDiffGateRun(): void {
+  const request = parseDiffGateExecutionRequest(process.env[DIFF_GATE_REQUEST_ENV]);
+  withDb((db) => {
+    printIsolatedAnalysisResult(DIFF_GATE_RUN_COMMAND, executeDiffGate(db, request));
   });
 }
 
