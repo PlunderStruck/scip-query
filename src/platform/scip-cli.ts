@@ -101,7 +101,13 @@ export function getScipVersion(): string | null {
   }
 
   try {
-    const output = execFileSync(scipBinary, ['--version'], { stdio: 'pipe' }).toString().trim();
+    const output = execFileSync(scipBinary, ['--version'], {
+      stdio: 'pipe',
+      timeout: 10_000,
+      killSignal: 'SIGKILL',
+    })
+      .toString()
+      .trim();
     return output;
   } catch {
     return null;

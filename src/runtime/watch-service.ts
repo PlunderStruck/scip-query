@@ -642,6 +642,8 @@ const DEFAULT_WATCH_SERVICE_RUNTIME: WatchServiceRuntime = {
     if (!existsSync(serverPath)) {
       throw new Error(`Watch service helper was not found at ${serverPath}. Run npm run build first.`);
     }
+    // scip-query: process-lifetime-reviewed -- detached service lifetime is
+    // owned by the persisted identity, heartbeat lease, and stop protocol.
     const child = spawn(process.execPath, [serverPath, projectRoot, cliVersion, JSON.stringify(watchOverrides)], {
       detached: true,
       stdio: 'ignore',

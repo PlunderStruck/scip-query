@@ -100,6 +100,7 @@ export function runTlaTool(opts: TlaToolRunOptions): TlaToolResult {
       cwd: resolved.cwd,
       encoding: 'utf8',
       timeout: timeoutMs,
+      killSignal: 'SIGKILL',
       maxBuffer: 1024 * 1024 * 10,
     }) as SpawnSyncReturns<string>;
   } finally {

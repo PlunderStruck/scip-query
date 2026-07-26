@@ -130,7 +130,13 @@ const DEFAULT_RUNTIME: AstParserSetupRuntime = {
         '--include=optional',
         ...packages,
       ],
-      { cwd: packageRoot, encoding: 'utf8' },
+      {
+        cwd: packageRoot,
+        encoding: 'utf8',
+        timeout: 300_000,
+        killSignal: 'SIGKILL',
+        maxBuffer: 10 * 1024 * 1024,
+      },
     );
     return result.status === 0
       ? { ok: true }

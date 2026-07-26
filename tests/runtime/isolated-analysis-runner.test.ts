@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   groupAnalysisTasks,
   runAnalysisTasks,
+  runIsolatedJsonProcess,
   runIsolatedJsonProcessAsync,
 } from '../../src/runtime/isolated-analysis-runner.js';
 
@@ -74,5 +75,37 @@ describe('analysis scheduler', () => {
         label: 'Scheduler child',
       }),
     ).resolves.toEqual({ command: 'probe', args: ['alpha', 'beta'] });
+  });
+
+  it('enforces the timeout supplied to the synchronous isolated runner', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-analysis-sync-timeout-'));
+    tempDirs.push(tempDir);
+    const scriptPath = join(tempDir, 'child.cjs');
+    writeFileSync(scriptPath, 'setInterval(() => {}, 1000);\n');
+
+    expect(() =>
+      runIsolatedJsonProcess({
+        cliPath: scriptPath,
+        command: 'probe',
+        label: 'Synchronous child',
+        timeoutMs: 50,
+      }),
+    ).toThrow(/timed out after 50ms/i);
+  });
+
+  it('terminates and reaps an asynchronous isolated child at its deadline', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-analysis-async-timeout-'));
+    tempDirs.push(tempDir);
+    const scriptPath = join(tempDir, 'child.cjs');
+    writeFileSync(scriptPath, "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);\n");
+
+    await expect(
+      runIsolatedJsonProcessAsync({
+        cliPath: scriptPath,
+        command: 'probe',
+        label: 'Asynchronous child',
+        timeoutMs: 50,
+      }),
+    ).rejects.toMatchObject({ timedOut: true, reaped: true });
   });
 });

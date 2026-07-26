@@ -29,6 +29,8 @@ export function exportSanyXml(opts: SanyXmlExportOptions): string | null {
     encoding: 'utf8',
     cwd: dirname(opts.specPath),
     maxBuffer: 1024 * 1024 * 32,
+    timeout: 30_000,
+    killSignal: 'SIGKILL',
   });
   if (result.status !== 0) return null;
   const stdout = result.stdout ?? '';

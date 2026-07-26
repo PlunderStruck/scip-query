@@ -81,6 +81,8 @@ export function verifyCleanupPlan(
   try {
     execFileSync('git', ['-C', projectRoot, 'worktree', 'add', '--detach', '--force', worktree, 'HEAD'], {
       stdio: 'ignore',
+      timeout: 30_000,
+      killSignal: 'SIGKILL',
     });
     linkUntrackedDeps(projectRoot, worktree);
 
@@ -114,7 +116,11 @@ export function verifyCleanupPlan(
     }
   } finally {
     try {
-      execFileSync('git', ['-C', projectRoot, 'worktree', 'remove', '--force', worktree], { stdio: 'ignore' });
+      execFileSync('git', ['-C', projectRoot, 'worktree', 'remove', '--force', worktree], {
+        stdio: 'ignore',
+        timeout: 30_000,
+        killSignal: 'SIGKILL',
+      });
     } catch {
       rmSync(worktree, { recursive: true, force: true });
     }
@@ -388,7 +394,11 @@ function dirtyPlanFiles(projectRoot: string, plan: CleanupPlanResult): string[] 
 function dirtyWorkingTreeFiles(projectRoot: string): string[] {
   let status: string;
   try {
-    status = execFileSync('git', ['-C', projectRoot, 'status', '--porcelain'], { encoding: 'utf-8' });
+    status = execFileSync('git', ['-C', projectRoot, 'status', '--porcelain'], {
+      encoding: 'utf-8',
+      timeout: 30_000,
+      killSignal: 'SIGKILL',
+    });
   } catch {
     return [];
   }
@@ -437,15 +447,23 @@ export function createCleanupPatch(projectRoot: string, batches: readonly Cleanu
   try {
     execFileSync('git', ['-C', projectRoot, 'worktree', 'add', '--detach', '--force', worktree, 'HEAD'], {
       stdio: 'ignore',
+      timeout: 30_000,
+      killSignal: 'SIGKILL',
     });
     applyCleanupBatches(worktree, batches);
     return execFileSync('git', ['-C', worktree, 'diff', '--binary'], {
       encoding: 'utf-8',
       maxBuffer: 32 * 1024 * 1024,
+      timeout: 30_000,
+      killSignal: 'SIGKILL',
     });
   } finally {
     try {
-      execFileSync('git', ['-C', projectRoot, 'worktree', 'remove', '--force', worktree], { stdio: 'ignore' });
+      execFileSync('git', ['-C', projectRoot, 'worktree', 'remove', '--force', worktree], {
+        stdio: 'ignore',
+        timeout: 30_000,
+        killSignal: 'SIGKILL',
+      });
     } catch {
       rmSync(worktree, { recursive: true, force: true });
     }
@@ -567,6 +585,7 @@ function runChecker(checker: Checker, worktree: string, timeoutMs: number): Chec
     cwd: worktree,
     encoding: 'utf-8',
     timeout: timeoutMs,
+    killSignal: 'SIGKILL',
     env: checker.env ?? process.env,
     maxBuffer: 32 * 1024 * 1024,
   });

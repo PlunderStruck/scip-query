@@ -6,6 +6,7 @@ import { cpus, tmpdir } from 'node:os';
 import type * as NodeOs from 'node:os';
 import type { SupportedLanguage } from '../../src/domain/types.js';
 import type * as ProcessIdentityModule from '../../src/platform/process-identity.js';
+import type * as BoundedProcessModule from '../../src/platform/bounded-process.js';
 import type * as AffectedShadow from '../../src/reindex/affected-shadow.js';
 import { resolveIndexerConcurrency } from '../../src/reindex/indexer-runner.js';
 import { projectShardSlug } from '../../src/reindex/project-shards.js';
@@ -206,6 +207,28 @@ describe('reindex reliability', () => {
     expect(result.languages).toEqual(['typescript', 'python']);
     expect(result.skipped).toEqual([]);
     expect(statuses.join('\n')).toContain('Retrying python indexer serially after parallel failure');
+  });
+
+  it('does not retry a permanent parallel indexer failure', async () => {
+    const projectRoot = createProject('scip-query-reindex-no-permanent-retry-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    const { reindex, attempts } = await loadReindexFixture({
+      languages: ['typescript', 'python'],
+      failIndexers: new Set(['python']),
+    });
+
+    await expect(
+      reindex({
+        projectRoot,
+        outputScip: join(cacheDir, 'index.scip'),
+        outputDb: join(cacheDir, 'index.db'),
+        onStatus: () => undefined,
+        indexerConcurrency: 2,
+      }),
+    ).rejects.toThrow(/failed to index all required languages/i);
+
+    expect(attempts.get('python')).toBe(1);
   });
 
   it('reuses unchanged per-language SCIP shards across mixed-language reindexes', async () => {
@@ -1327,6 +1350,41 @@ async function loadReindexFixture(opts: {
     });
   }
 
+  vi.doMock('../../src/platform/bounded-process.js', async () => {
+    const fs = await import('node:fs');
+    const actual = await vi.importActual<typeof BoundedProcessModule>('../../src/platform/bounded-process.js');
+    return {
+      ...actual,
+      runBoundedProcess: async (input: { command: string; args?: readonly string[] }) => {
+        const args = input.args ?? [];
+        commands.push({ binary: input.command, args });
+        const language = binaryToLanguage(input.command);
+        if (language) {
+          attempts.set(language, (attempts.get(language) ?? 0) + 1);
+        }
+        if (language && opts.failIndexers?.has(language)) {
+          throw new Error(`${language} failed`);
+        }
+        if (language && opts.failFirstIndexers?.has(language) && attempts.get(language) === 1) {
+          throw Object.assign(new Error(`${language} failed once`), { code: 'EAGAIN' });
+        }
+        const outputPath = outputArg(args);
+        if (outputPath) {
+          fs.mkdirSync(dirname(outputPath), { recursive: true });
+          fs.writeFileSync(outputPath, `${input.command} scip`);
+        }
+        return {
+          status: 0,
+          signal: null,
+          stdout: '',
+          stderr: '',
+          timedOut: false,
+          durationMs: 1,
+        };
+      },
+    };
+  });
+
   vi.doMock('node:child_process', async () => {
     const fs = await import('node:fs');
     const execFile = vi.fn(
@@ -1341,7 +1399,7 @@ async function loadReindexFixture(opts: {
           return;
         }
         if (language && opts.failFirstIndexers?.has(language) && attempts.get(language) === 1) {
-          callback(new Error(`${language} failed once`));
+          callback(Object.assign(new Error(`${language} failed once`), { code: 'EAGAIN' }));
           return;
         }
         const outputPath = outputArg(args);

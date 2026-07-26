@@ -191,6 +191,7 @@ function listGitSources(absRoot: string, extensions: ReadonlySet<string>): Set<s
       cwd: absRoot,
       encoding: 'utf-8',
       timeout: 10_000,
+      killSignal: 'SIGKILL',
       stdio: ['ignore', 'pipe', 'ignore'],
     });
     const out = new Set<string>();

@@ -175,7 +175,12 @@ function isHealthReport(value: unknown): value is HealthReport {
 function defaultKeyDeps(): HealthReportCacheKeyDeps {
   return {
     gitHead(cwd) {
-      const result = spawnSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' });
+      const result = spawnSync('git', ['rev-parse', 'HEAD'], {
+        cwd,
+        encoding: 'utf8',
+        timeout: 30_000,
+        killSignal: 'SIGKILL',
+      });
       return result.status === 0 ? result.stdout.trim() : null;
     },
   };

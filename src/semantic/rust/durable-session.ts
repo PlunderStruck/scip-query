@@ -539,6 +539,8 @@ const DEFAULT_REQUESTER_RUNTIME: DurableRustSessionRequesterRuntime = {
     if (!existsSync(serverPath)) {
       throw new Error(`Durable Rust semantic session helper was not found at ${serverPath}. Run npm run build first.`);
     }
+    // scip-query: process-lifetime-reviewed -- this detached durable session is
+    // owned by its lease, heartbeat, stop protocol, and per-request deadlines.
     const child = spawn(process.execPath, [serverPath, sessionDir, semanticWorkerPath], {
       detached: true,
       stdio: 'ignore',

@@ -492,6 +492,8 @@ export function createRustAnalyzerTransport(
   projectRoot: string,
   env: NodeJS.ProcessEnv = process.env,
 ): RustAnalyzerTransport {
+  // scip-query: process-lifetime-reviewed -- the returned transport owns this
+  // session process and its initialize/request/shutdown deadlines.
   const child = spawn(binary, [], {
     cwd: projectRoot,
     env,

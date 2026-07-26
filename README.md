@@ -513,6 +513,20 @@ legacy record or a platform lookup failure therefore fails closed with an
 explicit recovery error instead of treating a reused PID as the old
 scip-query process.
 
+Finite subprocesses use explicit wall-time and output budgets. Quick binary
+probes default to 10 seconds, Git operations to 30 seconds, isolated analysis
+workers to 180 seconds, installers and index conversion to 300 seconds, and
+language indexers to 600 seconds. Set `SCIP_QUERY_INDEXER_TIMEOUT_MS` to a
+positive integer to override the indexer deadline. Command-specific checker,
+TLA+, benchmark, and Rust semantic budgets continue to use their documented
+options or environment settings. When an asynchronous finite child exceeds
+its deadline or output budget, scip-query drains both streams, sends `TERM`,
+escalates to `KILL` after a one-second grace period only while the recorded
+process identity still matches, and reports completion only after the child
+has closed. Detached watch and semantic services are deliberate exceptions:
+their persisted identity, lease, request deadlines, and stop protocol own
+their lifetime.
+
 TypeScript monorepos can opt into project sharding with `indexer.typescript.projectMode: "workspace"`. In that mode, `scip-query` discovers repo-local TypeScript project roots, runs one `scip-typescript` process per project with bounded concurrency, merges the shard protobufs, and still publishes one TypeScript language index. Set `indexer.typescript.projects` to an explicit list of project directories or tsconfig paths when automatic discovery is too broad. When `projects` is set to a non-empty list, it is authoritative: only the listed projects are indexed, automatic discovery does not run, and the repo root is not re-added alongside them (even if the root tsconfig covers subdirectories) — files that are only covered by an excluded root tsconfig (e.g. shared ambient `.d.ts` files) drop out of the index, so pick the list deliberately. An empty or absent `projects` falls back to full discovery, unchanged. Workspace mode also caches each project shard: reindexing after an edit reruns only the changed projects and their dependents (workspace `package.json` dependencies and tsconfig `paths`/`references` targets count as dependencies), serves untouched projects from `language-indexes/typescript-projects/`, and reports every reuse decision in `reindex --json` shard diagnostics. Set `indexerConcurrency` when a repo needs a persistent worker cap; CLI `--indexer-concurrency` and `SCIP_QUERY_INDEXER_CONCURRENCY` still override ad hoc runs.
 Use `indexer.typescript.pnpmWorkspaces` only with the default single-project mode; workspace mode passes explicit projects instead.
 

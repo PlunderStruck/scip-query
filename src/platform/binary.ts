@@ -20,7 +20,7 @@ export function binaryAvailable(binary: string, spawn: CommandAvailabilitySpawn 
 export function isBinaryAvailable(name: string): boolean {
   const cmd = IS_WINDOWS ? 'where' : 'which';
   try {
-    execFileSync(cmd, [name], { stdio: 'pipe' });
+    execFileSync(cmd, [name], { stdio: 'pipe', timeout: 10_000, killSignal: 'SIGKILL' });
     return true;
   } catch {
     return false;
@@ -55,7 +55,12 @@ export interface ResolveSpawnableOptions {
 }
 
 function defaultLookup(cmd: string, args: string[]): string {
-  return execFileSync(cmd, args, { stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8' });
+  return execFileSync(cmd, args, {
+    stdio: ['ignore', 'pipe', 'ignore'],
+    encoding: 'utf8',
+    timeout: 10_000,
+    killSignal: 'SIGKILL',
+  });
 }
 
 /**

@@ -246,6 +246,8 @@ function getDotnetRootCandidates(env: NodeJS.ProcessEnv): string[] {
       const prefix = execFileSync('brew', ['--prefix', 'dotnet@9'], {
         stdio: 'pipe',
         env,
+        timeout: 10_000,
+        killSignal: 'SIGKILL',
       })
         .toString()
         .trim();
@@ -266,6 +268,8 @@ function canRunDotnetIndexer(binary: string, env: NodeJS.ProcessEnv): boolean {
     execFileSync(binary, ['--version'], {
       stdio: 'pipe',
       env,
+      timeout: 10_000,
+      killSignal: 'SIGKILL',
     });
     return true;
   } catch {

@@ -299,6 +299,8 @@ function gitInfoExcludePath(projectRoot: string): string | null {
     const value = execFileSync('git', ['-C', projectRoot, 'rev-parse', '--git-path', 'info/exclude'], {
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 30_000,
+      killSignal: 'SIGKILL',
     }).trim();
     if (!value) return null;
     return isAbsolute(value) ? value : resolve(projectRoot, value);
@@ -311,6 +313,8 @@ function isGitTracked(projectRoot: string, relativePath: string): boolean {
   try {
     execFileSync('git', ['-C', projectRoot, 'ls-files', '--error-unmatch', '--', relativePath], {
       stdio: 'ignore',
+      timeout: 30_000,
+      killSignal: 'SIGKILL',
     });
     return true;
   } catch {
@@ -769,6 +773,8 @@ const DEFAULT_HOOK_REFRESH_DEPENDENCIES: HookRefreshDependencies = {
   freshness: getIndexFreshness,
   requestRefresh: requestWatchServiceRefresh,
   startOneShot(projectRoot) {
+    // scip-query: process-lifetime-reviewed -- intentionally detached refresh;
+    // the durable watch/reindex lock owns completion after this hook exits.
     const child = spawn('scip-query', ['reindex', '--allow-partial'], {
       cwd: projectRoot,
       detached: true,

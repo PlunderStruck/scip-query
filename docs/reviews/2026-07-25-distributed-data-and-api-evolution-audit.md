@@ -465,6 +465,17 @@ The current API therefore permits a caller to believe it supplied a deadline tha
 
 **Acceptance condition:** no production child process can consume unbounded wall time or remain unreaped after its parent reports timeout completion.
 
+**Resolution:** Slice 02 adds a shared asynchronous bounded-process owner with
+required time and independent stdout/stderr budgets, process-identity-aware
+TERM-to-KILL escalation, continuous draining, and settlement only after
+`close`. The isolated synchronous runner now forwards a hard timeout; the
+asynchronous runner always has a finite default; indexers use a configurable
+600-second deadline and retry only transient resource failures. Direct
+production child-process calls now carry an inline timeout or an exact
+lifetime-owner annotation, enforced by an AST inventory test. Hostile fixtures
+cover ignored TERM, grace-period exit, stdout and stderr floods, spawn failure,
+and sync timeout forwarding.
+
 ### RES-02 — S3 — Watch shutdown can strand or overlap an in-flight reindex child
 
 **Evidence:** source-confirmed lifecycle gap.
@@ -966,4 +977,7 @@ The program is complete when all of the following are true:
 - Fault-injection tests cover the adverse interleavings listed in §10 without relying on sleep timing.
 - Existing strong mechanisms—private SQLite candidate validation, immutable shared generations, fingerprinted cache reads, immutable outcome-event files, and token-owned release—remain intact.
 
-Until DD-01 and DD-02 are fixed, the repository should treat generation-sensitive pagination/semantic delegation and process preemption as the two highest-risk operational surfaces.
+With DD-02 resolved, the repository should treat DD-01
+generation-sensitive pagination/semantic delegation as the highest-risk
+remaining operational surface. Process preemption now fails closed on missing
+or mismatched process-instance evidence.

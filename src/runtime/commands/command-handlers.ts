@@ -739,6 +739,8 @@ function repoFileCounts(projectRoot: string): { repoFiles: number | null; source
   const result = spawnSync('git', ['-C', projectRoot, 'ls-files', '-co', '--exclude-standard'], {
     encoding: 'utf8',
     maxBuffer: BENCH_MAX_BUFFER,
+    timeout: 30_000,
+    killSignal: 'SIGKILL',
   });
   if (result.status !== 0) return { repoFiles: null, sourceFiles: null };
   const files = result.stdout.split('\n').filter(Boolean);

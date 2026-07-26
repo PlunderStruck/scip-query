@@ -1,4 +1,5 @@
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
+import { BoundedProcessError, PROCESS_TIMEOUT_MS, runBoundedProcess } from '../platform/bounded-process.js';
 
 interface IsolatedJsonProcessOptions {
   cliPath: string;
@@ -16,20 +17,28 @@ export class IsolatedProcessTimeoutError extends Error {
   constructor(
     readonly label: string,
     readonly timeoutMs: number,
+    readonly reaped = true,
   ) {
     super(`${label} timed out after ${timeoutMs}ms.`);
+    this.name = 'IsolatedProcessTimeoutError';
   }
 }
 
 // scip-query: ignore-wrapper — subprocess JSON handoff boundary shared by
 // health phases and diff-impact batches.
 export function runIsolatedJsonProcess<T>(opts: IsolatedJsonProcessOptions): T {
+  const timeoutMs = opts.timeoutMs ?? PROCESS_TIMEOUT_MS.analysis;
   const result = spawnSync(process.execPath, [...process.execArgv, opts.cliPath, opts.command, ...(opts.args ?? [])], {
     cwd: process.cwd(),
     env: opts.env ?? process.env,
     encoding: 'utf8',
     maxBuffer: opts.maxBuffer ?? 10 * 1024 * 1024,
+    timeout: timeoutMs,
+    killSignal: 'SIGKILL',
   });
+  if (result.error && (result.error as NodeJS.ErrnoException).code === 'ETIMEDOUT') {
+    throw new IsolatedProcessTimeoutError(opts.label, timeoutMs);
+  }
   if (result.status !== 0) {
     const stderr = result.stderr.trim();
     throw new Error(`${opts.label} failed${stderr ? `:\n${stderr}` : ''}`);
@@ -48,64 +57,37 @@ export function chunked<T>(items: readonly T[], size: number): T[][] {
 }
 
 export function runIsolatedJsonProcessAsync<T>(opts: IsolatedJsonProcessOptions): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const maxBuffer = opts.maxBuffer ?? 10 * 1024 * 1024;
-    const child = spawn(process.execPath, [...process.execArgv, opts.cliPath, opts.command, ...(opts.args ?? [])], {
-      cwd: process.cwd(),
-      env: opts.env ?? process.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
-    let stdoutBytes = 0;
-    let stderrBytes = 0;
-    let settled = false;
-    const timeout =
-      opts.timeoutMs && opts.timeoutMs > 0
-        ? setTimeout(() => fail(new IsolatedProcessTimeoutError(opts.label, opts.timeoutMs!)), opts.timeoutMs)
-        : null;
-
-    const fail = (error: Error): void => {
-      if (settled) return;
-      settled = true;
-      if (timeout) clearTimeout(timeout);
-      child.kill();
-      reject(error);
-    };
-
-    child.stdout.on('data', (chunk: Buffer) => {
-      stdoutBytes += chunk.length;
-      if (stdoutBytes > maxBuffer) {
-        fail(new Error(`${opts.label} exceeded stdout buffer limit (${maxBuffer} bytes).`));
-        return;
+  const timeoutMs = opts.timeoutMs ?? PROCESS_TIMEOUT_MS.analysis;
+  const maxBuffer = opts.maxBuffer ?? 10 * 1024 * 1024;
+  return runBoundedProcess({
+    command: process.execPath,
+    args: [...process.execArgv, opts.cliPath, opts.command, ...(opts.args ?? [])],
+    cwd: process.cwd(),
+    env: opts.env ?? process.env,
+    label: opts.label,
+    timeoutMs,
+    maxStdoutBytes: maxBuffer,
+    maxStderrBytes: maxBuffer,
+  })
+    .catch((error: unknown) => {
+      if (error instanceof BoundedProcessError && error.kind === 'timeout') {
+        throw new IsolatedProcessTimeoutError(opts.label, timeoutMs, error.reaped);
       }
-      stdout.push(chunk);
-    });
-    child.stderr.on('data', (chunk: Buffer) => {
-      stderrBytes += chunk.length;
-      if (stderrBytes > maxBuffer) {
-        fail(new Error(`${opts.label} exceeded stderr buffer limit (${maxBuffer} bytes).`));
-        return;
-      }
-      stderr.push(chunk);
-    });
-    child.on('error', fail);
-    child.on('close', (code) => {
-      if (settled) return;
-      settled = true;
-      if (timeout) clearTimeout(timeout);
-      const stderrText = Buffer.concat(stderr).toString('utf8').trim();
-      if (code !== 0) {
-        reject(new Error(`${opts.label} failed${stderrText ? `:\n${stderrText}` : ''}`));
-        return;
+      throw error;
+    })
+    .then((result) => {
+      const stderrText = result.stderr.trim();
+      if (result.status !== 0) {
+        throw new Error(`${opts.label} failed${stderrText ? `:\n${stderrText}` : ''}`);
       }
       try {
-        resolve(JSON.parse(Buffer.concat(stdout).toString('utf8')) as T);
+        return JSON.parse(result.stdout) as T;
       } catch (error) {
-        reject(new Error(`${opts.label} returned invalid JSON: ${error instanceof Error ? error.message : error}`));
+        throw new Error(`${opts.label} returned invalid JSON: ${error instanceof Error ? error.message : error}`, {
+          cause: error,
+        });
       }
     });
-  });
 }
 
 export async function runAnalysisTasks<T, R>(

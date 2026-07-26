@@ -111,6 +111,8 @@ function listGitProjectFiles(projectRoot: string): string[] | null {
       encoding: 'utf-8',
       maxBuffer: 50 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 30_000,
+      killSignal: 'SIGKILL',
     })
       .split('\n')
       .filter(Boolean);

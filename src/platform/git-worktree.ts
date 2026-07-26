@@ -245,6 +245,8 @@ function runGitCommand(projectRoot: string, args: readonly string[]): GitCommand
     env: { ...process.env, LC_ALL: 'C' },
     maxBuffer: 50 * 1024 * 1024,
     stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 30_000,
+    killSignal: 'SIGKILL',
   });
   if (result.status === 0) return { kind: 'success', output: result.stdout.trimEnd() };
   const stderr = typeof result.stderr === 'string' ? result.stderr.trim() : '';

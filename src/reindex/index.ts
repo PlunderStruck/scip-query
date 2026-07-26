@@ -2009,6 +2009,8 @@ function convertScipToSqlite(
       env,
       stdio: 'pipe',
       maxBuffer: 50 * 1024 * 1024,
+      timeout: 300_000,
+      killSignal: 'SIGKILL',
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

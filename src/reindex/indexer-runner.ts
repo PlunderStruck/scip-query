@@ -1,9 +1,9 @@
-import { execFile } from 'node:child_process';
 import { existsSync, renameSync, rmSync, statSync } from 'node:fs';
 import { cpus } from 'node:os';
 import { join } from 'node:path';
 import type { IndexerConfig, SupportedLanguage } from '../domain/types.js';
 import { toPortableCommand } from '../platform/binary.js';
+import { BoundedProcessError, PROCESS_TIMEOUT_MS, runBoundedProcess } from '../platform/bounded-process.js';
 
 // scip-query: ignore-stale — exported handoff record between reindex planning
 // and the runner; inlining would smear indexer execution state across modules.
@@ -35,6 +35,11 @@ export interface IndexerRunResult {
   /** Size in bytes of the produced SCIP shard; absent when the run failed. */
   outputBytes?: number;
   skipped?: { language: SupportedLanguage; reason: string };
+}
+
+interface IndexerAttempt {
+  result: IndexerRunResult;
+  retryable: boolean;
 }
 
 interface DefaultOutputBackup {
@@ -113,25 +118,25 @@ export async function runPreparedIndexers(
   const results: IndexerRunResult[] = [];
   const concurrency = resolveIndexerConcurrency(directOutputRuns.length, configuredConcurrency);
 
-  const directResults = await runWithConcurrency(directOutputRuns, concurrency, (run) =>
+  const directAttempts = await runWithConcurrency(directOutputRuns, concurrency, (run) =>
     runPreparedIndexer(run, projectRoot, onStatus),
   );
 
   if (concurrency > 1) {
     const retryResults = new Map<string, IndexerRunResult>();
-    for (const failed of directResults.filter((result) => result.skipped)) {
-      const run = directOutputRuns.find((candidate) => candidate.id === failed.id);
+    for (const failed of directAttempts.filter((attempt) => attempt.result.skipped && attempt.retryable)) {
+      const run = directOutputRuns.find((candidate) => candidate.id === failed.result.id);
       if (!run) continue;
       onStatus(`Retrying ${run.label} indexer serially after parallel failure...`);
-      retryResults.set(run.id, await runPreparedIndexer(run, projectRoot, onStatus));
+      retryResults.set(run.id, (await runPreparedIndexer(run, projectRoot, onStatus)).result);
     }
-    results.push(...directResults.map((result) => retryResults.get(result.id) ?? result));
+    results.push(...directAttempts.map(({ result }) => retryResults.get(result.id) ?? result));
   } else {
-    results.push(...directResults);
+    results.push(...directAttempts.map(({ result }) => result));
   }
 
   for (const run of defaultOutputRuns) {
-    results.push(await runPreparedIndexer(run, projectRoot, onStatus));
+    results.push((await runPreparedIndexer(run, projectRoot, onStatus)).result);
   }
 
   return results.sort((a, b) => runs.findIndex((run) => run.id === a.id) - runs.findIndex((run) => run.id === b.id));
@@ -144,7 +149,7 @@ async function runPreparedIndexer(
   run: PreparedIndexerRun,
   projectRoot: string,
   onStatus: (message: string) => void,
-): Promise<IndexerRunResult> {
+): Promise<IndexerAttempt> {
   onStatus(`Indexing ${run.label} with ${run.resolvedBinary}...`);
   rmSync(run.scipPath, { force: true });
   const defaultOutputBackup = takeDefaultOutputBackup(run.config, projectRoot, run.scipPath);
@@ -153,11 +158,20 @@ async function runPreparedIndexer(
 
   try {
     const spawnable = toPortableCommand(run.binary, run.args);
-    await execFileBuffered(spawnable.binary, spawnable.args, {
+    const completed = await runBoundedProcess({
+      command: spawnable.binary,
+      args: spawnable.args,
+      label: `${run.label} indexer`,
       cwd: projectRoot,
       env: run.env,
-      maxBuffer: 50 * 1024 * 1024,
+      timeoutMs: resolveIndexerTimeoutMs(),
+      maxStdoutBytes: 50 * 1024 * 1024,
+      maxStderrBytes: 50 * 1024 * 1024,
     });
+    if (completed.status !== 0) {
+      const detail = completed.stderr.trim();
+      throw new Error(`${run.resolvedBinary} exited with status ${completed.status}${detail ? `:\n${detail}` : ''}`);
+    }
     moveDefaultOutputIfNeeded(run.config, projectRoot, run.scipPath);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -165,14 +179,17 @@ async function runPreparedIndexer(
     const skippedReason = run.label === run.language ? reason : `${run.label}: ${reason}`;
     onStatus(`Skipping ${run.label}: ${reason}`);
     return {
-      id: run.id,
-      language: run.language,
-      label: run.label,
-      scipPath: run.scipPath,
-      outputScipPath: run.outputScipPath,
-      durationMs: Date.now() - startedAt,
-      command,
-      skipped: { language: run.language, reason: skippedReason },
+      result: {
+        id: run.id,
+        language: run.language,
+        label: run.label,
+        scipPath: run.scipPath,
+        outputScipPath: run.outputScipPath,
+        durationMs: Date.now() - startedAt,
+        command,
+        skipped: { language: run.language, reason: skippedReason },
+      },
+      retryable: isTransientIndexerFailure(err),
     };
   } finally {
     restoreDefaultOutputBackup(defaultOutputBackup);
@@ -183,14 +200,17 @@ async function runPreparedIndexer(
     const skippedReason = run.label === run.language ? reason : `${run.label}: ${reason}`;
     onStatus(`Skipping ${run.label}: ${reason}`);
     return {
-      id: run.id,
-      language: run.language,
-      label: run.label,
-      scipPath: run.scipPath,
-      outputScipPath: run.outputScipPath,
-      durationMs: Date.now() - startedAt,
-      command,
-      skipped: { language: run.language, reason: skippedReason },
+      result: {
+        id: run.id,
+        language: run.language,
+        label: run.label,
+        scipPath: run.scipPath,
+        outputScipPath: run.outputScipPath,
+        durationMs: Date.now() - startedAt,
+        command,
+        skipped: { language: run.language, reason: skippedReason },
+      },
+      retryable: false,
     };
   }
   let outputBytes: number | undefined;
@@ -200,31 +220,35 @@ async function runPreparedIndexer(
     outputBytes = undefined;
   }
   return {
-    id: run.id,
-    language: run.language,
-    label: run.label,
-    scipPath: run.scipPath,
-    outputScipPath: run.outputScipPath,
-    durationMs: Date.now() - startedAt,
-    command,
-    outputBytes,
+    result: {
+      id: run.id,
+      language: run.language,
+      label: run.label,
+      scipPath: run.scipPath,
+      outputScipPath: run.outputScipPath,
+      durationMs: Date.now() - startedAt,
+      command,
+      outputBytes,
+    },
+    retryable: false,
   };
 }
 
-function execFileBuffered(
-  binary: string,
-  args: readonly string[],
-  options: { cwd: string; env: NodeJS.ProcessEnv; maxBuffer: number },
-): Promise<void> {
-  return new Promise((resolveRun, rejectRun) => {
-    execFile(binary, [...args], options, (err) => {
-      if (err) {
-        rejectRun(err);
-      } else {
-        resolveRun();
-      }
-    });
-  });
+function resolveIndexerTimeoutMs(): number {
+  const configured = Number(process.env['SCIP_QUERY_INDEXER_TIMEOUT_MS']);
+  return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : PROCESS_TIMEOUT_MS.indexer;
+}
+
+function isTransientIndexerFailure(error: unknown): boolean {
+  if (error instanceof BoundedProcessError) {
+    return error.kind === 'spawn' && isTransientErrorCode(error.cause);
+  }
+  return isTransientErrorCode(error);
+}
+
+function isTransientErrorCode(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  return code === 'EAGAIN' || code === 'ENOMEM' || code === 'EMFILE' || code === 'ENFILE' || code === 'ETXTBSY';
 }
 
 // scip-query: ignore-twin — indexer scheduling and Rust request scheduling have different failure policy.

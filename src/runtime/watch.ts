@@ -334,6 +334,8 @@ export class Watcher {
       const latestIndexPaths = resolveIndexStoragePaths(this.projectRoot, latestConfig);
       const latestTypeScript = latestConfig.indexer?.typescript;
       const latestClojure = latestConfig.indexer?.clojure;
+      // scip-query: process-lifetime-reviewed -- this reindex worker is owned
+      // by the watch job state machine; RES-02 hardens its drain/shutdown path.
       const child = fork(new URL('./reindex-worker.js', import.meta.url).pathname, [], {
         detached: true,
         env: {
