@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, fsyncSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -257,6 +257,15 @@ describe('fetchVerifiedBinary', () => {
       message: /failed to stage verified binary/,
     },
     {
+      label: 'file flush',
+      overrides: {
+        syncImpl: (() => {
+          throw new Error('file flush failed');
+        }) as never,
+      },
+      message: /failed to install verified binary/,
+    },
+    {
       label: 'rename',
       overrides: {
         renameImpl: (() => {
@@ -278,6 +287,30 @@ describe('fetchVerifiedBinary', () => {
 
     expect(error).toMatchObject({ kind: 'install', message: expect.stringMatching(message) });
     expect(existsSync(cachePath)).toBe(false);
+    expect(fetchArtifacts(cachePath)).toEqual([]);
+  });
+
+  it('keeps verified new bytes visible but reports an unconfirmed directory flush', async () => {
+    const cachePath = createCachePath();
+    const bytes = Buffer.from('verified payload');
+    let syncCalls = 0;
+    const error = await fetchVerifiedBinary({
+      cachePath,
+      url: 'https://example.test/install.bin',
+      expectedSha256: digest(bytes),
+      fetchImpl: (async () => byteResponse([bytes], { contentLength: bytes.length })) as typeof fetch,
+      syncImpl: ((fd: number) => {
+        syncCalls += 1;
+        if (syncCalls === 2) throw new Error('directory flush failed');
+        fsyncSync(fd);
+      }) as typeof fsyncSync,
+    }).catch((reason: unknown) => reason);
+
+    expect(error).toMatchObject({
+      kind: 'install',
+      message: expect.stringMatching(/failed to install verified binary/),
+    });
+    expect(readFileSync(cachePath)).toEqual(bytes);
     expect(fetchArtifacts(cachePath)).toEqual([]);
   });
 

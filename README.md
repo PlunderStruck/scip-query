@@ -394,7 +394,13 @@ response, rejects malformed or oversized `Content-Length`, and enforces the
 same ceiling when the header is absent. Callers for one cache path serialize on
 a token-owned lock and recheck the winner's checksum before fetching. Failed,
 aborted, or competing operations remove only their random-token staging file;
-the previously accepted cache remains available.
+the previously accepted cache remains available. Successful promotion flushes
+the verified file and its containing directory before acknowledging the new
+cache where the platform supports directory sync.
+
+File-backed state uses an explicit visibility-versus-crash-durability
+classification. See [Filesystem Publication and Durability](docs/DURABILITY.md)
+for the guarantees, failure outcomes, Windows limitation, and call-site matrix.
 
 ## Quick Start
 

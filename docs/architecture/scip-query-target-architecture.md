@@ -312,11 +312,14 @@ Evidence: `node dist/cli.js architecture --json`;
 `node dist/cli.js imports src/language-parsers/source-evidence.ts --json`;
 `node dist/cli.js imports src/reindex/index.ts --json`;
 `node dist/cli.js imports src/reindex/shared-generation-store.ts --json`;
+`node dist/cli.js imports src/storage/atomic-file.ts --json`;
+`node dist/cli.js imports src/storage/atomic-json.ts --json`;
 `node dist/cli.js system src/semantic --json`;
 `node dist/cli.js imports src/semantic/typescript/remote-provider.ts --json`;
 `node dist/cli.js imports src/symbols/identifier-attribution.ts --json`; and
-`node dist/cli.js imports src/symbols/references/reference-callers.ts --json`
-on 2026-07-23.
+`node dist/cli.js imports src/symbols/references/reference-callers.ts --json`.
+The atomic-file and atomic-JSON boundary direction was reverified on
+2026-07-25.
 
 The `semantic -> symbols` row is now closed together with the rest of
 semantic's classified outgoing relationships. The intended direction is

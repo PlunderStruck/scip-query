@@ -9,7 +9,7 @@ import {
   type DurableRustSessionServerState,
 } from './durable-session.js';
 import { createWorkerRustAnalyzerSessionRequester } from './lsp-session.js';
-import { writeJsonAtomic } from '../../storage/atomic-json.js';
+import { writeJsonAtomic, writeJsonDurable } from '../../storage/atomic-json.js';
 import { isProcessAlive } from '../../platform/process-liveness.js';
 
 const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60_000;
@@ -79,7 +79,7 @@ async function runDurableRustSessionServer(sessionDir: string, semanticWorkerPat
     const now = Date.now();
     if (!force && now - lastHeartbeatAtMs < HEARTBEAT_INTERVAL_MS) return;
     lastHeartbeatAtMs = now;
-    writeJsonAtomic(resolve(sessionDir, 'server.json'), {
+    writeJsonDurable(resolve(sessionDir, 'server.json'), {
       protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
       pid: process.pid,
       heartbeatAtMs: now,

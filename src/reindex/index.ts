@@ -46,7 +46,7 @@ import {
   type ProjectInputFingerprint,
 } from '../platform/project-files.js';
 import type { LastRefreshMetadata, RefreshTrigger, SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
-import { writeJsonAtomic } from '../storage/atomic-json.js';
+import { writeJsonDurable } from '../storage/atomic-json.js';
 import { ScipDatabase } from '../storage/db.js';
 import { seedTypeScriptReferenceFragments } from '../semantic/typescript/reference-fragment-shadow.js';
 import { auxiliaryDocumentsAugmentationStage } from './augmentation/augment.js';
@@ -2316,7 +2316,7 @@ function isUnchangedReindex(metaPath: string, fingerprint: ReindexFingerprint): 
 }
 
 function writeReindexMeta(metaPath: string, metadata: ReindexMetadata): void {
-  writeJsonAtomic(metaPath, metadata, { spacing: 2, trailingNewline: true });
+  writeJsonDurable(metaPath, metadata, { spacing: 2, trailingNewline: true });
 }
 
 function updateReindexLastRefresh(metaPath: string, lastRefresh: LastRefreshMetadata): void {

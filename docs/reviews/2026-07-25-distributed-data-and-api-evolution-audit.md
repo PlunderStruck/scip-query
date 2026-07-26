@@ -340,6 +340,33 @@ The temporary name is also only `path + pid + Date.now()`. Two writes from the s
 
 **Acceptance condition:** each caller chooses a named durability contract rather than inheriting an ambiguous one.
 
+**Resolution:** Slice 08 introduces one exclusive random-token atomic-file
+primitive with two explicit modes. Visibility mode stages complete bytes and
+renames them, guaranteeing old-or-new complete observations without claiming
+crash survival. Durable mode flushes the staging descriptor before rename and
+the containing directory after rename. Known Windows directory-handle
+limitations return `directorySync: "unsupported"` after the file flush and
+rename; all other sync errors fail explicitly. Create, partial write, file
+flush, and rename failures remove only the writer's owned staging file and
+preserve the previous target. A POSIX directory-flush failure occurs after
+rename, so the verified new file remains visible while the call reports
+unconfirmed durability.
+
+`writeJsonAtomic` retains its visibility-atomic `void` API.
+`writeJsonDurable` is additive and returns the achieved directory-sync status.
+Verified binary downloads apply the same ordered file-flush, rename, and
+directory-flush contract inside the independent platform boundary. Reindex metadata, SQLite
+generation state, shared-generation manifests, worktree leases and pointers,
+watch service ownership, Rust session discovery, project configuration, agent
+hook configuration, structured suppressions, and health baselines now choose
+durable replacement. Ephemeral mailboxes, watch activity, content-addressed
+TypeScript caches, GC history, and shadow telemetry remain visibility-atomic.
+`docs/DURABILITY.md` records the guarantee, post-rename ambiguity, Windows
+limitation, and full call-site matrix. Fault tests cover exclusive-create
+collision, partial write, file flush, rename after flush, POSIX directory
+flush, Windows unsupported directory sync, old-or-new visibility, staging
+ownership, JSON compatibility, and durable binary promotion.
+
 ### DD-09 — S3 — Concurrent health runs can lose finding-outcome increments
 
 **Evidence:** source-confirmed interleaving.

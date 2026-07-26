@@ -11,7 +11,7 @@ import {
   statSync,
 } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
-import { writeJsonAtomic } from '../storage/atomic-json.js';
+import { writeJsonDurable } from '../storage/atomic-json.js';
 
 export const SQLITE_GENERATION_STORE_VERSION = 1;
 export const SQLITE_GENERATION_DIRECTORY = '.scipquery-generations';
@@ -107,7 +107,7 @@ export function promoteReindexArtifacts(input: PromoteReindexArtifactsInput): Pr
     ...(input.publication ? { publication: input.publication } : {}),
     publishedAt: (input.now ?? (() => new Date()))().toISOString(),
   };
-  writeJsonAtomic(join(generationRoot, 'state.json'), state, { spacing: 2, trailingNewline: true });
+  writeJsonDurable(join(generationRoot, 'state.json'), state, { spacing: 2, trailingNewline: true });
   return { currentGeneration, ...(previousGeneration ? { previousGeneration } : {}) };
 }
 
@@ -151,7 +151,7 @@ export function refreshSqliteGenerationMetadata(
     ...(previous?.publication ? { publication: previous.publication } : {}),
     publishedAt: now().toISOString(),
   };
-  writeJsonAtomic(join(sqliteGenerationRoot(outputDb), 'state.json'), state, {
+  writeJsonDurable(join(sqliteGenerationRoot(outputDb), 'state.json'), state, {
     spacing: 2,
     trailingNewline: true,
   });

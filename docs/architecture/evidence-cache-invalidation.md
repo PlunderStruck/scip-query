@@ -76,8 +76,12 @@ implementation whose behavior created the files; including it makes an upgrade
 miss safely instead of adopting artifacts with incompatible semantics.
 Clean worktrees with that exact identity clone the generation into their own
 writable cache before opening SQLite. The clone is rebound to the target SCIP
-project root, then enters through the existing local atomic publication and
-generation-recovery boundary. Dirty or partial indexes are never published.
+project root, then enters through the existing local complete-visibility
+publication and generation-recovery boundary. The generation manifest,
+worktree lease, local pointer, reindex metadata, and SQLite generation state
+use crash-durable file replacement; the wider multi-file generation handoff
+remains a distinct publication protocol. See `docs/DURABILITY.md` for that
+classification. Dirty or partial indexes are never published.
 Peer bootstrap validates the stable cache artifacts, not the peer checkout's
 current files: a dirty checkout may donate an older cache that still exactly
 describes the target `HEAD`, while a cache containing the dirty changes cannot.

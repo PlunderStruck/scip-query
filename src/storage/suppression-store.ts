@@ -13,10 +13,11 @@
  * but is no longer written to by the `suppress` command.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import type { FindingSuppression } from '../domain/config-types.js';
+import { writeJsonDurable } from './atomic-json.js';
 
 export const SUPPRESSION_DIR = join('.scipquery', 'suppressions');
 
@@ -61,7 +62,7 @@ export function writeSuppressionFile(
     ...suppression,
     createdAt: suppression.createdAt ?? now.toISOString(),
   };
-  writeFileSync(path, JSON.stringify(record, null, 2) + '\n');
+  writeJsonDurable(path, record, { spacing: 2, trailingNewline: true });
   return { path };
 }
 

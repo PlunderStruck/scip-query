@@ -38,7 +38,7 @@ import {
   type ProjectInputFingerprint,
   type ProjectInputFingerprintOptions,
 } from '../platform/project-files.js';
-import { writeJsonAtomic } from '../storage/atomic-json.js';
+import { writeJsonDurable } from '../storage/atomic-json.js';
 import { detectLanguages } from './detect.js';
 import {
   describeIndexArtifactSet,
@@ -274,7 +274,10 @@ export function publishSharedGeneration(input: {
       createdAt: (input.now ?? (() => new Date()))().toISOString(),
       artifacts: records.sort((left, right) => left.path.localeCompare(right.path)),
     };
-    writeJsonAtomic(join(stagingDir, SHARED_GENERATION_MANIFEST), manifest, { spacing: 2, trailingNewline: true });
+    writeJsonDurable(join(stagingDir, SHARED_GENERATION_MANIFEST), manifest, {
+      spacing: 2,
+      trailingNewline: true,
+    });
     const targetDir = sharedGenerationDirectory(input.snapshot);
     try {
       if (existsSync(targetDir) && !readSharedGeneration(input.snapshot)) {
@@ -675,7 +678,7 @@ export function touchExistingWorktreeLease(
     if (!lock) return null;
     try {
       lease.lastSeenAt = current.toISOString();
-      writeJsonAtomic(leasePath, lease, { spacing: 2, trailingNewline: true });
+      writeJsonDurable(leasePath, lease, { spacing: 2, trailingNewline: true });
     } finally {
       lock.release();
     }
@@ -772,7 +775,7 @@ function importPeerGeneration(
 
 function writeWorktreeCachePointer(localCacheDir: string, repositoryId: string, worktreeId: string): void {
   mkdirSync(localCacheDir, { recursive: true });
-  writeJsonAtomic(
+  writeJsonDurable(
     join(localCacheDir, WORKTREE_CACHE_POINTER),
     { version: 1, repositoryId, worktreeId },
     { spacing: 2, trailingNewline: true },
@@ -884,7 +887,10 @@ function persistWorktreeLease(repositoryCacheDir: string, lease: WorktreeCacheLe
     }
     const worktreesDir = join(repositoryCacheDir, 'worktrees');
     mkdirSync(worktreesDir, { recursive: true });
-    writeJsonAtomic(join(worktreesDir, `${lease.worktreeId}.json`), lease, { spacing: 2, trailingNewline: true });
+    writeJsonDurable(join(worktreesDir, `${lease.worktreeId}.json`), lease, {
+      spacing: 2,
+      trailingNewline: true,
+    });
     writeWorktreeCachePointer(lease.localCacheDir, lease.repositoryId, lease.worktreeId);
   } finally {
     lock.release();

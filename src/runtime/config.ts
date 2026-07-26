@@ -1,6 +1,7 @@
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import type { ProjectConfig, SupportedLanguage, WatchConfig } from '../domain/types.js';
+import { writeJsonDurable } from '../storage/atomic-json.js';
 
 const CONFIG_FILENAME = '.scipquery.json';
 const DEFAULT_WATCH_DEBOUNCE_MS = 250;
@@ -686,7 +687,7 @@ export function initProjectConfig(projectRoot: string, languages: string[]): str
     },
   };
 
-  writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+  writeJsonDurable(configPath, config, { spacing: 2, trailingNewline: true });
   return configPath;
 }
 
@@ -705,7 +706,7 @@ export function configureProjectLanguages(
   const configPath = join(projectRoot, CONFIG_FILENAME);
   const nextConfig: ProjectConfig = { ...config, languages: [...languages] };
   const changed = !existsSync(configPath) || JSON.stringify(nextConfig) !== JSON.stringify(config);
-  if (changed) writeFileSync(configPath, JSON.stringify(nextConfig, null, 2) + '\n');
+  if (changed) writeJsonDurable(configPath, nextConfig, { spacing: 2, trailingNewline: true });
   return { configPath, config: nextConfig, changed };
 }
 
@@ -729,7 +730,7 @@ export function configureProjectAutomaticRefresh(
     },
   };
   const changed = !existsSync(configPath) || JSON.stringify(nextConfig) !== JSON.stringify(config);
-  if (changed) writeFileSync(configPath, JSON.stringify(nextConfig, null, 2) + '\n');
+  if (changed) writeJsonDurable(configPath, nextConfig, { spacing: 2, trailingNewline: true });
   return { configPath, config: nextConfig, changed };
 }
 

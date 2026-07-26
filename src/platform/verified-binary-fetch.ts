@@ -3,6 +3,7 @@ import {
   closeSync,
   createReadStream,
   existsSync,
+  fsyncSync,
   mkdirSync,
   openSync,
   renameSync,
@@ -52,8 +53,10 @@ export interface VerifiedBinaryFetchOptions {
   signal?: AbortSignal;
   /** Failure-injection seam; production uses node:fs.writeSync. */
   writeImpl?: typeof writeSync;
-  /** Failure-injection seam; Slice 08 replaces this visibility-atomic promotion with durable promotion. */
+  /** Failure-injection seam for the durable promotion rename. */
   renameImpl?: typeof renameSync;
+  /** Failure-injection seam for staged-file and directory flushes. */
+  syncImpl?: typeof fsyncSync;
 }
 
 export interface VerifiedBinaryFetchResult {
@@ -266,7 +269,7 @@ async function downloadVerifiedBinary(
     closeSync(fd);
     fd = undefined;
     try {
-      (opts.renameImpl ?? renameSync)(tmpPath, opts.cachePath);
+      promoteVerifiedBinary(tmpPath, opts.cachePath, opts.renameImpl ?? renameSync, opts.syncImpl ?? fsyncSync);
     } catch (error) {
       throw new VerifiedBinaryFetchError('install', `failed to install verified binary at ${opts.cachePath}`, {
         cause: error,
@@ -327,6 +330,54 @@ function writeChunk(fd: number, chunk: Buffer, writeImpl: typeof writeSync): voi
     }
     offset += written;
   }
+}
+
+/**
+ * The platform boundary owns executable/tool installation independently from
+ * storage's JSON publication primitive; architecture forbids either sibling
+ * infrastructure boundary from depending on the other.
+ */
+function promoteVerifiedBinary(
+  stagingPath: string,
+  targetPath: string,
+  renameImpl: typeof renameSync,
+  syncImpl: typeof fsyncSync,
+): void {
+  flushPath(stagingPath, syncImpl);
+  renameImpl(stagingPath, targetPath);
+  flushBinaryDirectory(dirname(targetPath), syncImpl);
+}
+
+function flushPath(path: string, syncImpl: typeof fsyncSync): void {
+  const fd = openSync(path, 'r');
+  try {
+    syncImpl(fd);
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function flushBinaryDirectory(path: string, syncImpl: typeof fsyncSync): void {
+  let fd: number;
+  try {
+    fd = openSync(path, 'r');
+  } catch (error) {
+    if (isWindowsDirectoryFlushLimitation(error)) return;
+    throw error;
+  }
+  try {
+    syncImpl(fd);
+  } catch (error) {
+    if (!isWindowsDirectoryFlushLimitation(error)) throw error;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function isWindowsDirectoryFlushLimitation(error: unknown): boolean {
+  if (process.platform !== 'win32') return false;
+  const code = (error as NodeJS.ErrnoException).code;
+  return code === 'EACCES' || code === 'EBADF' || code === 'EINVAL' || code === 'EISDIR' || code === 'EPERM';
 }
 
 function raceWithAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {

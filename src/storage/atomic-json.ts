@@ -1,20 +1,43 @@
-import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { replaceFileAtomic, type AtomicFileRuntime, type AtomicFileWriteResult } from './atomic-file.js';
 
 export interface AtomicJsonWriteOptions {
   spacing?: number;
   trailingNewline?: boolean;
+  /** @internal deterministic fault-injection boundary. */
+  runtime?: AtomicFileRuntime;
 }
 
 /**
- * Replaces one JSON file only after its complete next value is durable enough
- * for a same-filesystem rename. Readers therefore observe the old complete
- * value or the new complete value, never a partially written JSON document.
+ * Visibility-atomic JSON replacement. Concurrent readers observe the old
+ * complete document or the new complete document, never a partial write.
+ * This function does not claim crash durability.
  */
 export function writeJsonAtomic(path: string, value: unknown, options: AtomicJsonWriteOptions = {}): void {
-  mkdirSync(dirname(path), { recursive: true });
-  const temporaryPath = `${path}.${process.pid}.${Date.now()}.tmp`;
+  replaceFileAtomic(path, serializeJson(value, options), {
+    durability: 'visibility',
+    runtime: options.runtime,
+  });
+}
+
+/**
+ * Crash-durable JSON replacement. The file is flushed before rename and the
+ * parent directory is flushed before success where the platform supports it.
+ * Windows callers receive `directorySync: "unsupported"` when Node cannot
+ * flush directory handles; file contents are still flushed and replacement is
+ * visibility-atomic.
+ */
+export function writeJsonDurable(
+  path: string,
+  value: unknown,
+  options: AtomicJsonWriteOptions = {},
+): AtomicFileWriteResult {
+  return replaceFileAtomic(path, serializeJson(value, options), {
+    durability: 'durable',
+    runtime: options.runtime,
+  });
+}
+
+function serializeJson(value: unknown, options: AtomicJsonWriteOptions): string {
   const json = JSON.stringify(value, null, options.spacing);
-  writeFileSync(temporaryPath, options.trailingNewline ? `${json}\n` : json);
-  renameSync(temporaryPath, path);
+  return options.trailingNewline ? `${json}\n` : json;
 }

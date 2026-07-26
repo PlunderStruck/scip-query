@@ -20,7 +20,7 @@ import {
   type WatchServicePaths,
   type WatchServiceState,
 } from '../platform/watch-service-state.js';
-import { writeJsonAtomic } from '../storage/atomic-json.js';
+import { writeJsonAtomic, writeJsonDurable } from '../storage/atomic-json.js';
 
 export {
   WATCH_ACTIVITY_FILE,
@@ -344,7 +344,7 @@ export function stopWatchService(opts: WatchServiceControllerOptions): WatchServ
 // scip-query: ignore-passthrough — protocol writer keeps watch-state callers
 // on the validated service contract instead of its JSON storage mechanism.
 export function writeWatchServiceState(statePath: string, state: WatchServiceState): void {
-  writeJsonAtomic(statePath, state);
+  writeJsonDurable(statePath, state);
 }
 
 export function recordWatchServiceActivity(activityPath: string, nowMs = Date.now()): void {

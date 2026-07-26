@@ -11,6 +11,7 @@ import type { DiffGateResult } from '../queries/impact/diff-gate.js';
 import { createGitignoreFilter } from '../source/primitives/gitignore-filter.js';
 import { escapeRegex } from '../source/primitives/regex-utils.js';
 import { ScipDatabase } from '../storage/db.js';
+import { writeJsonDurable } from '../storage/atomic-json.js';
 import { loadProjectConfig, resolveWatchConfig } from './config.js';
 import { getIndexFreshness } from './index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from './project-readiness.js';
@@ -373,7 +374,7 @@ function installProviderHooks(opts: {
 
   const existed = existsSync(opts.configPath);
   mkdirSync(dirname(opts.configPath), { recursive: true });
-  writeFileSync(opts.configPath, `${JSON.stringify(next, null, 2)}\n`);
+  writeJsonDurable(opts.configPath, next, { spacing: 2, trailingNewline: true });
   opts.result[existed ? 'updated' : 'installed'].push(opts.label);
 }
 
@@ -418,7 +419,7 @@ function removeProviderHooks(opts: {
     if (Object.keys(next).length === 0) {
       rmSync(opts.configPath, { force: true });
     } else {
-      writeFileSync(opts.configPath, `${JSON.stringify(next, null, 2)}\n`);
+      writeJsonDurable(opts.configPath, next, { spacing: 2, trailingNewline: true });
     }
   }
   opts.result.removed.push(opts.label);
@@ -440,7 +441,7 @@ function removeProjectProviderHooks(opts: {
   const next: HookConfig = { ...current, scipQueryHooks: 'declined' };
   if (!opts.dryRun) {
     mkdirSync(dirname(opts.configPath), { recursive: true });
-    writeFileSync(opts.configPath, `${JSON.stringify(next, null, 2)}\n`);
+    writeJsonDurable(opts.configPath, next, { spacing: 2, trailingNewline: true });
   }
   if (opts.result.removed.length === before) {
     opts.result.removed.push(`${opts.label} (declined)`);

@@ -11,8 +11,8 @@
  * Detector options come from HEALTH_DETECTOR_PROFILES — the same constants
  * health uses, so the ratchet and the report always describe the same runs.
  */
-import { writeFileSync } from 'node:fs';
 import type { ScipDatabase } from '../../storage/db.js';
+import { writeJsonDurable } from '../../storage/atomic-json.js';
 import { isEntrySurface, isRootedSymbol } from '../../analysis/file-classifier.js';
 import { HEALTH_DETECTOR_PROFILES } from '../internal/health-detector-profiles.js';
 import {
@@ -139,7 +139,7 @@ export function writeHealthBaseline(
   const findings = collectBaselineFindings(db, { scope: opts.scope });
   const path = resolveBaselinePath(db, opts.path);
   const payload: HealthBaselineFile = { version: 1, findings };
-  writeFileSync(path, JSON.stringify(payload, null, 2) + '\n');
+  writeJsonDurable(path, payload, { spacing: 2, trailingNewline: true });
   return { path, findingCount: findings.length };
 }
 
