@@ -1700,7 +1700,14 @@ program-wide gate remains separately recorded below.
 |    24 | API-06  | complete | `57bcc65e` | 99 focused; 1,730 full-suite tests  | Strict Rust request/response decoding, session/deadline correlation, retry authority, overlap behavior, and expiry verified                  |
 |    25 | REL-01  | complete | `251dde89` | 16 focused tests                    | Versioned manifest, PE/hash inspection, pinned inputs, staging, pack, and prepublish fence verified                                          |
 |    26 | REL-02  | complete | `850d0e16` | 37 focused; 1,765 full-suite tests  | Recomputed pack/registry identity, bounded ambiguity, immutable drift, exact conflict, and read-only verification proven                     |
-|    27 | REL-03  | complete |            | 77 focused; 1,805 full-suite tests  | Clean revision, pinned registry, inspected pair, durable state, ordered publish, every retry, guard, pack, and live absence proven           |
+|    27 | REL-03  | complete | `499ad9d1` | 77 focused; 1,805 full-suite tests  | Clean revision, pinned registry, inspected pair, durable state, ordered publish, every retry, guard, pack, and live absence proven           |
+
+Procedural variance: the Slice 13–15 commit subjects predate the ledger's
+strict subject-line convention and do not spell out their finding IDs. Their
+immutable mappings are Slice 13 / DD-06 = `5bc743ed`, Slice 14 / DD-07 =
+`5fd33ab0`, and Slice 15 / DD-09 = `adfded36`. The commits remain one-to-one
+with their slices and tests; history was not rewritten merely to repair
+subject formatting.
 
 ### Slice 10 verification record
 
@@ -2405,9 +2412,9 @@ program-wide gate remains separately recorded below.
   lint reaches only Claude's two concurrently stale `.agents` wrapper links.
 - A real main pack produces `scip-query@0.19.6` with 366 entries, includes the
   release-state schema and complete runbook, and embeds the exact
-  `scip-query-scip-windows@0.13.1` pin. `npm publish <verified-main.tgz>
---dry-run --ignore-scripts` accepts the artifact shape without registry
-  mutation.
+  `scip-query-scip-windows@0.13.1` pin.
+  `npm publish <verified-main.tgz> --dry-run --ignore-scripts` accepts the
+  artifact shape without registry mutation.
 - A real sidecar pack reruns provenance verification and retains its six-entry
   identity: SHA-1 `4f79806b3dc2b681a882ff3fc542ab4f5e16b2ed` and SHA-512
   `sha512-nucZotX6lwnhfutXetAHptYWb5ScSBPopU5byeShyY6P3TF3hFJbCDH7Focm3iunlBoS0cJuLch1IRBVxs1rLg==`.
@@ -2446,3 +2453,110 @@ program-wide gate remains separately recorded below.
   identity, and interleaving injection is its purpose; test consumers are not
   counted by that detector. No health-baseline ratchet or suppression was
   written at this per-slice gate.
+
+## 12. Program completion record
+
+All 27 source-confirmed findings are implemented in their own commits, with
+the exact mappings recorded in the slice ledger. The concurrent consolidated
+skill migration is completed in `ec2d783a`; the full-suite fixture-budget
+hardening discovered during reconciliation is isolated in `48dd9abc`.
+
+### Whole-program verification
+
+- The complete suite passes 230 of 230 files: 1,810 tests pass and 2 are
+  intentionally skipped. An isolated writable `XDG_CACHE_HOME` separates
+  product behavior from the desktop sandbox's denial of normal cache writes.
+- Three filesystem/SQLite fixture cases passed quickly in isolation but
+  exceeded Vitest's five-second default under full parallel saturation. The
+  large 1,100-file augmentation case and the SQLite locality fixture suite
+  now carry local 15-second test budgets. No global test timeout, production
+  deadline, retry count, or product behavior changed. The two focused files
+  pass 16 of 16 tests, and the later whole-suite run passes.
+- `pnpm run lint` passes formatting, ESLint, production build, all 72 public
+  API paths, downstream consumer compilation, and skill-link validation.
+  `pnpm run docs:commands` is idempotent and its generated output is defended
+  by tests.
+- The consolidated skill matrix passes 45 of 45 focused setup, CLI-contract,
+  and command-reference tests. Every installed workflow skill names valid
+  commands, the seven-route router exactly matches the installed inventory,
+  every CLI command is covered recursively, and the descriptor-owned agent
+  contract catalogue is generated without drift. The twin scaffold's renamed
+  integrity scenario passes its 8 focused cases.
+- Current-build `scip-query reindex` reuses the complete TypeScript/Rust
+  generation, and `doctor`, `status --capabilities`, and `config-validate`
+  pass against a fresh index. TypeScript and Rust compiler/semantic
+  capabilities, cleanup checkers, and the Git gate are all available.
+- `diff-impact --json` reports four source files, two changed symbols, and
+  three affected descriptor consumers. Those consumers are exercised by the
+  CLI-contract suite and the full suite. Documentation, skills, tests, and
+  generated surfaces are additionally covered by their explicit contract
+  tests rather than being misrepresented as compiler-indexed symbols.
+- The routed co-change check correctly identifies
+  `skills/scip-query/SKILL.md`'s historical relationships with
+  `docs/COMMAND_REFERENCE.md`, `skills/_shared/SKILL.md`, and
+  `src/runtime/setup.ts`. The first two change in the same integration diff;
+  the third is protected by the exact router/inventory/setup tests.
+- Full `doc-drift` scans 692 documents and returns 77 bounded heuristic
+  candidates. No changed document has a broken reference. Its signals for the
+  changed agent, detector, command, and skill guides compare their previous
+  committed timestamp with already-committed program slices; those documents
+  are updated in `ec2d783a`, so the uncommitted closeout is the repair rather
+  than additional drift. The one unsnapshotted broken reference belongs to
+  an unchanged architecture-vision document and predates this program.
+- `self-audit` samples 50 symbols with a 100% answering compiler oracle.
+  File-level reference agreement has precision 0.97 and recall 1.0. Callee
+  recall is 0.667 on the three samples for which the partial oracle answered,
+  so no callee precision claim is made.
+- `health --baseline` reports the same 82 accumulated detector signals
+  recorded at the end of the source slices. They span intended new
+  coordination, durability, compatibility, and release boundaries; the
+  skill-integration diff adds no new indexed behavior. The baseline is not
+  silently rewritten and no suppression is added merely to manufacture a
+  green number.
+- The unbounded compact diff gate has complete coverage
+  (`totalKnown: true`, one returned, zero omitted). Its sole signal is that
+  `cleanup/descriptors.ts` changed without `cleanup/handlers.ts`. The edit
+  changes only user-facing prose from the removed
+  `scip-integrity-audit` name to the consolidated `scip-audit` integrity
+  scenario; handler behavior and options are unchanged. Six of seven
+  historical co-edits are broad sweeps, so changing the handler, adding a
+  decorative edit, or installing a permanent suppression would reduce
+  correctness. The outcome record is committed with `ec2d783a` and this is
+  the explicit acceptance reason.
+
+### Refutation attempts
+
+1. **Sandbox artifact attack.** The default full run was allowed to fail,
+   then repeated with only its cache root moved to a writable temporary
+   location. Eight permission failures disappeared, separating environment
+   denial from product defects; the remaining three timeouts were replayed
+   below.
+2. **Timeout masking attack.** The three failed heavy cases were rerun in
+   isolation before any timeout change and all passed. After assigning only
+   their fixture-local budgets, both focused files and the entire parallel
+   suite passed. This refutes a semantic failure while retaining finite
+   hang detection.
+3. **Skill drift attack.** Tests deliberately compare all installed skill
+   directories, recursive command declarations, runtime command descriptors,
+   generated router content, and generated contract content. The first run
+   caught the stale `is` token, 40 uncovered commands, two broken wrapper
+   links, and three removed-skill coupling paths; the integration fixes all
+   of them, and the 45-test focused matrix now passes.
+4. **Installed-version attack.** The global 0.19.5 binary and its legacy
+   watcher were distinguished from the repository's 0.19.6 build by exact
+   executable, project, start, and process-birth identities. Only that
+   verified process was stopped. The current build then started the watcher,
+   refreshed the cache, and passed doctor/status, proving the final evidence
+   did not accidentally come from the old installed version.
+
+### Remaining risk
+
+- The Rust callee oracle remains partial; this program does not treat its
+  three answered samples as a complete precision measurement.
+- The 82 health signals remain visible for future calibration instead of
+  being converted into a broad baseline acceptance. Their per-slice
+  explanations are retained above.
+- The final `npm run release:npm:dry-run` must run from the clean final
+  revision after this completion record is committed. Its result belongs in
+  the external handoff because recording it inside the source revision would
+  change the revision and tarball it just verified.
