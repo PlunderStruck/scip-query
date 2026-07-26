@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { platform } from 'node:os';
+import { homedir, platform } from 'node:os';
+import { delimiter, join } from 'node:path';
 import type { IndexerConfig } from '../domain/types.js';
 import { isBinaryAvailable } from '../platform/binary.js';
 import { describeIndexerBinary, resolveIndexerBinary } from '../platform/indexer-toolchain.js';
@@ -21,11 +22,22 @@ export function tryInstallIndexer(config: IndexerConfig, onStatus: (msg: string)
   }
 
   for (const method of methods) {
+    if (!method.identity || !method.destination) {
+      onStatus(
+        `Refusing ${method.label} installation for ${binaryLabel}: ` +
+          'the installer descriptor lacks an immutable identity or destination.',
+      );
+      continue;
+    }
     if (!isBinaryAvailable(method.prerequisite)) {
       continue;
     }
 
-    onStatus(`Installing ${binaryLabel} via ${method.label}...`);
+    const destination = resolveInstallerDestination(method);
+    onStatus(
+      `Installing immutable ${method.identity} via ${method.label} into ${destination}; ` +
+        `expected executable: ${binaryLabel}.`,
+    );
     try {
       execFileSync(method.binary, method.args, {
         stdio: 'inherit',
@@ -39,7 +51,10 @@ export function tryInstallIndexer(config: IndexerConfig, onStatus: (msg: string)
       const resolvedBinary = resolveIndexerBinary(config);
       if (resolvedBinary) {
         const resolutionNote = resolvedBinary === config.indexerBinary ? '' : ` (using ${resolvedBinary})`;
-        onStatus(`Successfully installed ${binaryLabel} via ${method.label}${resolutionNote}`);
+        onStatus(
+          `Successfully installed ${method.identity} via ${method.label}${resolutionNote}; ` +
+            `resolved executable: ${resolvedBinary}.`,
+        );
         return true;
       }
       onStatus(`${method.label} command completed but ${binaryLabel} was not found on PATH`);
@@ -54,4 +69,38 @@ export function tryInstallIndexer(config: IndexerConfig, onStatus: (msg: string)
     onStatus(`Install manually from: ${config.installUrl}`);
   }
   return false;
+}
+
+function resolveInstallerDestination(method: NonNullable<IndexerConfig['installMethods']>[number]): string {
+  if (method.binary === 'npm') {
+    return probeInstallerOutput('npm', ['root', '-g']) ?? method.destination!;
+  }
+  if (method.binary === 'go') {
+    const goBin = probeInstallerOutput('go', ['env', 'GOBIN']);
+    if (goBin) return goBin;
+    const goPath = probeInstallerOutput('go', ['env', 'GOPATH']);
+    if (goPath) return join(goPath.split(delimiter)[0]!, 'bin');
+  }
+  if (method.binary === 'dotnet') {
+    return join(process.env['DOTNET_CLI_HOME'] ?? homedir(), '.dotnet', 'tools');
+  }
+  if (method.binary === 'dart') {
+    return join(process.env['PUB_CACHE'] ?? join(homedir(), '.pub-cache'), 'bin');
+  }
+  return method.destination!;
+}
+
+function probeInstallerOutput(binary: string, args: string[]): string | null {
+  try {
+    const output = execFileSync(binary, args, {
+      stdio: ['ignore', 'pipe', 'ignore'],
+      encoding: 'utf8',
+      timeout: 10_000,
+      killSignal: 'SIGKILL',
+      env: process.env,
+    }).trim();
+    return output || null;
+  } catch {
+    return null;
+  }
 }

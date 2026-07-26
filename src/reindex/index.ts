@@ -135,6 +135,8 @@ export interface ReindexOptions {
   clojureConfigPath?: string;
   /** Skip auto-install prompts */
   skipAutoInstall?: boolean;
+  /** Explicitly permit installing missing global tools for this operation. */
+  installMissing?: boolean;
   /** Permit repository-local indexers after an explicit trust decision. */
   trustProjectTools?: boolean;
   /** Reuse an existing index when tracked source inputs are unchanged (default true). */
@@ -291,7 +293,10 @@ interface ReindexLockMetadata {
 // reindex; hiding the ordered steps behind another helper would make failure
 // behavior harder to audit.
 export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
-  const { projectRoot, maxHeapMb = 8192, onStatus = console.log, skipAutoInstall = false } = opts;
+  const { projectRoot, maxHeapMb = 8192, onStatus = console.log } = opts;
+  // Compatibility note: skipAutoInstall=true still wins, but false does not
+  // grant host-mutation authority. Only installMissing=true does.
+  const skipAutoInstall = opts.skipAutoInstall === true || opts.installMissing !== true;
 
   const paths = resolveReindexOutputPaths(opts);
   const start = Date.now();
@@ -1636,19 +1641,21 @@ async function ensureScipCliAvailable(skipAutoInstall: boolean, onStatus: (messa
     return;
   }
 
-  if (skipAutoInstall) {
-    throw new Error(
-      'The scip CLI is required but not found on PATH.\n' +
-        'Install from: https://github.com/sourcegraph/scip/releases',
-    );
-  }
-
   if (platform() === 'win32') {
     throw new Error(
       'The scip CLI was not found. On Windows it ships via the npm sidecar package ' +
         'scip-query-scip-windows (installed automatically with scip-query). ' +
-        "Reinstall with optional dependencies enabled, run 'npm install -g scip-query-scip-windows', " +
+        "Reinstall scip-query with optional dependencies enabled, or follow 'scip-query setup' guidance " +
+        'for the exact sidecar package version, ' +
         'or set SCIP_QUERY_SCIP_BIN to a local scip.exe path.',
+    );
+  }
+
+  if (skipAutoInstall) {
+    throw new Error(
+      'The scip CLI is required but not found on PATH.\n' +
+        'To install the reviewed version, run: scip-query reindex --install-missing\n' +
+        'Or install manually from: https://github.com/sourcegraph/scip/releases',
     );
   }
 
@@ -1787,7 +1794,9 @@ function prepareIndexerRun(opts: {
 
   if (!trustedProjectTool && !installedBinary && !isIndexerInstalled(config)) {
     if (opts.skipAutoInstall) {
-      const reason = `${binaryLabel} not found on PATH (auto-install disabled). ${config.installUrl ?? ''}`.trim();
+      const reason =
+        `${binaryLabel} not found on PATH. To install the reviewed version, run: ` +
+        `scip-query reindex --install-missing${config.installUrl ? ` (manual source: ${config.installUrl})` : ''}`;
       opts.onStatus(`Skipping ${opts.language}: ${reason}`);
       return { skipped: { language: opts.language, reason } };
     }

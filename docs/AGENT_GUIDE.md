@@ -27,7 +27,10 @@ For analyzer implementation work, follow [Regex Policy](REGEX_POLICY.md): regex 
    explicit `watch.enabled: false` is preserved. Use `scip-query setup --guided`
    for a recommended automatic-indexing choice, or
    `scip-query setup --no-hooks --json` when the repo should not write Codex or
-   Claude Code lifecycle hooks.
+   Claude Code lifecycle hooks. Non-interactive setup and ordinary reindex
+   diagnose missing global tools without installing them. Pass
+   `--install-missing` only after reviewing the pinned package identities and
+   granting that user-environment change for the current operation.
 
    Setup reports three change scopes. Repository records are shared project
    facts and history that must survive clones, so commit `.scipquery.json`,
@@ -37,7 +40,9 @@ For analyzer implementation work, follow [Regex Policy](REGEX_POLICY.md): regex 
    not commit `.codex/hooks.json` or `.claude/settings.local.json`; setup keeps
    them out of Git through `.git/info/exclude`. User-environment changes install
    skills or indexers for the current machine. Use `setup --guided` to answer
-   each repository, checkout, or user-scope question separately.
+   each repository, checkout, or user-scope question separately; use
+   `setup --install-missing` for an explicit non-interactive installation
+   grant.
 
 2. **Resolve blockers**
 

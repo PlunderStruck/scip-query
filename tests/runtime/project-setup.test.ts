@@ -280,16 +280,15 @@ afterEach(() => {
 });
 
 describe('runProjectSetup', () => {
-  it('installs detected AST parsers unless the setup choice is declined', async () => {
+  it('installs detected AST parsers only after explicit setup consent', async () => {
     const { module, setupAstParsers } = await loadProjectSetup({ languages: ['typescript', 'python'] });
-    const selected = await module.runProjectSetup({ runHealth: false });
-    expect(setupAstParsers).toHaveBeenCalledWith(['typescript', 'python']);
-    expect(selected.steps).toContainEqual(expect.objectContaining({ id: 'ast-parsers', status: 'ok' }));
-
-    setupAstParsers.mockClear();
-    const skipped = await module.runProjectSetup({ runHealth: false, installAstParsers: false });
+    const skipped = await module.runProjectSetup({ runHealth: false });
     expect(setupAstParsers).not.toHaveBeenCalled();
     expect(skipped.steps).toContainEqual(expect.objectContaining({ id: 'ast-parsers', status: 'skipped' }));
+
+    const selected = await module.runProjectSetup({ runHealth: false, installAstParsers: true });
+    expect(setupAstParsers).toHaveBeenCalledWith(['typescript', 'python']);
+    expect(selected.steps).toContainEqual(expect.objectContaining({ id: 'ast-parsers', status: 'ok' }));
   });
 
   it('plans guided setup choices without creating agent docs by default', async () => {
@@ -496,7 +495,7 @@ describe('runProjectSetup', () => {
     expect(report.indexerRemediation).toEqual([]);
     expect(report.steps.find((step) => step.id === 'indexer-remediation')).toMatchObject({
       status: 'skipped',
-      message: 'Skipped by guided setup choice.',
+      message: 'Skipped because installing missing indexers requires explicit consent.',
     });
   });
 
@@ -865,7 +864,7 @@ describe('runProjectSetup', () => {
     }));
 
     const module = await import('../../src/runtime/project-setup.js');
-    const report = await module.runProjectSetup();
+    const report = await module.runProjectSetup({ installIndexers: true });
 
     expect(report.verdict).toBe('partial');
     expect(tryInstallIndexer).toHaveBeenCalledTimes(1);

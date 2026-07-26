@@ -177,6 +177,7 @@ export async function handleReindex(rawOpts: unknown): Promise<void> {
       skipIfUnchanged: !booleanOptionValue(opts, 'force'),
       allowPartial: booleanOptionValue(opts, 'allowPartial'),
       skipAutoInstall: process.env['SCIP_QUERY_SKIP_AUTO_INSTALL'] === '1',
+      installMissing: booleanOptionValue(opts, 'installMissing'),
       trustProjectTools: booleanOptionValue(opts, 'trustProjectTools'),
       indexerConcurrency: numberOptionValue(opts, 'indexerConcurrency') ?? config.indexerConcurrency,
       trigger: { kind: 'manual-cli', detail: 'scip-query reindex' },
@@ -1259,13 +1260,15 @@ export function handleSetupAgent(rawOpts: unknown): void {
 export async function handleSetup(rawOpts: unknown): Promise<void> {
   const opts = commandOptions(rawOpts);
   try {
+    const installMissing = booleanOptionValue(opts, 'installMissing');
     let setupOptions: ProjectSetupOptions = {
       gitHook: booleanOptionValue(opts, 'gitHook'),
       noHooks: booleanOptionValue(opts, 'noHooks') || opts['hooks'] === false,
       dossierDir: stringOptionValue(opts, 'dossierDir'),
       runHealth: booleanOptionValue(opts, 'yes') ? false : opts['health'] !== false,
       installSkills: opts['skills'] !== false,
-      installAstParsers: opts['parsers'] !== false,
+      installIndexers: installMissing,
+      installAstParsers: installMissing && opts['parsers'] !== false,
       ...(booleanOptionValue(opts, 'yes') ? { automaticRefresh: true } : {}),
     };
     const json = booleanOptionValue(opts, 'json');
@@ -1360,10 +1363,12 @@ async function guidedProjectSetupOptions(
       base.noHooks ||
       (plan.actions.some((action) => action.id === 'install-project-hooks') && !selected.has('install-project-hooks')),
     noAgentGuidance: !agentActionSelected,
-    ...(indexerAction ? { installIndexers: selected.has('install-indexers') } : {}),
+    ...(indexerAction
+      ? { installIndexers: interactive ? selected.has('install-indexers') : base.installIndexers === true }
+      : {}),
     languages: readiness.languages.filter((language) => selected.has(`language:${language}`)),
     installSkills: selected.has('install-agent-skills'),
-    installAstParsers: selected.has('install-ast-parsers'),
+    installAstParsers: interactive ? selected.has('install-ast-parsers') : base.installAstParsers === true,
     runHealth: selected.has('run-health-analysis'),
   };
 }
@@ -1379,9 +1384,8 @@ function guidedProjectSetupFiles(projectRoot: string): ProjectSetupGuidedFiles {
 
 function recommendedGuidedActions(actions: readonly ProjectSetupGuidedAction[]): Set<string> {
   return new Set([
-    ...actions.filter((action) => action.recommended).map((action) => action.id),
+    ...actions.filter((action) => action.recommended && action.id !== 'install-indexers').map((action) => action.id),
     'install-agent-skills',
-    'install-ast-parsers',
   ]);
 }
 

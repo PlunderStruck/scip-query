@@ -403,7 +403,8 @@ reports Rust's final durable/worker semantic selection and lifecycle state.
 The status read is passive; the setup health audit may make a semantic request
 that wakes rust-analyzer, after which the helper exits on clean idle.
 It also installs/refreshes skills, configures project-local hooks unless
-skipped, checks indexer readiness, attempts configured indexer remediation,
+skipped, checks indexer readiness, performs explicitly approved pinned indexer
+remediation,
 refreshes the index, smoke-tests representative command families, writes
 `docs/scip-query/health-dossier.md` and `.json` when the optional health pass is
 selected, reports the health score and items needing attention, and seeds
@@ -414,7 +415,9 @@ explicitly). After setup,
 `scip-audit` confirms raw signals and `scip-improve` keeps
 fixing the worst confirmed items until no safe confirmed cleanup remains. Use
 `scip-query setup --git-hook` when you also want a local pre-commit diff gate.
-CI setup is intentionally separate.
+Non-interactive setup and ordinary reindex report missing global tools without
+installing them; pass `--install-missing` only when that operation may install
+the reviewed immutable package versions. CI setup is intentionally separate.
 
 Setup classifies every change by where its facts belong:
 

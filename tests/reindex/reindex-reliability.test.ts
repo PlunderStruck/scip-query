@@ -1190,6 +1190,82 @@ describe('reindex reliability', () => {
     ).rejects.toThrow(/scip-query-scip-windows[\s\S]*SCIP_QUERY_SCIP_BIN/);
   });
 
+  it('does not install a missing scip CLI during a normal reindex', async () => {
+    const projectRoot = createProject('scip-query-reindex-missing-scip-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    const tryInstallScipCli = vi.fn(() => true);
+    const { reindex } = await loadReindexFixture({
+      languages: ['typescript'],
+      platform: 'linux',
+      scipCli: { resolveScipBinary: () => null, tryInstallScipCli },
+    });
+
+    await expect(
+      reindex({
+        projectRoot,
+        outputScip: join(cacheDir, 'index.scip'),
+        outputDb: join(cacheDir, 'index.db'),
+        onStatus: () => undefined,
+      }),
+    ).rejects.toThrow(/scip-query reindex --install-missing/);
+    expect(tryInstallScipCli).not.toHaveBeenCalled();
+  });
+
+  it('installs a missing scip CLI only with an explicit grant', async () => {
+    const projectRoot = createProject('scip-query-reindex-install-scip-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    let installed = false;
+    const tryInstallScipCli = vi.fn(() => {
+      installed = true;
+      return true;
+    });
+    const { reindex } = await loadReindexFixture({
+      languages: ['typescript'],
+      platform: 'linux',
+      scipCli: {
+        resolveScipBinary: () => (installed ? 'scip' : null),
+        tryInstallScipCli,
+      },
+    });
+
+    const result = await reindex({
+      projectRoot,
+      outputScip: join(cacheDir, 'index.scip'),
+      outputDb: join(cacheDir, 'index.db'),
+      installMissing: true,
+      onStatus: () => undefined,
+    });
+
+    expect(result.languages).toEqual(['typescript']);
+    expect(tryInstallScipCli).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the compatibility skip override authoritative over an install grant', async () => {
+    const projectRoot = createProject('scip-query-reindex-skip-install-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    const tryInstallScipCli = vi.fn(() => true);
+    const { reindex } = await loadReindexFixture({
+      languages: ['typescript'],
+      platform: 'linux',
+      scipCli: { resolveScipBinary: () => null, tryInstallScipCli },
+    });
+
+    await expect(
+      reindex({
+        projectRoot,
+        outputScip: join(cacheDir, 'index.scip'),
+        outputDb: join(cacheDir, 'index.db'),
+        installMissing: true,
+        skipAutoInstall: true,
+        onStatus: () => undefined,
+      }),
+    ).rejects.toThrow(/scip-query reindex --install-missing/);
+    expect(tryInstallScipCli).not.toHaveBeenCalled();
+  });
+
   it('keeps the rebuilt generation authoritative when shadow telemetry cannot be written', async () => {
     const projectRoot = createProject('scip-query-reindex-shadow-write-');
     const cacheDir = join(projectRoot, '.cache');

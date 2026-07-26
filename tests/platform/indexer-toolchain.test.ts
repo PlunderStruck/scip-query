@@ -44,7 +44,7 @@ describe('indexer toolchain discovery', () => {
         throw new Error('missing');
       }
       if (target === 'scip-python-plus') {
-        return Buffer.from('/tmp/scip-python-plus\n');
+        return '/tmp/scip-python-plus\n';
       }
       throw new Error(`unexpected binary check: ${String(target)}`);
     });
@@ -63,7 +63,7 @@ describe('indexer toolchain discovery', () => {
     };
 
     expect(describeIndexerBinary(config)).toBe('scip-python or scip-python-plus');
-    expect(resolveIndexerBinary(config)).toBe('scip-python-plus');
+    expect(resolveIndexerBinary(config)).toBe('/tmp/scip-python-plus');
     expect(isIndexerInstalled(config)).toBe(true);
   });
 
@@ -101,7 +101,7 @@ describe('indexer toolchain discovery', () => {
       if (cmd === 'brew' && args[0] === '--prefix' && args[1] === 'dotnet@9') {
         return Buffer.from('/opt/homebrew/opt/dotnet@9\n');
       }
-      if (cmd === 'scip-dotnet' && args[0] === '--version') {
+      if ((cmd === 'scip-dotnet' || cmd === '/usr/local/bin/scip-dotnet') && args[0] === '--version') {
         if (opts?.env?.['DOTNET_ROOT'] === '/opt/homebrew/opt/dotnet@9/libexec') {
           return Buffer.from('scip-dotnet 0.8.0\n');
         }
@@ -137,7 +137,7 @@ describe('indexer toolchain discovery', () => {
   it('reports scip-dotnet as runnable when dotnet@9 is available via DOTNET_ROOT', async () => {
     const execFileSync = vi.fn((cmd: string, args: readonly string[], opts?: { env?: Record<string, string> }) => {
       if (cmd === 'which' && args[0] === 'scip-dotnet') {
-        return Buffer.from('/usr/local/bin/scip-dotnet\n');
+        return '/usr/local/bin/scip-dotnet\n';
       }
       if (cmd === 'which' && args[0] === 'brew') {
         return Buffer.from('/opt/homebrew/bin/brew\n');
@@ -145,7 +145,7 @@ describe('indexer toolchain discovery', () => {
       if (cmd === 'brew' && args[0] === '--prefix' && args[1] === 'dotnet@9') {
         return Buffer.from('/opt/homebrew/opt/dotnet@9\n');
       }
-      if (cmd === 'scip-dotnet' && args[0] === '--version') {
+      if ((cmd === 'scip-dotnet' || cmd === '/usr/local/bin/scip-dotnet') && args[0] === '--version') {
         if (opts?.env?.['DOTNET_ROOT'] === '/opt/homebrew/opt/dotnet@9/libexec') {
           return Buffer.from('scip-dotnet 0.8.0\n');
         }

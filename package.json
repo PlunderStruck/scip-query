@@ -372,8 +372,8 @@
   },
   "//optionalDependencies": "Native parsers and bundled SCIP indexers go in optionalDependencies so a failed install (missing build tools, restricted registry, incompatible platform) downgrades scip-query gracefully — the affected language falls back to regex parsing or asks the user to install its indexer manually — instead of blocking npm install.",
   "optionalDependencies": {
-    "@sourcegraph/scip-typescript": "^0.4.0",
-    "scip-python-plus": "^0.7.4",
+    "@sourcegraph/scip-typescript": "0.4.0",
+    "scip-python-plus": "0.7.4",
     "scip-query-scip-windows": "0.13.1",
     "tree-sitter": "0.21.1",
     "tree-sitter-c": "0.23.2",

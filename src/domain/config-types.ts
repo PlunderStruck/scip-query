@@ -3,6 +3,10 @@
 export interface InstallMethod {
   /** Human-readable label (e.g., "npm", "pip", "go install") */
   label: string;
+  /** Immutable package/module identity requested from the installer. */
+  identity?: string;
+  /** Host location class that the installer will mutate. */
+  destination?: string;
   /** Binary that must exist for this install method to work (e.g., "npm", "pip3", "go") */
   prerequisite: string;
   /** Command to execute */

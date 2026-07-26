@@ -3,6 +3,12 @@ import { isAbsolute, join, resolve } from 'node:path';
 import type { SupportedLanguage, IndexerConfig } from '../domain/types.js';
 import { RUST_ANALYZER_TOOLCHAIN } from '../platform/indexer-toolchain.js';
 
+const SCIP_TYPESCRIPT_PACKAGE = '@sourcegraph/scip-typescript@0.4.0';
+const SCIP_PYTHON_PACKAGE = 'scip-python-plus@0.7.4';
+const SCIP_GO_PACKAGE = 'github.com/sourcegraph/scip-go@v0.2.7';
+const SCIP_DOTNET_PACKAGE = 'scip-dotnet@0.2.14';
+const SCIP_DART_PACKAGE = 'scip_dart@1.6.2';
+
 /**
  * Indexer configurations for each supported language.
  * Each entry describes how to produce a SCIP index for that language.
@@ -24,7 +30,14 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     },
     markerFiles: ['tsconfig.json'],
     installMethods: [
-      { label: 'npm', prerequisite: 'npm', binary: 'npm', args: ['install', '-g', '@sourcegraph/scip-typescript'] },
+      {
+        label: 'npm',
+        identity: SCIP_TYPESCRIPT_PACKAGE,
+        destination: 'npm global prefix',
+        prerequisite: 'npm',
+        binary: 'npm',
+        args: ['install', '-g', SCIP_TYPESCRIPT_PACKAGE],
+      },
     ],
     installUrl: 'https://github.com/sourcegraph/scip-typescript',
     bundledNpmPackage: '@sourcegraph/scip-typescript',
@@ -40,7 +53,14 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     }),
     markerFiles: ['package.json'],
     installMethods: [
-      { label: 'npm', prerequisite: 'npm', binary: 'npm', args: ['install', '-g', '@sourcegraph/scip-typescript'] },
+      {
+        label: 'npm',
+        identity: SCIP_TYPESCRIPT_PACKAGE,
+        destination: 'npm global prefix',
+        prerequisite: 'npm',
+        binary: 'npm',
+        args: ['install', '-g', SCIP_TYPESCRIPT_PACKAGE],
+      },
     ],
     installUrl: 'https://github.com/sourcegraph/scip-typescript',
     bundledNpmPackage: '@sourcegraph/scip-typescript',
@@ -94,9 +114,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       args: ['scip', '.', '--output', outputPath],
     }),
     markerFiles: ['Cargo.toml'],
-    installMethods: [
-      { label: 'rustup', prerequisite: 'rustup', binary: 'rustup', args: ['component', 'add', 'rust-analyzer'] },
-    ],
+    installMethods: [],
     installUrl: RUST_ANALYZER_TOOLCHAIN.installUrl,
   },
 
@@ -110,7 +128,16 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       args: ['index', '--output', outputPath, '--project-name', 'project'],
     }),
     markerFiles: ['pyproject.toml', 'setup.py'],
-    installMethods: [{ label: 'npm', prerequisite: 'npm', binary: 'npm', args: ['install', '-g', 'scip-python-plus'] }],
+    installMethods: [
+      {
+        label: 'npm',
+        identity: SCIP_PYTHON_PACKAGE,
+        destination: 'npm global prefix',
+        prerequisite: 'npm',
+        binary: 'npm',
+        args: ['install', '-g', SCIP_PYTHON_PACKAGE],
+      },
+    ],
     installUrl: 'https://github.com/PlunderStruck/scip-python',
     bundledNpmPackage: 'scip-python-plus',
   },
@@ -158,9 +185,11 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     installMethods: [
       {
         label: 'go install',
+        identity: SCIP_GO_PACKAGE,
+        destination: 'Go bin directory (GOBIN or GOPATH/bin)',
         prerequisite: 'go',
         binary: 'go',
-        args: ['install', 'github.com/sourcegraph/scip-go@latest'],
+        args: ['install', SCIP_GO_PACKAGE],
       },
     ],
     installUrl: 'https://github.com/sourcegraph/scip-go',
@@ -211,9 +240,11 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     installMethods: [
       {
         label: 'dotnet',
+        identity: SCIP_DOTNET_PACKAGE,
+        destination: 'dotnet global tool directory',
         prerequisite: 'dotnet',
         binary: 'dotnet',
-        args: ['tool', 'install', '--global', 'scip-dotnet'],
+        args: ['tool', 'install', '--global', 'scip-dotnet', '--version', '0.2.14'],
       },
     ],
     installUrl: 'https://github.com/sourcegraph/scip-dotnet/releases',
@@ -238,9 +269,11 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     installMethods: [
       {
         label: 'dotnet',
+        identity: SCIP_DOTNET_PACKAGE,
+        destination: 'dotnet global tool directory',
         prerequisite: 'dotnet',
         binary: 'dotnet',
-        args: ['tool', 'install', '--global', 'scip-dotnet'],
+        args: ['tool', 'install', '--global', 'scip-dotnet', '--version', '0.2.14'],
       },
     ],
     installUrl: 'https://github.com/sourcegraph/scip-dotnet/releases',
@@ -256,7 +289,14 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     }),
     markerFiles: ['pubspec.yaml'],
     installMethods: [
-      { label: 'dart pub', prerequisite: 'dart', binary: 'dart', args: ['pub', 'global', 'activate', 'scip_dart'] },
+      {
+        label: 'dart pub',
+        identity: SCIP_DART_PACKAGE,
+        destination: 'Dart pub global cache',
+        prerequisite: 'dart',
+        binary: 'dart',
+        args: ['pub', 'global', 'activate', 'scip_dart', '1.6.2'],
+      },
     ],
     installUrl: 'https://github.com/Workiva/scip-dart/releases',
   },

@@ -64,14 +64,11 @@ export function describeIndexerBinary(toolchain: IndexerToolchain): string {
  */
 export function resolveIndexerBinary(toolchain: IndexerToolchain): string | null {
   for (const candidate of getBinaryCandidates(toolchain)) {
-    if (platform() === 'win32') {
-      // `where` also reports npm's .cmd/extensionless shim scripts, which a
-      // shell-less spawn rejects with EFTYPE; only a real executable counts.
-      const spawnable = resolveSpawnableExecutable(candidate);
-      if (spawnable) return spawnable;
-    } else if (isBinaryAvailable(candidate)) {
-      return candidate;
-    }
+    // `where` can report npm's .cmd/extensionless shim scripts, which a
+    // shell-less spawn rejects with EFTYPE. On every platform, retain the
+    // concrete executable path so post-install status identifies what will run.
+    const spawnable = resolveSpawnableExecutable(candidate);
+    if (spawnable) return spawnable;
   }
   return resolveBundledNpmBinary(toolchain);
 }

@@ -154,10 +154,13 @@ moving the whole product surface at once.
   checkout-local preference, or a user-environment change. Indexer consent
   controls external compiler remediation, while the AST-parser choice probes
   and repairs missing pinned Tree-sitter packages inside scip-query's own
-  installation. Setup persists the demand-started indexing policy, proves the
-  service's clean-idle lifecycle from live state, and reports Rust's final
-  semantic transport, lifecycle state, and worker fallback after health. The
-  status read is passive; semantic health work may wake the helper.
+  installation. The interactive checklist supplies that consent per action;
+  non-interactive setup and ordinary reindex remain diagnostic-only unless
+  `--install-missing` grants the pinned installation for that operation. Setup
+  persists the demand-started indexing policy, proves the service's clean-idle
+  lifecycle from live state, and reports Rust's final semantic transport,
+  lifecycle state, and worker fallback after health. The status read is
+  passive; semantic health work may wake the helper.
 
 ## Product Decisions
 

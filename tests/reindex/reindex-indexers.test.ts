@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { getIndexerConfig } from '../../src/reindex/indexers.js';
+import { INDEXER_CONFIGS, getIndexerConfig } from '../../src/reindex/indexers.js';
 
 const tempDirs: string[] = [];
 
@@ -236,5 +236,26 @@ describe('indexer configs', () => {
     expect(scala.installMethods).toEqual([]);
     expect(kotlin.installMethods).toEqual([]);
     expect(java.installUrl).toContain('scip-java/releases');
+  });
+
+  it('keeps every automated installer request immutable and destination-owned', () => {
+    const methods = Object.values(INDEXER_CONFIGS).flatMap((config) => config.installMethods ?? []);
+
+    expect(methods).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ identity: '@sourcegraph/scip-typescript@0.4.0' }),
+        expect.objectContaining({ identity: 'scip-python-plus@0.7.4' }),
+        expect.objectContaining({ identity: 'github.com/sourcegraph/scip-go@v0.2.7' }),
+        expect.objectContaining({ identity: 'scip-dotnet@0.2.14' }),
+        expect.objectContaining({ identity: 'scip_dart@1.6.2' }),
+      ]),
+    );
+    for (const method of methods) {
+      expect(method.identity).toMatch(/@(?:v)?\d+\.\d+\.\d+$/);
+      expect(method.identity).not.toContain('@latest');
+      expect(method.destination?.trim()).not.toBe('');
+      expect(method.args.join(' ')).toContain(method.identity!.replace(/@v?(\d+\.\d+\.\d+)$/, ''));
+    }
+    expect(getIndexerConfig('rust').installMethods).toEqual([]);
   });
 });

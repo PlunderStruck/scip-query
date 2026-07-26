@@ -237,7 +237,7 @@ export function planGuidedProjectSetup(input: {
       recommended: true,
       requiresConsent: true,
       reason: `${blockedIndexers.length} detected language indexer(s) are not runnable.`,
-      command: 'scip-query setup',
+      command: 'scip-query setup --install-missing',
     });
   }
 
@@ -291,7 +291,9 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     id: 'scip-cli',
     label: 'scip CLI',
     status: scipCliInstalled ? 'ok' : 'warn',
-    message: scipCliInstalled ? 'scip CLI is available.' : 'scip CLI is not available; reindex may attempt install.',
+    message: scipCliInstalled
+      ? 'scip CLI is available.'
+      : 'scip CLI is not available; installation requires explicit --install-missing consent.',
   });
 
   const skills =
@@ -347,7 +349,7 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
   });
 
   const astParsers =
-    opts.installAstParsers === false
+    opts.installAstParsers !== true
       ? {
           supportedLanguages: [],
           availableBefore: [],
@@ -360,10 +362,10 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
   addStep(steps, {
     id: 'ast-parsers',
     label: 'AST parser packages',
-    status: opts.installAstParsers === false ? 'skipped' : astParsers.unavailable.length > 0 ? 'warn' : 'ok',
+    status: opts.installAstParsers !== true ? 'skipped' : astParsers.unavailable.length > 0 ? 'warn' : 'ok',
     message:
-      opts.installAstParsers === false
-        ? 'Skipped by setup choice.'
+      opts.installAstParsers !== true
+        ? 'Skipped because installing missing parser packages requires explicit consent.'
         : astParsers.supportedLanguages.length === 0
           ? 'No selected language uses a bundled Tree-sitter parser.'
           : `${astParsers.availableAfter.length}/${astParsers.supportedLanguages.length} selected language parser(s) available${astParsers.installed.length > 0 ? `; installed ${astParsers.installed.join(', ')}` : ''}.`,
@@ -373,14 +375,14 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     ],
   });
 
-  const installIndexers = opts.installIndexers ?? true;
+  const installIndexers = opts.installIndexers === true;
   const indexerRemediation = installIndexers ? remediateIndexers(projectRoot, initialReadiness, steps) : [];
   if (!installIndexers) {
     addStep(steps, {
       id: 'indexer-remediation',
       label: 'Indexer remediation',
       status: 'skipped',
-      message: 'Skipped by guided setup choice.',
+      message: 'Skipped because installing missing indexers requires explicit consent.',
     });
   }
   const readyForIndexing = getProjectReadiness(projectRoot, config);
@@ -393,6 +395,7 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     configHasErrors: configErrors.length > 0,
     steps,
     onStatus: opts.onStatus,
+    installMissing: opts.installIndexers === true,
   });
   const reindexResult = refreshed.reindexResult;
   const postReindexFreshness = refreshed.freshness;
@@ -600,6 +603,7 @@ interface SetupIndexRefreshInput {
   configHasErrors: boolean;
   steps: ProjectSetupStep[];
   onStatus?: (message: string) => void;
+  installMissing: boolean;
 }
 
 async function refreshSetupIndex(
@@ -636,6 +640,7 @@ async function refreshSetupIndex(
         clojureConfigPath: input.config.indexer?.clojure?.configPath,
         skipIfUnchanged: true,
         allowPartial: true,
+        installMissing: input.installMissing,
         indexerConcurrency: input.config.indexerConcurrency,
         trigger: { kind: 'setup', detail: 'scip-query setup' },
         onStatus: (message) => {

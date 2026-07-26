@@ -169,6 +169,7 @@ describe('CLI contract', () => {
       '--no-hooks',
       '--no-skills',
       '--no-parsers',
+      '--install-missing',
       '--no-health',
       '--dossier-dir <path>',
       '--json',

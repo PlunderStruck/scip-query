@@ -24,7 +24,9 @@ async function loadScipCli(opts: {
   // their existing behavior.
   const execFileSync = vi.fn((cmd: string, args: readonly string[], ...rest: unknown[]) => {
     if (userIsBinary && (cmd === 'which' || cmd === 'where') && Array.isArray(args)) {
-      if (isBinaryAvailable(args[0]!)) return Buffer.from('');
+      if (isBinaryAvailable(args[0]!)) {
+        return opts.platform === 'win32' ? `C:\\tools\\${args[0]}.exe\n` : `/usr/local/bin/${args[0]}\n`;
+      }
       throw new Error(`${args[0]} not found`);
     }
     if (userExec) return userExec(cmd, args, ...rest);
@@ -57,7 +59,10 @@ afterEach(() => {
 describe('scip CLI helpers', () => {
   it('detects when scip is installed and trims the reported version', async () => {
     const execFileSync = vi.fn((cmd: string, args: readonly string[]) => {
-      if (cmd === 'scip' && args[0] === '--version') {
+      if (cmd === 'which' && args[0] === 'scip') {
+        return '/usr/local/bin/scip\n';
+      }
+      if (cmd === '/usr/local/bin/scip' && args[0] === '--version') {
         return Buffer.from('v0.7.0\n');
       }
       return Buffer.from('');
@@ -72,7 +77,11 @@ describe('scip CLI helpers', () => {
     expect(isScipInstalled()).toBe(true);
     expect(getScipVersion()).toBe('v0.7.0');
     expect(execFileSync).toHaveBeenCalledWith('which', ['scip'], expect.objectContaining({ stdio: 'pipe' }));
-    expect(execFileSync).toHaveBeenCalledWith('scip', ['--version'], expect.objectContaining({ stdio: 'pipe' }));
+    expect(execFileSync).toHaveBeenCalledWith(
+      '/usr/local/bin/scip',
+      ['--version'],
+      expect.objectContaining({ stdio: 'pipe' }),
+    );
   });
 
   it('returns null when the scip version probe fails', async () => {
@@ -99,7 +108,7 @@ describe('scip CLI helpers', () => {
     const { printScipInstallInstructions } = await import('../../src/platform/scip-cli.js');
     printScipInstallInstructions();
 
-    expect(log.mock.calls.flat().join('\n')).toContain('brew install sourcegraph/scip/scip');
+    expect(log.mock.calls.flat().join('\n')).toContain('go install github.com/sourcegraph/scip/cmd/scip@v0.8.1');
     expect(log.mock.calls.flat().join('\n')).toContain('scip-darwin-arm64.tar.gz');
     expect(log.mock.calls.flat().join('\n')).toContain('https://github.com/sourcegraph/scip/releases/download/v0.8.1/');
   });
@@ -150,9 +159,12 @@ describe('scip CLI helpers', () => {
 
   it('tries go install when brew is unavailable and confirms scip afterward', async () => {
     let installed = false;
-    const execFileSync = vi.fn((cmd: string) => {
+    const execFileSync = vi.fn((cmd: string, args: readonly string[]) => {
       if (cmd === 'go') {
         installed = true;
+      }
+      if (cmd === '/usr/local/bin/scip' && args[0] === '--version') {
+        return Buffer.from('scip version v0.8.1\n');
       }
       return Buffer.from('');
     });
@@ -176,11 +188,17 @@ describe('scip CLI helpers', () => {
     expect(tryInstallScipCli((message) => status.push(message))).toBe(true);
     expect(execFileSync).toHaveBeenCalledWith(
       'go',
-      ['install', 'github.com/sourcegraph/scip/cmd/scip@latest'],
+      ['install', 'github.com/sourcegraph/scip/cmd/scip@v0.8.1'],
       expect.objectContaining({ stdio: 'inherit' }),
     );
-    expect(status).toContain('Installing scip CLI via go install...');
-    expect(status).toContain('Successfully installed scip CLI via go install');
+    expect(status).toContain(
+      'Installing immutable github.com/sourcegraph/scip/cmd/scip@v0.8.1 via go install into ' +
+        'the Go bin directory (GOBIN or GOPATH/bin); expected executable: scip.',
+    );
+    expect(status).toContain(
+      'Successfully installed github.com/sourcegraph/scip/cmd/scip@v0.8.1; ' +
+        'resolved executable: /usr/local/bin/scip; reported version: scip version v0.8.1.',
+    );
   });
 
   it('falls back to manual instructions when auto-install is unavailable', async () => {

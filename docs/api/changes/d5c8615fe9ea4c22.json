@@ -1,0 +1,25 @@
+{
+  "acceptedAt": "2026-07-26T18:50:30.916Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "d5c8615fe9ea4c2241dc62d69e7900ad9f36b9d7c3538e56badd9d4bf006bbf7",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ReindexOptions changed from interface ReindexOptions { projectRoot: string; languages?: SupportedLanguage[]; outputScip?: string; outputDb?: string; maxHeapMb?: number; onStatus?: (message: string) => void... to interface ReindexOptions { projectRoot: string; languages?: SupportedLanguage[]; outputScip?: string; outputDb?: string; maxHeapMb?: number; onStatus?: (message: string) => void....",
+      "target": "./reindex:ReindexOptions"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-changed",
+      "message": "Non-exported declarations changed in referenced module config-types-<hash>.d.ts.",
+      "target": "config-types-<hash>.d.ts"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.19.6",
+  "previousDigest": "0bb02294e95c759c12060aa416f2e6ecfbe95f1a94e6a93ff9b2ea443feb6fed",
+  "reason": "Adds the optional ReindexOptions.installMissing grant; referenced installer metadata is optional and no existing exported declaration or behavior is removed.",
+  "schemaVersion": 1
+}
