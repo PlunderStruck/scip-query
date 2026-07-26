@@ -21,5 +21,16 @@ describe('Windows SCIP sidecar documentation', () => {
     const prepublishOnly = packageJson.scripts?.['prepublishOnly'];
 
     expect(prepublishOnly).toBe('npm run api:check && vite-node scripts/publish-scip-windows.ts');
+    expect(packageJson.scripts?.['verify:scip-windows']).toBe('node scripts/verify-scip-windows.mjs');
+  });
+
+  it('verifies provenance again when the sidecar itself is packed', () => {
+    const sidecar = JSON.parse(readFileSync('packages/scip-windows/package.json', 'utf8')) as {
+      files?: string[];
+      scripts?: Record<string, string>;
+    };
+
+    expect(sidecar.files).toContain('provenance.json');
+    expect(sidecar.scripts?.['prepack']).toBe('node ../../scripts/verify-scip-windows.mjs');
   });
 });

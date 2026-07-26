@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/PlunderStruck/scip-query/blob/main/docs/schemas/windows-sidecar-provenance.schema.json",
+  "title": "scip-query Windows sidecar provenance",
+  "type": "object",
+  "required": ["kind", "schemaVersion", "package", "source", "toolchain", "build", "binaries"],
+  "properties": {
+    "kind": {
+      "const": "scip-query-windows-sidecar-provenance"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "package": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": {
+          "const": "scip-query-scip-windows"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "source": {
+      "type": "object",
+      "required": ["repository", "tag", "commit"],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string",
+          "minLength": 1
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        }
+      },
+      "additionalProperties": true
+    },
+    "toolchain": {
+      "type": "object",
+      "required": ["goVersion"],
+      "properties": {
+        "goVersion": {
+          "type": "string",
+          "pattern": "^go[0-9]+\\.[0-9]+"
+        }
+      },
+      "additionalProperties": true
+    },
+    "build": {
+      "type": "object",
+      "required": ["command", "package", "flags", "environment"],
+      "properties": {
+        "command": {
+          "const": "go build"
+        },
+        "package": {
+          "const": "./cmd/scip"
+        },
+        "flags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "environment": {
+          "type": "object",
+          "required": ["CGO_ENABLED", "GOOS"],
+          "properties": {
+            "CGO_ENABLED": {
+              "const": "0"
+            },
+            "GOOS": {
+              "const": "windows"
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "binaries": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["filename", "target", "size", "sha256", "peMachine", "peMachineCode"],
+        "properties": {
+          "filename": {
+            "enum": ["scip-win32-x64.exe", "scip-win32-arm64.exe"]
+          },
+          "target": {
+            "type": "object",
+            "required": ["goos", "goarch", "packageArch"],
+            "properties": {
+              "goos": {
+                "const": "windows"
+              },
+              "goarch": {
+                "enum": ["amd64", "arm64"]
+              },
+              "packageArch": {
+                "enum": ["x64", "arm64"]
+              }
+            },
+            "additionalProperties": true
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "peMachine": {
+            "enum": ["AMD64", "ARM64"]
+          },
+          "peMachineCode": {
+            "enum": ["0x8664", "0xaa64"]
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

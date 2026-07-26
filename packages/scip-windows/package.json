@@ -9,8 +9,12 @@
     "scip-win32-x64.exe",
     "scip-win32-arm64.exe",
     "LICENSE.scip",
-    "README.md"
+    "README.md",
+    "provenance.json"
   ],
+  "scripts": {
+    "prepack": "node ../../scripts/verify-scip-windows.mjs"
+  },
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

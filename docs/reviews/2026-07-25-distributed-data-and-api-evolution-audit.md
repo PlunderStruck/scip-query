@@ -1195,6 +1195,36 @@ Those facts prove file type and identity, not provenance. If `SCIP_VERSION`, sou
 
 **Acceptance condition:** file presence alone can never authorize publication.
 
+**Resolution:** Slice 25 replaced the presence check with a versioned executable
+provenance contract. `packages/scip-windows/provenance.json` binds sidecar
+package name/version, upstream repository and tag, immutable source commit,
+pinned Go version, command, build flags, environment, target triples, PE
+machine codes, sizes, and SHA-256 values for both ignored executable files.
+The dependency-light decoder rejects malformed and future records, while the
+verifier requires the current repository/tag/toolchain/build contract and
+observes the PE32+ header and exact bytes itself.
+
+The build now checks the pinned Go toolchain before cloning, builds both
+targets in private staging, generates the manifest from staged bytes, promotes
+only after both targets exist, and verifies the installed result. A failed
+second target promotes nothing; an interrupted per-file promotion cannot
+authorize release because the next complete verification rejects any mixed
+set.
+
+`npm run verify:scip-windows`, the sidecar package's `prepack`, and the main
+prepublish release entry all execute the same verifier. Existing filenames no
+longer trigger an automatic trust path or rebuild: stale or missing evidence
+fails before any registry command. The checked-in current record is grounded
+in the executables' observed SCIP `v0.8.1`/commit
+`bf70486060b71bed40f3d6dd19c96da4b3239ead`, Go `1.26.4`, clean VCS state,
+Windows target, PE machine, file size, and SHA-256 evidence.
+
+The public schema, authority, trusted-rebuild procedure, failure/recovery
+matrix, and unsigned-attestation limit are documented in
+`docs/WINDOWS_SIDECAR_RELEASE.md`. Mutation tests cover stale bytes, swapped
+architectures, source/tag/toolchain/flag/package drift, malformed and future
+records, build failure, and release-time failure before registry access.
+
 ### REL-02 — S2 — “Already published” checks version existence, not content identity
 
 **Evidence:** source-confirmed release gap.

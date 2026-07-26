@@ -1165,6 +1165,116 @@ limitation accepted, no path remains that exposes uncorrelated result data.
 **Dependencies:** Slice 08 for durable manifest writes.  
 **Rollback:** package still contains binaries; manifest is additive.
 
+#### Slice 25 high-assurance certificate
+
+**Goal.** Make the two ignored Windows executables eligible for packing or
+publishing only when inspected bytes match a reviewed, committed build claim
+for the exact sidecar version and target.
+
+**Definitions and invariants.**
+
+A Windows sidecar binary is one PE32+ executable carried by the
+OS-constrained optional npm package; what distinguishes it from an arbitrary
+file at the expected path is an inspected target machine and exact content
+identity.
+
+A sidecar provenance record is the versioned JSON record committed beside the
+package metadata; what distinguishes it from descriptive build notes is that
+build, pack, and prepublish decisions recompute every observable binary fact
+and reject any disagreement.
+
+- Presence is never acceptance.
+- The manifest's package name/version must equal the sidecar package.
+- Repository, tag, source commit, toolchain, command, flags, environment,
+  target triples, PE machines, sizes, and hashes are required.
+- Both targets must finish in private staging before any artifact promotion.
+- A failed or interrupted build cannot turn a partial output into
+  release-authorized bytes.
+- Missing, malformed, partial, or future provenance fails closed.
+- Version 1 may gain unknown additive fields, but no decision field may become
+  optional without a new compatibility design.
+
+**Premises.**
+
+- **P1.** The two executable files are ignored by Git; their presence in one
+  developer checkout is not shared evidence.
+- **P2.** The former prepublish path built only when a filename was absent and
+  otherwise made no byte or architecture check.
+- **P3.** The observed binaries are PE32+ AMD64/ARM64 files whose Go build
+  metadata identifies SCIP v0.8.1, source commit
+  `bf70486060b71bed40f3d6dd19c96da4b3239ead`, Go 1.26.4, clean VCS state,
+  trimpath, `CGO_ENABLED=0`, and Windows targets.
+- **P4.** npm runs a sidecar package's `prepack` before computing its tarball,
+  so the same local verifier can guard pack and publish without trusting
+  registry state.
+- **P5.** Package and source/toolchain changes are intentional build inputs;
+  silently regenerating evidence during prepublish would convert the verifier
+  into a rubber stamp.
+- **P6.** A committed local attestation is not a remote signature. Its source
+  claim is trusted only after a clean controlled build and code review; REL-02
+  separately proves registry tarball identity.
+
+**Reuse and boundary design.**
+
+- `scripts/scip-windows-provenance.mjs` owns the pure decoder, PE inspection,
+  manifest generator, and filesystem verifier so build, pack, prepublish, and
+  tests cannot drift.
+- `scripts/build-scip-windows.mjs` retains the established Git/Go commands but
+  exposes an injected command/filesystem runtime and promotes from private
+  staging.
+- `scripts/scip-windows-release.ts` owns the injectable release entry flow.
+  Slice 25 places provenance verification before its existing registry
+  decision; Slices 26 and 27 replace that registry decision and add recovery.
+- The source runtime's atomic-file implementation is not imported into the
+  build script because npm executes these scripts before `dist` is a reliable
+  dependency. The script uses same-directory temporary replacement, and the
+  complete verifier is the acceptance fence for cross-file crash recovery.
+
+**Testability design.**
+
+| Behavior               | Pure/injected seam                        | Acceptance evidence                                     |
+| ---------------------- | ----------------------------------------- | ------------------------------------------------------- |
+| PE classification      | `inspectPortableExecutable`               | MZ, PE, PE32+, AMD64/ARM64 and hostile header fixtures  |
+| Manifest compatibility | `decodeWindowsSidecarProvenance`          | current, malformed, partial, and future records         |
+| Byte identity          | injected `readFile` plus SHA-256          | stale size/hash and exact real/synthetic files          |
+| Build provenance       | `buildScipWindowsSidecar` runtime         | exact clone/tag/commit/Go/flags/targets                 |
+| Partial build          | injected second-target failure            | no package artifact promoted                            |
+| Pack boundary          | sidecar `prepack`                         | real npm dry-run contains verified manifest and two PEs |
+| Prepublish boundary    | `runWindowsSidecarRelease` runtime        | mismatch stops before first npm registry invocation     |
+| Schema/package surface | runtime/schema alignment and pack listing | discriminator/version aligned; record included          |
+
+**Attack record.**
+
+- **A1 — Stale files remain present.** **HOLE repaired:** exact size and
+  SHA-256 are recomputed before acceptance.
+- **A2 — Architectures are swapped or mislabeled.** **HOLE repaired:** PE32+
+  machine codes must match filename, GOARCH, and package architecture.
+- **A3 — Source URL or tag changes around existing files.** **HOLE repaired:**
+  current expectations must equal the committed repository/tag/commit claim.
+- **A4 — Go version or build flags change.** **HOLE repaired:** a pinned
+  toolchain is checked before clone, and the verifier compares the complete
+  build contract.
+- **A5 — Sidecar package version changes without rebuilding.** **HOLE
+  repaired:** manifest and package versions must match exactly.
+- **A6 — The second target build fails.** **HOLE repaired:** both outputs are
+  built in private staging and no artifact is promoted.
+- **A7 — Promotion crashes between files.** **Held fail-closed:** a mixed set
+  may be visible locally, but the next full verification rejects it before
+  pack or registry work.
+- **A8 — Malformed/future manifest is treated as old success.** **HOLE
+  repaired:** no legacy success path exists; unsupported schema is explicit.
+- **A9 — Prepublish auto-regenerates evidence and hides drift.** **HOLE
+  repaired:** prepublish verifies only and instructs an intentional rebuild
+  and manifest review.
+- **A10 — Manifest author lies about the source.** **Accepted trust boundary:**
+  the record is an unsigned reviewed build attestation. Clean trusted build
+  provenance is required operationally; cryptographic remote attestation is
+  not claimed.
+
+**Verdict.** `PLANNED-COMPLETE` — 9 executable attacks fenced, 1 explicit
+review trust boundary retained, and every local build/pack/prepublish consumer
+uses one verifier.
+
 ### Slice 26 — REL-02 — Compare local and registry tarball identity
 
 **Invariant:** an existing sidecar version is skipped only when registry bytes equal the locally packed intended package.
@@ -1265,8 +1375,8 @@ limitation accepted, no path remains that exposes uncorrelated result data.
 |    21 | API-02  | complete | `80cb260d` | 13 contract + consumer compile      | 72 paths, 871 exports, shared declaration closure, conservative classification, immutable acceptance, and release gate verified              |
 |    22 | API-03  | complete | `777d09c9` | 95 config/API/revision assertions   | Legacy/current/future/malformed decoding, no-op migration, unknown-field preservation, conflict safety, and packaged schema verified         |
 |    23 | API-05  | complete | `9c812746` | 65 focused; 1,717 full-suite tests  | Exact compatibility accounting, overlap readers, safe migration, incomplete-history fencing, disclosure, schemas, and package verified       |
-|    24 | API-06  | complete |            | 99 focused; 1,730 full-suite tests  | Strict Rust request/response decoding, session/deadline correlation, retry authority, overlap behavior, and expiry verified                  |
-|    25 | REL-01  | pending  |            |                                     |                                                                                                                                              |
+|    24 | API-06  | complete | `57bcc65e` | 99 focused; 1,730 full-suite tests  | Strict Rust request/response decoding, session/deadline correlation, retry authority, overlap behavior, and expiry verified                  |
+|    25 | REL-01  | complete |            | 16 focused tests                    | Versioned manifest, PE/hash inspection, pinned inputs, staging, pack, and prepublish fence verified                                          |
 |    26 | REL-02  | pending  |            |                                     |                                                                                                                                              |
 |    27 | REL-03  | pending  |            |                                     |                                                                                                                                              |
 
@@ -1811,6 +1921,58 @@ limitation accepted, no path remains that exposes uncorrelated result data.
   `docs/MAILBOX_LIFECYCLE.md`, and the architecture/metadata compatibility
   records define the overlap matrix, authority, replay, retry, expiry,
   recovery, and shared validation boundaries.
+
+### Slice 25 verification record
+
+- The committed v1 record identifies
+  `scip-query-scip-windows@0.13.0`, SCIP tag `v0.8.1`, immutable source commit
+  `bf70486060b71bed40f3d6dd19c96da4b3239ead`, Go `1.26.4`, the exact Go
+  command/flags/environment, and both Windows targets. Regenerating the
+  manifest from the checked-in metadata and observed local executable bytes
+  produces the same decoded record.
+- The verifier parses DOS, PE, and PE32+ headers itself. The observed x64 file
+  is AMD64, 20,801,024 bytes, SHA-256
+  `891ebc6315f8b50371a70b3d677c47dc3c1d097f3002d5b96658c2f3393d531b`;
+  the ARM64 file is 19,709,440 bytes, SHA-256
+  `ba2c566d4e820fe38e51695849bf2de3d003294b8f8f272befbfa9c59e97ceb0`.
+- The injected build checks Go before network work, clones the exact source
+  tag, resolves a full commit, builds both targets in private staging,
+  generates evidence from staged bytes, then promotes and verifies. A
+  second-target failure leaves the established package artifacts untouched.
+- `npm run verify:scip-windows` and direct
+  `npm run publish:scip-windows` pass. The latter verifies provenance and, as
+  a non-publish invocation, executes no npm registry command.
+- The real sidecar `npm pack --dry-run` runs its `prepack` verifier and emits a
+  six-entry package containing the license, README, package metadata,
+  provenance record, and both PEs. npm reports shasum
+  `0dfa31cef3ae9ed8bb00fc3e208f2b207eea5407` and SHA-512 integrity
+  `sha512-kUA7ikflFydQX2faGq+prJiPXc0vuDlYbfPNi7HwuF/lLzfbwV5wGSWVNS5D9PzQ4Yt8LYIKuAuiSRDDly1PDA==`.
+  The main-package dry-run also succeeds and includes the verifier, provenance
+  module, public schema, and release guide.
+- Sixteen focused assertions cover the real files, exact synthetic
+  x64/ARM64 files, stable regeneration, schema alignment, stale bytes, wrong
+  architecture, hostile PE headers, missing/malformed/future records,
+  source/tag/toolchain/build/package drift, partial build, and fail-before-npm
+  release behavior.
+- Typecheck, formatting, all new-script/test ESLint rules, production build,
+  all 72 API paths, downstream consumer compilation, and the sidecar pack
+  lifecycle pass. Full lint reaches its final link check and stops only on
+  Claude's two concurrently removed `scip-maintainability` wrapper targets.
+- With an isolated cache, the complete suite passes 226 of 227 files and
+  1,744 tests, with 2 intentional skips. The only 2 failures remain Claude's
+  concurrent `skills/scip-query/SKILL.md` command token and uncovered-command
+  catalog assertions; all 16 REL-01 tests pass.
+- The final diff gate reports no REL-01 blocker or advisory. These
+  script/package artifacts are outside the compiler index, and the only two
+  gate findings are Claude's existing command-reference and `_shared`
+  skill-router co-change signals.
+- `scip-query health --baseline` remains at 82 accumulated source findings.
+  REL-01 changes no indexed production source, so it adds no health delta and
+  writes no baseline ratchet or suppression.
+- `docs/WINDOWS_SIDECAR_RELEASE.md` and the packaged JSON Schema define the
+  evidence authority, trusted-build limit, version policy, rebuild steps, and
+  recovery table. They explicitly do not claim cryptographic attestation or
+  registry equality; those remain REL-02/REL-03.
 
 ### Slice 09 verification note
 

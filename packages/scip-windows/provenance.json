@@ -1,0 +1,51 @@
+{
+  "kind": "scip-query-windows-sidecar-provenance",
+  "schemaVersion": 1,
+  "package": {
+    "name": "scip-query-scip-windows",
+    "version": "0.13.0"
+  },
+  "source": {
+    "repository": "https://github.com/scip-code/scip.git",
+    "tag": "v0.8.1",
+    "commit": "bf70486060b71bed40f3d6dd19c96da4b3239ead"
+  },
+  "toolchain": {
+    "goVersion": "go1.26.4"
+  },
+  "build": {
+    "command": "go build",
+    "package": "./cmd/scip",
+    "flags": ["-trimpath", "-ldflags=-s -w"],
+    "environment": {
+      "CGO_ENABLED": "0",
+      "GOOS": "windows"
+    }
+  },
+  "binaries": [
+    {
+      "filename": "scip-win32-x64.exe",
+      "target": {
+        "goos": "windows",
+        "goarch": "amd64",
+        "packageArch": "x64"
+      },
+      "size": 20801024,
+      "sha256": "891ebc6315f8b50371a70b3d677c47dc3c1d097f3002d5b96658c2f3393d531b",
+      "peMachine": "AMD64",
+      "peMachineCode": "0x8664"
+    },
+    {
+      "filename": "scip-win32-arm64.exe",
+      "target": {
+        "goos": "windows",
+        "goarch": "arm64",
+        "packageArch": "arm64"
+      },
+      "size": 19709440,
+      "sha256": "ba2c566d4e820fe38e51695849bf2de3d003294b8f8f272befbfa9c59e97ceb0",
+      "peMachine": "ARM64",
+      "peMachineCode": "0xaa64"
+    }
+  ]
+}
