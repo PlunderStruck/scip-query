@@ -278,11 +278,15 @@ describe('CLI contract', () => {
   });
 
   it('prints stable JSON envelopes with only scalar positional args', () => {
-    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const writes: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
 
     printJsonEnvelope('fan-in', ['symbolName', { json: true }], { json: true }, { rows: [] });
 
-    const payload = JSON.parse(log.mock.calls[0]![0] as string) as {
+    const payload = JSON.parse(writes[0]!) as {
       command: string;
       args: unknown[];
       options: Record<string, unknown>;
@@ -303,17 +307,25 @@ describe('CLI contract', () => {
   });
 
   it('stamps descriptor evidence tiers into JSON envelopes', () => {
-    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const writes: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
 
     printJsonEnvelope('recent-duplicates', [], { json: true }, { rows: [] });
     printJsonEnvelope('diff-gate', [], { json: true }, { rows: [] });
 
-    expect(JSON.parse(log.mock.calls[0]![0] as string)).toMatchObject({ evidence: 'heuristic' });
-    expect(JSON.parse(log.mock.calls[1]![0] as string)).toMatchObject({ evidence: 'mixed' });
+    expect(JSON.parse(writes[0]!)).toMatchObject({ evidence: 'heuristic' });
+    expect(JSON.parse(writes[1]!)).toMatchObject({ evidence: 'mixed' });
   });
 
   it('omits analysisBudget when uncapped, and stamps it at the envelope top level when supplied', () => {
-    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const writes: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
 
     printJsonEnvelope('recent-duplicates', [], { json: true }, { rows: [] });
     printJsonEnvelope(
@@ -324,10 +336,10 @@ describe('CLI contract', () => {
       { analysisBudget: { scanLimit: 2500, semanticEnrichment: false, reason: 'large index default budget' } },
     );
 
-    const uncapped = JSON.parse(log.mock.calls[0]![0] as string) as Record<string, unknown>;
+    const uncapped = JSON.parse(writes[0]!) as Record<string, unknown>;
     expect(Object.hasOwn(uncapped, 'analysisBudget')).toBe(false);
 
-    const capped = JSON.parse(log.mock.calls[1]![0] as string) as Record<string, unknown>;
+    const capped = JSON.parse(writes[1]!) as Record<string, unknown>;
     expect(capped['analysisBudget']).toEqual({
       scanLimit: 2500,
       semanticEnrichment: false,

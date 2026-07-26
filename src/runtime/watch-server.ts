@@ -2,6 +2,7 @@ import process from 'node:process';
 import { rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { sanitizeTerminalLine } from '../platform/terminal-output.js';
 import { monotonicNowMs } from '../domain/time.js';
 import type { RefreshTrigger, WatcherStatus } from '../domain/types.js';
 import { resolveIndexStoragePaths } from '../platform/cache-layout.js';
@@ -329,7 +330,7 @@ if (invokedPath === import.meta.url) {
     try {
       await runWatchServiceServer(projectRoot, cliVersion, watchOverrides);
     } catch (error) {
-      console.error(`watch-service: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(`watch-service: ${sanitizeTerminalLine(error instanceof Error ? error.message : String(error))}`);
       process.exitCode = 1;
     }
   }

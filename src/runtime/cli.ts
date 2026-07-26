@@ -29,13 +29,23 @@ import {
 import { projectEvidenceFingerprint } from '../storage/evidence-cache.js';
 import { maybeSweepRepositoryCache } from './repository-cache-lifecycle.js';
 import { resolveGitWorktreeContext } from '../platform/git-worktree.js';
+import { installTerminalConsoleSanitizer, sanitizeTerminalText } from '../platform/terminal-output.js';
+
+const cliEntrypoint = isCliEntrypoint();
+if (cliEntrypoint) {
+  installTerminalConsoleSanitizer();
+  program.configureOutput({
+    writeOut: (value) => process.stdout.write(sanitizeTerminalText(value)),
+    writeErr: (value) => process.stderr.write(sanitizeTerminalText(value)),
+  });
+}
 
 program
   .name('scip-query')
   .description('Language-agnostic code intelligence CLI powered by SCIP indexes')
   .version(cliVersion);
 
-const commandDescriptors = await loadInvocationCommandDescriptors(isCliEntrypoint() ? process.argv[2] : undefined);
+const commandDescriptors = await loadInvocationCommandDescriptors(cliEntrypoint ? process.argv[2] : undefined);
 registerCommandDescriptors(program, commandDescriptors);
 program.hook('preAction', async (_thisCommand, actionCommand) => {
   const commandName = actionCommand.name();
@@ -108,7 +118,7 @@ function initializeProfileContext(): void {
 
 export { program, renderHeuristicNotice };
 
-if (isCliEntrypoint()) {
+if (cliEntrypoint) {
   await program.parseAsync();
 }
 

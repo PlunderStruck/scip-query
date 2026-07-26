@@ -79,14 +79,18 @@ describe('handleReindex --json', () => {
     }));
 
     const { handleReindex } = await import('../../src/runtime/commands/command-handlers.js');
-    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const writes: string[] = [];
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
 
     try {
       await withProjectRoot(projectRoot, () => handleReindex({ json: true }));
-      // stdout must be pure JSON: exactly one console.log call, matching
-      // every other --json command in this CLI.
-      expect(log.mock.calls).toHaveLength(1);
-      const payload = JSON.parse(log.mock.calls[0]![0] as string) as {
+      // stdout must be pure JSON: exactly one direct write, matching every
+      // other --json command in this CLI.
+      expect(writes).toHaveLength(1);
+      const payload = JSON.parse(writes[0]!) as {
         command: string;
         result: ReindexResult;
       };
@@ -94,7 +98,7 @@ describe('handleReindex --json', () => {
       expect(payload.result.shards).toEqual(fakeResult.shards);
       expect(payload.result.reused).toBe(false);
     } finally {
-      log.mockRestore();
+      stdout.mockRestore();
     }
   });
 

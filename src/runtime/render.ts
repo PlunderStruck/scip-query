@@ -16,6 +16,9 @@
  * five canonical output layouts to the user." A consumer who needs a
  * different format only changes one place.
  */
+import { sanitizeTerminalLine, writeSerializedJson } from '../platform/terminal-output.js';
+
+export { writeSerializedJson };
 
 /** Convert a 0-indexed DB line number to a 1-indexed display line number. */
 export function displayLine(line: number): number {
@@ -29,12 +32,12 @@ export function displayRange(startLine: number, endLine: number): string {
 
 /** "{relativePath}:{startDisplay}-{endDisplay}". The canonical "this is where the symbol lives" form. */
 export function displayPathRange(relativePath: string, startLine: number, endLine: number): string {
-  return `${relativePath}:${displayRange(startLine, endLine)}`;
+  return `${sanitizeTerminalLine(relativePath)}:${displayRange(startLine, endLine)}`;
 }
 
 /** Collapse a multi-line evidence snippet into one bounded terminal row. */
 export function displaySnippet(value: string, maxLength = 180): string {
-  const compact = value.replace(/\s+/g, ' ').trim();
+  const compact = sanitizeTerminalLine(value).replace(/\s+/g, ' ').trim();
   return compact.length > maxLength ? `${compact.slice(0, maxLength - 3)}...` : compact;
 }
 
@@ -59,13 +62,13 @@ export interface ReportSection {
 export const render = {
   /** Empty-state: prints a single line. Match the EXACT current empty message per command. */
   empty(message: string): void {
-    console.log(message);
+    console.log(sanitizeTerminalLine(message));
   },
 
   /** One row per item, no grouping. Used by files/deps/rdeps/imported-by/members. */
   list<T>(items: readonly T[], formatItem: (item: T) => string): void {
     for (const item of items) {
-      console.log(formatItem(item));
+      console.log(sanitizeTerminalLine(formatItem(item)));
     }
   },
 
@@ -89,10 +92,10 @@ export const render = {
       const key = keyFn(item);
       if (key !== prevKey) {
         if (prevKey) console.log('');
-        console.log(key);
+        console.log(sanitizeTerminalLine(key));
         prevKey = key;
       }
-      console.log(formatItem(item));
+      console.log(sanitizeTerminalLine(formatItem(item)));
     }
   },
 
@@ -108,9 +111,9 @@ export const render = {
       if (section.skipIfEmpty && section.rows.length === 0) continue;
       if (!first) console.log('');
       first = false;
-      if (section.title !== undefined) console.log(`═══ ${section.title} ═══`);
-      if (section.explanation !== undefined) console.log(section.explanation);
-      for (const row of section.rows) console.log(row);
+      if (section.title !== undefined) console.log(`═══ ${sanitizeTerminalLine(section.title)} ═══`);
+      if (section.explanation !== undefined) console.log(sanitizeTerminalLine(section.explanation));
+      for (const row of section.rows) console.log(sanitizeTerminalLine(row));
     }
   },
 
@@ -124,9 +127,9 @@ export const render = {
    * Used by hotspots/bottlenecks/complexity-hotspots/kind-counts/top-fan-in/top-fan-out.
    */
   table(headers: readonly string[], rows: readonly string[], dashWidths?: readonly number[]): void {
-    console.log(`  ${headers.join('  ')}`);
+    console.log(`  ${headers.map(sanitizeTerminalLine).join('  ')}`);
     const widths = dashWidths ?? headers.map((h) => h.length);
     console.log(`  ${widths.map((w) => '─'.repeat(w)).join('  ')}`);
-    for (const row of rows) console.log(row);
+    for (const row of rows) console.log(sanitizeTerminalLine(row));
   },
 };

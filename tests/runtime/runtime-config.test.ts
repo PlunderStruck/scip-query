@@ -885,10 +885,15 @@ describe('status config diagnostics', () => {
     process.env['SCIP_QUERY_PROJECT_ROOT'] = projectRoot;
     delete process.env['SCIP_RUST_SEMANTIC_DURABLE_SESSION'];
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const writes: string[] = [];
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
 
     try {
       handleStatus({ json: true });
-      const payload = JSON.parse(log.mock.calls[0]![0] as string) as {
+      const payload = JSON.parse(writes[0]!) as {
         result: { affectedSetShadow: unknown; sqliteGeneration: unknown; configDiagnostics: unknown[] };
       };
 
@@ -908,6 +913,7 @@ describe('status config diagnostics', () => {
         expect.objectContaining({ state: 'legacy', statePath: join(projectRoot, '.scipquery-generations/state.json') }),
       );
     } finally {
+      stdout.mockRestore();
       log.mockRestore();
       if (previousProjectRoot === undefined) {
         delete process.env['SCIP_QUERY_PROJECT_ROOT'];
@@ -930,10 +936,15 @@ describe('status config diagnostics', () => {
     process.env['SCIP_QUERY_PROJECT_ROOT'] = projectRoot;
     delete process.env['SCIP_RUST_SEMANTIC_DURABLE_SESSION'];
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const writes: string[] = [];
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
 
     try {
       handleStatus({ json: true });
-      const payload = JSON.parse(log.mock.calls[0]![0] as string) as {
+      const payload = JSON.parse(writes[0]!) as {
         result: {
           affectedSetShadow: unknown;
           sqliteGeneration: unknown;
@@ -974,6 +985,7 @@ describe('status config diagnostics', () => {
       );
       expect(output).toContain(`Latest:   ${join(projectRoot, 'affected-shadow-latest.json')}`);
     } finally {
+      stdout.mockRestore();
       log.mockRestore();
       if (previousProjectRoot === undefined) {
         delete process.env['SCIP_QUERY_PROJECT_ROOT'];
@@ -1095,10 +1107,15 @@ describe('watch command config gate', () => {
     const previousProjectRoot = process.env['SCIP_QUERY_PROJECT_ROOT'];
     process.env['SCIP_QUERY_PROJECT_ROOT'] = projectRoot;
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const writes: string[] = [];
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
 
     try {
       handleWatch({ status: true, json: true });
-      const payload = JSON.parse(String(log.mock.calls[0]?.[0])) as { result: Record<string, unknown> };
+      const payload = JSON.parse(writes[0]!) as { result: Record<string, unknown> };
       expect(payload.result.indexGeneration).toBe(indexGeneration);
       expect(payload.result.refreshRequests).toMatchObject({ pending: 2, claimed: 0, completed: 0, expired: 0 });
 
@@ -1109,6 +1126,7 @@ describe('watch command config gate', () => {
         'Refresh requests: 2 pending, 0 claimed, 0 completed, 0 expired',
       );
     } finally {
+      stdout.mockRestore();
       log.mockRestore();
       if (previousProjectRoot === undefined) delete process.env['SCIP_QUERY_PROJECT_ROOT'];
       else process.env['SCIP_QUERY_PROJECT_ROOT'] = previousProjectRoot;
@@ -1126,11 +1144,16 @@ describe('watch command config gate', () => {
     const previousProjectRoot = process.env['SCIP_QUERY_PROJECT_ROOT'];
     process.env['SCIP_QUERY_PROJECT_ROOT'] = projectRoot;
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const writes: string[] = [];
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
 
     try {
       expect(lock.acquired).toBe(true);
       handleWatch({ status: true, json: true });
-      const payload = JSON.parse(String(log.mock.calls[0]?.[0])) as { result: Record<string, unknown> };
+      const payload = JSON.parse(writes[0]!) as { result: Record<string, unknown> };
       expect(payload.result).toEqual(
         expect.objectContaining({
           state: 'running',
@@ -1146,6 +1169,7 @@ describe('watch command config gate', () => {
         `Worktree: ${realpathSync(projectRoot)} [${identity.identity.worktreeId.slice(0, 12)}]`,
       );
     } finally {
+      stdout.mockRestore();
       log.mockRestore();
       lock.release();
       if (previousProjectRoot === undefined) delete process.env['SCIP_QUERY_PROJECT_ROOT'];
@@ -1159,10 +1183,15 @@ describe('watch command config gate', () => {
     const previousProjectRoot = process.env['SCIP_QUERY_PROJECT_ROOT'];
     process.env['SCIP_QUERY_PROJECT_ROOT'] = projectRoot;
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const writes: string[] = [];
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
 
     try {
       handleWatch({ status: true, json: true });
-      const payload = JSON.parse(String(log.mock.calls[0]?.[0]));
+      const payload = JSON.parse(writes[0]!);
       expect(payload.result).toEqual({
         enabled: false,
         state: 'stopped',
@@ -1176,6 +1205,7 @@ describe('watch command config gate', () => {
         },
       });
     } finally {
+      stdout.mockRestore();
       log.mockRestore();
       if (previousProjectRoot === undefined) delete process.env['SCIP_QUERY_PROJECT_ROOT'];
       else process.env['SCIP_QUERY_PROJECT_ROOT'] = previousProjectRoot;

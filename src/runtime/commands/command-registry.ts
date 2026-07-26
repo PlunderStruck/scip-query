@@ -2,6 +2,7 @@ import type { Command } from 'commander';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
 import { setCommandAgentContractMap, setCommandEvidenceMap } from '../command-kit/command-execution.js';
 import { descriptorEvidenceTier } from '../command-kit/command-docs.js';
+import { sanitizeTerminalLine } from '../../platform/terminal-output.js';
 
 type PlainCommanderDefault = string | boolean | string[] | undefined;
 
@@ -55,6 +56,6 @@ export function registerCommandDescriptors(
 
 function handleCommandError(err: unknown): void {
   const message = err instanceof Error ? err.message : String(err);
-  console.error(`error: ${message}`);
+  console.error(`error: ${sanitizeTerminalLine(message)}`);
   process.exitCode = 1;
 }

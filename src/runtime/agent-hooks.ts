@@ -33,6 +33,7 @@ import { findGitRoot } from '../platform/git-worktree.js';
 import { resolveSharedEvidenceDbPath } from '../reindex/shared-generation-store.js';
 import { formatRecordCompatibilityWarning } from '../domain/record-compatibility.js';
 import { resolveSpawnableExecutable, toPortableCommand } from '../platform/binary.js';
+import { writeSerializedJson } from '../platform/terminal-output.js';
 
 const SKIP_HOOK_INSTALL_ENV = 'SCIP_QUERY_SKIP_HOOK_INSTALL';
 const STOP_HOOK_MODE_ENV = 'SCIP_QUERY_STOP_HOOK_MODE';
@@ -654,7 +655,7 @@ function quoteHookCommandArgument(value: string): string {
 export async function handleAgentHookContext(): Promise<void> {
   const output = await renderAgentHookContext(readHookInput());
   if (output) {
-    console.log(JSON.stringify(output));
+    writeSerializedJson(JSON.stringify(output));
   }
 }
 
@@ -676,7 +677,7 @@ export function handleAgentHookPreToolUse(): void {
       permissionDecisionReason: decision.reason,
     },
   };
-  console.log(JSON.stringify(output));
+  writeSerializedJson(JSON.stringify(output));
 }
 
 type PreToolDecision = { kind: 'allow' } | { kind: 'deny' | 'reconsider'; reason: string };
@@ -770,7 +771,7 @@ export function runStopHookDiffGate(hookInput: string): DiffGateResult | undefin
 export function handleAgentHookStop(): void {
   const result = runStopHookDiffGate(readHookInput());
   if (!result || (result.findings.length === 0 && !suppressionCoverageWarning(result))) return;
-  console.log(JSON.stringify(renderStopHookOutput(result, resolveStopHookMode())));
+  writeSerializedJson(JSON.stringify(renderStopHookOutput(result, resolveStopHookMode())));
 }
 
 export function renderStopHookOutput(result: DiffGateResult, mode: StopHookMode = 'feedback'): ClaudeHookJsonOutput {

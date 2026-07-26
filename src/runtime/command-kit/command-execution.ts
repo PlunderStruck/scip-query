@@ -13,7 +13,7 @@ import {
   type AnalysisBudgetDisclosure,
 } from '../cli-support.js';
 import { createCliJsonEnvelope, serializeCliJsonEnvelope } from '../cli-json-envelope.js';
-import { render } from '../render.js';
+import { render, writeSerializedJson } from '../render.js';
 import type { ReportSection } from '../render.js';
 
 export type CommandOptions = Record<string, unknown>;
@@ -368,7 +368,7 @@ export function printJsonEnvelope(
     ...(extra.agentResult !== undefined ? { agentResult: extra.agentResult } : {}),
     ...(extra.resultSchemaVersion === undefined ? {} : { resultSchemaVersion: extra.resultSchemaVersion }),
   });
-  console.log(serializeCliJsonEnvelope(envelope, booleanOptionValue(options, 'compact')));
+  writeSerializedJson(serializeCliJsonEnvelope(envelope, booleanOptionValue(options, 'compact')));
 }
 
 export function validateInvocationCoverage(coverage: InvocationCoverage): void {

@@ -116,10 +116,14 @@ describe('CLI JSON envelope compatibility', () => {
     );
     expect(jsonCommands.length).toBeGreaterThan(50);
 
-    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const writes: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
     for (const descriptor of jsonCommands) {
       printJsonEnvelope(descriptor.id, [], { json: true, compact: true }, {});
-      const payload = JSON.parse(log.mock.calls.at(-1)![0] as string) as Record<string, unknown>;
+      const payload = JSON.parse(writes.at(-1)!) as Record<string, unknown>;
       expect(payload, descriptor.id).toMatchObject({
         kind: CLI_JSON_ENVELOPE_KIND,
         schemaVersion: CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION,
@@ -168,7 +172,7 @@ describe('CLI JSON envelope compatibility', () => {
 
     expect(handlers).not.toContain('console.log(JSON.stringify');
     expect(cliSupport).not.toContain('console.log(JSON.stringify');
-    expect(hooks.match(/console\.log\(JSON\.stringify/g)).toHaveLength(3);
-    expect(isolated.match(/console\.log\(JSON\.stringify/g)).toHaveLength(1);
+    expect(hooks.match(/writeSerializedJson\(JSON\.stringify/g)).toHaveLength(3);
+    expect(isolated.match(/writeSerializedJson\(JSON\.stringify/g)).toHaveLength(1);
   });
 });

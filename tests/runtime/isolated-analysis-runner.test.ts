@@ -27,11 +27,15 @@ describe('analysis scheduler', () => {
   });
 
   it('identifies the private child-process protocol and producer', () => {
-    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const writes: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
 
     printIsolatedAnalysisResult('__probe', { ok: true });
 
-    expect(JSON.parse(log.mock.calls[0]![0] as string)).toMatchObject({
+    expect(JSON.parse(writes[0]!)).toMatchObject({
       protocol: ISOLATED_ANALYSIS_PROTOCOL,
       schemaVersion: ISOLATED_ANALYSIS_SCHEMA_VERSION,
       producer: { name: 'scip-query', version: expect.any(String) },

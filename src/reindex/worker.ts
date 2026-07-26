@@ -5,6 +5,7 @@
 import { reindex } from './index.js';
 import type { RefreshTriggerKind, SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
 import { parsePositiveInteger } from '../domain/number-parsing.js';
+import { sanitizeTerminalLine } from '../platform/terminal-output.js';
 
 const projectRoot = process.env['SCIP_REINDEX_PROJECT_ROOT'];
 const outputScip = process.env['SCIP_REINDEX_OUTPUT_SCIP'];
@@ -35,13 +36,13 @@ reindex({
   clojureConfigPath,
   indexerConcurrency,
   trigger: { kind: triggerKind, detail: triggerDetail || undefined },
-  onStatus: (msg) => process.stderr.write(`[reindex] ${msg}\n`),
+  onStatus: (msg) => process.stderr.write(`[reindex] ${sanitizeTerminalLine(msg)}\n`),
 })
   .then(() => {
     process.exit(0);
   })
   .catch((err) => {
-    console.error(`reindex-worker error: ${err}`);
+    console.error(`reindex-worker error: ${sanitizeTerminalLine(String(err))}`);
     process.exit(1);
   });
 

@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { BoundedProcessError, PROCESS_TIMEOUT_MS, runBoundedProcess } from '../platform/bounded-process.js';
 import { cliVersion } from '../platform/cli-version.js';
 import { isRecordObject } from '../domain/record-validation.js';
+import { writeSerializedJson } from '../platform/terminal-output.js';
 
 export const ISOLATED_ANALYSIS_PROTOCOL = 'scip-query-isolated-analysis' as const;
 export const ISOLATED_ANALYSIS_SCHEMA_VERSION = 1 as const;
@@ -45,7 +46,7 @@ export function printIsolatedAnalysisResult(command: string, result: unknown): v
     command,
     result,
   };
-  console.log(JSON.stringify(envelope));
+  writeSerializedJson(JSON.stringify(envelope));
 }
 
 // scip-query: ignore-wrapper — subprocess JSON handoff boundary shared by

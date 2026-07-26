@@ -273,7 +273,7 @@ function resolveNpmRegistry(root: string, runtime: NpmReleaseRuntime): string {
   try {
     parsed = new URL(observed);
   } catch {
-    throw new Error(`npm registry must be an absolute HTTPS URL; received ${JSON.stringify(observed)}.`);
+    throw new Error('npm registry must be an absolute HTTPS URL; received an invalid registry value.');
   }
   if (
     parsed.protocol !== 'https:' ||
@@ -282,11 +282,22 @@ function resolveNpmRegistry(root: string, runtime: NpmReleaseRuntime): string {
     parsed.search !== '' ||
     parsed.hash !== ''
   ) {
-    throw new Error(`npm registry must be a credential-free HTTPS URL; received ${JSON.stringify(observed)}.`);
+    throw new Error(
+      `npm registry must be a credential-free HTTPS URL; received ${formatRegistryForDiagnostic(parsed)}.`,
+    );
   }
   const registry = parsed.toString();
   runtime.log(`Release registry: ${registry}`);
   return registry;
+}
+
+function formatRegistryForDiagnostic(registry: URL): string {
+  const safe = new URL(registry);
+  if (safe.username) safe.username = 'redacted';
+  if (safe.password) safe.password = 'redacted';
+  if (safe.search) safe.search = '?redacted';
+  if (safe.hash) safe.hash = '#redacted';
+  return JSON.stringify(safe.toString());
 }
 
 function requireCleanGitRevision(root: string, runtime: NpmReleaseRuntime, expected?: string): string {

@@ -153,6 +153,22 @@ describe('ordered npm release coordinator', () => {
     });
   });
 
+  it('never includes registry credentials in a rejection diagnostic', async () => {
+    await withFixture(async (fixture) => {
+      fixture.registryUrl = 'https://release-user:super-secret@registry.example.test/';
+
+      let message = '';
+      try {
+        runNpmRelease(fixture.runtime);
+      } catch (error) {
+        message = error instanceof Error ? error.message : String(error);
+      }
+
+      expect(message).toContain('https://redacted:redacted@registry.example.test/');
+      expect(message).not.toContain('super-secret');
+    });
+  });
+
   it('checks both existing identities before the first publish', async () => {
     await withFixture(async (fixture) => {
       fixture.registry.main = 'different';

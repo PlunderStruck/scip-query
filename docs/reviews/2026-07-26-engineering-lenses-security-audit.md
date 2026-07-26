@@ -717,6 +717,16 @@ way.
 - malicious path, symbol, documentation, source, and indexer stderr;
 - JSON round-trip retains the original data.
 
+#### Resolution — 2026-07-26
+
+Resolved by a shared terminal-output boundary. Complete CSI, OSC, DCS, SOS,
+PM, and APC sequences are removed; remaining C0/C1 and bidirectional
+formatting controls are made visible and inert. The real CLI installs the
+sanitizer once for console and Commander output, while row renderers reject
+embedded newline/tab structure. Child diagnostics and the watch progress row
+sanitize untrusted fields without removing scip-query's own progress control
+prefix. Structured JSON is serialized first and round-trips unchanged.
+
 ---
 
 ### SEC-10 — Managed cache permissions expose code metadata to other local users
@@ -785,6 +795,13 @@ authentication separately, so the exposure is limited but real.
 Parse the URL, replace username/password with a fixed redaction marker, and
 only then construct the diagnostic. Add a regression test asserting that the
 original credential never appears in thrown errors or captured output.
+
+#### Resolution — 2026-07-26
+
+Resolved. Invalid registry syntax is no longer echoed, and parseable rejected
+URLs replace username, password, query, and fragment data before constructing
+the diagnostic. The release regression test proves the original password is
+absent from the thrown error.
 
 ---
 

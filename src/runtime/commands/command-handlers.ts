@@ -115,6 +115,7 @@ import {
   stringOptionValue,
 } from '../command-kit/command-execution.js';
 import { printIsolatedAnalysisResult } from '../isolated-analysis-runner.js';
+import { sanitizeTerminalLine, sanitizeTerminalText } from '../../platform/terminal-output.js';
 
 // Descriptor-backed query commands live under runtime/query-commands/*.
 // This file owns side-effect lifecycles such as reindex, setup, watch, and
@@ -442,7 +443,7 @@ export function handleWorkAudit(profile: unknown, rawOpts: unknown): void {
     printJsonEnvelope('work-audit', [profilePath], opts, { profilePath, ...report });
     return;
   }
-  process.stdout.write(renderProfileWorkAudit(report, profilePath));
+  process.stdout.write(sanitizeTerminalText(renderProfileWorkAudit(report, profilePath)));
 }
 
 export function handleTypeScriptSemanticCompare(rawOpts: unknown): void {
@@ -801,7 +802,7 @@ function runBenchCommand(
 }
 
 function reportBenchProgress(enabled: boolean | undefined, message: string): void {
-  if (enabled) process.stderr.write(`[bench] ${message}\n`);
+  if (enabled) process.stderr.write(`[bench] ${sanitizeTerminalLine(message)}\n`);
 }
 
 function benchProfileEnv(command: string, profileOut: string | undefined): NodeJS.ProcessEnv {
@@ -1577,7 +1578,7 @@ export function handleWatch(rawOpts: unknown): void {
     config,
     languages: config.languages,
     onStatus: (status) => {
-      process.stdout.write(`\r\x1b[K${formatStatus(status)}`);
+      process.stdout.write(`\r\x1b[K${sanitizeTerminalLine(formatStatus(status))}`);
     },
     onReindexComplete: (durationMs) => {
       console.log(`\nReindex complete in ${(durationMs / 1000).toFixed(1)}s`);
