@@ -6,8 +6,9 @@
  * is repository-dead. Binary-only targets are deliberately absent: `pub` in a
  * binary changes in-crate visibility but does not create a downstream API.
  */
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { projectFileExists, readProjectFileText } from '../source/primitives/project-file-boundary.js';
 import type { ScipDatabase } from '../storage/db.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
 import { getDefinitionsForFile } from '../symbols/definition-catalog.js';
@@ -48,13 +49,15 @@ export function deriveRustLibrarySurface(projectRoot: string): RustLibrarySurfac
   const sourcePrefixes = new Set<string>();
 
   for (const manifestRoot of findCargoManifestRoots(projectRoot)) {
-    const manifestPath = join(projectRoot, manifestRoot, 'Cargo.toml');
-    const manifest = readFileSync(manifestPath, 'utf8');
+    const manifest = readProjectFileText(projectRoot, join(manifestRoot, 'Cargo.toml'), {
+      maxBytes: 8 * 1024 * 1024,
+      inputKind: 'Cargo manifest',
+    });
     const explicitPath = cargoLibPath(manifest);
     const defaultPath = packagePath(manifestRoot, 'src/lib.rs');
     const rootFile = explicitPath
       ? packagePath(manifestRoot, explicitPath)
-      : !cargoAutolibDisabled(manifest) && existsSync(join(projectRoot, defaultPath))
+      : !cargoAutolibDisabled(manifest) && projectFileExists(projectRoot, defaultPath)
         ? defaultPath
         : null;
     if (!rootFile) continue;

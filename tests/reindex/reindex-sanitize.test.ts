@@ -46,4 +46,24 @@ describe('SCIP sanitizer', () => {
     expect(result.index.documents[0]!.occurrences.map((occurrence) => occurrence.symbol)).toEqual([valid, invalid]);
     expect(result.index.documents[0]!.occurrences[1]!.symbolRoles).toBe(0);
   });
+
+  it.each(['../outside.ts', '/etc/passwd', 'C:\\Users\\outside.ts', '\\\\server\\share\\outside.ts'])(
+    'refuses unsafe document path %s before publication',
+    (relativePath) => {
+      const index = create(IndexSchema, {
+        documents: [
+          create(DocumentSchema, {
+            language: 'typescript',
+            relativePath,
+          }),
+        ],
+      });
+
+      expect(() => sanitizeScipIndex(index)).toThrow(
+        expect.objectContaining({
+          name: 'UnsafeProjectPathError',
+        }),
+      );
+    },
+  );
 });

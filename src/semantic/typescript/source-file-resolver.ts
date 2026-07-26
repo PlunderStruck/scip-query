@@ -1,5 +1,6 @@
 import path from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
+import { isMissingProjectFileError, resolveProjectFile } from '../../platform/project-files.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { cached } from './cache.js';
 import { isTypeScriptLike, TYPESCRIPT_SEMANTIC_EXTENSIONS } from './source-kinds.js';
@@ -48,7 +49,8 @@ export function createTypeScriptSourceFiles(
   const sourceFileMatch = (relativePath: string): SourceFileMatch | null => {
     if (!isTypeScriptLike(relativePath)) return null;
     return cached(sourceFileCache, relativePath, () => {
-      const fullPath = normalizeSourcePath(path.resolve(db.config.projectRoot, relativePath));
+      const fullPath = resolveIndexedSourcePath(db.config.projectRoot, relativePath);
+      if (!fullPath) return null;
       for (const { project, sourceFiles } of projectSourceFileIndexes()) {
         let sourceFile = sourceFiles.get(fullPath) ?? null;
         if (!sourceFile) {
@@ -81,7 +83,8 @@ function buildProjectSourceFileIndexes(
   }));
 
   for (const relativePath of indexedDocuments) {
-    const fullPath = normalizeSourcePath(path.resolve(projectRoot, relativePath));
+    const fullPath = resolveIndexedSourcePath(projectRoot, relativePath);
+    if (!fullPath) continue;
     for (const index of indexes) {
       if (index.sourceFiles.has(fullPath)) break;
       const sourceFile = index.project.addSourceFileAtPathIfExists(fullPath) ?? null;
@@ -93,6 +96,19 @@ function buildProjectSourceFileIndexes(
   }
 
   return indexes;
+}
+
+function resolveIndexedSourcePath(projectRoot: string, relativePath: string): string | null {
+  try {
+    return normalizeSourcePath(
+      resolveProjectFile(projectRoot, relativePath, {
+        inputKind: 'indexed TypeScript source file',
+      }).absolutePath,
+    );
+  } catch (error) {
+    if (!isMissingProjectFileError(error)) throw error;
+    return null;
+  }
 }
 
 function normalizeSourcePath(filePath: string): string {

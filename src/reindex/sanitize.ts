@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { create } from '@bufbuild/protobuf';
 import { deserializeSCIP, DocumentSchema, IndexSchema, serializeSCIP, SymbolRole } from '@c4312/scip';
 import type { Document, Index } from '@c4312/scip';
+import { normalizeSafeProjectRelativePath } from '../domain/path-normalization.js';
 
 export interface SanitizeScipResult {
   removedDefinitionOccurrences: number;
@@ -31,6 +32,7 @@ export function sanitizeScipFile(path: string): SanitizeScipResult {
 export function sanitizeScipIndex(index: Index): SanitizeScipResult & { index: Index } {
   const definedSymbols = new Set<string>();
   for (const document of index.documents) {
+    normalizeSafeProjectRelativePath(document.relativePath);
     for (const symbol of document.symbols) {
       if (symbol.symbol) definedSymbols.add(symbol.symbol);
     }

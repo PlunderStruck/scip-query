@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { extname, join } from 'node:path';
+import { extname } from 'node:path';
+import { isMissingProjectFileError, readProjectFileText } from '../../source/primitives/project-file-boundary.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { resolveIndexedFile } from '../internal/file-resolution.js';
@@ -62,11 +62,13 @@ function readSymbolRange(
   );
 
   // Read the file
-  const filePath = join(db.config.projectRoot, match.relativePath);
   let fileContent: string;
   try {
-    fileContent = readFileSync(filePath, 'utf-8');
-  } catch {
+    fileContent = readProjectFileText(db.config.projectRoot, match.relativePath, {
+      inputKind: 'indexed source file',
+    });
+  } catch (error) {
+    if (!isMissingProjectFileError(error)) throw error;
     return null;
   }
 
@@ -107,11 +109,13 @@ function readFileRange(
   );
   if (!doc) return null;
 
-  const fullPath = join(db.config.projectRoot, doc.relative_path);
   let fileContent: string;
   try {
-    fileContent = readFileSync(fullPath, 'utf-8');
-  } catch {
+    fileContent = readProjectFileText(db.config.projectRoot, doc.relative_path, {
+      inputKind: 'indexed source file',
+    });
+  } catch (error) {
+    if (!isMissingProjectFileError(error)) throw error;
     return null;
   }
 

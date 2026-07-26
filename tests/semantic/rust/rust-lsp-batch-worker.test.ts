@@ -261,7 +261,10 @@ describe('Rust LSP batch worker', () => {
 
   it('passes the current request timeout through a hover retry', async () => {
     vi.useFakeTimers();
+    const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-rust-hover-retry-'));
     try {
+      mkdirSync(join(projectRoot, 'src'), { recursive: true });
+      writeFileSync(join(projectRoot, 'src/lib.rs'), 'pub fn run() -> i32 { 1 }\n');
       const { signatureForDefinition } = await import('../../../src/semantic/rust/lsp-batch-worker.js');
       const timeouts: Array<number | undefined> = [];
       const client = {
@@ -272,12 +275,13 @@ describe('Rust LSP batch worker', () => {
         }),
       } as unknown as RustAnalyzerLspClient;
 
-      const signaturePromise = signatureForDefinition(client, '/repo', rustDefinition(), { timeoutMs: 125 });
+      const signaturePromise = signatureForDefinition(client, projectRoot, rustDefinition(), { timeoutMs: 125 });
       await vi.advanceTimersByTimeAsync(1_000);
 
       await expect(signaturePromise).resolves.toBe('pub fn run() -> i32');
       expect(timeouts).toEqual([125, 125]);
     } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
       vi.useRealTimers();
     }
   });

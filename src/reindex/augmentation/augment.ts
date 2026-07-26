@@ -1,7 +1,8 @@
 import Database from 'better-sqlite3';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { extname, join } from 'node:path';
+import { readProjectFileText } from '../../source/primitives/project-file-boundary.js';
 import { createGitignoreFilter } from '../../source/primitives/gitignore-filter.js';
 import { AUXILIARY_EXTENSIONS, SKIP_DIRS } from '../../source/primitives/source-fileset.js';
 import type { PostIndexAugmentationStage } from './post-index-augmentation.js';
@@ -70,7 +71,9 @@ export function augmentAuxiliaryDocuments(opts: AugmentAuxiliaryDocumentsOptions
       let inserted = 0;
       for (const relativePath of paths) {
         if (existing.has(relativePath)) continue;
-        const text = readFileSync(join(opts.projectRoot, relativePath), 'utf-8');
+        const text = readProjectFileText(opts.projectRoot, relativePath, {
+          inputKind: 'auxiliary source file',
+        });
         const info = insert.run(auxiliaryDocumentLanguageTag(relativePath), relativePath, text);
         inserted += Number(info.changes);
       }

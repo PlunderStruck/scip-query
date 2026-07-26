@@ -1,17 +1,33 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { relative, resolve, sep } from 'node:path';
+import { realpathSync } from 'node:fs';
+import { basename, dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { IndexedDefinition } from '../../domain/types.js';
+import { isMissingProjectFileError, readProjectFileText, resolveProjectFile } from '../../platform/project-files.js';
 import type { SemanticReference } from '../types.js';
 import type { LspLocation, LspPosition, LspReferenceParams } from './lsp-types.js';
 
 export function filePathToDocumentUri(projectRoot: string, relativePath: string): string {
-  return pathToFileURL(resolve(projectRoot, relativePath)).href;
+  if (relativePath === '.' || relativePath === './') {
+    return pathToFileURL(realpathSync(projectRoot)).href;
+  }
+  return pathToFileURL(resolveProjectFile(projectRoot, relativePath).absolutePath).href;
 }
 
 export function documentUriToRelativePath(projectRoot: string, uri: string): string {
   const absolutePath = fileURLToPath(uri);
-  return relative(projectRoot, absolutePath).split(sep).join('/');
+  return relative(realpathSync(projectRoot), canonicalizeUriPath(absolutePath)).split(sep).join('/');
+}
+
+function canonicalizeUriPath(absolutePath: string): string {
+  try {
+    return realpathSync(absolutePath);
+  } catch {
+    try {
+      return join(realpathSync(dirname(absolutePath)), basename(absolutePath));
+    } catch {
+      return absolutePath;
+    }
+  }
 }
 
 export function definitionToReferenceParams(
@@ -31,12 +47,14 @@ export function referencePositionForDefinition(projectRoot: string, definition: 
     line: definition.startLine,
     character: definition.startChar ?? 0,
   };
-  const sourcePath = resolve(projectRoot, definition.relativePath);
-  if (!existsSync(sourcePath)) return fallback;
-
   try {
-    return referencePositionFromSource(readFileSync(sourcePath, 'utf8'), definition, fallback);
-  } catch {
+    return referencePositionFromSource(
+      readProjectFileText(projectRoot, definition.relativePath, { inputKind: 'indexed Rust source file' }),
+      definition,
+      fallback,
+    );
+  } catch (error) {
+    if (!isMissingProjectFileError(error)) throw error;
     return fallback;
   }
 }

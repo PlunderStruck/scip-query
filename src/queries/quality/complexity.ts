@@ -1,6 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
+import { isMissingProjectFileError, readProjectFileText } from '../../source/primitives/project-file-boundary.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../internal/project-index.js';
@@ -158,9 +157,12 @@ function languageForFile(db: ScipDatabase, relativePath: string): string {
 
 function readSymbolSource(db: ScipDatabase, relativePath: string, startLine: number, endLine: number): string {
   try {
-    const lines = readFileSync(join(db.config.projectRoot, relativePath), 'utf-8').split('\n');
+    const lines = readProjectFileText(db.config.projectRoot, relativePath, {
+      inputKind: 'indexed source file',
+    }).split('\n');
     return lines.slice(startLine, endLine + 1).join('\n');
-  } catch {
+  } catch (error) {
+    if (!isMissingProjectFileError(error)) throw error;
     return '';
   }
 }

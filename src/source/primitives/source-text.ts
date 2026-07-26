@@ -4,9 +4,8 @@
  * query (refs/dataflow/trace), and the AST runtime all read source
  * through here so we pay the disk cost once per file per process.
  */
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
+import { isMissingProjectFileError, readProjectFileText } from '../../platform/project-files.js';
 import { createPerDbCache } from '../../storage/per-db-cache.js';
 
 const SOURCE_TEXT_CACHE = createPerDbCache<string, string>('source-text', {
@@ -20,23 +19,15 @@ const SOURCE_LINES_CACHE = createPerDbCache<string, readonly string[]>('source-l
 export function getSourceText(db: ScipDatabase, relativePath: string): string {
   const normalized = relativePath.replace(/\\/g, '/');
   return SOURCE_TEXT_CACHE.get(db, normalized, () => {
-    const fullPath = join(db.config.projectRoot, normalized);
     try {
-      return readFileSync(fullPath, 'utf-8');
+      return readProjectFileText(db.config.projectRoot, normalized, {
+        inputKind: 'indexed source file',
+      });
     } catch (error) {
-      if (isMissingPathError(error)) return '';
+      if (isMissingProjectFileError(error)) return '';
       throw error;
     }
   });
-}
-
-function isMissingPathError(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error.code === 'ENOENT' || error.code === 'ENOTDIR')
-  );
 }
 
 export function getSourceLines(db: ScipDatabase, relativePath: string): readonly string[] {

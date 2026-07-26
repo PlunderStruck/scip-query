@@ -1,0 +1,14 @@
+{
+  "kind": "scip-query-suppression",
+  "schemaVersion": 1,
+  "suppressionIdentity": "SQED73CEBDE24D",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.19.6"
+  },
+  "id": "SQED73CEBDE24D",
+  "check": "co-change-partner",
+  "file": "src/semantic/rust/lsp-session-worker.ts",
+  "reason": "Accepted source-boundary-only change: Rust session readiness sequencing, deadlines, and health state are unchanged; the worker now obtains didOpen text through the validated bounded project-file reader. Focused Rust readiness tests, the 204-test Rust/security suite, and the full suite pass.",
+  "createdAt": "2026-07-26T17:25:12.399Z"
+}

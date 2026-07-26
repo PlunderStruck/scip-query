@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import type { ScipQueryConfig } from '../domain/types.js';
+import { normalizeSafeProjectRelativePath } from '../domain/path-normalization.js';
 import { fileIdentity, resolveSqliteGeneration, type SqliteGenerationHandle } from './sqlite-generation.js';
 
 /** The path-exclusion capability storage consumes from project source policy. */
@@ -62,6 +63,12 @@ export class ScipDatabase {
     this.db.pragma('temp_store = MEMORY');
     this.db.pragma('cache_size = -64000');
     this.db.pragma('mmap_size = 268435456');
+    try {
+      assertSafeIndexedDocumentPaths(this.db);
+    } catch (error) {
+      this.db.close();
+      throw error;
+    }
   }
 
   /** Check if a path should be excluded based on .gitignore rules */
@@ -153,6 +160,15 @@ export class ScipDatabase {
       this.statementCache.set(sql, statement);
     }
     return statement;
+  }
+}
+
+function assertSafeIndexedDocumentPaths(db: Database.Database): void {
+  const documents = db.prepare('SELECT relative_path FROM documents').iterate() as Iterable<{
+    relative_path: string;
+  }>;
+  for (const document of documents) {
+    normalizeSafeProjectRelativePath(document.relative_path);
   }
 }
 

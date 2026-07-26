@@ -1,9 +1,71 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync } from 'node:fs';
-import { isAbsolute, join, relative, sep } from 'node:path';
+import {
+  closeSync,
+  fstatSync,
+  lstatSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+  realpathSync,
+} from 'node:fs';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { isLanguageRelevantProjectInputPath, type ProjectFileFingerprint } from '../domain/project-input.js';
+import {
+  isPathInsideProject,
+  normalizeSafeProjectRelativePath,
+  UnsafeProjectPathError,
+} from '../domain/path-normalization.js';
 import type { SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
+
+export {
+  normalizeSafeProjectRelativePath,
+  UnsafeProjectPathError,
+  type ProjectFileFailure,
+} from '../domain/path-normalization.js';
+
+export const DEFAULT_PROJECT_SOURCE_LIMIT_BYTES = 64 * 1024 * 1024;
+
+/**
+ * A project-file proof identifies one existing regular file whose canonical
+ * path is beneath the canonical project root. The canonical containment and
+ * file identity make every later source read depend on a checked filesystem
+ * referent rather than on repository-controlled path text alone.
+ */
+export interface ResolvedProjectFile {
+  readonly projectRoot: string;
+  readonly relativePath: string;
+  readonly absolutePath: string;
+  readonly size: number;
+  readonly mtimeMs: number;
+  readonly device: number;
+  readonly inode: number;
+}
+
+export class InputTooLargeError extends Error {
+  readonly code = 'SCIP_QUERY_INPUT_TOO_LARGE';
+
+  // scip-query: ignore-similar — typed boundary errors intentionally share
+  // Error initialization shape; their fields and callers enforce different contracts.
+  constructor(
+    readonly inputKind: string,
+    readonly inputPath: string,
+    readonly observedBytes: number,
+    readonly limitBytes: number,
+  ) {
+    super(
+      `${inputKind} ${JSON.stringify(inputPath)} is ${observedBytes} bytes; ` +
+        `the safety limit is ${limitBytes} bytes`,
+    );
+    this.name = 'InputTooLargeError';
+  }
+}
+
+export interface ProjectFileReadOptions {
+  maxBytes?: number;
+  inputKind?: string;
+}
 
 export interface ProjectInputFingerprint {
   version: 2;
@@ -32,6 +94,117 @@ export function normalizeTypeScriptProjects(projects: readonly string[] | undefi
   return [...new Set((projects ?? []).map((project) => project.trim()).filter(Boolean))].sort((left, right) =>
     left.localeCompare(right),
   );
+}
+
+export function resolveProjectFile(
+  projectRoot: string,
+  candidatePath: string,
+  opts: ProjectFileReadOptions = {},
+): ResolvedProjectFile {
+  const relativePath = normalizeSafeProjectRelativePath(candidatePath);
+  const canonicalProjectRoot = realpathSync(projectRoot);
+  const joinedPath = resolve(canonicalProjectRoot, ...relativePath.split('/'));
+  if (!isPathInsideProject(canonicalProjectRoot, joinedPath) || joinedPath === canonicalProjectRoot) {
+    throw new UnsafeProjectPathError(candidatePath, 'outside-project');
+  }
+
+  const absolutePath = realpathSync(joinedPath);
+  if (!isPathInsideProject(canonicalProjectRoot, absolutePath) || absolutePath === canonicalProjectRoot) {
+    throw new UnsafeProjectPathError(candidatePath, 'outside-project');
+  }
+
+  const stat = lstatSync(absolutePath);
+  if (!stat.isFile()) {
+    throw new UnsafeProjectPathError(candidatePath, 'not-a-file');
+  }
+  const resolvedFile = {
+    projectRoot: canonicalProjectRoot,
+    relativePath,
+    absolutePath,
+    size: stat.size,
+    mtimeMs: stat.mtimeMs,
+    device: stat.dev,
+    inode: stat.ino,
+  };
+  const maxBytes = opts.maxBytes ?? DEFAULT_PROJECT_SOURCE_LIMIT_BYTES;
+  assertNonNegativeByteLimit(maxBytes);
+  if (resolvedFile.size > maxBytes) {
+    throw new InputTooLargeError(
+      opts.inputKind ?? 'project file',
+      resolvedFile.relativePath,
+      resolvedFile.size,
+      maxBytes,
+    );
+  }
+  return resolvedFile;
+}
+
+export function readProjectFile(projectRoot: string, candidatePath: string, opts: ProjectFileReadOptions = {}): Buffer {
+  const resolvedFile = resolveProjectFile(projectRoot, candidatePath, opts);
+  const maxBytes = opts.maxBytes ?? DEFAULT_PROJECT_SOURCE_LIMIT_BYTES;
+
+  const descriptor = openSync(resolvedFile.absolutePath, 'r');
+  try {
+    const before = fstatSync(descriptor);
+    if (
+      !before.isFile() ||
+      before.dev !== resolvedFile.device ||
+      before.ino !== resolvedFile.inode ||
+      before.size !== resolvedFile.size
+    ) {
+      throw new UnsafeProjectPathError(candidatePath, 'changed-during-read');
+    }
+    if (before.size > maxBytes) {
+      throw new InputTooLargeError(opts.inputKind ?? 'project file', resolvedFile.relativePath, before.size, maxBytes);
+    }
+
+    const content = readFileSync(descriptor);
+    const after = fstatSync(descriptor);
+    if (
+      after.dev !== before.dev ||
+      after.ino !== before.ino ||
+      after.size !== before.size ||
+      content.byteLength !== before.size
+    ) {
+      throw new UnsafeProjectPathError(candidatePath, 'changed-during-read');
+    }
+    return content;
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
+export function readProjectFileText(
+  projectRoot: string,
+  candidatePath: string,
+  opts: ProjectFileReadOptions = {},
+): string {
+  return readProjectFile(projectRoot, candidatePath, opts).toString('utf8');
+}
+
+export function isMissingProjectFileError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+  );
+}
+
+export function projectFileExists(projectRoot: string, candidatePath: string): boolean {
+  try {
+    resolveProjectFile(projectRoot, candidatePath);
+    return true;
+  } catch (error) {
+    if (isMissingProjectFileError(error)) return false;
+    throw error;
+  }
+}
+
+function assertNonNegativeByteLimit(maxBytes: number): void {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
+    throw new RangeError(`maxBytes must be a non-negative safe integer; received ${maxBytes}`);
+  }
 }
 
 export function listProjectFiles(projectRoot: string): string[] {

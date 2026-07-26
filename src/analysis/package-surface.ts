@@ -12,8 +12,9 @@
  * plausible source paths. Candidates that don't correspond to real indexed
  * files simply never match, so over-generation is harmless.
  */
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { isMissingProjectFileError, readProjectFileText } from '../source/primitives/project-file-boundary.js';
 import type { ScipDatabase } from '../storage/db.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
 
@@ -110,8 +111,17 @@ function collectNestedPackageManifests(
 }
 
 function readManifestAt(projectRoot: string, packageRoot: string): Record<string, unknown> | null {
+  let raw: string;
   try {
-    const raw = readFileSync(join(projectRoot, packageRoot, 'package.json'), 'utf-8');
+    raw = readProjectFileText(projectRoot, join(packageRoot, 'package.json'), {
+      maxBytes: 8 * 1024 * 1024,
+      inputKind: 'package manifest',
+    });
+  } catch (error) {
+    if (!isMissingProjectFileError(error)) throw error;
+    return null;
+  }
+  try {
     const parsed: unknown = JSON.parse(raw);
     return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
   } catch {

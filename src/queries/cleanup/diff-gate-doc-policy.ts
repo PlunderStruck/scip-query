@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
 import type { ScipDatabase } from '../../storage/db.js';
+import { projectFileExists, readProjectFileText } from '../../source/primitives/project-file-boundary.js';
 import { markdownCitationContext } from './doc-citation-context.js';
 import { matchingDocTerms } from './doc-terms.js';
 import type { ChangedLineRange } from '../internal/diff-gate-types.js';
@@ -99,12 +99,9 @@ function classifyCitation(contexts: readonly string[]): DocCitationClassificatio
 }
 
 function citationContexts(db: ScipDatabase, doc: string, cited: readonly string[]): string[] {
-  let lines: string[];
-  try {
-    lines = readFileSync(`${db.config.projectRoot}/${doc}`, 'utf-8').split(/\r?\n/);
-  } catch {
-    return [];
-  }
+  const source = getSourceText(db, doc);
+  if (!source && !projectFileExists(db.config.projectRoot, doc)) return [];
+  const lines = source.split(/\r?\n/);
 
   const needles = cited.flatMap(citationNeedles);
   const contexts: string[] = [];
@@ -166,7 +163,6 @@ function referenceTargets(
 
 function hasDocRelevantChange(db: ScipDatabase, file: string, ranges: readonly ChangedLineRange[]): boolean {
   if (!SOURCE_FILE_PATTERN.test(file)) return true;
-  const absolutePath = `${db.config.projectRoot}/${file}`;
   // Deleted (or renamed-away) files never produce a `+++`-anchored diff
   // hunk (git emits `+++ /dev/null`, which `parseChangedLineRanges` can't
   // attribute to a path) — so `ranges` is always empty for a deletion. A
@@ -174,9 +170,11 @@ function hasDocRelevantChange(db: ScipDatabase, file: string, ranges: readonly C
   // check existence BEFORE the ranges-empty bail-out below (21.2: this is
   // what makes "cited file deleted/renamed" reachable as a doc-reference
   // finding at all — see runDocReferenceCheck's severity split).
-  if (!existsSync(absolutePath)) return true;
+  if (!projectFileExists(db.config.projectRoot, file)) return true;
   if (ranges.length === 0) return false;
-  const lines = readFileSync(absolutePath, 'utf-8').split(/\r?\n/);
+  const lines = readProjectFileText(db.config.projectRoot, file, {
+    inputKind: 'changed source file',
+  }).split(/\r?\n/);
   const importLines = staticImportExportLines(lines);
   for (const range of ranges) {
     for (let line = range.startLine; line <= range.endLine; line += 1) {

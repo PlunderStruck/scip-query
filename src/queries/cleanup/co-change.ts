@@ -1,6 +1,5 @@
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
+import { projectFileExists } from '../../source/primitives/project-file-boundary.js';
 import { classifyFile } from '../../analysis/file-classifier.js';
 import { gitEvidenceProduct } from '../../analysis/git-history.js';
 import type {
@@ -182,7 +181,7 @@ export function coChange(
 }
 
 function fileStillExists(db: ScipDatabase, relativePath: string): boolean {
-  return existsSync(join(db.config.projectRoot, relativePath));
+  return projectFileExists(db.config.projectRoot, relativePath);
 }
 
 export function classifyCoChangePartner(fileA: string, fileB: string): CoChangePartnerClassification {

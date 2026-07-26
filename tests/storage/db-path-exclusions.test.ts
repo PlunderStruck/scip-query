@@ -58,4 +58,34 @@ describe('ScipDatabase path exclusions', () => {
       db.close();
     }
   });
+
+  it('refuses a legacy SQLite index containing an unsafe document path', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-db-unsafe-document-'));
+    const dbPath = join(tempDir, 'index.db');
+    const sqliteDb = new Database(dbPath);
+    sqliteDb.exec(`
+      CREATE TABLE documents (
+        id INTEGER PRIMARY KEY,
+        language TEXT,
+        relative_path TEXT NOT NULL UNIQUE
+      );
+      INSERT INTO documents (id, language, relative_path)
+      VALUES (1, 'typescript', '../outside.ts');
+    `);
+    sqliteDb.close();
+
+    expect(
+      () =>
+        new ScipDatabase({
+          dbPath,
+          indexPath: join(tempDir, 'index.scip'),
+          projectRoot: tempDir,
+        }),
+    ).toThrow(
+      expect.objectContaining({
+        name: 'UnsafeProjectPathError',
+        reason: 'parent-traversal',
+      }),
+    );
+  });
 });

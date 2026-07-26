@@ -1,8 +1,7 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
 import type { SymbolMatch } from '../domain/types.js';
+import { readProjectFileText } from '../platform/project-files.js';
 import { getAst } from '../source/ast.js';
 import type { SyntaxNode } from '../source/ast.js';
 import { escapeRegex as escapeRegExp } from '../source/primitives/regex-utils.js';
@@ -1523,7 +1522,9 @@ function collectSourceScanWrites(
   statements: readonly VariableStatement[] = [],
   orms: readonly VariableOrmCall[] = [],
 ): TlaStaticWrite[] {
-  const source = readFileSync(join(db.config.projectRoot, file), 'utf8');
+  const source = readProjectFileText(db.config.projectRoot, file, {
+    inputKind: 'indexed TLA conformance source file',
+  });
   const lines = source.split(/\r?\n/);
   const writes: TlaStaticWrite[] = [];
   const boundedEnd = Number.isFinite(endLine) ? Math.min(lines.length - 1, endLine) : lines.length - 1;
@@ -1571,7 +1572,9 @@ function collectSourceScanReads(
   statements: readonly VariableStatement[] = [],
   orms: readonly VariableOrmCall[] = [],
 ): TlaStaticRead[] {
-  const source = readFileSync(join(db.config.projectRoot, file), 'utf8');
+  const source = readProjectFileText(db.config.projectRoot, file, {
+    inputKind: 'indexed TLA conformance source file',
+  });
   const lines = source.split(/\r?\n/);
   const reads: TlaStaticRead[] = [];
   const boundedEnd = Number.isFinite(endLine) ? Math.min(lines.length - 1, endLine) : lines.length - 1;

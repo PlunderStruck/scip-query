@@ -1,6 +1,6 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
+import { projectFileExists, resolveProjectFile } from '../../source/primitives/project-file-boundary.js';
+import { getSourceText } from '../../source/primitives/source-text.js';
 import { gitEvidenceProduct } from '../../analysis/git-history.js';
 import type { GitHistoryMode } from '../../analysis/git-history.js';
 import { fileContentHash } from '../../storage/evidence-cache.js';
@@ -166,7 +166,7 @@ export function docDrift(
     if (doc !== undefined && !docFile.includes(doc)) continue;
     // Explicitly requested docs bypass the archival filter (detail mode).
     if (doc === undefined && !isLivingDoc(db, docFile)) continue;
-    if (doc !== undefined && !existsSync(join(db.config.projectRoot, docFile))) continue;
+    if (doc !== undefined && !projectFileExists(db.config.projectRoot, docFile)) continue;
     const snapshot = isSnapshotDoc(db, docFile);
     if (snapshot && !includeSnapshotExcluded) continue;
     const { value: docLastChangedAt, estimated: docLastChangedAtEstimated } = docLastChangedAtFor(
@@ -279,9 +279,10 @@ function docLastChangedAtFor(
     return { value: Math.max(...timestamps), estimated: false };
   }
   try {
-    const mtimeSeconds = Math.floor(statSync(join(db.config.projectRoot, docFile)).mtimeMs / 1000);
+    const mtimeSeconds = Math.floor(resolveProjectFile(db.config.projectRoot, docFile).mtimeMs / 1000);
     return { value: mtimeSeconds, estimated: true };
-  } catch {
+  } catch (error) {
+    if (projectFileExists(db.config.projectRoot, docFile)) throw error;
     return { value: 0, estimated: false };
   }
 }
@@ -292,10 +293,8 @@ interface DocDriftIntentClassification {
 }
 
 function classifyDocDriftIntent(db: ScipDatabase, docFile: string): DocDriftIntentClassification {
-  let text: string;
-  try {
-    text = readFileSync(join(db.config.projectRoot, docFile), 'utf8').slice(0, 6_000);
-  } catch {
+  const text = getSourceText(db, docFile).slice(0, 6_000);
+  if (!text) {
     return { docIntent: 'unknown', reasons: ['doc text unavailable'] };
   }
 
@@ -450,10 +449,8 @@ export function docsCitingFiles(
       for (const docFile of tracked) {
         if (!isLivingDoc(db, docFile)) continue;
         if (profiling) livingDocs += 1;
-        let content: string;
-        try {
-          content = readFileSync(join(db.config.projectRoot, docFile), 'utf-8');
-        } catch {
+        const content = getSourceText(db, docFile);
+        if (!content && !projectFileExists(db.config.projectRoot, docFile)) {
           if (profiling) unreadableDocs += 1;
           continue;
         }
@@ -514,7 +511,7 @@ export function docsCitingFiles(
 
 /** A doc that exists, isn't archival, and is eligible for drift tracking. */
 function isLivingDoc(db: ScipDatabase, docFile: string): boolean {
-  return DOC_FILE_PATTERN.test(docFile) && !isArchivalDoc(docFile) && existsSync(join(db.config.projectRoot, docFile));
+  return DOC_FILE_PATTERN.test(docFile) && !isArchivalDoc(docFile) && projectFileExists(db.config.projectRoot, docFile);
 }
 
 /** Map "suffix after last two segments" → full tracked paths, for short citations. */
@@ -660,11 +657,8 @@ function citationContextsForCandidates(
 function docPathEvidence(db: ScipDatabase, docFile: string, contentOverride?: string): DocPathEvidence | null {
   let content = contentOverride;
   if (content === undefined) {
-    try {
-      content = readFileSync(join(db.config.projectRoot, docFile), 'utf-8');
-    } catch {
-      return null;
-    }
+    content = getSourceText(db, docFile);
+    if (!content && !projectFileExists(db.config.projectRoot, docFile)) return null;
   }
 
   const contentHash = fileContentHash(db, docFile, content);

@@ -39,6 +39,7 @@ describe('Rust reference mapping', () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-rust-uri-'));
     try {
       mkdirSync(join(projectRoot, 'src'), { recursive: true });
+      writeFileSync(join(projectRoot, 'src/main lib.rs'), 'fn main() {}\n');
       const uri = filePathToDocumentUri(projectRoot, 'src/main lib.rs');
 
       expect(uri).toMatch(/^file:\/\//);
@@ -82,6 +83,9 @@ describe('Rust reference mapping', () => {
   it('converts LSP locations to sorted semantic references and removes duplicates', () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-rust-locations-'));
     try {
+      mkdirSync(join(projectRoot, 'src'), { recursive: true });
+      writeFileSync(join(projectRoot, 'src/consumer.rs'), 'fn consume() {}\n');
+      writeFileSync(join(projectRoot, 'src/lib.rs'), 'pub fn library() {}\n');
       const references = locationsToSemanticReferences(projectRoot, [
         {
           uri: filePathToDocumentUri(projectRoot, 'src/consumer.rs'),

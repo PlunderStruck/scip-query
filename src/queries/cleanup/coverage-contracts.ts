@@ -1,5 +1,6 @@
-import { readFileSync, readdirSync, type Dirent } from 'node:fs';
+import { readdirSync, type Dirent } from 'node:fs';
 import { basename, join } from 'node:path';
+import { isMissingProjectFileError, readProjectFileText } from '../../source/primitives/project-file-boundary.js';
 import type {
   CoverageContractConfig,
   CoverageContractKeySpec,
@@ -266,8 +267,12 @@ function listTopLevelDirs(absoluteDir: string): string[] {
 function resolveRegisteredCommands(projectRoot: string): string[] {
   let source: string;
   try {
-    source = readFileSync(join(projectRoot, 'docs/COMMAND_REFERENCE.md'), 'utf-8');
-  } catch {
+    source = readProjectFileText(projectRoot, 'docs/COMMAND_REFERENCE.md', {
+      maxBytes: 8 * 1024 * 1024,
+      inputKind: 'generated command reference',
+    });
+  } catch (error) {
+    if (!isMissingProjectFileError(error)) throw error;
     return [];
   }
   const block = markerBlock(source, 'COMMAND REFERENCE');

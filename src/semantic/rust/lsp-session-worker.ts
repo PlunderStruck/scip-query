@@ -1,9 +1,10 @@
 import process from 'node:process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { parentPort } from 'node:worker_threads';
 import { profileAsyncSpan, profileEnabled, writeProfileEvent } from '../../instrumentation/profile.js';
+import { isMissingProjectFileError, readProjectFileText } from '../../platform/project-files.js';
 import type { SemanticCallee, SemanticReference } from '../types.js';
 import { createRustAnalyzerTransport, RustAnalyzerLspClient } from './lsp-client.js';
 import type { LspInitializeResult } from './lsp-types.js';
@@ -664,10 +665,7 @@ async function openNewSourceDocuments(
   files: readonly string[],
   opts: { diagnosticsTimeoutMs?: number; settleDelayMs?: number; readinessDeadlineMs?: number },
 ): Promise<number> {
-  const filesToOpen = files.filter((file) => {
-    if (session.openedPaths.has(file)) return false;
-    return existsSync(resolve(projectRoot, file));
-  });
+  const filesToOpen = files.filter((file) => !session.openedPaths.has(file));
   if (filesToOpen.length === 0) {
     await waitForRustAnalyzerInitialReadinessWithoutDocuments(session);
     return 0;
@@ -684,15 +682,19 @@ async function openNewSourceDocuments(
         };
   const uris: string[] = [];
   for (const file of filesToOpen) {
-    const uri = filePathToDocumentUri(projectRoot, file);
-    session.client.didOpenTextDocument({
-      uri,
-      languageId: 'rust',
-      version: 1,
-      text: readFileSync(resolve(projectRoot, file), 'utf8'),
-    });
-    session.openedPaths.add(file);
-    uris.push(uri);
+    try {
+      const uri = filePathToDocumentUri(projectRoot, file);
+      session.client.didOpenTextDocument({
+        uri,
+        languageId: 'rust',
+        version: 1,
+        text: readProjectFileText(projectRoot, file, { inputKind: 'indexed Rust source file' }),
+      });
+      session.openedPaths.add(file);
+      uris.push(uri);
+    } catch (error) {
+      if (!isMissingProjectFileError(error)) throw error;
+    }
   }
   const diagnosticsTimeoutMs = opts.diagnosticsTimeoutMs ?? 10_000;
   let effectiveDiagnosticsTimeoutMs = diagnosticsTimeoutMs;

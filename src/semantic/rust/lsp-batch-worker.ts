@@ -1,8 +1,9 @@
 import process from 'node:process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { IndexedDefinition } from '../../domain/types.js';
+import { isMissingProjectFileError, readProjectFileText } from '../../platform/project-files.js';
 import type { SemanticCallee, SemanticReference } from '../types.js';
 import {
   createRustAnalyzerTransport,
@@ -339,16 +340,20 @@ export function openDefinitionDocuments(
   for (const definition of definitions) {
     if (opened.has(definition.relativePath)) continue;
     opened.add(definition.relativePath);
-    const path = resolve(projectRoot, definition.relativePath);
-    if (!existsSync(path)) continue;
-    const uri = filePathToDocumentUri(projectRoot, definition.relativePath);
-    client.didOpenTextDocument({
-      uri,
-      languageId: 'rust',
-      version: 1,
-      text: readFileSync(path, 'utf8'),
-    });
-    uris.push(uri);
+    try {
+      const uri = filePathToDocumentUri(projectRoot, definition.relativePath);
+      client.didOpenTextDocument({
+        uri,
+        languageId: 'rust',
+        version: 1,
+        text: readProjectFileText(projectRoot, definition.relativePath, {
+          inputKind: 'indexed Rust source file',
+        }),
+      });
+      uris.push(uri);
+    } catch (error) {
+      if (!isMissingProjectFileError(error)) throw error;
+    }
   }
   return uris;
 }

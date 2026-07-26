@@ -2,7 +2,14 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildProjectInputFingerprint, fingerprintProjectFiles } from '../../src/platform/project-files.js';
+import {
+  buildProjectInputFingerprint,
+  fingerprintProjectFiles,
+  InputTooLargeError,
+  readProjectFileText,
+  resolveProjectFile,
+  UnsafeProjectPathError,
+} from '../../src/platform/project-files.js';
 
 const tempDirs: string[] = [];
 
@@ -68,6 +75,62 @@ describe('platform project file fingerprints', () => {
 
     writeFileSync(join(projectRoot, 'value.ts'), 'export const value = 2;\n');
     expect(buildProjectInputFingerprint(projectRoot, ['typescript'], { pnpmWorkspaces: true })).not.toEqual(first);
+  });
+});
+
+describe('project file authority boundary', () => {
+  it.each([
+    ['empty', ''],
+    ['dot', '.'],
+    ['parent', '../secret.txt'],
+    ['nested parent', 'src/../../secret.txt'],
+    ['POSIX absolute', '/etc/passwd'],
+    ['Windows drive', 'C:\\Users\\secret.txt'],
+    ['Windows drive-relative', 'C:secret.txt'],
+    ['Windows UNC', '\\\\server\\share\\secret.txt'],
+    ['NUL', 'src/value.ts\0secret'],
+  ])('rejects %s path text before reading', (_label, candidatePath) => {
+    const projectRoot = temporaryDirectory('scip-query-project-path-');
+
+    expect(() => resolveProjectFile(projectRoot, candidatePath)).toThrow(UnsafeProjectPathError);
+  });
+
+  it('reads a regular file and an in-root symlink through one canonical proof', () => {
+    const projectRoot = temporaryDirectory('scip-query-project-read-');
+    mkdirSync(join(projectRoot, 'src'));
+    writeFileSync(join(projectRoot, 'src/value.ts'), 'export const value = 1;\n');
+    symlinkSync('value.ts', join(projectRoot, 'src/alias.ts'));
+
+    expect(readProjectFileText(projectRoot, './src/value.ts')).toBe('export const value = 1;\n');
+    expect(readProjectFileText(projectRoot, 'src/alias.ts')).toBe('export const value = 1;\n');
+  });
+
+  it('rejects a safe-looking symlink whose canonical target is outside the project', () => {
+    const projectRoot = temporaryDirectory('scip-query-project-root-');
+    const externalRoot = temporaryDirectory('scip-query-project-sibling-');
+    writeFileSync(join(externalRoot, 'secret.txt'), 'not project data');
+    symlinkSync(join(externalRoot, 'secret.txt'), join(projectRoot, 'source.ts'));
+
+    expect(() => readProjectFileText(projectRoot, 'source.ts')).toThrow(
+      expect.objectContaining({
+        name: 'UnsafeProjectPathError',
+        reason: 'outside-project',
+      }),
+    );
+  });
+
+  it('checks the byte budget before allocating the file contents', () => {
+    const projectRoot = temporaryDirectory('scip-query-project-budget-');
+    writeFileSync(join(projectRoot, 'source.ts'), '12345');
+
+    expect(() => readProjectFileText(projectRoot, 'source.ts', { maxBytes: 4 })).toThrow(
+      expect.objectContaining({
+        name: InputTooLargeError.name,
+        observedBytes: 5,
+        limitBytes: 4,
+      }),
+    );
+    expect(readProjectFileText(projectRoot, 'source.ts', { maxBytes: 5 })).toBe('12345');
   });
 });
 

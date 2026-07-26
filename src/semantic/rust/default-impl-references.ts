@@ -1,7 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { escapeRegex } from '../../source/primitives/regex-utils.js';
 import type { IndexedDefinition } from '../../domain/types.js';
+import { isMissingProjectFileError, readProjectFileText } from '../../platform/project-files.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { mentionReferenceChunkRows } from '../../storage/scip-mentions.js';
 import type { SemanticReference } from '../types.js';
@@ -143,11 +142,12 @@ function sourceText(db: ScipDatabase, relativePath: string, cache: SourceTextCac
 }
 
 function sourceTextFromDisk(db: ScipDatabase, relativePath: string): string | null {
-  const fullPath = resolve(db.config.projectRoot, relativePath);
-  if (!existsSync(fullPath)) return null;
   try {
-    return readFileSync(fullPath, 'utf8');
-  } catch {
+    return readProjectFileText(db.config.projectRoot, relativePath, {
+      inputKind: 'indexed Rust source file',
+    });
+  } catch (error) {
+    if (!isMissingProjectFileError(error)) throw error;
     return null;
   }
 }

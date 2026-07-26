@@ -1,7 +1,7 @@
-import { readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
 import type { IndexedDefinition } from '../domain/symbol-types.js';
+import { readProjectFileText } from '../platform/project-files.js';
 import { getDefinitionsForFile } from '../symbols/definition-catalog.js';
 import { collectReadsForRange, collectWritesForRange, type VariableAlias } from './conformance.js';
 
@@ -73,7 +73,9 @@ export function scaffoldTlaModel(db: ScipDatabase, file: string, opts: TlaScaffo
   if (definitions.length === 0) {
     throw new Error(`no indexed definitions found for ${file}; run 'scip-query reindex' or check the path`);
   }
-  const source = readFileSync(join(db.config.projectRoot, file), 'utf8');
+  const source = readProjectFileText(db.config.projectRoot, file, {
+    inputKind: 'indexed TLA scaffold source file',
+  });
   const lines = source.split(/\r?\n/);
 
   // Discriminate on the SCIP descriptor suffix ('().' = callable) rather than
