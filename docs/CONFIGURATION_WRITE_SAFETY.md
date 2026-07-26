@@ -2,11 +2,12 @@
 
 scip-query updates files that people and other agents may edit at the same
 time: `.scipquery.json`, provider hook JSON, `.git/info/exclude`,
-`AGENTS.md`, `CLAUDE.md`, and an owned pre-commit hook. A conflict-aware writer
-is a file updater that transforms one identified revision and refuses to claim
-success if an independent revision wins before commit. Its defining behavior
-is preservation: it either applies its narrow change to the newest valid
-input or leaves the newest input untouched and reports why.
+`AGENTS.md`, `CLAUDE.md`, structured suppression records, and an owned
+pre-commit hook. A conflict-aware writer is a file updater that transforms one
+identified revision and refuses to claim success if an independent revision
+wins before commit. Its defining behavior is preservation: it either applies
+its narrow change to the newest valid input or leaves the newest input
+untouched and reports why.
 
 ## Revision and commit protocol
 
@@ -51,6 +52,26 @@ Malformed latest JSON is never repaired by replacement because doing so could
 erase information the writer cannot classify. The command reports the parse
 failure and leaves the exact bytes in place.
 
+## Suppression policy rules
+
+A suppression identity is the stable finding ID, or the deterministic hash of
+a check-and-file target when no finding ID exists. It is a policy conflict
+domain: decisions for different identities occupy different files, while two
+decisions for the same identity must be reconciled.
+
+The first decision uses exclusive durable creation. An identical replay
+returns the existing revision without rewriting metadata. A different reason,
+expiry, check, or file requires `--replace <revision>`, where the revision is
+the full SHA-256 hash reported when the existing decision was rejected or
+created. Replacement succeeds only if those exact reviewed bytes still occupy
+the path. A stale token, a malformed record, an unsupported future schema, or
+an edit at the commit boundary leaves the latest bytes untouched.
+
+New records use suppression schema version 1 and include their stable identity
+plus the `scip-query` writer version. Unversioned legacy records remain
+readable. They remain byte-for-byte unchanged on an idempotent replay and are
+upgraded only by an explicit compare-and-replace policy change.
+
 ## Managed text rules
 
 Agent guidance changes only the text between the exact
@@ -71,7 +92,9 @@ When a command reports a conflict:
 
 1. open the named file and preserve the latest independent edit;
 2. repair malformed JSON or marker structure deliberately, if reported;
-3. rerun the setup/configuration command so it reads the new revision.
+3. for a suppression policy change, review the latest decision and rerun
+   `suppress` with the reported `--replace <revision>`;
+4. for setup/configuration, rerun the command so it reads the new revision.
 
 Do not delete a live `.scip-query-write.lock`. If its owner crashed, the next
 writer reclaims it only after the shared lock protocol proves the recorded

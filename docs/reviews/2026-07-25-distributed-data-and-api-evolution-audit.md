@@ -370,6 +370,20 @@ Two agents can suppress the same finding with different reasons or expiration po
 
 **Acceptance condition:** conflicting policy writes cannot silently erase one another, and a torn write cannot make an accepted suppression disappear without a diagnostic.
 
+**Resolution — Slice 13 (2026-07-25):** resolved. The runtime suppression
+writer now publishes a first identity exclusively, treats the same policy as
+an idempotent replay, and rejects every different reason, expiry, check, or
+file until the caller supplies the full SHA-256 revision through
+`--replace`. Replacement rechecks that reviewed revision at the commit
+boundary and uses durable publication; stale tokens and uncooperative edits
+leave the newer bytes untouched. New records declare schema version 1, their
+stable suppression identity, and the writer tool/version. The decoder keeps
+unversioned records readable and diagnoses malformed, mismatched, or
+unsupported future records instead of overwriting them. Fault tests cover
+competing first decisions, same replay, explicit and stale replacement,
+independent identities, pre-commit failure, commit-boundary edits, legacy
+upgrade, malformed data, identity drift, and future schemas.
+
 ### DD-07 — S3 — Worktree lease touch can overwrite a newer generation lease
 
 **Evidence:** source-confirmed interleaving.

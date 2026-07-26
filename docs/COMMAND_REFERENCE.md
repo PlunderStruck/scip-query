@@ -137,7 +137,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 | `capability-matrix` | Deprecated alias for capabilities --matrix | `--json` |
 | `init` | Create a .scipquery.json config file for this project | - |
 | `config-validate` | Validate .scipquery.json, including structured suppressions and declared coupling groups | `--json` |
-| `suppress <id>` | Record an accepted finding as a file under .scipquery/suppressions/ with a required reason | `--reason <text>`<br>`--check <check>`<br>`--file <path>`<br>`--expires-at <iso>`<br>`--json` |
+| `suppress <id>` | Record an accepted finding as a file under .scipquery/suppressions/ with a required reason | `--reason <text>`<br>`--check <check>`<br>`--file <path>`<br>`--expires-at <iso>`<br>`--replace <revision>`<br>`--json` |
 | `effectiveness` | Per-check effectiveness from the committed outcome ledger: caught, comparison-verified fixes, suppressed, unverified disappearances, and precision | `--since <window>`<br>`--check <check>`<br>`--json` |
 | `doctor` | Diagnose config, index freshness, dependency readiness, and project capabilities | `--json` |
 | `setup` | Bootstrap this project: enable automatic indexing, install agent skills, refresh the index, verify capabilities, and report health | `--guided`<br>`--yes`<br>`--git-hook`<br>`--no-hooks`<br>`--no-skills`<br>`--no-parsers`<br>`--no-health`<br>`--dossier-dir <path>`<br>`--json` |

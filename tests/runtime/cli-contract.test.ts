@@ -177,6 +177,14 @@ describe('CLI contract', () => {
       '--force',
       '--json',
     ]);
+    expect(docs.find((entry) => entry.id === 'suppress')?.options).toEqual([
+      '--reason <text>',
+      '--check <check>',
+      '--file <path>',
+      '--expires-at <iso>',
+      '--replace <revision>',
+      '--json',
+    ]);
     expect(docs.find((entry) => entry.id === 'watch')?.options).toEqual([
       '--daemon',
       '--status',

@@ -26,7 +26,6 @@ import {
   validateProjectConfig,
   SUPPORTED_LANGUAGES,
 } from '../config.js';
-import { writeSuppressionFile } from '../../storage/suppression-store.js';
 import { OUTCOME_EVENTS_DIR, readOutcomeEvents } from '../../storage/outcome-events.js';
 import { computeEffectiveness, parseSinceMs } from '../../queries/health/effectiveness.js';
 import { getIndexFreshness } from '../index-freshness.js';
@@ -68,6 +67,7 @@ import { healthPhases } from '../../queries/health/health.js';
 import { writeProfileEvent } from '../../instrumentation/profile.js';
 import { auditProfileWork, readProfileEvents, renderProfileWorkAudit } from '../profile-work-audit.js';
 import { discloseHealthCapabilities } from '../health-capability-disclosure.js';
+import { writeSuppressionFile } from '../suppression-writer.js';
 import { inspectWatchRefreshRequests } from '../../storage/watch-refresh-requests.js';
 import {
   collect,
@@ -996,18 +996,24 @@ export function handleSuppress(id: unknown, rawOpts: unknown): void {
     return;
   }
   try {
-    const result = writeSuppressionFile(resolveProjectRoot(), {
-      id: String(id),
-      check: stringOptionValue(opts, 'check'),
-      file: stringOptionValue(opts, 'file'),
-      reason,
-      expiresAt: stringOptionValue(opts, 'expiresAt'),
-    });
+    const result = writeSuppressionFile(
+      resolveProjectRoot(),
+      {
+        id: String(id),
+        check: stringOptionValue(opts, 'check'),
+        file: stringOptionValue(opts, 'file'),
+        reason,
+        expiresAt: stringOptionValue(opts, 'expiresAt'),
+      },
+      {
+        expectedRevision: stringOptionValue(opts, 'replace'),
+      },
+    );
     if (booleanOptionValue(opts, 'json')) {
       printJsonEnvelope('suppress', [String(id)], opts, result);
       return;
     }
-    console.log(`Suppression written to ${result.path}.`);
+    console.log(`Suppression ${result.disposition} at ${result.path}. Revision: ${result.revision}.`);
   } catch (err) {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exitCode = 1;

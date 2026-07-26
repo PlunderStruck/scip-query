@@ -614,8 +614,8 @@ Rollback is commit-scoped. Durable-format slices additionally retain legacy read
 |    09 | DD-04   | complete | `437dc042` | 181 focused tests                   | Partial creation, guarded reclaim, shared I/O, PID reuse, legacy, and release verified |
 |    10 | DD-01   | complete | `c58c28df` | 112 focused; 1,558 full-suite tests | Immutable pointer, retained companions, cursor/semantic isolation, architecture gate verified |
 |    11 | DD-03   | complete | `a13f6808` | 120 focused; 1,574 full-suite tests | Immutable admission, exclusive claims, completion receipts, retry, expiry, and status verified |
-|    12 | DD-05   | complete | this slice | 53 focused; 1,590 full-suite tests  | Revision checks, narrow merges, exclusive create, strict Markdown conflicts, and crash boundaries verified |
-|    13 | DD-06   | pending  |            |                                     |                                                                 |
+|    12 | DD-05   | complete | `aff8685c` | 53 focused; 1,590 full-suite tests  | Revision checks, narrow merges, exclusive create, strict Markdown conflicts, and crash boundaries verified |
+|    13 | DD-06   | complete | this slice | 39 focused; 1,598 full-suite tests  | Exclusive create, idempotent replay, compare-and-replace, schema decoding, and crash boundaries verified |
 |    14 | DD-07   | pending  |            |                                     |                                                                 |
 |    15 | DD-09   | pending  |            |                                     |                                                                 |
 |    16 | DD-10   | pending  |            |                                     |                                                                 |
@@ -682,6 +682,30 @@ Rollback is commit-scoped. Durable-format slices additionally retain legacy read
   writer class rather than only the originally cited call sites.
 - The complete suite passes: 213 test files and 1,590 tests. Lint, typecheck,
   production build, and whitespace validation also pass.
+
+### Slice 13 verification record
+
+- The suppression identity is now an explicit conflict domain. First
+  publication is exclusive, exact replay is byte-idempotent, and a different
+  policy requires the full observed SHA-256 revision.
+- New schema-versioned records carry stable identity and writer provenance.
+  Legacy records remain readable and upgrade only after an explicit policy
+  replacement; future, malformed, and identity-drifted records are diagnosed.
+- Fault injection publishes a competing first decision, changes an existing
+  record at the commit boundary, and throws before publication. Every test
+  asserts that the winning or prior bytes survive and the lock remains
+  recoverable.
+- The CLI and generated command reference expose `--replace <revision>`, while
+  README and write-safety documentation define the review/retry protocol.
+- A built-CLI smoke test exercised create, same replay, rejected policy change,
+  successful reviewed replacement, and stale-token rejection against a real
+  temporary Git repository.
+- The complete suite passes: 213 test files and 1,598 tests. Typecheck, lint,
+  production build, generated-command-reference checks, and whitespace
+  validation also pass.
+- Fresh SCIP references resolve the writer and decoder through their complete
+  consumer sets. The final diff gate reports zero blocking and zero advisory
+  findings.
 
 ### Slice 09 verification note
 

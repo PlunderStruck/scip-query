@@ -243,6 +243,29 @@ scip-query suppress SQABC123DEF456 --check echo --reason "intentional compatibil
 
 This writes one file per suppression under `.scipquery/suppressions/` — commit it with your change. One-file-per-suppression means two branches suppressing different findings merge without conflict; the legacy `suppressions[]` array in `.scipquery.json` is still honored (read-only). Every suppression requires a reason plus either a stable finding id or a `check` (optionally narrowed by `file`). Check+file suppressions are allowed but warn because they waive every matching finding in that file. `diff-gate --json` reports both active and suppressed findings.
 
+The first suppression for an identity is created exclusively. Repeating the
+same decision is idempotent, but a different reason, expiry, check, or file is
+a policy change and never silently overwrites the existing file. The command
+reports the existing SHA-256 revision:
+
+```text
+error: A different suppression decision already exists at ...
+Current revision: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.
+```
+
+After reviewing the committed decision, replace exactly that revision:
+
+```bash
+scip-query suppress SQABC123DEF456 --check echo \
+  --reason "superseded by a narrower compatibility exception" \
+  --replace 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+```
+
+If another writer changes the record first, the stale replacement is rejected
+and the newer bytes remain intact. New records declare their schema version,
+stable suppression identity, and writer version. Older unversioned records
+remain readable and are upgraded only by an explicit replacement.
+
 **12. Measure whether the gate is earning its keep.** Every completed `diff-gate` run, including JSON and installed Stop-hook runs, writes each finding transition to its own committed `.scipquery/events/*.json` file. Independent branches add independent paths instead of editing one shared ledger file, so ordinary event writes do not create merge conflicts. Each event stores the immutable Git commit used as its comparison base. A finding is a verified fix when it disappears under that same comparison—either directly or after scip-query cleanly replays the original base against a newer committed `HEAD`. Merely committing the finding cannot clear it: if replay still finds it, the outcome stays open; if the worktree is dirty or Git cannot reproduce the base, verification waits. A suppressed finding was noise or an accepted trade-off:
 
 ```bash

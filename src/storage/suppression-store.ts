@@ -13,13 +13,30 @@
  * but is no longer written to by the `suppress` command.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import type { FindingSuppression } from '../domain/config-types.js';
-import { writeJsonDurable } from './atomic-json.js';
 
 export const SUPPRESSION_DIR = join('.scipquery', 'suppressions');
+export const SUPPRESSION_FILE_SCHEMA_VERSION = 1;
+
+export interface SuppressionFileRecordV1 extends FindingSuppression {
+  schemaVersion: typeof SUPPRESSION_FILE_SCHEMA_VERSION;
+  suppressionIdentity: string;
+  writer: {
+    tool: 'scip-query';
+    version: string;
+  };
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface DecodedSuppressionFile {
+  suppression: FindingSuppression;
+  record: FindingSuppression | SuppressionFileRecordV1;
+  schemaVersion: 0 | typeof SUPPRESSION_FILE_SCHEMA_VERSION;
+}
 
 export interface SuppressionDirReadResult {
   suppressions: FindingSuppression[];
@@ -34,8 +51,7 @@ export function suppressionDirPath(projectRoot: string): string {
 /**
  * Stable, deterministic filename for a suppression: the finding id when
  * present (the common agent path), otherwise a short hash of the
- * check+file identity so re-suppressing the same target overwrites
- * rather than duplicates.
+ * check+file identity so the same policy target has one conflict domain.
  */
 export function suppressionFileName(suppression: FindingSuppression): string {
   if (suppression.id && suppression.id.trim() !== '') return `${suppression.id.trim()}.json`;
@@ -44,26 +60,60 @@ export function suppressionFileName(suppression: FindingSuppression): string {
   return `CHECK-${hash}.json`;
 }
 
-export function writeSuppressionFile(
-  projectRoot: string,
-  suppression: FindingSuppression,
-  now: Date = new Date(),
-): { path: string } {
-  if (!suppression.reason || suppression.reason.trim() === '') {
-    throw new Error('suppression requires a non-empty reason');
+export function suppressionIdentity(suppression: FindingSuppression): string {
+  return suppressionFileName(suppression).slice(0, -'.json'.length);
+}
+
+export function decodeSuppressionFile(
+  value: unknown,
+  expectedIdentity?: string,
+): DecodedSuppressionFile | { error: string } {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return { error: 'not a suppression object' };
   }
-  if (!suppression.id && !suppression.check) {
-    throw new Error('suppression requires an id or a check');
+  const candidate = value as Partial<SuppressionFileRecordV1>;
+  if (candidate.schemaVersion !== undefined && candidate.schemaVersion !== SUPPRESSION_FILE_SCHEMA_VERSION) {
+    return { error: `unsupported schemaVersion ${String(candidate.schemaVersion)}` };
   }
-  const dir = suppressionDirPath(projectRoot);
-  mkdirSync(dir, { recursive: true });
-  const path = join(dir, suppressionFileName(suppression));
-  const record: FindingSuppression = {
-    ...suppression,
-    createdAt: suppression.createdAt ?? now.toISOString(),
+  if (typeof candidate.reason !== 'string' || candidate.reason.trim() === '') {
+    return { error: 'missing reason' };
+  }
+  if (!candidate.id && !candidate.check) {
+    return { error: 'needs an id or a check' };
+  }
+  const suppression = suppressionFromRecord(candidate as FindingSuppression);
+  if (candidate.schemaVersion === undefined) {
+    return { suppression, record: candidate as FindingSuppression, schemaVersion: 0 };
+  }
+  const identity = suppressionIdentity(suppression);
+  if (
+    candidate.suppressionIdentity !== identity ||
+    (expectedIdentity !== undefined && candidate.suppressionIdentity !== expectedIdentity)
+  ) {
+    return { error: 'suppressionIdentity does not match the suppression target or filename' };
+  }
+  if (
+    !candidate.writer ||
+    candidate.writer.tool !== 'scip-query' ||
+    typeof candidate.writer.version !== 'string' ||
+    candidate.writer.version.trim() === ''
+  ) {
+    return { error: 'missing valid writer metadata' };
+  }
+  if (typeof candidate.createdAt !== 'string' || !Number.isFinite(Date.parse(candidate.createdAt))) {
+    return { error: 'missing valid createdAt timestamp' };
+  }
+  if (
+    candidate.updatedAt !== undefined &&
+    (typeof candidate.updatedAt !== 'string' || !Number.isFinite(Date.parse(candidate.updatedAt)))
+  ) {
+    return { error: 'invalid updatedAt timestamp' };
+  }
+  return {
+    suppression,
+    record: candidate as SuppressionFileRecordV1,
+    schemaVersion: SUPPRESSION_FILE_SCHEMA_VERSION,
   };
-  writeJsonDurable(path, record, { spacing: 2, trailingNewline: true });
-  return { path };
 }
 
 export function readSuppressionDir(projectRoot: string): SuppressionDirReadResult {
@@ -82,20 +132,23 @@ export function readSuppressionDir(projectRoot: string): SuppressionDirReadResul
       warnings.push(`${SUPPRESSION_DIR}/${entry}: malformed JSON — ignored`);
       continue;
     }
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      warnings.push(`${SUPPRESSION_DIR}/${entry}: not a suppression object — ignored`);
+    const decoded = decodeSuppressionFile(parsed, entry.slice(0, -'.json'.length));
+    if ('error' in decoded) {
+      warnings.push(`${SUPPRESSION_DIR}/${entry}: ${decoded.error} — ignored`);
       continue;
     }
-    const candidate = parsed as FindingSuppression;
-    if (typeof candidate.reason !== 'string' || candidate.reason.trim() === '') {
-      warnings.push(`${SUPPRESSION_DIR}/${entry}: missing reason — ignored`);
-      continue;
-    }
-    if (!candidate.id && !candidate.check) {
-      warnings.push(`${SUPPRESSION_DIR}/${entry}: needs an id or a check — ignored`);
-      continue;
-    }
-    suppressions.push(candidate);
+    suppressions.push(decoded.suppression);
   }
   return { suppressions, warnings };
+}
+
+function suppressionFromRecord(record: FindingSuppression): FindingSuppression {
+  return {
+    ...(typeof record.id === 'string' ? { id: record.id } : {}),
+    ...(typeof record.check === 'string' ? { check: record.check } : {}),
+    ...(typeof record.file === 'string' ? { file: record.file } : {}),
+    reason: record.reason,
+    ...(typeof record.expiresAt === 'string' ? { expiresAt: record.expiresAt } : {}),
+    ...(typeof record.createdAt === 'string' ? { createdAt: record.createdAt } : {}),
+  };
 }

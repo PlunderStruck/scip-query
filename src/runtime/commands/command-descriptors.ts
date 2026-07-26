@@ -360,6 +360,10 @@ export const commandDescriptors: CommandDescriptor[] = [
       option('--check <check>', 'Optional detector/check name to narrow the suppression'),
       option('--file <path>', 'Optional file path to narrow the suppression'),
       option('--expires-at <iso>', 'Optional ISO date after which the suppression expires'),
+      option(
+        '--replace <revision>',
+        'Replace a different existing decision only when it still has this reported SHA-256 revision',
+      ),
     ]),
     renderShape: 'custom',
     docs: doc('Maintenance', ['scip-query suppress SQABC123DEF456 --reason "intentional boundary"']),
