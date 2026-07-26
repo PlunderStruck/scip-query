@@ -1,4 +1,13 @@
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
@@ -14,6 +23,7 @@ import {
 } from '../../src/reindex/typescript-index-service.js';
 import {
   TYPESCRIPT_INDEX_PROTOCOL_VERSION,
+  TYPESCRIPT_INDEX_LEGACY_PROTOCOL_VERSION,
   parseTypeScriptIndexEnvelope,
   typeScriptIndexMailboxPaths,
   type TypeScriptIndexDocumentRequest,
@@ -25,6 +35,11 @@ import {
 } from '../../src/platform/watch-service-state.js';
 import { writeWatchServiceState } from '../../src/runtime/watch-service.js';
 import { writeJsonAtomic } from '../../src/storage/atomic-json.js';
+import {
+  BOUNDED_MAILBOX_VERSION,
+  boundedMailboxOperationKey,
+  boundedMailboxRequestId,
+} from '../../src/storage/bounded-mailbox.js';
 
 const NOW = Date.parse('2026-07-10T08:00:00.000Z');
 const tempDirs: string[] = [];
@@ -120,6 +135,16 @@ describe('TypeScript index service mailbox', () => {
     expect(processTypeScriptIndexMailbox(paths, host, { nowMs: NOW })).toBe(2);
     expect(readResponse(paths.responseDir, 'malformed')).toEqual(expect.objectContaining({ ok: false }));
     expect(readResponse(paths.responseDir, 'expired')).toEqual(expect.objectContaining({ ok: false }));
+    writeFileSync(join(paths.requestDir, 'oversized.json'), 'x'.repeat(2_000));
+    expect(
+      processTypeScriptIndexMailbox(paths, host, {
+        nowMs: NOW,
+        limits: { maxItemBytes: 512 },
+      }),
+    ).toBe(1);
+    expect(readResponse(paths.responseDir, 'oversized')).toEqual(
+      expect.objectContaining({ ok: false, error: expect.stringContaining('per-item limit') }),
+    );
 
     writeLiveState(fixture.cacheDir, fixture.projectRoot, host.status());
     const omitted = requesterWithRuntime(fixture, {
@@ -127,37 +152,43 @@ describe('TypeScript index service mailbox', () => {
       randomId: () => 'omitted',
       isProcessAlive: () => true,
       sleep: () => {
-        writeJsonAtomic(join(paths.responseDir, 'omitted.json'), {
+        const envelope = onlyPendingEnvelope(paths.pendingDir);
+        writeJsonAtomic(join(paths.responseDir, `${envelope.id}.json`), {
           ok: true,
           protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
-          id: 'omitted',
+          id: envelope.id,
+          operationKey: envelope.operationKey,
           baseGeneration: 'base',
-          response: { producerIdentity: 'producer', cold: false, durationMs: 1, fragments: [] },
+          response: { producerIdentity: 'producer-omitted', cold: false, durationMs: 1, fragments: [] },
         });
+        rmSync(envelope.requestPath, { force: true });
       },
     });
-    expect(() => omitted.request(indexRequest('producer'))).toThrow('omitted or added an affected document');
+    expect(() => omitted.request(indexRequest('producer-omitted'))).toThrow('omitted or added an affected document');
 
     const missingReferences = requesterWithRuntime(fixture, {
       now: () => NOW,
       randomId: () => 'missing-references',
       isProcessAlive: () => true,
       sleep: () => {
-        writeJsonAtomic(join(paths.responseDir, 'missing-references.json'), {
+        const envelope = onlyPendingEnvelope(paths.pendingDir);
+        writeJsonAtomic(join(paths.responseDir, `${envelope.id}.json`), {
           ok: true,
           protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
-          id: 'missing-references',
+          id: envelope.id,
+          operationKey: envelope.operationKey,
           baseGeneration: 'base',
           response: {
-            producerIdentity: 'producer',
+            producerIdentity: 'producer-missing',
             cold: false,
             durationMs: 1,
             fragments: [{ relativePath: 'src/a.ts', bytesBase64: null, occurrences: 0, symbols: 0 }],
           },
         });
+        rmSync(envelope.requestPath, { force: true });
       },
     });
-    expect(() => missingReferences.request(indexRequest('producer'))).toThrow('invalid fragment');
+    expect(() => missingReferences.request(indexRequest('producer-missing'))).toThrow('invalid fragment');
 
     const statePath = watchServicePaths(fixture.cacheDir).statePath;
     const crashed = requesterWithRuntime(fixture, {
@@ -166,7 +197,8 @@ describe('TypeScript index service mailbox', () => {
       isProcessAlive: () => true,
       sleep: () => rmSync(statePath, { force: true }),
     });
-    expect(() => crashed.request(indexRequest('producer'))).toThrow('stopped while processing');
+    expect(() => crashed.request(indexRequest('producer-crash'))).toThrow('stopped while processing');
+    expect(readdirSync(paths.pendingDir).filter((entry) => entry.endsWith('.json'))).toHaveLength(1);
 
     writeLiveState(fixture.cacheDir, fixture.projectRoot, host.status());
     let nowMs = NOW;
@@ -182,16 +214,26 @@ describe('TypeScript index service mailbox', () => {
       },
       20,
     );
-    expect(() => timedOut.request(indexRequest('producer'))).toThrow('timed out');
+    expect(() => timedOut.request(indexRequest('producer-timeout'))).toThrow('timed out');
+    expect(readdirSync(paths.pendingDir).filter((entry) => entry.endsWith('.json'))).toHaveLength(2);
   });
 
   test('parses only complete versioned requests', () => {
+    const request = indexRequest('producer');
+    const operationKey = boundedMailboxOperationKey('typescript-index-v3', {
+      baseGeneration: 'generation',
+      request,
+    });
     const valid = {
+      mailboxVersion: BOUNDED_MAILBOX_VERSION,
       protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
-      id: 'request',
+      id: boundedMailboxRequestId(operationKey),
+      operationKey,
+      clientId: 'client',
+      enqueuedAtMs: NOW - 1,
       baseGeneration: 'generation',
       deadlineAtMs: NOW,
-      request: indexRequest('producer'),
+      request,
     };
     expect(parseTypeScriptIndexEnvelope(JSON.stringify(valid))).toEqual(valid);
     expect(() =>
@@ -250,12 +292,23 @@ function writeRequest(
   request: TypeScriptIndexDocumentRequest,
 ): void {
   writeJsonAtomic(join(requestDir, `${id}.json`), {
-    protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
+    protocolVersion: TYPESCRIPT_INDEX_LEGACY_PROTOCOL_VERSION,
     id,
     baseGeneration,
     deadlineAtMs: NOW + 1_000,
     request,
   });
+}
+
+function onlyPendingEnvelope(pendingDir: string): { id: string; operationKey: string; requestPath: string } {
+  const files = readdirSync(pendingDir).filter((entry) => entry.endsWith('.json'));
+  expect(files).toHaveLength(1);
+  const requestPath = join(pendingDir, files[0]!);
+  const envelope = JSON.parse(readFileSync(requestPath, 'utf8')) as {
+    id: string;
+    operationKey: string;
+  };
+  return { ...envelope, requestPath };
 }
 
 function readResponse(responseDir: string, id: string): Record<string, unknown> {

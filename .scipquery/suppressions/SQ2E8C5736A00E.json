@@ -1,0 +1,7 @@
+{
+  "id": "SQ2E8C5736A00E",
+  "check": "echo",
+  "file": "src/storage/bounded-mailbox.ts",
+  "reason": "The similarity is limited to standard sorted regular-file enumeration. The mailbox must enumerate every retained file, including malformed and legacy records, while watch-refresh-requests intentionally filters a suffix; a shared abstraction would erase that storage-contract distinction for six lines of boilerplate.",
+  "createdAt": "2026-07-26T05:46:48.815Z"
+}

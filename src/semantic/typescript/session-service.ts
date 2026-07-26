@@ -1,5 +1,4 @@
-import { mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import {
   buildProjectChangeManifest,
   projectInputSnapshotOrNull,
@@ -12,8 +11,17 @@ import {
   type ProfileEnvironment,
 } from '../../instrumentation/profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { writeJsonAtomic } from '../../storage/atomic-json.js';
 import { generationMetadata } from '../../storage/sqlite-generation.js';
+import {
+  claimBoundedMailboxRequests,
+  completeBoundedMailboxClaim,
+  initializeBoundedMailbox,
+  inspectBoundedMailbox,
+  readBoundedMailboxClaim,
+  rejectBoundedMailboxClaim,
+  type BoundedMailboxLimits,
+  type BoundedMailboxStatus,
+} from '../../storage/bounded-mailbox.js';
 import { TypeScriptSemanticHost } from './session-host.js';
 import {
   TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
@@ -90,7 +98,7 @@ export class TypeScriptSemanticServiceHost {
     }
   }
 
-  status(): TypeScriptSemanticServiceStatus {
+  status(mailbox?: BoundedMailboxStatus): TypeScriptSemanticServiceStatus {
     const stats = this.host?.snapshotStats();
     return {
       protocolVersion: TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
@@ -103,6 +111,7 @@ export class TypeScriptSemanticServiceHost {
       sessionsRefreshed: stats?.sessionsRefreshed ?? 0,
       sessionsReplaced: stats?.sessionsReplaced ?? 0,
       projectsCreated: stats?.projectsCreated ?? 0,
+      ...(mailbox ? { mailbox } : {}),
     };
   }
 
@@ -142,8 +151,7 @@ export class TypeScriptSemanticServiceHost {
 }
 
 export function initializeTypeScriptSemanticMailbox(paths: TypeScriptSemanticMailboxPaths): void {
-  mkdirSync(paths.requestDir, { recursive: true });
-  mkdirSync(paths.responseDir, { recursive: true });
+  initializeBoundedMailbox(paths);
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
@@ -154,48 +162,71 @@ export function processTypeScriptSemanticMailbox(
     nowMs?: number;
     beforeRequest?: (deadlineAtMs: number) => void;
     afterRequest?: () => void;
+    ownerId?: string;
+    limits?: Partial<BoundedMailboxLimits>;
   } = {},
 ): number {
   initializeTypeScriptSemanticMailbox(paths);
+  const nowMs = opts.nowMs ?? Date.now();
+  const claims = claimBoundedMailboxRequests(paths, {
+    ownerId: opts.ownerId ?? TYPESCRIPT_SEMANTIC_MAILBOX_OWNER,
+    nowMs,
+    limits: opts.limits,
+  });
   let processed = 0;
-  for (const file of readdirSync(paths.requestDir)
-    .filter((entry) => entry.endsWith('.json'))
-    .sort()) {
-    const requestPath = resolve(paths.requestDir, file);
-    let id = file.slice(0, -'.json'.length);
+  for (const claim of claims) {
+    let id = claim.requestId;
     let previousProfileEnvironment: ProfileEnvironment | null = null;
     try {
-      const envelope = parseTypeScriptSemanticEnvelope(readFileSync(requestPath, 'utf8'));
+      const envelope = parseTypeScriptSemanticEnvelope(readBoundedMailboxClaim(claim, opts.limits));
       id = envelope.id;
-      if (envelope.deadlineAtMs < (opts.nowMs ?? Date.now())) {
+      if (id !== claim.requestId) {
+        throw new Error('TypeScript semantic request identity does not match its mailbox path.');
+      }
+      if (envelope.deadlineAtMs < nowMs) {
         throw new Error('TypeScript semantic request expired before processing.');
       }
       previousProfileEnvironment = captureProfileEnvironment();
       applyProfileEnvironment(envelope.profileEnvironment ?? {});
       opts.beforeRequest?.(envelope.deadlineAtMs);
       const response = host.handle(envelope.generation, envelope.request);
-      writeJsonAtomic(resolve(paths.responseDir, `${id}.json`), {
-        ok: true,
-        protocolVersion: TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
-        id,
-        generation: envelope.generation,
-        response,
-      });
+      completeBoundedMailboxClaim(
+        paths,
+        claim,
+        {
+          ok: true,
+          protocolVersion: TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
+          id,
+          generation: envelope.generation,
+          response,
+        },
+        { nowMs, limits: opts.limits },
+      );
     } catch (error) {
-      writeJsonAtomic(resolve(paths.responseDir, `${id}.json`), {
-        ok: false,
-        protocolVersion: TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
-        id,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      const message = error instanceof Error ? error.message : String(error);
+      rejectBoundedMailboxClaim(
+        paths,
+        claim,
+        {
+          ok: false,
+          protocolVersion: TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
+          id,
+          error: message,
+        },
+        message,
+        { nowMs, limits: opts.limits },
+      );
     } finally {
       if (previousProfileEnvironment) applyProfileEnvironment(previousProfileEnvironment);
       opts.afterRequest?.();
-      rmSync(requestPath, { force: true });
       processed += 1;
     }
   }
   return processed;
+}
+
+export function typeScriptSemanticMailboxStatus(paths: TypeScriptSemanticMailboxPaths): BoundedMailboxStatus {
+  return inspectBoundedMailbox(paths);
 }
 
 function referenceMap(
@@ -244,3 +275,5 @@ function transitionManifest(
 function assertNever(value: never): never {
   throw new Error(`Unhandled TypeScript semantic request: ${JSON.stringify(value)}`);
 }
+
+const TYPESCRIPT_SEMANTIC_MAILBOX_OWNER = `typescript-semantic-${process.pid}-${randomUUID()}`;

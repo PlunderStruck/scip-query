@@ -2,8 +2,18 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { SemanticReferenceFragment } from '../semantic/types.js';
+import {
+  BOUNDED_MAILBOX_VERSION,
+  boundedMailboxOperationKey,
+  boundedMailboxPaths,
+  boundedMailboxRequestId,
+  type BoundedMailboxPaths,
+  type BoundedMailboxRequestIdentity,
+  type BoundedMailboxStatus,
+} from '../storage/bounded-mailbox.js';
 
-export const TYPESCRIPT_INDEX_PROTOCOL_VERSION = 2;
+export const TYPESCRIPT_INDEX_PROTOCOL_VERSION = 3;
+export const TYPESCRIPT_INDEX_LEGACY_PROTOCOL_VERSION = 2;
 export const TYPESCRIPT_INDEX_MAILBOX_DIRECTORY = 'typescript-index';
 
 export interface TypeScriptIndexDocumentRequest {
@@ -16,11 +26,9 @@ export interface TypeScriptIndexDocumentRequest {
   affectedFiles: string[];
 }
 
-export interface TypeScriptIndexEnvelope {
+export interface TypeScriptIndexEnvelope extends BoundedMailboxRequestIdentity {
   protocolVersion: typeof TYPESCRIPT_INDEX_PROTOCOL_VERSION;
-  id: string;
   baseGeneration: string;
-  deadlineAtMs: number;
   request: TypeScriptIndexDocumentRequest;
 }
 
@@ -54,39 +62,77 @@ export interface TypeScriptIndexServiceStatus {
   lastDurationMs?: number;
   lastError?: string;
   busyUntil?: string;
+  mailbox?: BoundedMailboxStatus;
 }
 
 // scip-query: ignore-stale — reviewed S1 owned contract; these paths name the index-service mailbox boundary.
-export interface TypeScriptIndexMailboxPaths {
-  rootDir: string;
+export interface TypeScriptIndexMailboxPaths extends BoundedMailboxPaths {
+  /** Flat v2 request directory retained for overlap reads. */
   requestDir: string;
-  responseDir: string;
 }
 
 export function typeScriptIndexMailboxPaths(cacheDir: string): TypeScriptIndexMailboxPaths {
   const rootDir = join(cacheDir, TYPESCRIPT_INDEX_MAILBOX_DIRECTORY);
+  const paths = boundedMailboxPaths(rootDir);
   return {
-    rootDir,
-    requestDir: join(rootDir, 'requests'),
-    responseDir: join(rootDir, 'responses'),
+    ...paths,
+    requestDir: paths.legacyRequestDir,
   };
 }
 
 export function parseTypeScriptIndexEnvelope(raw: string): TypeScriptIndexEnvelope {
   const parsed = JSON.parse(raw) as Partial<TypeScriptIndexEnvelope>;
+  const protocolVersion = (parsed as { protocolVersion?: unknown }).protocolVersion;
+  const legacy = protocolVersion === TYPESCRIPT_INDEX_LEGACY_PROTOCOL_VERSION;
   if (
-    parsed.protocolVersion !== TYPESCRIPT_INDEX_PROTOCOL_VERSION ||
+    (!legacy && protocolVersion !== TYPESCRIPT_INDEX_PROTOCOL_VERSION) ||
     typeof parsed.id !== 'string' ||
     !parsed.id ||
     typeof parsed.baseGeneration !== 'string' ||
     !parsed.baseGeneration ||
     typeof parsed.deadlineAtMs !== 'number' ||
     !Number.isFinite(parsed.deadlineAtMs) ||
-    !isTypeScriptIndexRequest(parsed.request)
+    !isTypeScriptIndexRequest(parsed.request) ||
+    (!legacy &&
+      (parsed.mailboxVersion !== BOUNDED_MAILBOX_VERSION ||
+        typeof parsed.operationKey !== 'string' ||
+        !/^[a-f0-9]{64}$/.test(parsed.operationKey) ||
+        parsed.id !== boundedMailboxRequestId(parsed.operationKey) ||
+        typeof parsed.clientId !== 'string' ||
+        !parsed.clientId ||
+        typeof parsed.enqueuedAtMs !== 'number' ||
+        !Number.isFinite(parsed.enqueuedAtMs) ||
+        parsed.deadlineAtMs < parsed.enqueuedAtMs))
   ) {
     throw new Error('TypeScript index service received an invalid mailbox request.');
   }
-  return parsed as TypeScriptIndexEnvelope;
+  if (!legacy) {
+    const current = parsed as TypeScriptIndexEnvelope;
+    const expectedOperationKey = boundedMailboxOperationKey('typescript-index-v3', {
+      baseGeneration: current.baseGeneration,
+      request: current.request,
+    });
+    if (current.operationKey !== expectedOperationKey) {
+      throw new Error('TypeScript index service received a mismatched mailbox operation identity.');
+    }
+    return current;
+  }
+  const operationKey = boundedMailboxOperationKey('typescript-index-v2', {
+    id: parsed.id,
+    baseGeneration: parsed.baseGeneration,
+    request: parsed.request,
+  });
+  return {
+    protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
+    mailboxVersion: BOUNDED_MAILBOX_VERSION,
+    id: parsed.id,
+    operationKey,
+    clientId: 'legacy-v2',
+    enqueuedAtMs: parsed.deadlineAtMs,
+    deadlineAtMs: parsed.deadlineAtMs,
+    baseGeneration: parsed.baseGeneration,
+    request: parsed.request,
+  };
 }
 
 export function publishedTypeScriptIndexGeneration(dbPath: string): string | null {

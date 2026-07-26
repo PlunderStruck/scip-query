@@ -75,8 +75,8 @@ const compilerEnvironment = {
 };
 
 describe('durable Rust semantic session identity', () => {
-  it('uses mailbox protocol version 2', () => {
-    expect(DURABLE_RUST_SESSION_PROTOCOL_VERSION).toBe(2);
+  it('uses the bounded-mailbox protocol version 3', () => {
+    expect(DURABLE_RUST_SESSION_PROTOCOL_VERSION).toBe(3);
   });
 
   it('is stable for the same compiler inputs', () => {
@@ -712,17 +712,21 @@ describe('durable Rust semantic requester', () => {
     let spawnCount = 0;
     let serverPid = 123;
     const processPendingRequests = (sessionDir: string): void => {
-      const requestDir = join(sessionDir, 'requests');
+      const requestDir = join(sessionDir, 'pending');
       const responseDir = join(sessionDir, 'responses');
       for (const file of readdirSync(requestDir)) {
         const message = JSON.parse(readFileSync(join(requestDir, file), 'utf8')) as {
           id: string;
+          operationKey: string;
           request: { request: RustReferenceWorkerRequest };
         };
         writeFileSync(
           join(responseDir, `${message.id}.json`),
           JSON.stringify({
             ok: true,
+            protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
+            id: message.id,
+            operationKey: message.operationKey,
             session: 'reused',
             response: {
               available: true,
@@ -822,14 +826,59 @@ describe('durable Rust semantic helper shell', () => {
     try {
       expect(processDurableRustSessionRequests(sessionDir, host)).toBe(1);
       expect(readdirSync(requestDir)).toEqual([]);
-      expect(JSON.parse(readFileSync(join(responseDir, 'request-1.json'), 'utf8'))).toEqual({
-        ok: true,
-        session: 'created',
-        response: {
-          available: true,
-          references: [[1, []]],
+      expect(JSON.parse(readFileSync(join(responseDir, 'request-1.json'), 'utf8'))).toEqual(
+        expect.objectContaining({
+          ok: true,
+          protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
+          id: 'request-1',
+          session: 'created',
+          response: {
+            available: true,
+            references: [[1, []]],
+          },
+        }),
+      );
+    } finally {
+      host.shutdown();
+      rmSync(sessionDir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects explicit future and oversized mailbox input without killing the service loop', () => {
+    const sessionDir = mkdtempSync(join(tmpdir(), 'scip-query-durable-session-server-reject-test-'));
+    const requestDir = join(sessionDir, 'requests');
+    const responseDir = join(sessionDir, 'responses');
+    mkdirSync(requestDir, { recursive: true });
+    mkdirSync(responseDir, { recursive: true });
+    writeFileSync(
+      join(requestDir, 'future.json'),
+      JSON.stringify({
+        protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION + 1,
+        id: 'future',
+        request: {
+          kind: 'semantic',
+          identityKey: 'identity-a',
+          request: semanticRequest,
+          timeoutMs: 1_000,
         },
-      });
+      }),
+    );
+    writeFileSync(join(requestDir, 'oversized.json'), 'x'.repeat(2_000));
+    const host = new DurableRustSessionHost(() => fakeRequester(1, []));
+
+    try {
+      expect(
+        processDurableRustSessionRequests(sessionDir, host, {
+          nowMs: 1_000,
+          limits: { maxItemBytes: 1_024 },
+        }),
+      ).toBe(2);
+      expect(JSON.parse(readFileSync(join(responseDir, 'future.json'), 'utf8'))).toEqual(
+        expect.objectContaining({ ok: false, error: expect.stringContaining('does not support mailbox protocol') }),
+      );
+      expect(JSON.parse(readFileSync(join(responseDir, 'oversized.json'), 'utf8'))).toEqual(
+        expect.objectContaining({ ok: false, error: expect.stringContaining('per-item limit') }),
+      );
     } finally {
       host.shutdown();
       rmSync(sessionDir, { recursive: true, force: true });
@@ -918,9 +967,13 @@ function captureDurableMailboxRequest(
     sleep: (durationMs: number) => {
       nowMs += durationMs;
       const sessionDir = durableRustSessionDirectory('/repo', '/dist/server.js', tempRoot);
-      const requestPath = join(sessionDir, 'requests', 'request-1.json');
+      const pendingDir = join(sessionDir, 'pending');
+      const requestFile = readdirSync(pendingDir).find((entry) => entry.endsWith('.json'));
+      if (!requestFile) throw new Error('Expected one pending durable Rust request.');
+      const requestPath = join(pendingDir, requestFile);
       const message = JSON.parse(readFileSync(requestPath, 'utf8')) as {
         id: string;
+        operationKey: string;
         request: DurableRustSessionRequest;
       };
       captured = message.request;
@@ -930,7 +983,14 @@ function captureDurableMailboxRequest(
           : { available: true, sourcePaths: captured.request.positions.map((position) => [position.id, null]) };
       writeFileSync(
         join(sessionDir, 'responses', `${message.id}.json`),
-        JSON.stringify({ ok: true, session: 'reused', response }),
+        JSON.stringify({
+          ok: true,
+          protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
+          id: message.id,
+          operationKey: message.operationKey,
+          session: 'reused',
+          response,
+        }),
       );
     },
   };

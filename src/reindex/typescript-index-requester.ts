@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 import {
   WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS,
   readWatchServiceState,
@@ -9,7 +8,13 @@ import {
 } from '../platform/watch-service-state.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
 import { canonicalPath } from '../platform/git-worktree.js';
-import { writeJsonAtomic } from '../storage/atomic-json.js';
+import {
+  BOUNDED_MAILBOX_VERSION,
+  boundedMailboxOperationKey,
+  boundedMailboxRequestId,
+  enqueueBoundedMailboxRequest,
+  type BoundedMailboxLimits,
+} from '../storage/bounded-mailbox.js';
 import type { TypeScriptDocumentFragment } from './typescript-document-emitter.js';
 import {
   TYPESCRIPT_INDEX_PROTOCOL_VERSION,
@@ -31,6 +36,7 @@ export interface TypeScriptIndexRequesterRuntime {
 export interface TypeScriptIndexRequesterOptions {
   timeoutMs?: number;
   runtime?: TypeScriptIndexRequesterRuntime;
+  mailboxLimits?: Partial<BoundedMailboxLimits>;
 }
 
 export interface RequestedTypeScriptDocuments {
@@ -46,6 +52,7 @@ export class TypeScriptIndexRequester {
   private readonly baseGeneration: string;
   private readonly timeoutMs: number;
   private readonly runtime: TypeScriptIndexRequesterRuntime;
+  private readonly mailboxLimits: Partial<BoundedMailboxLimits>;
 
   constructor(
     input: { projectRoot: string; cacheDir: string; baseGeneration: string },
@@ -56,6 +63,7 @@ export class TypeScriptIndexRequester {
     this.baseGeneration = input.baseGeneration;
     this.timeoutMs = opts.timeoutMs ?? configuredTimeoutMs();
     this.runtime = opts.runtime ?? DEFAULT_RUNTIME;
+    this.mailboxLimits = opts.mailboxLimits ?? {};
   }
 
   // scip-query: ignore-twin — request clients target unrelated index, LSP, and semantic protocols.
@@ -67,42 +75,47 @@ export class TypeScriptIndexRequester {
       throw new Error('Compatible TypeScript index service is not running.');
     }
 
-    const id = this.runtime.randomId();
-    const requestPath = resolve(mailboxPaths.requestDir, `${id}.json`);
-    const responsePath = resolve(mailboxPaths.responseDir, `${id}.json`);
-    const deadlineAtMs = this.runtime.now() + this.timeoutMs;
-    mkdirSync(mailboxPaths.requestDir, { recursive: true });
-    mkdirSync(mailboxPaths.responseDir, { recursive: true });
-    writeJsonAtomic(requestPath, {
-      protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
-      id,
+    const enqueuedAtMs = this.runtime.now();
+    const deadlineAtMs = enqueuedAtMs + this.timeoutMs;
+    const operationKey = boundedMailboxOperationKey('typescript-index-v3', {
       baseGeneration: this.baseGeneration,
-      deadlineAtMs,
       request,
     });
+    const id = boundedMailboxRequestId(operationKey);
+    const admitted = enqueueBoundedMailboxRequest(
+      mailboxPaths,
+      {
+        mailboxVersion: BOUNDED_MAILBOX_VERSION,
+        operationKey,
+        clientId: this.runtime.randomId(),
+        enqueuedAtMs,
+        deadlineAtMs,
+        protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
+        id,
+        baseGeneration: this.baseGeneration,
+        request,
+      },
+      { nowMs: enqueuedAtMs, limits: this.mailboxLimits },
+    );
 
-    try {
-      while (this.runtime.now() <= deadlineAtMs) {
-        if (existsSync(responsePath)) {
-          return parseResponse(
-            readFileSync(responsePath, 'utf8'),
-            id,
-            this.baseGeneration,
-            request.producerIdentity,
-            request.affectedFiles,
-          );
-        }
-        const liveState = readWatchServiceState(servicePaths.statePath);
-        if (!usableServiceState(liveState, this.projectRoot, this.runtime)) {
-          throw new Error('TypeScript index service stopped while processing a request.');
-        }
-        this.runtime.sleep(REQUEST_POLL_INTERVAL_MS);
+    while (this.runtime.now() <= deadlineAtMs) {
+      if (existsSync(admitted.responsePath)) {
+        return parseResponse(
+          readFileSync(admitted.responsePath, 'utf8'),
+          id,
+          operationKey,
+          this.baseGeneration,
+          request.producerIdentity,
+          request.affectedFiles,
+        );
       }
-      throw new Error(`TypeScript index service timed out after ${this.timeoutMs}ms.`);
-    } finally {
-      rmSync(requestPath, { force: true });
-      rmSync(responsePath, { force: true });
+      const liveState = readWatchServiceState(servicePaths.statePath);
+      if (!usableServiceState(liveState, this.projectRoot, this.runtime)) {
+        throw new Error('TypeScript index service stopped while processing a request.');
+      }
+      this.runtime.sleep(REQUEST_POLL_INTERVAL_MS);
     }
+    throw new Error(`TypeScript index service timed out after ${this.timeoutMs}ms.`);
   }
 }
 
@@ -129,6 +142,7 @@ function usableServiceState(
 function parseResponse(
   raw: string,
   id: string,
+  operationKey: string,
   baseGeneration: string,
   producerIdentity: string,
   affectedFiles: readonly string[],
@@ -137,6 +151,7 @@ function parseResponse(
     ok?: unknown;
     protocolVersion?: unknown;
     id?: unknown;
+    operationKey?: unknown;
     baseGeneration?: unknown;
     response?: unknown;
     error?: unknown;
@@ -144,6 +159,7 @@ function parseResponse(
   if (
     response.protocolVersion !== TYPESCRIPT_INDEX_PROTOCOL_VERSION ||
     response.id !== id ||
+    response.operationKey !== operationKey ||
     (response.ok === true && response.baseGeneration !== baseGeneration)
   ) {
     throw new Error('TypeScript index service wrote an incompatible response.');

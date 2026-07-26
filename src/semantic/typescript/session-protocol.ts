@@ -3,8 +3,18 @@ import type { IndexedDefinition } from '../../domain/types.js';
 import type { ProfileEnvironment } from '../../instrumentation/profile.js';
 import { stringArray } from '../../storage/evidence-payload.js';
 import { publishedSqliteGenerationIdentity } from '../../storage/sqlite-generation.js';
+import {
+  BOUNDED_MAILBOX_VERSION,
+  boundedMailboxOperationKey,
+  boundedMailboxPaths,
+  boundedMailboxRequestId,
+  type BoundedMailboxPaths,
+  type BoundedMailboxRequestIdentity,
+  type BoundedMailboxStatus,
+} from '../../storage/bounded-mailbox.js';
 
-export const TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION = 2;
+export const TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION = 3;
+export const TYPESCRIPT_SEMANTIC_LEGACY_PROTOCOL_VERSION = 2;
 export const TYPESCRIPT_SEMANTIC_MAILBOX_DIR = 'typescript-semantic';
 
 export type TypeScriptSemanticRequest =
@@ -15,11 +25,9 @@ export type TypeScriptSemanticRequest =
   | { kind: 'callees'; definitions: IndexedDefinition[] }
   | { kind: 'signature'; definition: IndexedDefinition };
 
-export interface TypeScriptSemanticMailboxEnvelope {
+export interface TypeScriptSemanticMailboxEnvelope extends BoundedMailboxRequestIdentity {
   protocolVersion: typeof TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION;
-  id: string;
   generation: string;
-  deadlineAtMs: number;
   profileEnvironment?: ProfileEnvironment;
   request: TypeScriptSemanticRequest;
 }
@@ -37,21 +45,21 @@ export interface TypeScriptSemanticServiceStatus {
   sessionsRefreshed: number;
   sessionsReplaced: number;
   projectsCreated: number;
+  mailbox?: BoundedMailboxStatus;
 }
 
 // scip-query: ignore-stale — reviewed S1 owned contract; these paths name the semantic-service mailbox boundary.
-export interface TypeScriptSemanticMailboxPaths {
-  rootDir: string;
+export interface TypeScriptSemanticMailboxPaths extends BoundedMailboxPaths {
+  /** Flat v2 request directory retained for overlap reads. */
   requestDir: string;
-  responseDir: string;
 }
 
 export function typeScriptSemanticMailboxPaths(cacheDir: string): TypeScriptSemanticMailboxPaths {
   const rootDir = join(cacheDir, TYPESCRIPT_SEMANTIC_MAILBOX_DIR);
+  const paths = boundedMailboxPaths(rootDir);
   return {
-    rootDir,
-    requestDir: join(rootDir, 'requests'),
-    responseDir: join(rootDir, 'responses'),
+    ...paths,
+    requestDir: paths.legacyRequestDir,
   };
 }
 
@@ -61,18 +69,59 @@ export function publishedGenerationIdentity(dbPath: string): string | null {
 
 export function parseTypeScriptSemanticEnvelope(raw: string): TypeScriptSemanticMailboxEnvelope {
   const parsed = JSON.parse(raw) as Partial<TypeScriptSemanticMailboxEnvelope>;
+  const protocolVersion = (parsed as { protocolVersion?: unknown }).protocolVersion;
+  const legacy = protocolVersion === TYPESCRIPT_SEMANTIC_LEGACY_PROTOCOL_VERSION;
   if (
-    parsed.protocolVersion !== TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION ||
+    (!legacy && protocolVersion !== TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION) ||
     typeof parsed.id !== 'string' ||
     typeof parsed.generation !== 'string' ||
     typeof parsed.deadlineAtMs !== 'number' ||
+    !Number.isFinite(parsed.deadlineAtMs) ||
     (parsed.profileEnvironment !== undefined && !isProfileEnvironment(parsed.profileEnvironment)) ||
     !parsed.request ||
-    !isTypeScriptSemanticRequest(parsed.request)
+    !isTypeScriptSemanticRequest(parsed.request) ||
+    (!legacy &&
+      (parsed.mailboxVersion !== BOUNDED_MAILBOX_VERSION ||
+        typeof parsed.operationKey !== 'string' ||
+        !/^[a-f0-9]{64}$/.test(parsed.operationKey) ||
+        parsed.id !== boundedMailboxRequestId(parsed.operationKey) ||
+        typeof parsed.clientId !== 'string' ||
+        !parsed.clientId ||
+        typeof parsed.enqueuedAtMs !== 'number' ||
+        !Number.isFinite(parsed.enqueuedAtMs) ||
+        parsed.deadlineAtMs < parsed.enqueuedAtMs))
   ) {
     throw new Error('TypeScript semantic service received an invalid mailbox request.');
   }
-  return parsed as TypeScriptSemanticMailboxEnvelope;
+  if (!legacy) {
+    const current = parsed as TypeScriptSemanticMailboxEnvelope;
+    const expectedOperationKey = boundedMailboxOperationKey('typescript-semantic-v3', {
+      generation: current.generation,
+      profileEnvironment: current.profileEnvironment,
+      request: current.request,
+    });
+    if (current.operationKey !== expectedOperationKey) {
+      throw new Error('TypeScript semantic service received a mismatched mailbox operation identity.');
+    }
+    return current;
+  }
+  const operationKey = boundedMailboxOperationKey('typescript-semantic-v2', {
+    id: parsed.id,
+    generation: parsed.generation,
+    request: parsed.request,
+  });
+  return {
+    protocolVersion: TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
+    mailboxVersion: BOUNDED_MAILBOX_VERSION,
+    id: parsed.id,
+    operationKey,
+    clientId: 'legacy-v2',
+    enqueuedAtMs: parsed.deadlineAtMs,
+    deadlineAtMs: parsed.deadlineAtMs,
+    generation: parsed.generation,
+    ...(parsed.profileEnvironment ? { profileEnvironment: parsed.profileEnvironment } : {}),
+    request: parsed.request,
+  };
 }
 
 function isProfileEnvironment(value: unknown): value is ProfileEnvironment {

@@ -368,6 +368,17 @@ Rollback is commit-scoped. Durable-format slices additionally retain legacy read
 **Dependencies:** Slices 01, 08, 09, and 11's queue mechanics where reusable.  
 **Rollback:** services read legacy flat mailbox files during overlap; no destructive migration.
 
+**Implemented shape:** one storage-owned bounded-mailbox state machine now
+backs TypeScript semantic, TypeScript index, and durable Rust requests.
+Admission is serialized around immutable content identities and count/byte
+limits; claims are atomic owner-specific renames with expiry; completions are
+durable exclusive publications retained for idempotent retry; batches and
+cleanup passes are capped; legacy flat requests remain readable; and current
+pressure is present in watch/Rust status. Introducing the lifecycle required
+advancing the three message protocols to version 3 and adding Rust
+correlation fields here; Slice 24 still owns the complete public compatibility
+fixture/schema audit rather than duplicating those lifecycle mechanics.
+
 ### Slice 17 — DD-11 — Use monotonic time for elapsed waits
 
 **Invariant:** civil-clock adjustment cannot extend an in-process wait or alone authorize a destructive ownership action.
@@ -495,8 +506,9 @@ Rollback is commit-scoped. Durable-format slices additionally retain legacy read
 
 **Implementation:**
 
-- Add explicit request/response envelope versions and strict kind validators.
-- Echo request and operation IDs plus durable server/session identity.
+- Retain Slice 16's explicit v3 request/response versions, request ID,
+  operation ID, deadline, and prior-unversioned overlap reader.
+- Add strict request-kind validators and echo durable server/session identity.
 - Enforce absolute expiry before work and before response acceptance.
 - Emit explicit unsupported-protocol and malformed-request responses where safe.
 - Use Slice 16 lifecycle states and quotas.
@@ -601,35 +613,35 @@ Rollback is commit-scoped. Durable-format slices additionally retain legacy read
 
 ## 10. Implementation ledger
 
-| Slice | Finding | Status   | Commit     | Focused tests                       | Notes                                                           |
-| ----: | ------- | -------- | ---------- | ----------------------------------- | --------------------------------------------------------------- |
-|    01 | DD-02   | complete | `d8b62fce` | 60 focused tests                    | PID reuse, legacy records, and per-worktree lifecycle verified  |
-|    02 | RES-01  | complete | `17ea60bd` | 230 regression + 2 contract tests   | Reap, byte/time budgets, transient retry, and inventory verified |
-|    03 | TEST-01 | complete | `6fbe2a9a` | 20 behavior + 1 contract test       | Runner, subscription, clock, and launch-policy seams verified    |
-|    04 | RES-02  | complete | `7eaab92e` | 61 focused tests                    | Child reap, output drain, close failures, and ownership verified |
-|    05 | RES-03  | complete | `63ec2cc0` | 163 Rust semantic tests             | Frame bounds, sticky failure, waiters, and one-shot kill verified |
-|    06 | RES-04  | complete | `8587125e` | 34 focused tests                    | Time/byte bounds, lock/recheck, staging cleanup, and TLA verified |
-|    07 | RES-05  | complete | `b9cb9aa3` | 20 focused + 25 contract tests      | Exit/error/timeout ownership, result identity, and cache verified |
-|    08 | DD-08   | complete | `2a4d62b4` | 180 focused + contract tests        | Fault phases, platform limits, callers, and binary promotion verified |
-|    09 | DD-04   | complete | `437dc042` | 181 focused tests                   | Partial creation, guarded reclaim, shared I/O, PID reuse, legacy, and release verified |
-|    10 | DD-01   | complete | `c58c28df` | 112 focused; 1,558 full-suite tests | Immutable pointer, retained companions, cursor/semantic isolation, architecture gate verified |
-|    11 | DD-03   | complete | `a13f6808` | 120 focused; 1,574 full-suite tests | Immutable admission, exclusive claims, completion receipts, retry, expiry, and status verified |
-|    12 | DD-05   | complete | `aff8685c` | 53 focused; 1,590 full-suite tests  | Revision checks, narrow merges, exclusive create, strict Markdown conflicts, and crash boundaries verified |
-|    13 | DD-06   | complete | `5bc743ed` | 39 focused; 1,598 full-suite tests  | Exclusive create, idempotent replay, compare-and-replace, schema decoding, and crash boundaries verified |
-|    14 | DD-07   | complete | `5fd33ab0` | 24 focused; 1,603 full-suite tests  | G2 publication, deletion/recreation, ownership, and touch ordering verified |
-|    15 | DD-09   | complete | this slice | 48 focused; 1,606 full-suite tests  | Serialized UPSERT, exact retry, collision, timeout, and suppression verified |
-|    16 | DD-10   | pending  |            |                                     |                                                                 |
-|    17 | DD-11   | pending  |            |                                     |                                                                 |
-|    18 | DD-12   | pending  |            |                                     |                                                                 |
-|    19 | API-04  | pending  |            |                                     |                                                                 |
-|    20 | API-01  | pending  |            |                                     |                                                                 |
-|    21 | API-02  | pending  |            |                                     |                                                                 |
-|    22 | API-03  | pending  |            |                                     |                                                                 |
-|    23 | API-05  | pending  |            |                                     |                                                                 |
-|    24 | API-06  | pending  |            |                                     |                                                                 |
-|    25 | REL-01  | pending  |            |                                     |                                                                 |
-|    26 | REL-02  | pending  |            |                                     |                                                                 |
-|    27 | REL-03  | pending  |            |                                     |                                                                 |
+| Slice | Finding | Status   | Commit     | Focused tests                       | Notes                                                                                                                             |
+| ----: | ------- | -------- | ---------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+|    01 | DD-02   | complete | `d8b62fce` | 60 focused tests                    | PID reuse, legacy records, and per-worktree lifecycle verified                                                                    |
+|    02 | RES-01  | complete | `17ea60bd` | 230 regression + 2 contract tests   | Reap, byte/time budgets, transient retry, and inventory verified                                                                  |
+|    03 | TEST-01 | complete | `6fbe2a9a` | 20 behavior + 1 contract test       | Runner, subscription, clock, and launch-policy seams verified                                                                     |
+|    04 | RES-02  | complete | `7eaab92e` | 61 focused tests                    | Child reap, output drain, close failures, and ownership verified                                                                  |
+|    05 | RES-03  | complete | `63ec2cc0` | 163 Rust semantic tests             | Frame bounds, sticky failure, waiters, and one-shot kill verified                                                                 |
+|    06 | RES-04  | complete | `8587125e` | 34 focused tests                    | Time/byte bounds, lock/recheck, staging cleanup, and TLA verified                                                                 |
+|    07 | RES-05  | complete | `b9cb9aa3` | 20 focused + 25 contract tests      | Exit/error/timeout ownership, result identity, and cache verified                                                                 |
+|    08 | DD-08   | complete | `2a4d62b4` | 180 focused + contract tests        | Fault phases, platform limits, callers, and binary promotion verified                                                             |
+|    09 | DD-04   | complete | `437dc042` | 181 focused tests                   | Partial creation, guarded reclaim, shared I/O, PID reuse, legacy, and release verified                                            |
+|    10 | DD-01   | complete | `c58c28df` | 112 focused; 1,558 full-suite tests | Immutable pointer, retained companions, cursor/semantic isolation, architecture gate verified                                     |
+|    11 | DD-03   | complete | `a13f6808` | 120 focused; 1,574 full-suite tests | Immutable admission, exclusive claims, completion receipts, retry, expiry, and status verified                                    |
+|    12 | DD-05   | complete | `aff8685c` | 53 focused; 1,590 full-suite tests  | Revision checks, narrow merges, exclusive create, strict Markdown conflicts, and crash boundaries verified                        |
+|    13 | DD-06   | complete | `5bc743ed` | 39 focused; 1,598 full-suite tests  | Exclusive create, idempotent replay, compare-and-replace, schema decoding, and crash boundaries verified                          |
+|    14 | DD-07   | complete | `5fd33ab0` | 24 focused; 1,603 full-suite tests  | G2 publication, deletion/recreation, ownership, and touch ordering verified                                                       |
+|    15 | DD-09   | complete | `adfded36` | 48 focused; 1,606 full-suite tests  | Serialized UPSERT, exact retry, collision, timeout, and suppression verified                                                      |
+|    16 | DD-10   | complete | this slice | 68 focused mailbox/identity tests   | Atomic claims, first-completion fencing, retry, quotas, crash recovery, legacy overlap, fairness, cleanup, and telemetry verified |
+|    17 | DD-11   | pending  |            |                                     |                                                                                                                                   |
+|    18 | DD-12   | pending  |            |                                     |                                                                                                                                   |
+|    19 | API-04  | pending  |            |                                     |                                                                                                                                   |
+|    20 | API-01  | pending  |            |                                     |                                                                                                                                   |
+|    21 | API-02  | pending  |            |                                     |                                                                                                                                   |
+|    22 | API-03  | pending  |            |                                     |                                                                                                                                   |
+|    23 | API-05  | pending  |            |                                     |                                                                                                                                   |
+|    24 | API-06  | pending  |            |                                     |                                                                                                                                   |
+|    25 | REL-01  | pending  |            |                                     |                                                                                                                                   |
+|    26 | REL-02  | pending  |            |                                     |                                                                                                                                   |
+|    27 | REL-03  | pending  |            |                                     |                                                                                                                                   |
 
 ### Slice 10 verification record
 
@@ -750,6 +762,62 @@ Rollback is commit-scoped. Durable-format slices additionally retain legacy read
   a writable temporary root; the unredirected sandbox run reached all changed
   tests but denied eight unrelated `~/.cache` directory creations.
 - Typecheck, lint, production build, and whitespace validation pass.
+
+### Slice 16 verification record
+
+- The common mailbox is a bounded state machine with `pending`,
+  owner-specific `inflight`, retained `responses`, and bounded `dead-letter`
+  state. Admission, claim transfer, reclaim, first completion, and maintenance
+  share one token-owned coordinator so a quota scan cannot miss a concurrent
+  rename between lifecycle directories.
+- A SHA-256 operation key and deterministic request ID make retry a join over
+  pending, inflight, or completed state. The canonical JSON identity encoder
+  is shared by mailbox and durable Rust session identities, with explicit
+  tests for key-order convergence and array-order significance.
+- TypeScript semantic, TypeScript index, and durable Rust transports publish
+  version 3 request envelopes with client identity, enqueue time, deadline,
+  and operation identity. They drain the immediately prior request layout,
+  reject malformed, expired, oversized, and explicitly future-version work,
+  and retain authoritative responses instead of deleting evidence on client
+  timeout.
+- The 68-test focused matrix covers the shared state machine plus all three
+  transports, watch-state parsing, watch-service telemetry, canonical
+  identity, item/count/byte backpressure, bounded batch fairness, claim expiry,
+  owner fencing, crash-before/after-response recovery, legacy overlap, and
+  bounded cleanup.
+- A complete SCIP affected-consumer pass identified TypeScript incremental
+  indexing and the Rust LSP session/readiness consumers. Their 62 tests pass
+  independently of the focused mailbox suites.
+- Refutation R1 followed every affected consumer outside the directly changed
+  tests and found no generation, requester, or LSP readiness regression.
+  Refutation R2 forced an expired owner to complete after its owner directory
+  had been reclaimed; it exposed a real missing-directory fsync defect. The
+  completion path now syncs the surviving inflight root, and a permanent
+  first-completion-fencing race test covers the repaired boundary.
+- The health-baseline lens reported accumulated heuristic deltas across the
+  remediation program. One DD-10 duplicate was real: Rust and mailbox identity
+  code had separate canonical JSON encoders. That implementation was unified
+  in the dependency-free domain boundary. The retained DD-10 signals are
+  expected extraction pressure inside one cohesive state machine, typed
+  backpressure/wire contracts whose purpose is cross-process behavior, and
+  thin protocol adapters.
+- The diff gate's directory-enumeration echo was reviewed and suppressed
+  narrowly: the mailbox must enumerate malformed and legacy retained records,
+  while the older refresh queue intentionally filters a suffix. The
+  watch-server/watch-service co-change signal was also suppressed narrowly:
+  DD-10 changes mailbox processing and telemetry publication, while
+  `watch-service.ts` owns unchanged external lifecycle control. The complete
+  watch-service suite verifies that boundary.
+- Production build, TypeScript validation, ESLint, formatting, whitespace,
+  and all 68 focused tests pass. The complete suite reaches 215 files: 214
+  files and 1,613 tests pass, with 2 intentional skips. Its remaining 2
+  failures are the concurrent skill-consolidation command-catalog assertions
+  in `tests/runtime/cli-contract.test.ts`; they do not execute DD-10 code and
+  are assigned to the skill owner in `HEY.md`. The same concurrent edit is the
+  only blocking finding left in the combined diff gate, and the two broken
+  repo-local wrapper links are the only remaining full-lint failure. These
+  integration failures must be closed and the full suite/gate rerun before
+  the durable-coordination phase gate.
 
 ### Slice 09 verification note
 

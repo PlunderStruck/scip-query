@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import type { RustReferenceWorkerRequest, RustReferenceWorkerResponse } from './lsp-batch-worker.js';
@@ -9,13 +9,23 @@ import type {
   RustImportDefinitionWorkerRequest,
   RustImportDefinitionWorkerResponse,
 } from './semantic-resolution.js';
+import { stableJson } from '../../domain/stable-json.js';
 import { profileEnabled, writeProfileEvent } from '../../instrumentation/profile.js';
 import { isProcessAlive } from '../../platform/process-liveness.js';
-import { writeJsonAtomic } from '../../storage/atomic-json.js';
+import {
+  BOUNDED_MAILBOX_VERSION,
+  boundedMailboxOperationKey,
+  boundedMailboxPaths,
+  boundedMailboxRequestId,
+  enqueueBoundedMailboxRequest,
+  type BoundedMailboxLimits,
+  type BoundedMailboxRequestIdentity,
+  type BoundedMailboxStatus,
+} from '../../storage/bounded-mailbox.js';
 import { rustCompilerEngineIdentity, type RustCompilerEngineIdentity } from './engine-identity.js';
 import { rustAnalyzerProjectFingerprint } from './project-fingerprint.js';
 
-export const DURABLE_RUST_SESSION_PROTOCOL_VERSION = 2;
+export const DURABLE_RUST_SESSION_PROTOCOL_VERSION = 3;
 const DURABLE_RUST_SESSION_MAX_HEARTBEAT_AGE_MS = 5_000;
 const DURABLE_RUST_SESSION_STARTUP_TIMEOUT_MS = 5_000;
 const DURABLE_RUST_SESSION_POLL_INTERVAL_MS = 10;
@@ -74,6 +84,12 @@ export interface DurableRustSessionServerState {
   pid: number;
   heartbeatAtMs: number;
   busyUntilMs?: number;
+  mailbox?: BoundedMailboxStatus;
+}
+
+export interface DurableRustMailboxEnvelope extends BoundedMailboxRequestIdentity {
+  protocolVersion: typeof DURABLE_RUST_SESSION_PROTOCOL_VERSION;
+  request: DurableRustSessionRequest;
 }
 
 export interface DurableRustSessionRequesterRuntime {
@@ -90,6 +106,7 @@ export interface DurableRustSessionRequesterOptions {
   tempRoot?: string;
   identityRuntime?: DurableRustSessionIdentityRuntime;
   runtime?: DurableRustSessionRequesterRuntime;
+  mailboxLimits?: Partial<BoundedMailboxLimits>;
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
@@ -281,6 +298,7 @@ export function createDurableRustAnalyzerSessionRequester(
       request,
       timeoutMs,
       runtime,
+      opts.mailboxLimits,
     );
   };
 
@@ -362,47 +380,52 @@ function dispatchDurableRustSessionRequest<Response>(
   request: DurableRustSessionRequest,
   timeoutMs: number,
   runtime: DurableRustSessionRequesterRuntime,
+  mailboxLimits: Partial<BoundedMailboxLimits> = {},
 ): Response {
-  const requestId = runtime.randomId();
   const startedAtMs = runtime.now();
-  const requestDir = resolve(sessionDir, 'requests');
-  const responseDir = resolve(sessionDir, 'responses');
-  const requestPath = resolve(requestDir, `${requestId}.json`);
-  const responsePath = resolve(responseDir, `${requestId}.json`);
-  mkdirSync(requestDir, { recursive: true });
-  mkdirSync(responseDir, { recursive: true });
-  writeJsonAtomic(requestPath, { id: requestId, request });
+  const deadline = startedAtMs + timeoutMs;
+  const operationKey = boundedMailboxOperationKey('rust-semantic-v3', request);
+  const requestId = boundedMailboxRequestId(operationKey);
+  const mailboxPaths = boundedMailboxPaths(sessionDir);
+  const admitted = enqueueBoundedMailboxRequest(
+    mailboxPaths,
+    {
+      mailboxVersion: BOUNDED_MAILBOX_VERSION,
+      protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
+      id: requestId,
+      operationKey,
+      clientId: runtime.randomId(),
+      enqueuedAtMs: startedAtMs,
+      deadlineAtMs: deadline,
+      request,
+    } satisfies DurableRustMailboxEnvelope,
+    { nowMs: startedAtMs, limits: mailboxLimits },
+  );
 
-  const deadline = runtime.now() + timeoutMs;
-  try {
-    ensureDurableRustSessionServer(sessionDir, serverPath, semanticWorkerPath, deadline, runtime);
-    while (runtime.now() <= deadline) {
-      if (existsSync(responsePath)) {
-        const payload = parseDurableResponse(readFileSync(responsePath, 'utf8'));
-        if (!payload.ok) throw new Error(payload.error);
-        if (profileEnabled()) {
-          writeProfileEvent({
-            type: 'span',
-            name: 'rust.semantic.durable-session.request',
-            durationMs: runtime.now() - startedAtMs,
-            ok: true,
-            session: payload.session,
-            kind: request.kind,
-          });
-        }
-        return payload.response as Response;
+  ensureDurableRustSessionServer(sessionDir, serverPath, semanticWorkerPath, deadline, runtime);
+  while (runtime.now() <= deadline) {
+    if (existsSync(admitted.responsePath)) {
+      const payload = parseDurableResponse(readFileSync(admitted.responsePath, 'utf8'), requestId, operationKey);
+      if (!payload.ok) throw new Error(payload.error);
+      if (profileEnabled()) {
+        writeProfileEvent({
+          type: 'span',
+          name: 'rust.semantic.durable-session.request',
+          durationMs: runtime.now() - startedAtMs,
+          ok: true,
+          session: payload.session,
+          kind: request.kind,
+        });
       }
-      const state = readDurableRustSessionServerState(sessionDir);
-      if (!state || !isDurableRustSessionStateLive(state, runtime.now(), runtime.isProcessAlive)) {
-        ensureDurableRustSessionServer(sessionDir, serverPath, semanticWorkerPath, deadline, runtime);
-      }
-      runtime.sleep(DURABLE_RUST_SESSION_POLL_INTERVAL_MS);
+      return payload.response as Response;
     }
-    throw new Error(`Durable Rust semantic session timed out after ${(timeoutMs / 1000).toFixed(0)}s.`);
-  } finally {
-    rmSync(requestPath, { force: true });
-    rmSync(responsePath, { force: true });
+    const state = readDurableRustSessionServerState(sessionDir);
+    if (!state || !isDurableRustSessionStateLive(state, runtime.now(), runtime.isProcessAlive)) {
+      ensureDurableRustSessionServer(sessionDir, serverPath, semanticWorkerPath, deadline, runtime);
+    }
+    runtime.sleep(DURABLE_RUST_SESSION_POLL_INTERVAL_MS);
   }
+  throw new Error(`Durable Rust semantic session timed out after ${(timeoutMs / 1000).toFixed(0)}s.`);
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
@@ -436,7 +459,8 @@ export function readDurableRustSessionServerState(sessionDir: string): DurableRu
       typeof parsed.protocolVersion !== 'number' ||
       typeof parsed.pid !== 'number' ||
       typeof parsed.heartbeatAtMs !== 'number' ||
-      (parsed.busyUntilMs !== undefined && typeof parsed.busyUntilMs !== 'number')
+      (parsed.busyUntilMs !== undefined && typeof parsed.busyUntilMs !== 'number') ||
+      (parsed.mailbox !== undefined && !isBoundedMailboxStatus(parsed.mailbox))
     ) {
       return null;
     }
@@ -445,13 +469,18 @@ export function readDurableRustSessionServerState(sessionDir: string): DurableRu
       pid: parsed.pid,
       heartbeatAtMs: parsed.heartbeatAtMs,
       ...(parsed.busyUntilMs === undefined ? {} : { busyUntilMs: parsed.busyUntilMs }),
+      ...(parsed.mailbox === undefined ? {} : { mailbox: parsed.mailbox }),
     };
   } catch {
     return null;
   }
 }
 
-function parseDurableResponse(raw: string):
+function parseDurableResponse(
+  raw: string,
+  requestId: string,
+  operationKey: string,
+):
   | {
       ok: true;
       session: DurableRustSessionResponse['session'];
@@ -459,7 +488,22 @@ function parseDurableResponse(raw: string):
     }
   | { ok: false; error: string } {
   try {
-    const parsed = JSON.parse(raw) as { ok?: unknown; session?: unknown; response?: unknown; error?: unknown };
+    const parsed = JSON.parse(raw) as {
+      ok?: unknown;
+      protocolVersion?: unknown;
+      id?: unknown;
+      operationKey?: unknown;
+      session?: unknown;
+      response?: unknown;
+      error?: unknown;
+    };
+    if (
+      parsed.protocolVersion !== DURABLE_RUST_SESSION_PROTOCOL_VERSION ||
+      parsed.id !== requestId ||
+      parsed.operationKey !== operationKey
+    ) {
+      return { ok: false, error: 'helper wrote an incompatible response identity' };
+    }
     if (
       parsed.ok === true &&
       (parsed.session === 'created' || parsed.session === 'reused' || parsed.session === 'invalidated') &&
@@ -479,6 +523,27 @@ function parseDurableResponse(raw: string):
       error: `helper wrote malformed JSON: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
+}
+
+function isBoundedMailboxStatus(value: unknown): value is BoundedMailboxStatus {
+  if (!value || typeof value !== 'object') return false;
+  const status = value as Partial<BoundedMailboxStatus>;
+  return (
+    nonNegativeInteger(status.pending) &&
+    nonNegativeInteger(status.inflight) &&
+    nonNegativeInteger(status.responses) &&
+    nonNegativeInteger(status.deadLetters) &&
+    nonNegativeInteger(status.invalid) &&
+    nonNegativeInteger(status.totalItems) &&
+    typeof status.totalBytes === 'number' &&
+    Number.isFinite(status.totalBytes) &&
+    status.totalBytes >= 0 &&
+    (status.oldestPendingAt === undefined || Number.isFinite(Date.parse(status.oldestPendingAt)))
+  );
+}
+
+function nonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
 }
 
 function currentWorkerEnvironment(): Record<string, string | null> {
@@ -552,17 +617,6 @@ const DEFAULT_REQUESTER_RUNTIME: DurableRustSessionRequesterRuntime = {
     Atomics.wait(signal, 0, 0, durationMs);
   },
 };
-
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.entries(value)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value);
-}
 
 function sha256(value: string | NodeJS.ArrayBufferView): string {
   return createHash('sha256').update(value).digest('hex');

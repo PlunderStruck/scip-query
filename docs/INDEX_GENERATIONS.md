@@ -70,6 +70,14 @@ and TypeScript semantic mailbox requests carry the handle identity, so a
 continuation or numeric symbol identifier from an older generation is rejected
 when a service has moved to a newer one.
 
+Mailbox protocol version 3 additionally binds that generation identity into a
+content-derived logical-operation key. The deterministic request ID lets a
+retry join an already pending, inflight, or retained completed operation,
+while the service still recomputes the key and rejects a path, payload, or
+generation mismatch. See
+[`MAILBOX_LIFECYCLE.md`](MAILBOX_LIFECYCLE.md) for ownership, expiry, limits,
+and legacy overlap.
+
 ## Legacy overlap and retention
 
 A cache without `state.json` remains readable through a bounded legacy

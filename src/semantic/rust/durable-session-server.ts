@@ -1,15 +1,30 @@
 import process from 'node:process';
-import { mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   DURABLE_RUST_SESSION_PROTOCOL_VERSION,
   DurableRustSessionHost,
+  type DurableRustMailboxEnvelope,
   type DurableRustSessionRequest,
   type DurableRustSessionServerState,
 } from './durable-session.js';
 import { createWorkerRustAnalyzerSessionRequester } from './lsp-session.js';
-import { writeJsonAtomic, writeJsonDurable } from '../../storage/atomic-json.js';
+import { writeJsonDurable } from '../../storage/atomic-json.js';
+import {
+  BOUNDED_MAILBOX_VERSION,
+  boundedMailboxOperationKey,
+  boundedMailboxPaths,
+  boundedMailboxRequestId,
+  claimBoundedMailboxRequests,
+  completeBoundedMailboxClaim,
+  initializeBoundedMailbox,
+  inspectBoundedMailbox,
+  readBoundedMailboxClaim,
+  rejectBoundedMailboxClaim,
+  type BoundedMailboxLimits,
+} from '../../storage/bounded-mailbox.js';
 import {
   type LegacyProcessLockDecoder,
   type ProcessFileLock,
@@ -20,49 +35,73 @@ const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60_000;
 const POLL_INTERVAL_MS = 10;
 const HEARTBEAT_INTERVAL_MS = 1_000;
 
-interface DurableMailboxRequest {
-  id: string;
-  request: DurableRustSessionRequest;
-}
-
 export function processDurableRustSessionRequests(
   sessionDir: string,
   host: DurableRustSessionHost,
-  opts: { beforeRequest?: (request: DurableRustSessionRequest) => void } = {},
+  opts: {
+    beforeRequest?: (request: DurableRustSessionRequest) => void;
+    nowMs?: number;
+    ownerId?: string;
+    limits?: Partial<BoundedMailboxLimits>;
+  } = {},
 ): number {
-  const requestDir = resolve(sessionDir, 'requests');
-  const responseDir = resolve(sessionDir, 'responses');
-  mkdirSync(requestDir, { recursive: true });
-  mkdirSync(responseDir, { recursive: true });
+  const paths = boundedMailboxPaths(sessionDir);
+  initializeBoundedMailbox(paths);
+  const nowMs = opts.nowMs ?? Date.now();
+  const claims = claimBoundedMailboxRequests(paths, {
+    ownerId: opts.ownerId ?? DURABLE_RUST_MAILBOX_OWNER,
+    nowMs,
+    limits: opts.limits,
+  });
   let processed = 0;
-  for (const file of readdirSync(requestDir)
-    .filter((entry) => entry.endsWith('.json'))
-    .sort()) {
-    const requestPath = resolve(requestDir, file);
-    let message: DurableMailboxRequest | null = null;
+  for (const claim of claims) {
+    let message: DurableRustMailboxEnvelope | null = null;
     try {
-      message = parseMailboxRequest(readFileSync(requestPath, 'utf8'));
+      message = parseMailboxRequest(readBoundedMailboxClaim(claim, opts.limits), nowMs);
+      if (message.id !== claim.requestId) {
+        throw new Error('Durable Rust semantic request identity does not match its mailbox path.');
+      }
+      if (message.deadlineAtMs < nowMs) {
+        throw new Error('Durable Rust semantic request expired before processing.');
+      }
       opts.beforeRequest?.(message.request);
       const result = host.handle(message.request);
-      writeJsonAtomic(resolve(responseDir, `${message.id}.json`), { ok: true, ...result });
+      completeBoundedMailboxClaim(
+        paths,
+        claim,
+        {
+          ok: true,
+          protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
+          id: message.id,
+          ...result,
+        },
+        { nowMs, limits: opts.limits },
+      );
     } catch (error) {
-      const id = message?.id ?? file.slice(0, -'.json'.length);
-      writeJsonAtomic(resolve(responseDir, `${id}.json`), {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    } finally {
-      rmSync(requestPath, { force: true });
-      processed += 1;
+      const id = message?.id ?? claim.requestId;
+      const reason = error instanceof Error ? error.message : String(error);
+      rejectBoundedMailboxClaim(
+        paths,
+        claim,
+        {
+          ok: false,
+          protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
+          id,
+          error: reason,
+        },
+        reason,
+        { nowMs, limits: opts.limits },
+      );
     }
+    processed += 1;
   }
   return processed;
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 async function runDurableRustSessionServer(sessionDir: string, semanticWorkerPath: string): Promise<void> {
-  mkdirSync(resolve(sessionDir, 'requests'), { recursive: true });
-  mkdirSync(resolve(sessionDir, 'responses'), { recursive: true });
+  const mailboxPaths = boundedMailboxPaths(sessionDir);
+  initializeBoundedMailbox(mailboxPaths);
   const lockPath = resolve(sessionDir, 'server.lock');
   const serverLock = acquireDurableRustSessionServerLock(lockPath);
   if (!serverLock) return;
@@ -89,6 +128,7 @@ async function runDurableRustSessionServer(sessionDir: string, semanticWorkerPat
       pid: process.pid,
       heartbeatAtMs: now,
       ...(busyUntilMs === undefined ? {} : { busyUntilMs }),
+      mailbox: inspectBoundedMailbox(mailboxPaths),
     } satisfies DurableRustSessionServerState);
   };
 
@@ -131,12 +171,49 @@ export function acquireDurableRustSessionServerLock(lockPath: string): ProcessFi
   return result.kind === 'acquired' ? result.lock : null;
 }
 
-function parseMailboxRequest(raw: string): DurableMailboxRequest {
-  const parsed = JSON.parse(raw) as Partial<DurableMailboxRequest>;
+function parseMailboxRequest(raw: string, nowMs: number): DurableRustMailboxEnvelope {
+  const parsed = JSON.parse(raw) as Partial<DurableRustMailboxEnvelope> & { protocolVersion?: unknown };
   if (typeof parsed.id !== 'string' || !parsed.request || typeof parsed.request !== 'object') {
     throw new Error('Durable Rust semantic helper received an invalid mailbox request.');
   }
-  return { id: parsed.id, request: parsed.request } as DurableMailboxRequest;
+  if (parsed.protocolVersion === DURABLE_RUST_SESSION_PROTOCOL_VERSION) {
+    if (
+      parsed.mailboxVersion !== BOUNDED_MAILBOX_VERSION ||
+      typeof parsed.operationKey !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(parsed.operationKey) ||
+      parsed.id !== boundedMailboxRequestId(parsed.operationKey) ||
+      typeof parsed.clientId !== 'string' ||
+      !parsed.clientId ||
+      typeof parsed.enqueuedAtMs !== 'number' ||
+      !Number.isFinite(parsed.enqueuedAtMs) ||
+      typeof parsed.deadlineAtMs !== 'number' ||
+      !Number.isFinite(parsed.deadlineAtMs) ||
+      parsed.deadlineAtMs < parsed.enqueuedAtMs
+    ) {
+      throw new Error('Durable Rust semantic helper received an invalid mailbox lifecycle.');
+    }
+    const current = parsed as DurableRustMailboxEnvelope;
+    if (current.operationKey !== boundedMailboxOperationKey('rust-semantic-v3', current.request)) {
+      throw new Error('Durable Rust semantic helper received a mismatched mailbox operation identity.');
+    }
+    return current;
+  }
+  if (parsed.protocolVersion !== undefined) {
+    throw new Error(
+      `Durable Rust semantic helper does not support mailbox protocol ${String(parsed.protocolVersion)}.`,
+    );
+  }
+  const request = parsed.request as DurableRustSessionRequest;
+  return {
+    mailboxVersion: BOUNDED_MAILBOX_VERSION,
+    protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
+    id: parsed.id,
+    operationKey: boundedMailboxOperationKey('rust-semantic-v2', { id: parsed.id, request }),
+    clientId: 'legacy-v2',
+    enqueuedAtMs: nowMs,
+    deadlineAtMs: nowMs + Math.max(1, request.timeoutMs ?? 120_000),
+    request,
+  };
 }
 
 function configuredIdleTimeoutMs(): number {
@@ -159,3 +236,5 @@ if (invokedPath === import.meta.url) {
     await runDurableRustSessionServer(sessionDir, semanticWorkerPath);
   }
 }
+
+const DURABLE_RUST_MAILBOX_OWNER = `rust-semantic-${process.pid}-${randomUUID()}`;

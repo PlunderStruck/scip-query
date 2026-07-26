@@ -1,0 +1,7 @@
+{
+  "id": "SQF78A9F0FAF56",
+  "check": "co-change-partner",
+  "file": "src/runtime/watch-server.ts",
+  "reason": "DD-10 changes bounded mailbox processing and publishes its telemetry from the watch server. watch-service.ts owns external process lifecycle and only consumes the versioned state through platform/watch-service-state.ts; its behavior and interface are unchanged, and the complete watch-service suite verifies that boundary.",
+  "createdAt": "2026-07-26T05:46:48.826Z"
+}

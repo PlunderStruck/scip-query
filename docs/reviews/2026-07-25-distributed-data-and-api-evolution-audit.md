@@ -71,24 +71,24 @@ Severity:
 
 ## 3. Shared-state and contract map
 
-| Boundary                    | Real authority                                    | Writers                                  | Readers                                           | Current coordination                                | Audit result                                                       |
-| --------------------------- | ------------------------------------------------- | ---------------------------------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------ |
-| Stable index                | One corresponding SQLite/SCIP/metadata generation | Reindex publisher, shared-cache hydrator | CLI commands, semantic services, freshness checks | Reindex lock; per-file atomic rename                | Candidate construction is strong; multi-file reader binding is not |
-| Shared clean-worktree cache | Immutable content-addressed generation directory  | Reindex shared publisher                 | Hydrator, garbage collector                       | Build lock, repository GC lock, artifact hashes     | Publication is strong; lease touch has a stale write               |
-| Watch control plane         | Watch state, activity, PID lock                   | Watch process and command clients        | Watch controller and requesters                   | Atomic JSON replacement, PID liveness               | Refresh RMW can lose requests; PID identity is insufficient        |
-| Reindex ownership           | Reindex lock file                                 | Watcher or manual CLI                    | Competing reindex and preemption path             | `open("wx")`, PID liveness                          | Malformed locks wedge; PID reuse makes preemption unsafe           |
-| Evidence cache              | Rebuildable SQLite observations                   | Query processes                          | Query processes                                   | WAL, transactions, fingerprints                     | Result caching is sound; outcome counters lose increments          |
-| TypeScript mailbox          | Request and response files                        | CLI clients and watch service            | Watch service and CLI clients                     | UUID filenames, protocol version, deadlines         | Correlation is good; orphan cleanup and backpressure are absent    |
-| Rust mailbox                | Request and response files                        | CLI clients and durable server           | Durable server and CLI clients                    | UUID filenames, server-state version                | Per-message contract and expiry are weaker than TypeScript         |
-| Subprocesses and workers    | Child exit plus bounded output                    | Reindex, analysis, watch, semantic paths | Parent coordinators                               | Per-call ad hoc timeouts and buffers                | Deadlines, drain, and termination policy are incomplete            |
-| Rust LSP transport          | Framed JSON-RPC byte stream                       | rust-analyzer                            | Rust semantic client                              | Content-Length framing and request deadlines        | Header and body accumulation are unbounded                         |
-| Verified binary download    | Checksum-matching cached bytes                    | TLA/Windows fetch commands               | Tool resolvers                                    | SHA-256 and atomic rename                           | Network duration, response size, and temp ownership are unbounded  |
-| Project/agent config        | User-authored JSON or Markdown                    | User, setup, hook installer              | Agents and runtime                                | Revision-aware narrow merge and durable publication | Conflicts are explicit; latest unrelated edits survive             |
-| Suppressions                | One committed JSON file per accepted finding      | Agents and users                         | Diff gate                                         | Deterministic filename                              | Same-worktree writers silently overwrite                           |
-| Outcome events              | One immutable committed JSON file per event       | Diff gate                                | Reports and reconciliation                        | Content-derived name, exclusive create, read dedupe | Good merge model; schema is unversioned                            |
-| CLI JSON                    | Printed process output                            | Current CLI                              | Agents, scripts, external callers                 | Descriptor metadata and coverage validation         | Shape is useful but unversioned                                    |
-| npm TypeScript API          | Exported `.d.ts` surface                          | Package releases                         | Library consumers                                 | Export membership tests                             | No signature compatibility baseline                                |
-| Windows sidecar             | Published npm tarball containing two PE binaries  | Release script                           | Windows installations                             | Version pin and file-presence checks                | Byte provenance and registry identity are not verified             |
+| Boundary                    | Real authority                                    | Writers                                  | Readers                                           | Current coordination                                      | Audit result                                                               |
+| --------------------------- | ------------------------------------------------- | ---------------------------------------- | ------------------------------------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Stable index                | One corresponding SQLite/SCIP/metadata generation | Reindex publisher, shared-cache hydrator | CLI commands, semantic services, freshness checks | Reindex lock; per-file atomic rename                      | Candidate construction is strong; multi-file reader binding is not         |
+| Shared clean-worktree cache | Immutable content-addressed generation directory  | Reindex shared publisher                 | Hydrator, garbage collector                       | Build lock, repository GC lock, artifact hashes           | Publication is strong; lease touch has a stale write                       |
+| Watch control plane         | Watch state, activity, PID lock                   | Watch process and command clients        | Watch controller and requesters                   | Atomic JSON replacement, PID liveness                     | Refresh RMW can lose requests; PID identity is insufficient                |
+| Reindex ownership           | Reindex lock file                                 | Watcher or manual CLI                    | Competing reindex and preemption path             | `open("wx")`, PID liveness                                | Malformed locks wedge; PID reuse makes preemption unsafe                   |
+| Evidence cache              | Rebuildable SQLite observations                   | Query processes                          | Query processes                                   | WAL, transactions, fingerprints                           | Result caching is sound; outcome counters lose increments                  |
+| TypeScript mailbox          | Pending, inflight, response, and rejection files  | CLI clients and watch service            | Watch service and CLI clients                     | Stable operation identity, protocol v3, deadlines, quotas | Correlation, retry, claim recovery, cleanup, and backpressure are explicit |
+| Rust mailbox                | Pending, inflight, response, and rejection files  | CLI clients and durable server           | Durable server and CLI clients                    | Stable operation identity, protocol v3, deadlines, quotas | Lifecycle now shares the TypeScript mailbox state machine                  |
+| Subprocesses and workers    | Child exit plus bounded output                    | Reindex, analysis, watch, semantic paths | Parent coordinators                               | Per-call ad hoc timeouts and buffers                      | Deadlines, drain, and termination policy are incomplete                    |
+| Rust LSP transport          | Framed JSON-RPC byte stream                       | rust-analyzer                            | Rust semantic client                              | Content-Length framing and request deadlines              | Header and body accumulation are unbounded                                 |
+| Verified binary download    | Checksum-matching cached bytes                    | TLA/Windows fetch commands               | Tool resolvers                                    | SHA-256 and atomic rename                                 | Network duration, response size, and temp ownership are unbounded          |
+| Project/agent config        | User-authored JSON or Markdown                    | User, setup, hook installer              | Agents and runtime                                | Revision-aware narrow merge and durable publication       | Conflicts are explicit; latest unrelated edits survive                     |
+| Suppressions                | One committed JSON file per accepted finding      | Agents and users                         | Diff gate                                         | Deterministic filename                                    | Same-worktree writers silently overwrite                                   |
+| Outcome events              | One immutable committed JSON file per event       | Diff gate                                | Reports and reconciliation                        | Content-derived name, exclusive create, read dedupe       | Good merge model; schema is unversioned                                    |
+| CLI JSON                    | Printed process output                            | Current CLI                              | Agents, scripts, external callers                 | Descriptor metadata and coverage validation               | Shape is useful but unversioned                                            |
+| npm TypeScript API          | Exported `.d.ts` surface                          | Package releases                         | Library consumers                                 | Export membership tests                                   | No signature compatibility baseline                                        |
+| Windows sidecar             | Published npm tarball containing two PE binaries  | Release script                           | Windows installations                             | Version pin and file-presence checks                      | Byte provenance and registry identity are not verified                     |
 
 ---
 
@@ -497,7 +497,7 @@ connections reproduce the former stale-read interleaving and retain both
 increments; additional tests cover retry, collision, suppression, duplicate
 findings within one run, lock timeout, and successful retry after lock release.
 
-### DD-10 — S3 — File mailboxes have no claim state, orphan collection, or backpressure
+### DD-10 — S3 — File mailboxes have no claim state, orphan collection, or backpressure — resolved in Slice 16
 
 **Evidence:** source-confirmed lifecycle gap.
 
@@ -530,6 +530,31 @@ Unique IDs correctly prevent response correlation mistakes. The work is read-onl
 **Required tests:** client death, server death before and after claim, timeout during processing, replay, duplicate logical request, queue overload, and cleanup after restart.
 
 **Acceptance condition:** every mailbox file has a bounded lifecycle and every replayable operation has declared duplicate semantics.
+
+**Resolution:** `src/storage/bounded-mailbox.ts` now owns the shared
+filesystem state machine used by both TypeScript mailboxes and the durable Rust
+mailbox. Current writers publish immutable requests under `pending/` only
+after a token-checked admission coordinator proves the retained item, byte,
+and per-item limits. Each request carries a recomputed SHA-256 operation key,
+deterministic request ID, client identity, enqueue time, and deadline.
+Services claim a bounded enqueue-ordered batch by atomically renaming work into
+an owner-specific `inflight/` directory whose filename records claim expiry.
+Expired ownership is reclaimed; a response is durably and exclusively
+published before claim release; a retained response makes retry idempotent and
+also closes the crash-after-response window without re-execution.
+
+Response, dead-letter, and atomic-staging history is collected under bounded
+per-pass maintenance. Malformed, expired, oversized, and failed work receives
+an explicit error response and a bounded rejection record. The watch service
+and Rust helper state expose pending, inflight, response, dead-letter, invalid,
+item, byte, and oldest-pending telemetry. New services drain TypeScript v2
+flat request files and the former unversioned Rust request shape during the
+overlap window; current writers never publish into the legacy directory.
+Crash-before-claim, crash-after-claim, crash-after-response, exact retry,
+admission interleaving, count/byte/per-item overload, FIFO batch fairness,
+orphan reclaim, malformed/oversized input, retention, and protocol integration
+are covered by the shared and three transport suites. The operational
+contract and default limits are in `docs/MAILBOX_LIFECYCLE.md`.
 
 ### DD-11 — S3 — Wall-clock jumps can distort ownership, timeout, and heartbeat decisions
 
@@ -920,9 +945,10 @@ The immutable one-file-per-event design is excellent for Git merging and replay 
 
 **Acceptance condition:** readers can distinguish “no event” from “event exists but this binary cannot interpret it.”
 
-### API-06 — S3 — Rust mailbox messages lack the explicit version and identity checks used by TypeScript
+### API-06 — S3 — Rust mailbox needs a complete session-identity and compatibility contract
 
-**Evidence:** contract gap.
+**Evidence:** pre-Slice-16 contract gap, partially resolved by the shared
+mailbox lifecycle.
 
 **Code:**
 
@@ -931,9 +957,17 @@ The immutable one-file-per-event design is excellent for Git merging and replay 
 - The durable server's `server.json` is versioned and the session directory is tied to a server binary fingerprint elsewhere, which reduces mixed-binary risk.
 - TypeScript envelopes, by contrast, validate protocol, ID, deadline, and generation/base generation.
 
-Unique per-session paths and UUID filenames make accidental cross-request responses unlikely. The gap is explicit compatibility and malformed-message behavior, not evidence of current response confusion.
+Slice 16 advanced Rust requests and responses to protocol version 3, added
+absolute request deadlines and stable operation/request correlation, rejects
+explicit unknown protocol versions, and retained the former unversioned
+request as a bounded legacy read. The remaining gap is strict domain-kind
+validation, echoed durable-session identity, response-expiry acceptance, and
+an executable old/current/future compatibility matrix—not queue lifecycle.
 
-**Recommended design:** version every Rust request and response envelope, validate the request kind and required fields, echo request ID and durable-session identity, add absolute expiry, and reject unsupported versions explicitly.
+**Recommended design:** validate every Rust request kind and required field,
+echo durable-session identity alongside the already versioned request and
+operation IDs, enforce response expiry, and make supported legacy/current and
+unsupported future behavior an explicit compatibility fixture.
 
 **Required tests:** malformed kind, wrong ID, wrong protocol, stale response, newer server/older client, and older server/newer client.
 
@@ -1046,9 +1080,15 @@ DD-09 concerns the mutable observational ledger inside the same database, not th
 
 The missing case is malformed observation recovery, and PID birth identity remains necessary where the tool sends signals.
 
-### 8.6 TypeScript mailbox correlation
+### 8.6 Mailbox correlation and retained completion
 
-TypeScript request and response envelopes include protocol version, request ID, deadline, and generation or base generation. Responses are parsed against expected identity. API-06 should bring Rust up to this standard; DD-10 should add lifecycle management without removing these checks.
+TypeScript request and response envelopes include protocol version, stable
+operation and request identity, deadline, and generation or base generation.
+Responses are parsed against expected identity. Slice 16 extended the same
+correlation fields and lifecycle states to Rust because a retained completion
+cannot be safe without them. API-06 still owns the formal compatibility
+fixture, schema inventory, and supported-version policy audit; it no longer
+needs to invent a separate Rust queue mechanism.
 
 ### 8.7 Conservative shared-cache garbage collection
 

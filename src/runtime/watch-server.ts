@@ -18,6 +18,7 @@ import {
   TypeScriptSemanticServiceHost,
   initializeTypeScriptSemanticMailbox,
   processTypeScriptSemanticMailbox,
+  typeScriptSemanticMailboxStatus,
 } from '../semantic/typescript/session-service.js';
 import {
   publishedGenerationIdentity,
@@ -27,6 +28,7 @@ import {
   TypeScriptIndexServiceHost,
   initializeTypeScriptIndexMailbox,
   processTypeScriptIndexMailbox,
+  typeScriptIndexMailboxStatus,
 } from '../reindex/typescript-index-service.js';
 import {
   publishedTypeScriptIndexGeneration,
@@ -129,11 +131,11 @@ export async function runWatchServiceServer(
       reindexActivity,
       refreshRequests: refreshCoordinator.status(),
       typescriptSemantic: {
-        ...semanticHost.status(),
+        ...semanticHost.status(typeScriptSemanticMailboxStatus(semanticMailboxPaths)),
         ...(semanticBusyUntilMs === undefined ? {} : { busyUntil: new Date(semanticBusyUntilMs).toISOString() }),
       },
       typescriptIndex: {
-        ...indexHost.status(),
+        ...indexHost.status(typeScriptIndexMailboxStatus(indexMailboxPaths)),
         ...(indexBusyUntilMs === undefined ? {} : { busyUntil: new Date(indexBusyUntilMs).toISOString() }),
       },
     });

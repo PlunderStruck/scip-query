@@ -1,10 +1,16 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { captureProfileEnvironment } from '../../instrumentation/profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { writeJsonAtomic } from '../../storage/atomic-json.js';
+import {
+  BOUNDED_MAILBOX_VERSION,
+  boundedMailboxOperationKey,
+  boundedMailboxRequestId,
+  enqueueBoundedMailboxRequest,
+  type BoundedMailboxLimits,
+} from '../../storage/bounded-mailbox.js';
 import {
   WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS,
   readWatchServiceState,
@@ -41,6 +47,7 @@ interface TypeScriptSemanticRequesterRuntime {
 export interface TypeScriptSemanticRequesterOptions {
   timeoutMs?: number;
   runtime?: TypeScriptSemanticRequesterRuntime;
+  mailboxLimits?: Partial<BoundedMailboxLimits>;
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
@@ -119,6 +126,7 @@ export class TypeScriptSemanticRequester {
   private readonly timeoutMs: number;
   private readonly cacheDir: string;
   private readonly projectRoot: string;
+  private readonly mailboxLimits: Partial<BoundedMailboxLimits>;
 
   constructor(
     private readonly db: ScipDatabase,
@@ -126,6 +134,7 @@ export class TypeScriptSemanticRequester {
   ) {
     this.runtime = opts.runtime ?? DEFAULT_RUNTIME;
     this.timeoutMs = opts.timeoutMs ?? configuredTimeoutMs();
+    this.mailboxLimits = opts.mailboxLimits ?? {};
     this.cacheDir = dirname(db.config.dbPath);
     this.projectRoot = canonicalPath(db.config.projectRoot);
   }
@@ -140,37 +149,43 @@ export class TypeScriptSemanticRequester {
     const generation = this.db.generation.identity;
     if (!generation) throw new Error('Published TypeScript generation identity is unavailable.');
 
-    const id = this.runtime.randomId();
-    const requestPath = resolve(mailboxPaths.requestDir, `${id}.json`);
-    const responsePath = resolve(mailboxPaths.responseDir, `${id}.json`);
-    const deadlineAtMs = this.runtime.now() + this.timeoutMs;
-    mkdirSync(mailboxPaths.requestDir, { recursive: true });
-    mkdirSync(mailboxPaths.responseDir, { recursive: true });
-    writeJsonAtomic(requestPath, {
-      protocolVersion: TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
-      id,
+    const enqueuedAtMs = this.runtime.now();
+    const deadlineAtMs = enqueuedAtMs + this.timeoutMs;
+    const profileEnvironment = captureProfileEnvironment();
+    const operationKey = boundedMailboxOperationKey('typescript-semantic-v3', {
       generation,
-      deadlineAtMs,
-      profileEnvironment: captureProfileEnvironment(),
+      profileEnvironment,
       request,
     });
+    const id = boundedMailboxRequestId(operationKey);
+    const admitted = enqueueBoundedMailboxRequest(
+      mailboxPaths,
+      {
+        mailboxVersion: BOUNDED_MAILBOX_VERSION,
+        operationKey,
+        clientId: this.runtime.randomId(),
+        enqueuedAtMs,
+        deadlineAtMs,
+        protocolVersion: TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
+        id,
+        generation,
+        profileEnvironment,
+        request,
+      },
+      { nowMs: enqueuedAtMs, limits: this.mailboxLimits },
+    );
 
-    try {
-      while (this.runtime.now() <= deadlineAtMs) {
-        if (existsSync(responsePath)) {
-          return parseResponse(readFileSync(responsePath, 'utf8'), id, generation);
-        }
-        const liveState = readWatchServiceState(servicePaths.statePath);
-        if (!usableServiceState(liveState, this.projectRoot, this.runtime)) {
-          throw new Error('TypeScript semantic service stopped while processing a request.');
-        }
-        this.runtime.sleep(REQUEST_POLL_INTERVAL_MS);
+    while (this.runtime.now() <= deadlineAtMs) {
+      if (existsSync(admitted.responsePath)) {
+        return parseResponse(readFileSync(admitted.responsePath, 'utf8'), id, generation, operationKey);
       }
-      throw new Error(`TypeScript semantic service timed out after ${this.timeoutMs}ms.`);
-    } finally {
-      rmSync(requestPath, { force: true });
-      rmSync(responsePath, { force: true });
+      const liveState = readWatchServiceState(servicePaths.statePath);
+      if (!usableServiceState(liveState, this.projectRoot, this.runtime)) {
+        throw new Error('TypeScript semantic service stopped while processing a request.');
+      }
+      this.runtime.sleep(REQUEST_POLL_INTERVAL_MS);
     }
+    throw new Error(`TypeScript semantic service timed out after ${this.timeoutMs}ms.`);
   }
 }
 
@@ -193,18 +208,20 @@ function usableServiceState(
   );
 }
 
-function parseResponse(raw: string, id: string, generation: string): unknown {
+function parseResponse(raw: string, id: string, generation: string, operationKey: string): unknown {
   const response = JSON.parse(raw) as {
     ok?: unknown;
     protocolVersion?: unknown;
     id?: unknown;
     generation?: unknown;
+    operationKey?: unknown;
     response?: unknown;
     error?: unknown;
   };
   if (
     response.protocolVersion !== TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION ||
     response.id !== id ||
+    response.operationKey !== operationKey ||
     (response.ok === true && response.generation !== generation)
   ) {
     throw new Error('TypeScript semantic service wrote an incompatible response.');

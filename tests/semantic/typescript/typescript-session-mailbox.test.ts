@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -28,6 +29,7 @@ import {
 } from '../../../src/semantic/typescript/session-service.js';
 import {
   TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
+  TYPESCRIPT_SEMANTIC_LEGACY_PROTOCOL_VERSION,
   publishedGenerationIdentity,
   typeScriptSemanticMailboxPaths,
 } from '../../../src/semantic/typescript/session-protocol.js';
@@ -108,6 +110,16 @@ describe('TypeScript semantic service mailbox', () => {
     for (const id of ['expired', 'malformed', 'wrong']) {
       expect(readResponse(paths.responseDir, id)).toEqual(expect.objectContaining({ ok: false, id }));
     }
+    writeFileSync(join(paths.requestDir, 'oversized.json'), 'x'.repeat(2_000));
+    expect(
+      processTypeScriptSemanticMailbox(paths, service, {
+        nowMs: NOW,
+        limits: { maxItemBytes: 512 },
+      }),
+    ).toBe(1);
+    expect(readResponse(paths.responseDir, 'oversized')).toEqual(
+      expect.objectContaining({ ok: false, id: 'oversized', error: expect.stringContaining('per-item limit') }),
+    );
     expect(service.status().requests).toBe(0);
     service.closeTypeScriptService();
   });
@@ -152,17 +164,21 @@ describe('TypeScript semantic service mailbox', () => {
         randomId: () => 'request-bad',
         isProcessAlive: () => true,
         sleep: () => {
-          writeJsonAtomic(join(paths.responseDir, 'request-bad.json'), {
+          const envelope = onlyPendingEnvelope(paths.pendingDir);
+          writeJsonAtomic(join(paths.responseDir, `${envelope.id}.json`), {
             ok: true,
             protocolVersion: TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
             id: 'some-other-request',
+            operationKey: envelope.operationKey,
             generation,
             response: { available: true },
           });
         },
       },
     });
-    expect(() => mismatched.request({ kind: 'availability' })).toThrow('incompatible response');
+    expect(() => mismatched.request({ kind: 'import-usage', file: 'src/mismatch.ts' })).toThrow(
+      'incompatible response',
+    );
     service.closeTypeScriptService();
     db.close();
   });
@@ -230,6 +246,7 @@ describe('TypeScript semantic service mailbox', () => {
   it('abandons a request promptly when the service dies and bounds a live-service timeout', () => {
     const fixture = serviceFixture(true);
     const db = fixture.openDb();
+    const paths = typeScriptSemanticMailboxPaths(fixture.projectRoot);
     const statePath = join(fixture.projectRoot, 'watch-state.json');
     writeLiveState(statePath, fixture.projectRoot);
     const crashed = new TypeScriptSemanticRequester(db, {
@@ -242,6 +259,7 @@ describe('TypeScript semantic service mailbox', () => {
       },
     });
     expect(() => crashed.request({ kind: 'availability' })).toThrow('stopped while processing');
+    expect(readdirSync(paths.pendingDir).filter((entry) => entry.endsWith('.json'))).toHaveLength(1);
 
     writeLiveState(statePath, fixture.projectRoot);
     let nowMs = NOW;
@@ -256,7 +274,8 @@ describe('TypeScript semantic service mailbox', () => {
         },
       },
     });
-    expect(() => timedOut.request({ kind: 'availability' })).toThrow('timed out');
+    expect(() => timedOut.request({ kind: 'import-usage', file: 'src/timeout.ts' })).toThrow('timed out');
+    expect(readdirSync(paths.pendingDir).filter((entry) => entry.endsWith('.json'))).toHaveLength(2);
     db.close();
   });
 
@@ -470,13 +489,29 @@ function writeRequest(
   profileEnvironment?: Record<string, string | null>,
 ): void {
   writeJsonAtomic(join(requestDir, `${id}.json`), {
-    protocolVersion: TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
+    protocolVersion: TYPESCRIPT_SEMANTIC_LEGACY_PROTOCOL_VERSION,
     id,
     generation,
     deadlineAtMs,
     ...(profileEnvironment ? { profileEnvironment } : {}),
     request,
   });
+}
+
+function onlyPendingEnvelope(pendingDir: string): {
+  id: string;
+  operationKey: string;
+} {
+  const files = readdirJson(pendingDir);
+  expect(files).toHaveLength(1);
+  return JSON.parse(readFileSync(join(pendingDir, files[0]!), 'utf8')) as {
+    id: string;
+    operationKey: string;
+  };
+}
+
+function readdirJson(directory: string): string[] {
+  return readdirSync(directory).filter((entry) => entry.endsWith('.json'));
 }
 
 function readResponse(responseDir: string, id: string): Record<string, unknown> {

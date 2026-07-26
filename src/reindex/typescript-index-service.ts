@@ -1,6 +1,15 @@
-import { mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
-import { writeJsonAtomic } from '../storage/atomic-json.js';
+import {
+  claimBoundedMailboxRequests,
+  completeBoundedMailboxClaim,
+  initializeBoundedMailbox,
+  inspectBoundedMailbox,
+  readBoundedMailboxClaim,
+  rejectBoundedMailboxClaim,
+  type BoundedMailboxLimits,
+  type BoundedMailboxStatus,
+} from '../storage/bounded-mailbox.js';
 import {
   createTypeScriptDocumentEmitter,
   type TypeScriptDocumentEmitter,
@@ -91,7 +100,7 @@ export class TypeScriptIndexServiceHost {
   }
 
   // scip-query: ignore-twin — each service reports its own protocol-specific status envelope.
-  status(): TypeScriptIndexServiceStatus {
+  status(mailbox?: BoundedMailboxStatus): TypeScriptIndexServiceStatus {
     const stats = this.active?.emitter.snapshotStats();
     return {
       protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
@@ -106,6 +115,7 @@ export class TypeScriptIndexServiceHost {
       ...(this.lastRequestAtMs === null ? {} : { lastRequestAt: new Date(this.lastRequestAtMs).toISOString() }),
       ...(this.lastDurationMs === null ? {} : { lastDurationMs: this.lastDurationMs }),
       ...(this.lastError ? { lastError: this.lastError } : {}),
+      ...(mailbox ? { mailbox } : {}),
     };
   }
 
@@ -140,8 +150,7 @@ export class TypeScriptIndexServiceHost {
 }
 
 export function initializeTypeScriptIndexMailbox(paths: TypeScriptIndexMailboxPaths): void {
-  mkdirSync(paths.requestDir, { recursive: true });
-  mkdirSync(paths.responseDir, { recursive: true });
+  initializeBoundedMailbox(paths);
 }
 
 export function processTypeScriptIndexMailbox(
@@ -151,42 +160,67 @@ export function processTypeScriptIndexMailbox(
     nowMs?: number;
     beforeRequest?: (deadlineAtMs: number) => void;
     afterRequest?: () => void;
+    ownerId?: string;
+    limits?: Partial<BoundedMailboxLimits>;
   } = {},
 ): number {
   initializeTypeScriptIndexMailbox(paths);
+  const nowMs = opts.nowMs ?? Date.now();
+  const claims = claimBoundedMailboxRequests(paths, {
+    ownerId: opts.ownerId ?? TYPESCRIPT_INDEX_MAILBOX_OWNER,
+    nowMs,
+    limits: opts.limits,
+  });
   let processed = 0;
-  for (const file of readdirSync(paths.requestDir)
-    .filter((entry) => entry.endsWith('.json'))
-    .sort()) {
-    const requestPath = resolve(paths.requestDir, file);
-    let id = file.slice(0, -'.json'.length);
+  for (const claim of claims) {
+    let id = claim.requestId;
     try {
-      const envelope = parseTypeScriptIndexEnvelope(readFileSync(requestPath, 'utf8'));
+      const envelope = parseTypeScriptIndexEnvelope(readBoundedMailboxClaim(claim, opts.limits));
       id = envelope.id;
-      if (envelope.deadlineAtMs < (opts.nowMs ?? Date.now())) {
+      if (id !== claim.requestId) {
+        throw new Error('TypeScript index request identity does not match its mailbox path.');
+      }
+      if (envelope.deadlineAtMs < nowMs) {
         throw new Error('TypeScript index request expired before processing.');
       }
       opts.beforeRequest?.(envelope.deadlineAtMs);
       const response = host.handle(envelope.baseGeneration, envelope.request);
-      writeJsonAtomic(resolve(paths.responseDir, `${id}.json`), {
-        ok: true,
-        protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
-        id,
-        baseGeneration: envelope.baseGeneration,
-        response,
-      });
+      completeBoundedMailboxClaim(
+        paths,
+        claim,
+        {
+          ok: true,
+          protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
+          id,
+          baseGeneration: envelope.baseGeneration,
+          response,
+        },
+        { nowMs, limits: opts.limits },
+      );
     } catch (error) {
-      writeJsonAtomic(resolve(paths.responseDir, `${id}.json`), {
-        ok: false,
-        protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
-        id,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      const message = error instanceof Error ? error.message : String(error);
+      rejectBoundedMailboxClaim(
+        paths,
+        claim,
+        {
+          ok: false,
+          protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
+          id,
+          error: message,
+        },
+        message,
+        { nowMs, limits: opts.limits },
+      );
     } finally {
       opts.afterRequest?.();
-      rmSync(requestPath, { force: true });
       processed += 1;
     }
   }
   return processed;
 }
+
+export function typeScriptIndexMailboxStatus(paths: TypeScriptIndexMailboxPaths): BoundedMailboxStatus {
+  return inspectBoundedMailbox(paths);
+}
+
+const TYPESCRIPT_INDEX_MAILBOX_OWNER = `typescript-index-${process.pid}-${randomUUID()}`;

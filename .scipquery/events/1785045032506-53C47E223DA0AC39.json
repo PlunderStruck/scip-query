@@ -1,0 +1,9 @@
+{
+  "ts": 1785045032506,
+  "check": "echo",
+  "findingId": "SQ2E8C5736A00E",
+  "event": "suppressed",
+  "commit": "52fcd16b853109762b7a8f8cdb6a2eea15e2a04b",
+  "comparisonBaseCommit": "52fcd16b853109762b7a8f8cdb6a2eea15e2a04b",
+  "symbol": "scip-typescript npm scip-query 0.19.5 src/storage/`bounded-mailbox.ts`/regularFiles()."
+}

@@ -55,42 +55,42 @@ their established work profile.
 
 ## Enforced Boundary Responsibilities
 
-| Boundary | Stable responsibility |
-| --- | --- |
-| `analysis` | Cross-cutting evidence interpretation, including history and file classification |
-| `domain` | Dependency-free values, configuration shapes, identities, and project-input transitions |
-| `instrumentation` | Dependency-free profiling primitives |
-| `platform` | Host, toolchain, process, cache, and verified-binary mechanisms |
-| `public-api` | Published library exports |
-| `queries-cleanup` | Cleanup detectors and candidate production |
-| `queries-facade` | Public query aggregation and export registration |
-| `queries-frontend` | Framework-specific analysis products |
-| `queries-graph` | Architecture and graph reports |
-| `queries-health` | Composite health collection and health-baseline orchestration |
-| `queries-impact` | Change-impact and diff-gate workflows |
-| `queries-internal` | Shared query evidence, policy, and baseline-file primitives |
-| `queries-navigation` | File and symbol navigation |
-| `queries-quality` | Complexity and self-audit queries |
-| `queries-utils` | Common query result normalization and formatting |
-| `reindex` | Index construction and generation orchestration |
-| `reindex-augmentation` | Post-index source augmentation |
-| `reindex-vue` | Vue-specific index augmentation |
-| `runtime-command-kit` | Reusable command definition and execution machinery |
-| `runtime-commands` | Top-level command catalog, registry, and handlers |
-| `runtime-entry` | CLI and package executable entry points |
-| `runtime-query-commands` | Query command adapters and renderers |
-| `runtime-services` | Watch, setup, diagnostic, and delivery services |
-| `rust-kernels` | Native package implementation |
-| `semantic-contracts` | Provider-neutral semantic contracts |
-| `semantic-core` | Provider selection, caching, and shared semantic orchestration |
-| `semantic-rust` | rust-analyzer-backed semantic evidence |
-| `semantic-typescript` | TypeScript-compiler-backed semantic evidence |
-| `source` | Source text, AST, import parsing, language adapters, and framework facts |
-| `storage` | SQLite, cache, and repository-file persistence |
-| `symbols-core` | Symbol catalog, identity, and attribution |
-| `symbols-graph` | File and call dependency graph construction |
-| `symbols-references` | Reference and caller discovery |
-| `tla` | Formal-model use cases and tooling |
+| Boundary                 | Stable responsibility                                                                   |
+| ------------------------ | --------------------------------------------------------------------------------------- |
+| `analysis`               | Cross-cutting evidence interpretation, including history and file classification        |
+| `domain`                 | Dependency-free values, configuration shapes, identities, and project-input transitions |
+| `instrumentation`        | Dependency-free profiling primitives                                                    |
+| `platform`               | Host, toolchain, process, cache, and verified-binary mechanisms                         |
+| `public-api`             | Published library exports                                                               |
+| `queries-cleanup`        | Cleanup detectors and candidate production                                              |
+| `queries-facade`         | Public query aggregation and export registration                                        |
+| `queries-frontend`       | Framework-specific analysis products                                                    |
+| `queries-graph`          | Architecture and graph reports                                                          |
+| `queries-health`         | Composite health collection and health-baseline orchestration                           |
+| `queries-impact`         | Change-impact and diff-gate workflows                                                   |
+| `queries-internal`       | Shared query evidence, policy, and baseline-file primitives                             |
+| `queries-navigation`     | File and symbol navigation                                                              |
+| `queries-quality`        | Complexity and self-audit queries                                                       |
+| `queries-utils`          | Common query result normalization and formatting                                        |
+| `reindex`                | Index construction and generation orchestration                                         |
+| `reindex-augmentation`   | Post-index source augmentation                                                          |
+| `reindex-vue`            | Vue-specific index augmentation                                                         |
+| `runtime-command-kit`    | Reusable command definition and execution machinery                                     |
+| `runtime-commands`       | Top-level command catalog, registry, and handlers                                       |
+| `runtime-entry`          | CLI and package executable entry points                                                 |
+| `runtime-query-commands` | Query command adapters and renderers                                                    |
+| `runtime-services`       | Watch, setup, diagnostic, and delivery services                                         |
+| `rust-kernels`           | Native package implementation                                                           |
+| `semantic-contracts`     | Provider-neutral semantic contracts                                                     |
+| `semantic-core`          | Provider selection, caching, and shared semantic orchestration                          |
+| `semantic-rust`          | rust-analyzer-backed semantic evidence                                                  |
+| `semantic-typescript`    | TypeScript-compiler-backed semantic evidence                                            |
+| `source`                 | Source text, AST, import parsing, language adapters, and framework facts                |
+| `storage`                | SQLite, cache, and repository-file persistence                                          |
+| `symbols-core`           | Symbol catalog, identity, and attribution                                               |
+| `symbols-graph`          | File and call dependency graph construction                                             |
+| `symbols-references`     | Reference and caller discovery                                                          |
+| `tla`                    | Formal-model use cases and tooling                                                      |
 
 ## Target Responsibility Flow
 
@@ -189,6 +189,16 @@ continues to own only the process-neutral state schema and paths. Persisted
 record decoders share the dependency-free timestamp predicate in
 `domain/record-validation.ts` rather than creating cross-dependencies between
 storage, reindex, and platform.
+
+The nested TypeScript semantic and index snapshots now also expose the
+bounded-mailbox state owned by `storage/bounded-mailbox.ts`: pending,
+owner-specific inflight, retained response, and dead-letter counts plus the
+retained byte total and oldest enqueue time. `platform/watch-service-state.ts`
+validates that passive snapshot without owning admission, claim, expiry, or
+cleanup policy. Runtime remains the service coordinator that asks each
+mailbox host for its current snapshot when it durably publishes watch state.
+This keeps cross-process lifecycle policy in storage/runtime while preserving
+platform as a process-neutral decoder.
 
 The state union includes `draining`, the live interval in which the owner has
 stopped accepting refreshes but has not yet closed every subscription and
@@ -312,10 +322,10 @@ reverse import must be removed before either row is closed. A merge means two
 directories are one enforced subsystem because their files collaborate to
 produce the same kind of result.
 
-| Original pair                 | Target decision                  | Reason                                                                                                                                                               | Migration status                                                                                                                                                 |
-| ----------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Original pair                 | Target decision                  | Reason                                                                                                                                                               | Migration status                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `language-parsers <-> source` | Merge into the `source` boundary | Both directories derive syntactic facts from source text. Fourteen parser files use source primitives, while the source evidence facade invokes the parser registry. | Complete, and the merge now holds without a reciprocal dependency. `source-evidence.ts` — the one file importing the parser registry from the source side — moved into `src/language-parsers/`, its true owner. `src/source` was then layered into `primitives/ -> ast/ -> facts/ -> vue/` with the products facade at the root, so the merged boundary is internally acyclic and the directory names still distinguish shared primitives from language-specific strategies. |
-| `semantic <-> symbols`        | Keep `semantic -> symbols`       | Semantic providers translate compiler results into repository symbol identities and graphs; symbol facts need optional compiler evidence without provider knowledge. | Complete: the symbols-owned port is implemented in `semantic` and passed by query orchestration. `symbols -> semantic` is empty, and no reciprocal pair remains. |
+| `semantic <-> symbols`        | Keep `semantic -> symbols`       | Semantic providers translate compiler results into repository symbol identities and graphs; symbol facts need optional compiler evidence without provider knowledge. | Complete: the symbols-owned port is implemented in `semantic` and passed by query orchestration. `symbols -> semantic` is empty, and no reciprocal pair remains.                                                                                                                                                                                                                                                                                                             |
 
 Evidence: `node dist/cli.js architecture --json`;
 `node dist/cli.js imports src/language-parsers/source-evidence.ts --json`;
@@ -352,7 +362,9 @@ the low-level filesystem boundary. `src/storage/sqlite-generation.ts` resolves
 the current pointer into one retained database, metadata, and SCIP artifact
 set. `src/semantic/typescript/remote-provider.ts` carries that retained
 generation identity into the semantic mailbox instead of rereading a mutable
-compatibility path.
+compatibility path. The generation identity is part of the mailbox operation
+key, so retries for one immutable generation join the same logical operation
+while a later published generation is necessarily a distinct request.
 
 The `semantic -> symbols` row is now closed together with the rest of
 semantic's classified outgoing relationships. The intended direction is

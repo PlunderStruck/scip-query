@@ -33,6 +33,7 @@ export interface TypeScriptSemanticServiceStatusSnapshot {
   sessionsRefreshed: number;
   sessionsReplaced: number;
   projectsCreated: number;
+  mailbox?: BoundedMailboxStatusSnapshot;
 }
 
 export interface TypeScriptIndexServiceStatusSnapshot {
@@ -49,6 +50,18 @@ export interface TypeScriptIndexServiceStatusSnapshot {
   lastDurationMs?: number;
   lastError?: string;
   busyUntil?: string;
+  mailbox?: BoundedMailboxStatusSnapshot;
+}
+
+export interface BoundedMailboxStatusSnapshot {
+  pending: number;
+  inflight: number;
+  responses: number;
+  deadLetters: number;
+  invalid: number;
+  totalItems: number;
+  totalBytes: number;
+  oldestPendingAt?: string;
 }
 
 export interface WatchServiceState {
@@ -235,7 +248,8 @@ function validTypeScriptSemanticStatus(value: unknown): value is TypeScriptSeman
     finiteNumber(status.projectsCreated) &&
     (status.lastRequestAt === undefined || isValidWatchServiceTimestamp(status.lastRequestAt)) &&
     (status.lastError === undefined || typeof status.lastError === 'string') &&
-    (status.busyUntil === undefined || isValidWatchServiceTimestamp(status.busyUntil))
+    (status.busyUntil === undefined || isValidWatchServiceTimestamp(status.busyUntil)) &&
+    (status.mailbox === undefined || validBoundedMailboxStatus(status.mailbox))
   );
 }
 
@@ -258,7 +272,25 @@ function validTypeScriptIndexStatus(value: unknown): value is TypeScriptIndexSer
     (status.lastRequestAt === undefined || isValidWatchServiceTimestamp(status.lastRequestAt)) &&
     (status.lastDurationMs === undefined || (finiteNumber(status.lastDurationMs) && status.lastDurationMs >= 0)) &&
     (status.lastError === undefined || typeof status.lastError === 'string') &&
-    (status.busyUntil === undefined || isValidWatchServiceTimestamp(status.busyUntil))
+    (status.busyUntil === undefined || isValidWatchServiceTimestamp(status.busyUntil)) &&
+    (status.mailbox === undefined || validBoundedMailboxStatus(status.mailbox))
+  );
+}
+
+function validBoundedMailboxStatus(value: unknown): value is BoundedMailboxStatusSnapshot {
+  if (!value || typeof value !== 'object') return false;
+  const status = value as Partial<BoundedMailboxStatusSnapshot>;
+  return (
+    nonNegativeInteger(status.pending) &&
+    nonNegativeInteger(status.inflight) &&
+    nonNegativeInteger(status.responses) &&
+    nonNegativeInteger(status.deadLetters) &&
+    nonNegativeInteger(status.invalid) &&
+    nonNegativeInteger(status.totalItems) &&
+    finiteNumber(status.totalBytes) &&
+    status.totalBytes! >= 0 &&
+    status.totalItems === status.pending! + status.inflight! + status.responses! + status.deadLetters! &&
+    (status.oldestPendingAt === undefined || isValidWatchServiceTimestamp(status.oldestPendingAt))
   );
 }
 

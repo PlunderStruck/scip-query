@@ -67,6 +67,15 @@ describe('watch service persisted state', () => {
         refreshRequests: { ...liveState().refreshRequests!, pending: -1 },
       }),
     ).toBeNull();
+    expect(
+      parseWatchServiceState({
+        ...liveState(),
+        typescriptSemantic: {
+          ...liveState().typescriptSemantic!,
+          mailbox: { ...liveState().typescriptSemantic!.mailbox!, totalItems: 99 },
+        },
+      }),
+    ).toBeNull();
   });
 
   it('reads valid state and treats missing or malformed files as unavailable', () => {
@@ -133,6 +142,16 @@ function liveState(): WatchServiceState {
       sessionsRefreshed: 0,
       sessionsReplaced: 0,
       projectsCreated: 0,
+      mailbox: {
+        pending: 1,
+        inflight: 2,
+        responses: 3,
+        deadLetters: 4,
+        invalid: 0,
+        totalItems: 10,
+        totalBytes: 1_024,
+        oldestPendingAt: '2026-07-09T19:59:57.000Z',
+      },
     },
     typescriptIndex: {
       protocolVersion: 1,
@@ -144,6 +163,15 @@ function liveState(): WatchServiceState {
       programUpdates: 0,
       documentsEmitted: 0,
       documentsRemoved: 0,
+      mailbox: {
+        pending: 0,
+        inflight: 0,
+        responses: 1,
+        deadLetters: 0,
+        invalid: 0,
+        totalItems: 1,
+        totalBytes: 512,
+      },
     },
   };
 }

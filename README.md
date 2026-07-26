@@ -34,16 +34,22 @@ Two layers, wired by `scip-query setup`:
 
 **Invoked** — the agent routes work through skills, each carrying its own short command list so it never navigates the full CLI:
 
-| Phase     | Skill                                                            | Commands underneath (also usable directly)           |
-| --------- | ---------------------------------------------------------------- | ---------------------------------------------------- |
-| Orient    | `scip-explore`                                                   | `system`, `trace`, `plan-context`, `call-graph`      |
-| Plan      | `scip-concrete-plan` (one change) · `scip-conductor` (a program) | `plan-context`, `change-surface`, `co-change`        |
-| Reuse     | (taught in-loop by the planning skills)                          | `similar`, `duplicate-bodies`, `recent-duplicates`   |
-| Implement | your agent + the post-change check for the change type           | `incomplete-migration`, `unused-params`, `co-change` |
-| Verify    | `scip-verify` (closeout) + the ambient diff gate                 | `diff-impact`, `diff-gate`, `health --baseline`      |
-| Clean up  | `scip-cleanup-audit` → `scip-cleanup-improve`                    | `cleanup-plan --verify`, `dead`, `twin-drift`        |
+| Phase    | Skill                                            | Commands underneath (also usable directly)          |
+| -------- | ------------------------------------------------ | --------------------------------------------------- |
+| Orient   | `scip-explore`                                   | `system`, `trace`, `plan-context`, `call-graph`     |
+| Plan     | `scip-plan`                                      | `plan-context`, `change-surface`, `co-change`       |
+| Diagnose | `scip-diagnose`                                  | `trace`, `callers`, `probe-branches`, `diff-impact` |
+| Audit    | `scip-audit`                                     | `cleanup-plan --verify`, `dead`, `twin-drift`       |
+| Improve  | `scip-improve`                                   | `incomplete-migration`, `recent-duplicates`         |
+| Verify   | `scip-verify` (closeout) + the ambient diff gate | `diff-impact`, `diff-gate`, `health --baseline`     |
+| Set up   | `scip-setup`                                     | `doctor`, `setup`, `setup-hooks`, `setup-agent`     |
 
-Interrogation lenses go deeper on demand: `scip-integrity-audit` ("is this implementation real?"), `scip-twin-drift`, `scip-claim-audit`, `scip-probe-reachability`, and `scip-maintainability`. The full map with essential differences is in [Bundled skills](#bundled-skills); every command remains directly invocable for humans and scripts.
+The consolidated skills retain the former specialist lenses as routed
+scenarios: API impact and formal/performance planning live in `scip-plan`;
+root cause and reachability probes live in `scip-diagnose`; integrity,
+maintainability, claim, framework, directory, and twin-drift review live in
+`scip-audit`; and cleanup or documentation repair lives in `scip-improve`.
+Every command remains directly invocable for humans and scripts.
 
 React and Vue repositories get additional framework-aware checks for repeated component/template structure, hook/composable behavior, and large-component or large-view pressure. These extend the same reuse and completion workflow; the core graph, history, planning, cleanup, and diff-gate commands are not frontend-specific.
 
@@ -206,18 +212,20 @@ When verification _fails_, the errors name the exact references the static evide
 **8. Gate every diff.** `diff-gate` runs a defined set of checks scoped to what a change _introduces_ and exits nonzero with remediation text for each finding. Baseline regressions are included when you pass `--baseline`.
 
 <!-- BEGIN GENERATED DIFF-GATE CHECKS -->
-| Check | What it catches | When it runs |
-| --- | --- | --- |
-| `echo` | Changed symbols that newly echo established code elsewhere. | Default diff gate. |
-| `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain. | Default diff gate. |
-| `co-change-partner` | Historically coupled files that usually change together but are missing from this diff. | Default diff gate. |
-| `twin-partner` | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched. | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves. |
-| `coverage-contract` | A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source. | Default diff gate, only when either side of a configured contract changed. |
-| `architecture` | A declared architecture boundary rule has a violation absent from the committed health baseline. | Default diff gate when closed dependency rows, requireCompletePolicy, requireAcyclic, requireResolvedBoundaries, requireMinimalPolicy, maxBoundaryFanOut/maxBoundaryFiles, or testPaths are configured and a baseline exists. |
-| `doc-reference` | Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy. | Default diff gate. Advisory (21.2) for bare file-mention citations; blocking when the citation has a line anchor or the cited file was deleted/renamed. |
-| `unused-params` | Fresh trailing parameters or options that no changed body uses. | Default diff gate. |
-| `new-dead` | Changed production symbols with zero indexed consumers. | Default diff gate. |
-| `baseline` | New health finding identities compared with the committed health baseline. | Only with `diff-gate --baseline`. |
+
+| Check                  | What it catches                                                                                                                   | When it runs                                                                                                                                                                                                                  |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `echo`                 | Changed symbols that newly echo established code elsewhere.                                                                       | Default diff gate.                                                                                                                                                                                                            |
+| `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain.                                                | Default diff gate.                                                                                                                                                                                                            |
+| `co-change-partner`    | Historically coupled files that usually change together but are missing from this diff.                                           | Default diff gate.                                                                                                                                                                                                            |
+| `twin-partner`         | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched.            | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves.                                                                                                                                     |
+| `coverage-contract`    | A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source. | Default diff gate, only when either side of a configured contract changed.                                                                                                                                                    |
+| `architecture`         | A declared architecture boundary rule has a violation absent from the committed health baseline.                                  | Default diff gate when closed dependency rows, requireCompletePolicy, requireAcyclic, requireResolvedBoundaries, requireMinimalPolicy, maxBoundaryFanOut/maxBoundaryFiles, or testPaths are configured and a baseline exists. |
+| `doc-reference`        | Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy.     | Default diff gate. Advisory (21.2) for bare file-mention citations; blocking when the citation has a line anchor or the cited file was deleted/renamed.                                                                       |
+| `unused-params`        | Fresh trailing parameters or options that no changed body uses.                                                                   | Default diff gate.                                                                                                                                                                                                            |
+| `new-dead`             | Changed production symbols with zero indexed consumers.                                                                           | Default diff gate.                                                                                                                                                                                                            |
+| `baseline`             | New health finding identities compared with the committed health baseline.                                                        | Only with `diff-gate --baseline`.                                                                                                                                                                                             |
+
 <!-- END GENERATED DIFF-GATE CHECKS -->
 
 Illustrative output:
@@ -348,37 +356,23 @@ Heuristic detectors carry guardrails learned from real codebases: published `pac
 
 One-line "essential difference" per skill — read this table before the Routes table in `skills/scip-query/SKILL.md` if two names sound alike.
 
-| Skill                         | Essential difference                                                                   |
-| ----------------------------- | -------------------------------------------------------------------------------------- |
-| `scip-query`                  | Router: dispatches codebase work to the specialist skill below.                        |
-| `scip-explore`                | Understand before touching.                                                            |
-| `scip-concrete-plan`          | Specify ONE change so an executor can't guess.                                         |
-| `scip-conductor`              | Run a multi-phase program (delegate, verify handoffs, pre-registered benchmarks).      |
-| `scip-debug`                  | Root-cause a failure.                                                                  |
-| `scip-root-cause`             | Diagnose the design flaw behind a family of recurring bugs.                            |
-| `scip-triage-issue`           | Package a report into an actionable issue+fix plan.                                    |
-| `scip-verify`                 | Post-change closeout gate.                                                             |
-| `scip-cleanup-audit`          | Rank findings, no edits.                                                               |
-| `scip-cleanup-improve`        | Autonomously fix confirmed findings.                                                   |
-| `scip-maintainability`        | Is this well-organized (scattered concepts, accidental variation)?                     |
-| `scip-integrity-audit`        | Is this real (decorative checkers, faked implementations, dead fallback-hidden paths)? |
-| `scip-calibrate`              | Measure detector precision on a repo before trusting scores or gating anyone.          |
-| `scip-twin-drift`             | Same-name implementations that drifted apart.                                          |
-| `scip-claim-audit`            | Status words derived vs asserted.                                                      |
-| `scip-probe-reachability`     | Prove parser/AST branches actually fire.                                               |
-| `scip-api-impact`             | Blast radius before changing public surfaces.                                          |
-| `scip-directory-architecture` | Folder/ownership layout.                                                               |
-| `scip-doc-reconcile`          | Docs vs code drift.                                                                    |
-| `scip-diagram`                | Visual artifacts.                                                                      |
-| `scip-react-maintainability`  | Framework-specific reuse lens (React).                                                 |
-| `scip-vue-maintainability`    | Framework-specific reuse lens (Vue).                                                   |
-| `scip-language-playbook`      | Which commands per language.                                                           |
-| `scip-hyper-optimization`     | Performance campaigns without output changes.                                          |
-| `scip-tla-model-system`       | Formal models tied to code evidence.                                                   |
-| `scip-setup`                  | Adopt or repair scip-query in a repo.                                                  |
-| `_shared`                     | Reference loaded by other skills, not user-invoked.                                    |
+| Skill           | Essential difference                                                           |
+| --------------- | ------------------------------------------------------------------------------ |
+| `scip-query`    | Router: select the smallest workflow that answers the request.                 |
+| `scip-explore`  | Understand or diagram existing code without changing it.                       |
+| `scip-plan`     | Prove the blast radius and specify one change or a multi-phase program.        |
+| `scip-diagnose` | Trace a failure, recurring design flaw, issue, or unreachable branch to cause. |
+| `scip-audit`    | Classify integrity, maintainability, drift, framework, and cleanup evidence.   |
+| `scip-improve`  | Act on confirmed audit or documentation findings and ratchet the result.       |
+| `scip-verify`   | Test and challenge a finished change before declaring it complete.             |
+| `scip-setup`    | Adopt or repair scip-query in a repository.                                    |
+| `_shared`       | Manual-only command/evidence reference loaded by another workflow when needed. |
 
-The confusable clusters, disambiguated: `scip-debug` (one failure, one minimal fix) vs `scip-root-cause` (a family of recurring bugs traced to a design flaw); `scip-concrete-plan` (one change) vs `scip-conductor` (a program of changes with delegation); `scip-cleanup-audit` (report only) vs `scip-cleanup-improve` (autonomous fixing loop); `scip-verify` (did this specific change land safely) vs `scip-integrity-audit` (does this code actually work at all) vs `scip-maintainability` (is this well organized) vs `scip-twin-drift` (one drifted same-name pair specifically); `scip-directory-architecture` (folder ownership) vs `scip-maintainability` (deeper structural compression). `skills/scip-query/SKILL.md`'s Tie-Breaks section has the full routing logic.
+The important boundary is read-only versus mutating work: `scip-audit`
+classifies current evidence, while `scip-improve` changes confirmed findings.
+`scip-plan` is prospective evidence before implementation; `scip-verify`
+challenges a concrete finished diff. `scip-explore` explains working behavior;
+`scip-diagnose` starts from a failure or contradiction.
 
 Project setup writes reviewable checkout-local lifecycle hooks for Codex and Claude Code (`.codex/hooks.json` and `.claude/settings.local.json`). A checkout-local hook is an agent-tool preference whose defining trait is that it applies to one clone rather than expressing team policy. Setup adds both paths to that clone's `.git/info/exclude`, so they do not appear in commits, and refuses to rewrite either path if it is already tracked. `setup-hooks --shared` remains accepted only as a deprecated compatibility flag; it no longer writes `.claude/settings.json`. These hooks add scip-query context at session start, route prompts toward the right skill, and run an advisory Stop-hook wrapper around the diff gate only for that repository. The Stop hook sends feedback to the agent by default instead of blocking; set `SCIP_QUERY_STOP_HOOK_MODE=warn` for a warning-only hook response, or `SCIP_QUERY_STOP_HOOK_MODE=block` to enforce the gate. Set `SCIP_QUERY_SKIP_HOOK_INSTALL=1` or run `scip-query setup --no-hooks` to skip hook installation during setup, and run `scip-query setup-hooks --json` later to repair the current checkout's hooks.
 
@@ -406,7 +400,7 @@ AGENTS.md/CLAUDE.md guidance. Use
 the default terminal checklist to accept or decline the recommended automatic
 indexing action and other project-local changes (`--guided` reopens it
 explicitly). After setup,
-`scip-cleanup-audit` confirms raw signals and `scip-cleanup-improve` keeps
+`scip-audit` confirms raw signals and `scip-improve` keeps
 fixing the worst confirmed items until no safe confirmed cleanup remains. Use
 `scip-query setup --git-hook` when you also want a local pre-commit diff gate.
 CI setup is intentionally separate.
@@ -431,7 +425,7 @@ scip-query tla trace-check specs/queue/Queue.tla --trace traces/run1.json   # ch
 scip-query tla fetch-tools                           # download the pinned tla2tools.jar into the cache
 ```
 
-`tla verify` checks the mapping contract against the model text and the indexed code: variable and action referents must resolve to value-like symbols (not types), declared reads/writes are checked against a static scan, and every waiver requires a reason and is counted in the output. At scale, findings are grouped by `(category, modelElement)` with up to 3 exemplars per group by default — pass `--full` to print every finding ungrouped. The `scip-tla-model-system` skill (`scip-query install-skills`) walks the scaffold → verify → instrument → trace-check loop end to end.
+`tla verify` checks the mapping contract against the model text and the indexed code: variable and action referents must resolve to value-like symbols (not types), declared reads/writes are checked against a static scan, and every waiver requires a reason and is counted in the output. At scale, findings are grouped by `(category, modelElement)` with up to 3 exemplars per group by default — pass `--full` to print every finding ungrouped. The `scip-plan` formal-model scenario (`scip-query install-skills`) walks the scaffold → verify → instrument → trace-check loop end to end.
 
 `tla fetch-tools` allows five minutes and 256 MiB for the pinned download by
 default. It streams bytes through the SHA-256 verifier instead of buffering the
@@ -706,9 +700,18 @@ advertising a clean stop; the reported reason is the recovery evidence.
 
 The same demand-started service lazily owns TypeScript compiler Projects after
 the first command that needs ts-morph semantics. Separate CLI processes reuse
-that session through a repository-local atomic mailbox; source-only index
+that session through a repository-local bounded mailbox; source-only index
 generations refresh the existing Projects, while configuration or uncertain
 changes replace them. `watch --status` reports Project/session/request counts.
+Current TypeScript and durable Rust mailbox operations use stable
+content-derived identities, pending/inflight/response states, atomic
+owner-expiring claims, retained idempotent completions, FIFO enqueue ordering,
+typed item/byte backpressure, bounded cleanup, and pressure telemetry. Client
+timeout or exit no longer deletes shared work; a service crash before response
+is reclaimable, while a response published before a crash prevents
+re-execution. The precise state machine, default limits, legacy overlap, and
+failure matrix are documented in
+[`docs/MAILBOX_LIFECYCLE.md`](docs/MAILBOX_LIFECYCLE.md).
 It also reports a rolling 24-hour reindex activity summary: rebuilt, reused,
 failed, and freshness-proven suppressed refreshes plus estimated logical output
 bytes. The estimate counts scip-query artifacts emitted by rebuilt refreshes;
