@@ -1,0 +1,967 @@
+# scip-query — Distributed Data and API Evolution Audit
+
+Date: 2026-07-25  
+Audited revision: `bb02f0169bdda7b6598051a2b83caea454f684da`
+
+Scope: the shared index generation, watch daemon, process locks, worktree cache, evidence cache, file mailboxes, repository-owned records, project and agent configuration, subprocess and worker lifecycles, remote binary downloads, Rust LSP framing, CLI JSON contract, published TypeScript package surface, metadata formats, and Windows sidecar release path.
+
+Method: this audit applies the repository's `distributed-data` failure model, `api-evolution` compatibility model, `resilience` hostile-dependency and bounded-lifecycle model, and `unit-testing` observability model. Native source reads established literal behavior. Compiler-resolved scip-query exploration established entry-to-effect and consumer relationships where identity mattered. No production state was mutated and no findings were fixed in this pass.
+
+---
+
+## 1. Outcome
+
+The core indexing algorithms are substantially stronger than the surrounding coordination protocols. Candidate SQLite generations are built privately and validated transactionally; shared clean-worktree generations are content-addressed, immutable, and hashed; cache hits are tied to input fingerprints; committed outcome events use independent immutable paths.
+
+The highest-risk defects live at the boundaries between those mechanisms:
+
+1. An open SQLite reader can continue reading generation A while the metadata path and cursor/session identity functions describe generation B. This can attach generation-B authority to generation-A rows or numeric symbol IDs.
+2. Watch and reindex ownership is proven only by a process ID. After PID reuse, stop or preemption can signal an unrelated process.
+3. Several read-modify-write protocols have no compare-and-swap step, so a concurrent writer can be silently erased.
+4. Public data contracts are numerous but mostly unversioned. The CLI envelope, project configuration, committed records, Rust mailbox requests, and published TypeScript signatures have no complete compatibility baseline.
+5. The Windows sidecar release script proves that files exist and a version exists on npm, but it does not prove that either set of bytes is the intended set.
+6. Long-lived subprocess, worker, download, and LSP transport boundaries do not consistently impose deadlines, memory ceilings, output draining, or termination-and-reap semantics.
+
+This report records **27 findings**:
+
+- **2 S1** integrity or process-safety defects;
+- **10 S2** lost-update or compatibility defects;
+- **13 S3** availability, lifecycle, durability, or observability defects;
+- **2 S4** low-risk operational or testability defects.
+
+These counts describe source-confirmed mechanisms, not incident frequency. The audit found no evidence that all of these failures have occurred in production.
+
+---
+
+## 2. Terms, evidence grades, and severity
+
+A **generation** is one accepted set of mutually corresponding index artifacts—principally `index.db`, `index.scip`, and `meta.json`—distinguished from other accepted sets by the fact that every artifact describes the same indexing run. That correspondence is what lets a reader treat separate files as one snapshot.
+
+A **generation handle** is a reader-owned reference to one accepted generation, distinguished from a path lookup by retaining the identity and artifacts that were opened together. The retained association is what prevents later path replacement from changing the meaning of an in-flight read.
+
+An **authority** is the store or process whose accepted value decides what the system will treat as true, distinguished from a cache or observation by being the value writers and readers must reconcile around. For example, the stable SQLite file is authoritative for graph rows, while the evidence database is rebuildable and therefore not authoritative for source truth.
+
+A **lost update** is a completed write that disappears because a later writer derived its replacement from an older value, distinguished from ordinary last-writer-wins behavior by the later writer's promise or expectation that it preserved independent fields. The stale read used to construct the replacement is the causal feature.
+
+An **idempotency key** is a stable operation identity that lets repeated delivery have the effect of one delivery, distinguished from a random request identifier by surviving retries of the same logical operation. Random IDs prevent response mix-ups; they do not prevent duplicate work after retry.
+
+A **fencing token** is a monotonically ordered ownership value checked by the protected resource, distinguished from a lock token that only controls file deletion by preventing an older owner from publishing after a newer owner. Non-expiring, token-owned locks in this repository do not automatically need fencing; a protocol that expires or steals live ownership would.
+
+A **compatibility contract** is the externally observable shape and meaning that an older or newer consumer depends on, distinguished from an internal TypeScript type by crossing a version or process boundary. CLI JSON, npm exports, config files, committed event files, and mailbox envelopes are compatibility contracts.
+
+A **resource budget** is an enforced upper bound on time, memory, bytes, attempts, or queued work consumed by one operation, distinguished from a preferred target by causing an explicit failure when exhausted. Enforcement is what prevents a slow, silent, or hostile dependency from turning one request into process-wide exhaustion.
+
+A **drain** is the orderly completion or cancellation of accepted in-flight work before an owner advertises itself as stopped, distinguished from merely refusing new work by retaining responsibility for work already started. That retained responsibility is what prevents two nominal owners or orphaned children from continuing the same operation.
+
+Evidence grades used below:
+
+- **Existing-test confirmation** means a checked-in test already demonstrates the key runtime fact.
+- **Source-confirmed interleaving** means all steps are reachable in the current code and no synchronization orders them, but this audit did not run a deterministic scheduler test.
+- **Contract gap** means a public or durable boundary lacks versioning, migration, or comparison machinery; it is a latent evolution defect rather than a claim that a current consumer has broken.
+- **Hardening gap** means current behavior is acceptable under ordinary execution but lacks a stated crash, clock, queue, or release guarantee.
+
+Severity:
+
+- **S1** means an allowed execution can misattribute authoritative data or signal a process the tool does not own.
+- **S2** means an allowed execution can silently lose requested or persisted state, or a routine version change can break or mislead consumers without detection.
+- **S3** means the primary consequence is recoverable unavailability, recomputation, unbounded debris, misleading metrics, or a difficult release recovery.
+- **S4** means a low-value operational record can be lost without affecting authoritative results.
+
+---
+
+## 3. Shared-state and contract map
+
+| Boundary                    | Real authority                                    | Writers                                  | Readers                                           | Current coordination                                | Audit result                                                       |
+| --------------------------- | ------------------------------------------------- | ---------------------------------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------ |
+| Stable index                | One corresponding SQLite/SCIP/metadata generation | Reindex publisher, shared-cache hydrator | CLI commands, semantic services, freshness checks | Reindex lock; per-file atomic rename                | Candidate construction is strong; multi-file reader binding is not |
+| Shared clean-worktree cache | Immutable content-addressed generation directory  | Reindex shared publisher                 | Hydrator, garbage collector                       | Build lock, repository GC lock, artifact hashes     | Publication is strong; lease touch has a stale write               |
+| Watch control plane         | Watch state, activity, PID lock                   | Watch process and command clients        | Watch controller and requesters                   | Atomic JSON replacement, PID liveness               | Refresh RMW can lose requests; PID identity is insufficient        |
+| Reindex ownership           | Reindex lock file                                 | Watcher or manual CLI                    | Competing reindex and preemption path             | `open("wx")`, PID liveness                          | Malformed locks wedge; PID reuse makes preemption unsafe           |
+| Evidence cache              | Rebuildable SQLite observations                   | Query processes                          | Query processes                                   | WAL, transactions, fingerprints                     | Result caching is sound; outcome counters lose increments          |
+| TypeScript mailbox          | Request and response files                        | CLI clients and watch service            | Watch service and CLI clients                     | UUID filenames, protocol version, deadlines         | Correlation is good; orphan cleanup and backpressure are absent    |
+| Rust mailbox                | Request and response files                        | CLI clients and durable server           | Durable server and CLI clients                    | UUID filenames, server-state version                | Per-message contract and expiry are weaker than TypeScript         |
+| Subprocesses and workers    | Child exit plus bounded output                    | Reindex, analysis, watch, semantic paths | Parent coordinators                               | Per-call ad hoc timeouts and buffers                | Deadlines, drain, and termination policy are incomplete            |
+| Rust LSP transport          | Framed JSON-RPC byte stream                       | rust-analyzer                            | Rust semantic client                              | Content-Length framing and request deadlines        | Header and body accumulation are unbounded                         |
+| Verified binary download    | Checksum-matching cached bytes                    | TLA/Windows fetch commands               | Tool resolvers                                    | SHA-256 and atomic rename                           | Network duration, response size, and temp ownership are unbounded  |
+| Project/agent config        | User-authored JSON or Markdown                    | User, setup, hook installer              | Agents and runtime                                | Read/merge/plain write                              | Concurrent edits can be lost or files torn                         |
+| Suppressions                | One committed JSON file per accepted finding      | Agents and users                         | Diff gate                                         | Deterministic filename                              | Same-worktree writers silently overwrite                           |
+| Outcome events              | One immutable committed JSON file per event       | Diff gate                                | Reports and reconciliation                        | Content-derived name, exclusive create, read dedupe | Good merge model; schema is unversioned                            |
+| CLI JSON                    | Printed process output                            | Current CLI                              | Agents, scripts, external callers                 | Descriptor metadata and coverage validation         | Shape is useful but unversioned                                    |
+| npm TypeScript API          | Exported `.d.ts` surface                          | Package releases                         | Library consumers                                 | Export membership tests                             | No signature compatibility baseline                                |
+| Windows sidecar             | Published npm tarball containing two PE binaries  | Release script                           | Windows installations                             | Version pin and file-presence checks                | Byte provenance and registry identity are not verified             |
+
+---
+
+## 4. Detailed distributed-data findings
+
+### DD-01 — S1 — In-flight readers can combine old SQLite rows with new generation identity
+
+**Evidence:** existing-test confirmation plus source-confirmed interleaving.
+
+**Code:**
+
+- `src/reindex/sqlite-generation-store.ts:85-110` replaces `index.scip`, `index.db`, and `meta.json` sequentially, then writes generation state.
+- `src/storage/db.ts:44-60` opens a read-only SQLite connection by stable path.
+- `tests/reindex/sqlite-generation-store.test.ts:36-62` explicitly proves that an existing reader remains on the old inode after the stable path is replaced, while a new reader sees the new generation.
+- `src/semantic/typescript/session-protocol.ts:59-86` derives `publishedGenerationIdentity` from the current `meta.json` path.
+- `src/semantic/typescript/remote-provider.ts:124-157` owns an already-open `ScipDatabase` but derives the request generation from the current metadata path.
+- `src/runtime/result-pagination.ts:14-18` also derives cursor generation from the current metadata path, with a path-stat fallback.
+- `src/runtime/query-commands/direct-navigation.ts:56-85` obtains `refs` rows from the open database and only afterward obtains the path-derived generation identity.
+
+**Failure interleaving:**
+
+1. Command C opens stable `index.db` generation A.
+2. Reindex P retains A and renames generation B into the stable database and metadata paths.
+3. C's SQLite connection correctly continues reading inode A.
+4. C calls `publishedGenerationIdentity(dbPath)`, which now hashes metadata B.
+5. A semantic request can therefore send numeric symbol IDs read from A under B's generation identity. The service opens B and can interpret those IDs as different symbols.
+6. A paginated `refs` response can label A's sorted rows with generation B. The continuation request opens B, accepts the cursor as B, then applies A's offset to B's result set. Insertions or removals before that offset can produce omissions or duplicates.
+
+There is also a shorter handoff window in which `index.db` and `meta.json` name different accepted generations because the files are replaced one at a time. Atomic rename protects the completeness of each file; it does not make the set atomic.
+
+**Why this matters:** this is not merely a stale read. A stale reader is acceptable when it is honestly identified as generation A. The defect is attaching generation-B authority to generation-A facts.
+
+**Recommended design:**
+
+- Introduce a generation handle that opens the database and reads metadata/state as one validated snapshot.
+- Bind semantic requests, result cursors, evidence fingerprints, and coverage claims to the handle, not to fresh path reads.
+- One feasible protocol is: read generation state, open the database, obtain the opened file identity, reread generation state, and retry unless both observations agree and the open file matches the named generation.
+- A stronger layout is an immutable generation directory plus one atomic pointer. Readers resolve the pointer once and open every artifact beneath that immutable directory.
+- Keep old generation directories alive while handles exist or until a conservative grace/lease policy permits collection.
+
+**Required tests:**
+
+- Pause publication after each handoff stage with `onStage`; issue `refs`, semantic reference, and pagination requests from a reader opened before the pause.
+- Assert every request's generation identity matches the rows' actual database inode or content identity.
+- Change the sorted `refs` set between generations and prove a cursor either continues the original immutable generation or rejects the continuation.
+- Assign deliberately conflicting numeric symbol IDs across A and B and prove remote semantic resolution cannot cross the generations.
+
+**Acceptance condition:** no code path can construct one externally meaningful response from an open database and independently reread generation identity from a replaceable path.
+
+### DD-02 — S1 — PID reuse can cause scip-query to terminate an unrelated process
+
+**Evidence:** source-confirmed interleaving.
+
+**Code:**
+
+- `src/platform/process-liveness.ts:1-8` defines process identity as “`kill(pid, 0)` succeeds or returns `EPERM`.”
+- `src/runtime/watch-service.ts:474-535` classifies watch state by PID, protocol fields, and heartbeat; stale or incompatible live-PID states plan replacement or signal-stop.
+- `src/runtime/watch-service.ts:568-577` signals that PID.
+- `src/reindex/index.ts:2034-2064` lets a manual reindex preempt a watcher-owned reindex lock.
+- `src/reindex/index.ts:2137-2153` sends `SIGTERM` and then `SIGKILL`, first to the process group and then the PID.
+
+**Failure interleaving:**
+
+1. A watch or reindex owner writes PID P and dies without removing its state.
+2. The operating system reuses P for an unrelated process.
+3. `isProcessAlive(P)` returns true.
+4. A stale heartbeat, CLI-version mismatch, manual preemption, or explicit stop causes scip-query to signal P or process group `-P`.
+
+The heartbeat proves that the old record has not advanced. It does not prove that the currently living PID is the recorded process.
+
+**Recommended design:**
+
+- Record and verify a process birth identity in addition to the PID: OS process start time, platform process handle identity, or a nonce returned by an authenticated local control socket.
+- Prefer asking the watch service to stop over its control channel and require a nonce-bearing acknowledgment.
+- For reindex preemption, only signal after verifying that the process still has the recorded start identity and project/session token.
+- If identity cannot be verified, fail closed and leave an explicit recovery instruction; never infer ownership from PID alone.
+
+**Required tests:**
+
+- Inject a liveness provider that reports the PID alive but a birth identity different from the recorded one.
+- Assert `watch ensure`, `watch stop`, and manual reindex preemption never invoke the signal function.
+- Test both positive identity verification and platforms where identity lookup fails.
+
+**Acceptance condition:** every destructive signal is preceded by a proof that the live process is the same process instance that wrote the ownership record.
+
+### DD-03 — S2 — Watch refresh requests can be erased by activity recording
+
+**Evidence:** source-confirmed interleaving.
+
+**Code:**
+
+- `src/runtime/watch-service.ts:341-352` reads the current activity object, then replaces it while preserving a refresh request only if that stale read observed one.
+- `src/runtime/watch-service.ts:359-365` independently replaces the same file to request a refresh.
+- `src/runtime/watch-server.ts:212-225` polls one refresh timestamp and acts only on a timestamp newer than its prior observation.
+
+**Failure interleaving:**
+
+1. Activity writer A reads a record without `refreshRequestedAt`.
+2. Requester B writes a refresh request.
+3. A replaces the file with its activity value, derived from the older read.
+4. The refresh request disappears before the watch server observes it.
+
+Two requesters can also overwrite each other's detail and timestamps, and an older delayed writer can regress `at` or `refreshRequestedAt`.
+
+**Recommended design:**
+
+- Represent refresh intent as immutable request files or append-only events, one per logical request.
+- Give each logical refresh an idempotency key when callers may retry.
+- Let the server atomically rename `pending/<id>` to `inflight/<id>`, coalesce requests deliberately, and remove them only after refresh completion.
+- Keep activity/heartbeat in a separate last-writer-wins file; it should not share a replacement record with durable intent.
+
+**Required tests:**
+
+- Use barriers to force the exact stale-read/request/new-write order.
+- Assert every accepted refresh is either processed or represented by a still-pending event.
+- Test duplicate idempotency keys, distinct concurrent keys, server crash after claim, and retry after crash.
+
+**Acceptance condition:** no activity update can erase an unacknowledged refresh request.
+
+### DD-04 — S2 — Empty or malformed lock files can wedge watch, reindex, and cache operations indefinitely
+
+**Evidence:** source-confirmed crash window.
+
+**Code:**
+
+- Watch lock acquisition opens with `wx` and then writes metadata at `src/runtime/watch-service.ts:394-436`; its reader returns `null` for malformed or incomplete content at `:455-470`, but acquisition only removes a parsed stale record at `:402-412`.
+- Reindex has the same create-then-write window at `src/reindex/index.ts:2070-2092`; `readReindexLock` returns `null` at `:2103-2118`, and the caller then reports another reindex forever at `:2064`.
+- `src/platform/repository-cache-lock.ts:32-70` reclaims a parsed dead or PID-less observation, but `readLockObservation` returns `null` for malformed JSON at `:79-88`, so a truncated record is never reclaimable.
+- The shared-generation build lock follows the same observation pattern around `src/reindex/shared-generation-store.ts:537-546`.
+
+A crash, disk-full condition, or forced termination between exclusive file creation and metadata write leaves an empty file. Exclusive creation then preserves the dead file exactly as designed, while the recovery path has no identity it is willing to reclaim.
+
+The reindex release path has a related ownership weakness: `src/reindex/index.ts:2094-2099` unconditionally removes the path. Unlike the generic token-owned lock, it does not verify that the path still contains its own token before deletion.
+
+**Recommended design:**
+
+- Put a random ownership token in every lock and use token-checked release.
+- Treat malformed/empty records as observations that can be reclaimed only through a second exclusive reclaim lock, after a short creation grace period and a raw-content/metadata recheck.
+- Alternatively, write a complete ownership record to a uniquely named file and atomically link or rename it into the lock name with a protocol that preserves exclusivity.
+- Preserve the generic lock's “never unlink a changed observed record” rule.
+
+**Required tests:**
+
+- Crash/fail after `open("wx")` and before the metadata write for every lock implementation.
+- Start two reclaimers and prove only one removes the unchanged malformed file.
+- Replace a lock path with a successor before an old owner releases; prove the old release cannot delete the successor.
+
+**Acceptance condition:** a malformed lock is eventually recoverable without permitting two owners, and release is always ownership-checked.
+
+### DD-05 — S2 — Project, hook, and agent setup writers can overwrite concurrent user edits
+
+**Evidence:** source-confirmed interleaving.
+
+**Code:**
+
+- `src/runtime/config.ts:670-690` checks whether `.scipquery.json` exists and then performs a non-exclusive plain write.
+- `src/runtime/config.ts:700-733` accepts a previously read `ProjectConfig`, modifies one field, and writes the whole stale object.
+- `src/runtime/agent-hooks.ts:340-373` and `:376-440` read, merge, and plainly replace Claude/Codex hook JSON.
+- `src/runtime/agent-setup.ts:151-167` and `:170-197` read AGENTS/CLAUDE Markdown, transform the managed block, and plainly replace or delete the file.
+
+**Failure interleaving:**
+
+1. scip-query reads revision A.
+2. A user, editor, or another agent writes independent revision B.
+3. scip-query writes its transformation of A.
+4. B's unrelated fields or prose disappear.
+
+Plain writes also expose truncated JSON or Markdown if the process fails mid-write. `initProjectConfig` has an additional check-then-create race: a file created after `existsSync` can be overwritten.
+
+**Recommended design:**
+
+- Use atomic replacement for visibility and an optimistic revision check for preservation.
+- Capture a content hash or file identity with the read, acquire a path-scoped lock, reread, and retry the merge if the input changed.
+- Create absent configuration with `wx`.
+- Apply narrow patch operations to the newest parsed object, preserving unknown fields.
+- For human-authored Markdown, report a conflict rather than overwriting if non-managed content changed during the operation.
+
+**Required tests:**
+
+- Inject a concurrent edit between read and write for every writer.
+- Assert unknown JSON fields and unrelated Markdown survive.
+- Test a simultaneous first-time config creation and a crash during replacement.
+
+**Acceptance condition:** setup and hook operations either preserve the latest unrelated edits or return an explicit conflict without changing the file.
+
+### DD-06 — S2 — Same-worktree suppression writers silently overwrite policy decisions
+
+**Evidence:** source-confirmed interleaving.
+
+**Code:** `src/storage/suppression-store.ts:33-65` derives a deterministic path from finding identity and plainly replaces it. The header correctly explains why independent files merge across branches, but the same path is intentionally reused when suppressing the same finding.
+
+Two agents can suppress the same finding with different reasons or expiration policy. The later write silently erases the first. A crash during the plain write can leave malformed JSON, which `readSuppressionDir` warns about and ignores at `:68-99`; the accepted policy then disappears from gate behavior.
+
+**Recommended design:**
+
+- Make the policy transition explicit: exclusive create for first acceptance; compare-and-replace with expected prior hash for an update.
+- If independent reasons must coexist, store immutable revision events and derive current policy with deterministic conflict rules.
+- Add `schemaVersion`, writer/tool version, and a stable suppression identity to the record.
+- Use durable atomic replacement for policy state.
+
+**Required tests:**
+
+- Concurrent first creation with distinct reasons.
+- Concurrent replacement from the same prior hash.
+- Crash during write and read of an unsupported future schema.
+
+**Acceptance condition:** conflicting policy writes cannot silently erase one another, and a torn write cannot make an accepted suppression disappear without a diagnostic.
+
+### DD-07 — S3 — Worktree lease touch can overwrite a newer generation lease
+
+**Evidence:** source-confirmed interleaving.
+
+**Code:** `src/reindex/shared-generation-store.ts:620-678` reads and validates the pointer, lease, metadata, and artifacts before acquiring the repository lock at `:674`. It then updates and writes the previously read lease at `:677-678`. Generation publication writes a fresh lease through `writeWorktreeLease` at `:552-575`.
+
+**Failure interleaving:**
+
+1. Touch A reads lease for generation G and validates G.
+2. Reindex B publishes generation G2 and writes a G2 lease under the repository lock.
+3. A later acquires the lock and rewrites its stale G lease with a newer `lastSeenAt`.
+
+This can make the new shared generation appear unreferenced and regress status metadata. A later touch is likely to reject and repair the mismatch, so the primary effect is cache availability and extra work rather than incorrect query facts.
+
+**Recommended design:** acquire the repository lock before reading the lease, or reread and compare the lease generation and ownership checksum after acquiring it. Update only `lastSeenAt` with a compare-and-swap predicate over the prior generation identity.
+
+**Required tests:** pause touch before lock acquisition, publish G2, resume touch, and assert the final lease remains G2.
+
+**Acceptance condition:** a touch can advance liveness only for the generation that is still current when the write lock is held.
+
+### DD-08 — S3 — Atomic JSON writes guarantee complete visibility but not crash durability
+
+**Evidence:** hardening gap.
+
+**Code:** `src/storage/atomic-json.ts:9-19` writes a temporary file and renames it, but does not `fsync` the file descriptor or parent directory.
+
+Readers in a normally running process observe either the old or new complete JSON document. After power loss or kernel crash, however, the latest file contents or directory rename can be absent. That distinction is appropriate for rebuildable heartbeat and cache metadata, but not necessarily for policy records, ownership transitions, or a release ledger. The helper's phrase “durable enough” does not state which guarantee callers receive.
+
+The temporary name is also only `path + pid + Date.now()`. Two writes from the same process in the same millisecond could target the same temporary path; most current calls are synchronous, so this is a narrow risk, but a UUID removes the assumption cheaply.
+
+**Recommended design:**
+
+- Split the API into a visibility-atomic helper and an explicitly durable helper.
+- The durable helper should write through an open descriptor, flush it, rename, and flush the parent directory where the platform supports it.
+- Use a random temporary suffix.
+- Classify every caller by whether loss after power failure is acceptable.
+
+**Required tests:** injected failures before write, after write, after file flush, after rename, and after directory flush; document platform limitations.
+
+**Acceptance condition:** each caller chooses a named durability contract rather than inheriting an ambiguous one.
+
+### DD-09 — S3 — Concurrent health runs can lose finding-outcome increments
+
+**Evidence:** source-confirmed interleaving.
+
+**Code:** `src/storage/evidence-cache.ts:733-792` reads the full outcome ledger, while the writer groups the caller-computed state, deletes each check's rows, and reinserts the replacement in a transaction.
+
+SQLite makes each replacement atomic, but it does not make the earlier read and later replacement one serializable transition:
+
+1. Processes A and B read `timesShown = 4`.
+2. Each computes `5`.
+3. A writes 5; B deletes and writes 5.
+4. One observation is lost.
+
+This affects detector-effectiveness metrics and local history, not source or index correctness.
+
+**Recommended design:** update counters and timestamps with SQL `UPSERT` expressions inside one transaction, or add a revision and retry compare-and-swap. If observations may be retried, give each observation a stable ID and record it exactly once.
+
+**Required tests:** two database connections update the same finding behind a barrier; final count must reflect both distinct observations and one retried observation only once.
+
+**Acceptance condition:** distinct observations commute without loss, and retry semantics are declared.
+
+### DD-10 — S3 — File mailboxes have no claim state, orphan collection, or backpressure
+
+**Evidence:** source-confirmed lifecycle gap.
+
+**Code:**
+
+- TypeScript requesters create UUID request/response paths and remove both in `finally`: `src/semantic/typescript/remote-provider.ts:144-173` and `src/reindex/typescript-index-requester.ts:70-105`.
+- TypeScript services scan sorted request names, write a response, then remove the request: `src/semantic/typescript/session-service.ts:142-196` and `src/reindex/typescript-index-service.ts:142-191`.
+- Rust follows the same requester lifecycle at `src/semantic/rust/durable-session.ts:358-405` and service lifecycle at `src/semantic/rust/durable-session-server.ts:24-55`.
+- Mailbox initialization creates directories only; it does not collect stale requests or responses.
+
+**Failure and accumulation cases:**
+
+- A client times out and deletes its paths while the service is processing; the service later writes an orphan response.
+- A client dies after writing a request; TypeScript eventually writes an expired-error response with no reader. Rust requests have no per-envelope absolute expiry and can still cause expensive work.
+- A server dies after reading a request but before deleting or responding; the next server replays it.
+- UUID sort order is not FIFO or deadline order. Under load, a newer long-deadline request can run before an older near-deadline request.
+- There is no queue length or byte limit, so a stalled service can accumulate files without backpressure.
+
+Unique IDs correctly prevent response correlation mistakes. The work is read-only or rebuildable, so replay is usually safe. Those strengths do not solve queue lifecycle.
+
+**Recommended design:**
+
+- Add `pending`, `inflight`, and `responses` states; claim with atomic rename.
+- Put protocol version, absolute expiry, client/session identity, and request identity in every envelope.
+- Decide explicitly whether retries share an idempotency key or are new operations.
+- Periodically collect expired pending, abandoned inflight, and orphan responses.
+- Add queue count/byte limits and return a clear overload error.
+- Process by deadline or enqueue sequence, not random UUID order.
+
+**Required tests:** client death, server death before and after claim, timeout during processing, replay, duplicate logical request, queue overload, and cleanup after restart.
+
+**Acceptance condition:** every mailbox file has a bounded lifecycle and every replayable operation has declared duplicate semantics.
+
+### DD-11 — S3 — Wall-clock jumps can distort ownership, timeout, and heartbeat decisions
+
+**Evidence:** hardening gap.
+
+**Code:**
+
+- `src/platform/repository-cache-lock.ts:38-70` accepts an injected `now` function but computes and compares the wait deadline with `Date.now()`, making the time abstraction internally inconsistent.
+- Watch classification compares ISO wall-clock heartbeat time against wall-clock `now` at `src/runtime/watch-service.ts:474-499`.
+- Watch stop/start waits use absolute wall-clock deadlines at `:553-577`.
+- TypeScript mailbox deadlines and heartbeat checks use wall-clock milliseconds, including `src/reindex/typescript-index-requester.ts:73-118`.
+- Rust requester and server loops use wall-clock deadlines and heartbeat ages at `src/semantic/rust/durable-session.ts:366-427` and `src/semantic/rust/durable-session-server.ts:69-107`.
+
+A forward clock jump can expire valid requests or classify a healthy service stale. A backward jump can prolong waits and make an old heartbeat appear fresh. Wall time is necessary for cross-process diagnostics, but elapsed duration inside one process should not depend on civil-clock adjustment.
+
+**Recommended design:** use a monotonic clock for same-process elapsed time. For cross-process liveness, combine wall timestamps with process birth identity, boot/session identity, and an active handshake; treat wall time as a diagnostic and conservative timeout hint.
+
+**Required tests:** inject forward and backward jumps around every deadline and heartbeat boundary.
+
+**Acceptance condition:** clock adjustment cannot cause an unrelated process signal, an unbounded local wait, or silent acceptance of an incompatible session.
+
+### DD-12 — S4 — Rotating operational JSONL files can lose records under concurrent writers
+
+**Evidence:** source-confirmed interleaving, qualified by low authority.
+
+**Code:** `src/reindex/reindex-activity.ts:92-119` and `src/reindex/affected-shadow.ts:633-652` use size-check/remove/rename/append sequences without their own lock.
+
+Two writers that both decide to rotate can rename or delete different generations of the log and split or lose records. Reindex serialization prevents most contention, and these files are operational evidence rather than source or index authority, so impact is limited.
+
+**Recommended design:** use immutable sequence-named segments, or hold a token-owned rotation lock. Make readers tolerate a set of segments and partial final records.
+
+**Required tests:** two writers cross at each rotation step; all complete records should remain readable or loss should be explicitly accepted and counted.
+
+**Acceptance condition:** either rotation is serialized or the file is explicitly documented as lossy telemetry.
+
+---
+
+## 5. Detailed resilience and testability findings
+
+### RES-01 — S3 — Production subprocesses do not share an enforced timeout and reap policy
+
+**Evidence:** source-confirmed hostile-dependency path.
+
+**Code:**
+
+- `src/reindex/indexer-runner.ts:143-227` invokes every language indexer with a 50 MiB output buffer but no timeout. A silent indexer can hold both a manual reindex and the watch refresh state machine forever.
+- `src/runtime/isolated-analysis-runner.ts:26-38` accepts `timeoutMs` for the synchronous JSON runner but never passes it to `spawnSync`. Its asynchronous sibling at `:50-108` treats the timeout as optional, sends one default termination signal, rejects immediately, and does not wait for process exit or escalate if the child ignores it.
+- `src/analysis/git-history.ts:246-251`, `src/platform/git-worktree.ts:242-248`, `src/platform/project-files.ts:108-119`, `src/runtime/health-report-cache.ts:175-180`, and several `src/runtime/cleanup-verify.ts` Git calls have output ceilings in some cases but no execution deadline.
+- Other subprocess boundaries already demonstrate the intended local policy: diff-impact Git calls, source-fileset discovery, project readiness, checker execution, TLA tools, and Rust worker subprocesses pass explicit timeouts.
+
+The current API therefore permits a caller to believe it supplied a deadline that is not enforced, while semantically equivalent commands have different liveness guarantees depending on which helper they happen to use.
+
+**Recommended design:**
+
+- Define one production subprocess policy with a required operation label, timeout, stdout/stderr budget, and termination grace.
+- Provide synchronous and asynchronous adapters that classify timeout, output-budget, spawn, signal, and exit failures distinctly.
+- On asynchronous timeout, send the platform-appropriate graceful signal, drain output, wait a bounded grace period, escalate only after process-instance verification, and resolve only after the child is reaped.
+- Give installation/build commands explicitly longer budgets rather than making absence of a budget mean infinity.
+- Retry only operations whose error is classified as transient; do not serially retry every failed parallel indexer.
+
+**Required tests:**
+
+- Hostile child that never exits.
+- Child that ignores the first termination signal.
+- Child that fills stdout or stderr.
+- Child that exits during the termination grace race.
+- Synchronous runner assertion that the supplied timeout reaches `spawnSync`.
+- Inventory test that every production subprocess call declares a timeout or an explicit reviewed exemption.
+
+**Acceptance condition:** no production child process can consume unbounded wall time or remain unreaped after its parent reports timeout completion.
+
+### RES-02 — S3 — Watch shutdown can strand or overlap an in-flight reindex child
+
+**Evidence:** source-confirmed lifecycle gap.
+
+**Code:**
+
+- `src/runtime/watch.ts:330-367` forks a detached reindex worker with `stdio: "pipe"` but installs no stdout or stderr data handlers. Enough child output can fill an OS pipe and block the worker before exit.
+- The watcher does not retain the active `ChildProcess`, impose a worker timeout, or record a bounded output tail for errors.
+- `src/runtime/watch.ts:121-130` closes Chokidar watchers without awaiting them and immediately reports idle, while an accepted reindex promise can still be active.
+- `src/runtime/watch-server.ts:244-253` then removes service state and activity and releases the watch lock. Another watch service can start while the prior detached child is still running. The reindex lock limits simultaneous publication but does not make the advertised service lifecycle truthful.
+
+**Recommended design:**
+
+- Inject a `ReindexRunner` boundary that returns an owned operation with a completion promise and cancellation/drain method.
+- Consume stdout and stderr continuously with bounded tails.
+- Make `Watcher.stop()` asynchronous: refuse new refreshes, close subscriptions, cancel or drain the current reindex according to an explicit shutdown budget, and report stopped only afterward.
+- Keep watch state and ownership until drain completes. If forced cancellation cannot prove exit, retain an explicit degraded state rather than advertising no owner.
+
+**Required tests:**
+
+- Worker emits more than a pipe buffer before exit.
+- Shutdown while the worker is running and while it is between TERM and exit.
+- Worker ignores TERM and requires escalation.
+- A second watcher attempts startup during drain.
+- Chokidar close rejects.
+
+**Acceptance condition:** releasing watch ownership proves that every accepted reindex child exited or remains represented by an explicit recoverable ownership record.
+
+### RES-03 — S3 — Rust LSP framing accepts unbounded headers and bodies into process memory
+
+**Evidence:** source-confirmed hostile-stream path.
+
+**Code:** `src/semantic/rust/lsp-client.ts:292-313` concatenates every stdout chunk into one buffer. Before `\r\n\r\n` appears there is no header ceiling. After a `Content-Length` is parsed there is no maximum body length, finite-integer check, or total-buffer ceiling. A misbehaving or compromised `rust-analyzer` can therefore send an infinite header, declare a huge body and drip bytes indefinitely, or make `bodyStart + contentLength` exceed the safe numeric range. Request timeouts reject callers but do not clear the accumulated transport buffer or terminate the producer.
+
+**Recommended design:**
+
+- Define explicit maximum LSP header and message sizes, chosen above known rust-analyzer responses and configurable only within a safe overall ceiling.
+- Parse `Content-Length` as a finite safe integer.
+- Reject the transport once on malformed or oversized framing, clear buffered bytes, terminate the producer, and reject every pending and readiness waiter.
+- Avoid repeated `Buffer.concat` growth by consuming a bounded chunk queue or preallocated frame body.
+
+**Required tests:**
+
+- Header exceeding the ceiling without a delimiter.
+- Negative, non-numeric, duplicate-conflicting, and unsafe-integer lengths.
+- Body length above the ceiling.
+- Chunked frame exactly at the ceiling.
+- Multiple valid frames split at every header/body boundary.
+- Rejection proves the transport is killed and pending maps are drained.
+
+**Acceptance condition:** rust-analyzer output has a hard memory bound independent of the bytes the child attempts to send.
+
+### RES-04 — S3 — Verified binary downloads have no deadline, byte ceiling, or collision-safe staging owner
+
+**Evidence:** source-confirmed hostile-network and concurrent-call path.
+
+**Code:** `src/platform/verified-binary-fetch.ts:49-75` calls `fetch` without an abort deadline, materializes the entire response with `arrayBuffer()` without checking `Content-Length` or streamed bytes, and stages at `${cachePath}.tmp-${process.pid}`. Two concurrent calls in one process target the same temporary path. A timeout, checksum failure after staging changes, write error, or rename failure has no `finally` cleanup. SHA-256 verification and atomic rename protect accepted bytes but do not bound the work needed to reach acceptance.
+
+**Recommended design:**
+
+- Require a download deadline and maximum byte count with conservative defaults.
+- Stream the response while hashing and enforcing both advertised and observed byte limits.
+- Use an exclusive unique temporary file containing a random operation token, flush it according to the durable-install contract, and remove it in `finally`.
+- Coordinate concurrent fetches for one cache path with a token-owned lock or in-process single flight plus cross-process recheck.
+- Preserve the checksum recheck after acquiring ownership so a winner can be reused.
+
+**Required tests:**
+
+- Never-resolving fetch aborted at the deadline.
+- Missing, false, and oversized `Content-Length`.
+- Stream exceeds the byte budget.
+- Two callers fetch the same path concurrently.
+- Crash/failure at write, flush, checksum, and rename stages leaves no accepted corrupt file and only reclaimable temp debris.
+
+**Acceptance condition:** one download has bounded time and bytes, and concurrent callers cannot corrupt or steal each other's staging file.
+
+### RES-05 — S3 — Timed-out Vue workers are neither retained nor terminated
+
+**Evidence:** source-confirmed opt-in failure path.
+
+**Code:** `src/reindex/vue/augment-vue-workers.ts:19-66` constructs worker threads without storing their handles. On timeout or a worker-reported error, the `finally` block removes the result directory but cannot terminate the still-running workers. Those workers remain referenced, can keep the process alive, and can race writes into a removed directory. Parallel workers are opt-in today, but the advertised option has no safe failure lifecycle.
+
+**Recommended design:**
+
+- Retain every `Worker` handle and result identity.
+- Make worker completion explicit rather than inferred solely from a shared counter.
+- On any failure or timeout, terminate all unfinished workers and wait for their termination before deleting the result directory.
+- Bound each result file before parsing and include worker/task identity in every payload.
+
+**Required tests:**
+
+- One worker hangs while peers finish.
+- One worker reports an error while peers continue.
+- Timeout terminates every worker before result-directory cleanup.
+- Late worker message or write cannot affect a subsequent run.
+- Successful multi-worker merge remains deterministic.
+
+**Acceptance condition:** the coordinator cannot return or throw while an owned Vue worker can still run.
+
+### TEST-01 — S4 — Watcher tests depend on private implementation members instead of an observable side-effect boundary
+
+**Evidence:** unit-test design gap.
+
+**Code:** `tests/runtime/watch.test.ts:47-49`, `:81-83`, `:112-114`, and `:137-139` replace the private `runReindex` method through casts. Other cases invoke `handleFileChange` and inspect `pendingTrigger` and `changedFiles` through private-member casts. This makes the suite sensitive to field names while leaving child drain, cancellation, and ownership behavior hard to drive deterministically.
+
+**Recommended design:** introduce the `ReindexRunner`, clock/timer, and watcher-subscription boundaries required by RES-02; drive public refresh/start/stop behavior through those injected ports; observe calls, status, cancellation, and completion rather than private fields.
+
+**Required tests:** rewrite every private-member test through the public API or a named exported pure policy function. Add an architecture test that rejects new private-member casts in watcher tests.
+
+**Acceptance condition:** watcher lifecycle and state-machine behavior can be tested deterministically without accessing or replacing a private class member.
+
+---
+
+## 6. Detailed API-evolution findings
+
+### API-01 — S2 — CLI JSON has no schema or producer version
+
+**Evidence:** contract gap.
+
+**Code:** `src/runtime/command-kit/command-execution.ts:334-365` emits `command`, evidence metadata, analysis budget, args, options, result, coverage, and optional agent result. It emits no envelope schema version or producer package version.
+
+The coverage additions are useful and internally validated, but an agent or external script cannot distinguish an old result shape from a new one, cannot negotiate a breaking result change, and cannot explain differing output from two installed CLI versions.
+
+**Recommended design:**
+
+- Add a top-level envelope discriminator and integer `schemaVersion`.
+- Add `producer: { name, version }`.
+- Version command result payloads where their semantics can evolve independently.
+- Treat additions as additive, preserve deprecated aliases for a stated window, and reserve breaking removal for a major contract version.
+- Publish a machine-readable schema and keep fixtures from at least the previous supported version.
+
+**Required tests:** parse current and previous-version golden outputs with the newest consumer; ensure an older fixture consumer ignores additive fields; reject unsupported major schema versions with an actionable error.
+
+**Acceptance condition:** every JSON consumer can identify the producer and determine whether it understands the contract.
+
+### API-02 — S2 — The 72 npm export paths have no signature compatibility baseline
+
+**Evidence:** contract gap.
+
+**Code:**
+
+- `package.json:23-312` publishes 72 export paths: the root, `./queries`, `./reindex`, `./runtime`, and 68 individual query subpaths.
+- `tests/runtime/cli-contract.test.ts:395-445` correctly keeps query export membership synchronized with the public-query manifest.
+- The test does not compare exported function signatures, required object fields, discriminated unions, or declaration meaning against a prior release.
+
+A result field can become required, a union member can disappear, or a parameter can change while the export membership test remains green.
+
+**Recommended design:**
+
+- Generate and commit an API declaration report from the built `.d.ts` files.
+- Compare it in CI and require an explicit semver classification for differences.
+- Keep compile fixtures for representative downstream imports from root, query subpaths, reindex, and runtime.
+- Define a deprecation window before removals and preserve aliases or adapters where feasible.
+
+**Required tests:** compile the prior-release consumer fixture against the new package; prove additive changes pass and breaking signatures require an approved baseline update.
+
+**Acceptance condition:** a release cannot change a public TypeScript signature without a reviewed compatibility diff.
+
+### API-03 — S3 — `.scipquery.json` has no schema version or migration boundary
+
+**Evidence:** contract gap.
+
+**Code:**
+
+- `src/runtime/config.ts:105-126` parses JSON and casts it directly to `ProjectConfig`.
+- `src/domain/config-types.ts:106-137` defines no schema/version field.
+- `src/runtime/config.ts:736-750` and its key sets reject or diagnose unknown fields.
+- Most writers spread the existing object, which is a good unknown-field preservation habit when parsing succeeds.
+
+Mixed-version teams cannot distinguish a typo from a valid field introduced by a newer client, and the runtime cannot migrate a field whose meaning changes. A future additive field may be treated as invalid by an older client even when it could safely ignore it.
+
+**Recommended design:** add `$schema` and an integer format version, route all reads through one decoder, migrate old supported versions to a current internal model, and state whether unknown future fields are preserved, warned, or rejected by context.
+
+**Required tests:** oldest supported config, current config, future additive unknown field, malformed version, and round-trip preservation by every config writer.
+
+**Acceptance condition:** config meaning changes only through an explicit versioned migration.
+
+### API-04 — S2 — Reindex metadata compatibility logic is duplicated across at least seven consumers
+
+**Evidence:** source-confirmed contract drift.
+
+**Code:** raw version-2/version-3 checks appear independently in:
+
+- `src/storage/evidence-cache.ts:175-179`;
+- `src/semantic/typescript/session-protocol.ts:59-86`;
+- `src/reindex/typescript-index-protocol.ts:100-116`;
+- `src/reindex/sqlite-generation-store.ts:266-278`;
+- `src/reindex/index.ts:2243-2263`;
+- `src/runtime/index-freshness.ts:57-61`;
+- additional metadata paths in `src/reindex/index.ts`.
+
+These consumers already apply different completeness rules: evidence caching accepts complete or partial metadata, while generation and freshness paths require complete metadata. The policy differences may be intentional, but version decoding and capability recognition are repeated.
+
+A future version 4 can therefore make freshness accept a generation that semantic sessions reject, or make evidence fingerprinting disagree with shared publication.
+
+**Recommended design:**
+
+- Introduce one `parseReindexMetadata` decoder that validates and migrates every supported format.
+- Return a current semantic model plus named capabilities such as `usableForQuery`, `usableForEvidenceCache`, and `publishableGeneration`.
+- Keep intentional completeness differences as named policy predicates, not repeated raw version checks.
+
+**Required tests:** a matrix of every supported metadata version/status against every consumer capability, plus an unsupported-future-version case.
+
+**Acceptance condition:** adding a metadata version requires one decoder update and one reviewed capability matrix, not edits to scattered readers.
+
+### API-05 — S2 — Committed suppression and outcome records are unversioned
+
+**Evidence:** contract gap.
+
+**Code:**
+
+- `src/storage/suppression-store.ts:46-99` writes and parses suppression objects without a schema version.
+- `src/storage/outcome-events.ts:58-82` writes immutable event files without a version.
+- `src/storage/outcome-events.ts:133-180` silently returns `null` for malformed or unknown event kinds.
+- `src/domain/finding-outcomes.ts:30-46` defines the current event union but no wire-format version.
+
+The immutable one-file-per-event design is excellent for Git merging and replay idempotency. The evolution problem is that an older binary silently drops an event introduced by a newer binary, making team-shared effectiveness history look complete while undercounting it. Suppressions have the same ambiguity between malformed, future, and current records.
+
+**Recommended design:**
+
+- Add a record discriminator and schema version to each committed file.
+- Decode through version-specific validators and migrate to the current model.
+- Report unsupported versions as explicit incomplete coverage; do not silently omit them from totals.
+- Preserve immutable event paths and read-side deduplication.
+
+**Required tests:** old/current/future records, unknown event kinds, mixed-version repositories, and round-trip preservation.
+
+**Acceptance condition:** readers can distinguish “no event” from “event exists but this binary cannot interpret it.”
+
+### API-06 — S3 — Rust mailbox messages lack the explicit version and identity checks used by TypeScript
+
+**Evidence:** contract gap.
+
+**Code:**
+
+- `src/semantic/rust/durable-session.ts:358-405` writes `{ id, request }` and parses a response without checking an echoed request ID or protocol version.
+- `src/semantic/rust/durable-session-server.ts:19-55` validates only enough to cast a `DurableRustSessionRequest`; responses contain no protocol version, request ID, or server/session identity.
+- The durable server's `server.json` is versioned and the session directory is tied to a server binary fingerprint elsewhere, which reduces mixed-binary risk.
+- TypeScript envelopes, by contrast, validate protocol, ID, deadline, and generation/base generation.
+
+Unique per-session paths and UUID filenames make accidental cross-request responses unlikely. The gap is explicit compatibility and malformed-message behavior, not evidence of current response confusion.
+
+**Recommended design:** version every Rust request and response envelope, validate the request kind and required fields, echo request ID and durable-session identity, add absolute expiry, and reject unsupported versions explicitly.
+
+**Required tests:** malformed kind, wrong ID, wrong protocol, stale response, newer server/older client, and older server/newer client.
+
+**Acceptance condition:** a Rust response is accepted only when it proves which request and protocol produced it.
+
+---
+
+## 7. Windows sidecar release findings
+
+### REL-01 — S2 — Existing Windows binaries can be stale and still pass prepublish
+
+**Evidence:** source-confirmed release gap.
+
+**Code:**
+
+- `scripts/publish-scip-windows.ts:32-38` builds only when either expected filename is absent.
+- `scripts/build-scip-windows.mjs:8-9` selects source repository and SCIP tag, currently defaulting to `v0.8.1`.
+- `packages/scip-windows/package.json:1-19` includes the two binaries, license, and README but no provenance or checksum manifest.
+
+At the audited revision, the files are valid Windows PE binaries, and their observed SHA-256 values were:
+
+- x64: `891ebc6315f8b50371a70b3d677c47dc3c1d097f3002d5b96658c2f3393d531b`
+- arm64: `ba2c566d4e820fe38e51695849bf2de3d003294b8f8f272befbfa9c59e97ceb0`
+
+Those facts prove file type and identity, not provenance. If `SCIP_VERSION`, source, build flags, or the sidecar package version changes while the old files remain, prepublish skips the build and publishes the old bytes.
+
+**Recommended design:**
+
+- Generate a committed provenance manifest containing source URL, immutable source commit, tag, Go version, build flags, target, file size, and SHA-256.
+- Verify the manifest, PE machine architecture, and hashes during prepublish.
+- Prefer a clean trusted-CI rebuild for releases; otherwise verify an attestation produced by that build.
+
+**Required tests:** wrong architecture, stale hash, changed source version with existing binaries, missing manifest, and correct reproducible manifest.
+
+**Acceptance condition:** file presence alone can never authorize publication.
+
+### REL-02 — S2 — “Already published” checks version existence, not content identity
+
+**Evidence:** source-confirmed release gap.
+
+**Code:** `scripts/publish-scip-windows.ts:47-64` runs `npm view <name>@<version> version` and skips publication when the returned string equals the local version.
+
+If local package bytes differ from the already-published immutable npm version, the script reports the sidecar ready and continues. The changed local bytes cannot ship without a version bump, but the release command does not surface that fact.
+
+**Recommended design:**
+
+- Pack the local sidecar deterministically.
+- Compare its npm integrity/shasum and provenance manifest with registry metadata or the downloaded registry tarball.
+- Skip only when identities match. Fail with “sidecar content changed; bump its version” when they do not.
+- On registry/network ambiguity, fail rather than converting every error into “not published.”
+
+**Required tests:** same version/same bytes, same version/different bytes, 404, auth error, timeout, and registry response corruption.
+
+**Acceptance condition:** an existing version is accepted only when its published content is the intended content.
+
+### REL-03 — S3 — Main and sidecar publication is an ordered workflow, not one atomic release
+
+**Evidence:** hardening gap.
+
+**Code:**
+
+- `package.json:327` runs `vite-node scripts/publish-scip-windows.ts && npm run build` in `prepublishOnly`.
+- `scripts/publish-scip-windows.ts:47-53` publishes the sidecar before allowing the main package's build and npm publication to continue.
+
+If sidecar publication succeeds and the main build or main publication fails, the sidecar version remains published without its intended main consumer. This is recoverable because the sidecar is independently versioned, but the comment “ship BOTH packages in one command” can be mistaken for an all-or-nothing guarantee.
+
+Two concurrent release processes can both observe the version as absent; one publishes successfully, the other fails its sidecar publish and aborts the main release even though the desired version now exists.
+
+**Recommended design:**
+
+- Build, test, and pack both packages before any registry mutation.
+- Publish the sidecar first, then verify its registry integrity, then publish the main package last.
+- On a publish conflict, reread registry state and continue only if content identity matches.
+- Record partial release state and make retry instructions explicit.
+- Do not claim transactionality; npm cannot atomically publish two packages.
+
+**Required tests:** simulated registry with sidecar success/main failure, concurrent publisher conflict, sidecar conflict with matching bytes, conflict with different bytes, and retry.
+
+**Acceptance condition:** every partial state is detectable, safe to retry, and incapable of pairing a main version with unintended sidecar bytes.
+
+---
+
+## 8. Designs that should be preserved
+
+### 8.1 Incremental SQLite candidate publication
+
+`src/reindex/incremental-sqlite-publication.ts:102-171` validates source databases, copies the prior accepted generation into a private candidate, patches through an immediate SQLite transaction, checks schema and uniqueness, runs `integrity_check` and `foreign_key_check`, and compares affected-fact digests before acceptance. Concurrent work cannot partially mutate the stable accepted database.
+
+The fix for DD-01 should change the stable handoff and reader binding, not weaken private candidate construction.
+
+### 8.2 Content-addressed shared generations
+
+`src/reindex/shared-generation-store.ts:209-294` hashes every artifact, builds in a unique staging directory, writes a manifest, and atomically renames the complete directory. A raced publisher validates and accepts the winner. Manifest parsing at `:688-727` validates version, producer identity, paths, checksums, uniqueness, and required artifacts.
+
+This is the strongest distributed-data design in the audited surface. The DD-07 lease fix should retain immutable generation directories and the repository GC lock.
+
+### 8.3 Rebuildable evidence-cache contract
+
+`src/storage/evidence-cache.ts:204-210` uses WAL, a busy timeout, and `synchronous = NORMAL` under an explicit rebuildable-cache rationale. Writes use transactions, and result reads are tied to content and project fingerprints. Concurrent obsolete writes generally reduce hit rate rather than returning wrong-key evidence.
+
+DD-09 concerns the mutable observational ledger inside the same database, not the fingerprinted evidence rows.
+
+### 8.4 Immutable outcome-event identities
+
+`src/storage/outcome-events.ts:44-82` writes one file per event with exclusive create and a content-derived filename; exact replay is idempotent, and `dedupeEvents` collapses merged duplicates. This is a sound Git-distributed event model. API-05 should add versioned envelopes without replacing the independent-file structure.
+
+### 8.5 Token-owned generic lock release
+
+`src/platform/repository-cache-lock.ts:91-125` uses an exclusive reclaim file, rechecks raw observed content, refuses to reclaim a changed/live record, and deletes a lock on release only when PID and random token still match. That is the correct ownership shape for a non-expiring file lock.
+
+The missing case is malformed observation recovery, and PID birth identity remains necessary where the tool sends signals.
+
+### 8.6 TypeScript mailbox correlation
+
+TypeScript request and response envelopes include protocol version, request ID, deadline, and generation or base generation. Responses are parsed against expected identity. API-06 should bring Rust up to this standard; DD-10 should add lifecycle management without removing these checks.
+
+### 8.7 Conservative shared-cache garbage collection
+
+The shared cache serializes lease reachability changes and collection, validates ownership checksums, constrains deletion to managed paths, and treats artifacts as rebuildable. The identified stale touch can cause unnecessary recomputation, but the collector's conservative path checks materially limit destructive scope.
+
+---
+
+## 9. Rejected or qualified suspicions
+
+These items were investigated and should not be filed as defects without new evidence:
+
+1. **No generic fencing-token defect was found.** The principal process-file locks do not expire a live owner. Token-checked release prevents an old owner from deleting a successor. Fencing becomes necessary only if the design starts expiring/stealing live ownership or if a protected publisher does not check current ownership.
+2. **Old SQLite readers are not themselves unsafe.** SQLite retaining the old inode is a useful snapshot property. DD-01 arises only because other files are reread from the new stable path and attributed to that old snapshot.
+3. **Fingerprint-keyed evidence cache writes do not normally return stale evidence.** A stale writer can waste storage or reduce hit rate; current reads compare the relevant content/project identity before accepting a hit.
+4. **The shared generation publisher is not a partial-directory publication path.** It stages, hashes, and renames an immutable directory, and validates a race winner.
+5. **JSONL append without rotation was not shown to corrupt authoritative data.** DD-12 is limited to the uncoordinated rotation path and operational telemetry.
+6. **Random mailbox IDs solve correlation, not idempotency.** They are a positive property, but a retried logical operation receives a new ID and can run twice unless the protocol adds a stable operation key.
+7. **`synchronous = NORMAL` is appropriate for rebuildable cache rows.** The durability concern applies only when the same helper or database stores non-rebuildable policy or ownership state.
+8. **The shared repository cache is not unbounded by design.** Automatic sweeps run on CLI/watch activity, use a one-hour generation TTL and a two-GiB default budget, and preserve live leases. A currently unreferenced generation inside the grace period is expected, not a leak.
+9. **Per-database semantic maps are scoped to an open database/session.** The inspected maps are keyed by indexed symbols or files from that repository and are released with the database or service; no cross-repository process-global query-key cache was found.
+
+---
+
+## 10. Required fault-injection and compatibility test matrix
+
+| Test ID | Boundary              | Forced event                                            | Invariant                                                                    |
+| ------- | --------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| FI-01   | Stable generation     | Pause after SCIP, DB, and metadata handoff stages       | One response never combines artifacts or identity from different generations |
+| FI-02   | Result cursor         | Publish changed sorted refs between pages               | Continue immutable generation or reject; never skip/duplicate silently       |
+| FI-03   | Semantic request      | Reuse numeric symbol IDs differently across generations | Remote service resolves only the requester's pinned generation               |
+| FI-04   | Watch process         | Reuse PID with different birth identity                 | No signal is sent                                                            |
+| FI-05   | Reindex preemption    | Reuse PID/process group                                 | No TERM/KILL is sent                                                         |
+| FI-06   | Watch refresh         | Activity stale-read crosses refresh write               | Refresh remains pending or is acknowledged                                   |
+| FI-07   | Lock creation         | Crash after exclusive create, before metadata write     | One recovery owner reclaims safely                                           |
+| FI-08   | Lock release          | Successor replaces lock before old release              | Old owner cannot remove successor                                            |
+| FI-09   | Config/hook setup     | User edit between read and write                        | Latest unrelated content survives or explicit conflict                       |
+| FI-10   | Suppression           | Two distinct reasons target same finding concurrently   | Conflict is visible; neither is silently erased                              |
+| FI-11   | Worktree lease        | Publish G2 while G touch waits for lock                 | Final lease remains G2                                                       |
+| FI-12   | Atomic JSON           | Failure at each write/flush/rename stage                | Stated visibility/durability contract holds                                  |
+| FI-13   | Outcome counter       | Two connections observe same finding                    | Both distinct observations count                                             |
+| FI-14   | Mailbox               | Client dies before/after claim                          | Work is bounded and debris is collected                                      |
+| FI-15   | Mailbox               | Server dies before/after response                       | Replay semantics are explicit and correlation holds                          |
+| FI-16   | Mailbox               | Queue exceeds count/byte budget                         | New work receives explicit backpressure                                      |
+| FI-17   | Clock                 | Forward/backward wall-clock jump                        | Monotonic waits remain bounded; no ownership signal follows                  |
+| FI-18   | CLI JSON              | New producer adds fields                                | Supported older fixture remains parseable                                    |
+| FI-19   | npm API               | Required field or union member changes                  | Compatibility diff blocks unclassified release                               |
+| FI-20   | Config/metadata       | Read old/current/future schema                          | Migrate supported, report unsupported, preserve safe unknowns                |
+| FI-21   | Committed records     | Older client sees future event/suppression              | Reports incomplete compatibility instead of silently dropping                |
+| FI-22   | Rust mailbox          | Wrong version, ID, session, or expired request          | Reject with explicit protocol error                                          |
+| FI-23   | Sidecar build         | Existing binary hash mismatches provenance              | Prepublish fails                                                             |
+| FI-24   | Registry              | Existing version has different tarball identity         | Release fails and demands version bump                                       |
+| FI-25   | Multi-package release | Sidecar succeeds, main fails                            | Partial state is recorded and retry is safe                                  |
+| FI-26   | Subprocess policy     | Child hangs, floods output, or ignores TERM             | Parent times out, bounds output, escalates safely, and reaps                 |
+| FI-27   | Watch lifecycle       | Stop during reindex and Chokidar shutdown               | Ownership remains until child/subscriptions are drained                      |
+| FI-28   | Rust LSP framing      | Oversized or malformed header/body                      | Transport fails once within a fixed memory budget                            |
+| FI-29   | Binary download       | Slow, oversized, or concurrent response                 | Deadline/byte limits hold and accepted cache remains checksum-valid          |
+| FI-30   | Vue workers           | One worker hangs while peers finish                     | Every worker terminates before coordinator cleanup                           |
+| FI-31   | Watcher tests         | Internal field and method names change                  | Behavior tests remain stable and use only public/injected boundaries         |
+
+The concurrency tests should use explicit barriers or injected stage callbacks, not timing sleeps. A barrier makes the harmful order a deterministic unit test rather than a probabilistic stress test.
+
+---
+
+## 11. Recommended remediation order
+
+The order below follows causal risk and shared infrastructure, not file proximity.
+
+### Phase 0 — Process safety
+
+1. Add process birth identity/control-channel authentication.
+2. Require it before watch stop/replacement and reindex preemption.
+3. Add PID-reuse tests before changing any lock-stealing behavior.
+
+### Phase 1 — Bounded execution and truthful shutdown
+
+1. Introduce the shared subprocess timeout, output-budget, termination, and reap policy.
+2. Give the watch reindex child an owned runner and asynchronous drain.
+3. Bound Rust LSP frames and verified binary downloads.
+4. Retain and terminate Vue workers on every failure path.
+5. Rewrite watcher tests around the injected runner and observable status.
+
+### Phase 2 — Generation integrity
+
+1. Define the generation handle and its invariants.
+2. Bind `ScipDatabase`, metadata, semantic requests, evidence fingerprints, and pagination to it.
+3. Replace multi-file stable-path observation with an immutable-generation pointer or a validated open/retry protocol.
+4. Run FI-01 through FI-03 at every publication stage.
+
+### Phase 3 — Lost-update removal
+
+1. Separate refresh intent from watch activity.
+2. Add optimistic revision/lock/retry helpers for config, hook, and managed Markdown changes.
+3. Make suppression changes conflict-aware.
+4. Move worktree lease reads inside the repository lock.
+5. Replace outcome ledger read/replace transitions with database-native atomic updates.
+
+### Phase 4 — Lock, durability, and mailbox lifecycle
+
+1. Standardize token-owned lock records and malformed-record recovery.
+2. Split visibility-atomic and durable JSON helpers.
+3. Add pending/inflight/response mailbox states, expiry, cleanup, ordering, and backpressure.
+4. Move same-process elapsed waits to monotonic time.
+
+### Phase 5 — Versioned contracts
+
+1. Version CLI JSON first because it is the broadest agent-facing boundary.
+2. Centralize reindex metadata decoding.
+3. Version `.scipquery.json`, suppressions, outcome events, and Rust envelopes.
+4. Generate the TypeScript declaration compatibility baseline.
+
+### Phase 6 — Release provenance
+
+1. Produce and verify the Windows binary provenance manifest.
+2. Compare local tarball identity with npm before accepting an existing version.
+3. Build and pack both packages before publishing either.
+4. Test and document the recoverable partial-release states.
+
+### Phase 7 — Low-risk operational hardening
+
+1. Make JSONL rotation serial or segment-based.
+2. Add telemetry for reclaimed locks, expired mailbox work, queue pressure, config conflicts, and partial releases.
+
+---
+
+## 12. Definition of done for the remediation program
+
+The program is complete when all of the following are true:
+
+- Every authoritative index response is bound to one retained generation.
+- No process is signaled from PID evidence alone.
+- Every durable intent has an acknowledgment or remains recoverably pending.
+- Every read-modify-write boundary either serializes the read with the write or checks that its input revision is still current.
+- Every lock is recoverable after partial creation and can only be released by its owner.
+- Every mailbox item has a version, identity, expiry, bounded lifecycle, and declared replay behavior.
+- Every externally consumed JSON/file contract declares a version and unsupported records are visible.
+- Every published TypeScript signature change receives a compatibility classification.
+- Every Windows binary is tied to source and build provenance, and registry equality means byte equality.
+- Every subprocess, worker, download, and framed transport has an enforced time/byte/lifecycle budget.
+- Watch ownership is released only after subscriptions and in-flight reindex work are drained.
+- Watcher lifecycle tests observe public behavior and injected side-effect boundaries rather than private members.
+- Fault-injection tests cover the adverse interleavings listed in §10 without relying on sleep timing.
+- Existing strong mechanisms—private SQLite candidate validation, immutable shared generations, fingerprinted cache reads, immutable outcome-event files, and token-owned release—remain intact.
+
+Until DD-01 and DD-02 are fixed, the repository should treat generation-sensitive pagination/semantic delegation and process preemption as the two highest-risk operational surfaces.
