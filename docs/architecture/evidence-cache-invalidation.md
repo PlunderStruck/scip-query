@@ -82,6 +82,13 @@ worktree lease, local pointer, reindex metadata, and SQLite generation state
 use crash-durable file replacement; the wider multi-file generation handoff
 remains a distinct publication protocol. See `docs/DURABILITY.md` for that
 classification. Dirty or partial indexes are never published.
+Generation attachment, worktree-lease liveness updates, and repository cleanup
+also share the repository-cache lock. A liveness update uses its first pointer
+observation only to select that lock, then rereads and validates the current
+pointer, lease ownership, Git tree, local fingerprint, generation, and
+artifacts before changing only `lastSeenAt`. It therefore cannot replay an old
+lease after a newer generation is attached or move liveness behind a touch
+that completed first.
 Peer bootstrap validates the stable cache artifacts, not the peer checkout's
 current files: a dirty checkout may donate an older cache that still exactly
 describes the target `HEAD`, while a cache containing the dirty changes cannot.
@@ -92,7 +99,8 @@ only while that watcher is idle, error-free, and naming the same database
 generation; it never makes dirty files eligible for cross-worktree publication.
 The implementation and its compiler-backed tests live in
 `src/reindex/shared-generation-store.ts` and
-`tests/reindex/shared-worktree-cache.integration.test.ts`.
+`tests/reindex/shared-generation-store.test.ts`, with the cross-worktree path
+covered by `tests/reindex/shared-worktree-cache.integration.test.ts`.
 
 Shared-generation build ownership now uses the same crash-durable,
 token-checked process-lock record as repository cleanup, reindex, watch, and

@@ -404,6 +404,17 @@ This can make the new shared generation appear unreferenced and regress status m
 
 **Acceptance condition:** a touch can advance liveness only for the generation that is still current when the write lock is held.
 
+**Resolution — Slice 14 (2026-07-25):** resolved. A lease touch now uses its
+first local pointer observation only to select the repository-cache lock. Once
+serialized with generation attachment and cleanup, it rereads the pointer and
+current lease, verifies the pointer identity, ownership checksum, Git tree,
+local-cache path, metadata fingerprint, generation IDs, and artifacts, then
+merges only `lastSeenAt`. It never writes the pre-lock lease object. Barrier
+tests publish G2 while a G1 touch waits, delete or recreate the lease before
+the touch acquires ownership, corrupt the ownership checksum, and complete a
+newer concurrent touch first. In every case the current lease remains intact
+and liveness never moves backward.
+
 ### DD-08 — S3 — Atomic JSON writes guarantee complete visibility but not crash durability
 
 **Evidence:** hardening gap.

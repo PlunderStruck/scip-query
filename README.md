@@ -519,6 +519,15 @@ copy-on-write cloning is used when available, with an ordinary copy fallback;
 hard links are never used. Dirty edits, watcher refreshes, locks, and local
 `evidence.db` state therefore remain private to the worktree.
 
+Each worktree lease names the exact shared generation protected from
+collection. Lease publication, liveness touches, and repository cleanup share
+one repository-cache lock. A touch rereads the current lease only after
+acquiring that lock, validates its ownership checksum and current local
+generation, and changes only `lastSeenAt`. If a newer generation was attached,
+the lease was deleted or recreated, or its ownership changed while the touch
+waited, the touch preserves that current state instead of replaying its stale
+observation.
+
 Automatic refresh follows the same boundary. When `watch.enabled` is true,
 the first watcher-eligible command in each worktree starts or reuses a daemon
 identified by that checkout's Git worktree ID. A Git worktree ID is a checkout

@@ -615,8 +615,8 @@ Rollback is commit-scoped. Durable-format slices additionally retain legacy read
 |    10 | DD-01   | complete | `c58c28df` | 112 focused; 1,558 full-suite tests | Immutable pointer, retained companions, cursor/semantic isolation, architecture gate verified |
 |    11 | DD-03   | complete | `a13f6808` | 120 focused; 1,574 full-suite tests | Immutable admission, exclusive claims, completion receipts, retry, expiry, and status verified |
 |    12 | DD-05   | complete | `aff8685c` | 53 focused; 1,590 full-suite tests  | Revision checks, narrow merges, exclusive create, strict Markdown conflicts, and crash boundaries verified |
-|    13 | DD-06   | complete | this slice | 39 focused; 1,598 full-suite tests  | Exclusive create, idempotent replay, compare-and-replace, schema decoding, and crash boundaries verified |
-|    14 | DD-07   | pending  |            |                                     |                                                                 |
+|    13 | DD-06   | complete | `5bc743ed` | 39 focused; 1,598 full-suite tests  | Exclusive create, idempotent replay, compare-and-replace, schema decoding, and crash boundaries verified |
+|    14 | DD-07   | complete | this slice | 24 focused; 1,603 full-suite tests  | G2 publication, deletion/recreation, ownership, and touch ordering verified |
 |    15 | DD-09   | pending  |            |                                     |                                                                 |
 |    16 | DD-10   | pending  |            |                                     |                                                                 |
 |    17 | DD-11   | pending  |            |                                     |                                                                 |
@@ -706,6 +706,27 @@ Rollback is commit-scoped. Durable-format slices additionally retain legacy read
 - Fresh SCIP references resolve the writer and decoder through their complete
   consumer sets. The final diff gate reports zero blocking and zero advisory
   findings.
+
+### Slice 14 verification record
+
+- The initial pointer read now selects a repository-cache lock; every
+  authoritative pointer, lease, context, metadata, generation, and artifact
+  observation happens again while that lock excludes generation publication
+  and cleanup.
+- The touch constructs a new record by changing only `lastSeenAt`. It never
+  mutates or republishes the pre-lock object.
+- Deterministic barriers publish G2 while a G1 touch waits, delete a lease,
+  recreate it with different ownership, corrupt its checksum, and complete a
+  newer touch before an older one. G2/current bytes survive every case and
+  liveness does not regress.
+- The 24-test focused matrix covers the shared-generation store and repository
+  cache lifecycle; TypeScript validation passes.
+- The complete suite passes: 213 test files and 1,603 tests. Lint, production
+  build, and whitespace validation also pass.
+- Fresh SCIP references report the touch's complete consumer set. The first
+  diff gate identified two architecture documents that cite the changed shared
+  generation owner; both lease/ownership claims were reconciled, and the final
+  gate reports zero blocking and zero advisory findings.
 
 ### Slice 09 verification note
 

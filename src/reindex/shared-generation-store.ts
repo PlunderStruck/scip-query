@@ -126,6 +126,11 @@ export interface WorktreeCacheLease {
   lastSeenAt: string;
 }
 
+export interface WorktreeLeaseTouchOptions {
+  /** @internal deterministic barrier for a competing generation/lease writer. */
+  onBeforeRepositoryLock?: () => void;
+}
+
 export type SharedBuildLockResult =
   | { kind: 'owner'; release: () => void }
   | { kind: 'generation-ready' }
@@ -608,64 +613,64 @@ export function touchExistingWorktreeLease(
   localCacheDir: string,
   now: (() => Date) | undefined = undefined,
   resolvedContext?: GitWorktreeContext,
+  options: WorktreeLeaseTouchOptions = {},
 ): WorktreeCacheLease | null {
   try {
-    const pointer = JSON.parse(readFileSync(join(localCacheDir, WORKTREE_CACHE_POINTER), 'utf8')) as {
-      version?: unknown;
-      repositoryId?: unknown;
-      worktreeId?: unknown;
-    };
-    if (
-      pointer.version !== 1 ||
-      typeof pointer.repositoryId !== 'string' ||
-      !/^[a-f0-9]{24}$/.test(pointer.repositoryId) ||
-      typeof pointer.worktreeId !== 'string' ||
-      !/^[a-f0-9]{24}$/.test(pointer.worktreeId)
-    ) {
-      return null;
-    }
-    const leasePath = join(resolveRepositoryCacheDir(pointer.repositoryId), 'worktrees', `${pointer.worktreeId}.json`);
-    const lease = JSON.parse(readFileSync(leasePath, 'utf8')) as WorktreeCacheLease;
-    const context = resolvedContext ?? resolveGitWorktreeContext(projectRoot);
-    if (
-      !context?.clean ||
-      !context.treeOid ||
-      lease.version !== 1 ||
-      lease.repositoryId !== pointer.repositoryId ||
-      lease.worktreeId !== pointer.worktreeId ||
-      lease.repositoryId !== context.repositoryId ||
-      lease.worktreeId !== context.worktreeId ||
-      resolve(lease.projectRoot) !== resolve(context.projectRoot) ||
-      lease.treeOid !== context.treeOid ||
-      resolve(lease.localCacheDir) !== resolve(localCacheDir) ||
-      lease.ownershipChecksum !== worktreeLeaseOwnershipChecksum(lease)
-    ) {
-      return null;
-    }
-    const metadata = readReindexMetadata(localCacheDir);
-    if (!isProjectInputFingerprint(metadata?.fingerprint)) return null;
-    const snapshot = buildSharedGenerationSnapshot(context, metadata.fingerprint);
-    if (
-      !snapshot ||
-      lease.baseGenerationId !== snapshot.generationId ||
-      lease.activeGenerationId !== snapshot.generationId ||
-      !validateSourceGeneration(localCacheDir, projectRoot, snapshot.fingerprint, true, false)
-    ) {
-      return null;
-    }
-    const current = (now ?? (() => new Date()))();
-    if (Number.isFinite(Date.parse(lease.lastSeenAt)) && current.getTime() - Date.parse(lease.lastSeenAt) < 60_000) {
-      return lease;
-    }
-    const lock = acquireRepositoryCacheLock(snapshot.repositoryCacheDir, { waitMs: 5_000 });
+    const observedPointer = readWorktreeCachePointer(localCacheDir);
+    if (!observedPointer) return null;
+    const repositoryCacheDir = resolveRepositoryCacheDir(observedPointer.repositoryId);
+    options.onBeforeRepositoryLock?.();
+    const lock = acquireRepositoryCacheLock(repositoryCacheDir, { waitMs: 5_000 });
     if (!lock) return null;
     try {
-      lease.lastSeenAt = current.toISOString();
-      writeJsonDurable(leasePath, lease, { spacing: 2, trailingNewline: true });
+      const pointer = readWorktreeCachePointer(localCacheDir);
+      if (
+        !pointer ||
+        pointer.repositoryId !== observedPointer.repositoryId ||
+        pointer.worktreeId !== observedPointer.worktreeId
+      ) {
+        return null;
+      }
+      const leasePath = join(repositoryCacheDir, 'worktrees', `${pointer.worktreeId}.json`);
+      const lease = JSON.parse(readFileSync(leasePath, 'utf8')) as WorktreeCacheLease;
+      const context = resolvedContext ?? resolveGitWorktreeContext(projectRoot);
+      if (
+        !context?.clean ||
+        !context.treeOid ||
+        lease.version !== 1 ||
+        lease.repositoryId !== pointer.repositoryId ||
+        lease.worktreeId !== pointer.worktreeId ||
+        lease.repositoryId !== context.repositoryId ||
+        lease.worktreeId !== context.worktreeId ||
+        resolve(lease.projectRoot) !== resolve(context.projectRoot) ||
+        lease.treeOid !== context.treeOid ||
+        resolve(lease.localCacheDir) !== resolve(localCacheDir) ||
+        lease.ownershipChecksum !== worktreeLeaseOwnershipChecksum(lease)
+      ) {
+        return null;
+      }
+      const metadata = readReindexMetadata(localCacheDir);
+      if (!isProjectInputFingerprint(metadata?.fingerprint)) return null;
+      const snapshot = buildSharedGenerationSnapshot(context, metadata.fingerprint);
+      if (
+        !snapshot ||
+        snapshot.repositoryCacheDir !== repositoryCacheDir ||
+        lease.baseGenerationId !== snapshot.generationId ||
+        lease.activeGenerationId !== snapshot.generationId ||
+        !validateSourceGeneration(localCacheDir, projectRoot, snapshot.fingerprint, true, false)
+      ) {
+        return null;
+      }
+      const current = (now ?? (() => new Date()))();
+      if (Number.isFinite(Date.parse(lease.lastSeenAt)) && current.getTime() - Date.parse(lease.lastSeenAt) < 60_000) {
+        return lease;
+      }
+      const touched = { ...lease, lastSeenAt: current.toISOString() };
+      writeJsonDurable(leasePath, touched, { spacing: 2, trailingNewline: true });
+      return touched;
     } finally {
       lock.release();
     }
-    return lease;
   } catch {
     return null;
   }
@@ -804,6 +809,30 @@ function configFingerprintOptions(config: ProjectConfig): ProjectInputFingerprin
 
 function sharedGenerationDirectory(snapshot: SharedGenerationSnapshot): string {
   return join(snapshot.repositoryCacheDir, 'generations', snapshot.generationId);
+}
+
+function readWorktreeCachePointer(
+  localCacheDir: string,
+): { version: 1; repositoryId: string; worktreeId: string } | null {
+  const pointer = JSON.parse(readFileSync(join(localCacheDir, WORKTREE_CACHE_POINTER), 'utf8')) as {
+    version?: unknown;
+    repositoryId?: unknown;
+    worktreeId?: unknown;
+  };
+  if (
+    pointer.version !== 1 ||
+    typeof pointer.repositoryId !== 'string' ||
+    !/^[a-f0-9]{24}$/.test(pointer.repositoryId) ||
+    typeof pointer.worktreeId !== 'string' ||
+    !/^[a-f0-9]{24}$/.test(pointer.worktreeId)
+  ) {
+    return null;
+  }
+  return {
+    version: pointer.version,
+    repositoryId: pointer.repositoryId,
+    worktreeId: pointer.worktreeId,
+  };
 }
 
 function persistWorktreeLease(repositoryCacheDir: string, lease: WorktreeCacheLease, requireGeneration: boolean): void {

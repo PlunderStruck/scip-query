@@ -338,6 +338,13 @@ revision-aware coordinator belongs to `runtime-services`, where it may combine
 that storage primitive with the platform process-lock protocol without
 introducing a forbidden `storage -> platform` dependency.
 
+The shared-generation direction was reverified on 2026-07-25. Reindex owns
+generation identity, lease validation, and the liveness-only merge; it depends
+on the platform-owned repository-cache lock and storage-owned durable JSON
+publication. Lease attachment, touch, and cleanup use that same lock, so no
+reverse `platform -> reindex` or `storage -> reindex` dependency is needed to
+prevent a stale touch from restoring an older generation.
+
 The immutable SQLite generation handoff was reverified on 2026-07-25.
 `src/reindex/index.ts` coordinates publication, but durable directory flushing
 is owned by `src/storage/atomic-file.ts`; the reindex layer does not depend on

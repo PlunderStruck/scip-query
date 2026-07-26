@@ -90,3 +90,24 @@ warms a worktree by copying a complete generation into the worktree's private
 cache; the local publisher then creates the local immutable directory and
 pointer described here. Later worktree writes cannot mutate either the shared
 source or a retained local reader.
+
+## Shared worktree lease invariant
+
+A worktree lease is a repository-cache reachability record whose generation
+IDs keep an immutable shared generation from collection while that worktree
+uses it. Its essential ownership fields bind the repository, worktree,
+project path, and local cache path through a checksum; `lastSeenAt` is only a
+liveness observation.
+
+Generation attachment, lease liveness touches, and repository cleanup
+serialize through one repository-cache lock. A touch may inspect the local
+pointer before waiting only to identify that lock. Once it owns the lock, it
+rereads the pointer and lease, validates the ownership checksum, current Git
+tree, local metadata fingerprint, generation IDs, and source artifacts, then
+merges only a newer `lastSeenAt`. It never writes a lease assembled from the
+pre-lock observation.
+
+Consequently, a touch waiting behind a new generation attaches to or rejects
+the new lease; it cannot restore the old generation. A deleted lease stays
+deleted, a recreated lease with different ownership stays intact, and a touch
+whose clock is behind another completed touch cannot move liveness backward.

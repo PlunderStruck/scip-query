@@ -78,7 +78,7 @@ could not confirm the stronger durability guarantee.
 | Reindex `meta.json` | Durable | Names the accepted index status, fingerprint, and generation metadata |
 | SQLite generation manifest and `state.json` | Durable | Flushes one complete immutable artifact set, then atomically selects it for new readers |
 | Shared-generation manifest | Durable file within staging | Authenticates immutable artifacts; the later generation-directory publication remains a separate generation-store operation |
-| Worktree lease and local cache pointer | Durable | Protect generations from collection and bind a worktree to repository cache identity |
+| Worktree lease and local cache pointer | Durable | Protect generations from collection and bind a worktree to repository cache identity; generation changes, liveness touches, and cleanup serialize through the repository-cache lock |
 | Watch service state | Durable | Publishes the process instance and index generation accepted as current |
 | Rust semantic session `server.json` | Durable | Publishes the live server process and mailbox identity |
 | Project `.scipquery.json` | Durable | Controls indexing, watch, architecture, and detector policy |

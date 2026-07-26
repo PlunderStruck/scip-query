@@ -19,8 +19,10 @@ import {
   sharedCacheBypassReason,
   SHARED_GENERATION_PRODUCER_IDENTITY,
   touchExistingWorktreeLease,
+  worktreeLeaseOwnershipChecksum,
   writeWorktreeLease,
   type SharedGenerationSnapshot,
+  type WorktreeCacheLease,
 } from '../../src/reindex/shared-generation-store.js';
 import { refreshSqliteGenerationMetadata } from '../../src/reindex/sqlite-generation-store.js';
 import { TYPESCRIPT_FRAGMENT_STORE_DIRECTORY } from '../../src/reindex/typescript-fragment-store.js';
@@ -239,6 +241,96 @@ describe('shared generation store', () => {
     }
   });
 
+  it('does not let a waiting G1 touch overwrite a G2 lease', () => {
+    withWarmLeaseFixture('generation-race', ({ context, localCache, leasePath, snapshot }) => {
+      const newerSnapshot = { ...snapshot, generationId: 'd'.repeat(64) };
+      mkdirSync(join(snapshot.repositoryCacheDir, 'generations', newerSnapshot.generationId), { recursive: true });
+
+      const touched = touchExistingWorktreeLease(context.projectRoot, localCache, () => new Date(120_000), context, {
+        onBeforeRepositoryLock: () => {
+          writeWorktreeLease(newerSnapshot, localCache, 'attached', () => new Date(180_000));
+        },
+      });
+
+      expect(touched).toBeNull();
+      expect(JSON.parse(readFileSync(leasePath, 'utf8'))).toEqual(
+        expect.objectContaining({
+          activeGenerationId: newerSnapshot.generationId,
+          baseGenerationId: newerSnapshot.generationId,
+          lastSeenAt: new Date(180_000).toISOString(),
+        }),
+      );
+    });
+  });
+
+  it('does not recreate a lease deleted while a touch is waiting', () => {
+    withWarmLeaseFixture('lease-delete', ({ context, localCache, leasePath }) => {
+      const touched = touchExistingWorktreeLease(context.projectRoot, localCache, () => new Date(120_000), context, {
+        onBeforeRepositoryLock: () => rmSync(leasePath),
+      });
+
+      expect(touched).toBeNull();
+      expect(existsSync(leasePath)).toBe(false);
+    });
+  });
+
+  it('preserves a recreated lease whose ownership checksum names a different cache', () => {
+    withWarmLeaseFixture('lease-recreate', ({ context, localCache, leasePath }) => {
+      const foreignLeaseWithoutChecksum = {
+        version: 1,
+        repositoryId: context.repositoryId,
+        worktreeId: context.worktreeId,
+        projectRoot: context.projectRoot,
+        treeOid: context.treeOid,
+        localCacheDir: `${localCache}-foreign`,
+        baseGenerationId: 'e'.repeat(64),
+        activeGenerationId: 'e'.repeat(64),
+        lastAction: 'attached',
+        lastSeenAt: new Date(180_000).toISOString(),
+      } as const;
+      const foreignLease: WorktreeCacheLease = {
+        ...foreignLeaseWithoutChecksum,
+        ownershipChecksum: worktreeLeaseOwnershipChecksum(foreignLeaseWithoutChecksum),
+      };
+      const foreignBytes = `${JSON.stringify(foreignLease, null, 2)}\n`;
+
+      const touched = touchExistingWorktreeLease(context.projectRoot, localCache, () => new Date(120_000), context, {
+        onBeforeRepositoryLock: () => writeFileSync(leasePath, foreignBytes),
+      });
+
+      expect(touched).toBeNull();
+      expect(readFileSync(leasePath, 'utf8')).toBe(foreignBytes);
+    });
+  });
+
+  it('rejects an ownership-checksum mismatch without rewriting the lease', () => {
+    withWarmLeaseFixture('lease-checksum', ({ context, localCache, leasePath }) => {
+      const lease = JSON.parse(readFileSync(leasePath, 'utf8')) as WorktreeCacheLease;
+      const corruptedBytes = `${JSON.stringify({ ...lease, ownershipChecksum: '0'.repeat(64) }, null, 2)}\n`;
+      writeFileSync(leasePath, corruptedBytes);
+
+      expect(touchExistingWorktreeLease(context.projectRoot, localCache, () => new Date(120_000), context)).toBeNull();
+      expect(readFileSync(leasePath, 'utf8')).toBe(corruptedBytes);
+    });
+  });
+
+  it('serializes concurrent touches and never regresses lastSeenAt', () => {
+    withWarmLeaseFixture('lease-concurrent-touch', ({ context, localCache, leasePath }) => {
+      let inner: WorktreeCacheLease | null = null;
+      const outer = touchExistingWorktreeLease(context.projectRoot, localCache, () => new Date(120_000), context, {
+        onBeforeRepositoryLock: () => {
+          inner = touchExistingWorktreeLease(context.projectRoot, localCache, () => new Date(180_000), context);
+        },
+      });
+
+      expect(inner?.lastSeenAt).toBe(new Date(180_000).toISOString());
+      expect(outer?.lastSeenAt).toBe(new Date(180_000).toISOString());
+      expect((JSON.parse(readFileSync(leasePath, 'utf8')) as WorktreeCacheLease).lastSeenAt).toBe(
+        new Date(180_000).toISOString(),
+      );
+    });
+  });
+
   it('rejects dirty publication before inspecting project fingerprint inputs', () => {
     const root = temporaryDirectory('scip-query-shared-dirty-');
     const cacheHome = temporaryDirectory('scip-query-shared-dirty-cache-');
@@ -284,6 +376,44 @@ describe('shared generation store', () => {
     }
   });
 });
+
+function withWarmLeaseFixture(
+  name: string,
+  run: (fixture: {
+    context: NonNullable<ReturnType<typeof resolveGitWorktreeContext>>;
+    localCache: string;
+    leasePath: string;
+    snapshot: SharedGenerationSnapshot;
+  }) => void,
+): void {
+  const root = temporaryDirectory(`scip-query-shared-${name}-`);
+  const cacheHome = temporaryDirectory(`scip-query-shared-${name}-cache-`);
+  const localCache = join(cacheHome, 'scip-query', 'projects', 'managed');
+  const previousCacheHome = process.env['XDG_CACHE_HOME'];
+  process.env['XDG_CACHE_HOME'] = cacheHome;
+  try {
+    git(root, ['init', '-q', '-b', 'main']);
+    git(root, ['config', 'user.email', 'test@example.com']);
+    git(root, ['config', 'user.name', 'Test User']);
+    writeFileSync(join(root, 'value.ts'), 'export const value = 1;\n');
+    git(root, ['add', '.']);
+    git(root, ['commit', '-qm', 'first']);
+    const context = resolveGitWorktreeContext(root)!;
+    const snapshot = buildSharedGenerationSnapshot(context, fingerprint())!;
+    createCache(localCache, root, name);
+    mkdirSync(join(snapshot.repositoryCacheDir, 'generations', snapshot.generationId), { recursive: true });
+    writeWorktreeLease(snapshot, localCache, 'attached', () => new Date(0));
+    run({
+      context,
+      localCache,
+      snapshot,
+      leasePath: join(snapshot.repositoryCacheDir, 'worktrees', `${snapshot.worktreeId}.json`),
+    });
+  } finally {
+    if (previousCacheHome === undefined) delete process.env['XDG_CACHE_HOME'];
+    else process.env['XDG_CACHE_HOME'] = previousCacheHome;
+  }
+}
 
 function createSnapshot(root: string, projectRoot: string): SharedGenerationSnapshot {
   return {
