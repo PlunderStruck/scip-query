@@ -1054,8 +1054,10 @@ describe('watch command config gate', () => {
   it('exposes the idle watcher database generation in JSON and text status', () => {
     const projectRoot = createProject();
     execFileSync('git', ['-C', projectRoot, 'init', '-q']);
-    const dbPath = join(projectRoot, '.cache', 'index.db');
-    writeFileSync(join(projectRoot, '.scipquery.json'), `${JSON.stringify({ dbPath, watch: { enabled: true } })}\n`);
+    writeFileSync(
+      join(projectRoot, '.scipquery.json'),
+      `${JSON.stringify({ dbPath: '.cache', watch: { enabled: true } })}\n`,
+    );
     const identity = resolveGitWorktreeIdentity(projectRoot);
     if (identity.kind !== 'worktree') throw new Error(`Expected Git worktree, received ${identity.kind}`);
     const servicePaths = watchServicePaths(

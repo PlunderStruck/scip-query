@@ -1,0 +1,16 @@
+{
+  "ts": 1785088997989,
+  "check": "echo",
+  "findingId": "SQ46524FDB45B6",
+  "event": "caught",
+  "commit": "d3b1614767cc131d929997686d5f5ce8d4c8e03b",
+  "comparisonBaseCommit": "d3b1614767cc131d929997686d5f5ce8d4c8e03b",
+  "symbol": "scip-typescript npm scip-query 0.19.6 src/platform/`cache-layout.ts`/CacheOwnershipError#`<constructor>`().",
+  "kind": "scip-query-outcome-event",
+  "schemaVersion": 1,
+  "eventIdentity": "[\"echo\",\"SQ46524FDB45B6\",\"caught\",\"d3b1614767cc131d929997686d5f5ce8d4c8e03b\"]",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.19.6"
+  }
+}

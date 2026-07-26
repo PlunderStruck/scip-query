@@ -1,0 +1,16 @@
+{
+  "ts": 1785088997989,
+  "check": "new-dead",
+  "findingId": "SQ18686C99AF7C",
+  "event": "caught",
+  "commit": "d3b1614767cc131d929997686d5f5ce8d4c8e03b",
+  "comparisonBaseCommit": "d3b1614767cc131d929997686d5f5ce8d4c8e03b",
+  "symbol": "scip-typescript npm scip-query 0.19.6 src/platform/`cache-layout.ts`/hardenOwnedCacheTree().",
+  "kind": "scip-query-outcome-event",
+  "schemaVersion": 1,
+  "eventIdentity": "[\"new-dead\",\"SQ18686C99AF7C\",\"caught\",\"d3b1614767cc131d929997686d5f5ce8d4c8e03b\"]",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.19.6"
+  }
+}

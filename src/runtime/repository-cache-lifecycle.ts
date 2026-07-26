@@ -1,6 +1,7 @@
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import {
+  canonicalCacheIdentity,
   automaticSharedCacheEnabled,
   resolveDefaultCacheDir,
   resolveScipQueryCacheRoot,
@@ -427,7 +428,8 @@ function buildSweepInventory(
 
 function safeManagedWorktreeCache(lease: WorktreeCacheLease): boolean {
   if (lease.ownershipChecksum !== worktreeLeaseOwnershipChecksum(lease)) return false;
-  if (resolve(lease.localCacheDir) !== resolve(resolveDefaultCacheDir(lease.projectRoot))) return false;
+  if (canonicalCacheIdentity(lease.localCacheDir) !== canonicalCacheIdentity(resolveDefaultCacheDir(lease.projectRoot)))
+    return false;
   const managedRoot = resolve(resolveScipQueryCacheRoot());
   const projectsRoot = resolve(join(managedRoot, 'projects'));
   const cachePath = resolve(lease.localCacheDir);

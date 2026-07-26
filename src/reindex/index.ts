@@ -28,6 +28,7 @@ import {
 } from '../domain/reindex-metadata.js';
 import { monotonicNowMs } from '../domain/time.js';
 import { profileAsyncSpan, profileSpan } from '../instrumentation/profile.js';
+import { hardenOwnedCacheTreeIfOwned } from '../platform/cache-layout.js';
 import { resolveScipBinary, tryInstallScipCli } from '../platform/scip-cli.js';
 import {
   parseProcessIdentity,
@@ -427,6 +428,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
     if (reused) {
       publishSharedReindexResult({ snapshot: sharedSnapshot, paths, projectRoot, fingerprint, onStatus });
       recordReindexRunActivity(paths.outputDb, reused);
+      hardenOwnedCacheTreeIfOwned(projectRoot, dirname(paths.outputDb));
       return reused;
     }
 
@@ -461,6 +463,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
     );
     publishSharedReindexResult({ snapshot: sharedSnapshot, paths, projectRoot, fingerprint, onStatus });
     recordReindexRunActivity(paths.outputDb, freshResult);
+    hardenOwnedCacheTreeIfOwned(projectRoot, dirname(paths.outputDb));
     return freshResult;
   } catch (error) {
     const lastRefresh = buildLastRefresh({

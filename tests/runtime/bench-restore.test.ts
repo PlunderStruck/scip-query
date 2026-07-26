@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { ensureOwnedCacheDir } from '../../src/platform/cache-layout.js';
 import {
   benchRestoreMarkerPath,
   finishBenchIndexCacheRestore,
@@ -6,86 +10,96 @@ import {
   restoreBenchIndexCache,
 } from '../../src/runtime/commands/command-handlers.js';
 
-describe('bench cold-index restore marker', () => {
-  it('writes a marker before moving the cache and removes it after discarding the backup', () => {
-    const fs = fakeFs(['/project/.cache/scip-query']);
-    const cacheDir = '/project/.cache/scip-query';
-    const backupDir = '/project/.cache/scip-query.bench-backup-1';
+const roots: string[] = [];
+const originalXdgCache = process.env['XDG_CACHE_HOME'];
 
-    expect(moveBenchIndexCacheAside(cacheDir, backupDir, fs)).toBe(true);
-    expect(fs.existsSync(cacheDir)).toBe(false);
-    expect(fs.existsSync(backupDir)).toBe(true);
-    expect(fs.existsSync(benchRestoreMarkerPath(cacheDir))).toBe(true);
+afterEach(() => {
+  if (originalXdgCache === undefined) delete process.env['XDG_CACHE_HOME'];
+  else process.env['XDG_CACHE_HOME'] = originalXdgCache;
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
 
-    finishBenchIndexCacheRestore(cacheDir, backupDir, true, 'discard-backup', fs);
+describe('bench cold-index owned-cache recovery', () => {
+  it('writes a private marker before moving the cache and validates ownership before discarding the backup', () => {
+    const { projectRoot, cacheDir } = fixture();
+    const backupDir = `${cacheDir}.bench-backup-1`;
+    writeFileSync(join(cacheDir, 'index.db'), 'old');
 
-    expect(fs.existsSync(backupDir)).toBe(false);
-    expect(fs.existsSync(benchRestoreMarkerPath(cacheDir))).toBe(false);
+    expect(moveBenchIndexCacheAside(projectRoot, cacheDir, backupDir)).toBe(true);
+    const markerPath = benchRestoreMarkerPath(cacheDir);
+    expect(readFileSync(markerPath, 'utf8')).toContain('"ownerSha256"');
+
+    ensureOwnedCacheDir(projectRoot, cacheDir);
+    writeFileSync(join(cacheDir, 'index.db'), 'new');
+    finishBenchIndexCacheRestore(projectRoot, cacheDir, backupDir, true, 'discard-backup');
+
+    expect(() => readFileSync(backupDir)).toThrow();
+    expect(() => readFileSync(markerPath)).toThrow();
+    expect(readFileSync(join(cacheDir, 'index.db'), 'utf8')).toBe('new');
   });
 
-  it('restores a moved cache when the marker is present on the next bench run', () => {
-    const cacheDir = '/project/.cache/scip-query';
-    const backupDir = '/project/.cache/scip-query.bench-backup-1';
-    const markerPath = benchRestoreMarkerPath(cacheDir);
-    const fs = fakeFs([backupDir], {
-      [markerPath]: JSON.stringify({ originalPath: cacheDir, backupPath: backupDir }),
-    });
+  it('restores the exact owned backup after an interrupted move', () => {
+    const { projectRoot, cacheDir } = fixture();
+    const backupDir = `${cacheDir}.bench-backup-2`;
+    writeFileSync(join(cacheDir, 'index.db'), 'old');
+    moveBenchIndexCacheAside(projectRoot, cacheDir, backupDir);
 
-    expect(restoreBenchIndexCache(cacheDir, fs)).toBe(true);
+    expect(restoreBenchIndexCache(projectRoot, cacheDir)).toBe(true);
 
-    expect(fs.existsSync(cacheDir)).toBe(true);
-    expect(fs.existsSync(backupDir)).toBe(false);
-    expect(fs.existsSync(markerPath)).toBe(false);
+    expect(readFileSync(join(cacheDir, 'index.db'), 'utf8')).toBe('old');
+    expect(() => readFileSync(backupDir)).toThrow();
+    expect(() => readFileSync(benchRestoreMarkerPath(cacheDir))).toThrow();
   });
 
-  it('clears a stale marker when the backup is missing', () => {
-    const cacheDir = '/project/.cache/scip-query';
+  it('refuses a forged marker and leaves an external sentinel untouched', () => {
+    const { root, projectRoot, cacheDir } = fixture();
+    const external = join(root, 'external');
+    mkdirSync(external);
+    const sentinel = join(external, 'sentinel');
+    writeFileSync(sentinel, 'keep');
     const markerPath = benchRestoreMarkerPath(cacheDir);
-    const fs = fakeFs([], {
-      [markerPath]: JSON.stringify({ originalPath: cacheDir, backupPath: '/missing/backup' }),
-    });
+    mkdirSync(dirname(markerPath), { recursive: true });
+    writeFileSync(
+      markerPath,
+      `${JSON.stringify({
+        schemaVersion: 1,
+        canonicalProjectRoot: projectRoot,
+        originalCachePath: cacheDir,
+        backupPath: external,
+        ownerSha256: 'a'.repeat(64),
+      })}\n`,
+    );
 
-    expect(restoreBenchIndexCache(cacheDir, fs)).toBe(true);
+    expect(() => restoreBenchIndexCache(projectRoot, cacheDir)).toThrow();
+    expect(readFileSync(sentinel, 'utf8')).toBe('keep');
+  });
 
-    expect(fs.existsSync(cacheDir)).toBe(false);
-    expect(fs.existsSync(markerPath)).toBe(false);
+  it('refuses to move a directory without a valid ownership record', () => {
+    const root = temporaryRoot();
+    const projectRoot = join(root, 'project');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir, { recursive: true });
+    writeFileSync(join(cacheDir, 'sentinel'), 'keep');
+
+    expect(() => moveBenchIndexCacheAside(projectRoot, cacheDir, `${cacheDir}.bench-backup-3`)).toThrow(
+      'unowned cache directory',
+    );
+    expect(readFileSync(join(cacheDir, 'sentinel'), 'utf8')).toBe('keep');
   });
 });
 
-function fakeFs(initialPaths: string[], initialFiles: Record<string, string> = {}) {
-  const paths = new Set(initialPaths);
-  const files = new Map(Object.entries(initialFiles));
-  for (const file of files.keys()) paths.add(file);
-  return {
-    existsSync(path: string): boolean {
-      return paths.has(path);
-    },
-    readFileSync(path: string): string {
-      const value = files.get(path);
-      if (value === undefined) throw new Error(`missing file: ${path}`);
-      return value;
-    },
-    writeFileSync(path: string, data: string): void {
-      paths.add(path);
-      files.set(path, data);
-    },
-    renameSync(oldPath: string, newPath: string): void {
-      if (!paths.has(oldPath)) throw new Error(`missing path: ${oldPath}`);
-      paths.delete(oldPath);
-      paths.add(newPath);
-      const data = files.get(oldPath);
-      if (data !== undefined) {
-        files.delete(oldPath);
-        files.set(newPath, data);
-      }
-    },
-    rmSync(path: string): void {
-      paths.delete(path);
-      files.delete(path);
-    },
-    unlinkSync(path: string): void {
-      paths.delete(path);
-      files.delete(path);
-    },
-  };
+function fixture(): { root: string; projectRoot: string; cacheDir: string } {
+  const root = temporaryRoot();
+  process.env['XDG_CACHE_HOME'] = join(root, 'xdg-cache');
+  const projectRoot = join(root, 'project');
+  const requestedCacheDir = join(projectRoot, '.cache');
+  mkdirSync(projectRoot);
+  const cacheDir = ensureOwnedCacheDir(projectRoot, requestedCacheDir);
+  return { root, projectRoot, cacheDir };
+}
+
+function temporaryRoot(): string {
+  const root = mkdtempSync(join(tmpdir(), 'scip-query-bench-owner-'));
+  roots.push(root);
+  return root;
 }

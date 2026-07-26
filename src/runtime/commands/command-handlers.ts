@@ -1,9 +1,27 @@
 import { spawnSync } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
-import { existsSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, extname, join, resolve } from 'node:path';
 import type { IndexedDefinition, SupportedLanguage } from '../../domain/types.js';
-import { resolveIndexStoragePaths } from '../../platform/cache-layout.js';
+import {
+  assertOwnedCacheBackup,
+  assertOwnedCacheDir,
+  cacheIdentityHash,
+  canonicalCacheIdentity,
+  ensureOwnedCacheDir,
+  resolveIndexStoragePaths,
+  resolveScipQueryCacheRoot,
+} from '../../platform/cache-layout.js';
 import { WATCH_LOCK_FILE } from '../../platform/watch-service-state.js';
 import * as queries from '../../queries/index.js';
 import {
@@ -491,8 +509,9 @@ async function measureColdIndex(projectRoot: string): Promise<BenchIndexRun> {
   const paths = resolveIndexStoragePaths(projectRoot, config);
   const cacheDir = dirname(paths.dbPath);
   const backupDir = `${cacheDir}.bench-backup-${Date.now()}`;
-  restoreBenchIndexCache(cacheDir);
-  const moved = moveBenchIndexCacheAside(cacheDir, backupDir);
+  restoreBenchIndexCache(projectRoot, cacheDir);
+  const moved = moveBenchIndexCacheAside(projectRoot, cacheDir, backupDir);
+  ensureOwnedCacheDir(projectRoot, cacheDir);
 
   try {
     const result = await measureAsync(() =>
@@ -512,7 +531,7 @@ async function measureColdIndex(projectRoot: string): Promise<BenchIndexRun> {
         onStatus: () => {},
       }),
     );
-    finishBenchIndexCacheRestore(cacheDir, backupDir, moved, 'discard-backup');
+    finishBenchIndexCacheRestore(projectRoot, cacheDir, backupDir, moved, 'discard-backup');
     return {
       durationMs: result.durationMs,
       result: result.value.reused ? 'reused' : 'rebuilt',
@@ -520,85 +539,137 @@ async function measureColdIndex(projectRoot: string): Promise<BenchIndexRun> {
       ...currentIndexCounts(projectRoot),
     };
   } catch (error) {
-    finishBenchIndexCacheRestore(cacheDir, backupDir, moved, 'restore-backup');
+    finishBenchIndexCacheRestore(projectRoot, cacheDir, backupDir, moved, 'restore-backup');
     throw error;
   }
 }
 
-interface BenchRestoreFs {
-  existsSync(path: string): boolean;
-  readFileSync(path: string, encoding: 'utf8'): string;
-  writeFileSync(path: string, data: string): void;
-  renameSync(oldPath: string, newPath: string): void;
-  rmSync(path: string, opts: { recursive?: boolean; force?: boolean }): void;
-  unlinkSync(path: string): void;
-}
-
-const NODE_BENCH_RESTORE_FS: BenchRestoreFs = {
-  existsSync,
-  readFileSync,
-  writeFileSync,
-  renameSync,
-  rmSync,
-  unlinkSync,
-};
-
 interface BenchRestoreMarker {
-  originalPath: string;
+  schemaVersion: 1;
+  canonicalProjectRoot: string;
+  originalCachePath: string;
   backupPath: string;
+  ownerSha256: string;
 }
 
 export function benchRestoreMarkerPath(cacheDir: string): string {
-  return join(dirname(cacheDir), 'bench-restore.json');
+  return join(resolveScipQueryCacheRoot(), 'bench-restores', `${cacheIdentityHash(cacheDir)}.json`);
 }
 
-export function restoreBenchIndexCache(cacheDir: string, fs: BenchRestoreFs = NODE_BENCH_RESTORE_FS): boolean {
+export function restoreBenchIndexCache(projectRoot: string, cacheDir: string): boolean {
   const markerPath = benchRestoreMarkerPath(cacheDir);
-  if (!fs.existsSync(markerPath)) return false;
-  const marker = parseBenchRestoreMarker(fs.readFileSync(markerPath, 'utf8'));
-  if (marker && !fs.existsSync(marker.originalPath) && fs.existsSync(marker.backupPath)) {
-    fs.renameSync(marker.backupPath, marker.originalPath);
+  if (!existsSync(markerPath)) return false;
+  const marker = parseBenchRestoreMarker(readFileSync(markerPath, 'utf8'));
+  const canonicalProjectRoot = realpathSync(projectRoot);
+  const expectedOriginal = canonicalCacheIdentity(cacheDir);
+  if (
+    !marker ||
+    marker.canonicalProjectRoot !== canonicalProjectRoot ||
+    marker.originalCachePath !== expectedOriginal ||
+    benchRestoreMarkerPath(marker.originalCachePath) !== markerPath
+  ) {
+    throw new Error(`refusing invalid cold-index restore marker ${markerPath}`);
   }
-  fs.unlinkSync(markerPath);
+
+  if (existsSync(marker.backupPath)) {
+    assertOwnedCacheBackup(projectRoot, marker.backupPath, marker.originalCachePath, marker.ownerSha256);
+    if (existsSync(marker.originalCachePath)) {
+      assertOwnedCacheDir(projectRoot, marker.originalCachePath);
+      rmSync(marker.originalCachePath, { recursive: true, force: true });
+    }
+    renameSync(marker.backupPath, marker.originalCachePath);
+    assertOwnedCacheDir(projectRoot, marker.originalCachePath);
+  } else if (existsSync(marker.originalCachePath)) {
+    assertOwnedCacheDir(projectRoot, marker.originalCachePath);
+  }
+  unlinkSync(markerPath);
   return true;
 }
 
-export function moveBenchIndexCacheAside(
-  cacheDir: string,
-  backupDir: string,
-  fs: BenchRestoreFs = NODE_BENCH_RESTORE_FS,
-): boolean {
-  if (!fs.existsSync(cacheDir)) return false;
-  fs.writeFileSync(benchRestoreMarkerPath(cacheDir), JSON.stringify({ originalPath: cacheDir, backupPath: backupDir }));
-  fs.renameSync(cacheDir, backupDir);
+export function moveBenchIndexCacheAside(projectRoot: string, cacheDir: string, backupDir: string): boolean {
+  if (!existsSync(cacheDir)) return false;
+  const proof = assertOwnedCacheDir(projectRoot, cacheDir);
+  const expectedBackup = expectedBenchBackupPath(proof.record.canonicalCacheDir, backupDir);
+  if (existsSync(expectedBackup)) throw new Error(`refusing existing cold-index backup ${expectedBackup}`);
+  const markerPath = benchRestoreMarkerPath(proof.record.canonicalCacheDir);
+  const marker: BenchRestoreMarker = {
+    schemaVersion: 1,
+    canonicalProjectRoot: proof.record.canonicalProjectRoot,
+    originalCachePath: proof.record.canonicalCacheDir,
+    backupPath: expectedBackup,
+    ownerSha256: proof.ownerSha256,
+  };
+  ensurePrivateBenchMarkerDirectory(markerPath);
+  writeFileSync(markerPath, `${JSON.stringify(marker, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
+  try {
+    renameSync(proof.physicalCacheDir, expectedBackup);
+  } catch (error) {
+    unlinkSync(markerPath);
+    throw error;
+  }
   return true;
 }
 
 export function finishBenchIndexCacheRestore(
+  projectRoot: string,
   cacheDir: string,
   backupDir: string,
   moved: boolean,
   mode: 'discard-backup' | 'restore-backup',
-  fs: BenchRestoreFs = NODE_BENCH_RESTORE_FS,
 ): void {
-  if (moved && mode === 'restore-backup' && !fs.existsSync(cacheDir) && fs.existsSync(backupDir)) {
-    fs.renameSync(backupDir, cacheDir);
-  } else if (moved && mode === 'discard-backup') {
-    fs.rmSync(backupDir, { recursive: true, force: true });
-  }
+  if (!moved) return;
   const markerPath = benchRestoreMarkerPath(cacheDir);
-  if (fs.existsSync(markerPath)) fs.unlinkSync(markerPath);
+  const marker = parseBenchRestoreMarker(readFileSync(markerPath, 'utf8'));
+  if (!marker || marker.backupPath !== backupDir || marker.originalCachePath !== canonicalCacheIdentity(cacheDir)) {
+    throw new Error(`refusing invalid cold-index restore marker ${markerPath}`);
+  }
+  assertOwnedCacheBackup(projectRoot, backupDir, marker.originalCachePath, marker.ownerSha256);
+
+  if (mode === 'restore-backup') {
+    if (existsSync(cacheDir)) {
+      assertOwnedCacheDir(projectRoot, cacheDir);
+      rmSync(cacheDir, { recursive: true, force: true });
+    }
+    renameSync(backupDir, marker.originalCachePath);
+    assertOwnedCacheDir(projectRoot, marker.originalCachePath);
+  } else {
+    rmSync(backupDir, { recursive: true, force: true });
+  }
+  unlinkSync(markerPath);
 }
 
 function parseBenchRestoreMarker(payload: string): BenchRestoreMarker | null {
   try {
     const raw = JSON.parse(payload) as Partial<BenchRestoreMarker>;
-    return typeof raw.originalPath === 'string' && typeof raw.backupPath === 'string'
-      ? { originalPath: raw.originalPath, backupPath: raw.backupPath }
+    return raw.schemaVersion === 1 &&
+      typeof raw.canonicalProjectRoot === 'string' &&
+      typeof raw.originalCachePath === 'string' &&
+      typeof raw.backupPath === 'string' &&
+      typeof raw.ownerSha256 === 'string' &&
+      /^[a-f0-9]{64}$/.test(raw.ownerSha256)
+      ? (raw as BenchRestoreMarker)
       : null;
   } catch {
     return null;
   }
+}
+
+function expectedBenchBackupPath(canonicalCacheDir: string, candidate: string): string {
+  const expectedPrefix = `${canonicalCacheDir}.bench-backup-`;
+  const canonicalCandidate = canonicalCacheIdentity(candidate);
+  if (
+    !canonicalCandidate.startsWith(expectedPrefix) ||
+    !/^\d+$/.test(canonicalCandidate.slice(expectedPrefix.length))
+  ) {
+    throw new Error(`refusing cold-index backup outside the owned cache namespace: ${candidate}`);
+  }
+  return canonicalCandidate;
+}
+
+function ensurePrivateBenchMarkerDirectory(markerPath: string): void {
+  const directory = dirname(markerPath);
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  if (process.platform !== 'win32') chmodSync(directory, 0o700);
 }
 
 // scip-query: ignore-similar - warm and cold benchmark paths stay parallel so timing comparisons stay honest.

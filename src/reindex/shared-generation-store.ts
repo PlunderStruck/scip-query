@@ -26,6 +26,7 @@ import { acquireProcessFileLock, acquireRepositoryCacheLock } from '../platform/
 import { tryAcquireProcessFileLock, type LegacyProcessLockDecoder } from '../platform/process-file-lock.js';
 import {
   automaticSharedCacheEnabled,
+  canonicalCacheIdentity,
   resolveDefaultCacheDir,
   resolveRepositoryCacheDir,
   type resolveIndexStoragePaths,
@@ -173,7 +174,10 @@ export function sharedCacheBypassReason(
 ): string | undefined {
   if (process.env[SHARED_GENERATION_ENV] === '0') return `${SHARED_GENERATION_ENV}=0`;
   if (!automaticSharedCacheEnabled(config)) return 'explicit cache or database override';
-  if (resolve(outputDb) !== resolve(join(resolveDefaultCacheDir(projectRoot), 'index.db'))) {
+  if (
+    canonicalCacheIdentity(dirname(outputDb)) !== canonicalCacheIdentity(resolveDefaultCacheDir(projectRoot)) ||
+    outputDb !== join(dirname(outputDb), 'index.db')
+  ) {
     return 'index database is outside the managed worktree cache';
   }
   return undefined;
