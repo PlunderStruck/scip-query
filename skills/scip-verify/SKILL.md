@@ -1,6 +1,6 @@
 ---
 name: scip-verify
-description: Use after finishing a change and before committing: reindex, run the postchecks matching what you edited, diff-gate, and try to refute your own PASS — including verifying that a React or Vue refactor actually achieved the reuse it claimed. Also use to calibrate detector precision once a repo is already set up and its findings look too noisy or too clean. For an existing status claim with no just-finished diff, use scip-audit instead. Distinct from the `review` skill: that one reviews a branch against coding standards and the originating spec; this one runs reindex, routed postchecks and diff-gate on a change you just made.
+description: Use after finishing a change and before committing: ensure the watcher has produced a fresh index generation, run the postchecks matching what you edited, diff-gate, and try to refute your own PASS — including verifying that a React or Vue refactor actually achieved the reuse it claimed. Also use to calibrate detector precision once a repo is already set up and its findings look too noisy or too clean. For an existing status claim with no just-finished diff, use scip-audit instead. Distinct from the `review` skill: that one reviews a branch against coding standards and the originating spec; this one runs freshness, routed postchecks and diff-gate checks on a change you just made.
 commands:
   - template: "scip-query doctor"
     when: "Prove the workspace and configuration are usable before trusting evidence."
@@ -54,6 +54,11 @@ shortlist covers `doctor`, `status`, `diff-impact`, `diff-gate`, `health`,
 scip-query doctor
 scip-query status --capabilities
 ```
+
+Apply `_shared`'s freshness gate here: if the watcher is already refreshing or
+has accepted a refresh request, wait and check once more rather than launching
+a parallel reindex. Use manual `scip-query reindex` only when the index is
+stale, missing, or unknown and the watcher is disabled, unavailable, or failed.
 
 Complete only when missing indexers, invalid config, stale indexes, or
 unavailable relevant capabilities are fixed or reported as blockers. Verify

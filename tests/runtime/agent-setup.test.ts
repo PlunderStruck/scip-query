@@ -27,6 +27,8 @@ describe('setupAgent', () => {
     expect(result.written).toEqual(['AGENTS.md', 'CLAUDE.md']);
     const agentsMd = readFileSync(join(projectRoot, 'AGENTS.md'), 'utf-8');
     expect(agentsMd).toContain('scip-query diff-gate');
+    expect(agentsMd).toContain('let an active watcher finish its refresh');
+    expect(agentsMd).toContain('Run `scip-query reindex` only when freshness is stale, missing, or unknown');
     expect(agentsMd).toContain('commit `.scipquery/suppressions/*.json`');
     expect(agentsMd).toContain('`.scipquery/events/*.json`');
     expect(agentsMd).toContain('`.codex/hooks.json` and `.claude/settings.local.json`');

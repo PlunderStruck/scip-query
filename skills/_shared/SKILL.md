@@ -24,7 +24,9 @@ A SCIP index is the compiler-derived map of a repository: source files, symbols,
 
 ## Freshness gate
 
-Before trusting any graph fact: run `scip-query status --capabilities`. If freshness reports `fresh`, continue. If it reports `stale`, `missing`, or `unknown`, run `scip-query reindex` first — it indexes the codebase and converts it to SQLite — then re-check status before proceeding.
+Before the first SCIP graph fact in a work session, run `scip-query status --capabilities` once. If the reported generation is fresh, reuse it until source changes; do not repeat capability checks between commands against that same generation.
+
+After source changes, let an active watcher refresh the index. If status says the watcher is indexing, debouncing, cooling down, or already has a pending/claimed refresh request, wait for that work to finish and check once more instead of starting a competing refresh. Run `scip-query reindex` only when freshness is `stale`, `missing`, or `unknown` and the watcher is disabled, unavailable, or has failed to refresh. Re-check status once after that fallback completes.
 
 ## Symbol lookup fallback ladder
 
@@ -87,7 +89,7 @@ Standalone detector commands (outside diff-gate) are not outcome-tracked in this
 
 ## Postcheck
 
-Every implemented change ends with `scip-query status --capabilities` and `scip-query diff-gate --json`. Fix each finding, or record a specific acceptance reason for each one left unresolved (findings marked `(advisory)` never block — treat them as context, not obligations). Do not report success while a diff-gate finding is unexplained. The authoritative table of *which* postcheck to run for *which* kind of edit lives in `scip-verify`; invoke that skill rather than re-deriving it here.
+At final verification for a coherent diff, run `scip-query status --capabilities` once and `scip-query diff-gate --json`. Repeat them only if the diff changes afterward. Fix each finding, or record a specific acceptance reason for each one left unresolved (findings marked `(advisory)` never block — treat them as context, not obligations). Do not report success while a diff-gate finding is unexplained. The authoritative table of *which* postcheck to run for *which* kind of edit lives in `scip-verify`; invoke that skill rather than re-deriving it here.
 
 ## Subagent evidence boundary
 
