@@ -431,11 +431,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       option('--dossier-dir <path>', 'Directory for generated setup health dossier files'),
     ]),
     renderShape: 'custom',
-    docs: doc('Maintenance', [
-      'scip-query setup',
-      'scip-query setup --install-missing',
-      'scip-query setup --json',
-    ]),
+    docs: doc('Maintenance', ['scip-query setup', 'scip-query setup --install-missing', 'scip-query setup --json']),
     handler: handlers.handleSetup,
   },
   {
