@@ -245,6 +245,7 @@ export function createNpmReleaseRuntime(): NpmReleaseRuntime {
 function runLocalPreflight(root: string, runtime: NpmReleaseRuntime): void {
   const commands: Array<{ label: string; args: string[] }> = [
     { label: 'typecheck', args: ['run', 'typecheck'] },
+    { label: 'production dependency audit', args: ['run', 'audit:prod'] },
     { label: 'complete test suite', args: ['test'] },
     { label: 'lint, build, API compatibility, and skill links', args: ['run', 'lint'] },
   ];

@@ -44,6 +44,7 @@ describe('ordered npm release coordinator', () => {
         'git-status',
         'registry-config',
         'preflight-typecheck',
+        'preflight-audit',
         'preflight-test',
         'preflight-lint',
         'pack-sidecar',
@@ -662,6 +663,7 @@ function commandName(
     return 'registry-config';
   }
   if (args[0] === 'run' && args[1] === 'typecheck') return 'preflight-typecheck';
+  if (args[0] === 'run' && args[1] === 'audit:prod') return 'preflight-audit';
   if (args[0] === 'test') return 'preflight-test';
   if (args[0] === 'run' && args[1] === 'lint') return 'preflight-lint';
   if (args[0] === 'pack' && options.cwd === sidecarDir) return 'pack-sidecar';

@@ -4,7 +4,7 @@ import type { SupportedLanguage, IndexerConfig } from '../domain/types.js';
 import { RUST_ANALYZER_TOOLCHAIN } from '../platform/indexer-toolchain.js';
 
 const SCIP_TYPESCRIPT_PACKAGE = '@sourcegraph/scip-typescript@0.4.0';
-const SCIP_PYTHON_PACKAGE = 'scip-python-plus@0.7.4';
+const SCIP_PYTHON_PACKAGE = 'scip-python-plus@0.7.5';
 const SCIP_GO_PACKAGE = 'github.com/sourcegraph/scip-go@v0.2.7';
 const SCIP_DOTNET_PACKAGE = 'scip-dotnet@0.2.14';
 const SCIP_DART_PACKAGE = 'scip_dart@1.6.2';

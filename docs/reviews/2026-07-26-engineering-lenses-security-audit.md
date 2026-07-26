@@ -652,6 +652,28 @@ production tree.
 - If public pattern or CSS-processing behavior expands, add adversarial
   reachability tests rather than assuming the advisories remain unreachable.
 
+#### Resolution — 2026-07-26
+
+Resolved in the dependency-security slice:
+
+- `scip-python-plus@0.7.5` removes the vulnerable legacy
+  `glob`/`minimatch`/`brace-expansion` production path;
+- the remaining production tree resolves `brace-expansion@5.0.8` and
+  `postcss@8.5.23`;
+- Vue compiler minimums are now 3.5.40 and Vitest's minimum is 3.2.7;
+- `npm run audit:prod` is a release preflight and a pull-request/main-branch
+  GitHub Actions gate;
+- Dependabot proposes npm and GitHub Actions updates, while workflow actions
+  are pinned to full commit identities.
+
+`npm audit --omit=dev` reports zero vulnerabilities after the refresh. The
+complete development tree retains one low-severity `esbuild@0.27.7` advisory
+about serving attacker-controlled pages from its development server on
+Windows. scip-query does not run an esbuild development server, and forcing
+`0.28.x` would exceed `tsup@8.5.1`'s declared compatibility range, so this
+non-production advisory is recorded rather than hidden with an incompatible
+override.
+
 ---
 
 ### SEC-09 — Human terminal output accepts control sequences from untrusted fields

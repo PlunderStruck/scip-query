@@ -244,7 +244,7 @@ describe('indexer configs', () => {
     expect(methods).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ identity: '@sourcegraph/scip-typescript@0.4.0' }),
-        expect.objectContaining({ identity: 'scip-python-plus@0.7.4' }),
+        expect.objectContaining({ identity: 'scip-python-plus@0.7.5' }),
         expect.objectContaining({ identity: 'github.com/sourcegraph/scip-go@v0.2.7' }),
         expect.objectContaining({ identity: 'scip-dotnet@0.2.14' }),
         expect.objectContaining({ identity: 'scip_dart@1.6.2' }),
