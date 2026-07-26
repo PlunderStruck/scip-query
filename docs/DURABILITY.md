@@ -92,7 +92,9 @@ could not confirm the stronger durability guarantee.
 | Repository GC state | Visibility-atomic | Sweep history can be reconstructed conservatively |
 | Affected-set shadow latest record | Visibility-atomic | Calibration telemetry does not control publication |
 
-Process locks use exclusive descriptor creation rather than replacement; Slice
-09 defines their durable ownership and recovery protocol. Generation
-directories and stable compatibility files have a wider multi-file publication
-contract; Slice 10 defines their generation handle and pointer handoff.
+Process locks use exclusive descriptor creation rather than replacement. Their
+durable token ownership, malformed-creation grace, guarded recovery, and
+legacy compatibility are defined in
+[Process Lock Ownership and Recovery](LOCK_PROTOCOL.md). Generation directories
+and stable compatibility files have a wider multi-file publication contract;
+Slice 10 defines their generation handle and pointer handoff.

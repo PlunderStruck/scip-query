@@ -1,6 +1,6 @@
 import process from 'node:process';
-import { closeSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   DURABLE_RUST_SESSION_PROTOCOL_VERSION,
@@ -10,7 +10,11 @@ import {
 } from './durable-session.js';
 import { createWorkerRustAnalyzerSessionRequester } from './lsp-session.js';
 import { writeJsonAtomic, writeJsonDurable } from '../../storage/atomic-json.js';
-import { isProcessAlive } from '../../platform/process-liveness.js';
+import {
+  type LegacyProcessLockDecoder,
+  type ProcessFileLock,
+  tryAcquireProcessFileLock,
+} from '../../platform/process-file-lock.js';
 
 const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60_000;
 const POLL_INTERVAL_MS = 10;
@@ -60,7 +64,8 @@ async function runDurableRustSessionServer(sessionDir: string, semanticWorkerPat
   mkdirSync(resolve(sessionDir, 'requests'), { recursive: true });
   mkdirSync(resolve(sessionDir, 'responses'), { recursive: true });
   const lockPath = resolve(sessionDir, 'server.lock');
-  if (!acquireServerLock(lockPath)) return;
+  const serverLock = acquireDurableRustSessionServerLock(lockPath);
+  if (!serverLock) return;
 
   const host = new DurableRustSessionHost(() =>
     createWorkerRustAnalyzerSessionRequester({ semanticWorkerPath, shareEnvironment: true }),
@@ -109,34 +114,21 @@ async function runDurableRustSessionServer(sessionDir: string, semanticWorkerPat
   } finally {
     host.shutdown();
     rmSync(resolve(sessionDir, 'server.json'), { force: true });
-    rmSync(lockPath, { force: true });
+    serverLock.release();
   }
 }
 
-function acquireServerLock(lockPath: string): boolean {
-  mkdirSync(dirname(lockPath), { recursive: true });
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const fd = openSync(lockPath, 'wx');
-      writeFileSync(fd, String(process.pid));
-      closeSync(fd);
-      return true;
-    } catch {
-      const recordedPid = readRecordedPid(lockPath);
-      if (recordedPid !== null && isProcessAlive(recordedPid)) return false;
-      rmSync(lockPath, { force: true });
-    }
-  }
-  return false;
-}
+const decodeLegacyRustServerLock: LegacyProcessLockDecoder = (value) => {
+  const pid = Number(value);
+  return Number.isInteger(pid) && pid > 0 ? { pid } : null;
+};
 
-function readRecordedPid(lockPath: string): number | null {
-  try {
-    const parsed = Number(readFileSync(lockPath, 'utf8'));
-    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-  } catch {
-    return null;
-  }
+export function acquireDurableRustSessionServerLock(lockPath: string): ProcessFileLock | null {
+  const result = tryAcquireProcessFileLock(lockPath, {
+    kind: 'rust-durable-session-server',
+    parseLegacy: decodeLegacyRustServerLock,
+  });
+  return result.kind === 'acquired' ? result.lock : null;
 }
 
 function parseMailboxRequest(raw: string): DurableMailboxRequest {

@@ -319,7 +319,11 @@ Evidence: `node dist/cli.js architecture --json`;
 `node dist/cli.js imports src/symbols/identifier-attribution.ts --json`; and
 `node dist/cli.js imports src/symbols/references/reference-callers.ts --json`.
 The atomic-file and atomic-JSON boundary direction was reverified on
-2026-07-25.
+2026-07-25. The complete-descriptor write loop and Windows directory-handle
+classification shared by atomic replacement and platform-owned lock/binary
+publication live in the dependency-free `src/filesystem/file-descriptor.ts`
+boundary; `platform` and `storage` may both depend on that primitive without
+depending on one another.
 
 The `semantic -> symbols` row is now closed together with the rest of
 semantic's classified outgoing relationships. The intended direction is

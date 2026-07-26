@@ -610,8 +610,8 @@ Rollback is commit-scoped. Durable-format slices additionally retain legacy read
 |    05 | RES-03  | complete | `63ec2cc0` | 163 Rust semantic tests             | Frame bounds, sticky failure, waiters, and one-shot kill verified |
 |    06 | RES-04  | complete | `8587125e` | 34 focused tests                    | Time/byte bounds, lock/recheck, staging cleanup, and TLA verified |
 |    07 | RES-05  | complete | `b9cb9aa3` | 20 focused + 25 contract tests      | Exit/error/timeout ownership, result identity, and cache verified |
-|    08 | DD-08   | complete | this slice | 180 focused + contract tests        | Fault phases, platform limits, callers, and binary promotion verified |
-|    09 | DD-04   | pending  |            |                                     |                                                                 |
+|    08 | DD-08   | complete | `2a4d62b4` | 180 focused + contract tests        | Fault phases, platform limits, callers, and binary promotion verified |
+|    09 | DD-04   | complete | this slice | 181 focused tests                   | Partial creation, guarded reclaim, shared I/O, PID reuse, legacy, and release verified |
 |    10 | DD-01   | pending  |            |                                     |                                                                 |
 |    11 | DD-03   | pending  |            |                                     |                                                                 |
 |    12 | DD-05   | pending  |            |                                     |                                                                 |
@@ -630,3 +630,27 @@ Rollback is commit-scoped. Durable-format slices additionally retain legacy read
 |    25 | REL-01  | pending  |            |                                     |                                                                 |
 |    26 | REL-02  | pending  |            |                                     |                                                                 |
 |    27 | REL-03  | pending  |            |                                     |                                                                 |
+
+### Slice 09 verification note
+
+- The final focused matrix passed 181 tests. Three linked-worktree watcher
+  integrations also passed, exercising real per-worktree ownership and source
+  refresh rather than only injected lock runtimes.
+- An additional `tests/runtime/runtime-config.test.ts` run passed 38 cases and
+  was environment-blocked in five cases before reaching the changed code:
+  workspace sandboxing denied those tests permission to create their normal
+  project directories under `~/.cache/scip-query/projects`.
+- `scip-query diff-gate --json --compact` passed with zero blocking or
+  advisory findings after its first run caught two exact durability-mechanics
+  duplicates. Those duplicates were removed through the dependency-free
+  `filesystem` boundary; the corresponding caught/resolved event records are
+  committed with the slice.
+- `scip-query health --baseline` reports 23 accumulated heuristic deltas from
+  Slices 01–09, not 23 Slice 09 regressions. The Slice 09 entries are
+  extraction signals for cohesive lock acquisition/reclaim workflows, an
+  access-scaffolding similarity between the two halves of that state machine,
+  and a single-production-consumer signal for `ProcessFileLockRuntime`. The
+  runtime is retained because deterministic crash, filesystem, liveness,
+  identity, and interleaving injection is its purpose; test consumers are not
+  counted by that detector. No health-baseline ratchet or suppression was
+  written at this per-slice gate.

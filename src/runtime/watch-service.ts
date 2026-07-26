@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ProjectConfig, WatchConfig, WatcherStatus } from '../domain/types.js';
 import { canonicalPath, resolveGitWorktreeIdentity, type GitWorktreeContext } from '../platform/git-worktree.js';
@@ -11,6 +11,14 @@ import {
   type ProcessIdentity,
 } from '../platform/process-identity.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
+import {
+  NODE_PROCESS_FILE_LOCK_RUNTIME,
+  readProcessFileLock,
+  reclaimProcessFileLock,
+  tryAcquireProcessFileLock,
+  type LegacyProcessLockDecoder,
+  type ProcessFileLockObservation,
+} from '../platform/process-file-lock.js';
 import {
   WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS,
   WATCH_SERVICE_PROTOCOL_VERSION,
@@ -413,8 +421,24 @@ export function acquireWatchProcessLock(
   const pid = opts.pid ?? process.pid;
   const isAlive = opts.isProcessAlive ?? isProcessAlive;
   const releaseNoop = (): void => undefined;
-  const existing = readWatchProcessLock(lockPath);
-  if (existing && isAlive(existing.pid)) {
+  const readIdentity = opts.readProcessIdentity ?? readProcessIdentity;
+  const now = opts.now ?? (() => new Date());
+  const runtime = {
+    ...NODE_PROCESS_FILE_LOCK_RUNTIME,
+    wallNow: () => now().getTime(),
+    isProcessAlive: isAlive,
+    readProcessIdentity: readIdentity,
+  };
+  const acquired = tryAcquireProcessFileLock(lockPath, {
+    kind: 'watch',
+    pid,
+    processIdentity: readIdentity(pid),
+    detail: { projectRoot: resolve(projectRoot) },
+    parseLegacy: parseLegacyWatchOwner,
+    runtime,
+  });
+  if (acquired.kind === 'contended') {
+    const existing = watchMetadataFromObservation(acquired.observation);
     return {
       acquired: false,
       lockPath,
@@ -422,54 +446,46 @@ export function acquireWatchProcessLock(
       release: releaseNoop,
     };
   }
-  if (existing) rmSync(lockPath, { force: true });
-  mkdirSync(dirname(lockPath), { recursive: true });
-
-  let fd: number;
-  try {
-    fd = openSync(lockPath, 'wx');
-  } catch (error) {
-    const code = errorCode(error);
-    if (code === 'EEXIST') {
-      return {
-        acquired: false,
-        lockPath,
-        message: runningWatchMessage(lockPath, projectRoot, readWatchProcessLock(lockPath)),
-        release: releaseNoop,
-      };
-    }
-    throw error;
-  }
-
-  const metadata: WatchProcessLockMetadata = {
-    version: 1,
-    pid,
-    ...processIdentityField((opts.readProcessIdentity ?? readProcessIdentity)(pid), pid),
-    projectRoot: resolve(projectRoot),
-    startedAt: (opts.now ?? (() => new Date()))().toISOString(),
-  };
-  writeFileSync(fd, `${JSON.stringify(metadata)}\n`);
-
-  let released = false;
   return {
     acquired: true,
     lockPath,
     message: '',
-    release: () => {
-      if (released) return;
-      released = true;
-      closeSync(fd);
-      const current = readWatchProcessLock(lockPath);
-      if (current?.pid === metadata.pid && current.startedAt === metadata.startedAt) {
-        rmSync(lockPath, { force: true });
-      }
-    },
+    release: () => void acquired.lock.release(),
   };
 }
 
 export function readWatchProcessLock(lockPath: string): WatchProcessLockMetadata | null {
+  return watchMetadataFromObservation(readProcessFileLock(lockPath, { parseLegacy: parseLegacyWatchOwner }));
+}
+
+const parseLegacyWatchOwner: LegacyProcessLockDecoder = (value) => {
+  const metadata = parseLegacyWatchMetadata(value);
+  return metadata
+    ? {
+        pid: metadata.pid,
+        ...(metadata.processIdentity ? { processIdentity: metadata.processIdentity } : {}),
+      }
+    : null;
+};
+
+function watchMetadataFromObservation(observation: ProcessFileLockObservation): WatchProcessLockMetadata | null {
+  if (observation.state === 'valid' && observation.record?.kind === 'watch') {
+    const projectRoot = observation.record.detail?.['projectRoot'];
+    if (typeof projectRoot !== 'string') return null;
+    return {
+      version: 1,
+      pid: observation.record.pid,
+      ...(observation.record.processIdentity ? { processIdentity: observation.record.processIdentity } : {}),
+      projectRoot,
+      startedAt: observation.record.startedAt,
+    };
+  }
+  return parseLegacyWatchMetadata(observation.parsed);
+}
+
+function parseLegacyWatchMetadata(value: unknown): WatchProcessLockMetadata | null {
   try {
-    const parsed = JSON.parse(readFileSync(lockPath, 'utf-8')) as Partial<WatchProcessLockMetadata>;
+    const parsed = value as Partial<WatchProcessLockMetadata>;
     if (
       parsed.version !== 1 ||
       typeof parsed.pid !== 'number' ||
@@ -614,7 +630,20 @@ function cleanupWatchServiceFiles(paths: WatchServicePaths, expectedPid: number,
   rmSync(paths.activityPath, { force: true });
   const lock = readWatchProcessLock(paths.lockPath);
   if (lock?.pid === expectedPid && !runtime.isProcessAlive(expectedPid)) {
-    rmSync(paths.lockPath, { force: true });
+    const lockRuntime = {
+      ...NODE_PROCESS_FILE_LOCK_RUNTIME,
+      wallNow: runtime.now,
+      isProcessAlive: runtime.isProcessAlive,
+      readProcessIdentity: runtime.readProcessIdentity,
+    };
+    const observation = readProcessFileLock(paths.lockPath, {
+      parseLegacy: parseLegacyWatchOwner,
+      runtime: lockRuntime,
+    });
+    reclaimProcessFileLock(paths.lockPath, observation, {
+      parseLegacy: parseLegacyWatchOwner,
+      runtime: lockRuntime,
+    });
   }
 }
 
@@ -624,10 +653,6 @@ function runningWatchMessage(lockPath: string, projectRoot: string, existing: Wa
   }. Stop that watcher before starting another.`;
 }
 
-function errorCode(error: unknown): string | undefined {
-  return typeof error === 'object' && error && 'code' in error ? (error as { code?: string }).code : undefined;
-}
-
 function recordWatchServiceActivityBestEffort(activityPath: string, runtime: WatchServiceRuntime): void {
   try {
     (runtime.recordActivity ?? recordWatchServiceActivity)(activityPath, runtime.now());
@@ -635,6 +660,10 @@ function recordWatchServiceActivityBestEffort(activityPath: string, runtime: Wat
     const code = errorCode(error);
     if (code !== 'EPERM' && code !== 'EACCES' && code !== 'EROFS') throw error;
   }
+}
+
+function errorCode(error: unknown): string | undefined {
+  return (error as NodeJS.ErrnoException).code;
 }
 
 const DEFAULT_WATCH_SERVICE_RUNTIME: WatchServiceRuntime = {
@@ -662,13 +691,6 @@ const DEFAULT_WATCH_SERVICE_RUNTIME: WatchServiceRuntime = {
     Atomics.wait(signal, 0, 0, durationMs);
   },
 };
-
-function processIdentityField(
-  processIdentity: ProcessIdentity | null,
-  pid: number,
-): { processIdentity: ProcessIdentity } | Record<string, never> {
-  return processIdentity?.pid === pid ? { processIdentity } : {};
-}
 
 function assertSameProcessInstance(
   owner: { pid: number; processIdentity?: ProcessIdentity },

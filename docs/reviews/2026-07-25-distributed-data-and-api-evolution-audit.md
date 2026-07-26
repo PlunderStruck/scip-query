@@ -240,6 +240,23 @@ The reindex release path has a related ownership weakness: `src/reindex/index.ts
 
 **Acceptance condition:** a malformed lock is eventually recoverable without permitting two owners, and release is always ownership-checked.
 
+**Resolution:** Slice 09 introduces one crash-durable, versioned process-lock
+record with a random ownership token and optional process-start identity.
+Watch, reindex, repository-cache, shared-generation, verified-binary fetch, and
+durable Rust semantic-server ownership use the common parser and
+token-checked release. Empty, truncated, and malformed records become
+recoverable only after a five-second creation grace, beneath an exclusive
+reclaim guard, and after unchanged raw-byte plus file-identity revalidation.
+Live legacy or identity-unverifiable owners remain contended; a reused PID is
+reclaimed without signaling its newer occupant. Deterministic fault tests
+cover failure immediately after exclusive create, truncated records, two
+reclaim attempts, abandoned reclaim guards, PID reuse, token mismatch, and a
+successor appearing before removal. The operational state machine and manual
+recovery guidance are recorded in `docs/LOCK_PROTOCOL.md`. The descriptor
+write loop and Windows directory-handle classification are shared through the
+dependency-free `src/filesystem/file-descriptor.ts` boundary, keeping
+`platform` and `storage` independent while preventing durability-policy drift.
+
 ### DD-05 — S2 — Project, hook, and agent setup writers can overwrite concurrent user edits
 
 **Evidence:** source-confirmed interleaving.

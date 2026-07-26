@@ -1,18 +1,15 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
-  closeSync,
   copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
-  openSync,
   readdirSync,
   readFileSync,
   renameSync,
   rmSync,
   statSync,
-  writeFileSync,
 } from 'node:fs';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { platform } from 'node:os';
@@ -32,6 +29,13 @@ import {
 import { isProcessAlive } from '../platform/process-liveness.js';
 import { resolveGitWorktreeContext } from '../platform/git-worktree.js';
 import { acquireProcessFileLock } from '../platform/repository-cache-lock.js';
+import {
+  readProcessFileLock,
+  reclaimProcessFileLock,
+  tryAcquireProcessFileLock,
+  type LegacyProcessLockDecoder,
+  type ProcessFileLockObservation,
+} from '../platform/process-file-lock.js';
 import {
   describeIndexerBinary,
   getIndexerExecutionEnv,
@@ -2074,12 +2078,10 @@ async function acquireReindexLock(
           `Could not confirm the watcher's in-progress reindex (pid ${existing.pid}) terminated for ${dirname(lockPath)}; refusing to steal an active lock.`,
         );
       }
-      rmSync(lockPath, { force: true });
-      continue;
-    }
-
-    if (existing && !isProcessAlive(existing.pid)) {
-      rmSync(lockPath, { force: true });
+      const observed = readProcessFileLock(lockPath, { parseLegacy: parseLegacyReindexOwner });
+      if (!reclaimProcessFileLock(lockPath, observed, { parseLegacy: parseLegacyReindexOwner })) {
+        throw new Error(`Reindex lock ownership changed before preemption completed for ${dirname(lockPath)}.`);
+      }
       continue;
     }
 
@@ -2091,43 +2093,71 @@ async function acquireReindexLock(
 
 function tryAcquireReindexLock(
   lockPath: string,
-  opts: { projectRoot: string; trigger?: RefreshTrigger },
+  opts: { projectRoot: string; trigger?: RefreshTrigger; onStatus: (message: string) => void },
 ): (() => void) | null {
-  let fd: number;
-  try {
-    fd = openSync(lockPath, 'wx');
-  } catch (err) {
-    const code = typeof err === 'object' && err && 'code' in err ? (err as { code?: string }).code : undefined;
-    if (code === 'EEXIST') {
-      return null;
-    }
-    throw err;
-  }
-
   const processIdentity = readProcessIdentity(process.pid);
-  const metadata: ReindexLockMetadata = {
-    version: 2,
-    pid: process.pid,
-    ...(processIdentity ? { processIdentity } : {}),
-    ...(process.env['SCIP_REINDEX_PROCESS_GROUP_LEADER'] === '1' ? { processGroupLeader: true } : {}),
-    projectRoot: opts.projectRoot,
-    startedAt: new Date().toISOString(),
-    trigger: opts.trigger,
-  };
-  writeFileSync(fd, JSON.stringify(metadata) + '\n');
-
-  return () => {
-    try {
-      closeSync(fd);
-    } finally {
-      rmSync(lockPath, { force: true });
+  const acquired = tryAcquireProcessFileLock(lockPath, {
+    kind: 'reindex',
+    processIdentity,
+    detail: {
+      projectRoot: opts.projectRoot,
+      ...(process.env['SCIP_REINDEX_PROCESS_GROUP_LEADER'] === '1' ? { processGroupLeader: true } : {}),
+      ...(opts.trigger ? { trigger: opts.trigger } : {}),
+    },
+    parseLegacy: parseLegacyReindexOwner,
+  });
+  if (acquired.kind === 'acquired' && acquired.reclaimed) {
+    const previous = reindexMetadataFromObservation(acquired.reclaimed, lockPath);
+    if (previous && shouldPreemptReindexLock(opts.trigger, previous)) {
+      opts.onStatus(
+        `Manual reindex preempting watcher refresh started at ${previous.startedAt}; its prior owner was already stale.`,
+      );
+    } else {
+      opts.onStatus(`Recovered an abandoned or incomplete reindex lock for ${dirname(lockPath)}.`);
     }
-  };
+  }
+  return acquired.kind === 'acquired' ? () => void acquired.lock.release() : null;
 }
 
 function readReindexLock(lockPath: string): ReindexLockMetadata | null {
+  return reindexMetadataFromObservation(
+    readProcessFileLock(lockPath, { parseLegacy: parseLegacyReindexOwner }),
+    lockPath,
+  );
+}
+
+const parseLegacyReindexOwner: LegacyProcessLockDecoder = (value) => {
+  const metadata = parseLegacyReindexMetadata(value, '');
+  return metadata
+    ? {
+        pid: metadata.pid,
+        ...(metadata.processIdentity ? { processIdentity: metadata.processIdentity } : {}),
+      }
+    : null;
+};
+
+function reindexMetadataFromObservation(
+  observation: ProcessFileLockObservation,
+  lockPath: string,
+): ReindexLockMetadata | null {
+  if (observation.state === 'valid' && observation.record?.kind === 'reindex') {
+    const detail = observation.record.detail ?? {};
+    return {
+      version: 2,
+      pid: observation.record.pid,
+      ...(observation.record.processIdentity ? { processIdentity: observation.record.processIdentity } : {}),
+      ...(detail['processGroupLeader'] === true ? { processGroupLeader: true } : {}),
+      projectRoot: typeof detail['projectRoot'] === 'string' ? detail['projectRoot'] : dirname(lockPath),
+      startedAt: observation.record.startedAt,
+      trigger: detail['trigger'] as RefreshTrigger | undefined,
+    };
+  }
+  return parseLegacyReindexMetadata(observation.parsed, lockPath);
+}
+
+function parseLegacyReindexMetadata(value: unknown, lockPath: string): ReindexLockMetadata | null {
   try {
-    const parsed = JSON.parse(readFileSync(lockPath, 'utf-8')) as Partial<ReindexLockMetadata>;
+    const parsed = value as Partial<ReindexLockMetadata>;
     if (typeof parsed.pid !== 'number' || !Number.isInteger(parsed.pid) || parsed.pid <= 0) {
       return null;
     }

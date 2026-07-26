@@ -23,6 +23,10 @@
         "paths": ["src/domain/**"]
       },
       {
+        "name": "filesystem",
+        "paths": ["src/filesystem/**"]
+      },
+      {
         "name": "instrumentation",
         "paths": ["src/instrumentation/**"]
       },
@@ -189,8 +193,9 @@
     "allowedDependencies": {
       "analysis": ["domain", "source", "storage", "symbols-core", "symbols-graph"],
       "domain": [],
+      "filesystem": [],
       "instrumentation": [],
-      "platform": ["domain"],
+      "platform": ["domain", "filesystem"],
       "public-api": ["domain", "queries-internal", "source", "storage", "symbols-core"],
       "queries-cleanup": [
         "analysis",
@@ -383,7 +388,7 @@
         "symbols-graph"
       ],
       "source": ["domain", "platform", "storage"],
-      "storage": ["domain", "instrumentation"],
+      "storage": ["domain", "filesystem", "instrumentation"],
       "symbols-core": ["domain", "source", "storage"],
       "symbols-graph": ["domain", "instrumentation", "source", "storage", "symbols-core", "symbols-references"],
       "symbols-references": ["domain", "instrumentation", "source", "storage", "symbols-core"],

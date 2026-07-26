@@ -401,6 +401,9 @@ cache where the platform supports directory sync.
 File-backed state uses an explicit visibility-versus-crash-durability
 classification. See [Filesystem Publication and Durability](docs/DURABILITY.md)
 for the guarantees, failure outcomes, Windows limitation, and call-site matrix.
+Process coordination uses one versioned, token-owned format with conservative
+malformed-file recovery; see
+[Process Lock Ownership and Recovery](docs/LOCK_PROTOCOL.md).
 
 ## Quick Start
 

@@ -21,7 +21,10 @@ import type {
   RustImportDefinitionWorkerRequest,
 } from '../../../src/semantic/rust/lsp-session.js';
 import { rustAnalyzerProjectFingerprint } from '../../../src/semantic/rust/project-fingerprint.js';
-import { processDurableRustSessionRequests } from '../../../src/semantic/rust/durable-session-server.js';
+import {
+  acquireDurableRustSessionServerLock,
+  processDurableRustSessionRequests,
+} from '../../../src/semantic/rust/durable-session-server.js';
 
 const definition: IndexedDefinition = {
   symbolId: 1,
@@ -263,6 +266,39 @@ describe('durable Rust semantic session identity', () => {
       expect(changedByPath).toEqual(Object.fromEntries(excludedPaths.map((path) => [path, false])));
     } finally {
       rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('durable Rust semantic server ownership', () => {
+  it('serializes server ownership and uses token-checked release', () => {
+    const sessionDir = mkdtempSync(join(tmpdir(), 'scip-query-rust-server-lock-'));
+    const lockPath = join(sessionDir, 'server.lock');
+    try {
+      const owner = acquireDurableRustSessionServerLock(lockPath);
+      expect(owner).not.toBeNull();
+      expect(acquireDurableRustSessionServerLock(lockPath)).toBeNull();
+      owner!.release();
+      const successor = acquireDurableRustSessionServerLock(lockPath);
+      expect(successor).not.toBeNull();
+      successor!.release();
+    } finally {
+      rmSync(sessionDir, { recursive: true, force: true });
+    }
+  });
+
+  it('reads legacy PID locks conservatively and reclaims only a dead owner', () => {
+    const sessionDir = mkdtempSync(join(tmpdir(), 'scip-query-rust-server-legacy-lock-'));
+    const lockPath = join(sessionDir, 'server.lock');
+    try {
+      writeFileSync(lockPath, String(process.pid));
+      expect(acquireDurableRustSessionServerLock(lockPath)).toBeNull();
+      writeFileSync(lockPath, String(2_147_483_647));
+      const recovered = acquireDurableRustSessionServerLock(lockPath);
+      expect(recovered).not.toBeNull();
+      recovered!.release();
+    } finally {
+      rmSync(sessionDir, { recursive: true, force: true });
     }
   });
 });

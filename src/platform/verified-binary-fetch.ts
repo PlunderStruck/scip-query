@@ -13,6 +13,7 @@ import {
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { acquireProcessFileLockAsync } from './repository-cache-lock.js';
+import { isDirectorySyncUnsupported, writeFileCompletely } from '../filesystem/file-descriptor.js';
 
 /**
  * Shared download/checksum-verify/cache primitive behind `tla fetch-tools`
@@ -251,7 +252,7 @@ async function downloadVerifiedBinary(
       }
       const chunk = Buffer.from(value.buffer, value.byteOffset, value.byteLength);
       digest.update(chunk);
-      writeChunk(fd, chunk, opts.writeImpl ?? writeSync);
+      writeFileCompletely(fd, chunk, { writeFile: opts.writeImpl ?? writeSync }, 'verified binary staging');
     }
     if (declaredBytes !== undefined && observedBytes !== declaredBytes) {
       throw new VerifiedBinaryFetchError(
@@ -321,21 +322,10 @@ function declaredContentLength(response: Response, maxBytes: number, url: string
   return declared;
 }
 
-function writeChunk(fd: number, chunk: Buffer, writeImpl: typeof writeSync): void {
-  let offset = 0;
-  while (offset < chunk.length) {
-    const written = writeImpl(fd, chunk, offset, chunk.length - offset);
-    if (!Number.isSafeInteger(written) || written <= 0 || written > chunk.length - offset) {
-      throw new Error('staging write did not make valid forward progress');
-    }
-    offset += written;
-  }
-}
-
 /**
  * The platform boundary owns executable/tool installation independently from
- * storage's JSON publication primitive; architecture forbids either sibling
- * infrastructure boundary from depending on the other.
+ * storage's JSON publication primitive. Both depend on the smaller filesystem
+ * boundary for descriptor progress and directory-handle classification.
  */
 function promoteVerifiedBinary(
   stagingPath: string,
@@ -362,22 +352,16 @@ function flushBinaryDirectory(path: string, syncImpl: typeof fsyncSync): void {
   try {
     fd = openSync(path, 'r');
   } catch (error) {
-    if (isWindowsDirectoryFlushLimitation(error)) return;
+    if (isDirectorySyncUnsupported(error, process.platform)) return;
     throw error;
   }
   try {
     syncImpl(fd);
   } catch (error) {
-    if (!isWindowsDirectoryFlushLimitation(error)) throw error;
+    if (!isDirectorySyncUnsupported(error, process.platform)) throw error;
   } finally {
     closeSync(fd);
   }
-}
-
-function isWindowsDirectoryFlushLimitation(error: unknown): boolean {
-  if (process.platform !== 'win32') return false;
-  const code = (error as NodeJS.ErrnoException).code;
-  return code === 'EACCES' || code === 'EBADF' || code === 'EINVAL' || code === 'EISDIR' || code === 'EPERM';
 }
 
 function raceWithAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {

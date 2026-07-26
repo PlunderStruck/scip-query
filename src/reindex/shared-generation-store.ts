@@ -1,21 +1,17 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
-  closeSync,
   constants,
   copyFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
-  openSync,
   readdirSync,
   readFileSync,
   realpathSync,
   renameSync,
   rmSync,
   statSync,
-  unlinkSync,
-  writeFileSync,
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -24,8 +20,8 @@ import { deserializeSCIP } from '@c4312/scip';
 import Database from 'better-sqlite3';
 import type { ProjectConfig } from '../domain/types.js';
 import { cliVersion } from '../platform/cli-version.js';
-import { isProcessAlive } from '../platform/process-liveness.js';
 import { acquireProcessFileLock, acquireRepositoryCacheLock } from '../platform/repository-cache-lock.js';
+import { tryAcquireProcessFileLock, type LegacyProcessLockDecoder } from '../platform/process-file-lock.js';
 import {
   automaticSharedCacheEnabled,
   resolveDefaultCacheDir,
@@ -513,41 +509,28 @@ export async function acquireSharedGenerationBuildLock(
   const deadline = now() + timeoutMs;
   const locksDir = join(snapshot.repositoryCacheDir, 'locks');
   const lockPath = join(locksDir, `${snapshot.generationId}.lock`);
-  mkdirSync(locksDir, { recursive: true });
+  const parseLegacyBuildLock: LegacyProcessLockDecoder = (value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const pid = (value as { pid?: unknown }).pid;
+    return typeof pid === 'number' && Number.isSafeInteger(pid) && pid > 0 ? { pid } : null;
+  };
 
   while (now() <= deadline) {
     if (readSharedGeneration(snapshot)) return { kind: 'generation-ready' };
-    const token = randomUUID();
-    try {
-      const fd = openSync(lockPath, 'wx');
-      try {
-        writeFileSync(
-          fd,
-          `${JSON.stringify({ version: 1, pid: process.pid, token, generationId: snapshot.generationId, startedAt: new Date(now()).toISOString() })}\n`,
-        );
-      } finally {
-        closeSync(fd);
-      }
+    const acquired = tryAcquireProcessFileLock(lockPath, {
+      kind: 'shared-generation-build',
+      detail: { generationId: snapshot.generationId },
+      parseLegacy: parseLegacyBuildLock,
+    });
+    if (acquired.kind === 'acquired') {
       return {
         kind: 'owner',
-        release: () => {
-          try {
-            const current = JSON.parse(readFileSync(lockPath, 'utf8')) as { pid?: unknown; token?: unknown };
-            if (current.pid === process.pid && current.token === token) unlinkSync(lockPath);
-          } catch {
-            // Another process may already have cleaned a stale lock.
-          }
-        },
+        release: () => acquired.lock.release(),
       };
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') return { kind: 'timeout' };
-      const observed = readBuildLock(lockPath);
-      if (observed && (observed.pid === undefined || !isProcessAlive(observed.pid))) {
-        reclaimStaleBuildLock(lockPath, observed);
-        continue;
-      }
-      await delay(pollMs);
     }
+    const remainingMs = deadline - now();
+    if (remainingMs <= 0) break;
+    await delay(Math.min(pollMs, remainingMs));
   }
   return readSharedGeneration(snapshot) ? { kind: 'generation-ready' } : { kind: 'timeout' };
 }
@@ -821,58 +804,6 @@ function configFingerprintOptions(config: ProjectConfig): ProjectInputFingerprin
 
 function sharedGenerationDirectory(snapshot: SharedGenerationSnapshot): string {
   return join(snapshot.repositoryCacheDir, 'generations', snapshot.generationId);
-}
-
-interface BuildLockObservation {
-  raw: string;
-  pid?: number;
-}
-
-function readBuildLock(lockPath: string): BuildLockObservation | null {
-  try {
-    const raw = readFileSync(lockPath, 'utf8');
-    const parsed = JSON.parse(raw) as { pid?: unknown };
-    const pid =
-      typeof parsed.pid === 'number' && Number.isSafeInteger(parsed.pid) && parsed.pid > 0 ? parsed.pid : undefined;
-    return { raw, ...(pid === undefined ? {} : { pid }) };
-  } catch {
-    return null;
-  }
-}
-
-function reclaimStaleBuildLock(lockPath: string, observed: BuildLockObservation): boolean {
-  const reclaimPath = `${lockPath}.reclaim`;
-  const token = randomUUID();
-  let fd: number;
-  try {
-    fd = openSync(reclaimPath, 'wx');
-  } catch {
-    return false;
-  }
-  try {
-    writeFileSync(
-      fd,
-      `${JSON.stringify({ version: 1, pid: process.pid, token, startedAt: new Date().toISOString() })}\n`,
-    );
-  } finally {
-    closeSync(fd);
-  }
-  try {
-    const current = readBuildLock(lockPath);
-    if (!current || current.raw !== observed.raw) return false;
-    if (current.pid !== undefined && isProcessAlive(current.pid)) return false;
-    unlinkSync(lockPath);
-    return true;
-  } catch {
-    return false;
-  } finally {
-    try {
-      const guard = JSON.parse(readFileSync(reclaimPath, 'utf8')) as { pid?: unknown; token?: unknown };
-      if (guard.pid === process.pid && guard.token === token) unlinkSync(reclaimPath);
-    } catch {
-      // A crashed or superseded reclaimer may already have removed the guard.
-    }
-  }
 }
 
 function persistWorktreeLease(repositoryCacheDir: string, lease: WorktreeCacheLease, requireGeneration: boolean): void {

@@ -1092,7 +1092,7 @@ describe('reindex reliability', () => {
     expect(existsSync(join(cacheDir, 'index.lock'))).toBe(true);
   });
 
-  it('does not signal a reused PID when a watcher lock belongs to an older process instance', async () => {
+  it('reclaims a reused PID lock without signaling the newer process instance', async () => {
     const projectRoot = createProject('scip-query-reindex-preempt-reused-pid-');
     const cacheDir = join(projectRoot, '.cache');
     mkdirSync(cacheDir);
@@ -1128,19 +1128,18 @@ describe('reindex reliability', () => {
     });
     const killSpy = vi.spyOn(process, 'kill').mockReturnValue(true);
 
-    await expect(
-      reindex({
-        projectRoot,
-        outputScip: join(cacheDir, 'index.scip'),
-        outputDb: join(cacheDir, 'index.db'),
-        onStatus: () => undefined,
-        trigger: { kind: 'manual-cli', detail: 'manual test' },
-      }),
-    ).rejects.toThrow(/process identity.*does not match/i);
+    const result = await reindex({
+      projectRoot,
+      outputScip: join(cacheDir, 'index.scip'),
+      outputDb: join(cacheDir, 'index.db'),
+      onStatus: () => undefined,
+      trigger: { kind: 'manual-cli', detail: 'manual test' },
+    });
 
+    expect(result.languages).toEqual(['typescript']);
     expect(killSpy).not.toHaveBeenCalledWith(recordedIdentity.pid, 'SIGTERM');
     expect(killSpy).not.toHaveBeenCalledWith(-recordedIdentity.pid, 'SIGTERM');
-    expect(existsSync(join(cacheDir, 'index.lock'))).toBe(true);
+    expect(existsSync(join(cacheDir, 'index.lock'))).toBe(false);
   });
 
   it('fails with the sidecar-package guidance when scip is missing on Windows', async () => {

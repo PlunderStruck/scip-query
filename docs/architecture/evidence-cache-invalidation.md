@@ -94,6 +94,12 @@ The implementation and its compiler-backed tests live in
 `src/reindex/shared-generation-store.ts` and
 `tests/reindex/shared-worktree-cache.integration.test.ts`.
 
+Shared-generation build ownership now uses the same crash-durable,
+token-checked process-lock record as repository cleanup, reindex, watch, and
+the Rust semantic server. This changes lock recovery—not generation identity,
+manifest validation, lease ownership, or publication—and is specified in
+`docs/LOCK_PROTOCOL.md`.
+
 Shared evidence is a repository-level read-through database at
 `~/.cache/scip-query/repositories/<repository-id>/evidence.db`. The
 worktree-local `evidence.db` remains authoritative: reads try local first and
