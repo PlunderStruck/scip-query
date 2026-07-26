@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { closeSync, fsyncSync, mkdirSync, openSync, renameSync, unlinkSync, writeSync } from 'node:fs';
+import { closeSync, fsyncSync, linkSync, mkdirSync, openSync, renameSync, unlinkSync, writeSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { isDirectorySyncUnsupported, writeFileCompletely } from '../filesystem/file-descriptor.js';
 
@@ -20,6 +20,7 @@ export interface AtomicFileRuntime {
   syncFile(fd: number): void;
   closeFile(fd: number): void;
   renameFile(source: string, target: string): void;
+  linkFile?(source: string, target: string): void;
   removeFile(path: string): void;
 }
 
@@ -32,6 +33,7 @@ export const NODE_ATOMIC_FILE_RUNTIME: AtomicFileRuntime = Object.freeze({
   syncFile: (fd: number) => fsyncSync(fd),
   closeFile: (fd: number) => closeSync(fd),
   renameFile: (source: string, target: string) => renameSync(source, target),
+  linkFile: (source: string, target: string) => linkSync(source, target),
   removeFile: (path: string) => unlinkSync(path),
 });
 
@@ -88,6 +90,60 @@ export function replaceFileAtomic(
       } catch {
         // Only the random-token owner removes this path. A failed create or
         // injected filesystem fault may mean no owned path remains.
+      }
+    }
+  }
+}
+
+/**
+ * Publishes complete bytes only when the target does not exist. The staged
+ * inode is flushed before an exclusive hard-link creates the public name, so
+ * competing creators cannot replace one another and readers never observe a
+ * partially written first version.
+ */
+export function createFileAtomicExclusive(
+  targetPath: string,
+  bytes: string | Buffer,
+  options: ReplaceFileAtomicOptions = {},
+): AtomicFileWriteResult {
+  const durability = options.durability ?? 'visibility';
+  const runtime = options.runtime ?? NODE_ATOMIC_FILE_RUNTIME;
+  if (!runtime.linkFile) {
+    throw new Error('Exclusive atomic file publication requires hard-link support.');
+  }
+  const parentDirectory = dirname(targetPath);
+  runtime.makeDirectory(parentDirectory);
+  const temporaryPath = `${targetPath}.tmp-${runtime.randomToken()}`;
+  const payload = typeof bytes === 'string' ? Buffer.from(bytes) : bytes;
+  let fd: number | undefined;
+  let temporaryOwned = false;
+  try {
+    fd = runtime.openFile(temporaryPath, 'wx', options.mode ?? 0o600);
+    temporaryOwned = true;
+    writeFileCompletely(fd, payload, runtime, 'exclusive atomic file');
+    if (durability === 'durable') runtime.syncFile(fd);
+    runtime.closeFile(fd);
+    fd = undefined;
+    runtime.linkFile(temporaryPath, targetPath);
+    runtime.removeFile(temporaryPath);
+    temporaryOwned = false;
+    return {
+      durability,
+      directorySync: durability === 'durable' ? syncDirectoryDurable(parentDirectory, runtime) : 'not-requested',
+    };
+  } finally {
+    if (fd !== undefined) {
+      try {
+        runtime.closeFile(fd);
+      } catch {
+        // Preserve the primary write/sync error.
+      }
+    }
+    if (temporaryOwned) {
+      try {
+        runtime.removeFile(temporaryPath);
+      } catch {
+        // Only the random-token owner removes this path.
       }
     }
   }

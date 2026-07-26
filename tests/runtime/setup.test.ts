@@ -90,6 +90,38 @@ async function loadSetup(): Promise<{
   vi.doMock('node:url', () => ({
     fileURLToPath: () => '/pkg/dist/setup.js',
   }));
+  vi.doMock('../../src/runtime/revisioned-file.js', () => ({
+    mutateTextFileRevisionAware: (
+      path: string,
+      transform: (snapshot: { path: string; text: string; revision: { exists: boolean; hash: string } }) => {
+        kind: 'unchanged' | 'write' | 'delete';
+        text?: string;
+      },
+    ) => {
+      const existed = existsSync(path);
+      const snapshot = {
+        path,
+        text: existed ? String(readFileSync(path, 'utf8')) : '',
+        revision: { exists: existed, hash: existed ? 'existing' : 'absent' },
+      };
+      const mutation = transform(snapshot);
+      if (mutation.kind === 'write') writeFileSync(path, mutation.text);
+      if (mutation.kind === 'delete') rmSync(path, { force: true });
+      const changed = mutation.kind !== 'unchanged';
+      return {
+        changed,
+        attempts: 1,
+        previous: snapshot,
+        current: changed
+          ? {
+              path,
+              text: mutation.kind === 'write' ? (mutation.text ?? '') : '',
+              revision: { exists: mutation.kind === 'write', hash: 'updated' },
+            }
+          : snapshot,
+      };
+    },
+  }));
 
   const module = await import('../../src/runtime/setup.js');
   return {
@@ -256,7 +288,7 @@ describe('skill installation', () => {
       remove: true,
     });
 
-    expect(result.removed).toContain('.claude/settings.local.json (declined)');
+    expect(result.removed).toContain('.claude/settings.local.json');
     expect(writeFileSync).toHaveBeenCalledWith(
       '/repo/.claude/settings.local.json',
       expect.stringContaining('"scipQueryHooks": "declined"'),

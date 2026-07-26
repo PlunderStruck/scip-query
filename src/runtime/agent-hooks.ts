@@ -11,7 +11,11 @@ import type { DiffGateResult } from '../queries/impact/diff-gate.js';
 import { createGitignoreFilter } from '../source/primitives/gitignore-filter.js';
 import { escapeRegex } from '../source/primitives/regex-utils.js';
 import { ScipDatabase } from '../storage/db.js';
-import { writeJsonDurable } from '../storage/atomic-json.js';
+import {
+  mutateTextFileRevisionAware,
+  type RevisionedTextMutation,
+  type RevisionedTextSnapshot,
+} from './revisioned-file.js';
 import { loadProjectConfig, resolveWatchConfig } from './config.js';
 import { getIndexFreshness } from './index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from './project-readiness.js';
@@ -281,16 +285,27 @@ function ensureProjectHookGitExcludes(projectRoot: string, result: InstallUserAg
     ...targets.map((target) => `/${target.relativePath}`),
     LOCAL_HOOK_EXCLUDE_END,
   ].join('\n');
-  const current = existsSync(excludePath) ? readFileSync(excludePath, 'utf-8') : '';
   const pattern = new RegExp(
     `${escapeRegex(LOCAL_HOOK_EXCLUDE_BEGIN)}[\\s\\S]*?${escapeRegex(LOCAL_HOOK_EXCLUDE_END)}\\n?`,
     'g',
   );
-  const withoutOwnedBlock = current.replace(pattern, '').replace(/\n*$/, '');
-  const next = `${withoutOwnedBlock}${withoutOwnedBlock ? '\n\n' : ''}${block}\n`;
-  if (!dryRun && next !== current) {
-    mkdirSync(dirname(excludePath), { recursive: true });
-    writeFileSync(excludePath, next);
+  if (!dryRun) {
+    try {
+      mutateTextFileRevisionAware(excludePath, (snapshot) => {
+        const withoutOwnedBlock = snapshot.text.replace(pattern, '').replace(/\n*$/, '');
+        const next = `${withoutOwnedBlock}${withoutOwnedBlock ? '\n\n' : ''}${block}\n`;
+        return next === snapshot.text
+          ? { kind: 'unchanged' }
+          : {
+              kind: 'write',
+              text: next,
+              ...(!snapshot.revision.exists ? { mode: 0o644 } : {}),
+            };
+      });
+    } catch (error) {
+      result.warnings.push(error instanceof Error ? error.message : String(error));
+      return;
+    }
   }
   result.gitExcluded.push(...targets.map((target) => target.label));
 }
@@ -356,26 +371,30 @@ function installProviderHooks(opts: {
     return;
   }
 
-  const current = readJsonConfig(opts.configPath, opts.label, opts.result);
-  if (!current) return;
-  if (current['scipQueryHooks'] === 'declined' && !opts.force) {
+  let declined = false;
+  const mutation = mutateHookConfigFile(opts.configPath, opts.label, opts.result, (current) => {
+    if (current['scipQueryHooks'] === 'declined' && !opts.force) {
+      declined = true;
+      return { kind: 'unchanged' };
+    }
+    const next = mergeScipHookConfig(current, opts.provider, opts.commandPrefix);
+    return JSON.stringify(next) === JSON.stringify(current)
+      ? { kind: 'unchanged' }
+      : { kind: 'write', text: serializeHookConfig(next) };
+  });
+  if (!mutation) return;
+  if (declined) {
     opts.result.skipped.push({
       target: opts.label,
       reason: 'scip-query hooks were previously removed; rerun with --force',
     });
     return;
   }
-
-  const next = mergeScipHookConfig(current, opts.provider, opts.commandPrefix);
-  if (JSON.stringify(next) === JSON.stringify(current)) {
+  if (!mutation.changed) {
     opts.result.unchanged.push(opts.label);
     return;
   }
-
-  const existed = existsSync(opts.configPath);
-  mkdirSync(dirname(opts.configPath), { recursive: true });
-  writeJsonDurable(opts.configPath, next, { spacing: 2, trailingNewline: true });
-  opts.result[existed ? 'updated' : 'installed'].push(opts.label);
+  opts.result[mutation.previous.revision.exists ? 'updated' : 'installed'].push(opts.label);
 }
 
 function removeProviderHooks(opts: {
@@ -383,46 +402,22 @@ function removeProviderHooks(opts: {
   label: string;
   result: InstallUserAgentHooksResult;
   dryRun?: boolean;
+  writeDeclinedTombstone?: boolean;
 }): void {
-  if (!existsSync(opts.configPath)) return;
-
-  const current = readJsonConfig(opts.configPath, opts.label, opts.result);
-  if (!current) return;
-
-  const hooks =
-    current.hooks && typeof current.hooks === 'object' && !Array.isArray(current.hooks) ? current.hooks : {};
-  const nextHooks: HookConfig['hooks'] = { ...hooks };
-  let changed = false;
-
-  for (const event of ['SessionStart', 'UserPromptSubmit', 'PostCompact', 'PreToolUse', 'Stop'] as const) {
-    const groups = Array.isArray(hooks[event]) ? hooks[event] : [];
-    const pruned = pruneScipHookGroups(groups);
-    if (pruned.length !== groups.length || JSON.stringify(pruned) !== JSON.stringify(groups)) {
-      changed = true;
-      if (pruned.length > 0) {
-        nextHooks[event] = pruned;
-      } else {
-        delete nextHooks[event];
-      }
-    }
+  if (!existsSync(opts.configPath) && !opts.writeDeclinedTombstone) return;
+  const transform = (current: HookConfig): RevisionedTextMutation => {
+    const next = removeScipHookConfig(current, opts.writeDeclinedTombstone);
+    if (JSON.stringify(next) === JSON.stringify(current)) return { kind: 'unchanged' };
+    return Object.keys(next).length === 0 ? { kind: 'delete' } : { kind: 'write', text: serializeHookConfig(next) };
+  };
+  if (opts.dryRun) {
+    const current = readJsonConfig(opts.configPath, opts.label, opts.result);
+    if (!current) return;
+    if (transform(current).kind !== 'unchanged') opts.result.removed.push(opts.label);
+    return;
   }
-
-  if (!changed) return;
-
-  const next: HookConfig = { ...current };
-  if (Object.keys(nextHooks).length > 0) {
-    next.hooks = nextHooks;
-  } else {
-    delete next.hooks;
-  }
-  if (!opts.dryRun) {
-    if (Object.keys(next).length === 0) {
-      rmSync(opts.configPath, { force: true });
-    } else {
-      writeJsonDurable(opts.configPath, next, { spacing: 2, trailingNewline: true });
-    }
-  }
-  opts.result.removed.push(opts.label);
+  const mutation = mutateHookConfigFile(opts.configPath, opts.label, opts.result, transform);
+  if (mutation?.changed) opts.result.removed.push(opts.label);
 }
 
 function removeProjectProviderHooks(opts: {
@@ -434,18 +429,68 @@ function removeProjectProviderHooks(opts: {
 }): void {
   const before = opts.result.removed.length;
   removeProviderHooks(opts);
-  if (!opts.writeDeclinedTombstone) return;
+  if (opts.writeDeclinedTombstone && opts.result.removed.length === before) {
+    const snapshot = readJsonConfig(opts.configPath, opts.label, opts.result);
+    if (snapshot?.scipQueryHooks === 'declined') opts.result.removed.push(`${opts.label} (declined)`);
+  }
+}
 
-  const current = readJsonConfig(opts.configPath, opts.label, opts.result);
-  if (!current) return;
-  const next: HookConfig = { ...current, scipQueryHooks: 'declined' };
-  if (!opts.dryRun) {
-    mkdirSync(dirname(opts.configPath), { recursive: true });
-    writeJsonDurable(opts.configPath, next, { spacing: 2, trailingNewline: true });
+function removeScipHookConfig(current: HookConfig, writeDeclinedTombstone = false): HookConfig {
+  const hooks =
+    current.hooks && typeof current.hooks === 'object' && !Array.isArray(current.hooks) ? current.hooks : {};
+  const nextHooks: HookConfig['hooks'] = { ...hooks };
+  for (const event of ['SessionStart', 'UserPromptSubmit', 'PostCompact', 'PreToolUse', 'Stop'] as const) {
+    if (!Array.isArray(hooks[event])) continue;
+    const groups = hooks[event];
+    const pruned = pruneScipHookGroups(groups);
+    if (pruned.length > 0) nextHooks[event] = pruned;
+    else delete nextHooks[event];
   }
-  if (opts.result.removed.length === before) {
-    opts.result.removed.push(`${opts.label} (declined)`);
+  const next: HookConfig = { ...current };
+  if (Object.keys(nextHooks).length > 0) next.hooks = nextHooks;
+  else delete next.hooks;
+  if (writeDeclinedTombstone) next.scipQueryHooks = 'declined';
+  return next;
+}
+
+function mutateHookConfigFile(
+  path: string,
+  label: string,
+  result: InstallUserAgentHooksResult,
+  transform: (current: HookConfig, snapshot: RevisionedTextSnapshot) => RevisionedTextMutation,
+): ReturnType<typeof mutateTextFileRevisionAware> | undefined {
+  try {
+    return mutateTextFileRevisionAware(path, (snapshot) => {
+      const current = parseHookConfigSnapshot(snapshot);
+      return transform(current, snapshot);
+    });
+  } catch (error) {
+    result.skipped.push({
+      target: label,
+      reason: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
   }
+}
+
+function parseHookConfigSnapshot(snapshot: RevisionedTextSnapshot): HookConfig {
+  if (!snapshot.revision.exists) return {};
+  try {
+    const parsed = JSON.parse(snapshot.text) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('top-level value is not an object');
+    }
+    return parsed as HookConfig;
+  } catch (error) {
+    throw new Error(
+      `Cannot update ${snapshot.path}: the latest hook config is invalid JSON (${error instanceof Error ? error.message : String(error)}).`,
+      { cause: error },
+    );
+  }
+}
+
+function serializeHookConfig(config: HookConfig): string {
+  return `${JSON.stringify(config, null, 2)}\n`;
 }
 
 function readJsonConfig(path: string, label: string, result: InstallUserAgentHooksResult): HookConfig | undefined {

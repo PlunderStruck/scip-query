@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -122,6 +122,46 @@ describe('automatic indexing config setup', () => {
     expect(result).toMatchObject({ changed: false, config: current });
     expect(loadProjectConfig(projectRoot)).toEqual(current);
   });
+
+  it('merges unrelated edits made after the caller loaded its config', () => {
+    const projectRoot = createProject();
+    const stale = { watch: { enabled: false, debounceMs: 500 } };
+    writeFileSync(
+      join(projectRoot, '.scipquery.json'),
+      `${JSON.stringify({ ...stale, futureOption: { retained: true } }, null, 2)}\n`,
+    );
+
+    configureProjectAutomaticRefresh(projectRoot, stale, true);
+
+    expect(loadProjectConfig(projectRoot)).toEqual({
+      watch: { enabled: true, debounceMs: 500, autoRefresh: true },
+      futureOption: { retained: true },
+    });
+  });
+
+  it('rejects a stale same-field update and preserves the latest config', () => {
+    const projectRoot = createProject();
+    const stale = { watch: { enabled: false } };
+    const latest = { watch: { enabled: true }, futureOption: 'latest' };
+    const path = join(projectRoot, '.scipquery.json');
+    writeFileSync(path, `${JSON.stringify(latest, null, 2)}\n`);
+
+    expect(() => configureProjectAutomaticRefresh(projectRoot, stale, false)).toThrow(
+      /watch\.enabled changed since it was read/,
+    );
+    expect(loadProjectConfig(projectRoot)).toEqual(latest);
+  });
+
+  it('refuses to rewrite a malformed latest config', () => {
+    const projectRoot = createProject();
+    const path = join(projectRoot, '.scipquery.json');
+    writeFileSync(path, '{broken\n');
+
+    expect(() => configureProjectAutomaticRefresh(projectRoot, {}, true)).toThrow(
+      /latest project config is invalid JSON/,
+    );
+    expect(readFileSync(path, 'utf8')).toBe('{broken\n');
+  });
 });
 
 describe('setup language selection', () => {
@@ -139,6 +179,20 @@ describe('setup language selection', () => {
       watch: { enabled: true },
       languages: ['typescript', 'python'],
     });
+  });
+
+  it('rejects a concurrent language choice rather than replacing it', async () => {
+    const projectRoot = createProject();
+    const stale = { languages: ['rust'] as const };
+    const latest = { languages: ['python'] as const, retained: true };
+    const path = join(projectRoot, '.scipquery.json');
+    writeFileSync(path, `${JSON.stringify(latest, null, 2)}\n`);
+    const { configureProjectLanguages } = await import('../../src/runtime/config.js');
+
+    expect(() => configureProjectLanguages(projectRoot, stale, ['typescript'])).toThrow(
+      /languages changed since it was read/,
+    );
+    expect(loadProjectConfig(projectRoot)).toEqual(latest);
   });
 });
 

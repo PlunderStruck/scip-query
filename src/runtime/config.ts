@@ -1,7 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import type { ProjectConfig, SupportedLanguage, WatchConfig } from '../domain/types.js';
-import { writeJsonDurable } from '../storage/atomic-json.js';
+import {
+  FileContentConflictError,
+  mutateTextFileRevisionAware,
+  type RevisionedTextSnapshot,
+} from './revisioned-file.js';
 
 const CONFIG_FILENAME = '.scipquery.json';
 const DEFAULT_WATCH_DEBOUNCE_MS = 250;
@@ -670,11 +674,6 @@ export function resolveWatchConfig(config: ProjectConfig): Required<WatchConfig>
  */
 export function initProjectConfig(projectRoot: string, languages: string[]): string {
   const configPath = join(projectRoot, CONFIG_FILENAME);
-
-  if (existsSync(configPath)) {
-    return configPath;
-  }
-
   const config: ProjectConfig = {
     languages: languages as ProjectConfig['languages'],
     watch: {
@@ -686,8 +685,9 @@ export function initProjectConfig(projectRoot: string, languages: string[]): str
       autoRefresh: true,
     },
   };
-
-  writeJsonDurable(configPath, config, { spacing: 2, trailingNewline: true });
+  mutateTextFileRevisionAware(configPath, (snapshot) =>
+    snapshot.revision.exists ? { kind: 'unchanged' } : { kind: 'write', text: serializeProjectConfig(config) },
+  );
   return configPath;
 }
 
@@ -704,10 +704,20 @@ export function configureProjectLanguages(
   languages: readonly SupportedLanguage[],
 ): ProjectAutomaticRefreshConfigResult {
   const configPath = join(projectRoot, CONFIG_FILENAME);
-  const nextConfig: ProjectConfig = { ...config, languages: [...languages] };
-  const changed = !existsSync(configPath) || JSON.stringify(nextConfig) !== JSON.stringify(config);
-  if (changed) writeJsonDurable(configPath, nextConfig, { spacing: 2, trailingNewline: true });
-  return { configPath, config: nextConfig, changed };
+  const desired = [...languages];
+  let finalConfig = config;
+  const mutation = mutateTextFileRevisionAware(configPath, (snapshot) => {
+    const latest = parseProjectConfigSnapshot(snapshot, config);
+    if (conflictingFieldEdit(config.languages, latest.languages, desired)) {
+      throw new FileContentConflictError(configPath, 'languages');
+    }
+    const next: ProjectConfig = { ...latest, languages: desired };
+    finalConfig = next;
+    return snapshot.revision.exists && sameJson(next, latest)
+      ? { kind: 'unchanged' }
+      : { kind: 'write', text: serializeProjectConfig(next) };
+  });
+  return { configPath, config: finalConfig, changed: mutation.changed };
 }
 
 /**
@@ -721,17 +731,54 @@ export function configureProjectAutomaticRefresh(
   enabled: boolean,
 ): ProjectAutomaticRefreshConfigResult {
   const configPath = join(projectRoot, CONFIG_FILENAME);
-  const nextConfig: ProjectConfig = {
-    ...config,
-    watch: {
-      ...config.watch,
-      enabled,
-      ...(enabled && config.watch?.autoRefresh === undefined ? { autoRefresh: true } : {}),
-    },
-  };
-  const changed = !existsSync(configPath) || JSON.stringify(nextConfig) !== JSON.stringify(config);
-  if (changed) writeJsonDurable(configPath, nextConfig, { spacing: 2, trailingNewline: true });
-  return { configPath, config: nextConfig, changed };
+  let finalConfig = config;
+  const mutation = mutateTextFileRevisionAware(configPath, (snapshot) => {
+    const latest = parseProjectConfigSnapshot(snapshot, config);
+    if (conflictingFieldEdit(config.watch?.enabled, latest.watch?.enabled, enabled)) {
+      throw new FileContentConflictError(configPath, 'watch.enabled');
+    }
+    const next: ProjectConfig = {
+      ...latest,
+      watch: {
+        ...latest.watch,
+        enabled,
+        ...(enabled && latest.watch?.autoRefresh === undefined ? { autoRefresh: true } : {}),
+      },
+    };
+    finalConfig = next;
+    return snapshot.revision.exists && sameJson(next, latest)
+      ? { kind: 'unchanged' }
+      : { kind: 'write', text: serializeProjectConfig(next) };
+  });
+  return { configPath, config: finalConfig, changed: mutation.changed };
+}
+
+function parseProjectConfigSnapshot(snapshot: RevisionedTextSnapshot, fallback: ProjectConfig): ProjectConfig {
+  if (!snapshot.revision.exists) return fallback;
+  try {
+    const parsed = JSON.parse(snapshot.text) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('top-level value is not an object');
+    }
+    return parsed as ProjectConfig;
+  } catch (error) {
+    throw new Error(
+      `Cannot update ${snapshot.path}: the latest project config is invalid JSON (${error instanceof Error ? error.message : String(error)}).`,
+      { cause: error },
+    );
+  }
+}
+
+function serializeProjectConfig(config: ProjectConfig): string {
+  return `${JSON.stringify(config, null, 2)}\n`;
+}
+
+function sameJson(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function conflictingFieldEdit(base: unknown, latest: unknown, desired: unknown): boolean {
+  return !sameJson(base, latest) && !sameJson(latest, desired);
 }
 
 function reportUnknownConfigKeys(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {

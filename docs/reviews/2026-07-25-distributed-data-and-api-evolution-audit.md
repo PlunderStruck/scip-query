@@ -83,7 +83,7 @@ Severity:
 | Subprocesses and workers    | Child exit plus bounded output                    | Reindex, analysis, watch, semantic paths | Parent coordinators                               | Per-call ad hoc timeouts and buffers                | Deadlines, drain, and termination policy are incomplete            |
 | Rust LSP transport          | Framed JSON-RPC byte stream                       | rust-analyzer                            | Rust semantic client                              | Content-Length framing and request deadlines        | Header and body accumulation are unbounded                         |
 | Verified binary download    | Checksum-matching cached bytes                    | TLA/Windows fetch commands               | Tool resolvers                                    | SHA-256 and atomic rename                           | Network duration, response size, and temp ownership are unbounded  |
-| Project/agent config        | User-authored JSON or Markdown                    | User, setup, hook installer              | Agents and runtime                                | Read/merge/plain write                              | Concurrent edits can be lost or files torn                         |
+| Project/agent config        | User-authored JSON or Markdown                    | User, setup, hook installer              | Agents and runtime                                | Revision-aware narrow merge and durable publication | Conflicts are explicit; latest unrelated edits survive             |
 | Suppressions                | One committed JSON file per accepted finding      | Agents and users                         | Diff gate                                         | Deterministic filename                              | Same-worktree writers silently overwrite                           |
 | Outcome events              | One immutable committed JSON file per event       | Diff gate                                | Reports and reconciliation                        | Content-derived name, exclusive create, read dedupe | Good merge model; schema is unversioned                            |
 | CLI JSON                    | Printed process output                            | Current CLI                              | Agents, scripts, external callers                 | Descriptor metadata and coverage validation         | Shape is useful but unversioned                                    |
@@ -332,6 +332,20 @@ Plain writes also expose truncated JSON or Markdown if the process fails mid-wri
 - Test a simultaneous first-time config creation and a crash during replacement.
 
 **Acceptance condition:** setup and hook operations either preserve the latest unrelated edits or return an explicit conflict without changing the file.
+
+**Resolution — Slice 12 (2026-07-25):** resolved. A shared revision-aware
+mutation primitive now identifies snapshots by raw-byte hash and file identity,
+serializes cooperating writers with token-owned process locks, performs a final
+revision check, bounds retries, and publishes complete bytes durably. Absent
+files use exclusive staged publication. Project config updates perform a
+three-way check on the owned field, preserve unknown latest fields, and reject
+stale same-field decisions. Hook JSON remerges only scip-query-owned groups
+against the latest valid provider object. Managed agent Markdown, the owned
+pre-commit hook, and `.git/info/exclude` preserve independent text; ambiguous
+markers and strict revision conflicts are reported without modification.
+Fault-injection tests cover the read/commit barrier, retry exhaustion,
+simultaneous creation, pre-publication crashes, malformed latest inputs, marker
+corruption, unknown-field preservation, and same-field conflicts.
 
 ### DD-06 — S2 — Same-worktree suppression writers silently overwrite policy decisions
 

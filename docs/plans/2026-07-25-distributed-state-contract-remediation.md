@@ -613,8 +613,8 @@ Rollback is commit-scoped. Durable-format slices additionally retain legacy read
 |    08 | DD-08   | complete | `2a4d62b4` | 180 focused + contract tests        | Fault phases, platform limits, callers, and binary promotion verified |
 |    09 | DD-04   | complete | `437dc042` | 181 focused tests                   | Partial creation, guarded reclaim, shared I/O, PID reuse, legacy, and release verified |
 |    10 | DD-01   | complete | `c58c28df` | 112 focused; 1,558 full-suite tests | Immutable pointer, retained companions, cursor/semantic isolation, architecture gate verified |
-|    11 | DD-03   | complete | this slice | 120 focused; 1,574 full-suite tests | Immutable admission, exclusive claims, completion receipts, retry, expiry, and status verified |
-|    12 | DD-05   | pending  |            |                                     |                                                                 |
+|    11 | DD-03   | complete | `a13f6808` | 120 focused; 1,574 full-suite tests | Immutable admission, exclusive claims, completion receipts, retry, expiry, and status verified |
+|    12 | DD-05   | complete | this slice | 53 focused; 1,590 full-suite tests  | Revision checks, narrow merges, exclusive create, strict Markdown conflicts, and crash boundaries verified |
 |    13 | DD-06   | pending  |            |                                     |                                                                 |
 |    14 | DD-07   | pending  |            |                                     |                                                                 |
 |    15 | DD-09   | pending  |            |                                     |                                                                 |
@@ -666,6 +666,22 @@ Rollback is commit-scoped. Durable-format slices additionally retain legacy read
 - The complete suite passes: 212 test files and 1,574 tests. Lint, typecheck,
   build, whitespace validation, reindex, and diff-gate also pass; the final
   gate reports no blocking or advisory findings.
+
+### Slice 12 verification record
+
+- Storage fault tests inject independent writes at the read/commit barrier,
+  continuous edits through retry exhaustion, a simultaneous first creator, and
+  a crash before publication. The winning/latest bytes remain intact and the
+  token-owned lock is released for recovery.
+- Runtime tests cover unrelated and unknown JSON fields, stale same-field
+  choices, malformed latest JSON, incomplete/reordered Markdown markers,
+  managed prose preservation, and hook installation/removal against real Git
+  checkout-local files.
+- The revision protocol also covers the managed `.git/info/exclude` block and
+  owned pre-commit hook found during the implementation pass, closing the
+  writer class rather than only the originally cited call sites.
+- The complete suite passes: 213 test files and 1,590 tests. Lint, typecheck,
+  production build, and whitespace validation also pass.
 
 ### Slice 09 verification note
 

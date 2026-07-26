@@ -332,7 +332,11 @@ The atomic-file and atomic-JSON boundary direction was reverified on
 classification shared by atomic replacement and platform-owned lock/binary
 publication live in the dependency-free `src/filesystem/file-descriptor.ts`
 boundary; `platform` and `storage` may both depend on that primitive without
-depending on one another.
+depending on one another. `src/storage/atomic-file.ts` now also owns exclusive
+first publication through a flushed staging inode and hard link. The
+revision-aware coordinator belongs to `runtime-services`, where it may combine
+that storage primitive with the platform process-lock protocol without
+introducing a forbidden `storage -> platform` dependency.
 
 The immutable SQLite generation handoff was reverified on 2026-07-25.
 `src/reindex/index.ts` coordinates publication, but durable directory flushing

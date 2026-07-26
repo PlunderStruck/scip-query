@@ -71,6 +71,20 @@ describe('setupAgent', () => {
     expect(readFileSync(join(projectRoot, 'CLAUDE.md'), 'utf-8')).toBe('# Shim\n\n@AGENTS.md\n');
   });
 
+  it('reports malformed managed markers without changing user prose', () => {
+    const path = join(projectRoot, 'AGENTS.md');
+    const malformed = '# Notes\n\n<!-- scip-query:agent-setup:begin -->\ncustom work\n';
+    writeFileSync(path, malformed);
+
+    const result = setupAgent(projectRoot);
+
+    expect(result.skipped).toContainEqual({
+      target: 'AGENTS.md',
+      reason: 'managed scip-query markers are incomplete, duplicated, or out of order',
+    });
+    expect(readFileSync(path, 'utf8')).toBe(malformed);
+  });
+
   it('installs an executable git pre-commit hook when asked', () => {
     mkdirSync(join(projectRoot, '.git', 'hooks'), { recursive: true });
 
@@ -112,6 +126,26 @@ describe('setupAgent', () => {
     expect(readFileSync(join(projectRoot, 'AGENTS.md'), 'utf-8')).toBe('# Existing notes\n');
     expect(() => readFileSync(join(projectRoot, 'CLAUDE.md'), 'utf-8')).toThrow();
     expect(() => readFileSync(join(projectRoot, '.git', 'hooks', 'pre-commit'), 'utf-8')).toThrow();
+  });
+
+  it('does not remove a block whose markers were reordered', () => {
+    const path = join(projectRoot, 'AGENTS.md');
+    const malformed = [
+      '# Notes',
+      '<!-- scip-query:agent-setup:end -->',
+      'custom work',
+      '<!-- scip-query:agent-setup:begin -->',
+      '',
+    ].join('\n');
+    writeFileSync(path, malformed);
+
+    const result = removeAgentSetup(projectRoot);
+
+    expect(result.skipped).toContainEqual({
+      target: 'AGENTS.md',
+      reason: 'managed scip-query markers are incomplete, duplicated, or out of order',
+    });
+    expect(readFileSync(path, 'utf8')).toBe(malformed);
   });
 });
 

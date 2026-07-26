@@ -2,7 +2,12 @@ import { mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { NODE_ATOMIC_FILE_RUNTIME, replaceFileAtomic, type AtomicFileRuntime } from '../../src/storage/atomic-file.js';
+import {
+  createFileAtomicExclusive,
+  NODE_ATOMIC_FILE_RUNTIME,
+  replaceFileAtomic,
+  type AtomicFileRuntime,
+} from '../../src/storage/atomic-file.js';
 import { writeJsonAtomic, writeJsonDurable } from '../../src/storage/atomic-json.js';
 
 const fixtureDirectories = new Set<string>();
@@ -176,6 +181,38 @@ describe('atomic file replacement', () => {
     expect(fileSynced).toBe(true);
     expect(result).toEqual({ durability: 'durable', directorySync: 'unsupported' });
     expect(readFileSync(target, 'utf8')).toBe('new');
+  });
+});
+
+describe('exclusive atomic file creation', () => {
+  it('publishes complete first-version bytes without replacing a competing target', () => {
+    const root = fixtureDirectory();
+    const target = join(root, 'state.json');
+
+    const result = createFileAtomicExclusive(target, 'first', { durability: 'durable' });
+
+    expect(result).toEqual({ durability: 'durable', directorySync: 'synced' });
+    expect(readFileSync(target, 'utf8')).toBe('first');
+    expect(readdirSync(root)).toEqual(['state.json']);
+    expect(() => createFileAtomicExclusive(target, 'second', { durability: 'durable' })).toThrow(/EEXIST/);
+    expect(readFileSync(target, 'utf8')).toBe('first');
+    expect(readdirSync(root)).toEqual(['state.json']);
+  });
+
+  it('leaves no public or staged file when the staged write crashes', () => {
+    const root = fixtureDirectory();
+    const target = join(root, 'state.json');
+    const runtime = runtimeWith({
+      randomToken: () => 'exclusive-crash',
+      writeFile: () => {
+        throw new Error('injected exclusive write failure');
+      },
+    });
+
+    expect(() => createFileAtomicExclusive(target, 'first', { durability: 'durable', runtime })).toThrow(
+      'injected exclusive write failure',
+    );
+    expect(readdirSync(root)).toEqual([]);
   });
 });
 

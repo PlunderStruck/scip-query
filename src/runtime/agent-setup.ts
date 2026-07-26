@@ -15,10 +15,15 @@
  * hook config: those schemas are three independent implementations, and
  * silently-drifting config is worse than asking users to wire one line.
  */
-import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { blockingFindings } from '../queries/impact/diff-gate.js';
 import type { DiffGateResult } from '../queries/impact/diff-gate.js';
+import {
+  mutateTextFileRevisionAware,
+  type RevisionedTextMutation,
+  type RevisionedTextSnapshot,
+} from './revisioned-file.js';
 
 const MD_BLOCK_BEGIN = '<!-- scip-query:agent-setup:begin -->';
 const MD_BLOCK_END = '<!-- scip-query:agent-setup:end -->';
@@ -136,33 +141,41 @@ function writeInstructionsBlock(projectRoot: string, result: SetupAgentResult): 
 
   upsertManagedBlock(projectRoot, 'AGENTS.md', block, result);
 
-  const claudeCurrent = existsSync(join(projectRoot, 'CLAUDE.md'))
-    ? readFileSync(join(projectRoot, 'CLAUDE.md'), 'utf-8')
-    : '';
-  if (claudeCurrent.includes('@AGENTS.md') && !claudeCurrent.includes(MD_BLOCK_BEGIN)) {
-    // The user already bridges AGENTS.md into Claude Code themselves.
-    result.unchanged.push('CLAUDE.md');
-    return;
-  }
   const shim = [MD_BLOCK_BEGIN, '@AGENTS.md', MD_BLOCK_END].join('\n');
-  upsertManagedBlock(projectRoot, 'CLAUDE.md', shim, result);
+  upsertManagedBlock(projectRoot, 'CLAUDE.md', shim, result, (current) => {
+    // The user already bridges AGENTS.md into Claude Code themselves.
+    return current.includes('@AGENTS.md') && !current.includes(MD_BLOCK_BEGIN);
+  });
 }
 
 /** Create the file with the block, or replace/append only our marked block. */
-function upsertManagedBlock(projectRoot: string, name: string, block: string, result: SetupAgentResult): void {
+function upsertManagedBlock(
+  projectRoot: string,
+  name: string,
+  block: string,
+  result: SetupAgentResult,
+  preserveCurrent?: (current: string) => boolean,
+): void {
   const path = join(projectRoot, name);
-  const current = existsSync(path) ? readFileSync(path, 'utf-8') : '';
-  let next: string;
-  if (current.includes(MD_BLOCK_BEGIN)) {
-    const pattern = new RegExp(`${MD_BLOCK_BEGIN}[\\s\\S]*?${MD_BLOCK_END}`);
-    next = current.replace(pattern, block);
-  } else {
-    next = current.length > 0 ? `${current.replace(/\n*$/, '\n\n')}${block}\n` : `${block}\n`;
-  }
-  if (next === current) {
+  let preserved = false;
+  const mutation = mutateManagedFile(path, name, result, (snapshot) => {
+    if (preserveCurrent?.(snapshot.text)) {
+      preserved = true;
+      return { kind: 'unchanged' };
+    }
+    const next = upsertManagedBlockText(snapshot.text, block);
+    return next === snapshot.text
+      ? { kind: 'unchanged' }
+      : {
+          kind: 'write',
+          text: next,
+          ...(!snapshot.revision.exists ? { mode: 0o644 } : {}),
+        };
+  });
+  if (!mutation) return;
+  if (!mutation.changed || preserved) {
     result.unchanged.push(name);
   } else {
-    writeFileSync(path, next);
     result.written.push(name);
   }
 }
@@ -174,26 +187,79 @@ function removeManagedBlock(
   result: RemoveAgentSetupResult,
 ): void {
   const path = join(projectRoot, name);
-  if (!existsSync(path)) {
-    result.unchanged.push(name);
+  if (opts.dryRun) {
+    if (!existsSync(path)) {
+      result.unchanged.push(name);
+      return;
+    }
+    try {
+      const current = readFileSync(path, 'utf-8');
+      if (!current.includes(MD_BLOCK_BEGIN)) result.unchanged.push(name);
+      else {
+        removeManagedBlockText(current);
+        result.removed.push(name);
+      }
+    } catch (error) {
+      result.skipped.push({
+        target: name,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+    }
     return;
   }
-  const current = readFileSync(path, 'utf-8');
-  if (!current.includes(MD_BLOCK_BEGIN)) {
-    result.unchanged.push(name);
-    return;
+  const mutation = mutateManagedFile(path, name, result, (snapshot) => {
+    if (!snapshot.revision.exists || !snapshot.text.includes(MD_BLOCK_BEGIN)) return { kind: 'unchanged' };
+    const next = removeManagedBlockText(snapshot.text);
+    return next.length === 0 ? { kind: 'delete' } : { kind: 'write', text: next };
+  });
+  if (!mutation) return;
+  if (mutation.changed) result.removed.push(name);
+  else result.unchanged.push(name);
+}
+
+function upsertManagedBlockText(current: string, block: string): string {
+  const markers = assertManagedMarkerShape(current);
+  if (markers === 'present') {
+    const pattern = new RegExp(`${MD_BLOCK_BEGIN}[\\s\\S]*?${MD_BLOCK_END}`);
+    return current.replace(pattern, block);
   }
+  return current.length > 0 ? `${current.replace(/\n*$/, '\n\n')}${block}\n` : `${block}\n`;
+}
+
+function removeManagedBlockText(current: string): string {
+  assertManagedMarkerShape(current);
   const pattern = new RegExp(`${MD_BLOCK_BEGIN}[\\s\\S]*?${MD_BLOCK_END}`);
   const next = current
     .replace(pattern, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  result.removed.push(name);
-  if (opts.dryRun) return;
-  if (next.length === 0) {
-    rmSync(path, { force: true });
-  } else {
-    writeFileSync(path, `${next}\n`);
+  return next.length === 0 ? '' : `${next}\n`;
+}
+
+function assertManagedMarkerShape(current: string): 'absent' | 'present' {
+  const begins = current.split(MD_BLOCK_BEGIN).length - 1;
+  const ends = current.split(MD_BLOCK_END).length - 1;
+  if (begins === 0 && ends === 0) return 'absent';
+  if (begins === 1 && ends === 1 && current.indexOf(MD_BLOCK_BEGIN) < current.indexOf(MD_BLOCK_END)) {
+    return 'present';
+  }
+  throw new Error('managed scip-query markers are incomplete, duplicated, or out of order');
+}
+
+function mutateManagedFile(
+  path: string,
+  label: string,
+  result: SetupAgentResult | RemoveAgentSetupResult,
+  transform: (snapshot: RevisionedTextSnapshot) => RevisionedTextMutation,
+): ReturnType<typeof mutateTextFileRevisionAware> | undefined {
+  try {
+    return mutateTextFileRevisionAware(path, transform, { maxRetries: 0 });
+  } catch (error) {
+    result.skipped.push({
+      target: label,
+      reason: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
   }
 }
 
@@ -215,41 +281,57 @@ function writeGitPreCommitHook(projectRoot: string, result: SetupAgentResult): v
     '',
   ].join('\n');
 
-  if (existsSync(path)) {
-    const current = readFileSync(path, 'utf-8');
-    if (current.includes(PRE_COMMIT_MARKER)) {
-      if (current === script) {
-        result.unchanged.push('.git/hooks/pre-commit');
-        return;
-      }
-    } else {
-      result.skipped.push({
-        target: '.git/hooks/pre-commit',
-        reason: 'a pre-commit hook already exists — add `scip-query diff-gate` to it manually',
-      });
-      return;
+  let foreign = false;
+  const mutation = mutateManagedFile(path, '.git/hooks/pre-commit', result, (snapshot) => {
+    if (snapshot.revision.exists && !snapshot.text.includes(PRE_COMMIT_MARKER)) {
+      foreign = true;
+      return { kind: 'unchanged' };
     }
+    return snapshot.text === script ? { kind: 'unchanged' } : { kind: 'write', text: script, mode: 0o755 };
+  });
+  if (!mutation) return;
+  if (foreign) {
+    result.skipped.push({
+      target: '.git/hooks/pre-commit',
+      reason: 'a pre-commit hook already exists — add `scip-query diff-gate` to it manually',
+    });
+  } else if (mutation.changed) {
+    result.written.push('.git/hooks/pre-commit');
+  } else {
+    result.unchanged.push('.git/hooks/pre-commit');
   }
-
-  writeFileSync(path, script);
-  chmodSync(path, 0o755);
-  result.written.push('.git/hooks/pre-commit');
 }
 
 function removeGitPreCommitHook(projectRoot: string, opts: { dryRun?: boolean }, result: RemoveAgentSetupResult): void {
   const path = join(projectRoot, '.git', 'hooks', 'pre-commit');
-  if (!existsSync(path)) {
-    result.unchanged.push('.git/hooks/pre-commit');
+  if (opts.dryRun) {
+    if (!existsSync(path)) result.unchanged.push('.git/hooks/pre-commit');
+    else if (!readFileSync(path, 'utf-8').includes(PRE_COMMIT_MARKER)) {
+      result.skipped.push({
+        target: '.git/hooks/pre-commit',
+        reason: 'pre-commit hook is not managed by scip-query',
+      });
+    } else result.removed.push('.git/hooks/pre-commit');
     return;
   }
-  const current = readFileSync(path, 'utf-8');
-  if (!current.includes(PRE_COMMIT_MARKER)) {
+  let foreign = false;
+  const mutation = mutateManagedFile(path, '.git/hooks/pre-commit', result, (snapshot) => {
+    if (!snapshot.revision.exists) return { kind: 'unchanged' };
+    if (!snapshot.text.includes(PRE_COMMIT_MARKER)) {
+      foreign = true;
+      return { kind: 'unchanged' };
+    }
+    return { kind: 'delete' };
+  });
+  if (!mutation) return;
+  if (foreign) {
     result.skipped.push({
       target: '.git/hooks/pre-commit',
       reason: 'pre-commit hook is not managed by scip-query',
     });
-    return;
+  } else if (mutation.changed) {
+    result.removed.push('.git/hooks/pre-commit');
+  } else {
+    result.unchanged.push('.git/hooks/pre-commit');
   }
-  result.removed.push('.git/hooks/pre-commit');
-  if (!opts.dryRun) rmSync(path, { force: true });
 }

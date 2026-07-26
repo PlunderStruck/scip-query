@@ -73,6 +73,43 @@ describe('checkout-local project hooks', () => {
     expect(result.installed).toContain('.claude/settings.local.json');
   });
 
+  it('preserves unknown provider fields while installing and removing owned hooks', () => {
+    const root = createGitRoot();
+    const path = join(root, '.claude', 'settings.local.json');
+    mkdirSync(join(root, '.claude'), { recursive: true });
+    writeFileSync(path, `${JSON.stringify({ theme: 'dark', futureProviderField: { retained: true } }, null, 2)}\n`);
+
+    installProjectAgentHooks(root, { removeLegacyUserHooks: false });
+    const installed = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+    expect(installed).toMatchObject({
+      theme: 'dark',
+      futureProviderField: { retained: true },
+    });
+
+    installProjectAgentHooks(root, { remove: true, removeLegacyUserHooks: false });
+    const removed = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+    expect(removed).toMatchObject({
+      theme: 'dark',
+      futureProviderField: { retained: true },
+      scipQueryHooks: 'declined',
+    });
+  });
+
+  it('reports malformed latest provider JSON and leaves it byte-for-byte unchanged', () => {
+    const root = createGitRoot();
+    const path = join(root, '.codex', 'hooks.json');
+    mkdirSync(join(root, '.codex'), { recursive: true });
+    writeFileSync(path, '{broken\n');
+
+    const result = installProjectAgentHooks(root, { removeLegacyUserHooks: false });
+
+    expect(result.skipped).toContainEqual({
+      target: '.codex/hooks.json',
+      reason: expect.stringContaining('latest hook config is invalid JSON'),
+    });
+    expect(readFileSync(path, 'utf8')).toBe('{broken\n');
+  });
+
   it('removes owned Codex hooks and keeps the ignored Claude opt-out', () => {
     const root = createGitRoot();
     installProjectAgentHooks(root, { removeLegacyUserHooks: false });

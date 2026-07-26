@@ -346,6 +346,15 @@ The confusable clusters, disambiguated: `scip-debug` (one failure, one minimal f
 
 Project setup writes reviewable checkout-local lifecycle hooks for Codex and Claude Code (`.codex/hooks.json` and `.claude/settings.local.json`). A checkout-local hook is an agent-tool preference whose defining trait is that it applies to one clone rather than expressing team policy. Setup adds both paths to that clone's `.git/info/exclude`, so they do not appear in commits, and refuses to rewrite either path if it is already tracked. `setup-hooks --shared` remains accepted only as a deprecated compatibility flag; it no longer writes `.claude/settings.json`. These hooks add scip-query context at session start, route prompts toward the right skill, and run an advisory Stop-hook wrapper around the diff gate only for that repository. The Stop hook sends feedback to the agent by default instead of blocking; set `SCIP_QUERY_STOP_HOOK_MODE=warn` for a warning-only hook response, or `SCIP_QUERY_STOP_HOOK_MODE=block` to enforce the gate. Set `SCIP_QUERY_SKIP_HOOK_INSTALL=1` or run `scip-query setup --no-hooks` to skip hook installation during setup, and run `scip-query setup-hooks --json` later to repair the current checkout's hooks.
 
+Setup/configuration writers are conflict-aware. They reread the latest file
+under a short token-owned lock, preserve unknown JSON fields and prose outside
+owned Markdown markers, and publish complete bytes durably. An unrelated
+intervening JSON edit is merged; a stale decision about the same project-config
+field, malformed latest JSON, malformed managed markers, or an edit that wins
+the final revision check produces an explicit conflict and leaves the latest
+file untouched. Reload the file and rerun the command after resolving that
+conflict. See [Configuration and setup write safety](docs/CONFIGURATION_WRITE_SAFETY.md).
+
 For a project, run `scip-query setup`. It enables demand-started automatic
 indexing unless the project already has an explicit `watch.enabled: false`,
 starts or reuses the project service, verifies its clean-idle deadline, and
@@ -625,6 +634,9 @@ It creates a minimal `.scipquery.json`:
   }
 }
 ```
+
+Creation is exclusive: if another process creates `.scipquery.json` first,
+`init` preserves that complete file rather than replacing it.
 
 Add optional fields such as `indexerConcurrency`, `indexer`, `entryRoots`,
 `declaredCouplings`, and `suppressions` only when the project needs them.
