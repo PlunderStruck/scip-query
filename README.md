@@ -485,9 +485,11 @@ package, x64 + ARM64) that only Windows installs fetch. Resolution order:
 `scip-query check-deps` for platform-specific install instructions. The
 [Windows sidecar release guide](docs/WINDOWS_SIDECAR_RELEASE.md) defines its
 executable provenance, fail-closed build/pack checks, and registry identity
-gate. Release operators can run `npm run verify:scip-windows-registry` to
-prove an existing sidecar tarball equals the reviewed local package, or that
-the intended version is explicitly absent, without publishing it.
+gate. Release operators can run `npm run verify:scip-windows-registry` for a
+sidecar-only read, or `npm run release:npm:dry-run` for the complete
+main-plus-sidecar preflight and registry reconciliation without publication.
+The publishing command is `npm run release:npm`; direct `npm publish` refuses
+to run because it cannot own the recoverable two-package ordering.
 
 | Language                      | Indexer          | Install                                                                                                                       |
 | ----------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |

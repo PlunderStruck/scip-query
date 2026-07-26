@@ -1454,6 +1454,186 @@ stops before publication.
 **Dependencies:** Slices 21, 25, and 26.  
 **Rollback:** publication cannot be undone; rollback means stop and follow recorded recovery rather than reverting registry state.
 
+#### Slice 27 high-assurance certificate
+
+**Goal.** Make `scip-query@0.19.6` and
+`scip-query-scip-windows@0.13.1` one identity-safe ordered release even though
+npm cannot commit two package coordinates atomically.
+
+A release coordinator is the repository process that owns every fallible
+local check and both irreversible registry transitions. What distinguishes it
+from a prepublish hook is that it observes the complete package pair before
+the first mutation and retains enough exact evidence to reconcile any later
+partial state.
+
+A release-state record is a durable local JSON fact about one intended package
+pair. What distinguishes it from registry authority is that it binds the
+tested source and packed bytes but never lets a retry skip a fresh registry
+observation.
+
+A verified registry fact is one package coordinate whose `dist` metadata,
+downloaded tarball hashes, downloaded package coordinate, and complete local
+tarball hashes agree. The sidecar fact additionally requires packed provenance
+identity. A version string or successful publish exit alone is not a verified
+fact.
+
+**Premises.**
+
+- **P1.** npm publication is irreversible at a version coordinate, and no npm
+  operation atomically commits two coordinates.
+- **P2.** The sidecar must be available before the main package that pins it;
+  otherwise a newly installed main version may temporarily lack its intended
+  Windows dependency.
+- **P3.** Every build, test, pack, API check, and provenance check can fail.
+  Therefore all of them must precede the first registry mutation.
+- **P4.** Testing one working tree and packing another can publish untested
+  code. A clean Git revision and an empty tracked/untracked status must be
+  observed before preflight and remain unchanged after both packs.
+- **P5.** A working-tree `package.json` pin does not prove the packed
+  main-package pin. The packed manifest itself must name the reviewed main
+  coordinate and exact sidecar version.
+- **P6.** A local progress file can be stale, corrupt, rolled back, or copied.
+  It can detect same-version local drift and aid recovery, but registry truth
+  must be reobserved every run.
+- **P7.** The state path must be stable by coordinate pair, not content hash.
+  Otherwise changed bytes under the same immutable version create a new path
+  and evade the conflict.
+- **P8.** A civil clock can move backward. Timestamps are diagnostic metadata;
+  stage advancement must not write an `updatedAt` earlier than the retained
+  record.
+- **P9.** Publication success may precede registry visibility, and publication
+  failure may mean an identical concurrent writer won. Post-publish
+  reconciliation must be bounded and identity-based.
+- **P10.** A state write can fail before or after registry mutation. Registry
+  observation, rather than the presence of a completed-stage marker, must
+  make retry idempotent.
+- **P11.** Ambient npm lifecycle variables are process context, not a
+  publication capability. Mutation authority must be explicit in code and
+  exposed through only the complete coordinator.
+- **P12.** Cleanup can fail after a more important publication failure.
+  Resource finalization must release the lock while retaining every causally
+  prior diagnostic.
+- **P13.** A package coordinate is scoped to one npm registry. Registry
+  configuration can change independently of the Git checkout, so one
+  canonical HTTPS registry must be retained and passed explicitly to every
+  registry observation and mutation.
+
+**Authority inventory.**
+
+| Fact or transition                  | Authority                                                         | Persistence/visibility                      | Retry rule                                                                    |
+| ----------------------------------- | ----------------------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------- |
+| Tested source revision              | clean `git rev-parse HEAD` plus complete tracked/untracked status | local checkout                              | same revision and empty status required again after both packs                |
+| Registry namespace                  | canonical credential-free HTTPS npm URL                           | release state plus every registry argument  | changed registry conflicts before reads; ambient config is not reconsulted    |
+| Intended sidecar bytes              | verified local sidecar `.tgz`                                     | private temporary file plus durable digest  | repack must equal the coordinate-stable state and any existing registry bytes |
+| Intended main bytes and sidecar pin | inspected local main `.tgz`                                       | private temporary file plus durable digest  | packed manifest and exact pin required before registry read                   |
+| Local recovery history              | schema-v1 release-state decoder                                   | atomic durable `.scipquery/releases/*.json` | malformed/future/different source or bytes stop before registry work          |
+| Sidecar registry completion         | fresh exact registry verification                                 | npm registry plus local completed fact      | exact replay skips publish; absent publishes; ambiguity/difference stops      |
+| Main registry completion            | fresh exact registry verification                                 | npm registry plus local completed fact      | exact replay skips publish; absent publishes only after sidecar verification  |
+| Cross-process local ownership       | token-owned process file lock                                     | `.scipquery/releases/npm-release.lock`      | live/unverifiable owner blocks; dead attributable owner may be reclaimed      |
+| Direct-publish refusal              | root `prepublishOnly` guard                                       | npm lifecycle exit                          | supported operator path is `npm run release:npm`                              |
+
+**Reuse and boundary design.**
+
+- `scripts/scip-windows-package-identity.ts` remains the one npm pack,
+  registry metadata, tarball hash, and bounded archive authority. REL-03 adds
+  a generic complete-package comparison without weakening the sidecar
+  provenance check.
+- `scripts/scip-windows-release.ts` retains the bounded process runtime,
+  sidecar pack, registry lookup, and sidecar download verifier. Its
+  `local-only`, `verify-only`, and `publish` modes are explicit; ambient npm
+  environment cannot select one.
+- `src/platform/process-file-lock.ts` supplies token-owned/reclaim-safe release
+  exclusion, and `src/storage/atomic-file.ts` supplies atomic durable state
+  replacement. No weaker release-specific lock or writer is invented.
+- `scripts/npm-release-state.ts` owns the schema discriminator, identity,
+  coordinate-stable path, strict current reader, additive-field policy,
+  canonical fact set, and monotonic timestamp rule.
+- `scripts/npm-release.ts` owns orchestration only: clean-source fences,
+  preflight, two packs, state persistence, dual initial observation,
+  sidecar-first/main-last mutation, visibility retry, and finalization.
+
+**Testability design.**
+
+| Behavior                     | Pure/injected seam                         | Acceptance evidence                                                                    |
+| ---------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------- |
+| State compatibility/identity | state creator/decoder/matcher              | round trip, additive fields, malformed/future, bad identities/stages/times, drift      |
+| Clock rollback               | injected `now`                             | advancement preserves a readable nondecreasing timestamp                               |
+| Clean-source binding         | injected Git commands                      | tracked/untracked dirt and changed post-pack revision stop before state/registry       |
+| Registry binding             | injected npm-config and command ports      | insecure URL stops early; each view/download/publish carries the retained HTTPS URL    |
+| Complete local preflight     | injected bounded runner                    | tests/lint and both packs precede state, registry reads, and publication               |
+| Packed pair identity         | bounded tar entry reader                   | wrong packed sidecar pin stops before registry work                                    |
+| Initial registry safety      | injected lookup/download                   | both identities observed before first publish; auth/ambiguity and drift cause no write |
+| Publication order            | injected publish/visibility ports          | sidecar publish+verify+state precedes main publish                                     |
+| Crash/retry                  | state and registry barriers                | crash after each of five boundaries produces one publication per package               |
+| State-write loss             | write-before/write-after failure injection | no first mutation without state; post-publish loss reconciles registry truth           |
+| Concurrent winner            | publish error plus changed registry        | exact winner continues; different winner stops                                         |
+| Reconciliation diagnostics   | publish error plus failing registry read   | both causally linked failures survive in one aggregate                                 |
+| Visibility delay             | injected wait/registry sequence            | finite 0/500/1000/2000 ms attempts then explicit recovery error                        |
+| Lock/finalization            | injected lock, temp, and cleanup ports     | contention blocks; ownership loss fails; primary and cleanup failures both survive     |
+| Direct publish guard         | package-script contract test               | root lifecycle refuses and points to the coordinator                                   |
+
+**Attack record.**
+
+- **A1 — Main build fails after sidecar publication.** **HOLE repaired:** the
+  full local gate and both packs finish before either registry read or
+  mutation.
+- **A2 — Tests ran on revision A, packs came from revision B.** **HOLE
+  repaired:** complete tracked/untracked cleanliness and exact `HEAD` are
+  checked on both sides of preflight and packing.
+- **A3 — Main working-tree pin is correct but the tarball pin is stale.**
+  **HOLE repaired:** both packed manifests are extracted and compared before
+  the state record.
+- **A4 — Changed same-version bytes choose a new recovery file.** **HOLE
+  repaired:** state path is coordinate-derived while its release identity is
+  source-and-content-derived, forcing a conflict.
+- **A5 — Corrupt/future recovery state is treated as no state.** **HOLE
+  repaired:** the strict decoder fails before registry observation.
+- **A6 — Clock rollback makes the next state unreadable.** **HOLE repaired:**
+  `updatedAt` retains the later recorded value.
+- **A7 — Sidecar exists, local fact write was lost, retry republishes it.**
+  **HOLE repaired:** every retry freshly downloads/verifies registry bytes
+  before the publication decision.
+- **A8 — Main already exists while sidecar is absent.** **HOLE repaired:** both
+  initial identities are independent facts; the coordinator verifies the
+  main and repairs only the absent exact sidecar.
+- **A9 — Concurrent publisher wins.** **HOLE repaired:** a failed publish is
+  accepted only after the winner's complete identity equals local.
+- **A10 — Publish succeeds but registry visibility lags.** **HOLE repaired:**
+  four bounded observations precede a non-blind retry instruction.
+- **A11 — Registry auth/timeout/corruption becomes absence.** **HOLE
+  repaired:** REL-02's typed exact-E404 rule remains the only absent branch,
+  and both initial observations precede the first publish.
+- **A12 — Old sidecar lifecycle helper remains a hidden publishing CLI.**
+  **HOLE repaired:** its default is local-only; registry modes are explicit
+  in-process capabilities; root direct publish refuses.
+- **A13 — Two coordinators race locally.** **HOLE repaired:** one robust
+  release lock spans preflight, registry decisions, state transitions, and
+  cleanup.
+- **A14 — State write fails after one package publishes.** **HOLE repaired:**
+  the next run derives completion from registry truth and repairs the record.
+- **A15 — Cleanup masks whether publication failed.** **HOLE repaired:** the
+  outcome merges the primary error with cleanup/lock errors and exits nonzero.
+- **A16 — A successful command loses lock ownership silently.** **HOLE
+  repaired:** failed ownership-checked release is itself a failed coordinator
+  outcome requiring registry reconciliation.
+- **A17 — Registry config changes between observation and publication.**
+  **HOLE repaired:** the coordinator resolves one canonical credential-free
+  HTTPS URL, stores it in the content identity, and passes it explicitly to
+  every view, download, and publish command.
+- **A18 — An untracked file enters `npm pack` but is absent from the recorded
+  Git revision.** **HOLE repaired:** both source fences request complete
+  tracked and untracked porcelain status; every non-ignored path blocks the
+  release before state or registry work.
+- **A19 — A publish fails ambiguously and the immediate registry
+  reconciliation also fails.** **HOLE repaired:** the coordinator retains
+  both causal errors in an aggregate instead of replacing the publish result
+  with the later observation failure.
+
+**Verdict.** `COMPLETE` — all 19 attacks have deterministic fences and
+adverse-path tests; real pack/publish-shape checks, live absence checks, the
+complete suite, and the release phase gate agree with the model. The
+program-wide gate remains separately recorded below.
+
 ## 7. Phase gates
 
 | Gate                                          | Slices | Required evidence                                                                                           |
@@ -1519,8 +1699,8 @@ stops before publication.
 |    23 | API-05  | complete | `9c812746` | 65 focused; 1,717 full-suite tests  | Exact compatibility accounting, overlap readers, safe migration, incomplete-history fencing, disclosure, schemas, and package verified       |
 |    24 | API-06  | complete | `57bcc65e` | 99 focused; 1,730 full-suite tests  | Strict Rust request/response decoding, session/deadline correlation, retry authority, overlap behavior, and expiry verified                  |
 |    25 | REL-01  | complete | `251dde89` | 16 focused tests                    | Versioned manifest, PE/hash inspection, pinned inputs, staging, pack, and prepublish fence verified                                          |
-|    26 | REL-02  | complete |            | 37 focused; 1,765 full-suite tests  | Recomputed pack/registry identity, bounded ambiguity, immutable drift, exact conflict, and read-only verification proven                     |
-|    27 | REL-03  | pending  |            |                                     |                                                                                                                                              |
+|    26 | REL-02  | complete | `850d0e16` | 37 focused; 1,765 full-suite tests  | Recomputed pack/registry identity, bounded ambiguity, immutable drift, exact conflict, and read-only verification proven                     |
+|    27 | REL-03  | complete |            | 77 focused; 1,805 full-suite tests  | Clean revision, pinned registry, inspected pair, durable state, ordered publish, every retry, guard, pack, and live absence proven           |
 
 ### Slice 10 verification record
 
@@ -2179,6 +2359,68 @@ stops before publication.
   with the slice that produced and repaired the findings.
 - `scip-query health --baseline` remains at 82 accumulated source findings.
   REL-02 changes no indexed production source, so it adds no health delta and
+  writes no baseline ratchet or suppression.
+
+### Slice 27 verification record
+
+- `scripts/npm-release.ts` is the sole publishing CLI. It acquires the
+  token-owned release lock, requires a clean Git revision and empty complete
+  tracked/untracked status before preflight, runs typecheck/full tests/lint,
+  verifies and packs the sidecar, packs the main package, inspects both packed
+  manifests and the exact optional dependency, then requires the same clean
+  revision and status before any state or registry work.
+- `scripts/npm-release-state.ts` writes schema-v1 local recovery state under a
+  coordinate-stable ignored path. The content identity binds the canonical
+  credential-free HTTPS registry, source revision, and both exact tarballs;
+  the strict reader accepts additive current fields but rejects malformed,
+  future, reordered, duplicate, or self-inconsistent facts. Fact advancement
+  is canonical and retains a nondecreasing timestamp across civil-clock
+  rollback.
+- One npm registry is resolved before preflight and passed explicitly to every
+  view, download, and publish. Both coordinates are observed and, when
+  present, fully downloaded and compared before the first publication. An
+  absent sidecar publishes and verifies before an absent main package. Every
+  retry reobserves registry truth; state facts do not authorize a skip.
+- The old sidecar helper no longer derives registry capability from
+  `npm_lifecycle_event` or any inherited environment variable. Its default is
+  local-only, the read-only wrapper passes explicit verification authority,
+  and root `prepublishOnly` refuses direct `npm publish`. The coordinator
+  publishes only its already verified tarballs with lifecycle scripts
+  disabled.
+- The focused release matrix passes 77/77 tests: 32 coordinator cases, 7 state
+  compatibility cases, 21 registry/package-identity cases, 13
+  provenance/build cases, and 4 package/runbook contract cases. It covers
+  tracked/untracked dirt and changing Git state, insecure or changed registry
+  identity, wrong packed pins, both initial registry ambiguities, same-version drift,
+  state-write loss before and after publication, five crash boundaries,
+  matching/different concurrent winners, dual publish/reconciliation failure,
+  visibility lag, lock contention/ownership loss, clock rollback, and cleanup
+  without masking the primary failure.
+- With an isolated cache, the complete suite passes 229 of 230 files and 1,805
+  tests, with 2 intentional skips. The only 2 failures are Claude's concurrent
+  `skills/scip-query/SKILL.md` command token and 40-command coverage
+  assertions; every Slice 27 test passes.
+- Typecheck, scoped ESLint, formatting, production build, all 72 public API
+  paths, downstream consumer compilation, and `git diff --check` pass. Full
+  lint reaches only Claude's two concurrently stale `.agents` wrapper links.
+- A real main pack produces `scip-query@0.19.6` with 366 entries, includes the
+  release-state schema and complete runbook, and embeds the exact
+  `scip-query-scip-windows@0.13.1` pin. `npm publish <verified-main.tgz>
+--dry-run --ignore-scripts` accepts the artifact shape without registry
+  mutation.
+- A real sidecar pack reruns provenance verification and retains its six-entry
+  identity: SHA-1 `4f79806b3dc2b681a882ff3fc542ab4f5e16b2ed` and SHA-512
+  `sha512-nucZotX6lwnhfutXetAHptYWb5ScSBPopU5byeShyY6P3TF3hFJbCDH7Focm3iunlBoS0cJuLch1IRBVxs1rLg==`.
+  A direct root `npm publish --dry-run` invokes the refusal guard and stops.
+- Read-only live npm queries return explicit `E404` for both
+  `scip-query@0.19.6` and `scip-query-scip-windows@0.13.1`; neither immutable
+  coordinate was consumed or mutated during verification.
+- Reindex reuses the unchanged TypeScript/Rust index. The final diff gate has
+  no REL-03 finding or advisory; its only two blockers are Claude's concurrent
+  skill-router co-change signals. No Slice 27 event or suppression was
+  generated.
+- `scip-query health --baseline` remains at the 82 accumulated source
+  findings from Slices 01–24. REL-03 changes no indexed production source and
   writes no baseline ratchet or suppression.
 
 ### Slice 09 verification note

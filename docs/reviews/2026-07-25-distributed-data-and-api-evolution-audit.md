@@ -7,6 +7,11 @@ Scope: the shared index generation, watch daemon, process locks, worktree cache,
 
 Method: this audit applies the repository's `distributed-data` failure model, `api-evolution` compatibility model, `resilience` hostile-dependency and bounded-lifecycle model, and `unit-testing` observability model. Native source reads established literal behavior. Compiler-resolved scip-query exploration established entry-to-effect and consumer relationships where identity mattered. No production state was mutated and no findings were fixed in this pass.
 
+Remediation status: all 27 findings now have implemented, tested slice
+resolutions recorded beneath their original evidence. The original outcome
+and severity counts remain unchanged as the audit snapshot; they describe the
+pre-remediation revision rather than current unresolved debt.
+
 ---
 
 ## 1. Outcome
@@ -1300,6 +1305,46 @@ Two concurrent release processes can both observe the version as absent; one pub
 **Required tests:** simulated registry with sidecar success/main failure, concurrent publisher conflict, sidecar conflict with matching bytes, conflict with different bytes, and retry.
 
 **Acceptance condition:** every partial state is detectable, safe to retry, and incapable of pairing a main version with unintended sidecar bytes.
+
+**Resolution (Slice 27):** `scripts/npm-release.ts` is now the sole
+publishing CLI and owns the complete pair. It acquires the shared release
+lock; requires one clean, unchanged Git revision and an empty complete
+tracked/untracked status; runs typecheck, the full suite, and the
+lint/build/API/consumer/skill-link gate; verifies sidecar provenance; and packs
+both artifacts before any registry read or mutation. It extracts the packed
+package manifests and proves that the packed main tarball pins the packed
+sidecar coordinate.
+
+Before the first registry observation, the coordinator resolves one canonical
+credential-free HTTPS npm registry and durably writes a schema-v1 local record
+that binds that registry, the source revision, both exact tarball sizes and
+digests, writer identity, and completed facts. Every registry view, download,
+and publish receives the retained URL explicitly. The path is stable for the
+coordinate pair, so changed registry, source, or bytes under the same
+immutable versions conflict before registry work. Stage advancement is
+canonical and clock-rollback safe. Every run freshly reconciles both registry
+coordinates; the record describes recovery history but never authorizes
+skipping registry truth.
+
+Publication is sidecar first and main last. Each publish is followed by
+bounded visibility retries and a complete metadata/download/local identity
+comparison. A failed command is accepted only when an identical concurrent
+winner becomes visible. The sidecar-verification helper no longer infers
+publication authority from npm lifecycle environment: local-only,
+registry-verification, and publish capabilities are explicit, and no
+sidecar-only publishing CLI remains. Root `prepublishOnly` refuses direct
+`npm publish`; the coordinator publishes its already verified tarballs with
+lifecycle scripts disabled.
+
+The recovery matrix covers both packages absent, either package already
+exact, both exact, sidecar success/main failure, failed durable writes before
+and after registry mutation, five crash points, matching and mismatching
+concurrent winners, corrupt/future state, changed same-version source,
+registry, or bytes, dirty or changing Git state, registry ambiguity, bounded
+post-publication visibility, tracked and untracked package inputs, lock
+contention/ownership loss, and cleanup failure without diagnostic masking.
+The local state schema, operator sequence, trust boundary, and every
+partial-state recovery are documented in `docs/WINDOWS_SIDECAR_RELEASE.md`.
 
 ---
 

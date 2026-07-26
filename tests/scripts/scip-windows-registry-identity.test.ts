@@ -217,7 +217,7 @@ describe('Windows sidecar registry release decisions', () => {
     await withTempDir(async (root) => {
       const fixture = createReleaseRuntime(root, { registry: 'absent', publish: 'succeed' });
 
-      runWindowsSidecarRelease(fixture.runtime);
+      runWindowsSidecarRelease(fixture.runtime, { registryMode: 'publish' });
 
       expect(fixture.commandNames()).toEqual(['pack-local', 'view', 'publish']);
       const publish = fixture.calls.find((call) => call.name === 'publish');
@@ -231,7 +231,7 @@ describe('Windows sidecar registry release decisions', () => {
     await withTempDir(async (root) => {
       const fixture = createReleaseRuntime(root, { registry: 'same', publish: 'succeed' });
 
-      runWindowsSidecarRelease(fixture.runtime);
+      runWindowsSidecarRelease(fixture.runtime, { registryMode: 'publish' });
 
       expect(fixture.commandNames()).toEqual(['pack-local', 'view', 'pack-registry']);
       expect(fixture.logs.join('\n')).toContain('identical registry bytes');
@@ -242,7 +242,9 @@ describe('Windows sidecar registry release decisions', () => {
     await withTempDir(async (root) => {
       const fixture = createReleaseRuntime(root, { registry: 'different', publish: 'succeed' });
 
-      expect(() => runWindowsSidecarRelease(fixture.runtime)).toThrow('sidecar content changed, so bump its version');
+      expect(() => runWindowsSidecarRelease(fixture.runtime, { registryMode: 'publish' })).toThrow(
+        'sidecar content changed, so bump its version',
+      );
       expect(fixture.commandNames()).not.toContain('publish');
     });
   });
@@ -257,7 +259,7 @@ describe('Windows sidecar registry release decisions', () => {
     await withTempDir(async (root) => {
       const fixture = createReleaseRuntime(root, { registry, publish: 'succeed' });
 
-      expect(() => runWindowsSidecarRelease(fixture.runtime)).toThrow(expected);
+      expect(() => runWindowsSidecarRelease(fixture.runtime, { registryMode: 'publish' })).toThrow(expected);
       expect(fixture.commandNames()).not.toContain('publish');
     });
   });
@@ -269,7 +271,7 @@ describe('Windows sidecar registry release decisions', () => {
         publish: 'conflict-same',
       });
 
-      runWindowsSidecarRelease(fixture.runtime);
+      runWindowsSidecarRelease(fixture.runtime, { registryMode: 'publish' });
 
       expect(fixture.commandNames()).toEqual(['pack-local', 'view', 'publish', 'view', 'pack-registry']);
       expect(fixture.logs.join('\n')).toContain('raced with an identical publisher');
@@ -283,7 +285,7 @@ describe('Windows sidecar registry release decisions', () => {
         publish: 'conflict-different',
       });
 
-      expect(() => runWindowsSidecarRelease(fixture.runtime)).toThrow(
+      expect(() => runWindowsSidecarRelease(fixture.runtime, { registryMode: 'publish' })).toThrow(
         'concurrently published version has different content',
       );
     });
@@ -324,7 +326,7 @@ describe('Windows sidecar registry release decisions', () => {
       const fixture = createReleaseRuntime(root, { registry: 'absent', publish: 'succeed' });
       fixture.runtime.env.SCIP_WINDOWS_RELEASE_VERIFY_ONLY = 'true';
 
-      runWindowsSidecarRelease(fixture.runtime);
+      runWindowsSidecarRelease(fixture.runtime, { registryMode: 'publish' });
 
       expect(fixture.commandNames()).toEqual(['pack-local', 'view', 'publish']);
     });

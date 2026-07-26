@@ -63,13 +63,14 @@ export interface WindowsSidecarReleaseRuntime {
 }
 
 export interface WindowsSidecarReleaseOptions {
-  registryMode?: 'publish' | 'verify-only';
+  registryMode?: 'local-only' | 'publish' | 'verify-only';
 }
 
 export function runWindowsSidecarRelease(
   runtime: WindowsSidecarReleaseRuntime,
   options: WindowsSidecarReleaseOptions = {},
 ): void {
+  const registryMode = options.registryMode ?? 'local-only';
   const root = runtime.cwd();
   const sidecarDir = join(root, 'packages', 'scip-windows');
   const main = parsePackage(runtime.readFile(join(root, 'package.json')), 'main package');
@@ -105,15 +106,10 @@ export function runWindowsSidecarRelease(
       `Packed ${local.pack.name}@${local.pack.version}: ${local.pack.integrity}, ${local.pack.entryCount} entries.`,
     );
 
-    const underNpmPublish = runtime.env.npm_lifecycle_event === 'prepublishOnly';
-    if (!underNpmPublish) {
+    if (registryMode === 'local-only') {
       runtime.log(
-        `Checks and local pack OK. Not publishing ${sidecar.name} (direct invocation) — main-package npm publish runs the ordered sidecar workflow.`,
+        `Checks and local pack OK. Not publishing ${sidecar.name}; npm run release:npm owns registry mutation.`,
       );
-      return;
-    }
-    if (runtime.env.npm_config_dry_run === 'true') {
-      runtime.log(`[dry-run] would publish ${sidecar.name}@${sidecar.version}, skipping.`);
       return;
     }
 
@@ -125,7 +121,7 @@ export function runWindowsSidecarRelease(
       );
       return;
     }
-    if (options.registryMode === 'verify-only') {
+    if (registryMode === 'verify-only') {
       runtime.log(
         `${sidecar.name}@${sidecar.version} is absent from the registry; local identity is ready for a first publish.`,
       );
@@ -181,9 +177,12 @@ export function lookupRegistryDist(
   name: string,
   version: string,
   runtime: WindowsSidecarReleaseRuntime,
+  registry?: string,
 ): RegistryDistIdentity | null {
   try {
-    const output = runtime.run('npm', ['view', `${name}@${version}`, 'dist', '--json'], {
+    const args = ['view', `${name}@${version}`, 'dist', '--json'];
+    if (registry) args.push('--registry', registry);
+    const output = runtime.run('npm', args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       timeoutMs: REGISTRY_TIMEOUT_MS,
       maxOutputBytes: COMMAND_OUTPUT_LIMIT_BYTES,
@@ -205,25 +204,24 @@ export function verifyExistingRegistryPackage(
   registryDist: RegistryDistIdentity,
   releaseDirectory: string,
   runtime: WindowsSidecarReleaseRuntime,
+  registry?: string,
 ): VerifiedSidecarPackageIdentity {
   const registryDirectory = join(releaseDirectory, 'registry');
   runtime.mkdir(registryDirectory);
-  const output = runtime.run(
-    'npm',
-    [
-      'pack',
-      `${local.pack.name}@${local.pack.version}`,
-      '--json',
-      '--ignore-scripts',
-      '--pack-destination',
-      registryDirectory,
-    ],
-    {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      timeoutMs: PACK_TIMEOUT_MS,
-      maxOutputBytes: COMMAND_OUTPUT_LIMIT_BYTES,
-    },
-  );
+  const args = [
+    'pack',
+    `${local.pack.name}@${local.pack.version}`,
+    '--json',
+    '--ignore-scripts',
+    '--pack-destination',
+    registryDirectory,
+  ];
+  if (registry) args.push('--registry', registry);
+  const output = runtime.run('npm', args, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeoutMs: PACK_TIMEOUT_MS,
+    maxOutputBytes: COMMAND_OUTPUT_LIMIT_BYTES,
+  });
   return verifyRegistryTarballIdentity({
     local,
     registryDist,

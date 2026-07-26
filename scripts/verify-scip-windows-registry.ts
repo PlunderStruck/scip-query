@@ -1,10 +1,6 @@
 import { createWindowsSidecarReleaseRuntime, runWindowsSidecarRelease } from './scip-windows-release.js';
 
 const runtime = createWindowsSidecarReleaseRuntime();
-runtime.env = {
-  ...runtime.env,
-  npm_lifecycle_event: 'prepublishOnly',
-};
 
 try {
   runWindowsSidecarRelease(runtime, { registryMode: 'verify-only' });

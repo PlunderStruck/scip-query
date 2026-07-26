@@ -64,6 +64,8 @@ list. Do not edit the generated manifest or an acceptance record by hand.
 - Preserve the compile fixture in
   `tests/fixtures/public-api-consumer/`. It represents a previously written
   downstream program and must compile against the newly built package.
-- A release is blocked by `api:check` in both lint and `prepublishOnly`; a
-  declaration change is not accepted merely because its implementation tests
-  pass.
+- The two-package release coordinator runs lint, whose gate includes
+  `api:check`, before packing either artifact or reading registry state. Direct
+  `npm publish` is refused by `prepublishOnly`; it is not an alternate API
+  compatibility path. A declaration change is not accepted merely because
+  its implementation tests pass.

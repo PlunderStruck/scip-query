@@ -107,28 +107,176 @@ tarball is identical or reports that the version is absent and ready for its
 first publish. The wrapper passes an explicit verification-only capability;
 no inherited environment variable can suppress an authorized release publish.
 
-The main package's prepublish lifecycle publishes the already verified local
-`.tgz`, not a directory that npm could repack differently. If that publish
-fails because another process won the race, the flow rereads and downloads
+The complete release coordinator publishes an already verified local `.tgz`,
+not a directory that npm could repack differently. If a publish command fails
+because another process won the race, the coordinator rereads and downloads
 the winning registry version. It may continue only when the winner has the
-same complete identity; a different winner requires a new sidecar version.
+same complete identity; a different winner requires a new package version.
+
+The historical `npm run publish:scip-windows` alias is now local verification
+only. `npm_lifecycle_event`, npm's dry-run environment, and other inherited
+environment variables cannot grant it registry mutation authority. The
+sidecar-only registry reader has an explicit verification capability, while
+the complete coordinator is the only publishing CLI.
+
+## Two-package release coordinator
+
+A two-package release is one ordered publication of an exact main-package
+tarball and the exact Windows-sidecar tarball pinned by that main package.
+Unlike a database transaction, it cannot roll back an npm publication. Its
+essential safety property is therefore not atomicity: it is that every
+partial registry state identifies the intended bytes, is observed before the
+next irreversible step, and can be reconciled by rerunning one command.
+
+The release coordinator is the repository command that owns this entire
+ordering. It differs from a lifecycle hook by packing and validating both
+artifacts before either registry mutation, recording local recovery evidence,
+and verifying registry truth after each publication:
+
+1. acquire the token-owned release lock;
+2. require a clean Git checkout and record the exact `HEAD` object ID;
+3. resolve one canonical credential-free HTTPS npm registry and retain it for
+   the complete run;
+4. run typecheck, the complete test suite, and lint; lint includes formatting,
+   production build, API compatibility, downstream compilation, and skill
+   link checks;
+5. verify provenance and pack the sidecar;
+6. pack the main package with lifecycle scripts disabled;
+7. extract both packed `package.json` files, require their coordinates, and
+   require the packed main tarball to pin the exact packed sidecar version;
+8. require Git `HEAD` and complete tracked/untracked working-tree cleanliness
+   to be unchanged;
+9. durably record the registry and both local tarball identities before
+   reading the registry;
+10. observe and fully verify both registry coordinates, always passing the
+    retained registry URL explicitly, before the first
+    publish;
+11. publish and verify the sidecar if absent, then durably record that fact;
+12. publish and verify the main package if absent, then durably record that
+    fact; and
+13. remove private packs and release the owned lock.
+
+Every Git, npm pack, registry, publish, test, and lint process has a finite
+deadline and captured-output limit. A cleanup or lock-release failure produces
+a nonzero outcome without erasing an earlier build, registry, or publication
+failure from the diagnostic.
+
+### Operator runbook
+
+Prepare and commit the complete release change first. The checkout must be
+clean because the recorded source revision is the wider evidence from which
+the two packed artifacts were tested and produced.
+
+1. Bump the main package version. If sidecar bytes or provenance changed, also
+   bump the immutable sidecar version and update its exact optional-dependency
+   pin.
+2. Rebuild and review sidecar provenance when required, following the rebuild
+   procedure above.
+3. Review and commit the version, lockfile, changelog, provenance, schemas,
+   release code, and tests.
+4. Run:
+
+   ```bash
+   npm run release:npm:dry-run
+   ```
+
+   This runs the complete local preflight, packs both artifacts, writes the
+   local recovery record, and reads/downloads any existing registry versions.
+   It never invokes `npm publish`.
+
+5. Review the reported coordinates, integrities, registry states, and the JSON
+   record under `.scipquery/releases/`.
+6. Run:
+
+   ```bash
+   npm run release:npm
+   ```
+
+7. Require the final output to say that both exact registry identities are
+   verified. A later retry of the same command is safe: it repeats local
+   preflight and registry verification, but it does not republish an already
+   identical coordinate.
+
+Do not run `npm publish` directly. The root `prepublishOnly` guard refuses that
+path because npm's lifecycle owns only one package publication and cannot
+record or recover the pair. An operator can deliberately bypass lifecycle
+scripts with npm's `--ignore-scripts` option; that is an administrative
+capability outside the repository's enforcement boundary, not an alternate
+supported release path. The coordinator itself uses `--ignore-scripts` only
+when publishing the two tarballs it has already packed, hashed, inspected,
+and recorded.
+
+### Durable local release state
+
+A local release-state record is a schema-versioned JSON recovery fact stored
+outside both npm tarballs under `.scipquery/releases/`. It is distinguished
+from registry authority by recording what this checkout intended and what an
+earlier run verified, while never permitting a later run to skip fresh
+registry observation.
+
+Schema version 1 records:
+
+- a content-derived `releaseId`;
+- the clean Git revision used for preflight and packing;
+- the canonical HTTPS npm registry on which the coordinates are interpreted;
+- each package's name, version, byte size, SHA-1, and SHA-512 integrity;
+- `createdAt` and nondecreasing `updatedAt` timestamps;
+- the writer identity; and
+- a canonical set of completed facts:
+  `local-preflight-complete`, `sidecar-registry-verified`, and
+  `main-registry-verified`.
+
+The registry facts are independent observations, not a fictional transaction
+log. For example, an old or manually created state may have the main identity
+verified while the sidecar is absent. The next coordinator run still verifies
+both coordinates and repairs only the absent intended package.
+
+The path is stable for one pair of package coordinates. Repacking different
+bytes, using a different source revision, or selecting a different registry
+under those same versions therefore collides with the existing record and
+stops before registry work. The record is atomically replaced with directory
+durability while the release lock is owned. It is intentionally ignored by Git
+and omitted from the npm package: it is local recovery state, not portable
+release authority. The normative shape is
+`docs/schemas/npm-release-state.schema.json`.
+
+Current-schema additive fields are tolerated. Malformed JSON, a wrong
+discriminator, an invalid identity, a noncanonical stage list, or a future
+schema fails closed. Do not hand-edit a damaged record. Preserve it for
+diagnosis, move it out of the coordinate-stable path, and rerun from the exact
+recorded source revision; the new run will recompute local bytes and reverify
+both registry coordinates before acquiring publication authority.
 
 ## Failure and recovery
 
-| Failure                                                       | Result                                                                |
-| ------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Missing executable or manifest                                | Build, pack, and prepublish stop before registry work                 |
-| Existing executable with stale size or SHA-256                | Stop; rebuild and review rather than trusting presence                |
-| x64 filename containing ARM64 bytes, or the reverse           | Stop with the observed PE machine mismatch                            |
-| Changed package version, source, tag, toolchain, or flags     | Stop until the manifest and exact bytes are intentionally regenerated |
-| One target build fails after the other succeeds               | No sidecar artifact is promoted from private staging                  |
-| Promotion is interrupted                                      | A later verification rejects the mixed set; no release is authorized  |
-| Future or malformed manifest schema                           | Stop with an explicit compatibility error                             |
-| Registry query times out, is unauthorized, or is malformed    | Stop; ambiguity is not converted to absence                           |
-| Published tarball disagrees with its `dist` metadata          | Stop; treat the download or registry metadata as corrupt              |
-| Existing version has no provenance or different bytes         | Stop with “sidecar content changed”; bump the immutable npm version   |
-| Concurrent publisher wins with identical bytes                | Reconcile the winning registry identity and continue                  |
-| Concurrent publisher wins with different or unverifiable data | Stop; do not pair the main package with the unintended sidecar        |
+| Observed state or failure                                           | Safe outcome and recovery                                                                                                  |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Missing executable or provenance                                    | Stop before registry reads; rebuild, review, and commit the intended sidecar                                               |
+| Stale hash, wrong PE machine, or changed build input                | Stop before registry reads; do not authorize bytes from file presence                                                      |
+| One target build fails or promotion is interrupted                  | No complete new build is authorized; rebuild both and rerun verification                                                   |
+| Dirty checkout before preflight                                     | Stop before tests and registry reads; commit, remove, or intentionally ignore/restore every tracked or untracked path      |
+| Missing, insecure, credential-bearing, or malformed registry URL    | Stop before tests and registry reads; configure one canonical credential-free HTTPS npm registry                           |
+| Git revision or any tracked/untracked path changes during preflight | Stop before the state record and registry reads; remove the concurrent editor and rerun from one completely clean revision |
+| Test, lint, build, API, sidecar pack, or main pack fails            | No registry mutation has occurred; fix the local failure and rerun                                                         |
+| Initial state publication fails                                     | No registry read or mutation has occurred; repair local filesystem durability/permissions and rerun                        |
+| State contains only `local-preflight-complete`                      | Registry is freshly reconciled; absent packages publish in sidecar-then-main order                                         |
+| Sidecar is exact, main is absent                                    | Record sidecar verification if needed, then publish and verify the main package                                            |
+| Main is exact, sidecar is absent                                    | Verify the main tarball pins the intended sidecar, then publish and verify only the sidecar                                |
+| Both packages are exact, state is stale or absent                   | Record both observed facts and finish without publication                                                                  |
+| Sidecar publishes but its state write fails                         | Stop before main; retry observes the exact sidecar and continues                                                           |
+| Main publishes but its state write fails                            | Retry observes both exact registry identities and records completion                                                       |
+| Publish reports failure but an identical winner is visible          | Accept the registry fact after downloading and hashing it; continue                                                        |
+| Publish and its immediate registry reconciliation both fail         | Report both causal failures; rerun the coordinator to establish registry truth before another publication decision         |
+| Publish returns success but identity is not yet visible             | Stop after bounded visibility retries; rerun the coordinator rather than publishing blindly                                |
+| Registry query times out, is unauthorized, or is malformed          | Stop; ambiguity is not converted to absence                                                                                |
+| Published tarball disagrees with `dist` metadata                    | Stop; treat the download or registry metadata as corrupt                                                                   |
+| Existing coordinate lacks provenance or has different bytes         | Stop; npm versions are immutable, so bump the changed package version                                                      |
+| State records different source or bytes under the same versions     | Stop before registry reads; resume the recorded revision, or bump the changed package version                              |
+| Configured registry differs from the recorded release registry      | Stop before registry reads; restore the intended registry or begin new package versions for the other registry             |
+| Malformed or future local state                                     | Preserve and move the artifact for diagnosis; rerun from the recorded revision so local and registry facts are rebuilt     |
+| Release lock is held by a live owner                                | Wait; a dead attributable owner is reclaimed conservatively, while unverifiable ownership fails closed                     |
+| Cleanup and an earlier operation both fail                          | Both failures are reported; inspect registry/state first, then rerun to reconcile                                          |
+| Lock ownership changes before release                               | Command exits nonzero; do not infer failure or success from the local message—rerun and require exact registry identity    |
 
 Build outputs are produced in a private temporary directory. Only after both
 targets and the manifest exist are individual files atomically replaced in the
@@ -143,3 +291,8 @@ field used by the release decision. Missing, malformed, older, or future
 versions are not treated as legacy success. Changing a required field or its
 meaning requires a new schema version and an explicit overlap policy before a
 writer ships it.
+
+The local release-state schema is independently versioned at 1. Because it has
+not shipped before `0.19.6`, it has no legacy reader. Additive current fields
+are compatible; removing or reinterpreting a required identity, source, stage,
+or timestamp field requires a new schema and an explicit recovery policy.

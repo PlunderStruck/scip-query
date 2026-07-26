@@ -1,6 +1,6 @@
 {
   "name": "scip-query",
-  "version": "0.19.5",
+  "version": "0.19.6",
   "description": "Evidence and verification for AI coding agents: map code, reuse concepts, finish migrations, and gate diffs.",
   "type": "module",
   "main": "dist/index.js",
@@ -324,7 +324,7 @@
     "api:report": "node scripts/api-surface-contract.mjs report",
     "api:check": "npm run build && node scripts/api-surface-contract.mjs check && tsc -p tests/fixtures/public-api-consumer/tsconfig.json",
     "api:update": "npm run build && node scripts/api-surface-contract.mjs update",
-    "lint": "npm run format:check && eslint src tests tsup.config.ts scripts/api-surface-contract.mjs scripts/build-scip-windows.mjs scripts/publish-scip-windows.ts scripts/scip-windows-package-identity.ts scripts/scip-windows-provenance.mjs scripts/scip-windows-release.ts scripts/verify-scip-windows.mjs scripts/verify-scip-windows-registry.ts && npm run api:check && node scripts/check-skill-links.mjs",
+    "lint": "npm run format:check && eslint src tests tsup.config.ts scripts/api-surface-contract.mjs scripts/build-scip-windows.mjs scripts/npm-release-state.ts scripts/npm-release.ts scripts/publish-scip-windows.ts scripts/release-npm-guard.ts scripts/release-npm.ts scripts/scip-windows-package-identity.ts scripts/scip-windows-provenance.mjs scripts/scip-windows-release.ts scripts/verify-scip-windows.mjs scripts/verify-scip-windows-registry.ts && npm run api:check && node scripts/check-skill-links.mjs",
     "build:scip-windows": "node scripts/build-scip-windows.mjs",
     "verify:scip-windows": "node scripts/verify-scip-windows.mjs",
     "verify:scip-windows-registry": "vite-node scripts/verify-scip-windows-registry.ts",
@@ -332,9 +332,11 @@
     "bench:native-symbol-leaf": "node scripts/bench-native-symbol-leaf.mjs",
     "calibrate": "node scripts/accuracy-calibration.mjs",
     "docs:commands": "vite-node scripts/render-command-reference.ts --write",
-    "prepublishOnly": "npm run api:check && vite-node scripts/publish-scip-windows.ts",
+    "prepublishOnly": "vite-node scripts/release-npm-guard.ts",
     "postinstall": "node dist/postinstall.js || true",
-    "publish:scip-windows": "vite-node scripts/publish-scip-windows.ts"
+    "publish:scip-windows": "vite-node scripts/publish-scip-windows.ts",
+    "release:npm": "vite-node scripts/release-npm.ts",
+    "release:npm:dry-run": "vite-node scripts/release-npm.ts --dry-run"
   },
   "keywords": [
     "scip",

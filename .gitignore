@@ -17,3 +17,4 @@ crates/*/target/
 vendor/
 packages/scip-windows/*.exe
 packages/scip-windows/LICENSE.scip
+/.scipquery/releases/

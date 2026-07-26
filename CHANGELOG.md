@@ -4,6 +4,53 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+## [0.19.6]
+
+### State and process resilience
+
+- Index publication now binds SQLite, SCIP, metadata, cursors, semantic
+  sessions, and retained generations to one immutable generation identity.
+  Shared-cache hydration and lease updates preserve current ownership across
+  concurrent writers and crash recovery.
+- Watch/reindex locks, refresh requests, TypeScript and Rust mailboxes,
+  evidence counters, suppressions, and outcome records now use explicit
+  operation identities, bounded queues, durable publication, conservative
+  owner reclamation, retry-safe transitions, and versioned compatibility
+  readers.
+- Child processes, workers, verified downloads, and Rust LSP framing have
+  finite time, byte, output, and shutdown budgets with typed timeout,
+  overflow, cancellation, and recovery outcomes.
+
+### Public and durable contracts
+
+- CLI JSON, project configuration, reindex metadata, committed suppression and
+  outcome files, and Rust durable-session messages have explicit current,
+  legacy, malformed, and future-version policies. Incomplete history and
+  partial metadata disclose their reduced capabilities instead of silently
+  acting current.
+- The published TypeScript declaration surface is checked across all 72
+  export paths and 871 declarations, including transitive declaration chunks
+  and a downstream consumer compile fixture.
+
+### Windows sidecar and npm release
+
+- The Windows sidecar carries a versioned provenance manifest binding its
+  immutable SCIP source commit, pinned Go toolchain, build contract, PE
+  machines, sizes, and SHA-256 hashes. Build, sidecar pack, and release all
+  reject stale, partial, swapped, or unverifiable binaries.
+- Existing npm versions are accepted only after local pack reports, registry
+  metadata, downloaded tarball hashes, package coordinates, and provenance
+  bytes agree. Only an explicit npm `E404` authorizes first publication;
+  ambiguity and concurrent different-content winners fail closed.
+- `npm run release:npm` owns the complete two-package workflow: test/build/API
+  preflight and both packs from one clean, unchanged Git revision precede
+  registry mutation, the sidecar publishes and verifies first, the main
+  package publishes and verifies last, and a durable schema-versioned local
+  state record binds the canonical HTTPS registry, source revision, and exact
+  artifacts so every partial state is observable and safely retryable. Direct
+  `npm publish` is guarded because it cannot provide that cross-package
+  recovery contract.
+
 ## [0.19.5]
 
 ### Agent evidence and workflows
@@ -201,7 +248,7 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ### Fixes (accuracy / false-positive)
 
-- **Three false-dead archetypes fixed.** Symbols consumed only via `import type` across a `tsconfig` path alias are no longer reported dead. pnpm-workspace cross-package consumers are now resolved via a new workspace-package resolver (this also fixed a real bug — `fanInBySymbolId.get(id) === 0` treated an *absent* symbol the same as a zero-reference one, suppressing semantic enrichment broadly, not just for the workspace case). Vue `<script setup>` composable consumers were verified already correct and gained a regression fixture. Where the remaining gap couldn't be closed this release (an ambiguous leaf name across an unresolved barrel re-export hop), the finding is now labeled `unconfirmed` instead of asserted `dead`.
+- **Three false-dead archetypes fixed.** Symbols consumed only via `import type` across a `tsconfig` path alias are no longer reported dead. pnpm-workspace cross-package consumers are now resolved via a new workspace-package resolver (this also fixed a real bug — `fanInBySymbolId.get(id) === 0` treated an _absent_ symbol the same as a zero-reference one, suppressing semantic enrichment broadly, not just for the workspace case). Vue `<script setup>` composable consumers were verified already correct and gained a regression fixture. Where the remaining gap couldn't be closed this release (an ambiguous leaf name across an unresolved barrel re-export hop), the finding is now labeled `unconfirmed` instead of asserted `dead`.
 - **`diff-gate` fails closed.** A git-diff-unavailable condition (diff too large for the exec buffer, a bad `--base`, or a git error) now exits nonzero having run zero checks, instead of silently passing.
 - **`doc-drift` epoch-0 timestamp bug fixed.** A doc whose only commit touched it as part of a >50-file bulk sweep now falls back to file mtime instead of being reported as "last changed at the Unix epoch."
 - **SANY XML export was silently dead code.** `-o <path>` on the SANY invocation meant "offline mode," not "output path" — the real-parser XML export path never actually ran. Fixed the invocation and rewrote the XML grammar parser against real `tla2tools` v1.8.0 output.

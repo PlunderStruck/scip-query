@@ -9,18 +9,22 @@ export function writeNpmPackFixture({
   version = '0.13.1',
   provenanceBytes,
   payload = 'same-package-content',
+  packageJson,
 }: {
   directory: string;
   name?: string;
   version?: string;
-  provenanceBytes: Buffer;
+  provenanceBytes?: Buffer;
   payload?: string;
+  packageJson?: Record<string, unknown>;
 }): { output: string; tarball: Buffer; tarballPath: string } {
   mkdirSync(directory, { recursive: true });
-  const tarball = createTarGzip([
-    { path: 'package/provenance.json', bytes: provenanceBytes },
+  const entries = [
+    ...(packageJson ? [{ path: 'package/package.json', bytes: Buffer.from(`${JSON.stringify(packageJson)}\n`) }] : []),
+    ...(provenanceBytes ? [{ path: 'package/provenance.json', bytes: provenanceBytes }] : []),
     { path: 'package/payload.txt', bytes: Buffer.from(payload) },
-  ]);
+  ];
+  const tarball = createTarGzip(entries);
   const filename = `${name}-${version}.tgz`;
   const tarballPath = join(directory, filename);
   writeFileSync(tarballPath, tarball);
@@ -32,10 +36,10 @@ export function writeNpmPackFixture({
         version,
         filename,
         size: identity.size,
-        unpackedSize: provenanceBytes.length + Buffer.byteLength(payload),
+        unpackedSize: entries.reduce((total, entry) => total + entry.bytes.length, 0),
         shasum: identity.shasum,
         integrity: identity.integrity,
-        entryCount: 2,
+        entryCount: entries.length,
       },
     ]),
     tarball,

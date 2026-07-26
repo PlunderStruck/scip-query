@@ -13,7 +13,7 @@ The current envelope is schema version 1:
 {
   "kind": "scip-query-result",
   "schemaVersion": 1,
-  "producer": { "name": "scip-query", "version": "0.19.5" },
+  "producer": { "name": "scip-query", "version": "0.19.6" },
   "command": "refs",
   "resultSchemaVersion": 1,
   "evidence": "graph-fact",

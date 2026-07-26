@@ -159,11 +159,18 @@ export function verifyRegistryTarballIdentity({
   registryPackDirectory: string;
   readFile?: typeof readFileSync;
 }): VerifiedSidecarPackageIdentity {
-  const downloaded = decodeNpmPackTarball(registryPackOutput, registryPackDirectory, readFile);
-  requireEqual(downloaded.pack.name, local.pack.name, 'registry package name');
-  requireEqual(downloaded.pack.version, local.pack.version, 'registry package version');
-  requireEqual(downloaded.pack.shasum, registryDist.shasum, 'downloaded registry shasum');
-  requireEqual(downloaded.pack.integrity, registryDist.integrity, 'downloaded registry integrity');
+  const downloaded = verifyRegistryNpmPackIdentity({
+    local: {
+      pack: local.pack,
+      bytes: readFile(local.pack.tarballPath),
+    },
+    registryDist,
+    registryPackOutput,
+    registryPackDirectory,
+    readFile,
+    contentLabel: 'sidecar',
+    compareLocal: false,
+  });
 
   let packedProvenance: Pick<VerifiedSidecarPackageIdentity, 'provenance' | 'provenanceBytes'>;
   try {
@@ -191,6 +198,40 @@ export function verifyRegistryTarballIdentity({
     );
   }
   return registry;
+}
+
+export function verifyRegistryNpmPackIdentity({
+  local,
+  registryDist,
+  registryPackOutput,
+  registryPackDirectory,
+  readFile = readFileSync,
+  contentLabel = 'package',
+  compareLocal = true,
+}: {
+  local: DecodedNpmPackTarball;
+  registryDist: RegistryDistIdentity;
+  registryPackOutput: string;
+  registryPackDirectory: string;
+  readFile?: typeof readFileSync;
+  contentLabel?: string;
+  compareLocal?: boolean;
+}): DecodedNpmPackTarball {
+  const downloaded = decodeNpmPackTarball(registryPackOutput, registryPackDirectory, readFile);
+  requireEqual(downloaded.pack.name, local.pack.name, 'registry package name');
+  requireEqual(downloaded.pack.version, local.pack.version, 'registry package version');
+  requireEqual(downloaded.pack.shasum, registryDist.shasum, 'downloaded registry shasum');
+  requireEqual(downloaded.pack.integrity, registryDist.integrity, 'downloaded registry integrity');
+  if (
+    compareLocal &&
+    (local.pack.shasum !== downloaded.pack.shasum || local.pack.integrity !== downloaded.pack.integrity)
+  ) {
+    throw new Error(
+      `${local.pack.name}@${local.pack.version} exists with different content; ` +
+        `the ${contentLabel} content changed, so bump its version before publishing.`,
+    );
+  }
+  return downloaded;
 }
 
 export function hashTarball(bytes: Buffer): { size: number; shasum: string; integrity: string } {

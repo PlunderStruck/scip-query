@@ -14,13 +14,15 @@ describe('Windows SCIP sidecar documentation', () => {
     }
   });
 
-  it('gates the main publish lifecycle before invoking the sidecar release check', () => {
+  it('gates direct npm publish and exposes the complete release coordinator', () => {
     const packageJson = JSON.parse(readFileSync('package.json', 'utf8')) as {
       scripts?: Record<string, string>;
     };
     const prepublishOnly = packageJson.scripts?.['prepublishOnly'];
 
-    expect(prepublishOnly).toBe('npm run api:check && vite-node scripts/publish-scip-windows.ts');
+    expect(prepublishOnly).toBe('vite-node scripts/release-npm-guard.ts');
+    expect(packageJson.scripts?.['release:npm']).toBe('vite-node scripts/release-npm.ts');
+    expect(packageJson.scripts?.['release:npm:dry-run']).toBe('vite-node scripts/release-npm.ts --dry-run');
     expect(packageJson.scripts?.['verify:scip-windows']).toBe('node scripts/verify-scip-windows.mjs');
     expect(packageJson.scripts?.['verify:scip-windows-registry']).toBe(
       'vite-node scripts/verify-scip-windows-registry.ts',
@@ -35,5 +37,26 @@ describe('Windows SCIP sidecar documentation', () => {
 
     expect(sidecar.files).toContain('provenance.json');
     expect(sidecar.scripts?.['prepack']).toBe('node ../../scripts/verify-scip-windows.mjs');
+  });
+
+  it('keeps durable release state local and documents the direct-publish refusal', () => {
+    const packageJson = JSON.parse(readFileSync('package.json', 'utf8')) as {
+      version?: string;
+      optionalDependencies?: Record<string, string>;
+    };
+    const ignored = readFileSync('.gitignore', 'utf8');
+    const guard = readFileSync('scripts/release-npm-guard.ts', 'utf8');
+    const releaseGuide = readFileSync('docs/WINDOWS_SIDECAR_RELEASE.md', 'utf8');
+
+    expect(packageJson.version).toBe('0.19.6');
+    expect(packageJson.optionalDependencies?.['scip-query-scip-windows']).toBe('0.13.1');
+    expect(ignored).toContain('/.scipquery/releases/');
+    expect(guard).toContain('Direct npm publish is disabled');
+    expect(guard).toContain('npm run release:npm');
+    expect(releaseGuide).toContain('npm run release:npm:dry-run');
+    expect(releaseGuide).toContain('Sidecar publishes but its state write fails');
+    expect(releaseGuide).toContain('Main is exact, sidecar is absent');
+    expect(releaseGuide).toMatch(/administrative\s+capability outside the repository's enforcement boundary/);
+    expect(releaseGuide).toContain('docs/schemas/npm-release-state.schema.json');
   });
 });

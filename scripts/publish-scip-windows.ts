@@ -1,9 +1,8 @@
 /**
- * Main-package prepublish hook for the ordered Windows sidecar workflow.
+ * Legacy local-package verification entry point.
  *
- * This entry point verifies the optional-dependency pin and complete local
- * binary provenance before making any registry decision. Registry identity
- * is proven here; REL-03 adds the cross-package preflight and recovery record.
+ * Despite the historical filename and package-script alias, this entry point
+ * has no registry capability. npm-release.ts is the only publishing CLI.
  */
 import { createWindowsSidecarReleaseRuntime, runWindowsSidecarRelease } from './scip-windows-release.js';
 
