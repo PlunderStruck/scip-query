@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { WatcherStatus } from '../../src/domain/types.js';
 import type { GitWorktreeContext } from '../../src/platform/git-worktree.js';
+import type { ProcessIdentity } from '../../src/platform/process-identity.js';
 import {
   WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS,
   WATCH_SERVICE_PROTOCOL_VERSION,
@@ -29,6 +30,12 @@ import { startupRefreshTrigger } from '../../src/runtime/watch-server.js';
 
 const NOW = Date.parse('2026-07-09T20:00:00.000Z');
 const IDENTITY = { projectRoot: tmpdir(), worktreeKind: 'non-git', cliVersion: '0.15.0' } as const;
+const WATCH_PROCESS_IDENTITY: ProcessIdentity = {
+  version: 1,
+  pid: 123,
+  platform: 'darwin',
+  startToken: 'Sat Jul 25 12:34:56 2026',
+};
 
 describe('watch service contract', () => {
   it('trusts a watcher generation only while the matching live watcher is idle and error-free', () => {
@@ -376,6 +383,36 @@ describe('watch service contract', () => {
       expect(existsSync(paths.activityPath)).toBe(false);
     });
   });
+
+  it('never signals a reused PID whose birth identity differs from the watch record', () => {
+    withTempCache((cacheDir) => {
+      const paths = watchServicePaths(cacheDir);
+      const runtime = fakeRuntime(paths.statePath);
+      runtime.alive.add(123);
+      runtime.processIdentities.set(123, {
+        ...WATCH_PROCESS_IDENTITY,
+        startToken: 'Sat Jul 25 13:00:00 2026',
+      });
+      writeWatchServiceState(paths.statePath, liveState());
+
+      expect(() => stopWatchService(controllerOptions(cacheDir, runtime))).toThrow(/process identity.*does not match/i);
+      expect(runtime.signaled).toEqual([]);
+    });
+  });
+
+  it('never signals a live legacy watch record that has no process identity', () => {
+    withTempCache((cacheDir) => {
+      const paths = watchServicePaths(cacheDir);
+      const runtime = fakeRuntime(paths.statePath);
+      runtime.alive.add(123);
+      runtime.processIdentities.set(123, WATCH_PROCESS_IDENTITY);
+      const { processIdentity: _omitted, ...legacyState } = liveState();
+      writeFileSync(paths.statePath, `${JSON.stringify(legacyState)}\n`);
+
+      expect(() => stopWatchService(controllerOptions(cacheDir, runtime))).toThrow(/has no process identity/i);
+      expect(runtime.signaled).toEqual([]);
+    });
+  });
 });
 
 function liveState(): WatchServiceState {
@@ -383,6 +420,7 @@ function liveState(): WatchServiceState {
     version: 1,
     protocolVersion: WATCH_SERVICE_PROTOCOL_VERSION,
     pid: 123,
+    processIdentity: WATCH_PROCESS_IDENTITY,
     projectRoot: IDENTITY.projectRoot,
     cliVersion: IDENTITY.cliVersion,
     startedAt: new Date(NOW - 60_000).toISOString(),
@@ -425,6 +463,7 @@ function shouldStop(watcher: WatcherStatus, idleForMs: number, idleTimeoutMs: nu
 
 interface FakeRuntime extends WatchServiceRuntime {
   alive: Set<number>;
+  processIdentities: Map<number, ProcessIdentity>;
   signaled: number[];
   spawned: number;
   filesAtSpawn: Array<{ state: boolean; lock: boolean; activity: boolean }>;
@@ -433,15 +472,18 @@ interface FakeRuntime extends WatchServiceRuntime {
 function fakeRuntime(statePath: string): FakeRuntime {
   const paths = watchServicePaths(dirname(statePath));
   const alive = new Set<number>();
+  const processIdentities = new Map<number, ProcessIdentity>([[123, WATCH_PROCESS_IDENTITY]]);
   const signaled: number[] = [];
   let nextPid = 456;
   const runtime: FakeRuntime = {
     alive,
+    processIdentities,
     signaled,
     spawned: 0,
     filesAtSpawn: [],
     now: () => NOW,
     isProcessAlive: (pid) => alive.has(pid),
+    readProcessIdentity: (pid) => processIdentities.get(pid) ?? null,
     spawnServer: (_serverPath, projectRoot, cliVersion) => {
       runtime.spawned += 1;
       runtime.filesAtSpawn.push({
@@ -451,7 +493,13 @@ function fakeRuntime(statePath: string): FakeRuntime {
       });
       const pid = nextPid++;
       alive.add(pid);
-      writeWatchServiceState(statePath, { ...liveState(), pid, projectRoot, cliVersion });
+      const processIdentity: ProcessIdentity = {
+        ...WATCH_PROCESS_IDENTITY,
+        pid,
+        startToken: `spawn-${pid}`,
+      };
+      processIdentities.set(pid, processIdentity);
+      writeWatchServiceState(statePath, { ...liveState(), pid, processIdentity, projectRoot, cliVersion });
     },
     signalProcess: (pid) => {
       signaled.push(pid);

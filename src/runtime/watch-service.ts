@@ -4,6 +4,12 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ProjectConfig, WatchConfig, WatcherStatus } from '../domain/types.js';
 import { canonicalPath, resolveGitWorktreeIdentity, type GitWorktreeContext } from '../platform/git-worktree.js';
+import {
+  parseProcessIdentity,
+  readProcessIdentity,
+  sameProcessIdentity,
+  type ProcessIdentity,
+} from '../platform/process-identity.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
 import {
   WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS,
@@ -82,6 +88,8 @@ export interface WatchServiceActivity {
 export interface WatchProcessLockMetadata {
   version: 1;
   pid: number;
+  /** Absent only on legacy/unverifiable records, which cannot authorize a signal. */
+  processIdentity?: ProcessIdentity;
   projectRoot: string;
   startedAt: string;
 }
@@ -96,6 +104,7 @@ export interface WatchProcessLockResult {
 export interface WatchServiceRuntime {
   now(): number;
   isProcessAlive(pid: number): boolean;
+  readProcessIdentity(pid: number): ProcessIdentity | null;
   recordActivity?(activityPath: string, nowMs: number): void;
   spawnServer(
     serverPath: string,
@@ -254,7 +263,7 @@ export function ensureWatchService(opts: WatchServiceControllerOptions): WatchSe
     return { disposition: 'reused', state: action.state };
   }
   if (action.kind === 'replace') {
-    stopLiveWatchProcess(action.state.pid, opts, runtime);
+    stopLiveWatchProcess(action.state, opts, runtime);
     cleanupWatchServiceFiles(inspection.paths, action.state.pid, runtime);
   } else if (action.kind === 'start') {
     if (inspection.lockIsLive) {
@@ -315,7 +324,7 @@ export function stopWatchService(opts: WatchServiceControllerOptions): WatchServ
       : { kind: 'stale', state, reason: 'dead-process' };
   const action = planWatchServiceAction('stop', classification);
   if (action.kind === 'signal-stop') {
-    stopLiveWatchProcess(action.state.pid, opts, runtime);
+    stopLiveWatchProcess(action.state, opts, runtime);
     cleanupWatchServiceFiles(paths, action.state.pid, runtime);
     return { disposition: 'stopped', pid: action.state.pid };
   }
@@ -325,7 +334,7 @@ export function stopWatchService(opts: WatchServiceControllerOptions): WatchServ
   }
   const lock = readWatchProcessLock(paths.lockPath);
   if (action.kind === 'already-stopped' && lock && runtime.isProcessAlive(lock.pid)) {
-    stopLiveWatchProcess(lock.pid, opts, runtime);
+    stopLiveWatchProcess(lock, opts, runtime);
     cleanupWatchServiceFiles(paths, lock.pid, runtime);
     return { disposition: 'stopped', pid: lock.pid };
   }
@@ -394,7 +403,12 @@ export function readWatchServiceActivity(activityPath: string): WatchServiceActi
 export function acquireWatchProcessLock(
   lockPath: string,
   projectRoot: string,
-  opts: { pid?: number; now?: () => Date; isProcessAlive?: (pid: number) => boolean } = {},
+  opts: {
+    pid?: number;
+    now?: () => Date;
+    isProcessAlive?: (pid: number) => boolean;
+    readProcessIdentity?: (pid: number) => ProcessIdentity | null;
+  } = {},
 ): WatchProcessLockResult {
   const pid = opts.pid ?? process.pid;
   const isAlive = opts.isProcessAlive ?? isProcessAlive;
@@ -430,6 +444,7 @@ export function acquireWatchProcessLock(
   const metadata: WatchProcessLockMetadata = {
     version: 1,
     pid,
+    ...processIdentityField((opts.readProcessIdentity ?? readProcessIdentity)(pid), pid),
     projectRoot: resolve(projectRoot),
     startedAt: (opts.now ?? (() => new Date()))().toISOString(),
   };
@@ -465,7 +480,15 @@ export function readWatchProcessLock(lockPath: string): WatchProcessLockMetadata
     ) {
       return null;
     }
-    return parsed as WatchProcessLockMetadata;
+    const processIdentity = parsed.processIdentity === undefined ? null : parseProcessIdentity(parsed.processIdentity);
+    if (parsed.processIdentity !== undefined && (!processIdentity || processIdentity.pid !== parsed.pid)) return null;
+    return {
+      version: 1,
+      pid: parsed.pid,
+      ...(processIdentity ? { processIdentity } : {}),
+      projectRoot: parsed.projectRoot,
+      startedAt: parsed.startedAt,
+    };
   } catch {
     return null;
   }
@@ -565,8 +588,14 @@ function waitForWatchServiceState(
   return null;
 }
 
-function stopLiveWatchProcess(pid: number, opts: WatchServiceControllerOptions, runtime: WatchServiceRuntime): void {
+function stopLiveWatchProcess(
+  owner: { pid: number; processIdentity?: ProcessIdentity },
+  opts: WatchServiceControllerOptions,
+  runtime: WatchServiceRuntime,
+): void {
+  const { pid } = owner;
   if (!runtime.isProcessAlive(pid)) return;
+  assertSameProcessInstance(owner, runtime);
   runtime.signalProcess(pid);
   const timeoutMs = opts.stopTimeoutMs ?? WATCH_SERVICE_STOP_TIMEOUT_MS;
   const deadline = runtime.now() + timeoutMs;
@@ -608,6 +637,7 @@ function recordWatchServiceActivityBestEffort(activityPath: string, runtime: Wat
 const DEFAULT_WATCH_SERVICE_RUNTIME: WatchServiceRuntime = {
   now: Date.now,
   isProcessAlive,
+  readProcessIdentity,
   spawnServer(serverPath, projectRoot, cliVersion, watchOverrides) {
     if (!existsSync(serverPath)) {
       throw new Error(`Watch service helper was not found at ${serverPath}. Run npm run build first.`);
@@ -627,6 +657,33 @@ const DEFAULT_WATCH_SERVICE_RUNTIME: WatchServiceRuntime = {
     Atomics.wait(signal, 0, 0, durationMs);
   },
 };
+
+function processIdentityField(
+  processIdentity: ProcessIdentity | null,
+  pid: number,
+): { processIdentity: ProcessIdentity } | Record<string, never> {
+  return processIdentity?.pid === pid ? { processIdentity } : {};
+}
+
+function assertSameProcessInstance(
+  owner: { pid: number; processIdentity?: ProcessIdentity },
+  runtime: Pick<WatchServiceRuntime, 'readProcessIdentity'>,
+): void {
+  if (!owner.processIdentity) {
+    throw new Error(
+      `Refusing to signal scip-query watch pid ${owner.pid}: its ownership record has no process identity.`,
+    );
+  }
+  const actual = runtime.readProcessIdentity(owner.pid);
+  if (!actual) {
+    throw new Error(`Refusing to signal scip-query watch pid ${owner.pid}: its process identity is unavailable.`);
+  }
+  if (!sameProcessIdentity(owner.processIdentity, actual)) {
+    throw new Error(
+      `Refusing to signal scip-query watch pid ${owner.pid}: its process identity does not match the ownership record.`,
+    );
+  }
+}
 
 function assertNever(value: never): never {
   throw new Error(`Unhandled watch service value: ${JSON.stringify(value)}`);

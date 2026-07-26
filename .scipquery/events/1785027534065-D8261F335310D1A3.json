@@ -1,0 +1,8 @@
+{
+  "ts": 1785027534065,
+  "check": "doc-reference",
+  "findingId": "SQ7028DA6CFC99",
+  "event": "resolved",
+  "commit": "2683e9002b77964e2d677810a058507cdb2b2b3a",
+  "comparisonBaseCommit": "2683e9002b77964e2d677810a058507cdb2b2b3a"
+}

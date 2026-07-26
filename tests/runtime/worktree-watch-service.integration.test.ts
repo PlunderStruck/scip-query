@@ -7,6 +7,7 @@ import { isAbsolute, join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveIndexStoragePaths } from '../../src/platform/cache-layout.js';
 import { resolveGitWorktreeContext } from '../../src/platform/git-worktree.js';
+import type { ProcessIdentity } from '../../src/platform/process-identity.js';
 import {
   WATCH_SERVICE_PROTOCOL_VERSION,
   watchServicePaths,
@@ -270,28 +271,39 @@ describe('per-worktree watch service', () => {
 
 interface WorktreeRuntime extends WatchServiceRuntime {
   alive: Set<number>;
+  processIdentities: Map<number, ProcessIdentity>;
   signaled: number[];
   spawnedRoots: string[];
 }
 
 function worktreeRuntime(): WorktreeRuntime {
   const alive = new Set<number>();
+  const processIdentities = new Map<number, ProcessIdentity>();
   const signaled: number[] = [];
   let nextPid = 40_000;
   const runtime: WorktreeRuntime = {
     alive,
+    processIdentities,
     signaled,
     spawnedRoots: [],
     now: () => NOW,
     isProcessAlive: (pid) => alive.has(pid),
+    readProcessIdentity: (pid) => processIdentities.get(pid) ?? null,
     spawnServer: (_serverPath, projectRoot, cliVersion) => {
       runtime.spawnedRoots.push(projectRoot);
       const pid = nextPid++;
       alive.add(pid);
+      const processIdentity: ProcessIdentity = {
+        version: 1,
+        pid,
+        platform: 'darwin',
+        startToken: `spawn-${pid}`,
+      };
+      processIdentities.set(pid, processIdentity);
       const indexPaths = resolveIndexStoragePaths(projectRoot, {});
       const statePath = watchServicePaths(indexPaths.cacheDir).statePath;
       const worktreeId = resolveGitWorktreeContext(projectRoot)?.worktreeId;
-      writeWatchServiceState(statePath, watcherState(pid, projectRoot, cliVersion, worktreeId));
+      writeWatchServiceState(statePath, watcherState(pid, projectRoot, cliVersion, worktreeId, processIdentity));
     },
     signalProcess: (pid) => {
       signaled.push(pid);
@@ -307,11 +319,13 @@ function watcherState(
   projectRoot: string,
   cliVersion: string,
   worktreeId: string | undefined,
+  processIdentity?: ProcessIdentity,
 ): WatchServiceState {
   return {
     version: 1,
     protocolVersion: WATCH_SERVICE_PROTOCOL_VERSION,
     pid,
+    ...(processIdentity ? { processIdentity } : {}),
     projectRoot,
     ...(worktreeId ? { worktreeId } : {}),
     cliVersion,

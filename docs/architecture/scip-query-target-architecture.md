@@ -177,7 +177,9 @@ essential characteristic is that it validates the complete stored record
 without starting, stopping, or otherwise controlling the process. The schema,
 paths, reader, parser, and all nested validators therefore moved together to
 `platform/watch-service-state.ts`; runtime retains process lifecycle, activity
-and lock mutation, and the existing atomic writer.
+and lock mutation, and the existing atomic writer. The stored identity now
+includes the operating-system process start token as well as the reusable PID;
+runtime must verify both before a stop or replacement signal.
 
 The runtime module directly re-exports the former read-side names for source
 compatibility, but internal consumers now import their owner directly. The

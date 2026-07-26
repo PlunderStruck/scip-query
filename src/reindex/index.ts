@@ -23,6 +23,12 @@ import {
 } from '../domain/project-input.js';
 import { profileAsyncSpan, profileSpan } from '../instrumentation/profile.js';
 import { resolveScipBinary, tryInstallScipCli } from '../platform/scip-cli.js';
+import {
+  parseProcessIdentity,
+  readProcessIdentity,
+  sameProcessIdentity,
+  type ProcessIdentity,
+} from '../platform/process-identity.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
 import { resolveGitWorktreeContext } from '../platform/git-worktree.js';
 import { acquireProcessFileLock } from '../platform/repository-cache-lock.js';
@@ -251,8 +257,10 @@ interface TypeScriptProjectShardClassification {
 }
 
 interface ReindexLockMetadata {
-  version: 1;
+  version: 1 | 2;
   pid: number;
+  processIdentity?: ProcessIdentity;
+  processGroupLeader?: boolean;
   projectRoot: string;
   startedAt: string;
   trigger?: RefreshTrigger;
@@ -2042,7 +2050,15 @@ async function acquireReindexLock(
     const existing = readReindexLock(lockPath);
     if (existing && shouldPreemptReindexLock(opts.trigger, existing)) {
       opts.onStatus(`Manual reindex preempting watcher refresh started at ${existing.startedAt}.`);
-      const terminated = await terminateReindexLockOwner(existing.pid);
+      let terminated: boolean;
+      try {
+        terminated = await terminateReindexLockOwner(existing);
+      } catch (error) {
+        throw new Error(
+          `Could not verify the watcher's in-progress reindex owner (pid ${existing.pid}); refusing to steal an active lock: ${errorMessage(error)}`,
+          { cause: error },
+        );
+      }
       if (!terminated) {
         // The owner survived SIGTERM and SIGKILL (or PID liveness cannot be
         // confirmed dead, e.g. a stuck/uninterruptible process, a permission
@@ -2082,9 +2098,12 @@ function tryAcquireReindexLock(
     throw err;
   }
 
+  const processIdentity = readProcessIdentity(process.pid);
   const metadata: ReindexLockMetadata = {
-    version: 1,
+    version: 2,
     pid: process.pid,
+    ...(processIdentity ? { processIdentity } : {}),
+    ...(process.env['SCIP_REINDEX_PROCESS_GROUP_LEADER'] === '1' ? { processGroupLeader: true } : {}),
     projectRoot: opts.projectRoot,
     startedAt: new Date().toISOString(),
     trigger: opts.trigger,
@@ -2107,8 +2126,15 @@ function readReindexLock(lockPath: string): ReindexLockMetadata | null {
       return null;
     }
     return {
-      version: 1,
+      version: parsed.version === 2 ? 2 : 1,
       pid: parsed.pid,
+      ...(parsed.processIdentity === undefined
+        ? {}
+        : (() => {
+            const processIdentity = parseProcessIdentity(parsed.processIdentity);
+            return processIdentity?.pid === parsed.pid ? { processIdentity } : {};
+          })()),
+      ...(parsed.processGroupLeader === true ? { processGroupLeader: true } : {}),
       projectRoot: typeof parsed.projectRoot === 'string' ? parsed.projectRoot : dirname(lockPath),
       startedAt: typeof parsed.startedAt === 'string' ? parsed.startedAt : 'unknown',
       trigger: parsed.trigger,
@@ -2134,33 +2160,64 @@ function isWatcherRefreshTrigger(trigger: RefreshTrigger | undefined): boolean {
   );
 }
 
-/** Returns true only once the owner's PID is confirmed dead. */
-async function terminateReindexLockOwner(pid: number): Promise<boolean> {
-  sendSignal(pid, 'SIGTERM');
-  if (await waitForProcessExit(pid, 2_000)) return true;
-  sendSignal(pid, 'SIGKILL');
-  return waitForProcessExit(pid, 1_000);
+/** Returns true only once the recorded owner exited or its PID was reused. */
+async function terminateReindexLockOwner(owner: ReindexLockMetadata): Promise<boolean> {
+  if (!isProcessAlive(owner.pid)) return true;
+  assertReindexOwnerIdentity(owner);
+  sendSignal(owner, 'SIGTERM');
+  if (await waitForProcessExit(owner, 2_000)) return true;
+  assertReindexOwnerIdentity(owner);
+  sendSignal(owner, 'SIGKILL');
+  return waitForProcessExit(owner, 1_000);
 }
 
-function sendSignal(pid: number, signal: NodeJS.Signals): void {
-  try {
-    process.kill(-pid, signal);
-  } catch {
+function sendSignal(owner: ReindexLockMetadata, signal: NodeJS.Signals): void {
+  if (owner.processGroupLeader) {
     try {
-      process.kill(pid, signal);
+      process.kill(-owner.pid, signal);
+      return;
     } catch {
-      // The owner already exited.
+      // Fall back to the owner only after proving it still occupies the PID.
+      if (!isProcessAlive(owner.pid)) return;
+      assertReindexOwnerIdentity(owner);
     }
   }
+  try {
+    process.kill(owner.pid, signal);
+  } catch {
+    // The verified owner already exited.
+  }
 }
 
-async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boolean> {
+async function waitForProcessExit(owner: ReindexLockMetadata, timeoutMs: number): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (!isProcessAlive(pid)) return true;
+    if (reindexOwnerExited(owner)) return true;
     await delay(50);
   }
-  return !isProcessAlive(pid);
+  return reindexOwnerExited(owner);
+}
+
+function assertReindexOwnerIdentity(owner: ReindexLockMetadata): void {
+  if (!owner.processIdentity) {
+    throw new Error(`Refusing to signal reindex pid ${owner.pid}: its ownership record has no process identity.`);
+  }
+  const actual = readProcessIdentity(owner.pid);
+  if (!actual) {
+    throw new Error(`Refusing to signal reindex pid ${owner.pid}: its process identity is unavailable.`);
+  }
+  if (!sameProcessIdentity(owner.processIdentity, actual)) {
+    throw new Error(
+      `Refusing to signal reindex pid ${owner.pid}: its process identity does not match the ownership record.`,
+    );
+  }
+}
+
+function reindexOwnerExited(owner: ReindexLockMetadata): boolean {
+  if (!isProcessAlive(owner.pid)) return true;
+  if (!owner.processIdentity) return false;
+  const actual = readProcessIdentity(owner.pid);
+  return actual !== null && !sameProcessIdentity(owner.processIdentity, actual);
 }
 
 function delay(ms: number): Promise<void> {

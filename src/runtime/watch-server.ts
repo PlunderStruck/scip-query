@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { RefreshTrigger, WatcherStatus } from '../domain/types.js';
 import { resolveIndexStoragePaths } from '../platform/cache-layout.js';
+import { readProcessIdentity } from '../platform/process-identity.js';
 import {
   WATCH_SERVICE_PROTOCOL_VERSION,
   watchServicePaths,
@@ -66,7 +67,10 @@ export async function runWatchServiceServer(
   }
   const indexPaths = resolveIndexStoragePaths(projectRoot, config);
   const servicePaths = watchServicePaths(indexPaths.cacheDir);
-  const lock = acquireWatchProcessLock(servicePaths.lockPath, projectRoot);
+  const processIdentity = readProcessIdentity(process.pid);
+  const lock = acquireWatchProcessLock(servicePaths.lockPath, projectRoot, {
+    readProcessIdentity: (pid) => (pid === process.pid ? processIdentity : readProcessIdentity(pid)),
+  });
   if (!lock.acquired) return;
 
   const startedAtMs = Date.now();
@@ -103,6 +107,7 @@ export async function runWatchServiceServer(
       version: 1,
       protocolVersion: WATCH_SERVICE_PROTOCOL_VERSION,
       pid: process.pid,
+      ...(processIdentity ? { processIdentity } : {}),
       projectRoot,
       ...(serviceIdentity.worktreeId ? { worktreeId: serviceIdentity.worktreeId } : {}),
       cliVersion,

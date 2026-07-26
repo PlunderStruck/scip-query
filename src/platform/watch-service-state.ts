@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { LastRefreshMetadata, ReindexActivitySummary, WatcherStatus } from '../domain/types.js';
+import { parseProcessIdentity, type ProcessIdentity } from './process-identity.js';
 
 export const WATCH_SERVICE_PROTOCOL_VERSION = 4;
 export const WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS = 5_000;
@@ -43,6 +44,8 @@ export interface WatchServiceState {
   version: 1;
   protocolVersion: typeof WATCH_SERVICE_PROTOCOL_VERSION;
   pid: number;
+  /** Required on newly written state; absent only on legacy records that must never authorize signaling. */
+  processIdentity?: ProcessIdentity;
   projectRoot: string;
   worktreeId?: string;
   cliVersion: string;
@@ -103,6 +106,11 @@ export function parseWatchServiceState(value: unknown): WatchServiceState | null
   }
   if (state.idleDeadlineAt !== undefined && !isValidWatchServiceTimestamp(state.idleDeadlineAt)) {
     return null;
+  }
+  if (state.processIdentity !== undefined) {
+    const processIdentity = parseProcessIdentity(state.processIdentity);
+    if (!processIdentity || processIdentity.pid !== state.pid) return null;
+    state.processIdentity = processIdentity;
   }
   if (state.indexGeneration !== undefined && !/^[a-f0-9]{64}$/.test(state.indexGeneration)) {
     return null;

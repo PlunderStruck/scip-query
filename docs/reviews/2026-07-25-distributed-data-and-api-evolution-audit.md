@@ -174,6 +174,8 @@ The heartbeat proves that the old record has not advanced. It does not prove tha
 
 **Acceptance condition:** every destructive signal is preceded by a proof that the live process is the same process instance that wrote the ownership record.
 
+**Resolution:** Slice 01 adds a platform process-start identity to newly written watch state, watch locks, and reindex locks. Watch stop/replacement and reindex preemption fail closed for legacy, unavailable, or mismatched identity evidence; deterministic PID-reuse tests prove that neither the PID nor its process group is signaled.
+
 ### DD-03 — S2 — Watch refresh requests can be erased by activity recording
 
 **Evidence:** source-confirmed interleaving.

@@ -351,6 +351,7 @@ export class Watcher {
           SCIP_REINDEX_CLOJURE_CONFIG_PATH: latestClojure?.configPath ?? this.clojureConfigPath ?? '',
           SCIP_REINDEX_TRIGGER_KIND: trigger.kind,
           SCIP_REINDEX_TRIGGER_DETAIL: trigger.detail ?? '',
+          SCIP_REINDEX_PROCESS_GROUP_LEADER: '1',
         },
         stdio: 'pipe',
       });

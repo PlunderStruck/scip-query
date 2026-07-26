@@ -506,6 +506,12 @@ Historical shadow rows are compact calibration summaries. They rotate at
 project; the complete latest record remains available for status diagnostics.
 After acquiring a project's exclusive reindex lock, each reindex also removes
 staging directories abandoned by interrupted earlier reindexes.
+Watch and watcher-triggered reindex ownership records include the operating
+system process start identity as well as the PID. `watch stop`, daemon
+replacement, and manual preemption verify both values before signaling. A
+legacy record or a platform lookup failure therefore fails closed with an
+explicit recovery error instead of treating a reused PID as the old
+scip-query process.
 
 TypeScript monorepos can opt into project sharding with `indexer.typescript.projectMode: "workspace"`. In that mode, `scip-query` discovers repo-local TypeScript project roots, runs one `scip-typescript` process per project with bounded concurrency, merges the shard protobufs, and still publishes one TypeScript language index. Set `indexer.typescript.projects` to an explicit list of project directories or tsconfig paths when automatic discovery is too broad. When `projects` is set to a non-empty list, it is authoritative: only the listed projects are indexed, automatic discovery does not run, and the repo root is not re-added alongside them (even if the root tsconfig covers subdirectories) — files that are only covered by an excluded root tsconfig (e.g. shared ambient `.d.ts` files) drop out of the index, so pick the list deliberately. An empty or absent `projects` falls back to full discovery, unchanged. Workspace mode also caches each project shard: reindexing after an edit reruns only the changed projects and their dependents (workspace `package.json` dependencies and tsconfig `paths`/`references` targets count as dependencies), serves untouched projects from `language-indexes/typescript-projects/`, and reports every reuse decision in `reindex --json` shard diagnostics. Set `indexerConcurrency` when a repo needs a persistent worker cap; CLI `--indexer-concurrency` and `SCIP_QUERY_INDEXER_CONCURRENCY` still override ad hoc runs.
 Use `indexer.typescript.pnpmWorkspaces` only with the default single-project mode; workspace mode passes explicit projects instead.

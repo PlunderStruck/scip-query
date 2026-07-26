@@ -601,32 +601,32 @@ Rollback is commit-scoped. Durable-format slices additionally retain legacy read
 
 ## 10. Implementation ledger
 
-| Slice | Finding | Status  | Commit | Focused tests | Notes |
-| ----: | ------- | ------- | ------ | ------------- | ----- |
-|    01 | DD-02   | pending |        |               |       |
-|    02 | RES-01  | pending |        |               |       |
-|    03 | TEST-01 | pending |        |               |       |
-|    04 | RES-02  | pending |        |               |       |
-|    05 | RES-03  | pending |        |               |       |
-|    06 | RES-04  | pending |        |               |       |
-|    07 | RES-05  | pending |        |               |       |
-|    08 | DD-08   | pending |        |               |       |
-|    09 | DD-04   | pending |        |               |       |
-|    10 | DD-01   | pending |        |               |       |
-|    11 | DD-03   | pending |        |               |       |
-|    12 | DD-05   | pending |        |               |       |
-|    13 | DD-06   | pending |        |               |       |
-|    14 | DD-07   | pending |        |               |       |
-|    15 | DD-09   | pending |        |               |       |
-|    16 | DD-10   | pending |        |               |       |
-|    17 | DD-11   | pending |        |               |       |
-|    18 | DD-12   | pending |        |               |       |
-|    19 | API-04  | pending |        |               |       |
-|    20 | API-01  | pending |        |               |       |
-|    21 | API-02  | pending |        |               |       |
-|    22 | API-03  | pending |        |               |       |
-|    23 | API-05  | pending |        |               |       |
-|    24 | API-06  | pending |        |               |       |
-|    25 | REL-01  | pending |        |               |       |
-|    26 | REL-02  | pending |        |               |       |
-|    27 | REL-03  | pending |        |               |       |
+| Slice | Finding | Status   | Commit     | Focused tests    | Notes                                                          |
+| ----: | ------- | -------- | ---------- | ---------------- | -------------------------------------------------------------- |
+|    01 | DD-02   | complete | this slice | 60 focused tests | PID reuse, legacy records, and per-worktree lifecycle verified |
+|    02 | RES-01  | pending  |            |                  |                                                                |
+|    03 | TEST-01 | pending  |            |                  |                                                                |
+|    04 | RES-02  | pending  |            |                  |                                                                |
+|    05 | RES-03  | pending  |            |                  |                                                                |
+|    06 | RES-04  | pending  |            |                  |                                                                |
+|    07 | RES-05  | pending  |            |                  |                                                                |
+|    08 | DD-08   | pending  |            |                  |                                                                |
+|    09 | DD-04   | pending  |            |                  |                                                                |
+|    10 | DD-01   | pending  |            |                  |                                                                |
+|    11 | DD-03   | pending  |            |                  |                                                                |
+|    12 | DD-05   | pending  |            |                  |                                                                |
+|    13 | DD-06   | pending  |            |                  |                                                                |
+|    14 | DD-07   | pending  |            |                  |                                                                |
+|    15 | DD-09   | pending  |            |                  |                                                                |
+|    16 | DD-10   | pending  |            |                  |                                                                |
+|    17 | DD-11   | pending  |            |                  |                                                                |
+|    18 | DD-12   | pending  |            |                  |                                                                |
+|    19 | API-04  | pending  |            |                  |                                                                |
+|    20 | API-01  | pending  |            |                  |                                                                |
+|    21 | API-02  | pending  |            |                  |                                                                |
+|    22 | API-03  | pending  |            |                  |                                                                |
+|    23 | API-05  | pending  |            |                  |                                                                |
+|    24 | API-06  | pending  |            |                  |                                                                |
+|    25 | REL-01  | pending  |            |                  |                                                                |
+|    26 | REL-02  | pending  |            |                  |                                                                |
+|    27 | REL-03  | pending  |            |                  |                                                                |
