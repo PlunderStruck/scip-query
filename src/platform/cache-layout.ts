@@ -7,7 +7,6 @@ import {
   lstatSync,
   mkdirSync,
   openSync,
-  readFileSync,
   readdirSync,
   realpathSync,
   unlinkSync,
@@ -22,6 +21,7 @@ import {
   UnsafeProjectPathError,
 } from '../domain/path-normalization.js';
 import { cliVersion } from './cli-version.js';
+import { readSmallArtifactText } from './bounded-file.js';
 
 export const CACHE_OWNERSHIP_SCHEMA_VERSION = 1 as const;
 export const CACHE_OWNERSHIP_FILE = '.scip-query-cache-owner.json';
@@ -248,7 +248,7 @@ function readAndValidateOwnership(
   if (!stat.isFile() || stat.size > MAX_CACHE_OWNERSHIP_BYTES) {
     throw cacheOwnershipError(physicalCacheDir, 'invalid ownership record file');
   }
-  const payload = readFileSync(ownerPath, 'utf8');
+  const payload = readSmallArtifactText(ownerPath, 'cache ownership record');
   const record = parseOwnershipRecord(payload, physicalCacheDir);
   if (record.canonicalProjectRoot !== canonicalProjectRoot) {
     throw cacheOwnershipError(physicalCacheDir, 'ownership record belongs to a different project');

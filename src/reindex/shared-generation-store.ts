@@ -7,7 +7,6 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
-  readFileSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -32,6 +31,14 @@ import {
   type resolveIndexStoragePaths,
 } from '../platform/cache-layout.js';
 import { listGitWorktrees, resolveGitWorktreeContext, type GitWorktreeContext } from '../platform/git-worktree.js';
+import {
+  hashFileWithinLimit,
+  readFileWithinLimit,
+  readTextFileWithinLimit,
+  SCIP_ARTIFACT_MAX_BYTES,
+  sha256FileWithinLimit,
+  SMALL_ARTIFACT_MAX_BYTES,
+} from '../platform/bounded-file.js';
 import {
   buildProjectInputFingerprint,
   type ProjectInputFingerprint,
@@ -201,7 +208,12 @@ export function readSharedGeneration(
   const generationDir = sharedGenerationDirectory(snapshot);
   let manifest: SharedGenerationManifest;
   try {
-    manifest = parseSharedGenerationManifest(readFileSync(join(generationDir, SHARED_GENERATION_MANIFEST), 'utf8'));
+    manifest = parseSharedGenerationManifest(
+      readTextFileWithinLimit(join(generationDir, SHARED_GENERATION_MANIFEST), {
+        inputKind: 'shared-generation manifest',
+        maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+      }),
+    );
   } catch {
     return null;
   }
@@ -219,7 +231,15 @@ export function readSharedGeneration(
     for (const artifact of manifest.artifacts) {
       const path = indexArtifactPath(generationDir, artifact.path);
       const stat = statSync(path);
-      if (!stat.isFile() || stat.size !== artifact.size || sha256(readFileSync(path)) !== artifact.sha256) return null;
+      if (
+        !stat.isFile() ||
+        stat.size !== artifact.size ||
+        sha256FileWithinLimit(path, {
+          inputKind: 'shared-generation artifact',
+          maxBytes: SCIP_ARTIFACT_MAX_BYTES,
+        }) !== artifact.sha256
+      )
+        return null;
     }
   } catch {
     return null;
@@ -253,10 +273,22 @@ export function publishSharedGeneration(input: {
       const source = indexArtifactPath(input.sourceCacheDir, relativePath);
       const target = indexArtifactPath(stagingDir, relativePath);
       cloneArtifactFile(source, target);
-      const bytes = readFileSync(target);
-      records.push({ path: relativePath, size: bytes.byteLength, sha256: sha256(bytes) });
+      const size = statSync(target).size;
+      records.push({
+        path: relativePath,
+        size,
+        sha256: sha256FileWithinLimit(target, {
+          inputKind: 'staged shared-generation artifact',
+          maxBytes: SCIP_ARTIFACT_MAX_BYTES,
+        }),
+      });
     }
-    const scipProjectRoot = deserializeSCIP(readFileSync(join(stagingDir, 'index.scip'))).metadata?.projectRoot;
+    const scipProjectRoot = deserializeSCIP(
+      readFileWithinLimit(join(stagingDir, 'index.scip'), {
+        inputKind: 'staged shared SCIP index',
+        maxBytes: SCIP_ARTIFACT_MAX_BYTES,
+      }),
+    ).metadata?.projectRoot;
     if (!scipProjectRoot) throw new Error('shared SCIP generation has no project root metadata');
     const expectedSourceRoot = canonicalProjectRootUrl(input.sourceProjectRoot);
     if (scipProjectRoot !== expectedSourceRoot) {
@@ -327,8 +359,14 @@ export function hydrateSharedGeneration(input: {
       const source = indexArtifactPath(generationDir, artifact.path);
       const target = indexArtifactPath(stagingDir, artifact.path);
       cloneArtifactFile(source, target);
-      const bytes = readFileSync(target);
-      if (bytes.byteLength !== artifact.size || sha256(bytes) !== artifact.sha256) {
+      const size = statSync(target).size;
+      if (
+        size !== artifact.size ||
+        sha256FileWithinLimit(target, {
+          inputKind: 'hydrated shared-generation artifact',
+          maxBytes: SCIP_ARTIFACT_MAX_BYTES,
+        }) !== artifact.sha256
+      ) {
         throw new Error(`shared artifact is corrupt: ${artifact.path}`);
       }
     }
@@ -638,7 +676,12 @@ export function touchExistingWorktreeLease(
         return null;
       }
       const leasePath = join(repositoryCacheDir, 'worktrees', `${pointer.worktreeId}.json`);
-      const lease = JSON.parse(readFileSync(leasePath, 'utf8')) as WorktreeCacheLease;
+      const lease = JSON.parse(
+        readTextFileWithinLimit(leasePath, {
+          inputKind: 'worktree cache lease',
+          maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+        }),
+      ) as WorktreeCacheLease;
       const context = resolvedContext ?? resolveGitWorktreeContext(projectRoot);
       if (
         !context?.clean ||
@@ -781,8 +824,15 @@ function sourceGenerationSignature(cacheDir: string): string | null {
     const artifacts = describeIndexArtifactSet(cacheDir);
     const hash = createHash('sha256');
     for (const file of artifacts.files) {
-      const bytes = readFileSync(indexArtifactPath(cacheDir, file));
-      hash.update(file).update('\0').update(String(bytes.byteLength)).update('\0').update(bytes).update('\0');
+      const path = indexArtifactPath(cacheDir, file);
+      const size = statSync(path).size;
+      hash.update(file).update('\0').update(String(size)).update('\0');
+      hashFileWithinLimit(
+        path,
+        { inputKind: 'source-generation artifact', maxBytes: SCIP_ARTIFACT_MAX_BYTES },
+        (chunk) => hash.update(chunk),
+      );
+      hash.update('\0');
     }
     return hash.digest('hex');
   } catch {
@@ -792,7 +842,12 @@ function sourceGenerationSignature(cacheDir: string): string | null {
 
 function readPublishableReindexMetadata(cacheDir: string): ReindexMetadata | undefined {
   try {
-    const decoded = decodeReindexMetadata(readFileSync(join(cacheDir, 'meta.json'), 'utf8'));
+    const decoded = decodeReindexMetadata(
+      readTextFileWithinLimit(join(cacheDir, 'meta.json'), {
+        inputKind: 'reindex metadata',
+        maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+      }),
+    );
     return (decoded.kind === 'legacy' || decoded.kind === 'supported') && decoded.capabilities.publishableGeneration
       ? decoded.metadata
       : undefined;
@@ -817,7 +872,12 @@ function sharedGenerationDirectory(snapshot: SharedGenerationSnapshot): string {
 function readWorktreeCachePointer(
   localCacheDir: string,
 ): { version: 1; repositoryId: string; worktreeId: string } | null {
-  const pointer = JSON.parse(readFileSync(join(localCacheDir, WORKTREE_CACHE_POINTER), 'utf8')) as {
+  const pointer = JSON.parse(
+    readTextFileWithinLimit(join(localCacheDir, WORKTREE_CACHE_POINTER), {
+      inputKind: 'worktree cache pointer',
+      maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+    }),
+  ) as {
     version?: unknown;
     repositoryId?: unknown;
     worktreeId?: unknown;
@@ -1012,7 +1072,12 @@ function validateSourceGeneration(
       ? artifacts.files.filter((file) => file.endsWith('.scip'))
       : ['index.scip'];
     const rootsMatch = scipArtifacts.every((file) => {
-      const actualRoot = deserializeSCIP(readFileSync(indexArtifactPath(cacheDir, file))).metadata?.projectRoot;
+      const actualRoot = deserializeSCIP(
+        readFileWithinLimit(indexArtifactPath(cacheDir, file), {
+          inputKind: 'shared SCIP validation artifact',
+          maxBytes: SCIP_ARTIFACT_MAX_BYTES,
+        }),
+      ).metadata?.projectRoot;
       if (actualRoot !== expectedRoot)
         debugSharedCache(`source validation rejected SCIP root for ${file}: ${String(actualRoot)}`);
       return actualRoot === expectedRoot;

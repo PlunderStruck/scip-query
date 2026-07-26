@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../storage/db.js';
+import { encodeCursorPayload } from './cursor-codec.js';
 
 interface ResultCursorPayload {
   version: 1;
@@ -13,9 +14,7 @@ export function indexGenerationIdentity(db: ScipDatabase): string {
 }
 
 export function encodeResultCursor(payload: Omit<ResultCursorPayload, 'version'>): string {
-  return Buffer.from(JSON.stringify({ version: 1, ...payload } satisfies ResultCursorPayload), 'utf8').toString(
-    'base64url',
-  );
+  return encodeCursorPayload({ version: 1, ...payload } satisfies ResultCursorPayload);
 }
 
 export function decodeResultCursor(

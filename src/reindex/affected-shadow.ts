@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { buildProjectChangeManifest } from '../domain/project-input.js';
 import { monotonicNowMs } from '../domain/time.js';
@@ -11,6 +11,7 @@ import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import { buildFileDepGraph } from '../symbols/graph/file-dep-graph.js';
 import { classifyAffectedSetFallback, planAffectedFiles, type AffectedFilePlan } from './affected-set.js';
 import { appendRotatingJsonlRecord, ROTATING_JSONL_PREVIOUS_SUFFIX } from './rotating-jsonl.js';
+import { readSourceArtifactText } from '../platform/bounded-file.js';
 
 export const GLOBAL_FACTS_UNIT = '<global-symbols>';
 
@@ -488,7 +489,7 @@ export function affectedSetShadowPaths(outputDb: string): AffectedSetShadowPaths
 // scip-query: ignore-extract — reviewed E3 feature-local pipeline; validation and telemetry classify one shadow-status read.
 export function readAffectedSetShadowStatus(
   outputDb: string,
-  readFile: (path: string) => string = (path) => readFileSync(path, 'utf-8'),
+  readFile: (path: string) => string = (path) => readSourceArtifactText(path, 'affected-shadow source file'),
 ): AffectedSetShadowStatus {
   const paths = affectedSetShadowPaths(outputDb);
   let raw: unknown;

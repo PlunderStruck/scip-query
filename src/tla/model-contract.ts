@@ -1,8 +1,14 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { isRecord, stringArray } from '../storage/evidence-payload.js';
 import { isPathInsideProject as isInsideProject } from '../domain/path-normalization.js';
 import { parseSanyXmlFacts, type SanyActionFacts } from './sany-facts.js';
+import {
+  readTextFileWithinLimit,
+  SMALL_ARTIFACT_MAX_BYTES,
+  SOURCE_ARTIFACT_MAX_BYTES,
+} from '../platform/bounded-file.js';
+import { compileBoundedRegExp } from '../platform/bounded-regexp.js';
 
 export type TlaCheckerMode = 'auto' | 'sany' | 'tlc' | 'apalache' | 'none';
 
@@ -250,7 +256,12 @@ export function loadTlaModelContract(projectRoot: string, mapPath: string): TlaC
 
   let raw: unknown;
   try {
-    raw = JSON.parse(readFileSync(resolvedMapPath, 'utf8')) as unknown;
+    raw = JSON.parse(
+      readTextFileWithinLimit(resolvedMapPath, {
+        inputKind: 'TLA mapping',
+        maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+      }),
+    ) as unknown;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return { errors: [`map file is not valid JSON: ${message}`] };
@@ -294,7 +305,10 @@ export function resolveContractPath(projectRoot: string, mapDir: string, path: s
 export function readTlaModuleFacts(projectRoot: string, modulePath: string): TlaModuleFacts | null {
   const absolutePath = resolveProjectPath(projectRoot, modulePath);
   if (!absolutePath || !existsSync(absolutePath)) return null;
-  const text = readFileSync(absolutePath, 'utf8');
+  const text = readTextFileWithinLimit(absolutePath, {
+    inputKind: 'TLA module',
+    maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
+  });
   return {
     path: absolutePath,
     modelParse: 'regex-fallback',
@@ -312,7 +326,10 @@ export function readTlaModuleFactsFromSanyXml(
 ): TlaModuleFacts | null {
   const absolutePath = resolveProjectPath(projectRoot, modulePath);
   if (!absolutePath || !existsSync(absolutePath)) return null;
-  const text = readFileSync(absolutePath, 'utf8');
+  const text = readTextFileWithinLimit(absolutePath, {
+    inputKind: 'TLA module',
+    maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
+  });
   const facts = parseSanyXmlFacts(xml);
   return {
     path: absolutePath,
@@ -330,7 +347,12 @@ export function loadTraceSteps(projectRoot: string, tracePath: string): { steps:
   if (!existsSync(absolutePath)) return { steps: [], errors: [`trace file not found: ${tracePath}`] };
 
   try {
-    const raw = JSON.parse(readFileSync(absolutePath, 'utf8')) as unknown;
+    const raw = JSON.parse(
+      readTextFileWithinLimit(absolutePath, {
+        inputKind: 'TLA trace',
+        maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
+      }),
+    ) as unknown;
     const stepsRaw = Array.isArray(raw) ? raw : isRecord(raw) && Array.isArray(raw.steps) ? raw.steps : null;
     if (!stepsRaw) return { steps: [], errors: [`trace file must be an array or an object with a steps array`] };
     const steps: TlaTraceStep[] = [];
@@ -601,7 +623,7 @@ function parseStatementBindings(
       return;
     }
     try {
-      new RegExp(pattern);
+      compileBoundedRegExp(pattern, `variables.${variableName}.statements[${index}].pattern`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       errors.push(
@@ -828,7 +850,10 @@ export function readTlaConfigInvariants(configPath: string | null | undefined): 
   // TLC treats INVARIANT and INVARIANTS as synonyms, and invariant names may
   // appear on the keyword line or on any following lines until the next
   // config keyword (the standard block form). Strip comments, then tokenize.
-  const text = readFileSync(configPath, 'utf8')
+  const text = readTextFileWithinLimit(configPath, {
+    inputKind: 'TLA checker configuration',
+    maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+  })
     .replace(/\(\*[\s\S]*?\*\)/g, ' ')
     .replace(/\\\*[^\n]*/g, ' ');
   const names = new Set<string>();
@@ -894,7 +919,10 @@ const TLA_MODULE_HEADER = /^-{4,}\s*MODULE\s+([A-Za-z_][A-Za-z0-9_]*)\s*-{4,}/m;
  */
 export function discoverMapPathByModule(projectRoot: string, specPath: string): TlaMapAutoDiscoveryResult {
   if (!existsSync(specPath)) return { status: 'none' };
-  const moduleMatch = readFileSync(specPath, 'utf8').match(TLA_MODULE_HEADER);
+  const moduleMatch = readTextFileWithinLimit(specPath, {
+    inputKind: 'TLA module',
+    maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
+  }).match(TLA_MODULE_HEADER);
   const moduleName = moduleMatch?.[1];
   const relativeSpecPath = relative(projectRoot, specPath).split(sep).join('/');
   const specBasename = basename(specPath);
@@ -912,7 +940,12 @@ export function discoverMapPathByModule(projectRoot: string, specPath: string): 
     const candidatePath = join(dir, entry);
     let raw: unknown;
     try {
-      raw = JSON.parse(readFileSync(candidatePath, 'utf8')) as unknown;
+      raw = JSON.parse(
+        readTextFileWithinLimit(candidatePath, {
+          inputKind: 'TLA mapping candidate',
+          maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+        }),
+      ) as unknown;
     } catch {
       continue;
     }

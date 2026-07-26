@@ -1,0 +1,14 @@
+{
+  "kind": "scip-query-suppression",
+  "schemaVersion": 1,
+  "suppressionIdentity": "SQ8EE4E18F0DF6",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.19.7"
+  },
+  "id": "SQ8EE4E18F0DF6",
+  "check": "new-dead",
+  "file": "src/runtime/output-pagination.ts",
+  "reason": "False positive: OutputSnapshotWriter is instantiated by runWithCliOutputPagination; tests prove the action runs once, private 0700/0600 snapshots are reused across pages, tampering fails closed, and final-page cleanup occurs.",
+  "createdAt": "2026-07-26T20:31:01.115Z"
+}

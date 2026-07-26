@@ -1,10 +1,11 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { deserializeSCIP, SymbolRole } from '@c4312/scip';
 import type { IndexedDefinition, ScipSymbol } from '../../domain/types.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import type { SemanticReference } from '../types.js';
 import { dedupeSemanticReferences } from './reference-mapping.js';
 import { isRustTraitImplMember, leafSuffix, parseSymbol } from '../../symbols/symbol-parser.js';
+import { readFileWithinLimit, SCIP_ARTIFACT_MAX_BYTES } from '../../platform/bounded-file.js';
 
 interface ScipOccurrenceReferenceIndex {
   referencesBySymbol: Map<string, SemanticReference[]>;
@@ -89,7 +90,12 @@ function scipOccurrenceReferenceIndex(db: ScipDatabase): ScipOccurrenceReference
 function loadScipOccurrenceReferenceIndex(db: ScipDatabase): ScipOccurrenceReferenceIndex | null {
   if (!db.generation.indexPath || !existsSync(db.generation.indexPath)) return null;
   try {
-    const scipIndex = deserializeSCIP(readFileSync(db.generation.indexPath));
+    const scipIndex = deserializeSCIP(
+      readFileWithinLimit(db.generation.indexPath, {
+        inputKind: 'SCIP occurrence-reference index',
+        maxBytes: SCIP_ARTIFACT_MAX_BYTES,
+      }),
+    );
     const referencesBySymbol = new Map<string, SemanticReference[]>();
     for (const document of scipIndex.documents ?? []) {
       const relativePath = document.relativePath;

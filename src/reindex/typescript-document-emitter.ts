@@ -1,8 +1,8 @@
-import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import type * as TypeScript from 'typescript';
 import type { SemanticReferenceFragment } from '../semantic/types.js';
+import { readSmallArtifactText } from '../platform/bounded-file.js';
 
 const require = createRequire(import.meta.url);
 
@@ -187,7 +187,9 @@ function resolveTypeScriptDocumentProducer():
   | Extract<TypeScriptDocumentProducerAvailability, { available: false }> {
   try {
     const packageJsonPath = require.resolve('@sourcegraph/scip-typescript/package.json');
-    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as { version?: unknown };
+    const packageJson = JSON.parse(readSmallArtifactText(packageJsonPath, 'scip-typescript package manifest')) as {
+      version?: unknown;
+    };
     if (packageJson.version !== SUPPORTED_SCIP_TYPESCRIPT_VERSION) {
       return {
         available: false,
@@ -196,7 +198,9 @@ function resolveTypeScriptDocumentProducer():
     }
     const packageRoot = dirname(packageJsonPath);
     const typescriptPackagePath = require.resolve('typescript/package.json', { paths: [packageRoot] });
-    const typescriptPackage = JSON.parse(readFileSync(typescriptPackagePath, 'utf8')) as { version?: unknown };
+    const typescriptPackage = JSON.parse(
+      readSmallArtifactText(typescriptPackagePath, 'TypeScript package manifest'),
+    ) as { version?: unknown };
     if (typeof typescriptPackage.version !== 'string' || !typescriptPackage.version) {
       return { available: false, reason: 'scip-typescript TypeScript compiler version is unavailable' };
     }

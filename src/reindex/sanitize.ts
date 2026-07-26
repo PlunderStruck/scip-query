@@ -1,8 +1,9 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { create } from '@bufbuild/protobuf';
 import { deserializeSCIP, DocumentSchema, IndexSchema, serializeSCIP, SymbolRole } from '@c4312/scip';
 import type { Document, Index } from '@c4312/scip';
 import { normalizeSafeProjectRelativePath } from '../domain/path-normalization.js';
+import { readFileWithinLimit, SCIP_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
 
 export interface SanitizeScipResult {
   removedDefinitionOccurrences: number;
@@ -12,7 +13,9 @@ export interface SanitizeScipResult {
 export function sanitizeScipFile(path: string): SanitizeScipResult {
   let index: Index;
   try {
-    index = deserializeSCIP(readFileSync(path));
+    index = deserializeSCIP(
+      readFileWithinLimit(path, { inputKind: 'SCIP sanitization input', maxBytes: SCIP_ARTIFACT_MAX_BYTES }),
+    );
   } catch {
     return {
       removedDefinitionOccurrences: 0,

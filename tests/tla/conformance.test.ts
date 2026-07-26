@@ -1177,7 +1177,8 @@ Read == UNCHANGED ledger
     };
 
     try {
-      const result = verifyTlaConformance(db, contract, readTlaModuleFacts(root, 'Ledger.tla'));
+      const facts = readTlaModuleFacts(root, 'Ledger.tla');
+      const result = verifyTlaConformance(db, contract, facts);
 
       expect(result.staticWrites).toEqual(
         expect.arrayContaining([
@@ -1198,6 +1199,21 @@ Read == UNCHANGED ledger
         ]),
       );
       expect(result.findings.filter((finding) => finding.severity === 'error')).toEqual([]);
+      expect(() =>
+        verifyTlaConformance(
+          db,
+          {
+            ...contract,
+            variables: {
+              ledger: {
+                ...contract.variables.ledger!,
+                statements: [{ pattern: 'a'.repeat(4_097) }],
+              },
+            },
+          },
+          facts,
+        ),
+      ).toThrow(/safety limit is 4096 characters/u);
     } finally {
       db.close();
     }

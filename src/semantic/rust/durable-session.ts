@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { existsSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { isNonNegativeInteger } from '../../domain/record-validation.js';
@@ -31,6 +31,12 @@ import {
 } from '../../storage/bounded-mailbox.js';
 import { rustCompilerEngineIdentity, type RustCompilerEngineIdentity } from './engine-identity.js';
 import { rustAnalyzerProjectFingerprint } from './project-fingerprint.js';
+import {
+  readTextFileWithinLimit,
+  sha256FileWithinLimit,
+  SMALL_ARTIFACT_MAX_BYTES,
+  SOURCE_ARTIFACT_MAX_BYTES,
+} from '../../platform/bounded-file.js';
 import {
   DURABLE_RUST_SESSION_PROTOCOL_VERSION,
   decodeDurableRustMailboxResponse,
@@ -262,7 +268,10 @@ export function isDurableRustSessionStateLive(
 export function durableRustSessionDirectory(projectRoot: string, serverPath: string, tempRoot: string): string {
   let serverFingerprint: string;
   try {
-    serverFingerprint = sha256(readFileSync(serverPath));
+    serverFingerprint = sha256FileWithinLimit(serverPath, {
+      maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
+      inputKind: 'Rust semantic engine artifact',
+    });
   } catch {
     serverFingerprint = 'missing';
   }
@@ -419,14 +428,20 @@ function dispatchDurableRustSessionRequest<Response>(
   ensureDurableRustSessionServer(sessionDir, serverPath, semanticWorkerPath, monotonicDeadline, runtime);
   while ((runtime.monotonicNow ?? monotonicNowMs)() <= monotonicDeadline) {
     if (existsSync(admitted.responsePath)) {
-      const payload = parseDurableResponse(readFileSync(admitted.responsePath, 'utf8'), {
-        requestId,
-        operationKey,
-        sessionIdentity,
-        deadlineAtMs: admitted.authoritativeDeadlineAtMs,
-        requestKind: request.kind,
-        nowMs: runtime.now(),
-      });
+      const payload = parseDurableResponse(
+        readTextFileWithinLimit(admitted.responsePath, {
+          maxBytes: mailboxLimits.maxItemBytes ?? SOURCE_ARTIFACT_MAX_BYTES,
+          inputKind: 'durable Rust semantic mailbox response',
+        }),
+        {
+          requestId,
+          operationKey,
+          sessionIdentity,
+          deadlineAtMs: admitted.authoritativeDeadlineAtMs,
+          requestKind: request.kind,
+          nowMs: runtime.now(),
+        },
+      );
       if (!payload.ok) throw new Error(payload.error);
       if (profileEnabled()) {
         writeProfileEvent({
@@ -488,7 +503,10 @@ function ensureDurableRustSessionServer(
 export function readDurableRustSessionServerState(sessionDir: string): DurableRustSessionServerState | null {
   try {
     const parsed = JSON.parse(
-      readFileSync(resolve(sessionDir, 'server.json'), 'utf8'),
+      readTextFileWithinLimit(resolve(sessionDir, 'server.json'), {
+        maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+        inputKind: 'durable Rust session state',
+      }),
     ) as Partial<DurableRustSessionServerState>;
     if (
       typeof parsed.protocolVersion !== 'number' ||
@@ -593,7 +611,10 @@ const DEFAULT_IDENTITY_RUNTIME: DurableRustSessionIdentityRuntime = {
   },
   engineIdentity: rustCompilerEngineIdentity,
   fileFingerprint(path) {
-    return sha256(readFileSync(path));
+    return sha256FileWithinLimit(path, {
+      maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
+      inputKind: 'Rust semantic engine artifact',
+    });
   },
   environment() {
     return rustCompilerSessionEnvironment(process.env);

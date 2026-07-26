@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { deserializeSCIP, SymbolRole } from '@c4312/scip';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { profileSpan } from '../../instrumentation/profile.js';
@@ -7,6 +7,7 @@ import { getSourceFacts } from '../../source/facts/source-facts.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
 import { isRustTraitImplMember } from '../../symbols/symbol-parser.js';
 import type { SemanticCallee } from '../types.js';
+import { readFileWithinLimit, SCIP_ARTIFACT_MAX_BYTES } from '../../platform/bounded-file.js';
 
 interface RustScipOccurrenceCalleeIndex {
   occurrencesByFile: Map<string, RustScipOccurrenceCallee[]>;
@@ -153,7 +154,12 @@ function loadScipOccurrenceCalleeIndex(db: ScipDatabase): RustScipOccurrenceCall
         definition.isFunctionLike,
     );
     const definitionBySymbol = new Map(callableDefinitions.map((definition) => [definition.symbol, definition]));
-    const scipIndex = deserializeSCIP(readFileSync(db.generation.indexPath));
+    const scipIndex = deserializeSCIP(
+      readFileWithinLimit(db.generation.indexPath, {
+        inputKind: 'SCIP occurrence-callee index',
+        maxBytes: SCIP_ARTIFACT_MAX_BYTES,
+      }),
+    );
     const occurrencesByFile = new Map<string, RustScipOccurrenceCallee[]>();
     for (const document of scipIndex.documents ?? []) {
       const relativePath = document.relativePath;

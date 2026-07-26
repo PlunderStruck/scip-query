@@ -1,9 +1,14 @@
 import type Database from 'better-sqlite3';
 import { createRequire } from 'node:module';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { dirname, extname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { ResolvedOccurrence } from './augment-vue-contracts.js';
+import {
+  readTextFileWithinLimit,
+  SMALL_ARTIFACT_MAX_BYTES,
+  SOURCE_ARTIFACT_MAX_BYTES,
+} from '../../platform/bounded-file.js';
 
 export interface DefinitionInfo {
   fileName: string;
@@ -291,7 +296,10 @@ function createVolarLanguage(
   const languageRef: { current?: VolarLanguage } = {};
   const language = vueCore.createLanguage([vuePlugin], new Map(), (id) => {
     if (!existsSync(id)) return;
-    const text = readFileSync(id, 'utf-8');
+    const text = readTextFileWithinLimit(id, {
+      maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
+      inputKind: 'Vue language-service source file',
+    });
     languageRef.current?.scripts.set(
       id,
       ts.ScriptSnapshot.fromString(text),
@@ -750,7 +758,10 @@ export function createVueSourceReader(): VueSourceReader {
         return cache.get(fileName) ?? null;
       }
       try {
-        const text = readFileSync(fileName, 'utf-8');
+        const text = readTextFileWithinLimit(fileName, {
+          maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
+          inputKind: 'Vue source file',
+        });
         const info = { text, lineStarts: createLineStarts(text) };
         cache.set(fileName, info);
         return info;
@@ -792,7 +803,12 @@ function selectDocumentIds(db: Database.Database, relativePaths: readonly string
 
 function readPackageInfo(projectRoot: string): { name: string; version: string } {
   try {
-    const raw = JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf-8')) as {
+    const raw = JSON.parse(
+      readTextFileWithinLimit(join(projectRoot, 'package.json'), {
+        maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+        inputKind: 'project package manifest',
+      }),
+    ) as {
       name?: string;
       version?: string;
     };

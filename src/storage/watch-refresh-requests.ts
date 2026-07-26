@@ -1,10 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, linkSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, linkSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
 import { syncDirectoryDurable } from './atomic-file.js';
 import { writeJsonDurable } from './atomic-json.js';
 import { isValidRecordTimestamp } from '../domain/record-validation.js';
+import { readSmallArtifactText } from '../filesystem/bounded-file.js';
 
 export const WATCH_REFRESH_REQUEST_PROTOCOL_VERSION = 1;
 export const WATCH_REFRESH_REQUEST_DEFAULT_TTL_MS = 10 * 60_000;
@@ -365,7 +366,7 @@ function jsonFiles(directory: string, suffix = '.json'): string[] {
 
 function parseJson<T>(path: string, valid: (value: unknown) => value is T): T | null {
   try {
-    const value = JSON.parse(readFileSync(path, 'utf8')) as unknown;
+    const value = JSON.parse(readSmallArtifactText(path, 'watch refresh request record')) as unknown;
     return valid(value) ? value : null;
   } catch {
     return null;

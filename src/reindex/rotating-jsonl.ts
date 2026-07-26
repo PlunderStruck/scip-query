@@ -1,17 +1,9 @@
-import {
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  statSync,
-  truncateSync,
-} from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, renameSync, rmSync, statSync, truncateSync } from 'node:fs';
 import { basename, dirname } from 'node:path';
 
 import { monotonicNowMs } from '../domain/time.js';
 import { tryAcquireProcessFileLock } from '../platform/process-file-lock.js';
+import { BoundedFileReadError, PROFILE_ARTIFACT_MAX_BYTES, readFileWithinLimit } from '../platform/bounded-file.js';
 
 export const ROTATING_JSONL_PREVIOUS_SUFFIX = '.previous';
 export const ROTATING_JSONL_LOCK_SUFFIX = '.rotation.lock';
@@ -50,6 +42,7 @@ export interface AppendRotatingJsonlOptions {
 export interface ReadRotatingJsonlOptions {
   previousSuffix?: string;
   lockTimeoutMs?: number;
+  maxSegmentBytes?: number;
   runtime?: RotatingJsonlRuntime;
 }
 
@@ -104,7 +97,10 @@ const NODE_ROTATING_JSONL_RUNTIME = Object.freeze<RotatingJsonlRuntime>({
   },
   exists: existsSync,
   readBytes(path) {
-    return readFileSync(path);
+    return readFileWithinLimit(path, {
+      maxBytes: PROFILE_ARTIFACT_MAX_BYTES,
+      inputKind: 'rotating JSONL segment',
+    });
   },
   size(path) {
     return statSync(path).size;
@@ -136,7 +132,7 @@ export function appendRotatingJsonlRecord(
   const segmentLimitBytes = Math.max(1, Math.floor(options.maxSegmentBytes), line.length);
   return withRotatingJsonlLock(path, options.lockTimeoutMs, runtime, () => {
     runtime.makeDirectory(dirname(path));
-    const repairedTailBytes = repairIncompleteCurrentTail(path, runtime);
+    const repairedTailBytes = repairIncompleteCurrentTail(path, PROFILE_ARTIFACT_MAX_BYTES, runtime);
     options.onPhase?.('tail-repaired');
 
     const previousPath = `${path}${options.previousSuffix ?? ROTATING_JSONL_PREVIOUS_SUFFIX}`;
@@ -171,13 +167,14 @@ export function appendRotatingJsonlRecord(
  */
 export function readRotatingJsonlLines(path: string, options: ReadRotatingJsonlOptions = {}): ReadRotatingJsonlResult {
   const runtime = options.runtime ?? NODE_ROTATING_JSONL_RUNTIME;
+  const maxSegmentBytes = normalizedSegmentReadLimit(options.maxSegmentBytes);
   return withRotatingJsonlLock(path, options.lockTimeoutMs, runtime, () => {
     const lines: string[] = [];
     let ignoredPartialTailBytes = 0;
     const previousPath = `${path}${options.previousSuffix ?? ROTATING_JSONL_PREVIOUS_SUFFIX}`;
     for (const segmentPath of [previousPath, path]) {
       if (!runtime.exists(segmentPath)) continue;
-      const decoded = completeJsonlLines(runtime.readBytes(segmentPath));
+      const decoded = completeJsonlLines(readRuntimeBytesWithinLimit(segmentPath, maxSegmentBytes, runtime));
       lines.push(...decoded.lines);
       ignoredPartialTailBytes += decoded.partialTailBytes;
     }
@@ -225,14 +222,35 @@ function withRotatingJsonlLock<T>(
   return result as T;
 }
 
-function repairIncompleteCurrentTail(path: string, runtime: RotatingJsonlRuntime): number {
+function repairIncompleteCurrentTail(path: string, maxSegmentBytes: number, runtime: RotatingJsonlRuntime): number {
   if (!runtime.exists(path)) return 0;
-  const bytes = runtime.readBytes(path);
+  const bytes = readRuntimeBytesWithinLimit(path, maxSegmentBytes, runtime);
   if (bytes.length === 0 || bytes[bytes.length - 1] === 0x0a) return 0;
   const lastNewline = bytes.lastIndexOf(0x0a);
   const retainedBytes = lastNewline < 0 ? 0 : lastNewline + 1;
   runtime.truncate(path, retainedBytes);
   return bytes.length - retainedBytes;
+}
+
+function normalizedSegmentReadLimit(value: number | undefined): number {
+  const resolved = value ?? PROFILE_ARTIFACT_MAX_BYTES;
+  if (!Number.isSafeInteger(resolved) || resolved <= 0) {
+    throw new RangeError(`maxSegmentBytes must be a positive safe integer; received ${resolved}`);
+  }
+  return resolved;
+}
+
+function readRuntimeBytesWithinLimit(path: string, maxSegmentBytes: number, runtime: RotatingJsonlRuntime): Buffer {
+  const before = runtime.size(path);
+  if (before > maxSegmentBytes) {
+    throw new BoundedFileReadError('rotating JSONL segment', path, 'too-large', before, maxSegmentBytes);
+  }
+  const bytes = runtime.readBytes(path);
+  const after = runtime.size(path);
+  if (after !== before || bytes.byteLength !== before) {
+    throw new BoundedFileReadError('rotating JSONL segment', path, 'changed-during-read', after, maxSegmentBytes);
+  }
+  return bytes;
 }
 
 function completeJsonlLines(bytes: Buffer): { lines: string[]; partialTailBytes: number } {

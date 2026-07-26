@@ -393,6 +393,18 @@ compatibility path. The generation identity is part of the mailbox operation
 key, so retries for one immutable generation join the same logical operation
 while a later published generation is necessarily a distinct request.
 
+The untrusted-artifact read direction was reverified on 2026-07-26.
+`src/filesystem/bounded-file.ts` is the dependency-free owner of
+descriptor-bound regular-file reads, byte budgets, changed-during-read checks,
+and streaming hashes. Platform and storage expose boundary-specific facades
+over that primitive; they do not duplicate its safety policy. Repository
+regular-expression budgets are a dependency-free domain rule, so analysis can
+compile configured test patterns without importing host-platform mechanisms.
+Post-index augmentation is the one augmentation layer that owns a file-backed
+fingerprint cache, so its closed dependency row deliberately includes the
+filesystem primitive alongside source facts. This is narrower than allowing
+augmentation to depend on the full platform or storage layers.
+
 The `semantic -> symbols` row is now closed together with the rest of
 semantic's classified outgoing relationships. The intended direction is
 observed without a reverse import.

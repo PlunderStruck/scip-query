@@ -18,6 +18,7 @@ import {
   UnsafeProjectPathError,
 } from '../domain/path-normalization.js';
 import type { SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
+import { hashFileWithinLimit } from './bounded-file.js';
 
 export {
   normalizeSafeProjectRelativePath,
@@ -241,11 +242,16 @@ export function fingerprintProjectFiles(
           hash: createHash('sha256').update('symlink\0').update(target).digest('hex'),
         };
       }
-      const data = readFileSync(absPath);
+      const hash = createHash('sha256');
+      const size = hashFileWithinLimit(
+        absPath,
+        { inputKind: 'project fingerprint input', maxBytes: DEFAULT_PROJECT_SOURCE_LIMIT_BYTES },
+        (chunk) => hash.update(chunk),
+      );
       return {
         path: relativePath,
-        size: data.byteLength,
-        hash: createHash('sha256').update(data).digest('hex'),
+        size,
+        hash: hash.digest('hex'),
       };
     } catch {
       return {

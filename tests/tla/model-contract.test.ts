@@ -356,6 +356,22 @@ Enqueue(job) == queue' = Append(queue, job)
     expect(loaded.errors[0]).toContain('variables.ledger.statements[0].pattern is not a valid regular expression');
   });
 
+  it('rejects a statement binding whose regular expression exceeds the input budget', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
+    writeFileSync(
+      join(root, 'Broken.scip-tla.json'),
+      JSON.stringify({
+        variables: { ledger: { code: ['src/db.ts/CONNECTIONS'], statements: [{ pattern: 'a'.repeat(4_097) }] } },
+        actions: { Write: { code: ['src/db.ts/write'], writes: ['ledger'] } },
+      }),
+    );
+
+    const loaded = loadTlaModelContract(root, 'Broken.scip-tla.json');
+
+    expect(loaded.loaded).toBeUndefined();
+    expect(loaded.errors[0]).toContain('4097 characters; the safety limit is 4096 characters');
+  });
+
   it('rejects two variables sharing a statement pattern', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-contract-'));
     writeFileSync(

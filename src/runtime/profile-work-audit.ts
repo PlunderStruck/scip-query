@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { PROFILE_ARTIFACT_MAX_BYTES, readTextFileWithinLimit } from '../platform/bounded-file.js';
 
 export type ProfileWorkOutcome = 'computed' | 'cache-hit' | 'cache-miss' | 'reused' | 'skipped';
 
@@ -110,7 +110,11 @@ interface SubsystemCoverageAccumulator {
 
 export function readProfileEvents(path: string): ProfileEvent[] {
   const events: ProfileEvent[] = [];
-  for (const [index, rawLine] of readFileSync(path, 'utf8').split('\n').entries()) {
+  const profile = readTextFileWithinLimit(path, {
+    maxBytes: PROFILE_ARTIFACT_MAX_BYTES,
+    inputKind: 'profile JSONL artifact',
+  });
+  for (const [index, rawLine] of profile.split('\n').entries()) {
     const line = rawLine.trim();
     if (!line) continue;
     let value: unknown;

@@ -3,6 +3,8 @@ import type { CommandDescriptor } from '../command-kit/command-descriptor-types.
 import { setCommandAgentContractMap, setCommandEvidenceMap } from '../command-kit/command-execution.js';
 import { descriptorEvidenceTier } from '../command-kit/command-docs.js';
 import { sanitizeTerminalLine } from '../../platform/terminal-output.js';
+import { cliVersion } from '../cli-support.js';
+import { runWithCliOutputPagination } from '../output-pagination.js';
 
 type PlainCommanderDefault = string | boolean | string[] | undefined;
 
@@ -45,7 +47,19 @@ export function registerCommandDescriptors(
 
     command.action(async (...args: unknown[]) => {
       try {
-        await descriptor.handler(...args);
+        const opts = command.optsWithGlobals() as Record<string, unknown>;
+        await runWithCliOutputPagination(
+          {
+            command: descriptor.id,
+            producerVersion: cliVersion,
+            argv: process.argv.slice(2),
+            cwd: process.cwd(),
+            json: opts['json'] === true,
+            ...(typeof opts['outputPageSize'] === 'number' ? { pageSize: opts['outputPageSize'] } : {}),
+            ...(typeof opts['outputCursor'] === 'string' ? { cursor: opts['outputCursor'] } : {}),
+          },
+          () => descriptor.handler(...args),
+        );
       } catch (err) {
         handleCommandError(err);
       }

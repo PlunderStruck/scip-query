@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 import { platform as hostPlatform } from 'node:os';
 import type { ProcessIdentity } from '../domain/process-identity.js';
+import { readTextStreamPathWithinLimit } from './bounded-file.js';
 
 export { parseProcessIdentity, sameProcessIdentity, type ProcessIdentity } from '../domain/process-identity.js';
 
@@ -67,7 +67,10 @@ function nonEmptyToken(value: string): string | null {
 const DEFAULT_PROCESS_IDENTITY_RUNTIME: ProcessIdentityRuntime = {
   platform: hostPlatform(),
   readFile(path) {
-    return readFileSync(path, 'utf8');
+    return readTextStreamPathWithinLimit(path, {
+      maxBytes: PROCESS_IDENTITY_MAX_OUTPUT_BYTES,
+      inputKind: 'process identity pseudo-file',
+    });
   },
   run(binary, args) {
     return execFileSync(binary, [...args], {

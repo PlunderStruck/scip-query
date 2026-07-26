@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { SUPPORTED_LANGUAGES } from '../domain/config-types.js';
 import {
@@ -12,6 +12,8 @@ import {
 } from '../domain/project-config.js';
 import { isRecordObject } from '../domain/record-validation.js';
 import type { ProjectConfig, SupportedLanguage, WatchConfig } from '../domain/types.js';
+import { compileBoundedRegExp } from '../platform/bounded-regexp.js';
+import { readTextFileWithinLimit, SMALL_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
 import {
   FileContentConflictError,
   mutateTextFileRevisionAware,
@@ -116,7 +118,10 @@ export function loadProjectConfig(projectRoot: string): ProjectConfig {
 
   let raw: string;
   try {
-    raw = readFileSync(configPath, 'utf-8');
+    raw = readTextFileWithinLimit(configPath, {
+      maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+      inputKind: 'scip-query project config',
+    });
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     throw new Error(`unable to read ${CONFIG_FILENAME} at ${configPath}: ${reason}`, { cause: err });
@@ -154,6 +159,17 @@ export function validateProjectConfig(
         level: 'error',
         path: `languages[${index}]`,
         message: `Unsupported language: ${language}`,
+      });
+    }
+  }
+  for (const [index, pattern] of (config.entryRoots?.symbolPatterns ?? []).entries()) {
+    try {
+      compileBoundedRegExp(pattern, `entryRoots.symbolPatterns[${index}]`);
+    } catch (error) {
+      diagnostics.push({
+        level: 'error',
+        path: `entryRoots.symbolPatterns[${index}]`,
+        message: error instanceof Error ? error.message : String(error),
       });
     }
   }

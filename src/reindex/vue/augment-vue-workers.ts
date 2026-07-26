@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { emptySkippedReferenceDiagnostics, mergeSkippedReferenceDiagnostics } from './augment-vue-contracts.js';
 import type { VueReferenceComputationResult, VueReferenceTask } from './augment-vue-contracts.js';
+import { readTextFileWithinLimit } from '../../platform/bounded-file.js';
 
 const DEFAULT_VUE_WORKER_TIMEOUT_MS = 300_000;
 const DEFAULT_VUE_WORKER_RESULT_MAX_BYTES = 64 * 1024 * 1024;
@@ -36,7 +37,11 @@ const NODE_VUE_WORKER_RUNTIME: VueWorkerRuntimePort = {
   createResultDirectory: () => mkdtempSync(join(tmpdir(), 'scip-query-vue-workers-')),
   spawn: (workerUrl, workerData) => new Worker(workerUrl, { workerData }),
   resultSize: (path) => statSync(path).size,
-  readResult: (path) => readFileSync(path, 'utf-8'),
+  readResult: (path) =>
+    readTextFileWithinLimit(path, {
+      maxBytes: DEFAULT_VUE_WORKER_RESULT_MAX_BYTES,
+      inputKind: 'Vue worker result',
+    }),
   removeResultDirectory: (path) => rmSync(path, { recursive: true, force: true }),
 };
 

@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { canonicalReindexMetadataIdentity, decodeReindexMetadata } from '../domain/reindex-metadata.js';
 import type { ScipQueryConfig } from '../domain/types.js';
+import { readSmallArtifactText } from '../filesystem/bounded-file.js';
 
 export const SQLITE_GENERATION_STORE_VERSION = 1;
 export const SQLITE_GENERATION_MANIFEST_VERSION = 1;
@@ -80,7 +81,7 @@ export function sqliteGenerationRoot(outputDb: string): string {
 export function readSqliteGenerationState(outputDb: string): SqliteGenerationState | null {
   try {
     const parsed = JSON.parse(
-      readFileSync(join(sqliteGenerationRoot(outputDb), 'state.json'), 'utf8'),
+      readSmallArtifactText(join(sqliteGenerationRoot(outputDb), 'state.json'), 'SQLite generation state'),
     ) as Partial<SqliteGenerationState>;
     return validSqliteGenerationState(parsed) ? parsed : null;
   } catch {
@@ -98,7 +99,7 @@ export function readSqliteGenerationManifestFromRoot(
 ): SqliteGenerationManifest | null {
   try {
     const parsed = JSON.parse(
-      readFileSync(join(generationRoot, identity, SQLITE_GENERATION_MANIFEST), 'utf8'),
+      readSmallArtifactText(join(generationRoot, identity, SQLITE_GENERATION_MANIFEST), 'SQLite generation manifest'),
     ) as Partial<SqliteGenerationManifest>;
     return validManifest(parsed, identity) ? parsed : null;
   } catch {
@@ -130,7 +131,7 @@ export function publishedSqliteGenerationIdentity(dbPath: string): string | null
   if (state) return state.currentGeneration;
   try {
     const metaPath = join(dirname(dbPath), 'meta.json');
-    const metadataRaw = existsSync(metaPath) ? readFileSync(metaPath, 'utf8') : undefined;
+    const metadataRaw = existsSync(metaPath) ? readSmallArtifactText(metaPath, 'reindex metadata') : undefined;
     return legacyGenerationIdentity(dbPath, metadataRaw);
   } catch {
     return null;
@@ -169,7 +170,7 @@ function readImmutableGeneration(config: ScipQueryConfig, identity: string): Sql
       identity,
       databasePath,
       ...(indexPath ? { indexPath } : {}),
-      ...(metadataPath ? { metadataPath, metadataRaw: readFileSync(metadataPath, 'utf8') } : {}),
+      ...(metadataPath ? { metadataPath, metadataRaw: readSmallArtifactText(metadataPath, 'reindex metadata') } : {}),
       source: 'immutable',
     };
   } catch {
@@ -180,7 +181,7 @@ function readImmutableGeneration(config: ScipQueryConfig, identity: string): Sql
 function resolveLegacyGeneration(config: ScipQueryConfig, publishedIdentity?: string): SqliteGenerationHandle {
   const databaseFileIdentity = fileIdentity(config.dbPath);
   const metadataPath = join(dirname(config.dbPath), 'meta.json');
-  const metadataRaw = existsSync(metadataPath) ? readFileSync(metadataPath, 'utf8') : undefined;
+  const metadataRaw = existsSync(metadataPath) ? readSmallArtifactText(metadataPath, 'reindex metadata') : undefined;
   const indexPath = existsSync(config.indexPath) ? config.indexPath : undefined;
   return {
     identity: publishedIdentity ?? legacyGenerationIdentity(config.dbPath, metadataRaw),

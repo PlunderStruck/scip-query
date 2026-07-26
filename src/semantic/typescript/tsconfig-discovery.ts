@@ -1,6 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
+import { readSmallArtifactText } from '../../platform/bounded-file.js';
 import { expandWorkspacePattern } from '../../platform/workspace-packages.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { TYPESCRIPT_SEMANTIC_EXTENSIONS } from './source-kinds.js';
@@ -87,7 +88,7 @@ function discoverWorkspaceDirs(projectRoot: string): string[] {
 
   let parsed: { workspaces?: string[] | { packages?: string[] } };
   try {
-    parsed = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as typeof parsed;
+    parsed = JSON.parse(readSmallArtifactText(packageJsonPath, 'project package manifest')) as typeof parsed;
   } catch {
     return [];
   }

@@ -1,16 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  realpathSync,
-  renameSync,
-  rmSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, realpathSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join, resolve } from 'node:path';
 import type { IndexedDefinition, SupportedLanguage } from '../../domain/types.js';
 import {
@@ -23,6 +13,7 @@ import {
   resolveScipQueryCacheRoot,
 } from '../../platform/cache-layout.js';
 import { WATCH_LOCK_FILE } from '../../platform/watch-service-state.js';
+import { readSmallArtifactText } from '../../platform/bounded-file.js';
 import * as queries from '../../queries/index.js';
 import {
   augmentAuxiliaryDocuments,
@@ -561,7 +552,7 @@ export function benchRestoreMarkerPath(cacheDir: string): string {
 export function restoreBenchIndexCache(projectRoot: string, cacheDir: string): boolean {
   const markerPath = benchRestoreMarkerPath(cacheDir);
   if (!existsSync(markerPath)) return false;
-  const marker = parseBenchRestoreMarker(readFileSync(markerPath, 'utf8'));
+  const marker = parseBenchRestoreMarker(readSmallArtifactText(markerPath, 'benchmark restore marker'));
   const canonicalProjectRoot = realpathSync(projectRoot);
   const expectedOriginal = canonicalCacheIdentity(cacheDir);
   if (
@@ -621,7 +612,7 @@ export function finishBenchIndexCacheRestore(
 ): void {
   if (!moved) return;
   const markerPath = benchRestoreMarkerPath(cacheDir);
-  const marker = parseBenchRestoreMarker(readFileSync(markerPath, 'utf8'));
+  const marker = parseBenchRestoreMarker(readSmallArtifactText(markerPath, 'benchmark restore marker'));
   if (!marker || marker.backupPath !== backupDir || marker.originalCachePath !== canonicalCacheIdentity(cacheDir)) {
     throw new Error(`refusing invalid cold-index restore marker ${markerPath}`);
   }
@@ -1255,7 +1246,9 @@ export function handleSetupAgent(rawOpts: unknown): void {
   for (const target of result.unchanged) console.log(`  ok:   ${target} (already wired)`);
   for (const skip of result.skipped) console.log(`  skip: ${skip.target} — ${skip.reason}`);
   console.log('\nAgents reading this project now know to route through the scip-query skills and gate their diffs.');
-  console.log('Keep the index fresh (`scip-query reindex` or `scip-query watch`) so the gate sees current code.');
+  console.log(
+    'Check freshness once per work session. Reuse a fresh generation, let an active watcher refresh after edits, and reindex only when stale and no watcher can refresh it.',
+  );
 }
 
 export async function handleSetup(rawOpts: unknown): Promise<void> {

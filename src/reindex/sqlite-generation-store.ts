@@ -8,7 +8,6 @@ import {
   fsyncSync,
   mkdirSync,
   openSync,
-  readFileSync,
   readSync,
   readdirSync,
   renameSync,
@@ -16,6 +15,7 @@ import {
   statSync,
 } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
+import { readSmallArtifactText } from '../platform/bounded-file.js';
 import { syncDirectoryDurable } from '../storage/atomic-file.js';
 import { writeJsonDurable } from '../storage/atomic-json.js';
 import {
@@ -277,8 +277,8 @@ function stableMirrorsMatch(
   const immutableMetaPath = join(sqliteGenerationRoot(outputDb), manifest.identity, manifest.metadata.file);
   return (
     existsSync(immutableMetaPath) &&
-    stableMetadataIdentity(readFileSync(metaPath, 'utf8')) ===
-      stableMetadataIdentity(readFileSync(immutableMetaPath, 'utf8'))
+    stableMetadataIdentity(readSmallArtifactText(metaPath, 'reindex metadata')) ===
+      stableMetadataIdentity(readSmallArtifactText(immutableMetaPath, 'immutable reindex metadata'))
   );
 }
 
@@ -329,7 +329,9 @@ export function sqliteGenerationIdentity(
   const hash = createHash('sha256').update('sqlite-generation-artifacts-v1\0');
   hash.update(hashFile(databasePath));
   if (existsSync(indexPath)) hash.update(`\0${hashFile(indexPath)}`);
-  if (existsSync(metaPath)) hash.update(`\0${stableMetadataIdentity(readFileSync(metaPath, 'utf8'))}`);
+  if (existsSync(metaPath)) {
+    hash.update(`\0${stableMetadataIdentity(readSmallArtifactText(metaPath, 'reindex metadata'))}`);
+  }
   return hash.digest('hex');
 }
 
@@ -397,7 +399,9 @@ function generationIdentityFromArtifacts(
   const hash = createHash('sha256').update('sqlite-generation-artifacts-v1\0');
   hash.update(database.sha256);
   if (index) hash.update(`\0${index.sha256}`);
-  if (metadataPath) hash.update(`\0${stableMetadataIdentity(readFileSync(metadataPath, 'utf8'))}`);
+  if (metadataPath) {
+    hash.update(`\0${stableMetadataIdentity(readSmallArtifactText(metadataPath, 'reindex metadata'))}`);
+  }
   return hash.digest('hex');
 }
 
@@ -480,8 +484,8 @@ function storedMetadataMatches(
   const storedPath = join(directory, stored.file);
   return (
     existsSync(storedPath) &&
-    stableMetadataIdentity(readFileSync(storedPath, 'utf8')) ===
-      stableMetadataIdentity(readFileSync(candidatePath, 'utf8'))
+    stableMetadataIdentity(readSmallArtifactText(storedPath, 'stored reindex metadata')) ===
+      stableMetadataIdentity(readSmallArtifactText(candidatePath, 'candidate reindex metadata'))
   );
 }
 

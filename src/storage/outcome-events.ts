@@ -19,9 +19,10 @@
  */
 
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { OutcomeEvent } from '../domain/finding-outcomes.js';
+import { readProfileArtifactText, readSmallArtifactText } from '../filesystem/bounded-file.js';
 import {
   createOutcomeEventRecord,
   decodeOutcomeEventRecord,
@@ -105,7 +106,7 @@ function writeOutcomeEvent(dir: string, event: OutcomeEvent, toolVersion: string
     writeFileSync(path, contents, { flag: 'wx' });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-    if (readFileSync(path, 'utf-8') !== contents) {
+    if (readSmallArtifactText(path, 'outcome event record') !== contents) {
       throw new Error(`outcome event filename collision: ${path}`, { cause: error });
     }
   }
@@ -116,7 +117,7 @@ function removeLegacyLedger(projectRoot: string): void {
 
   const attributesPath = join(legacyLedgerDirPath(projectRoot), '.gitattributes');
   if (!existsSync(attributesPath)) return;
-  const remaining = readFileSync(attributesPath, 'utf-8')
+  const remaining = readSmallArtifactText(attributesPath, 'outcome event attributes')
     .split('\n')
     .filter((line) => line.trim() !== `${LEGACY_LEDGER_FILENAME} merge=union`)
     .join('\n')
@@ -141,7 +142,7 @@ export function readOutcomeEvents(projectRoot: string): OutcomeEventReadResult {
     for (const entry of readdirSync(dir).sort()) {
       if (!entry.endsWith('.json')) continue;
       const path = `${OUTCOME_EVENTS_DIR}/${entry}`;
-      const decoded = parseOutcomeEventRecord(readFileSync(join(dir, entry), 'utf-8'));
+      const decoded = parseOutcomeEventRecord(readSmallArtifactText(join(dir, entry), 'outcome event record'));
       observations.push({
         path,
         state: decoded.state,
@@ -164,7 +165,7 @@ function readLegacyOutcomeEvents(path: string): OutcomeEventCandidateRead {
   const events: OutcomeEvent[] = [];
   const observations: RecordCompatibilityObservation[] = [];
   const recordPath = `${LEGACY_LEDGER_DIR}/${LEGACY_LEDGER_FILENAME}`;
-  for (const [index, line] of readFileSync(path, 'utf-8').split('\n').entries()) {
+  for (const [index, line] of readProfileArtifactText(path, 'legacy outcome-event ledger').split('\n').entries()) {
     if (line.trim() === '') continue;
     const decoded = parseOutcomeEventRecord(line);
     observations.push({

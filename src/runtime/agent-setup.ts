@@ -15,8 +15,13 @@
  * hook config: those schemas are three independent implementations, and
  * silently-drifting config is worse than asking users to wire one line.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  readSmallArtifactText,
+  readTextFileDescriptorWithinLimit,
+  SMALL_ARTIFACT_MAX_BYTES,
+} from '../platform/bounded-file.js';
 import { blockingFindings } from '../queries/impact/diff-gate.js';
 import type { DiffGateResult } from '../queries/impact/diff-gate.js';
 import {
@@ -35,7 +40,10 @@ const PRE_COMMIT_MARKER = '# scip-query:agent-setup';
 export function readHookInput(): string {
   if (process.stdin.isTTY) return '';
   try {
-    return readFileSync(0, 'utf-8');
+    return readTextFileDescriptorWithinLimit(0, {
+      maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+      inputKind: 'agent hook input',
+    });
   } catch {
     return '';
   }
@@ -134,7 +142,7 @@ function writeInstructionsBlock(projectRoot: string, result: SetupAgentResult): 
     '- For a non-trivial change: establish the current entry-to-effect flow, the affected consumers, and the reuse options before editing (`scip-plan` skill, anchored by `scip-query plan-context <target>`).',
     '- Before claiming a complete relationship set, inspect the command coverage. If it is bounded or unknown, use `--full`, a narrower scope, or command pagination before making the claim.',
     '- After the change, run the postchecks matching what you actually edited — the table is in the `scip-verify` skill — then `scip-query diff-gate`. Fix findings or state why each is accepted.',
-    '- For `refs`, `trace`, `system`, `plan-context`, and `diff-gate`, do not pipe output through `head`, `tail`, or line-range `sed`; use `--json --compact`, and use `refs --limit` plus its continuation cursor when pagination is needed.',
+    '- Never pipe scip-query output through `head`, `tail`, or line-range `sed`. If output is paged or warns that a client may truncate it, run the emitted `Continue exactly:` command unchanged until the page reports `complete: true`. Every command supports `--output-page-size` plus `--output-cursor`; this transport cursor is separate from a command result cursor such as `refs --cursor`.',
     '- Repository records: commit `.scipquery/suppressions/*.json` and `.scipquery/events/*.json` with the code or docs change that produced them; do not ignore or drop these shared records.',
     '- Checkout preferences: `.codex/hooks.json` and `.claude/settings.local.json` are local agent-tool settings and must not be committed.',
     MD_BLOCK_END,
@@ -194,7 +202,7 @@ function removeManagedBlock(
       return;
     }
     try {
-      const current = readFileSync(path, 'utf-8');
+      const current = readSmallArtifactText(path, 'agent instruction file');
       if (!current.includes(MD_BLOCK_BEGIN)) result.unchanged.push(name);
       else {
         removeManagedBlockText(current);
@@ -307,7 +315,7 @@ function removeGitPreCommitHook(projectRoot: string, opts: { dryRun?: boolean },
   const path = join(projectRoot, '.git', 'hooks', 'pre-commit');
   if (opts.dryRun) {
     if (!existsSync(path)) result.unchanged.push('.git/hooks/pre-commit');
-    else if (!readFileSync(path, 'utf-8').includes(PRE_COMMIT_MARKER)) {
+    else if (!readSmallArtifactText(path, 'pre-commit hook').includes(PRE_COMMIT_MARKER)) {
       result.skipped.push({
         target: '.git/hooks/pre-commit',
         reason: 'pre-commit hook is not managed by scip-query',

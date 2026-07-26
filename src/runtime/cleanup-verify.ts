@@ -11,12 +11,13 @@
  * which also exercises the cascade claim itself.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CleanupBatch, CleanupPlanResult } from '../queries/cleanup/cleanup-plan.js';
 import { stripCommentsAndStrings } from '../source/primitives/source-stripper.js';
 import { binaryAvailable } from '../platform/binary.js';
+import { readTextFileWithinLimit, SOURCE_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
 import { CLOJURE_EXTENSIONS } from '../source/primitives/import-path-resolver.js';
 
 export interface BatchVerification {
@@ -434,7 +435,11 @@ function applyBatchDeletions(worktree: string, batch: CleanupBatch): void {
   for (const [file, ranges] of rangesByFile) {
     const path = join(worktree, file);
     if (!existsSync(path)) continue;
-    writeFileSync(path, deleteLineRanges(readFileSync(path, 'utf-8'), ranges, { rust: file.endsWith('.rs') }));
+    const source = readTextFileWithinLimit(path, {
+      maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
+      inputKind: 'cleanup verification source file',
+    });
+    writeFileSync(path, deleteLineRanges(source, ranges, { rust: file.endsWith('.rs') }));
   }
 }
 

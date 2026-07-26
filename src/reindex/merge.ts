@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { create } from '@bufbuild/protobuf';
 import {
   deserializeSCIP,
@@ -10,6 +10,7 @@ import {
 } from '@c4312/scip';
 import type { Document, Index, Occurrence, Relationship, SymbolInformation } from '@c4312/scip';
 import { sanitizeScipIndex } from './sanitize.js';
+import { readFileWithinLimit, SCIP_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
 
 export interface MergeScipResult {
   documentCount: number;
@@ -55,7 +56,9 @@ export function mergeScipFiles(inputPaths: readonly string[], outputPath: string
     throw new Error('Cannot merge zero SCIP files');
   }
 
-  const indexes = inputPaths.map((path) => deserializeSCIP(readFileSync(path)));
+  const indexes = inputPaths.map((path) =>
+    deserializeSCIP(readFileWithinLimit(path, { inputKind: 'SCIP merge input', maxBytes: SCIP_ARTIFACT_MAX_BYTES })),
+  );
   const merged = mergeScipIndexes(indexes);
   writeFileSync(outputPath, Buffer.from(serializeSCIP(merged)));
 
@@ -71,7 +74,9 @@ export function mergeAndSanitizeScipFiles(
   outputPath: string,
 ): MergeAndSanitizeScipResult {
   if (inputPaths.length === 0) throw new Error('Cannot merge zero SCIP files');
-  const indexes = inputPaths.map((path) => deserializeSCIP(readFileSync(path)));
+  const indexes = inputPaths.map((path) =>
+    deserializeSCIP(readFileWithinLimit(path, { inputKind: 'SCIP merge input', maxBytes: SCIP_ARTIFACT_MAX_BYTES })),
+  );
   const sanitized = sanitizeScipIndex(mergeScipIndexes(indexes));
   writeFileSync(outputPath, Buffer.from(serializeSCIP(sanitized.index)));
   return {
@@ -97,7 +102,9 @@ export function rebaseScipProjectRoot(index: Index, expectedProjectRoot: string,
 }
 
 export function rebaseScipFileProjectRoot(path: string, expectedProjectRoot: string, targetProjectRoot: string): void {
-  const index = deserializeSCIP(readFileSync(path));
+  const index = deserializeSCIP(
+    readFileWithinLimit(path, { inputKind: 'SCIP normalization input', maxBytes: SCIP_ARTIFACT_MAX_BYTES }),
+  );
   const rebased = rebaseScipProjectRoot(index, expectedProjectRoot, targetProjectRoot);
   writeFileSync(path, Buffer.from(serializeSCIP(rebased)));
 }

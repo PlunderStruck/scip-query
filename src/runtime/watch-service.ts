@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { monotonicNowMs } from '../domain/time.js';
@@ -20,6 +20,7 @@ import {
   type LegacyProcessLockDecoder,
   type ProcessFileLockObservation,
 } from '../platform/process-file-lock.js';
+import { readSmallArtifactText } from '../platform/bounded-file.js';
 import {
   WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS,
   WATCH_SERVICE_PROTOCOL_VERSION,
@@ -403,7 +404,7 @@ export function requestWatchServiceRefresh(
 
 export function readWatchServiceActivity(activityPath: string): WatchServiceActivity | null {
   try {
-    const parsed = JSON.parse(readFileSync(activityPath, 'utf8')) as {
+    const parsed = JSON.parse(readSmallArtifactText(activityPath, 'watch activity record')) as {
       version?: unknown;
       at?: unknown;
       refreshRequestedAt?: unknown;

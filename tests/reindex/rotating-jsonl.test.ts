@@ -140,6 +140,15 @@ describe('rotating JSONL', () => {
     );
   });
 
+  it('rejects retained segments that exceed the explicit read budget', () => {
+    const path = historyPath();
+    writeFileSync(path, `${JSON.stringify({ id: 'oversized' })}\n`);
+
+    expect(() => readRotatingJsonlLines(path, { maxSegmentBytes: 4 })).toThrow(
+      /rotating JSONL segment.*safety limit is 4 bytes/u,
+    );
+  });
+
   it('reports bounded contention without modifying the retained segments', () => {
     const path = historyPath();
     writeFileSync(path, `${JSON.stringify({ id: 'retained' })}\n`);

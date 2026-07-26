@@ -1,10 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
 import { stableJson } from '../domain/stable-json.js';
 import { monotonicNowMs } from '../domain/time.js';
 import { parseProcessIdentity, sameProcessIdentity, type ProcessIdentity } from '../domain/process-identity.js';
+import { BoundedFileReadError, readSmallArtifactText, readTextFileWithinLimit } from '../filesystem/bounded-file.js';
 import { createFileAtomicExclusive, syncDirectoryDurable } from './atomic-file.js';
 import { writeJsonDurable } from './atomic-json.js';
 
@@ -430,7 +431,10 @@ export function readBoundedMailboxClaim(
       claim.byteLength,
     );
   }
-  return readFileSync(claim.path, 'utf8');
+  return readTextFileWithinLimit(claim.path, {
+    maxBytes: resolved.maxItemBytes,
+    inputKind: 'bounded mailbox item',
+  });
 }
 
 /**
@@ -746,11 +750,19 @@ function reclaimAbandonedAdmissionLock(lockPath: string): void {
 
 function readAdmissionLockOwner(lockPath: string): { ownerToken?: unknown; pid?: unknown } {
   try {
-    return JSON.parse(readFileSync(lockPath, 'utf8')) as { ownerToken?: unknown; pid?: unknown };
+    return JSON.parse(readSmallArtifactText(lockPath, 'mailbox lock record')) as {
+      ownerToken?: unknown;
+      pid?: unknown;
+    };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EISDIR') throw error;
+    if (
+      (error as NodeJS.ErrnoException).code !== 'EISDIR' &&
+      !(error instanceof BoundedFileReadError && error.reason === 'not-regular')
+    ) {
+      throw error;
+    }
     // Compatibility with the v1 directory-shaped admission lock.
-    return JSON.parse(readFileSync(join(lockPath, 'owner.json'), 'utf8')) as {
+    return JSON.parse(readSmallArtifactText(join(lockPath, 'owner.json'), 'mailbox lock owner record')) as {
       ownerToken?: unknown;
       pid?: unknown;
     };
@@ -807,7 +819,7 @@ function mailboxOwnerState(
 
 function readMailboxOwnerRecord(path: string): MailboxOwnerRecord | null {
   try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as Partial<MailboxOwnerRecord>;
+    const parsed = JSON.parse(readSmallArtifactText(path, 'mailbox owner record')) as Partial<MailboxOwnerRecord>;
     if (
       parsed.version !== 1 ||
       typeof parsed.ownerId !== 'string' ||
@@ -930,7 +942,7 @@ function inflightClaims(directory: string): BoundedMailboxClaim[] {
 
 function readRequestHeader(path: string): RequestHeader | null {
   try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+    const parsed = JSON.parse(readSmallArtifactText(path, 'mailbox record')) as Record<string, unknown>;
     if (typeof parsed['id'] !== 'string' || !parsed['id']) return null;
     return {
       id: parsed['id'],

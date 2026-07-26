@@ -1,6 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { readSmallArtifactText } from '../platform/bounded-file.js';
 
 // scip-query: ignore-stale — exported setup report attachment shared by setup
 // orchestration, dossier writing, and tests; it is a named product contract.
@@ -167,7 +168,7 @@ function relativeDossierJsonPath(report: HealthDossierReport): string {
 
 function writeIfChanged(path: string, content: string, result: ProjectSetupHealthDossier): void {
   mkdirSync(dirname(path), { recursive: true });
-  const current = existsSync(path) ? readFileSync(path, 'utf-8') : null;
+  const current = existsSync(path) ? readSmallArtifactText(path, 'health dossier Markdown') : null;
   if (current === content) {
     result.unchanged.push(path);
     return;
@@ -179,7 +180,7 @@ function writeIfChanged(path: string, content: string, result: ProjectSetupHealt
 function writeJsonIfChanged(path: string, payload: HealthDossierReport, result: ProjectSetupHealthDossier): void {
   mkdirSync(dirname(path), { recursive: true });
   const content = `${JSON.stringify(payload, null, 2)}\n`;
-  const current = existsSync(path) ? readFileSync(path, 'utf-8') : null;
+  const current = existsSync(path) ? readSmallArtifactText(path, 'health dossier JSON') : null;
   if (current && jsonEqualIgnoringGeneratedAt(current, content)) {
     result.unchanged.push(path);
     return;

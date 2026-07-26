@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { monotonicNowMs } from '../../domain/time.js';
 import type { IndexedDefinition } from '../../domain/types.js';
@@ -20,6 +20,7 @@ import {
 import { isProcessAlive } from '../../platform/process-liveness.js';
 import { readProcessIdentity, sameProcessIdentity, type ProcessIdentity } from '../../platform/process-identity.js';
 import { canonicalPath } from '../../platform/git-worktree.js';
+import { readTextFileWithinLimit } from '../../platform/bounded-file.js';
 import type {
   SemanticAvailability,
   SemanticCallee,
@@ -183,7 +184,15 @@ export class TypeScriptSemanticRequester {
 
     while ((this.runtime.monotonicNow ?? monotonicNowMs)() <= monotonicDeadlineAtMs) {
       if (existsSync(admitted.responsePath)) {
-        return parseResponse(readFileSync(admitted.responsePath, 'utf8'), id, generation, operationKey);
+        return parseResponse(
+          readTextFileWithinLimit(admitted.responsePath, {
+            maxBytes: this.mailboxLimits.maxItemBytes ?? 64 * 1024 * 1024,
+            inputKind: 'TypeScript semantic mailbox response',
+          }),
+          id,
+          generation,
+          operationKey,
+        );
       }
       const liveState = readWatchServiceState(servicePaths.statePath);
       if (!usableServiceState(liveState, this.projectRoot, this.runtime)) {

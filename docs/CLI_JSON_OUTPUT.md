@@ -13,7 +13,7 @@ The current envelope is schema version 1:
 {
   "kind": "scip-query-result",
   "schemaVersion": 1,
-  "producer": { "name": "scip-query", "version": "0.19.6" },
+  "producer": { "name": "scip-query", "version": "0.19.7" },
   "command": "refs",
   "resultSchemaVersion": 1,
   "evidence": "graph-fact",
@@ -36,6 +36,86 @@ The public `scip-query/runtime` export provides
 `decodeCliJsonEnvelope()` and `requireCompatibleCliJsonEnvelope()` for
 consumers that want the repository's compatibility policy rather than a
 hand-written field check.
+
+## Complete output for agents
+
+An output page is one consecutive, bounded part of the characters a command
+rendered. Its real-world units are the `scip-query-output-page` objects and
+human page blocks returned after a result exceeds an agent transport's safe
+size. It differs from a query limit because it divides already-produced
+output without discarding any character: following each emitted continuation
+command reconstructs the complete rendered stream.
+
+Every command accepts these global options:
+
+```text
+--output-page-size <characters>
+--output-cursor <cursor>
+```
+
+Human output larger than 12,000 characters is paged automatically. The page
+prints its exact continuation command both before and after its content.
+Agents must run that command unchanged and continue until the page reports
+completion. Do not pipe scip-query through `head`, `tail`, or a line-range
+`sed`; those programs discard output without creating a resumable position.
+
+Default `--json` output remains the ordinary `scip-query-result` envelope
+byte-for-byte so existing scripts are not broken. When that envelope exceeds
+12,000 characters, scip-query writes an early stderr warning containing the
+exact command that opts into output pages. The paged command returns:
+
+```json
+{
+  "kind": "scip-query-output-page",
+  "schemaVersion": 1,
+  "producer": { "name": "scip-query", "version": "0.19.7" },
+  "command": "architecture",
+  "contentType": "application/json",
+  "page": {
+    "offset": 0,
+    "returnedCharacters": 12000,
+    "totalCharacters": 48152,
+    "omittedCharacters": 36152,
+    "remainingCharacters": 36152,
+    "complete": false,
+    "outputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "continuation": {
+      "cursor": "<opaque cursor>",
+      "command": "scip-query architecture --json --output-page-size 12000 --output-cursor <opaque cursor>"
+    }
+  },
+  "content": "{\n  \"kind\": \"scip-query-result\",\n  ..."
+}
+```
+
+The cursor is bound to the command, working directory, complete
+non-pagination argument list, next character offset, private output snapshot,
+and SHA-256 of the complete rendered output. SHA-256 is a fixed-size content
+fingerprint: the same bytes produce the same identity with overwhelming
+reliability. A continuation reads the immutable snapshot rather than re-running
+the command, so timestamps, durations, edits, or reindexes cannot mix
+different result generations between pages. Missing, expired, or changed
+snapshot data is rejected with the exact command that restarts at page one.
+
+Output pages and result coverage answer different questions:
+
+- output pagination says whether every rendered character is retrievable;
+- the result envelope's `coverage` says whether the command examined every
+  logical result unit.
+
+A completely retrieved page can therefore still contain a bounded or sampled
+analysis. Use the result envelope's stated `--full` remediation when present,
+then follow output continuation commands until complete.
+
+The machine-readable page schema is
+[`schemas/cli-output-page.schema.json`](schemas/cli-output-page.schema.json).
+Page sizes range from 256 through 100,000 characters and cursors are limited
+to 4,096 characters. The first paged invocation streams the complete output
+to a mode-`0600` snapshot beneath a current-user mode-`0700` temporary
+directory while retaining only the requested page in memory. Snapshots expire
+after one hour and are removed after the final page. Pagination imposes no
+arbitrary total-output ceiling and does not silently discard later pages;
+command-level result budgets still apply and report their own completeness.
 
 ## Compatibility policy
 

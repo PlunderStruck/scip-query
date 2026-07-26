@@ -12,6 +12,7 @@
  * handle it.
  */
 import type { ScipDatabase } from '../storage/db.js';
+import { compileBoundedRegExp } from '../domain/bounded-regexp.js';
 import { buildFileDepGraph } from '../symbols/graph/file-dep-graph.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
 import { sourceEvidence } from '../language-parsers/source-evidence.js';
@@ -161,7 +162,7 @@ export function isRootedSymbol(db: ScipDatabase, symbol: string, file: string): 
   if (
     roots.symbolPatterns?.some((pattern) => {
       try {
-        return new RegExp(pattern).test(symbol);
+        return compileBoundedRegExp(pattern, 'entryRoots.symbolPatterns entry').test(symbol);
       } catch {
         return false;
       }

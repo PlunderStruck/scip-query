@@ -50,6 +50,8 @@ export function renderCommandReferenceMarkdown(descriptors: readonly CommandDesc
     '',
     'Commands with `--json` emit the versioned public envelope documented in [CLI JSON output contract](CLI_JSON_OUTPUT.md).',
     '',
+    'Every command accepts `--output-page-size <characters>` and `--output-cursor <cursor>`. Oversized human output prints an exact continuation command; oversized JSON prints the exact command that opts into versioned output pages.',
+    '',
   ];
 
   for (const category of categories) {

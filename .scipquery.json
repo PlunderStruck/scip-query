@@ -308,7 +308,7 @@
         "storage",
         "symbols-graph"
       ],
-      "reindex-augmentation": ["source"],
+      "reindex-augmentation": ["filesystem", "source"],
       "reindex-vue": ["platform", "reindex-augmentation"],
       "runtime-command-kit": ["runtime-services", "storage"],
       "runtime-commands": [

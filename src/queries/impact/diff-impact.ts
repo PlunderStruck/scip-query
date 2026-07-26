@@ -1,7 +1,7 @@
 import type { ChangedLineRange } from '../internal/diff-gate-types.js';
 export type { ChangedLineRange };
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { basename } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
@@ -12,6 +12,7 @@ import { isCallableSymbol, isModuleLikeSymbol, shortenSymbol } from '../../symbo
 import { getAst, type SyntaxNode } from '../../source/ast.js';
 import { rangesByFile } from '../internal/diff-ranges.js';
 import { resolveGitCommit } from '../../platform/git-worktree.js';
+import { readProjectFileText } from '../../platform/project-files.js';
 
 export interface DiffImpactResult {
   changedFiles: string[];
@@ -436,7 +437,7 @@ function detectRenamedFiles(
       .filter((from) => basename(from) === basename(to));
     if (candidates.length === 0) continue;
 
-    const current = readFileSync(`${projectRoot}/${to}`, 'utf-8');
+    const current = readProjectFileText(projectRoot, to);
     const best = candidates
       .map((from) => ({
         from,

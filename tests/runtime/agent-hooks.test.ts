@@ -98,19 +98,19 @@ describe('agent hook context', () => {
     expect(context).toContain('scip-improve');
   });
 
-  it('blocks blind truncation for commands with compact or paginated alternatives', () => {
+  it('blocks blind truncation for every pageable command', () => {
     expect(
       evaluatePreToolUse(
         { tool_name: 'Bash', tool_input: { command: 'scip-query refs login --json | head -50' } },
         true,
       ),
-    ).toMatchObject({ kind: 'deny', reason: expect.stringContaining('--limit') });
+    ).toMatchObject({ kind: 'deny', reason: expect.stringContaining('--output-cursor') });
     expect(
       evaluatePreToolUse(
         { tool_name: 'Bash', tool_input: { command: "scip-query diff-gate --json | sed -n '1,80p'" } },
         true,
       ),
-    ).toMatchObject({ kind: 'deny', reason: expect.stringContaining('--compact') });
+    ).toMatchObject({ kind: 'deny', reason: expect.stringContaining('exact emitted paging command') });
     expect(
       evaluatePreToolUse(
         {
@@ -122,6 +122,9 @@ describe('agent hook context', () => {
     ).toMatchObject({ kind: 'deny' });
     expect(
       evaluatePreToolUse({ tool_name: 'Bash', tool_input: { command: 'scip-query health --json | head -50' } }, true),
+    ).toMatchObject({ kind: 'deny' });
+    expect(
+      evaluatePreToolUse({ tool_name: 'Bash', tool_input: { command: 'scip-query --help | head -50' } }, true),
     ).toEqual({ kind: 'allow' });
   });
 

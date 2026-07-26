@@ -86,6 +86,12 @@ describe('CLI contract', () => {
     }
   });
 
+  it('registers universal resumable output options at the program boundary', () => {
+    expect(program.options.map((option) => option.flags)).toEqual(
+      expect.arrayContaining(['--output-page-size <characters>', '--output-cursor <cursor>']),
+    );
+  });
+
   it('requires an agent contract on every public command', () => {
     const missing = commandDescriptors
       .filter((descriptor) => !descriptor.hidden && !descriptor.agent)

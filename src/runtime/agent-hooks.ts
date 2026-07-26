@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import type { ProjectConfig, ScipQueryConfig } from '../domain/types.js';
@@ -23,6 +23,7 @@ import { getProjectCapabilities, getProjectReadiness } from './project-readiness
 import { formatGateBlockReason, isStopHookReentry, readHookInput } from './agent-setup.js';
 import { cliVersion } from './cli-support.js';
 import { recordDiffGateOutcomes } from './diff-gate-outcomes.js';
+import { readSmallArtifactText } from '../platform/bounded-file.js';
 import { prepareWorktreeIndex } from './cli-context.js';
 import {
   ensureWatchServiceForCommand,
@@ -503,7 +504,7 @@ function readJsonConfig(path: string, label: string, result: InstallUserAgentHoo
     return {};
   }
   try {
-    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as unknown;
+    const parsed = JSON.parse(readSmallArtifactText(path, 'agent hook settings')) as unknown;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       result.skipped.push({ target: label, reason: 'existing hook config is not a JSON object' });
       return undefined;
@@ -682,8 +683,6 @@ export function handleAgentHookPreToolUse(): void {
 
 type PreToolDecision = { kind: 'allow' } | { kind: 'deny' | 'reconsider'; reason: string };
 
-const PAGINATED_OR_COMPACT_COMMANDS = ['refs', 'trace', 'system', 'plan-context', 'diff-gate'] as const;
-
 export function evaluatePreToolUse(payload: HookPayload, alreadyReminded: boolean): PreToolDecision {
   const tool = typeof payload.tool_name === 'string' ? payload.tool_name : '';
   const input =
@@ -694,7 +693,7 @@ export function evaluatePreToolUse(payload: HookPayload, alreadyReminded: boolea
     return {
       kind: 'deny',
       reason:
-        'Do not pipe scip-query output through head, tail, or a line-range sed selector: that hides whether evidence was omitted. Re-run with --json --compact; for refs, use --limit and the returned coverage.continuation.cursor.',
+        'Do not pipe scip-query output through head, tail, or a line-range sed selector: that discards evidence without a resumable position. Re-run the exact emitted paging command and follow each --output-cursor continuation until complete; command-level coverage such as refs --cursor remains a separate step.',
     };
   }
 
@@ -709,8 +708,7 @@ export function evaluatePreToolUse(payload: HookPayload, alreadyReminded: boolea
 }
 
 function blindlyTruncatesScipQuery(command: string): boolean {
-  const names = PAGINATED_OR_COMPACT_COMMANDS.join('|');
-  const scipQuery = new RegExp(`(?:^|[;&(]\\s*|\\s)(?:\\S*/)?scip-query\\s+(?:${names})(?:\\s|$)`);
+  const scipQuery = /(?:^|[;&(]\s*|\s)(?:\S*\/)?scip-query\s+[A-Za-z][A-Za-z0-9-]*(?:\s|$)/;
   if (!scipQuery.test(command)) return false;
   return (
     /\|\s*(?:head|tail)(?:\s|$)/.test(command) ||

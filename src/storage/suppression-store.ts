@@ -13,10 +13,11 @@
  * but is no longer written to by the `suppress` command.
  */
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import type { FindingSuppression } from '../domain/config-types.js';
+import { readSmallArtifactText } from '../filesystem/bounded-file.js';
 import {
   summarizeRecordCompatibility,
   type RecordCompatibilityObservation,
@@ -163,7 +164,7 @@ export function readSuppressionDir(projectRoot: string): SuppressionDirReadResul
     const recordPath = `${SUPPRESSION_DIR}/${entry}`;
     let parsed: unknown;
     try {
-      parsed = JSON.parse(readFileSync(path, 'utf-8'));
+      parsed = JSON.parse(readSmallArtifactText(path, 'suppression record'));
     } catch {
       observations.push({ path: recordPath, state: 'malformed', reason: 'malformed JSON' });
       continue;

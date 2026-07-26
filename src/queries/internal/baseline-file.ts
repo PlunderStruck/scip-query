@@ -8,10 +8,11 @@
  * importing the other. What stays out of this module is the production of
  * findings — collecting them requires running detectors, which sit above.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
+import { readSmallArtifactText } from '../../storage/bounded-artifact.js';
 
 export const DEFAULT_BASELINE_FILENAME = '.scipquery-baseline.json';
 
@@ -74,7 +75,7 @@ export function compareAgainstBaseline(
   if (!existsSync(path)) {
     throw new Error(`No baseline found at ${path}. Create one with: scip-query health --write-baseline`);
   }
-  const parsed = JSON.parse(readFileSync(path, 'utf-8')) as HealthBaselineFile;
+  const parsed = JSON.parse(readSmallArtifactText(path, 'health baseline')) as HealthBaselineFile;
   const recorded = (parsed.findings ?? []).map(normalizeBaselineFindingIdentity);
   const baseline = new Set(opts.accept ? recorded.filter(opts.accept) : recorded);
   const currentSet = new Set(current);

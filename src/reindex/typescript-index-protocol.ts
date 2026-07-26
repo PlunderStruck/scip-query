@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { canonicalReindexMetadataIdentity, decodeReindexMetadata } from '../domain/reindex-metadata.js';
 import type { SemanticReferenceFragment } from '../semantic/types.js';
@@ -12,6 +11,7 @@ import {
   type BoundedMailboxRequestIdentity,
   type BoundedMailboxStatus,
 } from '../storage/bounded-mailbox.js';
+import { readSmallArtifactText } from '../platform/bounded-file.js';
 
 export const TYPESCRIPT_INDEX_PROTOCOL_VERSION = 3;
 export const TYPESCRIPT_INDEX_LEGACY_PROTOCOL_VERSION = 2;
@@ -139,7 +139,7 @@ export function parseTypeScriptIndexEnvelope(raw: string): TypeScriptIndexEnvelo
 export function publishedTypeScriptIndexGeneration(dbPath: string): string | null {
   try {
     const canonical = canonicalReindexMetadataIdentity(
-      decodeReindexMetadata(readFileSync(join(dirname(dbPath), 'meta.json'), 'utf8')),
+      decodeReindexMetadata(readSmallArtifactText(join(dirname(dbPath), 'meta.json'), 'reindex metadata')),
     );
     return canonical ? createHash('sha256').update(canonical).digest('hex') : null;
   } catch {

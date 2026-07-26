@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
-import { closeSync, fstatSync, openSync, readFileSync, rmSync } from 'node:fs';
+import { closeSync, fstatSync, openSync, rmSync } from 'node:fs';
 import type { Stats } from 'node:fs';
 import { dirname } from 'node:path';
 import { monotonicNowMs } from '../domain/time.js';
 import { tryAcquireProcessFileLock, type ProcessFileLock } from '../platform/process-file-lock.js';
+import { readTextFileDescriptorWithinLimit, SOURCE_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
 import { createFileAtomicExclusive, replaceFileAtomic, syncDirectoryDurable } from '../storage/atomic-file.js';
 
 const DEFAULT_LOCK_TIMEOUT_MS = 2_000;
@@ -146,7 +147,10 @@ export function readStableTextSnapshot(path: string): RevisionedTextSnapshot {
     try {
       fd = openSync(path, 'r');
       const before = identityFromStat(fstatSync(fd));
-      const text = readFileSync(fd, 'utf8');
+      const text = readTextFileDescriptorWithinLimit(fd, {
+        maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
+        inputKind: 'revisioned text file',
+      });
       const after = identityFromStat(fstatSync(fd));
       if (!sameIdentity(before, after)) continue;
       return {

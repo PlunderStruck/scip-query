@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { ScipDatabase } from '../storage/db.js';
 import type { SymbolMatch } from '../domain/types.js';
+import { compileBoundedRegExp } from '../platform/bounded-regexp.js';
 import { readProjectFileText } from '../platform/project-files.js';
 import { getAst } from '../source/ast.js';
 import type { SyntaxNode } from '../source/ast.js';
@@ -435,7 +436,11 @@ function statementsForVariables(contract: TlaModelContract): VariableStatement[]
   const statements: VariableStatement[] = [];
   for (const [name, variable] of Object.entries(contract.variables)) {
     for (const statement of variable.statements ?? []) {
-      statements.push({ variable: name, pattern: statement.pattern, regex: new RegExp(statement.pattern) });
+      statements.push({
+        variable: name,
+        pattern: statement.pattern,
+        regex: compileBoundedRegExp(statement.pattern, `variables.${name}.statements pattern`),
+      });
     }
   }
   return statements;

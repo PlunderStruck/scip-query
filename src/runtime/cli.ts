@@ -30,6 +30,7 @@ import { projectEvidenceFingerprint } from '../storage/evidence-cache.js';
 import { maybeSweepRepositoryCache } from './repository-cache-lifecycle.js';
 import { resolveGitWorktreeContext } from '../platform/git-worktree.js';
 import { installTerminalConsoleSanitizer, sanitizeTerminalText } from '../platform/terminal-output.js';
+import { parseOutputPageSize } from './output-pagination.js';
 
 const cliEntrypoint = isCliEntrypoint();
 if (cliEntrypoint) {
@@ -43,7 +44,13 @@ if (cliEntrypoint) {
 program
   .name('scip-query')
   .description('Language-agnostic code intelligence CLI powered by SCIP indexes')
-  .version(cliVersion);
+  .version(cliVersion)
+  .option(
+    '--output-page-size <characters>',
+    'Return bounded output pages with an exact continuation command',
+    parseOutputPageSize,
+  )
+  .option('--output-cursor <cursor>', 'Continue a bounded output page');
 
 const commandDescriptors = await loadInvocationCommandDescriptors(cliEntrypoint ? process.argv[2] : undefined);
 registerCommandDescriptors(program, commandDescriptors);

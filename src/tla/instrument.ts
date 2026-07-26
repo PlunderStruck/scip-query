@@ -62,7 +62,7 @@ function renderRecorder(variables: readonly string[]): string {
  * wiring is safe to leave in place. The output is a JSON array compatible
  * with 'scip-query tla trace-check --trace <path>'.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, statSync, writeFileSync } from 'node:fs';
 
 interface TlaTraceStep {
   action: string;
@@ -71,18 +71,26 @@ interface TlaTraceStep {
 }
 
 const tracePath = process.env['SCIP_TLA_TRACE'];
+const TRACE_MAX_BYTES = 16 * 1024 * 1024;
+const TRACE_MAX_STEPS = 100_000;
 
 export function tlaRecord(action: string, before: Record<string, unknown>, after: Record<string, unknown>): void {
   if (!tracePath) return;
   let steps: TlaTraceStep[] = [];
   try {
+    const size = statSync(tracePath).size;
+    if (size > TRACE_MAX_BYTES) throw new Error(\`TLA trace exceeds \${TRACE_MAX_BYTES} bytes\`);
     steps = JSON.parse(readFileSync(tracePath, 'utf8')) as TlaTraceStep[];
     if (!Array.isArray(steps)) steps = [];
-  } catch {
-    steps = [];
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
+  if (steps.length >= TRACE_MAX_STEPS) throw new Error(\`TLA trace exceeds \${TRACE_MAX_STEPS} steps\`);
   steps.push({ action, before, after });
-  writeFileSync(tracePath, JSON.stringify(steps, null, 2));
+  const payload = JSON.stringify(steps, null, 2);
+  const payloadBytes = Buffer.byteLength(payload);
+  if (payloadBytes > TRACE_MAX_BYTES) throw new Error(\`TLA trace would exceed \${TRACE_MAX_BYTES} bytes\`);
+  writeFileSync(tracePath, payload);
 }
 `;
 }

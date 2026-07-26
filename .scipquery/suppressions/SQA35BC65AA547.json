@@ -1,0 +1,14 @@
+{
+  "kind": "scip-query-suppression",
+  "schemaVersion": 1,
+  "suppressionIdentity": "SQA35BC65AA547",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.19.7"
+  },
+  "id": "SQA35BC65AA547",
+  "check": "new-dead",
+  "file": "src/runtime/output-pagination.ts",
+  "reason": "False positive: PrefixBuffer is instantiated by runJsonWithOversizeWarning; output-pagination tests exercise oversized raw JSON, split UTF-8 chunks, warning emission, and byte-exact preservation.",
+  "createdAt": "2026-07-26T20:30:56.909Z"
+}

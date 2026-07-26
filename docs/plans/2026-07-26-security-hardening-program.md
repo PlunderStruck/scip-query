@@ -393,6 +393,34 @@ JSON remains parseable and preserves the original printable content.
 - clean `git diff --check`;
 - no unexplained finding left open.
 
+### Implemented disposition
+
+Implemented end to end:
+
+- one typed bounded-file owner covers small records, source/fragments, SCIP
+  indexes, profiles/JSONL, open descriptors, streams, and pseudo-files;
+- production artifact readers use explicit limits, while hashing and
+  fingerprinting stream rather than materialize large artifacts;
+- repository regular-expression patterns and generated TLA traces have
+  explicit parser/retention budgets;
+- a static contract test prevents future raw production materialization from
+  bypassing the owners;
+- every CLI command has stable rendered-output pagination with an exact
+  continuation command, output hash, invocation binding, private immutable
+  snapshot, expiry/restart behavior, and a published JSON schema;
+- ordinary JSON remains byte-compatible unless paging is explicitly selected;
+- human blind truncation is blocked by the Claude hook for every pageable
+  command, and generated agent instructions require following the emitted
+  continuation until complete;
+- transport pagination deliberately has no arbitrary total-output ceiling.
+  Memory remains bounded to one page, transient disk snapshots expire after
+  one hour, and command-owned logical result budgets and coverage metadata
+  remain the CPU/row authority.
+
+The final documentation lives in `docs/SECURITY_MODEL.md` and
+`docs/CLI_JSON_OUTPUT.md`. SEC-01 through SEC-12 have explicit final
+dispositions in the audit ledger.
+
 ## Dependency graph
 
 The slices are independently revertible, but they are not all linearly

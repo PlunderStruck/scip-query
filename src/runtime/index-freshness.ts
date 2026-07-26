@@ -1,9 +1,10 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { decodeReindexMetadata } from '../domain/reindex-metadata.js';
 import type { LastRefreshMetadata, ProjectConfig, SupportedLanguage } from '../domain/types.js';
 import { buildProjectInputFingerprint, type ProjectInputFingerprint } from '../platform/project-files.js';
 import { detectLanguages } from '../reindex/detect.js';
 import { inspectSqliteGeneration } from '../reindex/sqlite-generation-store.js';
+import { readSmallArtifactText } from '../platform/bounded-file.js';
 
 export type IndexFreshnessState = 'fresh' | 'stale' | 'missing' | 'unknown';
 
@@ -43,7 +44,7 @@ export function getIndexFreshness(
   }
 
   try {
-    const decoded = decodeReindexMetadata(readFileSync(paths.metaPath, 'utf-8'));
+    const decoded = decodeReindexMetadata(readSmallArtifactText(paths.metaPath, 'reindex metadata'));
     if (decoded.kind === 'unsupported') {
       return {
         state: 'unknown',

@@ -1,9 +1,9 @@
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { LastRefreshMetadata, ReindexActivitySummary, WatcherStatus } from '../domain/types.js';
 import { isNonNegativeInteger, isValidRecordTimestamp } from '../domain/record-validation.js';
 import { parseProcessIdentity, type ProcessIdentity } from './process-identity.js';
+import { readSmallArtifactText } from './bounded-file.js';
 
 export const WATCH_SERVICE_PROTOCOL_VERSION = 5;
 export const WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS = 5_000;
@@ -106,7 +106,7 @@ export function watchServicePaths(cacheDir: string): WatchServicePaths {
 
 export function readWatchServiceState(statePath: string): WatchServiceState | null {
   try {
-    return parseWatchServiceState(JSON.parse(readFileSync(statePath, 'utf8')) as unknown);
+    return parseWatchServiceState(JSON.parse(readSmallArtifactText(statePath, 'watch service state')) as unknown);
   } catch {
     return null;
   }

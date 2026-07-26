@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   buildProjectChangeManifest,
@@ -32,6 +32,7 @@ import { publishedTypeScriptIndexGeneration } from './typescript-index-protocol.
 import { TypeScriptIndexRequester } from './typescript-index-requester.js';
 import { discoverTypeScriptProjectRoots } from './typescript-projects.js';
 import type { SemanticReferenceFragment } from '../semantic/types.js';
+import { readFileWithinLimit, SCIP_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
 
 export interface TypeScriptIncrementalEligibilityInput {
   projectMode: TypeScriptProjectMode | undefined;
@@ -254,7 +255,12 @@ export function tryMaterializeTypeScriptIncrementalIndex(
     const requestMs = performance.now() - phaseStartedAt;
     const deferCompleteScip = statSync(input.previousShardPath).size >= TYPESCRIPT_DEFERRED_SCIP_THRESHOLD_BYTES;
     phaseStartedAt = performance.now();
-    const baseIndexBytes = deferCompleteScip ? null : readFileSync(input.previousShardPath);
+    const baseIndexBytes = deferCompleteScip
+      ? null
+      : readFileWithinLimit(input.previousShardPath, {
+          inputKind: 'TypeScript base SCIP shard',
+          maxBytes: SCIP_ARTIFACT_MAX_BYTES,
+        });
     const assembled = deferCompleteScip
       ? {
           completeIndexBytes: null,
@@ -354,7 +360,10 @@ export function materializeDeferredTypeScriptIndex(input: {
   const bytes = materializeTypeScriptOverlay({
     cacheDir: input.cacheDir,
     generationIdentity: input.generationIdentity,
-    baseIndexBytes: readFileSync(input.baseShardPath),
+    baseIndexBytes: readFileWithinLimit(input.baseShardPath, {
+      inputKind: 'TypeScript base SCIP shard',
+      maxBytes: SCIP_ARTIFACT_MAX_BYTES,
+    }),
     packageVersion: availability.packageVersion,
   });
   writeFileSync(input.candidateShardPath, bytes);

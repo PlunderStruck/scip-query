@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import {
   canonicalCacheIdentity,
@@ -21,6 +21,7 @@ import {
   type WorktreeCacheLease,
 } from '../reindex/shared-generation-store.js';
 import type { ProjectConfig } from '../domain/types.js';
+import { readSmallArtifactText } from '../platform/bounded-file.js';
 
 export const DEFAULT_SHARED_GENERATION_TTL_MS = 60 * 60 * 1_000;
 export const DEFAULT_REPOSITORY_CACHE_BUDGET_BYTES = 2 * 1024 * 1024 * 1024;
@@ -467,7 +468,7 @@ function hasLiveLocalCacheProcess(lease: WorktreeCacheLease, ignoreLifecycleLock
 
 function readLease(path: string): WorktreeCacheLease | null {
   try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as Partial<WorktreeCacheLease>;
+    const parsed = JSON.parse(readSmallArtifactText(path, 'worktree cache lease')) as Partial<WorktreeCacheLease>;
     if (
       parsed.version !== 1 ||
       typeof parsed.repositoryId !== 'string' ||
@@ -493,7 +494,7 @@ function readLease(path: string): WorktreeCacheLease | null {
 
 function readPid(path: string): number | undefined {
   try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as { pid?: unknown };
+    const parsed = JSON.parse(readSmallArtifactText(path, 'watch lock record')) as { pid?: unknown };
     return typeof parsed.pid === 'number' && Number.isSafeInteger(parsed.pid) && parsed.pid > 0
       ? parsed.pid
       : undefined;
@@ -504,7 +505,7 @@ function readPid(path: string): number | undefined {
 
 function readGcState(path: string): RepositoryGcState | null {
   try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as Partial<RepositoryGcState>;
+    const parsed = JSON.parse(readSmallArtifactText(path, 'repository cache GC state')) as Partial<RepositoryGcState>;
     if (
       parsed.version !== 1 ||
       typeof parsed.lastSweepAt !== 'string' ||

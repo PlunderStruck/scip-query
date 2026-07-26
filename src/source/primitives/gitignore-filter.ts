@@ -1,6 +1,7 @@
 import ignore from 'ignore';
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { readTextFileWithinLimit, SMALL_ARTIFACT_MAX_BYTES } from '../../platform/bounded-file.js';
 
 /**
  * Builds a gitignore-based path filter from .gitignore files found
@@ -49,7 +50,10 @@ function loadGitignoreFiles(projectRoot: string, ig: ReturnType<typeof ignore>):
   const addGitignore = (gitignorePath: string, relativeDir: string): void => {
     if (loaded.has(gitignorePath) || !existsSync(gitignorePath)) return;
     try {
-      const content = readFileSync(gitignorePath, 'utf-8');
+      const content = readTextFileWithinLimit(gitignorePath, {
+        maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+        inputKind: 'gitignore file',
+      });
       ig.add(relativeDir ? prefixGitignorePatterns(content, relativeDir) : content);
       loaded.add(gitignorePath);
     } catch {

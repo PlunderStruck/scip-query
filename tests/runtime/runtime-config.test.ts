@@ -371,6 +371,29 @@ describe('validateProjectConfig', () => {
     );
   });
 
+  it('rejects invalid and oversized entry-root regular expressions', () => {
+    const diagnostics = validateProjectConfig({
+      entryRoots: {
+        symbolPatterns: ['[', 'a'.repeat(4_097)],
+      },
+    });
+
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: 'error',
+          path: 'entryRoots.symbolPatterns[0]',
+          message: expect.stringMatching(/regular expression|Invalid/u),
+        }),
+        expect.objectContaining({
+          level: 'error',
+          path: 'entryRoots.symbolPatterns[1]',
+          message: expect.stringMatching(/4097 characters.*4096 characters/u),
+        }),
+      ]),
+    );
+  });
+
   it('validates Rust semantic config shape', () => {
     const diagnostics = validateProjectConfig({
       semantic: { rust: { rustAnalyzerPath: '  ' } },

@@ -34,15 +34,15 @@ Two layers, wired by `scip-query setup`:
 
 **Invoked** — the agent routes work through skills, each carrying its own short command list so it never navigates the full CLI:
 
-| Phase    | Skill                                            | Commands underneath (also usable directly)          |
-| -------- | ------------------------------------------------ | --------------------------------------------------- |
-| Orient   | `scip-explore`                                   | `system`, `trace`, `affected`, `call-graph`         |
-| Plan     | `scip-plan`                                      | `plan-context`, `change-surface`, `co-change`       |
-| Diagnose | `scip-diagnose`                                  | `files`, `trace`, `call-graph`, `outline`           |
-| Audit    | `scip-audit`                                     | `cleanup-plan --verify`, `dead`, `twin-drift`       |
-| Improve  | `scip-improve`                                   | `incomplete-migration`, `recent-duplicates`         |
-| Verify   | `scip-verify` (closeout) + the ambient diff gate | `diff-impact`, `diff-gate`, `health --baseline`     |
-| Set up   | `scip-setup`                                     | `doctor`, `setup`, `setup-hooks`, `setup-agent`     |
+| Phase    | Skill                                            | Commands underneath (also usable directly)      |
+| -------- | ------------------------------------------------ | ----------------------------------------------- |
+| Orient   | `scip-explore`                                   | `system`, `trace`, `affected`, `call-graph`     |
+| Plan     | `scip-plan`                                      | `plan-context`, `change-surface`, `co-change`   |
+| Diagnose | `scip-diagnose`                                  | `files`, `trace`, `call-graph`, `outline`       |
+| Audit    | `scip-audit`                                     | `cleanup-plan --verify`, `dead`, `twin-drift`   |
+| Improve  | `scip-improve`                                   | `incomplete-migration`, `recent-duplicates`     |
+| Verify   | `scip-verify` (closeout) + the ambient diff gate | `diff-impact`, `diff-gate`, `health --baseline` |
+| Set up   | `scip-setup`                                     | `doctor`, `setup`, `setup-hooks`, `setup-agent` |
 
 The consolidated skills retain the former specialist lenses as routed
 scenarios: API impact and formal/performance planning live in `scip-plan`;
@@ -119,8 +119,9 @@ scip-query similar <closest-symbol>
 # After an extraction or migration: find sites that still contain old logic
 scip-query incomplete-migration
 
-# Before declaring the work complete: refresh the index and gate the diff
-scip-query reindex && scip-query diff-gate --json
+# Before declaring the work complete: gate the diff. Reindex only when status
+# reports stale and no live watcher or hook refresh is already responsible.
+scip-query diff-gate --json
 ```
 
 For a repository-wide cleanup pass:
@@ -835,6 +836,7 @@ Query results are filtered through the project's `.gitignore`. If none exists, c
 - [Agent Guide](docs/AGENT_GUIDE.md): goal-oriented workflows for tracing, planning, cleanup, quality checks, and change verification.
 - [Command Reference](docs/COMMAND_REFERENCE.md): generated command syntax, descriptions, and options.
 - [CLI JSON output contract](docs/CLI_JSON_OUTPUT.md): versioned envelopes, compatibility rules, and schema.
+- [Security model](docs/SECURITY_MODEL.md): untrusted-checkout boundaries, authority flags, input budgets, and complete-output pagination.
 - [Programmatic API](docs/API.md): using the query functions from TypeScript.
 - [Historical plans](https://github.com/PlunderStruck/scip-query/tree/main/docs/plans): implementation notes and completed cleanup plans.
 

@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { isPathInsideProject } from '../domain/path-normalization.js';
 import type { ProjectFileFingerprint } from '../domain/project-input.js';
+import { readTextFileWithinLimit, SMALL_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
 
 /**
  * Maps repo-wide file fingerprints (from `fingerprintProjectFiles`) onto the
@@ -429,7 +430,10 @@ function stripJsonComments(input: string): string {
 
 function readJsonc(filePath: string): { ok: true; value: Record<string, unknown> } | { ok: false } {
   try {
-    const raw = readFileSync(filePath, 'utf-8');
+    const raw = readTextFileWithinLimit(filePath, {
+      maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+      inputKind: 'TypeScript project manifest',
+    });
     const parsed = JSON.parse(stripJsonComments(raw)) as unknown;
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       return { ok: true, value: parsed as Record<string, unknown> };

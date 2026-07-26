@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { cliVersion } from './cli-support.js';
+import { readSmallArtifactText } from '../platform/bounded-file.js';
 
 const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const UPDATE_NOTICE_CACHE_FILE = 'update-check.json';
@@ -78,7 +79,7 @@ function readUpdateNoticeCache(cacheDir: string): UpdateNoticeCache | null {
   if (!existsSync(cachePath)) return null;
 
   try {
-    const raw = JSON.parse(readFileSync(cachePath, 'utf8')) as Partial<UpdateNoticeCache>;
+    const raw = JSON.parse(readSmallArtifactText(cachePath, 'update notice cache')) as Partial<UpdateNoticeCache>;
     return typeof raw.checkedAt === 'number' && (typeof raw.latestVersion === 'string' || raw.latestVersion === null)
       ? { checkedAt: raw.checkedAt, latestVersion: raw.latestVersion }
       : null;

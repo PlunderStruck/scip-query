@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-26
 **Repository revision:** `9203ff8aba7f546175f87e85ccee69dd9e9147bb`
-**Package version:** `scip-query@0.19.6`
+**Package version:** `scip-query@0.19.7`
 **Method:** `engineering-lenses` security review, supplemented by `scip-audit`
 evidence rules, source inspection, compiler-resolved relationship queries,
 dependency scanning, static analysis, and disposable proof-of-concept fixtures.
@@ -836,6 +836,41 @@ the repository.
 - Bound row counts, regex input sizes, and accumulated diagnostic payloads.
 - Return typed incomplete/oversized coverage rather than silently truncating.
 
+#### Resolution — 2026-07-26
+
+Resolved by the resource-budget and complete-output slice:
+
+- `src/filesystem/bounded-file.ts` defines typed, descriptor-bound reads for
+  8 MiB small records, 64 MiB source/fragments, 512 MiB SCIP indexes, and
+  256 MiB profile/JSONL artifacts. It rechecks file identity after reading;
+  stream and pseudo-file readers count bytes as they arrive.
+- Project fingerprints, shared generations, fragment/overlay stores, SCIP
+  merge/sanitize paths, semantic worker mailboxes, TypeScript/Vue source
+  snapshots, configs, manifests, cache records, and profile readers now use a
+  declared budget. Large fingerprints and hashes stream in fixed-size chunks.
+- `tests/platform/artifact-budget-contract.test.ts` fails if a new production
+  raw synchronous file materialization appears outside the bounded file
+  owners. The only retained occurrences are the bounded helper itself, the
+  separately containment-checked project-file owner, and the dependency-free
+  generated TLA recorder whose pre-read and pre-write limits are asserted.
+- Repository-supplied regular-expression patterns are limited to 4,096
+  characters and rejected during config/model validation. Generated TLA
+  traces are limited to 16 MiB and 100,000 steps.
+- Result-level row limits continue to report their command-owned coverage and
+  `--full` remediation. Transport-level output no longer needs blind
+  truncation: every command accepts `--output-page-size` and
+  `--output-cursor`, and every incomplete page carries the exact command for
+  the next stable chunk.
+- Pagination retains only the requested page in memory while streaming the
+  complete rendered stream to a private, one-hour temporary snapshot.
+  Continuations read that immutable snapshot instead of re-running
+  timestamp- or duration-bearing commands. It has no arbitrary total-output
+  ceiling, and unavailable or changed snapshot data fails with an exact
+  page-one restart command rather than joining generations.
+
+The limits and trust model are published in `docs/SECURITY_MODEL.md`; the page
+envelope is specified by `docs/schemas/cli-output-page.schema.json`.
+
 ## Positive controls and refuted candidates
 
 ### Shell and subprocess construction
@@ -1037,3 +1072,24 @@ when:
 8. human output cannot emit repository-controlled terminal commands;
 9. private cache state is private by default;
 10. untrusted artifacts have explicit memory, CPU, and output budgets.
+
+## Final disposition — 2026-07-26
+
+| Finding                                | Disposition | Implementation evidence                                                                                                           |
+| -------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| SEC-01 crafted index paths             | Resolved    | `b9ce4aec`; canonical project-file containment, symlink/traversal tests, unsafe-index rejection                                   |
+| SEC-02 repository-local indexers       | Resolved    | `248cbd8c`; explicit `--trust-project-tools` policy and execution tests                                                           |
+| SEC-03 repository-local TLA jar        | Resolved    | `248cbd8c`; no implicit local-jar fallback, explicit reviewed path or verified pinned cache                                       |
+| SEC-04 hook executable identity        | Resolved    | `248cbd8c`; hook setup pins a trusted CLI identity and rejects project-controlled substitution                                    |
+| SEC-05 external destructive cache path | Resolved    | `e4fbbe95`; canonical ownership records, managed containment, safe legacy adoption                                                |
+| SEC-06 Git option injection            | Resolved    | `9809c72f`; revision validation and downstream `--` separation                                                                    |
+| SEC-07 mutable automatic installs      | Resolved    | `a68888a5`; explicit consent plus immutable package identities                                                                    |
+| SEC-08 production advisories           | Resolved    | `3e26a644`; zero production advisories, CI/release audit gate, pinned Actions                                                     |
+| SEC-09 terminal controls               | Resolved    | `4e542393`; centralized inert human rendering with JSON fidelity                                                                  |
+| SEC-10 cache permissions               | Resolved    | `e4fbbe95`; managed directories repaired to `0700`, managed files to `0600`                                                       |
+| SEC-11 registry credential logs        | Resolved    | `4e542393`; structural URL redaction and no-secret regression tests                                                               |
+| SEC-12 in-process resource budgets     | Resolved    | resource-budget and complete-output slice; typed artifact limits, regex/trace limits, static ownership gate, resumable pagination |
+
+The final verification matrix is recorded in the implementation plan. A
+finding is marked resolved only where both its production boundary and its
+adversarial regression test use the same enforcing owner.

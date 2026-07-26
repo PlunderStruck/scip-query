@@ -464,7 +464,16 @@ Numeric thresholds below are recommended starting points for review sessions; co
 
 ## Tips for AI Agents
 
-- **Check freshness before analysis**: run `scip-query status --capabilities`; if freshness is `stale`, `missing`, or `unknown`, run `scip-query reindex`.
+- **Check freshness once before the first graph claim in a work session**:
+  run `scip-query status --capabilities`, then reuse that generation until
+  source changes. After edits, let an active watcher or pending hook refresh
+  finish. Run `scip-query reindex` only when freshness is `stale`, `missing`,
+  or `unknown` and no responsible watcher is available.
+- **Retrieve complete output**: never pipe scip-query through `head`, `tail`,
+  or a line-range `sed`. Run every emitted `Continue exactly:` command
+  unchanged until `complete: true`. The universal `--output-cursor` pages the
+  rendered output; a result cursor such as `refs --cursor` advances logical
+  query coverage and is a separate obligation.
 - **Use `--json` on `health`** for programmatic consumption — parse the JSON to make decisions
 - **Run `change-surface` before every file modification** — it takes <1 second and prevents surprises
 - **Run `diff-impact --json` before committing** — catches unexpected blast radius across downstream consumers

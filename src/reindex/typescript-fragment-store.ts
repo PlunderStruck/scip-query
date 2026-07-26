@@ -1,9 +1,15 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { create, fromBinary, toBinary } from '@bufbuild/protobuf';
 import { deserializeSCIP, DocumentSchema, IndexSchema, serializeSCIP } from '@c4312/scip';
 import type { Document, Index } from '@c4312/scip';
+import {
+  readFileWithinLimit,
+  readTextFileWithinLimit,
+  SMALL_ARTIFACT_MAX_BYTES,
+  SOURCE_ARTIFACT_MAX_BYTES,
+} from '../platform/bounded-file.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import type { TypeScriptDocumentFragment, TypeScriptDocumentRuntime } from './typescript-document-emitter.js';
 
@@ -225,7 +231,12 @@ export function readTypeScriptFragmentGeneration(
   const manifestPath = generationManifestPath(paths, input.generationIdentity);
   let manifest: TypeScriptFragmentGenerationManifest;
   try {
-    manifest = parseManifest(readFileSync(manifestPath, 'utf8'));
+    manifest = parseManifest(
+      readTextFileWithinLimit(manifestPath, {
+        maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+        inputKind: 'TypeScript fragment manifest',
+      }),
+    );
   } catch (error) {
     throw new Error(
       `TypeScript fragment generation is unavailable: ${error instanceof Error ? error.message : String(error)}`,
@@ -245,7 +256,10 @@ export function readTypeScriptFragmentGeneration(
   const fragments = new Map<string, Uint8Array>();
   for (const record of manifest.documents) {
     const blobPath = join(paths.blobDir, `${record.blobHash}.scipdoc`);
-    const bytes = readFileSync(blobPath);
+    const bytes = readFileWithinLimit(blobPath, {
+      maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
+      inputKind: 'TypeScript fragment blob',
+    });
     if (bytes.byteLength !== record.byteLength || sha256(bytes) !== record.blobHash) {
       throw new Error(`TypeScript fragment blob is corrupt: ${record.relativePath}`);
     }
@@ -351,7 +365,12 @@ export function pruneTypeScriptFragmentGenerations(
   const generationFiles = readdirSync(paths.generationDir).filter((entry) => entry.endsWith('.json'));
   const referencedBlobs = new Set<string>();
   for (const file of generationFiles.filter((entry) => keepFiles.has(entry))) {
-    const manifest = parseManifest(readFileSync(join(paths.generationDir, file), 'utf8'));
+    const manifest = parseManifest(
+      readTextFileWithinLimit(join(paths.generationDir, file), {
+        maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+        inputKind: 'TypeScript fragment manifest',
+      }),
+    );
     for (const document of manifest.documents) referencedBlobs.add(`${document.blobHash}.scipdoc`);
   }
   for (const file of generationFiles) {
@@ -376,7 +395,10 @@ function persistFragment(
   mkdirSync(paths.blobDir, { recursive: true });
   const blobPath = join(paths.blobDir, `${blobHash}.scipdoc`);
   if (existsSync(blobPath)) {
-    const existing = readFileSync(blobPath);
+    const existing = readFileWithinLimit(blobPath, {
+      maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
+      inputKind: 'TypeScript fragment blob',
+    });
     if (existing.byteLength !== bytes.byteLength || sha256(existing) !== blobHash) {
       throw new Error(`existing TypeScript fragment blob is corrupt: ${relativePath}`);
     }
@@ -418,7 +440,12 @@ function persistManifest(cacheDir: string, manifest: TypeScriptFragmentGeneratio
   const paths = typeScriptFragmentStorePaths(cacheDir);
   const manifestPath = generationManifestPath(paths, manifest.generationIdentity);
   if (existsSync(manifestPath)) {
-    const existing = parseManifest(readFileSync(manifestPath, 'utf8'));
+    const existing = parseManifest(
+      readTextFileWithinLimit(manifestPath, {
+        maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+        inputKind: 'TypeScript fragment manifest',
+      }),
+    );
     if (manifestContentIdentity(existing) !== manifestContentIdentity(manifest)) {
       throw new Error(`TypeScript fragment generation is immutable: ${manifest.generationIdentity}`);
     }

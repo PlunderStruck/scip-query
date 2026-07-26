@@ -27,6 +27,11 @@ segments. That bounded-history deletion is different from concurrency loss:
 which segment is pruned is decided while the append/rotation lock excludes
 other writers.
 
+The retained-set reader also has a 256 MiB byte budget across the files it
+opens. It validates each segment as the same regular file before and after the
+read. Exceeding that operational budget is an explicit read failure; it does
+not silently return a prefix and present it as complete telemetry.
+
 ## Serialization and crash recovery
 
 The rotation lock is `<history>.rotation.lock`. It is a process-instance lock:

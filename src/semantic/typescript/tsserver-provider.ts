@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -15,6 +15,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { dedupeLocations, toRelative } from './semantic-locations.js';
 import { discoverTypeScriptTsconfigs } from './tsconfig-discovery.js';
 import { unavailableProvider } from './ts-morph-runtime.js';
+import { readTextFileWithinLimit, SOURCE_ARTIFACT_MAX_BYTES } from '../../platform/bounded-file.js';
 
 export interface TypeScriptReferenceProviderMismatch {
   symbol: string;
@@ -236,7 +237,12 @@ function createLanguageServiceHost(
     getScriptFileNames: () => parsed.fileNames,
     getScriptSnapshot: (fileName) => {
       if (!existsSync(fileName)) return undefined;
-      return ts.ScriptSnapshot.fromString(readFileSync(fileName, 'utf8'));
+      return ts.ScriptSnapshot.fromString(
+        readTextFileWithinLimit(fileName, {
+          maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
+          inputKind: 'TypeScript language-service source file',
+        }),
+      );
     },
     getScriptVersion: () => '0',
     readDirectory: ts.sys.readDirectory,

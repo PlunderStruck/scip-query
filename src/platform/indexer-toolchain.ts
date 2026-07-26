@@ -1,12 +1,13 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { platform } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { IndexerConfig } from '../domain/types.js';
 import { isBinaryAvailable, resolveSpawnableExecutable } from './binary.js';
 import { readProjectFile, resolveProjectFile } from './project-files.js';
+import { readSmallArtifactText } from './bounded-file.js';
 
 const requireFromHere = createRequire(import.meta.url);
 
@@ -92,7 +93,7 @@ function resolveBundledNpmBinary(toolchain: IndexerToolchain): string | null {
   const packageJsonPath = resolveBundledNpmPackageJson(toolchain);
   if (!packageJsonPath) return null;
 
-  const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
+  const pkg = JSON.parse(readSmallArtifactText(packageJsonPath, 'indexer package manifest')) as {
     bin?: string | Record<string, string>;
   };
   const bin = pkg.bin;

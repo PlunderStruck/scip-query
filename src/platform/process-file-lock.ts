@@ -1,15 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import {
-  closeSync,
-  fsyncSync,
-  linkSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  statSync,
-  unlinkSync,
-  writeSync,
-} from 'node:fs';
+import { closeSync, fsyncSync, linkSync, mkdirSync, openSync, statSync, unlinkSync, writeSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { isDirectorySyncUnsupported, writeFileCompletely } from '../filesystem/file-descriptor.js';
 import {
@@ -19,6 +9,7 @@ import {
   type ProcessIdentity,
 } from './process-identity.js';
 import { isProcessAlive } from './process-liveness.js';
+import { readSmallArtifactText } from './bounded-file.js';
 
 export const PROCESS_FILE_LOCK_PROTOCOL = 'scip-query-process-lock';
 export const PROCESS_FILE_LOCK_VERSION = 1;
@@ -90,7 +81,7 @@ export const NODE_PROCESS_FILE_LOCK_RUNTIME: ProcessFileLockRuntime = Object.fre
   syncFile: (fd: number) => fsyncSync(fd),
   closeFile: (fd: number) => closeSync(fd),
   linkFile: (existingPath: string, newPath: string) => linkSync(existingPath, newPath),
-  readFile: (path: string) => readFileSync(path, 'utf8'),
+  readFile: (path: string) => readSmallArtifactText(path, 'process lock record'),
   statFile: (path: string) => {
     const stat = statSync(path);
     return { dev: stat.dev, ino: stat.ino, size: stat.size, mtimeMs: stat.mtimeMs };

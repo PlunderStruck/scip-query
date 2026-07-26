@@ -1,10 +1,11 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { profileSpan } from '../instrumentation/profile.js';
 import type { HealthReport } from '../queries/health/health-report.js';
 import type { ScipDatabase } from '../storage/db.js';
 import { projectEvidenceFingerprint, sha256Hex } from '../storage/evidence-cache.js';
+import { readSmallArtifactText } from '../platform/bounded-file.js';
 
 // Q1: bumped 1 -> 2 for the twin-drift dimension (health.ts HEALTH_PHASES,
 // health-report.ts findings/axes/actions/scoreBreakdown) — an old-shaped
@@ -48,7 +49,7 @@ interface HealthReportCacheKeyDeps {
 interface HealthReportCacheFileDeps {
   existsSync(path: string): boolean;
   mkdirSync(path: string, opts: { recursive: true }): void;
-  readFileSync(path: string, encoding: 'utf8'): string;
+  readFile(path: string): string;
   renameSync(oldPath: string, newPath: string): void;
   writeFileSync(path: string, data: string): void;
   nowIso(): string;
@@ -87,7 +88,7 @@ export function readHealthReportCache(
     () => {
       if (!deps.existsSync(cachePath)) return null;
       try {
-        const parsed = JSON.parse(deps.readFileSync(cachePath, 'utf8')) as unknown;
+        const parsed = JSON.parse(deps.readFile(cachePath)) as unknown;
         if (!isHealthReportCacheFile(parsed)) return null;
         if (parsed.keyHash !== expectedHash) return null;
         hit = true;
@@ -190,7 +191,7 @@ function defaultFileDeps(): HealthReportCacheFileDeps {
   return {
     existsSync,
     mkdirSync,
-    readFileSync,
+    readFile: (path) => readSmallArtifactText(path, 'health report cache'),
     renameSync,
     writeFileSync,
     nowIso: () => new Date().toISOString(),

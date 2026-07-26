@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from 'node:fs';
+import { statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import type {
@@ -9,6 +9,7 @@ import type {
 } from '../domain/types.js';
 import { isNonNegativeFiniteNumber, isValidRecordTimestamp } from '../domain/record-validation.js';
 import type { ReindexResult } from './index.js';
+import { readSmallArtifactText } from '../platform/bounded-file.js';
 import {
   appendRotatingJsonlRecord,
   readRotatingJsonlLines,
@@ -43,7 +44,7 @@ export type ReindexActivityRecord = ReindexRunActivity | ReindexSuppressedActivi
 
 export type ReindexActivityWriteRuntime = RotatingJsonlRuntime;
 
-const defaultReadFile = (path: string): string => readFileSync(path, 'utf8');
+const defaultReadFile = (path: string): string => readSmallArtifactText(path, 'reindex activity segment');
 
 export function reindexActivityPath(outputDb: string): string {
   return join(dirname(outputDb), REINDEX_ACTIVITY_FILE);

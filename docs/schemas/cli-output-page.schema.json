@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ainsleyclark/scip-query/blob/main/docs/schemas/cli-output-page.schema.json",
+  "title": "scip-query CLI output page v1",
+  "description": "A bounded, resumable page of rendered scip-query output.",
+  "type": "object",
+  "required": ["kind", "schemaVersion", "producer", "command", "contentType", "page", "content"],
+  "properties": {
+    "kind": {
+      "const": "scip-query-output-page"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "producer": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": {
+          "const": "scip-query"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "command": {
+      "type": "string",
+      "minLength": 1
+    },
+    "contentType": {
+      "enum": ["text/plain", "application/json"]
+    },
+    "page": {
+      "type": "object",
+      "required": [
+        "offset",
+        "returnedCharacters",
+        "totalCharacters",
+        "omittedCharacters",
+        "remainingCharacters",
+        "complete",
+        "outputHash"
+      ],
+      "properties": {
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "returnedCharacters": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "totalCharacters": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "omittedCharacters": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "remainingCharacters": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "outputHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "continuation": {
+          "type": "object",
+          "required": ["cursor", "command"],
+          "properties": {
+            "cursor": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "command": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "content": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

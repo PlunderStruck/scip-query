@@ -1,10 +1,10 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { SupportedLanguage } from '../domain/types.js';
 import { probeAstLanguageRuntime, resetAstRuntimeProbeCache } from '../source/ast/ast-runtime.js';
 import type { AstLanguage } from '../source/ast/ast-language.js';
+import { readSmallArtifactText } from '../platform/bounded-file.js';
 
 const GRAMMAR_PACKAGES: Partial<Record<SupportedLanguage, { ast: AstLanguage; packages: string[] }>> = {
   typescript: { ast: 'typescript', packages: ['tree-sitter-typescript'] },
@@ -98,7 +98,9 @@ function installedPackageRoot(): string {
   for (;;) {
     const packagePath = join(current, 'package.json');
     try {
-      const parsed = JSON.parse(readFileSync(packagePath, 'utf8')) as { name?: unknown };
+      const parsed = JSON.parse(readSmallArtifactText(packagePath, 'AST parser package manifest')) as {
+        name?: unknown;
+      };
       if (parsed.name === 'scip-query') return current;
     } catch {
       // Keep walking toward the filesystem root.
@@ -110,7 +112,9 @@ function installedPackageRoot(): string {
 }
 
 function optionalDependencyVersions(packageRoot: string): Record<string, string> {
-  const parsed = JSON.parse(readFileSync(resolve(packageRoot, 'package.json'), 'utf8')) as {
+  const parsed = JSON.parse(
+    readSmallArtifactText(resolve(packageRoot, 'package.json'), 'AST parser package manifest'),
+  ) as {
     optionalDependencies?: Record<string, string>;
   };
   return parsed.optionalDependencies ?? {};

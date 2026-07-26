@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
+import { readTextFileWithinLimit, SMALL_ARTIFACT_MAX_BYTES } from '../../filesystem/bounded-file.js';
 
 export type PostIndexAugmentationFact =
   | 'auxiliary-document'
@@ -75,7 +76,12 @@ function readFingerprintCache<Result, Fingerprint>(
   fingerprint: Fingerprint,
 ): { result: Result } | null {
   try {
-    const cache = JSON.parse(readFileSync(cachePath, 'utf-8')) as { fingerprint: Fingerprint; result: Result };
+    const cache = JSON.parse(
+      readTextFileWithinLimit(cachePath, {
+        maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+        inputKind: 'post-index augmentation cache',
+      }),
+    ) as { fingerprint: Fingerprint; result: Result };
     return stableJson(cache.fingerprint) === stableJson(fingerprint) ? { result: cache.result } : null;
   } catch {
     return null;

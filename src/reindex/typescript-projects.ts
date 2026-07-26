@@ -1,6 +1,7 @@
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { isPathInsideProject as isInsideProject } from '../domain/path-normalization.js';
+import { readSmallArtifactText } from '../platform/bounded-file.js';
 
 const SKIP_DIR_NAMES = new Set([
   '.cache',
@@ -142,7 +143,7 @@ function tsconfigCoversSubdirectories(tsconfigPath: string): boolean {
 
 function readJsonObject(filePath: string): Record<string, unknown> | null {
   try {
-    const parsed = JSON.parse(readFileSync(filePath, 'utf-8')) as unknown;
+    const parsed = JSON.parse(readSmallArtifactText(filePath, 'TypeScript project config')) as unknown;
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
   } catch {
     return null;

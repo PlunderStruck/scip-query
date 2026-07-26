@@ -1,7 +1,13 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
+import {
+  readFileWithinLimit,
+  readTextFileWithinLimit,
+  SMALL_ARTIFACT_MAX_BYTES,
+  SOURCE_ARTIFACT_MAX_BYTES,
+} from '../platform/bounded-file.js';
 import type { TypeScriptDocumentFragment } from './typescript-document-emitter.js';
 import { assembleTypeScriptIndex } from './typescript-fragment-store.js';
 
@@ -83,7 +89,10 @@ export function materializeTypeScriptOverlay(input: MaterializeTypeScriptOverlay
     if (record.blobHash === null) {
       return { relativePath: record.relativePath, bytes: null, occurrences: 0, symbols: 0, referenceFragments: [] };
     }
-    const bytes = readFileSync(join(overlayRoot(input.cacheDir), 'blobs', `${record.blobHash}.scipdoc`));
+    const bytes = readFileWithinLimit(join(overlayRoot(input.cacheDir), 'blobs', `${record.blobHash}.scipdoc`), {
+      maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
+      inputKind: 'TypeScript overlay blob',
+    });
     if (bytes.byteLength !== record.byteLength || sha256(bytes) !== record.blobHash) {
       throw new Error(`TypeScript overlay blob is corrupt: ${record.relativePath}`);
     }
@@ -103,7 +112,12 @@ export function pruneTypeScriptOverlays(cacheDir: string, keepGenerationIdentiti
   const keep = new Set(keepGenerationIdentities.map(generationFile));
   const referenced = new Set<string>();
   for (const file of readdirSync(generationDir).filter((entry) => keep.has(entry))) {
-    const manifest = parseOverlayManifest(readFileSync(join(generationDir, file), 'utf8'));
+    const manifest = parseOverlayManifest(
+      readTextFileWithinLimit(join(generationDir, file), {
+        maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+        inputKind: 'TypeScript overlay manifest',
+      }),
+    );
     for (const overlay of manifest.overlays) {
       if (overlay.blobHash) referenced.add(`${overlay.blobHash}.scipdoc`);
     }
@@ -121,7 +135,12 @@ export function pruneTypeScriptOverlays(cacheDir: string, keepGenerationIdentiti
 export function readTypeScriptOverlay(cacheDir: string, generationIdentity: string): TypeScriptOverlayManifest | null {
   const path = join(overlayRoot(cacheDir), 'generations', generationFile(generationIdentity));
   if (!existsSync(path)) return null;
-  const manifest = parseOverlayManifest(readFileSync(path, 'utf8'));
+  const manifest = parseOverlayManifest(
+    readTextFileWithinLimit(path, {
+      maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+      inputKind: 'TypeScript overlay manifest',
+    }),
+  );
   if (manifest.generationIdentity !== generationIdentity) {
     throw new Error('TypeScript overlay generation identity does not match its path');
   }
@@ -137,7 +156,10 @@ function persistOverlayFragment(cacheDir: string, fragment: TypeScriptDocumentFr
   mkdirSync(blobDir, { recursive: true });
   const path = join(blobDir, `${blobHash}.scipdoc`);
   if (existsSync(path)) {
-    const existing = readFileSync(path);
+    const existing = readFileWithinLimit(path, {
+      maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
+      inputKind: 'TypeScript overlay blob',
+    });
     if (existing.byteLength !== bytes.byteLength || sha256(existing) !== blobHash) {
       throw new Error(`existing TypeScript overlay blob is corrupt: ${relativePath}`);
     }
@@ -152,7 +174,12 @@ function persistOverlayFragment(cacheDir: string, fragment: TypeScriptDocumentFr
 function persistOverlayManifest(cacheDir: string, manifest: TypeScriptOverlayManifest): void {
   const path = join(overlayRoot(cacheDir), 'generations', generationFile(manifest.generationIdentity));
   if (existsSync(path)) {
-    const existing = parseOverlayManifest(readFileSync(path, 'utf8'));
+    const existing = parseOverlayManifest(
+      readTextFileWithinLimit(path, {
+        maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+        inputKind: 'TypeScript overlay manifest',
+      }),
+    );
     if (manifestIdentity(existing) !== manifestIdentity(manifest)) {
       throw new Error(`TypeScript overlay generation is immutable: ${manifest.generationIdentity}`);
     }

@@ -12,8 +12,9 @@
  * top-level key — a full YAML parser is not needed to read that one shape,
  * and this repo has no YAML dependency to reach for.
  */
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { readSmallArtifactText } from './bounded-file.js';
 
 export interface WorkspacePackage {
   /** package.json "name" field, e.g. "@vega/shared". */
@@ -45,7 +46,7 @@ function pnpmWorkspacePatterns(projectRoot: string): string[] | null {
   const yamlPath = join(projectRoot, 'pnpm-workspace.yaml');
   if (!existsSync(yamlPath)) return null;
   try {
-    return parsePnpmWorkspacePackagesField(readFileSync(yamlPath, 'utf8'));
+    return parsePnpmWorkspacePackagesField(readSmallArtifactText(yamlPath, 'pnpm workspace manifest'));
   } catch {
     return null;
   }
@@ -95,7 +96,7 @@ function packageJsonWorkspacePatterns(projectRoot: string): string[] | null {
   const pkgPath = join(projectRoot, 'package.json');
   if (!existsSync(pkgPath)) return null;
   try {
-    const parsed = JSON.parse(readFileSync(pkgPath, 'utf8')) as {
+    const parsed = JSON.parse(readSmallArtifactText(pkgPath, 'workspace package manifest')) as {
       workspaces?: string[] | { packages?: string[] };
     };
     if (!parsed.workspaces) return null;
@@ -138,7 +139,10 @@ function readWorkspacePackage(projectRoot: string, dir: string): WorkspacePackag
   const pkgPath = join(dir, 'package.json');
   if (!existsSync(pkgPath)) return null;
   try {
-    const parsed = JSON.parse(readFileSync(pkgPath, 'utf8')) as { name?: string; exports?: unknown };
+    const parsed = JSON.parse(readSmallArtifactText(pkgPath, 'workspace package manifest')) as {
+      name?: string;
+      exports?: unknown;
+    };
     if (typeof parsed.name !== 'string' || parsed.name.length === 0) return null;
     return {
       name: parsed.name,

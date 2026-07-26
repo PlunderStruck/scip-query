@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -8,6 +8,7 @@ import type { IndexedDefinition } from '../../domain/types.js';
 import { profileEnabled, profileSpan, writeProfileEvent } from '../../instrumentation/profile.js';
 import { isProcessAlive } from '../../platform/process-liveness.js';
 import { readProcessIdentity } from '../../platform/process-identity.js';
+import { readTextFileWithinLimit, SOURCE_ARTIFACT_MAX_BYTES } from '../../platform/bounded-file.js';
 import type { SemanticCallee, SemanticReference } from '../types.js';
 import type {
   RustAnalyzerSessionRequester,
@@ -702,7 +703,12 @@ export function createWorkerRustAnalyzerSessionRequester(
       }
 
       try {
-        const payload = parseWorkerPayload(readFileSync(responsePath, 'utf8'));
+        const payload = parseWorkerPayload(
+          readTextFileWithinLimit(responsePath, {
+            maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
+            inputKind: 'Rust semantic worker response',
+          }),
+        );
         if (!payload.ok) throw new Error(payload.error);
         return payload.response;
       } finally {
@@ -734,7 +740,12 @@ export function createWorkerRustAnalyzerSessionRequester(
       }
 
       try {
-        const payload = parseImportDefinitionWorkerPayload(readFileSync(responsePath, 'utf8'));
+        const payload = parseImportDefinitionWorkerPayload(
+          readTextFileWithinLimit(responsePath, {
+            maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
+            inputKind: 'Rust import-definition worker response',
+          }),
+        );
         if (!payload.ok) throw new Error(payload.error);
         return payload.response;
       } finally {

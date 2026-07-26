@@ -1,18 +1,9 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  statSync,
-} from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { platform } from 'node:os';
+import { readSmallArtifactText } from '../platform/bounded-file.js';
 import {
   projectInputSnapshotOrNull,
   type ProjectFileFingerprint,
@@ -2393,7 +2384,7 @@ function typescriptProjectShardPath(outputDb: string, project: string): string {
 
 function readReindexMetaOrNull(metaPath: string): DecodedReindexMetadata | null {
   try {
-    return acceptedReindexMetadata(decodeReindexMetadata(readFileSync(metaPath, 'utf-8')));
+    return acceptedReindexMetadata(decodeReindexMetadata(readSmallArtifactText(metaPath, 'reindex metadata')));
   } catch {
     return null;
   }
@@ -2401,7 +2392,7 @@ function readReindexMetaOrNull(metaPath: string): DecodedReindexMetadata | null 
 
 function isUnchangedReindex(metaPath: string, fingerprint: ReindexFingerprint): boolean {
   try {
-    const decoded = decodeReindexMetadata(readFileSync(metaPath, 'utf-8'));
+    const decoded = decodeReindexMetadata(readSmallArtifactText(metaPath, 'reindex metadata'));
     if (decoded.kind !== 'legacy' && decoded.kind !== 'supported') return false;
     const meta = decoded.metadata;
     return (
@@ -2420,7 +2411,9 @@ function writeReindexMeta(metaPath: string, metadata: DecodedReindexMetadata): v
 
 function updateReindexLastRefresh(metaPath: string, lastRefresh: LastRefreshMetadata): void {
   try {
-    const metadata = acceptedReindexMetadata(decodeReindexMetadata(readFileSync(metaPath, 'utf-8')));
+    const metadata = acceptedReindexMetadata(
+      decodeReindexMetadata(readSmallArtifactText(metaPath, 'reindex metadata')),
+    );
     if (!metadata) return;
     writeReindexMeta(metaPath, { ...metadata, lastRefresh });
   } catch {
