@@ -1,4 +1,4 @@
-# Doc reconciliation (absorbs scip-doc-reconcile)
+# Doc reconciliation
 
 Use for stale standards, broken file references, docs that cite moved code, agent guidance, or normative contradictions between documentation and implementation. Only reconcile living docs — documentation agents or maintainers use to make present-day changes: AGENTS.md, CLAUDE.md, standards, command docs, workflow docs. Do not reconcile archival records (dated plans, ADRs, reports); list them in `.scipquery.json` under `docs.snapshotPaths` so `doc-drift` excludes them with a labeled exclusion instead of resurfacing them every sweep.
 

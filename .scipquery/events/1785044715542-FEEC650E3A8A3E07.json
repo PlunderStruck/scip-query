@@ -1,0 +1,8 @@
+{
+  "ts": 1785044715542,
+  "check": "doc-reference",
+  "findingId": "SQD988442A0245",
+  "event": "reopened",
+  "commit": "1128f4e24d5f5d36e0e610af4fec6f0fef785899",
+  "comparisonBaseCommit": "1128f4e24d5f5d36e0e610af4fec6f0fef785899"
+}

@@ -1,6 +1,6 @@
 # The Ways AI Coding Rots a Codebase — and the Detector Built for Each
 
-AI-assisted development fails in *specific, repeatable* ways. None of them are
+AI-assisted development fails in _specific, repeatable_ ways. None of them are
 visible in a single file, which is why linters and code review miss them: every
 one lives in the relationships between files — the reference graph, the git
 change graph, or the gap between docs and code. Each failure mode below names
@@ -19,7 +19,7 @@ hook, composable, or frontend component that already exists - a date formatter,
 a retry wrapper, a validation guard, a table toolbar. Now there are two implementations that drift independently until they
 contradict each other.
 
-**The detector:** `recent-duplicates` makes similarity *directional* using git
+**The detector:** `recent-duplicates` makes similarity _directional_ using git
 file ages - which side is the established original, which is the freshly-added
 echo.
 
@@ -61,11 +61,11 @@ inside the recency window) and tells you to pick one before they drift:
 **What the agent does:** creates an abstraction, rewires one or two call
 sites into it, and abandons the rest — the extracted logic survives inline at
 every site it missed. The codebase ends up with the worst of both worlds: an
-abstraction *and* the duplication it was meant to remove.
+abstraction _and_ the duplication it was meant to remove.
 
 **The detector:** `incomplete-migration` finds symbols that are new at the
 base ref, confirms they were wired into at least one site, then reports
-established untouched functions whose callee sets *contain* the helper's
+established untouched functions whose callee sets _contain_ the helper's
 (containment scoring, because a missed site holds the helper's logic plus its
 own — symmetric similarity under-scores exactly these):
 
@@ -88,11 +88,11 @@ scip-query incomplete-migration --base origin/main    # gate a whole branch
 ## 4. Writing code that never gets wired up
 
 **What the agent does:** builds the function, the type, the handler — and
-never connects it. Or it *was* connected, then a later session rewired the
+never connects it. Or it _was_ connected, then a later session rewired the
 flow and left the original dangling. Dead code that looks intentional.
 
 **The detectors:** `dead` (evidence-ranked, entrypoint-aware), and the
-`new-dead` check in `diff-gate` that catches it *at the moment of creation*:
+`new-dead` check in `diff-gate` that catches it _at the moment of creation_:
 
 ```
 [new-dead] resolveTheme (src/theme.ts) was changed but has zero indexed consumers
@@ -114,7 +114,7 @@ every future reader has to understand.
 
 **The detectors:** `unused-params` (trailing parameters no body uses, scoped
 to removals that are type-safe by construction), plus the abstraction-level
-versions: `wrapper-candidates` (functions that only forward), 
+versions: `wrapper-candidates` (functions that only forward),
 `passthrough-candidates` (layers that add nothing), and `stale-abstractions`
 (interfaces/bases with a single implementation).
 
@@ -131,11 +131,11 @@ scip-query stale-abstractions
 ## 6. Letting the standards docs lie
 
 **What the agent does:** nothing — that's the problem. You write in-repo
-standards *for* agents; the code moves on; the doc doesn't. The next agent
+standards _for_ agents; the code moves on; the doc doesn't. The next agent
 reads the doc and faithfully implements against a dead spec. A stale standard
 is worse than none.
 
-**The detector:** `doc-drift` reads every doc's file citations *and* its
+**The detector:** `doc-drift` reads every doc's file citations _and_ its
 co-change history, and flags docs whose referenced code kept changing after
 the doc stopped — including broken references to files that no longer exist.
 
@@ -147,8 +147,8 @@ staleness 94  product/domain-model.md
   22 change(s) since doc update  src/workflows/serviceTasks.ts
 ```
 
-**Use it:** `scip-query doc-drift`, then run the `scip-doc-reconcile` skill to
-drive staleness to zero (it updates descriptive claims and *escalates*
+**Use it:** `scip-query doc-drift`, then run the `scip-improve` documentation-reconciliation scenario to
+drive staleness to zero (it updates descriptive claims and _escalates_
 normative violations instead of silently blessing them).
 
 **Caught automatically by:** the `doc-reference` check in `diff-gate` — a doc
@@ -162,7 +162,7 @@ store. The reference graph can't see these pairs — no import connects them —
 but git history can: they've changed together in 12 of the last 14 commits.
 
 **The detector:** `co-change` finds file pairs that repeatedly change in the
-same commits with *no* dependency edge.
+same commits with _no_ dependency edge.
 
 **Use it:**
 
@@ -183,7 +183,7 @@ scip-query co-change src/db/schema.prisma  # partners of one file
 path still references, or it hoards code because it can't prove anything is
 safe to remove.
 
-**The detector:** `cleanup-plan` runs dead-code analysis to a *fixpoint* —
+**The detector:** `cleanup-plan` runs dead-code analysis to a _fixpoint_ —
 deleting batch 0 makes batch 1 dead, and the plan shows the cascade. Then
 `--verify` applies each batch in a throwaway git worktree and runs **your own
 compiler** (tsc, cargo, go, python oracles — differentially, so pre-existing
@@ -222,7 +222,7 @@ scip-query plan-context <symbol-or-file>   # before the edit
 scip-query diff-impact --json              # after the edit
 ```
 
-The `scip-concrete-plan` skill enforces this end-to-end: every step in a plan must
+The `scip-plan` skill enforces this end-to-end: every step in a plan must
 cite the scip-query command that verified it.
 
 ## 10. Slow quality decay nobody notices
@@ -231,7 +231,7 @@ cite the scip-query command that verified it.
 alarming; six weeks later the repo is unrecognizable.
 
 **The detector:** the ratchet. `health --write-baseline` snapshots finding
-identities into a committable file; `health --baseline` exits 1 on any *new*
+identities into a committable file; `health --baseline` exits 1 on any _new_
 finding. "Don't get worse" becomes an objective gate no score arithmetic can
 game.
 
@@ -281,8 +281,8 @@ The generated guidance distinguishes shared repository records from local
 preferences. Commit suppression files and `.scipquery/ledger/` outcome events
 with the change that produced them. Never commit the checkout hook files.
 
-After setup, use `scip-cleanup-audit` to confirm raw signals and
-`scip-cleanup-improve` when the user wants the agent to fix the worst confirmed
+After setup, use `scip-audit` to confirm raw signals and
+`scip-improve` when the user wants the agent to fix the worst confirmed
 items until the health score is as high as reasonably possible.
 
 **3. The gate (enforcement).**

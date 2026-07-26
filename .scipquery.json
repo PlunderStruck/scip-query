@@ -602,12 +602,8 @@
     },
     {
       "name": "agent skill documentation family",
-      "reason": "Bundled agent skills share guidance and examples when the agent workflow surface changes.",
-      "files": [
-        "skills/scip-concrete-plan/SKILL.md",
-        "skills/scip-cleanup-audit/SKILL.md",
-        "skills/scip-cleanup-improve/SKILL.md"
-      ]
+      "reason": "The consolidated planning, read-only audit, and mutating improvement workflows share the handoff contract that separates evidence gathering, prospective design, and implementation.",
+      "files": ["skills/scip-plan/SKILL.md", "skills/scip-audit/SKILL.md", "skills/scip-improve/SKILL.md"]
     },
     {
       "name": "runtime command dispatch",

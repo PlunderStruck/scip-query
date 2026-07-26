@@ -1,9 +1,28 @@
 ---
 name: scip-plan
 description: Use before, during, AND after non-trivial work: plan a change, migration, or refactor; assess what breaks when changing a public export, module boundary, schema, route, CLI command, config field, generated artifact, signature, or documented behaviour; conduct a multi-phase program and review a delegated agent's work mid-flight; plan a performance campaign; scaffold a TLA+ model before implementing, and trace-check it against the real system afterward. Distinct from the `review` skill, which reviews a finished branch or PR against coding standards and the originating spec — this one oversees a program you are conducting.
+commands:
+  - template: "scip-query plan-context <target>"
+    when: "Anchor the current flow, consumers, reuse options, and change risks."
+  - template: "scip-query refs <symbol>"
+    when: "Complete or narrow the direct consumer set for a planned symbol change."
+  - template: "scip-query affected <symbol> --json"
+    when: "Measure transitive impact when the change is not consumer-local."
 ---
 
 # scip-plan
+
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
+
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query plan-context <target>` | Pre-edit planning context for a symbol, file, or module | definitions and references; callers and callees; dataflow producers and consumers; backward and forward slices; affected symbols; change-surface risk; dependencies and reverse dependencies; module files and exports; external surface use; complexity; churn; co-change partners; active suppressions | `bounded` | Anchor the current flow, consumers, reuse options, and change risks. |
+| `scip-query refs <symbol>` | Find all files referencing a symbol | referencing file paths; reference line numbers grouped by file | `bounded` | Complete or narrow the direct consumer set for a planned symbol change. |
+| `scip-query affected <symbol> --json` | Transitive closure of symbols that could break if this symbol changes | affected symbol identities, files, and traversal depths | `bounded` | Measure transitive impact when the change is not consumer-local. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->
 
 ## Purpose
 

@@ -1,6 +1,11 @@
 # Root cause: recurring bug family → design flaw → least invasive remedy
 
-Use this mode to move from a family of related bugs to the design flaw that produces them, and to the least invasive remedy that eliminates the class. Debug mode takes one failure to one minimal fix; `scip-maintainability` finds structural smells without bug evidence; this mode starts from evidence that patching has not worked — the same kind of bug keeps recurring — and asks what the system's design gets wrong.
+Use this mode to move from a family of related bugs to the design flaw that
+produces them, and to the least invasive remedy that eliminates the class.
+Debug mode takes one failure to one minimal fix; the maintainability scenario
+in `scip-audit` finds structural smells without bug evidence; this mode starts
+from evidence that patching has not worked — the same kind of bug keeps
+recurring — and asks what the system's design gets wrong.
 
 Load shared mechanics from [`../../_shared/SKILL.md`](../../_shared/SKILL.md) only when this shortlist is insufficient.
 
@@ -37,7 +42,9 @@ The **remedy ladder** is the ordered set of interventions from least to most inv
 4. The hypothesis must retrodict every family member and predict at least one latent instance, and the latent-instance hunt must be executed (`similar`, `refs` over the invariant's carriers, or a constructed probe), not merely argued.
 5. Choose the lowest remedy rung that kills the whole class — retrodicted and latent members both. Climb a rung only when a constructed family member survives the rung below, and keep that counterexample in the record.
 6. Root-cause stories are the most rationalization-prone artifact in software: prefer delegating the attack on the diagnosis and the remedy to a fresh subagent given only the family table, system definition, and hypothesis — briefed to win by refuting it. Solo fallback: write the rival hypotheses and the latent-instance predictions before reading any more code.
-7. The verdict is derived with counts, and the diagnosis hands off to `scip-concrete-plan` for implementation — this mode does not edit application code itself.
+7. The verdict is derived with counts, and the diagnosis hands off to
+   `scip-plan` for implementation — this mode does not edit application code
+   itself.
 
 ## Workflow
 
@@ -106,7 +113,12 @@ The remedy ladder, in order:
 3. **Redesign the core behind its existing interface** — consumers untouched.
 4. **Redesign the interfaces** — last resort; consumers migrate.
 
-For the chosen rung, run the attack: construct a family member — retrodicted or latent — that survives the rung. If one survives, keep the counterexample in the record and climb one rung. Check blast radius with `scip-query affected` before proposing any rung above 1. For protocol- or lifecycle-shaped flaws whose remedy must hold across interleavings, note the escalation path to `scip-tla-model-system`.
+For the chosen rung, run the attack: construct a family member — retrodicted
+or latent — that survives the rung. If one survives, keep the counterexample
+in the record and climb one rung. Check blast radius with
+`scip-query affected` before proposing any rung above 1. For protocol- or
+lifecycle-shaped flaws whose remedy must hold across interleavings, note the
+escalation path to the TLA+ mode in `scip-plan`.
 
 This step is complete only when the chosen rung has an attack record showing no family member survives it, and every rejected lower rung keeps its surviving counterexample.
 
@@ -123,9 +135,11 @@ Retrodiction: <n>/<n> members derived
 Latent instances: <p> predicted, <f> found (each a fix target), hunts executed
 Remedy: rung <1-4> — <the intervention>; lower rungs rejected by <counterexamples>
 Blast radius: <affected summary>
-Escalation: <none | scip-tla-model-system for <property>>
+Escalation: <none | scip-plan TLA+ mode for <property>>
 ```
 
-Hand the diagnosis to `scip-concrete-plan`: the flaw and invariants become its Definitions & Invariants, the family table and hunt results become its premises, and the surviving-counterexample record seeds its attack pass.
+Hand the diagnosis to `scip-plan`: the flaw and invariants constrain current
+flow and risks, the family table and hunt results constrain the slices, and
+the surviving-counterexample record seeds the verification attacks.
 
 The diagnosis is complete only when the verdict line carries the counts and every count is backed by an entry in the record above it.

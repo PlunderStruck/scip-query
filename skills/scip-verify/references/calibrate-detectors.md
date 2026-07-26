@@ -12,7 +12,8 @@ every noise archetype into either a repo-side knob or an upstream detector
 bug. A health score that hasn't been calibrated is a number, not a fact:
 never present detector output from an uncalibrated repo as findings —
 present it as candidate findings pending classification. A calibrated score
-has to earn trust the same way a checker earns it in `scip-integrity-audit`:
+has to earn trust the same way a checker earns it in the integrity scenario
+of `scip-audit`:
 by being witnessed telling the truth on samples verified by hand.
 
 Run all five stages below. Each has a checkable completion criterion — don't

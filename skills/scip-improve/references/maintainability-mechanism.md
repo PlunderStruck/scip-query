@@ -1,6 +1,12 @@
-# Implementing a maintainability mechanism (absorbs scip-maintainability, act half)
+# Implementing a maintainability mechanism
 
-Use to implement a confirmed maintainability opportunity: a register or atlas entry that names a hidden policy, an unnamed lifecycle, or scattered concepts, and proposes a disposition. Maintainability is the degree to which real code units let a maintainer understand, verify, and change behavior without rediscovering hidden knowledge. If there is no confirmed register entry yet, run the `scip-maintainability` skill's review first — this reference starts from its output.
+Use to implement a confirmed maintainability opportunity: a register or atlas
+entry that names a hidden policy, an unnamed lifecycle, or scattered concepts,
+and proposes a disposition. Maintainability is the degree to which real code
+units let a maintainer understand, verify, and change behavior without
+rediscovering hidden knowledge. If there is no confirmed register entry yet,
+run the maintainability scenario in `scip-audit` first — this reference starts
+from its output.
 
 ## Vocabulary you need to act correctly
 

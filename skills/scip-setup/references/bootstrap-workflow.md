@@ -112,8 +112,8 @@ Complete only when config validates and every setting has a stated reason.
 
 ## 6. Hand off
 
-After setup, invoke `scip-cleanup-audit` when the user wants a report, or
-`scip-cleanup-improve` when the user wants autonomous cleanup. If the repo is
+After setup, invoke `scip-audit` when the user wants a report, or
+`scip-improve` when the user wants autonomous cleanup. If the repo is
 new to scip-query, also route through [Per-repo triage](per-repo-triage.md)
 so standing findings get encoded once rather than recurring on every gate run.
 

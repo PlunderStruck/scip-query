@@ -12,7 +12,7 @@ import { getSourceText } from '../../source/primitives/source-text.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 
 /**
- * not-implemented (D1): mechanizes scip-integrity-audit's "reachable
+ * not-implemented (D1): mechanizes scip-audit's integrity question: "reachable
  * placeholder" drill. A stub with zero callers is `dead`'s job (delete it);
  * a stub a production entry point can actually reach — through a real
  * caller, a framework-dispatched entry surface, or a package-surface/

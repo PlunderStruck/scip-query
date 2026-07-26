@@ -6,7 +6,7 @@ Key commands: `scip-query plan-context <target>` anchors each phase's step befor
 
 ## The three laws
 
-1. **A green result you have never seen fail is unverified.** This applies to tests, gates, reports from other agents, and your own checks (`scip-integrity-audit` applies the same law to code, where available).
+1. **A green result you have never seen fail is unverified.** This applies to tests, gates, reports from other agents, and your own checks (the integrity scenario in `scip-audit` applies the same law to code, where available).
 2. **A plan is a contract for a less-capable executor, not a note to self.** If a competent-but-uninspired agent could not execute a step without guessing, the step is not finished being written.
 3. **Nothing is silent.** Every finding, deviation, and shortcut must be either fixed or written down with a reason someone else would accept. 0% silent is the invariant — "fixed everything" is not.
 

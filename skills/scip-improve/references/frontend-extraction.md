@@ -1,6 +1,8 @@
-# React/Vue extraction (absorbs scip-react-maintainability + scip-vue-maintainability, act half)
+# React/Vue extraction
 
-Use to extract a React hook/component or a Vue composable/component once `scip-react-maintainability` or `scip-vue-maintainability` has produced confirmed candidate pairs. If nothing's confirmed yet, run the scan first (below), then cross-check, then act.
+Use to extract a React hook/component or a Vue composable/component once the
+frontend scenario in `scip-audit` has produced confirmed candidate pairs. If
+nothing is confirmed yet, run that scenario first, then cross-check, then act.
 
 - A **component duplicate candidate** is a pair or group of rendered structures repeating the same user-facing arrangement, controls, states, props/bindings, or data-presentation shape enough that a shared component may reduce drift.
 - A **hook candidate** (React) / **composable candidate** (Vue) is a pair or group of behaviors repeating the same state lifecycle, effects, requests, validation, persistence, or derived-data policy enough that a shared hook/composable may preserve behavior better.

@@ -1,4 +1,4 @@
-# Twin drift (absorbs scip-twin-drift)
+# Twin drift
 
 Use when the same concept exists in more than one place under the same or a near-name and the bodies have silently diverged — same-name or near-name functions across files with diverged bodies, drifted policy thresholds, one-sided fixes, or consolidating a duplicated concept into one canonical helper.
 

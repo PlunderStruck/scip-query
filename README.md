@@ -36,9 +36,9 @@ Two layers, wired by `scip-query setup`:
 
 | Phase    | Skill                                            | Commands underneath (also usable directly)          |
 | -------- | ------------------------------------------------ | --------------------------------------------------- |
-| Orient   | `scip-explore`                                   | `system`, `trace`, `plan-context`, `call-graph`     |
+| Orient   | `scip-explore`                                   | `system`, `trace`, `affected`, `call-graph`         |
 | Plan     | `scip-plan`                                      | `plan-context`, `change-surface`, `co-change`       |
-| Diagnose | `scip-diagnose`                                  | `trace`, `callers`, `probe-branches`, `diff-impact` |
+| Diagnose | `scip-diagnose`                                  | `files`, `trace`, `call-graph`, `outline`           |
 | Audit    | `scip-audit`                                     | `cleanup-plan --verify`, `dead`, `twin-drift`       |
 | Improve  | `scip-improve`                                   | `incomplete-migration`, `recent-duplicates`         |
 | Verify   | `scip-verify` (closeout) + the ambient diff gate | `diff-impact`, `diff-gate`, `health --baseline`     |
@@ -221,20 +221,18 @@ When verification _fails_, the errors name the exact references the static evide
 **8. Gate every diff.** `diff-gate` runs a defined set of checks scoped to what a change _introduces_ and exits nonzero with remediation text for each finding. Baseline regressions are included when you pass `--baseline`.
 
 <!-- BEGIN GENERATED DIFF-GATE CHECKS -->
-
-| Check                  | What it catches                                                                                                                   | When it runs                                                                                                                                                                                                                  |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `echo`                 | Changed symbols that newly echo established code elsewhere.                                                                       | Default diff gate.                                                                                                                                                                                                            |
-| `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain.                                                | Default diff gate.                                                                                                                                                                                                            |
-| `co-change-partner`    | Historically coupled files that usually change together but are missing from this diff.                                           | Default diff gate.                                                                                                                                                                                                            |
-| `twin-partner`         | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched.            | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves.                                                                                                                                     |
-| `coverage-contract`    | A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source. | Default diff gate, only when either side of a configured contract changed.                                                                                                                                                    |
-| `architecture`         | A declared architecture boundary rule has a violation absent from the committed health baseline.                                  | Default diff gate when closed dependency rows, requireCompletePolicy, requireAcyclic, requireResolvedBoundaries, requireMinimalPolicy, maxBoundaryFanOut/maxBoundaryFiles, or testPaths are configured and a baseline exists. |
-| `doc-reference`        | Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy.     | Default diff gate. Advisory (21.2) for bare file-mention citations; blocking when the citation has a line anchor or the cited file was deleted/renamed.                                                                       |
-| `unused-params`        | Fresh trailing parameters or options that no changed body uses.                                                                   | Default diff gate.                                                                                                                                                                                                            |
-| `new-dead`             | Changed production symbols with zero indexed consumers.                                                                           | Default diff gate.                                                                                                                                                                                                            |
-| `baseline`             | New health finding identities compared with the committed health baseline.                                                        | Only with `diff-gate --baseline`.                                                                                                                                                                                             |
-
+| Check | What it catches | When it runs |
+| --- | --- | --- |
+| `echo` | Changed symbols that newly echo established code elsewhere. | Default diff gate. |
+| `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain. | Default diff gate. |
+| `co-change-partner` | Historically coupled files that usually change together but are missing from this diff. | Default diff gate. |
+| `twin-partner` | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched. | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves. |
+| `coverage-contract` | A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source. | Default diff gate, only when either side of a configured contract changed. |
+| `architecture` | A declared architecture boundary rule has a violation absent from the committed health baseline. | Default diff gate when closed dependency rows, requireCompletePolicy, requireAcyclic, requireResolvedBoundaries, requireMinimalPolicy, maxBoundaryFanOut/maxBoundaryFiles, or testPaths are configured and a baseline exists. |
+| `doc-reference` | Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy. | Default diff gate. Advisory (21.2) for bare file-mention citations; blocking when the citation has a line anchor or the cited file was deleted/renamed. |
+| `unused-params` | Fresh trailing parameters or options that no changed body uses. | Default diff gate. |
+| `new-dead` | Changed production symbols with zero indexed consumers. | Default diff gate. |
+| `baseline` | New health finding identities compared with the committed health baseline. | Only with `diff-gate --baseline`. |
 <!-- END GENERATED DIFF-GATE CHECKS -->
 
 Illustrative output:

@@ -1,6 +1,13 @@
 ---
 name: scip-verify
 description: Use after finishing a change and before committing: reindex, run the postchecks matching what you edited, diff-gate, and try to refute your own PASS — including verifying that a React or Vue refactor actually achieved the reuse it claimed. Also use to calibrate detector precision once a repo is already set up and its findings look too noisy or too clean. For an existing status claim with no just-finished diff, use scip-audit instead. Distinct from the `review` skill: that one reviews a branch against coding standards and the originating spec; this one runs reindex, routed postchecks and diff-gate on a change you just made.
+commands:
+  - template: "scip-query doctor"
+    when: "Prove the workspace and configuration are usable before trusting evidence."
+  - template: "scip-query diff-impact --json"
+    when: "Compare changed files, symbols, and affected consumers with the intended diff."
+  - template: "scip-query diff-gate --json --compact"
+    when: "Run the complete finished-diff gate without blind line truncation."
 ---
 
 # scip-verify
@@ -18,6 +25,18 @@ conventions can be precise there and noisy elsewhere, so before any of the
 above output is trusted on a repo, someone has to find out which it is.
 
 Load shared mechanics — command syntax, the evidence contract, diff-gate's
+
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
+
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query doctor` | Diagnose config, index freshness, dependency readiness, and project capabilities | config, freshness, dependency, and capability diagnostics | `complete` | Prove the workspace and configuration are usable before trusting evidence. |
+| `scip-query diff-impact --json` | Compute changed symbols and downstream consumers from current git diff | changed symbols, downstream consumer identities, and impact paths | `bounded` | Compare changed files, symbols, and affected consumers with the intended diff. |
+| `scip-query diff-gate --json --compact` | Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | blocking findings with check id, message, and remediation; advisory findings; root-cause groups; changed file and symbol counts; process exit status (1 when blocking findings exist) | `bounded` | Run the complete finished-diff gate without blind line truncation. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->
 ten checks, detector-precision tiers — from `_shared`. This skill's own
 shortlist covers `doctor`, `status`, `diff-impact`, `diff-gate`, `health`,
 `doc-drift`, `self-audit`, `suppress`, and `config-validate`.

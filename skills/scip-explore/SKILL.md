@@ -1,11 +1,30 @@
 ---
 name: scip-explore
 description: Use to understand a system before editing it: what calls what, how data flows, what depends on it, what a change would reach, and what historically changed together. Includes choosing high-signal commands for an unfamiliar language and rendering the result as a flow, dependency, or blast-radius diagram. For understanding a failure mode class rather than this codebase, use `engineering-lenses`.
+commands:
+  - template: "scip-query system <module-or-scope>"
+    when: "Orient to a module's files, symbols, dependencies, and consumers."
+  - template: "scip-query trace <entry-symbol>"
+    when: "Connect an entry symbol to its definition and references."
+  - template: "scip-query affected <symbol> --json"
+    when: "Measure the transitive downstream blast radius of a change."
 ---
 
 ## Purpose
 
 Build verified understanding of how a system works end to end — entry points, call flow, data flow, dependencies, consumers, and risk — before answering or editing. Exploration means tracing code from entry points to effects against the SCIP index, not against memory or folder guesses. Load shared mechanics from `../_shared/SKILL.md`; use this skill's own shortlist first and open `_shared` only when it is insufficient.
+
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
+
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query system <module-or-scope>` | Full module map: files, symbols, deps in/out | module file paths; exported symbols with line ranges; internal dependencies; reverse dependencies | `complete` | Orient to a module's files, symbols, dependencies, and consumers. |
+| `scip-query trace <entry-symbol>` | Trace a symbol: definition + all references | definition sites with source and signature; referencing files with line numbers | `bounded` | Connect an entry symbol to its definition and references. |
+| `scip-query affected <symbol> --json` | Transitive closure of symbols that could break if this symbol changes | affected symbol identities, files, and traversal depths | `bounded` | Measure the transitive downstream blast radius of a change. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->
 
 ## Evidence rules (apply to every step below)
 

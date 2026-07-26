@@ -1,6 +1,13 @@
 ---
 name: scip-setup
 description: Use to adopt, onboard, repair, or diagnose scip-query ITSELF in a repo — first index, config, capability and dependency checks, installing or uninstalling agent skills, agent guidance blocks, project hooks, CI wiring. Wins over scip-verify for first-time adoption; calibration comes afterward.
+commands:
+  - template: "scip-query setup --json"
+    when: "Bootstrap or repair the complete repository setup."
+  - template: "scip-query doctor"
+    when: "Diagnose configuration, index, dependency, or capability failures."
+  - template: "scip-query status --capabilities"
+    when: "Confirm freshness and the exact evidence capabilities available."
 ---
 
 # scip-setup
@@ -14,6 +21,18 @@ the lifecycle commands that install, refresh, or remove scip-query's footprint
 (skills, agent guidance, hooks, CI).
 
 Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md). Use
+
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
+
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query setup --json` | Bootstrap this project: enable automatic indexing, install agent skills, refresh the index, verify capabilities, and report health | setup step outcomes, files, capabilities, smoke tests, and warnings | `complete` | Bootstrap or repair the complete repository setup. |
+| `scip-query doctor` | Diagnose config, index freshness, dependency readiness, and project capabilities | config, freshness, dependency, and capability diagnostics | `complete` | Diagnose configuration, index, dependency, or capability failures. |
+| `scip-query status --capabilities` | Show index status for this project | freshness, generation, language shards, watcher, and optional capabilities | `complete` | Confirm freshness and the exact evidence capabilities available. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->
 this skill's own command shortlist first; open the shared file only when it is
 insufficient.
 
@@ -27,7 +46,7 @@ insufficient.
 | Need to (re)install skills, agent guidance, hooks, or CI without a full bootstrap | [Lifecycle commands](references/lifecycle-commands.md) |
 | Removing scip-query's footprint from a repo | [Lifecycle commands § uninstall](references/lifecycle-commands.md#uninstall) |
 | New repo has standing findings that are intentional (naming conventions, snapshot docs, coupled files) | [Per-repo triage](references/per-repo-triage.md) |
-| Setup is done and clean; user wants a cleanup report or autonomous cleanup | Hand off to `scip-cleanup-audit` (report) or `scip-cleanup-improve` (autonomous) |
+| Setup is done and clean; user wants a cleanup report or autonomous cleanup | Hand off to `scip-audit` (report) or `scip-improve` (autonomous) |
 
 ## The core scenario
 

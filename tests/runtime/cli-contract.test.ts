@@ -4,6 +4,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { program, renderHeuristicNotice } from '../../src/runtime/cli.js';
 import { commandDescriptors } from '../../src/runtime/commands/command-descriptors.js';
 import { commandDocEntries, renderCommandReferenceMarkdown } from '../../src/runtime/command-kit/command-docs.js';
+import { renderAgentContractCatalogMarkdown } from '../../scripts/render-command-reference.js';
+import { BUILTIN_SKILLS } from '../../src/runtime/setup.js';
 import {
   commandOptions,
   definedLimitOption,
@@ -207,7 +209,7 @@ describe('CLI contract', () => {
     const publicCommandIds = new Set(
       commandDescriptors.filter((descriptor) => !descriptor.hidden).map((descriptor) => descriptor.id),
     );
-    const skillDocs = readdirSync(join(process.cwd(), 'skills')).map((skill) => `skills/${skill}/SKILL.md`);
+    const skillDocs = markdownFiles('skills');
     const documentedCommands = ['README.md', 'docs/AGENT_GUIDE.md', 'docs/COMMAND_REFERENCE.md', ...skillDocs].flatMap(
       (path) => readDocumentedCommands(path).map((command) => ({ path, command })),
     );
@@ -227,6 +229,25 @@ describe('CLI contract', () => {
     const skillMentionedCommands = readSkillMentionedCommands();
 
     expect(publicCommandIds.filter((command) => !skillMentionedCommands.has(command))).toEqual([]);
+  });
+
+  it('keeps the descriptor-owned skill command contract catalog generated', () => {
+    const catalog = readFileSync(join(process.cwd(), 'skills/_shared/references/agent-contract-catalog.md'), 'utf8');
+
+    expect(extractGeneratedAgentContractCatalog(catalog)).toBe(renderAgentContractCatalogMarkdown(commandDescriptors));
+  });
+
+  it('routes every consolidated workflow skill exactly once', () => {
+    const router = readFileSync(join(process.cwd(), 'skills/scip-query/SKILL.md'), 'utf8');
+    const routes = router.match(/## Routes\n([\s\S]*?)\n## Disambiguation/)?.[1] ?? '';
+    const routed = [...routes.matchAll(/^\|[^|\n]+\|\s*`(scip-[a-z0-9-]+)`\s*\|/gm)].map((match) => match[1]!).sort();
+    const expected = BUILTIN_SKILLS.filter((skill) => skill !== '_shared' && skill !== 'scip-query').sort();
+
+    expect(routed).toEqual(expected);
+    const preview = extractGeneratedRouterCommandPreview(router);
+    for (const skill of expected) {
+      expect(preview, `router preview missing ${skill}`).toContain(`| \`${skill}\` |`);
+    }
   });
 
   it('keeps command reference syntax generated from descriptors', () => {
@@ -474,19 +495,40 @@ describe('CLI contract', () => {
 
 function readDocumentedCommands(path: string): string[] {
   const content = readFileSync(join(process.cwd(), path), 'utf8');
-  const matches = content.matchAll(/^\s*scip-query\s+([a-z][a-z0-9-]*)\b/gm);
-  return [...matches].map((match) => match[1]!);
+  const commands = new Set<string>();
+  for (const match of content.matchAll(/`scip-query\s+([a-z][a-z0-9-]*)\b/g)) {
+    commands.add(match[1]!);
+  }
+  let inFence = false;
+  for (const line of content.split('\n')) {
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (!inFence) continue;
+    const match = line.match(/^\s*scip-query\s+([a-z][a-z0-9-]*)\b/);
+    if (match?.[1]) commands.add(match[1]);
+  }
+  return [...commands];
 }
 
 function readSkillMentionedCommands(): Set<string> {
   const commands = new Set<string>();
-  for (const skill of readdirSync(join(process.cwd(), 'skills'))) {
-    const content = readFileSync(join(process.cwd(), 'skills', skill, 'SKILL.md'), 'utf8');
+  for (const path of markdownFiles('skills')) {
+    const content = readFileSync(join(process.cwd(), path), 'utf8');
     for (const match of content.matchAll(/\bscip-query\s+([a-z][a-z0-9-]*)\b/g)) {
       commands.add(match[1]!);
     }
   }
   return commands;
+}
+
+function markdownFiles(relativeDir: string): string[] {
+  return readdirSync(join(process.cwd(), relativeDir), { withFileTypes: true }).flatMap((entry) => {
+    const relativePath = `${relativeDir}/${entry.name}`;
+    if (entry.isDirectory()) return markdownFiles(relativePath);
+    return entry.isFile() && entry.name.endsWith('.md') ? [relativePath] : [];
+  });
 }
 
 function querySourceFiles(relativeDir: string): string[] {
@@ -504,5 +546,21 @@ function extractGeneratedCommandReference(content: string): string {
     /<!-- BEGIN GENERATED COMMAND REFERENCE -->[\s\S]*?<!-- END GENERATED COMMAND REFERENCE -->/,
   );
   expect(match, 'command reference is missing generated command reference block').not.toBeNull();
+  return match![0];
+}
+
+function extractGeneratedAgentContractCatalog(content: string): string {
+  const match = content.match(
+    /<!-- BEGIN GENERATED AGENT CONTRACT CATALOG -->[\s\S]*?<!-- END GENERATED AGENT CONTRACT CATALOG -->/,
+  );
+  expect(match, 'agent contract catalog is missing its generated block').not.toBeNull();
+  return match![0];
+}
+
+function extractGeneratedRouterCommandPreview(content: string): string {
+  const match = content.match(
+    /<!-- BEGIN GENERATED ROUTER COMMAND PREVIEW -->[\s\S]*?<!-- END GENERATED ROUTER COMMAND PREVIEW -->/,
+  );
+  expect(match, 'router skill is missing its generated command preview').not.toBeNull();
   return match![0];
 }

@@ -1,6 +1,13 @@
 ---
 name: scip-audit
 description: Use to find and confirm problems WITHOUT editing: is this implementation real (decorative checkers, not-implemented, lying metrics), is a status word derived or merely asserted, are cleanup findings worth acting on, has a same-name twin silently drifted, have the living docs (AGENTS.md, standards, command docs) drifted from the code, and are there hidden policies, scattered concepts, accidental variation or weak boundaries — including React/Vue component and directory-locality pressure. Proactive: needs no reported symptom. Hand confirmed findings to scip-improve. Distinct from `complexity-cleanup` and `principal-maintainability-review`: those reason about a specific symbol's complexity or a reviewer's judgement; this one runs detectors across the repo and ranks confirmed findings by evidence.
+commands:
+  - template: "scip-query health --json"
+    when: "Orient to the repository-wide finding inventory before confirming candidates."
+  - template: "scip-query decorative-checkers --json --full"
+    when: "Audit whether validation-shaped code has a reachable failure exit."
+  - template: "scip-query doc-drift --json --full"
+    when: "Find current-guidance documents whose cited or coupled code moved."
 ---
 
 # scip-audit
@@ -11,6 +18,18 @@ real-vs-decorative, derived-vs-asserted, confirmed-vs-noise, drifted-vs-stable
 When a finding needs a fix, hand it to `scip-improve`; do not apply it here.
 
 Load shared mechanics (evidence freshness, lookup, the full command
+
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
+
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query health --json` | Composite codebase health report with prioritized action list | health score, findings, priorities, baselines, and coverage notes | `bounded` | Orient to the repository-wide finding inventory before confirming candidates. |
+| `scip-query decorative-checkers --json --full` | Decorative checker candidates: validate*/verify*/check*/assert*/is*/has* callables with no reachable failure exit anywhere in their body | checker identities, call sites, and decorative behavior evidence | `bounded` | Audit whether validation-shaped code has a reachable failure exit. |
+| `scip-query doc-drift --json --full` | Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped | document paths, coupled code subjects, and history evidence | `bounded` | Find current-guidance documents whose cited or coupled code moved. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->
 catalogue) from `../_shared/SKILL.md` — each reference file below carries its
 own shortlist first and only defers to `_shared` when that shortlist runs
 out. Before trusting any graph fact, confirm the index is fresh with

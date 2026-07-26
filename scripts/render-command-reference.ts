@@ -133,7 +133,7 @@ export function parseSkillCommands(raw: string, sourceLabel: string): SkillComma
     // quotes by default, double only when the value itself contains an
     // apostrophe (e.g. "the model's Next relation"). Both quote styles must
     // parse, or a plain `prettier --write` silently empties a skill's
-    // commands list (this broke scip-tla-model-system's router preview row).
+    // commands list (this once broke a routed TLA+ skill preview row).
     const templateMatch = line.match(/^\s*-\s*template:\s*(?:"(.*)"|'(.*)')\s*$/);
     const whenMatch = line.match(/^\s*when:\s*(?:"(.*)"|'(.*)')\s*$/);
     if (templateMatch) {
@@ -188,6 +188,28 @@ export function validateSkillCommand(entry: SkillCommandEntry, sourceLabel: stri
 
 function escapeSkillTableCell(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('`', '\\`').replaceAll('|', '\\|');
+}
+
+export function renderAgentContractCatalogMarkdown(
+  descriptors: readonly CommandDescriptor[] = commandDescriptors,
+): string {
+  const rows = [
+    '<!-- BEGIN GENERATED AGENT CONTRACT CATALOG -->',
+    '| Command | Questions it answers | Returns | Default coverage |',
+    '| --- | --- | --- | --- |',
+  ];
+  for (const descriptor of descriptors.filter((entry) => !entry.hidden)) {
+    const contract = descriptor.agent;
+    rows.push(
+      `| \`scip-query ${descriptor.command}\` | ${escapeSkillTableCell(
+        contract?.answers.join('; ') ?? 'Undeclared',
+      )} | ${escapeSkillTableCell(contract?.returns.join('; ') ?? 'Undeclared')} | \`${
+        contract?.coverage ?? 'unknown'
+      }\` |`,
+    );
+  }
+  rows.push('<!-- END GENERATED AGENT CONTRACT CATALOG -->');
+  return rows.join('\n');
 }
 
 export function renderSkillCommandsMarkdown(commands: readonly SkillCommandEntry[]): string {
@@ -303,6 +325,11 @@ if (!isTestImport && process.argv.includes('--write')) {
   const generatedDiffGateChecks = renderDiffGateChecksMarkdown();
   const generatedSkillCommandFamilies = renderSkillCommandFamiliesMarkdown();
   replaceGeneratedBlock(join(process.cwd(), 'docs/COMMAND_REFERENCE.md'), 'COMMAND REFERENCE', generated);
+  replaceGeneratedBlock(
+    join(process.cwd(), 'skills/_shared/references/agent-contract-catalog.md'),
+    'AGENT CONTRACT CATALOG',
+    renderAgentContractCatalogMarkdown(),
+  );
   for (const relativePath of ['README.md', 'docs/AI_FAILURE_MODES.md', 'docs/DETECTOR_GUIDE.md']) {
     replaceGeneratedBlock(join(process.cwd(), relativePath), 'DIFF-GATE CHECKS', generatedDiffGateChecks);
   }

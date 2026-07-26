@@ -1,6 +1,10 @@
-# Directory moves (absorbs scip-directory-architecture, act half)
+# Directory moves
 
-Use to move files to fix locality or to close a dependency rule, once `scip-directory-architecture` has produced a target structure or move ledger. If there's no reviewed target structure yet, run that skill first — this reference starts from its output and never invents a target structure on its own.
+Use to move files to fix locality or to close a dependency rule once the
+directory scenario in `scip-audit` has produced a target structure or move
+ledger. If there is no reviewed target structure yet, run that scenario first
+— this reference starts from its output and never invents a target structure
+on its own.
 
 ## Find and confirm the move
 

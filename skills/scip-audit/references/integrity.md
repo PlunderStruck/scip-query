@@ -66,7 +66,8 @@ captured-real sample.
 For every catch block, `??` fallback, and degraded mode in scope, produce an
 execution witness (a test, a probe, a log) that the PRIMARY path runs —
 because a primary path that has never worked looks identical to a healthy
-fallback. Use `scip-probe-reachability` for parser/AST branch reachability
+fallback. Use the probe-reachability mode in `scip-diagnose` for parser/AST
+branch reachability
 when autopsying fallbacks. A fallback that always fires means the feature
 above it is dead — "date of death: birth."
 

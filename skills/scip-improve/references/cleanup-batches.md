@@ -1,10 +1,12 @@
-# Cleanup batches (absorbs scip-cleanup-improve)
+# Cleanup batches
 
 Use when the user asks to fix cleanup findings, raise health, keep cleaning, continue after setup, or work until no safe confirmed cleanup remains. The target is not a higher health score for its own sake — it's fixing confirmed issues that make the codebase harder to understand, verify, or change.
 
 ## Before editing
 
-If cleanup findings haven't been swept and confirmed yet, run the `scip-cleanup-audit` sweep first (or run it yourself). Then report a markdown block, before touching any code:
+If cleanup findings have not been swept and confirmed yet, run the cleanup
+scenario in `scip-audit` first. Then report a markdown block before touching
+any code:
 
 - current score from `scip-query health --json`
 - the first confirmed batch: finding, evidence, planned fix, verification plan

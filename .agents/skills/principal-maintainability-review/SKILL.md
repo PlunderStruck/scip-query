@@ -5,7 +5,11 @@ description: Review maintainability like a principal engineer. Use when the user
 
 # Principal Maintainability Review
 
-Use this skill as a tone and judgment wrapper around [`scip-maintainability`](../../../skills/scip-maintainability/SKILL.md). The owning workflow is still `scip-maintainability`: it gathers SCIP evidence, ranks maintainability pressure, and verifies any implementation.
+Use this skill as a tone and judgment wrapper around the maintainability
+scenario in [`scip-audit`](../../../skills/scip-audit/SKILL.md). The owning
+workflow remains read-only: it gathers SCIP evidence and ranks maintainability
+pressure. Hand confirmed implementation work to
+[`scip-improve`](../../../skills/scip-improve/SKILL.md).
 
 Load shared scip-query mechanics from [`../../../skills/_shared/SKILL.md`](../../../skills/_shared/SKILL.md) when the target repo has a SCIP index.
 
@@ -22,7 +26,7 @@ Be direct without mocking the code. Taste is allowed only when it is tied to con
 
 ## Report Add-On
 
-After the `scip-maintainability` workflow has evidence, add:
+After the `scip-audit` maintainability scenario has evidence, add:
 
 ```markdown
 Principal read:
@@ -32,4 +36,6 @@ Principal read:
 - First slice:
 ```
 
-Do not run an independent closeout. Use the verification path from `scip-maintainability`.
+Do not run an independent closeout. A read-only review ends with the audit
+verdict; any implemented slice uses `scip-improve` and closes through
+`scip-verify`.

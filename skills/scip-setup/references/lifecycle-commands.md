@@ -13,7 +13,7 @@ scip-query install-skills
 When: bundled skills are missing, out of date after a scip-query upgrade, or
 a new agent root (Claude Code, Codex, or a shared agent root) needs the skill
 set that another root already has. Installs `_shared`, `scip-query`,
-`scip-setup`, and the full specialist family into Claude Code, Codex, and
+`scip-setup`, and the consolidated workflow family into Claude Code, Codex, and
 shared agent roots.
 
 Output to check: the list of skills written or linked per root. Confirm no

@@ -1,11 +1,23 @@
 ---
 name: scip-improve
 description: Use when edits should actually be made: fix confirmed cleanup findings batch by batch, consolidate a drifted twin into one canonical helper, implement a named maintainability mechanism, extract a React hook or Vue composable, move files to fix locality, or bring AGENTS.md/standards/docs back in sync with code. Requires findings already confirmed — audit first if they are not. For reducing one symbol's cognitive complexity, use `complexity-cleanup`; for deciding where a boundary belongs at design time, use `decomposition`.
+commands:
+  - template: "scip-query cleanup-plan --verify --json"
+    when: "Build compiler-checked deletion batches from confirmed dead-code findings."
+  - template: "scip-query cleanup-apply --verified --batch <n>"
+    when: "Apply one already verified cleanup batch."
+  - template: "scip-query diff-gate --json --compact"
+    when: "Gate each implemented improvement slice before declaring it complete."
 ---
 
 ## Purpose
 
-This skill edits the working tree. It does not discover findings — it acts on findings someone already confirmed: a cleanup-plan batch, a twin-drift group, a maintainability register entry, a React/Vue duplicate or extraction candidate, a directory move ledger, or a doc-drift worklist. If nothing has been confirmed yet, run the matching audit skill first (`scip-cleanup-audit`, `scip-twin-drift`, `scip-maintainability`, `scip-react-maintainability`, `scip-vue-maintainability`, `scip-directory-architecture`) and come back with its output.
+This skill edits the working tree. It does not discover findings — it acts on
+findings someone already confirmed: a cleanup-plan batch, a twin-drift group,
+a maintainability register entry, a React/Vue duplicate or extraction
+candidate, a directory move ledger, or a doc-drift worklist. If nothing has
+been confirmed yet, run the matching scenario in `scip-audit` and come back
+with its evidence and disposition.
 
 ## Ground rules, every scenario
 
@@ -29,3 +41,16 @@ This skill edits the working tree. It does not discover findings — it acts on 
 ## Owned commands
 
 `cleanup-apply`, `cleanup-plan`, `twin-drift`, `doc-drift`, `locality-candidates`, `extract-candidates`, `passthrough-candidates`, `wrapper-candidates`, `redundant-reexports`, `stale-abstractions` — each has a worked scenario in the references above; none should be run without reading the reference's evidence caveat first (several of these detectors are exploration-only with near-zero precision on codebases with intentional layering).
+
+
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
+
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query cleanup-plan --verify --json` | Ordered, batched deletion plan: graph-fact dead code plus the cascade candidates it unlocks | ordered cleanup batches, evidence, and optional verification outcomes | `bounded` | Build compiler-checked deletion batches from confirmed dead-code findings. |
+| `scip-query cleanup-apply --verified --batch <n>` | Apply a compiler-verified cleanup-plan batch to the working tree | applied files, deletions, verification, and refusal reasons | `bounded` | Apply one already verified cleanup batch. |
+| `scip-query diff-gate --json --compact` | Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | blocking findings with check id, message, and remediation; advisory findings; root-cause groups; changed file and symbol counts; process exit status (1 when blocking findings exist) | `bounded` | Gate each implemented improvement slice before declaring it complete. |
+
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+<!-- END GENERATED SKILL COMMANDS -->

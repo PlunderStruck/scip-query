@@ -54,7 +54,7 @@ For analyzer implementation work, follow [Regex Policy](REGEX_POLICY.md): regex 
    scip-query health --json
    scip-query diff-gate --json
    ```
-   Before cleanup, tell the user the health score, confirmed items, unavailable checks, and recommended first cleanup batch. Use `scip-cleanup-audit` for confirmation and `scip-cleanup-improve` when the user wants autonomous score improvement.
+   Before cleanup, tell the user the health score, confirmed items, unavailable checks, and recommended first cleanup batch. Use `scip-audit` for confirmation and `scip-improve` when the user wants autonomous score improvement.
 
 ### What you should know after this workflow
 

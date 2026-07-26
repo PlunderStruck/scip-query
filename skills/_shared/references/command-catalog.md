@@ -98,7 +98,7 @@ Every command the scip-query CLI exposes. Commands marked ★ have a usage scena
 - `work-audit <profile>` — ranks exact repeated computations in a profiling JSONL file by measured avoidable time.
 
 ## Setup, config, governance
-- `install-skills` — installs the 27-skill scip-query set into Claude Code, Codex, and shared agent roots.
+- `install-skills` — installs the nine bundled router, workflow, and shared-reference skills into Claude Code, Codex, and shared agent roots.
 - `setup-hooks` — installs or refreshes project-local Codex and Claude Code lifecycle hooks.
 - `check-deps` — checks whether scip-query and detected language indexers are actually runnable.
 - `capabilities` — reports which evidence/verification capabilities are available in this project.

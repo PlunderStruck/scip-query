@@ -15,7 +15,8 @@ every time `diff-gate` runs.
 4. Seed `coverageContracts` for every hand-maintained enumeration (policy
    maps, capability tables, registry lists) so enumeration rot fails the gate
    the day it happens.
-5. Set a hygiene cadence: run `scip-twin-drift` and `scip-claim-audit` after
+5. Set a hygiene cadence: run the twin-drift and claim scenarios in
+   `scip-audit` after
    large refactor campaigns or quarterly. The gate only sees diffs; these
    lenses see accumulated state.
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   parseSkillCommands,
+  renderAgentContractCatalogMarkdown,
   renderSkillCommandsMarkdown,
   validateSkillCommand,
 } from '../../scripts/render-command-reference.js';
@@ -37,7 +38,7 @@ description: A skill with no commands frontmatter.
 // Regression fixture: prettier's YAML formatter rewrites frontmatter string
 // quoting to single quotes by default, double only when the value itself
 // contains an apostrophe (mixed quoting in one file, as seen live in
-// skills/scip-tla-model-system/SKILL.md after `npm run format`). A `--write` run
+// a former TLA+ workflow skill after `npm run format`). A `--write` run
 // must not silently empty a skill's parsed commands list.
 const SKILL_MD_WITH_MIXED_QUOTES = `---
 name: mixed-quote-skill
@@ -130,5 +131,34 @@ describe('renderSkillCommandsMarkdown', () => {
     expect(markdown).toContain('`bounded`');
     expect(markdown).toContain('Find consumers before editing.');
     expect(markdown).toContain('Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.');
+  });
+});
+
+describe('renderAgentContractCatalogMarkdown', () => {
+  it('renders descriptor-owned questions, returned units, and coverage', () => {
+    const markdown = renderAgentContractCatalogMarkdown([
+      {
+        id: 'example',
+        command: 'example <symbol>',
+        description: 'Example command',
+        evidence: 'graph-fact',
+        renderShape: 'custom',
+        budget: 'fast',
+        handler: () => undefined,
+        agent: {
+          answers: ['Who references this symbol?'],
+          returns: ['referencing files'],
+          inputs: ['symbol'],
+          coverage: 'bounded',
+        },
+      },
+    ]);
+
+    expect(markdown).toContain('<!-- BEGIN GENERATED AGENT CONTRACT CATALOG -->');
+    expect(markdown).toContain('`scip-query example <symbol>`');
+    expect(markdown).toContain('Who references this symbol?');
+    expect(markdown).toContain('referencing files');
+    expect(markdown).toContain('`bounded`');
+    expect(markdown).toContain('<!-- END GENERATED AGENT CONTRACT CATALOG -->');
   });
 });

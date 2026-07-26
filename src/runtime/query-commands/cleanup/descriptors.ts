@@ -835,7 +835,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       'complete',
     ),
     description:
-      'Generate a behavioral A/B scaffold comparing two same-concept twins (scip-integrity-audit drill 5) — a ready-to-fill vitest file, not an auto-executor',
+      'Generate a behavioral A/B scaffold comparing two same-concept twins (scip-audit integrity scenario) — a ready-to-fill vitest file, not an auto-executor',
     options: withJsonOption([
       option(
         '--out <path>',

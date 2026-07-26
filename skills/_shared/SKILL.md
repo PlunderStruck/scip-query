@@ -16,7 +16,8 @@ A SCIP index is the compiler-derived map of a repository: source files, symbols,
 
 | Need | Where |
 |---|---|
-| Full command vocabulary (every command this repo's CLI exposes, owned or not) | `references/command-catalog.md` |
+| Human-oriented command vocabulary and when-to-use notes | `references/command-catalog.md` |
+| Descriptor-owned questions, returned units, and default coverage for every command | `references/agent-contract-catalog.md` |
 | Detector precision tiers, diff-gate's ten checks, root-cause groups, event ledger, effectiveness | `references/detector-precision-and-diffgate.md` |
 | Subagent evidence-boundary contract, dead-code reference-counting status and residual gap | `references/evidence-and-dead-code.md` |
 | The edit-to-postcheck table (which postcheck to run after which kind of edit) | `scip-verify` skill — authoritative, do not duplicate it here |

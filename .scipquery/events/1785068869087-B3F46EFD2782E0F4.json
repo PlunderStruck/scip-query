@@ -1,0 +1,15 @@
+{
+  "ts": 1785068869087,
+  "check": "doc-reference",
+  "findingId": "SQBD0BAEDC743D",
+  "event": "resolved",
+  "commit": "499ad9d186ae46d415f8e1574c315a38b44b906a",
+  "comparisonBaseCommit": "499ad9d186ae46d415f8e1574c315a38b44b906a",
+  "kind": "scip-query-outcome-event",
+  "schemaVersion": 1,
+  "eventIdentity": "[\"doc-reference\",\"SQBD0BAEDC743D\",\"resolved\",\"499ad9d186ae46d415f8e1574c315a38b44b906a\"]",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.19.6"
+  }
+}
