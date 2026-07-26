@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -285,12 +285,13 @@ describe('Watcher', () => {
     await vi.waitFor(() => expect(run).toHaveBeenCalledOnce());
 
     const launch = resolveReindexWorkerLaunch(captured[0]!);
+    const canonicalProjectRoot = realpathSync(projectRoot);
     expect(launch.workerPath).toMatch(/reindex-worker\.js$/);
     expect(launch.env).toEqual(
       expect.objectContaining({
         SCIP_REINDEX_PROJECT_ROOT: projectRoot,
-        SCIP_REINDEX_OUTPUT_SCIP: join(projectRoot, '.cache/scip-query/index.scip'),
-        SCIP_REINDEX_OUTPUT_DB: join(projectRoot, '.cache/scip-query/index.db'),
+        SCIP_REINDEX_OUTPUT_SCIP: join(canonicalProjectRoot, '.cache/scip-query/index.scip'),
+        SCIP_REINDEX_OUTPUT_DB: join(canonicalProjectRoot, '.cache/scip-query/index.db'),
         SCIP_REINDEX_INDEXER_CONCURRENCY: '6',
         SCIP_REINDEX_TYPESCRIPT_CONFIG: JSON.stringify({
           projectMode: 'workspace',

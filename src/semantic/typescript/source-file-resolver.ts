@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { realpathSync } from 'node:fs';
 import type { ScipDatabase } from '../../storage/db.js';
 import { isMissingProjectFileError, resolveProjectFile } from '../../platform/project-files.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
@@ -55,7 +56,7 @@ export function createTypeScriptSourceFiles(
         let sourceFile = sourceFiles.get(fullPath) ?? null;
         if (!sourceFile) {
           sourceFile = project.addSourceFileAtPathIfExists(fullPath) ?? null;
-          if (sourceFile) sourceFiles.set(normalizeSourcePath(sourceFile.getFilePath()), sourceFile);
+          if (sourceFile) addSourceFileAliases(sourceFiles, sourceFile);
         }
         if (sourceFile) return { project, sourceFile };
       }
@@ -75,12 +76,11 @@ function buildProjectSourceFileIndexes(
   projects: readonly ProjectBundle[],
   indexedDocuments: readonly string[],
 ): ProjectSourceFileIndex[] {
-  const indexes = projects.map(({ project }) => ({
-    project,
-    sourceFiles: new Map(
-      project.getSourceFiles().map((sourceFile) => [normalizeSourcePath(sourceFile.getFilePath()), sourceFile]),
-    ),
-  }));
+  const indexes = projects.map(({ project }) => {
+    const sourceFiles = new Map<string, SourceFile>();
+    for (const sourceFile of project.getSourceFiles()) addSourceFileAliases(sourceFiles, sourceFile);
+    return { project, sourceFiles };
+  });
 
   for (const relativePath of indexedDocuments) {
     const fullPath = resolveIndexedSourcePath(projectRoot, relativePath);
@@ -89,13 +89,23 @@ function buildProjectSourceFileIndexes(
       if (index.sourceFiles.has(fullPath)) break;
       const sourceFile = index.project.addSourceFileAtPathIfExists(fullPath) ?? null;
       if (sourceFile) {
-        index.sourceFiles.set(normalizeSourcePath(sourceFile.getFilePath()), sourceFile);
+        addSourceFileAliases(index.sourceFiles, sourceFile);
         break;
       }
     }
   }
 
   return indexes;
+}
+
+function addSourceFileAliases(index: Map<string, SourceFile>, sourceFile: SourceFile): void {
+  const sourcePath = normalizeSourcePath(sourceFile.getFilePath());
+  index.set(sourcePath, sourceFile);
+  try {
+    index.set(normalizeSourcePath(realpathSync(sourcePath)), sourceFile);
+  } catch (error) {
+    if (!isMissingProjectFileError(error)) throw error;
+  }
 }
 
 function resolveIndexedSourcePath(projectRoot: string, relativePath: string): string | null {

@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { realpathSync } from 'node:fs';
 import type { Identifier, Node, ReferencedSymbol, SourceFile } from 'ts-morph';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { escapeRegex as escapeRegExp } from '../../source/primitives/regex-utils.js';
@@ -126,7 +127,17 @@ export function dedupeLocations(locations: SemanticReference[]): SemanticReferen
 }
 
 export function toRelative(root: string, fullPath: string): string | null {
-  const relative = path.relative(root || process.cwd(), fullPath).replace(/\\/g, '/');
-  if (!relative || relative.startsWith('..')) return null;
-  return relative;
+  const anchor = root || process.cwd();
+  const direct = safeRelativePath(anchor, fullPath);
+  if (direct) return direct;
+  try {
+    return safeRelativePath(realpathSync(anchor), realpathSync(fullPath));
+  } catch {
+    return null;
+  }
+}
+
+function safeRelativePath(root: string, fullPath: string): string | null {
+  const relative = path.relative(root, fullPath).replace(/\\/g, '/');
+  return !relative || relative === '..' || relative.startsWith('../') ? null : relative;
 }
