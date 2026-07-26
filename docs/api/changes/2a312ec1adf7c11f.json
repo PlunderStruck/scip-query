@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-07-26T08:08:17.758Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "2a312ec1adf7c11f5ca0cc3a6afa320f523393b9b5b368c2c940bd02a9137b63",
+  "changes": [
+    {
+      "classification": "uncertain",
+      "kind": "baseline-created",
+      "message": "Created the first API declaration baseline.",
+      "target": "<package>"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.19.5",
+  "previousDigest": null,
+  "reason": "Establish the first complete declaration compatibility baseline for all public package exports.",
+  "schemaVersion": 1
+}

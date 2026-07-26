@@ -503,6 +503,16 @@ evolution boundary.
 **Dependencies:** none.  
 **Rollback:** manifest/checker can be reverted without runtime state.
 
+**Implemented shape:** one dependency-free contract script parses the built
+declarations with the repository's TypeScript compiler, follows generated
+re-exports, normalizes build noise, and emits a content-addressed manifest for
+all 72 package paths. The current baseline contains 871 named exports and
+eight referenced declaration chunks with no unresolved symbols. Every
+accepted baseline has an immutable digest-named classification record.
+`api:check` rebuilds first, compares the surface, validates the acceptance
+record, and compiles a preserved downstream consumer before lint or
+publication can continue.
+
 ### Slice 22 — API-03 — Version and migrate `.scipquery.json`
 
 **Invariant:** config loading distinguishes legacy/current/future versions and never casts unsupported data to `ProjectConfig`.
@@ -673,8 +683,8 @@ evolution boundary.
 |    17 | DD-11   | complete | `7c00267c` | 244 focused; 1,625 full-suite tests | Monotonic waits, conservative ownership, PID reuse, civil jumps, relative Rust budget, and atomic lock publication verified                  |
 |    18 | DD-12   | complete | `45676dd4` | 92 focused; 1,637 full-suite tests  | Locked tail repair, two-segment rotation, deterministic reads, contention, crash phases, and watch exclusions verified                       |
 |    19 | API-04  | complete | `e6637774` | 179 focused; 1,671 full-suite tests | Shared v2/v3 matrix, malformed fields, partial policy, v4 rejection, identity, reuse, publication, and additive fields verified              |
-|    20 | API-01  | complete |            | 126 focused passing tests           | v0/v1 decode, future rejection, result versions, all JSON descriptors, private protocol, config/metadata reuse, schema, and package verified |
-|    21 | API-02  | pending  |            |                                     |                                                                                                                                              |
+|    20 | API-01  | complete | `bbb0db24` | 126 focused passing tests           | v0/v1 decode, future rejection, result versions, all JSON descriptors, private protocol, config/metadata reuse, schema, and package verified |
+|    21 | API-02  | complete |            | 13 contract + consumer compile      | 72 paths, 871 exports, shared declaration closure, conservative classification, immutable acceptance, and release gate verified             |
 |    22 | API-03  | pending  |            |                                     |                                                                                                                                              |
 |    23 | API-05  | pending  |            |                                     |                                                                                                                                              |
 |    24 | API-06  | pending  |            |                                     |                                                                                                                                              |
@@ -1015,6 +1025,41 @@ evolution boundary.
   API-01 adds extraction pressure for the cohesive envelope renderer and a
   thin serialization boundary; no baseline ratchet or heuristic suppression
   was written.
+
+### Slice 21 verification record
+
+- The generated declaration contract covers all 72 `package.json` TypeScript
+  export targets, 871 named exports, and the eight generated declaration
+  chunks reachable from those entries. No exported signature remains
+  unresolved.
+- The committed manifest is bound to an immutable acceptance record by its
+  SHA-256 digest. A missing target, missing acceptance, edited manifest,
+  declaration drift, or stale package-export list fails closed.
+- Thirteen contract tests cover deterministic normalization, transitive
+  re-export resolution, additive exports and optional fields, removals,
+  optional-to-required parameters, union changes, required fields, moved
+  declaration targets, explicit first acceptance, and conservative
+  reclassification. The preserved downstream fixture compiles the root,
+  `queries/refs`, `reindex`, and `runtime` package paths.
+- `api:update` requires a meaningful reason and one of the reviewed
+  classifications. It refuses to label known breaking or uncertain changes
+  as additive, while an explicitly reviewed breaking acceptance receives its
+  own content-addressed record.
+- `npm run lint` reaches and passes formatting, ESLint, the production
+  declaration build, `api:check`, and the downstream consumer compilation. It
+  stops only on Claude's two concurrently removed
+  `scip-maintainability` wrapper links.
+- With an isolated cache, the full suite passes 220 of 221 files and 1,694
+  tests, with 2 intentional skips. The only 2 failures remain Claude's
+  concurrently edited skill catalog (`is` and 40 commands not yet covered).
+  The API contract and Windows sidecar lifecycle tests pass.
+- `npm pack --dry-run --ignore-scripts` succeeds with 356 package entries. The
+  contributor-only baseline stays in the repository, while every declaration
+  it verifies is present in the packed public surface.
+- The postchecks report no new API-02 source duplicates, unused parameters, or
+  affected consumers. The final diff gate has no API-02 blocking or advisory
+  finding; its blockers are Claude's uncommitted skill-router co-change
+  records. No suppression or health-baseline ratchet was written.
 
 ### Slice 09 verification note
 

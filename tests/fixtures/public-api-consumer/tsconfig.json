@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": false,
+    "noEmit": true,
+    "baseUrl": "../../..",
+    "paths": {
+      "scip-query": ["dist/index.d.ts"],
+      "scip-query/*": ["dist/*"]
+    },
+    "types": ["node"]
+  },
+  "include": ["index.ts"]
+}

@@ -80,6 +80,10 @@ schema, and producing package version. See the
 [CLI JSON output contract](docs/CLI_JSON_OUTPUT.md) for the compatibility
 policy, decoder API, and machine-readable schema.
 
+Contributors changing exported TypeScript declarations should also follow the
+[public API evolution workflow](docs/API_EVOLUTION.md). Its committed manifest
+makes every package-subpath signature change explicit before release.
+
 ### If npm warns about install scripts
 
 On npm setups with script approval enabled (`allow-scripts`), the install prints warnings like

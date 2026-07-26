@@ -919,7 +919,7 @@ protocol tests, compact/pretty equivalence test, additive-field test, and
 machine-readable JSON Schema make the compatibility claim executable. The
 schema and consumer guide ship in the npm tarball.
 
-### API-02 — S2 — The 72 npm export paths have no signature compatibility baseline
+### API-02 — S2 — The 72 npm export paths have no signature compatibility baseline — resolved in Slice 21
 
 **Evidence:** contract gap.
 
@@ -941,6 +941,32 @@ A result field can become required, a union member can disappear, or a parameter
 **Required tests:** compile the prior-release consumer fixture against the new package; prove additive changes pass and breaking signatures require an approved baseline update.
 
 **Acceptance condition:** a release cannot change a public TypeScript signature without a reviewed compatibility diff.
+
+**Resolution:** `scripts/api-surface-contract.mjs` now builds the declaration
+surface behind all 72 package export paths. It resolves generated re-exports
+through tsup's shared declaration chunks, records 871 exported declarations
+with their actual value/type/class/function/constant kind and normalized
+signature, and retains the eight shared chunks that define referenced public
+types. Comments, whitespace, named import/export order, path separators, and
+generated chunk hashes are normalized before the surface is hashed.
+
+`docs/api/scip-query.api.json` is the content-addressed baseline. Its matching
+record under `docs/api/changes/` binds the digest, package version, automatic
+classification, reviewed classification, reason, and exact change list.
+`api:check` rejects a missing declaration target, malformed or hand-edited
+manifest, missing acceptance record, removed export/path, changed signature,
+or referenced declaration drift. `api:update` requires an explicit
+`additive`, `compatible-correction`, or `breaking` decision and refuses to
+launder known or uncertain drift as additive.
+
+The hostile contract matrix covers export removal/addition, optional-to-
+required parameters, union narrowing and widening, optional and required
+interface fields, declaration-target movement, normalization noise, transitive
+re-export resolution, missing declaration files, missing baselines, and
+unclassified drift. A preserved downstream fixture compiles imports from the
+root, `queries/refs`, `reindex`, and `runtime` against each newly built package.
+Both lint and `prepublishOnly` run the API check, so release cannot proceed on
+an unreviewed declaration change.
 
 ### API-03 — S3 — `.scipquery.json` has no schema version or migration boundary
 
