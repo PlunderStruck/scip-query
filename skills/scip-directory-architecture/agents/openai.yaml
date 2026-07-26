@@ -1,4 +1,0 @@
-interface:
-  display_name: "SCIP Directory Architecture"
-  short_description: "Review and propose source folder boundaries"
-  default_prompt: "Use $scip-directory-architecture to review this repository directory structure and propose safer ownership boundaries."

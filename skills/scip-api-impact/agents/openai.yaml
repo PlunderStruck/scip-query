@@ -1,4 +1,0 @@
-interface:
-  display_name: "SCIP API Impact"
-  short_description: "Assess public API and boundary change impact"
-  default_prompt: "Assess the impact of this public API or module-boundary change with scip-query evidence and produce a migration-safe plan."

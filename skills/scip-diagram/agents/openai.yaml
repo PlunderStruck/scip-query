@@ -1,4 +1,0 @@
-interface:
-  display_name: "SCIP Diagram"
-  short_description: "Create HTML code-flow diagrams from scip-query"
-  default_prompt: "Generate an HTML diagram that explains this code path using scip-query evidence and command provenance."

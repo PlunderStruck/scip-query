@@ -1,4 +1,0 @@
-interface:
-  display_name: "SCIP Maintainability"
-  short_description: "Review hidden policy and boundaries"
-  default_prompt: "Use $scip-maintainability to find maintainability risks, hidden policies, and weak boundaries with SCIP evidence."

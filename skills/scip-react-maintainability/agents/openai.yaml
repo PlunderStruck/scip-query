@@ -1,4 +1,0 @@
-interface:
-  display_name: "SCIP React Maintainability"
-  short_description: "Review React reuse and component pressure"
-  default_prompt: "Use $scip-react-maintainability to review React reuse, hooks, components, and frontend health pressure."

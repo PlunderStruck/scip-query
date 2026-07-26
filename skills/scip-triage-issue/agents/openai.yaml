@@ -1,4 +1,0 @@
-interface:
-  display_name: "SCIP Triage Issue"
-  short_description: "Turn bug reports into evidence-backed fix plans"
-  default_prompt: "Triage this issue with scip-query evidence, identify the root cause, and write a test-first fix plan."

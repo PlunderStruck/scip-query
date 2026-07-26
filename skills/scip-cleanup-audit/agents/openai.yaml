@@ -1,4 +1,0 @@
-interface:
-  display_name: "SCIP Cleanup Audit"
-  short_description: "Confirm and rank cleanup, de-bloat, and recent AI residue signals without editing"
-  default_prompt: "Audit scip-query cleanup signals, classify findings with evidence, and report the safest next cleanup batch."

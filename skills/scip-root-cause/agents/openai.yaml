@@ -1,4 +1,0 @@
-interface:
-  display_name: "SCIP Root Cause"
-  short_description: "Diagnose the design flaw behind a family of recurring bugs"
-  default_prompt: "Use scip-query to trace a family of related bugs to the design flaw that produces them: retrodict every member, hunt the latent instances the flaw predicts, and propose the least invasive remedy that eliminates the class."

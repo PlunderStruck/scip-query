@@ -1,4 +1,0 @@
-interface:
-  display_name: "Concrete Plan"
-  short_description: "SCIP-grounded implementation plans"
-  default_prompt: "Use $scip-concrete-plan to create a SCIP-grounded implementation plan for this change."

@@ -1,4 +1,0 @@
-interface:
-  display_name: "SCIP Cleanup Improve"
-  short_description: "Fix confirmed cleanup findings batch by batch with verification"
-  default_prompt: "Improve scip-query health by fixing confirmed cleanup findings one verified batch at a time."

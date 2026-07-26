@@ -1,4 +1,0 @@
-interface:
-  display_name: "SCIP Doc Reconcile"
-  short_description: "Repair docs that drift from code"
-  default_prompt: "Use $scip-doc-reconcile to reconcile this documentation with current SCIP-backed code evidence."
