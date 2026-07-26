@@ -634,11 +634,7 @@ export const healthPhaseConcurrency = createAdaptiveConcurrencyResolver({
   defaultMaximum: MAX_DEFAULT_HEALTH_PHASE_CONCURRENCY,
 });
 
-export function renderHealthReport(report: HealthReport, json: boolean | undefined): void {
-  if (json) {
-    console.log(JSON.stringify(report, null, 2));
-    return;
-  }
+export function renderHealthReport(report: HealthReport): void {
   console.log(`\n  Codebase Health Score: ${report.score}/100`);
   console.log(`    Risk:    ${report.riskScore}/100  (risk-oriented graph facts + change graph)`);
   console.log(`    Hygiene: ${report.hygieneScore}/100  (tidiness candidates)\n`);

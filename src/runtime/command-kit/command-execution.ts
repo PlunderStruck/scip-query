@@ -6,7 +6,13 @@ import type {
   InvocationCoverage,
 } from './command-descriptor-types.js';
 import { withDb } from '../cli-context.js';
-import { commandAnalysisBudget, renderHeuristicNotice, type AnalysisBudgetDisclosure } from '../cli-support.js';
+import {
+  cliVersion,
+  commandAnalysisBudget,
+  renderHeuristicNotice,
+  type AnalysisBudgetDisclosure,
+} from '../cli-support.js';
+import { createCliJsonEnvelope, serializeCliJsonEnvelope } from '../cli-json-envelope.js';
 import { render } from '../render.js';
 import type { ReportSection } from '../render.js';
 
@@ -301,6 +307,9 @@ function renderRows<Row, Ctx extends DbCommandContext>(
 function runCommandOutput<Output, Ctx extends DbCommandContext>(ctx: Ctx, spec: CommandOutputSpec<Output, Ctx>): void {
   const output = spec.query(ctx);
   if (booleanOptionValue(ctx.opts, 'json')) {
+    if (!spec.commandName) {
+      throw new Error('JSON output requires a command name so its result contract can be identified.');
+    }
     printJsonEnvelope(spec.commandName, ctx.args, ctx.opts, spec.toJson ? spec.toJson(output, ctx) : output, {
       analysisBudget: budgetedContextAnalysisBudget(ctx),
       coverage: spec.coverage?.(output, ctx),
@@ -332,7 +341,7 @@ function budgetedContextAnalysisBudget(ctx: DbCommandContext): AnalysisBudgetDis
 }
 
 export function printJsonEnvelope(
-  command: string | undefined,
+  command: string,
   args: readonly unknown[],
   options: CommandOptions,
   result: unknown,
@@ -340,28 +349,26 @@ export function printJsonEnvelope(
     analysisBudget?: AnalysisBudgetDisclosure;
     coverage?: InvocationCoverage;
     agentResult?: unknown;
+    resultSchemaVersion?: number;
   } = {},
 ): void {
-  const evidence = command ? commandEvidenceById.get(command) : undefined;
-  const contract = command ? commandAgentContractById.get(command) : undefined;
+  const evidence = commandEvidenceById.get(command);
+  const contract = commandAgentContractById.get(command);
   const coverage = extra.coverage ?? defaultInvocationCoverage(contract, result, extra.analysisBudget);
   if (coverage) validateInvocationCoverage(coverage);
-  console.log(
-    JSON.stringify(
-      {
-        command,
-        ...(evidence ? { evidence } : {}),
-        ...(extra.analysisBudget ? { analysisBudget: extra.analysisBudget } : {}),
-        args: jsonPositionals(args),
-        options,
-        result,
-        ...(coverage ? { coverage } : {}),
-        ...(extra.agentResult !== undefined ? { agentResult: extra.agentResult } : {}),
-      },
-      null,
-      booleanOptionValue(options, 'compact') ? 0 : 2,
-    ),
-  );
+  const envelope = createCliJsonEnvelope({
+    producerVersion: cliVersion,
+    command,
+    ...(evidence ? { evidence } : {}),
+    ...(extra.analysisBudget ? { analysisBudget: extra.analysisBudget } : {}),
+    args: jsonPositionals(args),
+    options,
+    result,
+    ...(coverage ? { coverage } : {}),
+    ...(extra.agentResult !== undefined ? { agentResult: extra.agentResult } : {}),
+    ...(extra.resultSchemaVersion === undefined ? {} : { resultSchemaVersion: extra.resultSchemaVersion }),
+  });
+  console.log(serializeCliJsonEnvelope(envelope, booleanOptionValue(options, 'compact')));
 }
 
 export function validateInvocationCoverage(coverage: InvocationCoverage): void {

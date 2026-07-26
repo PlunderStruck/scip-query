@@ -79,6 +79,8 @@ import {
   withDb,
 } from '../cli-context.js';
 import {
+  DIFF_IMPACT_BATCH_COMMAND,
+  HEALTH_PHASE_COMMAND,
   cliVersion,
   renderDiffImpactReport,
   renderHealthReport,
@@ -93,6 +95,7 @@ import {
   stringArrayOptionValue,
   stringOptionValue,
 } from '../command-kit/command-execution.js';
+import { printIsolatedAnalysisResult } from '../isolated-analysis-runner.js';
 
 // Descriptor-backed query commands live under runtime/query-commands/*.
 // This file owns side-effect lifecycles such as reindex, setup, watch, and
@@ -222,7 +225,7 @@ export function handleDiffImpactBatch(rawOpts: unknown): void {
     const files = JSON.parse(process.env['SCIP_QUERY_DIFF_IMPACT_FILES'] ?? '[]') as string[];
     const plan = queries.diffImpactPlan(db, { base: stringOptionValue(opts, 'base') });
     const result = queries.diffImpactPartial(db, files, plan.changedFiles, plan.changedRanges);
-    console.log(JSON.stringify(result));
+    printIsolatedAnalysisResult(DIFF_IMPACT_BATCH_COMMAND, result);
   });
 }
 
@@ -263,7 +266,7 @@ export function handleHealthPhase(phase: unknown, rawOpts: unknown): void {
       validPhases.length === 1
         ? queries.healthPhase(db, validPhases[0]!, phaseOpts)
         : healthPhases(db, validPhases, phaseOpts);
-    console.log(JSON.stringify(result));
+    printIsolatedAnalysisResult(HEALTH_PHASE_COMMAND, result);
   });
 }
 
@@ -288,7 +291,7 @@ export async function handleHealth(rawOpts: unknown): Promise<void> {
       printJsonEnvelope('health', [], opts, disclosedReport);
       return;
     }
-    renderHealthReport(disclosedReport, false);
+    renderHealthReport(disclosedReport);
   } catch (err) {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exit(1);

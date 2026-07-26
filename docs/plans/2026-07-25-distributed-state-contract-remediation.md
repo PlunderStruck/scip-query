@@ -476,6 +476,15 @@ identity, and future-version rejection. The compatibility table is in
 **Dependencies:** none.  
 **Rollback:** additive fields do not break tolerant old consumers.
 
+**Implemented shape:** the public v1 transport uses
+`kind: "scip-query-result"`, `schemaVersion`, producer identity,
+command-owned `resultSchemaVersion`, and the unchanged command/options/result
+fields. `scip-query/runtime` exports the v0/v1 decoder and compatibility
+guard. Hidden analysis children use a distinct, fail-closed v1 protocol;
+host-owned hook JSON remains untouched. A packaged JSON Schema, two golden
+fixtures, generated command-reference link, and consumer guide define the
+evolution boundary.
+
 ### Slice 21 — API-02 — Generate and gate the npm declaration surface
 
 **Invariant:** a change to any exported declaration is visible and must be intentionally accepted before release.
@@ -643,35 +652,35 @@ identity, and future-version rejection. The compatibility table is in
 
 ## 10. Implementation ledger
 
-| Slice | Finding | Status   | Commit     | Focused tests                       | Notes                                                                                                                             |
-| ----: | ------- | -------- | ---------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-|    01 | DD-02   | complete | `d8b62fce` | 60 focused tests                    | PID reuse, legacy records, and per-worktree lifecycle verified                                                                    |
-|    02 | RES-01  | complete | `17ea60bd` | 230 regression + 2 contract tests   | Reap, byte/time budgets, transient retry, and inventory verified                                                                  |
-|    03 | TEST-01 | complete | `6fbe2a9a` | 20 behavior + 1 contract test       | Runner, subscription, clock, and launch-policy seams verified                                                                     |
-|    04 | RES-02  | complete | `7eaab92e` | 61 focused tests                    | Child reap, output drain, close failures, and ownership verified                                                                  |
-|    05 | RES-03  | complete | `63ec2cc0` | 163 Rust semantic tests             | Frame bounds, sticky failure, waiters, and one-shot kill verified                                                                 |
-|    06 | RES-04  | complete | `8587125e` | 34 focused tests                    | Time/byte bounds, lock/recheck, staging cleanup, and TLA verified                                                                 |
-|    07 | RES-05  | complete | `b9cb9aa3` | 20 focused + 25 contract tests      | Exit/error/timeout ownership, result identity, and cache verified                                                                 |
-|    08 | DD-08   | complete | `2a4d62b4` | 180 focused + contract tests        | Fault phases, platform limits, callers, and binary promotion verified                                                             |
-|    09 | DD-04   | complete | `437dc042` | 181 focused tests                   | Partial creation, guarded reclaim, shared I/O, PID reuse, legacy, and release verified                                            |
-|    10 | DD-01   | complete | `c58c28df` | 112 focused; 1,558 full-suite tests | Immutable pointer, retained companions, cursor/semantic isolation, architecture gate verified                                     |
-|    11 | DD-03   | complete | `a13f6808` | 120 focused; 1,574 full-suite tests | Immutable admission, exclusive claims, completion receipts, retry, expiry, and status verified                                    |
-|    12 | DD-05   | complete | `aff8685c` | 53 focused; 1,590 full-suite tests  | Revision checks, narrow merges, exclusive create, strict Markdown conflicts, and crash boundaries verified                        |
-|    13 | DD-06   | complete | `5bc743ed` | 39 focused; 1,598 full-suite tests  | Exclusive create, idempotent replay, compare-and-replace, schema decoding, and crash boundaries verified                          |
-|    14 | DD-07   | complete | `5fd33ab0` | 24 focused; 1,603 full-suite tests  | G2 publication, deletion/recreation, ownership, and touch ordering verified                                                       |
-|    15 | DD-09   | complete | `adfded36` | 48 focused; 1,606 full-suite tests  | Serialized UPSERT, exact retry, collision, timeout, and suppression verified                                                      |
-|    16 | DD-10   | complete | `d577a205` | 68 focused mailbox/identity tests   | Atomic claims, first-completion fencing, retry, quotas, crash recovery, legacy overlap, fairness, cleanup, and telemetry verified |
-|    17 | DD-11   | complete | `7c00267c` | 244 focused; 1,625 full-suite tests | Monotonic waits, conservative ownership, PID reuse, civil jumps, relative Rust budget, and atomic lock publication verified       |
-|    18 | DD-12   | complete | `45676dd4` | 92 focused; 1,637 full-suite tests  | Locked tail repair, two-segment rotation, deterministic reads, contention, crash phases, and watch exclusions verified            |
-|    19 | API-04  | complete |            | 179 focused; 1,671 full-suite tests | Shared v2/v3 matrix, malformed fields, partial policy, v4 rejection, identity, reuse, publication, and additive fields verified   |
-|    20 | API-01  | pending  |            |                                     |                                                                                                                                   |
-|    21 | API-02  | pending  |            |                                     |                                                                                                                                   |
-|    22 | API-03  | pending  |            |                                     |                                                                                                                                   |
-|    23 | API-05  | pending  |            |                                     |                                                                                                                                   |
-|    24 | API-06  | pending  |            |                                     |                                                                                                                                   |
-|    25 | REL-01  | pending  |            |                                     |                                                                                                                                   |
-|    26 | REL-02  | pending  |            |                                     |                                                                                                                                   |
-|    27 | REL-03  | pending  |            |                                     |                                                                                                                                   |
+| Slice | Finding | Status   | Commit     | Focused tests                       | Notes                                                                                                                                        |
+| ----: | ------- | -------- | ---------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+|    01 | DD-02   | complete | `d8b62fce` | 60 focused tests                    | PID reuse, legacy records, and per-worktree lifecycle verified                                                                               |
+|    02 | RES-01  | complete | `17ea60bd` | 230 regression + 2 contract tests   | Reap, byte/time budgets, transient retry, and inventory verified                                                                             |
+|    03 | TEST-01 | complete | `6fbe2a9a` | 20 behavior + 1 contract test       | Runner, subscription, clock, and launch-policy seams verified                                                                                |
+|    04 | RES-02  | complete | `7eaab92e` | 61 focused tests                    | Child reap, output drain, close failures, and ownership verified                                                                             |
+|    05 | RES-03  | complete | `63ec2cc0` | 163 Rust semantic tests             | Frame bounds, sticky failure, waiters, and one-shot kill verified                                                                            |
+|    06 | RES-04  | complete | `8587125e` | 34 focused tests                    | Time/byte bounds, lock/recheck, staging cleanup, and TLA verified                                                                            |
+|    07 | RES-05  | complete | `b9cb9aa3` | 20 focused + 25 contract tests      | Exit/error/timeout ownership, result identity, and cache verified                                                                            |
+|    08 | DD-08   | complete | `2a4d62b4` | 180 focused + contract tests        | Fault phases, platform limits, callers, and binary promotion verified                                                                        |
+|    09 | DD-04   | complete | `437dc042` | 181 focused tests                   | Partial creation, guarded reclaim, shared I/O, PID reuse, legacy, and release verified                                                       |
+|    10 | DD-01   | complete | `c58c28df` | 112 focused; 1,558 full-suite tests | Immutable pointer, retained companions, cursor/semantic isolation, architecture gate verified                                                |
+|    11 | DD-03   | complete | `a13f6808` | 120 focused; 1,574 full-suite tests | Immutable admission, exclusive claims, completion receipts, retry, expiry, and status verified                                               |
+|    12 | DD-05   | complete | `aff8685c` | 53 focused; 1,590 full-suite tests  | Revision checks, narrow merges, exclusive create, strict Markdown conflicts, and crash boundaries verified                                   |
+|    13 | DD-06   | complete | `5bc743ed` | 39 focused; 1,598 full-suite tests  | Exclusive create, idempotent replay, compare-and-replace, schema decoding, and crash boundaries verified                                     |
+|    14 | DD-07   | complete | `5fd33ab0` | 24 focused; 1,603 full-suite tests  | G2 publication, deletion/recreation, ownership, and touch ordering verified                                                                  |
+|    15 | DD-09   | complete | `adfded36` | 48 focused; 1,606 full-suite tests  | Serialized UPSERT, exact retry, collision, timeout, and suppression verified                                                                 |
+|    16 | DD-10   | complete | `d577a205` | 68 focused mailbox/identity tests   | Atomic claims, first-completion fencing, retry, quotas, crash recovery, legacy overlap, fairness, cleanup, and telemetry verified            |
+|    17 | DD-11   | complete | `7c00267c` | 244 focused; 1,625 full-suite tests | Monotonic waits, conservative ownership, PID reuse, civil jumps, relative Rust budget, and atomic lock publication verified                  |
+|    18 | DD-12   | complete | `45676dd4` | 92 focused; 1,637 full-suite tests  | Locked tail repair, two-segment rotation, deterministic reads, contention, crash phases, and watch exclusions verified                       |
+|    19 | API-04  | complete | `e6637774` | 179 focused; 1,671 full-suite tests | Shared v2/v3 matrix, malformed fields, partial policy, v4 rejection, identity, reuse, publication, and additive fields verified              |
+|    20 | API-01  | complete |            | 126 focused passing tests           | v0/v1 decode, future rejection, result versions, all JSON descriptors, private protocol, config/metadata reuse, schema, and package verified |
+|    21 | API-02  | pending  |            |                                     |                                                                                                                                              |
+|    22 | API-03  | pending  |            |                                     |                                                                                                                                              |
+|    23 | API-05  | pending  |            |                                     |                                                                                                                                              |
+|    24 | API-06  | pending  |            |                                     |                                                                                                                                              |
+|    25 | REL-01  | pending  |            |                                     |                                                                                                                                              |
+|    26 | REL-02  | pending  |            |                                     |                                                                                                                                              |
+|    27 | REL-03  | pending  |            |                                     |                                                                                                                                              |
 
 ### Slice 10 verification record
 
@@ -964,6 +973,48 @@ identity, and future-version rejection. The compatibility table is in
 - `docs/REINDEX_METADATA_COMPATIBILITY.md` records the version table,
   capability matrix, consumer policies, unknown-field preservation, and the
   reviewed procedure required to enable v4.
+
+### Slice 20 verification record
+
+- Every descriptor-backed public command that advertises `--json` is exercised
+  through the shared renderer matrix. The emitted v1 envelope identifies the
+  transport kind/version, package producer/version, command, and independent
+  result schema before preserving the established evidence, budget, args,
+  options, result, coverage, and agent-result fields.
+- The newest decoder accepts the committed unversioned v0 and current v1
+  fixtures, preserves an unknown additive fixture field, and rejects malformed
+  identities, unsupported outer versions, and unsupported per-command result
+  versions with actionable context. A legacy tolerant consumer still reads the
+  additive v1 record.
+- Pretty and compact serialization parse to the same record. The JSON Schema
+  constants and required keys are checked against the runtime constants, and
+  the package file allowlist includes the schema directory.
+- The two private analysis children now send a separately identified v1
+  protocol. Both synchronous and asynchronous parent paths validate protocol,
+  producer, version, command, and result; invalid JSON, future versions,
+  command mismatch, timeouts, and reaping remain fail-closed. Host-owned hook
+  outputs are explicitly classified and are not changed.
+- The 126 passing focused assertions include the envelope, isolated runner,
+  reindex JSON, CLI support, shared metadata/config record validation, and all
+  API-01 portions of the CLI contract. The CLI contract's only two failures
+  remain Claude's concurrently edited skill catalog (`is` and 40 commands not
+  yet covered).
+- With an isolated cache, the full suite passes 219 of 220 files and 1,681
+  tests, with 2 intentional skips. Its only 2 failures are those same
+  skill-owned catalog assertions; all API-01 tests pass.
+- Typecheck and the production build pass. The programmatic-consumption guide,
+  generated command-reference link, schema, and runtime decoder export are
+  present in the built declarations and packaged file surface.
+- Formatting and ESLint pass. Full lint stops only on Claude's two broken
+  `.agents/skills` links to the removed `scip-maintainability` directory.
+- The final source diff gate has zero blocking or advisory findings after the
+  producer-version dependency was routed through the existing runtime boundary
+  and decoded-record object checks were centralized in the domain validator.
+  Its sole blocking finding is Claude's uncommitted router co-change.
+- `health --baseline` reports 72 accumulated remediation-program deltas.
+  API-01 adds extraction pressure for the cohesive envelope renderer and a
+  thin serialization boundary; no baseline ratchet or heuristic suppression
+  was written.
 
 ### Slice 09 verification note
 

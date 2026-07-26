@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ainsleyclark/scip-query/blob/main/docs/schemas/cli-json-envelope.schema.json",
+  "title": "scip-query CLI JSON envelope v1",
+  "description": "The public transport record emitted by scip-query commands that accept --json.",
+  "type": "object",
+  "required": ["kind", "schemaVersion", "producer", "command", "resultSchemaVersion", "args", "options", "result"],
+  "properties": {
+    "kind": {
+      "const": "scip-query-result"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "producer": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": {
+          "const": "scip-query"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "command": {
+      "type": "string",
+      "minLength": 1
+    },
+    "resultSchemaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "evidence": {
+      "enum": ["graph-fact", "heuristic", "mixed"]
+    },
+    "analysisBudget": {},
+    "args": {
+      "type": "array"
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "result": {},
+    "coverage": {},
+    "agentResult": {}
+  },
+  "additionalProperties": true
+}

@@ -1,5 +1,5 @@
 import { isProjectFileFingerprint, type ProjectFileFingerprint } from './project-input.js';
-import { isValidRecordTimestamp } from './record-validation.js';
+import { isRecordObject, isValidRecordTimestamp } from './record-validation.js';
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from './config-types.js';
 import type { LastRefreshMetadata } from './maintenance-types.js';
 
@@ -70,7 +70,7 @@ export function decodeReindexMetadata(input: unknown): DecodedReindexMetadata {
       return { kind: 'malformed', reason: `invalid JSON: ${errorMessage(error)}` };
     }
   }
-  if (!isRecord(value)) return { kind: 'malformed', reason: 'metadata must be a JSON object' };
+  if (!isRecordObject(value)) return { kind: 'malformed', reason: 'metadata must be a JSON object' };
   const version = value['version'];
   if (!Number.isInteger(version)) return { kind: 'malformed', reason: 'version must be an integer' };
   if (version !== LEGACY_REINDEX_METADATA_VERSION && version !== CURRENT_REINDEX_METADATA_VERSION) {
@@ -113,7 +113,7 @@ export function canonicalReindexMetadataIdentity(decoded: DecodedReindexMetadata
 
 export function reindexMetadataCapabilities(metadata: ReindexMetadata): ReindexMetadataCapabilities {
   const hasFingerprint = metadata.fingerprint !== undefined;
-  const hasStructuredFingerprint = isRecord(metadata.fingerprint);
+  const hasStructuredFingerprint = isRecordObject(metadata.fingerprint);
   const hasIndexedLanguages = metadata.indexedLanguages !== undefined;
   const complete = metadata.status === 'complete';
   const v3 = metadata.version === CURRENT_REINDEX_METADATA_VERSION ? metadata : null;
@@ -181,7 +181,7 @@ function isSkippedLanguageArray(value: unknown): value is { language: SupportedL
     Array.isArray(value) &&
     value.every(
       (entry) =>
-        isRecord(entry) &&
+        isRecordObject(entry) &&
         typeof entry['language'] === 'string' &&
         SUPPORTED_LANGUAGE_SET.has(entry['language']) &&
         typeof entry['reason'] === 'string',
@@ -191,24 +191,21 @@ function isSkippedLanguageArray(value: unknown): value is { language: SupportedL
 
 function isLanguageFingerprintMap(value: unknown): boolean {
   return (
-    isRecord(value) &&
+    isRecordObject(value) &&
     Object.entries(value).every(
-      ([language, fingerprint]) => SUPPORTED_LANGUAGE_SET.has(language) && isRecord(fingerprint),
+      ([language, fingerprint]) => SUPPORTED_LANGUAGE_SET.has(language) && isRecordObject(fingerprint),
     )
   );
 }
 
 function isTypeScriptProjectShardMap(value: unknown): boolean {
   return (
-    isRecord(value) &&
+    isRecordObject(value) &&
     Object.values(value).every(
-      (shard) => isRecord(shard) && Array.isArray(shard['files']) && shard['files'].every(isProjectFileFingerprint),
+      (shard) =>
+        isRecordObject(shard) && Array.isArray(shard['files']) && shard['files'].every(isProjectFileFingerprint),
     )
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function errorMessage(error: unknown): string {

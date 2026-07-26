@@ -1,0 +1,225 @@
+import { isRecordObject } from '../domain/record-validation.js';
+
+export const CLI_JSON_ENVELOPE_KIND = 'scip-query-result' as const;
+export const LEGACY_CLI_JSON_ENVELOPE_SCHEMA_VERSION = 0 as const;
+export const CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION = 1 as const;
+export const DEFAULT_CLI_RESULT_SCHEMA_VERSION = 1 as const;
+
+export interface CliJsonProducer {
+  name: 'scip-query';
+  version: string;
+}
+
+/**
+ * One public machine-readable CLI response. The envelope is the stable
+ * transport contract; `result` remains the command-owned payload whose schema
+ * can advance independently through `resultSchemaVersion`.
+ */
+export interface CliJsonEnvelopeV1<Result = unknown> {
+  kind: typeof CLI_JSON_ENVELOPE_KIND;
+  schemaVersion: typeof CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION;
+  producer: CliJsonProducer;
+  command: string;
+  resultSchemaVersion: number;
+  evidence?: 'graph-fact' | 'heuristic' | 'mixed';
+  analysisBudget?: unknown;
+  args: readonly unknown[];
+  options: Readonly<Record<string, unknown>>;
+  result: Result;
+  coverage?: unknown;
+  agentResult?: unknown;
+}
+
+export interface LegacyCliJsonEnvelope<Result = unknown> {
+  command: string;
+  args: readonly unknown[];
+  options: Readonly<Record<string, unknown>>;
+  result: Result;
+  evidence?: 'graph-fact' | 'heuristic' | 'mixed';
+  analysisBudget?: unknown;
+  coverage?: unknown;
+  agentResult?: unknown;
+}
+
+export type CompatibleCliJsonEnvelope<Result = unknown> =
+  | {
+      kind: 'legacy';
+      schemaVersion: typeof LEGACY_CLI_JSON_ENVELOPE_SCHEMA_VERSION;
+      envelope: LegacyCliJsonEnvelope<Result>;
+    }
+  | {
+      kind: 'supported';
+      schemaVersion: typeof CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION;
+      envelope: CliJsonEnvelopeV1<Result>;
+    };
+
+export type DecodedCliJsonEnvelope<Result = unknown> =
+  | CompatibleCliJsonEnvelope<Result>
+  | {
+      kind: 'unsupported';
+      schemaVersion: number;
+      direction: 'older' | 'future';
+      producer?: { name: string; version: string };
+    }
+  | {
+      kind: 'unsupported-result';
+      schemaVersion: typeof CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION;
+      command: string;
+      resultSchemaVersion: number;
+      supportedResultSchemaVersions: readonly number[];
+    }
+  | { kind: 'malformed'; reason: string };
+
+export function createCliJsonEnvelope<Result>(
+  input: Omit<CliJsonEnvelopeV1<Result>, 'kind' | 'schemaVersion' | 'producer' | 'resultSchemaVersion'> & {
+    producerVersion: string;
+    resultSchemaVersion?: number;
+  },
+): CliJsonEnvelopeV1<Result> {
+  const resultSchemaVersion = input.resultSchemaVersion ?? DEFAULT_CLI_RESULT_SCHEMA_VERSION;
+  if (!isPositiveSafeInteger(resultSchemaVersion)) {
+    throw new Error('CLI result schema version must be a positive safe integer.');
+  }
+  const { producerVersion, ...fields } = input;
+  return {
+    kind: CLI_JSON_ENVELOPE_KIND,
+    schemaVersion: CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION,
+    producer: { name: 'scip-query', version: producerVersion },
+    resultSchemaVersion,
+    ...fields,
+  };
+}
+
+export function serializeCliJsonEnvelope(envelope: CliJsonEnvelopeV1, compact: boolean): string {
+  return JSON.stringify(envelope, null, compact ? 0 : 2);
+}
+
+/**
+ * Decodes the current envelope and the immediately preceding unversioned
+ * shape. Unknown additive fields are deliberately preserved on the returned
+ * object and ignored by compatibility checks.
+ */
+export function decodeCliJsonEnvelope<Result = unknown>(input: unknown): DecodedCliJsonEnvelope<Result> {
+  if (!isRecordObject(input)) return { kind: 'malformed', reason: 'CLI JSON output must be an object.' };
+
+  const hasKind = Object.hasOwn(input, 'kind');
+  const hasSchemaVersion = Object.hasOwn(input, 'schemaVersion');
+  if (!hasKind && !hasSchemaVersion) {
+    const reason = validateCommonEnvelopeFields(input);
+    return reason
+      ? { kind: 'malformed', reason: `Legacy CLI JSON envelope: ${reason}` }
+      : {
+          kind: 'legacy',
+          schemaVersion: LEGACY_CLI_JSON_ENVELOPE_SCHEMA_VERSION,
+          envelope: input as unknown as LegacyCliJsonEnvelope<Result>,
+        };
+  }
+  if (!hasKind || !hasSchemaVersion) {
+    return { kind: 'malformed', reason: 'CLI JSON envelope must contain both kind and schemaVersion.' };
+  }
+  if (input['kind'] !== CLI_JSON_ENVELOPE_KIND) {
+    return {
+      kind: 'malformed',
+      reason: `Unsupported CLI JSON envelope kind: ${describeValue(input['kind'])}.`,
+    };
+  }
+
+  const schemaVersion = input['schemaVersion'];
+  if (!Number.isSafeInteger(schemaVersion) || Number(schemaVersion) < 1) {
+    return { kind: 'malformed', reason: 'CLI JSON envelope schemaVersion must be a positive safe integer.' };
+  }
+  if (schemaVersion !== CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION) {
+    return {
+      kind: 'unsupported',
+      schemaVersion: Number(schemaVersion),
+      direction: Number(schemaVersion) < CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION ? 'older' : 'future',
+      ...(isProducer(input['producer']) ? { producer: input['producer'] } : {}),
+    };
+  }
+
+  const commonReason = validateCommonEnvelopeFields(input);
+  if (commonReason) return { kind: 'malformed', reason: `CLI JSON envelope v1: ${commonReason}` };
+  if (!isProducer(input['producer'])) {
+    return {
+      kind: 'malformed',
+      reason: 'CLI JSON envelope v1: producer must identify scip-query and its non-empty version.',
+    };
+  }
+  if (!isPositiveSafeInteger(input['resultSchemaVersion'])) {
+    return {
+      kind: 'malformed',
+      reason: 'CLI JSON envelope v1: resultSchemaVersion must be a positive safe integer.',
+    };
+  }
+  const supportedResultSchemaVersions = supportedCliResultSchemaVersions(input['command'] as string);
+  if (!supportedResultSchemaVersions.includes(input['resultSchemaVersion'])) {
+    return {
+      kind: 'unsupported-result',
+      schemaVersion: CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION,
+      command: input['command'] as string,
+      resultSchemaVersion: input['resultSchemaVersion'],
+      supportedResultSchemaVersions,
+    };
+  }
+
+  return {
+    kind: 'supported',
+    schemaVersion: CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION,
+    envelope: input as unknown as CliJsonEnvelopeV1<Result>,
+  };
+}
+
+export function requireCompatibleCliJsonEnvelope<Result = unknown>(input: unknown): CompatibleCliJsonEnvelope<Result> {
+  const decoded = decodeCliJsonEnvelope<Result>(input);
+  if (decoded.kind === 'legacy' || decoded.kind === 'supported') return decoded;
+  if (decoded.kind === 'unsupported') {
+    const producer = decoded.producer ? ` from ${decoded.producer.name}@${decoded.producer.version}` : '';
+    throw new Error(
+      `Unsupported scip-query CLI JSON schemaVersion ${decoded.schemaVersion}${producer}; this consumer supports the legacy unversioned envelope and schemaVersion ${CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION}.`,
+    );
+  }
+  if (decoded.kind === 'unsupported-result') {
+    throw new Error(
+      `Unsupported resultSchemaVersion ${decoded.resultSchemaVersion} for scip-query command ${JSON.stringify(decoded.command)}; this consumer supports ${decoded.supportedResultSchemaVersions.join(', ')}.`,
+    );
+  }
+  throw new Error(`Malformed scip-query CLI JSON envelope: ${decoded.reason}`);
+}
+
+/**
+ * Result schemas start at v1. A command that advances independently adds its
+ * supported transition window here without forcing unrelated commands to
+ * change their payload contract.
+ */
+export function supportedCliResultSchemaVersions(command: string): readonly number[] {
+  return RESULT_SCHEMA_VERSION_OVERRIDES[command] ?? [DEFAULT_CLI_RESULT_SCHEMA_VERSION];
+}
+
+const RESULT_SCHEMA_VERSION_OVERRIDES: Readonly<Record<string, readonly number[]>> = {};
+
+function validateCommonEnvelopeFields(input: Record<string, unknown>): string | null {
+  if (typeof input['command'] !== 'string' || input['command'].length === 0) {
+    return 'command must be a non-empty string.';
+  }
+  if (!Array.isArray(input['args'])) return 'args must be an array.';
+  if (!isRecordObject(input['options'])) return 'options must be an object.';
+  if (!Object.hasOwn(input, 'result')) return 'result is required.';
+  return null;
+}
+
+function isProducer(value: unknown): value is { name: 'scip-query'; version: string } {
+  return (
+    isRecordObject(value) &&
+    value['name'] === 'scip-query' &&
+    typeof value['version'] === 'string' &&
+    value['version'].length > 0
+  );
+}
+
+function isPositiveSafeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && Number(value) > 0;
+}
+
+function describeValue(value: unknown): string {
+  return typeof value === 'string' ? JSON.stringify(value) : String(value);
+}

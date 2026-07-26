@@ -369,9 +369,11 @@ The reindex-metadata direction was reverified on 2026-07-25.
 `src/domain/reindex-metadata.ts` is the dependency-free version, validation,
 and capability boundary. Reindex, runtime services, semantic sessions, and
 storage identity/cache consumers depend inward on it; the domain decoder
-depends only on domain language, timestamp, and project-file validators. This
-keeps future-version rejection identical without introducing a reverse
-domain dependency.
+depends only on domain language, record/timestamp, and project-file
+validators. The generic object-record predicate now lives beside the timestamp
+predicate in `src/domain/record-validation.ts` and is also reused by config and
+JSON protocol decoders. This keeps future-version rejection identical without
+introducing a reverse domain dependency.
 
 The immutable SQLite generation handoff was reverified on 2026-07-25.
 `src/reindex/index.ts` coordinates publication, but durable directory flushing

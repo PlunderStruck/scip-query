@@ -48,6 +48,8 @@ export function renderCommandReferenceMarkdown(descriptors: readonly CommandDesc
     '',
     'This syntax summary is generated from the CLI command descriptors. Keep workflow guidance hand-authored, but keep command syntax, descriptions, and option flags descriptor-owned.',
     '',
+    'Commands with `--json` emit the versioned public envelope documented in [CLI JSON output contract](CLI_JSON_OUTPUT.md).',
+    '',
   ];
 
   for (const category of categories) {

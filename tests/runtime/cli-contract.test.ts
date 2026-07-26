@@ -267,6 +267,10 @@ describe('CLI contract', () => {
       result: unknown;
     };
     expect(payload).toEqual({
+      kind: 'scip-query-result',
+      schemaVersion: 1,
+      producer: { name: 'scip-query', version: expect.any(String) },
+      resultSchemaVersion: 1,
       command: 'fan-in',
       evidence: 'graph-fact',
       args: ['symbolName'],
@@ -310,6 +314,10 @@ describe('CLI contract', () => {
     // Same field the sibling `result` key sits at — not nested inside result,
     // so it survives regardless of whether `result` is an array or object.
     expect(Object.keys(capped)).toEqual([
+      'kind',
+      'schemaVersion',
+      'producer',
+      'resultSchemaVersion',
       'command',
       'evidence',
       'analysisBudget',

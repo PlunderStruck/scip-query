@@ -1,0 +1,29 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.19.5"
+  },
+  "command": "stats",
+  "resultSchemaVersion": 1,
+  "evidence": "graph-fact",
+  "args": [],
+  "options": {
+    "json": true
+  },
+  "result": {
+    "documents": 12,
+    "symbols": 34
+  },
+  "coverage": {
+    "complete": true,
+    "totalKnown": true,
+    "returned": 1,
+    "total": 1,
+    "omitted": 0
+  },
+  "additiveFixtureField": {
+    "ignoredByTolerantConsumers": true
+  }
+}

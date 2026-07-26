@@ -1,5 +1,18 @@
 import { spawnSync } from 'node:child_process';
 import { BoundedProcessError, PROCESS_TIMEOUT_MS, runBoundedProcess } from '../platform/bounded-process.js';
+import { cliVersion } from '../platform/cli-version.js';
+import { isRecordObject } from '../domain/record-validation.js';
+
+export const ISOLATED_ANALYSIS_PROTOCOL = 'scip-query-isolated-analysis' as const;
+export const ISOLATED_ANALYSIS_SCHEMA_VERSION = 1 as const;
+
+interface IsolatedAnalysisEnvelope<T> {
+  protocol: typeof ISOLATED_ANALYSIS_PROTOCOL;
+  schemaVersion: typeof ISOLATED_ANALYSIS_SCHEMA_VERSION;
+  producer: { name: 'scip-query'; version: string };
+  command: string;
+  result: T;
+}
 
 interface IsolatedJsonProcessOptions {
   cliPath: string;
@@ -24,6 +37,17 @@ export class IsolatedProcessTimeoutError extends Error {
   }
 }
 
+export function printIsolatedAnalysisResult(command: string, result: unknown): void {
+  const envelope: IsolatedAnalysisEnvelope<unknown> = {
+    protocol: ISOLATED_ANALYSIS_PROTOCOL,
+    schemaVersion: ISOLATED_ANALYSIS_SCHEMA_VERSION,
+    producer: { name: 'scip-query', version: cliVersion },
+    command,
+    result,
+  };
+  console.log(JSON.stringify(envelope));
+}
+
 // scip-query: ignore-wrapper — subprocess JSON handoff boundary shared by
 // health phases and diff-impact batches.
 export function runIsolatedJsonProcess<T>(opts: IsolatedJsonProcessOptions): T {
@@ -43,7 +67,7 @@ export function runIsolatedJsonProcess<T>(opts: IsolatedJsonProcessOptions): T {
     const stderr = result.stderr.trim();
     throw new Error(`${opts.label} failed${stderr ? `:\n${stderr}` : ''}`);
   }
-  return JSON.parse(result.stdout) as T;
+  return parseIsolatedAnalysisResult<T>(result.stdout, opts);
 }
 
 // scip-query: ignore-wrapper — batch helper owned by the isolated analysis
@@ -75,19 +99,62 @@ export function runIsolatedJsonProcessAsync<T>(opts: IsolatedJsonProcessOptions)
       }
       throw error;
     })
-    .then((result) => {
+    .then((result): T => {
       const stderrText = result.stderr.trim();
       if (result.status !== 0) {
         throw new Error(`${opts.label} failed${stderrText ? `:\n${stderrText}` : ''}`);
       }
-      try {
-        return JSON.parse(result.stdout) as T;
-      } catch (error) {
-        throw new Error(`${opts.label} returned invalid JSON: ${error instanceof Error ? error.message : error}`, {
-          cause: error,
-        });
-      }
+      return parseIsolatedAnalysisResult<T>(result.stdout, opts);
     });
+}
+
+function parseIsolatedAnalysisResult<T>(stdout: string, opts: IsolatedJsonProcessOptions): T {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(`${opts.label} returned invalid JSON: ${error instanceof Error ? error.message : error}`, {
+      cause: error,
+    });
+  }
+  if (!isRecordObject(parsed)) {
+    throw new Error(`${opts.label} returned a non-object isolated-analysis message.`);
+  }
+  if (parsed['protocol'] !== ISOLATED_ANALYSIS_PROTOCOL) {
+    throw new Error(
+      `${opts.label} returned protocol ${describeValue(parsed['protocol'])}; expected ${ISOLATED_ANALYSIS_PROTOCOL}.`,
+    );
+  }
+  if (parsed['schemaVersion'] !== ISOLATED_ANALYSIS_SCHEMA_VERSION) {
+    throw new Error(
+      `${opts.label} returned unsupported isolated-analysis schemaVersion ${describeValue(parsed['schemaVersion'])}; expected ${ISOLATED_ANALYSIS_SCHEMA_VERSION}.`,
+    );
+  }
+  if (!isScipQueryProducer(parsed['producer'])) {
+    throw new Error(`${opts.label} did not identify a scip-query producer version.`);
+  }
+  if (parsed['command'] !== opts.command) {
+    throw new Error(
+      `${opts.label} returned result for command ${describeValue(parsed['command'])}; expected ${opts.command}.`,
+    );
+  }
+  if (!Object.hasOwn(parsed, 'result')) {
+    throw new Error(`${opts.label} omitted the isolated-analysis result.`);
+  }
+  return parsed['result'] as T;
+}
+
+function isScipQueryProducer(value: unknown): boolean {
+  return (
+    isRecordObject(value) &&
+    value['name'] === 'scip-query' &&
+    typeof value['version'] === 'string' &&
+    value['version'].length > 0
+  );
+}
+
+function describeValue(value: unknown): string {
+  return typeof value === 'string' ? JSON.stringify(value) : String(value);
 }
 
 export async function runAnalysisTasks<T, R>(

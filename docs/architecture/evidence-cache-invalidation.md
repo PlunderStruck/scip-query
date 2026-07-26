@@ -36,6 +36,12 @@ from current evidence.
 the health semantic-prewarm product, its cache key, or its invalidation
 triggers.
 
+2026-07-25 verification: removing the obsolete direct-JSON branch from the
+human health renderer does not change the semantic-prewarm product or its
+cache identity. Public health JSON is emitted by the shared versioned CLI
+envelope after the cached report is assembled; private health-phase child
+messages use their own versioned protocol.
+
 ## Finding-outcome observation ledger
 
 The finding-outcome ledger is a worktree-local observational product: its rows

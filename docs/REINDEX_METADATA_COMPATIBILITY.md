@@ -17,6 +17,10 @@ classifies an input as:
 - `malformed`: invalid JSON, a non-object, a missing/non-integer version, or an
   invalid field in a recognized version.
 
+The decoder shares only the dependency-free object-record and timestamp
+predicates in `src/domain/record-validation.ts`; moving that generic primitive
+out of the decoder does not change any version or capability decision.
+
 No consumer may cast an unsupported or malformed record to the current model.
 The decoder returns the original accepted v2/v3 object, so an authorized
 best-effort update such as `lastRefresh` preserves unknown additive fields.

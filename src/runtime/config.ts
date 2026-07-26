@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { SUPPORTED_LANGUAGES } from '../domain/config-types.js';
+import { isRecordObject } from '../domain/record-validation.js';
 import type { ProjectConfig, SupportedLanguage, WatchConfig } from '../domain/types.js';
 import {
   FileContentConflictError,
@@ -242,7 +243,7 @@ export function validateProjectConfig(
     }
   }
   if (config.locality !== undefined) {
-    if (!isConfigObject(config.locality)) {
+    if (!isRecordObject(config.locality)) {
       diagnostics.push({ level: 'error', path: 'locality', message: 'Must be an object.' });
     } else {
       const segments = config.locality.architecturalBoundarySegments as unknown;
@@ -321,7 +322,7 @@ export function validateProjectConfig(
   }
   for (const [index, suppression] of (Array.isArray(config.suppressions) ? config.suppressions : []).entries()) {
     const path = `suppressions[${index}]`;
-    if (!isConfigObject(suppression)) {
+    if (!isRecordObject(suppression)) {
       diagnostics.push({ level: 'error', path, message: 'Suppression must be an object.' });
       continue;
     }
@@ -371,7 +372,7 @@ export function validateProjectConfig(
 
 function validateArchitectureConfig(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
   if (config.architecture === undefined) return;
-  if (!isConfigObject(config.architecture)) {
+  if (!isRecordObject(config.architecture)) {
     diagnostics.push({ level: 'error', path: 'architecture', message: 'Must be an object.' });
     return;
   }
@@ -390,7 +391,7 @@ function validateArchitectureConfig(config: ProjectConfig, diagnostics: ConfigDi
   const boundaryPaths = new Set<string>();
   for (const [index, rawBoundary] of rawBoundaries.entries()) {
     const path = `architecture.boundaries[${index}]`;
-    if (!isConfigObject(rawBoundary)) {
+    if (!isRecordObject(rawBoundary)) {
       diagnostics.push({ level: 'error', path, message: 'Architecture boundary must be an object.' });
       continue;
     }
@@ -455,13 +456,13 @@ function validateArchitectureConfig(config: ProjectConfig, diagnostics: ConfigDi
   }
 
   const allowedDependencies = config.architecture.allowedDependencies as unknown;
-  if (allowedDependencies !== undefined && !isConfigObject(allowedDependencies)) {
+  if (allowedDependencies !== undefined && !isRecordObject(allowedDependencies)) {
     diagnostics.push({
       level: 'error',
       path: 'architecture.allowedDependencies',
       message: 'Must be an object keyed by boundary name.',
     });
-  } else if (isConfigObject(allowedDependencies)) {
+  } else if (isRecordObject(allowedDependencies)) {
     for (const [fromBoundary, rawTargets] of Object.entries(allowedDependencies)) {
       const rowPath = `architecture.allowedDependencies.${fromBoundary}`;
       if (!boundaryNames.has(fromBoundary)) {
@@ -515,7 +516,7 @@ function validateArchitectureConfig(config: ProjectConfig, diagnostics: ConfigDi
   ) {
     diagnostics.push({ level: 'error', path: 'architecture.requireCompletePolicy', message: 'Must be a boolean.' });
   } else if (config.architecture.requireCompletePolicy === true) {
-    const declaredRows = isConfigObject(allowedDependencies) ? allowedDependencies : {};
+    const declaredRows = isRecordObject(allowedDependencies) ? allowedDependencies : {};
     for (const boundaryName of [...boundaryNames].sort()) {
       if (Object.hasOwn(declaredRows, boundaryName)) continue;
       diagnostics.push({
@@ -565,7 +566,7 @@ function validateCoverageContracts(
   }
   for (const [index, contract] of config.coverageContracts.entries()) {
     const path = `coverageContracts[${index}]`;
-    if (!isConfigObject(contract)) {
+    if (!isRecordObject(contract)) {
       diagnostics.push({ level: 'error', path, message: 'Coverage contract must be an object.' });
       continue;
     }
@@ -608,7 +609,7 @@ function validateCoverageContractSpec(
   knownTypes: ReadonlySet<string>,
   unknownTypeMessage: string,
 ): void {
-  if (!isConfigObject(spec)) {
+  if (!isRecordObject(spec)) {
     diagnostics.push({ level: 'error', path, message: 'Must be an object with a "type" field.' });
     return;
   }
@@ -766,7 +767,7 @@ function conflictingFieldEdit(base: unknown, latest: unknown, desired: unknown):
 }
 
 function reportUnknownConfigKeys(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
-  if (!isConfigObject(config as unknown)) return;
+  if (!isRecordObject(config as unknown)) return;
   const typedConfig = config as ProjectConfig;
   reportUnknownObjectKeys(diagnostics, typedConfig, '', ROOT_CONFIG_KEYS);
   reportUnknownObjectKeys(diagnostics, typedConfig.watch, 'watch', WATCH_CONFIG_KEYS);
@@ -795,7 +796,7 @@ function reportUnknownConfigKeys(config: ProjectConfig, diagnostics: ConfigDiagn
     }
   }
 
-  if (isConfigObject(typedConfig.indexer)) {
+  if (isRecordObject(typedConfig.indexer)) {
     reportUnknownObjectKeys(diagnostics, typedConfig.indexer, 'indexer', INDEXER_CONFIG_KEYS);
     for (const [language, override] of Object.entries(typedConfig.indexer)) {
       if (INDEXER_CONFIG_KEYS.has(language as SupportedLanguage)) {
@@ -820,7 +821,7 @@ function reportUnknownConfigKeys(config: ProjectConfig, diagnostics: ConfigDiagn
     for (const [index, contract] of typedConfig.coverageContracts.entries()) {
       const path = `coverageContracts[${index}]`;
       reportUnknownObjectKeys(diagnostics, contract, path, COVERAGE_CONTRACT_CONFIG_KEYS);
-      if (isConfigObject(contract)) {
+      if (isRecordObject(contract)) {
         reportUnknownObjectKeys(diagnostics, contract.keys, `${path}.keys`, COVERAGE_CONTRACT_KEY_SPEC_KEYS);
         reportUnknownObjectKeys(
           diagnostics,
@@ -839,7 +840,7 @@ function reportUnknownObjectKeys(
   path: string,
   allowedKeys: ReadonlySet<string>,
 ): void {
-  if (!isConfigObject(value)) return;
+  if (!isRecordObject(value)) return;
   for (const key of Object.keys(value)) {
     if (allowedKeys.has(key)) continue;
     diagnostics.push({
@@ -848,8 +849,4 @@ function reportUnknownObjectKeys(
       message: 'Unknown config key.',
     });
   }
-}
-
-function isConfigObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

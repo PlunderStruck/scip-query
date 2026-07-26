@@ -18,3 +18,18 @@ export type {
 } from './watch.js';
 export { installSkills } from './setup.js';
 export { isScipInstalled, getScipVersion, printScipInstallInstructions } from '../platform/scip-cli.js';
+export {
+  CLI_JSON_ENVELOPE_KIND,
+  CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION,
+  LEGACY_CLI_JSON_ENVELOPE_SCHEMA_VERSION,
+  decodeCliJsonEnvelope,
+  requireCompatibleCliJsonEnvelope,
+  supportedCliResultSchemaVersions,
+} from './cli-json-envelope.js';
+export type {
+  CliJsonEnvelopeV1,
+  CliJsonProducer,
+  CompatibleCliJsonEnvelope,
+  DecodedCliJsonEnvelope,
+  LegacyCliJsonEnvelope,
+} from './cli-json-envelope.js';

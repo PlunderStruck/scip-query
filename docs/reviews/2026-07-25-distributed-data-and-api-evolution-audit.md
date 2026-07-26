@@ -879,7 +879,7 @@ new `as unknown as` cast in either watcher test suite.
 
 ## 6. Detailed API-evolution findings
 
-### API-01 — S2 — CLI JSON has no schema or producer version
+### API-01 — S2 — CLI JSON has no schema or producer version — resolved
 
 **Evidence:** contract gap.
 
@@ -898,6 +898,26 @@ The coverage additions are useful and internally validated, but an agent or exte
 **Required tests:** parse current and previous-version golden outputs with the newest consumer; ensure an older fixture consumer ignores additive fields; reject unsupported major schema versions with an actionable error.
 
 **Acceptance condition:** every JSON consumer can identify the producer and determine whether it understands the contract.
+
+**Resolution (Slice 20):** `printJsonEnvelope` now emits
+`kind: "scip-query-result"`, envelope `schemaVersion: 1`,
+`producer: { name: "scip-query", version }`, and an independently evolvable
+`resultSchemaVersion`. The public `scip-query/runtime` surface exports a
+tolerant decoder that reads the previous unversioned envelope, preserves
+unknown additive fields, rejects unknown envelope or command-result versions,
+and reports producer context in compatibility errors.
+
+The hidden health-phase and diff-impact batch messages no longer masquerade as
+public CLI results. Their parent and child share a separately versioned
+`scip-query-isolated-analysis` protocol whose decoder validates protocol,
+schema, producer, command, and result before admission. Codex/Claude hook
+messages remain on the host-defined hook schemas rather than receiving
+unrecognized CLI fields.
+
+The committed v0/v1 fixtures, descriptor-wide renderer matrix, internal
+protocol tests, compact/pretty equivalence test, additive-field test, and
+machine-readable JSON Schema make the compatibility claim executable. The
+schema and consumer guide ship in the npm tarball.
 
 ### API-02 — S2 — The 72 npm export paths have no signature compatibility baseline
 

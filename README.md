@@ -75,6 +75,11 @@ For automation, use `scip-query setup --yes` to accept recommended defaults or
 scope is intentionally managed elsewhere. Or run without a global install:
 `npx scip-query@latest setup`.
 
+Every public `--json` response identifies its envelope schema, command result
+schema, and producing package version. See the
+[CLI JSON output contract](docs/CLI_JSON_OUTPUT.md) for the compatibility
+policy, decoder API, and machine-readable schema.
+
 ### If npm warns about install scripts
 
 On npm setups with script approval enabled (`allow-scripts`), the install prints warnings like
@@ -793,6 +798,7 @@ Query results are filtered through the project's `.gitignore`. If none exists, c
 - [Detector Guide](docs/DETECTOR_GUIDE.md): what each detector measures, the differences between the confusable ones, and which check to run after which kind of change.
 - [Agent Guide](docs/AGENT_GUIDE.md): goal-oriented workflows for tracing, planning, cleanup, quality checks, and change verification.
 - [Command Reference](docs/COMMAND_REFERENCE.md): generated command syntax, descriptions, and options.
+- [CLI JSON output contract](docs/CLI_JSON_OUTPUT.md): versioned envelopes, compatibility rules, and schema.
 - [Programmatic API](docs/API.md): using the query functions from TypeScript.
 - [Historical plans](https://github.com/PlunderStruck/scip-query/tree/main/docs/plans): implementation notes and completed cleanup plans.
 

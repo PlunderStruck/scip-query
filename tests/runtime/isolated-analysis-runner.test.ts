@@ -1,9 +1,12 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   groupAnalysisTasks,
+  ISOLATED_ANALYSIS_PROTOCOL,
+  ISOLATED_ANALYSIS_SCHEMA_VERSION,
+  printIsolatedAnalysisResult,
   runAnalysisTasks,
   runIsolatedJsonProcess,
   runIsolatedJsonProcessAsync,
@@ -17,9 +20,24 @@ describe('analysis scheduler', () => {
   const tempDirs: string[] = [];
 
   afterEach(() => {
+    vi.restoreAllMocks();
     while (tempDirs.length > 0) {
       rmSync(tempDirs.pop()!, { recursive: true, force: true });
     }
+  });
+
+  it('identifies the private child-process protocol and producer', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    printIsolatedAnalysisResult('__probe', { ok: true });
+
+    expect(JSON.parse(log.mock.calls[0]![0] as string)).toMatchObject({
+      protocol: ISOLATED_ANALYSIS_PROTOCOL,
+      schemaVersion: ISOLATED_ANALYSIS_SCHEMA_VERSION,
+      producer: { name: 'scip-query', version: expect.any(String) },
+      command: '__probe',
+      result: { ok: true },
+    });
   });
 
   it('preserves input order while running tasks concurrently', async () => {
@@ -61,8 +79,11 @@ describe('analysis scheduler', () => {
       scriptPath,
       [
         'process.stdout.write(JSON.stringify({',
+        `  protocol: ${JSON.stringify(ISOLATED_ANALYSIS_PROTOCOL)},`,
+        `  schemaVersion: ${ISOLATED_ANALYSIS_SCHEMA_VERSION},`,
+        "  producer: { name: 'scip-query', version: 'test' },",
         '  command: process.argv[2],',
-        '  args: process.argv.slice(3),',
+        '  result: { command: process.argv[2], args: process.argv.slice(3) },',
         '}));',
       ].join('\n'),
     );
@@ -75,6 +96,26 @@ describe('analysis scheduler', () => {
         label: 'Scheduler child',
       }),
     ).resolves.toEqual({ command: 'probe', args: ['alpha', 'beta'] });
+  });
+
+  it('rejects an unsupported isolated-analysis protocol version before using the result', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-analysis-protocol-'));
+    tempDirs.push(tempDir);
+    const scriptPath = join(tempDir, 'child.cjs');
+    writeFileSync(
+      scriptPath,
+      `process.stdout.write(JSON.stringify({ protocol: ${JSON.stringify(
+        ISOLATED_ANALYSIS_PROTOCOL,
+      )}, schemaVersion: 2, producer: { name: 'scip-query', version: 'future' }, command: process.argv[2], result: {} }));\n`,
+    );
+
+    await expect(
+      runIsolatedJsonProcessAsync({
+        cliPath: scriptPath,
+        command: 'probe',
+        label: 'Scheduler child',
+      }),
+    ).rejects.toThrow(/unsupported isolated-analysis schemaVersion 2/);
   });
 
   it('enforces the timeout supplied to the synchronous isolated runner', () => {

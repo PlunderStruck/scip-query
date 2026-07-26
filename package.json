@@ -13,6 +13,7 @@
     "dist/**/*.js",
     "dist/**/*.d.ts",
     "docs/assets/**/*",
+    "docs/schemas/**/*",
     "docs/*.md",
     "scripts/build-scip-windows.mjs",
     "scripts/evidence-product-contract.mjs",
