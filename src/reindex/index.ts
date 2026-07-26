@@ -519,7 +519,11 @@ function errorMessage(error: unknown): string {
 export { detectLanguages } from './detect.js';
 export { augmentAuxiliaryDocuments, auxiliaryDocumentsAugmentationStage } from './augmentation/augment.js';
 export { runPostIndexAugmentation } from './augmentation/post-index-augmentation.js';
-export { augmentVueResolvedReferences, vueResolvedReferencesAugmentationStage } from './vue/augment-vue.js';
+export {
+  augmentVueResolvedReferences,
+  augmentVueResolvedReferencesAsync,
+  vueResolvedReferencesAugmentationStage,
+} from './vue/augment-vue.js';
 export { getIndexerConfig, INDEXER_CONFIGS } from './indexers.js';
 export { mergeScipFiles, mergeScipIndexes } from './merge.js';
 export {

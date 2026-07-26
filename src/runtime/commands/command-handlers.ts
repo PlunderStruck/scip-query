@@ -8,7 +8,7 @@ import { WATCH_LOCK_FILE } from '../../platform/watch-service-state.js';
 import * as queries from '../../queries/index.js';
 import {
   augmentAuxiliaryDocuments,
-  augmentVueResolvedReferences,
+  augmentVueResolvedReferencesAsync,
   detectLanguages,
   reindex,
 } from '../../reindex/index.js';
@@ -192,12 +192,12 @@ export function handleAugmentSources(): void {
   }
 }
 
-export function handleAugmentVue(rawOpts: unknown): void {
+export async function handleAugmentVue(rawOpts: unknown): Promise<void> {
   const opts = commandOptions(rawOpts);
   const projectRoot = resolveProjectRoot();
   const dbPath = resolveActiveDbPath(projectRoot);
   try {
-    const result = augmentVueResolvedReferences({
+    const result = await augmentVueResolvedReferencesAsync({
       projectRoot,
       dbPath,
       tsconfig: stringOptionValue(opts, 'project') ?? 'frontend/tsconfig.scip.json',

@@ -5,6 +5,7 @@ import { fingerprintProjectFiles } from '../../platform/project-files.js';
 import { auxiliaryDocumentsAugmentationStage } from '../augmentation/augment.js';
 import {
   runFingerprintCachedPostIndexAugmentation,
+  runFingerprintCachedPostIndexAugmentationAsync,
   runPostIndexAugmentation,
   type PostIndexAugmentationStage,
 } from '../augmentation/post-index-augmentation.js';
@@ -134,6 +135,21 @@ export function augmentVueResolvedReferences(opts: AugmentVueResolvedOptions): A
   }).result;
 }
 
+/**
+ * Async Vue augmentation enables the opt-in worker policy while preserving the
+ * synchronous public entry point's existing return type and reliable
+ * single-context execution.
+ */
+export async function augmentVueResolvedReferencesAsync(
+  opts: AugmentVueResolvedOptions,
+): Promise<AugmentVueResolvedResult> {
+  runPostIndexAugmentation(auxiliaryDocumentsAugmentationStage(), {
+    projectRoot: opts.projectRoot,
+    dbPath: opts.dbPath,
+  });
+  return augmentVueResolvedReferencesFromIndexedDocumentsAsync(opts);
+}
+
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function augmentVueResolvedReferencesFromIndexedDocuments(opts: AugmentVueResolvedOptions): AugmentVueResolvedResult {
   const configPath = resolve(opts.projectRoot, opts.tsconfig);
@@ -169,12 +185,70 @@ function augmentVueResolvedReferencesFromIndexedDocuments(opts: AugmentVueResolv
   }
 }
 
+async function augmentVueResolvedReferencesFromIndexedDocumentsAsync(
+  opts: AugmentVueResolvedOptions,
+): Promise<AugmentVueResolvedResult> {
+  const configPath = resolve(opts.projectRoot, opts.tsconfig);
+  if (!existsSync(configPath)) {
+    throw new Error(`Vue tsconfig not found at ${configPath}`);
+  }
+
+  const db = new Database(opts.dbPath);
+  try {
+    const vueFiles = listVueDocumentFiles(db, opts.projectRoot);
+    const cachePath = join(dirname(opts.dbPath), 'augment-vue-meta.json');
+    return await runFingerprintCachedPostIndexAugmentationAsync({
+      cachePath,
+      readFingerprint: () => computeAugmentVueFingerprint(db, opts.projectRoot, opts.tsconfig),
+      compute: () =>
+        runVueAugmentationTransactionAsync({
+          db,
+          projectRoot: opts.projectRoot,
+          dbPath: opts.dbPath,
+          tsconfig: opts.tsconfig,
+          configPath,
+          vueFiles,
+          onStatus: opts.onStatus,
+        }),
+      onCacheHit: (cachedResult) =>
+        opts.onStatus?.(
+          `Vue references unchanged; reused ${cachedResult.resolvedReferences} cached resolved references.`,
+        ),
+    });
+  } finally {
+    db.close();
+  }
+}
+
 // scip-query: ignore-extract — Vue augmentation is a transaction: create the
 // component-symbol view, compute Volar-backed references, normalize occurrence
 // facts, replace generated chunks, and return the persisted summary as one unit.
 function runVueAugmentationTransaction(ctx: VueAugmentationTransactionContext): AugmentVueResolvedResult {
   const vueSymbolLookup = createVueComponentSymbolLookup(ctx.db, ctx.projectRoot, ctx.vueFiles);
-  const computation = computeVueReferenceComputation(ctx, vueSymbolLookup);
+  const computation = computeVueReferenceComputationInProcess(ctx, vueSymbolLookup);
+  return persistVueReferenceComputation(ctx, vueSymbolLookup, computation);
+}
+
+async function runVueAugmentationTransactionAsync(
+  ctx: VueAugmentationTransactionContext,
+): Promise<AugmentVueResolvedResult> {
+  const vueSymbolLookup = createVueComponentSymbolLookup(ctx.db, ctx.projectRoot, ctx.vueFiles);
+  const computation = shouldUseVueWorkers(ctx.vueFiles)
+    ? await awaitVueReferenceWorkers({
+        projectRoot: ctx.projectRoot,
+        dbPath: ctx.dbPath,
+        tsconfig: ctx.tsconfig,
+        vueFiles: ctx.vueFiles,
+      })
+    : computeVueReferenceComputationInProcess(ctx, vueSymbolLookup);
+  return persistVueReferenceComputation(ctx, vueSymbolLookup, computation);
+}
+
+function persistVueReferenceComputation(
+  ctx: VueAugmentationTransactionContext,
+  vueSymbolLookup: ReturnType<typeof createVueComponentSymbolLookup>,
+  computation: VueReferenceComputationResult,
+): AugmentVueResolvedResult {
   const occurrences = dedupeOccurrences(computation.occurrences);
   const insertedMentions = replaceVueDocumentChunks(
     ctx.db,
@@ -200,19 +274,10 @@ function runVueAugmentationTransaction(ctx: VueAugmentationTransactionContext): 
   return result;
 }
 
-function computeVueReferenceComputation(
+function computeVueReferenceComputationInProcess(
   ctx: VueAugmentationTransactionContext,
   vueSymbolLookup: ReturnType<typeof createVueComponentSymbolLookup>,
 ): VueReferenceComputationResult {
-  if (shouldUseVueWorkers(ctx.vueFiles)) {
-    return awaitVueReferenceWorkers({
-      projectRoot: ctx.projectRoot,
-      dbPath: ctx.dbPath,
-      tsconfig: ctx.tsconfig,
-      vueFiles: ctx.vueFiles,
-    });
-  }
-
   const computationContext = createVueReferenceComputationContext({
     db: ctx.db,
     projectRoot: ctx.projectRoot,

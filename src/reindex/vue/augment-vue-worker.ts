@@ -3,8 +3,10 @@ import { workerData } from 'node:worker_threads';
 import { computeVueResolvedReferencesForWorker } from './augment-vue.js';
 
 const data = workerData as Parameters<typeof computeVueResolvedReferencesForWorker>[0] & {
+  runId: string;
+  workerId: number;
+  taskIds: string[];
   resultPath: string;
-  sharedBuffer: SharedArrayBuffer;
 };
 
 try {
@@ -15,17 +17,27 @@ try {
     vueFiles: data.vueFiles,
     tasks: data.tasks,
   });
-  writeFileSync(data.resultPath, JSON.stringify({ ok: true, result }));
+  writeFileSync(
+    data.resultPath,
+    JSON.stringify({
+      version: 1,
+      runId: data.runId,
+      workerId: data.workerId,
+      taskIds: data.taskIds,
+      ok: true,
+      result,
+    }),
+  );
 } catch (error) {
   writeFileSync(
     data.resultPath,
     JSON.stringify({
+      version: 1,
+      runId: data.runId,
+      workerId: data.workerId,
+      taskIds: data.taskIds,
       ok: false,
       error: error instanceof Error ? error.message : String(error),
     }),
   );
-} finally {
-  const signal = new Int32Array(data.sharedBuffer);
-  Atomics.add(signal, 0, 1);
-  Atomics.notify(signal, 0);
 }

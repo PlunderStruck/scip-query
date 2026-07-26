@@ -626,6 +626,23 @@ failure, artifact cleanup, cache reuse, and the TLA consumer.
 
 **Acceptance condition:** the coordinator cannot return or throw while an owned Vue worker can still run.
 
+**Resolution:** Slice 07 replaces the synchronous `Atomics.wait` coordinator
+with an event-driven async worker path used by the CLI. The established
+`augmentVueResolvedReferences` export retains its synchronous result contract
+and uses the reliable in-process computation; the additive
+`augmentVueResolvedReferencesAsync` entry point activates calibrated parallel
+workers. Each spawned handle is retained with a random run identity, stable
+worker number, exact task identities, and a private result path. Exit, error,
+peer failure, timeout, parse failure, and successful merge all converge on one
+`Promise.allSettled(worker.terminate())` ownership barrier, and the result
+directory is removed only after every termination settles. Result files are
+bounded to 64 MiB by default before parsing, decoded structurally, and rejected
+unless their run/worker/task identities match the coordinator's assignment.
+Results merge in worker-number order. Real worker-thread tests cover success,
+hang timeout, peer error, termination-before-removal, prevented late writes,
+oversized output, wrong identity, and worker-reported failure; async
+fingerprint-cache tests prove only settled successful computation is cached.
+
 ### TEST-01 — S4 — Watcher tests depend on private implementation members instead of an observable side-effect boundary
 
 **Evidence:** unit-test design gap.

@@ -437,6 +437,16 @@ For Python, the executable may be `scip-python`, `scip-python-plus`, or both. `s
 
 Vue single-file components are handled through the JavaScript/TypeScript indexer. `scip-query` also extracts the `<script>` or `<script setup>` block so symbol, reference, and import queries cover Vue components alongside regular `.ts` and `.js` files.
 
+`augment-vue` uses one in-process Volar context by default. Calibrated projects
+can opt into parallel computation with `SCIP_QUERY_AUGMENT_VUE_WORKERS=<count>`.
+The CLI then owns every worker until exit: a timeout or peer failure terminates
+and awaits all unfinished workers before removing their private result
+directory. `SCIP_QUERY_AUGMENT_VUE_WORKER_TIMEOUT_MS` defaults to five minutes,
+and `SCIP_QUERY_AUGMENT_VUE_WORKER_RESULT_MAX_BYTES` defaults to 64 MiB per
+worker. Every result carries its run, worker, and task identities and is
+size-checked before parsing, so a stale, partial, or mismatched result cannot
+enter the deterministic worker-order merge.
+
 `scip-query capabilities` prints project-level readiness plus a per-language matrix for SCIP indexing, source fallback evidence, semantic provider support, cleanup detector support, and cleanup verification coverage. Use it when you need to know whether a finding is graph-backed, semantic, heuristic, or compiler-verified for the language in front of you.
 
 ## How It Works
@@ -519,7 +529,7 @@ system process start identity as well as the PID. `watch stop`, daemon
 replacement, and manual preemption verify both values before signaling. A
 legacy record or a platform lookup failure therefore fails closed with an
 explicit recovery error instead of treating a reused PID as the old
-scip-query process.
+tool-owned process.
 
 Finite subprocesses use explicit wall-time and output budgets. Quick binary
 probes default to 10 seconds, Git operations to 30 seconds, isolated analysis

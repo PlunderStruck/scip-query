@@ -52,6 +52,24 @@ export function runFingerprintCachedPostIndexAugmentation<Result, Fingerprint>(o
   return result;
 }
 
+export async function runFingerprintCachedPostIndexAugmentationAsync<Result, Fingerprint>(opts: {
+  cachePath: string;
+  readFingerprint: () => Fingerprint;
+  compute: () => Promise<Result>;
+  onCacheHit?: (result: Result) => void;
+}): Promise<Result> {
+  const currentFingerprint = opts.readFingerprint();
+  const cached = readFingerprintCache<Result, Fingerprint>(opts.cachePath, currentFingerprint);
+  if (cached) {
+    opts.onCacheHit?.(cached.result);
+    return cached.result;
+  }
+
+  const result = await opts.compute();
+  writeFingerprintCache(opts.cachePath, opts.readFingerprint(), result);
+  return result;
+}
+
 function readFingerprintCache<Result, Fingerprint>(
   cachePath: string,
   fingerprint: Fingerprint,
