@@ -1,4 +1,6 @@
 {
+  "$schema": "./node_modules/scip-query/docs/schemas/project-config.schema.json",
+  "schemaVersion": 2,
   "watch": {
     "enabled": true,
     "autoRefresh": true,

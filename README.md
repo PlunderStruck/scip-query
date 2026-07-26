@@ -649,6 +649,8 @@ Clojure projects can pass a project-local `scip-clojure` config file through `.s
 
 ```json
 {
+  "$schema": "./node_modules/scip-query/docs/schemas/project-config.schema.json",
+  "schemaVersion": 2,
   "languages": ["clojure"],
   "indexer": {
     "clojure": {
@@ -676,6 +678,8 @@ It creates a minimal `.scipquery.json`:
 
 ```json
 {
+  "$schema": "./node_modules/scip-query/docs/schemas/project-config.schema.json",
+  "schemaVersion": 2,
   "languages": ["typescript"],
   "watch": {
     "enabled": true,
@@ -687,6 +691,14 @@ It creates a minimal `.scipquery.json`:
   }
 }
 ```
+
+`schemaVersion` identifies the meaning of the persisted fields. Version 2 is
+the current format. The CLI reads both unversioned/explicit-v1 legacy files
+and version 2. A setup command migrates a legacy file on its next authorized
+config write, preserving fields it does not own. An unsupported future
+version or malformed discriminator fails before any option is used and is
+left byte-for-byte unchanged. `$schema` points editors at the JSON Schema
+bundled with the installed package.
 
 Creation is exclusive: if another process creates `.scipquery.json` first,
 `init` preserves that complete file rather than replacing it.

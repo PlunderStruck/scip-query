@@ -113,6 +113,42 @@ describe('public API declaration contract', () => {
     ]);
   });
 
+  it('classifies optional fields in a transitively referenced declaration chunk as additive', () => {
+    const root = fixtureRoot();
+    writePackage(root, {
+      '.': { import: './dist/index.js', types: './dist/index.d.ts' },
+    });
+    writeDeclaration(
+      root,
+      'shared.d.ts',
+      'interface ProjectConfig { languages?: string[]; }\nexport type { ProjectConfig as P };',
+    );
+    writeDeclaration(
+      root,
+      'index.d.ts',
+      "import { P as ProjectConfig } from './shared.js';\nexport interface Options { config: ProjectConfig; }",
+    );
+    const before = createApiManifest(buildApiSurface({ projectRoot: root })).surface;
+
+    writeDeclaration(
+      root,
+      'shared.d.ts',
+      'interface ProjectConfig { languages?: string[]; schemaVersion?: 2; }\nexport type { ProjectConfig as P };',
+    );
+    const after = createApiManifest(buildApiSurface({ projectRoot: root })).surface;
+
+    expect(compareApiSurfaces(before, after)).toMatchObject({
+      classification: 'additive',
+      changes: [
+        expect.objectContaining({
+          kind: 'referenced-signature-changed',
+          classification: 'additive',
+          target: 'shared.d.ts:P',
+        }),
+      ],
+    });
+  });
+
   it('requires an explicit acceptance record and then passes the unchanged surface', () => {
     const root = fixtureRoot();
     writePackage(root, {

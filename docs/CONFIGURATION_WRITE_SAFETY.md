@@ -52,6 +52,29 @@ Malformed latest JSON is never repaired by replacement because doing so could
 erase information the writer cannot classify. The command reports the parse
 failure and leaves the exact bytes in place.
 
+### Project-config format boundary
+
+The project configuration is a durable policy record whose `schemaVersion`
+determines the meaning of its other fields. Current writers publish version 2
+and include a `$schema` URI reference to
+`docs/schemas/project-config.schema.json` in the installed package.
+Unversioned files and explicit `schemaVersion: 1` files have the same readable
+legacy meaning. They are migrated in memory and written as version 2 only when
+`init` creates a file or a setup action enters an authorized mutation path.
+
+The schema migration is part of the no-op decision. If the requested field is
+already correct but the durable record is legacy or lacks its editor-schema
+hint, the writer still publishes a current record and reports `changed: true`.
+Unknown root and nested fields survive because migration begins from the
+latest complete object and removes only the owned legacy discriminator.
+
+A non-integer discriminator, non-object top level, invalid `$schema` hint, or
+unsupported older/future version fails before options are exposed to runtime
+consumers. The loader names the supported legacy/current versions. A setup
+writer applies the same decoder to its latest stable snapshot and leaves
+rejected bytes byte-for-byte unchanged, so upgrading the CLI—not a blind
+rewrite—is the recovery path for a future version.
+
 ## Suppression policy rules
 
 A suppression identity is the stable finding ID, or the deterministic hash of

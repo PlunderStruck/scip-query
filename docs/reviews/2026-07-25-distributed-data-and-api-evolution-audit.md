@@ -968,7 +968,7 @@ root, `queries/refs`, `reindex`, and `runtime` against each newly built package.
 Both lint and `prepublishOnly` run the API check, so release cannot proceed on
 an unreviewed declaration change.
 
-### API-03 — S3 — `.scipquery.json` has no schema version or migration boundary
+### API-03 — S3 — `.scipquery.json` has no schema version or migration boundary — resolved in Slice 22
 
 **Evidence:** contract gap.
 
@@ -986,6 +986,21 @@ Mixed-version teams cannot distinguish a typo from a valid field introduced by a
 **Required tests:** oldest supported config, current config, future additive unknown field, malformed version, and round-trip preservation by every config writer.
 
 **Acceptance condition:** config meaning changes only through an explicit versioned migration.
+
+**Resolution:** `.scipquery.json` now has a pure format decoder with readable
+legacy v1 (unversioned or explicit), current v2, unsupported older/future, and
+malformed outcomes. Every runtime reader enters through that boundary before
+using a field. Current in-memory records retain unknown fields and receive the
+packaged editor-schema hint; every authorized writer publishes v2 through the
+existing revision-aware durable mutation boundary.
+
+The migration fact participates in the write decision, so a setup action
+upgrades a legacy record even when its requested field is already present.
+Unrelated concurrent fields survive the latest-snapshot merge, while
+same-field conflicts, malformed bytes, invalid discriminators, and future
+versions leave the latest file byte-for-byte unchanged. The repository's own
+config is migrated, the JSON Schema is packaged, and the public declaration
+change is accepted through the TypeScript API contract.
 
 ### API-04 — S2 — Reindex metadata compatibility logic is duplicated across at least seven consumers — resolved in Slice 19
 

@@ -1,6 +1,15 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { SUPPORTED_LANGUAGES } from '../domain/config-types.js';
+import {
+  CURRENT_PROJECT_CONFIG_SCHEMA_VERSION,
+  currentProjectConfig,
+  decodeProjectConfig,
+  LEGACY_PROJECT_CONFIG_SCHEMA_VERSION,
+  serializeCurrentProjectConfig,
+  type CurrentProjectConfig,
+  type DecodedProjectConfig,
+} from '../domain/project-config.js';
 import { isRecordObject } from '../domain/record-validation.js';
 import type { ProjectConfig, SupportedLanguage, WatchConfig } from '../domain/types.js';
 import {
@@ -33,6 +42,8 @@ export interface ConfigDiagnostic {
 }
 
 const ROOT_CONFIG_KEYS = new Set([
+  '$schema',
+  'schemaVersion',
   'languages',
   'indexerConcurrency',
   'watch',
@@ -103,16 +114,14 @@ export function loadProjectConfig(projectRoot: string): ProjectConfig {
     return {};
   }
 
+  let raw: string;
   try {
-    const raw = readFileSync(configPath, 'utf-8');
-    return JSON.parse(raw) as ProjectConfig;
+    raw = readFileSync(configPath, 'utf-8');
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
-    if (err instanceof SyntaxError) {
-      throw new Error(`invalid ${CONFIG_FILENAME} at ${configPath}: ${reason}`, { cause: err });
-    }
     throw new Error(`unable to read ${CONFIG_FILENAME} at ${configPath}: ${reason}`, { cause: err });
   }
+  return requireSupportedProjectConfig(decodeProjectConfig(raw), configPath, 'read').config;
 }
 
 export function validateProjectConfig(
@@ -121,6 +130,23 @@ export function validateProjectConfig(
 ): ConfigDiagnostic[] {
   const diagnostics: ConfigDiagnostic[] = [];
   reportUnknownConfigKeys(config, diagnostics);
+  const configRecord = config as unknown as Record<string, unknown>;
+  if (
+    configRecord['schemaVersion'] !== undefined &&
+    configRecord['schemaVersion'] !== CURRENT_PROJECT_CONFIG_SCHEMA_VERSION
+  ) {
+    diagnostics.push({
+      level: 'error',
+      path: 'schemaVersion',
+      message: `Must be ${CURRENT_PROJECT_CONFIG_SCHEMA_VERSION}; unversioned and v${LEGACY_PROJECT_CONFIG_SCHEMA_VERSION} files are migrated while loading.`,
+    });
+  }
+  if (
+    configRecord['$schema'] !== undefined &&
+    (typeof configRecord['$schema'] !== 'string' || configRecord['$schema'].trim() === '')
+  ) {
+    diagnostics.push({ level: 'error', path: '$schema', message: 'Must be a non-empty string.' });
+  }
   const supported = new Set(SUPPORTED_LANGUAGES);
   for (const [index, language] of (config.languages ?? []).entries()) {
     if (!supported.has(language)) {
@@ -693,12 +719,12 @@ export function configureProjectLanguages(
   let finalConfig = config;
   const mutation = mutateTextFileRevisionAware(configPath, (snapshot) => {
     const latest = parseProjectConfigSnapshot(snapshot, config);
-    if (conflictingFieldEdit(config.languages, latest.languages, desired)) {
+    if (conflictingFieldEdit(config.languages, latest.config.languages, desired)) {
       throw new FileContentConflictError(configPath, 'languages');
     }
-    const next: ProjectConfig = { ...latest, languages: desired };
+    const next: ProjectConfig = { ...latest.config, languages: desired };
     finalConfig = next;
-    return snapshot.revision.exists && sameJson(next, latest)
+    return snapshot.revision.exists && !latest.needsMigration && sameJson(next, latest.config)
       ? { kind: 'unchanged' }
       : { kind: 'write', text: serializeProjectConfig(next) };
   });
@@ -719,43 +745,43 @@ export function configureProjectAutomaticRefresh(
   let finalConfig = config;
   const mutation = mutateTextFileRevisionAware(configPath, (snapshot) => {
     const latest = parseProjectConfigSnapshot(snapshot, config);
-    if (conflictingFieldEdit(config.watch?.enabled, latest.watch?.enabled, enabled)) {
+    if (conflictingFieldEdit(config.watch?.enabled, latest.config.watch?.enabled, enabled)) {
       throw new FileContentConflictError(configPath, 'watch.enabled');
     }
     const next: ProjectConfig = {
-      ...latest,
+      ...latest.config,
       watch: {
-        ...latest.watch,
+        ...latest.config.watch,
         enabled,
-        ...(enabled && latest.watch?.autoRefresh === undefined ? { autoRefresh: true } : {}),
+        ...(enabled && latest.config.watch?.autoRefresh === undefined ? { autoRefresh: true } : {}),
       },
     };
     finalConfig = next;
-    return snapshot.revision.exists && sameJson(next, latest)
+    return snapshot.revision.exists && !latest.needsMigration && sameJson(next, latest.config)
       ? { kind: 'unchanged' }
       : { kind: 'write', text: serializeProjectConfig(next) };
   });
   return { configPath, config: finalConfig, changed: mutation.changed };
 }
 
-function parseProjectConfigSnapshot(snapshot: RevisionedTextSnapshot, fallback: ProjectConfig): ProjectConfig {
-  if (!snapshot.revision.exists) return fallback;
-  try {
-    const parsed = JSON.parse(snapshot.text) as unknown;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new Error('top-level value is not an object');
-    }
-    return parsed as ProjectConfig;
-  } catch (error) {
-    throw new Error(
-      `Cannot update ${snapshot.path}: the latest project config is invalid JSON (${error instanceof Error ? error.message : String(error)}).`,
-      { cause: error },
-    );
+interface ParsedProjectConfigSnapshot {
+  config: CurrentProjectConfig;
+  needsMigration: boolean;
+}
+
+function parseProjectConfigSnapshot(
+  snapshot: RevisionedTextSnapshot,
+  fallback: ProjectConfig,
+): ParsedProjectConfigSnapshot {
+  if (!snapshot.revision.exists) {
+    return { config: currentProjectConfig(fallback), needsMigration: true };
   }
+  const accepted = requireSupportedProjectConfig(decodeProjectConfig(snapshot.text), snapshot.path, 'update');
+  return { config: accepted.config, needsMigration: accepted.needsMigration };
 }
 
 function serializeProjectConfig(config: ProjectConfig): string {
-  return `${JSON.stringify(config, null, 2)}\n`;
+  return serializeCurrentProjectConfig(config);
 }
 
 function sameJson(left: unknown, right: unknown): boolean {
@@ -764,6 +790,30 @@ function sameJson(left: unknown, right: unknown): boolean {
 
 function conflictingFieldEdit(base: unknown, latest: unknown, desired: unknown): boolean {
   return !sameJson(base, latest) && !sameJson(latest, desired);
+}
+
+function requireSupportedProjectConfig(
+  decoded: DecodedProjectConfig,
+  configPath: string,
+  operation: 'read' | 'update',
+): Extract<DecodedProjectConfig, { kind: 'legacy' | 'supported' }> {
+  if (decoded.kind === 'legacy' || decoded.kind === 'supported') return decoded;
+  if (decoded.kind === 'malformed') {
+    const message =
+      operation === 'read'
+        ? `invalid ${CONFIG_FILENAME} at ${configPath}: ${decoded.reason}`
+        : `Cannot update ${configPath}: the latest project config is ${decoded.reason}.`;
+    throw new Error(`${message} The file was left untouched.`);
+  }
+  const prefix =
+    operation === 'read'
+      ? `invalid ${CONFIG_FILENAME} at ${configPath}`
+      : `Cannot update ${configPath}: the latest project config is invalid`;
+  throw new Error(
+    `${prefix} (unsupported ${decoded.direction} schemaVersion ${decoded.schemaVersion}; ` +
+      `this scip-query reads legacy v${LEGACY_PROJECT_CONFIG_SCHEMA_VERSION} and current ` +
+      `v${CURRENT_PROJECT_CONFIG_SCHEMA_VERSION}). Upgrade scip-query before retrying; the file was left untouched.`,
+  );
 }
 
 function reportUnknownConfigKeys(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {

@@ -242,16 +242,9 @@ export function compareApiSurfaces(previous, current) {
     }
   }
 
-  if (stableJson(previous.internalDeclarations ?? []) !== stableJson(current.internalDeclarations ?? [])) {
-    changes.push(
-      change(
-        'uncertain',
-        'referenced-declarations-changed',
-        '<internal>',
-        'One or more declaration chunks referenced by public entry points changed.',
-      ),
-    );
-  }
+  changes.push(
+    ...compareReferencedDeclarations(previous.internalDeclarations ?? [], current.internalDeclarations ?? []),
+  );
 
   return {
     classification: highestAutomaticClassification(changes),
@@ -363,6 +356,84 @@ export function classifySignatureChange(previousSignature, currentSignature) {
   }
   if (previousSignature === currentSignature) return 'none';
   return 'breaking';
+}
+
+function compareReferencedDeclarations(previousDeclarations, currentDeclarations) {
+  const changes = [];
+  const previousModules = new Map(previousDeclarations.map((item) => [item.module, item]));
+  const currentModules = new Map(currentDeclarations.map((item) => [item.module, item]));
+  const modules = new Set([...previousModules.keys(), ...currentModules.keys()]);
+
+  for (const module of [...modules].sort()) {
+    const before = previousModules.get(module);
+    const after = currentModules.get(module);
+    if (!before || !after) {
+      changes.push(
+        change(
+          'uncertain',
+          'referenced-declaration-module-changed',
+          module,
+          before
+            ? `Referenced declaration module ${module} was removed or renamed.`
+            : `Referenced declaration module ${module} was added or renamed.`,
+        ),
+      );
+      continue;
+    }
+    if (before.declaration === after.declaration) continue;
+
+    const oldExports = new Map(
+      extractPublicExports(before.declaration, before.module).map((item) => [item.name, item]),
+    );
+    const newExports = new Map(extractPublicExports(after.declaration, after.module).map((item) => [item.name, item]));
+    const names = new Set([...oldExports.keys(), ...newExports.keys()]);
+    let explained = false;
+    for (const name of [...names].sort()) {
+      const oldExport = oldExports.get(name);
+      const newExport = newExports.get(name);
+      if (!oldExport && newExport) {
+        explained = true;
+        changes.push(
+          change('additive', 'referenced-export-added', `${module}:${name}`, `Added referenced declaration ${name}.`),
+        );
+      } else if (oldExport && !newExport) {
+        explained = true;
+        changes.push(
+          change(
+            'breaking',
+            'referenced-export-removed',
+            `${module}:${name}`,
+            `Removed referenced declaration ${name}.`,
+          ),
+        );
+      } else if (oldExport && newExport && stableJson(oldExport) !== stableJson(newExport)) {
+        explained = true;
+        const classification =
+          oldExport.kind === newExport.kind
+            ? classifySignatureChange(oldExport.signature, newExport.signature)
+            : 'breaking';
+        changes.push(
+          change(
+            classification,
+            'referenced-signature-changed',
+            `${module}:${name}`,
+            `${name} changed from ${oneLine(oldExport.signature)} to ${oneLine(newExport.signature)}.`,
+          ),
+        );
+      }
+    }
+    if (!explained) {
+      changes.push(
+        change(
+          'uncertain',
+          'referenced-declaration-changed',
+          module,
+          `Non-exported declarations changed in referenced module ${module}.`,
+        ),
+      );
+    }
+  }
+  return changes;
 }
 
 function normalizeNamedBindings(statement) {

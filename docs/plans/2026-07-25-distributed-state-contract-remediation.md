@@ -531,6 +531,200 @@ publication can continue.
 **Dependencies:** Slice 12 for safe writers and Slice 19's decoder pattern.  
 **Rollback:** keep unversioned legacy reader through at least one release.
 
+**Implemented shape:** `src/domain/project-config.ts` classifies raw policy
+before any option is used, migrates unversioned/explicit-v1 records to current
+v2 in memory, retains unknown fields, and rejects malformed or unsupported
+versions. All readers and the three complete writer paths use the boundary.
+The revision-aware writers include schema migration in their no-op decision,
+so current meaning is published on the next authorized edit without weakening
+same-field conflict detection. The packaged JSON Schema, migrated repository
+config, compatibility documentation, declaration-manifest acceptance, and
+real-filesystem regression matrix close the format boundary.
+
+#### Slice 22 high-assurance certificate
+
+**Goal.** Make every persisted project configuration identify the format that
+gives its fields meaning, while retaining unversioned repositories and refusing
+to reinterpret bytes written by a newer scip-query.
+
+**Definitions and invariants.**
+
+A project configuration is a repository-owned JSON policy record whose fields
+select indexing, watch, architecture, documentation, and detector behavior;
+what distinguishes it from an arbitrary options object is that its committed
+bytes outlive the process that reads them and control later processes. Sources:
+`src/domain/config-types.ts:125-157`, `.scipquery.json`.
+
+A configuration migration is a deterministic translation from one supported
+persisted format to the current in-memory meaning; what makes it a migration
+rather than permissive parsing is that the source version is identified before
+any field is interpreted. Source: the decoder pattern in
+`src/domain/reindex-metadata.ts:37-89`.
+
+An authorized mutation is a caller-requested project-policy edit performed
+through the revision-aware file boundary; what distinguishes it from an
+automatic rewrite is that the user already asked a writer to change or
+initialize the record. Source: `src/runtime/config.ts:659-766`.
+
+- A supported file must always be decoded as legacy v1 or current v2 before
+  any field is exposed as `ProjectConfig`.
+- An unsupported older, future, malformed-version, or non-object file must
+  always fail before a runtime consumer acts on it.
+- A rejected file must always remain byte-for-byte unchanged.
+- Every successful authorized mutation must always publish current v2 while
+  preserving fields outside the writer's owned conflict domain.
+- A writer may report `changed: false` iff both the requested field and the
+  persisted schema are already current.
+
+**Premises.**
+
+- **P1.** The current loader parses arbitrary JSON and casts it directly to
+  `ProjectConfig`; the type and root-key set have no version discriminator.
+  Sources: `src/runtime/config.ts:34-115`,
+  `src/domain/config-types.ts:125-157`.
+- **P2.** The complete production reader set for `loadProjectConfig` is
+  `agent-hooks`, `cli-context`, command handlers, `watch-server`, and `watch`;
+  its direct references are complete at 17. Source:
+  `scip-query refs loadProjectConfig --json --full`.
+- **P3.** The complete production writer set is `initProjectConfig`,
+  `configureProjectLanguages`, and `configureProjectAutomaticRefresh`.
+  Their external references are complete at 3, 2, and 2 respectively. Source:
+  `scip-query refs initProjectConfig --json --full`,
+  `scip-query refs configureProjectLanguages --json --full`,
+  `scip-query refs configureProjectAutomaticRefresh --json --full`, plus the
+  only production `.scipquery.json` path writer in `src/runtime/config.ts`.
+- **P4.** All three writers already use the durable,
+  revision-checked `mutateTextFileRevisionAware` boundary. The two merge
+  writers reread the latest object, preserve unrelated fields, and reject
+  conflicting edits to their owned field. Sources:
+  `src/runtime/config.ts:659-766`,
+  `src/runtime/revisioned-file.ts:76-146`.
+- **P5.** The current no-op decision compares only decoded object values. If a
+  legacy file already contains the desired field, it returns unchanged and
+  has no way to record that the persisted schema still needs migration.
+  Source: `src/runtime/config.ts:685-738`.
+- **P6.** The repository's own `.scipquery.json` is a valid unversioned record,
+  establishing a real legacy fixture rather than a hypothetical one. Source:
+  `.scipquery.json`.
+- **P7.** `ProjectConfig` is reachable from the public declarations, and Slice
+  21's `api:check` fails on unaccepted declaration drift. Sources:
+  `scip-query refs ProjectConfig --json --full`,
+  `docs/api/scip-query.api.json`.
+
+**Current state.** Every CLI, hook, and watch entry reads the same loader
+(P2), but that boundary cannot distinguish an old valid record from a future
+record whose familiar field names have different meaning (P1). Setup writes
+are already conflict-aware and durable (P4), so schema evolution should extend
+that boundary rather than replace it. The no-op path is the only place where
+otherwise safe writing would fail to migrate a legacy record (P5).
+
+**Reuse audit.**
+
+- Reuse `isRecordObject` and the discriminated decoder pattern from
+  `reindex-metadata`; a project-config decoder is a new unit because reindex
+  metadata and repository policy have different fields, versions, and
+  compatibility outcomes (P1, P7).
+- Reuse `mutateTextFileRevisionAware`, `FileContentConflictError`, and the
+  existing three-way field merge; no parallel lock, atomic writer, or retry
+  mechanism is justified (P3, P4).
+- Extend `ProjectConfig` with optional format metadata so existing
+  programmatic callers remain source-compatible. The loader and serializers,
+  rather than every in-memory test object, enforce current persisted output
+  (P7).
+- Extend `docs/CONFIGURATION_WRITE_SAFETY.md` and the existing packaged
+  `docs/schemas/` surface; do not introduce a second configuration guide or
+  schema publication path.
+
+**Testability design.**
+
+| Behavior                             | Test seam                                  | Dependencies              | Pure core                                  | Side-effect shell            | Contract                                                  |
+| ------------------------------------ | ------------------------------------------ | ------------------------- | ------------------------------------------ | ---------------------------- | --------------------------------------------------------- |
+| Classify/migrate config              | `decodeProjectConfig`                      | none                      | version and object classification          | none                         | discriminated legacy/current/unsupported/malformed result |
+| Emit current config                  | `serializeProjectConfig` through writers   | none                      | canonical metadata plus field preservation | revision-aware file mutation | v2 JSON with stable schema hint                           |
+| Reject unsafe bytes                  | `loadProjectConfig` and both merge writers | temporary filesystem      | decoder decision                           | read/stable snapshot         | actionable error, exact bytes retained                    |
+| Preserve concurrent fields           | both merge writers                         | real temporary filesystem | three-way owned-field decision             | locked durable replace       | unrelated fields survive; same-field conflict fails       |
+| Keep public declarations intentional | `npm run api:check`                        | TypeScript build          | declaration classifier                     | manifest update              | reviewed additive API record                              |
+
+**Design phases.**
+
+1. **22.1 — Add the pure format boundary.** Extend
+   `src/domain/config-types.ts`, add `src/domain/project-config.ts`, and add
+   the packaged JSON Schema. Decode absent version or explicit v1 as legacy,
+   v2 as current, unsupported integers by direction, and invalid shapes as
+   malformed. Preserve unknown fields in the current object. Tests call the
+   decoder with real JSON values. **Deployable:** no, part of the single
+   `api-03-config-v2` deploy group; readers are not routed yet. Premises:
+   P1, P6, P7.
+2. **22.2 — Route every reader and writer.** Make `loadProjectConfig` and
+   snapshot parsing require a supported decoder result. Make initialization
+   and both merge writers serialize canonical v2; carry a `needsMigration`
+   fact so a same-value authorized call still upgrades legacy bytes. Retain
+   revision-aware three-way merging and reject future or malformed latest
+   bytes without writing. **Deployable:** yes, because every writer in P3
+   enters the new enforcer in the same step. Premises: P2-P5.
+3. **22.3 — Prove compatibility and publish the contract.** Expand
+   `runtime-config` behavior tests, migrate this repository's config, update
+   README/write-safety/durability guidance, validate the JSON Schema, and
+   accept the additive `ProjectConfig` declaration through `api:update`.
+   **Deployable:** yes. Premises: P6, P7.
+
+**Attack record.**
+
+- **A1 — Future writer, old reader.** A newer scip-query writes
+  `schemaVersion: 3`; this version reads familiar `watch` fields and starts
+  with the wrong meaning. **Outcome: HOLE — repaired by 22.1 and 22.2**, which
+  reject before exposing a config (P1, P2).
+- **A2 — Idempotent legacy mutation.** Setup reads an unversioned file whose
+  requested `watch.enabled` value is already present and takes the unchanged
+  branch forever. **Outcome: HOLE — repaired by 22.2** with an explicit
+  persisted-migration bit (P5).
+- **A3 — Concurrent additive field.** An editor adds a future-safe root field
+  after setup's initial read; setup enables watch. **Outcome: HELD** by 22.2
+  reusing the latest-snapshot merge and revision check, with a real
+  interleaving regression (P4).
+- **A4 — Malformed or future latest bytes.** Setup starts from a valid stale
+  object, but an editor replaces the public file with an invalid version
+  before mutation. **Outcome: HOLE — repaired by 22.2**, which decodes the
+  stable latest snapshot and leaves rejected bytes untouched (P4).
+- **A5 — Legacy and current processes overlap.** A current writer upgrades v1
+  while another current process still holds the old in-memory object.
+  **Outcome: HOLE — repaired by 22.2**: owned-field comparison uses the
+  caller's value while schema metadata is excluded from the field conflict;
+  the revision-aware writer retries against current bytes (P4).
+- **A6 — Type and schema drift.** Runtime accepts a new known field but the
+  editor schema or public declaration contract omits it. **Outcome: HOLE —
+  repaired by 22.3** through schema assertions and the Slice 21 API gate (P7).
+- **A7 — Explicit v1 producer.** A tool writes `schemaVersion: 1` rather than
+  omitting the legacy discriminator. **Outcome: HOLE — repaired by 22.1** by
+  treating both encodings as the same readable legacy meaning.
+
+**Coverage matrix.**
+
+| Surface or lens                                  | Attacks        |
+| ------------------------------------------------ | -------------- |
+| `loadProjectConfig` and all 17 direct references | A1, A4, A5     |
+| `initProjectConfig`                              | A4, A6         |
+| `configureProjectLanguages`                      | A2, A3, A4, A5 |
+| `configureProjectAutomaticRefresh`               | A2, A3, A4, A5 |
+| `ProjectConfig` public declaration               | A6             |
+| Repository legacy bytes                          | A2, A7         |
+| Valid intermediate state / enforcement window    | A1, A4, A5     |
+| Reversibility and rollback                       | A2, A5, A7     |
+| Observability and operator recovery              | A1, A4         |
+| Testability and reuse                            | A3, A6         |
+
+**Execution and ship order.** Phases 22.1 and 22.2 ship together so no reader
+or writer sees an unrecognized current format. Phase 22.3 is part of the same
+commit because the repository config and declaration manifest are enforced
+inputs. Rollback keeps the v1 reader and can stop writing v2 without data
+loss; v2 adds metadata and changes no existing option meaning.
+
+**Verdict.** A plan is `PLANNED-COMPLETE` iff every state authority and
+applicable lens has an attack, every attack ends in a cited defense or
+recorded repair, and every premise reproduces. Result:
+`PLANNED-COMPLETE` — 7 attacks, 6 holes repaired, 0 holes accepted, no blank
+coverage rows.
+
 ### Slice 23 — API-05 — Version suppression and outcome-event records
 
 **Invariant:** readers distinguish absent, malformed, supported legacy/current, and unsupported future records; future records affect completeness reporting.
@@ -684,8 +878,8 @@ publication can continue.
 |    18 | DD-12   | complete | `45676dd4` | 92 focused; 1,637 full-suite tests  | Locked tail repair, two-segment rotation, deterministic reads, contention, crash phases, and watch exclusions verified                       |
 |    19 | API-04  | complete | `e6637774` | 179 focused; 1,671 full-suite tests | Shared v2/v3 matrix, malformed fields, partial policy, v4 rejection, identity, reuse, publication, and additive fields verified              |
 |    20 | API-01  | complete | `bbb0db24` | 126 focused passing tests           | v0/v1 decode, future rejection, result versions, all JSON descriptors, private protocol, config/metadata reuse, schema, and package verified |
-|    21 | API-02  | complete |            | 13 contract + consumer compile      | 72 paths, 871 exports, shared declaration closure, conservative classification, immutable acceptance, and release gate verified             |
-|    22 | API-03  | pending  |            |                                     |                                                                                                                                              |
+|    21 | API-02  | complete | `80cb260d` | 13 contract + consumer compile      | 72 paths, 871 exports, shared declaration closure, conservative classification, immutable acceptance, and release gate verified              |
+|    22 | API-03  | complete |            | 95 config/API/revision assertions   | Legacy/current/future/malformed decoding, no-op migration, unknown-field preservation, conflict safety, and packaged schema verified         |
 |    23 | API-05  | pending  |            |                                     |                                                                                                                                              |
 |    24 | API-06  | pending  |            |                                     |                                                                                                                                              |
 |    25 | REL-01  | pending  |            |                                     |                                                                                                                                              |
@@ -1060,6 +1254,55 @@ publication can continue.
   affected consumers. The final diff gate has no API-02 blocking or advisory
   finding; its blockers are Claude's uncommitted skill-router co-change
   records. No suppression or health-baseline ratchet was written.
+
+### Slice 22 verification record
+
+- `src/domain/project-config.ts` is the single dependency-free format
+  boundary. It classifies unversioned/explicit-v1 records as legacy, v2 as
+  current, unsupported integers by direction, and invalid JSON, top-level
+  shapes, discriminators, or editor hints as malformed before runtime options
+  are exposed.
+- Initialization and both revision-aware setup writers publish v2. Their
+  latest-snapshot merge preserves unknown fields, rejects concurrent
+  same-field changes, and treats pending schema migration as a real write even
+  when the requested field is already present. Future or malformed latest
+  bytes remain byte-for-byte unchanged.
+- The focused matrix passes 95 tests across the pure decoder, runtime config,
+  project setup, revision-aware mutation, and TypeScript declaration contract.
+  It includes legacy/current/future/malformed records, no-op migration,
+  unknown-field preservation, initialization metadata, validation diagnostics,
+  concurrent mutation, and transitive declaration classification.
+- The real `ProjectConfig` declaration change exposed an overly conservative
+  Slice 21 classifier: every referenced declaration chunk had been marked
+  uncertain. The gate now resolves aliased exports inside each changed chunk,
+  recognizes this optional-field addition as additive, remains breaking for
+  removal or incompatible signatures, and remains uncertain when changed
+  non-exported text cannot be explained. Fourteen contract tests cover the
+  refined behavior.
+- The additive public change has the immutable acceptance digest
+  `fe238d8ffe284634`, a reviewed reason, and a successful downstream consumer
+  compile. Typecheck, formatting, ESLint, the production build, and
+  `api:check` pass.
+- `npm pack --dry-run` reports 357 package entries and includes
+  `docs/schemas/project-config.schema.json`. The runtime/schema alignment test
+  checks the discriminator, required metadata, and forward-field policy.
+- With an isolated cache, the complete suite passes 221 of 222 files and 1,706
+  tests, with 2 intentional skips. Its only 2 failures are Claude's
+  concurrently edited `skills/scip-query/SKILL.md` command token and
+  40-command coverage assertions; the API-03 documentation wording that first
+  triggered a third failure was corrected and its assertion now passes.
+- Complete postchecks found no recent duplicate or unused parameter. The pure
+  decoder deliberately follows the existing reindex-decoder pattern while
+  retaining a separate domain contract because the persisted records,
+  supported versions, and compatibility outcomes differ. The single-consumer
+  decoded union remains the explicit testable contract between classification
+  and runtime enforcement.
+- The built CLI accepts `$schema` and `schemaVersion`; the globally installed
+  pre-change CLI reports them as unknown until this slice is published.
+  Remaining config warnings and broken wrapper links belong to Claude's
+  concurrent skill consolidation. One exact echo finding is suppressed by
+  stable ID with the domain-separation rationale above; no broad suppression
+  or health-baseline ratchet was written.
 
 ### Slice 09 verification note
 

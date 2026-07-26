@@ -4,6 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveIndexStoragePaths } from '../../src/platform/cache-layout.js';
+import {
+  CURRENT_PROJECT_CONFIG_SCHEMA_VERSION,
+  LEGACY_PROJECT_CONFIG_SCHEMA_VERSION,
+  PROJECT_CONFIG_SCHEMA_PATH,
+} from '../../src/domain/project-config.js';
 import { handleDoctor, handleStatus, handleWatch } from '../../src/runtime/commands/command-handlers.js';
 import {
   configureProjectAutomaticRefresh,
@@ -24,6 +29,14 @@ import { cliVersion } from '../../src/runtime/cli-support.js';
 import { enqueueWatchRefreshRequest } from '../../src/storage/watch-refresh-requests.js';
 
 const tempDirs: string[] = [];
+const CURRENT_CONFIG_FORMAT = {
+  $schema: PROJECT_CONFIG_SCHEMA_PATH,
+  schemaVersion: CURRENT_PROJECT_CONFIG_SCHEMA_VERSION,
+} as const;
+
+function currentConfig<T extends Record<string, unknown>>(fields: T): typeof CURRENT_CONFIG_FORMAT & T {
+  return { ...CURRENT_CONFIG_FORMAT, ...fields };
+}
 
 function createProject(): string {
   const dir = mkdtempSync(join(tmpdir(), 'scip-query-config-'));
@@ -57,7 +70,32 @@ describe('loadProjectConfig', () => {
     const projectRoot = createProject();
     writeFileSync(join(projectRoot, '.scipquery.json'), '{ "languages": ["typescript"] }\n');
 
-    expect(loadProjectConfig(projectRoot)).toEqual({ languages: ['typescript'] });
+    expect(loadProjectConfig(projectRoot)).toEqual(currentConfig({ languages: ['typescript'] }));
+  });
+
+  it('loads explicit legacy v1 and rejects unsupported future versions without changing bytes', () => {
+    const projectRoot = createProject();
+    const configPath = join(projectRoot, '.scipquery.json');
+    writeFileSync(
+      configPath,
+      `${JSON.stringify({ schemaVersion: LEGACY_PROJECT_CONFIG_SCHEMA_VERSION, languages: ['rust'] })}\n`,
+    );
+    expect(loadProjectConfig(projectRoot)).toEqual(currentConfig({ languages: ['rust'] }));
+
+    const future = '{ "schemaVersion": 3, "watch": { "enabled": true }, "futureOption": 1 }\n';
+    writeFileSync(configPath, future);
+    expect(() => loadProjectConfig(projectRoot)).toThrow(/unsupported future schemaVersion 3/);
+    expect(readFileSync(configPath, 'utf8')).toBe(future);
+  });
+
+  it('rejects malformed schema versions without changing bytes', () => {
+    const projectRoot = createProject();
+    const configPath = join(projectRoot, '.scipquery.json');
+    const malformed = '{ "schemaVersion": "2", "watch": { "enabled": true } }\n';
+    writeFileSync(configPath, malformed);
+
+    expect(() => loadProjectConfig(projectRoot)).toThrow(/schemaVersion must be an integer/);
+    expect(readFileSync(configPath, 'utf8')).toBe(malformed);
   });
 
   it('throws when project config is invalid JSON', () => {
@@ -89,9 +127,12 @@ describe('automatic indexing config setup', () => {
 
     expect(configPath).toBe(join(projectRoot, '.scipquery.json'));
     expect(loadProjectConfig(projectRoot)).toMatchObject({
+      $schema: PROJECT_CONFIG_SCHEMA_PATH,
+      schemaVersion: CURRENT_PROJECT_CONFIG_SCHEMA_VERSION,
       languages: ['typescript'],
       watch: { enabled: true, autoRefresh: true, idleTimeoutMs: 600_000 },
     });
+    expect(JSON.parse(readFileSync(configPath, 'utf8'))).toMatchObject(CURRENT_CONFIG_FORMAT);
   });
 
   it('persists setup enablement without replacing unrelated config', () => {
@@ -105,22 +146,39 @@ describe('automatic indexing config setup', () => {
     const result = configureProjectAutomaticRefresh(projectRoot, current, true);
 
     expect(result.changed).toBe(true);
-    expect(loadProjectConfig(projectRoot)).toEqual({
-      languages: ['rust'],
-      docs: { snapshotPaths: ['docs/archive/**'] },
-      watch: { enabled: true, debounceMs: 500, autoRefresh: true },
-    });
+    expect(loadProjectConfig(projectRoot)).toEqual(
+      currentConfig({
+        languages: ['rust'],
+        docs: { snapshotPaths: ['docs/archive/**'] },
+        watch: { enabled: true, debounceMs: 500, autoRefresh: true },
+      }),
+    );
   });
 
   it('leaves an already-persisted setup state untouched', () => {
     const projectRoot = createProject();
-    const current = { watch: { enabled: true, autoRefresh: false } };
+    const current = currentConfig({ watch: { enabled: true, autoRefresh: false } });
     writeFileSync(join(projectRoot, '.scipquery.json'), `${JSON.stringify(current, null, 2)}\n`);
 
     const result = configureProjectAutomaticRefresh(projectRoot, current, true);
 
     expect(result).toMatchObject({ changed: false, config: current });
     expect(loadProjectConfig(projectRoot)).toEqual(current);
+  });
+
+  it('upgrades a legacy schema even when the requested setup field is already present', () => {
+    const projectRoot = createProject();
+    const legacy = { watch: { enabled: true, autoRefresh: false }, futureOption: { retained: true } };
+    const configPath = join(projectRoot, '.scipquery.json');
+    writeFileSync(configPath, `${JSON.stringify(legacy, null, 2)}\n`);
+
+    const result = configureProjectAutomaticRefresh(projectRoot, legacy, true);
+
+    expect(result.changed).toBe(true);
+    expect(loadProjectConfig(projectRoot)).toEqual(
+      currentConfig({ watch: { enabled: true, autoRefresh: false }, futureOption: { retained: true } }),
+    );
+    expect(JSON.parse(readFileSync(configPath, 'utf8'))).toEqual(result.config);
   });
 
   it('merges unrelated edits made after the caller loaded its config', () => {
@@ -133,10 +191,12 @@ describe('automatic indexing config setup', () => {
 
     configureProjectAutomaticRefresh(projectRoot, stale, true);
 
-    expect(loadProjectConfig(projectRoot)).toEqual({
-      watch: { enabled: true, debounceMs: 500, autoRefresh: true },
-      futureOption: { retained: true },
-    });
+    expect(loadProjectConfig(projectRoot)).toEqual(
+      currentConfig({
+        watch: { enabled: true, debounceMs: 500, autoRefresh: true },
+        futureOption: { retained: true },
+      }),
+    );
   });
 
   it('rejects a stale same-field update and preserves the latest config', () => {
@@ -149,7 +209,7 @@ describe('automatic indexing config setup', () => {
     expect(() => configureProjectAutomaticRefresh(projectRoot, stale, false)).toThrow(
       /watch\.enabled changed since it was read/,
     );
-    expect(loadProjectConfig(projectRoot)).toEqual(latest);
+    expect(loadProjectConfig(projectRoot)).toEqual(currentConfig(latest));
   });
 
   it('refuses to rewrite a malformed latest config', () => {
@@ -161,6 +221,18 @@ describe('automatic indexing config setup', () => {
       /latest project config is invalid JSON/,
     );
     expect(readFileSync(path, 'utf8')).toBe('{broken\n');
+  });
+
+  it('refuses to rewrite a future latest config', () => {
+    const projectRoot = createProject();
+    const path = join(projectRoot, '.scipquery.json');
+    const future = '{\n  "schemaVersion": 3,\n  "watch": { "enabled": false },\n  "futureOption": true\n}\n';
+    writeFileSync(path, future);
+
+    expect(() => configureProjectAutomaticRefresh(projectRoot, { watch: { enabled: false } }, true)).toThrow(
+      /unsupported future schemaVersion 3/,
+    );
+    expect(readFileSync(path, 'utf8')).toBe(future);
   });
 });
 
@@ -174,11 +246,13 @@ describe('setup language selection', () => {
     const result = configureProjectLanguages(projectRoot, current, ['typescript', 'python']);
 
     expect(result.changed).toBe(true);
-    expect(loadProjectConfig(projectRoot)).toEqual({
-      docs: { snapshotPaths: ['docs/**'] },
-      watch: { enabled: true },
-      languages: ['typescript', 'python'],
-    });
+    expect(loadProjectConfig(projectRoot)).toEqual(
+      currentConfig({
+        docs: { snapshotPaths: ['docs/**'] },
+        watch: { enabled: true },
+        languages: ['typescript', 'python'],
+      }),
+    );
   });
 
   it('rejects a concurrent language choice rather than replacing it', async () => {
@@ -192,11 +266,24 @@ describe('setup language selection', () => {
     expect(() => configureProjectLanguages(projectRoot, stale, ['typescript'])).toThrow(
       /languages changed since it was read/,
     );
-    expect(loadProjectConfig(projectRoot)).toEqual(latest);
+    expect(loadProjectConfig(projectRoot)).toEqual(currentConfig(latest));
   });
 });
 
 describe('validateProjectConfig', () => {
+  it('accepts legacy metadata omission and rejects invalid persisted metadata', () => {
+    expect(validateProjectConfig({ languages: ['typescript'] })).toEqual([]);
+    expect(
+      validateProjectConfig({
+        schemaVersion: 3,
+        $schema: '   ',
+      } as unknown as ProjectConfig),
+    ).toEqual([
+      expect.objectContaining({ level: 'error', path: 'schemaVersion' }),
+      expect.objectContaining({ level: 'error', path: '$schema' }),
+    ]);
+  });
+
   it('requires structured suppressions to include an identity and reason', () => {
     const diagnostics = validateProjectConfig({
       suppressions: [

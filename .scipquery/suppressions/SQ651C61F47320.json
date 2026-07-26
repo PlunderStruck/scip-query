@@ -1,0 +1,7 @@
+{
+  "id": "SQ651C61F47320",
+  "check": "echo",
+  "file": "src/domain/project-config.ts",
+  "reason": "Project configuration and reindex metadata are distinct durable formats with different discriminators, supported versions, validation rules, accepted models, and consumer capabilities; only their generic parse-and-classify scaffolding is similar.",
+  "createdAt": "2026-07-26T08:41:44.504Z"
+}

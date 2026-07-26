@@ -1,0 +1,9 @@
+{
+  "ts": 1785055264483,
+  "check": "echo",
+  "findingId": "SQ651C61F47320",
+  "event": "caught",
+  "commit": "80cb260d0f66b763357adc85140a2a03ebef1e7a",
+  "comparisonBaseCommit": "80cb260d0f66b763357adc85140a2a03ebef1e7a",
+  "symbol": "scip-typescript npm scip-query 0.19.5 src/domain/`project-config.ts`/decodeProjectConfig()."
+}

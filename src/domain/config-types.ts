@@ -125,6 +125,10 @@ export interface ScipQueryConfig {
 // ── Project Config (.scipquery.json) ───────────────────────
 
 export interface ProjectConfig {
+  /** JSON Schema hint for editors. Persisted writers add the packaged project-config schema. */
+  $schema?: string;
+  /** Persisted project-config format. Omitted only by readable legacy v1 records and in-memory callers. */
+  schemaVersion?: 2;
   /** Override which languages to index (default: auto-detect) */
   languages?: SupportedLanguage[];
   /** Number of indexer workers to run at once (default: adaptive, max 8) */

@@ -81,7 +81,7 @@ could not confirm the stronger durability guarantee.
 | Worktree lease and local cache pointer | Durable | Protect generations from collection and bind a worktree to repository cache identity; generation changes, liveness touches, and cleanup serialize through the repository-cache lock |
 | Watch service state | Durable | Publishes the process instance and index generation accepted as current |
 | Rust semantic session `server.json` | Durable | Publishes the live server process and mailbox identity |
-| Project `.scipquery.json` | Durable | Controls indexing, watch, architecture, and detector policy |
+| Project `.scipquery.json` | Durable | Controls indexing, watch, architecture, and detector policy; versioned reads reject unsupported meaning before use, and authorized writes migrate legacy bytes without dropping unknown fields |
 | Codex/Claude hook JSON | Durable | Controls whether and when agent hooks execute |
 | Structured suppression file | Durable | Records an accepted finding and its reason |
 | Health baseline | Durable | Acts as a committed regression policy |

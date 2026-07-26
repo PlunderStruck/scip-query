@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-07-26T08:32:52.187Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "fe238d8ffe284634133cbe3a2204631aa73424d2f19ac79df5908234b57ea3e4",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "P changed from interface ProjectConfig { languages?: SupportedLanguage[]; indexerConcurrency?: number; watch?: WatchConfig; hooks?: HookRuntimeConfig; indexer?: Partial<Record<SupportedLanguag... to interface ProjectConfig { $schema?: string; schemaVersion?: 2; languages?: SupportedLanguage[]; indexerConcurrency?: number; watch?: WatchConfig; hooks?: HookRuntimeConfig; inde....",
+      "target": "config-types-<hash>.d.ts:P"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.19.5",
+  "previousDigest": "2a312ec1adf7c11f5ca0cc3a6afa320f523393b9b5b368c2c940bd02a9137b63",
+  "reason": "Add optional project-config schema metadata while retaining all existing configuration fields and legacy callers.",
+  "schemaVersion": 1
+}

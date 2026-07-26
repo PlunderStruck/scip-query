@@ -1,0 +1,247 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/scip-query/docs/schemas/project-config.schema.json",
+  "title": "scip-query project configuration",
+  "description": "Repository-owned indexing, watch, architecture, documentation, and detector policy. Unknown fields are retained for forward-compatible rewrites.",
+  "type": "object",
+  "required": ["schemaVersion"],
+  "additionalProperties": true,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Editor schema hint. scip-query writers default this to the schema bundled in node_modules."
+    },
+    "schemaVersion": {
+      "const": 2,
+      "description": "Persisted project-config format version. Unversioned and explicit version 1 records are readable legacy input."
+    },
+    "languages": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/supportedLanguage" }
+    },
+    "indexerConcurrency": { "type": "integer", "minimum": 1 },
+    "watch": { "$ref": "#/$defs/watch" },
+    "hooks": { "$ref": "#/$defs/hooks" },
+    "indexer": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/supportedLanguage" },
+      "additionalProperties": { "$ref": "#/$defs/indexerOverride" }
+    },
+    "dbPath": { "type": "string", "minLength": 1 },
+    "entryRoots": { "$ref": "#/$defs/entryRoots" },
+    "semantic": { "$ref": "#/$defs/semantic" },
+    "suppressions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/suppression" }
+    },
+    "declaredCouplings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/declaredCoupling" }
+    },
+    "locality": { "$ref": "#/$defs/locality" },
+    "architecture": { "$ref": "#/$defs/architecture" },
+    "coverageContracts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/coverageContract" }
+    },
+    "docs": { "$ref": "#/$defs/docs" }
+  },
+  "$defs": {
+    "supportedLanguage": {
+      "enum": [
+        "typescript",
+        "javascript",
+        "java",
+        "scala",
+        "kotlin",
+        "rust",
+        "python",
+        "ruby",
+        "go",
+        "cpp",
+        "c",
+        "csharp",
+        "vb",
+        "dart",
+        "php",
+        "clojure"
+      ]
+    },
+    "stringArray": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "watch": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "debounceMs": { "type": "integer", "exclusiveMinimum": 0 },
+        "cooldownMs": { "type": "integer", "minimum": 0 },
+        "gitPollMs": { "type": "integer", "exclusiveMinimum": 0 },
+        "idleTimeoutMs": { "type": "integer", "minimum": 0 },
+        "autoRefresh": { "type": "boolean" },
+        "ignore": { "$ref": "#/$defs/stringArray" }
+      }
+    },
+    "hooks": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "router": { "enum": ["off", "single"] }
+      }
+    },
+    "indexerOverride": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "pnpmWorkspaces": { "type": "boolean" },
+        "projectMode": { "enum": ["single", "workspace"] },
+        "projects": { "$ref": "#/$defs/stringArray" },
+        "configPath": { "type": "string", "minLength": 1 }
+      }
+    },
+    "entryRoots": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "pathPrefixes": { "$ref": "#/$defs/stringArray" },
+        "files": { "$ref": "#/$defs/stringArray" },
+        "symbolPatterns": { "$ref": "#/$defs/stringArray" },
+        "qualifiedVars": { "$ref": "#/$defs/stringArray" }
+      }
+    },
+    "semantic": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "typescript": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "tsconfigs": { "$ref": "#/$defs/stringArray" }
+          }
+        },
+        "rust": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "rustAnalyzerPath": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "suppression": {
+      "type": "object",
+      "required": ["reason"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "check": { "type": "string", "minLength": 1 },
+        "file": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "anyOf": [{ "required": ["id"] }, { "required": ["check"] }]
+    },
+    "declaredCoupling": {
+      "type": "object",
+      "required": ["name", "files"],
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "files": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "reason": { "type": "string" }
+      }
+    },
+    "locality": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "architecturalBoundarySegments": { "$ref": "#/$defs/stringArray" }
+      }
+    },
+    "architectureBoundary": {
+      "type": "object",
+      "required": ["name", "paths"],
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "paths": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "maxFiles": { "type": "integer", "minimum": 1 },
+        "subUnits": { "enum": ["directory", "file"] }
+      }
+    },
+    "architecture": {
+      "type": "object",
+      "required": ["boundaries"],
+      "additionalProperties": true,
+      "properties": {
+        "boundaries": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/architectureBoundary" }
+        },
+        "allowedDependencies": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/stringArray" }
+        },
+        "requireCompletePolicy": { "type": "boolean" },
+        "requireAcyclic": { "type": "boolean" },
+        "requireResolvedBoundaries": { "type": "boolean" },
+        "requireMinimalPolicy": { "type": "boolean" },
+        "maxBoundaryFanOut": { "type": "integer", "minimum": 0 },
+        "maxBoundaryFiles": { "type": "integer", "minimum": 1 },
+        "testPaths": { "$ref": "#/$defs/stringArray" }
+      }
+    },
+    "coverageContract": {
+      "type": "object",
+      "required": ["name", "file", "keys", "mustEqual"],
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "file": { "type": "string", "minLength": 1 },
+        "keys": {
+          "type": "object",
+          "required": ["type"],
+          "additionalProperties": true,
+          "properties": {
+            "type": { "enum": ["object-literal-keys", "string-array", "markdown-list"] },
+            "identifier": { "type": "string", "minLength": 1 },
+            "marker": { "type": "string", "minLength": 1 }
+          }
+        },
+        "mustEqual": {
+          "type": "object",
+          "required": ["type"],
+          "additionalProperties": true,
+          "properties": {
+            "type": { "enum": ["top-level-dirs", "file-glob", "registered-commands", "builtin-skills"] },
+            "path": { "type": "string", "minLength": 1 },
+            "pattern": { "type": "string", "minLength": 1 }
+          }
+        },
+        "allowExtra": { "type": "boolean" }
+      }
+    },
+    "docs": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "snapshotPaths": { "$ref": "#/$defs/stringArray" }
+      }
+    }
+  }
+}
