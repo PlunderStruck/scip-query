@@ -1,7 +1,7 @@
 import { fork } from 'node:child_process';
 import { statSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
-import { watch, type FSWatcher } from 'chokidar';
+import { watch } from 'chokidar';
 import ignore from 'ignore';
 import type {
   RefreshTrigger,
@@ -20,10 +20,53 @@ export interface WatcherOptions {
   projectRoot: string;
   config: ProjectConfig;
   languages?: SupportedLanguage[];
+  reindexRunner?: ReindexRunner;
+  subscriptionFactory?: WatchSubscriptionFactory;
+  clock?: WatchClock;
   onStatus?: (status: WatcherStatus) => void;
   onReindexComplete?: (durationMs: number) => boolean | void;
   onRefreshSuppressed?: (trigger: RefreshTrigger) => void;
   onError?: (error: Error) => void;
+}
+
+export interface ReindexRunRequest {
+  projectRoot: string;
+  config: ProjectConfig;
+  languages?: SupportedLanguage[];
+  pnpmWorkspaces: boolean;
+  typescriptProjectMode?: TypeScriptProjectMode;
+  typescriptProjects?: string[];
+  clojureConfigPath?: string;
+  indexerConcurrency?: number;
+  trigger: RefreshTrigger;
+}
+
+export interface ReindexWorkerLaunch {
+  workerPath: string;
+  env: NodeJS.ProcessEnv;
+}
+
+export interface ReindexRunner {
+  run(request: ReindexRunRequest): Promise<number>;
+}
+
+export interface WatchSubscription {
+  on(event: 'all', listener: (eventName: string, path: string) => void): WatchSubscription;
+  on(event: 'error', listener: (error: unknown) => void): WatchSubscription;
+  close(): void | Promise<void>;
+}
+
+export type WatchSubscriptionOptions = NonNullable<Parameters<typeof watch>[1]>;
+export type WatchSubscriptionFactory = (projectRoot: string, options: WatchSubscriptionOptions) => WatchSubscription;
+
+type WatchTimer = ReturnType<typeof setTimeout>;
+
+export interface WatchClock {
+  now(): number;
+  setTimeout(callback: () => void, delayMs: number): WatchTimer;
+  clearTimeout(timer: WatchTimer): void;
+  setInterval(callback: () => void, intervalMs: number): WatchTimer;
+  clearInterval(timer: WatchTimer): void;
 }
 
 interface GitStateSnapshot {
@@ -58,11 +101,14 @@ export class Watcher {
   private onReindexComplete: (durationMs: number) => boolean | void;
   private onRefreshSuppressed: (trigger: RefreshTrigger) => void;
   private onError: (error: Error) => void;
+  private reindexRunner: ReindexRunner;
+  private subscriptionFactory: WatchSubscriptionFactory;
+  private clock: WatchClock;
 
   // State machine
   private status: WatcherStatus = { state: 'idle' };
-  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
-  private cooldownTimer: ReturnType<typeof setTimeout> | null = null;
+  private debounceTimer: WatchTimer | null = null;
+  private cooldownTimer: WatchTimer | null = null;
   private dirty = false;
   private changedFiles = 0;
   private pendingTrigger: RefreshTrigger | null = null;
@@ -70,9 +116,9 @@ export class Watcher {
   private lastReindexEnd = 0;
 
   // Chokidar maintains the platform-specific subscriptions beneath each root.
-  private fsWatchers: FSWatcher[] = [];
+  private fsWatchers: WatchSubscription[] = [];
   private sourcePollingFallbackStarted = false;
-  private gitPollTimer: ReturnType<typeof setInterval> | null = null;
+  private gitPollTimer: WatchTimer | null = null;
   private lastGitState: GitStateSnapshot | null = null;
   private gitignoreFilter: ReturnType<typeof createGitignoreFilter>;
   private extraIgnore: ReturnType<typeof ignore>;
@@ -93,6 +139,9 @@ export class Watcher {
     this.onReindexComplete = opts.onReindexComplete ?? (() => {});
     this.onRefreshSuppressed = opts.onRefreshSuppressed ?? (() => {});
     this.onError = opts.onError ?? ((e) => console.error(e.message));
+    this.clock = opts.clock ?? SYSTEM_WATCH_CLOCK;
+    this.reindexRunner = opts.reindexRunner ?? createForkedReindexRunner(this.clock);
+    this.subscriptionFactory = opts.subscriptionFactory ?? defaultWatchSubscriptionFactory;
 
     this.gitignoreFilter = createGitignoreFilter(opts.projectRoot);
     this.extraIgnore = ignore();
@@ -144,7 +193,7 @@ export class Watcher {
   // ── Internal ─────────────────────────────────────────────
 
   private startSourceWatcher(usePolling = false): void {
-    const watcher = watch(this.projectRoot, {
+    const watcher = this.subscriptionFactory(this.projectRoot, {
       ignoreInitial: true,
       ignored: (path, stats) => this.isIgnoredWatchPath(path, stats?.isDirectory() ?? false),
       usePolling,
@@ -157,7 +206,7 @@ export class Watcher {
     this.fsWatchers.push(watcher);
   }
 
-  private handleSourceWatcherError(watcher: FSWatcher, error: unknown, usePolling: boolean): void {
+  private handleSourceWatcherError(watcher: WatchSubscription, error: unknown, usePolling: boolean): void {
     if (usePolling || this.sourcePollingFallbackStarted || !isFileDescriptorLimitError(error) || this.stopped) {
       this.onError(new Error(`Failed to watch ${this.projectRoot}: ${String(error)}`));
       return;
@@ -233,10 +282,10 @@ export class Watcher {
     // Reset the debounce timer — every new change pushes the trigger out
     this.clearDebounceTimer();
 
-    const reindexAt = Date.now() + this.watchConfig.debounceMs;
+    const reindexAt = this.clock.now() + this.watchConfig.debounceMs;
     this.setStatus({ state: 'waiting', changedFiles: this.changedFiles, reindexAt });
 
-    this.debounceTimer = setTimeout(() => {
+    this.debounceTimer = this.clock.setTimeout(() => {
       this.debounceTimer = null;
       this.triggerReindex();
     }, this.watchConfig.debounceMs);
@@ -249,14 +298,14 @@ export class Watcher {
     if (this.reindexInFlight || this.stopped) return;
 
     // Check cooldown
-    const timeSinceLastReindex = Date.now() - this.lastReindexEnd;
+    const timeSinceLastReindex = this.clock.now() - this.lastReindexEnd;
     if (this.lastReindexEnd > 0 && timeSinceLastReindex < this.watchConfig.cooldownMs) {
       const remaining = this.watchConfig.cooldownMs - timeSinceLastReindex;
       this.dirty = true;
-      const until = Date.now() + remaining;
+      const until = this.clock.now() + remaining;
       this.setStatus({ state: 'cooldown', until, dirty: true });
 
-      this.cooldownTimer = setTimeout(() => {
+      this.cooldownTimer = this.clock.setTimeout(() => {
         this.cooldownTimer = null;
         if (this.dirty && !this.stopped) {
           this.dirty = false;
@@ -271,14 +320,15 @@ export class Watcher {
     this.changedFiles = 0;
     const trigger = this.pendingTrigger ?? { kind: 'watch-source' };
     this.pendingTrigger = null;
-    const startedAt = Date.now();
+    const startedAt = this.clock.now();
     this.setStatus({ state: 'indexing', startedAt });
 
     // Run reindex in a child process so it doesn't block the watcher
-    this.runReindex(trigger)
+    this.reindexRunner
+      .run(this.reindexRequest(trigger))
       .then((durationMs) => {
         this.reindexInFlight = false;
-        this.lastReindexEnd = Date.now();
+        this.lastReindexEnd = this.clock.now();
         let completedIndexIsFresh = false;
         try {
           completedIndexIsFresh = this.onReindexComplete(durationMs) === true;
@@ -297,10 +347,10 @@ export class Watcher {
             return;
           }
           // Changes arrived during reindex — enter cooldown then reindex again
-          const until = Date.now() + this.watchConfig.cooldownMs;
+          const until = this.clock.now() + this.watchConfig.cooldownMs;
           this.setStatus({ state: 'cooldown', until, dirty: true });
 
-          this.cooldownTimer = setTimeout(() => {
+          this.cooldownTimer = this.clock.setTimeout(() => {
             this.cooldownTimer = null;
             if (this.dirty && !this.stopped) {
               this.dirty = false;
@@ -315,59 +365,24 @@ export class Watcher {
       })
       .catch((err) => {
         this.reindexInFlight = false;
-        this.lastReindexEnd = Date.now();
+        this.lastReindexEnd = this.clock.now();
         this.onError(err instanceof Error ? err : new Error(String(err)));
         this.setStatus({ state: 'idle' });
       });
   }
 
-  /**
-   * Run the reindex in a forked child process.
-   * The child process uses the reindexer's own atomic publish path.
-   */
-  private runReindex(trigger: RefreshTrigger): Promise<number> {
-    return new Promise((resolve, reject) => {
-      const start = Date.now();
-
-      const loadedConfig = loadProjectConfig(this.projectRoot);
-      const latestConfig = Object.keys(loadedConfig).length > 0 ? loadedConfig : this.config;
-      const latestIndexPaths = resolveIndexStoragePaths(this.projectRoot, latestConfig);
-      const latestTypeScript = latestConfig.indexer?.typescript;
-      const latestClojure = latestConfig.indexer?.clojure;
-      // scip-query: process-lifetime-reviewed -- this reindex worker is owned
-      // by the watch job state machine; RES-02 hardens its drain/shutdown path.
-      const child = fork(new URL('./reindex-worker.js', import.meta.url).pathname, [], {
-        detached: true,
-        env: {
-          ...process.env,
-          SCIP_REINDEX_PROJECT_ROOT: this.projectRoot,
-          SCIP_REINDEX_OUTPUT_SCIP: latestIndexPaths.indexPath,
-          SCIP_REINDEX_OUTPUT_DB: latestIndexPaths.dbPath,
-          SCIP_REINDEX_LANGUAGES: (latestConfig.languages ?? this.languages)?.join(',') ?? '',
-          SCIP_REINDEX_INDEXER_CONCURRENCY: String(latestConfig.indexerConcurrency ?? this.indexerConcurrency ?? ''),
-          SCIP_REINDEX_PNPM_WORKSPACES: (latestTypeScript?.pnpmWorkspaces ?? this.pnpmWorkspaces) ? '1' : '',
-          SCIP_REINDEX_TYPESCRIPT_CONFIG: JSON.stringify({
-            projectMode: latestTypeScript?.projectMode ?? this.typescriptProjectMode,
-            projects: latestTypeScript?.projects ?? this.typescriptProjects ?? [],
-          }),
-          SCIP_REINDEX_CLOJURE_CONFIG_PATH: latestClojure?.configPath ?? this.clojureConfigPath ?? '',
-          SCIP_REINDEX_TRIGGER_KIND: trigger.kind,
-          SCIP_REINDEX_TRIGGER_DETAIL: trigger.detail ?? '',
-          SCIP_REINDEX_PROCESS_GROUP_LEADER: '1',
-        },
-        stdio: 'pipe',
-      });
-
-      child.on('exit', (code) => {
-        if (code === 0) {
-          resolve(Date.now() - start);
-        } else {
-          reject(new Error(`Reindex worker exited with code ${code}`));
-        }
-      });
-
-      child.on('error', reject);
-    });
+  private reindexRequest(trigger: RefreshTrigger): ReindexRunRequest {
+    return {
+      projectRoot: this.projectRoot,
+      config: this.config,
+      languages: this.languages,
+      pnpmWorkspaces: this.pnpmWorkspaces,
+      typescriptProjectMode: this.typescriptProjectMode,
+      typescriptProjects: this.typescriptProjects,
+      clojureConfigPath: this.clojureConfigPath,
+      indexerConcurrency: this.indexerConcurrency,
+      trigger,
+    };
   }
 
   private setStatus(status: WatcherStatus): void {
@@ -377,14 +392,14 @@ export class Watcher {
 
   private clearDebounceTimer(): void {
     if (this.debounceTimer) {
-      clearTimeout(this.debounceTimer);
+      this.clock.clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
   }
 
   private clearCooldownTimer(): void {
     if (this.cooldownTimer) {
-      clearTimeout(this.cooldownTimer);
+      this.clock.clearTimeout(this.cooldownTimer);
       this.cooldownTimer = null;
     }
   }
@@ -392,7 +407,7 @@ export class Watcher {
   private startGitStatePolling(): void {
     this.lastGitState = this.readGitState();
     if (!this.lastGitState) return;
-    this.gitPollTimer = setInterval(() => this.pollGitState(), this.watchConfig.gitPollMs);
+    this.gitPollTimer = this.clock.setInterval(() => this.pollGitState(), this.watchConfig.gitPollMs);
     this.gitPollTimer.unref?.();
   }
 
@@ -444,10 +459,85 @@ export class Watcher {
 
   private clearGitPollTimer(): void {
     if (this.gitPollTimer) {
-      clearInterval(this.gitPollTimer);
+      this.clock.clearInterval(this.gitPollTimer);
       this.gitPollTimer = null;
     }
   }
+}
+
+export function resolveReindexWorkerLaunch(request: ReindexRunRequest): ReindexWorkerLaunch {
+  const {
+    projectRoot,
+    config,
+    languages,
+    pnpmWorkspaces,
+    typescriptProjectMode,
+    typescriptProjects,
+    clojureConfigPath,
+    indexerConcurrency,
+    trigger,
+  } = request;
+  const loadedConfig = loadProjectConfig(projectRoot);
+  const latestConfig = Object.keys(loadedConfig).length > 0 ? loadedConfig : config;
+  const latestIndexPaths = resolveIndexStoragePaths(projectRoot, latestConfig);
+  const latestTypeScript = latestConfig.indexer?.typescript;
+  const latestClojure = latestConfig.indexer?.clojure;
+  return {
+    workerPath: new URL('./reindex-worker.js', import.meta.url).pathname,
+    env: {
+      ...process.env,
+      SCIP_REINDEX_PROJECT_ROOT: projectRoot,
+      SCIP_REINDEX_OUTPUT_SCIP: latestIndexPaths.indexPath,
+      SCIP_REINDEX_OUTPUT_DB: latestIndexPaths.dbPath,
+      SCIP_REINDEX_LANGUAGES: (latestConfig.languages ?? languages)?.join(',') ?? '',
+      SCIP_REINDEX_INDEXER_CONCURRENCY: String(latestConfig.indexerConcurrency ?? indexerConcurrency ?? ''),
+      SCIP_REINDEX_PNPM_WORKSPACES: (latestTypeScript?.pnpmWorkspaces ?? pnpmWorkspaces) ? '1' : '',
+      SCIP_REINDEX_TYPESCRIPT_CONFIG: JSON.stringify({
+        projectMode: latestTypeScript?.projectMode ?? typescriptProjectMode,
+        projects: latestTypeScript?.projects ?? typescriptProjects ?? [],
+      }),
+      SCIP_REINDEX_CLOJURE_CONFIG_PATH: latestClojure?.configPath ?? clojureConfigPath ?? '',
+      SCIP_REINDEX_TRIGGER_KIND: trigger.kind,
+      SCIP_REINDEX_TRIGGER_DETAIL: trigger.detail ?? '',
+      SCIP_REINDEX_PROCESS_GROUP_LEADER: '1',
+    },
+  };
+}
+
+const SYSTEM_WATCH_CLOCK: WatchClock = {
+  now: () => Date.now(),
+  setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
+  clearTimeout: (timer) => clearTimeout(timer),
+  setInterval: (callback, intervalMs) => setInterval(callback, intervalMs),
+  clearInterval: (timer) => clearInterval(timer),
+};
+
+const defaultWatchSubscriptionFactory: WatchSubscriptionFactory = (projectRoot, options) => watch(projectRoot, options);
+
+function createForkedReindexRunner(clock: WatchClock): ReindexRunner {
+  return {
+    run(request) {
+      return new Promise((resolve, reject) => {
+        const start = clock.now();
+        const launch = resolveReindexWorkerLaunch(request);
+        // scip-query: process-lifetime-reviewed -- this reindex worker is owned
+        // by the watch job state machine; RES-02 hardens its drain/shutdown path.
+        const child = fork(launch.workerPath, [], {
+          detached: true,
+          env: launch.env,
+          stdio: 'pipe',
+        });
+        child.on('exit', (code) => {
+          if (code === 0) {
+            resolve(clock.now() - start);
+          } else {
+            reject(new Error(`Reindex worker exited with code ${code}`));
+          }
+        });
+        child.on('error', reject);
+      });
+    },
+  };
 }
 
 function mergeRefreshTrigger(current: RefreshTrigger | null, next: RefreshTrigger): RefreshTrigger {

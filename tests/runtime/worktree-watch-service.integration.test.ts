@@ -4,6 +4,7 @@ import type * as NodeChildProcess from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
+import { watch } from 'chokidar';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveIndexStoragePaths } from '../../src/platform/cache-layout.js';
 import { resolveGitWorktreeContext } from '../../src/platform/git-worktree.js';
@@ -18,6 +19,7 @@ import {
   writeWatchServiceState,
   type WatchServiceRuntime,
 } from '../../src/runtime/watch-service.js';
+import type { WatchSubscription, WatchSubscriptionFactory } from '../../src/runtime/watch.js';
 
 const NOW = Date.parse('2026-07-14T20:00:00.000Z');
 const tempDirs: string[] = [];
@@ -120,15 +122,19 @@ describe('per-worktree watch service', () => {
     const { Watcher } = await import('../../src/runtime/watch.js');
     const watcherErrors: Error[] = [];
     const watcherConfig = { watch: { debounceMs: 50, cooldownMs: 0, gitPollMs: 60_000 } } as const;
+    const primarySubscriptions: WatchSubscription[] = [];
+    const linkedSubscriptions: WatchSubscription[] = [];
     const primaryWatcher = new Watcher({
       projectRoot: canonicalPrimaryProject,
       config: watcherConfig,
       onError: (error) => watcherErrors.push(error),
+      subscriptionFactory: recordingSubscriptionFactory(primarySubscriptions),
     });
     const linkedWatcher = new Watcher({
       projectRoot: canonicalLinkedProject,
       config: watcherConfig,
       onError: (error) => watcherErrors.push(error),
+      subscriptionFactory: recordingSubscriptionFactory(linkedSubscriptions),
     });
 
     try {
@@ -136,8 +142,8 @@ describe('per-worktree watch service', () => {
       linkedWatcher.start();
       await vi.waitFor(
         () => {
-          expect(watchedDirectoryCount(primaryWatcher)).toBeGreaterThan(0);
-          expect(watchedDirectoryCount(linkedWatcher)).toBeGreaterThan(0);
+          expect(watchedDirectoryCount(primarySubscriptions)).toBeGreaterThan(0);
+          expect(watchedDirectoryCount(linkedSubscriptions)).toBeGreaterThan(0);
         },
         { timeout: 5_000, interval: 20 },
       );
@@ -181,17 +187,30 @@ describe('per-worktree watch service', () => {
     const reindexEnvironments: NodeJS.ProcessEnv[] = [];
     mockReindexFork(reindexEnvironments);
     const { Watcher } = await import('../../src/runtime/watch.js');
-    const config = { watch: { debounceMs: 50, cooldownMs: 0, gitPollMs: 60_000 } } as const;
-    const primaryWatcher = new Watcher({ projectRoot: primaryProject, config });
-    const linkedWatcher = new Watcher({ projectRoot: linkedProject, config });
+    const config = {
+      dbPath: '.cache/scip-query',
+      watch: { debounceMs: 50, cooldownMs: 0, gitPollMs: 60_000 },
+    } as const;
+    const primarySubscriptions: WatchSubscription[] = [];
+    const linkedSubscriptions: WatchSubscription[] = [];
+    const primaryWatcher = new Watcher({
+      projectRoot: primaryProject,
+      config,
+      subscriptionFactory: recordingSubscriptionFactory(primarySubscriptions),
+    });
+    const linkedWatcher = new Watcher({
+      projectRoot: linkedProject,
+      config,
+      subscriptionFactory: recordingSubscriptionFactory(linkedSubscriptions),
+    });
 
     try {
       primaryWatcher.start();
       linkedWatcher.start();
       await vi.waitFor(
         () => {
-          expect(watchedDirectoryCount(primaryWatcher)).toBeGreaterThan(0);
-          expect(watchedDirectoryCount(linkedWatcher)).toBeGreaterThan(0);
+          expect(watchedDirectoryCount(primarySubscriptions)).toBeGreaterThan(0);
+          expect(watchedDirectoryCount(linkedSubscriptions)).toBeGreaterThan(0);
         },
         { timeout: 5_000, interval: 20 },
       );
@@ -204,7 +223,7 @@ describe('per-worktree watch service', () => {
       linkedWatcher.stop();
     }
 
-    const linkedIndex = resolveIndexStoragePaths(linkedProject, {});
+    const linkedIndex = resolveIndexStoragePaths(linkedProject, config);
     expect(reindexEnvironments).toEqual([
       expect.objectContaining({
         SCIP_REINDEX_PROJECT_ROOT: linkedProject,
@@ -230,12 +249,20 @@ describe('per-worktree watch service', () => {
     mockReindexFork(reindexEnvironments);
     const { Watcher } = await import('../../src/runtime/watch.js');
     const config = { watch: { debounceMs: 50, cooldownMs: 0, gitPollMs: 20 } } as const;
-    const primaryWatcher = new Watcher({ projectRoot: primaryProject, config });
-    const linkedWatcher = new Watcher({ projectRoot: linkedProject, config });
+    const primaryWatcher = new Watcher({
+      projectRoot: primaryProject,
+      config,
+      subscriptionFactory: inertSubscriptionFactory(),
+    });
+    const linkedWatcher = new Watcher({
+      projectRoot: linkedProject,
+      config,
+      subscriptionFactory: inertSubscriptionFactory(),
+    });
 
     try {
-      (primaryWatcher as unknown as { startGitStatePolling(): void }).startGitStatePolling();
-      (linkedWatcher as unknown as { startGitStatePolling(): void }).startGitStatePolling();
+      primaryWatcher.start();
+      linkedWatcher.start();
       await delay(50);
 
       writeFileSync(join(primaryProject, 'value.ts'), 'export const value = 20;\n');
@@ -371,13 +398,29 @@ function delay(durationMs: number): Promise<void> {
   return new Promise((resolvePromise) => setTimeout(resolvePromise, durationMs));
 }
 
-function watchedDirectoryCount(watcher: unknown): number {
-  const subscriptions = (
-    watcher as {
-      fsWatchers: Array<{ getWatched(): Record<string, string[]> }>;
-    }
-  ).fsWatchers;
-  return subscriptions.reduce((count, subscription) => count + Object.keys(subscription.getWatched()).length, 0);
+function recordingSubscriptionFactory(subscriptions: WatchSubscription[]): WatchSubscriptionFactory {
+  return (projectRoot, options) => {
+    const subscription = watch(projectRoot, options);
+    subscriptions.push(subscription);
+    return subscription;
+  };
+}
+
+function watchedDirectoryCount(subscriptions: readonly WatchSubscription[]): number {
+  return subscriptions.reduce((count, subscription) => {
+    if (!('getWatched' in subscription) || typeof subscription.getWatched !== 'function') return count;
+    return count + Object.keys(subscription.getWatched()).length;
+  }, 0);
+}
+
+function inertSubscriptionFactory(): WatchSubscriptionFactory {
+  return () => {
+    const subscription = {
+      on: () => subscription,
+      close: () => undefined,
+    };
+    return subscription as WatchSubscription;
+  };
 }
 
 function mockReindexFork(reindexEnvironments: NodeJS.ProcessEnv[]): void {

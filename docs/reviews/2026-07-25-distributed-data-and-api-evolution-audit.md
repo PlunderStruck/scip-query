@@ -587,6 +587,17 @@ and sync timeout forwarding.
 
 **Acceptance condition:** watcher lifecycle and state-machine behavior can be tested deterministically without accessing or replacing a private class member.
 
+**Resolution:** Slice 03 adds explicit `ReindexRunner`,
+`WatchSubscriptionFactory`, and `WatchClock` ports to `WatcherOptions`. The
+runner receives a typed high-level request, while the named
+`resolveReindexWorkerLaunch` adapter converts that request to the canonical
+worker path and environment. Unit tests now drive refreshes through
+`requestRefresh`, source events through injected subscriptions, and Git
+polling through `start`; they observe runner requests, status, suppression,
+errors, and public subscription handles rather than watcher fields. The linked
+worktree integration tests use the same seam. A source contract fails on any
+new `as unknown as` cast in either watcher test suite.
+
 ---
 
 ## 6. Detailed API-evolution findings
