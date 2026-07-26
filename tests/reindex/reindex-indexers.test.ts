@@ -197,23 +197,31 @@ describe('indexer configs', () => {
     ]);
   });
 
-  it('prefers a project-local scip-php binary and writes the default in-place output', () => {
+  it('uses only the PHP indexer identity selected by reindex policy', () => {
     const projectRoot = createProject('scip-query-indexers-php-');
     mkdirSync(join(projectRoot, 'vendor', 'bin'), { recursive: true });
     writeFileSync(join(projectRoot, 'vendor', 'bin', 'scip-php'), '#!/usr/bin/env php\n');
 
     const config = getIndexerConfig('php');
-    const command = config.indexArgs({
+    const installedCommand = config.indexArgs({
       projectRoot,
       outputPath: join(projectRoot, 'custom.scip'),
       indexerBinary: 'scip-php',
     });
 
-    expect(command.binary).toBe('php');
-    expect(command.args).toEqual([
+    expect(installedCommand).toEqual({ binary: 'scip-php', args: [] });
+
+    const trustedPath = join(projectRoot, 'vendor', 'bin', 'scip-php');
+    const trustedCommand = config.indexArgs({
+      projectRoot,
+      outputPath: join(projectRoot, 'custom.scip'),
+      indexerBinary: trustedPath,
+    });
+    expect(trustedCommand.binary).toBe('php');
+    expect(trustedCommand.args).toEqual([
       '-d',
       'error_reporting=E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED',
-      join(projectRoot, 'vendor', 'bin', 'scip-php'),
+      trustedPath,
     ]);
     expect(config.defaultOutputPath).toBe('index.scip');
     expect(config.installMethods).toEqual([]);

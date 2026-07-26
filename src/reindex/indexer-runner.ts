@@ -5,6 +5,7 @@ import type { IndexerConfig, SupportedLanguage } from '../domain/types.js';
 import { monotonicNowMs } from '../domain/time.js';
 import { toPortableCommand } from '../platform/binary.js';
 import { BoundedProcessError, PROCESS_TIMEOUT_MS, runBoundedProcess } from '../platform/bounded-process.js';
+import { revalidateTrustedProjectTool, type TrustedProjectToolIdentity } from '../platform/indexer-toolchain.js';
 
 // scip-query: ignore-stale — exported handoff record between reindex planning
 // and the runner; inlining would smear indexer execution state across modules.
@@ -19,6 +20,7 @@ export interface PreparedIndexerRun {
   binary: string;
   args: string[];
   env: NodeJS.ProcessEnv;
+  trustedProjectTool?: TrustedProjectToolIdentity;
 }
 
 // scip-query: ignore-stale — exported runner result consumed by reindex
@@ -158,6 +160,9 @@ async function runPreparedIndexer(
   const startedAt = monotonicNowMs();
 
   try {
+    if (run.trustedProjectTool) {
+      revalidateTrustedProjectTool(projectRoot, run.trustedProjectTool);
+    }
     const spawnable = toPortableCommand(run.binary, run.args);
     const completed = await runBoundedProcess({
       command: spawnable.binary,

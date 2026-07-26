@@ -187,6 +187,7 @@ describe('skill installation', () => {
     const result = module.installProjectAgentHooks('/repo', {
       homeDir: '/home/test',
       removeLegacyUserHooks: false,
+      commandPrefix: 'scip-query',
     });
 
     expect(result.installed).toEqual(['.codex/hooks.json', '.claude/settings.local.json']);
@@ -207,6 +208,7 @@ describe('skill installation', () => {
       homeDir: '/home/test',
       removeLegacyUserHooks: false,
       shared: true,
+      commandPrefix: 'scip-query',
     });
 
     expect(result.installed).toEqual(['.codex/hooks.json', '.claude/settings.local.json']);
@@ -225,6 +227,7 @@ describe('skill installation', () => {
     const result = module.installProjectAgentHooks('/repo', {
       homeDir: '/home/test',
       remove: true,
+      commandPrefix: 'scip-query',
     });
 
     expect(result.removed).toContain('.claude/settings.local.json');

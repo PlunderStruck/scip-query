@@ -159,6 +159,7 @@ export async function handleReindex(rawOpts: unknown): Promise<void> {
       skipIfUnchanged: !booleanOptionValue(opts, 'force'),
       allowPartial: booleanOptionValue(opts, 'allowPartial'),
       skipAutoInstall: process.env['SCIP_QUERY_SKIP_AUTO_INSTALL'] === '1',
+      trustProjectTools: booleanOptionValue(opts, 'trustProjectTools'),
       indexerConcurrency: numberOptionValue(opts, 'indexerConcurrency') ?? config.indexerConcurrency,
       trigger: { kind: 'manual-cli', detail: 'scip-query reindex' },
       // --json output must be pure JSON on stdout, matching every other

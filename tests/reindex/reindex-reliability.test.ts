@@ -1467,6 +1467,8 @@ async function loadReindexFixture(opts: {
     isIndexerInstalled: () => true,
     resolveIndexerBinary: (config: { indexerBinary: string }) => config.indexerBinary,
     resolveProjectLocalIndexerBinary: () => null,
+    trustProjectLocalIndexerBinary: () => null,
+    revalidateTrustedProjectTool: () => undefined,
   }));
   vi.doMock('../../src/reindex/install.js', () => ({
     tryInstallIndexer: () => true,

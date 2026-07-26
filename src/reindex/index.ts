@@ -51,6 +51,7 @@ import {
   isIndexerInstalled,
   resolveIndexerBinary,
   resolveProjectLocalIndexerBinary,
+  trustProjectLocalIndexerBinary,
 } from '../platform/indexer-toolchain.js';
 import {
   buildProjectInputFingerprint,
@@ -133,6 +134,8 @@ export interface ReindexOptions {
   clojureConfigPath?: string;
   /** Skip auto-install prompts */
   skipAutoInstall?: boolean;
+  /** Permit repository-local indexers after an explicit trust decision. */
+  trustProjectTools?: boolean;
   /** Reuse an existing index when tracked source inputs are unchanged (default true). */
   skipIfUnchanged?: boolean;
   /** Permit a partial index when some detected/requested languages fail (default false). */
@@ -879,6 +882,7 @@ async function runLanguageIndexersForFreshReindex(
     projectRoot: opts.projectRoot,
     env,
     skipAutoInstall: opts.skipAutoInstall,
+    trustProjectTools: opts.opts.trustProjectTools === true,
     pnpmWorkspaces: opts.opts.pnpmWorkspaces,
     typescriptProjectMode: opts.opts.typescriptProjectMode,
     typescriptProjects: opts.opts.typescriptProjects,
@@ -1660,6 +1664,7 @@ function prepareIndexerRuns(opts: {
   projectRoot: string;
   env: NodeJS.ProcessEnv;
   skipAutoInstall: boolean;
+  trustProjectTools: boolean;
   pnpmWorkspaces?: boolean;
   typescriptProjectMode?: TypeScriptProjectMode;
   typescriptProjects?: readonly string[];
@@ -1699,6 +1704,7 @@ function prepareIndexerRunsForLanguage(opts: {
   tempOutputScip: string;
   env: NodeJS.ProcessEnv;
   skipAutoInstall: boolean;
+  trustProjectTools: boolean;
   pnpmWorkspaces?: boolean;
   typescriptProjectMode?: TypeScriptProjectMode;
   typescriptProjects?: readonly string[];
@@ -1753,6 +1759,7 @@ function prepareIndexerRun(opts: {
   projectRoot: string;
   env: NodeJS.ProcessEnv;
   skipAutoInstall: boolean;
+  trustProjectTools: boolean;
   pnpmWorkspaces?: boolean;
   projectPath?: string;
   clojureConfigPath?: string;
@@ -1760,9 +1767,22 @@ function prepareIndexerRun(opts: {
 }): { prepared: PreparedIndexerRun } | { skipped: { language: SupportedLanguage; reason: string } } {
   const config = getIndexerConfig(opts.language);
   const binaryLabel = describeIndexerBinary(config);
-  const projectLocalBinary = resolveProjectLocalIndexerBinary(config, opts.projectRoot);
+  const discoveredProjectLocalBinary = resolveProjectLocalIndexerBinary(config, opts.projectRoot);
+  const trustedProjectTool =
+    opts.trustProjectTools && discoveredProjectLocalBinary
+      ? trustProjectLocalIndexerBinary(config, opts.projectRoot)
+      : null;
+  const installedBinary = resolveIndexerBinary(config);
 
-  if (!projectLocalBinary && !isIndexerInstalled(config)) {
+  if (!trustedProjectTool && !installedBinary && discoveredProjectLocalBinary) {
+    const reason =
+      `${binaryLabel} is available only as repository-local code at ${discoveredProjectLocalBinary}. ` +
+      'Review that exact tool and rerun with --trust-project-tools.';
+    opts.onStatus(`Skipping ${opts.language}: ${reason}`);
+    return { skipped: { language: opts.language, reason } };
+  }
+
+  if (!trustedProjectTool && !installedBinary && !isIndexerInstalled(config)) {
     if (opts.skipAutoInstall) {
       const reason = `${binaryLabel} not found on PATH (auto-install disabled). ${config.installUrl ?? ''}`.trim();
       opts.onStatus(`Skipping ${opts.language}: ${reason}`);
@@ -1776,7 +1796,7 @@ function prepareIndexerRun(opts: {
     }
   }
 
-  const resolvedBinary = projectLocalBinary ?? resolveIndexerBinary(config);
+  const resolvedBinary = trustedProjectTool?.canonicalPath ?? resolveIndexerBinary(config);
   if (!resolvedBinary) {
     const reason = `${binaryLabel} was not found after installation checks.`;
     opts.onStatus(`Skipping ${opts.language}: ${reason}`);
@@ -1791,6 +1811,17 @@ function prepareIndexerRun(opts: {
     projectPath: opts.projectPath,
     configPath: opts.language === 'clojure' ? opts.clojureConfigPath : undefined,
   });
+  if (trustedProjectTool && !trustedProjectTool.executable) {
+    const reason = `${trustedProjectTool.relativePath} is not executable; refusing project-local indexer.`;
+    opts.onStatus(`Skipping ${opts.language}: ${reason}`);
+    return { skipped: { language: opts.language, reason } };
+  }
+  if (trustedProjectTool) {
+    opts.onStatus(
+      `Trusted project-local ${opts.language} indexer ${trustedProjectTool.relativePath} ` +
+        `(${trustedProjectTool.sha256.slice(0, 12)}…, ${trustedProjectTool.canonicalPath}).`,
+    );
+  }
 
   return {
     prepared: {
@@ -1804,6 +1835,7 @@ function prepareIndexerRun(opts: {
       binary,
       args,
       env: getIndexerExecutionEnv(config, opts.env, resolvedBinary),
+      ...(trustedProjectTool ? { trustedProjectTool } : {}),
     },
   };
 }

@@ -3,9 +3,26 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { fetchTlaToolsJar, runTlaTool } from '../../src/tla/tool-runner.js';
+import { fetchTlaToolsJar, resolveTlaToolsJar, runTlaTool } from '../../src/tla/tool-runner.js';
 
 describe('TLA tool runner', () => {
+  it('does not select a repository-local tla2tools.jar without an explicit path', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-tla-local-jar-'));
+    const localJar = join(root, 'tla2tools.jar');
+    writeFileSync(localJar, 'repository bytes');
+    const env = { SCIP_QUERY_CACHE_DIR: join(root, 'empty-cache') };
+
+    expect(resolveTlaToolsJar({ projectRoot: root, specPath: join(root, 'Spec.tla'), env })).toBeNull();
+    expect(
+      resolveTlaToolsJar({
+        projectRoot: root,
+        specPath: join(root, 'Spec.tla'),
+        env,
+        tlaToolsJar: localJar,
+      }),
+    ).toBe(localJar);
+  });
+
   it('runs Apalache through a normalized command result', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-tla-tool-'));
     const specPath = join(root, 'Spec.tla');

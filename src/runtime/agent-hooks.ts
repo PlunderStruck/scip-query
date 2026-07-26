@@ -1,9 +1,10 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import type { ProjectConfig, ScipQueryConfig } from '../domain/types.js';
+import { isPathInsideProject } from '../domain/path-normalization.js';
 import { resolveIndexStoragePaths } from '../platform/cache-layout.js';
 import { watchServicePaths } from '../platform/watch-service-state.js';
 import { diffGate } from '../queries/impact/diff-gate.js';
@@ -31,6 +32,7 @@ import {
 import { findGitRoot } from '../platform/git-worktree.js';
 import { resolveSharedEvidenceDbPath } from '../reindex/shared-generation-store.js';
 import { formatRecordCompatibilityWarning } from '../domain/record-compatibility.js';
+import { resolveSpawnableExecutable, toPortableCommand } from '../platform/binary.js';
 
 const SKIP_HOOK_INSTALL_ENV = 'SCIP_QUERY_SKIP_HOOK_INSTALL';
 const STOP_HOOK_MODE_ENV = 'SCIP_QUERY_STOP_HOOK_MODE';
@@ -115,6 +117,7 @@ interface ProjectHookOptions {
   remove?: boolean;
   force?: boolean;
   dryRun?: boolean;
+  commandPrefix?: string;
 }
 
 export function installUserAgentHooks(
@@ -162,7 +165,7 @@ export function installProjectAgentHooks(
     return result;
   }
 
-  const commandPrefix = projectHookCommandPrefix(projectRoot);
+  const commandPrefix = opts.commandPrefix ?? projectHookCommandPrefix(projectRoot);
   if (opts.shared) {
     result.warnings.push('--shared is deprecated; project hooks are always checkout-local and will not be committed.');
   }
@@ -551,7 +554,9 @@ function isScipHook(hook: unknown): hook is CommandHook {
   const command = (hook as { command?: unknown }).command;
   return (
     typeof command === 'string' &&
-    (command.startsWith(SCIP_HOOK_COMMAND_PREFIX) || command === LEGACY_STOP_HOOK_COMMAND)
+    (command.startsWith(SCIP_HOOK_COMMAND_PREFIX) ||
+      command === LEGACY_STOP_HOOK_COMMAND ||
+      /(?:^|\s)hook-(?:context|pretool|stop)$/.test(command))
   );
 }
 
@@ -622,8 +627,28 @@ function scipHookGroup(_provider: HookProvider, event: HookEventName, commandPre
 }
 
 function projectHookCommandPrefix(projectRoot: string): string {
-  const localBin = join(projectRoot, 'node_modules', '.bin', 'scip-query');
-  return existsSync(localBin) ? localBin : 'scip-query';
+  const canonicalProjectRoot = realpathSync(projectRoot);
+  const candidates = [resolveSpawnableExecutable('scip-query'), process.argv[1]].filter(
+    (candidate): candidate is string => Boolean(candidate),
+  );
+  for (const entry of candidates) {
+    if (!existsSync(entry)) continue;
+    const canonicalEntry = realpathSync(entry);
+    if (isPathInsideProject(canonicalProjectRoot, canonicalEntry)) continue;
+    const portable = toPortableCommand(canonicalEntry, []);
+    return [portable.binary, ...portable.args].map(quoteHookCommandArgument).join(' ');
+  }
+  throw new Error(
+    'Cannot install persistent hooks without a scip-query CLI identity outside the target checkout. ' +
+      'Install scip-query globally and rerun setup-hooks.',
+  );
+}
+
+function quoteHookCommandArgument(value: string): string {
+  if (process.platform === 'win32') {
+    return `"${value.replaceAll('%', '%%').replaceAll('"', '\\"')}"`;
+  }
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
 export async function handleAgentHookContext(): Promise<void> {

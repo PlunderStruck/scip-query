@@ -21,6 +21,7 @@ async function loadToolchain(
     execFileSync: execFileSyncImpl,
   }));
   vi.doMock('node:fs', () => ({
+    ...actualFs,
     existsSync: options?.existsSyncImpl ?? (() => false),
     readFileSync: actualFs.readFileSync,
   }));

@@ -208,13 +208,9 @@ function resolveApalacheBin(opts: TlaToolRunOptions): string {
 
 export function resolveTlaToolsJar(opts: TlaToolRunOptions): string | null {
   const env = opts.env ?? process.env;
-  const candidates = [
-    opts.tlaToolsJar,
-    env['TLA_TOOLS_JAR'],
-    resolveTlaToolsJarCachePath(env),
-    join(opts.projectRoot, 'tla2tools.jar'),
-    join(opts.projectRoot, 'tools', 'tla2tools.jar'),
-  ].filter((candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0);
+  const candidates = [opts.tlaToolsJar, env['TLA_TOOLS_JAR'], resolveTlaToolsJarCachePath(env)].filter(
+    (candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0,
+  );
   return candidates.find((candidate) => existsSync(candidate)) ?? null;
 }
 

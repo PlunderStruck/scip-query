@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-07-26T17:41:40.174Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "0bb02294e95c759c12060aa416f2e6ecfbe95f1a94e6a93ff9b2ea443feb6fed",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ReindexOptions changed from interface ReindexOptions { projectRoot: string; languages?: SupportedLanguage[]; outputScip?: string; outputDb?: string; maxHeapMb?: number; onStatus?: (message: string) => void... to interface ReindexOptions { projectRoot: string; languages?: SupportedLanguage[]; outputScip?: string; outputDb?: string; maxHeapMb?: number; onStatus?: (message: string) => void....",
+      "target": "./reindex:ReindexOptions"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.19.6",
+  "previousDigest": "1e1c3f6d3d4f341b1a326269214fc265a1670afa2354474ad6e249c6ffaeb5b6",
+  "reason": "Add explicit opt-in for executing reviewed project-local indexers during reindex",
+  "schemaVersion": 1
+}

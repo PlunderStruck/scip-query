@@ -1,10 +1,12 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { platform } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { IndexerConfig } from '../domain/types.js';
 import { isBinaryAvailable, resolveSpawnableExecutable } from './binary.js';
+import { readProjectFile, resolveProjectFile } from './project-files.js';
 
 const requireFromHere = createRequire(import.meta.url);
 
@@ -27,6 +29,18 @@ export interface IndexerDependencyStatus {
   resolvedBinary: string | null;
   installUrl?: string;
   note?: string;
+}
+
+export interface TrustedProjectToolIdentity {
+  configuredPath: string;
+  canonicalPath: string;
+  relativePath: string;
+  sha256: string;
+  size: number;
+  mtimeMs: number;
+  device: number;
+  inode: number;
+  executable: boolean;
 }
 
 function getBinaryCandidates(toolchain: IndexerToolchain): string[] {
@@ -122,11 +136,85 @@ export function resolveProjectLocalIndexerBinary(toolchain: IndexerToolchain, pr
   return null;
 }
 
+export function trustProjectLocalIndexerBinary(
+  toolchain: IndexerToolchain,
+  projectRoot: string,
+): TrustedProjectToolIdentity | null {
+  for (const relativePath of toolchain.projectLocalBinaries ?? []) {
+    const configuredPath = join(projectRoot, relativePath);
+    if (!existsSync(configuredPath)) continue;
+    return identifyProjectLocalIndexer(projectRoot, relativePath, configuredPath);
+  }
+  return null;
+}
+
+export function revalidateTrustedProjectTool(projectRoot: string, identity: TrustedProjectToolIdentity): void {
+  const current = safelyIdentifyProjectLocalIndexer(projectRoot, identity);
+  if (
+    !current ||
+    current.canonicalPath !== identity.canonicalPath ||
+    current.sha256 !== identity.sha256 ||
+    current.size !== identity.size ||
+    current.mtimeMs !== identity.mtimeMs ||
+    current.device !== identity.device ||
+    current.inode !== identity.inode ||
+    current.executable !== identity.executable
+  ) {
+    throw new Error(
+      `refusing changed project-local indexer ${identity.relativePath}; ` +
+        'review the current file and rerun with --trust-project-tools',
+    );
+  }
+}
+
+function safelyIdentifyProjectLocalIndexer(
+  projectRoot: string,
+  identity: TrustedProjectToolIdentity,
+): TrustedProjectToolIdentity | null {
+  try {
+    return identifyProjectLocalIndexer(projectRoot, identity.relativePath, identity.configuredPath);
+  } catch {
+    return null;
+  }
+}
+
+function identifyProjectLocalIndexer(
+  projectRoot: string,
+  relativePath: string,
+  configuredPath: string,
+): TrustedProjectToolIdentity {
+  const options = {
+    maxBytes: 256 * 1024 * 1024,
+    inputKind: 'project-local indexer',
+  } as const;
+  const resolved = resolveProjectFile(projectRoot, relativePath, options);
+  const bytes = readProjectFile(projectRoot, relativePath, options);
+  const stat = statSync(resolved.absolutePath);
+  return {
+    configuredPath,
+    canonicalPath: resolved.absolutePath,
+    relativePath,
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+    size: resolved.size,
+    mtimeMs: resolved.mtimeMs,
+    device: resolved.device,
+    inode: resolved.inode,
+    executable: (stat.mode & 0o111) !== 0,
+  };
+}
+
 /**
  * Resolve an indexer binary, preferring a project-local executable when present.
  */
-export function resolveIndexerBinaryForProject(toolchain: IndexerToolchain, projectRoot: string): string | null {
-  return resolveProjectLocalIndexerBinary(toolchain, projectRoot) ?? resolveIndexerBinary(toolchain);
+export function resolveIndexerBinaryForProject(
+  toolchain: IndexerToolchain,
+  projectRoot: string,
+  opts: { trustProjectTools?: boolean } = {},
+): string | null {
+  return (
+    (opts.trustProjectTools ? trustProjectLocalIndexerBinary(toolchain, projectRoot)?.canonicalPath : null) ??
+    resolveIndexerBinary(toolchain)
+  );
 }
 
 /**
@@ -161,10 +249,14 @@ export function getIndexerExecutionEnv(
 /**
  * Check whether an indexer is installed and runnable in the current environment.
  */
-export function getIndexerDependencyStatus(toolchain: IndexerToolchain, projectRoot?: string): IndexerDependencyStatus {
+export function getIndexerDependencyStatus(
+  toolchain: IndexerToolchain,
+  projectRoot?: string,
+  opts: { trustProjectTools?: boolean } = {},
+): IndexerDependencyStatus {
   const binaryLabel = describeIndexerBinary(toolchain);
   const resolvedBinary = projectRoot
-    ? resolveIndexerBinaryForProject(toolchain, projectRoot)
+    ? resolveIndexerBinaryForProject(toolchain, projectRoot, opts)
     : resolveIndexerBinary(toolchain);
 
   if (!resolvedBinary) {
@@ -175,6 +267,9 @@ export function getIndexerDependencyStatus(toolchain: IndexerToolchain, projectR
       runnable: false,
       resolvedBinary: null,
       installUrl: toolchain.installUrl,
+      ...(projectRoot && resolveProjectLocalIndexerBinary(toolchain, projectRoot)
+        ? { note: 'project-local indexer available only with --trust-project-tools' }
+        : {}),
     };
   }
 

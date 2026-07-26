@@ -44,6 +44,25 @@ describe('checkout-local project hooks', () => {
     ).toBe('');
   });
 
+  it('does not persist a repository-local scip-query executable identity', () => {
+    const root = createGitRoot();
+    const localBin = join(root, 'node_modules', '.bin', 'scip-query');
+    mkdirSync(join(root, 'node_modules', '.bin'), { recursive: true });
+    writeFileSync(localBin, '#!/bin/sh\nexit 99\n');
+
+    installProjectAgentHooks(root, { removeLegacyUserHooks: false });
+
+    const claude = JSON.parse(readFileSync(join(root, '.claude', 'settings.local.json'), 'utf8')) as {
+      hooks?: Record<string, Array<{ hooks?: Array<{ command?: string }> }>>;
+    };
+    const commands = Object.values(claude.hooks ?? {})
+      .flatMap((groups) => groups)
+      .flatMap((group) => group.hooks ?? [])
+      .map((hook) => hook.command ?? '');
+    expect(commands.length).toBeGreaterThan(0);
+    expect(commands.every((command) => !command.includes(localBin) && !command.includes(root))).toBe(true);
+  });
+
   it('keeps the deprecated shared flag local', () => {
     const root = createGitRoot();
 

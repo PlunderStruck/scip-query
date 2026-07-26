@@ -10,7 +10,7 @@ Commands with `--json` emit the versioned public envelope documented in [CLI JSO
 
 | Command | Description | Options |
 |---|---|---|
-| `reindex` | Index the codebase and convert to SQLite | `-l, --language <lang>`<br>`--pnpm-workspaces`<br>`--force`<br>`--allow-partial`<br>`--indexer-concurrency <n>`<br>`--json` |
+| `reindex` | Index the codebase and convert to SQLite | `-l, --language <lang>`<br>`--pnpm-workspaces`<br>`--force`<br>`--allow-partial`<br>`--trust-project-tools`<br>`--indexer-concurrency <n>`<br>`--json` |
 | `augment-sources` | Add source files skipped by upstream SCIP indexers to the SQLite documents table | - |
 | `augment-vue` | Add compiler-resolved Vue SFC references to the SQLite index using Volar | `--project <tsconfig>` |
 

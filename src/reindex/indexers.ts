@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import type { SupportedLanguage, IndexerConfig } from '../domain/types.js';
 import { RUST_ANALYZER_TOOLCHAIN } from '../platform/indexer-toolchain.js';
@@ -266,19 +266,13 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     indexerBinary: 'scip-php',
     projectLocalBinaries: ['vendor/davidrjenni/scip-php/bin/scip-php', 'vendor/bin/scip-php'],
     checkCommand: 'scip-php --version',
-    indexArgs: ({ projectRoot, indexerBinary }) => {
-      const localBinary = join(projectRoot, 'vendor', 'bin', 'scip-php');
-      const nestedLocalBinary = join(projectRoot, 'vendor', 'davidrjenni', 'scip-php', 'bin', 'scip-php');
-      const targetBinary = existsSync(nestedLocalBinary)
-        ? nestedLocalBinary
-        : existsSync(localBinary)
-          ? localBinary
-          : indexerBinary;
-      return {
-        binary: 'php',
-        args: ['-d', 'error_reporting=E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED', targetBinary],
-      };
-    },
+    indexArgs: ({ indexerBinary }) =>
+      isAbsolute(indexerBinary)
+        ? {
+            binary: 'php',
+            args: ['-d', 'error_reporting=E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED', indexerBinary],
+          }
+        : { binary: indexerBinary, args: [] },
     defaultOutputPath: 'index.scip',
     markerFiles: ['composer.json'],
     installMethods: [],
