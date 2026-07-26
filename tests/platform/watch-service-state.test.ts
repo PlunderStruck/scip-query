@@ -25,6 +25,21 @@ describe('watch service persisted state', () => {
     expect(
       parseWatchServiceState({
         ...liveState(),
+        watcher: { state: 'draining', startedAt: 123, reason: 'worker still exiting' },
+      }),
+    ).toEqual({
+      ...liveState(),
+      watcher: { state: 'draining', startedAt: 123, reason: 'worker still exiting' },
+    });
+    expect(
+      parseWatchServiceState({
+        ...liveState(),
+        watcher: { state: 'draining', startedAt: 123 },
+      }),
+    ).toBeNull();
+    expect(
+      parseWatchServiceState({
+        ...liveState(),
         reindexActivity: { ...liveState().reindexActivity!, runs: -1 },
       }),
     ).toBeNull();

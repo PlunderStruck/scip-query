@@ -1507,13 +1507,23 @@ export function handleWatch(rawOpts: unknown): void {
   console.log('Press Ctrl+C to stop.\n');
   watcher.start();
 
-  process.on('SIGINT', () => {
-    watcher.stop();
-    watchLock.release();
-    console.log('\nStopped.');
-    process.exit(0);
-  });
-  process.once('exit', watchLock.release);
+  let foregroundStopStarted = false;
+  const stopForegroundWatcher = () => {
+    if (foregroundStopStarted) return;
+    foregroundStopStarted = true;
+    void watcher.stop().then((result) => {
+      if (result.state === 'degraded') {
+        foregroundStopStarted = false;
+        console.error(`\nUnable to stop safely: ${result.reasons.join('; ')}`);
+        return;
+      }
+      watchLock.release();
+      console.log('\nStopped.');
+      process.exit(0);
+    });
+  };
+  process.on('SIGINT', stopForegroundWatcher);
+  process.on('SIGTERM', stopForegroundWatcher);
 }
 
 function watchServiceReport(inspection: WatchServiceInspection, enabled = true) {

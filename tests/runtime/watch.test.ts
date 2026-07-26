@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
+  ReindexDiagnostics,
+  ReindexOperation,
   ReindexRunner,
   ReindexRunRequest,
   WatchSubscription,
@@ -22,17 +24,63 @@ function createProject(): string {
 
 function controlledReindexRunner(): {
   runner: ReindexRunner;
-  run: ReturnType<typeof vi.fn<(request: ReindexRunRequest) => Promise<number>>>;
+  run: ReturnType<typeof vi.fn<(request: ReindexRunRequest) => void>>;
   requests: ReindexRunRequest[];
   completions: Array<(durationMs: number) => void>;
 } {
   const requests: ReindexRunRequest[] = [];
   const completions: Array<(durationMs: number) => void> = [];
-  const run = vi.fn<(request: ReindexRunRequest) => Promise<number>>((request) => {
+  const run = vi.fn<(request: ReindexRunRequest) => void>();
+  const start = vi.fn<(request: ReindexRunRequest) => ReindexOperation>((request) => {
     requests.push(request);
-    return new Promise((resolvePromise) => completions.push(resolvePromise));
+    let resolveCompletion!: (durationMs: number) => void;
+    const completion = new Promise<number>((resolvePromise) => {
+      resolveCompletion = resolvePromise;
+      completions.push(resolvePromise);
+    });
+    run(request);
+    return {
+      completion,
+      async cancel() {
+        resolveCompletion(0);
+        await completion;
+        return { state: 'exited', diagnostics: emptyDiagnostics() };
+      },
+      diagnostics: emptyDiagnostics,
+    };
   });
-  return { runner: { run }, run, requests, completions };
+  return { runner: { start }, run, requests, completions };
+}
+
+function emptyDiagnostics(): ReindexDiagnostics {
+  return {
+    stdoutTail: '',
+    stderrTail: '',
+    stdoutTruncated: false,
+    stderrTruncated: false,
+  };
+}
+
+function completedOperation(durationMs = 1): ReindexOperation {
+  return {
+    completion: Promise.resolve(durationMs),
+    cancel: async () => ({ state: 'exited', diagnostics: emptyDiagnostics() }),
+    diagnostics: emptyDiagnostics,
+  };
+}
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve(value: T): void;
+  reject(error: unknown): void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
 }
 
 function sourceSubscriptionHarness(): {
@@ -99,7 +147,7 @@ describe('Watcher', () => {
 
     controlled.completions[1]?.(100);
     await vi.runAllTimersAsync();
-    watcher.stop();
+    await watcher.stop();
   });
 
   it('suppresses a dirty rerun when the completed index is proven fresh', async () => {
@@ -130,7 +178,7 @@ describe('Watcher', () => {
       kind: 'watch-startup',
       detail: 'new request',
     });
-    watcher.stop();
+    await watcher.stop();
   });
 
   it('preserves a dirty rerun when completion freshness cannot be observed', async () => {
@@ -158,35 +206,35 @@ describe('Watcher', () => {
 
     expect(controlled.run).toHaveBeenCalledTimes(2);
     expect(errors).toEqual(['freshness unavailable']);
-    watcher.stop();
+    await watcher.stop();
   });
 
   it('can request an immediate startup refresh without waiting for debounce', async () => {
     const projectRoot = createProject();
     const statuses: string[] = [];
     const { Watcher } = await import('../../src/runtime/watch.js');
-    const run = vi.fn<(request: ReindexRunRequest) => Promise<number>>().mockResolvedValue(1);
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
     const watcher = new Watcher({
       projectRoot,
       config: { watch: { debounceMs: 60_000, gitPollMs: 60_000 } },
       languages: ['typescript'],
       onStatus: (status) => statuses.push(status.state),
-      reindexRunner: { run },
+      reindexRunner: { start: run },
     });
 
     watcher.requestRefresh({ kind: 'watch-startup' }, { immediate: true });
     await vi.waitFor(() => expect(run).toHaveBeenCalledOnce());
 
     expect(statuses[0]).toBe('indexing');
-    watcher.stop();
+    await watcher.stop();
   });
 
   it('passes canonical index paths and trigger metadata to the reindex worker', async () => {
     const projectRoot = createProject();
     const captured: ReindexRunRequest[] = [];
-    const run = vi.fn<(request: ReindexRunRequest) => Promise<number>>(async (request) => {
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>((request) => {
       captured.push(request);
-      return 1;
+      return completedOperation();
     });
 
     const { Watcher, resolveReindexWorkerLaunch } = await import('../../src/runtime/watch.js');
@@ -199,7 +247,7 @@ describe('Watcher', () => {
         indexer: { typescript: { projectMode: 'workspace', projects: ['packages/web'] } },
       },
       languages: ['typescript'],
-      reindexRunner: { run },
+      reindexRunner: { start: run },
     });
 
     watcher.requestRefresh({ kind: 'watch-source', detail: 'src/a.ts' }, { immediate: true });
@@ -221,6 +269,7 @@ describe('Watcher', () => {
         SCIP_REINDEX_TRIGGER_DETAIL: 'src/a.ts',
       }),
     );
+    await watcher.stop();
   });
 
   it('ignores Git bookkeeping events in the source watcher path', async () => {
@@ -228,12 +277,12 @@ describe('Watcher', () => {
     const projectRoot = createProject();
     const { Watcher } = await import('../../src/runtime/watch.js');
     const subscription = sourceSubscriptionHarness();
-    const run = vi.fn<(request: ReindexRunRequest) => Promise<number>>().mockResolvedValue(1);
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
     const watcher = new Watcher({
       projectRoot,
       config: { watch: { gitPollMs: 60_000 } },
       languages: ['typescript'],
-      reindexRunner: { run },
+      reindexRunner: { start: run },
       subscriptionFactory: subscription.factory,
     });
 
@@ -242,7 +291,7 @@ describe('Watcher', () => {
     await vi.runAllTimersAsync();
 
     expect(run).not.toHaveBeenCalled();
-    watcher.stop();
+    await watcher.stop();
   });
 
   it('ignores reindex activity files in the source watcher path', async () => {
@@ -250,12 +299,12 @@ describe('Watcher', () => {
     const projectRoot = createProject();
     const { Watcher } = await import('../../src/runtime/watch.js');
     const subscription = sourceSubscriptionHarness();
-    const run = vi.fn<(request: ReindexRunRequest) => Promise<number>>().mockResolvedValue(1);
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
     const watcher = new Watcher({
       projectRoot,
       config: { watch: { gitPollMs: 60_000 } },
       languages: ['typescript'],
-      reindexRunner: { run },
+      reindexRunner: { start: run },
       subscriptionFactory: subscription.factory,
     });
 
@@ -265,7 +314,128 @@ describe('Watcher', () => {
     await vi.runAllTimersAsync();
 
     expect(run).not.toHaveBeenCalled();
-    watcher.stop();
+    await watcher.stop();
+  });
+
+  it('reports draining and waits for both subscription close and active-worker cancellation', async () => {
+    const projectRoot = createProject();
+    const completion = deferred<number>();
+    const cancellation = deferred<Awaited<ReturnType<ReindexOperation['cancel']>>>();
+    const subscriptionClose = deferred<void>();
+    const statuses: string[] = [];
+    const cancel = vi.fn(async () => {
+      completion.resolve(0);
+      return cancellation.promise;
+    });
+    const operation: ReindexOperation = {
+      completion: completion.promise,
+      cancel,
+      diagnostics: emptyDiagnostics,
+    };
+    const subscription = {
+      on: () => subscription,
+      close: () => subscriptionClose.promise,
+    } as WatchSubscription;
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { gitPollMs: 60_000 } },
+      reindexRunner: { start: () => operation },
+      subscriptionFactory: () => subscription,
+      onStatus: (status) => statuses.push(status.state),
+    });
+
+    watcher.start();
+    watcher.requestRefresh({ kind: 'watch-startup' }, { immediate: true });
+    const stopPromise = watcher.stop();
+    let settled = false;
+    void stopPromise.then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(statuses.at(-1)).toBe('draining');
+    expect(settled).toBe(false);
+    expect(() => watcher.start()).toThrow(/still draining/);
+
+    subscriptionClose.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    cancellation.resolve({ state: 'exited', diagnostics: emptyDiagnostics() });
+    await expect(stopPromise).resolves.toEqual({ state: 'stopped' });
+    expect(statuses.at(-1)).toBe('idle');
+  });
+
+  it('retains a degraded draining state when worker exit cannot be proven', async () => {
+    const projectRoot = createProject();
+    const never = new Promise<number>(() => undefined);
+    const diagnostics = emptyDiagnostics();
+    const start = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => ({
+      completion: never,
+      cancel: async () => ({
+        state: 'degraded',
+        reason: 'worker identity could not be verified',
+        diagnostics,
+      }),
+      diagnostics: () => diagnostics,
+    }));
+    const statuses: string[] = [];
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { gitPollMs: 60_000 } },
+      reindexRunner: { start },
+      onStatus: (status) => statuses.push(status.state),
+    });
+
+    watcher.requestRefresh({ kind: 'watch-startup' }, { immediate: true });
+    await expect(watcher.stop()).resolves.toEqual({
+      state: 'degraded',
+      reasons: ['worker identity could not be verified'],
+    });
+    watcher.requestRefresh({ kind: 'watch-demand' }, { immediate: true });
+
+    expect(start).toHaveBeenCalledOnce();
+    expect(statuses.at(-1)).toBe('draining');
+  });
+
+  it.each([
+    [
+      'synchronous',
+      () => () => {
+        throw new Error('sync close failure');
+      },
+    ],
+    [
+      'asynchronous',
+      () => async () => {
+        throw new Error('async close failure');
+      },
+    ],
+  ])('retains degraded ownership when a subscription has a %s close failure', async (_kind, createClose) => {
+    const projectRoot = createProject();
+    const statuses: string[] = [];
+    const subscription = {
+      on: () => subscription,
+      close: createClose(),
+    } as WatchSubscription;
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { gitPollMs: 60_000 } },
+      subscriptionFactory: () => subscription,
+      onStatus: (status) => statuses.push(status.state),
+    });
+
+    watcher.start();
+    await expect(watcher.stop()).resolves.toEqual({
+      state: 'degraded',
+      reasons: [expect.stringMatching(/watch subscription close failed: Error: .* close failure/)],
+    });
+
+    expect(statuses.at(-1)).toBe('draining');
   });
 
   it('refuses a second foreground watcher when the watch lock is live', async () => {

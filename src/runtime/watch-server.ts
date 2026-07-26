@@ -176,6 +176,9 @@ export async function runWatchServiceServer(
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);
 
+  let executionFailed = false;
+  let executionError: unknown;
+  let shutdownError: Error | undefined;
   try {
     watcher.start();
     const freshness = getIndexFreshness(projectRoot, config, indexPaths);
@@ -246,16 +249,33 @@ export async function runWatchServiceServer(
       }
       await sleep(SERVICE_LOOP_INTERVAL_MS);
     }
+  } catch (error) {
+    executionFailed = true;
+    executionError = error;
   } finally {
     process.off('SIGINT', stop);
     process.off('SIGTERM', stop);
     semanticHost.closeTypeScriptService();
     indexHost.close();
-    watcher.stop();
-    rmSync(servicePaths.statePath, { force: true });
-    rmSync(servicePaths.activityPath, { force: true });
-    lock.release();
+    const stopResult = await watcher.stop();
+    if (stopResult.state === 'stopped') {
+      rmSync(servicePaths.statePath, { force: true });
+      rmSync(servicePaths.activityPath, { force: true });
+      lock.release();
+    } else {
+      lastError = {
+        at: new Date().toISOString(),
+        message: `Watch service shutdown is degraded: ${stopResult.reasons.join('; ')}`,
+      };
+      persistState(true);
+      shutdownError = new Error(lastError.message);
+    }
   }
+  if (executionFailed && shutdownError) {
+    throw new AggregateError([executionError, shutdownError], 'Watch service execution and shutdown both failed.');
+  }
+  if (executionFailed) throw executionError;
+  if (shutdownError) throw shutdownError;
 }
 
 // scip-query: ignore-twin — independent process loops own their local timer primitive.

@@ -605,8 +605,8 @@ Rollback is commit-scoped. Durable-format slices additionally retain legacy read
 | ----: | ------- | -------- | ---------- | ----------------------------------- | --------------------------------------------------------------- |
 |    01 | DD-02   | complete | `d8b62fce` | 60 focused tests                    | PID reuse, legacy records, and per-worktree lifecycle verified  |
 |    02 | RES-01  | complete | `17ea60bd` | 230 regression + 2 contract tests   | Reap, byte/time budgets, transient retry, and inventory verified |
-|    03 | TEST-01 | complete | this slice | 20 behavior + 1 contract test       | Runner, subscription, clock, and launch-policy seams verified    |
-|    04 | RES-02  | pending  |            |                                     |                                                                 |
+|    03 | TEST-01 | complete | `6fbe2a9a` | 20 behavior + 1 contract test       | Runner, subscription, clock, and launch-policy seams verified    |
+|    04 | RES-02  | complete | this slice | 61 focused tests                    | Child reap, output drain, close failures, and ownership verified |
 |    05 | RES-03  | pending  |            |                                     |                                                                 |
 |    06 | RES-04  | pending  |            |                                     |                                                                 |
 |    07 | RES-05  | pending  |            |                                     |                                                                 |

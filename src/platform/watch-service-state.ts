@@ -144,6 +144,8 @@ function validWatcherStatus(value: unknown): value is WatcherStatus {
       return finiteNumber(status.startedAt);
     case 'cooldown':
       return finiteNumber(status.until) && typeof status.dirty === 'boolean';
+    case 'draining':
+      return finiteNumber(status.startedAt) && typeof status.reason === 'string';
     default:
       return false;
   }

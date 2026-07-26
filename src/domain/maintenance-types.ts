@@ -6,7 +6,8 @@ export type WatcherStatus =
   | { state: 'idle' }
   | { state: 'waiting'; changedFiles: number; reindexAt: number }
   | { state: 'indexing'; startedAt: number }
-  | { state: 'cooldown'; until: number; dirty: boolean };
+  | { state: 'cooldown'; until: number; dirty: boolean }
+  | { state: 'draining'; startedAt: number; reason: string };
 
 export type RefreshTriggerKind =
   | 'manual-cli'

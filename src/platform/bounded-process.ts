@@ -21,6 +21,9 @@ export interface BoundedProcessOptions {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   input?: string | Buffer;
+  signal?: AbortSignal;
+  detached?: boolean;
+  outputLimitBehavior?: 'terminate' | 'truncate-tail';
 }
 
 export interface BoundedProcessResult {
@@ -30,13 +33,19 @@ export interface BoundedProcessResult {
   stderr: string;
   timedOut: false;
   durationMs: number;
+  stdoutTruncated: boolean;
+  stderrTruncated: boolean;
 }
 
-export type BoundedProcessFailureKind = 'spawn' | 'timeout' | 'stdout-limit' | 'stderr-limit';
+export type BoundedProcessFailureKind = 'spawn' | 'timeout' | 'aborted' | 'stdout-limit' | 'stderr-limit';
 
 export class BoundedProcessError extends Error {
   readonly timedOut: boolean;
   readonly reaped: boolean;
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly stdoutTruncated: boolean;
+  readonly stderrTruncated: boolean;
 
   constructor(
     readonly kind: BoundedProcessFailureKind,
@@ -46,12 +55,20 @@ export class BoundedProcessError extends Error {
       timedOut?: boolean;
       reaped?: boolean;
       cause?: unknown;
+      stdout?: string;
+      stderr?: string;
+      stdoutTruncated?: boolean;
+      stderrTruncated?: boolean;
     } = {},
   ) {
     super(message, options.cause === undefined ? undefined : { cause: options.cause });
     this.name = 'BoundedProcessError';
     this.timedOut = options.timedOut ?? false;
     this.reaped = options.reaped ?? false;
+    this.stdout = options.stdout ?? '';
+    this.stderr = options.stderr ?? '';
+    this.stdoutTruncated = options.stdoutTruncated ?? false;
+    this.stderrTruncated = options.stderrTruncated ?? false;
   }
 }
 
@@ -72,6 +89,12 @@ function appendBounded(chunks: Buffer[], chunk: Buffer, currentBytes: number, li
   if (remaining > 0) {
     chunks.push(chunk.subarray(0, remaining));
   }
+}
+
+function appendTail(chunks: Buffer[], chunk: Buffer, limit: number): void {
+  const combined = Buffer.concat([...chunks, chunk]);
+  chunks.length = 0;
+  chunks.push(combined.subarray(Math.max(0, combined.length - limit)));
 }
 
 function shouldEscalate(child: ChildProcessWithoutNullStreams, identity: ProcessIdentity | null): boolean {
@@ -111,6 +134,7 @@ export function runBoundedProcess(opts: BoundedProcessOptions): Promise<BoundedP
       child = spawn(opts.command, [...(opts.args ?? [])], {
         cwd: opts.cwd,
         env: opts.env,
+        detached: opts.detached,
         stdio: ['pipe', 'pipe', 'pipe'],
       });
     } catch (cause) {
@@ -127,6 +151,8 @@ export function runBoundedProcess(opts: BoundedProcessOptions): Promise<BoundedP
     const stderr: Buffer[] = [];
     let stdoutBytes = 0;
     let stderrBytes = 0;
+    let stdoutTruncated = false;
+    let stderrTruncated = false;
     let failure: PendingFailure | null = null;
     let closed = false;
     let killTimer: NodeJS.Timeout | null = null;
@@ -152,29 +178,52 @@ export function runBoundedProcess(opts: BoundedProcessOptions): Promise<BoundedP
       });
     }, opts.timeoutMs);
     deadline.unref();
+    const abortListener = (): void => {
+      beginTermination({
+        kind: 'aborted',
+        timedOut: false,
+        message: `${opts.label} was cancelled.`,
+      });
+    };
+    opts.signal?.addEventListener('abort', abortListener, { once: true });
+    if (opts.signal?.aborted) abortListener();
 
     child.stdout.on('data', (raw: Buffer | string) => {
       const chunk = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
-      appendBounded(stdout, chunk, stdoutBytes, opts.maxStdoutBytes);
+      if (opts.outputLimitBehavior === 'truncate-tail') {
+        appendTail(stdout, chunk, opts.maxStdoutBytes);
+      } else {
+        appendBounded(stdout, chunk, stdoutBytes, opts.maxStdoutBytes);
+      }
       stdoutBytes += chunk.length;
       if (stdoutBytes > opts.maxStdoutBytes) {
-        beginTermination({
-          kind: 'stdout-limit',
-          timedOut: false,
-          message: `${opts.label} exceeded stdout limit (${opts.maxStdoutBytes} bytes).`,
-        });
+        stdoutTruncated = true;
+        if (opts.outputLimitBehavior !== 'truncate-tail') {
+          beginTermination({
+            kind: 'stdout-limit',
+            timedOut: false,
+            message: `${opts.label} exceeded stdout limit (${opts.maxStdoutBytes} bytes).`,
+          });
+        }
       }
     });
     child.stderr.on('data', (raw: Buffer | string) => {
       const chunk = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
-      appendBounded(stderr, chunk, stderrBytes, opts.maxStderrBytes);
+      if (opts.outputLimitBehavior === 'truncate-tail') {
+        appendTail(stderr, chunk, opts.maxStderrBytes);
+      } else {
+        appendBounded(stderr, chunk, stderrBytes, opts.maxStderrBytes);
+      }
       stderrBytes += chunk.length;
       if (stderrBytes > opts.maxStderrBytes) {
-        beginTermination({
-          kind: 'stderr-limit',
-          timedOut: false,
-          message: `${opts.label} exceeded stderr limit (${opts.maxStderrBytes} bytes).`,
-        });
+        stderrTruncated = true;
+        if (opts.outputLimitBehavior !== 'truncate-tail') {
+          beginTermination({
+            kind: 'stderr-limit',
+            timedOut: false,
+            message: `${opts.label} exceeded stderr limit (${opts.maxStderrBytes} bytes).`,
+          });
+        }
       }
     });
 
@@ -184,6 +233,7 @@ export function runBoundedProcess(opts: BoundedProcessOptions): Promise<BoundedP
       if (child.pid === undefined) {
         clearTimeout(deadline);
         if (killTimer) clearTimeout(killTimer);
+        opts.signal?.removeEventListener('abort', abortListener);
         closed = true;
         reject(
           new BoundedProcessError('spawn', opts.label, `${opts.label} could not start: ${cause.message}`, {
@@ -205,11 +255,18 @@ export function runBoundedProcess(opts: BoundedProcessOptions): Promise<BoundedP
       closed = true;
       clearTimeout(deadline);
       if (killTimer) clearTimeout(killTimer);
+      opts.signal?.removeEventListener('abort', abortListener);
+      const stdoutText = Buffer.concat(stdout).toString('utf8');
+      const stderrText = Buffer.concat(stderr).toString('utf8');
       if (failure) {
         reject(
           new BoundedProcessError(failure.kind, opts.label, failure.message, {
             timedOut: failure.timedOut,
             reaped: true,
+            stdout: stdoutText,
+            stderr: stderrText,
+            stdoutTruncated,
+            stderrTruncated,
           }),
         );
         return;
@@ -217,10 +274,12 @@ export function runBoundedProcess(opts: BoundedProcessOptions): Promise<BoundedP
       resolve({
         status,
         signal,
-        stdout: Buffer.concat(stdout).toString('utf8'),
-        stderr: Buffer.concat(stderr).toString('utf8'),
+        stdout: stdoutText,
+        stderr: stderrText,
         timedOut: false,
         durationMs: performance.now() - startedAt,
+        stdoutTruncated,
+        stderrTruncated,
       });
     });
 

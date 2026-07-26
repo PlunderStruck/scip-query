@@ -181,6 +181,13 @@ and lock mutation, and the existing atomic writer. The stored identity now
 includes the operating-system process start token as well as the reusable PID;
 runtime must verify both before a stop or replacement signal.
 
+The state union includes `draining`, the live interval in which the owner has
+stopped accepting refreshes but has not yet closed every subscription and
+reaped its active reindex child. Runtime persists the reason and continues to
+reuse that live service rather than starting another owner. Only a successful
+drain removes the service record and releases its process lock; an unproven
+exit remains visible as degraded ownership.
+
 The runtime module directly re-exports the former read-side names for source
 compatibility, but internal consumers now import their owner directly. The
 parser still accepts a numeric protocol version so runtime can classify an

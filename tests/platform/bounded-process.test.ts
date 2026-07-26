@@ -90,4 +90,29 @@ describe('runBoundedProcess', () => {
       reaped: true,
     });
   });
+
+  it('can retain a bounded tail while draining output beyond the budget', async () => {
+    const result = await nodeProcess("process.stdout.write('prefix-' + 'x'.repeat(8 * 1024) + '-suffix');", {
+      maxStdoutBytes: 64,
+      outputLimitBehavior: 'truncate-tail',
+    });
+
+    expect(result.stdoutTruncated).toBe(true);
+    expect(Buffer.byteLength(result.stdout)).toBeLessThanOrEqual(64);
+    expect(result.stdout).toMatch(/-suffix$/);
+  });
+
+  it('supports owned cancellation and settles only after the child is reaped', async () => {
+    const controller = new AbortController();
+    const completion = nodeProcess("process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);", {
+      signal: controller.signal,
+      terminationGraceMs: 25,
+    });
+    controller.abort();
+
+    await expect(completion).rejects.toMatchObject({
+      kind: 'aborted',
+      reaped: true,
+    });
+  });
 });

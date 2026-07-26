@@ -538,6 +538,9 @@ export function planWatchServiceAction(
             ? { kind: 'replace', state: classification.state }
             : { kind: 'start' };
         case 'live':
+          // A live `draining` watcher still owns its subscriptions, child, and
+          // lock. Reusing every live state prevents a second service from
+          // overlapping shutdown before that ownership is released.
           return { kind: 'reuse', state: classification.state };
         case 'incompatible':
           return { kind: 'replace', state: classification.state };

@@ -188,6 +188,8 @@ export function formatStatus(status: WatcherStatus): string {
       const secs = Math.round((status.until - Date.now()) / 1000);
       return `Cooldown (${secs}s)${status.dirty ? ' — changes pending' : ''}`;
     }
+    case 'draining':
+      return `Stopping safely — ${status.reason}`;
     default:
       return assertNever(status);
   }

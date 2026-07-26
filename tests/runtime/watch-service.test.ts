@@ -190,6 +190,9 @@ describe('watch service contract', () => {
     expect(shouldStop({ state: 'waiting', changedFiles: 1, reindexAt: NOW + 1_000 }, 20_000, 10_000)).toBe(false);
     expect(shouldStop({ state: 'indexing', startedAt: NOW }, 20_000, 10_000)).toBe(false);
     expect(shouldStop({ state: 'cooldown', until: NOW + 1_000, dirty: true }, 20_000, 10_000)).toBe(false);
+    expect(shouldStop({ state: 'draining', startedAt: NOW, reason: 'worker still exiting' }, 20_000, 10_000)).toBe(
+      false,
+    );
     expect(shouldStop({ state: 'idle' }, 20_000, 0)).toBe(false);
   });
 
@@ -218,6 +221,31 @@ describe('watch service contract', () => {
       expect(reused.disposition).toBe('reused');
       expect(reused.state.pid).toBe(started.state.pid);
       expect(runtime.spawned).toBe(1);
+    });
+  });
+
+  it('reuses a live service while its watcher is draining instead of starting an overlapping owner', () => {
+    withTempCache((cacheDir) => {
+      const paths = watchServicePaths(cacheDir);
+      const runtime = fakeRuntime(paths.statePath);
+      runtime.alive.add(123);
+      writeWatchServiceState(paths.statePath, {
+        ...liveState(),
+        projectRoot: realpathSync(IDENTITY.projectRoot),
+        watcher: {
+          state: 'draining',
+          startedAt: NOW,
+          reason: 'waiting for the active reindex worker to exit',
+        },
+      });
+
+      const reused = ensureWatchService(controllerOptions(cacheDir, runtime));
+
+      expect(reused).toEqual(
+        expect.objectContaining({ disposition: 'reused', state: expect.objectContaining({ pid: 123 }) }),
+      );
+      expect(runtime.spawned).toBe(0);
+      expect(runtime.signaled).toEqual([]);
     });
   });
 

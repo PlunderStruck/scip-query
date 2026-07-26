@@ -504,6 +504,23 @@ and sync timeout forwarding.
 
 **Acceptance condition:** releasing watch ownership proves that every accepted reindex child exited or remains represented by an explicit recoverable ownership record.
 
+**Resolution:** Slice 04 replaces the detached fire-and-forget worker with an
+owned `ReindexOperation`. The shared bounded-process runner continuously drains
+both streams, retains independently bounded diagnostic tails, applies a
+15-minute worker deadline, and makes cancellation settle only after child
+`close`, including TERM-to-KILL escalation. `Watcher.stop()` is now a
+single-flight asynchronous drain: it rejects new refresh requests, cancels the
+active operation, awaits every subscription close (including synchronous
+throws), and reports either `stopped` or a reason-bearing degraded result. The
+background service persists `draining` before shutdown and removes state,
+activity, and lock ownership only after a successful drain; a live draining
+record is reused instead of replaced by a second service. Foreground SIGINT and
+SIGTERM use the same drain and retain the lock on degraded shutdown. Tests cover
+pipe-filling workers, bounded diagnostic tails, normal and TERM-resistant
+children, concurrent child/subscription drain, synchronous and asynchronous
+subscription failures, ignored post-stop refreshes, restart refusal during
+drain, state decoding, and second-service reuse.
+
 ### RES-03 — S3 — Rust LSP framing accepts unbounded headers and bodies into process memory
 
 **Evidence:** source-confirmed hostile-stream path.

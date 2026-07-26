@@ -1,12 +1,17 @@
 export { resolveIndexStoragePaths } from '../platform/cache-layout.js';
 export { loadProjectConfig, initProjectConfig } from './config.js';
-export { Watcher, resolveReindexWorkerLaunch } from './watch.js';
+export { Watcher, createReindexRunner, resolveReindexWorkerLaunch } from './watch.js';
 export type {
+  ReindexCancellationResult,
+  ReindexDiagnostics,
+  ReindexOperation,
   ReindexRunner,
+  ReindexRunnerOptions,
   ReindexRunRequest,
   ReindexWorkerLaunch,
   WatchClock,
   WatcherOptions,
+  WatcherStopResult,
   WatchSubscription,
   WatchSubscriptionFactory,
   WatchSubscriptionOptions,

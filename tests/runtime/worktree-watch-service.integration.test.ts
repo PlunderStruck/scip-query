@@ -1,6 +1,4 @@
-import { EventEmitter } from 'node:events';
 import { execFileSync } from 'node:child_process';
-import type * as NodeChildProcess from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
@@ -9,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveIndexStoragePaths } from '../../src/platform/cache-layout.js';
 import { resolveGitWorktreeContext } from '../../src/platform/git-worktree.js';
 import type { ProcessIdentity } from '../../src/platform/process-identity.js';
+import type * as BoundedProcessModule from '../../src/platform/bounded-process.js';
 import {
   WATCH_SERVICE_PROTOCOL_VERSION,
   watchServicePaths,
@@ -28,6 +27,7 @@ const originalCacheOverride = process.env['SCIP_QUERY_CACHE_DIR'];
 
 afterEach(() => {
   vi.doUnmock('node:child_process');
+  vi.doUnmock('../../src/platform/bounded-process.js');
   vi.restoreAllMocks();
   vi.resetModules();
   restoreEnvironment('XDG_CACHE_HOME', originalXdgCacheHome);
@@ -154,8 +154,7 @@ describe('per-worktree watch service', () => {
       await vi.waitFor(() => expect(reindexEnvironments).toHaveLength(2), { timeout: 5_000, interval: 20 });
       await delay(200);
     } finally {
-      primaryWatcher.stop();
-      linkedWatcher.stop();
+      await Promise.all([primaryWatcher.stop(), linkedWatcher.stop()]);
     }
 
     expect(watcherErrors).toEqual([]);
@@ -219,8 +218,7 @@ describe('per-worktree watch service', () => {
       await vi.waitFor(() => expect(reindexEnvironments).toHaveLength(1), { timeout: 5_000, interval: 20 });
       await delay(200);
     } finally {
-      primaryWatcher.stop();
-      linkedWatcher.stop();
+      await Promise.all([primaryWatcher.stop(), linkedWatcher.stop()]);
     }
 
     const linkedIndex = resolveIndexStoragePaths(linkedProject, config);
@@ -275,8 +273,7 @@ describe('per-worktree watch service', () => {
       await vi.waitFor(() => expect(reindexEnvironments).toHaveLength(2), { timeout: 5_000, interval: 20 });
       await delay(200);
     } finally {
-      primaryWatcher.stop();
-      linkedWatcher.stop();
+      await Promise.all([primaryWatcher.stop(), linkedWatcher.stop()]);
     }
 
     const primaryIndex = resolveIndexStoragePaths(primaryProject, {});
@@ -424,15 +421,22 @@ function inertSubscriptionFactory(): WatchSubscriptionFactory {
 }
 
 function mockReindexFork(reindexEnvironments: NodeJS.ProcessEnv[]): void {
-  vi.doMock('node:child_process', async () => {
-    const actual = await vi.importActual<typeof NodeChildProcess>('node:child_process');
+  vi.doMock('../../src/platform/bounded-process.js', async () => {
+    const actual = await vi.importActual<typeof BoundedProcessModule>('../../src/platform/bounded-process.js');
     return {
       ...actual,
-      fork: vi.fn((_workerPath: string, _args: string[], options: { env?: NodeJS.ProcessEnv }) => {
+      runBoundedProcess: vi.fn(async (options: { env?: NodeJS.ProcessEnv }) => {
         reindexEnvironments.push(options.env ?? {});
-        const child = new EventEmitter();
-        process.nextTick(() => child.emit('exit', 0));
-        return child;
+        return {
+          status: 0,
+          signal: null,
+          stdout: '',
+          stderr: '',
+          timedOut: false,
+          durationMs: 1,
+          stdoutTruncated: false,
+          stderrTruncated: false,
+        };
       }),
     };
   });

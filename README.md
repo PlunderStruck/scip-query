@@ -591,7 +591,14 @@ background service. Relevant file/Git activity keeps it alive; it exits after
 timeout to `0` to keep it running. `scip-query watch` still provides foreground
 mode, while `watch --daemon`, `watch --status`, and `watch --stop` expose the
 background lifecycle. Both modes share one project lock, so only one can own an
-index cache.
+index cache. Stopping is an asynchronous drain: the watcher first rejects new
+refreshes, continuously consumes a bounded tail of the active worker's output,
+closes every source subscription, and waits for the worker to exit after
+`TERM`/`KILL` escalation before it removes service state or releases the lock.
+`watch --status` reports `Stopping safely` while that work is in progress. If a
+subscription cannot close or worker exit cannot be established, the service
+keeps an explicit degraded draining record and its ownership files instead of
+advertising a clean stop; the reported reason is the recovery evidence.
 
 The same demand-started service lazily owns TypeScript compiler Projects after
 the first command that needs ts-morph semantics. Separate CLI processes reuse

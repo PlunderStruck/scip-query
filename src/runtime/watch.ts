@@ -1,4 +1,3 @@
-import { fork } from 'node:child_process';
 import { statSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
 import { watch } from 'chokidar';
@@ -15,6 +14,7 @@ import { loadProjectConfig, resolveWatchConfig } from './config.js';
 import { createGitignoreFilter } from '../source/primitives/gitignore-filter.js';
 import { gitOutput, resolveGitPath } from '../platform/git-worktree.js';
 import { REINDEX_ACTIVITY_FILE } from '../reindex/reindex-activity.js';
+import { BoundedProcessError, runBoundedProcess } from '../platform/bounded-process.js';
 
 export interface WatcherOptions {
   projectRoot: string;
@@ -47,7 +47,33 @@ export interface ReindexWorkerLaunch {
 }
 
 export interface ReindexRunner {
-  run(request: ReindexRunRequest): Promise<number>;
+  start(request: ReindexRunRequest): ReindexOperation;
+}
+
+export interface ReindexDiagnostics {
+  stdoutTail: string;
+  stderrTail: string;
+  stdoutTruncated: boolean;
+  stderrTruncated: boolean;
+}
+
+export type ReindexCancellationResult =
+  | { state: 'exited'; diagnostics: ReindexDiagnostics }
+  | { state: 'degraded'; reason: string; diagnostics: ReindexDiagnostics };
+
+export interface ReindexOperation {
+  completion: Promise<number>;
+  cancel(): Promise<ReindexCancellationResult>;
+  diagnostics(): ReindexDiagnostics;
+}
+
+export type WatcherStopResult = { state: 'stopped' } | { state: 'degraded'; reasons: string[] };
+
+export interface ReindexRunnerOptions {
+  timeoutMs?: number;
+  terminationGraceMs?: number;
+  maxOutputBytes?: number;
+  resolveLaunch?: (request: ReindexRunRequest) => ReindexWorkerLaunch;
 }
 
 export interface WatchSubscription {
@@ -104,6 +130,9 @@ export class Watcher {
   private reindexRunner: ReindexRunner;
   private subscriptionFactory: WatchSubscriptionFactory;
   private clock: WatchClock;
+  private activeOperation: ReindexOperation | null = null;
+  private stopPromise: Promise<WatcherStopResult> | null = null;
+  private stopInProgress = false;
 
   // State machine
   private status: WatcherStatus = { state: 'idle' };
@@ -140,7 +169,7 @@ export class Watcher {
     this.onRefreshSuppressed = opts.onRefreshSuppressed ?? (() => {});
     this.onError = opts.onError ?? ((e) => console.error(e.message));
     this.clock = opts.clock ?? SYSTEM_WATCH_CLOCK;
-    this.reindexRunner = opts.reindexRunner ?? createForkedReindexRunner(this.clock);
+    this.reindexRunner = opts.reindexRunner ?? createReindexRunner();
     this.subscriptionFactory = opts.subscriptionFactory ?? defaultWatchSubscriptionFactory;
 
     this.gitignoreFilter = createGitignoreFilter(opts.projectRoot);
@@ -155,7 +184,11 @@ export class Watcher {
   // status, chokidar subscription, debounce handling, and close semantics are
   // one runtime boundary.
   start(): void {
+    if (this.stopInProgress) {
+      throw new Error('Cannot restart a watcher while its previous ownership is still draining.');
+    }
     this.stopped = false;
+    this.stopPromise = null;
     this.sourcePollingFallbackStarted = false;
     this.setStatus({ state: 'idle' });
     this.startGitStatePolling();
@@ -168,18 +201,32 @@ export class Watcher {
   }
 
   /** Stop watching and clean up */
-  stop(): void {
+  stop(): Promise<WatcherStopResult> {
+    if (this.stopPromise) return this.stopPromise;
     this.stopped = true;
-    for (const w of this.fsWatchers) void w.close();
+    this.stopInProgress = true;
+    const subscriptions = this.fsWatchers;
     this.fsWatchers = [];
     this.clearDebounceTimer();
     this.clearCooldownTimer();
     this.clearGitPollTimer();
-    this.setStatus({ state: 'idle' });
+    const operation = this.activeOperation;
+    if (operation) {
+      this.setStatus({
+        state: 'draining',
+        startedAt: this.clock.now(),
+        reason: 'waiting for the active reindex worker to exit',
+      });
+    }
+    this.stopPromise = this.finishStop(subscriptions, operation).finally(() => {
+      this.stopInProgress = false;
+    });
+    return this.stopPromise;
   }
 
   /** Request a refresh through the same single-flight/coalescing state machine used by file events. */
   requestRefresh(trigger: RefreshTrigger, opts: { immediate?: boolean } = {}): void {
+    if (this.stopped) return;
     if (!opts.immediate || this.reindexInFlight || this.status.state === 'cooldown') {
       this.scheduleReindex(trigger);
       return;
@@ -324,11 +371,13 @@ export class Watcher {
     this.setStatus({ state: 'indexing', startedAt });
 
     // Run reindex in a child process so it doesn't block the watcher
-    this.reindexRunner
-      .run(this.reindexRequest(trigger))
+    const operation = this.reindexRunner.start(this.reindexRequest(trigger));
+    this.activeOperation = operation;
+    operation.completion
       .then((durationMs) => {
         this.reindexInFlight = false;
         this.lastReindexEnd = this.clock.now();
+        if (this.stopped) return;
         let completedIndexIsFresh = false;
         try {
           completedIndexIsFresh = this.onReindexComplete(durationMs) === true;
@@ -366,9 +415,47 @@ export class Watcher {
       .catch((err) => {
         this.reindexInFlight = false;
         this.lastReindexEnd = this.clock.now();
+        if (this.stopped) return;
         this.onError(err instanceof Error ? err : new Error(String(err)));
         this.setStatus({ state: 'idle' });
+      })
+      .finally(() => {
+        if (this.activeOperation === operation) this.activeOperation = null;
       });
+  }
+
+  private async finishStop(
+    subscriptions: readonly WatchSubscription[],
+    operation: ReindexOperation | null,
+  ): Promise<WatcherStopResult> {
+    const reasons: string[] = [];
+    const cancellationPromise = operation ? operation.cancel() : null;
+    const closeResults = await Promise.allSettled(
+      subscriptions.map((subscription) => Promise.resolve().then(() => subscription.close())),
+    );
+    for (const result of closeResults) {
+      if (result.status === 'rejected') {
+        reasons.push(`watch subscription close failed: ${String(result.reason)}`);
+      }
+    }
+    if (cancellationPromise) {
+      try {
+        const cancellation = await cancellationPromise;
+        if (cancellation.state === 'degraded') reasons.push(cancellation.reason);
+      } catch (error) {
+        reasons.push(`reindex cancellation failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    if (reasons.length > 0) {
+      this.setStatus({
+        state: 'draining',
+        startedAt: this.clock.now(),
+        reason: reasons.join('; '),
+      });
+      return { state: 'degraded', reasons };
+    }
+    this.setStatus({ state: 'idle' });
+    return { state: 'stopped' };
   }
 
   private reindexRequest(trigger: RefreshTrigger): ReindexRunRequest {
@@ -514,28 +601,95 @@ const SYSTEM_WATCH_CLOCK: WatchClock = {
 
 const defaultWatchSubscriptionFactory: WatchSubscriptionFactory = (projectRoot, options) => watch(projectRoot, options);
 
-function createForkedReindexRunner(clock: WatchClock): ReindexRunner {
+const WATCH_REINDEX_TIMEOUT_MS = 15 * 60_000;
+const WATCH_REINDEX_TERMINATION_GRACE_MS = 1_000;
+const WATCH_REINDEX_OUTPUT_TAIL_BYTES = 64 * 1024;
+
+function emptyReindexDiagnostics(): ReindexDiagnostics {
   return {
-    run(request) {
-      return new Promise((resolve, reject) => {
-        const start = clock.now();
-        const launch = resolveReindexWorkerLaunch(request);
-        // scip-query: process-lifetime-reviewed -- this reindex worker is owned
-        // by the watch job state machine; RES-02 hardens its drain/shutdown path.
-        const child = fork(launch.workerPath, [], {
-          detached: true,
-          env: launch.env,
-          stdio: 'pipe',
-        });
-        child.on('exit', (code) => {
-          if (code === 0) {
-            resolve(clock.now() - start);
-          } else {
-            reject(new Error(`Reindex worker exited with code ${code}`));
+    stdoutTail: '',
+    stderrTail: '',
+    stdoutTruncated: false,
+    stderrTruncated: false,
+  };
+}
+
+function reindexFailureMessage(error: unknown, diagnostics: ReindexDiagnostics): string {
+  const base = error instanceof Error ? error.message : String(error);
+  const detail = diagnostics.stderrTail.trim() || diagnostics.stdoutTail.trim();
+  return detail ? `${base}\n${detail}` : base;
+}
+
+export function createReindexRunner(options: ReindexRunnerOptions = {}): ReindexRunner {
+  const timeoutMs = options.timeoutMs ?? WATCH_REINDEX_TIMEOUT_MS;
+  const terminationGraceMs = options.terminationGraceMs ?? WATCH_REINDEX_TERMINATION_GRACE_MS;
+  const maxOutputBytes = options.maxOutputBytes ?? WATCH_REINDEX_OUTPUT_TAIL_BYTES;
+  const resolveLaunch = options.resolveLaunch ?? resolveReindexWorkerLaunch;
+  return {
+    start(request) {
+      const launch = resolveLaunch(request);
+      const controller = new AbortController();
+      let diagnostics = emptyReindexDiagnostics();
+      let settled = false;
+      const completion = runBoundedProcess({
+        command: process.execPath,
+        args: [...process.execArgv, launch.workerPath],
+        label: 'watch reindex worker',
+        env: launch.env,
+        timeoutMs,
+        terminationGraceMs,
+        maxStdoutBytes: maxOutputBytes,
+        maxStderrBytes: maxOutputBytes,
+        outputLimitBehavior: 'truncate-tail',
+        signal: controller.signal,
+        detached: true,
+      })
+        .then((result) => {
+          diagnostics = {
+            stdoutTail: result.stdout,
+            stderrTail: result.stderr,
+            stdoutTruncated: result.stdoutTruncated,
+            stderrTruncated: result.stderrTruncated,
+          };
+          if (result.status !== 0) {
+            throw new Error(
+              reindexFailureMessage(
+                new Error(
+                  `Reindex worker exited with ${result.signal ? `signal ${result.signal}` : `code ${result.status}`}`,
+                ),
+                diagnostics,
+              ),
+            );
           }
+          return result.durationMs;
+        })
+        .catch((error: unknown) => {
+          if (error instanceof BoundedProcessError) {
+            diagnostics = {
+              stdoutTail: error.stdout,
+              stderrTail: error.stderr,
+              stdoutTruncated: error.stdoutTruncated,
+              stderrTruncated: error.stderrTruncated,
+            };
+          }
+          throw new Error(reindexFailureMessage(error, diagnostics), { cause: error });
+        })
+        .finally(() => {
+          settled = true;
         });
-        child.on('error', reject);
-      });
+      return {
+        completion,
+        async cancel() {
+          if (!settled) controller.abort();
+          try {
+            await completion;
+          } catch {
+            // Cancellation and worker failure both settle only after close.
+          }
+          return { state: 'exited', diagnostics };
+        },
+        diagnostics: () => diagnostics,
+      };
     },
   };
 }
