@@ -86,6 +86,7 @@ import {
   type SharedGenerationSnapshot,
 } from './shared-generation-store.js';
 import {
+  ensureImmutableSqliteGeneration,
   inspectSqliteGeneration,
   promoteReindexArtifacts,
   refreshSqliteGenerationMetadata,
@@ -385,6 +386,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
   let runDir: string | null = null;
 
   try {
+    ensureImmutableSqliteGeneration(paths.outputDb, paths.outputScip, paths.metaPath);
     const staleRunCleanup = pruneStaleReindexRunDirectories(dirname(paths.outputDb));
     if (staleRunCleanup.removed > 0) {
       onStatus(`Removed ${staleRunCleanup.removed} abandoned reindex workspace(s)`);

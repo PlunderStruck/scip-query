@@ -611,8 +611,8 @@ Rollback is commit-scoped. Durable-format slices additionally retain legacy read
 |    06 | RES-04  | complete | `8587125e` | 34 focused tests                    | Time/byte bounds, lock/recheck, staging cleanup, and TLA verified |
 |    07 | RES-05  | complete | `b9cb9aa3` | 20 focused + 25 contract tests      | Exit/error/timeout ownership, result identity, and cache verified |
 |    08 | DD-08   | complete | `2a4d62b4` | 180 focused + contract tests        | Fault phases, platform limits, callers, and binary promotion verified |
-|    09 | DD-04   | complete | this slice | 181 focused tests                   | Partial creation, guarded reclaim, shared I/O, PID reuse, legacy, and release verified |
-|    10 | DD-01   | pending  |            |                                     |                                                                 |
+|    09 | DD-04   | complete | `437dc042` | 181 focused tests                   | Partial creation, guarded reclaim, shared I/O, PID reuse, legacy, and release verified |
+|    10 | DD-01   | complete | this slice | 112 focused; 1,558 full-suite tests | Immutable pointer, retained companions, cursor/semantic isolation, architecture gate verified |
 |    11 | DD-03   | pending  |            |                                     |                                                                 |
 |    12 | DD-05   | pending  |            |                                     |                                                                 |
 |    13 | DD-06   | pending  |            |                                     |                                                                 |
@@ -630,6 +630,26 @@ Rollback is commit-scoped. Durable-format slices additionally retain legacy read
 |    25 | REL-01  | pending  |            |                                     |                                                                 |
 |    26 | REL-02  | pending  |            |                                     |                                                                 |
 |    27 | REL-03  | pending  |            |                                     |                                                                 |
+
+### Slice 10 verification record
+
+- The 112-test focused matrix covers local and shared generation publication,
+  reader retention, cursor rejection, conflicting semantic symbol IDs,
+  metadata refresh, freshness, Rust companion reads, and evidence identity.
+- The complete suite passes: 210 test files and 1,558 tests.
+- `pnpm run lint`, `pnpm run build`, and `git diff --check` pass.
+- A real local rebuild reports an immutable current generation and a retained
+  recovery generation; stable `index.db`, `index.scip`, and `meta.json` are
+  explicitly reported as compatibility mirrors.
+- The first diff-gate run caught a new `reindex -> filesystem` dependency and
+  its same-name directory-sync twin. The fix moved the reusable durable
+  directory-sync operation behind `src/storage/atomic-file.ts`; the final gate
+  must contain no blocking architecture finding.
+- Full-suite verification also exposed two inaccurate test doubles: setup's
+  mocked `node:fs` omitted descriptor-level durable-write operations, and the
+  linked-worktree watcher test treated duplicate OS notifications as a
+  correctness failure. Both now assert the actual durability and worktree
+  isolation contracts.
 
 ### Slice 09 verification note
 

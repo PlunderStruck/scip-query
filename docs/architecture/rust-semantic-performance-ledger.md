@@ -127,7 +127,10 @@ moving the whole product surface at once.
   project fingerprints. The cache key includes the index status, so complete and
   partial indexes do not share project-scoped rows accidentally. It exposes
   semantic callee/reference bulk readers that preserve the same current and
-  legacy key semantics as the single-row readers.
+  legacy key semantics as the single-row readers. Database-backed fingerprint
+  construction now uses the metadata snapshot retained by the open SQLite
+  generation handle, so a concurrent publication cannot attribute old cache
+  rows to a new index identity.
 - `crates/scip-query-kernels` is a first native-kernel experiment. It proves
   SCIP symbol leaf extraction can match TypeScript fixture behavior, but the
   helper-binary benchmark is slower for 100k symbols because process and

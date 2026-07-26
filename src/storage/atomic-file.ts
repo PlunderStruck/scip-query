@@ -71,7 +71,7 @@ export function replaceFileAtomic(
     temporaryOwned = false;
     return {
       durability,
-      directorySync: durability === 'durable' ? syncDirectory(parentDirectory, runtime) : 'not-requested',
+      directorySync: durability === 'durable' ? syncDirectoryDurable(parentDirectory, runtime) : 'not-requested',
     };
   } finally {
     if (fd !== undefined) {
@@ -93,7 +93,15 @@ export function replaceFileAtomic(
   }
 }
 
-function syncDirectory(path: string, runtime: AtomicFileRuntime): DirectorySyncStatus {
+/**
+ * Flushes a directory entry when the host exposes that durability primitive.
+ * Storage publishers share this boundary so platform-specific unsupported
+ * errors are classified consistently.
+ */
+export function syncDirectoryDurable(
+  path: string,
+  runtime: AtomicFileRuntime = NODE_ATOMIC_FILE_RUNTIME,
+): Exclude<DirectorySyncStatus, 'not-requested'> {
   let fd: number;
   try {
     fd = runtime.openFile(path, 'r');

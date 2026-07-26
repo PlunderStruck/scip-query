@@ -26,6 +26,7 @@ import { refreshSqliteGenerationMetadata } from '../../src/reindex/sqlite-genera
 import { TYPESCRIPT_FRAGMENT_STORE_DIRECTORY } from '../../src/reindex/typescript-fragment-store.js';
 import { resolveIndexStoragePaths, resolveRepositoryCacheDir } from '../../src/platform/cache-layout.js';
 import { resolveGitWorktreeContext } from '../../src/platform/git-worktree.js';
+import { ScipDatabase } from '../../src/storage/db.js';
 
 const tempDirs: string[] = [];
 
@@ -57,11 +58,22 @@ describe('shared generation store', () => {
     expect(readSharedGeneration(snapshot)).toEqual(expect.objectContaining({ generationId: snapshot.generationId }));
     expect(existsSync(join(targetCache, TYPESCRIPT_FRAGMENT_STORE_DIRECTORY))).toBe(false);
 
-    writeValue(join(targetCache, 'index.db'), 'target-only');
-    expect(readValue(join(targetCache, 'index.db'))).toBe('target-only');
-    expect(readValue(join(snapshot.repositoryCacheDir, 'generations', snapshot.generationId, 'index.db'))).toBe(
-      'source',
-    );
+    const retainedReader = new ScipDatabase({
+      projectRoot: targetRoot,
+      dbPath: join(targetCache, 'index.db'),
+      indexPath: join(targetCache, 'index.scip'),
+    });
+    try {
+      expect(retainedReader.generation.source).toBe('immutable');
+      writeValue(join(targetCache, 'index.db'), 'target-only');
+      expect(readValue(join(targetCache, 'index.db'))).toBe('target-only');
+      expect(readValueFromHandle(retainedReader)).toBe('source');
+      expect(readValue(join(snapshot.repositoryCacheDir, 'generations', snapshot.generationId, 'index.db'))).toBe(
+        'source',
+      );
+    } finally {
+      retainedReader.close();
+    }
   });
 
   it('rejects corrupt, incomplete, and source-changing generations', () => {
@@ -335,6 +347,10 @@ function readValue(path: string): string {
   } finally {
     db.close();
   }
+}
+
+function readValueFromHandle(db: ScipDatabase): string {
+  return (db.db.prepare('SELECT value FROM fixture').get() as { value: string }).value;
 }
 
 function writeValue(path: string, value: string): void {

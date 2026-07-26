@@ -1,9 +1,8 @@
-import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import type { IndexedDefinition } from '../../domain/types.js';
 import type { ProfileEnvironment } from '../../instrumentation/profile.js';
 import { stringArray } from '../../storage/evidence-payload.js';
+import { publishedSqliteGenerationIdentity } from '../../storage/sqlite-generation.js';
 
 export const TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION = 2;
 export const TYPESCRIPT_SEMANTIC_MAILBOX_DIR = 'typescript-semantic';
@@ -57,36 +56,7 @@ export function typeScriptSemanticMailboxPaths(cacheDir: string): TypeScriptSema
 }
 
 export function publishedGenerationIdentity(dbPath: string): string | null {
-  try {
-    const metadata = JSON.parse(readFileSync(join(dirname(dbPath), 'meta.json'), 'utf8')) as {
-      version?: unknown;
-      status?: unknown;
-      updatedAt?: unknown;
-      fingerprint?: unknown;
-      indexedLanguages?: unknown;
-    };
-    if (
-      (metadata.version !== 2 && metadata.version !== 3) ||
-      typeof metadata.status !== 'string' ||
-      typeof metadata.updatedAt !== 'string' ||
-      metadata.fingerprint === undefined
-    ) {
-      return null;
-    }
-    return createHash('sha256')
-      .update(
-        JSON.stringify({
-          version: metadata.version,
-          status: metadata.status,
-          updatedAt: metadata.updatedAt,
-          fingerprint: metadata.fingerprint,
-          indexedLanguages: metadata.indexedLanguages,
-        }),
-      )
-      .digest('hex');
-  } catch {
-    return null;
-  }
+  return publishedSqliteGenerationIdentity(dbPath);
 }
 
 export function parseTypeScriptSemanticEnvelope(raw: string): TypeScriptSemanticMailboxEnvelope {

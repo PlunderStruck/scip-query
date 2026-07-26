@@ -4,6 +4,14 @@ import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import { describe, expect, test } from 'vitest';
 import {
+  decodeResultCursor,
+  encodeResultCursor,
+  indexGenerationIdentity,
+} from '../../src/runtime/result-pagination.js';
+import { ScipDatabase } from '../../src/storage/db.js';
+import { SQLITE_GENERATION_MANIFEST } from '../../src/storage/sqlite-generation.js';
+import {
+  ensureImmutableSqliteGeneration,
   inspectSqliteGeneration,
   promoteReindexArtifacts,
   readSqliteGenerationState,
@@ -14,6 +22,7 @@ import {
 describe('SQLite generation handoff', () => {
   test.each([
     ['after-recovery-retained', 'old'],
+    ['after-pointer-handoff', 'old'],
     ['after-scip-handoff', 'old'],
     ['after-database-handoff', 'new'],
     ['after-metadata-handoff', 'new'],
@@ -30,7 +39,49 @@ describe('SQLite generation handoff', () => {
     ).toThrow(`failure at ${failureStage}`);
 
     expect(readValue(fixture.paths.outputDb)).toBe(stableValue);
-    expect(readValue(recoveryDatabasePath(fixture.paths.outputDb))).toBe('old');
+    expect(readValue(publishedDatabasePath(fixture.paths.outputDb))).toBe('old');
+  });
+
+  test.each([
+    'after-recovery-retained',
+    'after-pointer-handoff',
+    'after-scip-handoff',
+    'after-database-handoff',
+    'after-metadata-handoff',
+  ] as const)('keeps new database handles on one complete generation at %s', (failureStage) => {
+    const fixture = createFixture();
+    let observed:
+      | { value: string; identity: string; metadata: string | undefined; scip: string | undefined }
+      | undefined;
+
+    expect(() =>
+      promoteReindexArtifacts({
+        ...fixture.paths,
+        onStage: (stage) => {
+          if (stage !== failureStage) return;
+          const db = openFixtureDatabase(fixture);
+          try {
+            observed = {
+              value: readValueFromDatabase(db.db),
+              identity: indexGenerationIdentity(db),
+              metadata: db.generation.metadataRaw,
+              scip: db.generation.indexPath ? readFileSync(db.generation.indexPath, 'utf8') : undefined,
+            };
+          } finally {
+            db.close();
+          }
+          throw new Error(`failure at ${stage}`);
+        },
+      }),
+    ).toThrow(`failure at ${failureStage}`);
+
+    const pointerSwitched = failureStage !== 'after-recovery-retained';
+    expect(observed).toEqual({
+      value: pointerSwitched ? 'new' : 'old',
+      identity: readSqliteGenerationState(fixture.paths.outputDb)!.currentGeneration,
+      metadata: pointerSwitched ? 'new-meta' : 'old-meta',
+      scip: pointerSwitched ? 'new-scip' : 'old-scip',
+    });
   });
 
   test('keeps an old reader on the old inode while new readers open the new generation', () => {
@@ -74,9 +125,11 @@ describe('SQLite generation handoff', () => {
     );
   });
 
-  test('retains only the immediately preceding successful generation', () => {
+  test('retains immutable generations so existing readers never lose their companions', () => {
     const fixture = createFixture();
     promoteReindexArtifacts({ ...fixture.paths });
+    const retainedReader = openFixtureDatabase(fixture);
+    const retainedIdentity = retainedReader.generation.identity;
 
     const second = createCandidateArtifacts(fixture.root, 'next', 'next-scip', 'next-meta');
     const result = promoteReindexArtifacts({
@@ -88,9 +141,64 @@ describe('SQLite generation handoff', () => {
       metaPath: fixture.paths.metaPath,
     });
 
-    expect(generationDirectories(fixture.paths.outputDb)).toHaveLength(1);
-    expect(readValue(join(dirname(fixture.paths.outputDb), result.previousGeneration!.databasePath))).toBe('new');
-    expect(readValue(fixture.paths.outputDb)).toBe('next');
+    const currentReader = openFixtureDatabase(fixture);
+    try {
+      expect(generationDirectories(fixture.paths.outputDb)).toHaveLength(3);
+      expect(readValue(join(dirname(fixture.paths.outputDb), result.previousGeneration!.databasePath))).toBe('new');
+      expect(readValueFromDatabase(retainedReader.db)).toBe('new');
+      expect(retainedReader.generation.metadataRaw).toBe('new-meta');
+      expect(readFileSync(retainedReader.generation.indexPath!, 'utf8')).toBe('new-scip');
+      expect(indexGenerationIdentity(retainedReader)).toBe(retainedIdentity);
+      expect(readValueFromDatabase(currentReader.db)).toBe('next');
+      expect(currentReader.generation.metadataRaw).toBe('next-meta');
+      expect(currentReader.generation.identity).not.toBe(retainedIdentity);
+      expect(readValue(fixture.paths.outputDb)).toBe('next');
+    } finally {
+      retainedReader.close();
+      currentReader.close();
+    }
+  });
+
+  test('rejects a continuation cursor before applying an old offset to a new result set', () => {
+    const fixture = createFixture();
+    promoteReindexArtifacts({ ...fixture.paths });
+    const firstPageReader = openFixtureDatabase(fixture);
+    const cursor = encodeResultCursor({
+      command: 'refs',
+      target: 'value',
+      offset: 1,
+      indexGeneration: indexGenerationIdentity(firstPageReader),
+    });
+
+    const changed = createCandidateArtifacts(fixture.root, 'changed-order', 'changed-scip', 'changed-meta');
+    promoteReindexArtifacts({
+      tempOutputScip: changed.scip,
+      tempOutputDb: changed.db,
+      tempMetaPath: changed.meta,
+      outputScip: fixture.paths.outputScip,
+      outputDb: fixture.paths.outputDb,
+      metaPath: fixture.paths.metaPath,
+    });
+    const continuationReader = openFixtureDatabase(fixture);
+    try {
+      expect(
+        decodeResultCursor(cursor, {
+          command: 'refs',
+          target: 'value',
+          indexGeneration: indexGenerationIdentity(firstPageReader),
+        }).offset,
+      ).toBe(1);
+      expect(() =>
+        decodeResultCursor(cursor, {
+          command: 'refs',
+          target: 'value',
+          indexGeneration: indexGenerationIdentity(continuationReader),
+        }),
+      ).toThrow('index changed');
+    } finally {
+      firstPageReader.close();
+      continuationReader.close();
+    }
   });
 
   test('can publish a database generation while retaining a deferred SCIP companion', () => {
@@ -170,6 +278,7 @@ describe('SQLite generation handoff', () => {
   test('refreshes generation identity after a metadata-only publication', () => {
     const fixture = createFixture();
     promoteReindexArtifacts({ ...fixture.paths });
+    const prior = openFixtureDatabase(fixture);
     writeFileSync(fixture.paths.metaPath, 'metadata-only-update');
     expect(inspectSqliteGeneration(fixture.paths.outputDb, fixture.paths.metaPath).state).toBe('drifted');
 
@@ -179,10 +288,52 @@ describe('SQLite generation handoff', () => {
       () => new Date('2026-07-10T10:30:00.000Z'),
     );
 
-    expect(inspectSqliteGeneration(fixture.paths.outputDb, fixture.paths.metaPath)).toEqual(
-      expect.objectContaining({ state: 'current', currentMatches: true }),
+    const current = openFixtureDatabase(fixture);
+    try {
+      expect(inspectSqliteGeneration(fixture.paths.outputDb, fixture.paths.metaPath)).toEqual(
+        expect.objectContaining({ state: 'current', currentMatches: true }),
+      );
+      expect(readSqliteGenerationState(fixture.paths.outputDb)?.publishedAt).toBe('2026-07-10T10:30:00.000Z');
+      expect(prior.generation.metadataRaw).toBe('new-meta');
+      expect(current.generation.metadataRaw).toBe('metadata-only-update');
+      expect(current.generation.identity).not.toBe(prior.generation.identity);
+      expect(readValueFromDatabase(current.db)).toBe('new');
+    } finally {
+      prior.close();
+      current.close();
+    }
+  });
+
+  test('fails closed when an immutable generation named by the pointer is missing', () => {
+    const fixture = createFixture();
+    const result = promoteReindexArtifacts({ ...fixture.paths });
+    rmSync(join(sqliteGenerationRoot(fixture.paths.outputDb), result.currentGeneration, SQLITE_GENERATION_MANIFEST));
+
+    expect(() => openFixtureDatabase(fixture)).toThrow(
+      `Published SQLite generation ${result.currentGeneration} is missing or invalid.`,
     );
-    expect(readSqliteGenerationState(fixture.paths.outputDb)?.publishedAt).toBe('2026-07-10T10:30:00.000Z');
+  });
+
+  test('does not open replaceable legacy paths while an older publisher owns the reindex lock', () => {
+    const fixture = createFixture();
+    const lockPath = join(dirname(fixture.paths.outputDb), 'index.lock');
+    writeFileSync(lockPath, '{}');
+
+    expect(() => openFixtureDatabase(fixture)).toThrow('Legacy SQLite publication is in progress');
+    const upgraded = ensureImmutableSqliteGeneration(
+      fixture.paths.outputDb,
+      fixture.paths.outputScip,
+      fixture.paths.metaPath,
+    );
+    const db = openFixtureDatabase(fixture);
+    try {
+      expect(readValueFromDatabase(db.db)).toBe('old');
+      expect(db.generation.source).toBe('immutable');
+      expect(db.generation.identity).toBe(upgraded?.currentGeneration);
+    } finally {
+      db.close();
+      rmSync(lockPath);
+    }
   });
 });
 
@@ -259,9 +410,10 @@ function readValueFromDatabase(db: Database.Database): string {
   return db.prepare('SELECT value FROM generation_value').pluck().get() as string;
 }
 
-function recoveryDatabasePath(outputDb: string): string {
-  const generation = generationDirectories(outputDb)[0];
-  if (!generation) throw new Error('recovery generation was not retained');
+function publishedDatabasePath(outputDb: string): string {
+  const state = readSqliteGenerationState(outputDb);
+  const generation = state?.previousGeneration?.generationIdentity ?? state?.currentGeneration;
+  if (!generation) throw new Error('published generation was not retained');
   return join(sqliteGenerationRoot(outputDb), generation, 'index.db');
 }
 
@@ -269,4 +421,12 @@ function generationDirectories(outputDb: string): string[] {
   return readdirSync(sqliteGenerationRoot(outputDb), { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name);
+}
+
+function openFixtureDatabase(fixture: ReturnType<typeof createFixture>): ScipDatabase {
+  return new ScipDatabase({
+    projectRoot: fixture.root,
+    dbPath: fixture.paths.outputDb,
+    indexPath: fixture.paths.outputScip,
+  });
 }

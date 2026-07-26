@@ -466,6 +466,16 @@ enter the deterministic worker-order merge.
 
 By default, indexes live in `~/.cache/scip-query/projects/<hash>/`, keeping project directories clean. Override paths with `.scipquery.json` or `SCIP_QUERY_*` environment variables. Reindexing writes per-language SCIP shards next to the SQLite index, so a mixed-language repo can reuse unchanged language outputs and rerun only the languages whose source/config inputs changed.
 
+Each accepted worktree-local index is also stored beneath an immutable
+`.scipquery-generations/<identity>/` directory. An atomic `state.json` pointer
+selects the database, SCIP companion, and metadata as one unit; every
+`ScipDatabase` retains that unit for its lifetime. The familiar top-level
+`index.db`, `index.scip`, and `meta.json` files remain compatibility mirrors,
+but internal queries do not reread them after opening a generation. This keeps
+cursor identities and semantic requests attached to the same rows even during
+a concurrent reindex. The publication, crash, legacy-overlap, and retention
+rules are documented in [Local Index Generations](docs/INDEX_GENERATIONS.md).
+
 Git worktrees in the same repository also share immutable generations under
 `~/.cache/scip-query/repositories/<repository-id>/`. A shared generation is a
 complete index for one exact committed tree, indexing configuration, artifact

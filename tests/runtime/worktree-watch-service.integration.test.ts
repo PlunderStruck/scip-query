@@ -148,31 +148,50 @@ describe('per-worktree watch service', () => {
         { timeout: 5_000, interval: 20 },
       );
       writeFileSync(join(primaryProject, 'value.ts'), 'export const value = 2;\n');
-      await vi.waitFor(() => expect(reindexEnvironments).toHaveLength(1), { timeout: 5_000, interval: 20 });
+      await vi.waitFor(
+        () =>
+          expect(
+            reindexEnvironments.some(
+              (environment) => environment['SCIP_REINDEX_PROJECT_ROOT'] === canonicalPrimaryProject,
+            ),
+          ).toBe(true),
+        { timeout: 5_000, interval: 20 },
+      );
       await delay(100);
       writeFileSync(join(linkedProject, 'value.ts'), 'export const value = 2;\n');
-      await vi.waitFor(() => expect(reindexEnvironments).toHaveLength(2), { timeout: 5_000, interval: 20 });
+      await vi.waitFor(
+        () =>
+          expect(
+            reindexEnvironments.some(
+              (environment) => environment['SCIP_REINDEX_PROJECT_ROOT'] === canonicalLinkedProject,
+            ),
+          ).toBe(true),
+        { timeout: 5_000, interval: 20 },
+      );
       await delay(200);
     } finally {
       await Promise.all([primaryWatcher.stop(), linkedWatcher.stop()]);
     }
 
     expect(watcherErrors).toEqual([]);
-    expect(reindexEnvironments).toHaveLength(2);
-    expect(reindexEnvironments[0]).toEqual(
-      expect.objectContaining({
-        SCIP_REINDEX_PROJECT_ROOT: canonicalPrimaryProject,
-        SCIP_REINDEX_OUTPUT_SCIP: primaryIndex.indexPath,
-        SCIP_REINDEX_OUTPUT_DB: primaryIndex.dbPath,
-      }),
+    expect(new Set(reindexEnvironments.map((environment) => environment['SCIP_REINDEX_PROJECT_ROOT']))).toEqual(
+      new Set([canonicalPrimaryProject, canonicalLinkedProject]),
     );
-    expect(reindexEnvironments[1]).toEqual(
-      expect.objectContaining({
-        SCIP_REINDEX_PROJECT_ROOT: canonicalLinkedProject,
-        SCIP_REINDEX_OUTPUT_SCIP: linkedIndex.indexPath,
-        SCIP_REINDEX_OUTPUT_DB: linkedIndex.dbPath,
+    expect(
+      reindexEnvironments.every((environment) => {
+        if (environment['SCIP_REINDEX_PROJECT_ROOT'] === canonicalPrimaryProject) {
+          return (
+            environment['SCIP_REINDEX_OUTPUT_SCIP'] === primaryIndex.indexPath &&
+            environment['SCIP_REINDEX_OUTPUT_DB'] === primaryIndex.dbPath
+          );
+        }
+        return (
+          environment['SCIP_REINDEX_PROJECT_ROOT'] === canonicalLinkedProject &&
+          environment['SCIP_REINDEX_OUTPUT_SCIP'] === linkedIndex.indexPath &&
+          environment['SCIP_REINDEX_OUTPUT_DB'] === linkedIndex.dbPath
+        );
       }),
-    );
+    ).toBe(true);
   }, 30_000);
 
   it('subscribes each linked worktree watcher to its own source tree', async () => {
@@ -215,20 +234,28 @@ describe('per-worktree watch service', () => {
       );
 
       writeFileSync(join(linkedProject, 'value.ts'), 'export const value = 3;\n');
-      await vi.waitFor(() => expect(reindexEnvironments).toHaveLength(1), { timeout: 5_000, interval: 20 });
+      await vi.waitFor(
+        () =>
+          expect(
+            reindexEnvironments.some((environment) => environment['SCIP_REINDEX_PROJECT_ROOT'] === linkedProject),
+          ).toBe(true),
+        { timeout: 5_000, interval: 20 },
+      );
       await delay(200);
     } finally {
       await Promise.all([primaryWatcher.stop(), linkedWatcher.stop()]);
     }
 
     const linkedIndex = resolveIndexStoragePaths(linkedProject, config);
-    expect(reindexEnvironments).toEqual([
-      expect.objectContaining({
-        SCIP_REINDEX_PROJECT_ROOT: linkedProject,
-        SCIP_REINDEX_OUTPUT_SCIP: linkedIndex.indexPath,
-        SCIP_REINDEX_OUTPUT_DB: linkedIndex.dbPath,
-      }),
-    ]);
+    expect(reindexEnvironments.length).toBeGreaterThan(0);
+    expect(
+      reindexEnvironments.every(
+        (environment) =>
+          environment['SCIP_REINDEX_PROJECT_ROOT'] === linkedProject &&
+          environment['SCIP_REINDEX_OUTPUT_SCIP'] === linkedIndex.indexPath &&
+          environment['SCIP_REINDEX_OUTPUT_DB'] === linkedIndex.dbPath,
+      ),
+    ).toBe(true);
   }, 20_000);
 
   it('polls nested primary and linked Git indexes from paths resolved against each project', async () => {

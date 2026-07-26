@@ -1,7 +1,4 @@
-import { createHash } from 'node:crypto';
-import { statSync } from 'node:fs';
 import type { ScipDatabase } from '../storage/db.js';
-import { publishedGenerationIdentity } from '../semantic/typescript/session-protocol.js';
 
 interface ResultCursorPayload {
   version: 1;
@@ -12,10 +9,7 @@ interface ResultCursorPayload {
 }
 
 export function indexGenerationIdentity(db: ScipDatabase): string {
-  const published = publishedGenerationIdentity(db.config.dbPath);
-  if (published) return published;
-  const stat = statSync(db.config.dbPath);
-  return createHash('sha256').update(`${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}`).digest('hex');
+  return db.generation.identity;
 }
 
 export function encodeResultCursor(payload: Omit<ResultCursorPayload, 'version'>): string {

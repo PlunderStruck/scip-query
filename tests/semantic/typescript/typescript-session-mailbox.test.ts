@@ -1,4 +1,14 @@
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import Database from 'better-sqlite3';
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -27,6 +37,7 @@ import {
 } from '../../../src/semantic/typescript/remote-provider.js';
 import { loadTsMorph } from '../../../src/semantic/typescript/ts-morph-runtime.js';
 import { evidenceFixtureDb } from '../../fixtures/evidence-fixture.js';
+import { promoteReindexArtifacts } from '../../../src/reindex/sqlite-generation-store.js';
 
 const NOW = Date.parse('2026-07-09T23:00:00.000Z');
 const tempDirs: string[] = [];
@@ -154,6 +165,66 @@ describe('TypeScript semantic service mailbox', () => {
     expect(() => mismatched.request({ kind: 'availability' })).toThrow('incompatible response');
     service.closeTypeScriptService();
     db.close();
+  });
+
+  it('rejects old numeric symbol identifiers after publication moves to a conflicting generation', () => {
+    const fixture = serviceFixture(true);
+    const oldDb = fixture.openDb();
+    const candidateDir = join(fixture.projectRoot, 'candidate');
+    mkdirSync(candidateDir);
+    const candidateDbPath = join(candidateDir, 'index.db');
+    const candidateScipPath = join(candidateDir, 'index.scip');
+    const candidateMetaPath = join(candidateDir, 'meta.json');
+    copyFileSync(join(fixture.projectRoot, 'index.db'), candidateDbPath);
+    const candidate = new Database(candidateDbPath);
+    candidate
+      .prepare('UPDATE global_symbols SET symbol = ?, display_name = ? WHERE id = 7')
+      .run('scip-query npm new/New#', 'New');
+    candidate.close();
+    writeFileSync(candidateScipPath, 'new-generation-scip');
+    writeFileSync(
+      candidateMetaPath,
+      JSON.stringify({
+        version: 3,
+        status: 'complete',
+        updatedAt: '2026-07-09T23:01:00.000Z',
+        fingerprint: projectSnapshot('consumer-v2'),
+        indexedLanguages: ['typescript'],
+      }),
+    );
+
+    const publication = promoteReindexArtifacts({
+      tempOutputScip: candidateScipPath,
+      tempOutputDb: candidateDbPath,
+      tempMetaPath: candidateMetaPath,
+      outputScip: join(fixture.projectRoot, 'index.scip'),
+      outputDb: join(fixture.projectRoot, 'index.db'),
+      metaPath: join(fixture.projectRoot, 'meta.json'),
+    });
+    const currentDb = fixture.openDb();
+    const service = new TypeScriptSemanticServiceHost({
+      openDb: fixture.openDb,
+      createHost: fakeSemanticHost,
+    });
+    try {
+      expect(oldDb.get<{ symbol: string }>('SELECT symbol FROM global_symbols WHERE id = 7')?.symbol).toContain(
+        'old/Old#',
+      );
+      expect(currentDb.get<{ symbol: string }>('SELECT symbol FROM global_symbols WHERE id = 7')?.symbol).toContain(
+        'new/New#',
+      );
+      expect(currentDb.generation.identity).toBe(publication.currentGeneration);
+      expect(() => service.handle(oldDb.generation.identity, { kind: 'availability' })).toThrow(
+        'does not match the currently published index generation',
+      );
+      expect(service.handle(currentDb.generation.identity, { kind: 'availability' })).toEqual(
+        expect.objectContaining({ available: true }),
+      );
+    } finally {
+      service.closeTypeScriptService();
+      oldDb.close();
+      currentDb.close();
+    }
   });
 
   it('abandons a request promptly when the service dies and bounds a live-service timeout', () => {
@@ -315,7 +386,11 @@ function serviceFixture(withMetadata = false): {
   writeFileSync(join(projectRoot, 'src/consumer.ts'), 'export const value = 1;\n');
   writeFileSync(join(projectRoot, 'tsconfig.json'), '{}');
   const dbPath = join(projectRoot, 'index.db');
-  evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/consumer.ts').chunk(1, 1, 0, 0).write();
+  evidenceFixtureDb(dbPath)
+    .document(1, 'typescript', 'src/consumer.ts')
+    .symbol(7, 'scip-query npm old/Old#', 'Old')
+    .chunk(1, 1, 0, 0)
+    .write();
   if (withMetadata) {
     writeFileSync(
       join(projectRoot, 'meta.json'),

@@ -45,10 +45,12 @@ occurrences are not exact. SynthRunnerRust had no eligible non-`Default` rows.
 ## Architecture
 
 `src/semantic/rust/scip-occurrence-references.ts` remains the only occurrence
-reference policy boundary. It will load the SCIP index once, materialize the
-existing safe definitions, and additionally consider a fixed set of standard
-trait implementation symbols. One pure decision receives the parsed trait name
-and the number of exact SCIP occurrences:
+reference policy boundary. It loads the SCIP companion retained by the same
+open SQLite generation handle, materializes the existing safe definitions, and
+additionally considers a fixed set of standard trait implementation symbols.
+It never reopens the mutable compatibility path during a query. One pure
+decision receives the parsed trait name and the number of exact SCIP
+occurrences:
 
 - `Default`: reject;
 - `From` with zero occurrences: reject;

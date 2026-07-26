@@ -24,7 +24,6 @@ import type {
 import { createTsMorphProvider } from './ts-morph-provider.js';
 import {
   TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
-  publishedGenerationIdentity,
   typeScriptSemanticMailboxPaths,
   type TypeScriptSemanticRequest,
 } from './session-protocol.js';
@@ -138,7 +137,7 @@ export class TypeScriptSemanticRequester {
     if (!usableServiceState(state, this.projectRoot, this.runtime)) {
       throw new Error('Compatible TypeScript semantic service is not running.');
     }
-    const generation = publishedGenerationIdentity(this.db.config.dbPath);
+    const generation = this.db.generation.identity;
     if (!generation) throw new Error('Published TypeScript generation identity is unavailable.');
 
     const id = this.runtime.randomId();

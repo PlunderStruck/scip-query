@@ -1,23 +1,52 @@
 import { createHash } from 'node:crypto';
 import {
+  closeSync,
+  chmodSync,
   copyFileSync,
+  constants,
   existsSync,
-  linkSync,
+  fsyncSync,
   mkdirSync,
+  openSync,
   readFileSync,
+  readSync,
   readdirSync,
   renameSync,
   rmSync,
   statSync,
 } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
+import { syncDirectoryDurable } from '../storage/atomic-file.js';
 import { writeJsonDurable } from '../storage/atomic-json.js';
+import {
+  SQLITE_GENERATION_DIRECTORY,
+  SQLITE_GENERATION_MANIFEST,
+  SQLITE_GENERATION_MANIFEST_VERSION,
+  SQLITE_GENERATION_STORE_VERSION,
+  fileIdentity,
+  readSqliteGenerationManifest,
+  readSqliteGenerationManifestFromRoot,
+  readSqliteGenerationState,
+  sqliteGenerationRoot,
+  stableMetadataIdentity,
+  type SqliteGenerationArtifact,
+  type SqliteGenerationManifest,
+  type SqliteGenerationRecovery,
+  type SqliteGenerationState,
+  type SqlitePublicationRecord,
+} from '../storage/sqlite-generation.js';
 
-export const SQLITE_GENERATION_STORE_VERSION = 1;
-export const SQLITE_GENERATION_DIRECTORY = '.scipquery-generations';
+export {
+  SQLITE_GENERATION_DIRECTORY,
+  SQLITE_GENERATION_STORE_VERSION,
+  readSqliteGenerationState,
+  sqliteGenerationRoot,
+};
+export type { SqliteGenerationRecovery, SqliteGenerationState, SqlitePublicationRecord };
 
 export type SqliteGenerationHandoffStage =
   | 'after-recovery-retained'
+  | 'after-pointer-handoff'
   | 'after-scip-handoff'
   | 'after-database-handoff'
   | 'after-metadata-handoff';
@@ -34,34 +63,6 @@ export interface PromoteReindexArtifactsInput {
   publication?: SqlitePublicationRecord;
   onStage?: (stage: SqliteGenerationHandoffStage) => void;
   now?: () => Date;
-}
-
-export interface SqliteGenerationRecovery {
-  generationIdentity: string;
-  databasePath: string;
-  metadataPath?: string;
-}
-
-export interface SqliteGenerationState {
-  version: typeof SQLITE_GENERATION_STORE_VERSION;
-  currentGeneration: string;
-  previousGeneration?: SqliteGenerationRecovery;
-  publication?: SqlitePublicationRecord;
-  publishedAt: string;
-}
-
-export interface SqlitePublicationRecord {
-  mode: 'incremental' | 'full';
-  validation: 'passed';
-  converterDurationMs: number;
-  affectedDocumentCount?: number;
-  changedDocumentCount?: number;
-  producerDurationMs?: number;
-  materializationDurationMs?: number;
-  patchDurationMs?: number;
-  scipCompanion?: 'current' | 'deferred';
-  typescriptOverlayGeneration?: string;
-  fallbackReason?: string;
 }
 
 // scip-query: ignore-stale — reviewed S1 owned contract; this union names every generation-inspection outcome.
@@ -89,8 +90,28 @@ export interface PromoteReindexArtifactsResult {
 // scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 export function promoteReindexArtifacts(input: PromoteReindexArtifactsInput): PromoteReindexArtifactsResult {
   const generationRoot = sqliteGenerationRoot(input.outputDb);
-  const previousGeneration = retainPreviousGeneration(input, generationRoot);
+  const previousGeneration = retainPublishedGeneration(input);
   input.onStage?.('after-recovery-retained');
+
+  const candidateScip = input.preserveOutputScip ? input.outputScip : input.tempOutputScip;
+  const candidate = materializeGeneration({
+    generationRoot,
+    databasePath: input.tempOutputDb,
+    indexPath: existsSync(candidateScip) ? candidateScip : undefined,
+    metadataPath: existsSync(input.tempMetaPath) ? input.tempMetaPath : undefined,
+  });
+
+  const publishedAt = (input.now ?? (() => new Date()))().toISOString();
+  const state: SqliteGenerationState = {
+    version: SQLITE_GENERATION_STORE_VERSION,
+    currentGeneration: candidate.identity,
+    artifactSet: 'immutable-v1',
+    ...(previousGeneration ? { previousGeneration } : {}),
+    ...(input.publication ? { publication: input.publication } : {}),
+    publishedAt,
+  };
+  writeJsonDurable(join(generationRoot, 'state.json'), state, { spacing: 2, trailingNewline: true });
+  input.onStage?.('after-pointer-handoff');
 
   if (!input.preserveOutputScip) replaceFile(input.tempOutputScip, input.outputScip);
   input.onStage?.('after-scip-handoff');
@@ -99,38 +120,59 @@ export function promoteReindexArtifacts(input: PromoteReindexArtifactsInput): Pr
   replaceFile(input.tempMetaPath, input.metaPath);
   input.onStage?.('after-metadata-handoff');
 
-  const currentGeneration = sqliteGenerationIdentity(input.metaPath, input.outputDb);
-  const state: SqliteGenerationState = {
-    version: SQLITE_GENERATION_STORE_VERSION,
-    currentGeneration,
-    ...(previousGeneration ? { previousGeneration } : {}),
-    ...(input.publication ? { publication: input.publication } : {}),
-    publishedAt: (input.now ?? (() => new Date()))().toISOString(),
+  const currentGeneration = candidate.identity;
+  const mirroredState: SqliteGenerationState = {
+    ...state,
+    stableMirrors: stableMirrorIdentity(input.outputDb, input.outputScip),
   };
-  writeJsonDurable(join(generationRoot, 'state.json'), state, { spacing: 2, trailingNewline: true });
+  writeJsonDurable(join(generationRoot, 'state.json'), mirroredState, { spacing: 2, trailingNewline: true });
   return { currentGeneration, ...(previousGeneration ? { previousGeneration } : {}) };
 }
 
-export function readSqliteGenerationState(outputDb: string): SqliteGenerationState | null {
-  try {
-    const parsed = JSON.parse(
-      readFileSync(join(sqliteGenerationRoot(outputDb), 'state.json'), 'utf8'),
-    ) as Partial<SqliteGenerationState>;
-    if (
-      parsed.version !== SQLITE_GENERATION_STORE_VERSION ||
-      typeof parsed.currentGeneration !== 'string' ||
-      !parsed.currentGeneration ||
-      typeof parsed.publishedAt !== 'string' ||
-      !Number.isFinite(Date.parse(parsed.publishedAt)) ||
-      !validRecovery(parsed.previousGeneration) ||
-      !validPublication(parsed.publication)
-    ) {
-      return null;
-    }
-    return parsed as SqliteGenerationState;
-  } catch {
+/**
+ * Upgrades a complete legacy stable layout to the immutable pointer protocol
+ * before reindex code reads it while owning the publication lock.
+ */
+export function ensureImmutableSqliteGeneration(
+  outputDb: string,
+  outputScip: string,
+  metaPath: string,
+  now: () => Date = () => new Date(),
+): SqliteGenerationState | null {
+  if (!existsSync(outputDb)) return null;
+  const previous = readSqliteGenerationState(outputDb);
+  const statePath = join(sqliteGenerationRoot(outputDb), 'state.json');
+  if (previous?.artifactSet === 'immutable-v1' && readSqliteGenerationManifest(outputDb, previous.currentGeneration)) {
+    return previous;
+  }
+
+  const generationRoot = sqliteGenerationRoot(outputDb);
+  const recoveredIdentity =
+    !previous && existsSync(statePath) ? sqliteGenerationIdentity(metaPath, outputDb, outputScip) : undefined;
+  if (recoveredIdentity && !readSqliteGenerationManifestFromRoot(generationRoot, recoveredIdentity)) {
     return null;
   }
+  const retained = materializeGeneration({
+    generationRoot,
+    databasePath: outputDb,
+    indexPath: existsSync(outputScip) ? outputScip : undefined,
+    metadataPath: existsSync(metaPath) ? metaPath : undefined,
+    forcedIdentity: previous?.currentGeneration ?? recoveredIdentity,
+  });
+  const state: SqliteGenerationState = {
+    version: SQLITE_GENERATION_STORE_VERSION,
+    currentGeneration: retained.identity,
+    artifactSet: 'immutable-v1',
+    stableMirrors: stableMirrorIdentity(outputDb, outputScip),
+    ...(previous?.previousGeneration ? { previousGeneration: previous.previousGeneration } : {}),
+    ...(previous?.publication ? { publication: previous.publication } : {}),
+    publishedAt: previous?.publishedAt ?? now().toISOString(),
+  };
+  writeJsonDurable(join(generationRoot, 'state.json'), state, {
+    spacing: 2,
+    trailingNewline: true,
+  });
+  return state;
 }
 
 /** Refreshes the generation identity after metadata-only publication. */
@@ -144,10 +186,23 @@ export function refreshSqliteGenerationMetadata(
     throw new Error('metadata-only generation refresh requires stable database and metadata files');
   }
   const previous = readSqliteGenerationState(outputDb);
+  const generationRoot = sqliteGenerationRoot(outputDb);
+  const current = materializeGeneration({
+    generationRoot,
+    databasePath: outputDb,
+    indexPath: existsSync(join(dirname(outputDb), 'index.scip')) ? join(dirname(outputDb), 'index.scip') : undefined,
+    metadataPath: metaPath,
+  });
+  const previousGeneration =
+    previous && previous.currentGeneration !== current.identity
+      ? recoveryForGeneration(outputDb, previous.currentGeneration)
+      : undefined;
   const state: SqliteGenerationState = {
     version: SQLITE_GENERATION_STORE_VERSION,
-    currentGeneration: sqliteGenerationIdentity(metaPath, outputDb),
-    ...(previous?.previousGeneration ? { previousGeneration: previous.previousGeneration } : {}),
+    currentGeneration: current.identity,
+    artifactSet: 'immutable-v1',
+    stableMirrors: stableMirrorIdentity(outputDb, join(dirname(outputDb), 'index.scip')),
+    ...(previousGeneration ? { previousGeneration } : {}),
     ...(previous?.publication ? { publication: previous.publication } : {}),
     publishedAt: now().toISOString(),
   };
@@ -167,21 +222,24 @@ export function inspectSqliteGeneration(
   const generation = readSqliteGenerationState(outputDb);
   if (!generation) return { state: 'invalid', statePath, reason: 'generation state is malformed' };
   try {
-    const expectedGeneration = sqliteGenerationIdentity(metaPath, outputDb);
-    const currentMatches = generation.currentGeneration === expectedGeneration;
+    const manifest = readSqliteGenerationManifest(outputDb, generation.currentGeneration);
+    const currentExists = manifest !== null;
+    const currentMatches = manifest ? stableMirrorsMatch(outputDb, metaPath, manifest, generation) : false;
     const recoveryExists = generation.previousGeneration
       ? existsSync(join(dirname(outputDb), generation.previousGeneration.databasePath))
       : true;
-    if (!currentMatches || !recoveryExists) {
+    if (!currentMatches || !currentExists || !recoveryExists) {
       return {
         state: 'drifted',
         statePath,
         currentMatches,
         recoveryExists,
         generation,
-        reason: !currentMatches
-          ? 'stable database or metadata no longer matches the published generation'
-          : 'retained recovery database is missing',
+        reason: !currentExists
+          ? 'published immutable generation is missing'
+          : !currentMatches
+            ? 'stable database or metadata no longer matches the published generation'
+            : 'retained recovery database is missing',
       };
     }
     return { state: 'current', statePath, currentMatches, recoveryExists, generation };
@@ -197,48 +255,65 @@ export function inspectSqliteGeneration(
   }
 }
 
-export function sqliteGenerationRoot(outputDb: string): string {
-  return join(dirname(outputDb), SQLITE_GENERATION_DIRECTORY);
+function stableMirrorsMatch(
+  outputDb: string,
+  metaPath: string,
+  manifest: SqliteGenerationManifest,
+  state: SqliteGenerationState,
+): boolean {
+  if (
+    state.stableMirrors &&
+    (state.stableMirrors.databaseFileIdentity !== fileIdentity(outputDb) ||
+      (state.stableMirrors.indexFileIdentity !== undefined &&
+        state.stableMirrors.indexFileIdentity !== fileIdentity(join(dirname(outputDb), 'index.scip'))))
+  ) {
+    return false;
+  }
+  if (!artifactSizeMatches(outputDb, manifest.database)) return false;
+  const stableIndex = join(dirname(outputDb), 'index.scip');
+  if (manifest.index && !artifactSizeMatches(stableIndex, manifest.index)) return false;
+  if (!manifest.metadata) return !existsSync(metaPath);
+  if (!existsSync(metaPath)) return false;
+  const immutableMetaPath = join(sqliteGenerationRoot(outputDb), manifest.identity, manifest.metadata.file);
+  return (
+    existsSync(immutableMetaPath) &&
+    stableMetadataIdentity(readFileSync(metaPath, 'utf8')) ===
+      stableMetadataIdentity(readFileSync(immutableMetaPath, 'utf8'))
+  );
 }
 
-function retainPreviousGeneration(
-  input: PromoteReindexArtifactsInput,
-  generationRoot: string,
-): SqliteGenerationRecovery | undefined {
-  if (!existsSync(input.outputDb)) return undefined;
-  const generationIdentity = sqliteGenerationIdentity(input.metaPath, input.outputDb);
-  const generationDir = join(generationRoot, generationIdentity);
-  const databasePath = join(generationDir, basename(input.outputDb));
-  const metadataPath = existsSync(input.metaPath) ? join(generationDir, basename(input.metaPath)) : undefined;
+function artifactSizeMatches(path: string, artifact: SqliteGenerationArtifact): boolean {
+  return existsSync(path) && statSync(path).isFile() && statSync(path).size === artifact.size;
+}
 
-  if (!existsSync(databasePath)) {
-    const temporaryDir = `${generationDir}.${process.pid}.${Date.now()}.tmp`;
-    rmSync(temporaryDir, { recursive: true, force: true });
-    mkdirSync(temporaryDir, { recursive: true });
-    const temporaryDb = join(temporaryDir, basename(input.outputDb));
-    try {
-      linkSync(input.outputDb, temporaryDb);
-    } catch {
-      copyFileSync(input.outputDb, temporaryDb);
-    }
-    if (metadataPath) copyFileSync(input.metaPath, join(temporaryDir, basename(input.metaPath)));
-    mkdirSync(generationRoot, { recursive: true });
-    renameSync(temporaryDir, generationDir);
-  }
+function retainPublishedGeneration(input: PromoteReindexArtifactsInput): SqliteGenerationRecovery | undefined {
+  const published = ensureImmutableSqliteGeneration(input.outputDb, input.outputScip, input.metaPath);
+  return published ? recoveryForGeneration(input.outputDb, published.currentGeneration) : undefined;
+}
 
-  pruneRecoveryGenerations(generationRoot, generationIdentity);
+function stableMirrorIdentity(
+  databasePath: string,
+  indexPath: string,
+): NonNullable<SqliteGenerationState['stableMirrors']> {
   return {
-    generationIdentity,
-    databasePath: relative(dirname(input.outputDb), databasePath),
-    ...(metadataPath ? { metadataPath: relative(dirname(input.outputDb), metadataPath) } : {}),
+    databaseFileIdentity: fileIdentity(databasePath),
+    ...(existsSync(indexPath) ? { indexFileIdentity: fileIdentity(indexPath) } : {}),
   };
 }
 
-function pruneRecoveryGenerations(generationRoot: string, keepIdentity: string): void {
-  for (const entry of readdirSync(generationRoot, { withFileTypes: true })) {
-    if (!entry.isDirectory() || entry.name === keepIdentity || entry.name.endsWith('.tmp')) continue;
-    rmSync(join(generationRoot, entry.name), { recursive: true, force: true });
-  }
+function recoveryForGeneration(outputDb: string, identity: string): SqliteGenerationRecovery {
+  const directory = join(sqliteGenerationRoot(outputDb), identity);
+  const databasePath = join(directory, basename(outputDb));
+  const metadataPath = join(directory, 'meta.json');
+  return {
+    generationIdentity: identity,
+    databasePath: relative(dirname(outputDb), databasePath),
+    ...(existsSync(metadataPath) ? { metadataPath: relative(dirname(outputDb), metadataPath) } : {}),
+  };
+}
+
+function removeAbandonedStagingDirectories(generationRoot: string): void {
+  if (!existsSync(generationRoot)) return;
   for (const entry of readdirSync(generationRoot, { withFileTypes: true })) {
     if (entry.isDirectory() && entry.name.endsWith('.tmp')) {
       rmSync(join(generationRoot, entry.name), { recursive: true, force: true });
@@ -246,89 +321,172 @@ function pruneRecoveryGenerations(generationRoot: string, keepIdentity: string):
   }
 }
 
-function sqliteGenerationIdentity(metaPath: string, databasePath: string): string {
-  const hash = createHash('sha256').update(`sqlite-generation-v${SQLITE_GENERATION_STORE_VERSION}\0`);
-  if (existsSync(metaPath)) hash.update(stableMetadataIdentity(readFileSync(metaPath, 'utf8')));
-  const stat = statSync(databasePath);
-  hash.update(`\0${stat.size}`);
+export function sqliteGenerationIdentity(
+  metaPath: string,
+  databasePath: string,
+  indexPath = join(dirname(databasePath), 'index.scip'),
+): string {
+  const hash = createHash('sha256').update('sqlite-generation-artifacts-v1\0');
+  hash.update(hashFile(databasePath));
+  if (existsSync(indexPath)) hash.update(`\0${hashFile(indexPath)}`);
+  if (existsSync(metaPath)) hash.update(`\0${stableMetadataIdentity(readFileSync(metaPath, 'utf8'))}`);
   return hash.digest('hex');
 }
 
-function stableMetadataIdentity(raw: string): string {
-  try {
-    const metadata = JSON.parse(raw) as {
-      version?: unknown;
-      status?: unknown;
-      updatedAt?: unknown;
-      fingerprint?: unknown;
-      indexedLanguages?: unknown;
-      scipCompanion?: unknown;
-    };
+function materializeGeneration(input: {
+  generationRoot: string;
+  databasePath: string;
+  indexPath?: string;
+  metadataPath?: string;
+  forcedIdentity?: string;
+}): { identity: string } {
+  const database = describeArtifact(input.databasePath);
+  const index = input.indexPath ? describeArtifact(input.indexPath) : undefined;
+  const metadata = input.metadataPath ? describeArtifact(input.metadataPath) : undefined;
+  const identity = input.forcedIdentity ?? generationIdentityFromArtifacts(database, index, input.metadataPath);
+  const generationDirectory = join(input.generationRoot, identity);
+  const existingManifestPath = join(generationDirectory, SQLITE_GENERATION_MANIFEST);
+  if (existsSync(existingManifestPath)) {
+    const existing = readSqliteGenerationManifestFromRoot(input.generationRoot, identity);
     if (
-      (metadata.version === 2 || metadata.version === 3) &&
-      metadata.status === 'complete' &&
-      typeof metadata.updatedAt === 'string' &&
-      metadata.fingerprint !== undefined
+      existing &&
+      storedArtifactMatches(generationDirectory, existing.database, database) &&
+      optionalStoredArtifactMatches(generationDirectory, existing.index, index) &&
+      storedMetadataMatches(generationDirectory, existing.metadata, input.metadataPath)
     ) {
-      return JSON.stringify({
-        version: metadata.version,
-        status: metadata.status,
-        updatedAt: metadata.updatedAt,
-        fingerprint: metadata.fingerprint,
-        indexedLanguages: metadata.indexedLanguages,
-        scipCompanion: metadata.scipCompanion,
-      });
+      return { identity };
     }
-  } catch {
-    // Legacy/non-JSON metadata keeps its exact byte identity.
+    throw new Error(`SQLite generation ${identity} already exists with different or corrupt artifacts.`);
   }
-  return raw;
+
+  mkdirSync(input.generationRoot, { recursive: true });
+  removeAbandonedStagingDirectories(input.generationRoot);
+  const temporaryDirectory = `${generationDirectory}.${process.pid}.${Date.now()}.tmp`;
+  rmSync(temporaryDirectory, { recursive: true, force: true });
+  mkdirSync(temporaryDirectory, { recursive: true });
+  try {
+    cloneArtifact(input.databasePath, join(temporaryDirectory, database.file));
+    if (index && input.indexPath) cloneArtifact(input.indexPath, join(temporaryDirectory, index.file));
+    if (metadata && input.metadataPath) {
+      cloneArtifact(input.metadataPath, join(temporaryDirectory, metadata.file));
+    }
+    writeJsonDurable(
+      join(temporaryDirectory, SQLITE_GENERATION_MANIFEST),
+      {
+        version: SQLITE_GENERATION_MANIFEST_VERSION,
+        identity,
+        database,
+        ...(index ? { index } : {}),
+        ...(metadata ? { metadata } : {}),
+      } satisfies SqliteGenerationManifest,
+      { spacing: 2, trailingNewline: true },
+    );
+    renameSync(temporaryDirectory, generationDirectory);
+    syncDirectoryDurable(input.generationRoot);
+  } finally {
+    rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+  return { identity };
+}
+
+function generationIdentityFromArtifacts(
+  database: SqliteGenerationArtifact,
+  index: SqliteGenerationArtifact | undefined,
+  metadataPath: string | undefined,
+): string {
+  const hash = createHash('sha256').update('sqlite-generation-artifacts-v1\0');
+  hash.update(database.sha256);
+  if (index) hash.update(`\0${index.sha256}`);
+  if (metadataPath) hash.update(`\0${stableMetadataIdentity(readFileSync(metadataPath, 'utf8'))}`);
+  return hash.digest('hex');
+}
+
+function describeArtifact(path: string): SqliteGenerationArtifact {
+  return {
+    file: basename(path),
+    size: statSync(path).size,
+    sha256: hashFile(path),
+  };
+}
+
+function hashFile(path: string): string {
+  const hash = createHash('sha256');
+  const fd = openSync(path, 'r');
+  const buffer = Buffer.allocUnsafe(1024 * 1024);
+  try {
+    while (true) {
+      const bytesRead = readFileChunk(fd, buffer);
+      if (bytesRead === 0) break;
+      hash.update(buffer.subarray(0, bytesRead));
+    }
+  } finally {
+    closeSync(fd);
+  }
+  return hash.digest('hex');
+}
+
+function readFileChunk(fd: number, buffer: Buffer): number {
+  let offset = 0;
+  while (offset < buffer.length) {
+    const bytesRead = readSync(fd, buffer, offset, buffer.length - offset, null);
+    offset += bytesRead;
+    if (bytesRead === 0) break;
+  }
+  return offset;
+}
+
+function cloneArtifact(source: string, target: string): void {
+  copyFileSync(source, target, constants.COPYFILE_FICLONE);
+  const fd = openSync(target, 'r');
+  try {
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+  chmodSync(target, 0o444);
+}
+
+function storedArtifactMatches(
+  directory: string,
+  stored: SqliteGenerationArtifact,
+  candidate: SqliteGenerationArtifact,
+): boolean {
+  const path = join(directory, stored.file);
+  return (
+    stored.file === candidate.file &&
+    stored.size === candidate.size &&
+    stored.sha256 === candidate.sha256 &&
+    existsSync(path) &&
+    statSync(path).size === stored.size &&
+    hashFile(path) === stored.sha256
+  );
+}
+
+function optionalStoredArtifactMatches(
+  directory: string,
+  stored: SqliteGenerationArtifact | undefined,
+  candidate: SqliteGenerationArtifact | undefined,
+): boolean {
+  if (!stored || !candidate) return stored === candidate;
+  return storedArtifactMatches(directory, stored, candidate);
+}
+
+function storedMetadataMatches(
+  directory: string,
+  stored: SqliteGenerationArtifact | undefined,
+  candidatePath: string | undefined,
+): boolean {
+  if (!stored || !candidatePath) return stored === undefined && candidatePath === undefined;
+  const storedPath = join(directory, stored.file);
+  return (
+    existsSync(storedPath) &&
+    stableMetadataIdentity(readFileSync(storedPath, 'utf8')) ===
+      stableMetadataIdentity(readFileSync(candidatePath, 'utf8'))
+  );
 }
 
 function replaceFile(source: string, target: string): void {
   rmSync(`${target}.tmp-replace`, { force: true });
   renameSync(source, `${target}.tmp-replace`);
   renameSync(`${target}.tmp-replace`, target);
-}
-
-function validRecovery(value: unknown): boolean {
-  if (value === undefined) return true;
-  if (!value || typeof value !== 'object') return false;
-  const recovery = value as Partial<SqliteGenerationRecovery>;
-  return (
-    typeof recovery.generationIdentity === 'string' &&
-    Boolean(recovery.generationIdentity) &&
-    typeof recovery.databasePath === 'string' &&
-    Boolean(recovery.databasePath) &&
-    (recovery.metadataPath === undefined ||
-      (typeof recovery.metadataPath === 'string' && Boolean(recovery.metadataPath)))
-  );
-}
-
-function validPublication(value: unknown): boolean {
-  if (value === undefined) return true;
-  if (!value || typeof value !== 'object') return false;
-  const publication = value as Partial<SqlitePublicationRecord>;
-  const numericValues = [
-    publication.converterDurationMs,
-    publication.affectedDocumentCount,
-    publication.changedDocumentCount,
-    publication.producerDurationMs,
-    publication.materializationDurationMs,
-    publication.patchDurationMs,
-  ].filter((entry) => entry !== undefined);
-  return (
-    (publication.mode === 'incremental' || publication.mode === 'full') &&
-    publication.validation === 'passed' &&
-    publication.converterDurationMs !== undefined &&
-    numericValues.every((entry) => typeof entry === 'number' && Number.isFinite(entry) && entry >= 0) &&
-    (publication.scipCompanion === undefined ||
-      publication.scipCompanion === 'current' ||
-      publication.scipCompanion === 'deferred') &&
-    (publication.typescriptOverlayGeneration === undefined ||
-      (typeof publication.typescriptOverlayGeneration === 'string' &&
-        Boolean(publication.typescriptOverlayGeneration))) &&
-    (publication.scipCompanion !== 'deferred' || Boolean(publication.typescriptOverlayGeneration)) &&
-    (publication.fallbackReason === undefined || typeof publication.fallbackReason === 'string')
-  );
 }

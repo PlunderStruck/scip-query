@@ -76,7 +76,7 @@ could not confirm the stronger durability guarantee.
 | Record | Contract | Reason |
 | --- | --- | --- |
 | Reindex `meta.json` | Durable | Names the accepted index status, fingerprint, and generation metadata |
-| SQLite generation `state.json` | Durable | Selects current and recovery generations |
+| SQLite generation manifest and `state.json` | Durable | Flushes one complete immutable artifact set, then atomically selects it for new readers |
 | Shared-generation manifest | Durable file within staging | Authenticates immutable artifacts; the later generation-directory publication remains a separate generation-store operation |
 | Worktree lease and local cache pointer | Durable | Protect generations from collection and bind a worktree to repository cache identity |
 | Watch service state | Durable | Publishes the process instance and index generation accepted as current |
@@ -95,6 +95,6 @@ could not confirm the stronger durability guarantee.
 Process locks use exclusive descriptor creation rather than replacement. Their
 durable token ownership, malformed-creation grace, guarded recovery, and
 legacy compatibility are defined in
-[Process Lock Ownership and Recovery](LOCK_PROTOCOL.md). Generation directories
-and stable compatibility files have a wider multi-file publication contract;
-Slice 10 defines their generation handle and pointer handoff.
+[Process Lock Ownership and Recovery](LOCK_PROTOCOL.md). Generation directories,
+stable compatibility mirrors, and their crash ordering are defined in
+[Local Index Generations](INDEX_GENERATIONS.md).

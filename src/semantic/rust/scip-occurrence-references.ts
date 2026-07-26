@@ -87,9 +87,9 @@ function scipOccurrenceReferenceIndex(db: ScipDatabase): ScipOccurrenceReference
 }
 
 function loadScipOccurrenceReferenceIndex(db: ScipDatabase): ScipOccurrenceReferenceIndex | null {
-  if (!existsSync(db.config.indexPath)) return null;
+  if (!db.generation.indexPath || !existsSync(db.generation.indexPath)) return null;
   try {
-    const scipIndex = deserializeSCIP(readFileSync(db.config.indexPath));
+    const scipIndex = deserializeSCIP(readFileSync(db.generation.indexPath));
     const referencesBySymbol = new Map<string, SemanticReference[]>();
     for (const document of scipIndex.documents ?? []) {
       const relativePath = document.relativePath;

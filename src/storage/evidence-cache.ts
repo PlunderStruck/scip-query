@@ -15,7 +15,7 @@
  * process and every operation degrades to a miss/no-op.
  */
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import type { ScipDatabase } from './db.js';
@@ -171,9 +171,10 @@ export function fileContentHash(db: ScipDatabase, relativePath: string, content:
 export function projectEvidenceFingerprint(db: ScipDatabase): string | null {
   return PROJECT_FINGERPRINT_CACHE.get(db, 'current', () => {
     try {
-      const metadata = JSON.parse(
-        readFileSync(join(dirname(db.config.dbPath), 'meta.json'), 'utf-8'),
-      ) as ReindexEvidenceMetadata;
+      const metadata = db.generation.metadataRaw
+        ? (JSON.parse(db.generation.metadataRaw) as ReindexEvidenceMetadata)
+        : null;
+      if (!metadata) return null;
       if (metadata.version !== 2 && metadata.version !== 3) return null;
       if (metadata.status !== 'complete' && metadata.status !== 'partial') return null;
       if (metadata.fingerprint === undefined) return null;

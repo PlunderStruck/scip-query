@@ -138,6 +138,27 @@ There is also a shorter handoff window in which `index.db` and `meta.json` name 
 
 **Acceptance condition:** no code path can construct one externally meaningful response from an open database and independently reread generation identity from a replaceable path.
 
+**Resolution — Slice 10 (2026-07-25):** resolved. Local publication now
+materializes a flushed immutable database/SCIP/metadata directory and switches
+one durable pointer before updating compatibility mirrors.
+`ScipDatabase.generation` retains that directory's identity, database path,
+SCIP path, and metadata bytes. Result cursors, TypeScript requesters and
+services, Rust SCIP occurrence fallbacks, evidence fingerprints, semantic
+identity construction, and database statistics now consume that retained
+handle. Legacy caches use a file-identity-checked open overlap path; new state
+records fail closed if their named immutable set is missing or malformed.
+
+Deterministic tests now stop publication after recovery retention, pointer
+handoff, and each mirror handoff; every newly opened database sees either the
+complete prior set or the complete candidate set. Separate tests retain an old
+reader across two publications, reject a cursor before an old offset reaches a
+changed result set, reject deliberately conflicting numeric symbol IDs at the
+TypeScript service boundary, refresh metadata as a new generation, fail
+closed on a missing manifest, and exercise shared-cache hydration followed by
+private stable-path mutation. The stable mirrors remain available for older
+tools, while internal database-backed operations no longer derive authority
+from them.
+
 ### DD-02 — S1 — PID reuse can cause scip-query to terminate an unrelated process
 
 **Evidence:** source-confirmed interleaving.

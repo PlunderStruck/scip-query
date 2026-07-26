@@ -484,7 +484,7 @@ describe('reindex reliability', () => {
     expect(second.shards?.map((shard) => shard.language).sort()).toEqual(['python', 'typescript']);
   });
 
-  it('repairs a malformed generation from cached language shards without rerunning indexers', async () => {
+  it('recovers a malformed pointer from its complete immutable generation without rerunning indexers', async () => {
     const projectRoot = createProject('scip-query-reindex-generation-repair-');
     const cacheDir = join(projectRoot, '.scipquery-cache');
     mkdirSync(cacheDir);
@@ -497,10 +497,13 @@ describe('reindex reliability', () => {
     writeFileSync(join(cacheDir, '.scipquery-generations/state.json'), '{');
     const repaired = await reindex({ projectRoot, outputScip, outputDb, onStatus: () => undefined });
 
-    expect(repaired.reused).toBe(false);
+    expect(repaired.reused).toBe(true);
     expect(attempts).toEqual(attemptsAfterFirst);
-    expect(JSON.parse(readFileSync(join(cacheDir, '.scipquery-generations/state.json'), 'utf8')).publication).toEqual(
-      expect.objectContaining({ mode: 'full', validation: 'passed' }),
+    expect(JSON.parse(readFileSync(join(cacheDir, '.scipquery-generations/state.json'), 'utf8'))).toEqual(
+      expect.objectContaining({
+        artifactSet: 'immutable-v1',
+        currentGeneration: expect.stringMatching(/^[a-f0-9]{64}$/),
+      }),
     );
   });
 

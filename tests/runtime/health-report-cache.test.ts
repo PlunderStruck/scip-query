@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -12,10 +12,18 @@ import {
 import type { ScipDatabase } from '../../src/storage/db.js';
 
 function fakeDb(tempDir: string): ScipDatabase {
+  const dbPath = join(tempDir, 'index.db');
   return {
     config: {
-      dbPath: join(tempDir, 'index.db'),
+      dbPath,
       projectRoot: join(tempDir, 'project'),
+    },
+    generation: {
+      identity: 'test-generation',
+      databasePath: dbPath,
+      metadataPath: join(tempDir, 'meta.json'),
+      metadataRaw: readFileSync(join(tempDir, 'meta.json'), 'utf8'),
+      source: 'legacy',
     },
   } as ScipDatabase;
 }
@@ -96,9 +104,9 @@ describe('health report cache', () => {
 
   it('reuses a report for the same project identity and misses after the project fingerprint changes', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-query-health-report-cache-'));
-    const db = fakeDb(tempDir);
     const deps = { gitHead: () => 'head-a' };
     writeMeta(tempDir, { files: [{ path: 'src/a.ts', hash: 'a' }] });
+    const db = fakeDb(tempDir);
 
     const key = healthReportCacheKey(db, { full: true }, '0.11.0', deps);
     expect(key).not.toBeNull();
@@ -115,9 +123,9 @@ describe('health report cache', () => {
 
   it('separates full, scoped, and phase-timeout health reports in the cache key', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-query-health-report-cache-'));
-    const db = fakeDb(tempDir);
     const deps = { gitHead: () => 'head-a' };
     writeMeta(tempDir, { files: [{ path: 'src/a.ts', hash: 'a' }] });
+    const db = fakeDb(tempDir);
 
     const fullKey = healthReportCacheKey(db, { full: true }, '0.11.0', deps);
     const scopedKey = healthReportCacheKey(db, { full: true, scope: 'src/runtime' }, '0.11.0', deps);

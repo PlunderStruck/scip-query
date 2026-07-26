@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
 import { projectInputSnapshotOrNull } from '../../domain/project-input.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { createPerDbValue } from '../../storage/per-db-cache.js';
@@ -44,7 +42,8 @@ export function indexedTypeScriptFiles(db: ScipDatabase): string[] {
 
 function readIdentityContext(db: ScipDatabase): TypeScriptSemanticIdentityContext | null {
   try {
-    const metadata = JSON.parse(readFileSync(join(dirname(db.config.dbPath), 'meta.json'), 'utf8')) as {
+    if (!db.generation.metadataRaw) return null;
+    const metadata = JSON.parse(db.generation.metadataRaw) as {
       fingerprint?: unknown;
     };
     const snapshot = projectInputSnapshotOrNull(metadata.fingerprint);

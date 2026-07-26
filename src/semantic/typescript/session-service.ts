@@ -13,11 +13,11 @@ import {
 } from '../../instrumentation/profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { writeJsonAtomic } from '../../storage/atomic-json.js';
+import { generationMetadata } from '../../storage/sqlite-generation.js';
 import { TypeScriptSemanticHost } from './session-host.js';
 import {
   TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
   parseTypeScriptSemanticEnvelope,
-  publishedGenerationIdentity,
   type TypeScriptSemanticMailboxPaths,
   type TypeScriptSemanticRequest,
   type TypeScriptSemanticServiceStatus,
@@ -34,8 +34,8 @@ export interface TypeScriptSemanticServiceHostOptions {
 export class TypeScriptSemanticServiceHost {
   private readonly openDb: () => ScipDatabase;
   private readonly createHost: (db: ScipDatabase) => TypeScriptSemanticHost;
-  private readonly generationIdentity: (dbPath: string) => string | null;
-  private readonly readSnapshot: (dbPath: string) => ProjectInputSnapshot | null;
+  private readonly generationIdentity: (db: ScipDatabase) => string | null;
+  private readonly readSnapshot: (db: ScipDatabase) => ProjectInputSnapshot | null;
   private readonly now: () => number;
   private db: ScipDatabase | null = null;
   private host: TypeScriptSemanticHost | null = null;
@@ -49,8 +49,10 @@ export class TypeScriptSemanticServiceHost {
   constructor(opts: TypeScriptSemanticServiceHostOptions) {
     this.openDb = opts.openDb;
     this.createHost = opts.createHost ?? ((db) => new TypeScriptSemanticHost(db));
-    this.generationIdentity = opts.generationIdentity ?? publishedGenerationIdentity;
-    this.readSnapshot = opts.readSnapshot ?? readPublishedSnapshot;
+    this.generationIdentity = opts.generationIdentity
+      ? (db) => opts.generationIdentity!(db.config.dbPath)
+      : (db) => db.generation.identity;
+    this.readSnapshot = opts.readSnapshot ? (db) => opts.readSnapshot!(db.config.dbPath) : readPublishedSnapshot;
     this.now = opts.now ?? Date.now;
   }
 
@@ -118,12 +120,12 @@ export class TypeScriptSemanticServiceHost {
   private syncGeneration(requestedGeneration: string): void {
     if (this.generation === requestedGeneration && this.host && this.db) return;
     const nextDb = this.openDb();
-    const nextGeneration = this.generationIdentity(nextDb.config.dbPath);
+    const nextGeneration = this.generationIdentity(nextDb);
     if (!nextGeneration || nextGeneration !== requestedGeneration) {
       nextDb.close();
       throw new Error('TypeScript semantic request does not match the currently published index generation.');
     }
-    const nextSnapshot = this.readSnapshot(nextDb.config.dbPath);
+    const nextSnapshot = this.readSnapshot(nextDb);
     if (!this.host || !this.db) {
       this.db = nextDb;
       this.host = this.createHost(nextDb);
@@ -221,15 +223,9 @@ function resolveCalleeMap(
   );
 }
 
-function readPublishedSnapshot(dbPath: string): ProjectInputSnapshot | null {
-  try {
-    const metadata = JSON.parse(readFileSync(resolve(dbPath, '..', 'meta.json'), 'utf8')) as {
-      fingerprint?: unknown;
-    };
-    return projectInputSnapshotOrNull(metadata.fingerprint);
-  } catch {
-    return null;
-  }
+function readPublishedSnapshot(db: ScipDatabase): ProjectInputSnapshot | null {
+  const metadata = generationMetadata<{ fingerprint?: unknown }>(db.generation);
+  return projectInputSnapshotOrNull(metadata?.fingerprint);
 }
 
 function transitionManifest(

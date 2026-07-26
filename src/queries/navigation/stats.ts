@@ -21,7 +21,7 @@ export function stats(db: ScipDatabase): StatsResult {
     symbols,
     definitions,
     references,
-    ...readDbFileStats(db.config.dbPath),
+    ...readDbFileStats(db.generation.databasePath),
   };
 }
 

@@ -1780,6 +1780,9 @@ function renderSqliteGeneration(inspection: SqliteGenerationInspection): void {
   console.log(
     `DB gen:   ${inspection.state} ${inspection.generation.currentGeneration.slice(0, 12)} (${mode}; ${details})`,
   );
+  console.log(
+    `DB layout: ${inspection.generation.artifactSet === 'immutable-v1' ? 'immutable artifact set; stable paths are mirrors' : 'legacy stable paths'}`,
+  );
   if (inspection.generation.previousGeneration) {
     console.log(
       `Recovery: ${inspection.generation.previousGeneration.generationIdentity.slice(0, 12)} at ${inspection.generation.previousGeneration.databasePath}`,

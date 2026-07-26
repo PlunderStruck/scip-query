@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import type { ScipQueryConfig } from '../domain/types.js';
+import { fileIdentity, resolveSqliteGeneration, type SqliteGenerationHandle } from './sqlite-generation.js';
 
 /** The path-exclusion capability storage consumes from project source policy. */
 export interface PathExclusionPolicy {
@@ -44,6 +45,7 @@ const SQL_EXCLUDED_PATH_SEGMENTS = [
 export class ScipDatabase {
   readonly db: Database.Database;
   readonly config: ScipQueryConfig;
+  readonly generation: SqliteGenerationHandle;
   private pathFilter: PathExclusionPolicy | null;
   private statementCache = new Map<string, Database.Statement>();
 
@@ -52,7 +54,9 @@ export class ScipDatabase {
   constructor(config: ScipQueryConfig, pathFilter?: PathExclusionPolicy) {
     this.config = config;
     this.pathFilter = pathFilter ?? null;
-    this.db = new Database(config.dbPath, { readonly: true });
+    const opened = openPublishedGeneration(config);
+    this.generation = opened.generation;
+    this.db = opened.db;
     this.db.pragma('busy_timeout = 5000');
     this.db.pragma('query_only = ON');
     this.db.pragma('temp_store = MEMORY');
@@ -150,4 +154,34 @@ export class ScipDatabase {
     }
     return statement;
   }
+}
+
+function openPublishedGeneration(config: ScipQueryConfig): {
+  db: Database.Database;
+  generation: SqliteGenerationHandle;
+} {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const generation = resolveSqliteGeneration(config);
+    const db = new Database(generation.databasePath, { readonly: true, fileMustExist: true });
+    if (generation.source === 'immutable') {
+      return { db, generation };
+    }
+    try {
+      const observed = resolveSqliteGeneration(config);
+      if (
+        generation.databaseFileIdentity === fileIdentity(generation.databasePath) &&
+        observed.source === 'legacy' &&
+        observed.identity === generation.identity &&
+        observed.databaseFileIdentity === generation.databaseFileIdentity &&
+        observed.metadataRaw === generation.metadataRaw
+      ) {
+        return { db, generation };
+      }
+    } catch (error) {
+      db.close();
+      throw error;
+    }
+    db.close();
+  }
+  throw new Error('SQLite index publication changed repeatedly while opening a coherent generation.');
 }

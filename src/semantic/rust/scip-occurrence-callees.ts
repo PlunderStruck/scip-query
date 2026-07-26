@@ -144,7 +144,7 @@ function scipOccurrenceCalleeIndex(db: ScipDatabase): RustScipOccurrenceCalleeIn
 }
 
 function loadScipOccurrenceCalleeIndex(db: ScipDatabase): RustScipOccurrenceCalleeIndex | null {
-  if (!existsSync(db.config.indexPath)) return null;
+  if (!db.generation.indexPath || !existsSync(db.generation.indexPath)) return null;
   try {
     const callableDefinitions = getAllDefinitions(db).filter(
       (definition) =>
@@ -153,7 +153,7 @@ function loadScipOccurrenceCalleeIndex(db: ScipDatabase): RustScipOccurrenceCall
         definition.isFunctionLike,
     );
     const definitionBySymbol = new Map(callableDefinitions.map((definition) => [definition.symbol, definition]));
-    const scipIndex = deserializeSCIP(readFileSync(db.config.indexPath));
+    const scipIndex = deserializeSCIP(readFileSync(db.generation.indexPath));
     const occurrencesByFile = new Map<string, RustScipOccurrenceCallee[]>();
     for (const document of scipIndex.documents ?? []) {
       const relativePath = document.relativePath;

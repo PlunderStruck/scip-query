@@ -24,6 +24,18 @@ async function loadSetup(): Promise<{
   const readdirSync = vi.fn(() => []);
   const readFileSync = vi.fn(() => '{}');
   const writeFileSync = vi.fn();
+  let stagedBytes = Buffer.alloc(0);
+  const openSync = vi.fn(() => 42);
+  const writeSync = vi.fn((_fd: number, bytes: Buffer, offset: number, length: number) => {
+    stagedBytes = Buffer.concat([stagedBytes, bytes.subarray(offset, offset + length)]);
+    return length;
+  });
+  const fsyncSync = vi.fn();
+  const closeSync = vi.fn();
+  const renameSync = vi.fn((_source: string, target: string) => {
+    writeFileSync(target, stagedBytes.toString('utf8'));
+    stagedBytes = Buffer.alloc(0);
+  });
   const rmSync = vi.fn();
   const readlinkSync = vi.fn(() => {
     throw new Error('not-a-link');
@@ -65,6 +77,11 @@ async function loadSetup(): Promise<{
     rmSync,
     readlinkSync,
     unlinkSync,
+    openSync,
+    writeSync,
+    fsyncSync,
+    closeSync,
+    renameSync,
   }));
   vi.doMock('node:os', () => ({
     homedir: () => '/home/test',

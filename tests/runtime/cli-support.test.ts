@@ -20,6 +20,11 @@ import type { ScipDatabase } from '../../src/storage/db.js';
 function fakeLargeDb(): ScipDatabase {
   return {
     config: { dbPath: '/tmp/missing-index.db' },
+    generation: {
+      identity: 'test-generation',
+      databasePath: '/tmp/missing-index.db',
+      source: 'legacy',
+    },
     get: (sql: string) => {
       if (sql.includes('documents')) return { c: 10_000 };
       if (sql.includes('global_symbols')) return { c: 100_000 };

@@ -325,6 +325,15 @@ publication live in the dependency-free `src/filesystem/file-descriptor.ts`
 boundary; `platform` and `storage` may both depend on that primitive without
 depending on one another.
 
+The immutable SQLite generation handoff was reverified on 2026-07-25.
+`src/reindex/index.ts` coordinates publication, but durable directory flushing
+is owned by `src/storage/atomic-file.ts`; the reindex layer does not depend on
+the low-level filesystem boundary. `src/storage/sqlite-generation.ts` resolves
+the current pointer into one retained database, metadata, and SCIP artifact
+set. `src/semantic/typescript/remote-provider.ts` carries that retained
+generation identity into the semantic mailbox instead of rereading a mutable
+compatibility path.
+
 The `semantic -> symbols` row is now closed together with the rest of
 semantic's classified outgoing relationships. The intended direction is
 observed without a reverse import.
