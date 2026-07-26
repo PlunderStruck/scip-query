@@ -619,6 +619,12 @@ session by default. It remains stopped until a Rust semantic request needs it,
 exits after its clean idle period, and automatically falls back to the
 per-command worker on helper/readiness/timeout/request failure. Set
 `SCIP_RUST_SEMANTIC_DURABLE_SESSION=0` for an explicit worker-only opt-out.
+The LSP transport accepts at most a 16 KiB response header and a 64 MiB JSON
+message by default, with a 64 KiB header ceiling and a 256 MiB combined
+wire-buffer ceiling even for programmatic overrides. Missing, invalid,
+duplicate, unsafe, or oversized `Content-Length` framing kills that transport
+once, clears its retained bytes, and fails all outstanding semantic/readiness
+work so the normal worker or graph/source fallback can take over.
 
 Use `declaredCouplings` for files that intentionally form one maintenance unit.
 These pairs are treated as structurally linked by `co-change` and health, while

@@ -545,6 +545,22 @@ drain, state decoding, and second-service reuse.
 
 **Acceptance condition:** rust-analyzer output has a hard memory bound independent of the bytes the child attempts to send.
 
+**Resolution:** Slice 05 replaces repeated unbounded concatenation with a
+two-phase fixed-capacity accumulator. It retains at most one 16 KiB header and
+one declared 64 MiB message by default; constructor overrides are positive safe
+integers and cannot exceed a 64 KiB header or 256 MiB combined wire-buffer
+ceiling. The decoder accepts exactly one non-negative safe-integer
+`Content-Length`, rejects duplicate or conflicting fields before body
+allocation, and rejects declared bodies above the configured limit. Any
+framing or JSON-object failure clears both phases, kills the transport once,
+rejects pending requests and readiness waiters, resolves diagnostic waiters as
+unavailable, and makes later requests fail without another write. Tests cover
+unterminated headers, body declarations, negative/non-numeric/duplicate/
+conflicting/unsafe lengths, invalid JSON, exact header and body boundaries,
+multiple frames split one byte at a time, sticky rejection, waiter drainage,
+and one-shot termination. The complete 163-test Rust semantic suite remains
+green across batch, durable-session, mapping, cache, and provider consumers.
+
 ### RES-04 — S3 — Verified binary downloads have no deadline, byte ceiling, or collision-safe staging owner
 
 **Evidence:** source-confirmed hostile-network and concurrent-call path.

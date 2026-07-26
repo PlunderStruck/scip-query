@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  ABSOLUTE_RUST_ANALYZER_LSP_BUFFER_BYTES,
+  ABSOLUTE_RUST_ANALYZER_LSP_MAX_HEADER_BYTES,
+  DEFAULT_RUST_ANALYZER_LSP_MAX_HEADER_BYTES,
+  DEFAULT_RUST_ANALYZER_LSP_MAX_MESSAGE_BYTES,
   RustAnalyzerLspClient,
+  RustAnalyzerProtocolError,
   RustAnalyzerReadinessError,
+  rustAnalyzerLspFrameLimits,
   rustAnalyzerOperationBudget,
   type LspJsonMessage,
   type RustAnalyzerTransport,
@@ -12,7 +18,7 @@ class ScriptedTransport implements RustAnalyzerTransport {
   private readonly dataListeners: Array<(chunk: Buffer) => void> = [];
   private readonly closeListeners: Array<(code: number | null, signal: NodeJS.Signals | null) => void> = [];
   private readonly errorListeners: Array<(error: Error) => void> = [];
-  private killed = false;
+  private killCalls = 0;
 
   constructor(private readonly respond: (message: LspJsonMessage, transport: ScriptedTransport) => void) {}
 
@@ -36,17 +42,24 @@ class ScriptedTransport implements RustAnalyzerTransport {
   }
 
   kill(): void {
-    this.killed = true;
+    this.killCalls += 1;
   }
 
   isKilled(): boolean {
-    return this.killed;
+    return this.killCalls > 0;
+  }
+
+  killCount(): number {
+    return this.killCalls;
   }
 
   send(message: LspJsonMessage): void {
-    const json = JSON.stringify(message);
-    const frame = `Content-Length: ${Buffer.byteLength(json, 'utf8')}\r\n\r\n${json}`;
-    this.dataListeners.forEach((listener) => listener(Buffer.from(frame)));
+    this.sendRaw(frameMessage(message));
+  }
+
+  sendRaw(payload: string | Buffer): void {
+    const chunk = Buffer.isBuffer(payload) ? payload : Buffer.from(payload);
+    this.dataListeners.forEach((listener) => listener(chunk));
   }
 
   close(code: number | null = 0, signal: NodeJS.Signals | null = null): void {
@@ -76,6 +89,11 @@ function decodeFramedMessages(payload: string): LspJsonMessage[] {
   return messages;
 }
 
+function frameMessage(message: LspJsonMessage): Buffer {
+  const json = JSON.stringify(message);
+  return Buffer.from(`Content-Length: ${Buffer.byteLength(json, 'utf8')}\r\n\r\n${json}`);
+}
+
 describe('RustAnalyzerLspClient', () => {
   it('caps an operation timeout to the remaining absolute deadline', () => {
     expect(rustAnalyzerOperationBudget(500, 1_250, () => 1_000)).toEqual({
@@ -87,6 +105,184 @@ describe('RustAnalyzerLspClient', () => {
       deadlineLimited: false,
     });
     expect(() => rustAnalyzerOperationBudget(100, 1_000, () => 1_000)).toThrow(RustAnalyzerReadinessError);
+  });
+
+  it('uses conservative defaults and rejects configured frame limits above the absolute memory ceiling', () => {
+    expect(rustAnalyzerLspFrameLimits()).toEqual({
+      maxHeaderBytes: DEFAULT_RUST_ANALYZER_LSP_MAX_HEADER_BYTES,
+      maxMessageBytes: DEFAULT_RUST_ANALYZER_LSP_MAX_MESSAGE_BYTES,
+    });
+    expect(() => rustAnalyzerLspFrameLimits(ABSOLUTE_RUST_ANALYZER_LSP_MAX_HEADER_BYTES + 1, 1)).toThrow(
+      /maxHeaderBytes cannot exceed/,
+    );
+    expect(() => rustAnalyzerLspFrameLimits(1, ABSOLUTE_RUST_ANALYZER_LSP_BUFFER_BYTES)).toThrow(
+      /Combined rust-analyzer LSP header and message limits cannot exceed/,
+    );
+    expect(() => rustAnalyzerLspFrameLimits(0, 1)).toThrow(/positive safe integer/);
+  });
+
+  it('kills once and rejects a pending request when an unterminated header exceeds its bound', async () => {
+    const transport = new ScriptedTransport(() => undefined);
+    const client = new RustAnalyzerLspClient(transport, {
+      requestTimeoutMs: 1_000,
+      maxHeaderBytes: 32,
+      maxMessageBytes: 1_024,
+    });
+    const initialization = client.initialize({ rootUri: 'file:///repo' });
+    const rejection = expect(initialization).rejects.toThrow(/header exceeded 32 byte limit/);
+
+    transport.sendRaw('x'.repeat(37));
+    await rejection;
+    transport.sendRaw('ignored after failure');
+    transport.error(new Error('late transport error'));
+    transport.close(1);
+
+    expect(transport.killCount()).toBe(1);
+  });
+
+  it('rejects an oversized declared body before allocating or reading it', async () => {
+    const transport = new ScriptedTransport(() => undefined);
+    const client = new RustAnalyzerLspClient(transport, {
+      requestTimeoutMs: 1_000,
+      maxHeaderBytes: 128,
+      maxMessageBytes: 64,
+    });
+    const initialization = client.initialize({ rootUri: 'file:///repo' });
+    const rejection = expect(initialization).rejects.toThrow(/exceeds 64 byte message limit/);
+
+    transport.sendRaw('Content-Length: 65\r\n\r\n');
+
+    await rejection;
+    expect(transport.killCount()).toBe(1);
+  });
+
+  it.each([
+    {
+      label: 'missing length',
+      frame: 'Content-Type: application/json\r\n\r\n',
+      message: /missing Content-Length/,
+    },
+    {
+      label: 'negative length',
+      frame: 'Content-Length: -1\r\n\r\n',
+      message: /non-negative safe integer/,
+    },
+    {
+      label: 'non-numeric length',
+      frame: 'Content-Length: nope\r\n\r\n',
+      message: /non-negative safe integer/,
+    },
+    {
+      label: 'duplicate length',
+      frame: 'Content-Length: 2\r\nContent-Length: 2\r\n\r\n{}',
+      message: /duplicate Content-Length/,
+    },
+    {
+      label: 'conflicting duplicate length',
+      frame: 'Content-Length: 2\r\nContent-Length: 3\r\n\r\n{}',
+      message: /conflicting Content-Length/,
+    },
+    {
+      label: 'unsafe-integer length',
+      frame: 'Content-Length: 9007199254740992\r\n\r\n',
+      message: /non-negative safe integer/,
+    },
+    {
+      label: 'invalid JSON body',
+      frame: 'Content-Length: 1\r\n\r\n{',
+      message: /body was not a valid JSON object/,
+    },
+  ])('fails closed on $label', async ({ frame, message }) => {
+    const transport = new ScriptedTransport(() => undefined);
+    const client = new RustAnalyzerLspClient(transport, {
+      requestTimeoutMs: 1_000,
+      maxHeaderBytes: 128,
+      maxMessageBytes: 1_024,
+    });
+    const initialization = client.initialize({ rootUri: 'file:///repo' });
+    const errorPromise = initialization.catch((error: unknown) => error);
+
+    transport.sendRaw(frame);
+    const error = await errorPromise;
+
+    expect(error).toBeInstanceOf(RustAnalyzerProtocolError);
+    expect(error).toMatchObject({ message: expect.stringMatching(message) });
+    expect(transport.killCount()).toBe(1);
+  });
+
+  it('accepts exact-boundary frames, multiple frames, and every possible one-byte split', async () => {
+    const transport = new ScriptedTransport(() => undefined);
+    const status: LspJsonMessage = {
+      jsonrpc: '2.0',
+      method: 'experimental/serverStatus',
+      params: { health: 'ok', quiescent: true, message: 'ready' },
+    };
+    const response: LspJsonMessage = {
+      jsonrpc: '2.0',
+      id: 1,
+      result: { capabilities: { referencesProvider: true } },
+    };
+    const frames = [frameMessage(status), frameMessage(response)];
+    const bodyLengths = [status, response].map((message) => Buffer.byteLength(JSON.stringify(message), 'utf8'));
+    const headerLengths = bodyLengths.map((length) => Buffer.byteLength(`Content-Length: ${length}`, 'ascii'));
+    const client = new RustAnalyzerLspClient(transport, {
+      requestTimeoutMs: 1_000,
+      maxHeaderBytes: Math.max(...headerLengths),
+      maxMessageBytes: Math.max(...bodyLengths),
+    });
+    const initialization = client.initialize({ rootUri: 'file:///repo' });
+    const combined = Buffer.concat(frames);
+
+    for (let offset = 0; offset < combined.length; offset += 1) {
+      transport.sendRaw(combined.subarray(offset, offset + 1));
+    }
+
+    await expect(initialization).resolves.toEqual({ capabilities: { referencesProvider: true } });
+    expect(client.serverStatusGeneration()).toBe(1);
+    expect(client.serverStatusSnapshot()?.status).toEqual({ health: 'ok', quiescent: true, message: 'ready' });
+    expect(transport.killCount()).toBe(0);
+  });
+
+  it('makes protocol failure sticky and drains request, readiness, and diagnostic waiters', async () => {
+    vi.useFakeTimers();
+    try {
+      const { client, transport } = await createIdleClient(1_000);
+      const references = client
+        .references({
+          textDocument: { uri: 'file:///repo/src/lib.rs' },
+          position: { line: 1, character: 7 },
+          context: { includeDeclaration: false },
+        })
+        .catch((error: unknown) => error);
+      const readiness = client
+        .waitForQuiescence(client.serverStatusGeneration(), 2_000)
+        .catch((error: unknown) => error);
+      const diagnostics = client.waitForDiagnostics('file:///repo/src/lib.rs', 3_000);
+      const writesBeforeFailure = transport.writes.length;
+
+      transport.sendRaw('Content-Length: nope\r\n\r\n');
+
+      const [requestError, readinessError, diagnosticResult] = await Promise.all([references, readiness, diagnostics]);
+      expect(requestError).toBeInstanceOf(RustAnalyzerProtocolError);
+      expect(readinessError).toBe(requestError);
+      expect(diagnosticResult).toBe(false);
+      await expect(
+        client.hover({
+          textDocument: { uri: 'file:///repo/src/lib.rs' },
+          position: { line: 1, character: 7 },
+        }),
+      ).rejects.toBe(requestError);
+      expect(transport.writes).toHaveLength(writesBeforeFailure);
+      expect(transport.killCount()).toBe(1);
+      expect(vi.getTimerCount()).toBe(0);
+
+      transport.sendRaw('Content-Length: nope\r\n\r\n');
+      transport.error(new Error('late transport error'));
+      transport.close(1);
+      expect(transport.killCount()).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('initializes, ignores notifications, requests references, and shuts down', async () => {

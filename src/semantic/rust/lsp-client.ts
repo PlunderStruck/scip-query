@@ -39,6 +39,8 @@ export interface RustAnalyzerTransport {
 export interface RustAnalyzerLspClientOptions {
   requestTimeoutMs?: number;
   configuration?: Record<string, unknown>;
+  maxHeaderBytes?: number;
+  maxMessageBytes?: number;
 }
 
 export interface RustAnalyzerRequestOptions {
@@ -64,6 +66,8 @@ interface RustAnalyzerServerStatusPayload {
 }
 
 export class RustAnalyzerReadinessError extends Error {}
+
+export class RustAnalyzerProtocolError extends Error {}
 
 class RustAnalyzerResponseError extends Error {
   constructor(
@@ -91,16 +95,28 @@ interface ReadinessWaiter {
 }
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+export const DEFAULT_RUST_ANALYZER_LSP_MAX_HEADER_BYTES = 16 * 1024;
+export const DEFAULT_RUST_ANALYZER_LSP_MAX_MESSAGE_BYTES = 64 * 1024 * 1024;
+export const ABSOLUTE_RUST_ANALYZER_LSP_MAX_HEADER_BYTES = 64 * 1024;
+export const ABSOLUTE_RUST_ANALYZER_LSP_BUFFER_BYTES = 256 * 1024 * 1024;
+const LSP_HEADER_DELIMITER = Buffer.from('\r\n\r\n', 'ascii');
 
 export class RustAnalyzerLspClient {
   private nextId = 1;
-  private buffer = Buffer.alloc(0);
   private readonly pending = new Map<number | string, PendingRequest>();
   private readonly diagnosedUris = new Set<string>();
   private readonly diagnosticWaiters = new Map<string, Array<(value: boolean) => void>>();
   private readonly readinessWaiters = new Set<ReadinessWaiter>();
   private readonly requestTimeoutMs: number;
   private readonly configuration: Record<string, unknown>;
+  private readonly maxHeaderBytes: number;
+  private readonly maxMessageBytes: number;
+  private readonly headerBuffer: Buffer;
+  private headerLength = 0;
+  private bodyBuffer: Buffer | null = null;
+  private bodyLength = 0;
+  private transportFailure: Error | null = null;
+  private transportKilled = false;
   private currentServerStatusGeneration = 0;
   private latestServerStatus: { generation: number; status: RustAnalyzerServerStatus } | null = null;
   private shutdownStarted = false;
@@ -111,9 +127,13 @@ export class RustAnalyzerLspClient {
   ) {
     this.requestTimeoutMs = opts.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this.configuration = opts.configuration ?? {};
+    const limits = rustAnalyzerLspFrameLimits(opts.maxHeaderBytes, opts.maxMessageBytes);
+    this.maxHeaderBytes = limits.maxHeaderBytes;
+    this.maxMessageBytes = limits.maxMessageBytes;
+    this.headerBuffer = Buffer.allocUnsafe(this.maxHeaderBytes + LSP_HEADER_DELIMITER.length);
     this.transport.onData((chunk) => this.handleData(chunk));
-    this.transport.onClose((code, signal) => this.rejectPending(new Error(closeMessage(code, signal))));
-    this.transport.onError((error) => this.rejectPending(error));
+    this.transport.onClose((code, signal) => this.failTransport(new Error(closeMessage(code, signal)), false));
+    this.transport.onError((error) => this.failTransport(error, true));
   }
 
   async initialize(params: LspInitializeParams, opts: RustAnalyzerRequestOptions = {}): Promise<LspInitializeResult> {
@@ -203,6 +223,7 @@ export class RustAnalyzerLspClient {
   }
 
   waitForQuiescence(afterGeneration: number, timeoutMs: number): Promise<RustAnalyzerServerStatus> {
+    if (this.transportFailure) return Promise.reject(this.transportFailure);
     const latest = this.latestServerStatus;
     if (latest && latest.generation > afterGeneration) {
       if (latest.status.health === 'error') {
@@ -229,6 +250,7 @@ export class RustAnalyzerLspClient {
   }
 
   waitForDiagnostics(uri: string, timeoutMs: number): Promise<boolean> {
+    if (this.transportFailure) return Promise.resolve(false);
     if (this.diagnosedUris.has(uri)) return Promise.resolve(true);
     return new Promise((resolve) => {
       const wrappedResolve = (value: boolean): void => {
@@ -255,13 +277,14 @@ export class RustAnalyzerLspClient {
       this.notify('exit', null);
     } catch (error) {
       this.notify('exit', null);
-      this.transport.kill();
+      this.killTransportOnce();
       throw error;
     }
   }
 
   // scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
   private request<T>(method: string, params: unknown, opts: RustAnalyzerRequestOptions = {}): Promise<T> {
+    if (this.transportFailure) return Promise.reject(this.transportFailure);
     const budget = rustAnalyzerOperationBudget(opts.timeoutMs ?? this.requestTimeoutMs, opts.deadlineMs);
     const id = this.nextId++;
     const message: LspJsonMessage = { jsonrpc: '2.0', id, method, params };
@@ -286,31 +309,94 @@ export class RustAnalyzerLspClient {
   }
 
   private notify(method: string, params: unknown): void {
+    if (this.transportFailure) return;
     this.transport.write(frameJsonMessage({ jsonrpc: '2.0', method, params }));
   }
 
   private handleData(chunk: Buffer): void {
-    this.buffer = Buffer.concat([this.buffer, chunk]);
-    while (true) {
-      const headerEnd = this.buffer.indexOf('\r\n\r\n');
-      if (headerEnd < 0) return;
-
-      const header = this.buffer.subarray(0, headerEnd).toString('ascii');
-      const lengthMatch = /(?:^|\r\n)Content-Length:\s*(\d+)/i.exec(header);
-      if (!lengthMatch) {
-        this.rejectPending(new Error('rust-analyzer LSP response missing Content-Length header'));
-        return;
+    if (this.transportFailure || chunk.length === 0) return;
+    let offset = 0;
+    while (offset < chunk.length && !this.transportFailure) {
+      if (this.bodyBuffer) {
+        const copyLength = Math.min(chunk.length - offset, this.bodyBuffer.length - this.bodyLength);
+        chunk.copy(this.bodyBuffer, this.bodyLength, offset, offset + copyLength);
+        offset += copyLength;
+        this.bodyLength += copyLength;
+        if (this.bodyLength === this.bodyBuffer.length) {
+          const body = this.bodyBuffer.toString('utf8');
+          this.bodyBuffer = null;
+          this.bodyLength = 0;
+          let message: LspJsonMessage;
+          try {
+            message = parseJsonMessage(body);
+          } catch {
+            this.failProtocol('rust-analyzer LSP response body was not a valid JSON object');
+            continue;
+          }
+          try {
+            this.dispatchMessage(message);
+          } catch {
+            this.failTransport(new Error('rust-analyzer LSP message handling failed'), true);
+          }
+        }
+        continue;
       }
 
-      const contentLength = Number(lengthMatch[1]);
-      const bodyStart = headerEnd + 4;
-      const bodyEnd = bodyStart + contentLength;
-      if (this.buffer.length < bodyEnd) return;
+      if (this.headerLength === this.headerBuffer.length) {
+        this.failProtocol(`rust-analyzer LSP header exceeded ${this.maxHeaderBytes} byte limit`);
+        return;
+      }
+      this.headerBuffer[this.headerLength++] = chunk[offset++]!;
+      if (!this.headerDelimiterComplete()) continue;
 
-      const body = this.buffer.subarray(bodyStart, bodyEnd).toString('utf8');
-      this.buffer = this.buffer.subarray(bodyEnd);
-      this.dispatchMessage(parseJsonMessage(body));
+      const headerLength = this.headerLength - LSP_HEADER_DELIMITER.length;
+      if (headerLength > this.maxHeaderBytes) {
+        this.failProtocol(`rust-analyzer LSP header exceeded ${this.maxHeaderBytes} byte limit`);
+        return;
+      }
+      const header = this.headerBuffer.subarray(0, headerLength).toString('ascii');
+      this.headerLength = 0;
+      let contentLength: number;
+      try {
+        contentLength = parseContentLength(header, this.maxMessageBytes);
+      } catch (error) {
+        this.failProtocol(error instanceof Error ? error.message : String(error));
+        return;
+      }
+      this.bodyBuffer = Buffer.allocUnsafe(contentLength);
+      this.bodyLength = 0;
+      if (contentLength === 0) {
+        this.bodyBuffer = null;
+        this.failProtocol('rust-analyzer LSP response body was not a valid JSON object');
+      }
     }
+  }
+
+  private headerDelimiterComplete(): boolean {
+    if (this.headerLength < LSP_HEADER_DELIMITER.length) return false;
+    const start = this.headerLength - LSP_HEADER_DELIMITER.length;
+    return this.headerBuffer.subarray(start, this.headerLength).equals(LSP_HEADER_DELIMITER);
+  }
+
+  private failProtocol(message: string): void {
+    this.failTransport(new RustAnalyzerProtocolError(message), true);
+  }
+
+  private failTransport(error: Error, kill: boolean): void {
+    if (this.transportFailure) return;
+    this.transportFailure = error;
+    this.headerLength = 0;
+    this.bodyBuffer = null;
+    this.bodyLength = 0;
+    if (kill) this.killTransportOnce();
+    this.rejectPending(error);
+    this.resolveDiagnosticWaiters(false);
+  }
+
+  private killTransportOnce(): void {
+    if (this.transportKilled) return;
+    this.transportKilled = true;
+    this.transport.kill();
   }
 
   // scip-query: ignore-extract — reviewed E3 feature-local pipeline; the helper cluster has no separate owner or consumer.
@@ -410,6 +496,13 @@ export class RustAnalyzerLspClient {
     this.rejectReadinessWaiters(error);
   }
 
+  private resolveDiagnosticWaiters(value: boolean): void {
+    for (const waiters of this.diagnosticWaiters.values()) {
+      waiters.forEach((resolve) => resolve(value));
+    }
+    this.diagnosticWaiters.clear();
+  }
+
   private rejectReadinessWaiters(error: Error): void {
     for (const waiter of this.readinessWaiters) {
       clearTimeout(waiter.timeout);
@@ -417,6 +510,62 @@ export class RustAnalyzerLspClient {
       this.readinessWaiters.delete(waiter);
     }
   }
+}
+
+export function rustAnalyzerLspFrameLimits(
+  maxHeaderBytes = DEFAULT_RUST_ANALYZER_LSP_MAX_HEADER_BYTES,
+  maxMessageBytes = DEFAULT_RUST_ANALYZER_LSP_MAX_MESSAGE_BYTES,
+): { maxHeaderBytes: number; maxMessageBytes: number } {
+  if (!Number.isSafeInteger(maxHeaderBytes) || maxHeaderBytes <= 0) {
+    throw new TypeError('maxHeaderBytes must be a positive safe integer.');
+  }
+  if (!Number.isSafeInteger(maxMessageBytes) || maxMessageBytes <= 0) {
+    throw new TypeError('maxMessageBytes must be a positive safe integer.');
+  }
+  if (maxHeaderBytes > ABSOLUTE_RUST_ANALYZER_LSP_MAX_HEADER_BYTES) {
+    throw new RangeError(
+      `maxHeaderBytes cannot exceed ${ABSOLUTE_RUST_ANALYZER_LSP_MAX_HEADER_BYTES} bytes for rust-analyzer LSP.`,
+    );
+  }
+  if (maxHeaderBytes + LSP_HEADER_DELIMITER.length + maxMessageBytes > ABSOLUTE_RUST_ANALYZER_LSP_BUFFER_BYTES) {
+    throw new RangeError(
+      `Combined rust-analyzer LSP header and message limits cannot exceed ${ABSOLUTE_RUST_ANALYZER_LSP_BUFFER_BYTES} bytes.`,
+    );
+  }
+  return { maxHeaderBytes, maxMessageBytes };
+}
+
+function parseContentLength(header: string, maxMessageBytes: number): number {
+  const values: string[] = [];
+  for (const line of header.split('\r\n')) {
+    const colon = line.indexOf(':');
+    if (colon < 0 || line.slice(0, colon).trim().toLowerCase() !== 'content-length') continue;
+    values.push(line.slice(colon + 1).trim());
+  }
+  if (values.length === 0) {
+    throw new RustAnalyzerProtocolError('rust-analyzer LSP response missing Content-Length header');
+  }
+  if (values.length > 1) {
+    const message =
+      new Set(values).size > 1
+        ? 'rust-analyzer LSP response has conflicting Content-Length headers'
+        : 'rust-analyzer LSP response has duplicate Content-Length headers';
+    throw new RustAnalyzerProtocolError(message);
+  }
+  const raw = values[0]!;
+  if (!/^\d+$/.test(raw)) {
+    throw new RustAnalyzerProtocolError('rust-analyzer LSP Content-Length must be a non-negative safe integer');
+  }
+  const contentLength = Number(raw);
+  if (!Number.isSafeInteger(contentLength)) {
+    throw new RustAnalyzerProtocolError('rust-analyzer LSP Content-Length must be a non-negative safe integer');
+  }
+  if (contentLength > maxMessageBytes) {
+    throw new RustAnalyzerProtocolError(
+      `rust-analyzer LSP Content-Length exceeds ${maxMessageBytes} byte message limit`,
+    );
+  }
+  return contentLength;
 }
 
 export function rustAnalyzerOperationBudget(

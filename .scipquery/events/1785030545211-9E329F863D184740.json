@@ -1,0 +1,9 @@
+{
+  "ts": 1785030545211,
+  "check": "echo",
+  "findingId": "SQECF5E8BA74A5",
+  "event": "caught",
+  "commit": "7eaab92ead9211291a8f1acd65a48c93265e84de",
+  "comparisonBaseCommit": "7eaab92ead9211291a8f1acd65a48c93265e84de",
+  "symbol": "scip-typescript npm scip-query 0.19.5 src/semantic/rust/`lsp-client.ts`/validateSafePositiveInteger()."
+}
