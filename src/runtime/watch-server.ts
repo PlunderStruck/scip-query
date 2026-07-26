@@ -51,7 +51,12 @@ import { maintainBoundedMailbox } from '../storage/bounded-mailbox.js';
 const HEARTBEAT_INTERVAL_MS = 1_000;
 const ACTIVITY_POLL_INTERVAL_MS = 250;
 const MAILBOX_MAINTENANCE_INTERVAL_MS = 60_000;
-const SERVICE_LOOP_INTERVAL_MS = 10;
+const BUSY_SERVICE_LOOP_INTERVAL_MS = 10;
+const IDLE_SERVICE_LOOP_INTERVAL_MS = 50;
+
+export function watchServiceLoopDelayMs(processedRequests: number): number {
+  return processedRequests > 0 ? BUSY_SERVICE_LOOP_INTERVAL_MS : IDLE_SERVICE_LOOP_INTERVAL_MS;
+}
 
 export function startupRefreshTrigger(state: IndexFreshnessState): RefreshTrigger | null {
   return state === 'fresh' ? null : { kind: 'watch-startup', detail: `index ${state} when watch service started` };
@@ -276,7 +281,7 @@ export async function runWatchServiceServer(
       ) {
         break;
       }
-      await sleep(SERVICE_LOOP_INTERVAL_MS);
+      await sleep(watchServiceLoopDelayMs(semanticRequests + indexRequests));
     }
   } catch (error) {
     executionFailed = true;
