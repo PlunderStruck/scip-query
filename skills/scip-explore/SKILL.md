@@ -1,121 +1,71 @@
 ---
 name: scip-explore
-description: Explain how code works, where a feature is implemented, what calls or consumes it, how data flows, or what a change could affect. Uses scip-query to explore an unfamiliar system before answering or editing.
-commands:
-  - template: 'scip-query stats'
-    when: 'Orient: repo-wide size and shape before naming a scope.'
-  - template: 'scip-query system <module-or-scope>'
-    when: 'Orient: map files, symbols, deps in/out for the scope.'
-  - template: 'scip-query trace <entry-symbol>'
-    when: 'Trace entry points: definition plus every reference.'
-  - template: 'scip-query call-graph <entry-symbol>'
-    when: 'Trace entry points: callers and callees for the path.'
-  - template: 'scip-query dataflow <symbol-or-variable>'
-    when: 'Follow data and state through producers and consumers.'
-  - template: 'scip-query affected <symbol> --json'
-    when: 'Map dependencies and consumers: downstream blast radius.'
+description: Use to understand a system before editing it: what calls what, how data flows, what depends on it, what a change would reach, and what historically changed together. Includes choosing high-signal commands for an unfamiliar language and rendering the result as a flow, dependency, or blast-radius diagram. For understanding a failure mode class rather than this codebase, use `engineering-lenses`.
 ---
 
-# scip-explore
+## Purpose
 
-Use this skill to produce verified understanding. Exploration is the evidence pass that traces code from entry points to effects using the SCIP index rather than memory or folder guesses.
+Build verified understanding of how a system works end to end — entry points, call flow, data flow, dependencies, consumers, and risk — before answering or editing. Exploration means tracing code from entry points to effects against the SCIP index, not against memory or folder guesses. Load shared mechanics from `../_shared/SKILL.md`; use this skill's own shortlist first and open `_shared` only when it is insufficient.
 
-Load shared mechanics from [`../_shared/SKILL.md`](../_shared/SKILL.md).
+## Evidence rules (apply to every step below)
 
-<!-- BEGIN GENERATED SKILL COMMANDS -->
-## Commands for this skill
+- Use a current index before trusting graph facts: check `scip-query status --capabilities` freshness (`_shared` has the exact command); reindex if it reports `stale`, `missing`, or `unknown`.
+- Relationship, consumer, and completeness claims must cite a `scip-query` command. Literal local-source claims may cite a native file read instead.
+- Resolve ambiguous symbols before describing behavior — `scip-query code` is the usual tool, but it isn't mandatory when you already have an exact native range.
+- Follow the graph before trusting folder structure. Start wide, then narrow.
+- Descriptions need citations; conclusions need discriminators. A conclusion — why something happens, what a unit is for, which intent explains a shape — must state one rival explanation and the trace evidence that ruled it out.
 
-| Command | Purpose | Returns | Coverage | When |
-| --- | --- | --- | --- | --- |
-| `scip-query stats` | Show index statistics | document, symbol, definition, reference, size, and build-time totals | `complete` | Orient: repo-wide size and shape before naming a scope. |
-| `scip-query system <module-or-scope>` | Full module map: files, symbols, deps in/out | module file paths; exported symbols with line ranges; internal dependencies; reverse dependencies | `complete` | Orient: map files, symbols, deps in/out for the scope. |
-| `scip-query trace <entry-symbol>` | Trace a symbol: definition + all references | definition sites with source and signature; referencing files with line numbers | `bounded` | Trace entry points: definition plus every reference. |
-| `scip-query call-graph <entry-symbol>` | Show incoming callers and outgoing callees for a symbol | caller and callee symbol identities with files | `bounded` | Trace entry points: callers and callees for the path. |
-| `scip-query dataflow <symbol-or-variable>` | Reference-level dataflow: definition sites, usage sites, producers, consumers | definition sites, usage sites, producer symbols, and consumer symbols | `bounded` | Follow data and state through producers and consumers. |
-| `scip-query affected <symbol> --json` | Transitive closure of symbols that could break if this symbol changes | affected symbol identities, files, and traversal depths | `bounded` | Map dependencies and consumers: downstream blast radius. |
+Each `scip-query` command below carries a coverage rating: **complete** (exhaustive) or **bounded** (capped — a follow-up command may be needed to fill in the picture).
 
-Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
-<!-- END GENERATED SKILL COMMANDS -->
+## The core workflow
 
-## Rules
+Run these five steps in order. Skip a step only when its evidence is already in hand from an earlier step.
 
-1. Use a current index before trusting graph facts.
-2. Relationship, consumer, and completeness claims cite scip-query; literal local-source claims may cite a native file read.
-3. Resolve ambiguous symbols before describing behavior. `scip-query code` is useful but not mandatory when an exact native range is already known.
-4. Follow the graph before trusting folder structure.
-5. Start wide, then narrow.
-6. Descriptions need citations; conclusions need discriminators. A conclusion — why something happens, what a unit is for, which intent explains a shape — states one rival explanation and the trace evidence that rules it out.
+**1. Orient.** Run `stats` (repo-wide size/shape, complete), `kind-counts`, `system <module-or-scope>` (file paths, exported symbols with line ranges, internal/reverse deps, complete), `outline <entry-file>`, and `by-kind function --scope <scope>`.
+Done when: module files, key symbols, dependencies, and reverse dependencies are mapped.
 
-## Workflow
+**2. Trace entry points.** Run `trace <entry-symbol>` (definition + every reference, bounded), `call-graph <entry-symbol>` (incoming callers, outgoing callees, bounded), `code <entry-symbol>`, `dataflow <entry-symbol>` — repeat for important callees until the path reaches a side effect, a returned value, or a terminal output.
+Done when: the traced path connects entry point to observable effect.
 
-### 1. Orient
+**3. Map dependencies and consumers.** Run `deps <file>`, `rdeps <file>`, `fan-out <file>`, `surface <module>`, `affected <symbol> --json` (transitive closure of symbols that could break if this symbol changes: identities, files, traversal depths, bounded).
+Done when: direct dependencies, public surface, and downstream blast radius are named.
 
-```bash
-scip-query stats
-scip-query kind-counts
-scip-query system <module-or-scope>
-scip-query outline <entry-file>
-scip-query by-kind function --scope <scope>
-```
+**4. Follow data and state.** Run `dataflow <symbol-or-variable>` (definition sites, usage sites, producers, consumers, bounded), `slice <symbol-or-variable>`, `slice <symbol-or-variable> --forward`.
+Done when: producers, transformations, storage, and consumers are identified — or explicitly marked unavailable.
 
-This step is complete only when the module files, key symbols, dependencies, and reverse dependencies are mapped.
+**5. Assess risk.** Run `complexity <symbol>`, `complexity-hotspots`, `bottlenecks`, `change-surface <file>` (pre-change briefing: exports, consumers, blast-radius risk), `cycles`, `deep-chains --min-depth 5` (longest condensed dependency-component chains — flags fragile long call paths).
+Done when: the explanation names the risky symbols, or states that no relevant risks appeared.
 
-### 2. Trace entry points
+## Route by question type
 
-```bash
-scip-query trace <entry-symbol>
-scip-query call-graph <entry-symbol>
-scip-query code <entry-symbol>
-scip-query dataflow <entry-symbol>
-```
+| Question | Commands |
+|---|---|
+| Function behavior | `code`, `hierarchy`, `call-graph`, `dataflow`, `complexity` |
+| User-action flow | `files` or `outline` to find the handler, then `code` and `call-graph` down the path |
+| Safe to change? | `change-surface`, `affected`, `similar` |
+| Module architecture | `system`, `surface`, `deep-chains`, `bottlenecks`, `cycles`, `hotspots` (`hotspots` lists the most-referenced symbols — choke points where any change ripples widely) |
+| Relationship between two units | `coupling`, `similar --plan`, `similar-chains` |
 
-Repeat for important callees until the path reaches side effects, returned values, or terminal outputs.
+## Other owned commands
 
-This step is complete only when the explored path connects entry point to observable effect.
+These four don't have a dedicated workflow step above but come up constantly once you're inside a module — use them as needed, not in sequence:
 
-### 3. Map dependencies and consumers
+- **`imported-by <symbol>`** — which files import this symbol. Run before changing or removing a shared export, to know exactly which files to check. If the list is empty, confirm with `dead` before deleting rather than trusting the empty result alone.
+- **`unused-imports <file>`** — imports not referenced in that same file. Run on a file you're about to touch, or one a de-bloat pass flagged; remove only entries you've confirmed are safe.
+- **`similar-signatures`** — functions with near-identical type signatures. Run when hunting duplicate-shaped functions to consolidate. This is a *good-with-review* signal — check each match with `code` before merging, don't act on the list alone.
+- **`co-change [file]`** — files that change together in git history with no dependency edge between them: hidden coupling. Run when `change-surface` or `affected` reports a small blast radius but you suspect the graph is missing something. This is also *good-with-review* — a paired file is a prompt to check manually, not proof the current change must touch it too. (`diff-gate`'s `co-change-partner` check is the automated version of this same signal.)
 
-```bash
-scip-query deps <file>
-scip-query rdeps <file>
-scip-query fan-out <file>
-scip-query surface <module>
-scip-query affected <symbol>
-```
+## Report the exploration
 
-This step is complete only when direct dependencies, public surface, and downstream blast radius are named.
+Cover: overview, entry points, call flow, data flow, dependencies, consumers, risk areas, and the command citation that proves each claim. For every conclusion-bearing claim, name the rival explanation you considered and the evidence that ruled it out. Exploration is complete only when the reader can see what was proven, what remains unverified, and which conclusions rest on a discriminator rather than a single story.
 
-### 4. Follow data and state
+## Deeper references
 
-```bash
-scip-query dataflow <symbol-or-variable>
-scip-query slice <symbol-or-variable>
-scip-query slice <symbol-or-variable> --forward
-```
+| Need | Reference |
+|---|---|
+| Entering an unfamiliar language (TypeScript, Python, Java, Scala, Kotlin, Rust, Go, C, C++, Ruby, C#, Visual Basic, Dart, PHP, Clojure/ClojureScript, Vue) and picking the highest-signal commands, including de-bloat sets | `references/language-playbook.md` |
+| Turning exploration evidence into an HTML flow, dependency, data-flow, or blast-radius diagram | `references/diagrams.md` |
 
-This step is complete only when producers, transformations, storage, and consumers are identified or marked unavailable.
+## Constraint
 
-### 5. Assess risk
-
-```bash
-scip-query complexity <symbol>
-scip-query complexity-hotspots
-scip-query bottlenecks
-scip-query change-surface <file>
-scip-query cycles
-scip-query deep-chains --min-depth 5
-```
-
-This step is complete only when the explanation includes the risky symbols or states that no relevant risks appeared.
-
-## Question Recipes
-
-- Function behavior: `code`, `hierarchy`, `call-graph`, `dataflow`, `complexity`.
-- User action flow: `files` or `outline` for the handler, then `code` and `call-graph` down the path.
-- Safety to change: `change-surface`, `affected`, `similar`.
-- Module architecture: `system`, `surface`, `deep-chains`, `bottlenecks`, `cycles`, `hotspots`.
-- Relationship between units: `coupling`, `similar --plan`, `similar-chains`.
-
-## Report
-
-Report overview, entry points, call flow, data flow, dependencies, consumers, risk areas, and the command citations that prove each claim. For each conclusion-bearing claim, name the rival explanation considered and the evidence that ruled it out. Exploration is complete only when the user can see what was proven, what remains unverified, and which conclusions rest on a discriminator rather than a single story.
+scip-explore's OpenAI-agent interface binds to display name "SCIP Explore" with default prompt "Use $scip-explore to understand this system end to end with SCIP-backed code evidence."

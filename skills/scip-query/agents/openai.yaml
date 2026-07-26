@@ -1,4 +1,4 @@
 interface:
   display_name: "SCIP Query Router"
-  short_description: "Route codebase work to SCIP skills"
-  default_prompt: "Use $scip-query to choose the right SCIP-backed workflow for this codebase task."
+  short_description: "Route a codebase task to the right SCIP skill"
+  default_prompt: "Use $scip-query first to pick the right SCIP-backed skill for this task before doing anything else."

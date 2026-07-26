@@ -1,240 +1,97 @@
 ---
 name: _shared
-description: Shared scip-query reference for bundled skills.
-disable-model-invocation: true
+description: Load only as reference material from within another scip-* workflow skill when that skill's own shortlist is insufficient — never invoke _shared directly as the owning workflow for a task.
 ---
 
-# scip-query Shared Reference
+## Purpose
 
-This is shared reference for scip-query skills. Load it when another skill says to use the shared evidence, lookup, postcheck, or subagent rules.
+`_shared` is the catalog every other scip-* skill draws its command vocabulary and correctness rules from: freshness/lookup mechanics, the full command-family list, detector precision tiers, postcheck rules, the event ledger, and the subagent evidence-boundary contract. It is not a workflow — no task should end with "I invoked `_shared`". Come here mid-task from another skill when that skill's own shortlist runs out.
 
-## Evidence Contract
+A SCIP index is the compiler-derived map of a repository: source files, symbols, references, imports, calls, dependencies. It differs from text search because it records what the language toolchain actually resolved, so a claim backed by it can name definitions and consumers rather than matching strings. A **graph fact** is anything produced from that index — a definition line, a reference site, a caller, a dependency, a reverse dependency, an affected consumer.
 
-A SCIP index is the compiler-derived map of a repository's source files, symbols, references, imports, calls, and dependencies. What makes it different from text search is that it records what the language toolchain can identify, so code claims can point to definitions and consumers rather than matching strings.
+**Match evidence to the claim.** Native search and file reads are valid for literal text, exact local source, and unambiguous local logic (e.g. a helper defined two lines down in the same file is not a resolution claim). Use scip-query whenever the claim depends on compiler-resolved identity or on a relationship set being complete — definitions, references, callers, dependencies, consumers, affected units, public surface. Many scip-query commands return a bounded/capped sample rather than an exhaustive set; say so explicitly rather than treating a bounded result as proof of completeness.
 
-A graph fact is a claim produced from that index, such as a definition line, reference site, caller, callee, dependency, reverse dependency, or affected consumer. Use graph facts for code behavior, ownership, and blast-radius claims.
+## Triage table
 
-Before trusting graph facts, run:
+| Need | Where |
+|---|---|
+| Full command vocabulary (every command this repo's CLI exposes, owned or not) | `references/command-catalog.md` |
+| Detector precision tiers, diff-gate's ten checks, root-cause groups, event ledger, effectiveness | `references/detector-precision-and-diffgate.md` |
+| Subagent evidence-boundary contract, dead-code reference-counting status and residual gap | `references/evidence-and-dead-code.md` |
+| The edit-to-postcheck table (which postcheck to run after which kind of edit) | `scip-verify` skill — authoritative, do not duplicate it here |
 
-```bash
-scip-query status --capabilities
-```
+## Freshness gate
 
-If freshness is `fresh`, continue. If it is `stale`, `missing`, or `unknown`, run:
+Before trusting any graph fact: run `scip-query status --capabilities`. If freshness reports `fresh`, continue. If it reports `stale`, `missing`, or `unknown`, run `scip-query reindex` first — it indexes the codebase and converts it to SQLite — then re-check status before proceeding.
 
-```bash
-scip-query reindex
-```
+## Symbol lookup fallback ladder
 
-Match evidence to the claim. Native search and file reads establish literal text, exact local source, and unambiguous local logic. Use scip-query for compiler-resolved identity and whenever you claim a relationship set is complete — definitions, references, callers, dependencies, consumers, affected units, or public surface. State when a bounded result does not establish completeness.
+Look symbols up by partial name, no parentheses: `scip-query code parseConfig`, `scip-query trace loadSettings`. If a lookup is ambiguous or comes back empty:
+1. Retry with a shorter symbol name.
+2. If still unresolved, run `scip-query outline <file>` to get a tree of that file's symbols with line ranges.
+3. If outline doesn't resolve it, run `scip-query trace <name>` (definition plus every reference).
+4. Last resort, once you already know the file and line range: `scip-query code 'path/to/file.ts:START-END'`.
 
-## Lookup
+`scip-query files <pattern>` is the step before step 1 when you have a name fragment but no path — feed its result into outline or the lookup ladder. `scip-query stats` gives index statistics; reach for it when validating that a reindex actually populated the index (e.g. during setup/calibration, not mid-exploration).
 
-Use partial symbol names without parentheses:
+## Reading a symbol once located
 
-```bash
-scip-query code parseConfig
-scip-query call-graph runCommand
-scip-query trace loadSettings
-```
+- `scip-query members <symbol>` — every child of a symbol (methods, fields, nested types). Use once `hierarchy` or `by-kind` has identified a class/type, to see its full surface before editing or removing it.
+- `scip-query hierarchy <symbol>` — a method's ancestry chain up to its class and module. Use before editing a method, to understand the containing type's contract.
+- `scip-query by-kind <kind>` — every symbol of a SCIP kind (class, interface, enum, function…). Use after `scip-query kind-counts` (a histogram of kinds in the codebase) narrows down which kind is worth a systematic sweep.
+- `scip-query refs <symbol>` — every file referencing a symbol. This is the strong-signal confirmation step: whenever a dead-code or "is this used" claim needs checking, run `refs` before asserting it.
 
-If lookup is ambiguous or missing:
+## Structural surveys before a change
 
-1. Try a shorter symbol name.
-2. Run `scip-query outline <file>`.
-3. Run `scip-query trace <name>`.
-4. Use `scip-query code 'path/to/file.ts:START-END'` when you know the file range.
+- `scip-query system <module>` — full module map (files, symbols, deps in/out). Use to onboard to an unfamiliar module or produce a module-level briefing.
+- `scip-query surface <module>` — the symbols consumers actually use from a module. Compare against its declared exports to see whether public API can be pruned.
+- `scip-query imports <file>` — what a file imports. Use to audit a file's dependency footprint before moving or refactoring it.
+- `scip-query deps <file>` — internal files this file depends on (upstream blast radius).
+- `scip-query rdeps <file>` — files that depend on this file/module (downstream blast radius: who breaks if it changes).
 
-## Command Families
+## Deeper semantics
 
-<!-- BEGIN GENERATED COMMAND FAMILIES -->
+- `scip-query dataflow <symbol>` — reference-level dataflow: definition sites, usage sites, producers, consumers. Use when debugging or planning a change and location alone (`refs`) isn't enough — you need to know how data moves through the symbol.
+- `scip-query slice <symbol>` — a reference-level program slice, backward (what affects this symbol) or forward (what this symbol affects). Use to scope the minimum code touched by a targeted refactor.
 
-This syntax catalog is generated from the CLI command descriptors.
+## Dead code and duplication
 
-### Indexing
+- `scip-query dead [scope]` — repository-dead code, file-internal symbols, implicit-usage signals. Cross-check any hit with `refs` before deleting; see `references/evidence-and-dead-code.md` for the one residual false-dead gap (ambiguous leaf name reached only through a re-exporting barrel in a workspace package).
+- `scip-query isolated` — completely orphaned symbols with no references at all; the stricter sibling of `dead`, same reference-counting layer, same residual gap caveat.
+- `scip-query similar [symbol] [other]` — heuristic function-similarity candidates from callee fingerprints. Good-with-review signal: read the code before treating a hit as a real duplicate.
+- `scip-query similar-files [file]` — heuristic similar-file candidates from dependency profiles. Use before writing a new file, to check whether a sibling already does the job; review before acting.
 
-```bash
-scip-query reindex # Index the codebase and convert to SQLite
-scip-query augment-sources # Add source files skipped by upstream SCIP indexers to the SQLite documents table
-scip-query augment-vue # Add compiler-resolved Vue SFC references to the SQLite index using Volar
-```
+## Coupling and architecture health
 
-### Core
+- `scip-query fan-in [symbol]` — how many files reference an exact symbol. Use to gauge a symbol's criticality/blast-radius before changing its signature.
+- `scip-query fan-out [file]` — how many external symbols a file uses (or the top-fan-out list across the codebase). Use to gauge a file's coupling debt before deciding whether to split it.
+- `scip-query coupling [file1] [file2]` — coupling between two named files, or the top coupled pairs codebase-wide. Use when a specific pair is suspected of hidden coupling, or when scanning for the worst offenders.
+- `scip-query cycles` — circular dependency chains between files. Use when investigating why files resist clean layering or isolated testing.
+- `scip-query bottlenecks` — symbols/files with high fan-in *and* high fan-out (coupling hubs). Use to prioritize a maintainability review.
+- `scip-query architecture` — evaluates project-owned architectural boundaries and dependency rules. Its baseline is what diff-gate's `architecture` check reads from directly (see `references/detector-precision-and-diffgate.md`).
 
-```bash
-scip-query stats # Show index statistics
-```
+## History
 
-### Navigation
+- `scip-query co-change [file]` — files that change together in git history without a dependency edge: hidden-coupling candidates the graph misses. Good-with-review signal. Use before splitting a file to check whether its historical co-change partner also needs updating.
 
-```bash
-scip-query files <pattern> # Find files matching a pattern
-scip-query methods <className> # List methods of a class (with line ranges)
-scip-query refs <symbol> # Find all files referencing a symbol
-scip-query trace <symbol> # Trace a symbol: definition + all references
-scip-query deps <file> # Files this file depends on (internal)
-scip-query rdeps <file> # Files that depend on this file/module
-scip-query system <module> # Full module map: files, symbols, deps in/out
-scip-query surface <module> # What symbols consumers actually use from this module
-scip-query imports <file> # What symbols does this file import?
-scip-query imported-by <symbol> # Which files import this symbol?
-scip-query outline <file> # Tree view of symbols in a file, with line ranges
-scip-query members <symbol> # All children of a symbol (methods, fields, nested types)
-scip-query by-kind <kind> # Find symbols by SCIP kind (class, interface, enum, function, etc.)
-scip-query kind-counts # Histogram of symbol kinds in the codebase
-scip-query hierarchy <symbol> # Show a symbol's ancestry chain (method → class → module)
-scip-query code <symbol> # Read the source code for a symbol (bounded to its definition range)
-scip-query dataflow <symbol> # Reference-level dataflow: definition sites, usage sites, producers, consumers
-scip-query slice <symbol> # Reference-level program slice: what affects this (backward) or what this affects (forward)
-```
+## Governance: config, suppression, effectiveness
 
-### Cleanup
+1. `scip-query init` — creates `.scipquery.json` for a project. Run once, at bootstrap, before any config-dependent command.
+2. `scip-query config-validate` — validates `.scipquery.json`, including structured suppressions and declared coupling groups. Run after hand-editing either.
+3. `scip-query suppress <id>` — records an accepted finding as a file under `.scipquery/suppressions/` with a required reason, the moment you decide a finding is a false positive or an accepted risk. This is what feeds the "suppressed" count in effectiveness.
+4. `scip-query effectiveness [--since 30d] [--check <check>] [--json]` — per-check history from the committed outcome ledger: findings caught, comparison-verified fixed, suppressed, still open, "moved" (rename noise), legacy/non-comparable "unverified" resolutions, precision (verified-fixed ÷ (verified-fixed + suppressed)), and median days-to-fix. Run this periodically, or the moment diff-gate feels noisy, to see which checks are earning their keep — then either tune that check's config, suppress the standing findings with reasons, or consciously accept the noise. Do not let unresolved findings accumulate as wallpaper.
 
-```bash
-scip-query dead [scope] # Find repository-dead code, file-internal symbols, and implicit-usage signals
-scip-query unused-imports <file> # Find imports not referenced in the same file
-scip-query isolated # Find completely orphaned symbols (no references at all)
-scip-query similar [symbol] [other] # Find heuristic function similarity candidates from callee fingerprints
-scip-query similar-files [file] # Find heuristic similar-file candidates from dependency profiles
-scip-query react-component-duplicates [file] # Find heuristic duplicated React component structure candidates from JSX tags, props, events, and bindings
-scip-query react-hook-candidates [file] # Find heuristic React hook extraction candidates from shared state, effects, requests, and handlers
-scip-query react-large-component-pressure [file] # Find heuristic large React component pressure candidates from component lines, JSX structure, and hook behavior
-scip-query vue-component-duplicates [file] # Find heuristic duplicated Vue component structure candidates from template tags, bindings, slots, and directives
-scip-query vue-composable-candidates [file] # Find heuristic Vue composable extraction candidates from shared state, effects, requests, and template bindings
-scip-query vue-large-view-pressure [file] # Find heuristic large Vue view pressure candidates from template, script, style, and external script line counts
-scip-query similar-chains # Find heuristic similar-chain candidates from dependency flows
-scip-query extract-candidates # Find heuristic extraction candidates from isolated callee clusters
-scip-query locality-candidates [symbol-or-file] # Find directory-locality and ancestry candidates from consumer ownership
-scip-query cleanup-plan # Ordered, batched deletion plan: graph-fact dead code plus the cascade candidates it unlocks
-scip-query cleanup-apply # Apply a compiler-verified cleanup-plan batch to the working tree
-scip-query recent-duplicates # Directional duplicate candidates: recent code that re-implements established callable, React, or Vue code
-scip-query doc-drift [doc] # Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped
-scip-query unused-params # Speculative-generality candidates: trailing parameters no body ever uses (TS/JS)
-scip-query drift [module] # Detect drift candidates: unused imports and declared architecture violations; pass --architecture for boundary context
-scip-query wrapper-candidates # Find heuristic wrapper candidates only called by one consumer (high false-positive rate on codebases with intentional layering/ambient types — treat as exploration, not findings)
-scip-query passthrough-candidates # Find heuristic passthrough candidates that forward to one callee
-scip-query stale-abstractions # Find heuristic stale abstraction candidates with 0-1 consumers (high false-positive rate on codebases with intentional layering/ambient types — treat as exploration, not findings)
-scip-query complexity-hotspots # Find heuristic complexity hotspot candidates from LOC x fan-in x fan-out
-scip-query convergence <symbol1> <symbol2> # Deprecated alias for similar <symbol1> <symbol2> --plan
-scip-query redundant-reexports # Find barrel re-exports that nobody imports through
-scip-query duplicate-bodies # Find exact duplicate small-body candidates across files
-scip-query twin-drift # Twin drift candidates: same-name (or near-name) functions across files with diverged bodies
-scip-query twin-ab <symbolA> <symbolB> # Generate a behavioral A/B scaffold comparing two same-concept twins (scip-integrity-audit drill 5) — a ready-to-fill vitest file, not an auto-executor
-scip-query not-implemented # Reachable placeholder stub candidates (throw-stub, TODO+return-default, empty body) — production callers can actually reach these; an unreachable stub is dead's job, not this one's
-scip-query decorative-checkers # Decorative checker candidates: validate*/verify*/check*/assert*/is*/has* callables with no reachable failure exit anywhere in their body
-scip-query test-quality # Test-quality candidates: assertion-free it/test bodies, a skipped-test ledger with git-blame age, and mock-echo tests that assert the same literal they stubbed into a mock
-scip-query similar-signatures # Find functions with near-identical type signatures (same shape)
-```
+Standalone detector commands (outside diff-gate) are not outcome-tracked in this ledger until they expose complete-scan evidence. A pre-commit rerun of diff-gate reuses the same comparison base directly; after HEAD advances, a clean diff-gate run automatically replays the stored comparison commit. A dirty or unavailable replay leaves the effectiveness finding pending rather than manufacturing a fix result.
 
-### Graph
+## Postcheck
 
-```bash
-scip-query hotspots # Most-referenced symbols in the codebase (choke points)
-scip-query fan-in [symbol] # Count files referencing an exact symbol; top JSON rows include exact symbol identity
-scip-query fan-out [file] # How many external symbols a file uses (or top fan-out across codebase)
-scip-query coupling [file1] [file2] # Coupling between two files, or top coupled pairs in codebase
-scip-query cycles # Detect circular dependency chains between files
-scip-query architecture # Evaluate project-owned architectural boundaries and dependency rules
-scip-query bottlenecks # Find coupling hubs: high fan-in AND high fan-out
-scip-query deep-chains # Find the longest condensed dependency-component chains
-scip-query call-graph <symbol> # Show incoming callers and outgoing callees for a symbol
-```
+Every implemented change ends with `scip-query status --capabilities` and `scip-query diff-gate --json`. Fix each finding, or record a specific acceptance reason for each one left unresolved (findings marked `(advisory)` never block — treat them as context, not obligations). Do not report success while a diff-gate finding is unexplained. The authoritative table of *which* postcheck to run for *which* kind of edit lives in `scip-verify`; invoke that skill rather than re-deriving it here.
 
-### Impact
+## Subagent evidence boundary
 
-```bash
-scip-query affected <symbol> # Transitive closure of symbols that could break if this symbol changes
-scip-query change-surface <file> # Pre-change briefing: exports, consumers, and blast-radius risk
-scip-query co-change [file] # Files that change together in git history without a dependency edge — hidden coupling candidates
-scip-query diff-gate # Gate the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings
-scip-query incomplete-migration # Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain
-scip-query diff-impact # Compute changed symbols and downstream consumers from current git diff
-```
+When a subagent gathers scip-query evidence, its prompt must carry these rules verbatim:
+- Use scip-query for any compiler-resolved-identity or completeness claim; native search/file reads are valid only for literal source content and unambiguous local logic (e.g. a helper defined in the same file).
+- The trigger is resolution or completeness, not whether execution crosses a call boundary: asserting what `handler(x)` does without resolving what `handler` is requires scip-query evidence; reading a helper defined two lines down in the same file does not.
+- Cite the evidence source appropriate to each claim, and state plainly when neither source establishes a claim completely.
 
-### Formal Models
-
-```bash
-scip-query tla <operation> [spec] # TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation
-```
-
-### Planning
-
-```bash
-scip-query plan-context <target> # Pre-edit planning context for a symbol, file, or module
-```
-
-### Health
-
-```bash
-scip-query self-audit # Score cheap evidence paths against the best available semantic/source oracle on sampled symbols
-scip-query health # Composite codebase health report with prioritized action list
-scip-query complexity <symbol> # Per-symbol complexity: branches, cyclomatic estimate, fan-in/out, callees
-```
-
-### Maintenance
-
-```bash
-scip-query bench # Benchmark indexing and command runtimes for this repository
-scip-query work-audit <profile> # Rank exact repeated computations in a profiling JSONL file by measured avoidable time
-scip-query install-skills # Install skills (_shared, scip-query, scip-setup, scip-calibrate, scip-cleanup-audit, scip-cleanup-improve, scip-integrity-audit, scip-twin-drift, scip-claim-audit, scip-probe-reachability, scip-hyper-optimization, scip-api-impact, scip-concrete-plan, scip-conductor, scip-debug, scip-explore, scip-root-cause, scip-triage-issue, scip-diagram, scip-doc-reconcile, scip-directory-architecture, scip-maintainability, scip-react-maintainability, scip-vue-maintainability, scip-verify, scip-language-playbook, scip-tla-model-system) into Claude Code, Codex, and shared agent roots
-scip-query setup-hooks # Install or refresh project-local Codex and Claude Code lifecycle hooks
-scip-query check-deps # Check whether scip-query and the detected language indexers are actually runnable
-scip-query capabilities # Report which evidence and verification capabilities are available in this project
-scip-query capability-matrix # Deprecated alias for capabilities --matrix
-scip-query init # Create a .scipquery.json config file for this project
-scip-query config-validate # Validate .scipquery.json, including structured suppressions and declared coupling groups
-scip-query suppress <id> # Record an accepted finding as a file under .scipquery/suppressions/ with a required reason
-scip-query effectiveness # Per-check effectiveness from the committed outcome ledger: caught, comparison-verified fixes, suppressed, unverified disappearances, and precision
-scip-query doctor # Diagnose config, index freshness, dependency readiness, and project capabilities
-scip-query setup # Bootstrap this project: enable automatic indexing, install agent skills, refresh the index, verify capabilities, and report health
-scip-query setup-agent # Seed agent guidance for this project: AGENTS.md/CLAUDE.md block pointing agents at the scip-query skills and diff gate, plus an optional git pre-commit backstop
-scip-query setup-ci # Write a GitHub Actions workflow that runs scip-query reindex and diff-gate on pull requests
-scip-query uninstall # Remove scip-query-owned skill links, project hooks, and managed agent setup blocks
-scip-query watch # Watch in the foreground or manage the per-project background refresh service
-scip-query status # Show index status for this project
-```
-
-<!-- END GENERATED COMMAND FAMILIES -->
-
-## Detector Reliability
-
-Calibrated against two external production repos on 2026-07-01
-(docs/validation/2026-07-01-external-calibration-\*.md). Weight findings by
-measured precision, not by volume:
-
-- **Strong signal** — `complexity-hotspots` (~90%), `recent-duplicates` (~75%), graph facts (`refs`, `trace`, `deps`), compiler-verified `cleanup-plan --verify`.
-- **Good with review** — `duplicate-bodies`, `similar`, `co-change`, `doc-drift`, `twin-drift` (post-retune defaults).
-- **Exploration only** — `wrapper-candidates`, `stale-abstractions`, `drift --patterns`: near-zero precision on codebases with intentional layering or ambient types. Never file their findings without reading the cited code.
-- **Advisory gate findings** (marked `(advisory)`) never block; they are context, not obligations.
-- **False-dead archetypes (2026-07-02 remediation, docs/plans/2026-07-02-followups.md items 1-3)**: `import type`-only consumers (incl. tsconfig `paths`-aliased specifiers) and pnpm/npm/yarn workspace cross-package consumers (incl. unbuilt `dist/` exports maps) are now resolved by the shared reference-counting layer that `dead`/`isolated`/`new-dead`/`stale-abstractions`/`production-callables` all consume; Vue `<script setup>` composable consumers were already correctly resolved (verified live, no code change needed). One narrow residual gap remains: a symbol with an **ambiguous leaf name** (a same-named definition exists elsewhere in the project) reached only through a **re-exporting barrel file** in a workspace package can still misattribute — `new-dead` labels that specific shape `unconfirmed (cross-package ambiguous-name resolution gap)` with `evidence: "heuristic"` and lowered confidence instead of asserting `dead`; treat those as "verify manually," not as a fact. Everything else in this class is a normal graph-fact `dead` claim again — confirm with `refs` when in doubt, same as any other finding.
-- **Ledger nudges**: when `diff-gate --hook` reports "this check is rarely acted on in this repo", either tune that check's config, suppress the standing findings with reasons, or consciously accept the noise — do not let unresolved findings accumulate as wallpaper.
-- **Effectiveness ledger**: every completed diff-gate run, including JSON and hook mode, writes each caught/resolved/suppressed transition to its own committed `.scipquery/events/*.json` file. Independent branches add independent paths instead of editing a shared log; commit the event files with your changes. Legacy `.scipquery/ledger/events.jsonl` records remain readable and migrate on the next gate write. Query the history with `scip-query effectiveness [--since 30d] [--check <check>] [--json]`: per check it reports findings caught, comparison-verified fixed, suppressed, still open, `moved` (rename noise), legacy/non-comparable `unverified` resolutions, precision (verified fixed ÷ verified fixed plus suppressed), and median days-to-fix. A pre-commit rerun reuses the same base directly; after `HEAD` advances, a clean run automatically replays the stored comparison commit. A dirty or unavailable replay leaves the finding pending instead of manufacturing a fix. Standalone detector commands are not outcome-tracked until they expose complete-scan evidence.
-
-## Diff Gate Checks
-
-`diff-gate` recognizes ten checks (`--skip <check>` accepts any of these): `echo` (recent-duplicate-style echoes in the diff), `incomplete-migration`, `co-change-partner` (missing historically-paired file), `twin-partner` (advisory — unedited same-name twin), `coverage-contract` (a configured `coverageContracts` enumeration drifted from its ground truth — see `scip-setup`), `architecture` (a declared boundary violation absent from the shared baseline), `doc-reference` (uncited or stale doc claim), `unused-params`, `new-dead` (dead code introduced by this diff), and `baseline` (only with `--baseline`: compares all non-architecture health identities against the committed `.scipquery-baseline.json`, distinct from `health --baseline`). The architecture check runs by default only when enforceable architecture rules and a baseline exist; it uses that same file without running the full health suite. Findings print grouped under a `Root-cause groups (N):` header before the flat list — a group's remediation usually clears every finding under it, and the same remediation may then repeat in the flat list below; that repetition is expected, not a separate issue. Baseline-backed findings additionally carry an `actionTier`: `direct` (act on this finding alone), `signal` (corroborating evidence — read before acting), `support` (context only).
-
-## Postchecks
-
-The authoritative edit-to-postcheck table lives in [`../scip-verify/SKILL.md`](../scip-verify/SKILL.md). Invoke that skill after editing; do not maintain a second copy here.
-
-Every implemented change ends with:
-
-```bash
-scip-query status --capabilities
-scip-query diff-gate --json
-```
-
-Fix findings or record a specific acceptance reason. Do not report success while a diff-gate finding is unexplained.
-
-## Subagents
-
-When a subagent is used for scip-query evidence, include these rules in its prompt:
-
-```text
-Use scip-query for compiler-resolved identity and for completeness claims. Native search and file reads are valid evidence for literal source content and local logic, including an unambiguous helper you can see in the same file. Use scip-query when you assert which symbol something resolves to, or that a set is complete — definitions, references, callers, dependencies, consumers, or affected units. Cite the evidence source appropriate to each claim, and say so when neither source establishes it completely.
-```
-
-The trigger is resolution or completeness, not whether execution crosses a call boundary. Asserting what `handler(x)` does without resolving `handler` is a resolution claim; reading a helper defined two lines down is not.
-
-Reject subagent findings that source a resolution or completeness claim from text search. Do not reject a literal-content claim for citing a file read.
+Reject a subagent's finding if it sources a resolution or completeness claim from text search alone. Do not reject a literal-content claim merely for citing a file read as its evidence.

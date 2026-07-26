@@ -1,4 +1,4 @@
 interface:
-  display_name: "scip-query setup"
-  short_description: "Bootstrap or repair scip-query indexing, diagnostics, hooks, guidance, and health dossiers"
-  default_prompt: "Set up or repair scip-query in this repository, report readiness and blockers, and hand off the next cleanup step."
+  display_name: "SCIP Setup"
+  short_description: "Bootstrap or repair scip-query in a repo"
+  default_prompt: "Use $scip-setup to adopt, repair or diagnose scip-query itself in this repository."
