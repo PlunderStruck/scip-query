@@ -1,6 +1,7 @@
 ---
 name: _shared
 description: Load only as reference material from within another scip-* workflow skill when that skill's own shortlist is insufficient — never invoke _shared directly as the owning workflow for a task.
+disable-model-invocation: true
 ---
 
 ## Purpose
