@@ -585,6 +585,24 @@ green across batch, durable-session, mapping, cache, and provider consumers.
 
 **Acceptance condition:** one download has bounded time and bytes, and concurrent callers cannot corrupt or steal each other's staging file.
 
+**Resolution:** Slice 06 gives every verified fetch a five-minute deadline and
+256 MiB default byte ceiling, both overridable through validated positive
+options. Fetch and reader waits race the abort signal even when an injected
+dependency ignores it. Successful bodies must be readable byte streams;
+`Content-Length` may be absent, but if present it must be a non-negative safe
+integer no larger than the configured ceiling and must equal the observed byte
+count. Each chunk updates one incremental SHA-256 and is written through an
+exclusive random-token staging descriptor, so no complete response is retained
+in memory. A token-owned per-cache-path process lock serializes callers without
+blocking the event loop; the winner's cache is checksum-rechecked under that
+lock. All timeout, abort, HTTP, length, stream, checksum, write, and rename
+paths close the descriptor, remove only the owned staging path, and release the
+lock. The final promotion is visibility-atomic in this slice; Slice 08 will
+switch it to the shared crash-durable install primitive. Tests cover ignored
+abort signals, missing/malformed/oversized/short lengths, streamed overflow,
+successful and timed-out contention, checksum failure, injected write/rename
+failure, artifact cleanup, cache reuse, and the TLA consumer.
+
 ### RES-05 — S3 — Timed-out Vue workers are neither retained nor terminated
 
 **Evidence:** source-confirmed opt-in failure path.

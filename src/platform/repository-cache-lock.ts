@@ -71,6 +71,31 @@ export function acquireProcessFileLock(
   return null;
 }
 
+/**
+ * Wait for a token-owned process lock without blocking unrelated asynchronous
+ * work in the current process. Each attempt retains the synchronous helper's
+ * dead-owner reclamation and token-checked release semantics.
+ */
+export async function acquireProcessFileLockAsync(
+  lockPath: string,
+  opts: { waitMs?: number; pollMs?: number; now?: () => number; signal?: AbortSignal } = {},
+): Promise<RepositoryCacheLock | null> {
+  const waitMs = opts.waitMs ?? 0;
+  const pollMs = opts.pollMs ?? 10;
+  const now = opts.now ?? Date.now;
+  const deadline = now() + waitMs;
+
+  do {
+    throwIfAborted(opts.signal);
+    const lock = acquireProcessFileLock(lockPath, { now });
+    if (lock) return lock;
+    const remainingMs = deadline - now();
+    if (remainingMs <= 0) return null;
+    await sleepAsync(Math.min(pollMs, remainingMs), opts.signal);
+  } while (now() <= deadline);
+  return null;
+}
+
 interface LockObservation {
   raw: string;
   pid?: number;
@@ -130,4 +155,28 @@ function releaseOwnedLock(path: string, token: string): void {
 function sleepSync(durationMs: number): void {
   const view = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
   Atomics.wait(view, 0, 0, durationMs);
+}
+
+function sleepAsync(durationMs: number, signal: AbortSignal | undefined): Promise<void> {
+  if (signal?.aborted) return Promise.reject(abortReason(signal));
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, durationMs);
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      reject(signal ? abortReason(signal) : new Error('Lock acquisition was aborted.'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw abortReason(signal);
+}
+
+function abortReason(signal: AbortSignal): Error {
+  return signal.reason instanceof Error ? signal.reason : new Error('Lock acquisition was aborted.');
 }

@@ -172,11 +172,10 @@ describe('TLA tool runner', () => {
     const bytes = Buffer.from('tiny jar fixture');
     const expectedSha256 = createHash('sha256').update(bytes).digest('hex');
     const fetchImpl = (async () =>
-      ({
-        ok: true,
+      new Response(bytes, {
         status: 200,
-        arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
-      }) as Response) as typeof fetch;
+        headers: { 'content-length': String(bytes.length) },
+      })) as typeof fetch;
 
     const result = await fetchTlaToolsJar({
       cachePath: jarPath,

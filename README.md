@@ -388,6 +388,14 @@ scip-query tla fetch-tools                           # download the pinned tla2t
 
 `tla verify` checks the mapping contract against the model text and the indexed code: variable and action referents must resolve to value-like symbols (not types), declared reads/writes are checked against a static scan, and every waiver requires a reason and is counted in the output. At scale, findings are grouped by `(category, modelElement)` with up to 3 exemplars per group by default — pass `--full` to print every finding ungrouped. The `scip-tla-model-system` skill (`scip-query install-skills`) walks the scaffold → verify → instrument → trace-check loop end to end.
 
+`tla fetch-tools` allows five minutes and 256 MiB for the pinned download by
+default. It streams bytes through the SHA-256 verifier instead of buffering the
+response, rejects malformed or oversized `Content-Length`, and enforces the
+same ceiling when the header is absent. Callers for one cache path serialize on
+a token-owned lock and recheck the winner's checksum before fetching. Failed,
+aborted, or competing operations remove only their random-token staging file;
+the previously accepted cache remains available.
+
 ## Quick Start
 
 ```bash

@@ -59,6 +59,9 @@ export interface TlaToolsFetchOptions {
   url?: string;
   version?: string;
   expectedSha256?: string;
+  timeoutMs?: number;
+  maxBytes?: number;
+  signal?: AbortSignal;
 }
 
 interface ResolvedCommand {
@@ -224,7 +227,15 @@ export async function fetchTlaToolsJar(opts: TlaToolsFetchOptions = {}): Promise
   const expectedSha256 = opts.expectedSha256 ?? TLA_TOOLS_SHA256;
   const version = opts.version ?? TLA_TOOLS_VERSION;
   const url = opts.url ?? TLA_TOOLS_URL;
-  const result = await fetchVerifiedBinary({ cachePath: path, url, expectedSha256, fetchImpl: opts.fetchImpl });
+  const result = await fetchVerifiedBinary({
+    cachePath: path,
+    url,
+    expectedSha256,
+    fetchImpl: opts.fetchImpl,
+    timeoutMs: opts.timeoutMs,
+    maxBytes: opts.maxBytes,
+    signal: opts.signal,
+  });
   return { ...result, version, url };
 }
 

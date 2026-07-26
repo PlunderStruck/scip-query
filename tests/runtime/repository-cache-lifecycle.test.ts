@@ -29,7 +29,7 @@ import {
   type WorktreeCacheLease,
 } from '../../src/reindex/shared-generation-store.js';
 import type { ProjectInputFingerprint } from '../../src/platform/project-files.js';
-import { acquireRepositoryCacheLock } from '../../src/platform/repository-cache-lock.js';
+import { acquireProcessFileLockAsync, acquireRepositoryCacheLock } from '../../src/platform/repository-cache-lock.js';
 
 const HOUR = 60 * 60 * 1_000;
 const tempDirs: string[] = [];
@@ -51,6 +51,25 @@ describe('repository cache lifecycle policy', () => {
     const next = acquireRepositoryCacheLock(repositoryDir);
     expect(next).not.toBeNull();
     next!.release();
+  });
+
+  it('waits for a process lock without blocking the current event loop', async () => {
+    const repositoryDir = temporaryDirectory('scip-query-async-process-lock-');
+    const owner = acquireRepositoryCacheLock(repositoryDir);
+    expect(owner).not.toBeNull();
+    const repositoryLockPath = join(repositoryDir, 'gc.lock');
+    let timerFired = false;
+    setTimeout(() => {
+      timerFired = true;
+      owner!.release();
+    }, 5);
+
+    const waiter = await acquireProcessFileLockAsync(repositoryLockPath, { waitMs: 100, pollMs: 1 });
+
+    expect(timerFired).toBe(true);
+    expect(waiter).not.toBeNull();
+    waiter!.release();
+    expect(existsSync(repositoryLockPath)).toBe(false);
   });
 
   it('protects live leases and immediately schedules disappeared managed worktrees', () => {

@@ -607,8 +607,8 @@ Rollback is commit-scoped. Durable-format slices additionally retain legacy read
 |    02 | RES-01  | complete | `17ea60bd` | 230 regression + 2 contract tests   | Reap, byte/time budgets, transient retry, and inventory verified |
 |    03 | TEST-01 | complete | `6fbe2a9a` | 20 behavior + 1 contract test       | Runner, subscription, clock, and launch-policy seams verified    |
 |    04 | RES-02  | complete | `7eaab92e` | 61 focused tests                    | Child reap, output drain, close failures, and ownership verified |
-|    05 | RES-03  | complete | this slice | 163 Rust semantic tests             | Frame bounds, sticky failure, waiters, and one-shot kill verified |
-|    06 | RES-04  | pending  |            |                                     |                                                                 |
+|    05 | RES-03  | complete | `63ec2cc0` | 163 Rust semantic tests             | Frame bounds, sticky failure, waiters, and one-shot kill verified |
+|    06 | RES-04  | complete | this slice | 34 focused tests                    | Time/byte bounds, lock/recheck, staging cleanup, and TLA verified |
 |    07 | RES-05  | pending  |            |                                     |                                                                 |
 |    08 | DD-08   | pending  |            |                                     |                                                                 |
 |    09 | DD-04   | pending  |            |                                     |                                                                 |
