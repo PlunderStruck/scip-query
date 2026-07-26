@@ -4,10 +4,10 @@ import { readProcessIdentity } from '../platform/process-identity.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
 import { resolve } from 'node:path';
 import {
-  claimBoundedMailboxRequests,
   completeBoundedMailboxClaim,
   initializeBoundedMailbox,
   inspectBoundedMailbox,
+  pollBoundedMailboxRequests,
   readBoundedMailboxClaim,
   rejectBoundedMailboxClaim,
   type BoundedMailboxLimits,
@@ -174,7 +174,7 @@ export function processTypeScriptIndexMailbox(
 ): number {
   initializeTypeScriptIndexMailbox(paths);
   const nowMs = opts.nowMs ?? Date.now();
-  const claims = claimBoundedMailboxRequests(paths, {
+  const claims = pollBoundedMailboxRequests(paths, {
     ownerId: opts.ownerId ?? TYPESCRIPT_INDEX_MAILBOX_OWNER,
     nowMs,
     limits: opts.limits,

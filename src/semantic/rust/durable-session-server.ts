@@ -19,10 +19,10 @@ import { createWorkerRustAnalyzerSessionRequester } from './lsp-session.js';
 import { writeJsonDurable } from '../../storage/atomic-json.js';
 import {
   boundedMailboxPaths,
-  claimBoundedMailboxRequests,
   completeBoundedMailboxClaim,
   initializeBoundedMailbox,
   inspectBoundedMailbox,
+  pollBoundedMailboxRequests,
   readBoundedMailboxClaim,
   rejectBoundedMailboxClaim,
   type BoundedMailboxLimits,
@@ -56,7 +56,7 @@ export function processDurableRustSessionRequests(
   const now = opts.now ?? (opts.nowMs === undefined ? Date.now : () => opts.nowMs as number);
   const claimNowMs = now();
   const sessionIdentity = durableRustMailboxSessionIdentity(sessionDir);
-  const claims = claimBoundedMailboxRequests(paths, {
+  const claims = pollBoundedMailboxRequests(paths, {
     ownerId: opts.ownerId ?? DURABLE_RUST_MAILBOX_OWNER,
     nowMs: claimNowMs,
     limits: opts.limits,

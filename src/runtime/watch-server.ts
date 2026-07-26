@@ -46,9 +46,11 @@ import {
 } from './watch-service.js';
 import { maybeSweepRepositoryCache } from './repository-cache-lifecycle.js';
 import { WatchRefreshCoordinator } from './watch-refresh-coordinator.js';
+import { maintainBoundedMailbox } from '../storage/bounded-mailbox.js';
 
 const HEARTBEAT_INTERVAL_MS = 1_000;
 const ACTIVITY_POLL_INTERVAL_MS = 250;
+const MAILBOX_MAINTENANCE_INTERVAL_MS = 60_000;
 const SERVICE_LOOP_INTERVAL_MS = 10;
 
 export function startupRefreshTrigger(state: IndexFreshnessState): RefreshTrigger | null {
@@ -96,6 +98,7 @@ export async function runWatchServiceServer(
   let lastHeartbeatAtMonotonicMs = Number.NEGATIVE_INFINITY;
   let lastActivityPollAtMonotonicMs = Number.NEGATIVE_INFINITY;
   let lastCacheSweepAtMonotonicMs = Number.NEGATIVE_INFINITY;
+  let lastMailboxMaintenanceAtMonotonicMs = Number.NEGATIVE_INFINITY;
   let semanticBusyUntilMs: number | undefined;
   let indexBusyUntilMs: number | undefined;
   const semanticMailboxPaths = typeScriptSemanticMailboxPaths(indexPaths.cacheDir);
@@ -230,6 +233,11 @@ export async function runWatchServiceServer(
         },
       });
       const nowMonotonicMs = monotonicNowMs();
+      if (nowMonotonicMs - lastMailboxMaintenanceAtMonotonicMs >= MAILBOX_MAINTENANCE_INTERVAL_MS) {
+        lastMailboxMaintenanceAtMonotonicMs = nowMonotonicMs;
+        maintainBoundedMailbox(indexMailboxPaths);
+        maintainBoundedMailbox(semanticMailboxPaths);
+      }
       if (nowMonotonicMs - lastCacheSweepAtMonotonicMs >= 60_000) {
         lastCacheSweepAtMonotonicMs = nowMonotonicMs;
         maybeSweepRepositoryCache(projectRoot, cliVersion);

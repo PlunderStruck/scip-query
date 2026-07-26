@@ -332,6 +332,22 @@ export function claimBoundedMailboxRequests(
   }
 }
 
+/**
+ * Poll for newly published work without taking the admission lock or running
+ * retention maintenance when the mailbox has no pending requests.
+ *
+ * Long-lived services call this on their hot loop. Full maintenance remains
+ * explicit so retained responses are not rescanned on every idle poll.
+ */
+export function pollBoundedMailboxRequests(
+  paths: BoundedMailboxPaths,
+  options: Parameters<typeof claimBoundedMailboxRequests>[1],
+): BoundedMailboxClaim[] {
+  initializeBoundedMailbox(paths);
+  if (!directoryHasJsonRequest(paths.pendingDir) && !directoryHasJsonRequest(paths.legacyRequestDir)) return [];
+  return claimBoundedMailboxRequests(paths, options);
+}
+
 function claimBoundedMailboxRequestsUnlocked(
   paths: BoundedMailboxPaths,
   ownerId: string,
@@ -555,7 +571,7 @@ function maintainBoundedMailboxUnlocked(
   remaining = removeExpiredFiles(
     paths.responseDir,
     remaining,
-    (path, statMtimeMs) => responseExpiry(path) ?? statMtimeMs + limits.responseRetentionMs,
+    (_path, statMtimeMs) => statMtimeMs + limits.responseRetentionMs,
     nowMs,
     () => {
       result.responsesRemoved++;
@@ -928,15 +944,6 @@ function readRequestHeader(path: string): RequestHeader | null {
   }
 }
 
-function responseExpiry(path: string): number | null {
-  try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as { expiresAtMs?: unknown };
-    return typeof parsed.expiresAtMs === 'number' && Number.isFinite(parsed.expiresAtMs) ? parsed.expiresAtMs : null;
-  } catch {
-    return null;
-  }
-}
-
 function removeExpiredFiles(
   directory: string,
   remaining: number,
@@ -961,6 +968,14 @@ function regularFiles(directory: string): string[] {
     .filter((entry) => entry.isFile())
     .map((entry) => join(directory, entry.name))
     .sort();
+}
+
+function directoryHasJsonRequest(directory: string): boolean {
+  try {
+    return readdirSync(directory).some((name) => name.endsWith('.json'));
+  } catch {
+    return false;
+  }
 }
 
 function regularFilesRecursive(directory: string): string[] {

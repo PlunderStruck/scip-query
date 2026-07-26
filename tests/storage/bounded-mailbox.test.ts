@@ -15,6 +15,7 @@ import {
   initializeBoundedMailbox,
   inspectBoundedMailbox,
   maintainBoundedMailbox,
+  pollBoundedMailboxRequests,
   readBoundedMailboxClaim,
   rejectBoundedMailboxClaim,
   type BoundedMailboxPaths,
@@ -245,6 +246,32 @@ describe('bounded filesystem mailbox', () => {
       }),
     ).toThrow(expect.objectContaining({ code: 'admission-busy' }));
     expect(monotonicNow).toBeGreaterThan(15);
+  });
+
+  it('keeps idle polling independent from retained response bodies and maintenance', () => {
+    const paths = fixture();
+    initializeBoundedMailbox(paths);
+    const response = join(paths.responseDir, 'retained.json');
+    writeFileSync(response, JSON.stringify({ expiresAtMs: 0, payload: 'x'.repeat(2 * 1024 * 1024) }));
+    const published = new Date(NOW);
+    utimesSync(response, published, published);
+
+    expect(
+      pollBoundedMailboxRequests(paths, {
+        ownerId: 'idle-service',
+        nowMs: NOW + 50,
+        limits: { responseRetentionMs: 100 },
+      }),
+    ).toEqual([]);
+    expect(existsSync(response)).toBe(true);
+
+    expect(
+      maintainBoundedMailbox(paths, {
+        nowMs: NOW + 101,
+        limits: { responseRetentionMs: 100 },
+      }),
+    ).toEqual(expect.objectContaining({ responsesRemoved: 1 }));
+    expect(existsSync(response)).toBe(false);
   });
 
   it('does not reclaim an ownerless public lock from civil-clock age alone', () => {

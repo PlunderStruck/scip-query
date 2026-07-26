@@ -15,10 +15,10 @@ import {
 } from '../../instrumentation/profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import {
-  claimBoundedMailboxRequests,
   completeBoundedMailboxClaim,
   initializeBoundedMailbox,
   inspectBoundedMailbox,
+  pollBoundedMailboxRequests,
   readBoundedMailboxClaim,
   rejectBoundedMailboxClaim,
   type BoundedMailboxLimits,
@@ -170,7 +170,7 @@ export function processTypeScriptSemanticMailbox(
 ): number {
   initializeTypeScriptSemanticMailbox(paths);
   const nowMs = opts.nowMs ?? Date.now();
-  const claims = claimBoundedMailboxRequests(paths, {
+  const claims = pollBoundedMailboxRequests(paths, {
     ownerId: opts.ownerId ?? TYPESCRIPT_SEMANTIC_MAILBOX_OWNER,
     nowMs,
     limits: opts.limits,
