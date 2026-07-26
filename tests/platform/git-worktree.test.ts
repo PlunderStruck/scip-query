@@ -7,6 +7,7 @@ import {
   findGitRoot,
   listGitWorktrees,
   parseGitWorktreeList,
+  resolveGitCommit,
   resolveGitWorktreeContext,
   resolveGitWorktreeIdentity,
   type GitReader,
@@ -19,6 +20,66 @@ afterEach(() => {
 });
 
 describe('Git worktree identity', () => {
+  it('resolves revision syntax to one full commit identity behind an end-of-options marker', () => {
+    const root = createRepository();
+    const expected = git(root, ['rev-parse', 'HEAD']);
+    const calls: string[][] = [];
+    const gitReader: GitReader = {
+      run: () => undefined,
+      runResult: (_projectRoot, args) => {
+        calls.push([...args]);
+        return { kind: 'success', output: expected };
+      },
+    };
+
+    expect(resolveGitCommit(root, 'HEAD~0', gitReader)).toBe(expected);
+    expect(calls).toEqual([['rev-parse', '--verify', '--end-of-options', 'HEAD~0^{commit}']]);
+  });
+
+  it('accepts branches, tags, abbreviated hashes, full hashes, and ancestry expressions', () => {
+    const root = createRepository();
+    const firstCommit = git(root, ['rev-parse', 'HEAD']);
+    git(root, ['tag', 'baseline']);
+    writeFileSync(join(root, 'src/value.ts'), 'export const value = 2;\n');
+    git(root, ['add', '.']);
+    git(root, ['commit', '-qm', 'second']);
+    const secondCommit = git(root, ['rev-parse', 'HEAD']);
+
+    expect(resolveGitCommit(root, 'main')).toBe(secondCommit);
+    expect(resolveGitCommit(root, 'baseline')).toBe(firstCommit);
+    expect(resolveGitCommit(root, secondCommit.slice(0, 12))).toBe(secondCommit);
+    expect(resolveGitCommit(root, secondCommit)).toBe(secondCommit);
+    expect(resolveGitCommit(root, 'HEAD~1')).toBe(firstCommit);
+    expect(() => resolveGitCommit(root, 'does-not-exist')).toThrow('does not resolve to exactly one commit');
+  });
+
+  it('rejects option-like and control-bearing revisions before invoking Git', () => {
+    const calls: string[][] = [];
+    const gitReader: GitReader = {
+      run: () => undefined,
+      runResult: (_projectRoot, args) => {
+        calls.push([...args]);
+        return { kind: 'success', output: 'a'.repeat(40) };
+      },
+    };
+
+    for (const revision of ['--output=/tmp/owned', '-p', 'HEAD\n--output=/tmp/owned', 'HEAD\0other']) {
+      expect(() => resolveGitCommit('/repo', revision, gitReader)).toThrow('Invalid Git revision');
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it('rejects unknown or ambiguous Git output instead of forwarding it', () => {
+    const outputs = ['', 'not-an-object', `${'a'.repeat(40)}\n${'b'.repeat(40)}`];
+    for (const output of outputs) {
+      const gitReader: GitReader = {
+        run: () => undefined,
+        runResult: () => ({ kind: 'success', output }),
+      };
+      expect(() => resolveGitCommit('/repo', 'topic', gitReader)).toThrow('does not resolve to exactly one commit');
+    }
+  });
+
   it('reads complete worktree context with one metadata lookup and one status lookup', () => {
     const root = temporaryDirectory('scip-query-batched-git-context-');
     const gitDir = join(root, '.git');

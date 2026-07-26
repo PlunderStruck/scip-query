@@ -60,6 +60,17 @@ const BATCHED_WORKTREE_CONTEXT_ARGS = [
 ] as const;
 const GIT_OBJECT_ID = /^[0-9a-f]{40,64}$/;
 
+export function resolveGitCommit(projectRoot: string, revision: string, git: GitReader = DEFAULT_GIT_READER): string {
+  if (!revision || revision.startsWith('-') || /[\0\r\n]/.test(revision)) {
+    throw new Error(`Invalid Git revision ${JSON.stringify(revision)}.`);
+  }
+  const result = git.runResult(projectRoot, ['rev-parse', '--verify', '--end-of-options', `${revision}^{commit}`]);
+  if (result.kind !== 'success' || !GIT_OBJECT_ID.test(result.output)) {
+    throw new Error(`Git revision ${JSON.stringify(revision)} does not resolve to exactly one commit.`);
+  }
+  return result.output;
+}
+
 export function findGitRoot(cwd: string, git: GitReader = DEFAULT_GIT_READER): string | undefined {
   const root = git.run(cwd, ['rev-parse', '--show-toplevel'])?.trim();
   return root ? canonicalPath(root) : undefined;

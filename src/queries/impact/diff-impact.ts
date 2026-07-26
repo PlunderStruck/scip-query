@@ -11,6 +11,7 @@ import { sourceFallbackCallerEvidenceMap } from '../../symbols/references/caller
 import { isCallableSymbol, isModuleLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { getAst, type SyntaxNode } from '../../source/ast.js';
 import { rangesByFile } from '../internal/diff-ranges.js';
+import { resolveGitCommit } from '../../platform/git-worktree.js';
 
 export interface DiffImpactResult {
   changedFiles: string[];
@@ -105,7 +106,8 @@ export function diffImpact(db: ScipDatabase, opts: { base?: string; plan?: DiffI
 export function diffImpactPlan(db: ScipDatabase, opts: { base?: string } = {}): DiffImpactPlan {
   const { base = 'HEAD' } = opts;
   try {
-    const snapshot = getGitDiffSnapshot(db.config.projectRoot, base);
+    const resolvedBase = resolveGitCommit(db.config.projectRoot, base);
+    const snapshot = getGitDiffSnapshot(db.config.projectRoot, resolvedBase);
     const changedFileLines = snapshot.changedFileLines;
     const changedFiles = indexedChangedFiles(db, changedFileLines);
     const changedRanges = indexedChangedRanges(db, snapshot.changedRanges);
@@ -113,7 +115,7 @@ export function diffImpactPlan(db: ScipDatabase, opts: { base?: string } = {}): 
       changedFileLines,
       changedFiles,
       changedRanges,
-      renamedFiles: detectRenamedFiles(db.config.projectRoot, base, changedFiles, snapshot),
+      renamedFiles: detectRenamedFiles(db.config.projectRoot, resolvedBase, changedFiles, snapshot),
       note: changedFileLines.length === 0 ? 'No changed files found.' : undefined,
     };
   } catch {
@@ -262,13 +264,13 @@ function unindexedChangedFilesResult(changedFiles: string[]): DiffImpactResult {
 }
 
 function getGitDiffSnapshot(projectRoot: string, base: string): GitDiffSnapshot {
-  const diffNames = execFileSync('git', ['diff', '--name-status', '--find-renames', base], {
+  const diffNames = execFileSync('git', ['diff', '--name-status', '--find-renames', base, '--'], {
     encoding: 'utf-8',
     cwd: projectRoot,
     timeout: 30_000,
     maxBuffer: 64 * 1024 * 1024,
   });
-  const stagedNames = execFileSync('git', ['diff', '--name-status', '--find-renames', '--cached', base], {
+  const stagedNames = execFileSync('git', ['diff', '--name-status', '--find-renames', '--cached', base, '--'], {
     encoding: 'utf-8',
     cwd: projectRoot,
     timeout: 30_000,
@@ -280,13 +282,13 @@ function getGitDiffSnapshot(projectRoot: string, base: string): GitDiffSnapshot 
     timeout: 30_000,
     maxBuffer: 64 * 1024 * 1024,
   });
-  const diff = execFileSync('git', ['diff', '--unified=0', base], {
+  const diff = execFileSync('git', ['diff', '--unified=0', base, '--'], {
     encoding: 'utf-8',
     cwd: projectRoot,
     timeout: 30_000,
     maxBuffer: 64 * 1024 * 1024,
   });
-  const staged = execFileSync('git', ['diff', '--unified=0', '--cached', base], {
+  const staged = execFileSync('git', ['diff', '--unified=0', '--cached', base, '--'], {
     encoding: 'utf-8',
     cwd: projectRoot,
     timeout: 30_000,
@@ -304,9 +306,18 @@ function getGitDiffSnapshot(projectRoot: string, base: string): GitDiffSnapshot 
 
 export function fileContentAtBase(projectRoot: string, base: string, relativePath: string): string | null {
   try {
+    const resolvedBase = resolveGitCommit(projectRoot, base);
+    return fileContentAtResolvedBase(projectRoot, resolvedBase, relativePath);
+  } catch {
+    return null;
+  }
+}
+
+function fileContentAtResolvedBase(projectRoot: string, resolvedBase: string, relativePath: string): string | null {
+  try {
     // `ref:./path` resolves the path against cwd, so index-relative paths
     // work even when the project root is not the git root.
-    return execFileSync('git', ['show', `${base}:./${relativePath}`], {
+    return execFileSync('git', ['show', `${resolvedBase}:./${relativePath}`], {
       encoding: 'utf-8',
       cwd: projectRoot,
       timeout: 10_000,
@@ -351,7 +362,8 @@ export function fileContentsAtBase(
   if (uniquePaths.length === 0) return out;
 
   try {
-    const input = uniquePaths.map((path) => `${base}:./${path}\n`).join('');
+    const resolvedBase = resolveGitCommit(projectRoot, base);
+    const input = uniquePaths.map((path) => `${resolvedBase}:./${path}\n`).join('');
     const output = execFileSync('git', ['cat-file', '--batch'], {
       cwd: projectRoot,
       input,

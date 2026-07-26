@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -106,6 +106,34 @@ describe('diff-impact accuracy', () => {
   afterEach(() => {
     if (tempDir) rmSync(tempDir, { recursive: true, force: true });
     tempDir = null;
+  });
+
+  it('does not let an option-like base create a Git output file', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-query-diff-base-'));
+    mkdirSync(join(tempDir, 'src'), { recursive: true });
+    writeFileSync(join(tempDir, 'src', 'model.ts'), 'export const value = 1;\n');
+    execFileSync('git', ['init'], { cwd: tempDir, stdio: 'ignore' });
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: tempDir });
+    execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: tempDir });
+    execFileSync('git', ['add', '.'], { cwd: tempDir });
+    execFileSync('git', ['commit', '-m', 'initial'], { cwd: tempDir, stdio: 'ignore' });
+
+    const dbPath = join(tempDir, 'index.db');
+    createFixtureDb(dbPath);
+    const db = new ScipDatabase({
+      dbPath,
+      indexPath: join(tempDir, 'index.scip'),
+      projectRoot: tempDir,
+    });
+    const outputPath = join(tempDir, 'git-option-output');
+
+    try {
+      const result = diffImpact(db, { base: `--output=${outputPath}` });
+      expect(result.summary.note).toBe('Unable to compute git diff.');
+      expect(existsSync(outputPath)).toBe(false);
+    } finally {
+      db.close();
+    }
   });
 
   it('reports only definitions touched by changed hunks without sibling definition noise', () => {
