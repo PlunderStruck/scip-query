@@ -21,6 +21,7 @@ import {
 } from '../../src/platform/watch-service-state.js';
 import { acquireWatchProcessLock, writeWatchServiceState } from '../../src/runtime/watch-service.js';
 import { cliVersion } from '../../src/runtime/cli-support.js';
+import { enqueueWatchRefreshRequest } from '../../src/storage/watch-refresh-requests.js';
 
 const tempDirs: string[] = [];
 
@@ -921,6 +922,12 @@ describe('watch command config gate', () => {
     );
     const now = new Date().toISOString();
     const indexGeneration = 'a'.repeat(64);
+    enqueueWatchRefreshRequest(servicePaths.refreshRequestsPath, 'first pending request', {
+      idempotencyKey: 'first',
+    });
+    enqueueWatchRefreshRequest(servicePaths.refreshRequestsPath, 'second pending request', {
+      idempotencyKey: 'second',
+    });
     writeWatchServiceState(servicePaths.statePath, {
       version: 1,
       protocolVersion: WATCH_SERVICE_PROTOCOL_VERSION,
@@ -933,6 +940,14 @@ describe('watch command config gate', () => {
       lastActivityAt: now,
       watcher: { state: 'idle' },
       indexGeneration,
+      refreshRequests: {
+        pending: 2,
+        claimed: 0,
+        completed: 0,
+        expired: 0,
+        invalid: 0,
+        oldestPendingAt: now,
+      },
     });
     const previousProjectRoot = process.env['SCIP_QUERY_PROJECT_ROOT'];
     process.env['SCIP_QUERY_PROJECT_ROOT'] = projectRoot;
@@ -942,10 +957,14 @@ describe('watch command config gate', () => {
       handleWatch({ status: true, json: true });
       const payload = JSON.parse(String(log.mock.calls[0]?.[0])) as { result: Record<string, unknown> };
       expect(payload.result.indexGeneration).toBe(indexGeneration);
+      expect(payload.result.refreshRequests).toMatchObject({ pending: 2, claimed: 0, completed: 0, expired: 0 });
 
       log.mockClear();
       handleWatch({ status: true });
       expect(log.mock.calls.map((call) => String(call[0])).join('\n')).toContain('Index generation: aaaaaaaaaaaa');
+      expect(log.mock.calls.map((call) => String(call[0])).join('\n')).toContain(
+        'Refresh requests: 2 pending, 0 claimed, 0 completed, 0 expired',
+      );
     } finally {
       log.mockRestore();
       if (previousProjectRoot === undefined) delete process.env['SCIP_QUERY_PROJECT_ROOT'];
@@ -1001,7 +1020,18 @@ describe('watch command config gate', () => {
     try {
       handleWatch({ status: true, json: true });
       const payload = JSON.parse(String(log.mock.calls[0]?.[0]));
-      expect(payload.result).toEqual({ enabled: false, state: 'stopped', mode: 'none' });
+      expect(payload.result).toEqual({
+        enabled: false,
+        state: 'stopped',
+        mode: 'none',
+        refreshRequests: {
+          pending: 0,
+          claimed: 0,
+          completed: 0,
+          expired: 0,
+          invalid: 0,
+        },
+      });
     } finally {
       log.mockRestore();
       if (previousProjectRoot === undefined) delete process.env['SCIP_QUERY_PROJECT_ROOT'];

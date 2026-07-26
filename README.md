@@ -509,6 +509,16 @@ shared generation is only a warm starting snapshot; it never implies a shared
 watcher or shared later writes. A daemon that exits after its configured idle
 timeout starts warm again when that worktree is next used.
 
+Command-triggered refresh intent is stored separately from disposable activity
+timestamps. Each accepted demand is an immutable request with a deadline and
+optional idempotency key; the daemon claims pending requests exclusively,
+coalesces them deliberately, and acknowledges them only after the corresponding
+reindex completes. A failed attempt returns its requests to pending, and a
+successor daemon recovers claims left by a crashed owner. `watch --status`
+reports pending, claimed, completed, and expired counts. The complete
+at-least-once and retention contract is documented in
+[Watch Refresh Requests](docs/WATCH_REFRESH_REQUESTS.md).
+
 The primary checkout is only a possible source of a generation, never an
 authority for a linked worktree. If its local cache already contains
 uncommitted changes that are absent from a new worktree's `HEAD`, the full
@@ -647,6 +657,8 @@ failed, and freshness-proven suppressed refreshes plus estimated logical output
 bytes. The estimate counts scip-query artifacts emitted by rebuilt refreshes;
 it is not a measurement of physical SSD writes. The underlying
 `reindex-activity.jsonl` history uses two bounded 1 MiB segments.
+The refresh-request counters reported beside it describe durable demand
+admission and processing state, not reindex frequency.
 If the service is stopped, incompatible, busy beyond its bound, or returns an
 invalid response, the command falls back to the existing in-process ts-morph
 provider.

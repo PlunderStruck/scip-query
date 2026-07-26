@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ProjectConfig, WatchConfig, WatcherStatus } from '../domain/types.js';
 import { canonicalPath, resolveGitWorktreeIdentity, type GitWorktreeContext } from '../platform/git-worktree.js';
@@ -29,12 +29,17 @@ import {
   type WatchServiceState,
 } from '../platform/watch-service-state.js';
 import { writeJsonAtomic, writeJsonDurable } from '../storage/atomic-json.js';
+import {
+  enqueueWatchRefreshRequest,
+  type EnqueueWatchRefreshRequestOptions,
+} from '../storage/watch-refresh-requests.js';
 
 export {
   WATCH_ACTIVITY_FILE,
   WATCH_LOCK_FILE,
   WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS,
   WATCH_SERVICE_PROTOCOL_VERSION,
+  WATCH_REFRESH_REQUESTS_DIRECTORY,
   WATCH_STATE_FILE,
   parseWatchServiceState,
   readWatchServiceState,
@@ -356,16 +361,9 @@ export function writeWatchServiceState(statePath: string, state: WatchServiceSta
 }
 
 export function recordWatchServiceActivity(activityPath: string, nowMs = Date.now()): void {
-  const current = readWatchServiceActivity(activityPath);
   writeJsonAtomic(activityPath, {
     version: 1,
     at: new Date(nowMs).toISOString(),
-    ...(current?.refreshRequestedAtMs === undefined
-      ? {}
-      : {
-          refreshRequestedAt: new Date(current.refreshRequestedAtMs).toISOString(),
-          ...(current.refreshDetail ? { refreshDetail: current.refreshDetail } : {}),
-        }),
   });
 }
 
@@ -373,13 +371,17 @@ export function readWatchServiceActivityAt(activityPath: string): number | null 
   return readWatchServiceActivity(activityPath)?.atMs ?? null;
 }
 
-export function requestWatchServiceRefresh(activityPath: string, detail: string, nowMs = Date.now()): void {
-  writeJsonAtomic(activityPath, {
-    version: 1,
-    at: new Date(nowMs).toISOString(),
-    refreshRequestedAt: new Date(nowMs).toISOString(),
-    refreshDetail: detail,
+export function requestWatchServiceRefresh(
+  activityPath: string,
+  detail: string,
+  nowMs = Date.now(),
+  options: Omit<EnqueueWatchRefreshRequestOptions, 'now'> = {},
+): void {
+  enqueueWatchRefreshRequest(watchServicePaths(dirname(activityPath)).refreshRequestsPath, detail, {
+    ...options,
+    now: () => new Date(nowMs),
   });
+  recordWatchServiceActivity(activityPath, nowMs);
 }
 
 export function readWatchServiceActivity(activityPath: string): WatchServiceActivity | null {

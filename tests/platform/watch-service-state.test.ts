@@ -8,6 +8,7 @@ import {
   WATCH_ACTIVITY_FILE,
   WATCH_LOCK_FILE,
   WATCH_SERVICE_PROTOCOL_VERSION,
+  WATCH_REFRESH_REQUESTS_DIRECTORY,
   WATCH_STATE_FILE,
   parseWatchServiceState,
   readWatchServiceState,
@@ -60,6 +61,12 @@ describe('watch service persisted state', () => {
         typescriptIndex: { ...liveState().typescriptIndex!, documentsEmitted: -1 },
       }),
     ).toBeNull();
+    expect(
+      parseWatchServiceState({
+        ...liveState(),
+        refreshRequests: { ...liveState().refreshRequests!, pending: -1 },
+      }),
+    ).toBeNull();
   });
 
   it('reads valid state and treats missing or malformed files as unavailable', () => {
@@ -81,6 +88,7 @@ describe('watch service persisted state', () => {
       lockPath: join('/cache', WATCH_LOCK_FILE),
       statePath: join('/cache', WATCH_STATE_FILE),
       activityPath: join('/cache', WATCH_ACTIVITY_FILE),
+      refreshRequestsPath: join('/cache', WATCH_REFRESH_REQUESTS_DIRECTORY),
     });
   });
 });
@@ -97,6 +105,14 @@ function liveState(): WatchServiceState {
     lastActivityAt: '2026-07-09T19:59:58.000Z',
     idleDeadlineAt: '2026-07-09T20:09:58.000Z',
     watcher: { state: 'idle' },
+    refreshRequests: {
+      pending: 1,
+      claimed: 0,
+      completed: 2,
+      expired: 1,
+      invalid: 0,
+      oldestPendingAt: '2026-07-09T19:59:57.000Z',
+    },
     reindexActivity: {
       windowStartedAt: '2026-07-08T20:00:00.000Z',
       windowEndedAt: '2026-07-09T20:00:00.000Z',

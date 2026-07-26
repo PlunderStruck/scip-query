@@ -24,7 +24,8 @@ export interface WatcherOptions {
   subscriptionFactory?: WatchSubscriptionFactory;
   clock?: WatchClock;
   onStatus?: (status: WatcherStatus) => void;
-  onReindexComplete?: (durationMs: number) => boolean | void;
+  onReindexComplete?: (durationMs: number, trigger: RefreshTrigger) => boolean | void;
+  onReindexError?: (error: Error, trigger: RefreshTrigger) => void;
   onRefreshSuppressed?: (trigger: RefreshTrigger) => void;
   onError?: (error: Error) => void;
 }
@@ -124,7 +125,8 @@ export class Watcher {
   private indexerConcurrency?: number;
 
   private onStatus: (status: WatcherStatus) => void;
-  private onReindexComplete: (durationMs: number) => boolean | void;
+  private onReindexComplete: (durationMs: number, trigger: RefreshTrigger) => boolean | void;
+  private onReindexError: (error: Error, trigger: RefreshTrigger) => void;
   private onRefreshSuppressed: (trigger: RefreshTrigger) => void;
   private onError: (error: Error) => void;
   private reindexRunner: ReindexRunner;
@@ -166,6 +168,7 @@ export class Watcher {
 
     this.onStatus = opts.onStatus ?? (() => {});
     this.onReindexComplete = opts.onReindexComplete ?? (() => {});
+    this.onReindexError = opts.onReindexError ?? (() => {});
     this.onRefreshSuppressed = opts.onRefreshSuppressed ?? (() => {});
     this.onError = opts.onError ?? ((e) => console.error(e.message));
     this.clock = opts.clock ?? SYSTEM_WATCH_CLOCK;
@@ -380,7 +383,7 @@ export class Watcher {
         if (this.stopped) return;
         let completedIndexIsFresh = false;
         try {
-          completedIndexIsFresh = this.onReindexComplete(durationMs) === true;
+          completedIndexIsFresh = this.onReindexComplete(durationMs, trigger) === true;
         } catch (error) {
           this.onError(error instanceof Error ? error : new Error(String(error)));
         }
@@ -416,7 +419,9 @@ export class Watcher {
         this.reindexInFlight = false;
         this.lastReindexEnd = this.clock.now();
         if (this.stopped) return;
-        this.onError(err instanceof Error ? err : new Error(String(err)));
+        const error = err instanceof Error ? err : new Error(String(err));
+        this.onReindexError(error, trigger);
+        this.onError(error);
         this.setStatus({ state: 'idle' });
       })
       .finally(() => {

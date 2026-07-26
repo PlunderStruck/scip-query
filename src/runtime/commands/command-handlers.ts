@@ -68,6 +68,7 @@ import { healthPhases } from '../../queries/health/health.js';
 import { writeProfileEvent } from '../../instrumentation/profile.js';
 import { auditProfileWork, readProfileEvents, renderProfileWorkAudit } from '../profile-work-audit.js';
 import { discloseHealthCapabilities } from '../health-capability-disclosure.js';
+import { inspectWatchRefreshRequests } from '../../storage/watch-refresh-requests.js';
 import {
   collect,
   formatBytes,
@@ -1528,6 +1529,7 @@ export function handleWatch(rawOpts: unknown): void {
 
 function watchServiceReport(inspection: WatchServiceInspection, enabled = true) {
   const { classification } = inspection;
+  const refreshRequests = inspectWatchRefreshRequests(inspection.paths.refreshRequestsPath);
   switch (classification.kind) {
     case 'stopped':
       if (inspection.lockIsLive && inspection.lock) {
@@ -1539,9 +1541,10 @@ function watchServiceReport(inspection: WatchServiceInspection, enabled = true) 
           projectRoot: inspection.identity.projectRoot,
           worktreeId: inspection.identity.worktreeId,
           startedAt: inspection.lock.startedAt,
+          refreshRequests,
         };
       }
-      return { enabled, state: 'stopped' as const, mode: 'none' as const };
+      return { enabled, state: 'stopped' as const, mode: 'none' as const, refreshRequests };
     case 'live':
       return {
         enabled,
@@ -1559,6 +1562,7 @@ function watchServiceReport(inspection: WatchServiceInspection, enabled = true) 
         lastRefresh: classification.state.lastRefresh,
         lastError: classification.state.lastError,
         reindexActivity: classification.state.reindexActivity,
+        refreshRequests,
         typescriptSemantic: classification.state.typescriptSemantic,
         typescriptIndex: classification.state.typescriptIndex,
       };
@@ -1578,6 +1582,7 @@ function watchServiceReport(inspection: WatchServiceInspection, enabled = true) 
         lastRefresh: classification.state.lastRefresh,
         lastError: classification.state.lastError,
         reindexActivity: classification.state.reindexActivity,
+        refreshRequests,
         typescriptSemantic: classification.state.typescriptSemantic,
         typescriptIndex: classification.state.typescriptIndex,
       };
@@ -1589,6 +1594,7 @@ function watchServiceReport(inspection: WatchServiceInspection, enabled = true) 
 function renderWatchServiceReport(report: ReturnType<typeof watchServiceReport>): void {
   if (report.state === 'stopped') {
     console.log(`Watch service: stopped${report.enabled ? '' : ' (disabled)'}`);
+    renderWatchRefreshRequestStatus(report.refreshRequests);
     return;
   }
   const pid = 'pid' in report ? ` (pid ${report.pid})` : '';
@@ -1613,6 +1619,9 @@ function renderWatchServiceReport(report: ReturnType<typeof watchServiceReport>)
         `${formatBytes(activity.estimatedLogicalOutputBytes)} estimated logical output`,
     );
   }
+  if ('refreshRequests' in report && report.refreshRequests) {
+    renderWatchRefreshRequestStatus(report.refreshRequests);
+  }
   if ('typescriptSemantic' in report && report.typescriptSemantic) {
     const semantic = report.typescriptSemantic;
     console.log(
@@ -1625,6 +1634,14 @@ function renderWatchServiceReport(report: ReturnType<typeof watchServiceReport>)
       `TypeScript index: ${index.state} (${index.initializations} warmups, ${index.programUpdates} updates, ${index.requests} requests)`,
     );
   }
+}
+
+function renderWatchRefreshRequestStatus(requests: ReturnType<typeof inspectWatchRefreshRequests>): void {
+  console.log(
+    `Refresh requests: ${requests.pending} pending, ${requests.claimed} claimed, ` +
+      `${requests.completed} completed, ${requests.expired} expired` +
+      `${requests.invalid > 0 ? `, ${requests.invalid} invalid` : ''}`,
+  );
 }
 
 function assertNeverWatchService(value: never): never {

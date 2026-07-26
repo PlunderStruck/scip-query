@@ -2,13 +2,24 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { LastRefreshMetadata, ReindexActivitySummary, WatcherStatus } from '../domain/types.js';
+import { isValidRecordTimestamp } from '../domain/record-validation.js';
 import { parseProcessIdentity, type ProcessIdentity } from './process-identity.js';
 
-export const WATCH_SERVICE_PROTOCOL_VERSION = 4;
+export const WATCH_SERVICE_PROTOCOL_VERSION = 5;
 export const WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS = 5_000;
 export const WATCH_LOCK_FILE = 'watch.lock';
 export const WATCH_STATE_FILE = 'watch-state.json';
 export const WATCH_ACTIVITY_FILE = 'watch-activity.json';
+export const WATCH_REFRESH_REQUESTS_DIRECTORY = 'watch-refresh-requests';
+
+export interface WatchRefreshRequestStatusSnapshot {
+  pending: number;
+  claimed: number;
+  completed: number;
+  expired: number;
+  invalid: number;
+  oldestPendingAt?: string;
+}
 
 export interface TypeScriptSemanticServiceStatusSnapshot {
   protocolVersion: number;
@@ -58,6 +69,7 @@ export interface WatchServiceState {
   lastRefresh?: LastRefreshMetadata;
   lastError?: { at: string; message: string };
   reindexActivity?: ReindexActivitySummary;
+  refreshRequests?: WatchRefreshRequestStatusSnapshot;
   typescriptSemantic?: TypeScriptSemanticServiceStatusSnapshot;
   typescriptIndex?: TypeScriptIndexServiceStatusSnapshot;
 }
@@ -67,6 +79,7 @@ export interface WatchServicePaths {
   lockPath: string;
   statePath: string;
   activityPath: string;
+  refreshRequestsPath: string;
 }
 
 export function watchServicePaths(cacheDir: string): WatchServicePaths {
@@ -74,6 +87,7 @@ export function watchServicePaths(cacheDir: string): WatchServicePaths {
     lockPath: join(cacheDir, WATCH_LOCK_FILE),
     statePath: join(cacheDir, WATCH_STATE_FILE),
     activityPath: join(cacheDir, WATCH_ACTIVITY_FILE),
+    refreshRequestsPath: join(cacheDir, WATCH_REFRESH_REQUESTS_DIRECTORY),
   };
 }
 
@@ -118,6 +132,7 @@ export function parseWatchServiceState(value: unknown): WatchServiceState | null
   if (state.lastError !== undefined && !validLastError(state.lastError)) return null;
   if (state.lastRefresh !== undefined && !validLastRefresh(state.lastRefresh)) return null;
   if (state.reindexActivity !== undefined && !validReindexActivitySummary(state.reindexActivity)) return null;
+  if (state.refreshRequests !== undefined && !validWatchRefreshRequestStatus(state.refreshRequests)) return null;
   if (state.typescriptSemantic !== undefined && !validTypeScriptSemanticStatus(state.typescriptSemantic)) {
     return null;
   }
@@ -129,7 +144,7 @@ export function parseWatchServiceState(value: unknown): WatchServiceState | null
 
 // scip-query: ignore-wrapper — reviewed W1 reused predicate; eleven validation sites share this timestamp rule.
 export function isValidWatchServiceTimestamp(value: unknown): value is string {
-  return typeof value === 'string' && Number.isFinite(Date.parse(value));
+  return isValidRecordTimestamp(value);
 }
 
 function validWatcherStatus(value: unknown): value is WatcherStatus {
@@ -188,6 +203,19 @@ function validReindexActivitySummary(value: unknown): value is ReindexActivitySu
     return false;
   }
   return Object.values(summary.byTrigger).every((count) => count === undefined || nonNegativeInteger(count));
+}
+
+function validWatchRefreshRequestStatus(value: unknown): value is WatchRefreshRequestStatusSnapshot {
+  if (!value || typeof value !== 'object') return false;
+  const status = value as Partial<WatchRefreshRequestStatusSnapshot>;
+  return (
+    nonNegativeInteger(status.pending) &&
+    nonNegativeInteger(status.claimed) &&
+    nonNegativeInteger(status.completed) &&
+    nonNegativeInteger(status.expired) &&
+    nonNegativeInteger(status.invalid) &&
+    (status.oldestPendingAt === undefined || isValidWatchServiceTimestamp(status.oldestPendingAt))
+  );
 }
 
 function validTypeScriptSemanticStatus(value: unknown): value is TypeScriptSemanticServiceStatusSnapshot {

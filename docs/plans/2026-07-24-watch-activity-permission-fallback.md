@@ -2,6 +2,15 @@
 
 Date: 2026-07-24
 
+**Superseded refresh-field premise (2026-07-25):** this document remains the
+historical design record for permission-tolerant activity writes, but its P3/P5
+description of refresh intent inside `watch-activity.json` is no longer
+current. Slice 11 of the distributed-state remediation moved accepted refresh
+intent to the immutable request/claim/completion protocol in
+[`docs/WATCH_REFRESH_REQUESTS.md`](../WATCH_REFRESH_REQUESTS.md). Activity is
+now only a last-writer-wins idle-lifetime timestamp; the permission fallback
+described here still applies to that advisory write.
+
 ## Goal
 
 Keep an automatic scip-query command attached to an already-live watch service when a restricted execution sandbox cannot update the service's activity file, without hiding failures that mean the daemon is absent or unusable.

@@ -229,6 +229,37 @@ describe('Watcher', () => {
     await watcher.stop();
   });
 
+  it('attributes a failed reindex to the exact trigger consumed by that attempt', async () => {
+    const projectRoot = createProject();
+    const completion = deferred<number>();
+    const onReindexError = vi.fn();
+    const onError = vi.fn();
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { debounceMs: 60_000, gitPollMs: 60_000 } },
+      languages: ['typescript'],
+      onReindexError,
+      onError,
+      reindexRunner: {
+        start: () => ({
+          completion: completion.promise,
+          cancel: async () => ({ state: 'exited', diagnostics: emptyDiagnostics() }),
+          diagnostics: emptyDiagnostics,
+        }),
+      },
+    });
+    const trigger = { kind: 'watch-demand' as const, detail: 'claimed request A' };
+
+    watcher.requestRefresh(trigger, { immediate: true });
+    completion.reject(new Error('worker failed'));
+    await vi.waitFor(() => expect(onReindexError).toHaveBeenCalledOnce());
+
+    expect(onReindexError).toHaveBeenCalledWith(expect.objectContaining({ message: 'worker failed' }), trigger);
+    expect(onError).toHaveBeenCalledOnce();
+    await watcher.stop();
+  });
+
   it('passes canonical index paths and trigger metadata to the reindex worker', async () => {
     const projectRoot = createProject();
     const captured: ReindexRunRequest[] = [];

@@ -1,0 +1,8 @@
+{
+  "ts": 1785037898962,
+  "check": "echo",
+  "findingId": "SQ3D440C48DB74",
+  "event": "resolved",
+  "commit": "c58c28df75699ab7651a69b936f71872054af638",
+  "comparisonBaseCommit": "c58c28df75699ab7651a69b936f71872054af638"
+}

@@ -17,7 +17,9 @@ import {
   ensureWatchService,
   ensureWatchServiceForCommand,
   planWatchServiceAction,
+  recordWatchServiceActivity,
   readWatchServiceActivityAt,
+  requestWatchServiceRefresh,
   resolveWatchServiceIdentity,
   shouldStopWatchServiceForIdle,
   stopWatchService,
@@ -27,6 +29,7 @@ import {
   type WatchServiceRuntime,
 } from '../../src/runtime/watch-service.js';
 import { startupRefreshTrigger } from '../../src/runtime/watch-server.js';
+import { claimWatchRefreshRequests, inspectWatchRefreshRequests } from '../../src/storage/watch-refresh-requests.js';
 
 const NOW = Date.parse('2026-07-09T20:00:00.000Z');
 const IDENTITY = { projectRoot: tmpdir(), worktreeKind: 'non-git', cliVersion: '0.15.0' } as const;
@@ -204,6 +207,29 @@ describe('watch service contract', () => {
         detail: `index ${state} when watch service started`,
       });
     }
+  });
+
+  it('keeps an accepted refresh request independent of later activity replacement', () => {
+    withTempCache((cacheDir) => {
+      const paths = watchServicePaths(cacheDir);
+      recordWatchServiceActivity(paths.activityPath, NOW);
+      requestWatchServiceRefresh(paths.activityPath, 'stale index', NOW + 1, {
+        idempotencyKey: 'command-1',
+      });
+      recordWatchServiceActivity(paths.activityPath, NOW + 2);
+
+      expect(readWatchServiceActivityAt(paths.activityPath)).toBe(NOW + 2);
+      expect(inspectWatchRefreshRequests(paths.refreshRequestsPath)).toMatchObject({
+        pending: 1,
+        claimed: 0,
+      });
+      expect(
+        claimWatchRefreshRequests(paths.refreshRequestsPath, {
+          now: () => new Date(NOW + 3),
+          randomId: () => 'consumer',
+        }).requests.map((request) => request.detail),
+      ).toEqual(['stale index']);
+    });
   });
 
   it('starts once, records command activity, and reuses the live service', () => {
@@ -399,6 +425,9 @@ describe('watch service contract', () => {
       const runtime = fakeRuntime(paths.statePath);
       runtime.alive.add(123);
       writeWatchServiceState(paths.statePath, liveState());
+      requestWatchServiceRefresh(paths.activityPath, 'survive daemon replacement', NOW, {
+        idempotencyKey: 'survive-stop',
+      });
 
       expect(
         stopWatchService({
@@ -409,6 +438,7 @@ describe('watch service contract', () => {
       expect(runtime.signaled).toEqual([123]);
       expect(existsSync(paths.statePath)).toBe(false);
       expect(existsSync(paths.activityPath)).toBe(false);
+      expect(inspectWatchRefreshRequests(paths.refreshRequestsPath).pending).toBe(1);
     });
   });
 

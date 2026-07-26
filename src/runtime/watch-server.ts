@@ -42,6 +42,7 @@ import {
   type WatchServiceWatchOverrides,
 } from './watch-service.js';
 import { maybeSweepRepositoryCache } from './repository-cache-lifecycle.js';
+import { WatchRefreshCoordinator } from './watch-refresh-coordinator.js';
 
 const HEARTBEAT_INTERVAL_MS = 1_000;
 const ACTIVITY_POLL_INTERVAL_MS = 250;
@@ -72,6 +73,10 @@ export async function runWatchServiceServer(
     readProcessIdentity: (pid) => (pid === process.pid ? processIdentity : readProcessIdentity(pid)),
   });
   if (!lock.acquired) return;
+  const refreshCoordinator = new WatchRefreshCoordinator(servicePaths.refreshRequestsPath, {
+    retryDelayMs: Math.max(1_000, watchConfig.cooldownMs),
+  });
+  refreshCoordinator.initializeAfterOwnershipAcquired();
 
   const startedAtMs = Date.now();
   let lastActivityAtMs = startedAtMs;
@@ -122,6 +127,7 @@ export async function runWatchServiceServer(
       ...(lastRefresh ? { lastRefresh } : {}),
       ...(lastError ? { lastError } : {}),
       reindexActivity,
+      refreshRequests: refreshCoordinator.status(),
       typescriptSemantic: {
         ...semanticHost.status(),
         ...(semanticBusyUntilMs === undefined ? {} : { busyUntil: new Date(semanticBusyUntilMs).toISOString() }),
@@ -154,9 +160,13 @@ export async function runWatchServiceServer(
       indexGeneration =
         freshness.state === 'fresh' ? (publishedGenerationIdentity(indexPaths.dbPath) ?? undefined) : undefined;
       reindexActivity = readReindexActivitySummary(indexPaths.dbPath);
+      refreshCoordinator.completeActive();
       lastError = undefined;
       persistState(true);
       return freshness.state === 'fresh';
+    },
+    onReindexError() {
+      refreshCoordinator.failActive();
     },
     onRefreshSuppressed(trigger) {
       recordSuppressedReindexActivity(indexPaths.dbPath, trigger);
@@ -225,12 +235,15 @@ export async function runWatchServiceServer(
         }
         if (activity?.refreshRequestedAtMs !== undefined && activity.refreshRequestedAtMs > lastRefreshRequestAtMs) {
           lastRefreshRequestAtMs = activity.refreshRequestedAtMs;
-          recordActivity();
-          watcher.requestRefresh(
-            { kind: 'watch-demand', detail: activity.refreshDetail ?? 'stale index observed by a command' },
-            { immediate: true },
+          refreshCoordinator.observeLegacyRequest(
+            activity.refreshRequestedAtMs,
+            activity.refreshDetail ?? 'stale index observed by a legacy command',
           );
         }
+        refreshCoordinator.poll(watcherStatus, (detail) => {
+          recordActivity();
+          watcher.requestRefresh({ kind: 'watch-demand', detail }, { immediate: true });
+        });
       }
       if (semanticRequests > 0 || indexRequests > 0) {
         recordActivity();

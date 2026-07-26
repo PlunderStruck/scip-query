@@ -231,6 +231,25 @@ Two requesters can also overwrite each other's detail and timestamps, and an old
 
 **Acceptance condition:** no activity update can erase an unacknowledged refresh request.
 
+**Resolution — Slice 11 (2026-07-25):** resolved. New requesters publish a
+complete immutable record under `watch-refresh-requests/requests/`; ordinary
+activity writes now replace only a disposable timestamp. Stable request
+identity provides idempotency, exclusive claim records prevent competing
+consumers, and durable completion receipts are written before claim release.
+The watch server claims only while its watcher is idle, deliberately coalesces
+the claimed batch into one demand refresh, acknowledges it only from that
+reindex completion callback, and releases it after failure with a bounded retry
+delay. A successor recovers predecessor claims only after acquiring the watch
+process lock.
+
+Deterministic storage and coordinator tests cover the original stale-read
+interleaving, duplicate and distinct idempotency keys, competing claimers,
+crashes after claim and after completion, retry delay, deliberate coalescing,
+expiry, history pruning, and the former activity-record race. Protocol version
+5 state exposes pending, claimed, completed, expired, and invalid counters.
+Legacy activity refresh fields remain readable and are converted to
+deduplicated durable requests during the overlap release.
+
 ### DD-04 — S2 — Empty or malformed lock files can wedge watch, reindex, and cache operations indefinitely
 
 **Evidence:** source-confirmed crash window.

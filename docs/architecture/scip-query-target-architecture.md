@@ -181,6 +181,15 @@ and lock mutation, and the existing atomic writer. The stored identity now
 includes the operating-system process start token as well as the reusable PID;
 runtime must verify both before a stop or replacement signal.
 
+Protocol version 5 adds the validated refresh-request status snapshot and the
+checkout-local `watch-refresh-requests/` path. The authoritative request,
+claim, and completion records belong to `storage`; the runtime watch
+coordinator couples those records to watcher transitions, while `platform`
+continues to own only the process-neutral state schema and paths. Persisted
+record decoders share the dependency-free timestamp predicate in
+`domain/record-validation.ts` rather than creating cross-dependencies between
+storage, reindex, and platform.
+
 The state union includes `draining`, the live interval in which the owner has
 stopped accepting refreshes but has not yet closed every subscription and
 reaped its active reindex child. Runtime persists the reason and continues to

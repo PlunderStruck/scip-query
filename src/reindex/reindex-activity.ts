@@ -7,6 +7,7 @@ import type {
   RefreshTriggerKind,
   ReindexActivitySummary,
 } from '../domain/types.js';
+import { isValidRecordTimestamp } from '../domain/record-validation.js';
 import type { ReindexResult } from './index.js';
 
 export const REINDEX_ACTIVITY_FILE = 'reindex-activity.jsonl';
@@ -189,7 +190,7 @@ function parseReindexActivityRecord(line: string): ReindexActivityRecord | null 
     const record = value as Partial<ReindexActivityRecord>;
     if (
       record.version !== 1 ||
-      !validTimestamp(record.recordedAt) ||
+      !isValidRecordTimestamp(record.recordedAt) ||
       !record.trigger ||
       !isRefreshTriggerKind(record.trigger.kind)
     ) {
@@ -224,10 +225,6 @@ function isRefreshTriggerKind(value: unknown): value is RefreshTriggerKind {
     value === 'watch-git-state' ||
     value === 'unknown'
   );
-}
-
-function validTimestamp(value: unknown): value is string {
-  return typeof value === 'string' && Number.isFinite(Date.parse(value));
 }
 
 function nonNegativeNumber(value: unknown): value is number {

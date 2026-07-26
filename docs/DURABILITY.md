@@ -87,7 +87,8 @@ could not confirm the stronger durability guarantee.
 | Health baseline | Durable | Acts as a committed regression policy |
 | Verified binary cache promotion | Durable | Makes checksum-accepted executable or tool bytes current |
 | TypeScript/Rust request and response mailboxes | Visibility-atomic | A timeout or retry reconstructs the ephemeral message |
-| Watch activity/refresh activity | Visibility-atomic pending Slice 11 | Operational activity is rebuildable; refresh intent will move to immutable request records |
+| Watch activity | Visibility-atomic | A newer timestamp supersedes an older idle-lifetime observation; it carries no durable intent |
+| Watch refresh request, claim, and completion records | Durable immutable admission and acknowledgement | Accepted intent survives activity replacement and owner crashes; exclusive claims may be recovered only by the next lock owner |
 | TypeScript fragment/overlay manifests | Visibility-atomic | Content-addressed cache artifacts are validated and rebuildable |
 | Repository GC state | Visibility-atomic | Sweep history can be reconstructed conservatively |
 | Affected-set shadow latest record | Visibility-atomic | Calibration telemetry does not control publication |
@@ -97,4 +98,6 @@ durable token ownership, malformed-creation grace, guarded recovery, and
 legacy compatibility are defined in
 [Process Lock Ownership and Recovery](LOCK_PROTOCOL.md). Generation directories,
 stable compatibility mirrors, and their crash ordering are defined in
-[Local Index Generations](INDEX_GENERATIONS.md).
+[Local Index Generations](INDEX_GENERATIONS.md). Durable watch demand,
+idempotency, claim recovery, and acknowledgement ordering are defined in
+[Watch Refresh Requests](WATCH_REFRESH_REQUESTS.md).
