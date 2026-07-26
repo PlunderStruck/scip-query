@@ -157,75 +157,14 @@ describe('skill installation', () => {
 
     const result = module.installSkills({ quiet: true });
 
-    expect(result.installed).toContain('Claude/scip-language-playbook');
-    expect(result.installed).toContain('Codex/scip-language-playbook');
-    expect(result.installed).toContain('Claude/scip-maintainability');
-    expect(result.installed).toContain('Codex/scip-maintainability');
-    expect(result.installed).toContain('Agents/scip-maintainability');
-    expect(result.installed).toContain('Claude/scip-hyper-optimization');
-    expect(result.installed).toContain('Codex/scip-hyper-optimization');
-    expect(result.installed).toContain('Agents/scip-hyper-optimization');
-    expect(result.installed).toContain('Claude/scip-react-maintainability');
-    expect(result.installed).toContain('Codex/scip-react-maintainability');
-    expect(result.installed).toContain('Agents/scip-react-maintainability');
-    expect(result.installed).toContain('Claude/scip-vue-maintainability');
-    expect(result.installed).toContain('Codex/scip-vue-maintainability');
-    expect(result.installed).toContain('Agents/scip-vue-maintainability');
-    expect(symlinkSync).toHaveBeenCalledWith(
-      '/pkg/skills/scip-language-playbook',
-      '/home/test/.claude/skills/scip-language-playbook',
-      'dir',
-    );
-    expect(symlinkSync).toHaveBeenCalledWith(
-      '/pkg/skills/scip-language-playbook',
-      '/home/test/.codex/skills/scip-language-playbook',
-      'dir',
-    );
-    expect(symlinkSync).toHaveBeenCalledWith(
-      '/pkg/skills/scip-maintainability',
-      '/home/test/.claude/skills/scip-maintainability',
-      'dir',
-    );
-    expect(symlinkSync).toHaveBeenCalledWith(
-      '/pkg/skills/scip-maintainability',
-      '/home/test/.codex/skills/scip-maintainability',
-      'dir',
-    );
-    expect(symlinkSync).toHaveBeenCalledWith(
-      '/pkg/skills/scip-maintainability',
-      '/home/test/.agents/skills/scip-maintainability',
-      'dir',
-    );
-    expect(symlinkSync).toHaveBeenCalledWith(
-      '/pkg/skills/scip-react-maintainability',
-      '/home/test/.claude/skills/scip-react-maintainability',
-      'dir',
-    );
-    expect(symlinkSync).toHaveBeenCalledWith(
-      '/pkg/skills/scip-react-maintainability',
-      '/home/test/.codex/skills/scip-react-maintainability',
-      'dir',
-    );
-    expect(symlinkSync).toHaveBeenCalledWith(
-      '/pkg/skills/scip-react-maintainability',
-      '/home/test/.agents/skills/scip-react-maintainability',
-      'dir',
-    );
-    expect(symlinkSync).toHaveBeenCalledWith(
-      '/pkg/skills/scip-vue-maintainability',
-      '/home/test/.claude/skills/scip-vue-maintainability',
-      'dir',
-    );
-    expect(symlinkSync).toHaveBeenCalledWith(
-      '/pkg/skills/scip-vue-maintainability',
-      '/home/test/.codex/skills/scip-vue-maintainability',
-      'dir',
-    );
-    expect(symlinkSync).toHaveBeenCalledWith(
-      '/pkg/skills/scip-vue-maintainability',
-      '/home/test/.agents/skills/scip-vue-maintainability',
-      'dir',
-    );
+    for (const skill of module.BUILTIN_SKILLS) {
+      expect(result.installed).toContain(`Claude/${skill}`);
+      expect(result.installed).toContain(`Codex/${skill}`);
+      expect(result.installed).toContain(`Agents/${skill}`);
+      expect(symlinkSync).toHaveBeenCalledWith(`/pkg/skills/${skill}`, `/home/test/.claude/skills/${skill}`, 'dir');
+      expect(symlinkSync).toHaveBeenCalledWith(`/pkg/skills/${skill}`, `/home/test/.codex/skills/${skill}`, 'dir');
+      expect(symlinkSync).toHaveBeenCalledWith(`/pkg/skills/${skill}`, `/home/test/.agents/skills/${skill}`, 'dir');
+    }
   });
 
   it('prunes stale scip-query-owned skill links during installation', async () => {

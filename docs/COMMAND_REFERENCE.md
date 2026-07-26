@@ -130,7 +130,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 |---|---|---|
 | `bench` | Benchmark indexing and command runtimes for this repository | `--json`<br>`--cold-index`<br>`--include-heavy`<br>`--command <cmd>`<br>`--timeout-ms <n>`<br>`--progress`<br>`--profile`<br>`--profile-out <path>` |
 | `work-audit <profile>` | Rank exact repeated computations in a profiling JSONL file by measured avoidable time | `--top <n>`<br>`--json` |
-| `install-skills` | Install skills (_shared, scip-query, scip-setup, scip-calibrate, scip-cleanup-audit, scip-cleanup-improve, scip-integrity-audit, scip-twin-drift, scip-claim-audit, scip-probe-reachability, scip-hyper-optimization, scip-api-impact, scip-concrete-plan, scip-conductor, scip-debug, scip-explore, scip-root-cause, scip-triage-issue, scip-diagram, scip-doc-reconcile, scip-directory-architecture, scip-maintainability, scip-react-maintainability, scip-vue-maintainability, scip-verify, scip-language-playbook, scip-tla-model-system) into Claude Code, Codex, and shared agent roots | - |
+| `install-skills` | Install skills (_shared, scip-query, scip-setup, scip-explore, scip-plan, scip-diagnose, scip-audit, scip-improve, scip-verify) into Claude Code, Codex, and shared agent roots | - |
 | `setup-hooks` | Install or refresh project-local Codex and Claude Code lifecycle hooks | `--shared`<br>`--remove`<br>`--force`<br>`--json` |
 | `check-deps` | Check whether scip-query and the detected language indexers are actually runnable | - |
 | `capabilities` | Report which evidence and verification capabilities are available in this project | `--matrix`<br>`--json` |

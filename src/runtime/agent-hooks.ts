@@ -917,7 +917,7 @@ function renderSessionStartContext(
       ? `Unavailable or partial capabilities: ${unavailable.join(', ')}.`
       : 'Core capabilities are available.',
     'Use the scip-query router skill when exploring, planning, verifying, debugging, diagramming, or cleaning up code.',
-    'Before a non-trivial edit, establish the current entry-to-effect flow, affected consumers, and reuse options with scip-concrete-plan; then verify the finished diff with scip-verify.',
+    'Before a non-trivial edit, establish the current entry-to-effect flow, affected consumers, and reuse options with scip-plan; then verify the finished diff with scip-verify.',
   ]
     .filter((line): line is string => line !== undefined)
     .join('\n');
@@ -951,7 +951,7 @@ const PROMPT_ROUTES: PromptRoute[] = [
   },
   {
     id: 'debug',
-    skillNames: ['scip-debug', 'scip-triage-issue'],
+    skillNames: ['scip-diagnose'],
     keywords: [
       'debug',
       'bug',
@@ -965,21 +965,21 @@ const PROMPT_ROUTES: PromptRoute[] = [
       'not working',
       'crash',
     ],
-    message: 'Debug or bug request: use scip-debug. For issue-quality triage, use scip-triage-issue.',
+    message: 'Debug, root-cause, or issue-triage request: use scip-diagnose.',
   },
   {
     id: 'review',
-    skillNames: ['scip-maintainability', 'scip-api-impact', 'scip-verify'],
+    skillNames: ['scip-audit', 'scip-plan', 'scip-verify'],
     keywords: ['review', 'maintainability', 'architecture', 'boundary'],
     message:
-      'Review request: use scip-maintainability, scip-api-impact, or scip-verify depending on whether this is architecture, API impact, or post-change verification.',
+      'Review request: use scip-audit for current structure, scip-plan for prospective API impact, or scip-verify for a finished change.',
   },
   {
     id: 'implementation',
-    skillNames: ['scip-concrete-plan', 'scip-verify'],
+    skillNames: ['scip-plan', 'scip-verify'],
     keywords: ['implement', 'build', 'change', 'refactor', 'fix', 'add', 'update'],
     message:
-      'Before editing: use scip-concrete-plan and `scip-query plan-context <target>` to establish the current flow, affected consumers, and reuse options. After editing: use scip-verify.',
+      'Before editing: use scip-plan and `scip-query plan-context <target>` to establish the current flow, affected consumers, and reuse options. After editing: use scip-verify.',
   },
   {
     id: 'exploration',
@@ -989,13 +989,13 @@ const PROMPT_ROUTES: PromptRoute[] = [
   },
   {
     id: 'diagram',
-    skillNames: ['scip-diagram'],
+    skillNames: ['scip-explore'],
     keywords: ['diagram', 'visualize', 'visualise', 'flow map', 'architecture map'],
-    message: 'Diagram request: use scip-diagram and back every node and edge with scip-query evidence.',
+    message: 'Diagram request: use scip-explore and back every node and edge with scip-query evidence.',
   },
   {
     id: 'health',
-    skillNames: ['scip-cleanup-audit', 'scip-cleanup-improve'],
+    skillNames: ['scip-audit', 'scip-improve'],
     keywords: [
       'health',
       'score',
@@ -1009,7 +1009,7 @@ const PROMPT_ROUTES: PromptRoute[] = [
       'maximise',
     ],
     message:
-      'Health or cleanup request: use scip-cleanup-audit before editing; use scip-cleanup-improve when the user wants confirmed issues fixed autonomously.',
+      'Health or cleanup request: use scip-audit before editing; use scip-improve when the user wants confirmed issues fixed autonomously.',
   },
 ];
 

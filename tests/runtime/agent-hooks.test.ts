@@ -68,13 +68,13 @@ describe('agent hook context', () => {
     const context = renderUserPromptContext('Please debug this failing setup and then draw a diagram of the flow');
 
     expect(context).toContain('scip-setup');
-    expect(context).not.toContain('scip-debug');
-    expect(context).not.toContain('scip-diagram');
+    expect(context).not.toContain('scip-diagnose');
+    expect(context).not.toContain('scip-explore');
   });
 
   it('skips drive-by single-keyword prompts unless a skill is explicit', () => {
     expect(renderUserPromptContext('Please review this')).toBe('');
-    expect(routesForPrompt('Please use scip-debug on this')).toMatchObject({ id: 'debug' });
+    expect(routesForPrompt('Please use scip-diagnose on this')).toMatchObject({ id: 'debug' });
   });
 
   it('can disable prompt routing through config or env', () => {
@@ -93,8 +93,8 @@ describe('agent hook context', () => {
   it('routes health score prompts toward autonomous improvement when enough evidence is present', () => {
     const context = renderUserPromptContext('Raise the health score as high as reasonably possible');
 
-    expect(context).toContain('scip-cleanup-audit');
-    expect(context).toContain('scip-cleanup-improve');
+    expect(context).toContain('scip-audit');
+    expect(context).toContain('scip-improve');
   });
 
   it('blocks blind truncation for commands with compact or paginated alternatives', () => {

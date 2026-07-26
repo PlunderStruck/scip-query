@@ -73,7 +73,7 @@ describe('writeProjectHealthDossier', () => {
             confirmationStatus: 'unconfirmed',
             safeForAgentToStart: false,
             recommendedNextStep:
-              'Run scip-cleanup-audit to confirm this signal; use scip-cleanup-improve when the user wants confirmed issues fixed autonomously.',
+              'Run scip-audit to confirm this signal; use scip-improve when the user wants confirmed issues fixed autonomously.',
           },
         ],
         warnings: [],
