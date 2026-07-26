@@ -719,7 +719,11 @@ It also reports a rolling 24-hour reindex activity summary: rebuilt, reused,
 failed, and freshness-proven suppressed refreshes plus estimated logical output
 bytes. The estimate counts scip-query artifacts emitted by rebuilt refreshes;
 it is not a measurement of physical SSD writes. The underlying
-`reindex-activity.jsonl` history uses two bounded 1 MiB segments.
+`reindex-activity.jsonl` history uses two bounded 1 MiB segments. Append,
+rotation, and retained-set reads share a process-instance lock; incomplete
+crash tails are trimmed or ignored without deleting earlier complete lines.
+These observations are process-visible rather than crash-durable. See
+[`docs/TELEMETRY_RETENTION.md`](docs/TELEMETRY_RETENTION.md).
 The refresh-request counters reported beside it describe durable demand
 admission and processing state, not reindex frequency.
 If the service is stopped, incompatible, busy beyond its bound, or returns an

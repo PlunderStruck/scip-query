@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import type {
@@ -9,9 +9,15 @@ import type {
 } from '../domain/types.js';
 import { isValidRecordTimestamp } from '../domain/record-validation.js';
 import type { ReindexResult } from './index.js';
+import {
+  appendRotatingJsonlRecord,
+  readRotatingJsonlLines,
+  ROTATING_JSONL_PREVIOUS_SUFFIX,
+  type RotatingJsonlRuntime,
+} from './rotating-jsonl.js';
 
 export const REINDEX_ACTIVITY_FILE = 'reindex-activity.jsonl';
-export const REINDEX_ACTIVITY_PREVIOUS_SUFFIX = '.previous';
+export const REINDEX_ACTIVITY_PREVIOUS_SUFFIX = ROTATING_JSONL_PREVIOUS_SUFFIX;
 export const REINDEX_ACTIVITY_MAX_BYTES = 1024 * 1024;
 export const REINDEX_ACTIVITY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -35,23 +41,9 @@ interface ReindexSuppressedActivity {
 
 export type ReindexActivityRecord = ReindexRunActivity | ReindexSuppressedActivity;
 
-export interface ReindexActivityWriteRuntime {
-  appendFile(path: string, value: string): void;
-  exists(path: string): boolean;
-  mkdir(path: string): void;
-  rename(from: string, to: string): void;
-  remove(path: string): void;
-  size(path: string): number;
-}
+export type ReindexActivityWriteRuntime = RotatingJsonlRuntime;
 
-const defaultWriteRuntime: ReindexActivityWriteRuntime = {
-  appendFile: appendFileSync,
-  exists: existsSync,
-  mkdir: (path) => mkdirSync(path, { recursive: true }),
-  rename: renameSync,
-  remove: (path) => rmSync(path, { force: true }),
-  size: (path) => statSync(path).size,
-};
+const defaultReadFile = (path: string): string => readFileSync(path, 'utf8');
 
 export function reindexActivityPath(outputDb: string): string {
   return join(dirname(outputDb), REINDEX_ACTIVITY_FILE);
@@ -110,30 +102,20 @@ export function appendReindexActivity(
   path: string,
   record: ReindexActivityRecord,
   maxBytes = REINDEX_ACTIVITY_MAX_BYTES,
-  runtime: ReindexActivityWriteRuntime = defaultWriteRuntime,
+  runtime?: ReindexActivityWriteRuntime,
 ): void {
-  const line = `${JSON.stringify(record)}\n`;
-  const segmentLimit = Math.max(1, Math.floor(maxBytes));
-  const previousPath = `${path}${REINDEX_ACTIVITY_PREVIOUS_SUFFIX}`;
-  runtime.mkdir(dirname(path));
-  if (runtime.exists(path)) {
-    const currentBytes = runtime.size(path);
-    if (currentBytes > segmentLimit) {
-      runtime.remove(path);
-      runtime.remove(previousPath);
-    } else if (currentBytes + Buffer.byteLength(line) > segmentLimit) {
-      runtime.remove(previousPath);
-      runtime.rename(path, previousPath);
-    }
-  }
-  runtime.appendFile(path, line);
+  appendRotatingJsonlRecord(path, record, {
+    maxSegmentBytes: maxBytes,
+    previousSuffix: REINDEX_ACTIVITY_PREVIOUS_SUFFIX,
+    ...(runtime ? { runtime } : {}),
+  });
 }
 
 export function readReindexActivitySummary(
   outputDb: string,
   now: Date = new Date(),
   windowMs = REINDEX_ACTIVITY_WINDOW_MS,
-  readFile: (path: string) => string = (path) => readFileSync(path, 'utf8'),
+  readFile: (path: string) => string = defaultReadFile,
 ): ReindexActivitySummary {
   const endedAtMs = now.getTime();
   const startedAtMs = endedAtMs - windowMs;
@@ -149,28 +131,37 @@ export function readReindexActivitySummary(
     byTrigger: {},
   };
   const path = reindexActivityPath(outputDb);
-  for (const segment of [`${path}${REINDEX_ACTIVITY_PREVIOUS_SUFFIX}`, path]) {
-    let contents: string;
+  let lines: string[] = [];
+  if (readFile === defaultReadFile) {
     try {
-      contents = readFile(segment);
+      lines = readRotatingJsonlLines(path, {
+        previousSuffix: REINDEX_ACTIVITY_PREVIOUS_SUFFIX,
+      }).lines;
     } catch {
+      // Operational measurement must never prevent watch status reporting.
+    }
+  } else {
+    for (const segment of [`${path}${REINDEX_ACTIVITY_PREVIOUS_SUFFIX}`, path]) {
+      try {
+        lines.push(...completeInjectedLines(readFile(segment)));
+      } catch {
+        // Preserve the prior injectable best-effort read contract.
+      }
+    }
+  }
+  for (const line of lines) {
+    const record = parseReindexActivityRecord(line);
+    if (!record) continue;
+    const recordedAtMs = Date.parse(record.recordedAt);
+    if (recordedAtMs < startedAtMs || recordedAtMs > endedAtMs) continue;
+    summary.byTrigger[record.trigger.kind] = (summary.byTrigger[record.trigger.kind] ?? 0) + 1;
+    if (record.event === 'suppressed') {
+      summary.suppressed += 1;
       continue;
     }
-    for (const line of contents.split('\n')) {
-      if (!line) continue;
-      const record = parseReindexActivityRecord(line);
-      if (!record) continue;
-      const recordedAtMs = Date.parse(record.recordedAt);
-      if (recordedAtMs < startedAtMs || recordedAtMs > endedAtMs) continue;
-      summary.byTrigger[record.trigger.kind] = (summary.byTrigger[record.trigger.kind] ?? 0) + 1;
-      if (record.event === 'suppressed') {
-        summary.suppressed += 1;
-        continue;
-      }
-      summary.runs += 1;
-      summary[record.result] += 1;
-      summary.estimatedLogicalOutputBytes += record.estimatedLogicalOutputBytes;
-    }
+    summary.runs += 1;
+    summary[record.result] += 1;
+    summary.estimatedLogicalOutputBytes += record.estimatedLogicalOutputBytes;
   }
   return summary;
 }
@@ -237,4 +228,9 @@ function fileSize(path: string): number {
   } catch {
     return 0;
   }
+}
+
+function completeInjectedLines(contents: string): string[] {
+  if (!contents.endsWith('\n')) contents = contents.slice(0, Math.max(0, contents.lastIndexOf('\n') + 1));
+  return contents.split('\n').filter((line) => line.length > 0);
 }

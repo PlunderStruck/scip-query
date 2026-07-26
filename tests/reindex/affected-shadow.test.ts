@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -446,7 +446,7 @@ describe('affected-set document fact oracle', () => {
     expect(JSON.parse(readFileSync(historyPath, 'utf-8'))).toEqual(summarizeAffectedSetShadowRecord(record));
   });
 
-  it('discards oversized legacy history instead of retaining it as an archive', () => {
+  it('repairs an incomplete oversized legacy tail without discarding a complete prior segment', () => {
     const cacheDir = mkdtempSync(join(tmpdir(), 'scip-query-shadow-legacy-history-'));
     tempDirs.push(cacheDir);
     const historyPath = join(cacheDir, 'affected-shadow.jsonl');
@@ -456,7 +456,7 @@ describe('affected-set document fact oracle', () => {
 
     appendAffectedSetShadowHistory(historyPath, evaluatedRecord(), 1_024);
 
-    expect(existsSync(previousPath)).toBe(false);
+    expect(readFileSync(previousPath, 'utf-8')).toBe('older segment\n');
     expect(readFileSync(historyPath, 'utf-8')).not.toContain('"manifest"');
     expect(JSON.parse(readFileSync(historyPath, 'utf-8'))).toMatchObject({
       historyVersion: 1,

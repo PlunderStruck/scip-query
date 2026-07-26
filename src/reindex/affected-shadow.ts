@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { buildProjectChangeManifest } from '../domain/project-input.js';
 import { monotonicNowMs } from '../domain/time.js';
@@ -10,6 +10,7 @@ import { isRecord, stringArray } from '../storage/evidence-payload.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import { buildFileDepGraph } from '../symbols/graph/file-dep-graph.js';
 import { classifyAffectedSetFallback, planAffectedFiles, type AffectedFilePlan } from './affected-set.js';
+import { appendRotatingJsonlRecord, ROTATING_JSONL_PREVIOUS_SUFFIX } from './rotating-jsonl.js';
 
 export const GLOBAL_FACTS_UNIT = '<global-symbols>';
 
@@ -602,7 +603,7 @@ export function writeAffectedSetShadowRecord(
 }
 
 export const AFFECTED_SET_SHADOW_HISTORY_MAX_BYTES = 8 * 1024 * 1024;
-export const AFFECTED_SET_SHADOW_HISTORY_PREVIOUS_SUFFIX = '.previous';
+export const AFFECTED_SET_SHADOW_HISTORY_PREVIOUS_SUFFIX = ROTATING_JSONL_PREVIOUS_SUFFIX;
 
 export function summarizeAffectedSetShadowRecord(record: AffectedSetShadowRecord): AffectedSetShadowHistoryRecord {
   const base: AffectedSetShadowHistoryRecordBase = {
@@ -639,21 +640,10 @@ export function appendAffectedSetShadowHistory(
   record: AffectedSetShadowRecord,
   maxBytes = AFFECTED_SET_SHADOW_HISTORY_MAX_BYTES,
 ): void {
-  const line = `${JSON.stringify(summarizeAffectedSetShadowRecord(record))}\n`;
-  const segmentLimit = Math.max(1, Math.floor(maxBytes));
-  const previousPath = `${path}${AFFECTED_SET_SHADOW_HISTORY_PREVIOUS_SUFFIX}`;
-  mkdirSync(dirname(path), { recursive: true });
-  if (existsSync(path)) {
-    const currentBytes = statSync(path).size;
-    if (currentBytes > segmentLimit) {
-      rmSync(path, { force: true });
-      rmSync(previousPath, { force: true });
-    } else if (currentBytes + Buffer.byteLength(line) > segmentLimit) {
-      rmSync(previousPath, { force: true });
-      renameSync(path, previousPath);
-    }
-  }
-  appendFileSync(path, line);
+  appendRotatingJsonlRecord(path, summarizeAffectedSetShadowRecord(record), {
+    maxSegmentBytes: maxBytes,
+    previousSuffix: AFFECTED_SET_SHADOW_HISTORY_PREVIOUS_SUFFIX,
+  });
 }
 
 function symbolValues(row: GlobalSymbolRow, prefix: readonly DocumentFactValue[] = []): DocumentFactValue[] {

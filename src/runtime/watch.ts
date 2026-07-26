@@ -1,5 +1,5 @@
 import { statSync } from 'node:fs';
-import { isAbsolute, join, relative } from 'node:path';
+import { basename, isAbsolute, join, relative } from 'node:path';
 import { watch } from 'chokidar';
 import ignore from 'ignore';
 import type {
@@ -298,8 +298,7 @@ export class Watcher {
       rel.endsWith('index.db') ||
       rel.endsWith('index.scip') ||
       rel.endsWith('index.db.tmp') ||
-      rel.endsWith(REINDEX_ACTIVITY_FILE) ||
-      rel.endsWith(`${REINDEX_ACTIVITY_FILE}.previous`)
+      basename(rel).startsWith(REINDEX_ACTIVITY_FILE)
     ) {
       return;
     }

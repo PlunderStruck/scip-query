@@ -342,6 +342,8 @@ describe('Watcher', () => {
     watcher.start();
     subscription.emitAll('change', 'reindex-activity.jsonl');
     subscription.emitAll('change', 'reindex-activity.jsonl.previous');
+    subscription.emitAll('change', 'reindex-activity.jsonl.rotation.lock');
+    subscription.emitAll('change', 'reindex-activity.jsonl.rotation.lock.token.candidate');
     await vi.runAllTimersAsync();
 
     expect(run).not.toHaveBeenCalled();

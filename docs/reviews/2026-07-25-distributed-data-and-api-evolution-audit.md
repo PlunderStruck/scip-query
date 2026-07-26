@@ -606,7 +606,7 @@ start identity, hold a live claim beyond an apparent civil lease, and verify
 that only the ownership evidence changes the result. The complete decision
 table and compatibility policy are in `docs/TIME_SEMANTICS.md`.
 
-### DD-12 — S4 — Rotating operational JSONL files can lose records under concurrent writers
+### DD-12 — S4 — Rotating operational JSONL files can lose records under concurrent writers — resolved in Slice 18
 
 **Evidence:** source-confirmed interleaving, qualified by low authority.
 
@@ -619,6 +619,24 @@ Two writers that both decide to rotate can rename or delete different generation
 **Required tests:** two writers cross at each rotation step; all complete records should remain readable or loss should be explicitly accepted and counted.
 
 **Acceptance condition:** either rotation is serialized or the file is explicitly documented as lossy telemetry.
+
+**Resolution:** `src/reindex/rotating-jsonl.ts` now owns the two-segment
+protocol used by reindex activity and affected-set shadow history. One
+process-instance lock serializes incomplete-tail repair, previous-segment
+pruning, current rotation, append, and default retained-set reads. The wait is
+monotonic and bounded; timeout and ownership-changed release are typed
+failures. A configured limit smaller than one complete record expands to that
+record's size, so a successful append remains a complete retained line.
+
+The current segment is repaired only to its last newline after a partial
+append. Readers scan legacy-compatible `.previous` and current segments in
+that order, ignore an incomplete final tail, and report its byte count.
+Injected phase tests attempt a second writer after tail repair, prior-segment
+pruning, rename, and append; every attempt is excluded and succeeds on retry
+without losing a complete retained line. Additional tests stop after rename,
+recover a partial append, rotate three segments through the budget, and hold a
+live lock through a zero-budget contender. The authority, crash, and
+retention limits are documented in `docs/TELEMETRY_RETENTION.md`.
 
 ---
 

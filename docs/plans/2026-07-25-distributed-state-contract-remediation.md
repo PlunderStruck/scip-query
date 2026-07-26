@@ -422,6 +422,14 @@ its readiness deadline in the receiving process's monotonic domain.
 **Dependencies:** Slices 08 and 09 if the lock/manifest design is chosen.  
 **Rollback:** readers retain legacy `.previous` support.
 
+**Implemented shape:** both reindex-activity and affected-shadow history use
+one `rotating-jsonl` coordinator. A process-instance lock serializes current
+tail repair, retention pruning, rotation, append, and retained-set reads.
+Complete lines remain in deterministic previous-then-current order; one
+incomplete final tail is trimmed before the next append and ignored with an
+explicit byte count during reads. The two legacy segment names and their 1 MiB
+and 8 MiB limits remain compatible.
+
 ### Slice 19 — API-04 — Centralize reindex metadata decoding
 
 **Invariant:** every metadata consumer applies the same version, status, fingerprint, language, and companion validation.
@@ -643,8 +651,8 @@ its readiness deadline in the receiving process's monotonic domain.
 |    14 | DD-07   | complete | `5fd33ab0` | 24 focused; 1,603 full-suite tests  | G2 publication, deletion/recreation, ownership, and touch ordering verified                                                       |
 |    15 | DD-09   | complete | `adfded36` | 48 focused; 1,606 full-suite tests  | Serialized UPSERT, exact retry, collision, timeout, and suppression verified                                                      |
 |    16 | DD-10   | complete | `d577a205` | 68 focused mailbox/identity tests   | Atomic claims, first-completion fencing, retry, quotas, crash recovery, legacy overlap, fairness, cleanup, and telemetry verified |
-|    17 | DD-11   | complete |            | 244 focused; 1,625 full-suite tests | Monotonic waits, conservative ownership, PID reuse, civil jumps, relative Rust budget, and atomic lock publication verified       |
-|    18 | DD-12   | pending  |            |                                     |                                                                                                                                   |
+|    17 | DD-11   | complete | `7c00267c` | 244 focused; 1,625 full-suite tests | Monotonic waits, conservative ownership, PID reuse, civil jumps, relative Rust budget, and atomic lock publication verified       |
+|    18 | DD-12   | complete |            | 92 focused; 1,637 full-suite tests  | Locked tail repair, two-segment rotation, deterministic reads, contention, crash phases, and watch exclusions verified            |
 |    19 | API-04  | pending  |            |                                     |                                                                                                                                   |
 |    20 | API-01  | pending  |            |                                     |                                                                                                                                   |
 |    21 | API-02  | pending  |            |                                     |                                                                                                                                   |
@@ -871,6 +879,42 @@ its readiness deadline in the receiving process's monotonic domain.
   remediation program. DD-11-related entries are extraction pressure in
   cohesive ownership/readiness workflows, public cross-process contracts, and
   thin adapters; no baseline ratchet or heuristic suppression was written.
+
+### Slice 18 verification record
+
+- `src/reindex/rotating-jsonl.ts` is now the single owner of the operational
+  two-segment JSONL protocol. Its process-instance lock serializes incomplete
+  tail repair, previous-segment pruning, current rotation, append, and
+  retained-set reads. The established `.previous` name and each caller's
+  configured byte budget remain compatible.
+- The affected matrix passes 92 tests across the shared coordinator,
+  reindex-activity integration, affected-shadow integration, reindex
+  reliability, and watch exclusions. It exercises contention after every
+  mutation phase, a crash after rename, partial-tail recovery, a live
+  zero-budget contender, three-record retention, deterministic
+  previous-then-current reads, serialization rejection, release-ownership
+  change, and preservation of a primary append failure.
+- Typecheck and the production build pass. With an isolated cache, the full
+  suite passes 216 of 217 files and 1,637 tests, with 2 intentional skips. The
+  only 2 failures are the concurrently edited consolidated skill router's
+  command-catalog assertions (`is` plus 40 uncovered public commands); they
+  execute no DD-12 source and remain assigned to the skill owner in `HEY.md`.
+- Formatting and ESLint pass. Full lint stops only on the same concurrent
+  skill consolidation's two removed `.agents` wrapper targets.
+- The complete source diff gate has no DD-12 blocking finding. Its one source
+  advisory points from the unchanged TLA-model skill reference to
+  `src/runtime/watch.ts`; the cited `Watcher` class still exists and DD-12
+  changed only which generated telemetry filenames it ignores. The two
+  blocking findings are caused by Claude's uncommitted
+  `skills/scip-query/SKILL.md` preview and remain in that owner's scope.
+- `health --baseline` reports 66 accumulated heuristic deltas from the
+  remediation program. The sole new DD-12 entry is extraction pressure in the
+  cohesive append/repair/rotate transaction; no baseline ratchet or heuristic
+  suppression was written.
+- `docs/TELEMETRY_RETENTION.md` defines the retained referents, authority,
+  locking, crash, completeness, and durability limits. Successful writes are
+  process-visible complete records; the files remain bounded operational
+  evidence rather than authoritative or fsync-durable state.
 
 ### Slice 09 verification note
 
