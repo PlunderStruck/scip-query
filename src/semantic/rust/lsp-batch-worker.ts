@@ -4,6 +4,7 @@ import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { isMissingProjectFileError, readProjectFileText } from '../../platform/project-files.js';
+import { runWithConcurrency } from '../../platform/structured-concurrency.js';
 import type { SemanticCallee, SemanticReference } from '../types.js';
 import {
   createRustAnalyzerTransport,
@@ -508,24 +509,7 @@ function isInsideOrEqual(root: string, candidate: string): boolean {
   return candidate === root || candidate.startsWith(`${root}${sep}`);
 }
 
-export async function runWithConcurrency<T, R>(
-  items: readonly T[],
-  concurrency: number,
-  run: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let nextIndex = 0;
-  const workerCount = Math.max(1, Math.min(items.length, Math.floor(concurrency)));
-  await Promise.all(
-    Array.from({ length: workerCount }, async () => {
-      while (nextIndex < items.length) {
-        const index = nextIndex++;
-        results[index] = await run(items[index]!);
-      }
-    }),
-  );
-  return results;
-}
+export { runWithConcurrency } from '../../platform/structured-concurrency.js';
 
 async function readStdin(): Promise<string> {
   return new Promise((resolve, reject) => {

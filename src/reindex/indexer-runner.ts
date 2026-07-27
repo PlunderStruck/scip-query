@@ -6,6 +6,7 @@ import { monotonicNowMs } from '../domain/time.js';
 import { toPortableCommand } from '../platform/binary.js';
 import { BoundedProcessError, PROCESS_TIMEOUT_MS, runBoundedProcess } from '../platform/bounded-process.js';
 import { revalidateTrustedProjectTool, type TrustedProjectToolIdentity } from '../platform/indexer-toolchain.js';
+import { runWithConcurrency } from '../platform/structured-concurrency.js';
 
 // scip-query: ignore-stale — exported handoff record between reindex planning
 // and the runner; inlining would smear indexer execution state across modules.
@@ -258,24 +259,3 @@ function isTransientErrorCode(error: unknown): boolean {
 }
 
 // scip-query: ignore-twin — indexer scheduling and Rust request scheduling have different failure policy.
-async function runWithConcurrency<T, R>(
-  items: readonly T[],
-  concurrency: number,
-  run: (item: T) => Promise<R>,
-): Promise<R[]> {
-  if (items.length === 0) {
-    return [];
-  }
-
-  const results = new Array<R>(items.length);
-  let nextIndex = 0;
-  const workerCount = Math.max(1, Math.min(items.length, concurrency));
-  const workers = Array.from({ length: workerCount }, async () => {
-    while (nextIndex < items.length) {
-      const index = nextIndex++;
-      results[index] = await run(items[index]!);
-    }
-  });
-  await Promise.all(workers);
-  return results;
-}

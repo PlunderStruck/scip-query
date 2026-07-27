@@ -5,6 +5,7 @@ import { performance } from 'node:perf_hooks';
 import { parentPort } from 'node:worker_threads';
 import { profileAsyncSpan, profileEnabled, writeProfileEvent } from '../../instrumentation/profile.js';
 import { isMissingProjectFileError, readProjectFileText } from '../../platform/project-files.js';
+import { joinConcurrentOperations } from '../../platform/structured-concurrency.js';
 import type { SemanticCallee, SemanticReference } from '../types.js';
 import { createRustAnalyzerTransport, RustAnalyzerLspClient } from './lsp-client.js';
 import type { LspInitializeResult } from './lsp-types.js';
@@ -425,7 +426,7 @@ async function runSessionRequest(request: RustReferenceWorkerRequest): Promise<R
     calleeDefinitions.length > 0 &&
     parallelRustSemanticOperationsEnabled()
   ) {
-    [references, callees] = await Promise.all([computeReferences(), computeCallees()]);
+    [references, callees] = await joinConcurrentOperations([computeReferences(), computeCallees()]);
   } else {
     references = await computeReferences();
     callees = await computeCallees();
