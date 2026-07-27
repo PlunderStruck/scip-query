@@ -15,27 +15,13 @@ import {
 import { loadProjectConfig, resolveWatchConfig } from './config.js';
 import { getIndexFreshness, type IndexFreshnessState } from './index-freshness.js';
 import { Watcher } from './watch.js';
-import { openProjectDb } from './cli-context.js';
-import {
-  TypeScriptSemanticServiceHost,
-  initializeTypeScriptSemanticMailbox,
-  processTypeScriptSemanticMailbox,
-  typeScriptSemanticMailboxStatus,
-} from '../semantic/typescript/session-service.js';
+import { initializeTypeScriptSemanticMailbox } from '../semantic/typescript/session-service.js';
 import {
   publishedGenerationIdentity,
   typeScriptSemanticMailboxPaths,
 } from '../semantic/typescript/session-protocol.js';
-import {
-  TypeScriptIndexServiceHost,
-  initializeTypeScriptIndexMailbox,
-  processTypeScriptIndexMailbox,
-  typeScriptIndexMailboxStatus,
-} from '../reindex/typescript-index-service.js';
-import {
-  publishedTypeScriptIndexGeneration,
-  typeScriptIndexMailboxPaths,
-} from '../reindex/typescript-index-protocol.js';
+import { initializeTypeScriptIndexMailbox } from '../reindex/typescript-index-service.js';
+import { typeScriptIndexMailboxPaths } from '../reindex/typescript-index-protocol.js';
 import { readReindexActivitySummary, recordSuppressedReindexActivity } from '../reindex/reindex-activity.js';
 import {
   acquireWatchProcessLock,
@@ -48,6 +34,7 @@ import {
 import { maybeSweepRepositoryCache } from './repository-cache-lifecycle.js';
 import { WatchRefreshCoordinator } from './watch-refresh-coordinator.js';
 import { maintainBoundedMailbox } from '../storage/bounded-mailbox.js';
+import { createTypeScriptIndexMailboxLane, createTypeScriptSemanticMailboxLane } from './typescript-mailbox-lanes.js';
 
 const HEARTBEAT_INTERVAL_MS = 1_000;
 const ACTIVITY_POLL_INTERVAL_MS = 250;
@@ -167,11 +154,6 @@ export async function runWatchServiceServer(
   const indexMailboxPaths = typeScriptIndexMailboxPaths(indexPaths.cacheDir);
   initializeTypeScriptSemanticMailbox(semanticMailboxPaths);
   initializeTypeScriptIndexMailbox(indexMailboxPaths);
-  const semanticHost = new TypeScriptSemanticServiceHost({ openDb: () => openProjectDb(projectRoot) });
-  const indexHost = new TypeScriptIndexServiceHost({
-    projectRoot,
-    currentGeneration: () => publishedTypeScriptIndexGeneration(indexPaths.dbPath),
-  });
 
   const persistState = (
     force = false,
@@ -205,11 +187,11 @@ export async function runWatchServiceServer(
         reindexActivity,
         refreshRequests: refreshCoordinator.status(),
         typescriptSemantic: {
-          ...semanticHost.status(typeScriptSemanticMailboxStatus(semanticMailboxPaths)),
+          ...semanticLane.status(),
           ...(semanticBusyUntilMs === undefined ? {} : { busyUntil: new Date(semanticBusyUntilMs).toISOString() }),
         },
         typescriptIndex: {
-          ...indexHost.status(typeScriptIndexMailboxStatus(indexMailboxPaths)),
+          ...indexLane.status(),
           ...(indexBusyUntilMs === undefined ? {} : { busyUntil: new Date(indexBusyUntilMs).toISOString() }),
         },
       },
@@ -221,6 +203,31 @@ export async function runWatchServiceServer(
     lastActivityAtMs = Date.now();
     lastActivityAtMonotonicMs = monotonicNowMs();
   };
+
+  const recordMailboxFatal = (error: Error): void => {
+    recordActivity();
+    lastError = { at: new Date().toISOString(), message: error.message };
+    persistState(true, 'visibility');
+  };
+  const semanticLane = createTypeScriptSemanticMailboxLane({
+    paths: semanticMailboxPaths,
+    projectRoot,
+    onBusy(deadlineAtMs) {
+      semanticBusyUntilMs = deadlineAtMs === undefined ? undefined : deadlineAtMs + 5_000;
+      persistState(true, 'visibility');
+    },
+    onFatal: recordMailboxFatal,
+  });
+  const indexLane = createTypeScriptIndexMailboxLane({
+    paths: indexMailboxPaths,
+    projectRoot,
+    dbPath: indexPaths.dbPath,
+    onBusy(deadlineAtMs) {
+      indexBusyUntilMs = deadlineAtMs === undefined ? undefined : deadlineAtMs + 5_000;
+      persistState(true, 'visibility');
+    },
+    onFatal: recordMailboxFatal,
+  });
 
   const watcher = new Watcher({
     projectRoot,
@@ -289,28 +296,8 @@ export async function runWatchServiceServer(
 
     while (!stopping) {
       const iteration = await runWatchServiceLoopIteration(consecutiveIdleMailboxPolls, {
-        processIndexRequests: () =>
-          processTypeScriptIndexMailbox(indexMailboxPaths, indexHost, {
-            beforeRequest(deadlineAtMs) {
-              indexBusyUntilMs = deadlineAtMs + 5_000;
-              persistState(true, 'visibility');
-            },
-            afterRequest() {
-              indexBusyUntilMs = undefined;
-              persistState(true, 'visibility');
-            },
-          }),
-        processSemanticRequests: () =>
-          processTypeScriptSemanticMailbox(semanticMailboxPaths, semanticHost, {
-            beforeRequest(deadlineAtMs) {
-              semanticBusyUntilMs = deadlineAtMs + 5_000;
-              persistState(true, 'visibility');
-            },
-            afterRequest() {
-              semanticBusyUntilMs = undefined;
-              persistState(true, 'visibility');
-            },
-          }),
+        processIndexRequests: () => indexLane.poll(),
+        processSemanticRequests: () => semanticLane.poll(),
         afterMailboxPoll: ({ processedRequests }) => {
           const nowMonotonicMs = monotonicNowMs();
           if (nowMonotonicMs - lastMailboxMaintenanceAtMonotonicMs >= MAILBOX_MAINTENANCE_INTERVAL_MS) {
@@ -369,8 +356,10 @@ export async function runWatchServiceServer(
   } finally {
     process.off('SIGINT', stop);
     process.off('SIGTERM', stop);
-    semanticHost.closeTypeScriptService();
-    indexHost.close();
+    await Promise.all([
+      semanticLane.close('TypeScript semantic service stopped before completing the request.'),
+      indexLane.close('TypeScript index service stopped before completing the request.'),
+    ]);
     const stopResult = await watcher.stop();
     if (stopResult.state === 'stopped') {
       rmSync(servicePaths.statePath, { force: true });

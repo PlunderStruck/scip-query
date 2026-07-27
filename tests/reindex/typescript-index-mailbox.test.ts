@@ -1,4 +1,5 @@
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -41,6 +42,8 @@ import {
   boundedMailboxOperationKey,
   boundedMailboxRequestId,
 } from '../../src/storage/bounded-mailbox.js';
+import { createTypeScriptIndexMailboxLane } from '../../src/runtime/typescript-mailbox-lanes.js';
+import type { RequestWorkerLike, WorkerLaneResponse } from '../../src/runtime/worker-request-lane.js';
 
 const NOW = Date.parse('2026-07-10T08:00:00.000Z');
 const SERVICE_PROCESS_IDENTITY: ProcessIdentity = {
@@ -314,6 +317,55 @@ describe('TypeScript index service mailbox', () => {
       ),
     ).toThrow('invalid mailbox request');
   });
+
+  test('lets the parent claim and commit an isolated Worker result exactly once', async () => {
+    const fixture = serviceFixture();
+    const paths = typeScriptIndexMailboxPaths(fixture.cacheDir);
+    initializeTypeScriptIndexMailbox(paths);
+    writeRequest(paths.requestDir, 'isolated', 'base', indexRequest('producer'));
+    const worker = new FakeIndexWorker();
+    const lane = createTypeScriptIndexMailboxLane({
+      paths,
+      projectRoot: fixture.projectRoot,
+      dbPath: join(fixture.cacheDir, 'index.db'),
+      now: () => NOW,
+      createWorker: () => worker,
+      onFatal: (error) => {
+        throw error;
+      },
+    });
+
+    expect(lane.poll()).toBe(1);
+    expect(worker.posts).toHaveLength(1);
+    expect(existsSync(join(paths.responseDir, 'isolated.json'))).toBe(false);
+    const status = new TypeScriptIndexServiceHost({
+      projectRoot: fixture.projectRoot,
+      currentGeneration: () => 'base',
+    }).status();
+    const response: WorkerLaneResponse<
+      { producerIdentity: string; cold: boolean; durationMs: number; fragments: [] },
+      typeof status
+    > = {
+      kind: 'response',
+      requestId: 'isolated',
+      ok: true,
+      result: { producerIdentity: 'producer', cold: true, durationMs: 1, fragments: [] },
+      status,
+    };
+    worker.emitMessage(response);
+    worker.emitMessage(response);
+
+    expect(readResponse(paths.responseDir, 'isolated')).toEqual(
+      expect.objectContaining({
+        ok: true,
+        id: 'isolated',
+        baseGeneration: 'base',
+        response: expect.objectContaining({ producerIdentity: 'producer' }),
+      }),
+    );
+    expect(readdirSync(paths.responseDir).filter((entry) => entry === 'isolated.json')).toHaveLength(1);
+    await lane.close();
+  });
 });
 
 function serviceFixture(): { projectRoot: string; cacheDir: string } {
@@ -382,6 +434,28 @@ function onlyPendingEnvelope(pendingDir: string): { id: string; operationKey: st
 
 function readResponse(responseDir: string, id: string): Record<string, unknown> {
   return JSON.parse(readFileSync(join(responseDir, `${id}.json`), 'utf8')) as Record<string, unknown>;
+}
+
+class FakeIndexWorker implements RequestWorkerLike {
+  readonly posts: unknown[] = [];
+  private readonly messageListeners: Array<(value: unknown) => void> = [];
+
+  postMessage(value: unknown): void {
+    this.posts.push(value);
+  }
+
+  on(event: 'message' | 'error' | 'exit', listener: (value: never) => void): this {
+    if (event === 'message') this.messageListeners.push(listener as (value: unknown) => void);
+    return this;
+  }
+
+  terminate(): Promise<number> {
+    return Promise.resolve(0);
+  }
+
+  emitMessage(value: unknown): void {
+    for (const listener of this.messageListeners) listener(value);
+  }
 }
 
 function writeLiveState(
