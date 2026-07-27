@@ -475,7 +475,11 @@ Numeric thresholds below are recommended starting points for review sessions; co
   `complete: true`. Never pipe scip-query through `head`, `tail`, or a
   line-range `sed`. The universal `--output-cursor` pages the
   rendered output; a result cursor such as `refs --cursor` advances logical
-  query coverage and is a separate obligation.
+  query coverage and is a separate obligation. Follow every `refs --cursor`
+  continuation before claiming all references. Ordinary limited reference
+  pages resume by `(path, line)` without rebuilding prior pages; JSON reports
+  `pagination.producer: "complete-only"` when the selected evidence provider
+  had to materialize the complete answer despite the result limit.
 - **Use `--json` on `health`** for programmatic consumption — parse the JSON to make decisions
 - **Run `change-surface` before every file modification** — it takes <1 second and prevents surprises
 - **Run `diff-impact --json` before committing** — catches unexpected blast radius across downstream consumers

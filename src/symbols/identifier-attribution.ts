@@ -41,6 +41,14 @@ interface SymbolRef {
   relativePath: string;
 }
 
+export interface SourceReferenceTarget {
+  symbolId: number;
+  relativePath: string;
+  startLine: number;
+  endLine: number;
+  identifier: string;
+}
+
 // ── Forward: per-occurrence attribution ──────────────────────────
 
 /**
@@ -144,15 +152,14 @@ export function findReferences(
   symbol: SymbolLocation,
   opts: { semantic?: boolean; semanticEvidence?: SymbolSemanticEvidencePort } = {},
 ): ReferenceSite[] {
-  const match = getFullSymbolMatch(db, symbol);
-  if (!match) return [];
-  const identifier = leafName(match.symbol);
-  if (!identifier) return [];
+  const target = sourceReferenceTarget(db, symbol);
+  if (!target) return [];
+  const match = getFullSymbolMatch(db, symbol)!;
 
   if (opts.semantic !== false && opts.semanticEvidence) {
     const semanticSites = opts.semanticEvidence.references(db, {
       ...match,
-      leaf: identifier,
+      leaf: target.identifier,
       parentTypeName: null,
       isFunctionLike: false,
       isTypeLike: false,
@@ -173,26 +180,52 @@ export function findReferences(
 
   const fileLines = new Map<string, number[]>();
   for (const file of getSourceFiles(db)) {
-    // Cheap gate: if the identifier doesn't appear textually, skip.
-    const source = getSourceText(db, file);
-    if (!source || source.indexOf(identifier) === -1) continue;
-
-    // Does this file's textual hit attribute back to our target?
-    if (file !== match.relativePath) {
-      const refs = attributeIdentifier(db, file, identifier);
-      if (!refs.some((r) => r.symbolId === match.symbolId)) continue;
-    }
-
-    const lines = findIdentifierLines(
-      db,
-      file,
-      identifier,
-      file === match.relativePath ? { excludeStartLine: match.startLine, excludeEndLine: match.endLine } : {},
-    );
+    const lines = sourceReferenceLinesForFile(db, target, file);
     if (lines.length > 0) fileLines.set(file, lines);
   }
 
   return materializeReferenceSites(db, fileLines);
+}
+
+/**
+ * Resolves the immutable fields needed to attribute source references for one
+ * symbol. Paged callers resolve this once, then scan files from a keyset
+ * frontier without repeating symbol selection.
+ */
+export function sourceReferenceTarget(db: ScipDatabase, symbol: SymbolLocation): SourceReferenceTarget | null {
+  const match = getFullSymbolMatch(db, symbol);
+  if (!match) return null;
+  const identifier = leafName(match.symbol);
+  if (!identifier) return null;
+  return {
+    symbolId: match.symbolId,
+    relativePath: match.relativePath,
+    startLine: match.startLine,
+    endLine: match.endLine,
+    identifier,
+  };
+}
+
+/**
+ * Returns the sorted reference lines attributable to `target` in exactly one
+ * file. This is the producer unit used by both the complete source scan and
+ * keyset pagination, so their attribution policy cannot drift.
+ */
+export function sourceReferenceLinesForFile(db: ScipDatabase, target: SourceReferenceTarget, file: string): number[] {
+  const source = getSourceText(db, file);
+  if (!source || source.indexOf(target.identifier) === -1) return [];
+
+  if (file !== target.relativePath) {
+    const attributed = attributeIdentifier(db, file, target.identifier);
+    if (!attributed.some((reference) => reference.symbolId === target.symbolId)) return [];
+  }
+
+  return findIdentifierLines(
+    db,
+    file,
+    target.identifier,
+    file === target.relativePath ? { excludeStartLine: target.startLine, excludeEndLine: target.endLine } : {},
+  );
 }
 
 // ── Inverse: bulk caller-file map ────────────────────────────────

@@ -124,6 +124,18 @@ report a separate `coverage.resolution` state—`exact`, `ambiguous`, or
 and enumerating that identity's result rows are different completeness
 questions.
 
+`refs --limit <n>` uses a generation-bound keyset cursor: each ordinary page
+continues after the last returned `(relativePath, line)` and stops once it has
+found the requested rows plus one continuation witness. The JSON result reports
+`pagination.producer: "source-keyset"` for that bounded producer. Explicit
+semantic enrichment (`--full`), Ruby supplemental evidence, and the coarse SCIP
+chunk fallback cannot currently resume before complete materialization; those
+pages preserve their evidence but report
+`pagination.producer: "complete-only"` instead of implying that `--limit`
+bounded the analysis work. Version-1 offset cursors remain readable and their
+next continuation is upgraded to the version-2 keyset format. Every result
+cursor is rejected after the index generation changes.
+
 The machine-readable page schema is
 [`schemas/cli-output-page.schema.json`](schemas/cli-output-page.schema.json).
 Page sizes range from 256 through 100,000 characters and cursors are limited

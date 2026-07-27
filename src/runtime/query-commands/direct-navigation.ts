@@ -1,6 +1,7 @@
 import { code } from '../../queries/navigation/code.js';
 import { outline } from '../../queries/navigation/outline.js';
 import { refs } from '../../queries/navigation/refs.js';
+import { compareReferenceKey, referencePage } from '../refs-pagination.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
 import {
   doc,
@@ -21,7 +22,7 @@ import {
   stringArg,
   stringOptionValue,
 } from '../command-kit/command-execution.js';
-import { decodeResultCursor, encodeResultCursor, indexGenerationIdentity } from '../result-pagination.js';
+import { decodeCompatibleResultCursor, encodeResultCursor, indexGenerationIdentity } from '../result-pagination.js';
 import { displayLine, displayPathRange, displayRange, render } from '../render.js';
 import { symbolResolutionBefore, symbolResolutionEmptyMessage, withSymbolResolutionJson } from './symbol-resolution.js';
 
@@ -55,37 +56,31 @@ function trimSignature(signature: string): string {
 
 const handleRefs = budgetedDbCommand('refs', ({ db, args, opts, budget }) => {
   const target = stringArg(args, 0);
-  const allRows = refs(db, target, { semantic: budget.semantic }).sort(
-    (left, right) => left.relativePath.localeCompare(right.relativePath) || left.line - right.line,
-  );
   const cursor = stringOptionValue(opts, 'cursor');
   const requestedLimit = numberOptionValue(opts, 'limit');
-  const limit = requestedLimit ?? (cursor ? 50 : allRows.length);
   const indexGeneration = indexGenerationIdentity(db);
-  const offset = cursor ? decodeResultCursor(cursor, { command: 'refs', target, indexGeneration }).offset : 0;
-  if (offset > allRows.length) {
-    throw new Error('This cursor points past the current result set. Run again without --cursor.');
-  }
-  const rows = allRows.slice(offset, offset + limit);
-  const nextOffset = offset + rows.length;
-  const continuation =
-    nextOffset < allRows.length
-      ? {
-          cursor: encodeResultCursor({ command: 'refs', target, offset: nextOffset, indexGeneration }),
+  const decodedCursor = cursor
+    ? decodeCompatibleResultCursor(cursor, { command: 'refs', target, indexGeneration })
+    : undefined;
+  const unpaginated = !decodedCursor && requestedLimit === undefined;
+  const page = unpaginated
+    ? completeUnpaginatedRefs(db, target, budget.semantic)
+    : decodedCursor?.version === 1
+      ? legacyOffsetPage(db, target, decodedCursor.offset, requestedLimit ?? 50, budget.semantic)
+      : keysetReferencePage(db, target, {
+          limit: requestedLimit ?? 50,
+          cursor: decodedCursor,
+          semantic: decodedCursor?.semanticEnrichment ?? booleanOptionValue(opts, 'full'),
           indexGeneration,
-        }
-      : undefined;
-  const coverage = {
-    complete: offset === 0 && rows.length === allRows.length,
-    totalKnown: true,
-    returned: rows.length,
-    total: allRows.length,
-    omitted: allRows.length - rows.length,
-    ...(continuation ? { continuation } : {}),
-  } as const;
+        });
+  const { rows, continuation, coverage } = page;
 
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('refs', args, opts, withSymbolResolutionJson(db, target, rows, 'references'), {
+    const result = {
+      ...withSymbolResolutionJson(db, target, rows, 'references'),
+      pagination: page.pagination,
+    };
+    printJsonEnvelope('refs', args, opts, result, {
       analysisBudget: budget.analysisBudget,
       coverage,
     });
@@ -94,8 +89,142 @@ const handleRefs = budgetedDbCommand('refs', ({ db, args, opts, budget }) => {
   if (rows.length === 0) return render.empty(symbolResolutionEmptyMessage(db, target, 'No references found.'));
   symbolResolutionBefore(db, target);
   render.groupedByFile(rows, (reference) => `  line ${displayLine(reference.line)}`);
-  if (continuation) console.log(`\n${coverage.omitted} omitted; continue with --cursor ${continuation.cursor}`);
+  if (page.pagination.producer === 'complete-only' && !unpaginated) {
+    console.error(
+      '\nThis evidence provider required complete analysis; --limit bounded the returned rows, not analysis work.',
+    );
+  }
+  if (continuation) {
+    const omitted = coverage.totalKnown ? `${coverage.omitted} omitted; ` : 'More references are available; ';
+    console.log(`\n${omitted}continue with --cursor ${continuation.cursor}`);
+  }
 });
+
+interface RenderedRefPage {
+  rows: ReturnType<typeof refs>;
+  continuation?: { cursor: string; indexGeneration: string };
+  coverage: {
+    complete: boolean;
+    totalKnown: boolean;
+    returned: number;
+    total?: number;
+    omitted?: number;
+    continuation?: { cursor: string; indexGeneration: string };
+  };
+  pagination: {
+    cursorVersion: 1 | 2;
+    producer: 'source-keyset' | 'complete-only';
+    semanticEnrichment: boolean;
+  };
+}
+
+function completeUnpaginatedRefs(db: Parameters<typeof refs>[0], target: string, semantic: boolean): RenderedRefPage {
+  const rows = refs(db, target, { semantic }).sort(compareReferenceKey);
+  return {
+    rows,
+    coverage: {
+      complete: true,
+      totalKnown: true,
+      returned: rows.length,
+      total: rows.length,
+      omitted: 0,
+    },
+    pagination: { cursorVersion: 2, producer: 'complete-only', semanticEnrichment: semantic },
+  };
+}
+
+function legacyOffsetPage(
+  db: Parameters<typeof refs>[0],
+  target: string,
+  offset: number,
+  limit: number,
+  semantic: boolean,
+): RenderedRefPage {
+  const allRows = refs(db, target, { semantic }).sort(compareReferenceKey);
+  if (offset > allRows.length) {
+    throw new Error('This cursor points past the current result set. Run again without --cursor.');
+  }
+  const rows = allRows.slice(offset, offset + limit);
+  const nextOffset = offset + rows.length;
+  const lastRow = rows[rows.length - 1];
+  const continuation =
+    nextOffset < allRows.length && lastRow
+      ? {
+          cursor: encodeResultCursor({
+            command: 'refs',
+            target,
+            after: lastRow,
+            producer: 'complete-only',
+            semanticEnrichment: semantic,
+            indexGeneration: indexGenerationIdentity(db),
+          }),
+          indexGeneration: indexGenerationIdentity(db),
+        }
+      : undefined;
+  return {
+    rows,
+    continuation,
+    coverage: {
+      complete: offset === 0 && rows.length === allRows.length,
+      totalKnown: true,
+      returned: rows.length,
+      total: allRows.length,
+      omitted: allRows.length - rows.length,
+      ...(continuation ? { continuation } : {}),
+    },
+    pagination: { cursorVersion: 2, producer: 'complete-only', semanticEnrichment: semantic },
+  };
+}
+
+function keysetReferencePage(
+  db: Parameters<typeof refs>[0],
+  target: string,
+  input: {
+    limit: number;
+    cursor?: Extract<ReturnType<typeof decodeCompatibleResultCursor>, { version: 2 }>;
+    semantic: boolean;
+    indexGeneration: string;
+  },
+): RenderedRefPage {
+  const result = referencePage(db, target, {
+    limit: input.limit,
+    after: input.cursor?.after,
+    producer: input.cursor?.producer,
+    semantic: input.semantic,
+  });
+  const lastRow = result.rows[result.rows.length - 1];
+  const continuation =
+    result.hasMore && lastRow
+      ? {
+          cursor: encodeResultCursor({
+            command: 'refs',
+            target,
+            after: lastRow,
+            producer: result.producer,
+            semanticEnrichment: result.semanticEnrichment,
+            indexGeneration: input.indexGeneration,
+          }),
+          indexGeneration: input.indexGeneration,
+        }
+      : undefined;
+  const complete = !input.cursor && !result.hasMore;
+  return {
+    rows: result.rows,
+    continuation,
+    coverage: {
+      complete,
+      totalKnown: complete,
+      returned: result.rows.length,
+      ...(complete ? { total: result.rows.length, omitted: 0 } : {}),
+      ...(continuation ? { continuation } : {}),
+    },
+    pagination: {
+      cursorVersion: 2,
+      producer: result.producer,
+      semanticEnrichment: result.semanticEnrichment,
+    },
+  };
+}
 
 const handleCode = dbCommand(({ db, args, opts }) => {
   const query = stringArg(args, 0);

@@ -80,6 +80,13 @@ schema, and producing package version. See the
 [CLI JSON output contract](docs/CLI_JSON_OUTPUT.md) for the compatibility
 policy, decoder API, and machine-readable schema.
 
+Logical `refs --limit` pages use a generation-bound `(path, line)` cursor, so
+ordinary continuations resume after the prior row instead of rebuilding and
+discarding it. Follow every emitted `refs --cursor` continuation before
+claiming a complete reference set. JSON identifies semantic, Ruby, or SCIP
+fallback providers that still require complete analysis as
+`pagination.producer: "complete-only"`.
+
 Contributors changing exported TypeScript declarations should also follow the
 [public API evolution workflow](docs/API_EVOLUTION.md). Its committed manifest
 makes every package-subpath signature change explicit before release.
