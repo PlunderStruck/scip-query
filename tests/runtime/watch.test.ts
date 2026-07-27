@@ -411,15 +411,17 @@ describe('Watcher', () => {
       close: () => never,
     } as WatchSubscription;
     let shutdownDeadline: (() => void) | undefined;
+    const inertTimer = setTimeout(() => undefined, 0);
+    clearTimeout(inertTimer);
     const clock: WatchClock = {
       now: () => 0,
       wallNow: () => 0,
       setTimeout(callback, delayMs) {
         if (delayMs === 25) shutdownDeadline = callback;
-        return 1 as unknown as ReturnType<typeof setTimeout>;
+        return inertTimer;
       },
       clearTimeout: () => {},
-      setInterval: () => 2 as unknown as ReturnType<typeof setInterval>,
+      setInterval: () => inertTimer,
       clearInterval: () => {},
     };
     const { Watcher } = await import('../../src/runtime/watch.js');
