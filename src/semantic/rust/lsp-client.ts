@@ -291,6 +291,31 @@ export class RustAnalyzerLspClient {
     }
   }
 
+  /**
+   * Completes the LSP shutdown handshake and then joins process-tree
+   * termination. Session replacement must use this stronger boundary so a new
+   * rust-analyzer cannot overlap a predecessor that merely accepted `exit`.
+   */
+  async shutdownAndReap(opts: RustAnalyzerRequestOptions = {}): Promise<void> {
+    let shutdownError: unknown;
+    try {
+      await this.shutdown(opts);
+    } catch (error) {
+      shutdownError = error;
+    }
+    try {
+      await this.killTransportOnce();
+    } catch (cleanupError) {
+      throw new Error(
+        `rust-analyzer process-tree cleanup failed: ${
+          cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+        }`,
+        { cause: cleanupError },
+      );
+    }
+    if (shutdownError) throw shutdownError;
+  }
+
   // scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
   private request<T>(method: string, params: unknown, opts: RustAnalyzerRequestOptions = {}): Promise<T> {
     if (this.transportFailure) return Promise.reject(this.transportFailure);

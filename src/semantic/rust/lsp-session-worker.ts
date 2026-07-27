@@ -42,6 +42,11 @@ import {
   filePathToDocumentUri,
   locationsToSemanticReferences,
 } from './reference-mapping.js';
+import {
+  canonicalRustLinkedProjects,
+  RustAnalyzerSessionRegistry,
+  rustAnalyzerSessionKey,
+} from './session-registry.js';
 
 type RustSessionWorkerMessage =
   | {
@@ -108,7 +113,7 @@ interface RustCalleeFileProfile {
 const REFERENCE_TASK_PROFILE_THRESHOLD_ENV = 'SCIP_RUST_SEMANTIC_REFERENCE_TASK_PROFILE_MS';
 const CALLEE_TASK_PROFILE_THRESHOLD_ENV = 'SCIP_RUST_SEMANTIC_CALLEE_TASK_PROFILE_MS';
 
-const sessions = new Map<string, RustAnalyzerSessionState>();
+const sessions = new RustAnalyzerSessionRegistry<RustAnalyzerSessionState>();
 let queue = Promise.resolve();
 let ownershipDirectory: string | undefined;
 
@@ -492,75 +497,79 @@ async function sessionForPaths(
   relativePaths: readonly string[],
   opts: { requestTimeoutMs?: number; readinessDeadlineMs?: number },
 ): Promise<RustAnalyzerSessionState> {
-  const linkedProjects = cargoManifestsForDefinitions(
+  const linkedProjects = canonicalRustLinkedProjects(
     projectRoot,
-    relativePaths.map((relativePath) => ({ relativePath })),
+    cargoManifestsForDefinitions(
+      projectRoot,
+      relativePaths.map((relativePath) => ({ relativePath })),
+    ),
   );
   const sessionRoot = rustAnalyzerSessionRoot(projectRoot, linkedProjects);
-  const key = sessionKey(rustAnalyzerBinary, sessionRoot, linkedProjects);
-  const existing = sessions.get(key);
-  if (existing) return existing;
-
-  const initializationOptions = rustAnalyzerInitializationOptions(linkedProjects);
-  const client = new RustAnalyzerLspClient(
-    createRustAnalyzerTransport(rustAnalyzerBinary, sessionRoot, process.env, ownershipDirectory),
-    {
-      requestTimeoutMs: opts.requestTimeoutMs,
-      configuration: initializationOptions,
-    },
-  );
-  const initializationReadiness =
-    opts.readinessDeadlineMs === undefined
-      ? null
-      : {
-          afterGeneration: client.serverStatusGeneration(),
-          deadlineMs: opts.readinessDeadlineMs,
-        };
-  const initialized = await withRustAnalyzerReadinessInvalidation(
-    () =>
-      profileAsyncSpan(
-        'rust.semantic.worker.initialize',
-        () =>
-          client.initialize(
-            {
-              processId: process.pid,
-              rootUri: filePathToDocumentUri(sessionRoot, '.'),
-              capabilities: {
-                textDocument: {
-                  references: {
-                    dynamicRegistration: false,
-                  },
-                  definition: {
-                    dynamicRegistration: false,
-                  },
-                  callHierarchy: {
-                    dynamicRegistration: false,
-                  },
-                  hover: {
-                    dynamicRegistration: false,
-                  },
-                },
-              },
-              initializationOptions,
-            },
-            { timeoutMs: opts.requestTimeoutMs, deadlineMs: opts.readinessDeadlineMs },
-          ),
-        () => ({
-          linkedProjects: linkedProjects.length,
-          relativePaths: relativePaths.length,
-        }),
-      ),
-    () => client.shutdown({ deadlineMs: opts.readinessDeadlineMs }).catch(() => undefined),
-  );
-  const session: RustAnalyzerSessionState = {
+  const key = rustAnalyzerSessionKey(rustAnalyzerBinary, sessionRoot, linkedProjects);
+  return sessions.acquire(
     key,
-    client,
-    capabilities: initialized.capabilities,
-    openedPaths: new Set(),
-    initializationReadiness,
-  };
-  sessions.set(key, session);
-  return session;
+    async () => {
+      const initializationOptions = rustAnalyzerInitializationOptions(linkedProjects);
+      const client = new RustAnalyzerLspClient(
+        createRustAnalyzerTransport(rustAnalyzerBinary, sessionRoot, process.env, ownershipDirectory),
+        {
+          requestTimeoutMs: opts.requestTimeoutMs,
+          configuration: initializationOptions,
+        },
+      );
+      const initializationReadiness =
+        opts.readinessDeadlineMs === undefined
+          ? null
+          : {
+              afterGeneration: client.serverStatusGeneration(),
+              deadlineMs: opts.readinessDeadlineMs,
+            };
+      const initialized = await withRustAnalyzerReadinessInvalidation(
+        () =>
+          profileAsyncSpan(
+            'rust.semantic.worker.initialize',
+            () =>
+              client.initialize(
+                {
+                  processId: process.pid,
+                  rootUri: filePathToDocumentUri(sessionRoot, '.'),
+                  capabilities: {
+                    textDocument: {
+                      references: {
+                        dynamicRegistration: false,
+                      },
+                      definition: {
+                        dynamicRegistration: false,
+                      },
+                      callHierarchy: {
+                        dynamicRegistration: false,
+                      },
+                      hover: {
+                        dynamicRegistration: false,
+                      },
+                    },
+                  },
+                  initializationOptions,
+                },
+                { timeoutMs: opts.requestTimeoutMs, deadlineMs: opts.readinessDeadlineMs },
+              ),
+            () => ({
+              linkedProjects: linkedProjects.length,
+              relativePaths: relativePaths.length,
+            }),
+          ),
+        () => client.shutdownAndReap({ deadlineMs: opts.readinessDeadlineMs }),
+      );
+      return {
+        key,
+        client,
+        capabilities: initialized.capabilities,
+        openedPaths: new Set(),
+        initializationReadiness,
+      };
+    },
+    (victim) => victim.client.shutdownAndReap({ deadlineMs: opts.readinessDeadlineMs }),
+  );
 }
 
 // scip-query: ignore-similar — definition and source readiness have different inputs and state transitions.
@@ -841,22 +850,16 @@ function emptyResponse(request: RustReferenceWorkerRequest, reason: string): Rus
 }
 
 async function shutdownSessions(): Promise<void> {
-  const current = [...sessions.values()];
-  sessions.clear();
-  await Promise.all(current.map((session) => session.client.shutdown().catch(() => undefined)));
+  await sessions.shutdownAll((session) => session.client.shutdownAndReap());
 }
 
 export async function discardRustAnalyzerSession(
-  registry: Map<string, RustAnalyzerSessionState>,
+  registry: RustAnalyzerSessionRegistry<RustAnalyzerSessionState>,
   session: RustAnalyzerSessionState,
   readinessDeadlineMs: number | undefined,
 ): Promise<void> {
-  if (registry.get(session.key) === session) registry.delete(session.key);
-  await session.client.shutdown({ deadlineMs: readinessDeadlineMs }).catch(() => undefined);
-}
-
-function sessionKey(binary: string, sessionRoot: string, linkedProjects: readonly string[]): string {
-  return JSON.stringify({ binary, sessionRoot, linkedProjects });
+  registry.deleteIfSame(session);
+  await session.client.shutdownAndReap({ deadlineMs: readinessDeadlineMs });
 }
 
 function recordRustReferenceFileProfile(

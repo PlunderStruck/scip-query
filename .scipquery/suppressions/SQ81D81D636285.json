@@ -1,0 +1,14 @@
+{
+  "kind": "scip-query-suppression",
+  "schemaVersion": 1,
+  "suppressionIdentity": "SQ81D81D636285",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.19.8"
+  },
+  "id": "SQ81D81D636285",
+  "check": "co-change-partner",
+  "file": "tests/semantic/rust/rust-lsp-session-readiness.test.ts",
+  "reason": "Accepted test-boundary-only change: this test now constructs the worker-owned Rust session registry and verifies joined shutdown after readiness invalidation; src/semantic/rust/lsp-session-readiness.ts sequencing, deadlines, and classification behavior are unchanged.",
+  "createdAt": "2026-07-27T19:01:57.152Z"
+}

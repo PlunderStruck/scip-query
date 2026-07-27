@@ -367,6 +367,29 @@ describe('RustAnalyzerLspClient', () => {
     });
   });
 
+  it('joins transport process-tree cleanup after the graceful shutdown handshake', async () => {
+    const transport = new ScriptedTransport((message, server) => {
+      if (message.method === 'initialize') {
+        server.send({ jsonrpc: '2.0', id: message.id, result: { capabilities: {} } });
+      }
+      if (message.method === 'shutdown') {
+        server.send({ jsonrpc: '2.0', id: message.id, result: null });
+      }
+    });
+    const client = new RustAnalyzerLspClient(transport, { requestTimeoutMs: 100 });
+    await client.initialize({ rootUri: 'file:///repo' });
+
+    await client.shutdownAndReap();
+
+    expect(transport.writes.map((message) => message.method)).toEqual([
+      'initialize',
+      'initialized',
+      'shutdown',
+      'exit',
+    ]);
+    expect(transport.killCount()).toBe(1);
+  });
+
   it('requests call hierarchy outgoing calls', async () => {
     const callHierarchyItem = {
       name: 'run',

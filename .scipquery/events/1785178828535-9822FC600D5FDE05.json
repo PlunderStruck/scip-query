@@ -1,0 +1,16 @@
+{
+  "ts": 1785178828535,
+  "check": "new-dead",
+  "findingId": "SQ41DF185D7C88",
+  "event": "caught",
+  "commit": "11894a56c403339e6456a8a9133672012f6a08f7",
+  "comparisonBaseCommit": "11894a56c403339e6456a8a9133672012f6a08f7",
+  "symbol": "scip-typescript npm scip-query 0.19.8 src/semantic/rust/`session-registry.ts`/RustAnalyzerSessionRegistry#keys().",
+  "kind": "scip-query-outcome-event",
+  "schemaVersion": 1,
+  "eventIdentity": "[\"new-dead\",\"SQ41DF185D7C88\",\"caught\",\"11894a56c403339e6456a8a9133672012f6a08f7\"]",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.19.8"
+  }
+}

@@ -15,6 +15,7 @@ import {
   type RustAnalyzerReadinessClient,
 } from '../../../src/semantic/rust/lsp-session-readiness.js';
 import { discardRustAnalyzerSession } from '../../../src/semantic/rust/lsp-session-worker.js';
+import { RustAnalyzerSessionRegistry } from '../../../src/semantic/rust/session-registry.js';
 
 type RustAnalyzerSessionState = Parameters<typeof discardRustAnalyzerSession>[1];
 
@@ -426,14 +427,19 @@ describe('readiness failure orchestration', () => {
   });
 
   it('evicts and shuts down a session whose post-open readiness fails before it can be reused', async () => {
-    const shutdown = vi.fn(async () => undefined);
+    const shutdownAndReap = vi.fn(async () => undefined);
     const poisoned = {
       key: 'session-key',
-      client: { shutdown } as unknown as RustAnalyzerSessionState['client'],
+      client: { shutdownAndReap } as unknown as RustAnalyzerSessionState['client'],
       capabilities: {},
       openedPaths: new Set(['src/lib.rs']),
     } satisfies RustAnalyzerSessionState;
-    const sessions = new Map([[poisoned.key, poisoned]]);
+    const sessions = new RustAnalyzerSessionRegistry<RustAnalyzerSessionState>();
+    await sessions.acquire(
+      poisoned.key,
+      async () => poisoned,
+      async () => undefined,
+    );
 
     const postOpen = withRustAnalyzerReadinessInvalidation(
       async () => {
@@ -443,11 +449,15 @@ describe('readiness failure orchestration', () => {
     );
 
     await expect(postOpen).rejects.toThrow('post-open readiness failed');
-    expect(sessions.has(poisoned.key)).toBe(false);
-    expect(shutdown).toHaveBeenCalledWith({ deadlineMs: 2_000 });
+    expect(sessions.get(poisoned.key)).toBeUndefined();
+    expect(shutdownAndReap).toHaveBeenCalledWith({ deadlineMs: 2_000 });
 
     const replacement = { ...poisoned, openedPaths: new Set<string>() };
-    sessions.set(replacement.key, replacement);
+    await sessions.acquire(
+      replacement.key,
+      async () => replacement,
+      async () => undefined,
+    );
     expect(sessions.get(replacement.key)).toBe(replacement);
     expect(sessions.get(replacement.key)).not.toBe(poisoned);
   });

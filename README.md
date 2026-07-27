@@ -804,6 +804,12 @@ Rust v3 additionally binds every accepted response to its request ID,
 operation ID, mailbox-session identity, and authoritative absolute deadline;
 its old/current/future compatibility matrix is in
 [`docs/RUST_DURABLE_SESSION_PROTOCOL.md`](docs/RUST_DURABLE_SESSION_PROTOCOL.md).
+The Rust semantic worker retains at most four rust-analyzer sessions. Linked
+Cargo projects are resolved, deduplicated, and sorted before session reuse, so
+equivalent project sets share one session regardless of input order. When the
+capacity is full, the least-recently-used session completes its LSP shutdown
+and process-tree reap before a replacement starts; an unproven shutdown blocks
+replacement instead of allowing overlapping language servers.
 It also reports a rolling 24-hour reindex activity summary: rebuilt, reused,
 failed, and freshness-proven suppressed refreshes plus estimated logical output
 bytes. The estimate counts scip-query artifacts emitted by rebuilt refreshes;

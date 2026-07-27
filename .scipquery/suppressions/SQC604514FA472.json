@@ -1,0 +1,14 @@
+{
+  "kind": "scip-query-suppression",
+  "schemaVersion": 1,
+  "suppressionIdentity": "SQC604514FA472",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.19.8"
+  },
+  "id": "SQC604514FA472",
+  "check": "co-change-partner",
+  "file": "src/semantic/rust/lsp-session-worker.ts",
+  "reason": "Accepted session-lifecycle-only change: lsp-batch-worker.ts still supplies the same Cargo manifest and request inputs; canonical identity, finite LRU capacity, and joined eviction are owned entirely by lsp-session-worker.ts and session-registry.ts.",
+  "createdAt": "2026-07-27T19:01:57.760Z"
+}
