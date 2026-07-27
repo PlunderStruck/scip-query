@@ -416,12 +416,59 @@ Final:
 9. inspect `git diff --check`, ignored `HEY.md`, and all unstaged concurrent
    changes before the final commit
 
+## Completion record
+
+All implementation slices are complete. The program landed in reviewable
+commits rather than one cumulative mutation:
+
+| Slice | Finding(s) | Commit | Result |
+| --- | --- | --- | --- |
+| 1–2 | RC-02, RC-03 | `a142bf52` | Shared process-tree ownership, identity-safe TERM/KILL escalation, finite unreaped outcomes |
+| 3–4 | RC-04, RC-05 | `0e39a25f` | Joined Rust Worker/analyzer teardown, timeout cancellation, poisoned transport replacement |
+| 5 | RC-06 | `21fcf9a0` | Fail-fast admission with a full join of already-started work |
+| 6 | RC-01 | `800093ae` | Independent, bounded TypeScript index and semantic Worker lanes |
+| 7 | RC-07 | `556e5bc5` | Deadline-bounded watcher drain and identity-safe external stop |
+| 8–9 | RC-08, RC-09 | `b5c5cf22` | Atomic output quotas, linear page reads, and readable human pagination |
+| 10 | RC-10 | `11894a56` | Versioned keyset reference pages with bounded source scanning and legacy-cursor compatibility |
+| 11 | RC-11 | `41b4182a` | Canonical four-entry Rust session LRU with joined eviction and shutdown |
+| 12 | Contracts and docs | owning commits plus `eb1cb748` | Public/API docs, setup guidance, and no-preemptive-page-size instructions reconciled with behavior |
+
+`7d53d4b3` closes the only issue found by final whole-suite verification: the
+watcher deadline test now uses an actual typed inert timer handle rather than a
+double type assertion.
+
+Final verification on 2026-07-27:
+
+- `scip-query doctor`: OK; TypeScript and Rust graph, semantic, cleanup, and
+  verification capabilities available.
+- Cumulative `diff-impact` from `4945ec9b`: 23 changed source files, 200
+  changed indexed symbols, and 10 returned affected-consumer files. Its
+  command-level coverage is bounded/unknown, so this is an impact snapshot,
+  not a claim that no additional transitive consumer exists.
+- Every slice's self-hosted `diff-gate`: pass after fixes or narrow,
+  reasoned committed suppressions. The RC-11 gate removed one genuinely dead
+  test-only accessor and accepted two non-contractual co-change signals.
+- `npm run lint`: pass, including formatting, ESLint, build, 72-path public
+  TypeScript API compatibility, public consumer compilation, and skill-link
+  validation.
+- `cargo check --quiet --manifest-path Cargo.toml`: pass.
+- `npm test`: 253 test files and 1,975 tests pass. This exceeds the audited
+  baseline by 6 files and 41 tests.
+- Focused adversarial regressions cover every attack in the table above,
+  including descendant survival, missing/reused identities, teardown joins,
+  late LSP responses, concurrent sibling quiescence, isolated mailbox lanes,
+  stuck watcher close, concurrent snapshot admission, Unicode page
+  reconstruction, producer scan bounds, and joined LRU eviction.
+- `git diff --check`: pass. `HEY.md` remains ignored through
+  `.gitignore:21`; no `skills/**` path was edited or staged by this program.
+
 ## Verdict
 
-**PLANNED-COMPLETE**
+**IMPLEMENTED-COMPLETE**
 
-- Confirmed findings covered: 11 / 11
-- Implementation slices: 12
-- Registered adversarial attacks: 11
+- Confirmed findings repaired: 11 / 11
+- Implementation slices completed: 12 / 12
+- Registered adversarial attacks tested: 11 / 11
+- Blocking verification failures: 0
 - Known plan holes: 0
-- Baseline: 247 files, 1,934 tests passing
+- Final suite: 253 files, 1,975 tests passing
