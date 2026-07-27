@@ -115,4 +115,39 @@ describe('runBoundedProcess', () => {
       reaped: true,
     });
   });
+
+  it.runIf(process.platform !== 'win32')('terminates descendants that outlive the direct child', async () => {
+    const fixture = [
+      "const { spawn } = require('node:child_process');",
+      "const descendant = spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);\"], { stdio: 'ignore' });",
+      'process.stdout.write(String(descendant.pid));',
+      "process.on('SIGTERM', () => process.exit(0));",
+      'setInterval(() => {}, 1000);',
+    ].join('\n');
+
+    let failure: BoundedProcessError | null = null;
+    try {
+      await nodeProcess(fixture, {
+        timeoutMs: 300,
+        terminationGraceMs: 100,
+        terminationForceMs: 200,
+      });
+    } catch (error) {
+      failure = error as BoundedProcessError;
+    }
+
+    expect(failure).toMatchObject({ kind: 'timeout', reaped: true });
+    const descendantPid = Number(failure?.stdout);
+    expect(descendantPid).toBeGreaterThan(0);
+    expect(processExists(descendantPid)).toBe(false);
+  });
 });
+
+function processExists(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}

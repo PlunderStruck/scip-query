@@ -1,6 +1,11 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { platform as hostPlatform } from 'node:os';
 import { performance } from 'node:perf_hooks';
-import { readProcessIdentity, sameProcessIdentity, type ProcessIdentity } from './process-identity.js';
+import {
+  createOwnedProcessTree,
+  terminateOwnedProcessTree,
+  type ProcessTreeTerminationResult,
+} from './process-tree.js';
 
 export const PROCESS_TIMEOUT_MS = {
   probe: 10_000,
@@ -16,6 +21,7 @@ export interface BoundedProcessOptions {
   label: string;
   timeoutMs: number;
   terminationGraceMs?: number;
+  terminationForceMs?: number;
   maxStdoutBytes: number;
   maxStderrBytes: number;
   cwd?: string;
@@ -97,26 +103,12 @@ function appendTail(chunks: Buffer[], chunk: Buffer, limit: number): void {
   chunks.push(combined.subarray(Math.max(0, combined.length - limit)));
 }
 
-function shouldEscalate(child: ChildProcessWithoutNullStreams, identity: ProcessIdentity | null): boolean {
-  if (child.exitCode !== null || child.signalCode !== null || child.pid === undefined) {
-    return false;
-  }
-  if (!identity) {
-    // This is a child handle created and retained by this runner. When a platform
-    // cannot expose a start token, the still-live ChildProcess is the strongest
-    // ownership evidence available.
-    return true;
-  }
-  const currentIdentity = readProcessIdentity(child.pid);
-  return currentIdentity !== null && sameProcessIdentity(identity, currentIdentity);
-}
-
 /**
  * Run one finite child process while continuously draining both output streams.
  *
- * A timeout or output-budget violation initiates TERM, escalates to KILL after
- * the grace interval, and rejects only after the child emits `close`. Therefore
- * a settled promise also certifies that the child has been reaped.
+ * A timeout or output-budget violation initiates tree-wide TERM, escalates to
+ * tree-wide KILL after the grace interval, and settles within the force
+ * interval. A failure reports whether the owned process tree was reaped.
  */
 export function runBoundedProcess(opts: BoundedProcessOptions): Promise<BoundedProcessResult> {
   validatePositiveBudget(opts.timeoutMs, 'timeoutMs');
@@ -124,6 +116,8 @@ export function runBoundedProcess(opts: BoundedProcessOptions): Promise<BoundedP
   validatePositiveBudget(opts.maxStderrBytes, 'maxStderrBytes');
   const terminationGraceMs = opts.terminationGraceMs ?? 1_000;
   validatePositiveBudget(terminationGraceMs, 'terminationGraceMs');
+  const terminationForceMs = opts.terminationForceMs ?? terminationGraceMs;
+  validatePositiveBudget(terminationForceMs, 'terminationForceMs');
 
   return new Promise((resolve, reject) => {
     const startedAt = performance.now();
@@ -131,10 +125,11 @@ export function runBoundedProcess(opts: BoundedProcessOptions): Promise<BoundedP
     try {
       // scip-query: process-lifetime-reviewed -- this central runner owns the
       // deadline, bounded drains, TERM-to-KILL escalation, and close/reap wait.
+      const ownsProcessGroup = hostPlatform() !== 'win32';
       child = spawn(opts.command, [...(opts.args ?? [])], {
         cwd: opts.cwd,
         env: opts.env,
-        detached: opts.detached,
+        detached: ownsProcessGroup ? true : opts.detached,
         stdio: ['pipe', 'pipe', 'pipe'],
       });
     } catch (cause) {
@@ -154,20 +149,55 @@ export function runBoundedProcess(opts: BoundedProcessOptions): Promise<BoundedP
     let stdoutTruncated = false;
     let stderrTruncated = false;
     let failure: PendingFailure | null = null;
-    let closed = false;
-    let killTimer: NodeJS.Timeout | null = null;
-    const identity = child.pid === undefined ? null : readProcessIdentity(child.pid);
+    let settled = false;
+    const ownsProcessGroup = hostPlatform() !== 'win32';
+    const tree = child.pid === undefined ? null : createOwnedProcessTree(child.pid, ownsProcessGroup);
+
+    const clearLifecycle = (): void => {
+      clearTimeout(deadline);
+      opts.signal?.removeEventListener('abort', abortListener);
+    };
+
+    const rejectFailure = (termination: ProcessTreeTerminationResult): void => {
+      if (settled || !failure) return;
+      settled = true;
+      clearLifecycle();
+      const stdoutText = Buffer.concat(stdout).toString('utf8');
+      const stderrText = Buffer.concat(stderr).toString('utf8');
+      const suffix =
+        termination.reaped || !termination.detail ? '' : ` Process-tree cleanup failed: ${termination.detail}`;
+      reject(
+        new BoundedProcessError(failure.kind, opts.label, `${failure.message}${suffix}`, {
+          timedOut: failure.timedOut,
+          reaped: termination.reaped,
+          stdout: stdoutText,
+          stderr: stderrText,
+          stdoutTruncated,
+          stderrTruncated,
+        }),
+      );
+    };
 
     const beginTermination = (nextFailure: PendingFailure): void => {
-      if (failure || closed) return;
+      if (failure || settled) return;
       failure = nextFailure;
-      child.kill('SIGTERM');
-      killTimer = setTimeout(() => {
-        if (!closed && shouldEscalate(child, identity)) {
-          child.kill('SIGKILL');
-        }
-      }, terminationGraceMs);
-      killTimer.unref();
+      if (!tree) {
+        rejectFailure({
+          reaped: child.pid === undefined,
+          reason: child.pid === undefined ? 'terminated' : 'identity-unavailable',
+        });
+        return;
+      }
+      void terminateOwnedProcessTree(tree, {
+        gracefulMs: terminationGraceMs,
+        forceMs: terminationForceMs,
+      }).then(rejectFailure, (cause: unknown) => {
+        rejectFailure({
+          reaped: false,
+          reason: 'signal-failed',
+          detail: cause instanceof Error ? cause.message : String(cause),
+        });
+      });
     };
 
     const deadline = setTimeout(() => {
@@ -228,13 +258,11 @@ export function runBoundedProcess(opts: BoundedProcessOptions): Promise<BoundedP
     });
 
     child.on('error', (cause) => {
-      if (closed) return;
+      if (settled) return;
       if (failure) return;
       if (child.pid === undefined) {
-        clearTimeout(deadline);
-        if (killTimer) clearTimeout(killTimer);
-        opts.signal?.removeEventListener('abort', abortListener);
-        closed = true;
+        clearLifecycle();
+        settled = true;
         reject(
           new BoundedProcessError('spawn', opts.label, `${opts.label} could not start: ${cause.message}`, {
             cause,
@@ -251,26 +279,11 @@ export function runBoundedProcess(opts: BoundedProcessOptions): Promise<BoundedP
     });
 
     child.on('close', (status, signal) => {
-      if (closed) return;
-      closed = true;
-      clearTimeout(deadline);
-      if (killTimer) clearTimeout(killTimer);
-      opts.signal?.removeEventListener('abort', abortListener);
+      if (settled || failure) return;
+      settled = true;
+      clearLifecycle();
       const stdoutText = Buffer.concat(stdout).toString('utf8');
       const stderrText = Buffer.concat(stderr).toString('utf8');
-      if (failure) {
-        reject(
-          new BoundedProcessError(failure.kind, opts.label, failure.message, {
-            timedOut: failure.timedOut,
-            reaped: true,
-            stdout: stdoutText,
-            stderr: stderrText,
-            stdoutTruncated,
-            stderrTruncated,
-          }),
-        );
-        return;
-      }
       resolve({
         status,
         signal,
