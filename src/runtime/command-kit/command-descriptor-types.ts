@@ -78,7 +78,14 @@ export interface InvocationCoverage {
   omittedIdentities?: readonly string[];
   /** Resume token bound to the exact index generation that produced it. */
   continuation?: { cursor: string; indexGeneration: string };
+  /** Symbol-selection truth, independent from result enumeration and transport pagination. */
+  resolution?: {
+    state: 'exact' | 'ambiguous' | 'missing';
+    totalCandidates: number;
+  };
 }
+
+export type CommandResultUnitPolicy = { kind: 'rows' } | { kind: 'report' } | { kind: 'field'; field: string };
 
 /**
  * One positional slot. An array means the slot accepts any of those kinds —
@@ -112,6 +119,11 @@ export interface CommandAgentContract {
   scope?: CommandScope;
   /** Default coverage policy; the invocation reports what actually happened. */
   coverage: CoveragePolicy;
+  /**
+   * Descriptor-owned semantic unit extraction. When omitted, registration
+   * derives rows vs. one report from the descriptor's render shape.
+   */
+  resultUnits?: CommandResultUnitPolicy;
   /** Neighbouring commands this one is commonly confused with. */
   contrasts?: readonly { command: string; distinction: string }[];
 }

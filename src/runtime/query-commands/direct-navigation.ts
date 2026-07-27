@@ -172,12 +172,15 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'code',
     command: 'code <symbol>',
     description: 'Read the source code for a symbol (bounded to its definition range)',
-    agent: agentContract(
-      'What is the compiler-resolved definition source for this symbol?',
-      'definition identity, source, and line range',
-      ['symbol'],
-      'complete',
-    ),
+    agent: {
+      ...agentContract(
+        'What is the compiler-resolved definition source for this symbol?',
+        'definition identity, source, and line range',
+        ['symbol'],
+        'complete',
+      ),
+      resultUnits: { kind: 'field', field: 'code' },
+    },
     options: withJsonOption([option('-C, --context <n>', 'Extra lines of context above/below', parseInteger, 0)]),
     renderShape: 'custom',
     docs: doc('Navigation'),

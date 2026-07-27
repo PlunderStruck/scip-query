@@ -162,17 +162,18 @@ export function processTypeScriptSemanticMailbox(
   host: TypeScriptSemanticServiceHost,
   opts: {
     nowMs?: number;
+    now?: () => number;
     beforeRequest?: (deadlineAtMs: number) => void;
     afterRequest?: () => void;
     ownerId?: string;
     limits?: Partial<BoundedMailboxLimits>;
   } = {},
 ): number {
-  initializeTypeScriptSemanticMailbox(paths);
-  const nowMs = opts.nowMs ?? Date.now();
+  const now = opts.now ?? (opts.nowMs === undefined ? Date.now : () => opts.nowMs as number);
+  const claimNowMs = now();
   const claims = pollBoundedMailboxRequests(paths, {
     ownerId: opts.ownerId ?? TYPESCRIPT_SEMANTIC_MAILBOX_OWNER,
-    nowMs,
+    nowMs: claimNowMs,
     limits: opts.limits,
     owner: TYPESCRIPT_SEMANTIC_MAILBOX_PROCESS_OWNER,
     liveness: TYPESCRIPT_SEMANTIC_MAILBOX_LIVENESS,
@@ -187,13 +188,17 @@ export function processTypeScriptSemanticMailbox(
       if (id !== claim.requestId) {
         throw new Error('TypeScript semantic request identity does not match its mailbox path.');
       }
-      if (envelope.deadlineAtMs < nowMs) {
+      if (envelope.deadlineAtMs < now()) {
         throw new Error('TypeScript semantic request expired before processing.');
       }
       previousProfileEnvironment = captureProfileEnvironment();
       applyProfileEnvironment(envelope.profileEnvironment ?? {});
       opts.beforeRequest?.(envelope.deadlineAtMs);
       const response = host.handle(envelope.generation, envelope.request);
+      const completedAtMs = now();
+      if (envelope.deadlineAtMs < completedAtMs) {
+        throw new Error('TypeScript semantic request expired while the service was processing it.');
+      }
       completeBoundedMailboxClaim(
         paths,
         claim,
@@ -204,7 +209,7 @@ export function processTypeScriptSemanticMailbox(
           generation: envelope.generation,
           response,
         },
-        { nowMs, limits: opts.limits },
+        { nowMs: completedAtMs, limits: opts.limits },
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -218,7 +223,7 @@ export function processTypeScriptSemanticMailbox(
           error: message,
         },
         message,
-        { nowMs, limits: opts.limits },
+        { nowMs: now(), limits: opts.limits },
       );
     } finally {
       if (previousProfileEnvironment) applyProfileEnvironment(previousProfileEnvironment);

@@ -344,7 +344,6 @@ export function pollBoundedMailboxRequests(
   paths: BoundedMailboxPaths,
   options: Parameters<typeof claimBoundedMailboxRequests>[1],
 ): BoundedMailboxClaim[] {
-  initializeBoundedMailbox(paths);
   if (!directoryHasJsonRequest(paths.pendingDir) && !directoryHasJsonRequest(paths.legacyRequestDir)) return [];
   return claimBoundedMailboxRequests(paths, options);
 }

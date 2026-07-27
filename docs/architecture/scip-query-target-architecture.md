@@ -358,12 +358,21 @@ The atomic-file and atomic-JSON boundary direction was reverified on
 2026-07-25. The complete-descriptor write loop and Windows directory-handle
 classification shared by atomic replacement and platform-owned lock/binary
 publication live in the dependency-free `src/filesystem/file-descriptor.ts`
-boundary; `platform` and `storage` may both depend on that primitive without
-depending on one another. `src/storage/atomic-file.ts` now also owns exclusive
-first publication through a flushed staging inode and hard link. The
-revision-aware coordinator belongs to `runtime-services`, where it may combine
-that storage primitive with the platform process-lock protocol without
-introducing a forbidden `storage -> platform` dependency.
+boundary. `src/storage/atomic-file.ts` now also owns exclusive first
+publication through a flushed staging inode and hard link. The revision-aware
+coordinator belongs to `runtime-services`, where it combines that storage
+primitive with the platform process-lock protocol.
+
+The storage-to-platform direction was revised on 2026-07-26 for immutable
+SQLite generation reader leases. A reader lease is a process-owned durable
+claim that prevents collection of the exact immutable generation backing an
+open database. Its safety depends on three host facts that storage must not
+reimplement: token-owned interprocess locking, process liveness, and process
+start identity. `storage/sqlite-generation.ts` therefore depends directly on
+those platform primitives while it resolves and leases the generation as one
+atomic storage operation. This is an inward dependency on operating-system
+adapters, not a dependency on runtime orchestration; it avoids both a
+resolve-before-lease race and a second, weaker lock protocol inside storage.
 
 The shared-generation direction was reverified on 2026-07-25. Reindex owns
 generation identity, lease validation, and the liveness-only merge; it depends

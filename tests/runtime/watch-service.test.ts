@@ -30,6 +30,7 @@ import {
 } from '../../src/runtime/watch-service.js';
 import { startupRefreshTrigger } from '../../src/runtime/watch-server.js';
 import { claimWatchRefreshRequests, inspectWatchRefreshRequests } from '../../src/storage/watch-refresh-requests.js';
+import { NODE_ATOMIC_FILE_RUNTIME } from '../../src/storage/atomic-file.js';
 
 const NOW = Date.parse('2026-07-09T20:00:00.000Z');
 const IDENTITY = { projectRoot: tmpdir(), worktreeKind: 'non-git', cliVersion: '0.15.0' } as const;
@@ -41,6 +42,29 @@ const WATCH_PROCESS_IDENTITY: ProcessIdentity = {
 };
 
 describe('watch service contract', () => {
+  it('flushes authority transitions but keeps heartbeat telemetry visibility-atomic', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-query-watch-state-durability-'));
+    const path = join(root, 'state.json');
+    let syncs = 0;
+    let token = 0;
+    const runtime = {
+      ...NODE_ATOMIC_FILE_RUNTIME,
+      randomToken: () => `watch-state-${++token}`,
+      syncFile(fd: number) {
+        syncs += 1;
+        NODE_ATOMIC_FILE_RUNTIME.syncFile(fd);
+      },
+    };
+    try {
+      writeWatchServiceState(path, liveState(), { durability: 'visibility', runtime });
+      expect(syncs).toBe(0);
+      writeWatchServiceState(path, liveState(), { durability: 'durable', runtime });
+      expect(syncs).toBeGreaterThan(0);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('trusts a watcher generation only while the matching live watcher is idle and error-free', () => {
     const generation = 'a'.repeat(64);
     const liveInspection = {

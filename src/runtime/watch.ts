@@ -196,6 +196,7 @@ export class Watcher {
     }
     this.stopped = false;
     this.stopPromise = null;
+    watcherRetirementState(this).errors = [];
     this.sourcePollingFallbackStarted = false;
     this.setStatus({ state: 'idle' });
     this.startGitStatePolling();
@@ -225,7 +226,8 @@ export class Watcher {
         reason: 'waiting for the active reindex worker to exit',
       });
     }
-    this.stopPromise = this.finishStop(subscriptions, operation).finally(() => {
+    const retirements = [...watcherRetirementState(this).closures];
+    this.stopPromise = this.finishStop(subscriptions, retirements, operation).finally(() => {
       this.stopInProgress = false;
     });
     return this.stopPromise;
@@ -268,7 +270,7 @@ export class Watcher {
 
     this.sourcePollingFallbackStarted = true;
     this.fsWatchers = this.fsWatchers.filter((candidate) => candidate !== watcher);
-    void watcher.close();
+    retireWatchSubscription(watcherRetirementState(this), watcher, (retirementError) => this.onError(retirementError));
     try {
       this.startSourceWatcher(true);
     } catch (fallbackError) {
@@ -434,14 +436,20 @@ export class Watcher {
 
   private async finishStop(
     subscriptions: readonly WatchSubscription[],
+    retirements: readonly Promise<void>[],
     operation: ReindexOperation | null,
   ): Promise<WatcherStopResult> {
     const reasons: string[] = [];
     const cancellationPromise = operation ? operation.cancel() : null;
-    const closeResults = await Promise.allSettled(
-      subscriptions.map((subscription) => Promise.resolve().then(() => subscription.close())),
-    );
-    for (const result of closeResults) {
+    const closeResults = await Promise.allSettled([
+      ...subscriptions.map((subscription) => Promise.resolve().then(() => subscription.close())),
+      ...retirements,
+    ]);
+    const retirement = watcherRetirementState(this);
+    await Promise.all([...retirement.closures]);
+    reasons.push(...retirement.errors);
+    retirement.errors = [];
+    for (const result of closeResults.slice(0, subscriptions.length)) {
       if (result.status === 'rejected') {
         reasons.push(`watch subscription close failed: ${String(result.reason)}`);
       }
@@ -562,6 +570,37 @@ export class Watcher {
       this.gitPollTimer = null;
     }
   }
+}
+
+interface WatcherRetirementState {
+  closures: Set<Promise<void>>;
+  errors: string[];
+}
+
+const watcherRetirementStates = new WeakMap<Watcher, WatcherRetirementState>();
+
+function watcherRetirementState(watcher: Watcher): WatcherRetirementState {
+  const existing = watcherRetirementStates.get(watcher);
+  if (existing) return existing;
+  const created: WatcherRetirementState = { closures: new Set(), errors: [] };
+  watcherRetirementStates.set(watcher, created);
+  return created;
+}
+
+function retireWatchSubscription(
+  retirement: WatcherRetirementState,
+  subscription: WatchSubscription,
+  onError: (error: Error) => void,
+): void {
+  const closure = Promise.resolve()
+    .then(() => subscription.close())
+    .catch((error: unknown) => {
+      const message = `watch subscription close failed during polling fallback: ${String(error)}`;
+      retirement.errors.push(message);
+      onError(new Error(message));
+    });
+  retirement.closures.add(closure);
+  void closure.then(() => retirement.closures.delete(closure));
 }
 
 export function resolveReindexWorkerLaunch(request: ReindexRunRequest): ReindexWorkerLaunch {

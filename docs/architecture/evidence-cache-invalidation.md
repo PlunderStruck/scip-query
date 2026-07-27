@@ -42,6 +42,21 @@ cache identity. Public health JSON is emitted by the shared versioned CLI
 envelope after the cached report is assembled; private health-phase child
 messages use their own versioned protocol.
 
+## Access recency and eviction
+
+`last_accessed_at` is cache recency, not creation time. A successful shared
+evidence read advances it at most once per minute, which preserves LRU meaning
+without turning a hot read path into one SQLite write per hit. Touch failure is
+best effort: it cannot invalidate or hide the already-validated cached answer.
+
+Maintenance orders eviction through
+`idx_file_evidence_lru(last_accessed_at, kind, relative_path, key_hash,
+payload_version)`. The index supplies both the oldest-first order and stable
+tie-breakers, so bounded deletion does not sort the whole evidence table.
+Tests prove that a read makes an old row newest, repeated reads inside the
+coarse interval do not rewrite it, the touched row survives eviction pressure,
+and SQLite selects the LRU index for the maintenance query.
+
 ## Finding-outcome observation ledger
 
 The finding-outcome ledger is a worktree-local observational product: its rows

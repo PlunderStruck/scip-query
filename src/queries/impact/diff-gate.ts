@@ -29,7 +29,7 @@ import type {
 } from './diff-impact.js';
 import { baselineFindingMetadata } from './diff-gate-baseline-policy.js';
 import { docReferencePolicy, isSnapshotDoc } from '../cleanup/diff-gate-doc-policy.js';
-import type { DiffGateActionTier, DocCitationKind } from '../internal/diff-gate-types.js';
+import type { DiffGateActionTier, DiffGateCheck, DocCitationKind } from '../internal/diff-gate-types.js';
 import { docsCitingFiles } from '../cleanup/doc-drift.js';
 import { exactDuplicateBodyMatches } from '../cleanup/duplicate-bodies.js';
 import { allTwinGroups } from '../cleanup/twin-drift.js';
@@ -54,18 +54,7 @@ import { isCallableSymbol, leafName, leafSuffix } from '../../symbols/symbol-par
 import { getGlobalLeafIndex } from '../../symbols/leaf-symbol-index.js';
 import { discoverWorkspacePackages } from '../../platform/workspace-packages.js';
 import { profileSpan } from '../../instrumentation/profile.js';
-
-export type DiffGateCheck =
-  | 'echo'
-  | 'incomplete-migration'
-  | 'co-change-partner'
-  | 'twin-partner'
-  | 'coverage-contract'
-  | 'architecture'
-  | 'doc-reference'
-  | 'unused-params'
-  | 'new-dead'
-  | 'baseline';
+import { notifyDiffGateCheckComplete, notifyDiffGateCheckStart } from '../internal/diff-gate-progress.js';
 
 /** Canonical check list — the CLI validates `--skip` values against this. */
 export const DIFF_GATE_CHECKS: readonly DiffGateCheck[] = [
@@ -85,7 +74,7 @@ export type DiffGateEvidence = 'graph-fact' | 'semantic' | 'heuristic' | 'change
 
 export type DiffGateSeverity = 'info' | 'warning' | 'error';
 
-export type { DiffGateActionTier, DocCitationKind } from '../internal/diff-gate-types.js';
+export type { DiffGateActionTier, DiffGateCheck, DocCitationKind } from '../internal/diff-gate-types.js';
 
 export interface DiffGateFinding {
   id: string;
@@ -306,14 +295,19 @@ export function diffGate(
     const findingsBefore = result.findings.length;
     const skippedBefore = result.skipped.length;
     const checksRunBefore = result.checksRun.length;
-    profileSpan(`diff-gate.check.${check}`, run, () => ({
-      check,
-      changedFiles: changedFiles.length,
-      changedSymbols: impact.changedSymbols.length,
-      findingsAdded: result.findings.length - findingsBefore,
-      skippedAdded: result.skipped.length - skippedBefore,
-      checksRunAdded: result.checksRun.length - checksRunBefore,
-    }));
+    notifyDiffGateCheckStart(check);
+    try {
+      profileSpan(`diff-gate.check.${check}`, run, () => ({
+        check,
+        changedFiles: changedFiles.length,
+        changedSymbols: impact.changedSymbols.length,
+        findingsAdded: result.findings.length - findingsBefore,
+        skippedAdded: result.skipped.length - skippedBefore,
+        checksRunAdded: result.checksRun.length - checksRunBefore,
+      }));
+    } finally {
+      notifyDiffGateCheckComplete(check);
+    }
   };
   runUnlessSkipped('echo', () =>
     runEchoCheck(

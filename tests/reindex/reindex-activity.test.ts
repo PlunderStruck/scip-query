@@ -69,6 +69,9 @@ describe('reindex activity', () => {
 
     expect(summary).toEqual(
       expect.objectContaining({
+        confidence: 'complete',
+        recordsRead: 3,
+        invalidRecords: 0,
         runs: 2,
         rebuilt: 1,
         reused: 1,
@@ -92,6 +95,63 @@ describe('reindex activity', () => {
 
     expect(summary.runs).toBe(1);
     expect(summary.rebuilt).toBe(1);
+    expect(summary).toEqual(
+      expect.objectContaining({
+        confidence: 'partial',
+        recordsRead: 3,
+        invalidRecords: 1,
+        skippedRecords: 1,
+      }),
+    );
+  });
+
+  it('reports incomplete tails and unavailable segments instead of implying complete history', () => {
+    const cacheDir = createCache();
+    const outputDb = join(cacheDir, 'index.db');
+    const path = reindexActivityPath(outputDb);
+    writeFileSync(path, JSON.stringify(runRecord('2026-07-24T12:00:00.000Z')));
+
+    expect(readReindexActivitySummary(outputDb, new Date('2026-07-24T15:00:00.000Z'))).toEqual(
+      expect.objectContaining({
+        confidence: 'partial',
+        recordsRead: 0,
+        ignoredPartialTailBytes: expect.any(Number),
+      }),
+    );
+
+    expect(
+      readReindexActivitySummary(outputDb, new Date('2026-07-24T15:00:00.000Z'), 24 * 60 * 60_000, () => {
+        throw new Error('unreadable');
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        confidence: 'unavailable',
+        readErrors: 2,
+        recordsRead: 0,
+      }),
+    );
+  });
+
+  it('returns activity append failure to the caller without masking the refresh result', () => {
+    const cacheDir = createCache();
+    const blocker = join(cacheDir, 'not-a-directory');
+    writeFileSync(blocker, 'x');
+    const outputDb = join(blocker, 'index.db');
+    const outputScip = join(cacheDir, 'index.scip');
+    writeFileSync(outputScip, 'scip');
+
+    expect(
+      recordReindexRunActivity(
+        outputDb,
+        result({
+          outputDb,
+          outputScip,
+          completedAt: '2026-07-24T12:00:00.000Z',
+          result: 'rebuilt',
+          reused: false,
+        }),
+      ),
+    ).toEqual(expect.objectContaining({ state: 'failed', reason: expect.any(String) }));
   });
 
   it('rotates activity into at most two bounded segments', () => {

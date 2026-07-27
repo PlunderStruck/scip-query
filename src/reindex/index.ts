@@ -67,6 +67,7 @@ import { detectLanguages } from './detect.js';
 import { getIndexerConfig } from './indexers.js';
 import { mergeAndSanitizeScipFiles, mergeScipFiles } from './merge.js';
 import { patchIncrementalSqliteGeneration } from './incremental-sqlite-publication.js';
+import { removeRedundantSqliteIndexes } from './sqlite-index-maintenance.js';
 import { runPostIndexAugmentation } from './augmentation/post-index-augmentation.js';
 import { recordFailedReindexActivity, recordReindexRunActivity } from './reindex-activity.js';
 import {
@@ -423,7 +424,10 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
     );
     if (reused) {
       publishSharedReindexResult({ snapshot: sharedSnapshot, paths, projectRoot, fingerprint, onStatus });
-      recordReindexRunActivity(paths.outputDb, reused);
+      const activityWrite = recordReindexRunActivity(paths.outputDb, reused);
+      if (activityWrite.state === 'failed') {
+        onStatus(`Warning: reindex succeeded, but activity telemetry was not recorded: ${activityWrite.reason}`);
+      }
       hardenOwnedCacheTreeIfOwned(projectRoot, dirname(paths.outputDb));
       return reused;
     }
@@ -458,7 +462,10 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
       }),
     );
     publishSharedReindexResult({ snapshot: sharedSnapshot, paths, projectRoot, fingerprint, onStatus });
-    recordReindexRunActivity(paths.outputDb, freshResult);
+    const activityWrite = recordReindexRunActivity(paths.outputDb, freshResult);
+    if (activityWrite.state === 'failed') {
+      onStatus(`Warning: reindex succeeded, but activity telemetry was not recorded: ${activityWrite.reason}`);
+    }
     hardenOwnedCacheTreeIfOwned(projectRoot, dirname(paths.outputDb));
     return freshResult;
   } catch (error) {
@@ -470,7 +477,10 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
       error: error instanceof Error ? error.message : String(error),
     });
     updateReindexLastRefresh(paths.metaPath, lastRefresh);
-    recordFailedReindexActivity(paths.outputDb, lastRefresh);
+    const activityWrite = recordFailedReindexActivity(paths.outputDb, lastRefresh);
+    if (activityWrite.state === 'failed') {
+      onStatus(`Warning: failed reindex activity telemetry was not recorded: ${activityWrite.reason}`);
+    }
     throw error;
   } finally {
     if (runDir) {
@@ -594,7 +604,6 @@ function reuseExistingIndexIfPossible(opts: {
     dbPath: opts.paths.outputDb,
     onStatus: opts.onStatus,
   });
-
   const durationMs = monotonicNowMs() - opts.monotonicStart;
   const lastRefresh = buildLastRefresh({
     trigger: opts.opts.trigger,
@@ -1313,6 +1322,10 @@ function publishFreshReindexArtifacts(
     dbPath: opts.tempPaths.tempOutputDb,
     onStatus: opts.onStatus,
   });
+  const indexMaintenance = removeRedundantSqliteIndexes(opts.tempPaths.tempOutputDb);
+  if (indexMaintenance.removed.length > 0) {
+    opts.onStatus(`Removed redundant SQLite indexes: ${indexMaintenance.removed.join(', ')}`);
+  }
 
   if (sqliteMaterialization.mode === 'incremental' && incrementalTypeScript) {
     let candidateDb: ScipDatabase | null = null;

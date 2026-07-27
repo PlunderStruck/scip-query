@@ -1,0 +1,14 @@
+{
+  "kind": "scip-query-suppression",
+  "schemaVersion": 1,
+  "suppressionIdentity": "SQ1F913DC461A8",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.19.8"
+  },
+  "id": "SQ1F913DC461A8",
+  "check": "echo",
+  "file": "src/analysis/package-surface.ts",
+  "reason": "Accepted false structural match: derivePackageOperationalSurface parses package binaries and scripts into reasoned operational targets, while deriveRustLibrarySurface parses Cargo library roots into source-prefix reachability. Consolidating them would merge unrelated package policies.",
+  "createdAt": "2026-07-27T05:42:46.202Z"
+}

@@ -25,7 +25,13 @@ export interface PackageSurface {
   pathPrefixes: string[];
 }
 
+export interface PackageOperationalSurface {
+  /** Source candidates launched as package binaries or script processes. */
+  reasonsByFile: Map<string, string[]>;
+}
+
 const EMPTY_SURFACE: PackageSurface = { files: new Set(), pathPrefixes: [] };
+const EMPTY_OPERATIONAL_SURFACE: PackageOperationalSurface = { reasonsByFile: new Map() };
 
 /** Build-output directories commonly mapped from a `src/` tree. */
 const BUILD_DIR_PATTERN = /^(?:dist|build|lib|out|output|esm|cjs|umd)\//;
@@ -51,6 +57,9 @@ const MAX_PACKAGE_MANIFEST_DEPTH = 4;
 const packageSurfaceCache = createPerDbValue<PackageSurface>('package-surface', {
   clearGroups: ['whole-project'],
 });
+const packageOperationalSurfaceCache = createPerDbValue<PackageOperationalSurface>('package-operational-surface', {
+  clearGroups: ['whole-project'],
+});
 
 export function getPackageSurface(db: ScipDatabase): PackageSurface {
   return packageSurfaceCache.get(db, () => derivePackageSurface(db.config.projectRoot));
@@ -64,6 +73,14 @@ export function isPackageSurfaceFile(db: ScipDatabase, normalizedRelativePath: s
   return surface.pathPrefixes.some((prefix) => normalizedRelativePath.startsWith(prefix));
 }
 
+export function getPackageOperationalSurface(db: ScipDatabase): PackageOperationalSurface {
+  return packageOperationalSurfaceCache.get(db, () => derivePackageOperationalSurface(db.config.projectRoot));
+}
+
+export function packageOperationalRootReasons(db: ScipDatabase, normalizedRelativePath: string): string[] {
+  return getPackageOperationalSurface(db).reasonsByFile.get(normalizedRelativePath) ?? [];
+}
+
 export function derivePackageSurface(projectRoot: string): PackageSurface {
   const files = new Set<string>();
   const pathPrefixes: string[] = [];
@@ -74,6 +91,25 @@ export function derivePackageSurface(projectRoot: string): PackageSurface {
   }
   if (files.size === 0 && pathPrefixes.length === 0) return EMPTY_SURFACE;
   return { files, pathPrefixes };
+}
+
+export function derivePackageOperationalSurface(projectRoot: string): PackageOperationalSurface {
+  const reasonsByFile = new Map<string, string[]>();
+  for (const { manifest, packageRoot } of readPackageManifests(projectRoot)) {
+    const binTargets = collectBinTargets(manifest);
+    for (const target of binTargets) {
+      addOperationalTarget(projectRoot, packageRoot, target, 'package binary', reasonsByFile);
+    }
+    const scripts = manifest['scripts'];
+    if (!scripts || typeof scripts !== 'object') continue;
+    for (const [name, command] of Object.entries(scripts)) {
+      if (typeof command !== 'string') continue;
+      for (const target of executableScriptTargets(command)) {
+        addOperationalTarget(projectRoot, packageRoot, target, `package script "${name}"`, reasonsByFile);
+      }
+    }
+  }
+  return reasonsByFile.size === 0 ? EMPTY_OPERATIONAL_SURFACE : { reasonsByFile };
 }
 
 interface PackageManifestEntry {
@@ -148,6 +184,40 @@ function collectExportTargets(manifest: Record<string, unknown>): string[] {
   }
   collectExportsLeaves(manifest['exports'], targets);
   return targets;
+}
+
+function collectBinTargets(manifest: Record<string, unknown>): string[] {
+  const bin = manifest['bin'];
+  if (typeof bin === 'string') return [bin];
+  if (!bin || typeof bin !== 'object') return [];
+  return Object.values(bin).filter((value): value is string => typeof value === 'string');
+}
+
+function executableScriptTargets(command: string): string[] {
+  const targets: string[] = [];
+  const launcher =
+    /(?:^|&&|\|\||;)\s*(?:(?:cross-env|env)(?:\s+[A-Za-z_][A-Za-z0-9_]*=\S+)*\s+)?(?:node|bun|tsx|ts-node|vite-node|python3?|deno\s+run)\s+(?:(?:--?[A-Za-z0-9-]+(?:=\S+)?)\s+)*["']?([^"'`\s]+\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs|py))["']?/g;
+  for (const match of command.matchAll(launcher)) {
+    const target = match[1];
+    if (target && !target.startsWith('node_modules/') && !target.startsWith('./node_modules/')) targets.push(target);
+  }
+  return targets;
+}
+
+function addOperationalTarget(
+  projectRoot: string,
+  packageRoot: string,
+  target: string,
+  reason: string,
+  reasonsByFile: Map<string, string[]>,
+): void {
+  const candidates = new Set<string>();
+  expandTarget(projectRoot, packageRoot, target, candidates, []);
+  for (const candidate of candidates) {
+    const reasons = reasonsByFile.get(candidate) ?? [];
+    if (!reasons.includes(reason)) reasons.push(reason);
+    reasonsByFile.set(candidate, reasons);
+  }
 }
 
 function collectExportsLeaves(node: unknown, out: string[]): void {

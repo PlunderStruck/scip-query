@@ -1,7 +1,12 @@
 import Database from 'better-sqlite3';
 import type { ScipQueryConfig } from '../domain/types.js';
 import { normalizeSafeProjectRelativePath } from '../domain/path-normalization.js';
-import { fileIdentity, resolveSqliteGeneration, type SqliteGenerationHandle } from './sqlite-generation.js';
+import {
+  acquireSqliteGenerationReader,
+  fileIdentity,
+  resolveSqliteGeneration,
+  type SqliteGenerationHandle,
+} from './sqlite-generation.js';
 
 /** The path-exclusion capability storage consumes from project source policy. */
 export interface PathExclusionPolicy {
@@ -58,6 +63,7 @@ export class ScipDatabase {
     const opened = openPublishedGeneration(config);
     this.generation = opened.generation;
     this.db = opened.db;
+    generationReaderReleases.set(this, opened.release);
     this.db.pragma('busy_timeout = 5000');
     this.db.pragma('query_only = ON');
     this.db.pragma('temp_store = MEMORY');
@@ -67,6 +73,8 @@ export class ScipDatabase {
       assertSafeIndexedDocumentPaths(this.db);
     } catch (error) {
       this.db.close();
+      opened.release();
+      generationReaderReleases.delete(this);
       throw error;
     }
   }
@@ -149,8 +157,15 @@ export class ScipDatabase {
   }
 
   close(): void {
+    const releaseGenerationReader = generationReaderReleases.get(this);
+    if (!releaseGenerationReader) return;
     this.statementCache.clear();
-    this.db.close();
+    try {
+      this.db.close();
+    } finally {
+      releaseGenerationReader();
+      generationReaderReleases.delete(this);
+    }
   }
 
   private statement(sql: string): Database.Statement {
@@ -162,6 +177,8 @@ export class ScipDatabase {
     return statement;
   }
 }
+
+const generationReaderReleases = new WeakMap<ScipDatabase, () => void>();
 
 function assertSafeIndexedDocumentPaths(db: Database.Database): void {
   const documentsTable = db
@@ -179,12 +196,20 @@ function assertSafeIndexedDocumentPaths(db: Database.Database): void {
 function openPublishedGeneration(config: ScipQueryConfig): {
   db: Database.Database;
   generation: SqliteGenerationHandle;
+  release(): void;
 } {
   for (let attempt = 0; attempt < 4; attempt += 1) {
-    const generation = resolveSqliteGeneration(config);
-    const db = new Database(generation.databasePath, { readonly: true, fileMustExist: true });
+    const leased = acquireSqliteGenerationReader(config);
+    const generation = leased.generation;
+    let db: Database.Database;
+    try {
+      db = new Database(generation.databasePath, { readonly: true, fileMustExist: true });
+    } catch (error) {
+      leased.release();
+      throw error;
+    }
     if (generation.source === 'immutable') {
-      return { db, generation };
+      return { db, generation, release: leased.release };
     }
     try {
       const observed = resolveSqliteGeneration(config);
@@ -195,13 +220,15 @@ function openPublishedGeneration(config: ScipQueryConfig): {
         observed.databaseFileIdentity === generation.databaseFileIdentity &&
         observed.metadataRaw === generation.metadataRaw
       ) {
-        return { db, generation };
+        return { db, generation, release: leased.release };
       }
     } catch (error) {
       db.close();
+      leased.release();
       throw error;
     }
     db.close();
+    leased.release();
   }
   throw new Error('SQLite index publication changed repeatedly while opening a coherent generation.');
 }

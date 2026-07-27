@@ -1,0 +1,55 @@
+{
+  "acceptedAt": "2026-07-27T05:24:49.040Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "4aea7746657ee8aa11b95e9c770e5dae1afb464ace1610997071b25ac7914559",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ChangeSurfaceEntry changed from interface ChangeSurfaceEntry { symbol: string; shortName: string; startLine: number; endLine: number; externalConsumers: number; riskLevel: 'low' | 'medium' | 'high'; } to interface ChangeSurfaceEntry { symbol: string; shortName: string; startLine: number; endLine: number; externalConsumers: number; externalConsumerRiskLevel?: 'low' | 'medium' | '....",
+      "target": "./queries:ChangeSurfaceEntry"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ChangeSurfaceResult changed from interface ChangeSurfaceResult { file: string; symbols: ChangeSurfaceEntry[]; totalExternalConsumers: number; } to interface ChangeSurfaceResult { file: string; symbols: ChangeSurfaceEntry[]; totalExternalConsumers: number; fileRisk?: FileChangeRiskMetadata; }.",
+      "target": "./queries:ChangeSurfaceResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ChangeSurfaceEntry changed from interface ChangeSurfaceEntry { symbol: string; shortName: string; startLine: number; endLine: number; externalConsumers: number; riskLevel: 'low' | 'medium' | 'high'; } to interface ChangeSurfaceEntry { symbol: string; shortName: string; startLine: number; endLine: number; externalConsumers: number; externalConsumerRiskLevel?: 'low' | 'medium' | '....",
+      "target": "./queries/change-surface:ChangeSurfaceEntry"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ChangeSurfaceResult changed from interface ChangeSurfaceResult { file: string; symbols: ChangeSurfaceEntry[]; totalExternalConsumers: number; } to interface ChangeSurfaceResult { file: string; symbols: ChangeSurfaceEntry[]; totalExternalConsumers: number; fileRisk?: FileChangeRiskMetadata; }.",
+      "target": "./queries/change-surface:ChangeSurfaceResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ChangeSurfaceRiskReason.",
+      "target": "./queries/change-surface:ChangeSurfaceRiskReason"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ChangeSurfaceEntry changed from interface ChangeSurfaceEntry { symbol: string; shortName: string; startLine: number; endLine: number; externalConsumers: number; riskLevel: 'low' | 'medium' | 'high'; } to interface ChangeSurfaceEntry { symbol: string; shortName: string; startLine: number; endLine: number; externalConsumers: number; externalConsumerRiskLevel?: 'low' | 'medium' | '....",
+      "target": "./queries/index:ChangeSurfaceEntry"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ChangeSurfaceResult changed from interface ChangeSurfaceResult { file: string; symbols: ChangeSurfaceEntry[]; totalExternalConsumers: number; } to interface ChangeSurfaceResult { file: string; symbols: ChangeSurfaceEntry[]; totalExternalConsumers: number; fileRisk?: FileChangeRiskMetadata; }.",
+      "target": "./queries/index:ChangeSurfaceResult"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.19.8",
+  "previousDigest": "d5c8615fe9ea4c2241dc62d69e7900ad9f36b9d7c3538e56badd9d4bf006bbf7",
+  "reason": "Change-surface responses now include optional operational-root, published-API, external-consumer, and evidence-coverage risk metadata; existing fields and query signatures remain compatible.",
+  "schemaVersion": 1
+}

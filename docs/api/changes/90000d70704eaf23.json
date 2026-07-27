@@ -1,0 +1,55 @@
+{
+  "acceptedAt": "2026-07-27T05:48:16.625Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "90000d70704eaf2300770c6af091d730ceb2298caac66d41aebf990f9a4e87de",
+  "changes": [
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries; review their variance and runtime meaning.",
+      "target": "./queries"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/diff-gate; review their variance and runtime meaning.",
+      "target": "./queries/diff-gate"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/doc-drift; review their variance and runtime meaning.",
+      "target": "./queries/doc-drift"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/index; review their variance and runtime meaning.",
+      "target": "./queries/index"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "D changed from type DiffGateActionTier = 'direct' | 'signal' | 'support'; to type DiffGateCheck = 'echo' | 'incomplete-migration' | 'co-change-partner' | 'twin-partner' | 'coverage-contract' | 'architecture' | 'doc-reference' | 'unused-params' | 'new-dea....",
+      "target": "diff-gate-types-<hash>.d.ts:D"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "a changed from type DocCitationKind = 'behavioral-claim' | 'configuration-example' | 'guide-reference' | 'intentional-record'; to type DiffGateActionTier = 'direct' | 'signal' | 'support';.",
+      "target": "diff-gate-types-<hash>.d.ts:a"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration b.",
+      "target": "diff-gate-types-<hash>.d.ts:b"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.19.8",
+  "previousDigest": "4aea7746657ee8aa11b95e9c770e5dae1afb464ace1610997071b25ac7914559",
+  "reason": "Relocated the unchanged DiffGateCheck union behind its existing public export to break a queries-internal dependency cycle; public names, union members, and runtime behavior are unchanged.",
+  "schemaVersion": 1
+}

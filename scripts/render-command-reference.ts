@@ -325,6 +325,7 @@ if (!isTestImport && process.argv.includes('--write')) {
   const generatedDiffGateChecks = renderDiffGateChecksMarkdown();
   const generatedSkillCommandFamilies = renderSkillCommandFamiliesMarkdown();
   replaceGeneratedBlock(join(process.cwd(), 'docs/COMMAND_REFERENCE.md'), 'COMMAND REFERENCE', generated);
+  if (process.argv.includes('--docs-only')) process.exit(0);
   replaceGeneratedBlock(
     join(process.cwd(), 'skills/_shared/references/agent-contract-catalog.md'),
     'AGENT CONTRACT CATALOG',

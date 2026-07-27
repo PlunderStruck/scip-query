@@ -402,6 +402,55 @@ describe('Watcher', () => {
     expect(statuses.at(-1)).toBe('idle');
   });
 
+  it('tracks and reports native watcher retirement when EMFILE starts polling fallback', async () => {
+    const projectRoot = createProject();
+    const nativeEvents = new EventEmitter();
+    const pollingEvents = new EventEmitter();
+    const nativeClose = deferred<void>();
+    const errors: string[] = [];
+    const subscriptions: WatchSubscription[] = [];
+    const factory = vi.fn<WatchSubscriptionFactory>((_root, options) => {
+      const emitter = options.usePolling ? pollingEvents : nativeEvents;
+      const subscription = {
+        on(event: 'all' | 'error', listener: (...args: never[]) => void) {
+          emitter.on(event, listener);
+          return subscription;
+        },
+        close: options.usePolling ? vi.fn(async () => undefined) : vi.fn(() => nativeClose.promise),
+      } as WatchSubscription;
+      subscriptions.push(subscription);
+      return subscription;
+    });
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { gitPollMs: 60_000 } },
+      subscriptionFactory: factory,
+      onError: (error) => errors.push(error.message),
+    });
+
+    watcher.start();
+    nativeEvents.emit('error', Object.assign(new Error('too many files'), { code: 'EMFILE' }));
+    expect(factory).toHaveBeenCalledTimes(2);
+    expect(factory.mock.calls[1]?.[1]).toEqual(expect.objectContaining({ usePolling: true }));
+
+    const stopPromise = watcher.stop();
+    let stopped = false;
+    void stopPromise.then(() => {
+      stopped = true;
+    });
+    await Promise.resolve();
+    expect(stopped).toBe(false);
+
+    nativeClose.reject(new Error('native close failed'));
+    await expect(stopPromise).resolves.toEqual({
+      state: 'degraded',
+      reasons: [expect.stringContaining('polling fallback: Error: native close failed')],
+    });
+    expect(errors).toEqual([expect.stringContaining('polling fallback: Error: native close failed')]);
+    expect(subscriptions).toHaveLength(2);
+  });
+
   it('retains a degraded draining state when worker exit cannot be proven', async () => {
     const projectRoot = createProject();
     const never = new Promise<number>(() => undefined);

@@ -1,15 +1,23 @@
-import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
+import { unlinkSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { DIFF_GATE_CHECKS, diffGate, type DiffGateCheck, type DiffGateResult } from '../queries/impact/diff-gate.js';
+import { withDiffGateProgressObserver, type DiffGateProgressObserver } from '../queries/internal/diff-gate-progress.js';
+import { isRecordObject } from '../domain/record-validation.js';
+import { readSmallArtifactText } from '../filesystem/bounded-file.js';
 import type { ScipDatabase } from '../storage/db.js';
+import { writeJsonAtomic } from '../storage/atomic-json.js';
 import { tryAcquireProcessFileLock, type ProcessFileLockObservation } from '../platform/process-file-lock.js';
-import { runIsolatedJsonProcess } from './isolated-analysis-runner.js';
+import { IsolatedProcessTimeoutError, runIsolatedJsonProcess } from './isolated-analysis-runner.js';
 import { commandAnalysisBudget, type AnalysisBudgetDisclosure } from './cli-support.js';
 import { recordDiffGateOutcomes, type DiffGateOutcomeResult } from './diff-gate-outcomes.js';
 
 export const DIFF_GATE_RUN_COMMAND = '__diff-gate-run';
 export const DIFF_GATE_REQUEST_ENV = 'SCIP_QUERY_DIFF_GATE_REQUEST';
 export const DIFF_GATE_TIMEOUT_ENV = 'SCIP_QUERY_DIFF_GATE_TIMEOUT_MS';
+export const DIFF_GATE_PROGRESS_PATH_ENV = 'SCIP_QUERY_DIFF_GATE_PROGRESS_PATH';
+export const DIFF_GATE_PROGRESS_TOKEN_ENV = 'SCIP_QUERY_DIFF_GATE_PROGRESS_TOKEN';
 export const DEFAULT_DIFF_GATE_TIMEOUT_MS = 60_000;
 export const DEFAULT_FULL_DIFF_GATE_TIMEOUT_MS = 180_000;
 export const MAX_DIFF_GATE_TIMEOUT_MS = 600_000;
@@ -43,6 +51,16 @@ export interface IsolatedDiffGateOptions {
   env?: NodeJS.ProcessEnv;
 }
 
+export interface DiffGateProgressRecord {
+  schemaVersion: 1;
+  token: string;
+  stage: 'initializing' | 'current-gate' | 'outcome-ledger' | 'replay-gate' | 'complete';
+  activeCheck?: DiffGateCheck;
+  lastCompletedCheck?: DiffGateCheck;
+  replayBase?: string;
+  updatedAt: string;
+}
+
 export class DiffGateBusyError extends Error {
   readonly code = 'SCIP_QUERY_DIFF_GATE_BUSY';
 
@@ -61,12 +79,32 @@ export class DiffGateBusyError extends Error {
   }
 }
 
+export class DiffGateDetectorTimeoutError extends IsolatedProcessTimeoutError {
+  constructor(
+    timeoutMs: number,
+    readonly progress?: DiffGateProgressRecord,
+    reaped = true,
+  ) {
+    super('diff-gate', timeoutMs, reaped);
+    const active = progress?.activeCheck
+      ? ` Active detector: ${progress.activeCheck} (${progress.stage}).`
+      : progress
+        ? ` Active phase: ${progress.stage}.`
+        : ' No detector progress record was available.';
+    const completed = progress?.lastCompletedCheck ? ` Last completed detector: ${progress.lastCompletedCheck}.` : '';
+    this.message = `diff-gate timed out after ${timeoutMs}ms.${active}${completed}`;
+    this.name = 'DiffGateDetectorTimeoutError';
+  }
+}
+
 /**
  * Execute current-diff policy and secondary outcome bookkeeping in the same
  * isolated child. The parent owns the wall-clock deadline for both.
  */
 export function executeDiffGate(db: ScipDatabase, request: DiffGateExecutionRequest): DiffGateExecutionResult {
   const budget = commandAnalysisBudget(db, 'diff-gate', request.full, { quiet: true });
+  const progress = createDiffGateProgressReporter(process.env);
+  progress.stage('current-gate');
   const gateOptions = {
     base: request.base,
     minTogether: request.minTogether,
@@ -78,18 +116,23 @@ export function executeDiffGate(db: ScipDatabase, request: DiffGateExecutionRequ
     historyMode: request.full ? ('full' as const) : ('bounded' as const),
     skip: request.skip,
   };
-  const result = diffGate(db, gateOptions);
+  const result = withDiffGateProgressObserver(progress.observer('current-gate'), () => diffGate(db, gateOptions));
+  progress.stage('outcome-ledger');
   const outcomes = recordDiffGateOutcomes(db, result, {
     replayGate: (baseCommit, checks) => {
       const required = new Set(checks);
-      return diffGate(db, {
-        ...gateOptions,
-        base: baseCommit,
-        includeBaseline: required.has('baseline'),
-        skip: DIFF_GATE_CHECKS.filter((check) => !required.has(check)),
-      });
+      progress.stage('replay-gate', baseCommit);
+      return withDiffGateProgressObserver(progress.observer('replay-gate', baseCommit), () =>
+        diffGate(db, {
+          ...gateOptions,
+          base: baseCommit,
+          includeBaseline: required.has('baseline'),
+          skip: DIFF_GATE_CHECKS.filter((check) => !required.has(check)),
+        }),
+      );
     },
   });
+  progress.stage('complete');
   return {
     result,
     outcomes: {
@@ -149,21 +192,51 @@ export function runIsolatedDiffGate(
   options: IsolatedDiffGateOptions,
 ): DiffGateExecutionResult {
   const lockPath = join(options.cacheDir, 'runtime', 'diff-gate.lock');
-  return withDiffGateLease(lockPath, options.projectRoot, () =>
-    runIsolatedJsonProcess<DiffGateExecutionResult>({
-      cliPath: options.cliPath ?? process.argv[1] ?? fileURLToPath(import.meta.url),
-      command: DIFF_GATE_RUN_COMMAND,
-      args: ['--json'],
-      env: {
-        ...(options.env ?? process.env),
-        SCIP_QUERY_PROJECT_ROOT: options.projectRoot,
-        [DIFF_GATE_REQUEST_ENV]: JSON.stringify(request),
-      },
-      label: 'diff-gate',
-      timeoutMs: options.timeoutMs ?? diffGateTimeoutMs(request.full, options.env ?? process.env),
-      maxBuffer: 50 * 1024 * 1024,
-    }),
-  );
+  return withDiffGateLease(lockPath, options.projectRoot, () => {
+    const progressToken = randomUUID();
+    const progressPath = join(options.cacheDir, 'runtime', `diff-gate-progress-${progressToken}.json`);
+    const timeoutMs = options.timeoutMs ?? diffGateTimeoutMs(request.full, options.env ?? process.env);
+    try {
+      writeDiffGateProgress(progressPath, {
+        schemaVersion: 1,
+        token: progressToken,
+        stage: 'initializing',
+        updatedAt: new Date().toISOString(),
+      });
+      return runIsolatedJsonProcess<DiffGateExecutionResult>({
+        cliPath: options.cliPath ?? process.argv[1] ?? fileURLToPath(import.meta.url),
+        command: DIFF_GATE_RUN_COMMAND,
+        args: ['--json'],
+        env: {
+          ...(options.env ?? process.env),
+          SCIP_QUERY_PROJECT_ROOT: options.projectRoot,
+          [DIFF_GATE_REQUEST_ENV]: JSON.stringify(request),
+          [DIFF_GATE_PROGRESS_PATH_ENV]: progressPath,
+          [DIFF_GATE_PROGRESS_TOKEN_ENV]: progressToken,
+        },
+        label: 'diff-gate',
+        timeoutMs,
+        maxBuffer: 50 * 1024 * 1024,
+      });
+    } catch (error) {
+      if (error instanceof IsolatedProcessTimeoutError) {
+        throw new DiffGateDetectorTimeoutError(
+          timeoutMs,
+          readDiffGateProgress(progressPath, progressToken),
+          error.reaped,
+        );
+      }
+      throw error;
+    } finally {
+      try {
+        unlinkSync(progressPath);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          // Progress is diagnostic-only; cleanup failure must not mask the gate result.
+        }
+      }
+    }
+  });
 }
 
 export function withDiffGateLease<T>(lockPath: string, projectRoot: string, run: () => T): T {
@@ -196,4 +269,86 @@ function positiveFinite(value: unknown): value is number {
 
 function nonNegativeFinite(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function createDiffGateProgressReporter(env: NodeJS.ProcessEnv): {
+  stage(stage: DiffGateProgressRecord['stage'], replayBase?: string): void;
+  observer(stage: 'current-gate' | 'replay-gate', replayBase?: string): DiffGateProgressObserver;
+} {
+  const progressPath = env[DIFF_GATE_PROGRESS_PATH_ENV];
+  const token = env[DIFF_GATE_PROGRESS_TOKEN_ENV];
+  let record: DiffGateProgressRecord | undefined =
+    progressPath && token
+      ? {
+          schemaVersion: 1,
+          token,
+          stage: 'initializing',
+          updatedAt: new Date().toISOString(),
+        }
+      : undefined;
+  const publish = (patch: Partial<DiffGateProgressRecord>): void => {
+    if (!progressPath || !record) return;
+    record = { ...record, ...patch, updatedAt: new Date().toISOString() };
+    writeDiffGateProgress(progressPath, record);
+  };
+  return {
+    stage: (stage, replayBase) =>
+      publish({
+        stage,
+        activeCheck: undefined,
+        ...(replayBase ? { replayBase } : { replayBase: undefined }),
+      }),
+    observer: (stage, replayBase) => ({
+      onCheckStart: (activeCheck) => publish({ stage, activeCheck, replayBase }),
+      onCheckComplete: (lastCompletedCheck) =>
+        publish({ stage, activeCheck: undefined, lastCompletedCheck, replayBase }),
+    }),
+  };
+}
+
+function writeDiffGateProgress(path: string, record: DiffGateProgressRecord): void {
+  try {
+    writeJsonAtomic(path, record, { spacing: 2, trailingNewline: true });
+  } catch {
+    // The gate remains authoritative; progress only enriches a later timeout.
+  }
+}
+
+function readDiffGateProgress(path: string, token: string): DiffGateProgressRecord | undefined {
+  try {
+    const value: unknown = JSON.parse(readSmallArtifactText(path, 'diff-gate progress record'));
+    if (
+      !isRecordObject(value) ||
+      value['schemaVersion'] !== 1 ||
+      value['token'] !== token ||
+      typeof value['stage'] !== 'string' ||
+      typeof value['updatedAt'] !== 'string'
+    ) {
+      return undefined;
+    }
+    const stage = value['stage'];
+    if (!['initializing', 'current-gate', 'outcome-ledger', 'replay-gate', 'complete'].includes(stage)) {
+      return undefined;
+    }
+    const activeCheck = value['activeCheck'];
+    const lastCompletedCheck = value['lastCompletedCheck'];
+    if (
+      (activeCheck !== undefined && !DIFF_GATE_CHECKS.includes(activeCheck as DiffGateCheck)) ||
+      (lastCompletedCheck !== undefined && !DIFF_GATE_CHECKS.includes(lastCompletedCheck as DiffGateCheck)) ||
+      (value['replayBase'] !== undefined && typeof value['replayBase'] !== 'string')
+    ) {
+      return undefined;
+    }
+    return {
+      schemaVersion: 1,
+      token,
+      stage: stage as DiffGateProgressRecord['stage'],
+      ...(activeCheck === undefined ? {} : { activeCheck: activeCheck as DiffGateCheck }),
+      ...(lastCompletedCheck === undefined ? {} : { lastCompletedCheck: lastCompletedCheck as DiffGateCheck }),
+      ...(value['replayBase'] === undefined ? {} : { replayBase: value['replayBase'] }),
+      updatedAt: value['updatedAt'],
+    };
+  } catch {
+    return undefined;
+  }
 }

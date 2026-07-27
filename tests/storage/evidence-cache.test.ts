@@ -263,6 +263,80 @@ describe('evidence cache', () => {
     });
   });
 
+  it('touches shared evidence on read with bounded writes and evicts by indexed access recency', () => {
+    const sharedEvidenceDbPath = join(tempDir, 'lru-repository-cache', 'evidence.db');
+    const writerDir = join(tempDir, 'lru-writer');
+    const readerDir = join(tempDir, 'lru-reader');
+    for (const directory of [writerDir, readerDir]) {
+      mkdirSync(directory, { recursive: true });
+      copyFileSync(dbPath, join(directory, 'index.db'));
+    }
+    const openWorktreeDb = (directory: string): ScipDatabase =>
+      new ScipDatabase({
+        projectRoot,
+        dbPath: join(directory, 'index.db'),
+        indexPath: join(directory, 'index.scip'),
+        sharedEvidenceDbPath,
+      });
+
+    const writer = openWorktreeDb(writerDir);
+    try {
+      writeCachedFileEvidence(writer, 'doc-path-tokens', 'docs/old.md', 'old-hash', 'old');
+      writeCachedFileEvidence(writer, 'doc-path-tokens', 'docs/new.md', 'new-hash', 'new');
+    } finally {
+      writer.close();
+    }
+    const seeded = new Database(sharedEvidenceDbPath);
+    seeded.prepare('UPDATE file_evidence SET last_accessed_at = 1 WHERE relative_path = ?').run('docs/old.md');
+    seeded.prepare('UPDATE file_evidence SET last_accessed_at = 2 WHERE relative_path = ?').run('docs/new.md');
+    seeded.close();
+
+    const reader = openWorktreeDb(readerDir);
+    try {
+      expect(readCachedFileEvidence(reader, 'doc-path-tokens', 'docs/old.md', 'old-hash')).toBe('old');
+      const afterFirstRead = new Database(sharedEvidenceDbPath, { readonly: true });
+      const afterFirst = afterFirstRead
+        .prepare('SELECT last_accessed_at FROM file_evidence WHERE relative_path = ?')
+        .pluck()
+        .get('docs/old.md') as number;
+      afterFirstRead.close();
+      expect(afterFirst).toBeGreaterThan(2);
+      expect(readCachedFileEvidence(reader, 'doc-path-tokens', 'docs/old.md', 'old-hash')).toBe('old');
+      const verifier = new Database(sharedEvidenceDbPath, { readonly: true });
+      try {
+        expect(
+          verifier
+            .prepare('SELECT last_accessed_at FROM file_evidence WHERE relative_path = ?')
+            .pluck()
+            .get('docs/old.md'),
+        ).toBe(afterFirst);
+        const plan = verifier
+          .prepare(
+            'EXPLAIN QUERY PLAN SELECT rowid FROM file_evidence ORDER BY last_accessed_at ASC, rowid ASC LIMIT 1',
+          )
+          .all() as Array<{ detail: string }>;
+        expect(plan.some((row) => row.detail.includes('idx_file_evidence_lru'))).toBe(true);
+      } finally {
+        verifier.close();
+      }
+    } finally {
+      reader.close();
+    }
+
+    expect(
+      maintainSharedEvidenceCache(sharedEvidenceDbPath, {
+        maxRows: 1,
+        budgetBytes: Number.MAX_SAFE_INTEGER,
+      }),
+    ).toEqual({ deletedRows: 1, remainingRows: 1 });
+    const remaining = new Database(sharedEvidenceDbPath, { readonly: true });
+    try {
+      expect(remaining.prepare('SELECT relative_path FROM file_evidence').pluck().all()).toEqual(['docs/old.md']);
+    } finally {
+      remaining.close();
+    }
+  });
+
   it('treats invalid file evidence product payloads as misses', () => {
     const db = openDb();
     try {

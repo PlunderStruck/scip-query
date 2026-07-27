@@ -27,7 +27,7 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 | Command | Description | Options |
 |---|---|---|
 | `files <pattern>` | Find files matching a pattern | `--json` |
-| `methods <className>` | List methods of a class (with line ranges) | `--json` |
+| `methods <className>` | List methods of one exactly resolved class; ambiguity and missing targets fail explicitly | `--json` |
 | `refs <symbol>` | Find all files referencing a symbol | `--full`<br>`-n, --limit <n>`<br>`--cursor <cursor>`<br>`--json`<br>`--compact` |
 | `trace <symbol>` | Trace a symbol: definition + all references | `--full`<br>`--compact`<br>`--json` |
 | `deps <file>` | Files this file depends on (internal) | `--json` |
@@ -102,7 +102,7 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 | Command | Description | Options |
 |---|---|---|
 | `affected <symbol>` | Transitive closure of symbols that could break if this symbol changes | `--max-depth <n>`<br>`-s, --scope <path>`<br>`--json` |
-| `change-surface <file>` | Pre-change briefing: exports, consumers, and blast-radius risk | `--full`<br>`--json` |
+| `change-surface <file>` | Pre-change briefing: consumers, published API, operational roots, and explained change risk | `--full`<br>`--json` |
 | `co-change [file]` | Files that change together in git history without a dependency edge — hidden coupling candidates | `--min-together <n>`<br>`-n, --limit <n>`<br>`--all`<br>`--full`<br>`--json` |
 | `diff-gate` | Runtime-bounded, single-flight gate for the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | `--base <ref>`<br>`--min-together <n>`<br>`--max-echo-checks <n>`<br>`--max-helpers <n>`<br>`--baseline`<br>`--full`<br>`--skip <check>`<br>`--hook`<br>`--json`<br>`--compact` |
 | `incomplete-migration` | Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain | `--base <ref>`<br>`--min-containment <n>`<br>`--max-helpers <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json` |

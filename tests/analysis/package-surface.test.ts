@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { derivePackageSurface } from '../../src/analysis/package-surface.js';
+import { derivePackageOperationalSurface, derivePackageSurface } from '../../src/analysis/package-surface.js';
 
 let tempRoot: string | undefined;
 
@@ -120,5 +120,24 @@ describe('derivePackageSurface', () => {
   it('ignores targets escaping the project root', () => {
     const root = projectWithManifest({ exports: { '.': '../outside.js' } });
     expect(derivePackageSurface(root).files.size).toBe(0);
+  });
+});
+
+describe('derivePackageOperationalSurface', () => {
+  it('distinguishes binary and executable package-script roots from ordinary script arguments', () => {
+    const root = projectWithManifest({
+      bin: { tool: './dist/cli.js' },
+      scripts: {
+        release: 'vite-node scripts/release.ts --dry-run',
+        lint: 'eslint src/runtime/watch-server.ts',
+        chained: 'npm run build && node scripts/audit.mjs',
+      },
+    });
+
+    const reasons = derivePackageOperationalSurface(root).reasonsByFile;
+    expect(reasons.get('src/cli.ts')).toContain('package binary');
+    expect(reasons.get('scripts/release.ts')).toContain('package script "release"');
+    expect(reasons.get('scripts/audit.mjs')).toContain('package script "chained"');
+    expect(reasons.has('src/runtime/watch-server.ts')).toBe(false);
   });
 });

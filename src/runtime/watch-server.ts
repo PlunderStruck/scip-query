@@ -54,9 +54,64 @@ const ACTIVITY_POLL_INTERVAL_MS = 250;
 const MAILBOX_MAINTENANCE_INTERVAL_MS = 60_000;
 const BUSY_SERVICE_LOOP_INTERVAL_MS = 10;
 const IDLE_SERVICE_LOOP_INTERVAL_MS = 50;
+const MAX_IDLE_SERVICE_LOOP_INTERVAL_MS = 250;
 
-export function watchServiceLoopDelayMs(processedRequests: number): number {
-  return processedRequests > 0 ? BUSY_SERVICE_LOOP_INTERVAL_MS : IDLE_SERVICE_LOOP_INTERVAL_MS;
+export function watchServiceLoopDelayMs(processedRequests: number, consecutiveIdlePolls = 1): number {
+  if (processedRequests > 0) return BUSY_SERVICE_LOOP_INTERVAL_MS;
+  const exponent = Math.max(0, Math.min(3, consecutiveIdlePolls - 1));
+  return Math.min(MAX_IDLE_SERVICE_LOOP_INTERVAL_MS, IDLE_SERVICE_LOOP_INTERVAL_MS * 2 ** exponent);
+}
+
+export interface WatchServiceLoopIterationRuntime {
+  processIndexRequests(): number;
+  processSemanticRequests(): number;
+  afterMailboxPoll(result: { indexRequests: number; semanticRequests: number; processedRequests: number }): void;
+  shouldStop(): boolean;
+  wait(durationMs: number): Promise<void>;
+}
+
+export interface WatchServiceLoopIterationResult {
+  indexRequests: number;
+  semanticRequests: number;
+  processedRequests: number;
+  consecutiveIdlePolls: number;
+  stopped: boolean;
+  delayMs?: number;
+}
+
+/**
+ * One directly testable service-loop iteration. The injected runtime keeps
+ * process ownership and filesystem effects in the server while making mailbox
+ * ordering, idle backoff, shutdown, and failure propagation deterministic.
+ */
+export async function runWatchServiceLoopIteration(
+  consecutiveIdlePolls: number,
+  runtime: WatchServiceLoopIterationRuntime,
+): Promise<WatchServiceLoopIterationResult> {
+  const indexRequests = runtime.processIndexRequests();
+  const semanticRequests = runtime.processSemanticRequests();
+  const processedRequests = indexRequests + semanticRequests;
+  const nextIdlePolls = processedRequests > 0 ? 0 : consecutiveIdlePolls + 1;
+  runtime.afterMailboxPoll({ indexRequests, semanticRequests, processedRequests });
+  if (runtime.shouldStop()) {
+    return {
+      indexRequests,
+      semanticRequests,
+      processedRequests,
+      consecutiveIdlePolls: nextIdlePolls,
+      stopped: true,
+    };
+  }
+  const delayMs = watchServiceLoopDelayMs(processedRequests, nextIdlePolls);
+  await runtime.wait(delayMs);
+  return {
+    indexRequests,
+    semanticRequests,
+    processedRequests,
+    consecutiveIdlePolls: nextIdlePolls,
+    stopped: false,
+    delayMs,
+  };
 }
 
 export function startupRefreshTrigger(state: IndexFreshnessState): RefreshTrigger | null {
@@ -107,6 +162,7 @@ export async function runWatchServiceServer(
   let lastMailboxMaintenanceAtMonotonicMs = Number.NEGATIVE_INFINITY;
   let semanticBusyUntilMs: number | undefined;
   let indexBusyUntilMs: number | undefined;
+  let consecutiveIdleMailboxPolls = 0;
   const semanticMailboxPaths = typeScriptSemanticMailboxPaths(indexPaths.cacheDir);
   const indexMailboxPaths = typeScriptIndexMailboxPaths(indexPaths.cacheDir);
   initializeTypeScriptSemanticMailbox(semanticMailboxPaths);
@@ -117,41 +173,48 @@ export async function runWatchServiceServer(
     currentGeneration: () => publishedTypeScriptIndexGeneration(indexPaths.dbPath),
   });
 
-  const persistState = (force = false): void => {
+  const persistState = (
+    force = false,
+    durability: 'durable' | 'visibility' = force ? 'durable' : 'visibility',
+  ): void => {
     if (!ready) return;
     const nowMs = Date.now();
     const nowMonotonicMs = monotonicNowMs();
     if (!force && nowMonotonicMs - lastHeartbeatAtMonotonicMs < HEARTBEAT_INTERVAL_MS) return;
     lastHeartbeatAtMonotonicMs = nowMonotonicMs;
-    writeWatchServiceState(servicePaths.statePath, {
-      version: 1,
-      protocolVersion: WATCH_SERVICE_PROTOCOL_VERSION,
-      pid: process.pid,
-      ...(processIdentity ? { processIdentity } : {}),
-      projectRoot,
-      ...(serviceIdentity.worktreeId ? { worktreeId: serviceIdentity.worktreeId } : {}),
-      cliVersion,
-      startedAt: new Date(startedAtMs).toISOString(),
-      heartbeatAt: new Date(nowMs).toISOString(),
-      lastActivityAt: new Date(lastActivityAtMs).toISOString(),
-      ...(watchConfig.idleTimeoutMs === 0
-        ? {}
-        : { idleDeadlineAt: new Date(lastActivityAtMs + watchConfig.idleTimeoutMs).toISOString() }),
-      watcher: watcherStatus,
-      ...(watcherStatus.state === 'idle' && indexGeneration ? { indexGeneration } : {}),
-      ...(lastRefresh ? { lastRefresh } : {}),
-      ...(lastError ? { lastError } : {}),
-      reindexActivity,
-      refreshRequests: refreshCoordinator.status(),
-      typescriptSemantic: {
-        ...semanticHost.status(typeScriptSemanticMailboxStatus(semanticMailboxPaths)),
-        ...(semanticBusyUntilMs === undefined ? {} : { busyUntil: new Date(semanticBusyUntilMs).toISOString() }),
+    writeWatchServiceState(
+      servicePaths.statePath,
+      {
+        version: 1,
+        protocolVersion: WATCH_SERVICE_PROTOCOL_VERSION,
+        pid: process.pid,
+        ...(processIdentity ? { processIdentity } : {}),
+        projectRoot,
+        ...(serviceIdentity.worktreeId ? { worktreeId: serviceIdentity.worktreeId } : {}),
+        cliVersion,
+        startedAt: new Date(startedAtMs).toISOString(),
+        heartbeatAt: new Date(nowMs).toISOString(),
+        lastActivityAt: new Date(lastActivityAtMs).toISOString(),
+        ...(watchConfig.idleTimeoutMs === 0
+          ? {}
+          : { idleDeadlineAt: new Date(lastActivityAtMs + watchConfig.idleTimeoutMs).toISOString() }),
+        watcher: watcherStatus,
+        ...(watcherStatus.state === 'idle' && indexGeneration ? { indexGeneration } : {}),
+        ...(lastRefresh ? { lastRefresh } : {}),
+        ...(lastError ? { lastError } : {}),
+        reindexActivity,
+        refreshRequests: refreshCoordinator.status(),
+        typescriptSemantic: {
+          ...semanticHost.status(typeScriptSemanticMailboxStatus(semanticMailboxPaths)),
+          ...(semanticBusyUntilMs === undefined ? {} : { busyUntil: new Date(semanticBusyUntilMs).toISOString() }),
+        },
+        typescriptIndex: {
+          ...indexHost.status(typeScriptIndexMailboxStatus(indexMailboxPaths)),
+          ...(indexBusyUntilMs === undefined ? {} : { busyUntil: new Date(indexBusyUntilMs).toISOString() }),
+        },
       },
-      typescriptIndex: {
-        ...indexHost.status(typeScriptIndexMailboxStatus(indexMailboxPaths)),
-        ...(indexBusyUntilMs === undefined ? {} : { busyUntil: new Date(indexBusyUntilMs).toISOString() }),
-      },
-    });
+      { durability },
+    );
   };
 
   const recordActivity = (): void => {
@@ -185,7 +248,14 @@ export async function runWatchServiceServer(
       refreshCoordinator.failActive();
     },
     onRefreshSuppressed(trigger) {
-      recordSuppressedReindexActivity(indexPaths.dbPath, trigger);
+      const activityWrite = recordSuppressedReindexActivity(indexPaths.dbPath, trigger);
+      if (activityWrite.state === 'failed') {
+        lastError = {
+          at: new Date().toISOString(),
+          message: `Suppressed-refresh telemetry was not recorded: ${activityWrite.reason}`,
+        };
+        persistState(true, 'visibility');
+      }
       reindexActivity = readReindexActivitySummary(indexPaths.dbPath);
     },
     onError(error) {
@@ -218,71 +288,80 @@ export async function runWatchServiceServer(
     persistState(true);
 
     while (!stopping) {
-      const indexRequests = processTypeScriptIndexMailbox(indexMailboxPaths, indexHost, {
-        beforeRequest(deadlineAtMs) {
-          indexBusyUntilMs = deadlineAtMs + 5_000;
-          persistState(true);
+      const iteration = await runWatchServiceLoopIteration(consecutiveIdleMailboxPolls, {
+        processIndexRequests: () =>
+          processTypeScriptIndexMailbox(indexMailboxPaths, indexHost, {
+            beforeRequest(deadlineAtMs) {
+              indexBusyUntilMs = deadlineAtMs + 5_000;
+              persistState(true, 'visibility');
+            },
+            afterRequest() {
+              indexBusyUntilMs = undefined;
+              persistState(true, 'visibility');
+            },
+          }),
+        processSemanticRequests: () =>
+          processTypeScriptSemanticMailbox(semanticMailboxPaths, semanticHost, {
+            beforeRequest(deadlineAtMs) {
+              semanticBusyUntilMs = deadlineAtMs + 5_000;
+              persistState(true, 'visibility');
+            },
+            afterRequest() {
+              semanticBusyUntilMs = undefined;
+              persistState(true, 'visibility');
+            },
+          }),
+        afterMailboxPoll: ({ processedRequests }) => {
+          const nowMonotonicMs = monotonicNowMs();
+          if (nowMonotonicMs - lastMailboxMaintenanceAtMonotonicMs >= MAILBOX_MAINTENANCE_INTERVAL_MS) {
+            lastMailboxMaintenanceAtMonotonicMs = nowMonotonicMs;
+            maintainBoundedMailbox(indexMailboxPaths);
+            maintainBoundedMailbox(semanticMailboxPaths);
+          }
+          if (nowMonotonicMs - lastCacheSweepAtMonotonicMs >= 60_000) {
+            lastCacheSweepAtMonotonicMs = nowMonotonicMs;
+            maybeSweepRepositoryCache(projectRoot, cliVersion);
+          }
+          if (nowMonotonicMs - lastActivityPollAtMonotonicMs >= ACTIVITY_POLL_INTERVAL_MS) {
+            lastActivityPollAtMonotonicMs = nowMonotonicMs;
+            const activity = readWatchServiceActivity(servicePaths.activityPath);
+            if (activity && activity.atMs > lastActivityAtMs) {
+              lastActivityAtMs = activity.atMs;
+              lastActivityAtMonotonicMs = nowMonotonicMs;
+            }
+            if (
+              activity?.refreshRequestedAtMs !== undefined &&
+              activity.refreshRequestedAtMs > lastRefreshRequestAtMs
+            ) {
+              lastRefreshRequestAtMs = activity.refreshRequestedAtMs;
+              refreshCoordinator.observeLegacyRequest(
+                activity.refreshRequestedAtMs,
+                activity.refreshDetail ?? 'stale index observed by a legacy command',
+              );
+            }
+            refreshCoordinator.poll(watcherStatus, (detail) => {
+              recordActivity();
+              watcher.requestRefresh({ kind: 'watch-demand', detail }, { immediate: true });
+            });
+          }
+          if (processedRequests > 0) {
+            recordActivity();
+            persistState(true, 'visibility');
+          }
+          persistState();
         },
-        afterRequest() {
-          indexBusyUntilMs = undefined;
-          persistState(true);
-        },
+        shouldStop: () =>
+          stopping ||
+          shouldStopWatchServiceForIdle({
+            watcher: watcherStatus,
+            lastActivityAtMs: lastActivityAtMonotonicMs,
+            nowMs: monotonicNowMs(),
+            idleTimeoutMs: watchConfig.idleTimeoutMs,
+          }),
+        wait: sleep,
       });
-      const semanticRequests = processTypeScriptSemanticMailbox(semanticMailboxPaths, semanticHost, {
-        beforeRequest(deadlineAtMs) {
-          semanticBusyUntilMs = deadlineAtMs + 5_000;
-          persistState(true);
-        },
-        afterRequest() {
-          semanticBusyUntilMs = undefined;
-          persistState(true);
-        },
-      });
-      const nowMonotonicMs = monotonicNowMs();
-      if (nowMonotonicMs - lastMailboxMaintenanceAtMonotonicMs >= MAILBOX_MAINTENANCE_INTERVAL_MS) {
-        lastMailboxMaintenanceAtMonotonicMs = nowMonotonicMs;
-        maintainBoundedMailbox(indexMailboxPaths);
-        maintainBoundedMailbox(semanticMailboxPaths);
-      }
-      if (nowMonotonicMs - lastCacheSweepAtMonotonicMs >= 60_000) {
-        lastCacheSweepAtMonotonicMs = nowMonotonicMs;
-        maybeSweepRepositoryCache(projectRoot, cliVersion);
-      }
-      if (nowMonotonicMs - lastActivityPollAtMonotonicMs >= ACTIVITY_POLL_INTERVAL_MS) {
-        lastActivityPollAtMonotonicMs = nowMonotonicMs;
-        const activity = readWatchServiceActivity(servicePaths.activityPath);
-        if (activity && activity.atMs > lastActivityAtMs) {
-          lastActivityAtMs = activity.atMs;
-          lastActivityAtMonotonicMs = nowMonotonicMs;
-        }
-        if (activity?.refreshRequestedAtMs !== undefined && activity.refreshRequestedAtMs > lastRefreshRequestAtMs) {
-          lastRefreshRequestAtMs = activity.refreshRequestedAtMs;
-          refreshCoordinator.observeLegacyRequest(
-            activity.refreshRequestedAtMs,
-            activity.refreshDetail ?? 'stale index observed by a legacy command',
-          );
-        }
-        refreshCoordinator.poll(watcherStatus, (detail) => {
-          recordActivity();
-          watcher.requestRefresh({ kind: 'watch-demand', detail }, { immediate: true });
-        });
-      }
-      if (semanticRequests > 0 || indexRequests > 0) {
-        recordActivity();
-        persistState(true);
-      }
-      persistState();
-      if (
-        shouldStopWatchServiceForIdle({
-          watcher: watcherStatus,
-          lastActivityAtMs: lastActivityAtMonotonicMs,
-          nowMs: monotonicNowMs(),
-          idleTimeoutMs: watchConfig.idleTimeoutMs,
-        })
-      ) {
-        break;
-      }
-      await sleep(watchServiceLoopDelayMs(semanticRequests + indexRequests));
+      consecutiveIdleMailboxPolls = iteration.consecutiveIdlePolls;
+      if (iteration.stopped) break;
     }
   } catch (error) {
     executionFailed = true;

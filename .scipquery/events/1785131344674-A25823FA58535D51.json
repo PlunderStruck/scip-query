@@ -1,0 +1,16 @@
+{
+  "ts": 1785131344674,
+  "check": "twin-partner",
+  "findingId": "SQD30C0EC25271",
+  "event": "suppressed",
+  "commit": "f61efd2ae9be7a9bb2138d75bafceb6bc028ff34",
+  "comparisonBaseCommit": "f61efd2ae9be7a9bb2138d75bafceb6bc028ff34",
+  "symbol": "scip-typescript npm scip-query 0.19.8 src/analysis/`change-risk-metadata.ts`/errorMessage().",
+  "kind": "scip-query-outcome-event",
+  "schemaVersion": 1,
+  "eventIdentity": "[\"twin-partner\",\"SQD30C0EC25271\",\"suppressed\",\"f61efd2ae9be7a9bb2138d75bafceb6bc028ff34\"]",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.19.8"
+  }
+}

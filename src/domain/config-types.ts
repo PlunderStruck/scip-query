@@ -357,7 +357,7 @@ export interface WatchConfig {
   enabled?: boolean;
   /** Ms to wait after the last file change before triggering reindex (default: 250) */
   debounceMs?: number;
-  /** Minimum ms between reindex completions; 0 disables spacing (default: 0) */
+  /** Minimum ms between reindex completions; 0 disables spacing (default: 5000) */
   cooldownMs?: number;
   /** Ms between Git HEAD/index state checks (default: 2000) */
   gitPollMs?: number;

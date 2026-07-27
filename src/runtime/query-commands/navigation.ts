@@ -146,7 +146,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   listQueryCommand({
     id: 'methods',
     command: 'methods <className>',
-    description: 'List methods of a class (with line ranges)',
+    description: 'List methods of one exactly resolved class; ambiguity and missing targets fail explicitly',
     agent: agentContract('Which methods belong to this class?', 'method names and line ranges', ['symbol'], 'complete'),
     docs: doc('Navigation'),
     query: ({ db, args }) => queries.methods(db, stringArg(args, 0)),

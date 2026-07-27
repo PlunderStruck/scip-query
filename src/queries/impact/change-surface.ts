@@ -4,6 +4,13 @@ import { resolveIndexedFile } from '../internal/file-resolution.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { semanticCallerMap } from '../../semantic/shared-primitives.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
+import {
+  inspectFileChangeRiskMetadata,
+  type ChangeRiskReason,
+  type FileChangeRiskMetadata,
+} from '../../analysis/change-risk-metadata.js';
+
+export type ChangeSurfaceRiskReason = ChangeRiskReason | { kind: 'external-consumers'; detail: string };
 
 export interface ChangeSurfaceEntry {
   symbol: string;
@@ -11,13 +18,16 @@ export interface ChangeSurfaceEntry {
   startLine: number;
   endLine: number;
   externalConsumers: number;
+  externalConsumerRiskLevel?: 'low' | 'medium' | 'high';
   riskLevel: 'low' | 'medium' | 'high';
+  riskReasons?: ChangeSurfaceRiskReason[];
 }
 
 export interface ChangeSurfaceResult {
   file: string;
   symbols: ChangeSurfaceEntry[];
   totalExternalConsumers: number;
+  fileRisk?: FileChangeRiskMetadata;
 }
 
 /**
@@ -44,6 +54,7 @@ export function changeSurface(
   const symbols: ChangeSurfaceEntry[] = [];
   let totalExternalConsumers = 0;
   const definitions = sortedChangeSurfaceDefinitions(db, doc.relative_path);
+  const fileRisk = inspectFileChangeRiskMetadata(db, doc.relative_path);
   const semanticConsumers =
     opts.semantic === false ? new Map<number, Set<string>>() : semanticCallerMap(db, definitions);
 
@@ -55,6 +66,18 @@ export function changeSurface(
       semanticConsumers.get(def.symbolId) ?? new Set<string>(),
     );
     totalExternalConsumers += externalConsumers;
+    const externalConsumerRiskLevel = riskLevelForConsumers(externalConsumers);
+    const riskReasons: ChangeSurfaceRiskReason[] = [
+      ...fileRisk.reasons,
+      ...(externalConsumers > 0
+        ? [
+            {
+              kind: 'external-consumers' as const,
+              detail: `${externalConsumers} external consumer${externalConsumers === 1 ? '' : 's'}`,
+            },
+          ]
+        : []),
+    ];
 
     symbols.push({
       symbol: def.symbol,
@@ -62,7 +85,9 @@ export function changeSurface(
       startLine: def.startLine,
       endLine: def.endLine,
       externalConsumers,
-      riskLevel: riskLevelForConsumers(externalConsumers),
+      externalConsumerRiskLevel,
+      riskLevel: aggregateRiskLevel(externalConsumerRiskLevel, fileRisk),
+      riskReasons,
     });
   }
 
@@ -70,6 +95,7 @@ export function changeSurface(
     file: doc.relative_path,
     symbols,
     totalExternalConsumers,
+    fileRisk,
   };
 }
 
@@ -121,5 +147,21 @@ function externalConsumerCount(
 function riskLevelForConsumers(externalConsumers: number): 'low' | 'medium' | 'high' {
   if (externalConsumers > 10) return 'high';
   if (externalConsumers > 0) return 'medium';
+  return 'low';
+}
+
+function aggregateRiskLevel(
+  externalConsumerRiskLevel: 'low' | 'medium' | 'high',
+  fileRisk: FileChangeRiskMetadata,
+): ChangeSurfaceEntry['riskLevel'] {
+  if (externalConsumerRiskLevel === 'high') return 'high';
+  if (
+    externalConsumerRiskLevel === 'medium' ||
+    fileRisk.operationalRoot ||
+    fileRisk.publishedApi ||
+    fileRisk.coverage === 'partial'
+  ) {
+    return 'medium';
+  }
   return 'low';
 }

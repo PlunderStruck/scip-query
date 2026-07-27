@@ -23,6 +23,10 @@ The worktree cache keeps this internal layout:
   meta.json                        compatibility mirror
   .scipquery-generations/
     state.json                     atomic current-generation pointer
+    gc.json                        last bounded-collection observation
+    gc.lock                        collection/reader-admission coordinator
+    readers/
+      <pid>-<token>.json           live process-generation leases
     <generation-sha256>/
       manifest.json
       index.db
@@ -53,13 +57,17 @@ Publication proceeds in this order:
 3. Flush the artifact files and manifest, rename the complete staging
    directory into its content-derived identity, and flush the generation
    directory entry.
-4. Durably replace `state.json` so new internal readers select the complete
+4. Remove known redundant SQLite indexes only when schema inspection proves a
+   retained equivalent: the unique symbol index can replace the duplicate
+   symbol index, and a wider document-leading chunk index can replace the
+   single-column document index. Query-plan tests hold those proofs.
+5. Durably replace `state.json` so new internal readers select the complete
    new directory.
-5. Replace the three compatibility mirrors and durably record their file
+6. Replace the three compatibility mirrors and durably record their file
    identities for drift diagnostics.
 
-A crash before step 4 leaves the prior pointer authoritative. A crash after
-step 4 leaves the new immutable generation authoritative even if one or more
+A crash before step 5 leaves the prior pointer authoritative. A crash after
+step 5 leaves the new immutable generation authoritative even if one or more
 compatibility mirrors are old. `scip-query status` and freshness inspection
 report that mirror drift and a later refresh repairs it; database-backed
 queries remain generation-consistent throughout.
@@ -86,12 +94,26 @@ generation implementation, which did not name an immutable artifact set, also
 uses this compatibility path. New publications upgrade either layout without
 deleting the stable files.
 
-Published local generation directories are retained conservatively. Automatic
-collection is intentionally disabled until a cross-process reader lease can
-prove that no surviving handle can later need the retained SCIP companion.
-This can temporarily consume more cache space, but it preserves the stronger
-rule that storage reclamation may never change or remove evidence owned by a
-live query.
+Published local generation directories are retained by a bounded,
+reader-aware collector. Opening an immutable `ScipDatabase` first acquires the
+generation GC lock, resolves the current pointer, and visibility-atomically
+publishes a lease containing its random token, generation identity, PID, and
+operating-system process-start identity when available. Closing the database
+removes that exact lease idempotently.
+
+Publication and collection use the same token-owned process lock. Collection
+always protects the current generation, the named recovery generation, and
+every live reader generation. It removes only oldest unprotected generations
+until both default limits hold: at most eight retained generations and at most
+2 GiB of logical artifact bytes. A lease whose recorded process instance is
+provably dead is reclaimed. A malformed lease protects every generation and
+defers deletion; uncertainty cannot authorize reclamation.
+
+`gc.json` is a visibility-atomic diagnostic containing retained counts, logical
+bytes, protected/readers counts, removed counts, limits, state, time, and any
+reason. `scip-query status` reports that observation together with the current
+retained set and oldest generation age. Collection failure does not invalidate
+the accepted index; it remains explicit bounded-storage debt for the operator.
 
 The repository-wide shared generation store is a separate cache layer. It
 warms a worktree by copying a complete generation into the worktree's private

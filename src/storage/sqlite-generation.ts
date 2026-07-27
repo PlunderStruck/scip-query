@@ -1,14 +1,21 @@
-import { createHash } from 'node:crypto';
-import { existsSync, statSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { canonicalReindexMetadataIdentity, decodeReindexMetadata } from '../domain/reindex-metadata.js';
+import { parseProcessIdentity, sameProcessIdentity, type ProcessIdentity } from '../domain/process-identity.js';
 import type { ScipQueryConfig } from '../domain/types.js';
 import { readSmallArtifactText } from '../filesystem/bounded-file.js';
+import { readProcessIdentity } from '../platform/process-identity.js';
+import { isProcessAlive } from '../platform/process-liveness.js';
+import { acquireProcessFileLock } from '../platform/repository-cache-lock.js';
+import { writeJsonAtomic } from './atomic-json.js';
 
 export const SQLITE_GENERATION_STORE_VERSION = 1;
 export const SQLITE_GENERATION_MANIFEST_VERSION = 1;
 export const SQLITE_GENERATION_DIRECTORY = '.scipquery-generations';
 export const SQLITE_GENERATION_MANIFEST = 'manifest.json';
+export const SQLITE_GENERATION_READERS_DIRECTORY = 'readers';
+export const SQLITE_GENERATION_GC_LOCK = 'gc.lock';
 
 export interface SqliteGenerationRecovery {
   generationIdentity: string;
@@ -74,8 +81,184 @@ export interface SqliteGenerationHandle {
   databaseFileIdentity?: string;
 }
 
+export interface SqliteGenerationReaderLease {
+  version: 1;
+  token: string;
+  generationIdentity: string;
+  pid: number;
+  processIdentity?: ProcessIdentity;
+  acquiredAt: string;
+}
+
+export interface SqliteGenerationReaderLeaseSnapshot {
+  protectedGenerations: ReadonlySet<string>;
+  activeLeases: number;
+  staleLeasesRemoved: number;
+  malformedLeases: number;
+}
+
+export interface SqliteGenerationReaderRuntime {
+  pid: number;
+  now(): Date;
+  randomToken(): string;
+  isProcessAlive(pid: number): boolean;
+  readProcessIdentity(pid: number): ProcessIdentity | null;
+}
+
+const NODE_SQLITE_GENERATION_READER_RUNTIME: SqliteGenerationReaderRuntime = {
+  pid: process.pid,
+  now: () => new Date(),
+  randomToken: () => randomUUID(),
+  isProcessAlive,
+  readProcessIdentity,
+};
+
 export function sqliteGenerationRoot(outputDb: string): string {
   return join(dirname(outputDb), SQLITE_GENERATION_DIRECTORY);
+}
+
+export function sqliteGenerationGcLockPath(outputDb: string): string {
+  return join(sqliteGenerationRoot(outputDb), SQLITE_GENERATION_GC_LOCK);
+}
+
+/**
+ * Resolves one published immutable generation and protects it before the
+ * publication lock can make it eligible for collection.
+ */
+export function acquireSqliteGenerationReader(
+  config: ScipQueryConfig,
+  runtime: SqliteGenerationReaderRuntime = NODE_SQLITE_GENERATION_READER_RUNTIME,
+): { generation: SqliteGenerationHandle; release(): void } {
+  const lock = acquireProcessFileLock(sqliteGenerationGcLockPath(config.dbPath), { waitMs: 5_000 });
+  if (!lock) throw new Error('SQLite generation retention is busy; retry opening the index.');
+  let leasePath: string | undefined;
+  try {
+    const generation = resolveSqliteGeneration(config);
+    if (generation.source !== 'immutable') return { generation, release() {} };
+    const token = runtime.randomToken();
+    if (!/^[A-Za-z0-9._-]+$/.test(token)) throw new Error('SQLite generation reader token is unsafe.');
+    const readersDirectory = join(sqliteGenerationRoot(config.dbPath), SQLITE_GENERATION_READERS_DIRECTORY);
+    mkdirSync(readersDirectory, { recursive: true });
+    leasePath = join(readersDirectory, `${runtime.pid}-${token}.json`);
+    const processIdentity = runtime.readProcessIdentity(runtime.pid);
+    writeJsonAtomic(
+      leasePath,
+      {
+        version: 1,
+        token,
+        generationIdentity: generation.identity,
+        pid: runtime.pid,
+        ...(processIdentity ? { processIdentity } : {}),
+        acquiredAt: runtime.now().toISOString(),
+      } satisfies SqliteGenerationReaderLease,
+      { spacing: 2, trailingNewline: true },
+    );
+    let released = false;
+    return {
+      generation,
+      release() {
+        if (released || !leasePath) return;
+        released = true;
+        rmSync(leasePath, { force: true });
+      },
+    };
+  } finally {
+    lock.release();
+  }
+}
+
+/**
+ * Classifies reader ownership while the caller holds the generation GC lock.
+ * Invalid records fail closed by protecting every retained generation.
+ */
+export function inspectSqliteGenerationReaderLeases(
+  outputDb: string,
+  allGenerationIdentities: readonly string[],
+  runtime: Pick<
+    SqliteGenerationReaderRuntime,
+    'isProcessAlive' | 'readProcessIdentity'
+  > = NODE_SQLITE_GENERATION_READER_RUNTIME,
+  options: { removeStale?: boolean } = {},
+): SqliteGenerationReaderLeaseSnapshot {
+  const readersDirectory = join(sqliteGenerationRoot(outputDb), SQLITE_GENERATION_READERS_DIRECTORY);
+  if (!existsSync(readersDirectory)) {
+    return {
+      protectedGenerations: new Set(),
+      activeLeases: 0,
+      staleLeasesRemoved: 0,
+      malformedLeases: 0,
+    };
+  }
+  const protectedGenerations = new Set<string>();
+  let activeLeases = 0;
+  let staleLeasesRemoved = 0;
+  let malformedLeases = 0;
+  for (const entry of readdirSync(readersDirectory, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
+    const path = join(readersDirectory, entry.name);
+    let lease: SqliteGenerationReaderLease | null;
+    try {
+      lease = parseSqliteGenerationReaderLease(
+        JSON.parse(readSmallArtifactText(path, 'SQLite generation reader lease')),
+      );
+    } catch {
+      lease = null;
+    }
+    if (!lease) {
+      malformedLeases += 1;
+      for (const identity of allGenerationIdentities) protectedGenerations.add(identity);
+      continue;
+    }
+    if (!readerLeaseIsLive(lease, runtime)) {
+      if (options.removeStale !== false) {
+        rmSync(path, { force: true });
+        staleLeasesRemoved += 1;
+      }
+      continue;
+    }
+    activeLeases += 1;
+    protectedGenerations.add(lease.generationIdentity);
+  }
+  return { protectedGenerations, activeLeases, staleLeasesRemoved, malformedLeases };
+}
+
+function parseSqliteGenerationReaderLease(value: unknown): SqliteGenerationReaderLease | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const lease = value as Partial<SqliteGenerationReaderLease>;
+  const processIdentity = lease.processIdentity === undefined ? null : parseProcessIdentity(lease.processIdentity);
+  if (
+    lease.version !== 1 ||
+    typeof lease.token !== 'string' ||
+    lease.token.trim() === '' ||
+    typeof lease.generationIdentity !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(lease.generationIdentity) ||
+    typeof lease.pid !== 'number' ||
+    !Number.isSafeInteger(lease.pid) ||
+    lease.pid <= 0 ||
+    typeof lease.acquiredAt !== 'string' ||
+    !Number.isFinite(Date.parse(lease.acquiredAt)) ||
+    (lease.processIdentity !== undefined && (!processIdentity || processIdentity.pid !== lease.pid))
+  ) {
+    return null;
+  }
+  return {
+    version: 1,
+    token: lease.token,
+    generationIdentity: lease.generationIdentity,
+    pid: lease.pid,
+    ...(processIdentity ? { processIdentity } : {}),
+    acquiredAt: lease.acquiredAt,
+  };
+}
+
+function readerLeaseIsLive(
+  lease: SqliteGenerationReaderLease,
+  runtime: Pick<SqliteGenerationReaderRuntime, 'isProcessAlive' | 'readProcessIdentity'>,
+): boolean {
+  if (!runtime.isProcessAlive(lease.pid)) return false;
+  if (!lease.processIdentity) return true;
+  const observed = runtime.readProcessIdentity(lease.pid);
+  return observed === null || sameProcessIdentity(lease.processIdentity, observed);
 }
 
 export function readSqliteGenerationState(outputDb: string): SqliteGenerationState | null {

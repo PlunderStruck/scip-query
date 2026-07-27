@@ -9,10 +9,15 @@ import {
   indexGenerationIdentity,
 } from '../../src/runtime/result-pagination.js';
 import { ScipDatabase } from '../../src/storage/db.js';
-import { SQLITE_GENERATION_MANIFEST } from '../../src/storage/sqlite-generation.js';
 import {
+  SQLITE_GENERATION_MANIFEST,
+  SQLITE_GENERATION_READERS_DIRECTORY,
+} from '../../src/storage/sqlite-generation.js';
+import {
+  collectLocalSqliteGenerations,
   ensureImmutableSqliteGeneration,
   inspectSqliteGeneration,
+  inspectLocalSqliteGenerationRetention,
   promoteReindexArtifacts,
   readSqliteGenerationState,
   refreshSqliteGenerationMetadata,
@@ -335,6 +340,96 @@ describe('SQLite generation handoff', () => {
       rmSync(lockPath);
     }
   });
+
+  test('keeps current, previous, and live-reader generations while enforcing retention after close', () => {
+    const fixture = createFixture();
+    promoteReindexArtifacts({ ...fixture.paths });
+    const reader = openFixtureDatabase(fixture);
+    const readerIdentity = reader.generation.identity;
+
+    for (const value of ['next', 'latest']) {
+      const candidate = createCandidateArtifacts(fixture.root, value, `${value}-scip`, `${value}-meta`);
+      promoteReindexArtifacts({
+        tempOutputScip: candidate.scip,
+        tempOutputDb: candidate.db,
+        tempMetaPath: candidate.meta,
+        outputScip: fixture.paths.outputScip,
+        outputDb: fixture.paths.outputDb,
+        metaPath: fixture.paths.metaPath,
+      });
+    }
+
+    const protectedResult = collectLocalSqliteGenerations(fixture.paths.outputDb, {
+      limits: { maxGenerations: 2 },
+    });
+    expect(protectedResult).toEqual(
+      expect.objectContaining({
+        state: 'protected',
+        generationCount: 3,
+        activeReaderLeases: 1,
+      }),
+    );
+    expect(generationDirectories(fixture.paths.outputDb)).toContain(readerIdentity);
+    expect(readValueFromDatabase(reader.db)).toBe('new');
+
+    reader.close();
+    const collected = collectLocalSqliteGenerations(fixture.paths.outputDb, {
+      limits: { maxGenerations: 2 },
+    });
+    expect(collected).toEqual(
+      expect.objectContaining({
+        state: 'collected',
+        generationCount: 2,
+        activeReaderLeases: 0,
+        removedGenerations: 1,
+      }),
+    );
+    expect(generationDirectories(fixture.paths.outputDb)).not.toContain(readerIdentity);
+    expect(inspectLocalSqliteGenerationRetention(fixture.paths.outputDb)).toEqual(
+      expect.objectContaining({
+        state: 'managed',
+        generationCount: 2,
+        activeReaderLeases: 0,
+        limits: expect.objectContaining({ maxGenerations: 2 }),
+        lastCollection: expect.objectContaining({ state: 'collected' }),
+      }),
+    );
+  });
+
+  test('reclaims dead reader leases but fails closed on malformed ownership evidence', () => {
+    const fixture = createFixture();
+    promoteReindexArtifacts({ ...fixture.paths });
+    const readersDirectory = join(sqliteGenerationRoot(fixture.paths.outputDb), SQLITE_GENERATION_READERS_DIRECTORY);
+    mkdirSync(readersDirectory, { recursive: true });
+    const state = readSqliteGenerationState(fixture.paths.outputDb)!;
+    writeFileSync(
+      join(readersDirectory, 'dead.json'),
+      JSON.stringify({
+        version: 1,
+        token: 'dead',
+        generationIdentity: state.currentGeneration,
+        pid: 99_999_999,
+        acquiredAt: new Date().toISOString(),
+      }),
+    );
+    const dead = collectLocalSqliteGenerations(fixture.paths.outputDb, {
+      isProcessAlive: () => false,
+    });
+    expect(dead.staleReaderLeasesRemoved).toBe(1);
+    expect(readdirSync(readersDirectory)).toHaveLength(0);
+
+    writeFileSync(join(readersDirectory, 'malformed.json'), '{');
+    const malformed = collectLocalSqliteGenerations(fixture.paths.outputDb, {
+      limits: { maxGenerations: 2, maxLogicalBytes: 1 },
+    });
+    expect(malformed).toEqual(
+      expect.objectContaining({
+        state: 'protected',
+        malformedReaderLeases: 1,
+        reason: 'malformed reader ownership evidence fails closed',
+      }),
+    );
+  });
 });
 
 function createFixture(opts: { legacyWithoutMeta?: boolean } = {}): {
@@ -419,7 +514,7 @@ function publishedDatabasePath(outputDb: string): string {
 
 function generationDirectories(outputDb: string): string[] {
   return readdirSync(sqliteGenerationRoot(outputDb), { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
+    .filter((entry) => entry.isDirectory() && /^[a-f0-9]{64}$/.test(entry.name))
     .map((entry) => entry.name);
 }
 

@@ -1,7 +1,7 @@
 import { basename } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
 import { ProjectIndex } from '../internal/project-index.js';
-import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
+import { resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { detectAstLanguage, getSourceFacts } from '../../source/ast.js';
 import { isCallableSymbol, leafName } from '../../symbols/symbol-parser.js';
 
@@ -13,10 +13,20 @@ export interface MethodResult {
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function methods(db: ScipDatabase, className: string): MethodResult[] {
-  const classMatch = findFirstSymbolMatch(db, className);
-  if (!classMatch) {
-    return [];
+  const resolution = resolveSymbol(db, className);
+  if (!resolution.match) {
+    throw new Error(`No class definition matched '${className}'.`);
   }
+  if (resolution.total > 1) {
+    const candidates = [resolution.match, ...resolution.candidates]
+      .map((candidate) => `${candidate.relativePath}:${candidate.startLine + 1}`)
+      .join(', ');
+    throw new Error(
+      `Class '${className}' is ambiguous across ${resolution.total} definitions (${candidates}). ` +
+        'Qualify it with a path or exact SCIP symbol identity.',
+    );
+  }
+  const classMatch = resolution.match;
 
   const ownerName = leafName(classMatch.symbol);
   const index = new ProjectIndex(db);

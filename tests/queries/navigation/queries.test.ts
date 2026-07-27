@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Database from 'better-sqlite3';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
@@ -270,6 +270,42 @@ describe('query engine', () => {
       const names = results.map((m) => m.name);
       expect(names).toContain('login');
       expect(names).toContain('logout');
+    });
+
+    it('distinguishes an exact empty class from ambiguous and missing class resolution', () => {
+      const isolatedDir = mkdtempSync(join(tmpdir(), 'scip-query-method-resolution-'));
+      const isolatedDbPath = join(isolatedDir, 'index.db');
+      createFixtureDb(isolatedDbPath);
+      const writable = new Database(isolatedDbPath);
+      writable.exec(`
+        INSERT INTO documents (id, language, relative_path) VALUES
+          (80, 'typescript', 'src/other/auth.service.ts'),
+          (81, 'typescript', 'src/services/empty.service.ts');
+        INSERT INTO global_symbols (id, symbol, display_name, kind) VALUES
+          (80, 'scip-typescript npm my-app 1.0.0 src/other/\`auth.service.ts\`/AuthService#', 'AuthService', 5),
+          (81, 'scip-typescript npm my-app 1.0.0 src/services/\`empty.service.ts\`/EmptyService#', 'EmptyService', 5);
+        INSERT INTO defn_enclosing_ranges
+          (id, document_id, symbol_id, start_line, start_char, end_line, end_char)
+        VALUES
+          (80, 80, 80, 0, 0, 2, 1),
+          (81, 81, 81, 0, 0, 2, 1);
+      `);
+      writable.close();
+      const isolated = new ScipDatabase({
+        dbPath: isolatedDbPath,
+        indexPath: join(isolatedDir, 'index.scip'),
+        projectRoot: isolatedDir,
+      });
+      try {
+        expect(() => queries.methods(isolated, 'AuthService')).toThrow(/ambiguous across 2 definitions/);
+        expect(
+          queries.methods(isolated, 'scip-typescript npm my-app 1.0.0 src/services/`empty.service.ts`/EmptyService#'),
+        ).toEqual([]);
+        expect(() => queries.methods(isolated, 'DoesNotExist')).toThrow(/No class definition matched/);
+      } finally {
+        isolated.close();
+        rmSync(isolatedDir, { recursive: true, force: true });
+      }
     });
   });
 

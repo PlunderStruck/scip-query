@@ -1,0 +1,14 @@
+{
+  "kind": "scip-query-suppression",
+  "schemaVersion": 1,
+  "suppressionIdentity": "SQD30C0EC25271",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.19.8"
+  },
+  "id": "SQD30C0EC25271",
+  "check": "twin-partner",
+  "file": "src/analysis/change-risk-metadata.ts",
+  "reason": "Accepted intentional local leaf helper: the two-line unknown-error formatter carries no domain policy, and coupling analysis, metadata decoding, binary installation, and Vue reindex boundaries solely to share it would create a less stable abstraction than the duplication.",
+  "createdAt": "2026-07-27T05:46:07.079Z"
+}

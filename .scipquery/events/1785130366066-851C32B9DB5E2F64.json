@@ -1,0 +1,16 @@
+{
+  "ts": 1785130366066,
+  "check": "echo",
+  "findingId": "SQEA314C84F4CE",
+  "event": "caught",
+  "commit": "f61efd2ae9be7a9bb2138d75bafceb6bc028ff34",
+  "comparisonBaseCommit": "f61efd2ae9be7a9bb2138d75bafceb6bc028ff34",
+  "symbol": "scip-typescript npm scip-query 0.19.8 src/queries/internal/`diff-gate-progress.ts`/currentDiffGateProgressObserver().",
+  "kind": "scip-query-outcome-event",
+  "schemaVersion": 1,
+  "eventIdentity": "[\"echo\",\"SQEA314C84F4CE\",\"caught\",\"f61efd2ae9be7a9bb2138d75bafceb6bc028ff34\"]",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.19.8"
+  }
+}

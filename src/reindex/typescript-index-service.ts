@@ -166,17 +166,18 @@ export function processTypeScriptIndexMailbox(
   host: TypeScriptIndexServiceHost,
   opts: {
     nowMs?: number;
+    now?: () => number;
     beforeRequest?: (deadlineAtMs: number) => void;
     afterRequest?: () => void;
     ownerId?: string;
     limits?: Partial<BoundedMailboxLimits>;
   } = {},
 ): number {
-  initializeTypeScriptIndexMailbox(paths);
-  const nowMs = opts.nowMs ?? Date.now();
+  const now = opts.now ?? (opts.nowMs === undefined ? Date.now : () => opts.nowMs as number);
+  const claimNowMs = now();
   const claims = pollBoundedMailboxRequests(paths, {
     ownerId: opts.ownerId ?? TYPESCRIPT_INDEX_MAILBOX_OWNER,
-    nowMs,
+    nowMs: claimNowMs,
     limits: opts.limits,
     owner: TYPESCRIPT_INDEX_MAILBOX_PROCESS_OWNER,
     liveness: TYPESCRIPT_INDEX_MAILBOX_LIVENESS,
@@ -190,11 +191,15 @@ export function processTypeScriptIndexMailbox(
       if (id !== claim.requestId) {
         throw new Error('TypeScript index request identity does not match its mailbox path.');
       }
-      if (envelope.deadlineAtMs < nowMs) {
+      if (envelope.deadlineAtMs < now()) {
         throw new Error('TypeScript index request expired before processing.');
       }
       opts.beforeRequest?.(envelope.deadlineAtMs);
       const response = host.handle(envelope.baseGeneration, envelope.request);
+      const completedAtMs = now();
+      if (envelope.deadlineAtMs < completedAtMs) {
+        throw new Error('TypeScript index request expired while the service was processing it.');
+      }
       completeBoundedMailboxClaim(
         paths,
         claim,
@@ -205,7 +210,7 @@ export function processTypeScriptIndexMailbox(
           baseGeneration: envelope.baseGeneration,
           response,
         },
-        { nowMs, limits: opts.limits },
+        { nowMs: completedAtMs, limits: opts.limits },
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -219,7 +224,7 @@ export function processTypeScriptIndexMailbox(
           error: message,
         },
         message,
-        { nowMs, limits: opts.limits },
+        { nowMs: now(), limits: opts.limits },
       );
     } finally {
       opts.afterRequest?.();

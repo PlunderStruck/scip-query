@@ -30,7 +30,7 @@ import {
   type WatchServicePaths,
   type WatchServiceState,
 } from '../platform/watch-service-state.js';
-import { writeJsonAtomic, writeJsonDurable } from '../storage/atomic-json.js';
+import { writeJsonAtomic, writeJsonDurable, type AtomicJsonWriteOptions } from '../storage/atomic-json.js';
 import {
   enqueueWatchRefreshRequest,
   type EnqueueWatchRefreshRequestOptions,
@@ -374,8 +374,14 @@ export function stopWatchService(opts: WatchServiceControllerOptions): WatchServ
 
 // scip-query: ignore-passthrough — protocol writer keeps watch-state callers
 // on the validated service contract instead of its JSON storage mechanism.
-export function writeWatchServiceState(statePath: string, state: WatchServiceState): void {
-  writeJsonDurable(statePath, state);
+export function writeWatchServiceState(
+  statePath: string,
+  state: WatchServiceState,
+  options: AtomicJsonWriteOptions & { durability?: 'durable' | 'visibility' } = {},
+): void {
+  const { durability = 'durable', ...writeOptions } = options;
+  if (durability === 'durable') writeJsonDurable(statePath, state, writeOptions);
+  else writeJsonAtomic(statePath, state, writeOptions);
 }
 
 export function recordWatchServiceActivity(activityPath: string, nowMs = Date.now()): void {

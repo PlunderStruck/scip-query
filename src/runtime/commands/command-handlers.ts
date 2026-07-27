@@ -27,7 +27,12 @@ import {
   type AffectedSetShadowStatus,
 } from '../../reindex/affected-shadow.js';
 import { recordSuppressedReindexActivity } from '../../reindex/reindex-activity.js';
-import { inspectSqliteGeneration, type SqliteGenerationInspection } from '../../reindex/sqlite-generation-store.js';
+import {
+  inspectLocalSqliteGenerationRetention,
+  inspectSqliteGeneration,
+  type LocalSqliteGenerationStatus,
+  type SqliteGenerationInspection,
+} from '../../reindex/sqlite-generation-store.js';
 import {
   loadProjectConfig,
   resolveWatchConfig,
@@ -1591,7 +1596,10 @@ export function handleWatch(rawOpts: unknown): void {
       return getIndexFreshness(projectRoot, config, paths).state === 'fresh';
     },
     onRefreshSuppressed: (trigger) => {
-      recordSuppressedReindexActivity(paths.dbPath, trigger);
+      const activityWrite = recordSuppressedReindexActivity(paths.dbPath, trigger);
+      if (activityWrite.state === 'failed') {
+        console.error(`\nWatch warning: suppressed-refresh telemetry was not recorded: ${activityWrite.reason}`);
+      }
       console.log('\nSkipped redundant refresh; the completed index already includes the queued changes.');
     },
     onError: (err) => {
@@ -1714,8 +1722,16 @@ function renderWatchServiceReport(report: ReturnType<typeof watchServiceReport>)
       `Reindex activity (24h): ${activity.runs} run(s) ` +
         `(${activity.rebuilt} rebuilt, ${activity.reused} reused, ${activity.failed} failed), ` +
         `${activity.suppressed} redundant refresh(es) suppressed, ` +
-        `${formatBytes(activity.estimatedLogicalOutputBytes)} estimated logical output`,
+        `${formatBytes(activity.estimatedLogicalOutputBytes)} estimated logical output` +
+        `${activity.confidence && activity.confidence !== 'complete' ? ` [${activity.confidence} evidence]` : ''}`,
     );
+    if (activity.confidence && activity.confidence !== 'complete') {
+      console.log(
+        `Reindex evidence: ${activity.recordsRead ?? 0} record(s) read, ` +
+          `${activity.invalidRecords ?? 0} invalid, ${activity.readErrors ?? 0} read error(s), ` +
+          `${activity.ignoredPartialTailBytes ?? 0} incomplete byte(s) ignored`,
+      );
+    }
   }
   if ('refreshRequests' in report && report.refreshRequests) {
     renderWatchRefreshRequestStatus(report.refreshRequests);
@@ -1761,6 +1777,7 @@ export function handleStatus(rawOpts: unknown): void {
   );
   const affectedSetShadow = readAffectedSetShadowStatus(report.dbPath);
   const sqliteGeneration = inspectSqliteGeneration(report.dbPath, report.freshness.metaPath);
+  const localGenerations = inspectLocalSqliteGenerationRetention(report.dbPath);
   const rustSemanticSession = rustSemanticSessionStatus(
     report.projectRoot,
     process.env['SCIP_RUST_SEMANTIC_DURABLE_SESSION'],
@@ -1770,6 +1787,7 @@ export function handleStatus(rawOpts: unknown): void {
       ...report,
       affectedSetShadow,
       sqliteGeneration,
+      localGenerations,
       rustSemanticSession,
       watchService,
       stats: statusStats(report.exists),
@@ -1780,6 +1798,7 @@ export function handleStatus(rawOpts: unknown): void {
     affectedSetShadow,
     capabilities: booleanOptionValue(opts, 'capabilities'),
     sqliteGeneration,
+    localGenerations,
     rustSemanticSession,
     watchService,
   });
@@ -1811,6 +1830,7 @@ function renderStatusReport(
     affectedSetShadow: AffectedSetShadowStatus;
     capabilities: boolean;
     sqliteGeneration: SqliteGenerationInspection;
+    localGenerations: LocalSqliteGenerationStatus;
     rustSemanticSession: ReturnType<typeof rustSemanticSessionStatus>;
     watchService: ReturnType<typeof watchServiceReport>;
   },
@@ -1838,6 +1858,7 @@ function renderStatusReport(
   );
   if (!opts.rustSemanticSession.valid) console.log('Rust note: invalid durable-session value; using worker fallback');
   renderSqliteGeneration(opts.sqliteGeneration);
+  renderLocalSqliteGenerations(opts.localGenerations);
   console.log(`Shadow:   ${formatAffectedSetShadowStatus(opts.affectedSetShadow)}`);
   console.log(`Latest:   ${opts.affectedSetShadow.latestPath}`);
 
@@ -1905,6 +1926,23 @@ function renderSqliteGeneration(inspection: SqliteGenerationInspection): void {
   }
   if (publication?.fallbackReason) console.log(`DB fallback: ${publication.fallbackReason}`);
   if (inspection.reason) console.log(`DB note:   ${inspection.reason}`);
+}
+
+function renderLocalSqliteGenerations(status: LocalSqliteGenerationStatus): void {
+  if (status.state === 'absent') return;
+  console.log(
+    `Local GC: ${status.state}, ${status.generationCount} generation(s), ${formatBytes(status.logicalBytes)}, ` +
+      `${status.protectedGenerations} protected (${status.activeReaderLeases} live reader lease(s)); ` +
+      `limits ${status.limits.maxGenerations} / ${formatBytes(status.limits.maxLogicalBytes)}`,
+  );
+  if (status.oldestGenerationAt) console.log(`Local age: oldest generation ${status.oldestGenerationAt}`);
+  if (status.lastCollection) {
+    console.log(
+      `Local last: ${status.lastCollection.state} at ${status.lastCollection.at}, ` +
+        `${status.lastCollection.removedGenerations} removed`,
+    );
+  }
+  if (status.reason) console.log(`Local why: ${status.reason}`);
 }
 
 // scip-query: ignore-twin — command rendering and readiness computation expose different views.

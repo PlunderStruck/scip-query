@@ -1,0 +1,14 @@
+{
+  "kind": "scip-query-suppression",
+  "schemaVersion": 1,
+  "suppressionIdentity": "SQ23C1BB6D5DF3",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.19.8"
+  },
+  "id": "SQ23C1BB6D5DF3",
+  "check": "doc-reference",
+  "file": "skills/scip-plan/references/tla-model.md",
+  "reason": "Verified unchanged guide reference: src/runtime/watch.ts still defines the Watcher class and indexed mutable watcher state; this remediation changed scheduling and shutdown behavior, not TLA scaffold discovery semantics. Skill edits are intentionally reserved for the concurrent skill-maintenance work.",
+  "createdAt": "2026-07-27T05:46:07.150Z"
+}

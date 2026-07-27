@@ -336,13 +336,16 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'fan-in',
     command: 'fan-in [symbol]',
     description: 'Count files referencing an exact symbol; top JSON rows include exact symbol identity',
-    agent: agentContract(
-      'How many files reference this symbol, or which symbols have highest fan-in?',
-      'exact symbols with referencing-file counts',
-      ['symbol'],
-      'bounded',
-      'repository',
-    ),
+    agent: {
+      ...agentContract(
+        'How many files reference this symbol, or which symbols have highest fan-in?',
+        'exact symbols with referencing-file counts',
+        ['symbol'],
+        'bounded',
+        'repository',
+      ),
+      resultUnits: { kind: 'field', field: 'rows' },
+    },
     options: withJsonOption([
       option('-n, --limit <n>', 'Number of results for top mode', parseInteger, 30),
       option('-s, --scope <path>', 'Limit to files matching path'),

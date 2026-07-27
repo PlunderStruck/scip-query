@@ -16,18 +16,23 @@ import {
 } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
+import { readProcessIdentity } from '../platform/process-identity.js';
+import { isProcessAlive } from '../platform/process-liveness.js';
+import { acquireProcessFileLock } from '../platform/repository-cache-lock.js';
 import { syncDirectoryDurable } from '../storage/atomic-file.js';
-import { writeJsonDurable } from '../storage/atomic-json.js';
+import { writeJsonAtomic, writeJsonDurable } from '../storage/atomic-json.js';
 import {
   SQLITE_GENERATION_DIRECTORY,
   SQLITE_GENERATION_MANIFEST,
   SQLITE_GENERATION_MANIFEST_VERSION,
   SQLITE_GENERATION_STORE_VERSION,
   fileIdentity,
+  inspectSqliteGenerationReaderLeases,
   readSqliteGenerationManifest,
   readSqliteGenerationManifestFromRoot,
   readSqliteGenerationState,
   sqliteGenerationRoot,
+  sqliteGenerationGcLockPath,
   stableMetadataIdentity,
   type SqliteGenerationArtifact,
   type SqliteGenerationManifest,
@@ -81,6 +86,45 @@ export type SqliteGenerationInspection =
 export interface PromoteReindexArtifactsResult {
   currentGeneration: string;
   previousGeneration?: SqliteGenerationRecovery;
+  retention?: LocalSqliteGenerationRetentionResult;
+}
+
+export interface LocalSqliteGenerationRetentionLimits {
+  maxGenerations: number;
+  maxLogicalBytes: number;
+}
+
+export const DEFAULT_LOCAL_SQLITE_GENERATION_RETENTION: Readonly<LocalSqliteGenerationRetentionLimits> = Object.freeze({
+  maxGenerations: 8,
+  maxLogicalBytes: 2 * 1024 * 1024 * 1024,
+});
+
+export interface LocalSqliteGenerationRetentionResult {
+  state: 'within-bounds' | 'collected' | 'protected' | 'deferred' | 'error';
+  generationCount: number;
+  logicalBytes: number;
+  protectedGenerations: number;
+  activeReaderLeases: number;
+  staleReaderLeasesRemoved: number;
+  malformedReaderLeases: number;
+  removedGenerations: number;
+  removedLogicalBytes: number;
+  limits: LocalSqliteGenerationRetentionLimits;
+  at: string;
+  reason?: string;
+}
+
+export interface LocalSqliteGenerationStatus {
+  state: 'managed' | 'absent' | 'deferred' | 'error';
+  generationCount: number;
+  logicalBytes: number;
+  oldestGenerationAt?: string;
+  protectedGenerations: number;
+  activeReaderLeases: number;
+  malformedReaderLeases: number;
+  limits: LocalSqliteGenerationRetentionLimits;
+  lastCollection?: LocalSqliteGenerationRetentionResult;
+  reason?: string;
 }
 
 /**
@@ -126,7 +170,8 @@ export function promoteReindexArtifacts(input: PromoteReindexArtifactsInput): Pr
     stableMirrors: stableMirrorIdentity(input.outputDb, input.outputScip),
   };
   writeJsonDurable(join(generationRoot, 'state.json'), mirroredState, { spacing: 2, trailingNewline: true });
-  return { currentGeneration, ...(previousGeneration ? { previousGeneration } : {}) };
+  const retention = collectLocalSqliteGenerations(input.outputDb, { now: input.now });
+  return { currentGeneration, ...(previousGeneration ? { previousGeneration } : {}), retention };
 }
 
 /**
@@ -210,7 +255,270 @@ export function refreshSqliteGenerationMetadata(
     spacing: 2,
     trailingNewline: true,
   });
+  collectLocalSqliteGenerations(outputDb, { now });
   return state;
+}
+
+export function collectLocalSqliteGenerations(
+  outputDb: string,
+  options: {
+    limits?: Partial<LocalSqliteGenerationRetentionLimits>;
+    now?: () => Date;
+    isProcessAlive?: (pid: number) => boolean;
+    readProcessIdentity?: typeof readProcessIdentity;
+    onBeforeRemove?: (identity: string) => void;
+  } = {},
+): LocalSqliteGenerationRetentionResult {
+  const limits = resolveLocalGenerationRetentionLimits(options.limits);
+  const now = options.now ?? (() => new Date());
+  const at = now().toISOString();
+  const lock = acquireProcessFileLock(sqliteGenerationGcLockPath(outputDb), { waitMs: 0 });
+  if (!lock) {
+    return {
+      state: 'deferred',
+      generationCount: 0,
+      logicalBytes: 0,
+      protectedGenerations: 0,
+      activeReaderLeases: 0,
+      staleReaderLeasesRemoved: 0,
+      malformedReaderLeases: 0,
+      removedGenerations: 0,
+      removedLogicalBytes: 0,
+      limits,
+      at,
+      reason: 'another process owns local generation retention',
+    };
+  }
+  try {
+    const state = readSqliteGenerationState(outputDb);
+    const generations = localGenerationEntries(outputDb);
+    const leaseSnapshot = inspectSqliteGenerationReaderLeases(
+      outputDb,
+      generations.map((generation) => generation.identity),
+      {
+        isProcessAlive: options.isProcessAlive ?? isProcessAlive,
+        readProcessIdentity: options.readProcessIdentity ?? readProcessIdentity,
+      },
+    );
+    const protectedIdentities = new Set(leaseSnapshot.protectedGenerations);
+    if (state?.currentGeneration) protectedIdentities.add(state.currentGeneration);
+    if (state?.previousGeneration?.generationIdentity) {
+      protectedIdentities.add(state.previousGeneration.generationIdentity);
+    }
+    let generationCount = generations.length;
+    let logicalBytes = generations.reduce((total, generation) => total + generation.logicalBytes, 0);
+    let removedGenerations = 0;
+    let removedLogicalBytes = 0;
+    for (const generation of generations) {
+      if (generationCount <= limits.maxGenerations && logicalBytes <= limits.maxLogicalBytes) break;
+      if (protectedIdentities.has(generation.identity)) continue;
+      options.onBeforeRemove?.(generation.identity);
+      rmSync(generation.path, { recursive: true, force: true });
+      generationCount -= 1;
+      logicalBytes -= generation.logicalBytes;
+      removedGenerations += 1;
+      removedLogicalBytes += generation.logicalBytes;
+    }
+    const stillOverLimit = generationCount > limits.maxGenerations || logicalBytes > limits.maxLogicalBytes;
+    const result: LocalSqliteGenerationRetentionResult = {
+      state: stillOverLimit ? 'protected' : removedGenerations > 0 ? 'collected' : 'within-bounds',
+      generationCount,
+      logicalBytes,
+      protectedGenerations: protectedIdentities.size,
+      activeReaderLeases: leaseSnapshot.activeLeases,
+      staleReaderLeasesRemoved: leaseSnapshot.staleLeasesRemoved,
+      malformedReaderLeases: leaseSnapshot.malformedLeases,
+      removedGenerations,
+      removedLogicalBytes,
+      limits,
+      at,
+      ...(stillOverLimit
+        ? {
+            reason:
+              leaseSnapshot.malformedLeases > 0
+                ? 'malformed reader ownership evidence fails closed'
+                : 'retention bounds cannot be met without deleting a protected generation',
+          }
+        : {}),
+    };
+    writeLocalGenerationRetentionResult(outputDb, result);
+    return result;
+  } catch (error) {
+    const result: LocalSqliteGenerationRetentionResult = {
+      state: 'error',
+      generationCount: 0,
+      logicalBytes: 0,
+      protectedGenerations: 0,
+      activeReaderLeases: 0,
+      staleReaderLeasesRemoved: 0,
+      malformedReaderLeases: 0,
+      removedGenerations: 0,
+      removedLogicalBytes: 0,
+      limits,
+      at,
+      reason: error instanceof Error ? error.message : String(error),
+    };
+    try {
+      writeLocalGenerationRetentionResult(outputDb, result);
+    } catch {
+      // Publication remains authoritative even when observational GC telemetry cannot be written.
+    }
+    return result;
+  } finally {
+    lock.release();
+  }
+}
+
+export function inspectLocalSqliteGenerationRetention(outputDb: string): LocalSqliteGenerationStatus {
+  const root = sqliteGenerationRoot(outputDb);
+  if (!existsSync(root)) {
+    return {
+      state: 'absent',
+      generationCount: 0,
+      logicalBytes: 0,
+      protectedGenerations: 0,
+      activeReaderLeases: 0,
+      malformedReaderLeases: 0,
+      limits: { ...DEFAULT_LOCAL_SQLITE_GENERATION_RETENTION },
+      reason: 'local immutable generation store does not exist',
+    };
+  }
+  const lastCollection = readLocalGenerationRetentionResult(outputDb);
+  const limits = lastCollection?.limits ?? { ...DEFAULT_LOCAL_SQLITE_GENERATION_RETENTION };
+  const lock = acquireProcessFileLock(sqliteGenerationGcLockPath(outputDb), { waitMs: 0 });
+  if (!lock) {
+    return {
+      state: 'deferred',
+      generationCount: lastCollection?.generationCount ?? 0,
+      logicalBytes: lastCollection?.logicalBytes ?? 0,
+      protectedGenerations: lastCollection?.protectedGenerations ?? 0,
+      activeReaderLeases: lastCollection?.activeReaderLeases ?? 0,
+      malformedReaderLeases: lastCollection?.malformedReaderLeases ?? 0,
+      limits,
+      ...(lastCollection ? { lastCollection } : {}),
+      reason: 'another process owns local generation retention',
+    };
+  }
+  try {
+    const generations = localGenerationEntries(outputDb);
+    const state = readSqliteGenerationState(outputDb);
+    const leases = inspectSqliteGenerationReaderLeases(
+      outputDb,
+      generations.map((generation) => generation.identity),
+      { isProcessAlive, readProcessIdentity },
+      { removeStale: false },
+    );
+    const protectedIdentities = new Set(leases.protectedGenerations);
+    if (state?.currentGeneration) protectedIdentities.add(state.currentGeneration);
+    if (state?.previousGeneration?.generationIdentity) {
+      protectedIdentities.add(state.previousGeneration.generationIdentity);
+    }
+    return {
+      state: 'managed',
+      generationCount: generations.length,
+      logicalBytes: generations.reduce((total, generation) => total + generation.logicalBytes, 0),
+      ...(generations[0] ? { oldestGenerationAt: new Date(generations[0].modifiedAtMs).toISOString() } : {}),
+      protectedGenerations: protectedIdentities.size,
+      activeReaderLeases: leases.activeLeases,
+      malformedReaderLeases: leases.malformedLeases,
+      limits,
+      ...(lastCollection ? { lastCollection } : {}),
+      ...(leases.malformedLeases > 0
+        ? { reason: 'malformed reader ownership evidence prevents unsafe collection' }
+        : {}),
+    };
+  } catch (error) {
+    return {
+      state: 'error',
+      generationCount: 0,
+      logicalBytes: 0,
+      protectedGenerations: 0,
+      activeReaderLeases: 0,
+      malformedReaderLeases: 0,
+      limits,
+      ...(lastCollection ? { lastCollection } : {}),
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    lock.release();
+  }
+}
+
+function resolveLocalGenerationRetentionLimits(
+  overrides: Partial<LocalSqliteGenerationRetentionLimits> = {},
+): LocalSqliteGenerationRetentionLimits {
+  const limits = { ...DEFAULT_LOCAL_SQLITE_GENERATION_RETENTION, ...overrides };
+  if (!Number.isSafeInteger(limits.maxGenerations) || limits.maxGenerations < 2) {
+    throw new Error('Local SQLite generation retention must keep at least current and previous generations.');
+  }
+  if (!Number.isSafeInteger(limits.maxLogicalBytes) || limits.maxLogicalBytes <= 0) {
+    throw new Error('Local SQLite generation byte retention must be a positive safe integer.');
+  }
+  return limits;
+}
+
+function localGenerationEntries(outputDb: string): Array<{
+  identity: string;
+  path: string;
+  logicalBytes: number;
+  modifiedAtMs: number;
+}> {
+  const root = sqliteGenerationRoot(outputDb);
+  if (!existsSync(root)) return [];
+  return readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^[a-f0-9]{64}$/.test(entry.name))
+    .map((entry) => {
+      const path = join(root, entry.name);
+      const manifest = readSqliteGenerationManifestFromRoot(root, entry.name);
+      const logicalBytes = manifest
+        ? manifest.database.size + (manifest.index?.size ?? 0) + (manifest.metadata?.size ?? 0)
+        : directoryLogicalBytes(path);
+      return { identity: entry.name, path, logicalBytes, modifiedAtMs: statSync(path).mtimeMs };
+    })
+    .sort((left, right) => left.modifiedAtMs - right.modifiedAtMs || left.identity.localeCompare(right.identity));
+}
+
+function directoryLogicalBytes(path: string): number {
+  let bytes = 0;
+  for (const entry of readdirSync(path, { withFileTypes: true })) {
+    const child = join(path, entry.name);
+    if (entry.isDirectory()) bytes += directoryLogicalBytes(child);
+    else if (entry.isFile()) bytes += statSync(child).size;
+  }
+  return bytes;
+}
+
+function writeLocalGenerationRetentionResult(outputDb: string, result: LocalSqliteGenerationRetentionResult): void {
+  writeJsonAtomic(join(sqliteGenerationRoot(outputDb), 'gc.json'), result, {
+    spacing: 2,
+    trailingNewline: true,
+  });
+}
+
+function readLocalGenerationRetentionResult(outputDb: string): LocalSqliteGenerationRetentionResult | undefined {
+  try {
+    const value = JSON.parse(
+      readSmallArtifactText(join(sqliteGenerationRoot(outputDb), 'gc.json'), 'local SQLite generation GC status'),
+    ) as LocalSqliteGenerationRetentionResult;
+    if (
+      !value ||
+      (value.state !== 'within-bounds' &&
+        value.state !== 'collected' &&
+        value.state !== 'protected' &&
+        value.state !== 'deferred' &&
+        value.state !== 'error') ||
+      !Number.isSafeInteger(value.generationCount) ||
+      value.generationCount < 0 ||
+      !Number.isFinite(value.logicalBytes) ||
+      value.logicalBytes < 0 ||
+      !Number.isFinite(Date.parse(value.at))
+    ) {
+      return undefined;
+    }
+    return value;
+  } catch {
+    return undefined;
+  }
 }
 
 export function inspectSqliteGeneration(

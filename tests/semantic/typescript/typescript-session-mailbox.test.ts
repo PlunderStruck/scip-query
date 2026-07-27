@@ -153,6 +153,43 @@ describe('TypeScript semantic service mailbox', () => {
     service.closeTypeScriptService();
   });
 
+  it('rechecks each deadline so a later request cannot execute after an earlier handler advances time', () => {
+    const fixture = serviceFixture();
+    const service = new TypeScriptSemanticServiceHost({
+      openDb: fixture.openDb,
+      generationIdentity: () => 'current',
+      readSnapshot: () => projectSnapshot('current'),
+      createHost: fakeSemanticHost,
+      now: () => NOW,
+    });
+    const paths = typeScriptSemanticMailboxPaths(fixture.projectRoot);
+    initializeTypeScriptSemanticMailbox(paths);
+    writeRequest(paths.requestDir, 'first', 'current', { kind: 'availability' }, NOW + 1_000);
+    writeRequest(paths.requestDir, 'second', 'current', { kind: 'availability' }, NOW + 1_000);
+    let currentTime = NOW;
+    let started = 0;
+
+    expect(
+      processTypeScriptSemanticMailbox(paths, service, {
+        now: () => currentTime,
+        beforeRequest: () => {
+          started += 1;
+          currentTime = NOW + 2_000;
+        },
+      }),
+    ).toBe(2);
+
+    expect(started).toBe(1);
+    expect(service.status().requests).toBe(1);
+    expect(readResponse(paths.responseDir, 'first')).toEqual(
+      expect.objectContaining({ ok: false, error: expect.stringContaining('expired while') }),
+    );
+    expect(readResponse(paths.responseDir, 'second')).toEqual(
+      expect.objectContaining({ ok: false, error: expect.stringContaining('expired before') }),
+    );
+    service.closeTypeScriptService();
+  });
+
   it('lets a synchronous requester receive a response and rejects a mismatched response identity', () => {
     const fixture = serviceFixture(true);
     const projectAlias = symbolicLinkTo(fixture.projectRoot, 'scip-query-ts-mailbox-alias-');

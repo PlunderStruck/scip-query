@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { program, renderHeuristicNotice } from '../../src/runtime/cli.js';
 import { commandDescriptors } from '../../src/runtime/commands/command-descriptors.js';
+import { commandResultUnitPolicy } from '../../src/runtime/commands/command-registry.js';
 import { commandDocEntries, renderCommandReferenceMarkdown } from '../../src/runtime/command-kit/command-docs.js';
 import { renderAgentContractCatalogMarkdown } from '../../scripts/render-command-reference.js';
 import { BUILTIN_SKILLS } from '../../src/runtime/setup.js';
@@ -122,6 +123,9 @@ describe('CLI contract', () => {
       expect(contract.answers.length, `${where}: needs at least one answerable question`).toBeGreaterThan(0);
       expect(contract.returns.length, `${where}: needs at least one returned unit`).toBeGreaterThan(0);
       expect(coveragePolicies.has(contract.coverage), `${where}: bad coverage "${contract.coverage}"`).toBe(true);
+      expect(commandResultUnitPolicy(descriptor), `${where}: missing result-unit policy`).toMatchObject({
+        kind: expect.stringMatching(/^(rows|report|field)$/),
+      });
 
       for (const slot of contract.inputs) {
         for (const kind of Array.isArray(slot) ? slot : [slot]) {
@@ -315,6 +319,45 @@ describe('CLI contract', () => {
       options: { json: true },
       result: { rows: [] },
       coverage: { complete: null, totalKnown: false, returned: 0 },
+    });
+  });
+
+  it('counts descriptor-owned semantic units without summing unrelated arrays', () => {
+    const writes: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
+
+    printJsonEnvelope(
+      'code',
+      ['Thing'],
+      { json: true },
+      {
+        matched: true,
+        resolved: { symbol: 'exact', relativePath: 'src/a.ts' },
+        otherMatches: [{ relativePath: 'src/b.ts' }, { relativePath: 'src/c.ts' }],
+        totalMatches: 3,
+        code: { relativePath: 'src/a.ts', startLine: 0, endLine: 1, source: 'x' },
+      },
+    );
+    printJsonEnvelope('code', ['Missing'], { json: true }, { matched: false, suggestions: [], code: null });
+
+    expect(JSON.parse(writes[0]!).coverage).toEqual({
+      complete: true,
+      totalKnown: true,
+      returned: 1,
+      total: 1,
+      omitted: 0,
+      resolution: { state: 'ambiguous', totalCandidates: 3 },
+    });
+    expect(JSON.parse(writes[1]!).coverage).toEqual({
+      complete: true,
+      totalKnown: true,
+      returned: 0,
+      total: 0,
+      omitted: 0,
+      resolution: { state: 'missing', totalCandidates: 0 },
     });
   });
 

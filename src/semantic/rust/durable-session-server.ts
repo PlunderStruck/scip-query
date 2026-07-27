@@ -16,7 +16,7 @@ import {
   type DurableRustSessionServerState,
 } from './durable-session.js';
 import { createWorkerRustAnalyzerSessionRequester } from './lsp-session.js';
-import { writeJsonDurable } from '../../storage/atomic-json.js';
+import { writeJsonAtomic, writeJsonDurable } from '../../storage/atomic-json.js';
 import {
   boundedMailboxPaths,
   completeBoundedMailboxClaim,
@@ -37,6 +37,7 @@ import { isProcessAlive } from '../../platform/process-liveness.js';
 
 const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60_000;
 const POLL_INTERVAL_MS = 10;
+const MAX_IDLE_POLL_INTERVAL_MS = 250;
 const HEARTBEAT_INTERVAL_MS = 1_000;
 
 export function processDurableRustSessionRequests(
@@ -52,7 +53,6 @@ export function processDurableRustSessionRequests(
   } = {},
 ): number {
   const paths = boundedMailboxPaths(sessionDir);
-  initializeBoundedMailbox(paths);
   const now = opts.now ?? (opts.nowMs === undefined ? Date.now : () => opts.nowMs as number);
   const claimNowMs = now();
   const sessionIdentity = durableRustMailboxSessionIdentity(sessionDir);
@@ -180,6 +180,7 @@ async function runDurableRustSessionServer(sessionDir: string, semanticWorkerPat
   let lastActivityAtMonotonicMs = monotonicNowMs();
   let lastHeartbeatAtMonotonicMs = Number.NEGATIVE_INFINITY;
   let busyUntilMs: number | undefined;
+  let consecutiveIdlePolls = 0;
   const processIdentity = readProcessIdentity(process.pid);
   const sessionIdentity = durableRustMailboxSessionIdentity(sessionDir);
   const stop = (): void => {
@@ -188,12 +189,12 @@ async function runDurableRustSessionServer(sessionDir: string, semanticWorkerPat
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);
 
-  const writeState = (force = false): void => {
+  const writeState = (force = false, durability: 'durable' | 'visibility' = force ? 'durable' : 'visibility'): void => {
     const now = Date.now();
     const nowMonotonic = monotonicNowMs();
     if (!force && nowMonotonic - lastHeartbeatAtMonotonicMs < HEARTBEAT_INTERVAL_MS) return;
     lastHeartbeatAtMonotonicMs = nowMonotonic;
-    writeJsonDurable(resolve(sessionDir, 'server.json'), {
+    const state = {
       protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
       sessionIdentity,
       pid: process.pid,
@@ -201,7 +202,9 @@ async function runDurableRustSessionServer(sessionDir: string, semanticWorkerPat
       heartbeatAtMs: now,
       ...(busyUntilMs === undefined ? {} : { busyUntilMs }),
       mailbox: inspectBoundedMailbox(mailboxPaths),
-    } satisfies DurableRustSessionServerState);
+    } satisfies DurableRustSessionServerState;
+    if (durability === 'durable') writeJsonDurable(resolve(sessionDir, 'server.json'), state);
+    else writeJsonAtomic(resolve(sessionDir, 'server.json'), state);
   };
 
   try {
@@ -211,23 +214,31 @@ async function runDurableRustSessionServer(sessionDir: string, semanticWorkerPat
       const processed = processDurableRustSessionRequests(sessionDir, host, {
         beforeRequest(request) {
           busyUntilMs = Date.now() + request.timeoutMs + 5_000;
-          writeState(true);
+          writeState(true, 'visibility');
         },
       });
       if (processed > 0) {
+        consecutiveIdlePolls = 0;
         lastActivityAtMonotonicMs = monotonicNowMs();
         busyUntilMs = undefined;
-        writeState(true);
+        writeState(true, 'visibility');
       } else {
+        consecutiveIdlePolls += 1;
         writeState();
       }
-      await sleep(POLL_INTERVAL_MS);
+      await sleep(durableSessionLoopDelayMs(processed, consecutiveIdlePolls));
     }
   } finally {
     host.shutdown();
     rmSync(resolve(sessionDir, 'server.json'), { force: true });
     serverLock.release();
   }
+}
+
+export function durableSessionLoopDelayMs(processedRequests: number, consecutiveIdlePolls = 1): number {
+  if (processedRequests > 0) return POLL_INTERVAL_MS;
+  const exponent = Math.max(0, Math.min(5, consecutiveIdlePolls - 1));
+  return Math.min(MAX_IDLE_POLL_INTERVAL_MS, POLL_INTERVAL_MS * 2 ** exponent);
 }
 
 const decodeLegacyRustServerLock: LegacyProcessLockDecoder = (value) => {

@@ -6,6 +6,7 @@ import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
 import { diffGate } from '../../../src/queries/impact/diff-gate.js';
 import type { DiffGateCheck } from '../../../src/queries/impact/diff-gate.js';
+import { withDiffGateProgressObserver } from '../../../src/queries/internal/diff-gate-progress.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { createEvidenceSchema } from '../../fixtures/evidence-fixture.js';
 
@@ -90,6 +91,27 @@ function writeBaseline(root: string, findings: string[]): void {
 }
 
 describe('architecture diff-gate ratchet', () => {
+  it('publishes detector start and completion around each executed check', () => {
+    withArchitectureDiff((db, root) => {
+      writeBaseline(root, []);
+      const progress: string[] = [];
+
+      withDiffGateProgressObserver(
+        {
+          onCheckStart: (check) => progress.push(`start:${check}`),
+          onCheckComplete: (check) => progress.push(`complete:${check}`),
+        },
+        () =>
+          diffGate(db, {
+            base: 'HEAD',
+            skip: NON_ARCHITECTURE_CHECKS,
+          }),
+      );
+
+      expect(progress).toEqual(['start:architecture', 'complete:architecture']);
+    });
+  });
+
   it('blocks a new forbidden boundary pair with direct project-policy evidence', () => {
     withArchitectureDiff((db, root) => {
       writeBaseline(root, []);

@@ -1,0 +1,14 @@
+{
+  "kind": "scip-query-suppression",
+  "schemaVersion": 1,
+  "suppressionIdentity": "SQ3DF3A6F2B38C",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.19.8"
+  },
+  "id": "SQ3DF3A6F2B38C",
+  "check": "echo",
+  "file": "src/analysis/package-surface.ts",
+  "reason": "Accepted intentional parallel cache boundary: JavaScript operational entrypoints and Rust library reachability have different result contracts and invalidation semantics; both correctly use the shared per-database generation cache without sharing product policy.",
+  "createdAt": "2026-07-27T05:42:46.137Z"
+}

@@ -22,7 +22,7 @@ import {
 
 const CONFIG_FILENAME = '.scipquery.json';
 const DEFAULT_WATCH_DEBOUNCE_MS = 250;
-const DEFAULT_WATCH_COOLDOWN_MS = 0;
+const DEFAULT_WATCH_COOLDOWN_MS = 5_000;
 const DEFAULT_WATCH_IDLE_TIMEOUT_MS = 10 * 60_000;
 
 const DEFAULT_WATCH: Required<WatchConfig> = {

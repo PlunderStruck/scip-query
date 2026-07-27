@@ -80,14 +80,12 @@ const TABLE_CONTRACTS = {
 } as const satisfies Record<string, readonly TableColumn[]>;
 
 const INDEX_CONTRACTS = {
-  idx_chunks_doc_id: { table: 'chunks', columns: ['document_id'] },
   idx_chunks_line_range: { table: 'chunks', columns: ['document_id', 'start_line', 'end_line'] },
   idx_defn_enclosing_ranges_document: {
     table: 'defn_enclosing_ranges',
     columns: ['document_id', 'start_line', 'end_line'],
   },
   idx_defn_enclosing_ranges_symbol_id: { table: 'defn_enclosing_ranges', columns: ['symbol_id'] },
-  idx_global_symbols_symbol: { table: 'global_symbols', columns: ['symbol'] },
   idx_mentions_symbol_id_role: { table: 'mentions', columns: ['symbol_id', 'role'] },
 } as const satisfies Record<string, IndexContract>;
 

@@ -300,7 +300,12 @@ successor appearing before removal. The operational state machine and manual
 recovery guidance are recorded in `docs/LOCK_PROTOCOL.md`. The descriptor
 write loop and Windows directory-handle classification are shared through the
 dependency-free `src/filesystem/file-descriptor.ts` boundary, keeping
-`platform` and `storage` independent while preventing durability-policy drift.
+atomic publication independent of `platform` while preventing
+durability-policy drift. The later immutable-generation reader-lease work
+deliberately permits `storage/sqlite-generation.ts` to consume the
+platform-owned process lock, liveness, and process-start identity primitives;
+those host facts are required to make generation resolution and reader
+protection one race-free storage operation.
 
 ### DD-05 — S2 — Project, hook, and agent setup writers can overwrite concurrent user edits
 

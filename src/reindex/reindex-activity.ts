@@ -43,6 +43,7 @@ interface ReindexSuppressedActivity {
 export type ReindexActivityRecord = ReindexRunActivity | ReindexSuppressedActivity;
 
 export type ReindexActivityWriteRuntime = RotatingJsonlRuntime;
+export type ReindexActivityWriteResult = { state: 'recorded' } | { state: 'failed'; reason: string };
 
 const defaultReadFile = (path: string): string => readSmallArtifactText(path, 'reindex activity segment');
 
@@ -59,10 +60,10 @@ export function estimateReindexLogicalOutputBytes(result: ReindexResult): number
   return bytes;
 }
 
-export function recordReindexRunActivity(outputDb: string, result: ReindexResult): void {
+export function recordReindexRunActivity(outputDb: string, result: ReindexResult): ReindexActivityWriteResult {
   const refresh = result.lastRefresh;
-  if (!refresh) return;
-  writeReindexActivityBestEffort(reindexActivityPath(outputDb), {
+  if (!refresh) return { state: 'failed', reason: 'reindex result has no refresh metadata' };
+  return writeReindexActivityBestEffort(reindexActivityPath(outputDb), {
     version: 1,
     event: 'run',
     recordedAt: refresh.completedAt,
@@ -73,8 +74,11 @@ export function recordReindexRunActivity(outputDb: string, result: ReindexResult
   });
 }
 
-export function recordFailedReindexActivity(outputDb: string, refresh: LastRefreshMetadata): void {
-  writeReindexActivityBestEffort(reindexActivityPath(outputDb), {
+export function recordFailedReindexActivity(
+  outputDb: string,
+  refresh: LastRefreshMetadata,
+): ReindexActivityWriteResult {
+  return writeReindexActivityBestEffort(reindexActivityPath(outputDb), {
     version: 1,
     event: 'run',
     recordedAt: refresh.completedAt,
@@ -89,8 +93,8 @@ export function recordSuppressedReindexActivity(
   outputDb: string,
   trigger: RefreshTrigger,
   now: Date = new Date(),
-): void {
-  writeReindexActivityBestEffort(reindexActivityPath(outputDb), {
+): ReindexActivityWriteResult {
+  return writeReindexActivityBestEffort(reindexActivityPath(outputDb), {
     version: 1,
     event: 'suppressed',
     recordedAt: now.toISOString(),
@@ -120,7 +124,19 @@ export function readReindexActivitySummary(
 ): ReindexActivitySummary {
   const endedAtMs = now.getTime();
   const startedAtMs = endedAtMs - windowMs;
-  const summary: ReindexActivitySummary = {
+  const summary: ReindexActivitySummary &
+    Required<
+      Pick<
+        ReindexActivitySummary,
+        'confidence' | 'recordsRead' | 'invalidRecords' | 'skippedRecords' | 'readErrors' | 'ignoredPartialTailBytes'
+      >
+    > = {
+    confidence: 'complete',
+    recordsRead: 0,
+    invalidRecords: 0,
+    skippedRecords: 0,
+    readErrors: 0,
+    ignoredPartialTailBytes: 0,
     windowStartedAt: new Date(startedAtMs).toISOString(),
     windowEndedAt: now.toISOString(),
     runs: 0,
@@ -135,26 +151,41 @@ export function readReindexActivitySummary(
   let lines: string[] = [];
   if (readFile === defaultReadFile) {
     try {
-      lines = readRotatingJsonlLines(path, {
+      const read = readRotatingJsonlLines(path, {
         previousSuffix: REINDEX_ACTIVITY_PREVIOUS_SUFFIX,
-      }).lines;
+      });
+      lines = read.lines;
+      summary.ignoredPartialTailBytes = read.ignoredPartialTailBytes;
     } catch {
-      // Operational measurement must never prevent watch status reporting.
+      summary.readErrors += 1;
+      summary.confidence = 'unavailable';
     }
   } else {
+    let segmentsRead = 0;
     for (const segment of [`${path}${REINDEX_ACTIVITY_PREVIOUS_SUFFIX}`, path]) {
       try {
         lines.push(...completeInjectedLines(readFile(segment)));
+        segmentsRead += 1;
       } catch {
-        // Preserve the prior injectable best-effort read contract.
+        summary.readErrors += 1;
       }
     }
+    if (segmentsRead === 0) summary.confidence = 'unavailable';
+    else if (summary.readErrors > 0) summary.confidence = 'partial';
   }
   for (const line of lines) {
+    summary.recordsRead += 1;
     const record = parseReindexActivityRecord(line);
-    if (!record) continue;
+    if (!record) {
+      summary.invalidRecords += 1;
+      if (summary.confidence !== 'unavailable') summary.confidence = 'partial';
+      continue;
+    }
     const recordedAtMs = Date.parse(record.recordedAt);
-    if (recordedAtMs < startedAtMs || recordedAtMs > endedAtMs) continue;
+    if (recordedAtMs < startedAtMs || recordedAtMs > endedAtMs) {
+      summary.skippedRecords += 1;
+      continue;
+    }
     summary.byTrigger[record.trigger.kind] = (summary.byTrigger[record.trigger.kind] ?? 0) + 1;
     if (record.event === 'suppressed') {
       summary.suppressed += 1;
@@ -164,14 +195,18 @@ export function readReindexActivitySummary(
     summary[record.result] += 1;
     summary.estimatedLogicalOutputBytes += record.estimatedLogicalOutputBytes;
   }
+  if (summary.ignoredPartialTailBytes > 0 && summary.confidence !== 'unavailable') {
+    summary.confidence = 'partial';
+  }
   return summary;
 }
 
-function writeReindexActivityBestEffort(path: string, record: ReindexActivityRecord): void {
+function writeReindexActivityBestEffort(path: string, record: ReindexActivityRecord): ReindexActivityWriteResult {
   try {
     appendReindexActivity(path, record);
-  } catch {
-    // Operational measurement must never mask a refresh result.
+    return { state: 'recorded' };
+  } catch (error) {
+    return { state: 'failed', reason: error instanceof Error ? error.message : String(error) };
   }
 }
 

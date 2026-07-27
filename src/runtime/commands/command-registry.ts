@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
+import type { CommandDescriptor, CommandResultUnitPolicy } from '../command-kit/command-descriptor-types.js';
 import { setCommandAgentContractMap, setCommandEvidenceMap } from '../command-kit/command-execution.js';
 import { descriptorEvidenceTier } from '../command-kit/command-docs.js';
 import { sanitizeTerminalLine } from '../../platform/terminal-output.js';
@@ -20,7 +20,19 @@ export function registerCommandDescriptors(
   setCommandEvidenceMap(new Map(descriptors.map((descriptor) => [descriptor.id, descriptorEvidenceTier(descriptor)])));
   setCommandAgentContractMap(
     new Map(
-      descriptors.flatMap((descriptor) => (descriptor.agent ? [[descriptor.id, descriptor.agent] as const] : [])),
+      descriptors.flatMap((descriptor) =>
+        descriptor.agent
+          ? [
+              [
+                descriptor.id,
+                {
+                  ...descriptor.agent,
+                  resultUnits: commandResultUnitPolicy(descriptor),
+                },
+              ] as const,
+            ]
+          : [],
+      ),
     ),
   );
   return descriptors.map((descriptor) => {
@@ -66,6 +78,19 @@ export function registerCommandDescriptors(
     });
     return { descriptor, command };
   });
+}
+
+export function commandResultUnitPolicy(descriptor: CommandDescriptor): CommandResultUnitPolicy {
+  const explicit = descriptor.agent?.resultUnits;
+  if (explicit?.kind === 'field' && explicit.field.trim() === '') {
+    throw new Error(`Command ${descriptor.id} declares an empty result-unit field.`);
+  }
+  if (explicit) return explicit;
+  return descriptor.renderShape === 'list' ||
+    descriptor.renderShape === 'table' ||
+    descriptor.renderShape === 'grouped-by-file'
+    ? { kind: 'rows' }
+    : { kind: 'report' };
 }
 
 function handleCommandError(err: unknown): void {

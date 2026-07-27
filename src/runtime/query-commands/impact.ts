@@ -141,10 +141,23 @@ const handleChangeSurface = budgetedDbCommand('change-surface', ({ db, args, opt
   }
   if (!result) return render.empty('File not found in index.');
   console.log(`File: ${result.file}`);
-  console.log(`External consumers: ${result.totalExternalConsumers}\n`);
+  console.log(`External consumers: ${result.totalExternalConsumers}`);
+  if (result.fileRisk && result.fileRisk.reasons.length > 0) {
+    console.log(
+      `File risk factors (${result.fileRisk.coverage} metadata): ${result.fileRisk.reasons
+        .map((reason) => `${reason.kind}: ${reason.detail}`)
+        .join('; ')}`,
+    );
+  }
+  console.log('');
   render.list(result.symbols, (s) => {
     const risk = s.riskLevel === 'high' ? ' *** HIGH RISK ***' : s.riskLevel === 'medium' ? ' * medium risk *' : '';
-    return `  ${displayRange(s.startLine, s.endLine)}  ${s.shortName}  [${s.externalConsumers} consumers]${risk}`;
+    const riskReasons = s.riskReasons ?? [];
+    const reasons =
+      riskReasons.length === 0
+        ? ''
+        : `  [why: ${riskReasons.map((reason) => `${reason.kind}: ${reason.detail}`).join('; ')}]`;
+    return `  ${displayRange(s.startLine, s.endLine)}  ${s.shortName}  [${s.externalConsumers} consumers]${risk}${reasons}`;
   });
 });
 
@@ -476,7 +489,7 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'change-surface',
     command: 'change-surface <file>',
-    description: 'Pre-change briefing: exports, consumers, and blast-radius risk',
+    description: 'Pre-change briefing: consumers, published API, operational roots, and explained change risk',
     agent: agentContract(
       'What public surface and consumers make this file risky to change?',
       'defined symbols, external consumer counts, and risk levels',

@@ -39,6 +39,13 @@ export interface LastRefreshMetadata {
 }
 
 export interface ReindexActivitySummary {
+  /** Absent only on legacy watch-state records written before confidence reporting. */
+  confidence?: 'complete' | 'partial' | 'unavailable';
+  recordsRead?: number;
+  invalidRecords?: number;
+  skippedRecords?: number;
+  readErrors?: number;
+  ignoredPartialTailBytes?: number;
   windowStartedAt: string;
   windowEndedAt: string;
   runs: number;

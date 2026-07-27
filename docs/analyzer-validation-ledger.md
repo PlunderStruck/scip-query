@@ -506,3 +506,11 @@ still overriding it with the content-aware version. And the report described a
 single-import edge as "incidental rather than load-bearing" — the graph
 establishes edge breadth, not importance, so it now reports the measurement and
 says explicitly that breadth alone settles nothing.
+
+## 2026-07-26 Diff-Gate Progress Follow-Up
+
+The change-time gate and check-list citations remain accurate. Progress
+instrumentation does not add, remove, or reorder any `DIFF_GATE_CHECKS` entry:
+`diffGate()` emits process-local start and completion notifications around
+each check, while isolated CLI execution turns those notifications into
+diagnostic progress and active-detector timeout evidence.

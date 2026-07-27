@@ -105,6 +105,15 @@ parent terminates and reaps that child before releasing the lease. An operator
 may set `SCIP_QUERY_DIFF_GATE_TIMEOUT_MS` to a positive millisecond value; the
 runtime caps it at 10 minutes.
 
+The parent creates a unique, private progress path and one-run token while it
+owns the lease. The child visibility-atomically records the current gate phase
+and detector immediately before and after each detector. A timed-out parent
+accepts only the record carrying its token, reports the active detector or
+phase plus the last completed detector, and removes the record before releasing
+the lease. The progress record is diagnostic evidence, not authority: failure
+to write it cannot turn a passing gate into a failure, and a stale or malformed
+record cannot alter the gate result.
+
 Outcome reconciliation rechecks at most one historical comparison base per
 gate. Deferred bases remain open and the result reports their exact base and
 finding counts, so accumulated event history cannot silently multiply one

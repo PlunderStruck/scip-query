@@ -201,6 +201,15 @@ function validReindexActivitySummary(value: unknown): value is ReindexActivitySu
   if (!value || typeof value !== 'object') return false;
   const summary = value as Partial<ReindexActivitySummary>;
   if (
+    (summary.confidence !== undefined &&
+      summary.confidence !== 'complete' &&
+      summary.confidence !== 'partial' &&
+      summary.confidence !== 'unavailable') ||
+    (summary.recordsRead !== undefined && !isNonNegativeInteger(summary.recordsRead)) ||
+    (summary.invalidRecords !== undefined && !isNonNegativeInteger(summary.invalidRecords)) ||
+    (summary.skippedRecords !== undefined && !isNonNegativeInteger(summary.skippedRecords)) ||
+    (summary.readErrors !== undefined && !isNonNegativeInteger(summary.readErrors)) ||
+    (summary.ignoredPartialTailBytes !== undefined && !isNonNegativeInteger(summary.ignoredPartialTailBytes)) ||
     !isValidWatchServiceTimestamp(summary.windowStartedAt) ||
     !isValidWatchServiceTimestamp(summary.windowEndedAt) ||
     !isNonNegativeInteger(summary.runs) ||

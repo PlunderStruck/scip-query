@@ -354,7 +354,10 @@ export function printJsonEnvelope(
 ): void {
   const evidence = commandEvidenceById.get(command);
   const contract = commandAgentContractById.get(command);
-  const coverage = extra.coverage ?? defaultInvocationCoverage(contract, result, extra.analysisBudget);
+  const resolution = invocationResolutionCoverage(result);
+  const baseCoverage = extra.coverage ?? defaultInvocationCoverage(contract, result, extra.analysisBudget);
+  const coverage =
+    baseCoverage && resolution && !baseCoverage.resolution ? { ...baseCoverage, resolution } : baseCoverage;
   if (coverage) validateInvocationCoverage(coverage);
   const envelope = createCliJsonEnvelope({
     producerVersion: cliVersion,
@@ -392,6 +395,20 @@ export function validateInvocationCoverage(coverage: InvocationCoverage): void {
   if (coverage.omittedIdentities && coverage.omittedIdentities.length !== coverage.omitted) {
     throw new Error('Omitted identity count must equal the disclosed omitted count.');
   }
+  if (coverage.resolution) {
+    if (!Number.isSafeInteger(coverage.resolution.totalCandidates) || coverage.resolution.totalCandidates < 0) {
+      throw new Error('Invocation resolution candidate count must be a non-negative safe integer.');
+    }
+    if (coverage.resolution.state === 'exact' && coverage.resolution.totalCandidates !== 1) {
+      throw new Error('Exact invocation resolution must name exactly one candidate.');
+    }
+    if (coverage.resolution.state === 'missing' && coverage.resolution.totalCandidates !== 0) {
+      throw new Error('Missing invocation resolution cannot name candidates.');
+    }
+    if (coverage.resolution.state === 'ambiguous' && coverage.resolution.totalCandidates < 2) {
+      throw new Error('Ambiguous invocation resolution must name at least two candidates.');
+    }
+  }
 }
 
 function defaultInvocationCoverage(
@@ -400,7 +417,7 @@ function defaultInvocationCoverage(
   analysisBudget: AnalysisBudgetDisclosure | undefined,
 ): InvocationCoverage | undefined {
   if (!contract) return undefined;
-  const returned = countReturnedUnits(result);
+  const returned = countReturnedUnits(contract, result);
   if (contract.coverage === 'complete') {
     return { complete: true, totalKnown: true, returned, total: returned, omitted: 0 };
   }
@@ -413,14 +430,25 @@ function defaultInvocationCoverage(
   return { complete: null, totalKnown: false, returned };
 }
 
-function countReturnedUnits(result: unknown): number {
-  if (Array.isArray(result)) return result.length;
-  if (!result || typeof result !== 'object') return result === undefined || result === null ? 0 : 1;
+function countReturnedUnits(contract: CommandAgentContract, result: unknown): number {
+  const policy = contract.resultUnits ?? { kind: 'report' as const };
+  if (policy.kind === 'rows') return Array.isArray(result) ? result.length : 0;
+  if (policy.kind === 'field') {
+    if (!result || typeof result !== 'object') return 0;
+    const value = (result as Record<string, unknown>)[policy.field];
+    return Array.isArray(value) ? value.length : value === undefined || value === null ? 0 : 1;
+  }
+  return result === undefined || result === null ? 0 : 1;
+}
+
+function invocationResolutionCoverage(result: unknown): NonNullable<InvocationCoverage['resolution']> | undefined {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return undefined;
   const record = result as Record<string, unknown>;
-  if (Array.isArray(record['rows'])) return record['rows'].length;
-  const topLevelArrays = Object.values(record).filter(Array.isArray);
-  if (topLevelArrays.length > 0) return topLevelArrays.reduce((sum, rows) => sum + rows.length, 0);
-  return 1;
+  if (record['matched'] === false) return { state: 'missing', totalCandidates: 0 };
+  if (record['matched'] !== true || !Number.isSafeInteger(record['totalMatches'])) return undefined;
+  const totalCandidates = record['totalMatches'] as number;
+  if (totalCandidates <= 0) return { state: 'missing', totalCandidates: 0 };
+  return totalCandidates === 1 ? { state: 'exact', totalCandidates } : { state: 'ambiguous', totalCandidates };
 }
 
 function jsonPositionals(args: readonly unknown[]): readonly unknown[] {

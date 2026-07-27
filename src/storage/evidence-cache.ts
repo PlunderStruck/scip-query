@@ -88,6 +88,7 @@ interface SharedEvidenceConnection {
   evidence: Database.Database;
   readFileEvidence: Database.Statement;
   writeFileEvidence: Database.Statement;
+  touchFileEvidence: Database.Statement;
 }
 
 export const SHARED_FILE_EVIDENCE_KINDS = [
@@ -100,6 +101,7 @@ export const SHARED_FILE_EVIDENCE_KINDS = [
 const SHARED_FILE_EVIDENCE_KIND_SET = new Set<FileEvidenceKind>(SHARED_FILE_EVIDENCE_KINDS);
 export const DEFAULT_SHARED_EVIDENCE_MAX_ROWS = 250_000;
 export const DEFAULT_SHARED_EVIDENCE_BUDGET_BYTES = 512 * 1024 * 1024;
+export const SHARED_EVIDENCE_ACCESS_TOUCH_INTERVAL_MS = 60_000;
 
 /** Ledger rows are ids + timestamps only — no finding content, no prompt text. */
 export interface FindingOutcomeRow {
@@ -423,6 +425,8 @@ function openSharedEvidenceConnection(path: string | undefined): SharedEvidenceC
         last_accessed_at INTEGER NOT NULL,
         PRIMARY KEY (kind, relative_path, content_hash, version)
       );
+      CREATE INDEX IF NOT EXISTS idx_file_evidence_lru
+        ON file_evidence(last_accessed_at, kind, relative_path, content_hash, version);
     `);
     return {
       evidence,
@@ -434,6 +438,12 @@ function openSharedEvidenceConnection(path: string | undefined): SharedEvidenceC
          VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(kind, relative_path, content_hash, version)
          DO UPDATE SET payload = excluded.payload, last_accessed_at = excluded.last_accessed_at`,
+      ),
+      touchFileEvidence: evidence.prepare(
+        `UPDATE file_evidence
+         SET last_accessed_at = ?
+         WHERE kind = ? AND relative_path = ? AND content_hash = ? AND version = ?
+           AND last_accessed_at < ?`,
       ),
     };
   } catch (error) {
@@ -461,6 +471,10 @@ export function maintainSharedEvidenceCache(
   try {
     evidence = new Database(path);
     evidence.pragma('busy_timeout = 50');
+    evidence.exec(
+      `CREATE INDEX IF NOT EXISTS idx_file_evidence_lru
+       ON file_evidence(last_accessed_at, kind, relative_path, content_hash, version)`,
+    );
     evidence.pragma('wal_checkpoint(TRUNCATE)');
     const count = (evidence.prepare('SELECT COUNT(*) AS count FROM file_evidence').get() as { count: number }).count;
     const maxRows = opts.maxRows ?? DEFAULT_SHARED_EVIDENCE_MAX_ROWS;
@@ -516,6 +530,9 @@ export function readCachedFileEvidence(
       const shared = connection.shared.readFileEvidence.get(kind, relativePath, contentHash, VERSION) as
         | { payload: string }
         | undefined;
+      if (shared?.payload !== undefined) {
+        touchSharedFileEvidence(connection.shared, kind, relativePath, contentHash);
+      }
       return shared?.payload ?? null;
     } catch (error) {
       disableShared(connection, 'file_evidence read', error);
@@ -524,6 +541,29 @@ export function readCachedFileEvidence(
   } catch (error) {
     disable(db, 'file_evidence read', error);
     return null;
+  }
+}
+
+function touchSharedFileEvidence(
+  shared: SharedEvidenceConnection,
+  kind: FileEvidenceKind,
+  relativePath: string,
+  contentHash: string,
+): void {
+  const now = Date.now();
+  try {
+    shared.touchFileEvidence.run(
+      now,
+      kind,
+      relativePath,
+      contentHash,
+      VERSION,
+      now - SHARED_EVIDENCE_ACCESS_TOUCH_INTERVAL_MS,
+    );
+  } catch (error) {
+    // Recency is eviction metadata. A failed best-effort touch must not turn
+    // valid content-addressed evidence into a cache miss.
+    debugLog('shared file_evidence recency touch skipped', error);
   }
 }
 

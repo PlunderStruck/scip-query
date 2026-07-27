@@ -158,6 +158,19 @@ at most 64 removals or reclaims. Those caps are what let the watch and Rust
 server loops regain control to update heartbeats, observe stop signals, and
 run unrelated maintenance even when a mailbox was flooded.
 
+The TypeScript watch service initializes its two mailbox layouts once after
+acquiring service ownership. An empty poll reads the already-established
+directories; it does not recreate or chmod the full layout. Consecutive empty
+polls back off from 50 ms through 100 ms and 200 ms to a 250 ms ceiling. A poll
+that processes work returns to a 10 ms drain interval. The Rust service uses
+the same 10–250 ms adaptive range.
+
+Deadline authority is re-evaluated per claimed request. A service reads its
+clock immediately before starting each handler and again after the handler
+returns. Therefore a request that expires while an earlier request runs is
+rejected before execution, and an answer completed after its authoritative
+deadline is not published as success.
+
 Maintenance:
 
 - reclaims expired inflight ownership only after the recorded process instance

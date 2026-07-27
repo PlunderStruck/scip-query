@@ -250,6 +250,43 @@ describe('TypeScript index service mailbox', () => {
     expect(readdirSync(paths.pendingDir).filter((entry) => entry.endsWith('.json'))).toHaveLength(2);
   });
 
+  test('rechecks each deadline so later batch work cannot execute after earlier work advances time', () => {
+    const availability = loadTypeScriptDocumentRuntime();
+    expect(availability.available).toBe(true);
+    if (!availability.available) return;
+    const fixture = serviceFixture();
+    const paths = typeScriptIndexMailboxPaths(fixture.cacheDir);
+    const host = new TypeScriptIndexServiceHost({
+      projectRoot: fixture.projectRoot,
+      currentGeneration: () => 'base',
+      now: () => NOW,
+    });
+    initializeTypeScriptIndexMailbox(paths);
+    writeRequest(paths.requestDir, 'first', 'base', indexRequest(availability.producerIdentity));
+    writeRequest(paths.requestDir, 'second', 'base', indexRequest(availability.producerIdentity));
+    let currentTime = NOW;
+    let started = 0;
+
+    expect(
+      processTypeScriptIndexMailbox(paths, host, {
+        now: () => currentTime,
+        beforeRequest: () => {
+          started += 1;
+          currentTime = NOW + 2_000;
+        },
+      }),
+    ).toBe(2);
+
+    expect(started).toBe(1);
+    expect(host.status().requests).toBe(1);
+    expect(readResponse(paths.responseDir, 'first')).toEqual(
+      expect.objectContaining({ ok: false, error: expect.stringContaining('expired while') }),
+    );
+    expect(readResponse(paths.responseDir, 'second')).toEqual(
+      expect.objectContaining({ ok: false, error: expect.stringContaining('expired before') }),
+    );
+  });
+
   test('parses only complete versioned requests', () => {
     const request = indexRequest('producer');
     const operationKey = boundedMailboxOperationKey('typescript-index-v3', {

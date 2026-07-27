@@ -58,10 +58,17 @@ mailbox-response, and release records use their own durable protocols.
 
 Lock timeout and ownership-changed release are typed failures at the shared
 helper boundary. The reindex-activity and affected-shadow production writers
-remain best effort: they catch telemetry failure so an observation cannot
-change the authoritative reindex result. Callers that invoke the shared helper
-directly can distinguish lock timeout, count repaired tail bytes, and count
-partial bytes ignored during reads.
+remain best effort: telemetry failure cannot change the authoritative reindex
+result. A reindex-activity writer returns either `recorded` or `failed` with a
+reason; reindex, foreground watch, and daemon watch surface that failure as a
+warning or watch-state error rather than silently losing the observation.
+
+A retained-set summary carries an activity-confidence state. `complete` means
+every selected non-empty record decoded; `partial` means a valid subset was
+used while exact invalid/skipped/read-error or incomplete-tail counts are
+reported; `unavailable` means no reliable summary could be formed. The summary
+also exposes records read and ignored partial-tail bytes, so consumers can
+distinguish zero activity from missing evidence.
 
 The regression suite forces:
 

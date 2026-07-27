@@ -55,7 +55,7 @@ describe('loadProjectConfig', () => {
     expect(resolveWatchConfig({})).toMatchObject({
       enabled: false,
       debounceMs: 250,
-      cooldownMs: 0,
+      cooldownMs: 5_000,
       gitPollMs: 2_000,
       idleTimeoutMs: 600_000,
       autoRefresh: true,

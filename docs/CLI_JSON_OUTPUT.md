@@ -112,6 +112,15 @@ A completely retrieved page can therefore still contain a bounded or sampled
 analysis. Use the result envelope's stated `--full` remediation when present,
 then follow output continuation commands until complete.
 
+Invocation coverage counts the semantic result units declared by the command
+descriptor. A list command counts top-level rows; a report counts one report;
+and a command with a named result field counts only that field. Unrelated
+diagnostic arrays do not inflate `returned`. Symbol-selecting commands also
+report a separate `coverage.resolution` state—`exact`, `ambiguous`, or
+`missing` with its candidate count—because resolving one requested identity
+and enumerating that identity's result rows are different completeness
+questions.
+
 The machine-readable page schema is
 [`schemas/cli-output-page.schema.json`](schemas/cli-output-page.schema.json).
 Page sizes range from 256 through 100,000 characters and cursors are limited

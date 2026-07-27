@@ -188,6 +188,7 @@ function planContextAgentResult(result: queries.PlanContextResult) {
       ? {
           file: result.changeSurface.file,
           totalExternalConsumers: result.changeSurface.totalExternalConsumers,
+          fileRisk: result.changeSurface.fileRisk,
           riskCounts: {
             high: result.changeSurface.symbols.filter((symbol) => symbol.riskLevel === 'high').length,
             medium: result.changeSurface.symbols.filter((symbol) => symbol.riskLevel === 'medium').length,
@@ -296,11 +297,23 @@ function riskRows(result: queries.PlanContextResult, limit: number): string[] {
   if (result.changeSurface) {
     rows.push(`  File: ${result.changeSurface.file}`);
     rows.push(`  External consumers: ${result.changeSurface.totalExternalConsumers}`);
+    if (result.changeSurface.fileRisk && result.changeSurface.fileRisk.reasons.length > 0) {
+      rows.push(
+        `  File risk factors (${result.changeSurface.fileRisk.coverage} metadata): ${result.changeSurface.fileRisk.reasons
+          .map((reason) => `${reason.kind}: ${reason.detail}`)
+          .join('; ')}`,
+      );
+    }
     rows.push(
       ...result.changeSurface.symbols.map((symbol) => {
         const risk =
           symbol.riskLevel === 'high' ? ' *** HIGH RISK ***' : symbol.riskLevel === 'medium' ? ' * medium risk *' : '';
-        return `  ${displayRange(symbol.startLine, symbol.endLine)}  ${symbol.shortName}  [${symbol.externalConsumers} consumers]${risk}`;
+        const riskReasons = symbol.riskReasons ?? [];
+        const reasons =
+          riskReasons.length === 0
+            ? ''
+            : `  [why: ${riskReasons.map((reason) => `${reason.kind}: ${reason.detail}`).join('; ')}]`;
+        return `  ${displayRange(symbol.startLine, symbol.endLine)}  ${symbol.shortName}  [${symbol.externalConsumers} consumers]${risk}${reasons}`;
       }),
     );
   }
@@ -347,6 +360,11 @@ function planningNoteRows(result: queries.PlanContextResult): string[] {
   const highRiskSymbols = result.changeSurface?.symbols.filter((symbol) => symbol.riskLevel === 'high') ?? [];
   if (highRiskSymbols.length > 0) {
     rows.push('  Inspect high-risk consumers before editing public behavior.');
+  }
+  if (result.changeSurface?.fileRisk?.operationalRoot) {
+    rows.push(
+      '  This file is an operational root; validate its launch and shutdown path even when source fan-in is zero.',
+    );
   }
   if (result.affected.length > 0) {
     rows.push('  Validate downstream consumers at the shallowest affected depths first.');

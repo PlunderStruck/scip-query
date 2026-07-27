@@ -390,7 +390,7 @@
         "symbols-graph"
       ],
       "source": ["domain", "platform", "storage"],
-      "storage": ["domain", "filesystem", "instrumentation"],
+      "storage": ["domain", "filesystem", "instrumentation", "platform"],
       "symbols-core": ["domain", "source", "storage"],
       "symbols-graph": ["domain", "instrumentation", "source", "storage", "symbols-core", "symbols-references"],
       "symbols-references": ["domain", "instrumentation", "source", "storage", "symbols-core"],

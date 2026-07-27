@@ -77,7 +77,7 @@ describe('incremental SQLite publication', () => {
     createDatabase(drift.previous, populatePrevious);
     createDatabase(drift.mini, populateMini);
     const driftDb = new Database(drift.mini);
-    driftDb.exec('DROP INDEX idx_chunks_doc_id');
+    driftDb.exec('DROP INDEX idx_chunks_line_range');
     driftDb.close();
     expect(() =>
       patchIncrementalSqliteGeneration({
@@ -86,7 +86,7 @@ describe('incremental SQLite publication', () => {
         candidateDbPath: drift.candidate,
         affectedFiles: ['src/a.ts'],
       }),
-    ).toThrow('schema changed for index idx_chunks_doc_id');
+    ).toThrow('schema changed for index idx_chunks_line_range');
     expect(existsSync(drift.candidate)).toBe(false);
 
     const corrupt = fixturePaths();
