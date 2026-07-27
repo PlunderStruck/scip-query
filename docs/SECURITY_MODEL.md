@@ -76,20 +76,26 @@ Every command accepts:
 ```
 
 The opaque cursor binds the command, working directory, non-pagination
-arguments, next character offset, private output snapshot, and complete output
-hash. The first invocation streams the output to current-user temporary
-storage with private permissions while retaining only one page in memory.
-Continuations read that immutable snapshot instead of re-running a command
-whose timestamps or durations may change. Snapshots expire after one hour and
-are removed after the final page; an unavailable snapshot produces the exact
-page-one restart command.
+arguments, immutable page number and size, private output snapshot, and
+complete output hash. The first invocation records UTF-8 byte ranges and a
+hash for each page while retaining only one page in memory. A continuation
+reads and verifies only its own range instead of re-running the command or
+rescanning the complete output.
 
-Continue until `page.complete` is `true`. Do not pipe output through `head`,
-`tail`, or a line-range `sed`; those programs discard data without creating a
-resumable position. Every incomplete JSON page repeats this obligation in
-`agentInstruction`; an incomplete page must not support a conclusion or
-completion claim. See [CLI JSON output](CLI_JSON_OUTPUT.md) and the
-[output-page schema](schemas/cli-output-page.schema.json).
+One snapshot is limited to 32 million rendered characters, 64 MiB, and 32,768
+pages. The current user's snapshot pool is limited to 32 snapshots and 256 MiB
+under a process-identity-aware lock. Abandoned writers are reclaimed without
+removing a live writer; complete snapshots expire after one hour and are
+removed after their final page.
+
+Run commands normally without selecting a page size. If human output is
+oversized, the readable multiline page prints one `Continue exactly:` command;
+run it unchanged until the output-complete marker. Explicit paged `--json`
+returns the versioned object envelope and must be followed until
+`page.complete` is `true`. Do not pipe output through `head`, `tail`, or a
+line-range `sed`; those programs discard data without creating a resumable
+position. See [CLI JSON output](CLI_JSON_OUTPUT.md) and the [output-page
+schema](schemas/cli-output-page.schema.json).
 
 ## Diff-gate process containment
 

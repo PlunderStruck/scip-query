@@ -412,10 +412,11 @@ Implemented end to end:
 - human blind truncation is blocked by the Claude hook for every pageable
   command, and generated agent instructions require following the emitted
   continuation until complete;
-- transport pagination deliberately has no arbitrary total-output ceiling.
-  Memory remains bounded to one page, transient disk snapshots expire after
-  one hour, and command-owned logical result budgets and coverage metadata
-  remain the CPU/row authority.
+- transport pagination now has explicit per-snapshot and aggregate ceilings.
+  Memory remains bounded to one page, immutable page ranges make continuation
+  I/O linear, transient disk snapshots expire after one hour, and
+  command-owned logical result budgets and coverage metadata remain the
+  CPU/row authority.
 
 The final documentation lives in `docs/SECURITY_MODEL.md` and
 `docs/CLI_JSON_OUTPUT.md`. SEC-01 through SEC-12 have explicit final

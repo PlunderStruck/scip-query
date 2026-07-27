@@ -11,14 +11,22 @@ import {
   renameSync,
   rmSync,
   statSync,
-  writeFileSync,
   writeSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
+import {
+  parseProcessIdentity,
+  readProcessIdentity,
+  sameProcessIdentity,
+  type ProcessIdentity,
+} from '../platform/process-identity.js';
+import { isProcessAlive } from '../platform/process-liveness.js';
+import { tryAcquireProcessFileLock } from '../platform/process-file-lock.js';
 import { sanitizeTerminalLine } from '../platform/terminal-output.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
+import { writeJsonAtomic } from '../storage/atomic-json.js';
 import { encodeCursorPayload } from './cursor-codec.js';
 
 export const CLI_OUTPUT_PAGE_KIND = 'scip-query-output-page' as const;
@@ -27,22 +35,42 @@ export const DEFAULT_OUTPUT_PAGE_SIZE = 12_000;
 export const MIN_OUTPUT_PAGE_SIZE = 256;
 export const MAX_OUTPUT_PAGE_SIZE = 100_000;
 export const MAX_OUTPUT_CURSOR_LENGTH = 4_096;
-export const MAX_TRACKED_OUTPUT_CHARACTERS = Number.MAX_SAFE_INTEGER;
+export const MAX_TRACKED_OUTPUT_CHARACTERS = 32_000_000;
+export const MAX_OUTPUT_SNAPSHOT_BYTES = 64 * 1024 * 1024;
+export const MAX_OUTPUT_SNAPSHOT_AGGREGATE_BYTES = 256 * 1024 * 1024;
+export const MAX_OUTPUT_SNAPSHOT_COUNT = 32;
+export const MAX_OUTPUT_SNAPSHOT_PAGES = 32_768;
 export const OUTPUT_SNAPSHOT_TTL_MS = 60 * 60 * 1_000;
 
-const OUTPUT_SNAPSHOT_VERSION = 1;
+const OUTPUT_SNAPSHOT_VERSION = 2;
 const OUTPUT_SNAPSHOT_ROOT = join(
   tmpdir(),
   `scip-query-output-pages-${typeof process.getuid === 'function' ? process.getuid() : 'user'}`,
 );
 const OUTPUT_SNAPSHOT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+const OUTPUT_RESERVATION_VERSION = 1;
+const OUTPUT_QUOTA_LOCK_NAME = 'quota.lock';
+const OUTPUT_QUOTA_LOCK_WAIT_MS = 2_000;
+const OUTPUT_QUOTA_LOCK_RETRY_MS = 5;
+const OUTPUT_RESERVATION_CHUNK_BYTES = 1024 * 1024;
+const OUTPUT_QUOTA_WAIT_BUFFER = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
+let outputProcessIdentity: ProcessIdentity | null | undefined;
 
 interface OutputCursorPayload {
-  version: 1;
+  version: 2;
   invocationHash: string;
-  offset: number;
+  pageIndex: number;
+  pageSize: number;
   outputHash: string;
   snapshotId: string;
+}
+
+interface OutputSnapshotPage {
+  characterOffset: number;
+  characterLength: number;
+  byteOffset: number;
+  byteLength: number;
+  hash: string;
 }
 
 interface OutputSnapshotMetadata {
@@ -50,10 +78,35 @@ interface OutputSnapshotMetadata {
   snapshotId: string;
   invocationHash: string;
   outputHash: string;
+  pageSize: number;
+  pages: OutputSnapshotPage[];
   totalCharacters: number;
   byteLength: number;
   createdAtMs: number;
 }
+
+interface OutputSnapshotReservation {
+  version: typeof OUTPUT_RESERVATION_VERSION;
+  snapshotId: string;
+  pid: number;
+  processIdentity?: ProcessIdentity;
+  reservedBytes: number;
+  state: 'active' | 'complete';
+  createdAtMs: number;
+  updatedAtMs: number;
+}
+
+export interface OutputSnapshotLimits {
+  maxSnapshotBytes: number;
+  maxAggregateBytes: number;
+  maxSnapshotCount: number;
+}
+
+const DEFAULT_OUTPUT_SNAPSHOT_LIMITS: OutputSnapshotLimits = Object.freeze({
+  maxSnapshotBytes: MAX_OUTPUT_SNAPSHOT_BYTES,
+  maxAggregateBytes: MAX_OUTPUT_SNAPSHOT_AGGREGATE_BYTES,
+  maxSnapshotCount: MAX_OUTPUT_SNAPSHOT_COUNT,
+});
 
 export interface CliOutputPageEnvelopeV1 {
   kind: typeof CLI_OUTPUT_PAGE_KIND;
@@ -88,6 +141,12 @@ export interface CliOutputPaginationOptions {
   pageSize?: number;
   cursor?: string;
   maxOutputCharacters?: number;
+  /** @internal deterministic quota tests and embedded runtimes. */
+  snapshotLimits?: Partial<OutputSnapshotLimits>;
+  /** @internal isolate snapshot state in tests and embedded runtimes. */
+  snapshotRoot?: string;
+  /** @internal observe continuation I/O without patching filesystem globals. */
+  onSnapshotRead?: (bytes: number) => void;
 }
 
 export interface CliOutputPaginationRuntime {
@@ -118,6 +177,13 @@ export async function runWithCliOutputPagination(
   runtime: CliOutputPaginationRuntime = defaultRuntime,
 ): Promise<void> {
   const pageSize = options.pageSize ?? DEFAULT_OUTPUT_PAGE_SIZE;
+  const snapshotRoot = options.snapshotRoot ?? OUTPUT_SNAPSHOT_ROOT;
+  const snapshotLimits = resolveOutputSnapshotLimits(options.snapshotLimits);
+  const requestedMaxOutputCharacters = options.maxOutputCharacters ?? MAX_TRACKED_OUTPUT_CHARACTERS;
+  if (!Number.isSafeInteger(requestedMaxOutputCharacters) || requestedMaxOutputCharacters <= 0) {
+    throw new Error('Output character safety limit must be a positive integer.');
+  }
+  const maxOutputCharacters = Math.min(requestedMaxOutputCharacters, MAX_TRACKED_OUTPUT_CHARACTERS);
   validatePageSize(pageSize);
   if (options.cursor !== undefined && options.cursor.length > MAX_OUTPUT_CURSOR_LENGTH) {
     throw new Error(
@@ -133,15 +199,23 @@ export async function runWithCliOutputPagination(
   const filteredArgv = withoutOutputPaginationArgs(options.argv);
   const invocationHash = hashInvocation(options.command, options.cwd, filteredArgv);
   const decodedCursor = options.cursor === undefined ? undefined : decodeOutputCursor(options.cursor, invocationHash);
-  const offset = decodedCursor?.offset ?? 0;
   let snapshotId = decodedCursor?.snapshotId;
-  let completed: { content: string; totalCharacters: number; outputHash: string };
+  let completed: {
+    content: string;
+    offset: number;
+    pageIndex: number;
+    pageCount: number;
+    totalCharacters: number;
+    outputHash: string;
+  };
   if (decodedCursor) {
     try {
       completed = captureOutputSnapshotPage(
         decodedCursor,
         pageSize,
-        options.maxOutputCharacters ?? MAX_TRACKED_OUTPUT_CHARACTERS,
+        maxOutputCharacters,
+        snapshotRoot,
+        options.onSnapshotRead,
       );
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
@@ -150,13 +224,14 @@ export async function runWithCliOutputPagination(
       });
     }
   } else {
-    const capture = new OutputPageCapture(
-      offset,
+    const snapshot = new OutputSnapshotWriter(
+      invocationHash,
       pageSize,
-      options.maxOutputCharacters ?? MAX_TRACKED_OUTPUT_CHARACTERS,
+      maxOutputCharacters,
+      snapshotRoot,
+      snapshotLimits,
     );
-    const snapshot = new OutputSnapshotWriter(invocationHash);
-    const restore = installStdoutCapture(capture, (bytes) => snapshot.write(bytes));
+    const restore = installStdoutCapture((bytes) => snapshot.write(bytes));
     let actionCompleted = false;
     try {
       await action();
@@ -165,42 +240,38 @@ export async function runWithCliOutputPagination(
       restore();
       if (!actionCompleted) snapshot.abort();
     }
-    completed = capture.finish();
-    if (completed.totalCharacters > pageSize) {
-      snapshotId = snapshot.complete({
-        outputHash: completed.outputHash,
-        totalCharacters: completed.totalCharacters,
-      });
-    } else {
+    let captured: ReturnType<OutputSnapshotWriter['complete']>;
+    try {
+      captured = snapshot.complete();
+    } catch (error) {
       snapshot.abort();
+      throw error;
     }
-  }
-  if (offset > completed.totalCharacters) {
-    throw new Error('Output cursor points past the current result. Run the command again without --output-cursor.');
-  }
-  if (decodedCursor && decodedCursor.outputHash !== completed.outputHash) {
-    throw new Error(
-      `Command output changed after this cursor was issued. Restart with: ${renderInitialPageCommand(
-        filteredArgv,
-        pageSize,
-      )}`,
-    );
+    snapshotId = captured.snapshotId;
+    completed = {
+      content: captured.content,
+      offset: 0,
+      pageIndex: 0,
+      pageCount: captured.pageCount,
+      totalCharacters: captured.totalCharacters,
+      outputHash: captured.outputHash,
+    };
   }
 
-  const nextOffset = offset + completed.content.length;
-  const complete = nextOffset >= completed.totalCharacters;
+  const nextOffset = completed.offset + completed.content.length;
+  const complete = completed.pageIndex + 1 >= completed.pageCount;
   const continuation = complete
     ? undefined
     : createContinuation({
         filteredArgv,
         invocationHash,
-        nextOffset,
+        nextPageIndex: completed.pageIndex + 1,
         outputHash: completed.outputHash,
         pageSize,
         snapshotId: requireSnapshotId(snapshotId),
       });
 
-  if (offset === 0 && complete && options.pageSize === undefined && options.cursor === undefined) {
+  if (completed.offset === 0 && complete && options.pageSize === undefined && options.cursor === undefined) {
     runtime.writeStdout(completed.content);
     return;
   }
@@ -215,7 +286,7 @@ export async function runWithCliOutputPagination(
       ? 'INCOMPLETE EVIDENCE: do not draw conclusions or report completion from this partial page. Run page.continuation.command exactly, then repeat until page.complete is true.'
       : "OUTPUT COMPLETE: all rendered characters have been retrieved. Evaluate the command result's own coverage separately.",
     page: {
-      offset,
+      offset: completed.offset,
       returnedCharacters: completed.content.length,
       totalCharacters: completed.totalCharacters,
       omittedCharacters: completed.totalCharacters - completed.content.length,
@@ -227,13 +298,13 @@ export async function runWithCliOutputPagination(
     content: completed.content,
   };
 
-  if (options.json || options.pageSize !== undefined || options.cursor !== undefined) {
-    runtime.writeStdout(`${JSON.stringify(envelope, null, options.json ? 0 : 2)}\n`);
-    if (complete && snapshotId) removeOutputSnapshot(snapshotId);
+  if (options.json) {
+    runtime.writeStdout(`${JSON.stringify(envelope)}\n`);
+    if (complete && snapshotId) removeOutputSnapshot(snapshotId, snapshotRoot);
     return;
   }
   runtime.writeStdout(renderHumanOutputPage(envelope));
-  if (complete && snapshotId) removeOutputSnapshot(snapshotId);
+  if (complete && snapshotId) removeOutputSnapshot(snapshotId, snapshotRoot);
 }
 
 export function parseOutputPageSize(value: string): number {
@@ -298,12 +369,11 @@ async function runJsonWithOversizeWarning(
   }
 }
 
-function installStdoutCapture(capture: OutputPageCapture, mirror?: (bytes: Buffer) => void): () => void {
+function installStdoutCapture(write: (bytes: Buffer) => void): () => void {
   const originalWrite = process.stdout.write;
   process.stdout.write = ((chunk: string | Uint8Array, encodingOrCallback?: unknown, callback?: unknown): boolean => {
     const bytes = outputChunkToBuffer(chunk, encodingOrCallback);
-    mirror?.(bytes);
-    capture.write(bytes, undefined);
+    write(bytes);
     invokeWriteCallback(encodingOrCallback, callback);
     return true;
   }) as typeof process.stdout.write;
@@ -367,38 +437,108 @@ class PrefixBuffer {
   }
 }
 
-class OutputPageCapture {
+class OutputSnapshotWriter {
+  readonly snapshotId: string;
+  private readonly temporaryPath: string;
   private readonly decoder = new StringDecoder('utf8');
   private readonly hash = createHash('sha256');
-  private content = '';
+  private readonly pages: OutputSnapshotPage[] = [];
+  private descriptor: number | null = null;
+  private pending = '';
+  private firstPageContent = '';
   private totalCharacters = 0;
+  private pageCharacterOffset = 0;
+  private byteLength = 0;
+  private reservedBytes = 0;
+  private opened = false;
   private finished = false;
 
   constructor(
-    private readonly offset: number,
+    private readonly invocationHash: string,
     private readonly pageSize: number,
     private readonly maxOutputCharacters: number,
-  ) {}
+    private readonly snapshotRoot: string,
+    private readonly limits: OutputSnapshotLimits,
+  ) {
+    ensureOutputSnapshotRoot(snapshotRoot);
+    this.snapshotId = randomUUID();
+    this.temporaryPath = outputSnapshotPath(snapshotRoot, this.snapshotId, 'tmp');
+  }
 
-  write(chunk: string | Uint8Array, encodingOrCallback: unknown): void {
-    if (this.finished) throw new Error('Output capture is already complete.');
-    const bytes =
-      typeof chunk === 'string'
-        ? Buffer.from(chunk, typeof encodingOrCallback === 'string' ? (encodingOrCallback as BufferEncoding) : 'utf8')
-        : Buffer.from(chunk);
-    this.hash.update(bytes);
+  write(bytes: Buffer): void {
+    if (this.finished) throw new Error('Output snapshot writer is closed.');
     this.appendDecoded(this.decoder.write(bytes));
   }
 
-  finish(): { content: string; totalCharacters: number; outputHash: string } {
-    if (this.finished) throw new Error('Output capture is already complete.');
+  complete(): {
+    content: string;
+    totalCharacters: number;
+    outputHash: string;
+    pageCount: number;
+    snapshotId?: string;
+  } {
+    if (this.finished) throw new Error('Output snapshot writer is closed.');
     this.appendDecoded(this.decoder.end());
     this.finished = true;
-    return {
-      content: this.content,
-      totalCharacters: this.totalCharacters,
-      outputHash: this.hash.digest('hex'),
-    };
+    if (!this.opened) {
+      const content = this.pending;
+      const bytes = Buffer.from(content);
+      this.assertWithinByteLimit(bytes.length);
+      this.hash.update(bytes);
+      this.pending = '';
+      return {
+        content,
+        totalCharacters: this.totalCharacters,
+        outputHash: this.hash.digest('hex'),
+        pageCount: 1,
+      };
+    }
+    if (this.pending.length > 0 || this.pages.length === 0) {
+      this.flushPage(this.pending);
+      this.pending = '';
+    }
+    if (this.descriptor === null) throw new Error('Output snapshot writer is not open.');
+    closeSync(this.descriptor);
+    this.descriptor = null;
+    const outputHash = this.hash.digest('hex');
+    const outputPath = outputSnapshotPath(this.snapshotRoot, this.snapshotId, 'output');
+    const metadataPath = outputSnapshotPath(this.snapshotRoot, this.snapshotId, 'json');
+    try {
+      renameSync(this.temporaryPath, outputPath);
+      const metadata: OutputSnapshotMetadata = {
+        version: OUTPUT_SNAPSHOT_VERSION,
+        snapshotId: this.snapshotId,
+        invocationHash: this.invocationHash,
+        outputHash,
+        pageSize: this.pageSize,
+        pages: this.pages,
+        totalCharacters: this.totalCharacters,
+        byteLength: this.byteLength,
+        createdAtMs: Date.now(),
+      };
+      writeJsonAtomic(metadataPath, metadata);
+      updateOutputReservation(this.snapshotRoot, this.snapshotId, this.byteLength, 'complete', this.limits);
+      this.reservedBytes = this.byteLength;
+      return {
+        content: this.firstPageContent,
+        totalCharacters: this.totalCharacters,
+        outputHash,
+        pageCount: this.pages.length,
+        snapshotId: this.snapshotId,
+      };
+    } catch (error) {
+      removeOutputSnapshot(this.snapshotId, this.snapshotRoot);
+      throw error;
+    }
+  }
+
+  abort(): void {
+    if (this.descriptor !== null) {
+      closeSync(this.descriptor);
+      this.descriptor = null;
+    }
+    this.finished = true;
+    removeOutputSnapshot(this.snapshotId, this.snapshotRoot);
   }
 
   private appendDecoded(value: string): void {
@@ -409,80 +549,75 @@ class OutputPageCapture {
         `Command output exceeds the ${this.maxOutputCharacters}-character safety limit. Narrow the query before retrying.`,
       );
     }
-    const pageEnd = this.offset + this.pageSize;
-    const overlapStart = Math.max(this.offset, this.totalCharacters);
-    const overlapEnd = Math.min(pageEnd, nextTotal);
-    if (overlapStart < overlapEnd) {
-      const localStart = overlapStart - this.totalCharacters;
-      let localEnd = overlapEnd - this.totalCharacters;
-      if (isHighSurrogate(value.charCodeAt(localEnd - 1))) localEnd -= 1;
-      this.content += value.slice(localStart, localEnd);
-    }
     this.totalCharacters = nextTotal;
-  }
-}
-
-class OutputSnapshotWriter {
-  readonly snapshotId: string;
-  private readonly temporaryPath: string;
-  private descriptor: number | null;
-  private byteLength = 0;
-
-  constructor(private readonly invocationHash: string) {
-    ensureOutputSnapshotRoot();
-    pruneExpiredOutputSnapshots();
-    this.snapshotId = randomUUID();
-    this.temporaryPath = outputSnapshotPath(this.snapshotId, 'tmp');
-    this.descriptor = openSync(this.temporaryPath, 'wx', 0o600);
+    this.pending += value;
+    this.assertWithinByteLimit(this.byteLength + Buffer.byteLength(this.pending));
+    while (this.pending.length > this.pageSize) {
+      this.open();
+      let pageEnd = this.pageSize;
+      if (isHighSurrogate(this.pending.charCodeAt(pageEnd - 1))) pageEnd -= 1;
+      const page = this.pending.slice(0, pageEnd);
+      this.pending = this.pending.slice(pageEnd);
+      this.flushPage(page);
+    }
   }
 
-  write(bytes: Buffer): void {
-    if (this.descriptor === null) throw new Error('Output snapshot writer is closed.');
+  private open(): void {
+    if (this.opened) return;
+    reserveOutputSnapshot(this.snapshotRoot, this.snapshotId, 0, this.limits);
+    try {
+      this.descriptor = openSync(this.temporaryPath, 'wx', 0o600);
+      this.opened = true;
+    } catch (error) {
+      releaseOutputReservation(this.snapshotRoot, this.snapshotId);
+      throw error;
+    }
+  }
+
+  private flushPage(content: string): void {
+    if (this.descriptor === null) throw new Error('Output snapshot writer is not open.');
+    if (this.pages.length >= MAX_OUTPUT_SNAPSHOT_PAGES) {
+      throw new Error(
+        `Command output requires more than ${MAX_OUTPUT_SNAPSHOT_PAGES} snapshot pages. Retry with a larger --output-page-size or narrow the query.`,
+      );
+    }
+    const bytes = Buffer.from(content);
+    const nextByteLength = this.byteLength + bytes.length;
+    this.assertWithinByteLimit(nextByteLength);
+    if (nextByteLength > this.reservedBytes) {
+      const nextReservation = Math.min(
+        this.limits.maxSnapshotBytes,
+        Math.ceil(nextByteLength / OUTPUT_RESERVATION_CHUNK_BYTES) * OUTPUT_RESERVATION_CHUNK_BYTES,
+      );
+      updateOutputReservation(this.snapshotRoot, this.snapshotId, nextReservation, 'active', this.limits);
+      this.reservedBytes = nextReservation;
+    }
     let offset = 0;
     while (offset < bytes.length) {
       const written = writeSync(this.descriptor, bytes, offset, bytes.length - offset);
       if (written <= 0) throw new Error('Output snapshot write made no progress.');
       offset += written;
     }
-    this.byteLength += bytes.length;
-    if (!Number.isSafeInteger(this.byteLength)) throw new Error('Output snapshot exceeds the safe byte counter.');
+    const page: OutputSnapshotPage = {
+      characterOffset: this.pageCharacterOffset,
+      characterLength: content.length,
+      byteOffset: this.byteLength,
+      byteLength: bytes.length,
+      hash: createHash('sha256').update(bytes).digest('hex'),
+    };
+    if (this.pages.length === 0) this.firstPageContent = content;
+    this.pages.push(page);
+    this.hash.update(bytes);
+    this.pageCharacterOffset += content.length;
+    this.byteLength = nextByteLength;
   }
 
-  complete(result: { outputHash: string; totalCharacters: number }): string {
-    if (this.descriptor === null) throw new Error('Output snapshot writer is closed.');
-    closeSync(this.descriptor);
-    this.descriptor = null;
-    const outputPath = outputSnapshotPath(this.snapshotId, 'output');
-    const metadataPath = outputSnapshotPath(this.snapshotId, 'json');
-    const metadataTemporaryPath = outputSnapshotPath(this.snapshotId, 'meta.tmp');
-    try {
-      renameSync(this.temporaryPath, outputPath);
-      const metadata: OutputSnapshotMetadata = {
-        version: OUTPUT_SNAPSHOT_VERSION,
-        snapshotId: this.snapshotId,
-        invocationHash: this.invocationHash,
-        outputHash: result.outputHash,
-        totalCharacters: result.totalCharacters,
-        byteLength: this.byteLength,
-        createdAtMs: Date.now(),
-      };
-      writeFileSync(metadataTemporaryPath, JSON.stringify(metadata), { flag: 'wx', mode: 0o600 });
-      renameSync(metadataTemporaryPath, metadataPath);
-      return this.snapshotId;
-    } catch (error) {
-      rmSync(outputPath, { force: true });
-      rmSync(metadataPath, { force: true });
-      rmSync(metadataTemporaryPath, { force: true });
-      throw error;
+  private assertWithinByteLimit(bytes: number): void {
+    if (!Number.isSafeInteger(bytes) || bytes > this.limits.maxSnapshotBytes) {
+      throw new Error(
+        `Command output exceeds the ${this.limits.maxSnapshotBytes}-byte snapshot limit. Narrow the query before retrying.`,
+      );
     }
-  }
-
-  abort(): void {
-    if (this.descriptor !== null) {
-      closeSync(this.descriptor);
-      this.descriptor = null;
-    }
-    rmSync(this.temporaryPath, { force: true });
   }
 }
 
@@ -490,9 +625,18 @@ function captureOutputSnapshotPage(
   cursor: OutputCursorPayload,
   pageSize: number,
   maxOutputCharacters: number,
-): { content: string; totalCharacters: number; outputHash: string } {
-  ensureOutputSnapshotRoot();
-  const metadata = readOutputSnapshotMetadata(cursor.snapshotId);
+  snapshotRoot: string,
+  onRead?: (bytes: number) => void,
+): {
+  content: string;
+  offset: number;
+  pageIndex: number;
+  pageCount: number;
+  totalCharacters: number;
+  outputHash: string;
+} {
+  ensureOutputSnapshotRoot(snapshotRoot);
+  const metadata = readOutputSnapshotMetadata(cursor.snapshotId, snapshotRoot);
   if (
     metadata.invocationHash !== cursor.invocationHash ||
     metadata.outputHash !== cursor.outputHash ||
@@ -500,54 +644,71 @@ function captureOutputSnapshotPage(
   ) {
     throw new Error('Output snapshot identity does not match this cursor.');
   }
+  if (cursor.pageSize !== pageSize || metadata.pageSize !== pageSize) {
+    throw new Error(`Output page size changed after this cursor was issued; use ${metadata.pageSize}.`);
+  }
+  const page = metadata.pages[cursor.pageIndex];
+  if (!page) throw new Error('Output cursor points past the current result.');
+  if (metadata.totalCharacters > maxOutputCharacters) {
+    throw new Error(`Output snapshot exceeds the ${maxOutputCharacters}-character safety limit.`);
+  }
   if (Date.now() - metadata.createdAtMs > OUTPUT_SNAPSHOT_TTL_MS) {
-    removeOutputSnapshot(cursor.snapshotId);
+    removeOutputSnapshot(cursor.snapshotId, snapshotRoot);
     throw new Error('Output snapshot expired before all pages were read.');
   }
 
-  const path = outputSnapshotPath(cursor.snapshotId, 'output');
+  const path = outputSnapshotPath(snapshotRoot, cursor.snapshotId, 'output');
   const descriptor = openSync(path, 'r');
   try {
     const before = fstatSync(descriptor);
     if (!before.isFile() || before.size !== metadata.byteLength) {
       throw new Error('Output snapshot size or type changed.');
     }
-    const capture = new OutputPageCapture(cursor.offset, pageSize, maxOutputCharacters);
-    const buffer = Buffer.allocUnsafe(1024 * 1024);
-    let position = 0;
-    while (position < before.size) {
-      const bytesRead = readSync(descriptor, buffer, 0, Math.min(buffer.length, before.size - position), position);
-      if (bytesRead === 0) break;
-      capture.write(buffer.subarray(0, bytesRead), undefined);
-      position += bytesRead;
+    const bytes = Buffer.allocUnsafe(page.byteLength);
+    let bytesRead = 0;
+    while (bytesRead < bytes.length) {
+      const count = readSync(descriptor, bytes, bytesRead, bytes.length - bytesRead, page.byteOffset + bytesRead);
+      if (count === 0) break;
+      bytesRead += count;
+      onRead?.(count);
     }
     const after = fstatSync(descriptor);
     if (
       after.dev !== before.dev ||
       after.ino !== before.ino ||
       after.size !== before.size ||
-      position !== before.size
+      bytesRead !== page.byteLength
     ) {
       throw new Error('Output snapshot changed while it was being read.');
     }
-    const completed = capture.finish();
-    if (completed.outputHash !== metadata.outputHash || completed.totalCharacters !== metadata.totalCharacters) {
-      throw new Error('Output snapshot content no longer matches its metadata.');
+    if (createHash('sha256').update(bytes).digest('hex') !== page.hash) {
+      throw new Error('Output snapshot page no longer matches its metadata.');
     }
-    return completed;
+    const content = bytes.toString('utf8');
+    if (content.length !== page.characterLength) throw new Error('Output snapshot page character count changed.');
+    return {
+      content,
+      offset: page.characterOffset,
+      pageIndex: cursor.pageIndex,
+      pageCount: metadata.pages.length,
+      totalCharacters: metadata.totalCharacters,
+      outputHash: metadata.outputHash,
+    };
   } catch (error) {
-    removeOutputSnapshot(cursor.snapshotId);
+    removeOutputSnapshot(cursor.snapshotId, snapshotRoot);
     throw error;
   } finally {
     closeSync(descriptor);
   }
 }
 
-function readOutputSnapshotMetadata(snapshotId: string): OutputSnapshotMetadata {
+function readOutputSnapshotMetadata(snapshotId: string, snapshotRoot: string): OutputSnapshotMetadata {
   if (!OUTPUT_SNAPSHOT_ID.test(snapshotId)) throw new Error('Output snapshot identifier is invalid.');
   let parsed: unknown;
   try {
-    parsed = JSON.parse(readSmallArtifactText(outputSnapshotPath(snapshotId, 'json'), 'output snapshot metadata'));
+    parsed = JSON.parse(
+      readSmallArtifactText(outputSnapshotPath(snapshotRoot, snapshotId, 'json'), 'output snapshot metadata'),
+    );
   } catch (error) {
     throw new Error('Output snapshot is unavailable.', { cause: error });
   }
@@ -564,50 +725,275 @@ function isOutputSnapshotMetadata(value: unknown): value is OutputSnapshotMetada
     OUTPUT_SNAPSHOT_ID.test(metadata.snapshotId) &&
     isSha256(metadata.invocationHash) &&
     isSha256(metadata.outputHash) &&
+    Number.isSafeInteger(metadata.pageSize) &&
+    (metadata.pageSize ?? 0) >= MIN_OUTPUT_PAGE_SIZE &&
+    (metadata.pageSize ?? 0) <= MAX_OUTPUT_PAGE_SIZE &&
+    Array.isArray(metadata.pages) &&
+    metadata.pages.length > 1 &&
+    metadata.pages.length <= MAX_OUTPUT_SNAPSHOT_PAGES &&
+    metadata.pages.every(isOutputSnapshotPage) &&
+    pagesAreContiguous(metadata.pages) &&
     Number.isSafeInteger(metadata.totalCharacters) &&
     (metadata.totalCharacters ?? -1) >= 0 &&
+    metadata.pages.reduce((total, page) => total + page.characterLength, 0) === metadata.totalCharacters &&
     Number.isSafeInteger(metadata.byteLength) &&
     (metadata.byteLength ?? -1) >= 0 &&
+    metadata.pages.reduce((total, page) => total + page.byteLength, 0) === metadata.byteLength &&
     Number.isSafeInteger(metadata.createdAtMs) &&
     (metadata.createdAtMs ?? -1) >= 0
   );
 }
 
-function ensureOutputSnapshotRoot(): void {
-  mkdirSync(OUTPUT_SNAPSHOT_ROOT, { recursive: true, mode: 0o700 });
-  const stat = lstatSync(OUTPUT_SNAPSHOT_ROOT);
+function isOutputSnapshotPage(value: unknown): value is OutputSnapshotPage {
+  if (!value || typeof value !== 'object') return false;
+  const page = value as Partial<OutputSnapshotPage>;
+  return (
+    Number.isSafeInteger(page.characterOffset) &&
+    (page.characterOffset ?? -1) >= 0 &&
+    Number.isSafeInteger(page.characterLength) &&
+    (page.characterLength ?? 0) > 0 &&
+    Number.isSafeInteger(page.byteOffset) &&
+    (page.byteOffset ?? -1) >= 0 &&
+    Number.isSafeInteger(page.byteLength) &&
+    (page.byteLength ?? 0) > 0 &&
+    isSha256(page.hash)
+  );
+}
+
+function pagesAreContiguous(pages: readonly OutputSnapshotPage[]): boolean {
+  let characterOffset = 0;
+  let byteOffset = 0;
+  for (const page of pages) {
+    if (page.characterOffset !== characterOffset || page.byteOffset !== byteOffset) return false;
+    characterOffset += page.characterLength;
+    byteOffset += page.byteLength;
+  }
+  return true;
+}
+
+function ensureOutputSnapshotRoot(snapshotRoot: string): void {
+  mkdirSync(snapshotRoot, { recursive: true, mode: 0o700 });
+  const stat = lstatSync(snapshotRoot);
   if (!stat.isDirectory() || stat.isSymbolicLink()) {
-    throw new Error(`Output snapshot root is not a private directory: ${OUTPUT_SNAPSHOT_ROOT}`);
+    throw new Error(`Output snapshot root is not a private directory: ${snapshotRoot}`);
   }
   if (typeof process.getuid === 'function' && stat.uid !== process.getuid()) {
-    throw new Error(`Output snapshot root is not owned by the current user: ${OUTPUT_SNAPSHOT_ROOT}`);
+    throw new Error(`Output snapshot root is not owned by the current user: ${snapshotRoot}`);
   }
-  if (process.platform !== 'win32') chmodSync(OUTPUT_SNAPSHOT_ROOT, 0o700);
+  if (process.platform !== 'win32') chmodSync(snapshotRoot, 0o700);
 }
 
-function pruneExpiredOutputSnapshots(): void {
-  const cutoff = Date.now() - OUTPUT_SNAPSHOT_TTL_MS;
-  for (const entry of readdirSync(OUTPUT_SNAPSHOT_ROOT, { withFileTypes: true })) {
-    if (!entry.isFile() || !/^[0-9a-f-]{36}\.(?:json|output|tmp|meta\.tmp)$/u.test(entry.name)) continue;
-    const path = join(OUTPUT_SNAPSHOT_ROOT, entry.name);
+function resolveOutputSnapshotLimits(overrides: Partial<OutputSnapshotLimits> | undefined): OutputSnapshotLimits {
+  const resolved = { ...DEFAULT_OUTPUT_SNAPSHOT_LIMITS, ...overrides };
+  for (const [name, value] of Object.entries(resolved)) {
+    if (!Number.isSafeInteger(value) || value <= 0)
+      throw new Error(`Output snapshot ${name} must be a positive integer.`);
+  }
+  if (resolved.maxSnapshotBytes > resolved.maxAggregateBytes) {
+    throw new Error('Output snapshot maxSnapshotBytes cannot exceed maxAggregateBytes.');
+  }
+  return resolved;
+}
+
+function reserveOutputSnapshot(
+  snapshotRoot: string,
+  snapshotId: string,
+  reservedBytes: number,
+  limits: OutputSnapshotLimits,
+): void {
+  withOutputQuotaLock(snapshotRoot, () => {
+    pruneAbandonedOutputSnapshots(snapshotRoot);
+    writeOutputReservation(snapshotRoot, snapshotId, reservedBytes, 'active', limits);
+  });
+}
+
+function updateOutputReservation(
+  snapshotRoot: string,
+  snapshotId: string,
+  reservedBytes: number,
+  state: OutputSnapshotReservation['state'],
+  limits: OutputSnapshotLimits,
+): void {
+  if (!Number.isSafeInteger(reservedBytes) || reservedBytes < 0 || reservedBytes > limits.maxSnapshotBytes) {
+    throw new Error(`Command output exceeds the ${limits.maxSnapshotBytes}-byte snapshot limit.`);
+  }
+  withOutputQuotaLock(snapshotRoot, () => {
+    writeOutputReservation(snapshotRoot, snapshotId, reservedBytes, state, limits);
+  });
+}
+
+function writeOutputReservation(
+  snapshotRoot: string,
+  snapshotId: string,
+  reservedBytes: number,
+  state: OutputSnapshotReservation['state'],
+  limits: OutputSnapshotLimits,
+): void {
+  if (!Number.isSafeInteger(reservedBytes) || reservedBytes < 0 || reservedBytes > limits.maxSnapshotBytes) {
+    throw new Error(`Command output exceeds the ${limits.maxSnapshotBytes}-byte snapshot limit.`);
+  }
+  const reservations = readOutputReservations(snapshotRoot);
+  const current = reservations.find((reservation) => reservation.snapshotId === snapshotId);
+  const aggregateBytes =
+    reservations.reduce((total, reservation) => total + reservation.reservedBytes, 0) -
+    (current?.reservedBytes ?? 0) +
+    reservedBytes;
+  const snapshotCount = reservations.length + (current ? 0 : 1);
+  if (snapshotCount > limits.maxSnapshotCount || aggregateBytes > limits.maxAggregateBytes) {
+    throw new Error(
+      `Output snapshot capacity is full (${snapshotCount}/${limits.maxSnapshotCount} snapshots, ${aggregateBytes}/${limits.maxAggregateBytes} bytes). Narrow the query or finish an existing pagination sequence before retrying.`,
+    );
+  }
+  const nowMs = Date.now();
+  const reservation: OutputSnapshotReservation = {
+    version: OUTPUT_RESERVATION_VERSION,
+    snapshotId,
+    pid: process.pid,
+    ...(currentOutputProcessIdentity() ? { processIdentity: currentOutputProcessIdentity()! } : {}),
+    reservedBytes,
+    state,
+    createdAtMs: current?.createdAtMs ?? nowMs,
+    updatedAtMs: nowMs,
+  };
+  writeJsonAtomic(outputSnapshotPath(snapshotRoot, snapshotId, 'reserve'), reservation);
+}
+
+function releaseOutputReservation(snapshotRoot: string, snapshotId: string): void {
+  withOutputQuotaLock(snapshotRoot, () => {
+    rmSync(outputSnapshotPath(snapshotRoot, snapshotId, 'reserve'), { force: true });
+  });
+}
+
+function readOutputReservations(snapshotRoot: string): OutputSnapshotReservation[] {
+  const reservations: OutputSnapshotReservation[] = [];
+  for (const entry of readdirSync(snapshotRoot, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith('.reserve')) continue;
+    const snapshotId = entry.name.slice(0, -'.reserve'.length);
+    if (!OUTPUT_SNAPSHOT_ID.test(snapshotId)) continue;
     try {
-      if (statSync(path).mtimeMs < cutoff) rmSync(path, { force: true });
-    } catch {
-      // A concurrent continuation or cleanup may already own this entry.
+      const parsed = JSON.parse(
+        readSmallArtifactText(join(snapshotRoot, entry.name), 'output snapshot reservation'),
+      ) as unknown;
+      if (!isOutputSnapshotReservation(parsed) || parsed.snapshotId !== snapshotId) {
+        throw new Error('reservation identity is invalid');
+      }
+      reservations.push(parsed);
+    } catch (error) {
+      throw new Error(
+        `Output snapshot reservation ${entry.name} is invalid; retry after its owning process or snapshot expires.`,
+        { cause: error },
+      );
     }
   }
+  return reservations;
 }
 
-function removeOutputSnapshot(snapshotId: string): void {
-  if (!OUTPUT_SNAPSHOT_ID.test(snapshotId)) return;
-  for (const extension of ['json', 'output', 'tmp', 'meta.tmp'] as const) {
-    rmSync(outputSnapshotPath(snapshotId, extension), { force: true });
+function isOutputSnapshotReservation(value: unknown): value is OutputSnapshotReservation {
+  if (!value || typeof value !== 'object') return false;
+  const reservation = value as Partial<OutputSnapshotReservation>;
+  return (
+    reservation.version === OUTPUT_RESERVATION_VERSION &&
+    typeof reservation.snapshotId === 'string' &&
+    OUTPUT_SNAPSHOT_ID.test(reservation.snapshotId) &&
+    Number.isSafeInteger(reservation.pid) &&
+    (reservation.pid ?? 0) > 0 &&
+    (reservation.processIdentity === undefined ||
+      (parseProcessIdentity(reservation.processIdentity) !== null &&
+        reservation.processIdentity.pid === reservation.pid)) &&
+    Number.isSafeInteger(reservation.reservedBytes) &&
+    (reservation.reservedBytes ?? -1) >= 0 &&
+    (reservation.state === 'active' || reservation.state === 'complete') &&
+    Number.isSafeInteger(reservation.createdAtMs) &&
+    Number.isSafeInteger(reservation.updatedAtMs)
+  );
+}
+
+function pruneAbandonedOutputSnapshots(snapshotRoot: string): void {
+  const nowMs = Date.now();
+  for (const entry of readdirSync(snapshotRoot, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith('.reserve')) continue;
+    const snapshotId = entry.name.slice(0, -'.reserve'.length);
+    if (!OUTPUT_SNAPSHOT_ID.test(snapshotId)) continue;
+    let reservation: OutputSnapshotReservation | null = null;
+    try {
+      const parsed = JSON.parse(
+        readSmallArtifactText(join(snapshotRoot, entry.name), 'output snapshot reservation'),
+      ) as unknown;
+      reservation = isOutputSnapshotReservation(parsed) ? parsed : null;
+    } catch {
+      reservation = null;
+    }
+    const metadataExists = fileExists(outputSnapshotPath(snapshotRoot, snapshotId, 'json'));
+    const activeOwner =
+      reservation?.state === 'active' &&
+      isProcessAlive(reservation.pid) &&
+      (reservation.processIdentity === undefined ||
+        (() => {
+          const actual = readProcessIdentity(reservation.pid);
+          return actual !== null && sameProcessIdentity(reservation.processIdentity!, actual);
+        })());
+    const expired = reservation ? nowMs - reservation.updatedAtMs > OUTPUT_SNAPSHOT_TTL_MS : false;
+    if (activeOwner || (metadataExists && !expired)) continue;
+    if (!metadataExists && reservation && !expired && reservation.state === 'complete') continue;
+    removeOutputSnapshotFiles(snapshotId, snapshotRoot);
   }
 }
 
-function outputSnapshotPath(snapshotId: string, extension: 'json' | 'output' | 'tmp' | 'meta.tmp'): string {
+function fileExists(path: string): boolean {
+  try {
+    statSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function withOutputQuotaLock<T>(snapshotRoot: string, action: () => T): T {
+  ensureOutputSnapshotRoot(snapshotRoot);
+  const lockPath = join(snapshotRoot, OUTPUT_QUOTA_LOCK_NAME);
+  const deadlineAtMs = Date.now() + OUTPUT_QUOTA_LOCK_WAIT_MS;
+  while (true) {
+    const result = tryAcquireProcessFileLock(lockPath, {
+      kind: 'output-snapshot-quota',
+      processIdentity: currentOutputProcessIdentity(),
+    });
+    if (result.kind === 'acquired') {
+      try {
+        return action();
+      } finally {
+        result.lock.release();
+      }
+    }
+    if (Date.now() >= deadlineAtMs) {
+      throw new Error('Output snapshot quota is busy. Retry the command.');
+    }
+    Atomics.wait(OUTPUT_QUOTA_WAIT_BUFFER, 0, 0, OUTPUT_QUOTA_LOCK_RETRY_MS);
+  }
+}
+
+function currentOutputProcessIdentity(): ProcessIdentity | null {
+  if (outputProcessIdentity === undefined) outputProcessIdentity = readProcessIdentity(process.pid);
+  return outputProcessIdentity;
+}
+
+function removeOutputSnapshot(snapshotId: string, snapshotRoot: string): void {
+  if (!OUTPUT_SNAPSHOT_ID.test(snapshotId)) return;
+  withOutputQuotaLock(snapshotRoot, () => removeOutputSnapshotFiles(snapshotId, snapshotRoot));
+}
+
+function removeOutputSnapshotFiles(snapshotId: string, snapshotRoot: string): void {
+  for (const extension of ['json', 'output', 'tmp', 'reserve'] as const) {
+    rmSync(outputSnapshotPath(snapshotRoot, snapshotId, extension), { force: true });
+  }
+}
+
+function outputSnapshotPath(
+  snapshotRoot: string,
+  snapshotId: string,
+  extension: 'json' | 'output' | 'tmp' | 'reserve',
+): string {
   if (!OUTPUT_SNAPSHOT_ID.test(snapshotId)) throw new Error('Output snapshot identifier is invalid.');
-  return join(OUTPUT_SNAPSHOT_ROOT, `${snapshotId}.${extension}`);
+  return join(snapshotRoot, `${snapshotId}.${extension}`);
 }
 
 function requireSnapshotId(value: string | undefined): string {
@@ -622,14 +1008,15 @@ function isHighSurrogate(code: number): boolean {
 function createContinuation(input: {
   filteredArgv: readonly string[];
   invocationHash: string;
-  nextOffset: number;
+  nextPageIndex: number;
   outputHash: string;
   pageSize: number;
   snapshotId: string;
 }): { cursor: string; command: string } {
   const cursor = encodeOutputCursor({
     invocationHash: input.invocationHash,
-    offset: input.nextOffset,
+    pageIndex: input.nextPageIndex,
+    pageSize: input.pageSize,
     outputHash: input.outputHash,
     snapshotId: input.snapshotId,
   });
@@ -640,7 +1027,7 @@ function createContinuation(input: {
 }
 
 function encodeOutputCursor(payload: Omit<OutputCursorPayload, 'version'>): string {
-  return encodeCursorPayload({ version: 1, ...payload } satisfies OutputCursorPayload);
+  return encodeCursorPayload({ version: 2, ...payload } satisfies OutputCursorPayload);
 }
 
 function decodeOutputCursor(cursor: string, expectedInvocationHash: string): OutputCursorPayload {
@@ -665,10 +1052,13 @@ function isOutputCursorPayload(value: unknown): value is OutputCursorPayload {
   if (!value || typeof value !== 'object') return false;
   const cursor = value as Partial<OutputCursorPayload>;
   return (
-    cursor.version === 1 &&
+    cursor.version === 2 &&
     isSha256(cursor.invocationHash) &&
-    Number.isSafeInteger(cursor.offset) &&
-    (cursor.offset ?? -1) >= 0 &&
+    Number.isSafeInteger(cursor.pageIndex) &&
+    (cursor.pageIndex ?? -1) >= 1 &&
+    Number.isSafeInteger(cursor.pageSize) &&
+    (cursor.pageSize ?? 0) >= MIN_OUTPUT_PAGE_SIZE &&
+    (cursor.pageSize ?? 0) <= MAX_OUTPUT_PAGE_SIZE &&
     isSha256(cursor.outputHash) &&
     typeof cursor.snapshotId === 'string' &&
     OUTPUT_SNAPSHOT_ID.test(cursor.snapshotId)
@@ -716,23 +1106,10 @@ function shellQuote(value: string): string {
 
 function renderHumanOutputPage(envelope: CliOutputPageEnvelopeV1): string {
   const continuation = envelope.page.continuation;
-  const header = [
-    `[scip-query output page: characters ${envelope.page.offset}-${envelope.page.offset + envelope.page.returnedCharacters - 1} of ${envelope.page.totalCharacters}]`,
-    ...(continuation
-      ? [
-          'INCOMPLETE EVIDENCE — do not draw conclusions or report completion from this partial page.',
-          `Continue exactly: ${continuation.command}`,
-        ]
-      : []),
-    '',
-  ];
+  const pageEnd = Math.max(envelope.page.offset, envelope.page.offset + envelope.page.returnedCharacters - 1);
+  const header = `[scip-query output page: characters ${envelope.page.offset}-${pageEnd} of ${envelope.page.totalCharacters}]\n`;
   const footer = continuation
-    ? [
-        '',
-        `[${envelope.page.remainingCharacters} output characters remain]`,
-        'INCOMPLETE EVIDENCE — retrieve the remaining pages before using this output as evidence.',
-        `Continue exactly: ${continuation.command}`,
-      ]
-    : ['', '[scip-query output complete]'];
-  return `${header.join('\n')}${envelope.content}${footer.join('\n')}\n`;
+    ? `\n[Incomplete: ${envelope.page.remainingCharacters} characters remain. Continue exactly:\n${continuation.command}]\n`
+    : '\n[scip-query output complete]\n';
+  return `${header}${envelope.content}${footer}`;
 }

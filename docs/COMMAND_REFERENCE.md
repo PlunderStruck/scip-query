@@ -6,7 +6,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 
 Commands with `--json` emit the versioned public envelope documented in [CLI JSON output contract](CLI_JSON_OUTPUT.md).
 
-Every command accepts `--output-page-size <characters>` and `--output-cursor <cursor>`. Oversized human output prints an exact continuation command; oversized JSON prints the exact command that opts into versioned output pages.
+Every command accepts `--output-page-size <characters>` and `--output-cursor <cursor>`. Run normally without choosing a page size: oversized human output stays readable text and prints one exact continuation command; oversized JSON prints the exact command that opts into versioned JSON page envelopes.
 
 ### Indexing
 

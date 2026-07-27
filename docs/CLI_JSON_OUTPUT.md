@@ -53,10 +53,12 @@ Every command accepts these global options:
 --output-cursor <cursor>
 ```
 
-Human output larger than 12,000 characters is paged automatically. The page
-prints its exact continuation command both before and after its content.
-Agents must run that command unchanged and continue until the page reports
-completion. Do not pipe scip-query through `head`, `tail`, or a line-range
+Run commands normally without choosing a page size. Human output larger than
+12,000 characters is paged automatically as ordinary multiline text, not as a
+JSON object. Each incomplete page prints one exact continuation command after
+its content. Agents must run that command unchanged until the output-complete
+marker. Supplying `--output-page-size` changes the character budget; it does
+not select JSON. Do not pipe scip-query through `head`, `tail`, or a line-range
 `sed`; those programs discard output without creating a resumable position.
 
 Default `--json` output remains the ordinary `scip-query-result` envelope
@@ -90,16 +92,17 @@ exact command that opts into output pages. The paged command returns:
 ```
 
 The cursor is bound to the command, working directory, complete
-non-pagination argument list, next character offset, private output snapshot,
-and SHA-256 of the complete rendered output. SHA-256 is a fixed-size content
-fingerprint: the same bytes produce the same identity with overwhelming
-reliability. A continuation reads the immutable snapshot rather than re-running
-the command, so timestamps, durations, edits, or reindexes cannot mix
-different result generations between pages. Missing, expired, or changed
-snapshot data is rejected with the exact command that restarts at page one.
-Every incomplete machine-readable page also carries a direct
-`agentInstruction`. A partial page is not sufficient evidence for a conclusion
-or completion claim; consumers must follow `page.continuation.command` until
+non-pagination argument list, immutable page number and size, private output
+snapshot, and SHA-256 of the complete rendered output. The initial capture
+records each page's UTF-8 byte range and hash. A continuation reads and verifies
+only that range, so retrieving all pages performs linear snapshot I/O and never
+re-runs the command. A changed page, page-size mismatch, missing snapshot, or
+expired snapshot is rejected with the exact page-one restart command.
+
+One snapshot is bounded to 32 million characters, 64 MiB, and 32,768 pages.
+The per-user pool is bounded to 32 snapshots and 256 MiB under atomic
+reservation. Every incomplete machine-readable page carries a direct
+`agentInstruction`; consumers must follow `page.continuation.command` until
 `page.complete` is `true`.
 
 Output pages and result coverage answer different questions:
