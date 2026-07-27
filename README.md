@@ -657,6 +657,14 @@ replacement, and manual preemption verify both values before signaling. A
 legacy record or a platform lookup failure therefore fails closed with an
 explicit recovery error instead of treating a reused PID as the old
 tool-owned process.
+Watcher shutdown stops new work and gives subscriptions and active reindex
+ownership five seconds to drain. A dedicated watch service that cannot prove a
+clean stop reports a degraded shutdown and exits so the operating system can
+close stuck descriptors. `watch stop` allows six seconds for that graceful
+path, then revalidates the exact process-start identity before forced
+termination and waits up to one additional second to observe exit. A changed
+or unavailable identity is never signaled, and ownership files are not cleaned
+until the original process is known to have exited.
 
 Finite subprocesses use explicit wall-time and output budgets. Quick binary
 probes default to 10 seconds, Git operations to 30 seconds, isolated analysis

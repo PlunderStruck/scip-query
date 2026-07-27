@@ -8,6 +8,7 @@ import type {
   ReindexOperation,
   ReindexRunner,
   ReindexRunRequest,
+  WatchClock,
   WatchSubscription,
   WatchSubscriptionFactory,
 } from '../../src/runtime/watch.js';
@@ -400,6 +401,45 @@ describe('Watcher', () => {
     cancellation.resolve({ state: 'exited', diagnostics: emptyDiagnostics() });
     await expect(stopPromise).resolves.toEqual({ state: 'stopped' });
     expect(statuses.at(-1)).toBe('idle');
+  });
+
+  it('returns a degraded result by the injected shutdown deadline when close never settles', async () => {
+    const projectRoot = createProject();
+    const never = new Promise<void>(() => undefined);
+    const subscription = {
+      on: () => subscription,
+      close: () => never,
+    } as WatchSubscription;
+    let shutdownDeadline: (() => void) | undefined;
+    const clock: WatchClock = {
+      now: () => 0,
+      wallNow: () => 0,
+      setTimeout(callback, delayMs) {
+        if (delayMs === 25) shutdownDeadline = callback;
+        return 1 as unknown as ReturnType<typeof setTimeout>;
+      },
+      clearTimeout: () => {},
+      setInterval: () => 2 as unknown as ReturnType<typeof setInterval>,
+      clearInterval: () => {},
+    };
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { gitPollMs: 60_000 } },
+      subscriptionFactory: () => subscription,
+      clock,
+      stopTimeoutMs: 25,
+    });
+
+    watcher.start();
+    const stopping = watcher.stop();
+    shutdownDeadline!();
+
+    await expect(stopping).resolves.toEqual({
+      state: 'degraded',
+      reasons: ['watch shutdown exceeded the 25ms deadline with 1 operation(s) still pending'],
+    });
+    expect(() => watcher.start()).toThrow(/still draining/);
   });
 
   it('tracks and reports native watcher retirement when EMFILE starts polling fallback', async () => {

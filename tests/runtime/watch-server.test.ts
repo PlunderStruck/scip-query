@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { runWatchServiceLoopIteration, watchServiceLoopDelayMs } from '../../src/runtime/watch-server.js';
+import {
+  runWatchServiceLoopIteration,
+  terminateWatchServiceProcess,
+  watchServiceLoopDelayMs,
+} from '../../src/runtime/watch-server.js';
 
 describe('watchServiceLoopDelayMs', () => {
   it('backs off while both mailboxes are idle', () => {
@@ -91,5 +95,23 @@ describe('runWatchServiceLoopIteration', () => {
       }),
     ).rejects.toThrow('mailbox corrupt');
     expect(events).toEqual(['index']);
+  });
+});
+
+describe('terminateWatchServiceProcess', () => {
+  it('reports the shutdown failure before forcing the dedicated process to exit', () => {
+    const events: string[] = [];
+    const exit = new Error('process exited');
+
+    expect(() =>
+      terminateWatchServiceProcess(new Error('shutdown remained degraded'), {
+        report: (message) => events.push(`report:${message}`),
+        exit(code) {
+          events.push(`exit:${code}`);
+          throw exit;
+        },
+      }),
+    ).toThrow(exit);
+    expect(events).toEqual(['report:watch-service: shutdown remained degraded', 'exit:1']);
   });
 });

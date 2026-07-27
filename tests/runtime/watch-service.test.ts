@@ -442,6 +442,67 @@ describe('watch service contract', () => {
     });
   });
 
+  it('revalidates process birth identity before forced stop and refuses a reused PID', () => {
+    withTempCache((cacheDir) => {
+      const paths = watchServicePaths(cacheDir);
+      const runtime = fakeRuntime(paths.statePath);
+      runtime.alive.add(123);
+      writeWatchServiceState(paths.statePath, {
+        ...liveState(),
+        projectRoot: realpathSync(IDENTITY.projectRoot),
+      });
+      let monotonicNow = 0;
+      const forced: number[] = [];
+      runtime.monotonicNow = () => monotonicNow;
+      runtime.signalProcess = (pid) => runtime.signaled.push(pid);
+      runtime.forceSignalProcess = (pid) => forced.push(pid);
+      runtime.sleep = (durationMs) => {
+        monotonicNow += durationMs;
+        if (monotonicNow >= 20) {
+          runtime.processIdentities.set(123, { ...WATCH_PROCESS_IDENTITY, startToken: 'pid-successor' });
+        }
+      };
+
+      expect(() => stopWatchService({ ...controllerOptions(cacheDir, runtime), stopTimeoutMs: 20 })).toThrow(
+        /process identity does not match/,
+      );
+      expect(runtime.signaled).toEqual([123]);
+      expect(forced).toEqual([]);
+      expect(existsSync(paths.statePath)).toBe(true);
+    });
+  });
+
+  it('forces an identity-verified stuck service, observes exit, then cleans ownership files', () => {
+    withTempCache((cacheDir) => {
+      const paths = watchServicePaths(cacheDir);
+      const runtime = fakeRuntime(paths.statePath);
+      runtime.alive.add(123);
+      writeWatchServiceState(paths.statePath, {
+        ...liveState(),
+        projectRoot: realpathSync(IDENTITY.projectRoot),
+      });
+      let monotonicNow = 0;
+      const forced: number[] = [];
+      runtime.monotonicNow = () => monotonicNow;
+      runtime.signalProcess = (pid) => runtime.signaled.push(pid);
+      runtime.forceSignalProcess = (pid) => {
+        forced.push(pid);
+        runtime.alive.delete(pid);
+      };
+      runtime.sleep = (durationMs) => {
+        monotonicNow += durationMs;
+      };
+
+      expect(stopWatchService({ ...controllerOptions(cacheDir, runtime), stopTimeoutMs: 20 })).toEqual({
+        disposition: 'stopped',
+        pid: 123,
+      });
+      expect(runtime.signaled).toEqual([123]);
+      expect(forced).toEqual([123]);
+      expect(existsSync(paths.statePath)).toBe(false);
+    });
+  });
+
   it('stops, cleans, and replaces a live protocol-3 service', () => {
     withTempCache((cacheDir) => {
       const paths = watchServicePaths(cacheDir);

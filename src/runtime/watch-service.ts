@@ -51,7 +51,8 @@ export {
 } from '../platform/watch-service-state.js';
 
 const WATCH_SERVICE_STARTUP_TIMEOUT_MS = 5_000;
-const WATCH_SERVICE_STOP_TIMEOUT_MS = 2_000;
+const WATCH_SERVICE_STOP_TIMEOUT_MS = 6_000;
+const WATCH_SERVICE_FORCE_STOP_TIMEOUT_MS = 1_000;
 const WATCH_SERVICE_POLL_INTERVAL_MS = 10;
 const AUTO_START_EXCLUDED_COMMANDS = new Set([
   'bench',
@@ -132,6 +133,7 @@ export interface WatchServiceRuntime {
     watchOverrides: WatchServiceWatchOverrides,
   ): void;
   signalProcess(pid: number): void;
+  forceSignalProcess?(pid: number): void;
   sleep(durationMs: number): void;
 }
 
@@ -143,6 +145,7 @@ export interface WatchServiceControllerOptions {
   serverPath?: string;
   startupTimeoutMs?: number;
   stopTimeoutMs?: number;
+  forceStopTimeoutMs?: number;
   watchOverrides?: WatchServiceWatchOverrides;
   runtime?: WatchServiceRuntime;
 }
@@ -650,7 +653,22 @@ function stopLiveWatchProcess(
     if (!runtime.isProcessAlive(pid)) return;
     runtime.sleep(WATCH_SERVICE_POLL_INTERVAL_MS);
   }
-  throw new Error(`scip-query watch service pid ${pid} did not stop within ${timeoutMs}ms.`);
+  if (!runtime.forceSignalProcess) {
+    throw new Error(
+      `scip-query watch service pid ${pid} did not stop within ${timeoutMs}ms and forced termination is unavailable.`,
+    );
+  }
+  assertSameProcessInstance(owner, runtime);
+  runtime.forceSignalProcess(pid);
+  const forceTimeoutMs = opts.forceStopTimeoutMs ?? WATCH_SERVICE_FORCE_STOP_TIMEOUT_MS;
+  const forceDeadline = monotonicNow() + forceTimeoutMs;
+  while (monotonicNow() <= forceDeadline) {
+    if (!runtime.isProcessAlive(pid)) return;
+    const actual = runtime.readProcessIdentity(pid);
+    if (owner.processIdentity && actual && !sameProcessIdentity(owner.processIdentity, actual)) return;
+    runtime.sleep(WATCH_SERVICE_POLL_INTERVAL_MS);
+  }
+  throw new Error(`scip-query watch service pid ${pid} remained alive ${forceTimeoutMs}ms after forced termination.`);
 }
 
 function cleanupWatchServiceFiles(paths: WatchServicePaths, expectedPid: number, runtime: WatchServiceRuntime): void {
@@ -714,6 +732,9 @@ const DEFAULT_WATCH_SERVICE_RUNTIME: WatchServiceRuntime = {
   },
   signalProcess(pid) {
     process.kill(pid, 'SIGTERM');
+  },
+  forceSignalProcess(pid) {
+    process.kill(pid, 'SIGKILL');
   },
   sleep(durationMs) {
     const signal = new Int32Array(new SharedArrayBuffer(4));

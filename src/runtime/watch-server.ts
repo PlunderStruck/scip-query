@@ -386,6 +386,20 @@ function sleep(durationMs: number): Promise<void> {
   return new Promise((resolvePromise) => setTimeout(resolvePromise, durationMs));
 }
 
+export function terminateWatchServiceProcess(
+  error: unknown,
+  runtime: {
+    report(message: string): void;
+    exit(code: number): never;
+  } = {
+    report: (message) => console.error(message),
+    exit: (code) => process.exit(code),
+  },
+): never {
+  runtime.report(`watch-service: ${sanitizeTerminalLine(error instanceof Error ? error.message : String(error))}`);
+  return runtime.exit(1);
+}
+
 const invokedPath = process.argv[1] ? pathToFileURL(resolve(process.argv[1])).href : null;
 if (invokedPath === import.meta.url) {
   const projectRoot = process.argv[2];
@@ -398,8 +412,7 @@ if (invokedPath === import.meta.url) {
     try {
       await runWatchServiceServer(projectRoot, cliVersion, watchOverrides);
     } catch (error) {
-      console.error(`watch-service: ${sanitizeTerminalLine(error instanceof Error ? error.message : String(error))}`);
-      process.exitCode = 1;
+      terminateWatchServiceProcess(error);
     }
   }
 }

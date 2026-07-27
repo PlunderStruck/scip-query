@@ -24,6 +24,7 @@ export interface WatcherOptions {
   reindexRunner?: ReindexRunner;
   subscriptionFactory?: WatchSubscriptionFactory;
   clock?: WatchClock;
+  stopTimeoutMs?: number;
   onStatus?: (status: WatcherStatus) => void;
   onReindexComplete?: (durationMs: number, trigger: RefreshTrigger) => boolean | void;
   onReindexError?: (error: Error, trigger: RefreshTrigger) => void;
@@ -70,6 +71,7 @@ export interface ReindexOperation {
 }
 
 export type WatcherStopResult = { state: 'stopped' } | { state: 'degraded'; reasons: string[] };
+export const WATCHER_STOP_TIMEOUT_MS = 5_000;
 
 export interface ReindexRunnerOptions {
   timeoutMs?: number;
@@ -176,6 +178,10 @@ export class Watcher {
     this.onRefreshSuppressed = opts.onRefreshSuppressed ?? (() => {});
     this.onError = opts.onError ?? ((e) => console.error(e.message));
     this.clock = opts.clock ?? SYSTEM_WATCH_CLOCK;
+    watcherStopTimeouts.set(
+      this,
+      positiveDuration(opts.stopTimeoutMs ?? WATCHER_STOP_TIMEOUT_MS, 'watcher stop timeout'),
+    );
     this.reindexRunner = opts.reindexRunner ?? createReindexRunner();
     this.subscriptionFactory = opts.subscriptionFactory ?? defaultWatchSubscriptionFactory;
 
@@ -227,9 +233,14 @@ export class Watcher {
       });
     }
     const retirements = [...watcherRetirementState(this).closures];
-    this.stopPromise = this.finishStop(subscriptions, retirements, operation).finally(() => {
-      this.stopInProgress = false;
-    });
+    const stopTimeoutMs = watcherStopTimeout(this);
+    const deadlineAtMs = this.clock.now() + stopTimeoutMs;
+    this.stopPromise = this.finishStop(subscriptions, retirements, operation, deadlineAtMs, stopTimeoutMs).catch(
+      (error: unknown) => {
+        this.stopInProgress = false;
+        throw error;
+      },
+    );
     return this.stopPromise;
   }
 
@@ -438,29 +449,49 @@ export class Watcher {
     subscriptions: readonly WatchSubscription[],
     retirements: readonly Promise<void>[],
     operation: ReindexOperation | null,
+    deadlineAtMs: number,
+    stopTimeoutMs: number,
   ): Promise<WatcherStopResult> {
     const reasons: string[] = [];
-    const cancellationPromise = operation ? operation.cancel() : null;
-    const closeResults = await Promise.allSettled([
-      ...subscriptions.map((subscription) => Promise.resolve().then(() => subscription.close())),
-      ...retirements,
-    ]);
+    const tasks: Promise<void>[] = subscriptions.map(async (subscription) => {
+      try {
+        await subscription.close();
+      } catch (error) {
+        reasons.push(`watch subscription close failed: ${String(error)}`);
+      }
+    });
+    tasks.push(...retirements);
+    if (operation) {
+      tasks.push(
+        (async () => {
+          try {
+            const cancellation = await operation.cancel();
+            if (cancellation.state === 'degraded') reasons.push(cancellation.reason);
+          } catch (error) {
+            reasons.push(`reindex cancellation failed: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        })(),
+      );
+    }
+    let pendingTasks = tasks.length;
+    const trackedTasks = tasks.map((task) =>
+      task.finally(() => {
+        pendingTasks -= 1;
+      }),
+    );
+    const completed = await waitForWatcherShutdownTasks(trackedTasks, deadlineAtMs, this.clock);
     const retirement = watcherRetirementState(this);
-    await Promise.all([...retirement.closures]);
     reasons.push(...retirement.errors);
     retirement.errors = [];
-    for (const result of closeResults.slice(0, subscriptions.length)) {
-      if (result.status === 'rejected') {
-        reasons.push(`watch subscription close failed: ${String(result.reason)}`);
-      }
-    }
-    if (cancellationPromise) {
-      try {
-        const cancellation = await cancellationPromise;
-        if (cancellation.state === 'degraded') reasons.push(cancellation.reason);
-      } catch (error) {
-        reasons.push(`reindex cancellation failed: ${error instanceof Error ? error.message : String(error)}`);
-      }
+    if (!completed) {
+      reasons.push(
+        `watch shutdown exceeded the ${stopTimeoutMs}ms deadline with ${pendingTasks} operation(s) still pending`,
+      );
+      void Promise.all(trackedTasks).then(() => {
+        this.stopInProgress = false;
+      });
+    } else {
+      this.stopInProgress = false;
     }
     if (reasons.length > 0) {
       this.setStatus({
@@ -572,12 +603,30 @@ export class Watcher {
   }
 }
 
+async function waitForWatcherShutdownTasks(
+  tasks: readonly Promise<void>[],
+  deadlineAtMs: number,
+  clock: WatchClock,
+): Promise<boolean> {
+  if (tasks.length === 0) return true;
+  const completed = Promise.all(tasks).then(() => true);
+  const remainingMs = Math.max(0, deadlineAtMs - clock.now());
+  let timeout: WatchTimer | null = null;
+  const expired = new Promise<boolean>((resolvePromise) => {
+    timeout = clock.setTimeout(() => resolvePromise(false), remainingMs);
+  });
+  const result = await Promise.race([completed, expired]);
+  if (result && timeout) clock.clearTimeout(timeout);
+  return result;
+}
+
 interface WatcherRetirementState {
   closures: Set<Promise<void>>;
   errors: string[];
 }
 
 const watcherRetirementStates = new WeakMap<Watcher, WatcherRetirementState>();
+const watcherStopTimeouts = new WeakMap<Watcher, number>();
 
 function watcherRetirementState(watcher: Watcher): WatcherRetirementState {
   const existing = watcherRetirementStates.get(watcher);
@@ -585,6 +634,10 @@ function watcherRetirementState(watcher: Watcher): WatcherRetirementState {
   const created: WatcherRetirementState = { closures: new Set(), errors: [] };
   watcherRetirementStates.set(watcher, created);
   return created;
+}
+
+function watcherStopTimeout(watcher: Watcher): number {
+  return watcherStopTimeouts.get(watcher) ?? WATCHER_STOP_TIMEOUT_MS;
 }
 
 function retireWatchSubscription(
@@ -760,4 +813,9 @@ function isFileDescriptorLimitError(error: unknown): boolean {
     (error instanceof Error && 'code' in error && error.code === 'EMFILE') ||
     String(error).includes('EMFILE: too many open files')
   );
+}
+
+function positiveDuration(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${label} must be a positive integer.`);
+  return value;
 }

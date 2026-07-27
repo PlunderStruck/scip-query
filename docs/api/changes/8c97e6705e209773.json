@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-07-27T18:31:57.698Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "8c97e6705e209773a6737b5d50856ea78c82f952fe355daa1344af80a5ce737d",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "WatcherOptions changed from interface WatcherOptions { projectRoot: string; config: ProjectConfig; languages?: SupportedLanguage[]; reindexRunner?: ReindexRunner; subscriptionFactory?: WatchSubscriptionFac... to interface WatcherOptions { projectRoot: string; config: ProjectConfig; languages?: SupportedLanguage[]; reindexRunner?: ReindexRunner; subscriptionFactory?: WatchSubscriptionFac....",
+      "target": "./runtime:WatcherOptions"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.19.8",
+  "previousDigest": "90000d70704eaf2300770c6af091d730ceb2298caac66d41aebf990f9a4e87de",
+  "reason": "Allow callers to bound watcher shutdown while preserving the existing default.",
+  "schemaVersion": 1
+}
