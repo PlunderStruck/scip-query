@@ -48,7 +48,28 @@ describe('Rust LSP batch worker', () => {
     expect(client.references).toHaveBeenCalledTimes(1);
   });
 
-  it('retries timed-out reference lookups with the configured retry timeout', async () => {
+  it('does not immediately retry timed-out reference lookups even when a retry timeout is configured', async () => {
+    const { referencesWithCompletion } = await import('../../../src/semantic/rust/lsp-batch-worker.js');
+    const params = referenceParams();
+    const requestOptions: Array<{ timeoutMs?: number; deadlineMs?: number } | undefined> = [];
+    const client = {
+      references: vi.fn(async (_params, opts?: { timeoutMs?: number; deadlineMs?: number }) => {
+        requestOptions.push(opts);
+        throw new Error('rust-analyzer LSP request textDocument/references timed out after 15ms');
+      }),
+    } as unknown as RustAnalyzerLspClient;
+
+    const result = await referencesWithCompletion(client, params, {
+      requestTimeoutMs: 125,
+      retryTimeoutMs: 250,
+      deadlineMs: 2_000,
+    });
+
+    expect(result).toEqual({ locations: [], complete: false });
+    expect(requestOptions).toEqual([{ timeoutMs: 125, deadlineMs: 2_000 }]);
+  });
+
+  it('retains one bounded retry for an explicit content-modified response', async () => {
     const { referencesWithCompletion } = await import('../../../src/semantic/rust/lsp-batch-worker.js');
     const params = referenceParams();
     const location: LspLocation = {
@@ -59,9 +80,7 @@ describe('Rust LSP batch worker', () => {
     const client = {
       references: vi.fn(async (_params, opts?: { timeoutMs?: number; deadlineMs?: number }) => {
         requestOptions.push(opts);
-        if (requestOptions.length === 1) {
-          throw new Error('rust-analyzer LSP request textDocument/references timed out after 15ms');
-        }
+        if (requestOptions.length === 1) throw new Error('content modified');
         return [location];
       }),
     } as unknown as RustAnalyzerLspClient;

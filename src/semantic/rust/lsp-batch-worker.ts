@@ -391,7 +391,7 @@ export async function referencesWithCompletion(
     rethrowRustAnalyzerReadinessError(error);
     const message = error instanceof Error ? error.message : String(error);
     if (isRustAnalyzerRequestTimeout(error)) {
-      return retryTimedOutReferenceLookup(client, params, opts);
+      return { locations: [], complete: false };
     }
     if (!message.includes('content modified')) {
       return { locations: [], complete: true };
@@ -403,21 +403,6 @@ export async function referencesWithCompletion(
       rethrowRustAnalyzerReadinessError(retryError);
       return { locations: [], complete: !isRustAnalyzerRequestTimeout(retryError) };
     }
-  }
-}
-
-async function retryTimedOutReferenceLookup(
-  client: RustAnalyzerLspClient,
-  params: Parameters<RustAnalyzerLspClient['references']>[0],
-  opts: RustReferenceCompletionOptions,
-): Promise<{ locations: Awaited<ReturnType<RustAnalyzerLspClient['references']>>; complete: boolean }> {
-  if (!opts.retryTimeoutMs || opts.retryTimeoutMs <= 0) return { locations: [], complete: false };
-  const retryOptions = referenceRetryRequestOptions(opts);
-  try {
-    return { locations: await client.references(params, retryOptions), complete: true };
-  } catch (retryError) {
-    rethrowRustAnalyzerReadinessError(retryError);
-    return { locations: [], complete: !isRustAnalyzerRequestTimeout(retryError) };
   }
 }
 

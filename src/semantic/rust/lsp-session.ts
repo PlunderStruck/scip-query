@@ -33,6 +33,7 @@ import {
   isDurableRustSessionStateLive,
   readDurableRustSessionServerState,
 } from './durable-session.js';
+import { terminateRegisteredRustAnalyzerProcessTrees } from './process-ownership.js';
 
 export type {
   RustAnalyzerSessionRequester,
@@ -643,22 +644,50 @@ export function createWorkerRustAnalyzerSessionRequester(
   let resultDir: string | null = null;
   let nextRequestId = 1;
   let disposed = false;
+  let termination: Promise<void> | null = null;
+  let terminationFailure: Error | null = null;
 
-  const cleanupResultDir = (): void => {
-    if (!resultDir) return;
-    rmSync(resultDir, { recursive: true, force: true });
-    resultDir = null;
+  const cleanupResultDir = (directory: string | null): void => {
+    if (!directory) return;
+    rmSync(directory, { recursive: true, force: true });
   };
 
   const terminate = (): void => {
+    if (termination) return;
     const currentWorker = worker;
+    const currentResultDir = resultDir;
     worker = null;
-    if (currentWorker) void currentWorker.terminate();
-    cleanupResultDir();
+    resultDir = null;
+    const workerTermination = currentWorker ? currentWorker.terminate() : Promise.resolve(0);
+    termination = Promise.allSettled([
+      workerTermination,
+      terminateRegisteredRustAnalyzerProcessTrees(currentResultDir, { gracefulMs: 1_000, forceMs: 1_000 }),
+    ])
+      .then(([workerResult, processTreeResult]) => {
+        const processTrees =
+          processTreeResult.status === 'fulfilled'
+            ? processTreeResult.value
+            : [{ reaped: false, detail: String(processTreeResult.reason) }];
+        const unreaped = processTrees.filter((result) => !result.reaped);
+        if (workerResult.status === 'rejected' || unreaped.length > 0) {
+          terminationFailure = new Error(
+            `Rust semantic worker cleanup did not complete; ownership evidence remains at ${currentResultDir ?? 'unknown'}.`,
+          );
+          return;
+        }
+        cleanupResultDir(currentResultDir);
+      })
+      .finally(() => {
+        termination = null;
+      });
   };
 
   const ensureWorker = (): Worker => {
     if (worker) return worker;
+    if (termination) {
+      throw new Error('The previous Rust semantic session worker is still terminating; retry the request.');
+    }
+    if (terminationFailure) throw terminationFailure;
     const workerUrl = opts.semanticWorkerPath ? pathToFileURL(opts.semanticWorkerPath) : rustSemanticSessionWorkerUrl();
     if (!existsSync(fileURLToPath(workerUrl))) {
       throw new Error(
@@ -756,7 +785,8 @@ export function createWorkerRustAnalyzerSessionRequester(
       if (disposed) return;
       disposed = true;
       if (!worker) {
-        cleanupResultDir();
+        cleanupResultDir(resultDir);
+        resultDir = null;
         return;
       }
 

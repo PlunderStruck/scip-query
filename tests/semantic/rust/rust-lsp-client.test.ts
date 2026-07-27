@@ -20,7 +20,10 @@ class ScriptedTransport implements RustAnalyzerTransport {
   private readonly errorListeners: Array<(error: Error) => void> = [];
   private killCalls = 0;
 
-  constructor(private readonly respond: (message: LspJsonMessage, transport: ScriptedTransport) => void) {}
+  constructor(
+    private readonly respond: (message: LspJsonMessage, transport: ScriptedTransport) => void,
+    private readonly onKill?: () => void | Promise<void>,
+  ) {}
 
   write(payload: string): void {
     for (const message of decodeFramedMessages(payload)) {
@@ -41,8 +44,9 @@ class ScriptedTransport implements RustAnalyzerTransport {
     this.errorListeners.push(listener);
   }
 
-  kill(): void {
+  kill(): void | Promise<void> {
     this.killCalls += 1;
+    return this.onKill?.();
   }
 
   isKilled(): boolean {
@@ -525,29 +529,49 @@ describe('RustAnalyzerLspClient', () => {
     ]);
   });
 
-  it('times out a stalled request without preventing shutdown', async () => {
-    const transport = new ScriptedTransport((message, server) => {
-      if (message.method === 'initialize') {
-        server.send({ jsonrpc: '2.0', id: message.id, result: { capabilities: { referencesProvider: true } } });
-      }
-      if (message.method === 'shutdown') {
-        server.send({ jsonrpc: '2.0', id: message.id, result: null });
-      }
+  it('cancels a stalled request, poisons the transport, and reaps it before rejecting', async () => {
+    let finishKill!: () => void;
+    const killFinished = new Promise<void>((resolve) => {
+      finishKill = resolve;
     });
+    const transport = new ScriptedTransport(
+      (message, server) => {
+        if (message.method === 'initialize') {
+          server.send({ jsonrpc: '2.0', id: message.id, result: { capabilities: { referencesProvider: true } } });
+        }
+        if (message.method === 'shutdown') {
+          server.send({ jsonrpc: '2.0', id: message.id, result: null });
+        }
+      },
+      () => killFinished,
+    );
 
     const client = new RustAnalyzerLspClient(transport, { requestTimeoutMs: 5 });
     await client.initialize({ rootUri: 'file:///repo' });
 
-    await expect(
-      client.references({
+    let settled = false;
+    const request = client
+      .references({
         textDocument: { uri: 'file:///repo/src/lib.rs' },
         position: { line: 1, character: 7 },
         context: { includeDeclaration: false },
-      }),
-    ).rejects.toThrow(/timed out/);
+      })
+      .finally(() => {
+        settled = true;
+      });
 
-    await client.shutdown();
-    expect(transport.isKilled()).toBe(false);
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    expect(transport.writes.at(-1)).toEqual({
+      jsonrpc: '2.0',
+      method: '$/cancelRequest',
+      params: { id: 2 },
+    });
+    expect(transport.isKilled()).toBe(true);
+    expect(settled).toBe(false);
+    finishKill();
+    await expect(request).rejects.toThrow(/timed out/);
+    expect(settled).toBe(true);
+    await expect(client.shutdown()).rejects.toThrow(/timed out/);
   });
 
   it('allows a references request to use a shorter per-request timeout', async () => {
@@ -574,8 +598,37 @@ describe('RustAnalyzerLspClient', () => {
       ),
     ).rejects.toThrow(/timed out after 5ms/);
 
-    await client.shutdown();
-    expect(transport.isKilled()).toBe(false);
+    expect(transport.writes.at(-1)).toEqual({
+      jsonrpc: '2.0',
+      method: '$/cancelRequest',
+      params: { id: 2 },
+    });
+    expect(transport.isKilled()).toBe(true);
+    await expect(client.shutdown()).rejects.toThrow(/timed out after 5ms/);
+  });
+
+  it('reports an unreaped transport instead of hiding timeout cleanup failure', async () => {
+    const transport = new ScriptedTransport(
+      (message, server) => {
+        if (message.method === 'initialize') {
+          server.send({ jsonrpc: '2.0', id: message.id, result: { capabilities: { referencesProvider: true } } });
+        }
+      },
+      async () => {
+        throw new Error('process tree remained alive');
+      },
+    );
+    const client = new RustAnalyzerLspClient(transport, { requestTimeoutMs: 5 });
+    await client.initialize({ rootUri: 'file:///repo' });
+
+    await expect(
+      client.references({
+        textDocument: { uri: 'file:///repo/src/lib.rs' },
+        position: { line: 1, character: 7 },
+        context: { includeDeclaration: false },
+      }),
+    ).rejects.toThrow(/cleanup failed: process tree remained alive/);
+    expect(transport.isKilled()).toBe(true);
   });
 
   it('bounds initialization by a monotonic readiness deadline', async () => {
@@ -594,7 +647,8 @@ describe('RustAnalyzerLspClient', () => {
 
     await expect(initialization).rejects.toBeInstanceOf(RustAnalyzerReadinessError);
     await expect(initialization).rejects.toThrow(/readiness deadline expired during LSP request initialize/);
-    expect(transport.writes.map((message) => message.method)).toEqual(['initialize']);
+    expect(transport.writes.map((message) => message.method)).toEqual(['initialize', '$/cancelRequest']);
+    expect(transport.isKilled()).toBe(true);
   });
 
   it('accepts an in-budget response across forward and backward civil-clock jumps', async () => {
@@ -1015,7 +1069,6 @@ describe('RustAnalyzerLspClient', () => {
   });
 
   it('allows definition, call-hierarchy, outgoing-call, and hover requests to set timeouts', async () => {
-    const { client } = await createIdleClient(25);
     const params = {
       textDocument: { uri: 'file:///repo/src/lib.rs' },
       position: { line: 1, character: 7 },
@@ -1027,12 +1080,18 @@ describe('RustAnalyzerLspClient', () => {
       range: { start: { line: 1, character: 0 }, end: { line: 3, character: 1 } },
       selectionRange: { start: { line: 1, character: 7 }, end: { line: 1, character: 10 } },
     };
+    const operations: Array<(client: RustAnalyzerLspClient) => Promise<unknown>> = [
+      (client) => client.definition(params, { timeoutMs: 5 }),
+      (client) => client.prepareCallHierarchy(params, { timeoutMs: 5 }),
+      (client) => client.outgoingCalls(item, { timeoutMs: 5 }),
+      (client) => client.hover(params, { timeoutMs: 5 }),
+    ];
 
-    await expect(client.definition(params, { timeoutMs: 5 })).rejects.toThrow(/timed out after 5ms/);
-    await expect(client.prepareCallHierarchy(params, { timeoutMs: 5 })).rejects.toThrow(/timed out after 5ms/);
-    await expect(client.outgoingCalls(item, { timeoutMs: 5 })).rejects.toThrow(/timed out after 5ms/);
-    await expect(client.hover(params, { timeoutMs: 5 })).rejects.toThrow(/timed out after 5ms/);
-    await client.shutdown();
+    for (const operation of operations) {
+      const { client, transport } = await createIdleClient(25);
+      await expect(operation(client)).rejects.toThrow(/timed out after 5ms/);
+      expect(transport.isKilled()).toBe(true);
+    }
   });
 });
 

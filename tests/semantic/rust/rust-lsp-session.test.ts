@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -7,6 +7,7 @@ import {
   createConfiguredRustAnalyzerSessionRequester,
   createFailoverRustAnalyzerSessionRequester,
   createRustAnalyzerSessionResolver,
+  createWorkerRustAnalyzerSessionRequester,
   rustSemanticSessionSelection,
   rustSemanticSessionTransport,
   type RustAnalyzerSessionRequester,
@@ -941,6 +942,32 @@ describe('RustAnalyzerSessionResolver', () => {
     expect(requests).toHaveLength(1);
     expect(requests[0]?.request.referenceRetryTimeoutMs).toBe(250);
     expect(requests[0]?.timeoutMs).toBe(155_000);
+  });
+});
+
+describe('worker Rust analyzer session lifecycle', () => {
+  it('does not replace a timed-out Worker before asynchronous termination settles', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'scip-query-rust-worker-lifecycle-'));
+    const workerPath = join(directory, 'stalled-worker.cjs');
+    writeFileSync(
+      workerPath,
+      [
+        "const { parentPort } = require('node:worker_threads');",
+        "parentPort.on('message', () => {});",
+        'setInterval(() => {}, 1000);',
+      ].join('\n'),
+    );
+    const requester = createWorkerRustAnalyzerSessionRequester({ semanticWorkerPath: workerPath });
+    try {
+      expect(() => requester.requestSemantic(semanticRequest, 20)).toThrow(/worker timed out/);
+      expect(() => requester.requestImportDefinitions(importDefinitionRequest, 20)).toThrow(
+        /previous Rust semantic session worker is still terminating/,
+      );
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    } finally {
+      requester.shutdown();
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });
 

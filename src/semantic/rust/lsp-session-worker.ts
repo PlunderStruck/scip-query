@@ -1,6 +1,6 @@
 import process from 'node:process';
 import { existsSync, writeFileSync } from 'node:fs';
-import { isAbsolute, resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { parentPort } from 'node:worker_threads';
 import { profileAsyncSpan, profileEnabled, writeProfileEvent } from '../../instrumentation/profile.js';
@@ -109,6 +109,7 @@ const CALLEE_TASK_PROFILE_THRESHOLD_ENV = 'SCIP_RUST_SEMANTIC_CALLEE_TASK_PROFIL
 
 const sessions = new Map<string, RustAnalyzerSessionState>();
 let queue = Promise.resolve();
+let ownershipDirectory: string | undefined;
 
 parentPort?.on('message', (message: RustSessionWorkerMessage) => {
   queue = queue.then(() => handleMessage(message)).catch(() => undefined);
@@ -116,6 +117,7 @@ parentPort?.on('message', (message: RustSessionWorkerMessage) => {
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 async function handleMessage(message: RustSessionWorkerMessage): Promise<void> {
+  ownershipDirectory ??= dirname(message.responsePath);
   if (message.kind === 'shutdown') {
     await shutdownSessions();
     writeWorkerResponse(message.responsePath, { ok: true }, message.sharedBuffer);
@@ -499,10 +501,13 @@ async function sessionForPaths(
   if (existing) return existing;
 
   const initializationOptions = rustAnalyzerInitializationOptions(linkedProjects);
-  const client = new RustAnalyzerLspClient(createRustAnalyzerTransport(rustAnalyzerBinary, sessionRoot), {
-    requestTimeoutMs: opts.requestTimeoutMs,
-    configuration: initializationOptions,
-  });
+  const client = new RustAnalyzerLspClient(
+    createRustAnalyzerTransport(rustAnalyzerBinary, sessionRoot, process.env, ownershipDirectory),
+    {
+      requestTimeoutMs: opts.requestTimeoutMs,
+      configuration: initializationOptions,
+    },
+  );
   const initializationReadiness =
     opts.readinessDeadlineMs === undefined
       ? null

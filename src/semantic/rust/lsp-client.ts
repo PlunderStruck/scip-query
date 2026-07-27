@@ -1,5 +1,8 @@
 import { spawn } from 'node:child_process';
+import { platform as hostPlatform } from 'node:os';
 import { monotonicNowMs } from '../../domain/time.js';
+import { createOwnedProcessTree, terminateOwnedProcessTree } from '../../platform/process-tree.js';
+import { registerRustAnalyzerProcessTree, releaseRustAnalyzerProcessTree } from './process-ownership.js';
 import type {
   LspCallHierarchyItem,
   LspCallHierarchyOutgoingCall,
@@ -34,7 +37,7 @@ export interface RustAnalyzerTransport {
   onData(listener: (chunk: Buffer) => void): void;
   onClose(listener: (code: number | null, signal: NodeJS.Signals | null) => void): void;
   onError(listener: (error: Error) => void): void;
-  kill(): void;
+  kill(): void | Promise<void>;
 }
 
 export interface RustAnalyzerLspClientOptions {
@@ -121,6 +124,7 @@ export class RustAnalyzerLspClient {
   private bodyLength = 0;
   private transportFailure: Error | null = null;
   private transportKilled = false;
+  private transportKillPromise: Promise<void> | null = null;
   private currentServerStatusGeneration = 0;
   private latestServerStatus: { generation: number; status: RustAnalyzerServerStatus } | null = null;
   private shutdownStarted = false;
@@ -299,12 +303,10 @@ export class RustAnalyzerLspClient {
     const message: LspJsonMessage = { jsonrpc: '2.0', id, method, params };
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        this.pending.delete(id);
-        reject(
-          budget.deadlineLimited
-            ? new RustAnalyzerReadinessError(`rust-analyzer readiness deadline expired during LSP request ${method}`)
-            : new Error(`rust-analyzer LSP request ${method} timed out after ${budget.timeoutMs}ms`),
-        );
+        const error = budget.deadlineLimited
+          ? new RustAnalyzerReadinessError(`rust-analyzer readiness deadline expired during LSP request ${method}`)
+          : new Error(`rust-analyzer LSP request ${method} timed out after ${budget.timeoutMs}ms`);
+        void this.cancelAndFailTimedOutRequest(id, error);
       }, budget.timeoutMs);
       this.pending.set(id, {
         method,
@@ -397,15 +399,47 @@ export class RustAnalyzerLspClient {
     this.headerLength = 0;
     this.bodyBuffer = null;
     this.bodyLength = 0;
-    if (kill) this.killTransportOnce();
+    if (kill) void this.killTransportOnce().catch(() => undefined);
     this.rejectPending(error);
     this.resolveDiagnosticWaiters(false);
   }
 
-  private killTransportOnce(): void {
-    if (this.transportKilled) return;
+  private killTransportOnce(): Promise<void> {
+    if (this.transportKilled) return this.transportKillPromise ?? Promise.resolve();
     this.transportKilled = true;
-    this.transport.kill();
+    this.transportKillPromise = Promise.resolve(this.transport.kill());
+    return this.transportKillPromise;
+  }
+
+  private async cancelAndFailTimedOutRequest(id: number | string, error: Error): Promise<void> {
+    const timedOut = this.pending.get(id);
+    if (!timedOut) return;
+    this.pending.delete(id);
+    try {
+      this.transport.write(frameJsonMessage({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id } }));
+    } catch {
+      // Cleanup below owns the failed transport regardless of cancellation delivery.
+    }
+    if (!this.transportFailure) {
+      this.transportFailure = error;
+      this.headerLength = 0;
+      this.bodyBuffer = null;
+      this.bodyLength = 0;
+    }
+    let finalError = error;
+    try {
+      await this.killTransportOnce();
+    } catch (cleanupError) {
+      finalError = new Error(
+        `${error.message}; rust-analyzer cleanup failed: ${
+          cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+        }`,
+        { cause: cleanupError },
+      );
+    }
+    timedOut.reject(finalError);
+    this.rejectPending(finalError);
+    this.resolveDiagnosticWaiters(false);
   }
 
   // scip-query: ignore-extract — reviewed E3 feature-local pipeline; the helper cluster has no separate owner or consumer.
@@ -649,14 +683,20 @@ export function createRustAnalyzerTransport(
   binary: string,
   projectRoot: string,
   env: NodeJS.ProcessEnv = process.env,
+  ownershipDirectory?: string,
 ): RustAnalyzerTransport {
   // scip-query: process-lifetime-reviewed -- the returned transport owns this
   // session process and its initialize/request/shutdown deadlines.
   const child = spawn(binary, [], {
     cwd: projectRoot,
     env,
+    detached: hostPlatform() !== 'win32',
     stdio: ['pipe', 'pipe', 'pipe'],
   });
+  const tree = child.pid === undefined ? null : createOwnedProcessTree(child.pid, hostPlatform() !== 'win32');
+  const ownershipPath = tree ? registerRustAnalyzerProcessTree(ownershipDirectory, tree) : null;
+  let termination: Promise<void> | null = null;
+  child.on('close', () => releaseRustAnalyzerProcessTree(ownershipPath));
 
   return {
     write(payload) {
@@ -672,7 +712,17 @@ export function createRustAnalyzerTransport(
       child.on('error', listener);
     },
     kill() {
-      child.kill();
+      if (!tree) {
+        child.kill();
+        return;
+      }
+      termination ??= terminateOwnedProcessTree(tree, { gracefulMs: 1_000, forceMs: 1_000 }).then((result) => {
+        if (!result.reaped) {
+          throw new Error(result.detail ?? `rust-analyzer process tree ${tree.rootPid} was not reaped.`);
+        }
+        releaseRustAnalyzerProcessTree(ownershipPath);
+      });
+      return termination;
     },
   };
 }
