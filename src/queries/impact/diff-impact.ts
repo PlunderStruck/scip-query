@@ -13,6 +13,7 @@ import { getAst, type SyntaxNode } from '../../source/ast.js';
 import { rangesByFile } from '../internal/diff-ranges.js';
 import { resolveGitCommit } from '../../platform/git-worktree.js';
 import { readProjectFileText } from '../../platform/project-files.js';
+import { normalizeSafeProjectRelativePath } from '../../domain/path-normalization.js';
 
 export interface DiffImpactResult {
   changedFiles: string[];
@@ -84,13 +85,15 @@ export interface BaseContentsLookupOptions {
   relativePaths: readonly string[];
 }
 
+export interface BaseContentReaderOptions {
+  projectRoot: string;
+  base: string;
+  preloadPaths?: readonly string[];
+}
+
 export interface BaseContentGitRuntime {
   resolveCommit(projectRoot: string, base: string): string;
-  readBatch(input: {
-    projectRoot: string;
-    resolvedBase: string;
-    relativePaths: readonly string[];
-  }): Buffer;
+  readBatch(input: { projectRoot: string; resolvedBase: string; relativePaths: readonly string[] }): Buffer;
 }
 
 export type DiffImpactEvidenceTier = 'semantic-consumers' | 'source-fallback-consumers';
@@ -100,14 +103,8 @@ export type DiffImpactEvidenceTierStatus =
   | { tier: DiffImpactEvidenceTier; state: 'failed'; attemptedSymbols: number; reason: string };
 
 export interface DiffImpactEvidenceRuntime {
-  semanticConsumers(
-    db: ScipDatabase,
-    definitions: ReadonlyArray<IndexedDefinition>,
-  ): Map<number, Set<string>>;
-  sourceFallbackConsumers(
-    db: ScipDatabase,
-    definitions: ReadonlyArray<IndexedDefinition>,
-  ): Map<number, Set<string>>;
+  semanticConsumers(db: ScipDatabase, definitions: ReadonlyArray<IndexedDefinition>): Map<number, Set<string>>;
+  sourceFallbackConsumers(db: ScipDatabase, definitions: ReadonlyArray<IndexedDefinition>): Map<number, Set<string>>;
 }
 
 export interface DiffImpactPartialOptions {
@@ -230,10 +227,8 @@ export function diffImpactPartial(
   const fanInBySymbolId = scipFanInBySymbolId(db, symbolIds);
   const consumerFilesBySymbolId = scipConsumerFilesBySymbolId(db, symbolIds, allChangedFiles);
   const stillZeroAfterScip = defs.filter((def) => (fanInBySymbolId.get(def.symbolId) ?? 0) === 0);
-  const semanticEvidence = collectConsumerEvidence(
-    'semantic-consumers',
-    stillZeroAfterScip.length,
-    () => evidenceRuntime.semanticConsumers(db, stillZeroAfterScip),
+  const semanticEvidence = collectConsumerEvidence('semantic-consumers', stillZeroAfterScip.length, () =>
+    evidenceRuntime.semanticConsumers(db, stillZeroAfterScip),
   );
   const semanticConsumers = semanticEvidence.values;
   // Semantic (ts-morph) resolves most cross-file gaps the raw SCIP index
@@ -389,8 +384,40 @@ function getGitDiffSnapshot(projectRoot: string, base: string): GitDiffSnapshot 
   };
 }
 
-export function fileContentAtBase(projectRoot: string, base: string, relativePath: string): string | null {
-  const result = readBaseContent({ projectRoot, base, relativePath });
+export function fileContentAtBase(options: BaseContentLookupOptions): string | null;
+/**
+ * @deprecated Use `fileContentAtBase({ projectRoot, base, relativePath })` so
+ * the project root, Git revision, and project-relative path cannot be
+ * transposed.
+ */
+export function fileContentAtBase(projectRoot: string, base: string, relativePath: string): string | null;
+export function fileContentAtBase(
+  optionsOrProjectRoot: BaseContentLookupOptions | string,
+  legacyBase?: string,
+  legacyRelativePath?: string,
+): string | null {
+  const options =
+    typeof optionsOrProjectRoot === 'string'
+      ? {
+          projectRoot: optionsOrProjectRoot,
+          base: legacyBase,
+          relativePath: legacyRelativePath,
+        }
+      : optionsOrProjectRoot;
+  if (
+    typeof options.projectRoot !== 'string' ||
+    typeof options.base !== 'string' ||
+    typeof options.relativePath !== 'string'
+  ) {
+    throw new TypeError('fileContentAtBase requires projectRoot, base, and relativePath.');
+  }
+  const resolvedOptions: BaseContentLookupOptions = {
+    projectRoot: options.projectRoot,
+    base: options.base,
+    relativePath: options.relativePath,
+  };
+  const { relativePath } = resolvedOptions;
+  const result = readBaseContent(resolvedOptions);
   if (result.state === 'unavailable') {
     throw new Error(`Base content unavailable for ${relativePath}: ${result.reason}`);
   }
@@ -401,6 +428,7 @@ export function readBaseContent(
   opts: BaseContentLookupOptions,
   runtime: BaseContentGitRuntime = DEFAULT_BASE_CONTENT_GIT_RUNTIME,
 ): BaseContentResult {
+  validateProjectRelativePath(opts.relativePath);
   return (
     readBaseContents(
       {
@@ -420,6 +448,7 @@ export function readBaseContents(
   opts: BaseContentsLookupOptions,
   runtime: BaseContentGitRuntime = DEFAULT_BASE_CONTENT_GIT_RUNTIME,
 ): Map<string, BaseContentResult> {
+  for (const relativePath of opts.relativePaths) validateProjectRelativePath(relativePath);
   const uniquePaths = [...new Set(opts.relativePaths)];
   if (uniquePaths.length === 0) return new Map();
 
@@ -498,12 +527,34 @@ export function createBaseContentResultReader(
   };
 }
 
+export function createBaseContentReader(options: BaseContentReaderOptions): BaseContentReader;
+/**
+ * @deprecated Use `createBaseContentReader({ projectRoot, base, preloadPaths })`
+ * so the project root and Git revision cannot be transposed.
+ */
 export function createBaseContentReader(
   projectRoot: string,
   base: string,
-  preloadPaths: readonly string[] = [],
+  preloadPaths?: readonly string[],
+): BaseContentReader;
+export function createBaseContentReader(
+  optionsOrProjectRoot: BaseContentReaderOptions | string,
+  legacyBase?: string,
+  legacyPreloadPaths: readonly string[] = [],
 ): BaseContentReader {
-  const readResult = createBaseContentResultReader({ projectRoot, base, preloadPaths });
+  const options =
+    typeof optionsOrProjectRoot === 'string'
+      ? { projectRoot: optionsOrProjectRoot, base: legacyBase, preloadPaths: legacyPreloadPaths }
+      : optionsOrProjectRoot;
+  if (typeof options.projectRoot !== 'string' || typeof options.base !== 'string') {
+    throw new TypeError('createBaseContentReader requires projectRoot and base.');
+  }
+  const resolvedOptions: BaseContentReaderOptions = {
+    projectRoot: options.projectRoot,
+    base: options.base,
+    preloadPaths: options.preloadPaths,
+  };
+  const readResult = createBaseContentResultReader(resolvedOptions);
   return (relativePath) => {
     const result = readResult(relativePath);
     if (result.state === 'unavailable') {
@@ -521,12 +572,34 @@ export function baseContentPathsForDiffPlan(
   return [...new Set(changedFiles.map((file) => renamedFromByFile.get(file) ?? file))];
 }
 
+export function fileContentsAtBase(options: BaseContentsLookupOptions): Map<string, string | null>;
+/**
+ * @deprecated Use `fileContentsAtBase({ projectRoot, base, relativePaths })`
+ * so the project root, Git revision, and project-relative paths cannot be
+ * transposed.
+ */
 export function fileContentsAtBase(
   projectRoot: string,
   base: string,
   relativePaths: readonly string[],
+): Map<string, string | null>;
+export function fileContentsAtBase(
+  optionsOrProjectRoot: BaseContentsLookupOptions | string,
+  legacyBase?: string,
+  legacyRelativePaths?: readonly string[],
 ): Map<string, string | null> {
-  const results = readBaseContents({ projectRoot, base, relativePaths });
+  const options =
+    typeof optionsOrProjectRoot === 'string'
+      ? { projectRoot: optionsOrProjectRoot, base: legacyBase, relativePaths: legacyRelativePaths }
+      : optionsOrProjectRoot;
+  if (
+    typeof options.projectRoot !== 'string' ||
+    typeof options.base !== 'string' ||
+    !Array.isArray(options.relativePaths)
+  ) {
+    throw new TypeError('fileContentsAtBase requires projectRoot, base, and relativePaths.');
+  }
+  const results = readBaseContents(options as BaseContentsLookupOptions);
   const out = new Map<string, string | null>();
   for (const [path, result] of results) {
     if (result.state === 'unavailable') {
@@ -537,10 +610,11 @@ export function fileContentsAtBase(
   return out;
 }
 
-function unavailableBaseContents(
-  relativePaths: readonly string[],
-  reason: string,
-): Map<string, BaseContentResult> {
+function validateProjectRelativePath(relativePath: string): void {
+  normalizeSafeProjectRelativePath(relativePath);
+}
+
+function unavailableBaseContents(relativePaths: readonly string[], reason: string): Map<string, BaseContentResult> {
   return new Map(relativePaths.map((path) => [path, { state: 'unavailable', reason }]));
 }
 
@@ -611,7 +685,7 @@ function detectRenamedFiles(
       .map((from) => ({
         from,
         to,
-        similarity: sourceMoveSimilarity(fileContentAtBase(projectRoot, base, from) ?? '', current),
+        similarity: sourceMoveSimilarity(fileContentAtBase({ projectRoot, base, relativePath: from }) ?? '', current),
       }))
       .sort((left, right) => right.similarity - left.similarity)[0];
 
@@ -995,8 +1069,8 @@ function mergeEvidenceTierStatuses(partials: readonly DiffImpactPartial[]): Diff
     const reasons = [
       ...new Set(
         statuses
-          .filter((status): status is Extract<DiffImpactEvidenceTierStatus, { state: 'failed' }> =>
-            status.state === 'failed',
+          .filter(
+            (status): status is Extract<DiffImpactEvidenceTierStatus, { state: 'failed' }> => status.state === 'failed',
           )
           .map((status) => status.reason),
       ),

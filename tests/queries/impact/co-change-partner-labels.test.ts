@@ -252,7 +252,7 @@ describe('co-change partner labels', () => {
       changedRanges: [],
       renamedFiles: [],
     };
-    const checker = symbolPreexistenceChecker(repoRoot, 'HEAD', plan);
+    const checker = symbolPreexistenceChecker({ projectRoot: repoRoot, base: 'HEAD', diffPlan: plan });
 
     expect(
       checker({

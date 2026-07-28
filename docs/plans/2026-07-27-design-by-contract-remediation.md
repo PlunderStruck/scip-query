@@ -469,6 +469,40 @@ Verification:
 - public API fixture and snapshot;
 - command documentation where a user-visible example changes.
 
+Implementation record — complete:
+
+- named options are now the primary overloads for `twinAb`,
+  `fileContentAtBase`, `fileContentsAtBase`, `createBaseContentReader`,
+  `symbolPreexistenceChecker`, and `pathMatchesGlob`; every production caller
+  uses those labeled roles;
+- the positional signatures remain callable, are marked deprecated, and are
+  compiled in the external package-consumer fixture. The compatibility
+  correction is recorded in `docs/api/changes/d85979e8ebbe2047.json`;
+- `twinAb` now enforces its documented absolute-output-path precondition, and
+  the base-content and glob boundaries reuse the existing safe
+  project-relative-path validator to reject absolute paths, parent traversal,
+  empty paths, and NUL bytes;
+- 6 focused test files passed with 104 tests, including named and positional
+  calls, invalid paths, generated twin scaffolds, historical-content failure,
+  diff-gate integration, CLI contracts, and generated command references.
+  TypeScript, ESLint, and the external public API fixture also passed;
+- complete SCIP reference queries show each production consumer migrated to
+  the named overload. Full migration, duplicate, wrapper, abstraction,
+  unused-parameter, redundant-re-export, co-change, and doc-drift postchecks
+  found no candidate caused by these APIs. Two unrelated repository-wide
+  stale-abstraction signals remain outside the edited files;
+- the full diff gate passed with no blocking findings. Its two advisory
+  documentation citations are accepted: both say `diffGate()` and
+  `DIFF_GATE_CHECKS` live in `src/queries/impact/diff-gate.ts` and describe
+  the default check family; this slice changed only the signature of an
+  exported historical-content helper in that file, so both claims remain
+  accurate;
+- refutation R1 attempted misspelled and omitted named fields in the external
+  fixture; TypeScript rejected all four shapes. Refutation R2 supplied a
+  relative twin output, an absolute glob, and parent-traversing content paths;
+  the runtime boundaries rejected each. Refutation R3 compiled every legacy
+  overload and exercised representative positional calls at runtime.
+
 ## Dependency and ship order
 
 The execution order is:

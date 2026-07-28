@@ -99,7 +99,7 @@ describe('twin-ab', () => {
 
   it('resolves a real exported twin pair with matching signatures and generates an importable scaffold', () => {
     const outFile = join(db.config.projectRoot, defaultTwinAbOutPath('escapeRegex', 'escapeRegExp'));
-    const outcome = twinAb(db, 'escapeRegex', 'escapeRegExp', outFile);
+    const outcome = twinAb(db, { refA: 'escapeRegex', refB: 'escapeRegExp', outFile });
 
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
@@ -113,6 +113,16 @@ describe('twin-ab', () => {
     expect(outcome.testSource).toContain('escapeRegExp as twinB');
     expect(outcome.testSource).toContain('scip-audit integrity scenario');
     expect(outcome.testSource).toContain('TODO');
+  });
+
+  it('rejects a relative output path at the public boundary', () => {
+    expect(() =>
+      twinAb(db, {
+        refA: 'escapeRegex',
+        refB: 'escapeRegExp',
+        outFile: 'tests/generated/twin.test.ts',
+      }),
+    ).toThrow('twinAb outFile must be an absolute path');
   });
 
   it('flags a mismatched param count as signature-incompatible but still generates a scaffold', () => {

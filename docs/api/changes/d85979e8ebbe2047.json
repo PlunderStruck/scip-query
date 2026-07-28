@@ -1,0 +1,109 @@
+{
+  "acceptedAt": "2026-07-28T02:21:28.000Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "d85979e8ebbe2047c2c4d4e7e8de9e4db8bb3fb6b283d7d66773fdd68e3e8339",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BaseContentReaderOptions.",
+      "target": "./queries:BaseContentReaderOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TwinAbOptions.",
+      "target": "./queries:TwinAbOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "twinAb changed from declare function twinAb(db: ScipDatabase, refA: string, refB: string, outFile: string): TwinAbOutcome; to declare function twinAb(db: ScipDatabase, options: TwinAbOptions): TwinAbOutcome; declare function twinAb(db: ScipDatabase, refA: string, refB: string, outFile: string): TwinAbO....",
+      "target": "./queries:twinAb"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SymbolPreexistenceCheckerOptions.",
+      "target": "./queries/diff-gate:SymbolPreexistenceCheckerOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "symbolPreexistenceChecker changed from declare function symbolPreexistenceChecker(projectRoot: string, base: string, diffPlan: DiffImpactPlan, baseContentAt?: BaseContentReader): (changedSymbol: { symbol: string; fil... to declare function symbolPreexistenceChecker(options: SymbolPreexistenceCheckerOptions): (changedSymbol: { symbol: string; file: string; }) => boolean; declare function symbolPree....",
+      "target": "./queries/diff-gate:symbolPreexistenceChecker"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BaseContentReaderOptions.",
+      "target": "./queries/diff-impact:BaseContentReaderOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "createBaseContentReader changed from declare function createBaseContentReader(projectRoot: string, base: string, preloadPaths?: readonly string[]): BaseContentReader; to declare function createBaseContentReader(options: BaseContentReaderOptions): BaseContentReader; declare function createBaseContentReader(projectRoot: string, base: string, prelo....",
+      "target": "./queries/diff-impact:createBaseContentReader"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "fileContentAtBase changed from declare function fileContentAtBase(projectRoot: string, base: string, relativePath: string): string | null; to declare function fileContentAtBase(options: BaseContentLookupOptions): string | null; declare function fileContentAtBase(projectRoot: string, base: string, relativePath: string)....",
+      "target": "./queries/diff-impact:fileContentAtBase"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "fileContentsAtBase changed from declare function fileContentsAtBase(projectRoot: string, base: string, relativePaths: readonly string[]): Map<string, string | null>; to declare function fileContentsAtBase(options: BaseContentsLookupOptions): Map<string, string | null>; declare function fileContentsAtBase(projectRoot: string, base: string, relat....",
+      "target": "./queries/diff-impact:fileContentsAtBase"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PathMatchesGlobOptions.",
+      "target": "./queries/files:PathMatchesGlobOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "pathMatchesGlob changed from declare function pathMatchesGlob(pattern: string, relativePath: string): boolean; to declare function pathMatchesGlob(options: PathMatchesGlobOptions): boolean; declare function pathMatchesGlob(pattern: string, relativePath: string): boolean;.",
+      "target": "./queries/files:pathMatchesGlob"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BaseContentReaderOptions.",
+      "target": "./queries/index:BaseContentReaderOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TwinAbOptions.",
+      "target": "./queries/index:TwinAbOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "twinAb changed from declare function twinAb(db: ScipDatabase, refA: string, refB: string, outFile: string): TwinAbOutcome; to declare function twinAb(db: ScipDatabase, options: TwinAbOptions): TwinAbOutcome; declare function twinAb(db: ScipDatabase, refA: string, refB: string, outFile: string): TwinAbO....",
+      "target": "./queries/index:twinAb"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TwinAbOptions.",
+      "target": "./queries/twin-ab:TwinAbOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "twinAb changed from declare function twinAb(db: ScipDatabase, refA: string, refB: string, outFile: string): TwinAbOutcome; to declare function twinAb(db: ScipDatabase, options: TwinAbOptions): TwinAbOutcome; declare function twinAb(db: ScipDatabase, refA: string, refB: string, outFile: string): TwinAbO....",
+      "target": "./queries/twin-ab:twinAb"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.19.8",
+  "previousDigest": "2c9690623033ecdc20a43261de6696408539578ec81c4e25cafd3c6c12fdb787",
+  "reason": "Add named primary overloads while retaining deprecated positional signatures, and enforce the documented absolute/project-relative path preconditions.",
+  "schemaVersion": 1
+}

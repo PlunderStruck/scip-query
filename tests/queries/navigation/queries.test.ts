@@ -237,9 +237,15 @@ describe('query engine', () => {
     });
 
     it('keeps slash-qualified globs segment-aware', () => {
-      expect(pathMatchesGlob('src/queries/*.ts', 'src/queries/index.ts')).toBe(true);
-      expect(pathMatchesGlob('src/queries/*.ts', 'src/queries/cleanup/dead.ts')).toBe(false);
+      expect(pathMatchesGlob({ pattern: 'src/queries/*.ts', relativePath: 'src/queries/index.ts' })).toBe(true);
+      expect(pathMatchesGlob({ pattern: 'src/queries/*.ts', relativePath: 'src/queries/cleanup/dead.ts' })).toBe(false);
       expect(pathMatchesGlob('*.vue', 'src/components/UserList.vue')).toBe(true);
+      expect(() => pathMatchesGlob({ pattern: '*.ts', relativePath: '../outside.ts' })).toThrow(
+        'refusing unsafe project file path',
+      );
+      expect(() => pathMatchesGlob({ pattern: '/src/*.ts', relativePath: 'src/index.ts' })).toThrow(
+        'refusing unsafe project file path',
+      );
     });
   });
 

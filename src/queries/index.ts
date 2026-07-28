@@ -191,7 +191,7 @@ export type { CoChangeFinding, CoChangeResult } from './cleanup/co-change.js';
 export type { DocDriftFinding, DocDriftResult, DocDriftSubject, DocFileCitation } from './cleanup/doc-drift.js';
 export type { DuplicateBodyEntry, DuplicateBodyGroup } from './cleanup/duplicate-bodies.js';
 export type { TwinGroup, TwinMember, TwinRelationship, TwinDriftRecord } from './cleanup/twin-drift.js';
-export type { TwinAbOutcome, TwinAbSuccess, TwinAbRefusal, TwinAbSymbol } from './cleanup/twin-ab.js';
+export type { TwinAbOptions, TwinAbOutcome, TwinAbSuccess, TwinAbRefusal, TwinAbSymbol } from './cleanup/twin-ab.js';
 export type {
   NotImplementedFinding,
   NotImplementedStubKind,
@@ -223,6 +223,7 @@ export type { PlanContextOptions, PlanContextResult } from './impact/plan-contex
 export type {
   BaseContentGitRuntime,
   BaseContentLookupOptions,
+  BaseContentReaderOptions,
   BaseContentResult,
   BaseContentResultReader,
   BaseContentsLookupOptions,

@@ -1,4 +1,4 @@
-import { dirname, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
 import { resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
@@ -44,6 +44,13 @@ export interface TwinAbRefusal {
 
 export type TwinAbOutcome = TwinAbSuccess | TwinAbRefusal;
 
+export interface TwinAbOptions {
+  refA: string;
+  refB: string;
+  /** Absolute path used to derive import specifiers in the generated test. */
+  outFile: string;
+}
+
 const FUNCTION_LIKE_KINDS = new Set(scipFunctionLikeKindNumbers());
 
 /**
@@ -70,7 +77,28 @@ function slugifyRef(ref: string): string {
  * vitest file to — needed up front so the generated `import` specifiers are
  * correct relative paths, not just the twin's own file paths.
  */
-export function twinAb(db: ScipDatabase, refA: string, refB: string, outFile: string): TwinAbOutcome {
+export function twinAb(db: ScipDatabase, options: TwinAbOptions): TwinAbOutcome;
+/**
+ * @deprecated Use `twinAb(db, { refA, refB, outFile })` so symbol references
+ * cannot be transposed with the output path.
+ */
+export function twinAb(db: ScipDatabase, refA: string, refB: string, outFile: string): TwinAbOutcome;
+export function twinAb(
+  db: ScipDatabase,
+  optionsOrRefA: TwinAbOptions | string,
+  legacyRefB?: string,
+  legacyOutFile?: string,
+): TwinAbOutcome {
+  const { refA, refB, outFile } =
+    typeof optionsOrRefA === 'string'
+      ? { refA: optionsOrRefA, refB: legacyRefB, outFile: legacyOutFile }
+      : optionsOrRefA;
+  if (typeof refA !== 'string' || typeof refB !== 'string' || typeof outFile !== 'string') {
+    throw new TypeError('twinAb requires refA, refB, and outFile.');
+  }
+  if (!isAbsolute(outFile)) {
+    throw new TypeError('twinAb outFile must be an absolute path.');
+  }
   const a = resolveTwinAbSymbol(db, refA);
   if (!a.ok) return a;
   const b = resolveTwinAbSymbol(db, refB);

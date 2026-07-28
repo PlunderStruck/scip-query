@@ -1318,15 +1318,54 @@ function isCompileTimeContractAssertion(symbol: string): boolean {
   return name.startsWith('_Assert') || name.startsWith('Assert');
 }
 
+export interface SymbolPreexistenceCheckerOptions {
+  projectRoot: string;
+  base: string;
+  diffPlan: DiffImpactPlan;
+  baseContentAt?: BaseContentReader;
+}
+
+export function symbolPreexistenceChecker(
+  options: SymbolPreexistenceCheckerOptions,
+): (changedSymbol: { symbol: string; file: string }) => boolean;
+/**
+ * @deprecated Use
+ * `symbolPreexistenceChecker({ projectRoot, base, diffPlan, baseContentAt })`
+ * so the project root and Git revision cannot be transposed.
+ */
 export function symbolPreexistenceChecker(
   projectRoot: string,
   base: string,
   diffPlan: DiffImpactPlan,
   baseContentAt?: BaseContentReader,
+): (changedSymbol: { symbol: string; file: string }) => boolean;
+export function symbolPreexistenceChecker(
+  optionsOrProjectRoot: SymbolPreexistenceCheckerOptions | string,
+  legacyBase?: string,
+  legacyDiffPlan?: DiffImpactPlan,
+  legacyBaseContentAt?: BaseContentReader,
 ): (changedSymbol: { symbol: string; file: string }) => boolean {
+  const options =
+    typeof optionsOrProjectRoot === 'string'
+      ? {
+          projectRoot: optionsOrProjectRoot,
+          base: legacyBase,
+          diffPlan: legacyDiffPlan,
+          baseContentAt: legacyBaseContentAt,
+        }
+      : optionsOrProjectRoot;
+  if (typeof options.projectRoot !== 'string' || typeof options.base !== 'string' || options.diffPlan === undefined) {
+    throw new TypeError('symbolPreexistenceChecker requires projectRoot, base, and diffPlan.');
+  }
+  const { projectRoot, base, diffPlan, baseContentAt } = options;
   const renamedFromByFile = new Map(diffPlan.renamedFiles.map((rename) => [rename.to, rename.from]));
   const readBaseContent =
-    baseContentAt ?? createBaseContentReader(projectRoot, base, baseContentPathsForDiffPlan(diffPlan));
+    baseContentAt ??
+    createBaseContentReader({
+      projectRoot,
+      base,
+      preloadPaths: baseContentPathsForDiffPlan(diffPlan),
+    });
   return (changedSymbol) => {
     const oldPath = renamedFromByFile.get(changedSymbol.file) ?? changedSymbol.file;
     const leaf = leafName(changedSymbol.symbol);

@@ -1,7 +1,13 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
+import { normalizeSafeProjectRelativePath } from '../../domain/path-normalization.js';
 
 export interface FileResult {
+  relativePath: string;
+}
+
+export interface PathMatchesGlobOptions {
+  pattern: string;
   relativePath: string;
 }
 
@@ -24,13 +30,31 @@ function globToLike(pattern: string): string {
 export function files(db: ScipDatabase, pattern: string): FileResult[] {
   const likePattern = globToLike(pattern);
   return indexedDocumentPaths(db, { like: likePattern, includeIgnored: false })
-    .filter((relativePath) => pathMatchesGlob(pattern, relativePath))
+    .filter((relativePath) => pathMatchesGlob({ pattern, relativePath }))
     .map((relativePath) => ({
       relativePath,
     }));
 }
 
-export function pathMatchesGlob(pattern: string, relativePath: string): boolean {
+export function pathMatchesGlob(options: PathMatchesGlobOptions): boolean;
+/**
+ * @deprecated Use `pathMatchesGlob({ pattern, relativePath })` so the pattern
+ * and candidate path cannot be transposed.
+ */
+export function pathMatchesGlob(pattern: string, relativePath: string): boolean;
+export function pathMatchesGlob(
+  optionsOrPattern: PathMatchesGlobOptions | string,
+  legacyRelativePath?: string,
+): boolean {
+  const values =
+    typeof optionsOrPattern === 'string'
+      ? { pattern: optionsOrPattern, relativePath: legacyRelativePath }
+      : optionsOrPattern;
+  if (typeof values.pattern !== 'string' || typeof values.relativePath !== 'string') {
+    throw new TypeError('pathMatchesGlob requires pattern and relativePath.');
+  }
+  const pattern = normalizeSafeProjectRelativePath(values.pattern);
+  const relativePath = normalizeSafeProjectRelativePath(values.relativePath);
   if (!/[*?]/.test(pattern)) {
     return relativePath.includes(pattern);
   }

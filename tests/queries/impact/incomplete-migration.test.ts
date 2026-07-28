@@ -328,12 +328,11 @@ afterAll(() => {
 
 describe('incomplete-migration', () => {
   it('batch reads base file contents while preserving missing and non-blob paths', () => {
-    const contents = fileContentsAtBase(repoRoot, 'HEAD', [
-      'src',
-      'src/util.ts',
-      'src/does-not-exist.ts',
-      'src/util.ts',
-    ]);
+    const contents = fileContentsAtBase({
+      projectRoot: repoRoot,
+      base: 'HEAD',
+      relativePaths: ['src', 'src/util.ts', 'src/does-not-exist.ts', 'src/util.ts'],
+    });
 
     expect(contents.size).toBe(3);
     expect(contents.get('src')).toBeNull();
@@ -372,9 +371,20 @@ describe('incomplete-migration', () => {
       state: 'unavailable',
       reason: expect.stringContaining('definitely-not-a-real-base'),
     });
-    expect(() => fileContentAtBase(repoRoot, 'definitely-not-a-real-base', 'src/util.ts')).toThrow(
-      'Base content unavailable',
-    );
+    expect(() =>
+      fileContentAtBase({
+        projectRoot: repoRoot,
+        base: 'definitely-not-a-real-base',
+        relativePath: 'src/util.ts',
+      }),
+    ).toThrow('Base content unavailable');
+    expect(() =>
+      readBaseContent({
+        projectRoot: repoRoot,
+        base: 'HEAD',
+        relativePath: '../outside.ts',
+      }),
+    ).toThrow('refusing unsafe project file path');
 
     const timedOut = readBaseContents(
       {
@@ -493,7 +503,12 @@ describe('incomplete-migration', () => {
       base: 'HEAD',
       preloadPaths: baseContentPathsForDiffPlan(diffPlan),
     });
-    const result = incompleteMigration(db, { base: 'HEAD', semantic: false, diffPlan, baseContentResultAt: baseContentAt });
+    const result = incompleteMigration(db, {
+      base: 'HEAD',
+      semantic: false,
+      diffPlan,
+      baseContentResultAt: baseContentAt,
+    });
 
     expect(result.available).toBe(true);
     expect(result.helpersChecked).toBe(1);

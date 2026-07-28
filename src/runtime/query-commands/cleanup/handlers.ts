@@ -743,7 +743,7 @@ export const handleTwinAb = reportCommand<queries.TwinAbSuccess & { outPath: str
     const outPath = resolveProjectPath(db.config.projectRoot, outArg);
     if (!outPath) throw new Error(`twin-ab output path escapes the project root: ${outArg}`);
 
-    const outcome = queries.twinAb(db, refA, refB, outPath);
+    const outcome = queries.twinAb(db, { refA, refB, outFile: outPath });
     if (!outcome.ok) throw new Error(`twin-ab refused: ${outcome.reason}`);
 
     const displayPath = relative(db.config.projectRoot, outPath);
