@@ -39,6 +39,10 @@ function result(
     suppressed: [],
     findings,
     attributionNotes: [],
+    evidenceTiers: [
+      { tier: 'semantic-consumers', state: 'complete', attemptedSymbols: 0 },
+      { tier: 'source-fallback-consumers', state: 'complete', attemptedSymbols: 0 },
+    ],
   };
 }
 

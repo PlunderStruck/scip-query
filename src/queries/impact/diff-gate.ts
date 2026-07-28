@@ -399,6 +399,9 @@ export function diffGateFailureReason(result: DiffGateResult): string | undefine
   if (result.checksRun.length === 0 && result.note === GIT_DIFF_UNAVAILABLE_NOTE) {
     return 'git diff unavailable - zero checks ran; the gate fails closed';
   }
+  if (!Array.isArray(result.evidenceTiers)) {
+    return 'required consumer evidence status unavailable';
+  }
   const evidenceFailures = result.evidenceTiers.filter(
     (status): status is Extract<DiffImpactEvidenceTierStatus, { state: 'failed' }> => status.state === 'failed',
   );

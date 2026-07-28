@@ -1,4 +1,13 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -339,6 +348,11 @@ describe('bounded filesystem mailbox', () => {
     writeFileSync(temporary, 'partial');
     const cleanupAt = NOW + 2 * 24 * 60 * 60_000;
     const old = new Date(NOW);
+    for (const directory of [paths.responseDir, paths.deadLetterDir]) {
+      for (const entry of readdirSync(directory)) {
+        utimesSync(join(directory, entry), old, old);
+      }
+    }
     utimesSync(temporary, old, old);
     const maintenance = maintainBoundedMailbox(paths, {
       nowMs: cleanupAt,

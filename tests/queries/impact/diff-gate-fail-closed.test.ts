@@ -59,4 +59,12 @@ describe('diff-gate fails closed', () => {
     expect(diffGateFailureReason(failed)).toContain('semantic-consumers');
     expect(diffGateFailureReason(failed)).toContain('semantic provider crashed');
   });
+
+  it('fails closed when a runtime caller provides a legacy result without evidence status', () => {
+    const result = { ...base, checksRun: ['echo'] } as DiffGateResult;
+    delete (result as Partial<DiffGateResult>).evidenceTiers;
+
+    expect(diffGateFailureReason(result)).toBe('required consumer evidence status unavailable');
+    expect(diffGateFailedClosed(result)).toBe(true);
+  });
 });
