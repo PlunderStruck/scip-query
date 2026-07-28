@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { diffGateFailedClosed } from '../../../src/queries/impact/diff-gate.js';
+import { diffGateFailedClosed, diffGateFailureReason } from '../../../src/queries/impact/diff-gate.js';
 import { GIT_DIFF_UNAVAILABLE_NOTE } from '../../../src/queries/impact/diff-impact.js';
 import type { DiffGateResult } from '../../../src/queries/impact/diff-gate.js';
 
@@ -17,6 +17,10 @@ describe('diff-gate fails closed', () => {
     suppressed: [],
     findings: [],
     attributionNotes: [],
+    evidenceTiers: [
+      { tier: 'semantic-consumers', state: 'complete', attemptedSymbols: 0 },
+      { tier: 'source-fallback-consumers', state: 'complete', attemptedSymbols: 0 },
+    ],
     rootCauseGroups: [],
   } as unknown as Omit<DiffGateResult, 'checksRun' | 'note'>;
 
@@ -34,5 +38,25 @@ describe('diff-gate fails closed', () => {
       note: undefined,
     } as unknown as DiffGateResult;
     expect(diffGateFailedClosed(completed)).toBe(false);
+  });
+
+  it('fails closed when required consumer evidence degraded even if other checks ran', () => {
+    const failed = {
+      ...base,
+      checksRun: ['echo', 'co-change-partner'],
+      evidenceTiers: [
+        {
+          tier: 'semantic-consumers',
+          state: 'failed',
+          attemptedSymbols: 4,
+          reason: 'semantic provider crashed',
+        },
+        { tier: 'source-fallback-consumers', state: 'complete', attemptedSymbols: 4 },
+      ],
+    } as DiffGateResult;
+
+    expect(diffGateFailedClosed(failed)).toBe(true);
+    expect(diffGateFailureReason(failed)).toContain('semantic-consumers');
+    expect(diffGateFailureReason(failed)).toContain('semantic provider crashed');
   });
 });

@@ -36,7 +36,13 @@ export { localityCandidates } from './cleanup/locality-candidates.js';
 export { affected } from './graph/affected.js';
 export { changeSurface } from './impact/change-surface.js';
 export { cleanupPlan } from './cleanup/cleanup-plan.js';
-export { DIFF_GATE_CHECKS, diffGate, blockingFindings, diffGateFailedClosed } from './impact/diff-gate.js';
+export {
+  DIFF_GATE_CHECKS,
+  diffGate,
+  blockingFindings,
+  diffGateFailedClosed,
+  diffGateFailureReason,
+} from './impact/diff-gate.js';
 export { incompleteMigration } from './impact/incomplete-migration.js';
 export { coChange } from './cleanup/co-change.js';
 export { docDrift } from './cleanup/doc-drift.js';
@@ -206,7 +212,14 @@ export type {
 } from './cleanup/recent-duplicates.js';
 export type { BaselineComparison, HealthBaselineFile } from './internal/baseline-file.js';
 export type { PlanContextOptions, PlanContextResult } from './impact/plan-context.js';
-export type { DiffImpactResult } from './impact/diff-impact.js';
+export type {
+  DiffImpactEvidenceRuntime,
+  DiffImpactEvidenceTier,
+  DiffImpactEvidenceTierStatus,
+  DiffImpactPartial,
+  DiffImpactPartialOptions,
+  DiffImpactResult,
+} from './impact/diff-impact.js';
 export type { RedundantReexport, RedundantReexportActionTier } from './cleanup/redundant-reexports.js';
 export type { AuditDisagreement, AuditQuestionScore, SelfAuditResult } from './quality/self-audit.js';
 export type { SimilarSignatureGroup } from './cleanup/similar-signatures.js';

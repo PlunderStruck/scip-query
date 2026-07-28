@@ -864,6 +864,11 @@ export function renderDiffImpactReport(result: DiffImpactResult): void {
   if (result.summary.note) {
     console.log(`Note: ${result.summary.note}`);
   }
+  for (const tier of result.evidenceTiers.filter((status) => status.state === 'failed')) {
+    console.log(
+      `WARNING: ${tier.tier} evidence failed for ${tier.attemptedSymbols} candidate symbol(s): ${tier.reason}`,
+    );
+  }
   const unattributed = result.attributionNotes.filter((note) => note.method === 'unattributed');
   if (unattributed.length > 0) {
     const files = [...new Set(unattributed.map((note) => note.file))];

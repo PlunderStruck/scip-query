@@ -5,7 +5,12 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { IndexedDefinition, ScipQueryConfig } from '../../../src/domain/types.js';
-import { attributeResidue, diffImpact, diffImpactPartial } from '../../../src/queries/impact/diff-impact.js';
+import {
+  attributeResidue,
+  diffImpact,
+  diffImpactPartial,
+  mergeDiffImpactPartials,
+} from '../../../src/queries/impact/diff-impact.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 
 function createSchema(sqliteDb: Database.Database): void {
@@ -263,6 +268,60 @@ describe('diff-impact accuracy', () => {
         {
           file: 'src/consumer.ts',
           symbols: ['src:model:DEFAULT_STATUS', 'src:model:updateUser()'],
+        },
+      ]);
+      expect(result.evidenceTiers).toEqual([
+        { tier: 'semantic-consumers', state: 'complete', attemptedSymbols: 0 },
+        { tier: 'source-fallback-consumers', state: 'complete', attemptedSymbols: 0 },
+      ]);
+
+      const degraded = diffImpactPartial(
+        db,
+        ['src/model.ts'],
+        ['src/model.ts'],
+        [
+          { file: 'src/model.ts', startLine: 4, endLine: 4 },
+          { file: 'src/model.ts', startLine: 6, endLine: 6 },
+        ],
+        {
+          evidenceRuntime: {
+            semanticConsumers: () => {
+              throw new Error('semantic provider crashed');
+            },
+            sourceFallbackConsumers: () => {
+              throw new Error('source fallback exhausted');
+            },
+          },
+        },
+      );
+      expect(degraded.evidenceTiers).toEqual([
+        {
+          tier: 'semantic-consumers',
+          state: 'failed',
+          attemptedSymbols: 0,
+          reason: 'semantic provider crashed',
+        },
+        {
+          tier: 'source-fallback-consumers',
+          state: 'failed',
+          attemptedSymbols: 0,
+          reason: 'source fallback exhausted',
+        },
+      ]);
+
+      const merged = mergeDiffImpactPartials(['src/model.ts'], [result, degraded]);
+      expect(merged.evidenceTiers).toEqual([
+        {
+          tier: 'semantic-consumers',
+          state: 'failed',
+          attemptedSymbols: 0,
+          reason: 'semantic provider crashed',
+        },
+        {
+          tier: 'source-fallback-consumers',
+          state: 'failed',
+          attemptedSymbols: 0,
+          reason: 'source fallback exhausted',
         },
       ]);
     } finally {

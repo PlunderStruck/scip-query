@@ -24,6 +24,7 @@ import type {
   AttributionNote,
   BaseContentReader,
   ChangedLineRange,
+  DiffImpactEvidenceTierStatus,
   DiffImpactPlan,
   RenamedFile,
 } from './diff-impact.js';
@@ -186,6 +187,7 @@ export interface DiffGateResult {
   suppressed: Array<{ finding: DiffGateFinding; suppression: FindingSuppression }>;
   findings: DiffGateFinding[];
   attributionNotes: AttributionNote[];
+  evidenceTiers: DiffImpactEvidenceTierStatus[];
   /** Root-cause review items derived from unsuppressed findings. */
   rootCauseGroups?: DiffGateRootCauseGroup[];
   /** Coverage of committed policy records consulted by this result. */
@@ -281,6 +283,7 @@ export function diffGate(
     suppressed: [],
     findings: [],
     attributionNotes: impact.attributionNotes,
+    evidenceTiers: impact.evidenceTiers,
     rootCauseGroups: [],
     recordCompatibility: { suppressions: suppressionStore.compatibility },
     note: impact.summary.note,
@@ -335,7 +338,17 @@ export function diffGate(
     runDocReferenceCheck(db, changed, changedGitFiles, impactPlan.changedRanges, impactPlan.renamedFiles, result),
   );
   runUnlessSkipped('unused-params', () => runUnusedParamsCheck(db, changedFiles, result));
-  runUnlessSkipped('new-dead', () => runNewDeadCheck(db, impact.changedSymbols, symbolPreexistedAtBase, result));
+  runUnlessSkipped('new-dead', () => {
+    const failures = impact.evidenceTiers.filter((status) => status.state === 'failed');
+    if (failures.length > 0) {
+      result.skipped.push({
+        check: 'new-dead',
+        reason: `required consumer evidence unavailable: ${failures.map((failure) => failure.tier).join(', ')}`,
+      });
+      return;
+    }
+    runNewDeadCheck(db, impact.changedSymbols, symbolPreexistedAtBase, result);
+  });
   if (includeBaseline) runUnlessSkipped('baseline', () => runBaselineCheck(db, result));
   // Suppressions come from two stores: the legacy .scipquery.json array
   // (read-only since 0.15.0) and the conflict-free per-file directory the
@@ -360,7 +373,20 @@ export function diffGate(
  * Discovered on the 2026-07-01 Vega calibration run (8,099-file commit).
  */
 export function diffGateFailedClosed(result: DiffGateResult): boolean {
-  return result.checksRun.length === 0 && result.note === GIT_DIFF_UNAVAILABLE_NOTE;
+  return diffGateFailureReason(result) !== undefined;
+}
+
+export function diffGateFailureReason(result: DiffGateResult): string | undefined {
+  if (result.checksRun.length === 0 && result.note === GIT_DIFF_UNAVAILABLE_NOTE) {
+    return 'git diff unavailable - zero checks ran; the gate fails closed';
+  }
+  const evidenceFailures = result.evidenceTiers.filter(
+    (status): status is Extract<DiffImpactEvidenceTierStatus, { state: 'failed' }> => status.state === 'failed',
+  );
+  if (evidenceFailures.length === 0) return undefined;
+  return `required consumer evidence unavailable: ${evidenceFailures
+    .map((failure) => `${failure.tier} (${failure.reason})`)
+    .join('; ')}`;
 }
 
 export function blockingFindings(findings: readonly DiffGateFinding[]): DiffGateFinding[] {

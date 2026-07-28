@@ -26,6 +26,8 @@ export interface DiffImpactResult {
   }>;
   affectedConsumers: Array<{ file: string; consumedSymbols: number }>;
   attributionNotes: AttributionNote[];
+  /** Whether each non-SCIP consumer-discovery tier completed. */
+  evidenceTiers: DiffImpactEvidenceTierStatus[];
   summary: {
     totalChangedFiles: number;
     totalChangedSymbols: number;
@@ -63,10 +65,32 @@ export interface RenamedFile {
 
 export type BaseContentReader = (relativePath: string) => string | null;
 
+export type DiffImpactEvidenceTier = 'semantic-consumers' | 'source-fallback-consumers';
+
+export type DiffImpactEvidenceTierStatus =
+  | { tier: DiffImpactEvidenceTier; state: 'complete'; attemptedSymbols: number }
+  | { tier: DiffImpactEvidenceTier; state: 'failed'; attemptedSymbols: number; reason: string };
+
+export interface DiffImpactEvidenceRuntime {
+  semanticConsumers(
+    db: ScipDatabase,
+    definitions: ReadonlyArray<IndexedDefinition>,
+  ): Map<number, Set<string>>;
+  sourceFallbackConsumers(
+    db: ScipDatabase,
+    definitions: ReadonlyArray<IndexedDefinition>,
+  ): Map<number, Set<string>>;
+}
+
+export interface DiffImpactPartialOptions {
+  evidenceRuntime?: DiffImpactEvidenceRuntime;
+}
+
 export interface DiffImpactPartial {
   changedSymbols: ChangedSymbol[];
   consumerEntries: Array<{ file: string; symbols: string[] }>;
   attributionNotes: AttributionNote[];
+  evidenceTiers: DiffImpactEvidenceTierStatus[];
 }
 
 export interface AttributionNote {
@@ -81,6 +105,11 @@ export interface DeclarationSpan {
   startLine: number;
   endLine: number;
 }
+
+const DEFAULT_DIFF_IMPACT_EVIDENCE_RUNTIME: DiffImpactEvidenceRuntime = {
+  semanticConsumers: semanticCallerMap,
+  sourceFallbackConsumers: sourceFallbackCallerEvidenceMap,
+};
 
 /**
  * Given a git diff, compute the affected symbol set.
@@ -136,7 +165,9 @@ export function diffImpactPartial(
   filesToAnalyze: readonly string[],
   allChangedFiles: readonly string[],
   changedRanges: readonly ChangedLineRange[] = [],
+  opts: DiffImpactPartialOptions = {},
 ): DiffImpactPartial {
+  const evidenceRuntime = opts.evidenceRuntime ?? DEFAULT_DIFF_IMPACT_EVIDENCE_RUNTIME;
   const index = new ProjectIndex(db);
   const changedFileSet = new Set(allChangedFiles);
   const changedRangeMap = rangesByFile(changedRanges);
@@ -157,11 +188,12 @@ export function diffImpactPartial(
   const fanInBySymbolId = scipFanInBySymbolId(db, symbolIds);
   const consumerFilesBySymbolId = scipConsumerFilesBySymbolId(db, symbolIds, allChangedFiles);
   const stillZeroAfterScip = defs.filter((def) => (fanInBySymbolId.get(def.symbolId) ?? 0) === 0);
-  // ts-morph's checker can throw on pathological files (observed: an
-  // internal `resolveErrorCall`/`getTypeOfSymbol` crash in a large
-  // generated-contract file) — an enrichment tier failing must degrade to
-  // "found nothing from this tier", never take the whole gate down.
-  const semanticConsumers = safeConsumerMap(() => semanticCallerMap(db, stillZeroAfterScip));
+  const semanticEvidence = collectConsumerEvidence(
+    'semantic-consumers',
+    stillZeroAfterScip.length,
+    () => evidenceRuntime.semanticConsumers(db, stillZeroAfterScip),
+  );
+  const semanticConsumers = semanticEvidence.values;
   // Semantic (ts-morph) resolves most cross-file gaps the raw SCIP index
   // misses, but shares the same tsconfig-alias/workspace-package resolution
   // surface as everything else in this tool — when it also comes up empty,
@@ -176,7 +208,12 @@ export function diffImpactPartial(
   const stillZeroAfterSemantic = stillZeroAfterScip.filter(
     (def) => (semanticConsumers.get(def.symbolId)?.size ?? 0) === 0,
   );
-  const sourceFallbackConsumers = safeConsumerMap(() => sourceFallbackCallerEvidenceMap(db, stillZeroAfterSemantic));
+  const sourceFallbackEvidence = collectConsumerEvidence(
+    'source-fallback-consumers',
+    stillZeroAfterSemantic.length,
+    () => evidenceRuntime.sourceFallbackConsumers(db, stillZeroAfterSemantic),
+  );
+  const sourceFallbackConsumers = sourceFallbackEvidence.values;
   for (const def of defs) {
     addChangedDefinitionImpact(
       db,
@@ -198,6 +235,7 @@ export function diffImpactPartial(
       symbols: [...symbols].sort(),
     })),
     attributionNotes: residueAttribution.notes,
+    evidenceTiers: [semanticEvidence.status, sourceFallbackEvidence.status],
   };
 }
 
@@ -208,6 +246,7 @@ export function mergeDiffImpactPartials(
   const consumerMap: ConsumerMap = new Map();
   const changedSymbols = partials.flatMap((partial) => partial.changedSymbols);
   const attributionNotes = partials.flatMap((partial) => partial.attributionNotes ?? []);
+  const evidenceTiers = mergeEvidenceTierStatuses(partials);
 
   for (const partial of partials) {
     for (const entry of partial.consumerEntries) {
@@ -226,6 +265,7 @@ export function mergeDiffImpactPartials(
     changedSymbols,
     affectedConsumers,
     attributionNotes,
+    evidenceTiers,
     summary: {
       totalChangedFiles: changedFiles.length,
       totalChangedSymbols: changedSymbols.length,
@@ -240,6 +280,7 @@ function emptyDiffImpact(note: string, changedFiles: string[] = []): DiffImpactR
     changedSymbols: [],
     affectedConsumers: [],
     attributionNotes: [],
+    evidenceTiers: completeEvidenceTierStatuses(),
     summary: {
       totalChangedFiles: changedFiles.length,
       totalChangedSymbols: 0,
@@ -255,6 +296,7 @@ function unindexedChangedFilesResult(changedFiles: string[]): DiffImpactResult {
     changedSymbols: [],
     affectedConsumers: [],
     attributionNotes: [],
+    evidenceTiers: completeEvidenceTierStatuses(),
     summary: {
       totalChangedFiles: changedFiles.length,
       totalChangedSymbols: 0,
@@ -788,19 +830,72 @@ function addChangedDefinitionImpact(
   }
 }
 
-// scip-query: ignore-wrapper — one place to convert "an evidence tier
-// threw" into "this tier found nothing" for the two whole-project
-// enrichment scans (semantic, source-fallback) that changed-symbol impact
-// leans on; callers must not crash the gate over a best-effort tier.
-function safeConsumerMap<T>(compute: () => Map<number, T>): Map<number, T> {
+function collectConsumerEvidence<T>(
+  tier: DiffImpactEvidenceTier,
+  attemptedSymbols: number,
+  compute: () => Map<number, T>,
+): { values: Map<number, T>; status: DiffImpactEvidenceTierStatus } {
   try {
-    return compute();
-  } catch (err) {
-    console.error(
-      `warning: diff-impact enrichment scan failed, continuing without it: ${err instanceof Error ? err.message : err}`,
-    );
-    return new Map();
+    return {
+      values: compute(),
+      status: { tier, state: 'complete', attemptedSymbols },
+    };
+  } catch (error) {
+    return {
+      values: new Map(),
+      status: {
+        tier,
+        state: 'failed',
+        attemptedSymbols,
+        reason: boundedEvidenceFailureReason(error),
+      },
+    };
   }
+}
+
+function mergeEvidenceTierStatuses(partials: readonly DiffImpactPartial[]): DiffImpactEvidenceTierStatus[] {
+  return (['semantic-consumers', 'source-fallback-consumers'] as const).map((tier) => {
+    const statuses = partials.map(
+      (partial): DiffImpactEvidenceTierStatus =>
+        partial.evidenceTiers?.find((status) => status.tier === tier) ?? {
+          tier,
+          state: 'failed',
+          attemptedSymbols: 0,
+          reason: 'isolated diff-impact batch omitted its evidence-tier status',
+        },
+    );
+    const attemptedSymbols = statuses.reduce((sum, status) => sum + status.attemptedSymbols, 0);
+    const reasons = [
+      ...new Set(
+        statuses
+          .filter((status): status is Extract<DiffImpactEvidenceTierStatus, { state: 'failed' }> =>
+            status.state === 'failed',
+          )
+          .map((status) => status.reason),
+      ),
+    ];
+    return reasons.length === 0
+      ? { tier, state: 'complete', attemptedSymbols }
+      : {
+          tier,
+          state: 'failed',
+          attemptedSymbols,
+          reason: reasons.join('; ').slice(0, 500),
+        };
+  });
+}
+
+function completeEvidenceTierStatuses(): DiffImpactEvidenceTierStatus[] {
+  return [
+    { tier: 'semantic-consumers', state: 'complete', attemptedSymbols: 0 },
+    { tier: 'source-fallback-consumers', state: 'complete', attemptedSymbols: 0 },
+  ];
+}
+
+function boundedEvidenceFailureReason(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const bounded = message.replaceAll(/\s+/g, ' ').trim().slice(0, 500);
+  return bounded === '' ? 'evidence provider failed without a reason' : bounded;
 }
 
 function scipFanInBySymbolId(db: ScipDatabase, symbolIds: readonly number[]): Map<number, number> {

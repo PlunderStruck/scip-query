@@ -296,7 +296,8 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
   }
   const { result, outcomes, analysisBudget } = execution;
   const blocking = queries.blockingFindings(result.findings);
-  const gateFailed = queries.diffGateFailedClosed(result);
+  const gateFailure = queries.diffGateFailureReason(result);
+  const gateFailed = gateFailure !== undefined;
   const suppressionCoverageWarning = result.recordCompatibility
     ? formatRecordCompatibilityWarning('Committed suppression', result.recordCompatibility.suppressions)
     : undefined;
@@ -309,7 +310,7 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
       opts,
       {
         exitCode,
-        ...(gateFailed ? { gateError: 'git diff unavailable - zero checks ran; the gate fails closed' } : {}),
+        ...(gateFailure ? { gateError: gateFailure } : {}),
         advisoryFindingCount: result.findings.length - blocking.length,
         ...(analysisBudget ? { analysisBudget } : {}),
         ...result,
@@ -359,7 +360,7 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
     // see the `advisory` field doc comment on DiffGateFinding.
     if (gateFailed) {
       console.error(
-        'diff gate FAILED CLOSED: could not compute the git diff (diff too large, bad --base, or git error) - zero checks ran. Investigate with: scip-query diff-gate',
+        `diff gate FAILED CLOSED: ${gateFailure}. Investigate with: scip-query diff-gate`,
       );
       process.exitCode = 2;
       return;
@@ -380,9 +381,7 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
     return;
   }
   if (gateFailed) {
-    console.error(
-      'FAIL (gate error): could not compute the git diff - zero checks ran; the gate fails closed. Check --base and repository state.',
-    );
+    console.error(`FAIL (gate error): ${gateFailure}.`);
     process.exitCode = 1;
     return;
   }
