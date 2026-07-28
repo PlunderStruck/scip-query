@@ -199,30 +199,38 @@ function createTypeScriptMailboxLane<Envelope extends { id: string; deadlineAtMs
   const limits = { ...options.limits, maxBatch: 1 };
   let current: { claim: BoundedMailboxClaim; envelope: Envelope } | null = null;
   let serviceStatus = options.initialStatus();
+  let fatal = false;
+
+  const reportFatal = (error: Error): void => {
+    fatal = true;
+    options.onFatal(error);
+  };
 
   const workerLane = new WorkerRequestLane<Envelope, Result, Status>({
     name: options.name,
     createWorker: options.createWorker,
     now,
     onComplete(request, result, status) {
-      const claimed = takeCurrent(request.requestId);
+      const claimed = requireCurrent(request.requestId);
       serviceStatus = status;
       options.complete(claimed.claim, claimed.envelope, result, now());
+      releaseCurrent(claimed);
     },
     onReject(request, reason, status) {
-      const claimed = takeCurrent(request.requestId);
+      const claimed = requireCurrent(request.requestId);
       if (status !== undefined) serviceStatus = status;
       options.reject(claimed.claim, claimed.envelope.id, reason, now());
+      releaseCurrent(claimed);
     },
     onStatus(status) {
       serviceStatus = status;
     },
-    onFatal: options.onFatal,
+    onFatal: reportFatal,
   });
 
   return {
     poll(): number {
-      if (!workerLane.canAccept()) return 0;
+      if (fatal || !workerLane.canAccept()) return 0;
       const claim = pollBoundedMailboxRequests(options.paths, {
         ownerId,
         nowMs: now(),
@@ -241,23 +249,20 @@ function createTypeScriptMailboxLane<Envelope extends { id: string; deadlineAtMs
         if (envelope.deadlineAtMs < now()) {
           throw new Error(`${options.name} request expired before processing.`);
         }
-        current = { claim, envelope };
-        options.onBusy?.(envelope.deadlineAtMs);
-        if (!workerLane.start({ requestId: envelope.id, deadlineAtMs: envelope.deadlineAtMs, payload: envelope })) {
-          current = null;
-          options.onBusy?.(undefined);
-          throw new Error(`${options.name} worker lane closed admission after claiming a request.`);
+          current = { claim, envelope };
+          options.onBusy?.(envelope.deadlineAtMs);
+          if (!workerLane.start({ requestId: envelope.id, deadlineAtMs: envelope.deadlineAtMs, payload: envelope })) {
+            throw new Error(`${options.name} worker lane closed admission after claiming a request.`);
+          }
+        } catch (error) {
+          const reason = errorMessage(error);
+          try {
+            options.reject(claim, id, reason, now());
+            if (current?.claim === claim) releaseCurrent(current);
+          } catch (settlementError) {
+            reportFatal(asError(settlementError));
+          }
         }
-      } catch (error) {
-        if (current?.claim === claim) current = null;
-        options.onBusy?.(undefined);
-        const reason = errorMessage(error);
-        try {
-          options.reject(claim, id, reason, now());
-        } catch (settlementError) {
-          options.onFatal(asError(settlementError));
-        }
-      }
       return 1;
     },
     status(): Status {
@@ -271,14 +276,18 @@ function createTypeScriptMailboxLane<Envelope extends { id: string; deadlineAtMs
     },
   };
 
-  function takeCurrent(requestId: string): { claim: BoundedMailboxClaim; envelope: Envelope } {
+  function requireCurrent(requestId: string): { claim: BoundedMailboxClaim; envelope: Envelope } {
     const claimed = current;
     if (!claimed || claimed.envelope.id !== requestId) {
       throw new Error(`${options.name} parent lost the active mailbox claim.`);
     }
+    return claimed;
+  }
+
+  function releaseCurrent(claimed: { claim: BoundedMailboxClaim; envelope: Envelope }): void {
+    if (current !== claimed) return;
     current = null;
     options.onBusy?.(undefined);
-    return claimed;
   }
 }
 

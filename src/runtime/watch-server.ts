@@ -139,6 +139,7 @@ export async function runWatchServiceServer(
   let indexGeneration: string | undefined;
   let lastRefresh: WatchServiceState['lastRefresh'];
   let lastError: WatchServiceState['lastError'];
+  let mailboxFatalError: Error | undefined;
   let reindexActivity = readReindexActivitySummary(indexPaths.dbPath);
   let stopping = false;
   let ready = false;
@@ -206,6 +207,7 @@ export async function runWatchServiceServer(
 
   const recordMailboxFatal = (error: Error): void => {
     recordActivity();
+    mailboxFatalError ??= error;
     lastError = { at: new Date().toISOString(), message: error.message };
     persistState(true, 'visibility');
   };
@@ -339,6 +341,7 @@ export async function runWatchServiceServer(
         },
         shouldStop: () =>
           stopping ||
+          mailboxFatalError !== undefined ||
           shouldStopWatchServiceForIdle({
             watcher: watcherStatus,
             lastActivityAtMs: lastActivityAtMonotonicMs,
@@ -373,6 +376,10 @@ export async function runWatchServiceServer(
       persistState(true);
       shutdownError = new Error(lastError.message);
     }
+  }
+  if (!executionFailed && mailboxFatalError) {
+    executionFailed = true;
+    executionError = mailboxFatalError;
   }
   if (executionFailed && shutdownError) {
     throw new AggregateError([executionError, shutdownError], 'Watch service execution and shutdown both failed.');

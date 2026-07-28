@@ -34,6 +34,61 @@ describe('WorkerRequestLane', () => {
     expect(lane.canAccept()).toBe(true);
   });
 
+  it('retains ownership and closes admission when completion settlement throws', async () => {
+    const worker = new FakeWorker();
+    const fatal: string[] = [];
+    const rejections: string[] = [];
+    const lane = createLane(worker, {
+      onComplete: () => {
+        throw new Error('durable completion failed');
+      },
+      onReject: (_request, reason) => rejections.push(reason),
+      onFatal: (error) => fatal.push(error.message),
+    });
+
+    expect(lane.start(request('one'))).toBe(true);
+    const response = success('one', 'done', 1);
+    worker.emitMessage(response);
+    worker.emitMessage(response);
+
+    expect(fatal).toEqual(['durable completion failed']);
+    expect(lane.canAccept()).toBe(false);
+    expect(lane.start(request('replacement'))).toBe(false);
+
+    await lane.close('service failed after completion settlement');
+    expect(worker.terminateCalls).toBe(1);
+    expect(rejections).toEqual(['service failed after completion settlement']);
+    expect(lane.canAccept()).toBe(false);
+  });
+
+  it('retains ownership and retries rejection only during fail-stop shutdown', async () => {
+    const worker = new FakeWorker();
+    const fatal: string[] = [];
+    const rejections: string[] = [];
+    let rejectAttempts = 0;
+    const lane = createLane(worker, {
+      onReject: (_request, reason) => {
+        rejectAttempts += 1;
+        if (rejectAttempts === 1) throw new Error('durable rejection failed');
+        rejections.push(reason);
+      },
+      onFatal: (error) => fatal.push(error.message),
+    });
+
+    expect(lane.start(request('one'))).toBe(true);
+    worker.emitMessage(failure('one', 'worker could not answer', 1));
+    worker.emitMessage(failure('one', 'duplicate response', 1));
+
+    expect(fatal).toEqual(['durable rejection failed']);
+    expect(rejectAttempts).toBe(1);
+    expect(lane.canAccept()).toBe(false);
+
+    await lane.close('service failed after rejection settlement');
+    expect(worker.terminateCalls).toBe(1);
+    expect(rejectAttempts).toBe(2);
+    expect(rejections).toEqual(['service failed after rejection settlement']);
+  });
+
   it('closes admission after timeout until Worker termination has joined', async () => {
     const first = new FakeWorker();
     const second = new FakeWorker();
@@ -148,6 +203,7 @@ function createLane(
   overrides: {
     onComplete?: (request: ReturnType<typeof request>, result: string, status: Status) => void;
     onReject?: (request: ReturnType<typeof request>, reason: string, status?: Status) => void;
+    onFatal?: (error: Error) => void;
   } = {},
 ): WorkerRequestLane<Payload, string, Status> {
   return new WorkerRequestLane({
@@ -156,9 +212,11 @@ function createLane(
     onComplete: overrides.onComplete ?? (() => {}),
     onReject: overrides.onReject ?? (() => {}),
     onStatus: () => {},
-    onFatal: (error) => {
-      throw error;
-    },
+    onFatal:
+      overrides.onFatal ??
+      ((error) => {
+        throw error;
+      }),
   });
 }
 
@@ -172,6 +230,10 @@ function request(requestId: string) {
 
 function success(requestId: string, result: string, requests: number): WorkerLaneResponse<string, Status> {
   return { kind: 'response', requestId, ok: true, result, status: { requests } };
+}
+
+function failure(requestId: string, error: string, requests: number): WorkerLaneResponse<string, Status> {
+  return { kind: 'response', requestId, ok: false, error, status: { requests } };
 }
 
 class FakeWorker implements RequestWorkerLike {

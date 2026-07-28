@@ -366,6 +366,57 @@ describe('TypeScript index service mailbox', () => {
     expect(readdirSync(paths.responseDir).filter((entry) => entry === 'isolated.json')).toHaveLength(1);
     await lane.close();
   });
+
+  test('retains an inflight claim and closes admission when durable completion fails', async () => {
+    const fixture = serviceFixture();
+    const paths = typeScriptIndexMailboxPaths(fixture.cacheDir);
+    initializeTypeScriptIndexMailbox(paths);
+    writeRequest(paths.requestDir, 'settlement-failure', 'base', indexRequest('producer'));
+    const worker = new FakeIndexWorker();
+    const fatal: string[] = [];
+    const lane = createTypeScriptIndexMailboxLane({
+      paths,
+      projectRoot: fixture.projectRoot,
+      dbPath: join(fixture.cacheDir, 'index.db'),
+      now: () => NOW,
+      createWorker: () => worker,
+      onFatal: (error) => fatal.push(error.message),
+    });
+
+    expect(lane.poll()).toBe(1);
+    expect(lane.status().mailbox).toEqual(expect.objectContaining({ inflight: 1, responses: 0 }));
+    rmSync(paths.responseDir, { recursive: true, force: true });
+    writeFileSync(paths.responseDir, 'blocks response directory creation');
+
+    const status = new TypeScriptIndexServiceHost({
+      projectRoot: fixture.projectRoot,
+      currentGeneration: () => 'base',
+    }).status();
+    worker.emitMessage({
+      kind: 'response',
+      requestId: 'settlement-failure',
+      ok: true,
+      result: { producerIdentity: 'producer', cold: true, durationMs: 1, fragments: [] },
+      status,
+    } satisfies WorkerLaneResponse<
+      { producerIdentity: string; cold: boolean; durationMs: number; fragments: [] },
+      typeof status
+    >);
+
+    expect(fatal).toEqual([expect.any(String)]);
+    rmSync(paths.responseDir, { force: true });
+    mkdirSync(paths.responseDir, { recursive: true });
+    expect(lane.status().mailbox).toEqual(expect.objectContaining({ inflight: 1, responses: 0 }));
+    writeRequest(paths.requestDir, 'replacement', 'base', indexRequest('replacement-producer'));
+    expect(lane.poll()).toBe(0);
+
+    await lane.close('completion settlement failed');
+
+    expect(readResponse(paths.responseDir, 'settlement-failure')).toEqual(
+      expect.objectContaining({ ok: false, error: 'completion settlement failed' }),
+    );
+    expect(lane.status().mailbox).toEqual(expect.objectContaining({ inflight: 0, responses: 1 }));
+  });
 });
 
 function serviceFixture(): { projectRoot: string; cacheDir: string } {

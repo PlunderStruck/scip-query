@@ -48,6 +48,7 @@ export class WorkerRequestLane<Payload, Result, Status> {
   private readonly clearTimer: (timer: ReturnType<typeof setTimeout>) => void;
   private worker: RequestWorkerLike | null = null;
   private active: ActiveWorkerRequest<Payload> | null = null;
+  private activeFailure: Promise<void> | null = null;
   private terminating: Promise<boolean> | null = null;
   private closed = false;
   private workerGeneration = 0;
@@ -65,7 +66,12 @@ export class WorkerRequestLane<Payload, Result, Status> {
   start(request: WorkerLaneRequest<Payload>): boolean {
     if (!this.canAccept()) return false;
     if (request.deadlineAtMs < this.now()) {
-      this.options.onReject(request, `${this.options.name} request expired before processing.`);
+      try {
+        this.options.onReject(request, `${this.options.name} request expired before processing.`);
+      } catch (error) {
+        this.closed = true;
+        this.options.onFatal(asError(error));
+      }
       return true;
     }
     const worker = this.ensureWorker();
@@ -112,7 +118,7 @@ export class WorkerRequestLane<Payload, Result, Status> {
   }
 
   private handleMessage(generation: number, value: unknown): void {
-    if (generation !== this.workerGeneration || !this.active) return;
+    if (generation !== this.workerGeneration || this.closed || !this.active) return;
     if (!isWorkerLaneResponse<Result, Status>(value)) {
       void this.failActiveAfterTermination(`${this.options.name} worker returned an invalid response.`);
       return;
@@ -125,8 +131,7 @@ export class WorkerRequestLane<Payload, Result, Status> {
       void this.failActiveAfterTermination(`${this.options.name} request expired while it was processing.`);
       return;
     }
-    const active = this.takeActive();
-    if (!active) return;
+    const active = this.active;
     try {
       this.options.onStatus(value.status);
       if (value.ok) {
@@ -135,31 +140,49 @@ export class WorkerRequestLane<Payload, Result, Status> {
         this.options.onReject(active.request, value.error ?? `${this.options.name} request failed.`, value.status);
       }
     } catch (error) {
+      this.closed = true;
+      this.clearTimer(active.timer);
       this.options.onFatal(asError(error));
+      return;
     }
+    this.releaseActive(active);
   }
 
   private async failActiveAfterTermination(reason: string): Promise<void> {
-    const active = this.takeActive();
+    if (this.activeFailure) {
+      await this.activeFailure;
+      return;
+    }
+    const active = this.active;
     if (!active) {
       await this.terminateWorker();
       return;
     }
-    const terminated = await this.terminateWorker();
-    if (!terminated) return;
+    this.clearTimer(active.timer);
+    const failure = (async (): Promise<void> => {
+      const terminated = await this.terminateWorker();
+      if (!terminated) return;
+      try {
+        this.options.onReject(active.request, reason);
+      } catch (error) {
+        this.closed = true;
+        this.options.onFatal(asError(error));
+        return;
+      }
+      this.releaseActive(active);
+    })();
+    this.activeFailure = failure;
     try {
-      this.options.onReject(active.request, reason);
-    } catch (error) {
-      this.options.onFatal(asError(error));
+      await failure;
+    } finally {
+      if (this.activeFailure === failure) this.activeFailure = null;
     }
   }
 
-  private takeActive(): ActiveWorkerRequest<Payload> | null {
-    const active = this.active;
-    if (!active) return null;
+  private releaseActive(active: ActiveWorkerRequest<Payload>): void {
+    if (this.active !== active) return;
     this.active = null;
     this.clearTimer(active.timer);
-    return active;
   }
 
   private async terminateWorker(): Promise<boolean> {
