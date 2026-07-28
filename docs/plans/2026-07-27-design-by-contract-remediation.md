@@ -624,3 +624,37 @@ After all slices:
 8. update the audit with a finding-by-finding closure table and exact commands;
 9. inspect `HEY.md` before staging;
 10. stage explicit pathspecs and confirm no skill change enters a commit.
+
+### Completion record
+
+All nine slices are implemented:
+
+| Finding | Commit | Closed contract |
+| --- | --- | --- |
+| DBC-01 | `f6ec5f3e` | A claimed mailbox request remains owned until durable settlement succeeds; settlement failure closes admission and stops the watcher owner. |
+| DBC-02 | `7ddb6909` | Working-tree inspection is `known` or `unavailable`; unavailable knowledge blocks cleanup unless the separately named override is explicit. |
+| DBC-03 | `3261d9af` | Semantic and source-fallback consumer tiers retain `complete` or `failed` status through merging, rendering, and diff-gate evaluation. |
+| DBC-04 | `df5b54b5` | Historical content distinguishes `present`, `absent`, and operationally `unavailable`; safety consumers no longer treat Git failure as file absence. |
+| DBC-05 | `32f0a845` | Invocation coverage is a closed union whose arithmetic and continuation fields cannot contradict its completeness state. |
+| DBC-07 | `a13867e0` | Output, Worker, watcher, lock, and semantic-availability protocols require exactly the fields selected by their state tag. |
+| DBC-06 | `ec90abc6` | `ScipDatabase` rolls back partial construction, enforces idempotent close, and exposes query capability without exposing lifecycle mutation. |
+| DBC-08 | `32c5726e` | Method resolution returns `matched`, `missing`, or `ambiguous` data; JSON CLI failures remain valid JSON and the throwing wrapper is deprecated. |
+| DBC-09 | `4607cc66` | Semantically distinct public arguments have named primary APIs, validated paths, migrated internal callers, and deprecated positional compatibility overloads. |
+
+The complete suite then found two closure defects not visible in the focused
+runs. Commit `5ebe9503` made a runtime `DiffGateResult` with missing
+`evidenceTiers` fail closed instead of throwing, updated the outcome fixture
+to provide honest complete evidence, and removed a real-calendar dependency
+from mailbox-retention testing. Commit `dd286422` applied the repository's
+owned formatter to four earlier slice files; it changed no behavior.
+
+Final repository verification:
+
+- `npm test`: 256 files and 2,008 tests passed;
+- `npm run lint`: formatting, ESLint, build, public API snapshot, external
+  package-consumer compilation, and skill-link checks passed. The public
+  TypeScript API matches `d85979e8ebbe2047`;
+- `cargo check --quiet --manifest-path Cargo.toml`: passed;
+- no `skills/**` path was edited or committed by this implementation;
+- the final whole-series SCIP impact and diff-gate results are recorded in the
+  audit closure section.

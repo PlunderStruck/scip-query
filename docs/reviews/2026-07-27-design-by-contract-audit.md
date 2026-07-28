@@ -813,3 +813,120 @@ Refutation attempts:
 5. **The finding count or tracked scope may not match the summary.** A final checker found sequential DBC-01 through DBC-09 headings, exactly four high, four medium, and one low; Git showed only this review as untracked.
 
 No production behavior was changed by this audit. The only tracked change is this review document.
+
+---
+
+## 10. Remediation closure
+
+The nine findings are closed. Here, “closed” means the violated boundary now
+represents every relevant outcome, rejects or safely contains invalid states,
+and has a negative-path test that would fail if the original defect returned.
+
+| Finding | Resolution | Verification evidence |
+| --- | --- | --- |
+| DBC-01 | Mailbox claims remain the live owner's responsibility until completion or rejection is durably written. Settlement failure closes the lane, retains ownership for shutdown, and stops the watcher loop. | Worker settlement-throw tests, TypeScript mailbox tests, watcher fatal-stop tests; commit `f6ec5f3e`. |
+| DBC-02 | Worktree inspection returns `known` or `unavailable`. Cleanup fails closed—refuses to claim safety without the required observation—unless `allowUnknownWorkingTree` is explicitly selected. | Nonzero, timeout, signal, and overflow tests plus cleanup rendering tests; commit `7ddb6909`. |
+| DBC-03 | Consumer discovery carries a status for each semantic and source-fallback tier. Any failed required tier survives partial merging and makes diff-gate fail closed. | Tier-failure, partial-merge, JSON, CLI, and gate tests; commits `3261d9af` and `5ebe9503`. |
+| DBC-04 | Historical lookup returns `present`, `absent`, or `unavailable`; the nullable compatibility wrappers throw rather than convert operational failure into absence. | Invalid-base, Git-failure, malformed-batch, incomplete-migration, and gate tests; commit `df5b54b5`. |
+| DBC-05 | Coverage is a discriminated union for complete, bounded incomplete, and unknown results. Runtime validation enforces totals, omissions, identities, and continuations. | Compile-time invalid-state fixture, CLI contract tests, and descriptor registry gate; commit `32f0a845`. |
+| DBC-06 | Database construction releases every acquired resource on failure, close is idempotent, and supported consumers receive a query-only port rather than lifecycle-capable raw connection access. | Constructor rollback, lease, close, pragma, validation, and public-consumer tests; commit `ec90abc6`. |
+| DBC-07 | Core protocols are tagged unions and untrusted JSON is decoded according to the selected state. Impossible success/error and stopped/continued combinations no longer compile or decode. | Ten focused protocol files, 127 tests, compile-time fixture, API check, and full suite; commit `a13867e0`. |
+| DBC-08 | Method lookup reports `matched`, `missing`, or `ambiguous` as structured data. The CLI emits valid JSON for every JSON-mode outcome and uses nonzero status for nonmatches. | Library resolution and human/JSON CLI tests; commit `32c5726e`. |
+| DBC-09 | Named option objects are the primary public APIs for role-sensitive arguments; path roles are validated, internal callers use named forms, and source-compatible positional overloads are deprecated. | Six focused files, 104 tests, public compile fixture, API snapshot, complete reference checks, and boundary-refutation tests; commit `4607cc66`. |
+
+### Closure defects found by the full suite
+
+The first complete-suite run failed 14 outcome-ledger tests because their
+hand-built `DiffGateResult` fixture predated the required evidence-tier field.
+The production result builder already supplied the field, but the public
+runtime predicate dereferenced malformed legacy input and threw. The closure
+repair now treats absent evidence status as a gate failure, adds a direct
+regression test, and gives the fixture two explicit complete tiers.
+
+The same run found a mailbox-retention test whose simulated `nowMs` was
+compared with files carrying the machine's real modification time. Once the
+calendar moved beyond the test's fixed cleanup date, logically old files
+looked new. The test now assigns the simulated creation time to every retained
+response and dead-letter file before advancing its clock.
+
+### Whole-repository verification
+
+Exact commands and outcomes:
+
+```text
+npx vitest run tests/runtime/diff-gate-outcomes.test.ts \
+  tests/queries/impact/diff-gate-fail-closed.test.ts \
+  tests/storage/bounded-mailbox.test.ts
+  -> 3 files passed; 26 tests passed
+
+npm test
+  -> 256 files passed; 2,008 tests passed
+
+npm run lint
+  -> Prettier passed
+  -> ESLint passed
+  -> package build passed
+  -> public TypeScript API matches d85979e8ebbe2047 (72 paths)
+  -> external public-consumer fixture passed
+  -> skill-link validation passed
+
+cargo check --quiet --manifest-path Cargo.toml
+  -> passed
+```
+
+The final SCIP whole-series check used the commit immediately before the plan,
+`8745d26d`, as its base so committed slices were not hidden by the ordinary
+`HEAD` comparison:
+
+```text
+scip-query diff-impact --base 8745d26d --json
+  -> 36 indexed files changed
+  -> 200 indexed symbols changed
+  -> 180 affected consumer files
+  -> both required evidence tiers complete
+  -> command coverage unknown; all 94,850 rendered characters retrieved in 8 pages
+
+scip-query diff-gate --base 8745d26d --full --json --compact
+  -> 9 checks ran; 0 skipped
+  -> complete finding coverage: 6 of 6 unsuppressed findings returned
+  -> 3 existing structured suppressions matched
+  -> 1 blocking co-change signal and 5 advisory document signals
+  -> all 37,423 rendered characters retrieved in 4 pages
+```
+
+The sole blocking signal, `SQ81C85F3058D3`, says
+`lsp-batch-worker.ts` historically co-changes with
+`lsp-session-worker.ts`. It is accepted for this change, without a permanent
+suppression. The batch worker changed only
+`RustReferenceWorkerResponse` from a Boolean-plus-optional interface to its
+equivalent strict `SemanticAvailabilityState` intersection. A complete
+reference query found the session worker at three consumer sites; it already
+imports and produces that shared response type. TypeScript, the protocol
+fixture, Rust session tests, the public API check, and the 2,008-test full
+suite all compiled or exercised the consumer. Editing the session worker to
+manufacture a symmetric diff would not repair a contract, while permanently
+suppressing the file pair would hide a later real one-sided change.
+
+The five advisory document signals were reread and remain accurate:
+
+- `docs/COMMAND_REFERENCE.md` describes the co-change command's budget
+  boundary; the edited impact handler changed incomplete-migration and
+  diff-gate failure reporting, not that budget;
+- `docs/analyzer-inventory.md` and
+  `docs/analyzer-validation-ledger.md` say `diffGate()` and
+  `DIFF_GATE_CHECKS` own the default gate family; both symbols and the family
+  remain there;
+- `docs/architecture/evidence-cache-invalidation.md` describes cache
+  ownership and invalidation. The relevant source edits added a failed-tier
+  CLI warning and tightened a capability type; neither changed a cache key,
+  payload owner, or staleness rule;
+- `docs/architecture/scip-query-target-architecture.md` describes the
+  TypeScript semantic mailbox's immutable generation identity. The remote
+  provider now validates availability through the shared decoder, while its
+  generation identity and operation key are unchanged.
+
+The three matched structured suppressions were also rechecked. They cover a
+type-only watch-service stop-result change, an untouched semantic-prewarm
+anchor, and semantic protocol changes that do not alter the Rust performance
+ledger's session or cache behavior. Suppression-record compatibility was
+complete: all 42 repository records were accepted.
