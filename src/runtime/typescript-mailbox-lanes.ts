@@ -249,20 +249,20 @@ function createTypeScriptMailboxLane<Envelope extends { id: string; deadlineAtMs
         if (envelope.deadlineAtMs < now()) {
           throw new Error(`${options.name} request expired before processing.`);
         }
-          current = { claim, envelope };
-          options.onBusy?.(envelope.deadlineAtMs);
-          if (!workerLane.start({ requestId: envelope.id, deadlineAtMs: envelope.deadlineAtMs, payload: envelope })) {
-            throw new Error(`${options.name} worker lane closed admission after claiming a request.`);
-          }
-        } catch (error) {
-          const reason = errorMessage(error);
-          try {
-            options.reject(claim, id, reason, now());
-            if (current?.claim === claim) releaseCurrent(current);
-          } catch (settlementError) {
-            reportFatal(asError(settlementError));
-          }
+        current = { claim, envelope };
+        options.onBusy?.(envelope.deadlineAtMs);
+        if (!workerLane.start({ requestId: envelope.id, deadlineAtMs: envelope.deadlineAtMs, payload: envelope })) {
+          throw new Error(`${options.name} worker lane closed admission after claiming a request.`);
         }
+      } catch (error) {
+        const reason = errorMessage(error);
+        try {
+          options.reject(claim, id, reason, now());
+          if (current?.claim === claim) releaseCurrent(current);
+        } catch (settlementError) {
+          reportFatal(asError(settlementError));
+        }
+      }
       return 1;
     },
     status(): Status {

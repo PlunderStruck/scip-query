@@ -363,9 +363,7 @@ const handleDiffGate = dbCommand(({ db, opts }) => {
     // Advisory-only findings (e.g. twin-partner) never block the stop —
     // see the `advisory` field doc comment on DiffGateFinding.
     if (gateFailed) {
-      console.error(
-        `diff gate FAILED CLOSED: ${gateFailure}. Investigate with: scip-query diff-gate`,
-      );
+      console.error(`diff gate FAILED CLOSED: ${gateFailure}. Investigate with: scip-query diff-gate`);
       process.exitCode = 2;
       return;
     }

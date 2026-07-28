@@ -28,9 +28,7 @@ export interface BatchVerification {
   errors?: string[];
 }
 
-export type WorkingTreeInspection =
-  | { state: 'known'; files: string[] }
-  | { state: 'unavailable'; reason: string };
+export type WorkingTreeInspection = { state: 'known'; files: string[] } | { state: 'unavailable'; reason: string };
 
 export interface CleanupVerification {
   /** Human-readable checker invocations, empty when none was detected. */

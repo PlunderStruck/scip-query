@@ -10,12 +10,7 @@ import {
   createBaseContentResultReader,
   diffImpactPlan,
 } from './diff-impact.js';
-import type {
-  BaseContentReader,
-  BaseContentResult,
-  BaseContentResultReader,
-  DiffImpactPlan,
-} from './diff-impact.js';
+import type { BaseContentReader, BaseContentResult, BaseContentResultReader, DiffImpactPlan } from './diff-impact.js';
 import { meaningfulCallees, similarityFingerprintProduct } from '../cleanup/similar.js';
 import type { CalleeFingerprintIndex } from '../cleanup/similar.js';
 
