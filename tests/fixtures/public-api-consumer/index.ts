@@ -1,5 +1,12 @@
 import { ProjectIndex, parseSymbol, type ScipDatabase, type ScipQueryConfig } from 'scip-query';
 import { refs, type RefResult } from 'scip-query/queries/refs';
+import {
+  createBaseContentResultReader,
+  fileContentAtBase,
+  readBaseContent,
+  readBaseContents,
+  type BaseContentResult,
+} from 'scip-query/queries/diff-impact';
 import { reindex, type ReindexOptions, type ReindexResult } from 'scip-query/reindex';
 import {
   CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION,
@@ -24,5 +31,32 @@ const decoded: DecodedCliJsonEnvelope = decodeCliJsonEnvelope({
   options: {},
   result: [],
 });
+const historical: BaseContentResult = readBaseContent({
+  projectRoot: '.',
+  base: 'HEAD',
+  relativePath: 'src/index.ts',
+});
+const historicalBatch = readBaseContents({
+  projectRoot: '.',
+  base: 'HEAD',
+  relativePaths: ['src/index.ts'],
+});
+const historicalReader = createBaseContentResultReader({
+  projectRoot: '.',
+  base: 'HEAD',
+  preloadPaths: ['src/index.ts'],
+});
+const legacyHistorical: string | null = fileContentAtBase('.', 'HEAD', 'src/index.ts');
 
-void [index, config, references, resultPromise, decoded, parseSymbol('local 1')];
+void [
+  index,
+  config,
+  references,
+  resultPromise,
+  decoded,
+  historical,
+  historicalBatch,
+  historicalReader,
+  legacyHistorical,
+  parseSymbol('local 1'),
+];

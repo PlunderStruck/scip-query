@@ -65,6 +65,34 @@ export interface RenamedFile {
 
 export type BaseContentReader = (relativePath: string) => string | null;
 
+export type BaseContentResult =
+  | { state: 'present'; content: string }
+  | { state: 'absent' }
+  | { state: 'unavailable'; reason: string };
+
+export type BaseContentResultReader = (relativePath: string) => BaseContentResult;
+
+export interface BaseContentLookupOptions {
+  projectRoot: string;
+  base: string;
+  relativePath: string;
+}
+
+export interface BaseContentsLookupOptions {
+  projectRoot: string;
+  base: string;
+  relativePaths: readonly string[];
+}
+
+export interface BaseContentGitRuntime {
+  resolveCommit(projectRoot: string, base: string): string;
+  readBatch(input: {
+    projectRoot: string;
+    resolvedBase: string;
+    relativePaths: readonly string[];
+  }): Buffer;
+}
+
 export type DiffImpactEvidenceTier = 'semantic-consumers' | 'source-fallback-consumers';
 
 export type DiffImpactEvidenceTierStatus =
@@ -109,6 +137,20 @@ export interface DeclarationSpan {
 const DEFAULT_DIFF_IMPACT_EVIDENCE_RUNTIME: DiffImpactEvidenceRuntime = {
   semanticConsumers: semanticCallerMap,
   sourceFallbackConsumers: sourceFallbackCallerEvidenceMap,
+};
+
+const DEFAULT_BASE_CONTENT_GIT_RUNTIME: BaseContentGitRuntime = {
+  resolveCommit: resolveGitCommit,
+  readBatch({ projectRoot, resolvedBase, relativePaths }) {
+    const input = relativePaths.map((path) => `${resolvedBase}:./${path}\n`).join('');
+    return execFileSync('git', ['cat-file', '--batch'], {
+      cwd: projectRoot,
+      input,
+      maxBuffer: 256 * 1024 * 1024,
+      timeout: 10_000,
+      stdio: ['pipe', 'pipe', 'ignore'],
+    }) as Buffer;
+  },
 };
 
 /**
@@ -348,29 +390,112 @@ function getGitDiffSnapshot(projectRoot: string, base: string): GitDiffSnapshot 
 }
 
 export function fileContentAtBase(projectRoot: string, base: string, relativePath: string): string | null {
-  try {
-    const resolvedBase = resolveGitCommit(projectRoot, base);
-    return fileContentAtResolvedBase(projectRoot, resolvedBase, relativePath);
-  } catch {
-    return null;
+  const result = readBaseContent({ projectRoot, base, relativePath });
+  if (result.state === 'unavailable') {
+    throw new Error(`Base content unavailable for ${relativePath}: ${result.reason}`);
   }
+  return result.state === 'present' ? result.content : null;
 }
 
-function fileContentAtResolvedBase(projectRoot: string, resolvedBase: string, relativePath: string): string | null {
+export function readBaseContent(
+  opts: BaseContentLookupOptions,
+  runtime: BaseContentGitRuntime = DEFAULT_BASE_CONTENT_GIT_RUNTIME,
+): BaseContentResult {
+  return (
+    readBaseContents(
+      {
+        projectRoot: opts.projectRoot,
+        base: opts.base,
+        relativePaths: [opts.relativePath],
+      },
+      runtime,
+    ).get(opts.relativePath) ?? {
+      state: 'unavailable',
+      reason: `Base-content lookup omitted ${opts.relativePath}.`,
+    }
+  );
+}
+
+export function readBaseContents(
+  opts: BaseContentsLookupOptions,
+  runtime: BaseContentGitRuntime = DEFAULT_BASE_CONTENT_GIT_RUNTIME,
+): Map<string, BaseContentResult> {
+  const uniquePaths = [...new Set(opts.relativePaths)];
+  if (uniquePaths.length === 0) return new Map();
+
+  let resolvedBase: string;
   try {
-    // `ref:./path` resolves the path against cwd, so index-relative paths
-    // work even when the project root is not the git root.
-    return execFileSync('git', ['show', `${resolvedBase}:./${relativePath}`], {
-      encoding: 'utf-8',
-      cwd: projectRoot,
-      timeout: 10_000,
-      // A missing path at base is the expected "file is new" signal — keep
-      // git's fatal message off the user's terminal.
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
-  } catch {
-    return null;
+    resolvedBase = runtime.resolveCommit(opts.projectRoot, opts.base);
+  } catch (error) {
+    return unavailableBaseContents(uniquePaths, boundedBaseContentFailure(error));
   }
+
+  let output: Buffer;
+  try {
+    output = runtime.readBatch({
+      projectRoot: opts.projectRoot,
+      resolvedBase,
+      relativePaths: uniquePaths,
+    });
+  } catch (error) {
+    return unavailableBaseContents(uniquePaths, boundedBaseContentFailure(error));
+  }
+
+  let parsed: Map<string, string | null>;
+  try {
+    parsed = parseCatFileBatchOutput(output, uniquePaths);
+  } catch (error) {
+    return unavailableBaseContents(
+      uniquePaths,
+      `Malformed git cat-file batch output: ${boundedBaseContentFailure(error)}`,
+    );
+  }
+
+  return new Map(
+    uniquePaths.map((path) => {
+      const content = parsed.get(path) ?? null;
+      return [path, content === null ? ({ state: 'absent' } as const) : ({ state: 'present', content } as const)];
+    }),
+  );
+}
+
+export function createBaseContentResultReader(
+  opts: {
+    projectRoot: string;
+    base: string;
+    preloadPaths?: readonly string[];
+  },
+  runtime: BaseContentGitRuntime = DEFAULT_BASE_CONTENT_GIT_RUNTIME,
+): BaseContentResultReader {
+  const cache = readBaseContents(
+    {
+      projectRoot: opts.projectRoot,
+      base: opts.base,
+      relativePaths: opts.preloadPaths ?? [],
+    },
+    runtime,
+  );
+  return (relativePath) => {
+    if (!cache.has(relativePath)) {
+      cache.set(
+        relativePath,
+        readBaseContent(
+          {
+            projectRoot: opts.projectRoot,
+            base: opts.base,
+            relativePath,
+          },
+          runtime,
+        ),
+      );
+    }
+    return (
+      cache.get(relativePath) ?? {
+        state: 'unavailable',
+        reason: `Base-content reader omitted ${relativePath}.`,
+      }
+    );
+  };
 }
 
 export function createBaseContentReader(
@@ -378,12 +503,13 @@ export function createBaseContentReader(
   base: string,
   preloadPaths: readonly string[] = [],
 ): BaseContentReader {
-  const cache = fileContentsAtBase(projectRoot, base, preloadPaths);
+  const readResult = createBaseContentResultReader({ projectRoot, base, preloadPaths });
   return (relativePath) => {
-    if (!cache.has(relativePath)) {
-      cache.set(relativePath, fileContentAtBase(projectRoot, base, relativePath));
+    const result = readResult(relativePath);
+    if (result.state === 'unavailable') {
+      throw new Error(`Base content unavailable for ${relativePath}: ${result.reason}`);
     }
-    return cache.get(relativePath) ?? null;
+    return result.state === 'present' ? result.content : null;
   };
 }
 
@@ -400,27 +526,28 @@ export function fileContentsAtBase(
   base: string,
   relativePaths: readonly string[],
 ): Map<string, string | null> {
-  const uniquePaths = [...new Set(relativePaths)];
+  const results = readBaseContents({ projectRoot, base, relativePaths });
   const out = new Map<string, string | null>();
-  if (uniquePaths.length === 0) return out;
-
-  try {
-    const resolvedBase = resolveGitCommit(projectRoot, base);
-    const input = uniquePaths.map((path) => `${resolvedBase}:./${path}\n`).join('');
-    const output = execFileSync('git', ['cat-file', '--batch'], {
-      cwd: projectRoot,
-      input,
-      maxBuffer: 256 * 1024 * 1024,
-      timeout: 10_000,
-      stdio: ['pipe', 'pipe', 'ignore'],
-    }) as Buffer;
-    return parseCatFileBatchOutput(output, uniquePaths);
-  } catch {
-    for (const path of uniquePaths) {
-      out.set(path, fileContentAtBase(projectRoot, base, path));
+  for (const [path, result] of results) {
+    if (result.state === 'unavailable') {
+      throw new Error(`Base content unavailable for ${path}: ${result.reason}`);
     }
-    return out;
+    out.set(path, result.state === 'present' ? result.content : null);
   }
+  return out;
+}
+
+function unavailableBaseContents(
+  relativePaths: readonly string[],
+  reason: string,
+): Map<string, BaseContentResult> {
+  return new Map(relativePaths.map((path) => [path, { state: 'unavailable', reason }]));
+}
+
+function boundedBaseContentFailure(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const bounded = message.replaceAll(/\s+/g, ' ').trim().slice(0, 500);
+  return bounded === '' ? 'Git base-content lookup failed without a reason.' : bounded;
 }
 
 function parseCatFileBatchOutput(output: Buffer, relativePaths: readonly string[]): Map<string, string | null> {

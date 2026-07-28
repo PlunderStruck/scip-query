@@ -1,0 +1,355 @@
+{
+  "acceptedAt": "2026-07-28T01:35:05.713Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "91004a88fe45758af6a58ba12399003099745e9d61405d6232cd59f8f6ed35c4",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BaseContentGitRuntime.",
+      "target": "./queries:BaseContentGitRuntime"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BaseContentLookupOptions.",
+      "target": "./queries:BaseContentLookupOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BaseContentResult.",
+      "target": "./queries:BaseContentResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BaseContentResultReader.",
+      "target": "./queries:BaseContentResultReader"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BaseContentsLookupOptions.",
+      "target": "./queries:BaseContentsLookupOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DiffGateResult changed from interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s... to interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s....",
+      "target": "./queries:DiffGateResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export DiffImpactEvidenceRuntime.",
+      "target": "./queries:DiffImpactEvidenceRuntime"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export DiffImpactEvidenceTier.",
+      "target": "./queries:DiffImpactEvidenceTier"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export DiffImpactEvidenceTierStatus.",
+      "target": "./queries:DiffImpactEvidenceTierStatus"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export DiffImpactPartial.",
+      "target": "./queries:DiffImpactPartial"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export DiffImpactPartialOptions.",
+      "target": "./queries:DiffImpactPartialOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DiffImpactResult changed from interface DiffImpactResult { changedFiles: string[]; changedSymbols: Array<{ symbol: string; shortName: string; file: string; startLine: number; endLine: number; fanIn: number; ... to interface DiffImpactResult { changedFiles: string[]; changedSymbols: Array<{ symbol: string; shortName: string; file: string; startLine: number; endLine: number; fanIn: number; ....",
+      "target": "./queries:DiffImpactResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export createBaseContentResultReader.",
+      "target": "./queries:createBaseContentResultReader"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "diffGate changed from declare function diffGate(db: ScipDatabase, opts?: { base?: string; minTogether?: number; minConfidence?: number; maxEchoChecks?: number; maxHelpers?: number; minSimilarity?: nu... to declare function diffGate(db: ScipDatabase, opts?: { base?: string; minTogether?: number; minConfidence?: number; maxEchoChecks?: number; maxHelpers?: number; minSimilarity?: nu....",
+      "target": "./queries:diffGate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export diffGateFailureReason.",
+      "target": "./queries:diffGateFailureReason"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "diffImpactPartial changed from declare function diffImpactPartial(db: ScipDatabase, filesToAnalyze: readonly string[], allChangedFiles: readonly string[], changedRanges?: readonly ChangedLineRange[]): DiffImp... to declare function diffImpactPartial(db: ScipDatabase, filesToAnalyze: readonly string[], allChangedFiles: readonly string[], changedRanges?: readonly ChangedLineRange[], opts?: D....",
+      "target": "./queries:diffImpactPartial"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "incompleteMigration changed from declare function incompleteMigration(db: ScipDatabase, opts?: { base?: string; minContainment?: number; minCallees?: number; minSiteCoverage?: number; maxHelpers?: number; limit... to declare function incompleteMigration(db: ScipDatabase, opts?: { base?: string; minContainment?: number; minCallees?: number; minSiteCoverage?: number; maxHelpers?: number; limit....",
+      "target": "./queries:incompleteMigration"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export readBaseContent.",
+      "target": "./queries:readBaseContent"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export readBaseContents.",
+      "target": "./queries:readBaseContents"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DiffGateResult changed from interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s... to interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s....",
+      "target": "./queries/diff-gate:DiffGateResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "diffGate changed from declare function diffGate(db: ScipDatabase, opts?: { base?: string; minTogether?: number; minConfidence?: number; maxEchoChecks?: number; maxHelpers?: number; minSimilarity?: nu... to declare function diffGate(db: ScipDatabase, opts?: { base?: string; minTogether?: number; minConfidence?: number; maxEchoChecks?: number; maxHelpers?: number; minSimilarity?: nu....",
+      "target": "./queries/diff-gate:diffGate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export diffGateFailureReason.",
+      "target": "./queries/diff-gate:diffGateFailureReason"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BaseContentGitRuntime.",
+      "target": "./queries/diff-impact:BaseContentGitRuntime"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BaseContentLookupOptions.",
+      "target": "./queries/diff-impact:BaseContentLookupOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BaseContentResult.",
+      "target": "./queries/diff-impact:BaseContentResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BaseContentResultReader.",
+      "target": "./queries/diff-impact:BaseContentResultReader"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BaseContentsLookupOptions.",
+      "target": "./queries/diff-impact:BaseContentsLookupOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export DiffImpactEvidenceRuntime.",
+      "target": "./queries/diff-impact:DiffImpactEvidenceRuntime"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export DiffImpactEvidenceTier.",
+      "target": "./queries/diff-impact:DiffImpactEvidenceTier"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export DiffImpactEvidenceTierStatus.",
+      "target": "./queries/diff-impact:DiffImpactEvidenceTierStatus"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DiffImpactPartial changed from interface DiffImpactPartial { changedSymbols: ChangedSymbol[]; consumerEntries: Array<{ file: string; symbols: string[]; }>; attributionNotes: AttributionNote[]; } to interface DiffImpactPartial { changedSymbols: ChangedSymbol[]; consumerEntries: Array<{ file: string; symbols: string[]; }>; attributionNotes: AttributionNote[]; evidenceTiers: ....",
+      "target": "./queries/diff-impact:DiffImpactPartial"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export DiffImpactPartialOptions.",
+      "target": "./queries/diff-impact:DiffImpactPartialOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DiffImpactResult changed from interface DiffImpactResult { changedFiles: string[]; changedSymbols: Array<{ symbol: string; shortName: string; file: string; startLine: number; endLine: number; fanIn: number; ... to interface DiffImpactResult { changedFiles: string[]; changedSymbols: Array<{ symbol: string; shortName: string; file: string; startLine: number; endLine: number; fanIn: number; ....",
+      "target": "./queries/diff-impact:DiffImpactResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export createBaseContentResultReader.",
+      "target": "./queries/diff-impact:createBaseContentResultReader"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "diffImpactPartial changed from declare function diffImpactPartial(db: ScipDatabase, filesToAnalyze: readonly string[], allChangedFiles: readonly string[], changedRanges?: readonly ChangedLineRange[]): DiffImp... to declare function diffImpactPartial(db: ScipDatabase, filesToAnalyze: readonly string[], allChangedFiles: readonly string[], changedRanges?: readonly ChangedLineRange[], opts?: D....",
+      "target": "./queries/diff-impact:diffImpactPartial"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export readBaseContent.",
+      "target": "./queries/diff-impact:readBaseContent"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export readBaseContents.",
+      "target": "./queries/diff-impact:readBaseContents"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "incompleteMigration changed from declare function incompleteMigration(db: ScipDatabase, opts?: { base?: string; minContainment?: number; minCallees?: number; minSiteCoverage?: number; maxHelpers?: number; limit... to declare function incompleteMigration(db: ScipDatabase, opts?: { base?: string; minContainment?: number; minCallees?: number; minSiteCoverage?: number; maxHelpers?: number; limit....",
+      "target": "./queries/incomplete-migration:incompleteMigration"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BaseContentGitRuntime.",
+      "target": "./queries/index:BaseContentGitRuntime"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BaseContentLookupOptions.",
+      "target": "./queries/index:BaseContentLookupOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BaseContentResult.",
+      "target": "./queries/index:BaseContentResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BaseContentResultReader.",
+      "target": "./queries/index:BaseContentResultReader"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BaseContentsLookupOptions.",
+      "target": "./queries/index:BaseContentsLookupOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DiffGateResult changed from interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s... to interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s....",
+      "target": "./queries/index:DiffGateResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export DiffImpactEvidenceRuntime.",
+      "target": "./queries/index:DiffImpactEvidenceRuntime"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export DiffImpactEvidenceTier.",
+      "target": "./queries/index:DiffImpactEvidenceTier"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export DiffImpactEvidenceTierStatus.",
+      "target": "./queries/index:DiffImpactEvidenceTierStatus"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export DiffImpactPartial.",
+      "target": "./queries/index:DiffImpactPartial"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export DiffImpactPartialOptions.",
+      "target": "./queries/index:DiffImpactPartialOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DiffImpactResult changed from interface DiffImpactResult { changedFiles: string[]; changedSymbols: Array<{ symbol: string; shortName: string; file: string; startLine: number; endLine: number; fanIn: number; ... to interface DiffImpactResult { changedFiles: string[]; changedSymbols: Array<{ symbol: string; shortName: string; file: string; startLine: number; endLine: number; fanIn: number; ....",
+      "target": "./queries/index:DiffImpactResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export createBaseContentResultReader.",
+      "target": "./queries/index:createBaseContentResultReader"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "diffGate changed from declare function diffGate(db: ScipDatabase, opts?: { base?: string; minTogether?: number; minConfidence?: number; maxEchoChecks?: number; maxHelpers?: number; minSimilarity?: nu... to declare function diffGate(db: ScipDatabase, opts?: { base?: string; minTogether?: number; minConfidence?: number; maxEchoChecks?: number; maxHelpers?: number; minSimilarity?: nu....",
+      "target": "./queries/index:diffGate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export diffGateFailureReason.",
+      "target": "./queries/index:diffGateFailureReason"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "diffImpactPartial changed from declare function diffImpactPartial(db: ScipDatabase, filesToAnalyze: readonly string[], allChangedFiles: readonly string[], changedRanges?: readonly ChangedLineRange[]): DiffImp... to declare function diffImpactPartial(db: ScipDatabase, filesToAnalyze: readonly string[], allChangedFiles: readonly string[], changedRanges?: readonly ChangedLineRange[], opts?: D....",
+      "target": "./queries/index:diffImpactPartial"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "incompleteMigration changed from declare function incompleteMigration(db: ScipDatabase, opts?: { base?: string; minContainment?: number; minCallees?: number; minSiteCoverage?: number; maxHelpers?: number; limit... to declare function incompleteMigration(db: ScipDatabase, opts?: { base?: string; minContainment?: number; minCallees?: number; minSiteCoverage?: number; maxHelpers?: number; limit....",
+      "target": "./queries/index:incompleteMigration"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export readBaseContent.",
+      "target": "./queries/index:readBaseContent"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export readBaseContents.",
+      "target": "./queries/index:readBaseContents"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.19.8",
+  "previousDigest": "8c97e6705e209773a6737b5d50856ea78c82f952fe355daa1344af80a5ce737d",
+  "reason": "Adds explicit evidence and historical-content failure states while preserving existing valid JSON and legacy nullable reader call shapes.",
+  "schemaVersion": 1
+}

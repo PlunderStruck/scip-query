@@ -8,10 +8,14 @@ import type { ScipQueryConfig } from '../../../src/domain/types.js';
 import { collectBaselineFindings } from '../../../src/queries/health/health-baseline.js';
 import { diffGate } from '../../../src/queries/impact/diff-gate.js';
 import {
+  GIT_DIFF_UNAVAILABLE_NOTE,
   baseContentPathsForDiffPlan,
-  createBaseContentReader,
+  createBaseContentResultReader,
   diffImpactPlan,
+  fileContentAtBase,
   fileContentsAtBase,
+  readBaseContent,
+  readBaseContents,
 } from '../../../src/queries/impact/diff-impact.js';
 import { incompleteMigration } from '../../../src/queries/impact/incomplete-migration.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
@@ -335,6 +339,86 @@ describe('incomplete-migration', () => {
     expect(contents.get('src')).toBeNull();
     expect(contents.get('src/util.ts')).toContain('placeholder');
     expect(contents.get('src/does-not-exist.ts')).toBeNull();
+
+    const strict = readBaseContents({
+      projectRoot: repoRoot,
+      base: 'HEAD',
+      relativePaths: ['src', 'src/util.ts', 'src/does-not-exist.ts', 'src/util.ts'],
+    });
+    expect(strict).toEqual(
+      new Map([
+        ['src', { state: 'absent' }],
+        ['src/util.ts', { state: 'present', content: expect.stringContaining('placeholder') }],
+        ['src/does-not-exist.ts', { state: 'absent' }],
+      ]),
+    );
+  });
+
+  it('distinguishes confirmed absence from Git/base unavailability', () => {
+    expect(
+      readBaseContent({
+        projectRoot: repoRoot,
+        base: 'HEAD',
+        relativePath: 'src/does-not-exist.ts',
+      }),
+    ).toEqual({ state: 'absent' });
+
+    const invalid = readBaseContent({
+      projectRoot: repoRoot,
+      base: 'definitely-not-a-real-base',
+      relativePath: 'src/util.ts',
+    });
+    expect(invalid).toEqual({
+      state: 'unavailable',
+      reason: expect.stringContaining('definitely-not-a-real-base'),
+    });
+    expect(() => fileContentAtBase(repoRoot, 'definitely-not-a-real-base', 'src/util.ts')).toThrow(
+      'Base content unavailable',
+    );
+
+    const timedOut = readBaseContents(
+      {
+        projectRoot: repoRoot,
+        base: 'HEAD',
+        relativePaths: ['src/util.ts'],
+      },
+      {
+        resolveCommit: () => 'resolved',
+        readBatch: () => {
+          throw Object.assign(new Error('Git batch timed out'), { code: 'ETIMEDOUT' });
+        },
+      },
+    );
+    expect(timedOut.get('src/util.ts')).toEqual({
+      state: 'unavailable',
+      reason: expect.stringContaining('Git batch timed out'),
+    });
+
+    const malformed = readBaseContents(
+      {
+        projectRoot: repoRoot,
+        base: 'HEAD',
+        relativePaths: ['src/util.ts'],
+      },
+      {
+        resolveCommit: () => 'resolved',
+        readBatch: () => Buffer.from('not a valid cat-file batch'),
+      },
+    );
+    expect(malformed.get('src/util.ts')).toEqual({
+      state: 'unavailable',
+      reason: expect.stringContaining('Malformed git cat-file'),
+    });
+
+    const reader = createBaseContentResultReader({
+      projectRoot: repoRoot,
+      base: 'definitely-not-a-real-base',
+      preloadPaths: ['src/util.ts'],
+    });
+    expect(reader('src/util.ts')).toEqual({
+      state: 'unavailable',
+      reason: expect.stringContaining('definitely-not-a-real-base'),
+    });
   });
 
   it('reports un-migrated sites for a freshly wired helper', () => {
@@ -404,8 +488,12 @@ describe('incomplete-migration', () => {
 
   it('reuses a supplied base-content reader without changing incomplete-migration findings', () => {
     const diffPlan = diffImpactPlan(db, { base: 'HEAD' });
-    const baseContentAt = createBaseContentReader(repoRoot, 'HEAD', baseContentPathsForDiffPlan(diffPlan));
-    const result = incompleteMigration(db, { base: 'HEAD', semantic: false, diffPlan, baseContentAt });
+    const baseContentAt = createBaseContentResultReader({
+      projectRoot: repoRoot,
+      base: 'HEAD',
+      preloadPaths: baseContentPathsForDiffPlan(diffPlan),
+    });
+    const result = incompleteMigration(db, { base: 'HEAD', semantic: false, diffPlan, baseContentResultAt: baseContentAt });
 
     expect(result.available).toBe(true);
     expect(result.helpersChecked).toBe(1);
@@ -420,6 +508,48 @@ describe('incomplete-migration', () => {
         expect.objectContaining({ file: 'src/billing.ts', migrationScope: 'possible-subtype' }),
       ]),
     });
+  });
+
+  it('retains the legacy nullable base-content reader contract', () => {
+    const diffPlan = diffImpactPlan(db, { base: 'HEAD' });
+    const result = incompleteMigration(db, {
+      base: 'HEAD',
+      semantic: false,
+      diffPlan,
+      baseContentAt: (relativePath) => fileContentAtBase(repoRoot, 'HEAD', relativePath),
+    });
+
+    expect(result.available).toBe(true);
+    expect(result.helpersChecked).toBe(1);
+    expect(result.findings).toHaveLength(1);
+  });
+
+  it('rejects competing legacy and strict base-content readers', () => {
+    const diffPlan = diffImpactPlan(db, { base: 'HEAD' });
+
+    expect(() =>
+      incompleteMigration(db, {
+        base: 'HEAD',
+        diffPlan,
+        baseContentAt: () => null,
+        baseContentResultAt: () => ({ state: 'absent' }),
+      }),
+    ).toThrow('Specify only one');
+  });
+
+  it('reports base-content unavailability instead of treating every helper as new', () => {
+    const diffPlan = diffImpactPlan(db, { base: 'HEAD' });
+    const result = incompleteMigration(db, {
+      base: 'HEAD',
+      semantic: false,
+      diffPlan,
+      baseContentResultAt: () => ({ state: 'unavailable', reason: 'historical storage offline' }),
+    });
+
+    expect(result.available).toBe(false);
+    expect(result.note).toContain('historical storage offline');
+    expect(result.helpersChecked).toBe(0);
+    expect(result.findings).toEqual([]);
   });
 
   it('does not report already-migrated sites or files inside the diff', () => {
@@ -593,6 +723,7 @@ describe('incomplete-migration', () => {
       });
       const result = incompleteMigration(noGitDb, { base: 'HEAD' });
       expect(result.available).toBe(false);
+      expect(result.note).toBe(GIT_DIFF_UNAVAILABLE_NOTE);
       expect(result.findings).toHaveLength(0);
       noGitDb.close();
     } finally {
@@ -628,6 +759,20 @@ describe('incomplete-migration', () => {
         expect.stringContaining('Migration scope hints'),
       ]),
     );
+  });
+
+  it('makes diff-gate fail closed when historical content cannot be read', () => {
+    expect(() =>
+      diffGate(db, {
+        base: 'HEAD',
+        baseContentRuntime: {
+          resolveCommit: () => 'resolved',
+          readBatch: () => {
+            throw new Error('historical object store unavailable');
+          },
+        },
+      }),
+    ).toThrow('Base content unavailable');
   });
 
   it('groups echo evidence by changed symbol and exposes the action tier', () => {

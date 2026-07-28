@@ -17,12 +17,15 @@ import {
   GIT_DIFF_UNAVAILABLE_NOTE,
   baseContentPathsForDiffPlan,
   createBaseContentReader,
+  createBaseContentResultReader,
   diffImpact,
   diffImpactPlan,
 } from './diff-impact.js';
 import type {
   AttributionNote,
   BaseContentReader,
+  BaseContentGitRuntime,
+  BaseContentResultReader,
   ChangedLineRange,
   DiffImpactEvidenceTierStatus,
   DiffImpactPlan,
@@ -245,6 +248,7 @@ export function diffGate(
     semantic?: boolean;
     historyMode?: GitHistoryMode;
     skip?: readonly DiffGateCheck[];
+    baseContentRuntime?: BaseContentGitRuntime;
   } = {},
 ): DiffGateResult {
   const base = opts.base ?? 'HEAD';
@@ -268,12 +272,27 @@ export function diffGate(
   const changed = new Set(changedFiles);
   const changedGitFiles = new Set(impactPlan.changedFileLines);
   const changedForCoordination = new Set([...changed, ...changedGitFiles]);
-  const baseContentAt = createBaseContentReader(
+  const baseContentPaths = baseContentPathsForDiffPlan(impactPlan, changedFiles);
+  const baseContentAt = createBaseContentResultReader(
+    {
+      projectRoot: db.config.projectRoot,
+      base,
+      preloadPaths: baseContentPaths,
+    },
+    opts.baseContentRuntime,
+  );
+  for (const path of baseContentPaths) {
+    const content = baseContentAt(path);
+    if (content.state === 'unavailable') {
+      throw new Error(`Base content unavailable for ${path}: ${content.reason}`);
+    }
+  }
+  const symbolPreexistedAtBase = symbolPreexistenceCheckerFromResults(
     db.config.projectRoot,
     base,
-    baseContentPathsForDiffPlan(impactPlan, changedFiles),
+    impactPlan,
+    baseContentAt,
   );
-  const symbolPreexistedAtBase = symbolPreexistenceChecker(db.config.projectRoot, base, impactPlan, baseContentAt);
   const result: DiffGateResult = {
     base,
     changedFiles,
@@ -695,12 +714,19 @@ function runIncompleteMigrationCheck(
   maxHelpers: number,
   scanLimit: number | undefined,
   semantic: boolean,
-  baseContentAt: BaseContentReader,
+  baseContentAt: BaseContentResultReader,
   result: DiffGateResult,
 ): void {
-  const migration = incompleteMigration(db, { base, maxHelpers, diffPlan, scanLimit, semantic, baseContentAt });
+  const migration = incompleteMigration(db, {
+    base,
+    maxHelpers,
+    diffPlan,
+    scanLimit,
+    semantic,
+    baseContentResultAt: baseContentAt,
+  });
   if (!migration.available) {
-    result.skipped.push({ check: 'incomplete-migration', reason: 'no git history' });
+    result.skipped.push({ check: 'incomplete-migration', reason: migration.note ?? 'no git history' });
     return;
   }
   result.checksRun.push('incomplete-migration');
@@ -1307,6 +1333,32 @@ export function symbolPreexistenceChecker(
     if (!leaf) return false;
     const content = readBaseContent(oldPath);
     return content !== null && containsLeaf(content, leaf);
+  };
+}
+
+function symbolPreexistenceCheckerFromResults(
+  projectRoot: string,
+  base: string,
+  diffPlan: DiffImpactPlan,
+  baseContentAt?: BaseContentResultReader,
+): (changedSymbol: { symbol: string; file: string }) => boolean {
+  const renamedFromByFile = new Map(diffPlan.renamedFiles.map((rename) => [rename.to, rename.from]));
+  const readBaseContent =
+    baseContentAt ??
+    createBaseContentResultReader({
+      projectRoot,
+      base,
+      preloadPaths: baseContentPathsForDiffPlan(diffPlan),
+    });
+  return (changedSymbol) => {
+    const oldPath = renamedFromByFile.get(changedSymbol.file) ?? changedSymbol.file;
+    const leaf = leafName(changedSymbol.symbol);
+    if (!leaf) return false;
+    const content = readBaseContent(oldPath);
+    if (content.state === 'unavailable') {
+      throw new Error(`Base content unavailable for ${oldPath}: ${content.reason}`);
+    }
+    return content.state === 'present' && containsLeaf(content.content, leaf);
   };
 }
 

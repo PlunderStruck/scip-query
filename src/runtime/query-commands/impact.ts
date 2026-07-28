@@ -172,10 +172,14 @@ const handleIncompleteMigration = budgetedDbCommand('incomplete-migration', ({ d
   });
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('incomplete-migration', args, opts, result, { analysisBudget: budget.analysisBudget });
-    if (result.available && result.findings.length > 0) process.exitCode = 1;
+    if (!result.available || result.findings.length > 0) process.exitCode = 1;
     return;
   }
-  if (!result.available) return render.empty('No git history available (not a repository, or git missing).');
+  if (!result.available) {
+    console.error(`error: ${result.note ?? 'Required Git history is unavailable.'}`);
+    process.exitCode = 1;
+    return;
+  }
   if (result.changedFiles.length === 0) return render.empty(`No changes vs ${result.base}.`);
   console.log(
     `Incomplete migrations vs ${result.base}: ${result.changedFiles.length} changed file(s), ${result.helpersChecked} new helper(s) scored.`,

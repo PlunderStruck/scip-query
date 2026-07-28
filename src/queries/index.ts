@@ -56,7 +56,15 @@ export { recentDuplicates } from './cleanup/recent-duplicates.js';
 export { planContext } from './impact/plan-context.js';
 export { checkHealthBaseline, collectBaselineFindings, writeHealthBaseline } from './health/health-baseline.js';
 export { checkArchitectureBaseline } from './graph/architecture-baseline.js';
-export { diffImpact, diffImpactPartial, diffImpactPlan, mergeDiffImpactPartials } from './impact/diff-impact.js';
+export {
+  createBaseContentResultReader,
+  diffImpact,
+  diffImpactPartial,
+  diffImpactPlan,
+  mergeDiffImpactPartials,
+  readBaseContent,
+  readBaseContents,
+} from './impact/diff-impact.js';
 export { drift } from './cleanup/drift.js';
 export { wrapperCandidates } from './cleanup/wrapper-candidates.js';
 export { passthroughCandidates } from './cleanup/passthrough-candidates.js';
@@ -213,6 +221,11 @@ export type {
 export type { BaselineComparison, HealthBaselineFile } from './internal/baseline-file.js';
 export type { PlanContextOptions, PlanContextResult } from './impact/plan-context.js';
 export type {
+  BaseContentGitRuntime,
+  BaseContentLookupOptions,
+  BaseContentResult,
+  BaseContentResultReader,
+  BaseContentsLookupOptions,
   DiffImpactEvidenceRuntime,
   DiffImpactEvidenceTier,
   DiffImpactEvidenceTierStatus,

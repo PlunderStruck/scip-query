@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../../storage/db.js';
+import type { IndexedDefinition } from '../../domain/types.js';
 import { containment } from '../../analysis/similarity.js';
 import { ProjectIndex } from '../internal/project-index.js';
 import { escapeRegex } from '../../source/primitives/regex-utils.js';
@@ -6,10 +7,15 @@ import { leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import {
   GIT_DIFF_UNAVAILABLE_NOTE,
   baseContentPathsForDiffPlan,
-  createBaseContentReader,
+  createBaseContentResultReader,
   diffImpactPlan,
 } from './diff-impact.js';
-import type { BaseContentReader, DiffImpactPlan } from './diff-impact.js';
+import type {
+  BaseContentReader,
+  BaseContentResult,
+  BaseContentResultReader,
+  DiffImpactPlan,
+} from './diff-impact.js';
 import { meaningfulCallees, similarityFingerprintProduct } from '../cleanup/similar.js';
 import type { CalleeFingerprintIndex } from '../cleanup/similar.js';
 
@@ -50,7 +56,7 @@ export interface IncompleteMigrationSkip {
 }
 
 export interface IncompleteMigrationResult {
-  /** False when git history is unavailable (not a repo, bad base ref). */
+  /** False when the Git diff or required historical content is unavailable. */
   available: boolean;
   base: string;
   changedFiles: string[];
@@ -100,7 +106,9 @@ export function incompleteMigration(
     scanLimit?: number;
     semantic?: boolean;
     diffPlan?: DiffImpactPlan;
+    /** @deprecated Use baseContentResultAt so operational failure remains distinguishable from absence. */
     baseContentAt?: BaseContentReader;
+    baseContentResultAt?: BaseContentResultReader;
   } = {},
 ): IncompleteMigrationResult {
   const {
@@ -122,20 +130,36 @@ export function incompleteMigration(
     helpersChecked: 0,
     skipped: [],
     findings: [],
+    ...(plan.note ? { note: plan.note } : {}),
   };
   if (!result.available || plan.changedFiles.length === 0) return result;
 
   const index = new ProjectIndex(db);
   const changed = new Set(plan.changedFiles);
   const renamedFromByFile = new Map(plan.renamedFiles.map((rename) => [rename.to, rename.from]));
-  const baseContentAt =
-    opts.baseContentAt ?? createBaseContentReader(db.config.projectRoot, base, baseContentPathsForDiffPlan(plan));
+  if (opts.baseContentAt && opts.baseContentResultAt) {
+    throw new Error('Specify only one of baseContentAt or baseContentResultAt.');
+  }
+  const baseContentAt = opts.baseContentResultAt
+    ? opts.baseContentResultAt
+    : opts.baseContentAt
+      ? legacyBaseContentResultReader(opts.baseContentAt)
+      : createBaseContentResultReader({
+          projectRoot: db.config.projectRoot,
+          base,
+          preloadPaths: baseContentPathsForDiffPlan(plan),
+        });
 
-  const newDefs = newCallablesInDiff(index, changed, renamedFromByFile, baseContentAt);
-  if (newDefs.length === 0) return result;
-  const helpers = newDefs.slice(0, maxHelpers);
-  if (newDefs.length > maxHelpers) {
-    result.note = `helper scoring capped at ${maxHelpers} of ${newDefs.length} new symbols`;
+  const newCallables = newCallablesInDiff(index, changed, renamedFromByFile, baseContentAt);
+  if (newCallables.unavailable) {
+    result.available = false;
+    result.note = `Base content unavailable: ${newCallables.unavailable.reason}`;
+    return result;
+  }
+  if (newCallables.definitions.length === 0) return result;
+  const helpers = newCallables.definitions.slice(0, maxHelpers);
+  if (newCallables.definitions.length > maxHelpers) {
+    result.note = `helper scoring capped at ${maxHelpers} of ${newCallables.definitions.length} new symbols`;
   }
 
   const helperCalleeRows = index.calleeMap(helpers, { semantic });
@@ -373,14 +397,26 @@ function newCallablesInDiff(
   index: ProjectIndex,
   changed: ReadonlySet<string>,
   renamedFromByFile: ReadonlyMap<string, string>,
-  baseContentAt: BaseContentReader,
-) {
-  return index.productionCallableDefinitions({ files: [...changed], requireFunctionLikeSymbol: true }).filter((def) => {
-    if (!changed.has(def.relativePath)) return false;
+  baseContentAt: BaseContentResultReader,
+): { definitions: IndexedDefinition[]; unavailable?: Extract<BaseContentResult, { state: 'unavailable' }> } {
+  const definitions: IndexedDefinition[] = [];
+  for (const def of index.productionCallableDefinitions({ files: [...changed], requireFunctionLikeSymbol: true })) {
+    if (!changed.has(def.relativePath)) continue;
     const basePath = renamedFromByFile.get(def.relativePath) ?? def.relativePath;
-    const content = baseContentAt(basePath);
-    return content === null || !new RegExp(`\\b${escapeRegex(def.leaf)}\\b`).test(content);
-  });
+    const result = baseContentAt(basePath);
+    if (result.state === 'unavailable') return { definitions: [], unavailable: result };
+    if (result.state === 'absent' || !new RegExp(`\\b${escapeRegex(def.leaf)}\\b`).test(result.content)) {
+      definitions.push(def);
+    }
+  }
+  return { definitions };
+}
+
+function legacyBaseContentResultReader(reader: BaseContentReader): BaseContentResultReader {
+  return (relativePath) => {
+    const content = reader(relativePath);
+    return content === null ? { state: 'absent' } : { state: 'present', content };
+  };
 }
 
 /** Distinct files with a non-definition mention of the symbol (own file included — intra-file wiring counts). */
