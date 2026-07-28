@@ -417,6 +417,35 @@ Verification:
 - CLI human and JSON tests;
 - public API fixture and command reference.
 
+Implementation record — complete:
+
+- `resolveMethods(db, { className })` now returns a discriminated `matched`,
+  `missing`, or `ambiguous` result. Exact matches include the resolved owner,
+  missing matches include bounded name suggestions, and ambiguous matches
+  include stable symbol-and-location candidates plus the known total;
+- the deprecated `methods(db, className)` wrapper preserves its prior arrays
+  and exception messages, while the CLI consumes the structured API directly;
+- JSON-mode missing and ambiguous results remain valid result envelopes,
+  include exact resolution coverage, and exit nonzero. Human mode gives the
+  same concise qualification guidance without exposing a stack trace;
+- the additive public API change is recorded in
+  `docs/api/changes/2c9690623033ecdc.json` and exercised through the external
+  package-consumer fixture;
+- 6 focused test files passed with 70 tests across query resolution, CLI
+  envelopes, human output, Clojure and definition fallbacks, generated
+  command references, and descriptor contracts. TypeScript, ESLint, and the
+  public API check also passed;
+- complete SCIP references show the production consumers are the legacy
+  wrapper, query barrel, and CLI handler. Full migration, duplicate,
+  stale-abstraction, unused-parameter, and documentation-drift postchecks
+  found no actionable candidate, and the full diff gate passed with no
+  blocking or advisory findings;
+- refutation R1 exercised the built CLI as a subprocess against a real
+  ambiguous fixture database and proved stdout remained parseable JSON with
+  status 1. Refutation R2 proved the legacy wrapper still throws for missing
+  and ambiguous inputs and still returns an empty array for an exactly
+  resolved class with no methods.
+
 ### Slice 9 — DBC-09: named primary public APIs
 
 Red test first:

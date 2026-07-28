@@ -1,0 +1,91 @@
+{
+  "acceptedAt": "2026-07-28T02:13:25.988Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "2c9690623033ecdc20a43261de6696408539578ec81c4e25cafd3c6c12fdb787",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export MethodsOwner.",
+      "target": "./queries:MethodsOwner"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export MethodsResolution.",
+      "target": "./queries:MethodsResolution"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ResolveMethodsOptions.",
+      "target": "./queries:ResolveMethodsOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export resolveMethods.",
+      "target": "./queries:resolveMethods"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export MethodsOwner.",
+      "target": "./queries/index:MethodsOwner"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export MethodsResolution.",
+      "target": "./queries/index:MethodsResolution"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ResolveMethodsOptions.",
+      "target": "./queries/index:ResolveMethodsOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export resolveMethods.",
+      "target": "./queries/index:resolveMethods"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export MethodsOwner.",
+      "target": "./queries/methods:MethodsOwner"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export MethodsResolution.",
+      "target": "./queries/methods:MethodsResolution"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ResolveMethodsOptions.",
+      "target": "./queries/methods:ResolveMethodsOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export resolveMethods.",
+      "target": "./queries/methods:resolveMethods"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration c.",
+      "target": "symbol-types-<hash>.d.ts:c"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.19.8",
+  "previousDigest": "9f6e0d84b26f2b9fc451cbf9fbb8d171c8199f5a9747315f12ae23c05801406a",
+  "reason": "Add structured resolveMethods results while retaining the deprecated throwing methods wrapper for compatibility.",
+  "schemaVersion": 1
+}

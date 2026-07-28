@@ -1,7 +1,7 @@
 export { stats } from './navigation/stats.js';
 export { files } from './navigation/files.js';
 export { symbols } from './navigation/symbols.js';
-export { methods } from './navigation/methods.js';
+export { methods, resolveMethods } from './navigation/methods.js';
 export { refs } from './navigation/refs.js';
 export { trace } from './navigation/trace.js';
 export { deps, rdeps } from './navigation/deps.js';
@@ -84,7 +84,7 @@ export { similarSignatures } from './cleanup/similar-signatures.js';
 export type { StatsResult } from './navigation/stats.js';
 export type { FileResult } from './navigation/files.js';
 export type { SymbolResult } from './navigation/symbols.js';
-export type { MethodResult } from './navigation/methods.js';
+export type { MethodResult, MethodsOwner, MethodsResolution, ResolveMethodsOptions } from './navigation/methods.js';
 export type { RefResult } from './navigation/refs.js';
 export type { DepResult } from './navigation/deps.js';
 export type { TraceResult } from './navigation/trace.js';

@@ -1,9 +1,10 @@
 import { basename } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
 import { ProjectIndex } from '../internal/project-index.js';
-import { resolveSymbol } from '../../symbols/symbol-lookup.js';
+import { nearestSymbolNames, resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { detectAstLanguage, getSourceFacts } from '../../source/ast.js';
-import { isCallableSymbol, leafName } from '../../symbols/symbol-parser.js';
+import { isCallableSymbol, leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
+import type { SymbolMatch, SymbolResolutionCandidate } from '../../domain/types.js';
 
 export interface MethodResult {
   startLine: number;
@@ -11,14 +12,75 @@ export interface MethodResult {
   name: string;
 }
 
-// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
-export function methods(db: ScipDatabase, className: string): MethodResult[] {
+export interface ResolveMethodsOptions {
+  className: string;
+}
+
+export interface MethodsOwner {
+  symbol: string;
+  shortName: string;
+  relativePath: string;
+  startLine: number;
+  endLine: number;
+}
+
+export type MethodsResolution =
+  | {
+      kind: 'matched';
+      query: string;
+      owner: MethodsOwner;
+      methods: MethodResult[];
+    }
+  | {
+      kind: 'missing';
+      query: string;
+      suggestions: string[];
+    }
+  | {
+      kind: 'ambiguous';
+      query: string;
+      total: number;
+      candidates: SymbolResolutionCandidate[];
+    };
+
+export function resolveMethods(db: ScipDatabase, options: ResolveMethodsOptions): MethodsResolution {
+  const className = options.className;
   const resolution = resolveSymbol(db, className);
   if (!resolution.match) {
-    throw new Error(`No class definition matched '${className}'.`);
+    return {
+      kind: 'missing',
+      query: className,
+      suggestions: nearestSymbolNames(db, className, 5),
+    };
   }
   if (resolution.total > 1) {
-    const candidates = [resolution.match, ...resolution.candidates]
+    return {
+      kind: 'ambiguous',
+      query: className,
+      total: resolution.total,
+      candidates: [candidateFromMatch(resolution.match), ...resolution.candidates],
+    };
+  }
+  return {
+    kind: 'matched',
+    query: className,
+    owner: ownerFromMatch(resolution.match),
+    methods: methodsForOwner(db, resolution.match),
+  };
+}
+
+/**
+ * @deprecated Use `resolveMethods(db, { className })` so missing and ambiguous
+ * resolution remain structured outcomes.
+ */
+// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
+export function methods(db: ScipDatabase, className: string): MethodResult[] {
+  const resolution = resolveMethods(db, { className });
+  if (resolution.kind === 'missing') {
+    throw new Error(`No class definition matched '${className}'.`);
+  }
+  if (resolution.kind === 'ambiguous') {
+    const candidates = resolution.candidates
       .map((candidate) => `${candidate.relativePath}:${candidate.startLine + 1}`)
       .join(', ');
     throw new Error(
@@ -26,8 +88,10 @@ export function methods(db: ScipDatabase, className: string): MethodResult[] {
         'Qualify it with a path or exact SCIP symbol identity.',
     );
   }
-  const classMatch = resolution.match;
+  return resolution.methods;
+}
 
+function methodsForOwner(db: ScipDatabase, classMatch: SymbolMatch): MethodResult[] {
   const ownerName = leafName(classMatch.symbol);
   const index = new ProjectIndex(db);
   const definitions = index
@@ -53,6 +117,22 @@ export function methods(db: ScipDatabase, className: string): MethodResult[] {
   if (detectAstLanguage(classMatch.relativePath) !== 'clojure') return graphMethods;
 
   return mergeMethods(graphMethods, clojureSourceMethods(db, classMatch));
+}
+
+function candidateFromMatch(match: SymbolMatch): SymbolResolutionCandidate {
+  return {
+    symbol: match.symbol,
+    shortName: shortenSymbol(match.symbol),
+    relativePath: match.relativePath,
+    startLine: match.startLine,
+  };
+}
+
+function ownerFromMatch(match: SymbolMatch): MethodsOwner {
+  return {
+    ...candidateFromMatch(match),
+    endLine: match.endLine,
+  };
 }
 
 function stripExtension(relativePath: string): string {

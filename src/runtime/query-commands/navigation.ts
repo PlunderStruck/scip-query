@@ -1,5 +1,5 @@
 import * as queries from '../../queries/index.js';
-import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
+import type { CommandDescriptor, InvocationCoverage } from '../command-kit/command-descriptor-types.js';
 import {
   agentContract,
   compactOption,
@@ -12,6 +12,7 @@ import {
   booleanOptionValue,
   budgetedDbCommand,
   budgetedListCommand,
+  dbCommand,
   definedLimitOption,
   definedNumberOption,
   printJsonEnvelope,
@@ -127,6 +128,56 @@ const handleSlice = budgetedDbCommand('slice', ({ db, args, opts, budget }) => {
   console.log(`\n${result.connectedSymbols.length} connected symbol(s).`);
 });
 
+const handleMethods = dbCommand(({ db, args, opts }) => {
+  const className = stringArg(args, 0);
+  const result = queries.resolveMethods(db, { className });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('methods', args, opts, result, {
+      coverage: methodsInvocationCoverage(result),
+    });
+    if (result.kind !== 'matched') process.exitCode = 1;
+    return;
+  }
+  if (result.kind === 'matched') {
+    render.list(result.methods, (method) => `  ${displayRange(method.startLine, method.endLine)}  ${method.name}`);
+    return;
+  }
+  render.empty(methodsResolutionFailureMessage(result));
+  process.exitCode = 1;
+});
+
+function methodsInvocationCoverage(result: queries.MethodsResolution): InvocationCoverage {
+  const returned = result.kind === 'matched' ? result.methods.length : 0;
+  const resolution: NonNullable<InvocationCoverage['resolution']> =
+    result.kind === 'matched'
+      ? { state: 'exact', totalCandidates: 1 }
+      : result.kind === 'missing'
+        ? { state: 'missing', totalCandidates: 0 }
+        : { state: 'ambiguous', totalCandidates: result.total };
+  return {
+    complete: true,
+    totalKnown: true,
+    returned,
+    total: returned,
+    omitted: 0,
+    resolution,
+  };
+}
+
+function methodsResolutionFailureMessage(result: Exclude<queries.MethodsResolution, { kind: 'matched' }>): string {
+  if (result.kind === 'missing') {
+    const base = `No class definition matched '${result.query}'.`;
+    return result.suggestions.length > 0 ? `${base} Suggestions: ${result.suggestions.join(', ')}` : base;
+  }
+  const candidates = result.candidates
+    .map((candidate) => `${candidate.relativePath}:${displayLine(candidate.startLine)}`)
+    .join(', ');
+  return (
+    `Class '${result.query}' is ambiguous across ${result.total} definitions (${candidates}). ` +
+    'Qualify it with a path or exact SCIP symbol identity.'
+  );
+}
+
 export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   ...directNavigationQueryCommandDescriptors,
   listQueryCommand({
@@ -143,15 +194,19 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     query: ({ db, args }) => queries.files(db, stringArg(args, 0)),
     format: (r) => r.relativePath,
   }),
-  listQueryCommand({
+  {
     id: 'methods',
     command: 'methods <className>',
     description: 'List methods of one exactly resolved class; ambiguity and missing targets fail explicitly',
-    agent: agentContract('Which methods belong to this class?', 'method names and line ranges', ['symbol'], 'complete'),
+    options: withJsonOption(),
+    agent: {
+      ...agentContract('Which methods belong to this class?', 'method names and line ranges', ['symbol'], 'complete'),
+      resultUnits: { kind: 'field', field: 'methods' },
+    },
     docs: doc('Navigation'),
-    query: ({ db, args }) => queries.methods(db, stringArg(args, 0)),
-    format: (r) => `  ${displayRange(r.startLine, r.endLine)}  ${r.name}`,
-  }),
+    renderShape: 'list',
+    handler: handleMethods,
+  },
   budgetedSectionedQueryCommand({
     id: 'trace',
     command: 'trace <symbol>',

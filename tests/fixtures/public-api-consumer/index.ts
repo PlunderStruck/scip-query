@@ -1,5 +1,6 @@
 import { ProjectIndex, parseSymbol, type ScipDatabase, type ScipQueryConfig } from 'scip-query';
 import { refs, type RefResult } from 'scip-query/queries/refs';
+import { resolveMethods, type MethodsResolution } from 'scip-query/queries/methods';
 import {
   createBaseContentResultReader,
   fileContentAtBase,
@@ -19,6 +20,7 @@ declare const config: ScipQueryConfig;
 
 const index = new ProjectIndex(database);
 const references: RefResult[] = refs(database, 'login');
+const methodResolution: MethodsResolution = resolveMethods(database, { className: 'AuthService' });
 const preparedRead = database.db.prepare('SELECT 1 AS value').get();
 // @ts-expect-error The public query port does not own the connection lifecycle.
 database.db.close();
@@ -57,6 +59,7 @@ void [
   index,
   config,
   references,
+  methodResolution,
   preparedRead,
   resultPromise,
   decoded,

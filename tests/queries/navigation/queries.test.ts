@@ -265,6 +265,17 @@ describe('query engine', () => {
 
   describe('methods', () => {
     it('lists methods of a class', () => {
+      const resolution = queries.resolveMethods(db, { className: 'AuthService' });
+      expect(resolution).toMatchObject({
+        kind: 'matched',
+        query: 'AuthService',
+        owner: {
+          relativePath: 'src/services/auth.service.ts',
+        },
+      });
+      if (resolution.kind !== 'matched') throw new Error('Expected AuthService to resolve exactly.');
+      expect(resolution.methods).toHaveLength(2);
+
       const results = queries.methods(db, 'AuthService');
       expect(results.length).toBe(2);
       const names = results.map((m) => m.name);
@@ -297,6 +308,30 @@ describe('query engine', () => {
         projectRoot: isolatedDir,
       });
       try {
+        const ambiguous = queries.resolveMethods(isolated, { className: 'AuthService' });
+        expect(ambiguous).toMatchObject({
+          kind: 'ambiguous',
+          query: 'AuthService',
+          total: 2,
+          candidates: expect.arrayContaining([
+            expect.objectContaining({ relativePath: 'src/services/auth.service.ts' }),
+            expect.objectContaining({ relativePath: 'src/other/auth.service.ts' }),
+          ]),
+        });
+        const empty = queries.resolveMethods(isolated, {
+          className: 'scip-typescript npm my-app 1.0.0 src/services/`empty.service.ts`/EmptyService#',
+        });
+        expect(empty).toMatchObject({
+          kind: 'matched',
+          owner: { relativePath: 'src/services/empty.service.ts' },
+          methods: [],
+        });
+        expect(queries.resolveMethods(isolated, { className: 'DoesNotExist' })).toMatchObject({
+          kind: 'missing',
+          query: 'DoesNotExist',
+          suggestions: expect.any(Array),
+        });
+
         expect(() => queries.methods(isolated, 'AuthService')).toThrow(/ambiguous across 2 definitions/);
         expect(
           queries.methods(isolated, 'scip-typescript npm my-app 1.0.0 src/services/`empty.service.ts`/EmptyService#'),
