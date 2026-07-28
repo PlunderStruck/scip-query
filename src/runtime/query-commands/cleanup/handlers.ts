@@ -867,6 +867,9 @@ export const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, args, 
         `  Baseline has ${verification.baselineErrors} pre-existing error(s) — verifying differentially (no NEW errors).`,
       );
     }
+    if (verification.workingTree.state === 'unavailable') {
+      console.log(`  WARNING: working-tree inspection unavailable: ${verification.workingTree.reason}`);
+    }
     if (verification.dirtyOverlap.length > 0) {
       console.log(
         `  WARNING: plan files dirty in working tree (verification runs at HEAD): ${verification.dirtyOverlap.join(', ')}`,

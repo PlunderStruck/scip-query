@@ -28,6 +28,10 @@ export interface BatchVerification {
   errors?: string[];
 }
 
+export type WorkingTreeInspection =
+  | { state: 'known'; files: string[] }
+  | { state: 'unavailable'; reason: string };
+
 export interface CleanupVerification {
   /** Human-readable checker invocations, empty when none was detected. */
   checkers: string[];
@@ -38,6 +42,8 @@ export interface CleanupVerification {
    * verify differentially: pass = no NEW errors beyond this baseline.
    */
   baselineErrors: number;
+  /** Authoritative result of inspecting the caller's working tree. */
+  workingTree: WorkingTreeInspection;
   /** Plan files that are dirty in the working tree — verification runs at HEAD. */
   dirtyOverlap: string[];
   /** Any dirty/untracked working-tree paths hidden by the HEAD worktree verification. */
@@ -47,33 +53,59 @@ export interface CleanupVerification {
 
 export interface CleanupVerificationPolicy {
   allowDirty?: boolean;
+  /** Unsafe override for callers that explicitly accept unknown working-tree state. */
+  allowUnknownWorkingTree?: boolean;
+}
+
+export interface CleanupVerificationRuntime {
+  readWorkingTreeStatus(projectRoot: string): string;
+}
+
+export interface CleanupVerificationOptions {
+  timeoutMs?: number;
+  workingTreeRuntime?: CleanupVerificationRuntime;
 }
 
 const CHECK_TIMEOUT_MS = 300_000;
 const MAX_ERROR_LINES = 12;
+const GIT_STATUS_TIMEOUT_MS = 30_000;
+const GIT_STATUS_MAX_BYTES = 1024 * 1024;
+
+const DEFAULT_CLEANUP_VERIFICATION_RUNTIME: CleanupVerificationRuntime = {
+  readWorkingTreeStatus(projectRoot) {
+    return execFileSync('git', ['-C', projectRoot, 'status', '--porcelain'], {
+      encoding: 'utf-8',
+      timeout: GIT_STATUS_TIMEOUT_MS,
+      maxBuffer: GIT_STATUS_MAX_BYTES,
+      killSignal: 'SIGKILL',
+    });
+  },
+};
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; patch validation, checker execution, and restoration stay together.
 export function verifyCleanupPlan(
   projectRoot: string,
   plan: CleanupPlanResult,
-  opts: { timeoutMs?: number } = {},
+  opts: CleanupVerificationOptions = {},
 ): CleanupVerification {
+  const workingTree = inspectWorkingTree(projectRoot, opts.workingTreeRuntime);
+  const dirtyWorkingTree = workingTree.state === 'known' ? workingTree.files : [];
+  const dirtyOverlap = dirtyPlanFiles(plan, workingTree);
   const checkers = detectCheckers(projectRoot);
   if (checkers.length === 0) {
     return {
       checkers: [],
       uncoveredFiles: [],
       baselineErrors: 0,
-      dirtyOverlap: [],
-      dirtyWorkingTree: dirtyWorkingTreeFiles(projectRoot),
+      workingTree,
+      dirtyOverlap,
+      dirtyWorkingTree,
       batches: [],
     };
   }
   const uncoveredFiles = planFilesWithoutChecker(plan, checkers);
 
   const timeoutMs = opts.timeoutMs ?? CHECK_TIMEOUT_MS;
-  const dirtyOverlap = dirtyPlanFiles(projectRoot, plan);
-  const dirtyWorkingTree = dirtyWorkingTreeFiles(projectRoot);
   const worktree = mkdtempSync(join(tmpdir(), 'scip-cleanup-verify-'));
   const batches: BatchVerification[] = [];
   // Differential baseline: many projects don't check clean at the root
@@ -131,6 +163,7 @@ export function verifyCleanupPlan(
     checkers: checkers.map((checker) => checker.label),
     uncoveredFiles,
     baselineErrors: [...baselineErrorsByChecker.values()].reduce((sum, errors) => sum + errors.length, 0),
+    workingTree,
     dirtyOverlap,
     dirtyWorkingTree,
     batches,
@@ -386,28 +419,61 @@ function findCargoManifests(projectRoot: string): string[] {
   return manifests;
 }
 
-function dirtyPlanFiles(projectRoot: string, plan: CleanupPlanResult): string[] {
-  const dirty = new Set(dirtyWorkingTreeFiles(projectRoot));
+function dirtyPlanFiles(plan: CleanupPlanResult, inspection: WorkingTreeInspection): string[] {
+  if (inspection.state === 'unavailable') return [];
+  const dirty = new Set(inspection.files);
   const planFiles = new Set(plan.batches.flatMap((batch) => batch.entries.map((entry) => entry.file)));
   return [...planFiles].filter((file) => dirty.has(file)).sort();
 }
 
-function dirtyWorkingTreeFiles(projectRoot: string): string[] {
-  let status: string;
+export function inspectWorkingTree(
+  projectRoot: string,
+  runtime: CleanupVerificationRuntime = DEFAULT_CLEANUP_VERIFICATION_RUNTIME,
+): WorkingTreeInspection {
   try {
-    status = execFileSync('git', ['-C', projectRoot, 'status', '--porcelain'], {
-      encoding: 'utf-8',
-      timeout: 30_000,
-      killSignal: 'SIGKILL',
-    });
-  } catch {
-    return [];
+    const files = runtime
+      .readWorkingTreeStatus(projectRoot)
+      .split('\n')
+      .map((line) => line.slice(3).trim())
+      .filter((line) => line !== '')
+      .sort();
+    return { state: 'known', files };
+  } catch (error) {
+    return { state: 'unavailable', reason: workingTreeInspectionFailureReason(error) };
   }
-  return status
-    .split('\n')
-    .map((line) => line.slice(3).trim())
-    .filter((line) => line !== '')
-    .sort();
+}
+
+function workingTreeInspectionFailureReason(error: unknown): string {
+  const failure =
+    error && typeof error === 'object'
+      ? (error as {
+          code?: unknown;
+          killed?: unknown;
+          signal?: unknown;
+          status?: unknown;
+          message?: unknown;
+        })
+      : {};
+  if (failure.code === 'ETIMEDOUT' || failure.killed === true) {
+    return `git status timed out after ${GIT_STATUS_TIMEOUT_MS}ms`;
+  }
+  if (
+    failure.code === 'ENOBUFS' ||
+    (typeof failure.message === 'string' && /maxBuffer|stdout.*buffer/i.test(failure.message))
+  ) {
+    return `git status exceeded its ${GIT_STATUS_MAX_BYTES}-byte output limit`;
+  }
+  if (typeof failure.signal === 'string' && failure.signal !== '') {
+    return `git status was terminated by ${failure.signal}`;
+  }
+  if (typeof failure.status === 'number') {
+    return `git status exited with status ${failure.status}`;
+  }
+  const message =
+    typeof failure.message === 'string'
+      ? failure.message.replaceAll(/\s+/g, ' ').trim().slice(0, 240)
+      : String(error).replaceAll(/\s+/g, ' ').trim().slice(0, 240);
+  return message === '' ? 'git status failed for an unknown reason' : `git status failed: ${message}`;
 }
 
 /** Worktrees only contain tracked files — link the dependency dirs in. */
@@ -498,6 +564,9 @@ export function cleanupVerificationFailures(
   }
   if (verification.uncoveredFiles.length > 0) {
     failures.push(`No detected checker covers: ${verification.uncoveredFiles.join(', ')}.`);
+  }
+  if (!policy.allowUnknownWorkingTree && verification.workingTree.state === 'unavailable') {
+    failures.push(`Working-tree inspection is unavailable: ${verification.workingTree.reason}.`);
   }
   if (!policy.allowDirty && verification.dirtyOverlap.length > 0) {
     failures.push(`Plan files are dirty in the working tree: ${verification.dirtyOverlap.join(', ')}.`);

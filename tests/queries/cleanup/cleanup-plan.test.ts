@@ -12,8 +12,10 @@ import {
   deleteLineRanges,
   detectCheckers,
   errorKey,
+  inspectWorkingTree,
   parseCheckerDiagnostics,
   selectCleanupBatches,
+  verifyCleanupPlan,
 } from '../../../src/runtime/cleanup-verify.js';
 
 describe('cleanup plan removed-range index', () => {
@@ -102,6 +104,87 @@ describe('verification error identity', () => {
         ["a.ts(2,1): error TS2304: Cannot find name 'x'"],
       ),
     ).toEqual({ status: 'verified', reason: 'checker passed', errors: [] });
+  });
+});
+
+describe('working-tree inspection contract', () => {
+  it.each([
+    ['nonzero exit', Object.assign(new Error('git failed'), { status: 128 }), 'exited with status 128'],
+    ['timeout', Object.assign(new Error('git timed out'), { code: 'ETIMEDOUT', killed: true }), 'timed out'],
+    ['signal', Object.assign(new Error('git was killed'), { signal: 'SIGKILL' }), 'terminated by SIGKILL'],
+    ['output overflow', Object.assign(new Error('stdout maxBuffer exceeded'), { code: 'ENOBUFS' }), 'output limit'],
+  ])('returns unavailable for %s instead of an empty dirty-file proof', (_label, failure, expectedReason) => {
+    expect(
+      inspectWorkingTree('/repo', {
+        readWorkingTreeStatus: () => {
+          throw failure;
+        },
+      }),
+    ).toEqual({
+      state: 'unavailable',
+      reason: expect.stringContaining(expectedReason),
+    });
+  });
+
+  it('propagates unavailable inspection through verification and blocks independently of allowDirty', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-cleanup-unavailable-test-'));
+    try {
+      const verification = verifyCleanupPlan(
+        root,
+        { batches: [], totalSymbols: 0, totalLoc: 0, blocked: [] },
+        {
+          workingTreeRuntime: {
+            readWorkingTreeStatus: () => {
+              throw Object.assign(new Error('git timed out'), { code: 'ETIMEDOUT', killed: true });
+            },
+          },
+        },
+      );
+
+      expect(verification.workingTree).toEqual({
+        state: 'unavailable',
+        reason: expect.stringContaining('timed out'),
+      });
+      expect(verification.dirtyWorkingTree).toEqual([]);
+      expect(verification.dirtyOverlap).toEqual([]);
+
+      const otherwiseVerified = {
+        ...verification,
+        checkers: ['tsc --noEmit'],
+        batches: [{ depth: 0, status: 'verified' as const }],
+      };
+      const selected: CleanupBatch[] = [
+        {
+          depth: 0,
+          loc: 1,
+          filesEmptied: [],
+          entries: [
+            {
+              symbol: 'scip-typescript npm pkg 1.0.0 src/`a.ts`/dead().',
+              shortName: 'src:a:dead()',
+              file: 'src/a.ts',
+              startLine: 1,
+              endLine: 1,
+              loc: 1,
+              currentFanIn: 0,
+              becomesDeadAfter: [],
+              history: null,
+            },
+          ],
+        },
+      ];
+      expect(cleanupVerificationFailures(otherwiseVerified, selected, { allowDirty: true })).toEqual(
+        expect.arrayContaining([expect.stringContaining('Working-tree inspection is unavailable')]),
+      );
+      expect(
+        cleanupVerificationFailures(otherwiseVerified, selected, {
+          allowDirty: true,
+          allowUnknownWorkingTree: true,
+        }),
+      ).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 
@@ -261,6 +344,7 @@ describe('cleanup patch and apply helpers', () => {
           checkers: ['tsc --noEmit'],
           uncoveredFiles: [],
           baselineErrors: 0,
+          workingTree: { state: 'known', files: ['src/a.ts'] },
           dirtyOverlap: ['src/a.ts'],
           dirtyWorkingTree: ['src/a.ts'],
           batches: [{ depth: 0, status: 'verified' }],
@@ -274,6 +358,7 @@ describe('cleanup patch and apply helpers', () => {
           checkers: ['tsc --noEmit'],
           uncoveredFiles: [],
           baselineErrors: 0,
+          workingTree: { state: 'known', files: ['src/a.ts'] },
           dirtyOverlap: ['src/a.ts'],
           dirtyWorkingTree: ['src/a.ts'],
           batches: [{ depth: 0, status: 'verified' }],
