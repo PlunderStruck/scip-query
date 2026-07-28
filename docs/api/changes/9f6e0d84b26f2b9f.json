@@ -1,0 +1,25 @@
+{
+  "acceptedAt": "2026-07-28T02:00:33.136Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "9f6e0d84b26f2b9fc451cbf9fbb8d171c8199f5a9747315f12ae23c05801406a",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ScipDatabase changed from declare class ScipDatabase { readonly db: Database.Database; readonly config: ScipQueryConfig; readonly generation: SqliteGenerationHandle; private pathFilter; private statement... to declare class ScipDatabase { readonly db: ScipDatabaseQueryPort; readonly config: ScipQueryConfig; readonly generation: SqliteGenerationHandle; private pathFilter; private reado....",
+      "target": ".:ScipDatabase"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "S changed from declare class ScipDatabase { readonly db: Database.Database; readonly config: ScipQueryConfig; readonly generation: SqliteGenerationHandle; private pathFilter; private statement... to declare class ScipDatabase { readonly db: ScipDatabaseQueryPort; readonly config: ScipQueryConfig; readonly generation: SqliteGenerationHandle; private pathFilter; private reado....",
+      "target": "db-<hash>.d.ts:S"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.19.8",
+  "previousDigest": "91004a88fe45758af6a58ba12399003099745e9d61405d6232cd59f8f6ed35c4",
+  "reason": "ScipDatabase now owns its SQLite connection and generation-reader lease exclusively; the public db property is intentionally narrowed to a runtime-wrapped read-query port so callers cannot close, reconfigure, mutate, or recover the raw driver connection.",
+  "schemaVersion": 1
+}

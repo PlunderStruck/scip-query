@@ -121,17 +121,17 @@ why that slice requires full build and API validation.
 
 ## State-authority inventory
 
-| State | Authoritative owner | Acquisition | Release or transition | Failure obligation |
-| --- | --- | --- | --- | --- |
-| Worker request | `WorkerRequestLane.active` | `start()` | successful callback, terminal rejection, or joined termination | keep admission closed |
-| Durable mailbox claim | TypeScript mailbox lane `current` plus inflight record | `pollBoundedMailboxRequests` | completed/rejected record or dead-owner reclamation | retain claim or stop owner |
-| Watcher liveness | watch loop | service start | stop condition and final cleanup | mailbox fatal must stop |
-| Working-tree knowledge | cleanup verifier | bounded `git status` | tagged `known` or `unavailable` result | unknown blocks by default |
-| Consumer evidence | diff-impact tier result | semantic/source discovery | tagged success or failure merged into final result | required-tier failure blocks full gate |
-| Historical content | resolved Git base reader | base resolution plus batch lookup | `present`, `absent`, or `unavailable` | unavailable never becomes `null` |
-| Invocation completeness | common command executor | command coverage producer | validated coverage envelope | contradictory state is rejected |
-| SQLite generation reader | `ScipDatabase` | `openPublishedGeneration` | wrapper `close()` or constructor rollback | release exactly once |
-| CLI methods outcome | methods resolver | class selection | `matched`, `missing`, or `ambiguous` | JSON remains valid on every outcome |
+| State                    | Authoritative owner                                    | Acquisition                       | Release or transition                                          | Failure obligation                     |
+| ------------------------ | ------------------------------------------------------ | --------------------------------- | -------------------------------------------------------------- | -------------------------------------- |
+| Worker request           | `WorkerRequestLane.active`                             | `start()`                         | successful callback, terminal rejection, or joined termination | keep admission closed                  |
+| Durable mailbox claim    | TypeScript mailbox lane `current` plus inflight record | `pollBoundedMailboxRequests`      | completed/rejected record or dead-owner reclamation            | retain claim or stop owner             |
+| Watcher liveness         | watch loop                                             | service start                     | stop condition and final cleanup                               | mailbox fatal must stop                |
+| Working-tree knowledge   | cleanup verifier                                       | bounded `git status`              | tagged `known` or `unavailable` result                         | unknown blocks by default              |
+| Consumer evidence        | diff-impact tier result                                | semantic/source discovery         | tagged success or failure merged into final result             | required-tier failure blocks full gate |
+| Historical content       | resolved Git base reader                               | base resolution plus batch lookup | `present`, `absent`, or `unavailable`                          | unavailable never becomes `null`       |
+| Invocation completeness  | common command executor                                | command coverage producer         | validated coverage envelope                                    | contradictory state is rejected        |
+| SQLite generation reader | `ScipDatabase`                                         | `openPublishedGeneration`         | wrapper `close()` or constructor rollback                      | release exactly once                   |
+| CLI methods outcome      | methods resolver                                       | class selection                   | `matched`, `missing`, or `ambiguous`                           | JSON remains valid on every outcome    |
 
 ## Reuse and compatibility audit
 
@@ -366,6 +366,33 @@ Verification:
 - real SQLite lifecycle tests plus the narrow outer-boundary seam if needed;
 - public API fixture and snapshot;
 - full query suite because the wrapper is foundational.
+
+Implementation record — complete:
+
+- one idempotent ownership object now couples the raw connection to its
+  generation-reader release and makes every pragma, validation step, and
+  remaining constructor operation part of the rollback scope;
+- cleanup invokes both close and release even when either fails, preserves
+  both failures when necessary, and becomes terminal before cleanup begins;
+- the raw driver is private. The public `db` property is a frozen read-query
+  port whose prepared statements do not expose `close`, `pragma`, `run`, or
+  the driver's `database` back-reference;
+- the intentional public narrowing is recorded as a breaking API change in
+  `docs/api/changes/9f6e0d84b26f2b9f.json`, while valid prepared reads remain
+  covered by the package-consumer fixture;
+- 4 focused test files passed with 37 tests, including every pragma failure,
+  path validation failure, dual cleanup failure, repeated close, immutable
+  generation retention, and a persistent TypeScript semantic consumer;
+- bounded migration, duplicate, wrapper, passthrough, re-export, abstraction,
+  co-change, and doc-drift postchecks found no finding caused by this slice.
+  Their pre-existing repository-wide candidates do not name the new ownership
+  or query-port boundary. The API-evolution documentation citation remains
+  accurate after its manifest update;
+- refutation R1 tried to recover lifecycle methods from both the public port
+  and a returned prepared statement, then tried prepared PRAGMA and DDL
+  statements; the runtime and compile fixtures reject every route. Refutation
+  R2 forced connection close and lease release to fail together; both errors
+  were retained and a second close performed no work.
 
 ### Slice 8 — DBC-08: structured methods resolution
 

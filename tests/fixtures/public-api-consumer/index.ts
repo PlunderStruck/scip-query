@@ -19,6 +19,11 @@ declare const config: ScipQueryConfig;
 
 const index = new ProjectIndex(database);
 const references: RefResult[] = refs(database, 'login');
+const preparedRead = database.db.prepare('SELECT 1 AS value').get();
+// @ts-expect-error The public query port does not own the connection lifecycle.
+database.db.close();
+// @ts-expect-error Mutable connection configuration is private to ScipDatabase.
+database.db.pragma('query_only = OFF');
 const options: ReindexOptions = { projectRoot: '.', skipIfUnchanged: true };
 const resultPromise: Promise<ReindexResult> = reindex(options);
 const decoded: DecodedCliJsonEnvelope = decodeCliJsonEnvelope({
@@ -52,6 +57,7 @@ void [
   index,
   config,
   references,
+  preparedRead,
   resultPromise,
   decoded,
   historical,

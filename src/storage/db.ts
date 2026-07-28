@@ -13,6 +13,102 @@ export interface PathExclusionPolicy {
   isIgnored(relativePath: string): boolean;
 }
 
+/** Read operations exposed by a prepared SQLite statement. */
+export interface ScipPreparedReadStatement<BindParameters extends unknown[] = unknown[], Result = unknown> {
+  get(...params: BindParameters): Result | undefined;
+  all(...params: BindParameters): Result[];
+  iterate(...params: BindParameters): IterableIterator<Result>;
+  pluck(toggleState?: boolean): this;
+  expand(toggleState?: boolean): this;
+  raw(toggleState?: boolean): this;
+  bind(...params: BindParameters): this;
+  columns(): Database.ColumnDefinition[];
+  safeIntegers(toggleState?: boolean): this;
+}
+
+/** Query-only facade that cannot close or reconfigure the owned connection. */
+export interface ScipDatabaseQueryPort {
+  prepare<BindParameters extends unknown[] = unknown[], Result = unknown>(
+    source: string,
+  ): ScipPreparedReadStatement<BindParameters, Result>;
+}
+
+export interface ScipDatabaseInitializationConnection {
+  pragma(source: string): unknown;
+  close(): unknown;
+}
+
+export const SCIP_DATABASE_INITIALIZATION_PRAGMAS = [
+  'busy_timeout = 5000',
+  'query_only = ON',
+  'temp_store = MEMORY',
+  'cache_size = -64000',
+  'mmap_size = 268435456',
+] as const;
+
+/**
+ * Owns one SQLite connection together with the reader lease that keeps its
+ * immutable generation alive.
+ *
+ * This is exported from the internal storage module for production-shaped
+ * failure injection. It is not part of the package-root API.
+ */
+export class ScipDatabaseConnectionOwnership<Connection extends ScipDatabaseInitializationConnection> {
+  private active = true;
+
+  constructor(
+    readonly connection: Connection,
+    private readonly releaseGenerationReader: () => void,
+  ) {}
+
+  initialize(validate: (connection: Connection) => void): void {
+    try {
+      for (const pragma of SCIP_DATABASE_INITIALIZATION_PRAGMAS) {
+        this.connection.pragma(pragma);
+      }
+      validate(this.connection);
+    } catch (initializationError) {
+      try {
+        this.close();
+      } catch (cleanupError) {
+        throw new AggregateError(
+          [initializationError, cleanupError],
+          'SQLite initialization and rollback both failed.',
+          { cause: cleanupError },
+        );
+      }
+      throw initializationError;
+    }
+  }
+
+  close(): void {
+    if (!this.active) return;
+    this.active = false;
+
+    let connectionError: unknown;
+    let releaseError: unknown;
+    try {
+      this.connection.close();
+    } catch (error) {
+      connectionError = error;
+    }
+    try {
+      this.releaseGenerationReader();
+    } catch (error) {
+      releaseError = error;
+    }
+
+    if (connectionError !== undefined && releaseError !== undefined) {
+      throw new AggregateError(
+        [connectionError, releaseError],
+        'SQLite connection close and generation-reader release both failed.',
+      );
+    }
+    if (connectionError !== undefined) throw connectionError;
+    if (releaseError !== undefined) throw releaseError;
+  }
+}
+
 const SQL_EXCLUDED_PATH_SEGMENTS = [
   'node_modules',
   '.git',
@@ -49,10 +145,12 @@ const SQL_EXCLUDED_PATH_SEGMENTS = [
  *   chunks                — code segments (document_id, chunk_index, start/end line, occurrences)
  */
 export class ScipDatabase {
-  readonly db: Database.Database;
+  readonly db: ScipDatabaseQueryPort;
   readonly config: ScipQueryConfig;
   readonly generation: SqliteGenerationHandle;
   private pathFilter: PathExclusionPolicy | null;
+  private readonly connection: Database.Database;
+  private readonly connectionOwnership: ScipDatabaseConnectionOwnership<Database.Database>;
   private statementCache = new Map<string, Database.Statement>();
 
   // scip-query: ignore-wrapper — public storage boundary; callers construct
@@ -61,21 +159,22 @@ export class ScipDatabase {
     this.config = config;
     this.pathFilter = pathFilter ?? null;
     const opened = openPublishedGeneration(config);
-    this.generation = opened.generation;
-    this.db = opened.db;
-    generationReaderReleases.set(this, opened.release);
-    this.db.pragma('busy_timeout = 5000');
-    this.db.pragma('query_only = ON');
-    this.db.pragma('temp_store = MEMORY');
-    this.db.pragma('cache_size = -64000');
-    this.db.pragma('mmap_size = 268435456');
+    const ownership = new ScipDatabaseConnectionOwnership(opened.db, opened.release);
     try {
-      assertSafeIndexedDocumentPaths(this.db);
-    } catch (error) {
-      this.db.close();
-      opened.release();
-      generationReaderReleases.delete(this);
-      throw error;
+      ownership.initialize(assertSafeIndexedDocumentPaths);
+      this.generation = opened.generation;
+      this.connection = opened.db;
+      this.connectionOwnership = ownership;
+      this.db = createScipDatabaseQueryPort(opened.db);
+    } catch (constructionError) {
+      try {
+        ownership.close();
+      } catch (cleanupError) {
+        throw new AggregateError([constructionError, cleanupError], 'SQLite construction and rollback both failed.', {
+          cause: cleanupError,
+        });
+      }
+      throw constructionError;
     }
   }
 
@@ -157,28 +256,67 @@ export class ScipDatabase {
   }
 
   close(): void {
-    const releaseGenerationReader = generationReaderReleases.get(this);
-    if (!releaseGenerationReader) return;
     this.statementCache.clear();
-    try {
-      this.db.close();
-    } finally {
-      releaseGenerationReader();
-      generationReaderReleases.delete(this);
-    }
+    this.connectionOwnership.close();
   }
 
   private statement(sql: string): Database.Statement {
     let statement = this.statementCache.get(sql);
     if (!statement) {
-      statement = this.db.prepare(sql);
+      statement = this.connection.prepare(sql);
       this.statementCache.set(sql, statement);
     }
     return statement;
   }
 }
 
-const generationReaderReleases = new WeakMap<ScipDatabase, () => void>();
+function createScipDatabaseQueryPort(connection: Database.Database): ScipDatabaseQueryPort {
+  return Object.freeze({
+    prepare<BindParameters extends unknown[] = unknown[], Result = unknown>(source: string) {
+      const statement = connection.prepare<BindParameters, Result>(source);
+      if (!statement.readonly || !statement.reader) {
+        throw new Error('ScipDatabase.db only permits read-only statements that return rows.');
+      }
+      return createScipPreparedReadStatement(statement);
+    },
+  });
+}
+
+function createScipPreparedReadStatement<BindParameters extends unknown[], Result>(
+  statement: Database.Statement<BindParameters, Result>,
+): ScipPreparedReadStatement<BindParameters, Result> {
+  const prepared: ScipPreparedReadStatement<BindParameters, Result> = {
+    get: (...params) => statement.get(...params),
+    all: (...params) => statement.all(...params),
+    iterate: (...params) => statement.iterate(...params),
+    pluck(toggleState) {
+      if (toggleState === undefined) statement.pluck();
+      else statement.pluck(toggleState);
+      return prepared;
+    },
+    expand(toggleState) {
+      if (toggleState === undefined) statement.expand();
+      else statement.expand(toggleState);
+      return prepared;
+    },
+    raw(toggleState) {
+      if (toggleState === undefined) statement.raw();
+      else statement.raw(toggleState);
+      return prepared;
+    },
+    bind(...params) {
+      statement.bind(...params);
+      return prepared;
+    },
+    columns: () => statement.columns(),
+    safeIntegers(toggleState) {
+      if (toggleState === undefined) statement.safeIntegers();
+      else statement.safeIntegers(toggleState);
+      return prepared;
+    },
+  };
+  return Object.freeze(prepared);
+}
 
 function assertSafeIndexedDocumentPaths(db: Database.Database): void {
   const documentsTable = db
