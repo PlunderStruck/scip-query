@@ -62,28 +62,60 @@ export type CommandInputKind = 'symbol' | 'file' | 'module' | 'pattern' | 'path'
  */
 export type CommandScope = 'diff' | 'repository';
 
-/** What one invocation can prove about the result it returned. */
-export interface InvocationCoverage {
-  /** True for the complete answer, false for a known subset, null when unknowable. */
-  complete: boolean | null;
-  /** Whether `total` names the full available answer rather than only examined rows. */
-  totalKnown: boolean;
+export interface InvocationContinuation {
+  /** Resume token bound to the exact command inputs and result ordering. */
+  cursor: string;
+  /** Index generation against which the resume token is valid. */
+  indexGeneration: string;
+}
+
+export interface InvocationResolution {
+  /** Symbol-selection truth, independent from result enumeration and transport pagination. */
+  state: 'exact' | 'ambiguous' | 'missing';
+  totalCandidates: number;
+}
+
+interface InvocationCoverageBase {
   /** Number of result units returned by this invocation. */
   returned: number;
-  /** Full available unit count, when known. */
-  total?: number;
-  /** Units not returned, when the full count is known. */
-  omitted?: number;
-  /** Stable omitted identities, only when the complete identity set was materialized. */
-  omittedIdentities?: readonly string[];
-  /** Resume token bound to the exact index generation that produced it. */
-  continuation?: { cursor: string; indexGeneration: string };
-  /** Symbol-selection truth, independent from result enumeration and transport pagination. */
-  resolution?: {
-    state: 'exact' | 'ambiguous' | 'missing';
-    totalCandidates: number;
-  };
+  resolution?: InvocationResolution;
 }
+
+/**
+ * What one invocation can prove about the result it returned.
+ *
+ * Known-complete coverage names the entire answer and therefore has no
+ * omissions or continuation. Known-incomplete coverage names a strict subset
+ * of a known total. Unknown coverage cannot claim counts or identities it did
+ * not establish.
+ */
+export type InvocationCoverage = InvocationCoverageBase &
+  (
+    | {
+        complete: true;
+        totalKnown: true;
+        total: number;
+        omitted: 0;
+        omittedIdentities?: never;
+        continuation?: never;
+      }
+    | {
+        complete: false;
+        totalKnown: true;
+        total: number;
+        omitted: number;
+        omittedIdentities?: readonly string[];
+        continuation?: InvocationContinuation;
+      }
+    | {
+        complete: false | null;
+        totalKnown: false;
+        total?: never;
+        omitted?: never;
+        omittedIdentities?: never;
+        continuation?: InvocationContinuation;
+      }
+  );
 
 export type CommandResultUnitPolicy = { kind: 'rows' } | { kind: 'report' } | { kind: 'field'; field: string };
 

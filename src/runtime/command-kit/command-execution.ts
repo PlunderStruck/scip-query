@@ -378,22 +378,54 @@ export function validateInvocationCoverage(coverage: InvocationCoverage): void {
   if (!Number.isSafeInteger(coverage.returned) || coverage.returned < 0) {
     throw new Error('Invocation coverage returned count must be a non-negative safe integer.');
   }
-  if (coverage.complete === true && !coverage.totalKnown) {
-    throw new Error('Complete invocation coverage must know its total.');
+  if (coverage.complete !== true && coverage.complete !== false && coverage.complete !== null) {
+    throw new Error('Invocation coverage complete must be true, false, or null.');
   }
-  if (coverage.totalKnown) {
-    if (!Number.isSafeInteger(coverage.total) || (coverage.total ?? -1) < coverage.returned) {
+  if (coverage.complete === true) {
+    if (!coverage.totalKnown) {
+      throw new Error('Complete invocation coverage must know its total.');
+    }
+    if (!Number.isSafeInteger(coverage.total) || coverage.total !== coverage.returned) {
+      throw new Error('Complete invocation coverage total must equal returned.');
+    }
+    if (coverage.omitted !== 0) {
+      throw new Error('Complete invocation coverage cannot omit results.');
+    }
+    if (coverage.omittedIdentities !== undefined) {
+      throw new Error('Complete invocation coverage cannot name omitted identities.');
+    }
+    if (coverage.continuation !== undefined) {
+      throw new Error('Complete invocation coverage cannot provide a continuation.');
+    }
+  } else if (coverage.totalKnown) {
+    if (coverage.complete !== false) {
+      throw new Error('Known incomplete invocation coverage must set complete to false.');
+    }
+    if (!Number.isSafeInteger(coverage.total) || coverage.total < coverage.returned) {
       throw new Error('Known invocation coverage total must be a safe integer at least as large as returned.');
     }
-    const omitted = coverage.total! - coverage.returned;
+    const omitted = coverage.total - coverage.returned;
     if (coverage.omitted !== omitted) {
       throw new Error('Known invocation coverage omitted count must equal total minus returned.');
     }
-  } else if (coverage.total !== undefined || coverage.omitted !== undefined) {
-    throw new Error('Unknown invocation coverage cannot claim a total or omitted count.');
+    if (omitted === 0) {
+      throw new Error('Known incomplete invocation coverage must omit at least one result.');
+    }
+    if (coverage.omittedIdentities && coverage.omittedIdentities.length !== omitted) {
+      throw new Error('Omitted identity count must equal the disclosed omitted count.');
+    }
+  } else {
+    if (coverage.total !== undefined || coverage.omitted !== undefined) {
+      throw new Error('Unknown invocation coverage cannot claim a total or omitted count.');
+    }
+    if (coverage.omittedIdentities !== undefined) {
+      throw new Error('Unknown invocation coverage cannot claim omitted identities.');
+    }
   }
-  if (coverage.omittedIdentities && coverage.omittedIdentities.length !== coverage.omitted) {
-    throw new Error('Omitted identity count must equal the disclosed omitted count.');
+  if (coverage.continuation) {
+    if (coverage.continuation.cursor.length === 0 || coverage.continuation.indexGeneration.length === 0) {
+      throw new Error('Invocation coverage continuation requires a cursor and index generation.');
+    }
   }
   if (coverage.resolution) {
     if (!Number.isSafeInteger(coverage.resolution.totalCandidates) || coverage.resolution.totalCandidates < 0) {

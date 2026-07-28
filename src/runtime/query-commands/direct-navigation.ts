@@ -2,7 +2,7 @@ import { code } from '../../queries/navigation/code.js';
 import { outline } from '../../queries/navigation/outline.js';
 import { refs } from '../../queries/navigation/refs.js';
 import { compareReferenceKey, referencePage } from '../refs-pagination.js';
-import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
+import type { CommandDescriptor, InvocationCoverage } from '../command-kit/command-descriptor-types.js';
 import {
   doc,
   agentContract,
@@ -103,14 +103,7 @@ const handleRefs = budgetedDbCommand('refs', ({ db, args, opts, budget }) => {
 interface RenderedRefPage {
   rows: ReturnType<typeof refs>;
   continuation?: { cursor: string; indexGeneration: string };
-  coverage: {
-    complete: boolean;
-    totalKnown: boolean;
-    returned: number;
-    total?: number;
-    omitted?: number;
-    continuation?: { cursor: string; indexGeneration: string };
-  };
+  coverage: InvocationCoverage;
   pagination: {
     cursorVersion: 1 | 2;
     producer: 'source-keyset' | 'complete-only';
@@ -147,6 +140,7 @@ function legacyOffsetPage(
   const rows = allRows.slice(offset, offset + limit);
   const nextOffset = offset + rows.length;
   const lastRow = rows[rows.length - 1];
+  const complete = offset === 0 && rows.length === allRows.length;
   const continuation =
     nextOffset < allRows.length && lastRow
       ? {
@@ -164,14 +158,16 @@ function legacyOffsetPage(
   return {
     rows,
     continuation,
-    coverage: {
-      complete: offset === 0 && rows.length === allRows.length,
-      totalKnown: true,
-      returned: rows.length,
-      total: allRows.length,
-      omitted: allRows.length - rows.length,
-      ...(continuation ? { continuation } : {}),
-    },
+    coverage: complete
+      ? { complete: true, totalKnown: true, returned: rows.length, total: rows.length, omitted: 0 }
+      : {
+          complete: false,
+          totalKnown: true,
+          returned: rows.length,
+          total: allRows.length,
+          omitted: allRows.length - rows.length,
+          ...(continuation ? { continuation } : {}),
+        },
     pagination: { cursorVersion: 2, producer: 'complete-only', semanticEnrichment: semantic },
   };
 }
@@ -211,13 +207,20 @@ function keysetReferencePage(
   return {
     rows: result.rows,
     continuation,
-    coverage: {
-      complete,
-      totalKnown: complete,
-      returned: result.rows.length,
-      ...(complete ? { total: result.rows.length, omitted: 0 } : {}),
-      ...(continuation ? { continuation } : {}),
-    },
+    coverage: complete
+      ? {
+          complete: true,
+          totalKnown: true,
+          returned: result.rows.length,
+          total: result.rows.length,
+          omitted: 0,
+        }
+      : {
+          complete: false,
+          totalKnown: false,
+          returned: result.rows.length,
+          ...(continuation ? { continuation } : {}),
+        },
     pagination: {
       cursorVersion: 2,
       producer: result.producer,

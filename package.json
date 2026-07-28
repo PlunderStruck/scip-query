@@ -320,7 +320,7 @@
     "format:check": "prettier --check \"{src,tests,scripts}/**/*.{ts,tsx,js,mjs,json}\" \"*.{ts,js,json}\"",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tests/fixtures/invocation-coverage-contract/tsconfig.json",
     "audit:prod": "node scripts/audit-production-dependencies.mjs",
     "api:report": "node scripts/api-surface-contract.mjs report",
     "api:check": "npm run build && node scripts/api-surface-contract.mjs check && tsc -p tests/fixtures/public-api-consumer/tsconfig.json",

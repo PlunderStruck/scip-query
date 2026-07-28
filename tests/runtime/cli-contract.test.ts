@@ -13,6 +13,7 @@ import {
   printJsonEnvelope,
   validateInvocationCoverage,
 } from '../../src/runtime/command-kit/command-execution.js';
+import type { InvocationCoverage } from '../../src/runtime/command-kit/command-descriptor-types.js';
 import { PUBLIC_QUERY_ENTRIES, PUBLIC_QUERY_SOURCE_PATHS } from '../../src/queries/public-query-entries.js';
 
 const PRIVATE_QUERY_MODULES = [
@@ -418,9 +419,85 @@ describe('CLI contract', () => {
   });
 
   it('rejects internally inconsistent invocation coverage', () => {
+    const dynamicCoverage = (value: unknown) => value as InvocationCoverage;
+
     expect(() =>
-      validateInvocationCoverage({ complete: false, totalKnown: true, returned: 3, total: 7, omitted: 3 }),
+      validateInvocationCoverage(
+        dynamicCoverage({ complete: false, totalKnown: true, returned: 3, total: 7, omitted: 3 }),
+      ),
     ).toThrow(/total minus returned/);
+    expect(() =>
+      validateInvocationCoverage(
+        dynamicCoverage({
+          complete: false,
+          totalKnown: true,
+          returned: 3,
+          total: 7,
+          omitted: 4,
+          omittedIdentities: ['one'],
+        }),
+      ),
+    ).toThrow(/identity count/);
+    expect(() =>
+      validateInvocationCoverage(
+        dynamicCoverage({ complete: true, totalKnown: true, returned: 3, total: 4, omitted: 1 }),
+      ),
+    ).toThrow(/total must equal returned/);
+    expect(() =>
+      validateInvocationCoverage(
+        dynamicCoverage({
+          complete: true,
+          totalKnown: true,
+          returned: 3,
+          total: 3,
+          omitted: 0,
+          continuation: { cursor: 'next', indexGeneration: 'generation' },
+        }),
+      ),
+    ).toThrow(/cannot provide a continuation/);
+    expect(() =>
+      validateInvocationCoverage(
+        dynamicCoverage({
+          complete: true,
+          totalKnown: true,
+          returned: 3,
+          total: 3,
+          omitted: 0,
+          omittedIdentities: [],
+        }),
+      ),
+    ).toThrow(/cannot name omitted identities/);
+    expect(() =>
+      validateInvocationCoverage(
+        dynamicCoverage({ complete: false, totalKnown: true, returned: 3, total: 3, omitted: 0 }),
+      ),
+    ).toThrow(/must omit at least one/);
+    expect(() =>
+      validateInvocationCoverage(
+        dynamicCoverage({
+          complete: false,
+          totalKnown: false,
+          returned: 3,
+          omittedIdentities: ['unknown'],
+        }),
+      ),
+    ).toThrow(/cannot claim omitted identities/);
+    expect(() =>
+      validateInvocationCoverage(
+        dynamicCoverage({
+          complete: false,
+          totalKnown: false,
+          returned: 3,
+          continuation: { cursor: '', indexGeneration: 'generation' },
+        }),
+      ),
+    ).toThrow(/requires a cursor and index generation/);
+  });
+
+  it('accepts every valid invocation coverage state', () => {
+    expect(() =>
+      validateInvocationCoverage({ complete: true, totalKnown: true, returned: 3, total: 3, omitted: 0 }),
+    ).not.toThrow();
     expect(() =>
       validateInvocationCoverage({
         complete: false,
@@ -428,9 +505,19 @@ describe('CLI contract', () => {
         returned: 3,
         total: 7,
         omitted: 4,
-        omittedIdentities: ['one'],
+        omittedIdentities: ['a', 'b', 'c', 'd'],
+        continuation: { cursor: 'next', indexGeneration: 'generation' },
       }),
-    ).toThrow(/identity count/);
+    ).not.toThrow();
+    expect(() =>
+      validateInvocationCoverage({
+        complete: false,
+        totalKnown: false,
+        returned: 3,
+        continuation: { cursor: 'next', indexGeneration: 'generation' },
+      }),
+    ).not.toThrow();
+    expect(() => validateInvocationCoverage({ complete: null, totalKnown: false, returned: 0 })).not.toThrow();
   });
 
   it('treats --full as an unbounded result limit unless --limit is explicit', () => {
