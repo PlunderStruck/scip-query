@@ -70,7 +70,7 @@ describe('Rust semantic provider', () => {
       expect(provider.language).toBe('rust');
       expect(capability.language).toBe('rust');
       expect(capability.available).toBe(capability.dependencyAvailable);
-      expect(capability.reason).toMatch(/enabled|not runnable/);
+      expect(capability.available ? capability.note : capability.reason).toMatch(/enabled|not runnable/);
     });
   });
 

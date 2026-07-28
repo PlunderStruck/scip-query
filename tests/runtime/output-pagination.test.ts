@@ -18,7 +18,9 @@ import {
   MAX_OUTPUT_CURSOR_LENGTH,
   MAX_OUTPUT_PAGE_SIZE,
   MIN_OUTPUT_PAGE_SIZE,
+  decodeCliOutputPageEnvelope,
   parseOutputPageSize,
+  requireCliOutputPageEnvelope,
   runWithCliOutputPagination,
   type CliOutputPageEnvelopeV1,
   type CliOutputPaginationOptions,
@@ -72,7 +74,7 @@ async function invoke(
 }
 
 function parsePage(output: string): CliOutputPageEnvelopeV1 {
-  return JSON.parse(output) as CliOutputPageEnvelopeV1;
+  return requireCliOutputPageEnvelope(JSON.parse(output));
 }
 
 function freshSnapshotRoot(): string {
@@ -82,6 +84,46 @@ function freshSnapshotRoot(): string {
 }
 
 describe('universal CLI output pagination', () => {
+  it('rejects contradictory page completion states at the decoder boundary', () => {
+    const common = {
+      kind: CLI_OUTPUT_PAGE_KIND,
+      schemaVersion: CLI_OUTPUT_PAGE_SCHEMA_VERSION,
+      producer: { name: 'scip-query', version: 'test' },
+      command: 'refs',
+      contentType: 'application/json',
+      content: 'abc',
+    } as const;
+    const page = {
+      offset: 0,
+      returnedCharacters: 3,
+      totalCharacters: 6,
+      omittedCharacters: 3,
+      remainingCharacters: 3,
+      outputHash: 'a'.repeat(64),
+    };
+
+    expect(decodeCliOutputPageEnvelope({ ...common, page: { ...page, complete: false } })).toMatchObject({
+      kind: 'malformed',
+      reason: expect.stringContaining('requires a non-empty continuation'),
+    });
+    expect(
+      decodeCliOutputPageEnvelope({
+        ...common,
+        page: {
+          ...page,
+          totalCharacters: 3,
+          omittedCharacters: 0,
+          remainingCharacters: 0,
+          complete: true,
+          continuation: { cursor: 'next', command: 'scip-query refs x' },
+        },
+      }),
+    ).toMatchObject({
+      kind: 'malformed',
+      reason: expect.stringContaining('cannot have remaining content or a continuation'),
+    });
+  });
+
   it('retrieves every character across stable pages with exact continuation commands', async () => {
     const content = Array.from({ length: 730 }, (_, index) => String(index % 10)).join('');
     const argv = ['demo', "O'Reilly", '--json'];

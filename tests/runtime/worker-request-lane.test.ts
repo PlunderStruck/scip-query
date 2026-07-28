@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   WorkerRequestLane,
+  decodeWorkerLaneResponse,
   type RequestWorkerLike,
   type WorkerLaneResponse,
 } from '../../src/runtime/worker-request-lane.js';
@@ -15,6 +16,44 @@ interface Status {
 }
 
 describe('WorkerRequestLane', () => {
+  it('decodes only state-complete Worker responses', () => {
+    expect(
+      decodeWorkerLaneResponse<string, Status>({
+        kind: 'response',
+        requestId: 'one',
+        ok: true,
+        result: 'done',
+        status: { requests: 1 },
+      }),
+    ).toMatchObject({ ok: true, result: 'done' });
+    expect(
+      decodeWorkerLaneResponse<string, Status>({
+        kind: 'response',
+        requestId: 'one',
+        ok: false,
+        error: 'failed',
+        status: { requests: 1 },
+      }),
+    ).toMatchObject({ ok: false, error: 'failed' });
+    expect(
+      decodeWorkerLaneResponse<string, Status>({
+        kind: 'response',
+        requestId: 'one',
+        ok: true,
+        error: 'not a result',
+        status: { requests: 1 },
+      }),
+    ).toBeNull();
+    expect(
+      decodeWorkerLaneResponse<string, Status>({
+        kind: 'response',
+        requestId: 'one',
+        ok: false,
+        status: { requests: 1 },
+      }),
+    ).toBeNull();
+  });
+
   it('settles a request exactly once when a Worker repeats its response', () => {
     const worker = new FakeWorker();
     const completions: string[] = [];

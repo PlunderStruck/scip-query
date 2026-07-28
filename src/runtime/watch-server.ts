@@ -57,14 +57,15 @@ export interface WatchServiceLoopIterationRuntime {
   wait(durationMs: number): Promise<void>;
 }
 
-export interface WatchServiceLoopIterationResult {
+interface WatchServiceLoopIterationResultBase {
   indexRequests: number;
   semanticRequests: number;
   processedRequests: number;
   consecutiveIdlePolls: number;
-  stopped: boolean;
-  delayMs?: number;
 }
+
+export type WatchServiceLoopIterationResult = WatchServiceLoopIterationResultBase &
+  ({ stopped: true; delayMs?: never } | { stopped: false; delayMs: number });
 
 /**
  * One directly testable service-loop iteration. The injected runtime keeps

@@ -12,14 +12,14 @@ export interface WorkerLaneRequest<Payload> {
   payload: Payload;
 }
 
-export interface WorkerLaneResponse<Result, Status> {
+interface WorkerLaneResponseBase<Status> {
   kind: 'response';
   requestId: string;
-  ok: boolean;
-  result?: Result;
-  error?: string;
   status: Status;
 }
+
+export type WorkerLaneResponse<Result, Status> = WorkerLaneResponseBase<Status> &
+  ({ ok: true; result: Result; error?: never } | { ok: false; result?: never; error: string });
 
 export interface WorkerRequestLaneOptions<Payload, Result, Status> {
   name: string;
@@ -119,11 +119,12 @@ export class WorkerRequestLane<Payload, Result, Status> {
 
   private handleMessage(generation: number, value: unknown): void {
     if (generation !== this.workerGeneration || this.closed || !this.active) return;
-    if (!isWorkerLaneResponse<Result, Status>(value)) {
+    const response = decodeWorkerLaneResponse<Result, Status>(value);
+    if (!response) {
       void this.failActiveAfterTermination(`${this.options.name} worker returned an invalid response.`);
       return;
     }
-    if (value.requestId !== this.active.request.requestId) {
+    if (response.requestId !== this.active.request.requestId) {
       void this.failActiveAfterTermination(`${this.options.name} worker returned a mismatched request identity.`);
       return;
     }
@@ -133,11 +134,11 @@ export class WorkerRequestLane<Payload, Result, Status> {
     }
     const active = this.active;
     try {
-      this.options.onStatus(value.status);
-      if (value.ok) {
-        this.options.onComplete(active.request, value.result as Result, value.status);
+      this.options.onStatus(response.status);
+      if (response.ok) {
+        this.options.onComplete(active.request, response.result, response.status);
       } else {
-        this.options.onReject(active.request, value.error ?? `${this.options.name} request failed.`, value.status);
+        this.options.onReject(active.request, response.error, response.status);
       }
     } catch (error) {
       this.closed = true;
@@ -211,16 +212,20 @@ export class WorkerRequestLane<Payload, Result, Status> {
   }
 }
 
-function isWorkerLaneResponse<Result, Status>(value: unknown): value is WorkerLaneResponse<Result, Status> {
-  if (!value || typeof value !== 'object') return false;
-  const response = value as Partial<WorkerLaneResponse<Result, Status>>;
-  return (
-    response.kind === 'response' &&
-    typeof response.requestId === 'string' &&
-    typeof response.ok === 'boolean' &&
-    'status' in response &&
-    (response.ok ? 'result' in response : typeof response.error === 'string')
-  );
+export function decodeWorkerLaneResponse<Result, Status>(value: unknown): WorkerLaneResponse<Result, Status> | null {
+  if (!value || typeof value !== 'object') return null;
+  const response = value as Record<string, unknown>;
+  if (response['kind'] !== 'response' || typeof response['requestId'] !== 'string' || !('status' in response)) {
+    return null;
+  }
+  if (response['ok'] === true) {
+    if (!('result' in response) || 'error' in response) return null;
+  } else if (response['ok'] === false) {
+    if ('result' in response || typeof response['error'] !== 'string') return null;
+  } else {
+    return null;
+  }
+  return response as unknown as WorkerLaneResponse<Result, Status>;
 }
 
 function asError(error: unknown): Error {

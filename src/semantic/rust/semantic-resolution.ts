@@ -1,36 +1,30 @@
 import { parsePositiveInteger } from '../../domain/number-parsing.js';
 import type { IndexedDefinition } from '../../domain/types.js';
-import type { SemanticCallee, SemanticReference } from '../types.js';
+import type { SemanticAvailabilityState, SemanticCallee, SemanticReference } from '../types.js';
 import type { RustReferenceWorkerRequest, RustReferenceWorkerResponse } from './lsp-batch-worker.js';
 
-export interface RustReferenceResolution {
-  available: boolean;
-  reason?: string;
+export type RustReferenceResolution = SemanticAvailabilityState & {
   resolvedBinary?: string;
   references: Map<number, SemanticReference[]>;
-}
+};
 
 export interface RustReferenceResolver {
   referencesForDefinitions(definitions: readonly IndexedDefinition[]): RustReferenceResolution;
 }
 
-export interface RustCalleeResolution {
-  available: boolean;
-  reason?: string;
+export type RustCalleeResolution = SemanticAvailabilityState & {
   resolvedBinary?: string;
   callees: Map<number, SemanticCallee[]>;
-}
+};
 
 export interface RustCalleeResolver {
   calleesForDefinitions(definitions: readonly IndexedDefinition[]): RustCalleeResolution;
 }
 
-export interface RustSignatureResolution {
-  available: boolean;
-  reason?: string;
+export type RustSignatureResolution = SemanticAvailabilityState & {
   resolvedBinary?: string;
   signatures: Map<number, string | null>;
-}
+};
 
 export interface RustSignatureResolver {
   signaturesForDefinitions(definitions: readonly IndexedDefinition[]): RustSignatureResolution;
@@ -55,18 +49,14 @@ export interface RustImportDefinitionWorkerRequest {
   concurrency?: number;
 }
 
-export interface RustImportDefinitionWorkerResponse {
-  available: boolean;
-  reason?: string;
+export type RustImportDefinitionWorkerResponse = SemanticAvailabilityState & {
   sourcePaths: Array<[string, string | null]>;
-}
+};
 
-export interface RustImportDefinitionResolution {
-  available: boolean;
-  reason?: string;
+export type RustImportDefinitionResolution = SemanticAvailabilityState & {
   resolvedBinary?: string;
   sourcePaths: Map<string, string | null>;
-}
+};
 
 export interface RustImportDefinitionResolver {
   importDefinitionsForFile(

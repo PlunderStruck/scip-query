@@ -29,6 +29,7 @@ export interface SemanticReadiness {
   tsconfigPath?: string;
   tsconfigPaths?: string[];
   resolvedBinary?: string;
+  /** Explanatory status text, including positive readiness detail. */
   reason?: string;
 }
 
@@ -441,9 +442,13 @@ function semanticReadinessForLanguages(
     });
   }
   if (languages.includes('rust')) {
+    const status = getRustSemanticStatus(projectRoot);
     semantics.push({
       language: 'rust',
-      ...getRustSemanticStatus(projectRoot),
+      available: status.available,
+      dependencyAvailable: status.dependencyAvailable,
+      resolvedBinary: status.resolvedBinary,
+      reason: status.available ? status.note : status.reason,
     });
   }
   return semantics;

@@ -326,6 +326,23 @@ Verification:
 - public compile fixture;
 - full TypeScript build and CLI contract suite.
 
+Implementation record — complete:
+
+- the public protocol types are discriminated unions, and the untrusted JSON
+  boundaries now decode the matching state-specific fields;
+- the compile fixture rejects contradictory page, worker, watcher, lock, and
+  semantic-availability states;
+- 10 focused test files passed with 127 tests, alongside TypeScript, ESLint,
+  and the public API compatibility check;
+- the diff gate's `lsp-batch-worker.ts`/`lsp-session-worker.ts` co-change
+  finding is accepted: the unchanged session worker imports and produces the
+  newly strict response union, is compiled through the same package build,
+  and its production path is covered by `rust-lsp-session.test.ts`;
+- the two advisory architecture citations were reread. Their semantic-cache
+  ownership and retained-generation claims remain true because this slice
+  changed protocol state validation rather than cache keys or generation
+  retention.
+
 ### Slice 7 — DBC-06: SQLite lifecycle ownership
 
 Red test first:

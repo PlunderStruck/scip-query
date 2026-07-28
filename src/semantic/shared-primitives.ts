@@ -43,10 +43,10 @@ export type SemanticEvidenceSlot =
   | 'semantic-import-usage'
   | 'semantic-signatures';
 
-export interface SemanticEvidenceCapability extends SemanticAvailability {
+export type SemanticEvidenceCapability = SemanticAvailability & {
   slot: SemanticEvidenceSlot;
   language: SemanticProviderLanguage;
-}
+};
 
 export interface SemanticReferenceMaterializationResult {
   definitions: number;

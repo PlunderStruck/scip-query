@@ -276,6 +276,25 @@ describe('durable Rust mailbox response protocol', () => {
         error: expect.stringContaining('invalid success'),
       }),
     );
+
+    expect(
+      decodeDurableRustMailboxResponse(
+        {
+          ...successResponse(expected),
+          response: { available: false, references: [] },
+        },
+        expected,
+      ),
+    ).toMatchObject({ ok: false, code: 'malformed-response' });
+    expect(
+      decodeDurableRustMailboxResponse(
+        {
+          ...successResponse(expected),
+          response: { available: true, reason: 'contradictory', references: [] },
+        },
+        expected,
+      ),
+    ).toMatchObject({ ok: false, code: 'malformed-response' });
   });
 
   it('rejects prior, future, mismatched, replayed, and expired responses before exposing payload data', () => {

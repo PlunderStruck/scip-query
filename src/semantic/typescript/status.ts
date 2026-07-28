@@ -3,13 +3,21 @@ import { discoverTypeScriptTsconfigsForProject } from './tsconfig-discovery.js';
 
 const require = createRequire(import.meta.url);
 
-export interface TypeScriptSemanticStatus {
-  available: boolean;
-  dependencyAvailable: boolean;
-  tsconfigPath?: string;
-  tsconfigPaths?: string[];
-  reason?: string;
-}
+export type TypeScriptSemanticStatus =
+  | {
+      available: true;
+      dependencyAvailable: boolean;
+      tsconfigPath?: string;
+      tsconfigPaths?: string[];
+      reason?: never;
+    }
+  | {
+      available: false;
+      dependencyAvailable: boolean;
+      tsconfigPath?: string;
+      tsconfigPaths?: string[];
+      reason: string;
+    };
 
 export function getTypeScriptSemanticStatus(
   projectRoot: string,

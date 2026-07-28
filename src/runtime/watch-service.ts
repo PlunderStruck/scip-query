@@ -174,10 +174,9 @@ export interface WatchServiceEnsureResult {
   state: WatchServiceState;
 }
 
-export interface WatchServiceStopResult {
-  disposition: 'stopped' | 'already-stopped';
-  pid?: number;
-}
+export type WatchServiceStopResult =
+  | { disposition: 'stopped'; pid: number }
+  | { disposition: 'already-stopped'; pid?: never };
 
 // scip-query: ignore-stale — reviewed S1 owned contract; this union makes automatic-start outcomes explicit.
 export type WatchServiceAutoEnsureResult =

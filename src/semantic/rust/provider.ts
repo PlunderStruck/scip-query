@@ -6,6 +6,7 @@ import type { IndexedDefinition } from '../../domain/types.js';
 import { profileSpan } from '../../instrumentation/profile.js';
 import { isFunctionLikeSymbol, leafName } from '../../symbols/symbol-parser.js';
 import type {
+  SemanticAvailabilityState,
   SemanticCallee,
   SemanticImportUsage,
   SemanticProvider,
@@ -122,22 +123,13 @@ export function createRustSemanticProvider(
     try {
       const resolution = referenceResolver.referencesForDefinitions(rustDefinitions);
       const baseAvailability = currentBaseAvailability();
-      lastAvailability = {
-        ...baseAvailability,
-        available: resolution.available,
-        resolvedBinary: resolution.resolvedBinary ?? baseAvailability.resolvedBinary,
-        reason: resolution.reason ?? baseAvailability.reason,
-      };
+      lastAvailability = statusFromResolution(baseAvailability, resolution);
       return resolution.available
         ? new Map(resolution.references)
         : completeRustReferenceMap(rustDefinitions, resolution.references);
     } catch (error) {
       const baseAvailability = currentBaseAvailability();
-      lastAvailability = {
-        ...baseAvailability,
-        available: false,
-        reason: error instanceof Error ? error.message : String(error),
-      };
+      lastAvailability = failedSemanticStatus(baseAvailability, error);
       return emptyReferenceMap(rustDefinitions);
     }
   };
@@ -165,22 +157,13 @@ export function createRustSemanticProvider(
     try {
       const resolution = calleeResolver.calleesForDefinitions(pendingDefinitions);
       const baseAvailability = currentBaseAvailability();
-      lastAvailability = {
-        ...baseAvailability,
-        available: resolution.available,
-        resolvedBinary: resolution.resolvedBinary ?? baseAvailability.resolvedBinary,
-        reason: resolution.reason ?? baseAvailability.reason,
-      };
+      lastAvailability = statusFromResolution(baseAvailability, resolution);
       const completedPending = completeCalleeMap(pendingDefinitions, resolution.callees, calleeSymbolResolver);
       for (const [symbolId, callees] of completedPending) resolvedCallees.set(symbolId, callees);
       return completeCalleeMap(rustDefinitions, resolvedCallees, undefined);
     } catch (error) {
       const baseAvailability = currentBaseAvailability();
-      lastAvailability = {
-        ...baseAvailability,
-        available: false,
-        reason: error instanceof Error ? error.message : String(error),
-      };
+      lastAvailability = failedSemanticStatus(baseAvailability, error);
       return emptyCalleeMap(rustDefinitions);
     }
   };
@@ -218,12 +201,7 @@ export function createRustSemanticProvider(
             calleeDefinitions: pendingCalleeDefinitions,
           });
       const baseAvailability = currentBaseAvailability();
-      lastAvailability = {
-        ...baseAvailability,
-        available: resolution.available,
-        resolvedBinary: resolution.resolvedBinary ?? baseAvailability.resolvedBinary,
-        reason: resolution.reason ?? baseAvailability.reason,
-      };
+      lastAvailability = statusFromResolution(baseAvailability, resolution);
       const references = resolution.available
         ? new Map(resolution.references)
         : completeRustReferenceMap(rustReferenceDefinitions, resolution.references);
@@ -233,11 +211,7 @@ export function createRustSemanticProvider(
       return { references, callees };
     } catch (error) {
       const baseAvailability = currentBaseAvailability();
-      lastAvailability = {
-        ...baseAvailability,
-        available: false,
-        reason: error instanceof Error ? error.message : String(error),
-      };
+      lastAvailability = failedSemanticStatus(baseAvailability, error);
       return {
         references: emptyReferenceMap(rustReferenceDefinitions),
         callees: emptyCalleeMap(rustCalleeDefinitions),
@@ -251,20 +225,11 @@ export function createRustSemanticProvider(
     try {
       const resolution = signatureResolver.signaturesForDefinitions(rustDefinitions);
       const baseAvailability = currentBaseAvailability();
-      lastAvailability = {
-        ...baseAvailability,
-        available: resolution.available,
-        resolvedBinary: resolution.resolvedBinary ?? baseAvailability.resolvedBinary,
-        reason: resolution.reason ?? baseAvailability.reason,
-      };
+      lastAvailability = statusFromResolution(baseAvailability, resolution);
       return completeSignatureMap(rustDefinitions, resolution.signatures);
     } catch (error) {
       const baseAvailability = currentBaseAvailability();
-      lastAvailability = {
-        ...baseAvailability,
-        available: false,
-        reason: error instanceof Error ? error.message : String(error),
-      };
+      lastAvailability = failedSemanticStatus(baseAvailability, error);
       return emptySignatureMap(rustDefinitions);
     }
   };
@@ -284,11 +249,7 @@ export function createRustSemanticProvider(
         return usage;
       } catch (error) {
         const baseAvailability = currentBaseAvailability();
-        lastAvailability = {
-          ...baseAvailability,
-          available: false,
-          reason: error instanceof Error ? error.message : String(error),
-        };
+        lastAvailability = failedSemanticStatus(baseAvailability, error);
         return [];
       }
     },
@@ -301,6 +262,30 @@ export function createRustSemanticProvider(
     calleesForDefinitions,
     signatureFor: (definition: IndexedDefinition): string | null =>
       signaturesForDefinitions([definition]).get(definition.symbolId) ?? null,
+  };
+}
+
+function statusFromResolution(
+  base: RustSemanticStatus,
+  resolution: SemanticAvailabilityState & { resolvedBinary?: string },
+): RustSemanticStatus {
+  const common = {
+    dependencyAvailable: base.dependencyAvailable,
+    resolvedBinary: resolution.resolvedBinary ?? base.resolvedBinary,
+    ...(base.note ? { note: base.note } : {}),
+  };
+  return resolution.available
+    ? { available: true, ...common }
+    : { available: false, reason: resolution.reason, ...common };
+}
+
+function failedSemanticStatus(base: RustSemanticStatus, error: unknown): RustSemanticStatus {
+  return {
+    available: false,
+    dependencyAvailable: base.dependencyAvailable,
+    resolvedBinary: base.resolvedBinary,
+    ...(base.note ? { note: base.note } : {}),
+    reason: error instanceof Error ? error.message : String(error),
   };
 }
 
@@ -402,7 +387,7 @@ function resolveReferencesWithWorker(
     return {
       available: false,
       resolvedBinary: baseStatus.resolvedBinary,
-      reason: baseStatus.reason,
+      reason: unavailableBaseStatusReason(baseStatus),
       references: emptyReferenceMap(definitions),
     };
   }
@@ -462,9 +447,8 @@ function resolveReferencesWithWorker(
   const parsed = parseWorkerResponse(result.stdout);
   if (parsed) {
     return {
-      available: parsed.available,
+      ...semanticAvailabilityState(parsed),
       resolvedBinary: baseStatus.resolvedBinary,
-      reason: parsed.reason,
       references: completeRustReferenceMap(
         definitions,
         new Map(parsed.references),
@@ -496,7 +480,7 @@ function resolveCalleesWithWorker(
     return {
       available: false,
       resolvedBinary: baseStatus.resolvedBinary,
-      reason: baseStatus.reason,
+      reason: unavailableBaseStatusReason(baseStatus),
       callees: emptyCalleeMap(definitions),
     };
   }
@@ -550,9 +534,8 @@ function resolveCalleesWithWorker(
   const parsed = parseWorkerResponse(result.stdout);
   if (parsed) {
     return {
-      available: parsed.available,
+      ...semanticAvailabilityState(parsed),
       resolvedBinary: baseStatus.resolvedBinary,
-      reason: parsed.reason,
       callees: completeCalleeMap(definitions, new Map(parsed.callees ?? []), undefined),
     };
   }
@@ -580,7 +563,7 @@ function resolveSignaturesWithWorker(
     return {
       available: false,
       resolvedBinary: baseStatus.resolvedBinary,
-      reason: baseStatus.reason,
+      reason: unavailableBaseStatusReason(baseStatus),
       signatures: emptySignatureMap(definitions),
     };
   }
@@ -636,9 +619,8 @@ function resolveSignaturesWithWorker(
   const parsed = parseWorkerResponse(result.stdout);
   if (parsed) {
     return {
-      available: parsed.available,
+      ...semanticAvailabilityState(parsed),
       resolvedBinary: baseStatus.resolvedBinary,
-      reason: parsed.reason,
       signatures: completeSignatureMap(definitions, new Map(parsed.signatures ?? [])),
     };
   }
@@ -663,27 +645,35 @@ function resolveReferencesAndCalleesSeparately(
     calleeDefinitions: readonly IndexedDefinition[];
   },
 ): RustReferenceResolution & RustCalleeResolution {
-  const referenceResolution =
+  const referenceResolution: RustReferenceResolution =
     definitions.referenceDefinitions.length > 0
       ? referenceResolver.referencesForDefinitions(definitions.referenceDefinitions)
       : {
           available: true,
           references: emptyReferenceMap(definitions.referenceDefinitions),
         };
-  const calleeResolution =
+  const calleeResolution: RustCalleeResolution =
     definitions.calleeDefinitions.length > 0
       ? calleeResolver.calleesForDefinitions(definitions.calleeDefinitions)
       : {
           available: true,
           callees: emptyCalleeMap(definitions.calleeDefinitions),
         };
-  return {
-    available: referenceResolution.available && calleeResolution.available,
+  const payload = {
     resolvedBinary: referenceResolution.resolvedBinary ?? calleeResolution.resolvedBinary,
-    reason: referenceResolution.reason ?? calleeResolution.reason,
     references: referenceResolution.references,
     callees: calleeResolution.callees,
   };
+  return referenceResolution.available && calleeResolution.available
+    ? { available: true, ...payload }
+    : {
+        available: false,
+        reason:
+          (!referenceResolution.available ? referenceResolution.reason : undefined) ??
+          (!calleeResolution.available ? calleeResolution.reason : undefined) ??
+          'Rust semantic resolution was unavailable.',
+        ...payload,
+      };
 }
 
 function emptyReferenceMap(definitions: readonly IndexedDefinition[]): Map<number, SemanticReference[]> {
@@ -743,22 +733,37 @@ function rustSemanticWorkerPath(): string {
   return fileURLToPath(new URL('./rust-semantic-worker.js', import.meta.url));
 }
 
+function semanticAvailabilityState(value: SemanticAvailabilityState): SemanticAvailabilityState {
+  return value.available ? { available: true } : { available: false, reason: value.reason };
+}
+
+function unavailableBaseStatusReason(status: RustSemanticStatus): string {
+  return status.available ? 'rust-analyzer binary path is unavailable.' : status.reason;
+}
+
 function parseWorkerResponse(stdout: string): RustReferenceWorkerResponse | null {
   try {
     const parsed = JSON.parse(stdout) as unknown;
     if (!parsed || typeof parsed !== 'object') return null;
-    const record = parsed as Partial<RustReferenceWorkerResponse>;
-    if (typeof record.available !== 'boolean' || !Array.isArray(record.references)) return null;
-    return {
-      available: record.available,
-      reason: typeof record.reason === 'string' ? record.reason : undefined,
+    const record = parsed as Record<string, unknown>;
+    if (typeof record['available'] !== 'boolean' || !Array.isArray(record['references'])) return null;
+    if (
+      (record['available'] === false && typeof record['reason'] !== 'string') ||
+      (record['available'] === true && record['reason'] !== undefined)
+    ) {
+      return null;
+    }
+    const payload = {
       references: record.references,
-      incompleteReferenceSymbolIds: Array.isArray(record.incompleteReferenceSymbolIds)
-        ? record.incompleteReferenceSymbolIds.filter((value): value is number => typeof value === 'number')
+      incompleteReferenceSymbolIds: Array.isArray(record['incompleteReferenceSymbolIds'])
+        ? record['incompleteReferenceSymbolIds'].filter((value): value is number => typeof value === 'number')
         : undefined,
-      callees: Array.isArray(record.callees) ? record.callees : undefined,
-      signatures: Array.isArray(record.signatures) ? record.signatures : undefined,
+      callees: Array.isArray(record['callees']) ? record['callees'] : undefined,
+      signatures: Array.isArray(record['signatures']) ? record['signatures'] : undefined,
     };
+    return record['available'] === true
+      ? { available: true, ...payload }
+      : { available: false, reason: String(record['reason']), ...payload };
   } catch {
     return null;
   }

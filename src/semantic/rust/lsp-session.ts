@@ -9,7 +9,7 @@ import { profileEnabled, profileSpan, writeProfileEvent } from '../../instrument
 import { isProcessAlive } from '../../platform/process-liveness.js';
 import { readProcessIdentity } from '../../platform/process-identity.js';
 import { readTextFileWithinLimit, SOURCE_ARTIFACT_MAX_BYTES } from '../../platform/bounded-file.js';
-import type { SemanticCallee, SemanticReference } from '../types.js';
+import type { SemanticAvailabilityState, SemanticCallee, SemanticReference } from '../types.js';
 import type {
   RustAnalyzerSessionRequester,
   RustCalleeResolution,
@@ -50,13 +50,11 @@ export interface RustAnalyzerSessionResolverOptions {
   fallbackSignatureResolver?: RustSignatureResolver;
 }
 
-export interface RustCombinedSemanticResolution {
-  available: boolean;
-  reason?: string;
+export type RustCombinedSemanticResolution = SemanticAvailabilityState & {
   resolvedBinary?: string;
   references: Map<number, SemanticReference[]>;
   callees: Map<number, SemanticCallee[]>;
-}
+};
 
 const DEFAULT_RUST_REQUEST_TIMEOUT_MS = 15_000;
 const DEFAULT_RUST_CONCURRENCY = 8;
@@ -102,7 +100,7 @@ export class RustAnalyzerSessionResolver
       return {
         available: false,
         resolvedBinary: baseStatus.resolvedBinary,
-        reason: baseStatus.reason,
+        reason: unavailableBaseStatusReason(baseStatus),
         references: emptyReferenceMap(definitions),
       };
     }
@@ -112,9 +110,8 @@ export class RustAnalyzerSessionResolver
         includeReferences: true,
       });
       return {
-        available: response.available,
+        ...semanticAvailabilityState(response),
         resolvedBinary: baseStatus.resolvedBinary,
-        reason: response.reason,
         references: completeRustReferenceMap(
           definitions,
           new Map(response.references),
@@ -139,7 +136,7 @@ export class RustAnalyzerSessionResolver
       return {
         available: false,
         resolvedBinary: baseStatus.resolvedBinary,
-        reason: baseStatus.reason,
+        reason: unavailableBaseStatusReason(baseStatus),
         callees: emptyCalleeMap(definitions),
       };
     }
@@ -150,9 +147,8 @@ export class RustAnalyzerSessionResolver
         includeCallees: true,
       });
       return {
-        available: response.available,
+        ...semanticAvailabilityState(response),
         resolvedBinary: baseStatus.resolvedBinary,
-        reason: response.reason,
         callees: completeCalleeMap(definitions, new Map(response.callees ?? [])),
       };
     } catch (error) {
@@ -177,7 +173,7 @@ export class RustAnalyzerSessionResolver
       return {
         available: false,
         resolvedBinary: baseStatus.resolvedBinary,
-        reason: baseStatus.reason,
+        reason: unavailableBaseStatusReason(baseStatus),
         references: emptyReferenceMap(referenceDefinitions),
         callees: emptyCalleeMap(calleeDefinitions),
       };
@@ -192,9 +188,8 @@ export class RustAnalyzerSessionResolver
         calleeDefinitions,
       });
       return {
-        available: response.available,
+        ...semanticAvailabilityState(response),
         resolvedBinary: baseStatus.resolvedBinary,
-        reason: response.reason,
         references: completeRustReferenceMap(
           referenceDefinitions,
           new Map(response.references),
@@ -213,7 +208,7 @@ export class RustAnalyzerSessionResolver
       return {
         available: false,
         resolvedBinary: baseStatus.resolvedBinary,
-        reason: baseStatus.reason,
+        reason: unavailableBaseStatusReason(baseStatus),
         signatures: emptySignatureMap(definitions),
       };
     }
@@ -225,9 +220,8 @@ export class RustAnalyzerSessionResolver
         includeSignatures: true,
       });
       return {
-        available: response.available,
+        ...semanticAvailabilityState(response),
         resolvedBinary: baseStatus.resolvedBinary,
-        reason: response.reason,
         signatures: completeSignatureMap(definitions, new Map(response.signatures ?? [])),
       };
     } catch (error) {
@@ -248,18 +242,24 @@ export class RustAnalyzerSessionResolver
   ): RustImportDefinitionResolution {
     const baseStatus = this.status(this.projectRoot);
     if (positions.length === 0) {
-      return {
-        available: baseStatus.available,
-        resolvedBinary: baseStatus.resolvedBinary,
-        reason: baseStatus.reason,
-        sourcePaths: new Map(),
-      };
+      return baseStatus.available
+        ? {
+            available: true,
+            resolvedBinary: baseStatus.resolvedBinary,
+            sourcePaths: new Map(),
+          }
+        : {
+            available: false,
+            reason: baseStatus.reason,
+            resolvedBinary: baseStatus.resolvedBinary,
+            sourcePaths: new Map(),
+          };
     }
     if (!baseStatus.available || !baseStatus.resolvedBinary) {
       return {
         available: false,
         resolvedBinary: baseStatus.resolvedBinary,
-        reason: baseStatus.reason,
+        reason: unavailableBaseStatusReason(baseStatus),
         sourcePaths: new Map(positions.map((position) => [position.id, null])),
       };
     }
@@ -267,9 +267,8 @@ export class RustAnalyzerSessionResolver
     try {
       const response = this.requestImportDefinitions(baseStatus.resolvedBinary, file, positions);
       return {
-        available: response.available,
+        ...semanticAvailabilityState(response),
         resolvedBinary: baseStatus.resolvedBinary,
-        reason: response.reason,
         sourcePaths: new Map(response.sourcePaths),
       };
     } catch (error) {
@@ -367,23 +366,39 @@ export class RustAnalyzerSessionResolver
     calleeDefinitions: readonly IndexedDefinition[],
     error: unknown,
   ): RustCombinedSemanticResolution {
-    const referenceResolution =
+    const referenceResolution: RustReferenceResolution | undefined =
       referenceDefinitions.length === 0
-        ? { available: true, references: emptyReferenceMap(referenceDefinitions) }
+        ? {
+            available: true,
+            resolvedBinary: baseStatus.resolvedBinary,
+            references: emptyReferenceMap(referenceDefinitions),
+          }
         : this.opts.fallbackReferenceResolver?.referencesForDefinitions(referenceDefinitions);
-    const calleeResolution =
+    const calleeResolution: RustCalleeResolution | undefined =
       calleeDefinitions.length === 0
-        ? { available: true, callees: emptyCalleeMap(calleeDefinitions) }
+        ? {
+            available: true,
+            resolvedBinary: baseStatus.resolvedBinary,
+            callees: emptyCalleeMap(calleeDefinitions),
+          }
         : this.opts.fallbackCalleeResolver?.calleesForDefinitions(calleeDefinitions);
     if (referenceResolution && calleeResolution) {
-      return {
-        available: referenceResolution.available && calleeResolution.available,
+      const payload = {
         resolvedBinary:
           referenceResolution.resolvedBinary ?? calleeResolution.resolvedBinary ?? baseStatus.resolvedBinary,
-        reason: referenceResolution.reason ?? calleeResolution.reason,
         references: completeRustReferenceMap(referenceDefinitions, referenceResolution.references),
         callees: completeCalleeMap(calleeDefinitions, calleeResolution.callees),
       };
+      return referenceResolution.available && calleeResolution.available
+        ? { available: true, ...payload }
+        : {
+            available: false,
+            reason:
+              (!referenceResolution.available ? referenceResolution.reason : undefined) ??
+              (!calleeResolution.available ? calleeResolution.reason : undefined) ??
+              'Rust semantic fallback was unavailable.',
+            ...payload,
+          };
     }
     return {
       available: false,
@@ -438,6 +453,14 @@ export class RustAnalyzerSessionResolver
       }),
     );
   }
+}
+
+function semanticAvailabilityState(value: SemanticAvailabilityState): SemanticAvailabilityState {
+  return value.available ? { available: true } : { available: false, reason: value.reason };
+}
+
+function unavailableBaseStatusReason(status: RustSemanticStatus): string {
+  return status.available ? 'rust-analyzer binary path is unavailable.' : status.reason;
 }
 
 export function createRustAnalyzerSessionResolver(

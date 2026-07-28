@@ -464,7 +464,12 @@ function isResponseForKind(
   kind: DurableRustSessionRequest['kind'],
 ): value is RustReferenceWorkerResponse | RustImportDefinitionWorkerResponse {
   if (!isRecordObject(value) || typeof value.available !== 'boolean') return false;
-  if (value.reason !== undefined && typeof value.reason !== 'string') return false;
+  if (
+    (value.available === false && (typeof value.reason !== 'string' || value.reason.length === 0)) ||
+    (value.available === true && value.reason !== undefined)
+  ) {
+    return false;
+  }
   if (kind === 'import-definitions') {
     return (
       Array.isArray(value.sourcePaths) &&

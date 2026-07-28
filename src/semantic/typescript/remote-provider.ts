@@ -29,6 +29,7 @@ import type {
   SemanticReference,
   SemanticReferenceFragment,
 } from '../types.js';
+import { decodeSemanticAvailability } from '../types.js';
 import { createTsMorphProvider } from './ts-morph-provider.js';
 import {
   TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
@@ -252,14 +253,9 @@ function stringMap<T>(response: unknown): Map<string, T> {
 }
 
 function parseAvailability(response: unknown): SemanticAvailability {
-  if (
-    !response ||
-    typeof response !== 'object' ||
-    typeof (response as { available?: unknown }).available !== 'boolean'
-  ) {
-    throw new Error('TypeScript semantic service wrote invalid availability.');
-  }
-  return response as SemanticAvailability;
+  const availability = decodeSemanticAvailability(response);
+  if (!availability) throw new Error('TypeScript semantic service wrote invalid availability.');
+  return availability;
 }
 
 function parseSignature(response: unknown): string | null {

@@ -39,14 +39,47 @@ interface LockFileIdentity {
   mtimeMs: number;
 }
 
-export interface ProcessFileLockObservation {
-  state: 'missing' | 'valid' | 'legacy' | 'malformed';
-  raw?: string;
-  identity?: LockFileIdentity;
-  record?: ProcessFileLockRecord;
-  owner?: ProcessFileLockOwner;
-  parsed?: unknown;
-}
+export type ProcessFileLockObservation =
+  | {
+      state: 'missing';
+      raw?: never;
+      identity?: never;
+      record?: never;
+      owner?: never;
+      parsed?: never;
+    }
+  | {
+      state: 'valid';
+      raw: string;
+      identity: LockFileIdentity;
+      record: ProcessFileLockRecord;
+      owner: ProcessFileLockOwner;
+      parsed: unknown;
+    }
+  | {
+      state: 'legacy';
+      raw: string;
+      identity: LockFileIdentity;
+      record?: never;
+      owner: ProcessFileLockOwner;
+      parsed: unknown;
+    }
+  | {
+      state: 'malformed';
+      raw?: never;
+      identity?: never;
+      record?: never;
+      owner?: never;
+      parsed?: never;
+    }
+  | {
+      state: 'malformed';
+      raw: string;
+      identity: LockFileIdentity;
+      record?: never;
+      owner?: never;
+      parsed?: unknown;
+    };
 
 export interface ProcessFileLock {
   readonly path: string;

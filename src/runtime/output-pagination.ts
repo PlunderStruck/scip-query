@@ -27,6 +27,7 @@ import { tryAcquireProcessFileLock } from '../platform/process-file-lock.js';
 import { sanitizeTerminalLine } from '../platform/terminal-output.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
+import { isNonNegativeInteger, isRecordObject } from '../domain/record-validation.js';
 import { encodeCursorPayload } from './cursor-codec.js';
 
 export const CLI_OUTPUT_PAGE_KIND = 'scip-query-output-page' as const;
@@ -108,6 +109,28 @@ const DEFAULT_OUTPUT_SNAPSHOT_LIMITS: OutputSnapshotLimits = Object.freeze({
   maxSnapshotCount: MAX_OUTPUT_SNAPSHOT_COUNT,
 });
 
+interface CliOutputPageCommon {
+  offset: number;
+  returnedCharacters: number;
+  totalCharacters: number;
+  omittedCharacters: number;
+  remainingCharacters: number;
+  outputHash: string;
+}
+
+export type CliOutputPage =
+  | (CliOutputPageCommon & {
+      complete: false;
+      continuation: {
+        cursor: string;
+        command: string;
+      };
+    })
+  | (CliOutputPageCommon & {
+      complete: true;
+      continuation?: never;
+    });
+
 export interface CliOutputPageEnvelopeV1 {
   kind: typeof CLI_OUTPUT_PAGE_KIND;
   schemaVersion: typeof CLI_OUTPUT_PAGE_SCHEMA_VERSION;
@@ -116,20 +139,83 @@ export interface CliOutputPageEnvelopeV1 {
   contentType: 'text/plain' | 'application/json';
   /** Direct model-facing obligation; incomplete pages are not usable as complete evidence. */
   agentInstruction?: string;
-  page: {
-    offset: number;
-    returnedCharacters: number;
-    totalCharacters: number;
-    omittedCharacters: number;
-    remainingCharacters: number;
-    complete: boolean;
-    outputHash: string;
-    continuation?: {
-      cursor: string;
-      command: string;
-    };
-  };
+  page: CliOutputPage;
   content: string;
+}
+
+export type DecodedCliOutputPageEnvelope =
+  | { kind: 'supported'; envelope: CliOutputPageEnvelopeV1 }
+  | { kind: 'malformed'; reason: string };
+
+export function decodeCliOutputPageEnvelope(input: unknown): DecodedCliOutputPageEnvelope {
+  if (!isRecordObject(input)) return { kind: 'malformed', reason: 'Output page envelope must be an object.' };
+  if (input['kind'] !== CLI_OUTPUT_PAGE_KIND || input['schemaVersion'] !== CLI_OUTPUT_PAGE_SCHEMA_VERSION) {
+    return { kind: 'malformed', reason: 'Output page envelope kind or schema version is unsupported.' };
+  }
+  if (
+    !isRecordObject(input['producer']) ||
+    input['producer']['name'] !== 'scip-query' ||
+    typeof input['producer']['version'] !== 'string' ||
+    input['producer']['version'].length === 0 ||
+    typeof input['command'] !== 'string' ||
+    input['command'].length === 0 ||
+    (input['contentType'] !== 'text/plain' && input['contentType'] !== 'application/json') ||
+    (input['agentInstruction'] !== undefined && typeof input['agentInstruction'] !== 'string') ||
+    typeof input['content'] !== 'string' ||
+    !isRecordObject(input['page'])
+  ) {
+    return { kind: 'malformed', reason: 'Output page envelope contains invalid common fields.' };
+  }
+  const page = input['page'];
+  const integerFields = [
+    'offset',
+    'returnedCharacters',
+    'totalCharacters',
+    'omittedCharacters',
+    'remainingCharacters',
+  ] as const;
+  if (integerFields.some((field) => !isNonNegativeInteger(page[field])) || !isSha256(page['outputHash'])) {
+    return { kind: 'malformed', reason: 'Output page counts or output hash are invalid.' };
+  }
+  const offset = Number(page['offset']);
+  const returnedCharacters = Number(page['returnedCharacters']);
+  const totalCharacters = Number(page['totalCharacters']);
+  const omittedCharacters = Number(page['omittedCharacters']);
+  const remainingCharacters = Number(page['remainingCharacters']);
+  if (
+    returnedCharacters !== input['content'].length ||
+    omittedCharacters !== totalCharacters - returnedCharacters ||
+    remainingCharacters !== totalCharacters - offset - returnedCharacters ||
+    remainingCharacters < 0
+  ) {
+    return { kind: 'malformed', reason: 'Output page character counts are inconsistent.' };
+  }
+  if (page['complete'] === true) {
+    if (page['remainingCharacters'] !== 0 || page['continuation'] !== undefined) {
+      return { kind: 'malformed', reason: 'A complete output page cannot have remaining content or a continuation.' };
+    }
+  } else if (page['complete'] === false) {
+    const continuation = page['continuation'];
+    if (
+      page['remainingCharacters'] === 0 ||
+      !isRecordObject(continuation) ||
+      typeof continuation['cursor'] !== 'string' ||
+      continuation['cursor'].length === 0 ||
+      typeof continuation['command'] !== 'string' ||
+      continuation['command'].length === 0
+    ) {
+      return { kind: 'malformed', reason: 'An incomplete output page requires a non-empty continuation.' };
+    }
+  } else {
+    return { kind: 'malformed', reason: 'Output page complete must be a Boolean.' };
+  }
+  return { kind: 'supported', envelope: input as unknown as CliOutputPageEnvelopeV1 };
+}
+
+export function requireCliOutputPageEnvelope(input: unknown): CliOutputPageEnvelopeV1 {
+  const decoded = decodeCliOutputPageEnvelope(input);
+  if (decoded.kind === 'malformed') throw new Error(decoded.reason);
+  return decoded.envelope;
 }
 
 export interface CliOutputPaginationOptions {
@@ -285,16 +371,26 @@ export async function runWithCliOutputPagination(
     agentInstruction: continuation
       ? 'INCOMPLETE EVIDENCE: do not draw conclusions or report completion from this partial page. Run page.continuation.command exactly, then repeat until page.complete is true.'
       : "OUTPUT COMPLETE: all rendered characters have been retrieved. Evaluate the command result's own coverage separately.",
-    page: {
-      offset: completed.offset,
-      returnedCharacters: completed.content.length,
-      totalCharacters: completed.totalCharacters,
-      omittedCharacters: completed.totalCharacters - completed.content.length,
-      remainingCharacters: completed.totalCharacters - nextOffset,
-      complete,
-      outputHash: completed.outputHash,
-      ...(continuation ? { continuation } : {}),
-    },
+    page: continuation
+      ? {
+          offset: completed.offset,
+          returnedCharacters: completed.content.length,
+          totalCharacters: completed.totalCharacters,
+          omittedCharacters: completed.totalCharacters - completed.content.length,
+          remainingCharacters: completed.totalCharacters - nextOffset,
+          complete: false,
+          outputHash: completed.outputHash,
+          continuation,
+        }
+      : {
+          offset: completed.offset,
+          returnedCharacters: completed.content.length,
+          totalCharacters: completed.totalCharacters,
+          omittedCharacters: completed.totalCharacters - completed.content.length,
+          remainingCharacters: completed.totalCharacters - nextOffset,
+          complete: true,
+          outputHash: completed.outputHash,
+        },
     content: completed.content,
   };
 

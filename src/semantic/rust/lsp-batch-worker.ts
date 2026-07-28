@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { isMissingProjectFileError, readProjectFileText } from '../../platform/project-files.js';
 import { runWithConcurrency } from '../../platform/structured-concurrency.js';
-import type { SemanticCallee, SemanticReference } from '../types.js';
+import type { SemanticAvailabilityState, SemanticCallee, SemanticReference } from '../types.js';
 import {
   createRustAnalyzerTransport,
   RustAnalyzerLspClient,
@@ -44,14 +44,12 @@ export interface RustReferenceWorkerRequest {
 
 // scip-query: ignore-stale — subprocess response payload consumed by the
 // synchronous Rust semantic provider bridge.
-export interface RustReferenceWorkerResponse {
-  available: boolean;
-  reason?: string;
+export type RustReferenceWorkerResponse = SemanticAvailabilityState & {
   references: Array<[number, SemanticReference[]]>;
   incompleteReferenceSymbolIds?: number[];
   callees?: Array<[number, SemanticCallee[]]>;
   signatures?: Array<[number, string | null]>;
-}
+};
 
 interface ReferenceTaskResult {
   symbolId: number;

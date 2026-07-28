@@ -2,22 +2,26 @@ import { getIndexerDependencyStatus, RUST_ANALYZER_TOOLCHAIN } from '../../platf
 
 // scip-query: ignore-stale — named Rust semantic capability payload rendered
 // by status/doctor and used by the provider to report LSP availability.
-export interface RustSemanticStatus {
-  available: boolean;
+export type RustSemanticStatus = ({ available: true; reason?: never } | { available: false; reason: string }) & {
   dependencyAvailable: boolean;
   resolvedBinary?: string;
-  reason?: string;
-}
+  note?: string;
+};
 
 export function getRustSemanticStatus(projectRoot: string): RustSemanticStatus {
   const status = getIndexerDependencyStatus(RUST_ANALYZER_TOOLCHAIN, projectRoot);
   const dependencyAvailable = status.runnable;
-  return {
-    available: dependencyAvailable,
-    dependencyAvailable,
-    resolvedBinary: status.resolvedBinary ?? undefined,
-    reason: dependencyAvailable
-      ? 'rust-analyzer semantic reference queries are enabled.'
-      : 'rust-analyzer is not runnable; Rust semantic checks will use SCIP/source evidence only.',
-  };
+  return dependencyAvailable
+    ? {
+        available: true,
+        dependencyAvailable,
+        resolvedBinary: status.resolvedBinary ?? undefined,
+        note: 'rust-analyzer semantic reference queries are enabled.',
+      }
+    : {
+        available: false,
+        dependencyAvailable,
+        resolvedBinary: status.resolvedBinary ?? undefined,
+        reason: 'rust-analyzer is not runnable; Rust semantic checks will use SCIP/source evidence only.',
+      };
 }
