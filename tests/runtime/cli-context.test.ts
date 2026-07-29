@@ -11,6 +11,7 @@ import {
 } from '../../src/runtime/cli-context.js';
 import type { GitWorktreeContext } from '../../src/platform/git-worktree.js';
 import { resolveIndexStoragePaths } from '../../src/platform/cache-layout.js';
+import { fingerprintProjectFiles } from '../../src/platform/project-files.js';
 import { publishedGenerationIdentity } from '../../src/semantic/typescript/session-protocol.js';
 import type { ProjectConfig } from '../../src/domain/types.js';
 
@@ -41,10 +42,14 @@ describe('cli context', () => {
     expect(warning).toContain("run 'scip-query reindex'");
   });
 
-  it('prepares query, reindex, and watch commands but leaves setup lifecycle commands alone', () => {
-    expect(sharedCachePreparationEligible('status')).toBe(true);
-    expect(sharedCachePreparationEligible('reindex')).toBe(true);
-    expect(sharedCachePreparationEligible('watch')).toBe(true);
+  it('prepares graph commands but leaves passive, explicit-index, and setup commands alone', () => {
+    expect(sharedCachePreparationEligible('refs')).toBe(true);
+    expect(sharedCachePreparationEligible('status')).toBe(false);
+    expect(sharedCachePreparationEligible('watch')).toBe(false);
+    expect(sharedCachePreparationEligible('reindex')).toBe(false);
+    expect(sharedCachePreparationEligible('doctor')).toBe(false);
+    expect(sharedCachePreparationEligible('effectiveness')).toBe(false);
+    expect(sharedCachePreparationEligible('install-skills')).toBe(false);
     expect(sharedCachePreparationEligible('init')).toBe(false);
     expect(sharedCachePreparationEligible('setup')).toBe(false);
   });
@@ -106,6 +111,48 @@ describe('cli context', () => {
       expect(prepareWorktreeIndex(root, config, paths, { gitContext, watcherGeneration })).toEqual({
         kind: 'missed',
         reason: 'worktree is not a clean committed snapshot',
+      });
+    } finally {
+      if (previousCacheHome === undefined) delete process.env['XDG_CACHE_HOME'];
+      else process.env['XDG_CACHE_HOME'] = previousCacheHome;
+    }
+  });
+
+  it('uses a fresh local index without publishing it during graph-command preflight', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-query-cli-context-local-fresh-'));
+    const cacheHome = mkdtempSync(join(tmpdir(), 'scip-query-cli-context-local-fresh-cache-'));
+    tempDirs.push(root, cacheHome);
+    const previousCacheHome = process.env['XDG_CACHE_HOME'];
+    process.env['XDG_CACHE_HOME'] = cacheHome;
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(join(root, 'tsconfig.json'), '{}\n');
+      writeFileSync(join(root, 'src', 'value.ts'), 'export const value = 1;\n');
+      const paths = resolveIndexStoragePaths(root);
+      mkdirSync(paths.cacheDir, { recursive: true });
+      writeFileSync(paths.dbPath, '');
+      writeFileSync(
+        paths.metaPath,
+        `${JSON.stringify({
+          version: 3,
+          status: 'complete',
+          updatedAt: '2026-07-29T00:00:00.000Z',
+          fingerprint: {
+            version: 2,
+            languages: ['typescript'],
+            pnpmWorkspaces: false,
+            typescriptProjectMode: 'single',
+            typescriptProjects: [],
+            files: fingerprintProjectFiles(root),
+          },
+          requestedLanguages: ['typescript'],
+          indexedLanguages: ['typescript'],
+          skipped: [],
+        })}\n`,
+      );
+
+      expect(prepareWorktreeIndex(root, { languages: ['typescript'] }, paths)).toEqual({
+        kind: 'local-fresh',
       });
     } finally {
       if (previousCacheHome === undefined) delete process.env['XDG_CACHE_HOME'];

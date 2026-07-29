@@ -100,6 +100,42 @@ describe('shared generation store', () => {
     }
   });
 
+  it('gives one publication owner exclusive staging rights for a generation', () => {
+    const root = temporaryDirectory('scip-query-shared-publication-lock-');
+    const sourceRoot = join(root, 'source');
+    const sourceCache = join(root, 'source-cache');
+    mkdirSync(sourceRoot);
+    createCache(sourceCache, sourceRoot, 'source');
+    const snapshot = createSnapshot(root, sourceRoot);
+    let nestedError: unknown;
+    let attempted = false;
+
+    const publication = publishSharedGeneration({
+      snapshot,
+      sourceCacheDir: sourceCache,
+      sourceProjectRoot: sourceRoot,
+      onPublicationStage(stage) {
+        if (stage !== 'after-artifact-flushed' || attempted) return;
+        attempted = true;
+        try {
+          publishSharedGeneration({
+            snapshot,
+            sourceCacheDir: sourceCache,
+            sourceProjectRoot: sourceRoot,
+          });
+        } catch (error) {
+          nestedError = error;
+        }
+      },
+    });
+
+    expect(publication.kind).toBe('published');
+    expect(nestedError).toEqual(
+      new Error(`shared generation publication is already in progress for ${snapshot.generationId}`),
+    );
+    expect(readSharedGeneration(snapshot)).toEqual(expect.objectContaining({ generationId: snapshot.generationId }));
+  });
+
   it('rejects corrupt, incomplete, and source-changing generations', () => {
     const root = temporaryDirectory('scip-query-shared-corrupt-');
     const sourceRoot = join(root, 'source');

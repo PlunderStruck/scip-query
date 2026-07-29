@@ -13,7 +13,6 @@ import {
   publishFreshLocalGenerationForProject,
   type SharedCacheAction,
   resolveSharedEvidenceDbPath,
-  touchExistingWorktreeLease,
 } from '../reindex/shared-generation-store.js';
 
 export function resolveProjectRoot(): string {
@@ -78,10 +77,8 @@ export function prepareWorktreeIndex(
   paths: ReturnType<typeof resolveIndexStoragePaths>,
   opts: { gitContext?: GitWorktreeContext; watcherGeneration?: string } = {},
 ): SharedCacheAction {
-  if (existsSync(paths.dbPath) && touchExistingWorktreeLease(projectRoot, paths.cacheDir, undefined, opts.gitContext)) {
-    return { kind: 'local-fresh' };
-  }
   if (
+    existsSync(paths.dbPath) &&
     opts.gitContext?.clean === false &&
     opts.watcherGeneration !== undefined &&
     publishedGenerationIdentity(paths.dbPath) === opts.watcherGeneration
@@ -90,7 +87,7 @@ export function prepareWorktreeIndex(
   }
   const freshness = getIndexFreshness(projectRoot, config, paths);
   if (freshness.state === 'fresh') {
-    return publishFreshLocalGenerationForProject(projectRoot, config, paths, opts.gitContext);
+    return { kind: 'local-fresh' };
   }
   return prepareSharedGenerationForProject(projectRoot, config, paths, opts.gitContext);
 }
@@ -102,14 +99,20 @@ export function sharedCachePreparationEligible(commandName: string): boolean {
 const SHARED_CACHE_PREPARATION_EXCLUDED_COMMANDS = new Set([
   'bench',
   'config-validate',
+  'doctor',
+  'effectiveness',
   'hook-context',
   'hook-stop',
   'init',
+  'install-skills',
+  'reindex',
   'setup',
   'setup-agent',
   'setup-ci',
   'setup-hooks',
+  'status',
   'uninstall',
+  'watch',
   'work-audit',
 ]);
 

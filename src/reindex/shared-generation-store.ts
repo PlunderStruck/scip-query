@@ -131,6 +131,16 @@ export type SharedGenerationPublicationStage =
   | 'after-generation-renamed'
   | 'after-generations-directory-synced';
 
+interface SharedGenerationPublicationInput {
+  snapshot: SharedGenerationSnapshot;
+  sourceCacheDir: string;
+  sourceProjectRoot: string;
+  now?: () => Date;
+  sourceStillValid?: () => boolean;
+  /** @internal deterministic crash-boundary probe for persistence tests. */
+  onPublicationStage?: (stage: SharedGenerationPublicationStage, artifactPath?: string) => void;
+}
+
 export type SharedCacheAction =
   | { kind: 'local-fresh' }
   | { kind: 'attached'; generationId: string }
@@ -268,15 +278,21 @@ export function readSharedGeneration(
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; staging, manifest publication, and lease updates are one transaction.
-export function publishSharedGeneration(input: {
-  snapshot: SharedGenerationSnapshot;
-  sourceCacheDir: string;
-  sourceProjectRoot: string;
-  now?: () => Date;
-  sourceStillValid?: () => boolean;
-  /** @internal deterministic crash-boundary probe for persistence tests. */
-  onPublicationStage?: (stage: SharedGenerationPublicationStage, artifactPath?: string) => void;
-}): SharedGenerationPublicationResult {
+export function publishSharedGeneration(input: SharedGenerationPublicationInput): SharedGenerationPublicationResult {
+  const publicationLock = acquireProcessFileLock(
+    join(input.snapshot.repositoryCacheDir, 'locks', `${input.snapshot.generationId}.publish.lock`),
+  );
+  if (!publicationLock) {
+    throw new Error(`shared generation publication is already in progress for ${input.snapshot.generationId}`);
+  }
+  try {
+    return publishSharedGenerationOwned(input);
+  } finally {
+    publicationLock.release();
+  }
+}
+
+function publishSharedGenerationOwned(input: SharedGenerationPublicationInput): SharedGenerationPublicationResult {
   const existing = readSharedGeneration(input.snapshot);
   if (existing) return existingSharedGenerationResult(input.snapshot, existing);
   if (!validateSourceGeneration(input.sourceCacheDir, input.sourceProjectRoot, input.snapshot.fingerprint)) {

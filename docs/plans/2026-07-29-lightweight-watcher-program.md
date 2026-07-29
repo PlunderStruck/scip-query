@@ -580,6 +580,90 @@ the unchanged behavior passes both the full suite and the focused 40-test
 reindex reliability suite. No permanent suppression was added because the
 test/implementation coupling is useful for future behavioral edits.
 
+### Slice 9 — Passive-safe shared-cache publication
+
+Deployable: yes.
+
+Discovery: the first live probe after committing Slice 8 exposed a second,
+independent source of disk amplification. `watch --status` processes remained
+alive for more than a minute even though watcher auto-start was disabled.
+Process samples placed both status callers and the watcher reindex worker in
+`node::fs::CopyFile`, `fsync`, `open`, and `chmod`. The CLI had correctly
+stopped starting watchers for passive commands, but its separate shared-cache
+preflight still classified `status`, `watch`, `doctor`, `effectiveness`,
+`install-skills`, and `reindex` as preparation-eligible. A new commit changes
+the Git tree identity, so a fresh local index no longer matched the previous
+shared generation. Every eligible command then attempted to publish the full
+local cache before doing its actual work.
+
+The publication boundary had a second defect: the build lock serializes
+index construction, but direct publication and peer import did not own a
+distinct publication lock. Multiple processes could therefore stage, clone,
+hash, and durably flush the same immutable generation concurrently. The final
+rename handled the race correctly for integrity, but only after every contender
+had already paid nearly all of the write cost.
+
+Change:
+
+- exclude passive/lifecycle commands and explicit `reindex` from CLI
+  shared-cache preparation; reindex already owns build, hydration, and
+  publication inside its command implementation;
+- return immediately when an ordinary graph command already has a fresh local
+  index instead of hashing artifacts, touching a lease, and publishing a new
+  shared generation as command preflight;
+- retain shared-cache preparation for graph commands whose local index is
+  missing or stale, so exact committed generations can still hydrate a
+  worktree without rebuilding;
+- place a token-owned, generation-specific `.publish.lock` around validation,
+  staging, hashing, rename, and directory synchronization;
+- fail a publication contender immediately while an owner is active. Reindex
+  treats publication failure as non-fatal because the private local index is
+  already valid; a later command may use the completed immutable generation.
+
+Files: `src/runtime/cli-context.ts`,
+`src/reindex/shared-generation-store.ts`, focused runtime/shared-generation
+tests, and this plan.
+
+Validation: command-classification tests prove graph queries remain eligible
+and passive/reindex commands do not; a reentrant fault probe proves a nested
+publisher cannot enter staging while the owner completes normally; focused
+tests, full static checks, and a live concurrent `watch --status` probe must
+all pass. The live probe must complete promptly, leave no status process
+behind, and produce no watcher ownership file.
+
+Commit: `fix: serialize shared cache publication`.
+
+Result: **complete.** Five CLI-context tests prove that graph commands remain
+preparation-eligible, lifecycle/passive/explicit-reindex commands are not, a
+fresh local index returns without publication, and the dirty-watcher shortcut
+does not rebuild the project fingerprint. Twenty shared-generation tests prove
+the crash boundaries still hold and that a nested publisher fails before
+entering staging while its owner publishes a valid immutable generation.
+
+The full suite passes at 272 files / 2,183 tests with two intentional skips
+when run with normal process visibility and an isolated cache root. Typecheck,
+formatting, ESLint, build, public-API compatibility, public-consumer
+typechecking, and skill-link validation pass. The first restricted full-suite
+run produced 11 cache-permission failures and five process-identity/reaping
+failures; the equivalent normal-visibility run proves these were execution
+sandbox constraints rather than product defects.
+
+The globally linked `scip-query@0.20.0` resolves directly to this checkout.
+One cold `watch --status` completed in 0.50 seconds including process startup;
+four simultaneous calls completed in 40-48 ms each, all reported `stopped`,
+and a following JSON status call completed in 37 ms with zero refresh
+requests. No watcher, status, or reindex worker remained for this repository.
+The only persistent scip-query watcher belonged to the unrelated
+`arxiv-agent-cli` repository.
+
+Current-index postchecks found no scoped recent reimplementation and no
+incomplete migration. Diff-gate passed with two advisory configuration-example
+citations. Both were inspected: the evidence-cache document still correctly
+names the shared-generation implementation and its tests, and the target
+architecture document still correctly lists the file as an architecture
+evidence command. Neither claim changed, so no doc churn or permanent
+suppression was added.
+
 ## Dependency and Execution Order
 
 Slices 1 and 2 are independent admission filters and land first because they
@@ -587,7 +671,9 @@ eliminate whole watcher/rebuild lifecycles. Slice 3 reduces first-run burst
 frequency. Slices 4 and 5 bound lifetime and sustained work independently and
 may be reverted separately. Slice 6 depends on Slice 2's canonical input
 taxonomy but not on timing or budgets. Slice 7 follows Slice 6 so its first
-measurement describes the final shard policy. Slice 8 closes the program.
+measurement describes the final shard policy. Slice 8 closes the planned
+program. Slice 9 is a corrective slice found by closure testing: it depends on
+no timing policy, but is required for the program's disk-lightness claim.
 
 ## Attack Record
 
