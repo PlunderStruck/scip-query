@@ -359,6 +359,17 @@ shutdown cancels it.
 
 Commit: `perf: let watcher edit bursts settle`.
 
+Result: **complete.** The runtime default, generated repository setting,
+command help, configuration contract, and README now agree on a two-second
+quiet period. The existing single resettable timer remains the burst
+coalescer: each relevant input postpones the same deadline, shutdown cancels
+it, and explicit positive overrides remain unchanged. Focused config, watcher,
+and CLI tests pass at 121/121; typecheck, ESLint, the public API check, command
+documentation generation, and diff-gate pass. Four broad co-change
+expectations were recorded as evidence-bound counterexamples because the
+central default changed without changing the consumers' input contract or the
+generated command-reference shape.
+
 ### Slice 4 — Three-minute idle lifetime
 
 Deployable: yes.

@@ -117,6 +117,50 @@ afterEach(() => {
 });
 
 describe('Watcher', () => {
+  it('waits for two quiet seconds after the last event by default', async () => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { gitPollMs: 60_000 } },
+      languages: ['typescript'],
+      reindexRunner: { start: run },
+    });
+
+    watcher.requestRefresh({ kind: 'watch-source', detail: 'src/a.ts' });
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(run).not.toHaveBeenCalled();
+
+    watcher.requestRefresh({ kind: 'watch-source', detail: 'src/b.ts' });
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(run).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(run).toHaveBeenCalledOnce();
+    await watcher.stop();
+  });
+
+  it('cancels a pending quiet-period refresh when stopped', async () => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { gitPollMs: 60_000 } },
+      languages: ['typescript'],
+      reindexRunner: { start: run },
+    });
+
+    watcher.requestRefresh({ kind: 'watch-source', detail: 'src/a.ts' });
+    await watcher.stop();
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(run).not.toHaveBeenCalled();
+  });
+
   it.each([
     [250, 0],
     [250, 1_000],

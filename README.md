@@ -248,7 +248,6 @@ intended.
 **8. Gate every diff.** `diff-gate` runs a defined set of checks scoped to what a change _introduces_ and exits nonzero with remediation text for each finding. Baseline regressions are included when you pass `--baseline`.
 
 <!-- BEGIN GENERATED DIFF-GATE CHECKS -->
-
 | Check | What it catches | When it runs |
 | --- | --- | --- |
 | `echo` | Changed symbols that newly echo established code elsewhere. | Default diff gate. |
@@ -798,7 +797,7 @@ It creates a minimal `.scipquery.json`:
   "languages": ["typescript"],
   "watch": {
     "enabled": true,
-    "debounceMs": 250,
+    "debounceMs": 2000,
     "cooldownMs": 5000,
     "gitPollMs": 2000,
     "idleTimeoutMs": 600000,
@@ -838,11 +837,13 @@ mode, while `watch --daemon`, `watch --status`, and `watch --stop` expose the
 background lifecycle. Command-line timing flags are process-local and apply
 only when a foreground watcher or daemon starts; a live daemon refuses those
 flags and names the required stop/start sequence instead of pretending its
-timing changed. The 5-second minimum cooldown coalesces change bursts
-into one refresh plus, when necessary, one trailing refresh. Older configs and
-command-line overrides below 5,000 ms—including `cooldownMs: 0`—are raised to
-that runtime safety floor. Both modes share one project lock, so only one can own an
-index cache.
+timing changed. The 2-second default quiet period resets after every relevant
+input, so an edit burst settles before its first refresh. It remains explicitly
+configurable and has no hidden minimum. The 5-second minimum cooldown then
+limits a long or overlapping burst to one refresh plus, when necessary, one
+trailing refresh. Older configs and command-line overrides below 5,000
+ms—including `cooldownMs: 0`—are raised to that runtime safety floor. Both
+modes share one project lock, so only one can own an index cache.
 
 Relevant activity means a source file, ambient declaration, compiler/build
 manifest, dependency lock, or `.scipquery.json` change that can affect a

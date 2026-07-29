@@ -524,7 +524,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       option('--daemon', 'Ensure the demand-started background service is running; timing flags apply only at start'),
       option('--status', 'Show background/foreground watcher state'),
       option('--stop', 'Stop the watcher or background service for this project'),
-      option('--debounce <ms>', 'Process-local ms to wait after last change (default: 250)', parseNonNegativeInteger),
+      option('--debounce <ms>', 'Process-local ms to wait after last change (default: 2000)', parseNonNegativeInteger),
       option(
         '--cooldown <ms>',
         'Process-local ms between reindexes; values below the 5000ms safety floor are raised (default: 5000)',

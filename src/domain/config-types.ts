@@ -400,7 +400,7 @@ export interface EntryRootsConfig {
 export interface WatchConfig {
   /** Enable file watching (default: false, must opt in) */
   enabled?: boolean;
-  /** Ms to wait after the last file change before triggering reindex (default: 250) */
+  /** Ms to wait after the last file change before triggering reindex (default: 2000) */
   debounceMs?: number;
   /** Requested ms between reindex completions; values below 5000 use the 5000ms safety floor. */
   cooldownMs?: number;

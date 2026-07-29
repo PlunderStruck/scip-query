@@ -6,10 +6,9 @@
     "version": "0.20.0"
   },
   "id": "SQA94DC3F07D49",
-  "check": "co-change-partner",
-  "file": "src/runtime/commands/command-descriptors.ts",
-  "reason": "The generated command reference records option names but not option help text, so regenerating it correctly produces no diff for this cooldown-description change; README.md and the project-config schema document the new runtime floor. Broad-sweep co-change history does not establish a missing generated update here.",
+  "reason": "The generated command reference records option names but not option help text, so regeneration correctly produces no diff for this debounce-description change; README documents the new default.",
   "createdAt": "2026-07-29T19:05:27.242Z",
+  "updatedAt": "2026-07-29T19:51:15.369Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
@@ -19,38 +18,38 @@
     "observation": {
       "schemaVersion": 1,
       "authorityKind": "index-worktree",
-      "observedAt": "2026-07-29T19:05:27.241Z",
+      "observedAt": "2026-07-29T19:51:15.368Z",
       "projectIdentity": "178a22f2ce5800603672d10b597d4cf97078e596c64e2eb0293681604557bda7",
       "index": {
-        "generationIdentity": "0bb55a2b8822922a81ef5f154bcfd4cd9730dd5890044a9849123fedc36a2338",
+        "generationIdentity": "03c192dd966587ee098d123ebb3c5c95d01401d79420f048f44929dd4b07587f",
         "source": "immutable",
         "alignment": "not-certified"
       },
       "worktree": {
-        "identity": "0bcc1c88f61e66225a20b197c31764a70c6740d8ddf8e9edc657786414add55c",
+        "identity": "9e443c4c760fc58fe6c2ba6d6a0d7380b6ca8fcce6ad33f3f16bc0f1506910c5",
         "clean": false,
-        "headCommit": "ccfcb126176cb205a19e2f0a6284944e69e4a87a",
-        "treeOid": "d86abcb51bc3a8df0972fd8906cea2192b7a4fd9"
+        "headCommit": "8abc8a6758620ab84c553182847b5ec0bd59309b",
+        "treeOid": "1506a7bbfc71d853de3866cbc95758c8ebbb8611"
       }
     },
     "evidence": [
       {
         "kind": "source",
         "referent": "scripts/render-command-reference.ts",
-        "claim": "The generated command reference records option names but not option help text, so regenerating it correctly produces no diff for this cooldown-description change; README.md and the project-config schema document the new runtime floor. Broad-sweep co-change history does not establish a missing generated update here.",
+        "claim": "The generated command reference records option names but not option help text, so regeneration correctly produces no diff for this debounce-description change; README documents the new default.",
         "contentHash": "5959cfc2aee64441cdb4f57b076fce8bf631f153968e0046fd5f9f09b58a0297"
       },
       {
         "kind": "test",
         "referent": "tests/scripts/render-command-reference.test.ts",
-        "claim": "The generated command reference records option names but not option help text, so regenerating it correctly produces no diff for this cooldown-description change; README.md and the project-config schema document the new runtime floor. Broad-sweep co-change history does not establish a missing generated update here.",
+        "claim": "The generated command reference records option names but not option help text, so regeneration correctly produces no diff for this debounce-description change; README documents the new default.",
         "contentHash": "5da4f1d1cbd2c7f8742bf4535b20cefa8620fc95746c2fd34e989b42fcf426a0"
       },
       {
         "kind": "source",
         "referent": "README.md",
-        "claim": "The generated command reference records option names but not option help text, so regenerating it correctly produces no diff for this cooldown-description change; README.md and the project-config schema document the new runtime floor. Broad-sweep co-change history does not establish a missing generated update here.",
-        "contentHash": "55274dfa24aa3e42b4bed11e299dff76e2b8ebd480507d09590f3ea21a942753"
+        "claim": "The generated command reference records option names but not option help text, so regeneration correctly produces no diff for this debounce-description change; README documents the new default.",
+        "contentHash": "acc107552ae7710d67f3019923647e1c025a7d9772a702bed70cc49e3d2fc81e"
       }
     ],
     "invalidateOn": {

@@ -22,7 +22,7 @@ import {
 } from './revisioned-file.js';
 
 const CONFIG_FILENAME = '.scipquery.json';
-const DEFAULT_WATCH_DEBOUNCE_MS = 250;
+const DEFAULT_WATCH_DEBOUNCE_MS = 2_000;
 const MIN_WATCH_COOLDOWN_MS = 5_000;
 const DEFAULT_WATCH_COOLDOWN_MS = MIN_WATCH_COOLDOWN_MS;
 const DEFAULT_WATCH_IDLE_TIMEOUT_MS = 10 * 60_000;
