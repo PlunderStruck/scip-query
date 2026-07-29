@@ -147,7 +147,7 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 | `setup` | Bootstrap this project: enable automatic indexing, install agent skills, refresh the index, verify capabilities, and report health | `--guided`<br>`--yes`<br>`--git-hook`<br>`--no-hooks`<br>`--no-skills`<br>`--no-parsers`<br>`--install-missing`<br>`--no-health`<br>`--dossier-dir <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `setup-agent` | Seed agent guidance for this project: AGENTS.md/CLAUDE.md block pointing agents at the scip-query skills and diff gate, plus an optional git pre-commit backstop | `--git-hook` |
 | `setup-ci` | Write a GitHub Actions workflow that runs scip-query reindex and diff-gate on pull requests | `--force`<br>`--dry-run` |
-| `uninstall` | Remove scip-query-owned skill links, project hooks, and managed agent setup blocks | `--global`<br>`--project`<br>`--dry-run`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `uninstall` | Remove selected scip-query-owned integrations; real removal requires exactly one of --global or --project | `--global`<br>`--project`<br>`--dry-run`<br>`--verbose`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `watch` | Watch in the foreground or manage the per-project background refresh service | `--daemon`<br>`--status`<br>`--stop`<br>`--debounce <ms>`<br>`--cooldown <ms>`<br>`--git-poll <ms>`<br>`--idle-timeout <ms>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `status` | Show index status for this project | `--capabilities`<br>`--json`<br>`--result-only`<br>`--compact` |
 

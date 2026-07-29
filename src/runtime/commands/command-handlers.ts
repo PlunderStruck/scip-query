@@ -67,7 +67,7 @@ import { promptSetupChecklist, type SetupWizardChoice } from '../setup-wizard.js
 import { astParserLanguages } from '../ast-parser-setup.js';
 import { setupCiWorkflow } from '../setup-ci.js';
 import { installSkills, isScipInstalled, printScipInstallInstructions } from '../setup.js';
-import { runUninstall, selectUninstallScope } from '../uninstall.js';
+import { formatUninstallReport, runUninstall, selectUninstallScope } from '../uninstall.js';
 import { inspectSharedCacheStatus, type SharedCacheStatus } from '../repository-cache-lifecycle.js';
 import { ALL_SOURCE_EXTENSIONS } from '../../source/primitives/source-fileset.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
@@ -1488,28 +1488,7 @@ export function handleUninstall(rawOpts: unknown): void {
     return;
   }
 
-  const prefix = report.dryRun ? 'would ' : '';
-  if (report.global) {
-    for (const target of report.global.removed) console.log(`  ${prefix}remove: ${target}`);
-    for (const target of report.global.left) console.log(`  left: ${target}`);
-    for (const skip of report.global.skipped) console.log(`  skip: ${skip}`);
-  }
-  if (report.project) {
-    for (const target of report.project.hooks.removed) console.log(`  ${prefix}remove: ${target}`);
-    for (const target of report.project.agentSetup.removed) console.log(`  ${prefix}remove: ${target}`);
-    for (const target of report.project.agentSetup.unchanged) console.log(`  ok: ${target} (no managed block)`);
-    for (const skip of report.project.hooks.skipped) console.log(`  skip: ${skip.target} — ${skip.reason}`);
-    for (const skip of report.project.agentSetup.skipped) console.log(`  skip: ${skip.target} — ${skip.reason}`);
-    for (const target of report.project.left) console.log(`  left: ${target}`);
-  }
-
-  const removed =
-    (report.global?.removed.length ?? 0) +
-    (report.project?.hooks.removed.length ?? 0) +
-    (report.project?.agentSetup.removed.length ?? 0);
-  if (removed === 0) {
-    console.log(report.dryRun ? 'No scip-query-owned files would be removed.' : 'No scip-query-owned files removed.');
-  }
+  for (const line of formatUninstallReport(report, { verbose: booleanOptionValue(opts, 'verbose') })) console.log(line);
 }
 
 // scip-query: ignore-extract — long-running watch command lifecycle: option

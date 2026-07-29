@@ -502,6 +502,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       option('--global', 'Remove scip-query-owned skill symlinks from user-level agent skill roots'),
       option('--project', 'Remove project-local hooks and managed AGENTS.md/CLAUDE.md blocks'),
       option('--dry-run', 'List what would be removed without changing files'),
+      option('--verbose', 'List every unrelated global skill entry left in place'),
     ]),
     renderShape: 'custom',
     docs: doc('Maintenance', ['scip-query uninstall --dry-run', 'scip-query uninstall --project']),

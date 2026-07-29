@@ -3,7 +3,12 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { runUninstall, selectUninstallScope, uninstallProject } from '../../src/runtime/uninstall.js';
+import {
+  formatUninstallReport,
+  runUninstall,
+  selectUninstallScope,
+  uninstallProject,
+} from '../../src/runtime/uninstall.js';
 
 const roots: string[] = [];
 
@@ -34,6 +39,27 @@ describe('uninstallProject', () => {
         homeDir: '/another/missing/path',
       }),
     ).toThrow('uninstall requires an explicit scope');
+  });
+
+  it('summarizes unrelated global skills unless verbose output is requested', () => {
+    const report = {
+      dryRun: true,
+      global: {
+        removed: ['Claude/scip-query'],
+        left: ['Claude/custom-a (not a symlink)', 'Codex/custom-b (not a symlink)'],
+        skipped: [],
+      },
+    };
+
+    expect(formatUninstallReport(report)).toEqual([
+      '  would remove: Claude/scip-query',
+      '  left: 2 unrelated global skill entries (use --verbose to list)',
+    ]);
+    expect(formatUninstallReport(report, { verbose: true })).toEqual([
+      '  would remove: Claude/scip-query',
+      '  left: Claude/custom-a (not a symlink)',
+      '  left: Codex/custom-b (not a symlink)',
+    ]);
   });
 
   it('reports shared suppression and outcome records that are intentionally left in place', () => {
