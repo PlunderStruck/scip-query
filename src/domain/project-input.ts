@@ -69,10 +69,7 @@ export function classifyProjectInputPath(
   ) {
     return 'config';
   }
-  if (
-    languages.some(isTypeScriptFamilyLanguage) &&
-    /\.d\.(?:ts|mts|cts)$/.test(normalizedPath.toLowerCase())
-  ) {
+  if (languages.some(isTypeScriptFamilyLanguage) && /\.d\.(?:ts|mts|cts)$/.test(normalizedPath.toLowerCase())) {
     return 'ambient';
   }
   const extension = projectInputExtension(normalizedPath);
@@ -256,14 +253,7 @@ const LANGUAGE_ADDITIONAL_INDEX_INPUTS = {
     'gradle-wrapper.properties',
   ],
   rust: ['Cargo.lock', 'rust-project.json', 'rust-toolchain', 'rust-toolchain.toml'],
-  python: [
-    'setup.cfg',
-    'requirements*.txt',
-    'Pipfile',
-    'Pipfile.lock',
-    'poetry.lock',
-    'uv.lock',
-  ],
+  python: ['setup.cfg', 'requirements*.txt', 'Pipfile', 'Pipfile.lock', 'poetry.lock', 'uv.lock'],
   ruby: ['Gemfile.lock', 'gems.locked'],
   go: ['go.sum', 'go.work', 'go.work.sum'],
   cpp: ['compile_commands.json'],

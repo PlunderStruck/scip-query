@@ -660,24 +660,16 @@ describe('reindex reliability', () => {
 
     expect(attempts.get('typescript')).toBe(2);
     expect(attempts.get('rust')).toBe(1);
-    expect(afterPackageLock.shards).toContainEqual(
-      expect.objectContaining({ id: 'rust', reused: true }),
-    );
-    expect(afterPackageLock.shards).toContainEqual(
-      expect.objectContaining({ id: 'typescript', reused: false }),
-    );
+    expect(afterPackageLock.shards).toContainEqual(expect.objectContaining({ id: 'rust', reused: true }));
+    expect(afterPackageLock.shards).toContainEqual(expect.objectContaining({ id: 'typescript', reused: false }));
 
     writeFileSync(join(projectRoot, 'Cargo.lock'), 'version = 3\n');
     const afterCargoLock = await reindex({ projectRoot, outputScip, outputDb, onStatus: () => undefined });
 
     expect(attempts.get('typescript')).toBe(2);
     expect(attempts.get('rust')).toBe(2);
-    expect(afterCargoLock.shards).toContainEqual(
-      expect.objectContaining({ id: 'typescript', reused: true }),
-    );
-    expect(afterCargoLock.shards).toContainEqual(
-      expect.objectContaining({ id: 'rust', reused: false }),
-    );
+    expect(afterCargoLock.shards).toContainEqual(expect.objectContaining({ id: 'typescript', reused: true }));
+    expect(afterCargoLock.shards).toContainEqual(expect.objectContaining({ id: 'rust', reused: false }));
   });
 
   it('indexes TypeScript workspace project shards and publishes one language output', async () => {

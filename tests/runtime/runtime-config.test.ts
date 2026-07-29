@@ -1279,7 +1279,7 @@ describe('watch command config gate', () => {
             rebuilt: 1,
             reused: 0,
             producedOutputBytes: 1_024,
-            durationMs: 1_500,
+            durationMs: 268.28625,
           },
         },
         byTrigger: { 'manual-cli': 2 },
@@ -1315,7 +1315,7 @@ describe('watch command config gate', () => {
             rebuilt: 1,
             reused: 0,
             producedOutputBytes: 1_024,
-            durationMs: 1_500,
+            durationMs: 268.28625,
           },
         },
       });
@@ -1326,7 +1326,7 @@ describe('watch command config gate', () => {
       expect(rendered).toContain('Index generation: aaaaaaaaaaaa');
       expect(rendered).toContain('Refresh requests: 2 pending, 0 claimed, 0 completed, 0 expired');
       expect(rendered).toContain(
-        'Reindex language typescript: 1 run(s) (1 rebuilt, 0 reused), 1 KB produced, 1.5 s cumulative indexer time',
+        'Reindex language typescript: 1 run(s) (1 rebuilt, 0 reused), 1 KB produced, 268 ms cumulative indexer time',
       );
       expect(rendered).toContain(
         'Reindex language attribution: partial; 1 completed run(s) unattributed, 0 invalid detail(s) ignored',

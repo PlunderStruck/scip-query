@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveIndexStoragePaths } from '../../src/platform/cache-layout.js';
 import { resolveGitWorktreeContext } from '../../src/platform/git-worktree.js';
 import type { ProcessIdentity } from '../../src/platform/process-identity.js';
+import type * as ProcessIdentityModule from '../../src/platform/process-identity.js';
 import type * as BoundedProcessModule from '../../src/platform/bounded-process.js';
 import {
   WATCH_SERVICE_PROTOCOL_VERSION,
@@ -450,9 +451,7 @@ function inertSubscriptionFactory(): WatchSubscriptionFactory {
 
 function mockReindexFork(reindexEnvironments: NodeJS.ProcessEnv[]): void {
   vi.doMock('../../src/platform/process-identity.js', async () => {
-    const actual = await vi.importActual<typeof import('../../src/platform/process-identity.js')>(
-      '../../src/platform/process-identity.js',
-    );
+    const actual = await vi.importActual<typeof ProcessIdentityModule>('../../src/platform/process-identity.js');
     return {
       ...actual,
       readProcessIdentity: (pid: number): ProcessIdentity => ({

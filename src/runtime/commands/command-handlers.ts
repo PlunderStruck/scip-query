@@ -2111,7 +2111,7 @@ function formatLastRefresh(refresh: NonNullable<IndexFreshness['lastRefresh']>):
 }
 
 function formatIndexerDuration(durationMs: number): string {
-  return durationMs < 1_000 ? `${durationMs} ms` : `${(durationMs / 1_000).toFixed(1)} s`;
+  return durationMs < 1_000 ? `${Math.round(durationMs)} ms` : `${(durationMs / 1_000).toFixed(1)} s`;
 }
 
 function statusStats(exists: boolean):

@@ -523,6 +523,63 @@ Change:
 
 Commit: `docs: close lightweight watcher program`.
 
+Result: **complete.** The full Vitest suite passes at 272 files / 2,183
+tests, the Rust workspace passes at 2/2 tests, and full formatting, ESLint,
+build, public-API compatibility, public-consumer typechecking, and skill-link
+validation pass. After the final presentation repair, the three directly
+affected suites pass at 103/103. Human status rounds sub-second indexer
+durations instead of exposing performance-timer fractions.
+
+Live probes used an isolated Git repository and isolated cache:
+
+- `status` reported the missing index without creating a watch lock or
+  watch-state file;
+- a Markdown-only edit left the activity ledger at one run, and the
+  12-second probe daemon exited with both ownership files removed;
+- four filesystem events delivered over 0.4 seconds repeatedly reset the
+  two-second quiet period, produced one reindex, and advanced the ledger from
+  four runs to five;
+- three TypeScript source rebuilds each reused the Rust shard with zero Rust
+  output bytes, while a following unchanged manual reindex reused both
+  language shards in 54 ms;
+- the default daemon persisted an idle deadline exactly 180,000 ms after its
+  last activity; and
+- the per-language ledger contained one row per top-level language per run,
+  with no TypeScript project-shard duplication.
+
+The first foreground worker probe was deliberately run inside a restricted
+process sandbox and the ownership guard refused to spawn because it could not
+establish OS process identity. The same probe with normal process-table access
+completed. This is the intended fail-closed boundary, not a watcher crash in
+the supported execution environment.
+
+The original 24-hour snapshot was 131 runs, 63 rebuilds (48.1%), 68 reuses,
+and approximately 4.1 GiB of estimated writes. The closure snapshot is 168
+runs, 80 rebuilds (47.6%), 88 reuses, 5,603,147,184 estimated write bytes,
+1,062,399,215 reflinked staging bytes, and 187,276,204 fallback-copied bytes.
+Those totals are not a steady-state before/after experiment: the rolling
+window contains this implementation session's explicit reindexes and
+automatic refreshes from ongoing source edits. The full suite and live probes
+used isolated caches and did not enter this repository's ledger. The
+deployable conclusion rests on those isolated admission/reuse probes;
+operational reduction must be read from a new 24-hour window after the
+development runs age out.
+
+The globally linked `scip-query@0.20.0` now resolves to this checkout, and the
+pre-change watcher was stopped and replaced by the verified build. Its live
+deadline confirms the three-minute default. Language attribution is currently
+partial because 165 retained records predate Slice 7; they remain valid
+aggregate budget evidence and will age out naturally. Final merged SCIP,
+SQLite, and staging bytes intentionally remain project aggregates.
+
+Final diff-gate has one knowingly accepted co-change finding:
+`tests/reindex/reindex-reliability.test.ts` changed without
+`src/reindex/index.ts`. The closure change is Prettier-only; its associated
+language-reuse implementation already landed in Slice 6 at `4ffa24b6`, and
+the unchanged behavior passes both the full suite and the focused 40-test
+reindex reliability suite. No permanent suppression was added because the
+test/implementation coupling is useful for future behavioral edits.
+
 ## Dependency and Execution Order
 
 Slices 1 and 2 are independent admission filters and land first because they
