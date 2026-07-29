@@ -2008,10 +2008,11 @@ function renderSharedCacheStatus(status: SharedCacheStatus): void {
     console.log(`Shared:   ${status.state}${status.reason ? ` (${status.reason})` : ''}`);
     return;
   }
+  const base = status.baseGenerationId?.slice(0, 12) ?? 'none';
   const active = status.activeGenerationId?.slice(0, 12) ?? 'none';
   const action = status.lastAction ?? 'none';
   console.log(
-    `Shared:   ${action}, active ${active}, ${status.generations} generation(s), ${formatBytes(status.generationBytes)}`,
+    `Shared:   ${action}, base ${base}, active ${active}, ${status.generations} generation(s), ${formatBytes(status.generationBytes)}`,
   );
   if (status.reason) console.log(`Share why: ${status.reason}`);
   console.log(

@@ -769,6 +769,38 @@ export function writeWorktreeLease(
   return lease;
 }
 
+/**
+ * Records a private worktree cache derived from an immutable shared baseline.
+ *
+ * The baseline remains protected for lineage and future reuse, while the
+ * absent active generation states that local publication may diverge from the
+ * shared bytes.
+ */
+export function writeWorktreeOverlayLease(
+  snapshot: SharedGenerationSnapshot,
+  localCacheDir: string,
+  now: (() => Date) | undefined = undefined,
+): WorktreeCacheLease {
+  const leaseWithoutChecksum = {
+    version: 1,
+    repositoryId: snapshot.repositoryId,
+    worktreeId: snapshot.worktreeId,
+    projectRoot: snapshot.projectRoot,
+    treeOid: snapshot.treeOid,
+    localCacheDir,
+    baseGenerationId: snapshot.generationId,
+    lastAction: 'overlay',
+    lastReason: `private cache forked from shared baseline ${snapshot.generationId}`,
+    lastSeenAt: (now ?? (() => new Date()))().toISOString(),
+  } as const;
+  const lease: WorktreeCacheLease = {
+    ...leaseWithoutChecksum,
+    ownershipChecksum: worktreeLeaseOwnershipChecksum(leaseWithoutChecksum),
+  };
+  persistWorktreeLease(snapshot.repositoryCacheDir, lease, true);
+  return lease;
+}
+
 export function writeManagedWorktreeLease(
   context: GitWorktreeContext,
   localCacheDir: string,
@@ -1069,7 +1101,7 @@ function persistWorktreeLease(repositoryCacheDir: string, lease: WorktreeCacheLe
   if (!lock) throw new Error('repository cache cleanup is busy');
   try {
     if (requireGeneration) {
-      const generationId = lease.activeGenerationId;
+      const generationId = lease.activeGenerationId ?? lease.baseGenerationId;
       if (!generationId || !existsSync(join(repositoryCacheDir, 'generations', generationId))) {
         throw new Error('shared generation disappeared before its lease was attached');
       }

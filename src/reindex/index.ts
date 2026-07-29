@@ -95,7 +95,7 @@ import {
   publishSharedGeneration,
   readSharedGeneration,
   sharedCacheBypassReason,
-  writeManagedWorktreeLease,
+  writeWorktreeOverlayLease,
   writeWorktreeLease,
   type SharedGenerationSnapshot,
 } from './shared-generation-store.js';
@@ -359,13 +359,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
             targetProjectRoot: projectRoot,
             persistLease: false,
           });
-          writeManagedWorktreeLease(
-            context,
-            dirname(paths.outputDb),
-            'overlay',
-            undefined,
-            `private cache forked from shared baseline ${baseline.snapshot.generationId}`,
-          );
+          writeWorktreeOverlayLease(baseline.snapshot, dirname(paths.outputDb));
           onStatus(`Forked shared baseline ${baseline.snapshot.generationId.slice(0, 12)} for dirty worktree reindex`);
         } catch (error) {
           onStatus(`Shared baseline fork failed; continuing locally: ${errorMessage(error)}`);

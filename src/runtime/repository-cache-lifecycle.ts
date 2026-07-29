@@ -434,7 +434,6 @@ function safeManagedWorktreeCache(lease: WorktreeCacheLease): boolean {
   const managedRoot = resolve(resolveScipQueryCacheRoot());
   const projectsRoot = resolve(join(managedRoot, 'projects'));
   const cachePath = resolve(lease.localCacheDir);
-  if (!cachePath.startsWith(`${projectsRoot}${sep}`)) return false;
   try {
     const managedStat = lstatSync(managedRoot);
     const projectsStat = lstatSync(projectsRoot);

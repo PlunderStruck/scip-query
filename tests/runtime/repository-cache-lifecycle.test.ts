@@ -112,6 +112,23 @@ describe('repository cache lifecycle policy', () => {
     expect(plan.unreferencedSince['generation-gone']).toBe(2 * HOUR);
   });
 
+  it('protects the baseline of a live private overlay without an active shared generation', () => {
+    const overlay = lease('overlay', true, true, 'generation-base');
+    delete overlay.lease.activeGenerationId;
+    overlay.lease.lastAction = 'overlay';
+    const plan = planRepositoryCacheSweep({
+      nowMs: 2 * HOUR,
+      leases: [overlay],
+      generations: [generation('generation-base', 10, 0)],
+      locks: [],
+      temporaries: [],
+      policy: { generationTtlMs: HOUR, budgetBytes: 0 },
+    });
+
+    expect(plan.protectedGenerationIds).toEqual(['generation-base']);
+    expect(plan.deleteGenerations).toEqual([]);
+  });
+
   it('expires a generation at one hour unreferenced but not one millisecond earlier', () => {
     const before = planRepositoryCacheSweep({
       nowMs: HOUR - 1,

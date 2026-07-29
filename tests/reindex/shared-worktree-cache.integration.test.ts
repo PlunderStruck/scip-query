@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { resolveIndexStoragePaths } from '../../src/platform/cache-layout.js';
 import { loadProjectConfig } from '../../src/runtime/config.js';
 import { getIndexFreshness } from '../../src/runtime/index-freshness.js';
+import { inspectSharedCacheStatus } from '../../src/runtime/repository-cache-lifecycle.js';
 import { resolveGitWorktreeContext } from '../../src/platform/git-worktree.js';
 import { reindex } from '../../src/reindex/index.js';
 import {
@@ -195,6 +196,16 @@ describe('shared Git worktree cache integration', () => {
     expect(fileHash(sharedDb)).toBe(sharedHash);
     expect(getIndexFreshness(linked, {}, linkedPaths).state).toBe('fresh');
     expect(getIndexFreshness(primary, {}, primaryPaths).state).toBe('fresh');
+    const sharedStatus = inspectSharedCacheStatus(linked, loadProjectConfig(linked), linkedPaths);
+    expect(sharedStatus).toEqual(
+      expect.objectContaining({
+        state: 'managed',
+        baseGenerationId: snapshot.generationId,
+        activeGenerationId: undefined,
+        lastAction: 'overlay',
+        protectedGenerations: 1,
+      }),
+    );
   }, 90_000);
 
   it('imports a stable primary cache even after the primary files become dirty', async () => {

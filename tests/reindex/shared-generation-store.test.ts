@@ -35,6 +35,7 @@ import {
   touchExistingWorktreeLease,
   worktreeLeaseOwnershipChecksum,
   writeWorktreeLease,
+  writeWorktreeOverlayLease,
   type SharedGenerationSnapshot,
   type SharedGenerationPublicationStage,
   type WorktreeCacheLease,
@@ -502,6 +503,24 @@ describe('shared generation store', () => {
           lastSeenAt: new Date(180_000).toISOString(),
         }),
       );
+    });
+  });
+
+  it('records a protected baseline without claiming a private overlay is the shared active generation', () => {
+    withWarmLeaseFixture('overlay-lineage', ({ localCache, leasePath, snapshot }) => {
+      const lease = writeWorktreeOverlayLease(snapshot, localCache, () => new Date(240_000));
+
+      expect(lease).toEqual(
+        expect.objectContaining({
+          baseGenerationId: snapshot.generationId,
+          lastAction: 'overlay',
+          lastReason: `private cache forked from shared baseline ${snapshot.generationId}`,
+          lastSeenAt: new Date(240_000).toISOString(),
+        }),
+      );
+      expect(lease.activeGenerationId).toBeUndefined();
+      expect(lease.ownershipChecksum).toBe(worktreeLeaseOwnershipChecksum(lease));
+      expect(JSON.parse(readFileSync(leasePath, 'utf8'))).toEqual(lease);
     });
   });
 
