@@ -63,6 +63,7 @@ export const DEFAULT_BOUNDED_MAILBOX_LIMITS: Readonly<BoundedMailboxLimits> = Ob
 
 export type MailboxBackpressureCode = 'item-too-large' | 'item-capacity' | 'byte-capacity' | 'admission-busy';
 
+// scip-query: ignore-stale -- Structured domain error shared by mailbox operations and their contract tests.
 export class MailboxBackpressureError extends Error {
   constructor(
     readonly code: MailboxBackpressureCode,
@@ -83,6 +84,7 @@ export class MailboxBackpressureError extends Error {
   }
 }
 
+// scip-query: ignore-stale -- Durable claim record shared by storage and mailbox-lane consumers.
 export interface BoundedMailboxClaim {
   requestId: string;
   ownerId: string;
@@ -163,6 +165,7 @@ export interface MailboxClaimOwner {
   processIdentity?: ProcessIdentity;
 }
 
+// scip-query: ignore-stale -- Named durability stages form the deterministic fault-injection contract.
 export type BoundedMailboxClaimStage =
   | 'after-owner-directory-durable'
   | 'after-owner-record-published'

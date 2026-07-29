@@ -12,7 +12,7 @@ import {
 } from '../domain/project-config.js';
 import { isRecordObject } from '../domain/record-validation.js';
 import { isSuppressionDecision } from '../domain/suppression-adjudication.js';
-import type { ProjectConfig, SupportedLanguage, WatchConfig } from '../domain/types.js';
+import type { ProjectConfig, SupportedLanguage, WatchConfig, WatchResourceBudgetConfig } from '../domain/types.js';
 import { compileBoundedRegExp } from '../platform/bounded-regexp.js';
 import { readTextFileWithinLimit, SMALL_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
 import {
@@ -23,10 +23,21 @@ import {
 
 const CONFIG_FILENAME = '.scipquery.json';
 const DEFAULT_WATCH_DEBOUNCE_MS = 250;
-const DEFAULT_WATCH_COOLDOWN_MS = 5_000;
+const MIN_WATCH_COOLDOWN_MS = 5_000;
+const DEFAULT_WATCH_COOLDOWN_MS = MIN_WATCH_COOLDOWN_MS;
 const DEFAULT_WATCH_IDLE_TIMEOUT_MS = 10 * 60_000;
+const DEFAULT_WATCH_RESOURCE_BUDGET: Required<WatchResourceBudgetConfig> = {
+  enabled: true,
+  windowMs: 15 * 60_000,
+  maxRebuilds: 4,
+  maxEstimatedWriteBytes: 4 * 1024 * 1024 * 1024,
+};
 
-const DEFAULT_WATCH: Required<WatchConfig> = {
+export type ResolvedWatchConfig = Omit<Required<WatchConfig>, 'resourceBudget'> & {
+  resourceBudget: Required<WatchResourceBudgetConfig>;
+};
+
+const DEFAULT_WATCH: ResolvedWatchConfig = {
   enabled: false,
   debounceMs: DEFAULT_WATCH_DEBOUNCE_MS,
   cooldownMs: DEFAULT_WATCH_COOLDOWN_MS,
@@ -34,6 +45,7 @@ const DEFAULT_WATCH: Required<WatchConfig> = {
   idleTimeoutMs: DEFAULT_WATCH_IDLE_TIMEOUT_MS,
   autoRefresh: true,
   ignore: [],
+  resourceBudget: DEFAULT_WATCH_RESOURCE_BUDGET,
 };
 
 export { SUPPORTED_LANGUAGES };
@@ -71,7 +83,9 @@ const WATCH_CONFIG_KEYS = new Set([
   'idleTimeoutMs',
   'autoRefresh',
   'ignore',
+  'resourceBudget',
 ]);
+const WATCH_RESOURCE_BUDGET_CONFIG_KEYS = new Set(['enabled', 'windowMs', 'maxRebuilds', 'maxEstimatedWriteBytes']);
 const HOOK_CONFIG_KEYS = new Set(['router']);
 const ENTRY_ROOTS_CONFIG_KEYS = new Set(['pathPrefixes', 'files', 'symbolPatterns', 'qualifiedVars']);
 const SEMANTIC_CONFIG_KEYS = new Set(['typescript', 'rust']);
@@ -205,7 +219,13 @@ export function validateProjectConfig(
     diagnostics.push({
       level: 'error',
       path: 'watch.cooldownMs',
-      message: 'Must be a non-negative integer; 0 disables cooldown spacing.',
+      message: 'Must be a non-negative integer.',
+    });
+  } else if (config.watch?.cooldownMs !== undefined && config.watch.cooldownMs < MIN_WATCH_COOLDOWN_MS) {
+    diagnostics.push({
+      level: 'warning',
+      path: 'watch.cooldownMs',
+      message: `Values below ${MIN_WATCH_COOLDOWN_MS}ms are raised to the safety floor at runtime.`,
     });
   }
   if (config.watch?.gitPollMs !== undefined && config.watch.gitPollMs <= 0) {
@@ -223,6 +243,23 @@ export function validateProjectConfig(
   }
   if (config.watch?.autoRefresh !== undefined && typeof config.watch.autoRefresh !== 'boolean') {
     diagnostics.push({ level: 'error', path: 'watch.autoRefresh', message: 'Must be a boolean.' });
+  }
+  const resourceBudget = config.watch?.resourceBudget;
+  if (resourceBudget?.enabled !== undefined && typeof resourceBudget.enabled !== 'boolean') {
+    diagnostics.push({ level: 'error', path: 'watch.resourceBudget.enabled', message: 'Must be a boolean.' });
+  }
+  for (const [key, value] of [
+    ['windowMs', resourceBudget?.windowMs],
+    ['maxRebuilds', resourceBudget?.maxRebuilds],
+    ['maxEstimatedWriteBytes', resourceBudget?.maxEstimatedWriteBytes],
+  ] as const) {
+    if (value !== undefined && (!Number.isSafeInteger(value) || value <= 0)) {
+      diagnostics.push({
+        level: 'error',
+        path: `watch.resourceBudget.${key}`,
+        message: 'Must be a positive safe integer.',
+      });
+    }
   }
   if (config.hooks?.router !== undefined && config.hooks.router !== 'off' && config.hooks.router !== 'single') {
     diagnostics.push({ level: 'error', path: 'hooks.router', message: 'Must be "off" or "single".' });
@@ -717,10 +754,15 @@ function validateCoverageContractSpec(
 }
 
 /** Resolve watch config with defaults applied */
-export function resolveWatchConfig(config: ProjectConfig): Required<WatchConfig> {
+export function resolveWatchConfig(config: ProjectConfig): ResolvedWatchConfig {
   return {
     ...DEFAULT_WATCH,
     ...config.watch,
+    cooldownMs: Math.max(MIN_WATCH_COOLDOWN_MS, config.watch?.cooldownMs ?? DEFAULT_WATCH_COOLDOWN_MS),
+    resourceBudget: {
+      ...DEFAULT_WATCH_RESOURCE_BUDGET,
+      ...config.watch?.resourceBudget,
+    },
   };
 }
 
@@ -748,6 +790,7 @@ export function initProjectConfigDetailed(projectRoot: string, languages: string
       gitPollMs: 2_000,
       idleTimeoutMs: DEFAULT_WATCH_IDLE_TIMEOUT_MS,
       autoRefresh: true,
+      resourceBudget: { ...DEFAULT_WATCH_RESOURCE_BUDGET },
     },
   };
   const mutation = mutateTextFileRevisionAware(configPath, (snapshot) =>
@@ -875,6 +918,12 @@ function reportUnknownConfigKeys(config: ProjectConfig, diagnostics: ConfigDiagn
   const typedConfig = config as ProjectConfig;
   reportUnknownObjectKeys(diagnostics, typedConfig, '', ROOT_CONFIG_KEYS);
   reportUnknownObjectKeys(diagnostics, typedConfig.watch, 'watch', WATCH_CONFIG_KEYS);
+  reportUnknownObjectKeys(
+    diagnostics,
+    typedConfig.watch?.resourceBudget,
+    'watch.resourceBudget',
+    WATCH_RESOURCE_BUDGET_CONFIG_KEYS,
+  );
   reportUnknownObjectKeys(diagnostics, typedConfig.hooks, 'hooks', HOOK_CONFIG_KEYS);
   reportUnknownObjectKeys(diagnostics, typedConfig.entryRoots, 'entryRoots', ENTRY_ROOTS_CONFIG_KEYS);
   reportUnknownObjectKeys(diagnostics, typedConfig.semantic, 'semantic', SEMANTIC_CONFIG_KEYS);

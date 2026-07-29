@@ -19,6 +19,7 @@ export interface ProcessTreeTerminationResult {
   detail?: string;
 }
 
+// scip-query: ignore-stale -- Capability port isolates platform-specific process-tree effects for testing.
 export interface ProcessTreeRuntime {
   platform: NodeJS.Platform;
   now(): number;
@@ -31,6 +32,7 @@ export interface ProcessTreeRuntime {
   sleep(ms: number): Promise<void>;
 }
 
+// scip-query: ignore-stale -- Ownership handle preserves the identity and lifecycle of a managed process tree.
 export interface OwnedProcessTree {
   readonly rootPid: number;
   readonly rootIdentity: ProcessIdentity | null;

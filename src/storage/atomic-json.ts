@@ -1,5 +1,6 @@
 import { replaceFileAtomic, type AtomicFileRuntime, type AtomicFileWriteResult } from './atomic-file.js';
 
+// scip-query: ignore-stale -- Serialization policy and atomic-write fault seam are shared across write paths.
 export interface AtomicJsonWriteOptions {
   spacing?: number;
   trailingNewline?: boolean;

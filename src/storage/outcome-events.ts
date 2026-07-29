@@ -40,6 +40,7 @@ export const OUTCOME_EVENTS_DIR = join('.scipquery', 'events');
 const LEGACY_LEDGER_DIR = join('.scipquery', 'ledger');
 const LEGACY_LEDGER_FILENAME = 'events.jsonl';
 
+// scip-query: ignore-stale -- Read result keeps events, compatibility evidence, and warnings inseparable.
 export interface OutcomeEventReadResult {
   events: OutcomeEvent[];
   compatibility: RecordCompatibilitySummary;

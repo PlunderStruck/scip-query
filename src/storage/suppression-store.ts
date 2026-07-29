@@ -42,6 +42,7 @@ interface SuppressionFileRecordEnvelope {
   updatedAt?: string;
 }
 
+// scip-query: ignore-stale -- Named legacy schema is required for versioned suppression-file compatibility.
 export type SuppressionFileRecordV1 = Omit<FindingSuppression, 'createdAt' | 'decision'> &
   SuppressionFileRecordEnvelope & {
     schemaVersion: typeof LEGACY_SUPPRESSION_FILE_SCHEMA_VERSION;

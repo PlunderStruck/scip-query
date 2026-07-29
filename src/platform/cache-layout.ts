@@ -93,16 +93,27 @@ function cacheOwnershipError(cacheDir: string, reason: string): Error {
  */
 export function resolveCacheDir(projectRoot: string, config?: ProjectConfig): string {
   const canonicalProjectRoot = realpathSync(projectRoot);
+  return ensureOwnedCacheDir(canonicalProjectRoot, resolveCacheDirPath(canonicalProjectRoot, config));
+}
+
+/**
+ * Resolves the cache location without creating or adopting it.
+ *
+ * Read-only consumers use this form so constructing a watcher or inspecting
+ * optional telemetry cannot create global cache state as a side effect.
+ */
+export function resolveCacheDirPath(projectRoot: string, config?: ProjectConfig): string {
+  const canonicalProjectRoot = realpathSync(projectRoot);
   const envOverride = process.env['SCIP_QUERY_CACHE_DIR'];
   if (envOverride) {
-    return ensureOwnedCacheDir(canonicalProjectRoot, resolve(envOverride));
+    return resolve(envOverride);
   }
 
   if (config?.dbPath) {
-    return ensureOwnedCacheDir(canonicalProjectRoot, resolveConfiguredCacheDir(canonicalProjectRoot, config.dbPath));
+    return resolveConfiguredCacheDir(canonicalProjectRoot, config.dbPath);
   }
 
-  return ensureOwnedCacheDir(canonicalProjectRoot, resolveDefaultCacheDir(canonicalProjectRoot));
+  return resolveDefaultCacheDir(canonicalProjectRoot);
 }
 
 export function resolveScipQueryCacheRoot(): string {

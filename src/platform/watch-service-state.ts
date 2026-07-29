@@ -5,7 +5,7 @@ import { isNonNegativeInteger, isValidRecordTimestamp } from '../domain/record-v
 import { parseProcessIdentity, type ProcessIdentity } from './process-identity.js';
 import { readSmallArtifactText } from './bounded-file.js';
 
-export const WATCH_SERVICE_PROTOCOL_VERSION = 5;
+export const WATCH_SERVICE_PROTOCOL_VERSION = 6;
 export const WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS = 5_000;
 export const WATCH_LOCK_FILE = 'watch.lock';
 export const WATCH_STATE_FILE = 'watch-state.json';
@@ -172,6 +172,14 @@ function validWatcherStatus(value: unknown): value is WatcherStatus {
       return finiteNumber(status.startedAt);
     case 'cooldown':
       return finiteNumber(status.until) && typeof status.dirty === 'boolean';
+    case 'budget-paused':
+      return (
+        finiteNumber(status.until) &&
+        typeof status.dirty === 'boolean' &&
+        typeof status.reason === 'string' &&
+        isNonNegativeInteger(status.rebuilt) &&
+        isNonNegativeInteger(status.estimatedWriteBytes)
+      );
     case 'draining':
       return finiteNumber(status.startedAt) && typeof status.reason === 'string';
     default:
@@ -218,6 +226,11 @@ function validReindexActivitySummary(value: unknown): value is ReindexActivitySu
     !isNonNegativeInteger(summary.failed) ||
     !isNonNegativeInteger(summary.suppressed) ||
     !finiteNumber(summary.estimatedLogicalOutputBytes) ||
+    (summary.estimatedWriteBytes !== undefined && !isNonNegativeInteger(summary.estimatedWriteBytes)) ||
+    (summary.reflinkedBytes !== undefined && !isNonNegativeInteger(summary.reflinkedBytes)) ||
+    (summary.fallbackCopiedBytes !== undefined && !isNonNegativeInteger(summary.fallbackCopiedBytes)) ||
+    (summary.oldestRebuildAt !== undefined && !isValidWatchServiceTimestamp(summary.oldestRebuildAt)) ||
+    (summary.oldestWriteAt !== undefined && !isValidWatchServiceTimestamp(summary.oldestWriteAt)) ||
     summary.estimatedLogicalOutputBytes! < 0 ||
     !summary.byTrigger ||
     typeof summary.byTrigger !== 'object'

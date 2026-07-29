@@ -1,0 +1,60 @@
+{
+  "kind": "scip-query-suppression",
+  "suppressionIdentity": "SQ18EFFC6BA69F",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  },
+  "id": "SQ18EFFC6BA69F",
+  "check": "co-change-partner",
+  "file": "tests/runtime/watch-service.test.ts",
+  "reason": "The edited watch-service test validates stopWatchService's idempotent WatchServiceStopResult contract in src/runtime/watch-service.ts. The reported watch-server pairing has zero focused co-edits and all six historical co-edits were broad sweeps, so src/runtime/watch-server.ts is not a required consumer for this change.",
+  "createdAt": "2026-07-29T17:27:07.126Z",
+  "schemaVersion": 2,
+  "decision": {
+    "kind": "automated-adjudication",
+    "reasonCode": "detector-counterexample",
+    "decidedBy": "agent",
+    "policyVersion": 1,
+    "observation": {
+      "schemaVersion": 1,
+      "authorityKind": "index-worktree",
+      "observedAt": "2026-07-29T17:27:07.125Z",
+      "projectIdentity": "178a22f2ce5800603672d10b597d4cf97078e596c64e2eb0293681604557bda7",
+      "index": {
+        "generationIdentity": "19f8d783bd98c8df93fd6bb51c231d15fdba57ef48776d040f5416eff2c37140",
+        "source": "immutable",
+        "alignment": "not-certified"
+      },
+      "worktree": {
+        "identity": "05fb1a49fe038ec427bc3d54d1852a9bb78b20123424e0b413640fca661208ad",
+        "clean": false,
+        "headCommit": "ccfcb126176cb205a19e2f0a6284944e69e4a87a",
+        "treeOid": "d86abcb51bc3a8df0972fd8906cea2192b7a4fd9"
+      }
+    },
+    "evidence": [
+      {
+        "kind": "test",
+        "referent": "tests/runtime/watch-service.test.ts",
+        "claim": "The edited watch-service test validates stopWatchService's idempotent WatchServiceStopResult contract in src/runtime/watch-service.ts. The reported watch-server pairing has zero focused co-edits and all six historical co-edits were broad sweeps, so src/runtime/watch-server.ts is not a required consumer for this change.",
+        "contentHash": "af28c5400cc79759a0cba20d11fb044a185b791ec68a45e7eaa21b20ca974656"
+      },
+      {
+        "kind": "source",
+        "referent": "src/runtime/watch-service.ts",
+        "claim": "The edited watch-service test validates stopWatchService's idempotent WatchServiceStopResult contract in src/runtime/watch-service.ts. The reported watch-server pairing has zero focused co-edits and all six historical co-edits were broad sweeps, so src/runtime/watch-server.ts is not a required consumer for this change.",
+        "contentHash": "1db40534551f22974bcc7142de3562e089b94b96ba187d6bc3a39ea000ff597f"
+      },
+      {
+        "kind": "graph",
+        "referent": "scip-query co-change src/runtime/watch-server.ts --full",
+        "claim": "The edited watch-service test validates stopWatchService's idempotent WatchServiceStopResult contract in src/runtime/watch-service.ts. The reported watch-server pairing has zero focused co-edits and all six historical co-edits were broad sweeps, so src/runtime/watch-server.ts is not a required consumer for this change."
+      }
+    ],
+    "invalidateOn": {
+      "targetContentChange": true,
+      "detectorMajorChange": true
+    }
+  }
+}

@@ -50,6 +50,7 @@ export function diffGateDeadlineContract(childTimeoutMs: number, preflightMs = 0
   };
 }
 
+// scip-query: ignore-stale -- Parsed request contract separates CLI input from isolated execution.
 export interface DiffGateExecutionRequest {
   base?: string;
   minTogether: number;
@@ -65,6 +66,7 @@ export type IsolatedDiffGateOutcomes = Omit<DiffGateOutcomeResult, 'ledger'> & {
   ledger?: DiffGateOutcomeResult['ledger'];
 };
 
+// scip-query: ignore-stale -- Execution result contract crosses the diff-gate and agent-hook boundary.
 export interface DiffGateExecutionResult {
   result: DiffGateResult;
   outcomes: IsolatedDiffGateOutcomes;

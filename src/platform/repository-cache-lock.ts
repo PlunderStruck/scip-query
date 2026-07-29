@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { monotonicNowMs } from '../domain/time.js';
+import { abortSignalReason, throwIfSignalAborted } from './abort-signal.js';
 import { tryAcquireProcessFileLock, type LegacyProcessLockDecoder, type ProcessFileLock } from './process-file-lock.js';
 
 export interface RepositoryCacheLock {
@@ -59,7 +60,7 @@ export async function acquireProcessFileLockAsync(
   const deadline = now() + waitMs;
 
   do {
-    throwIfAborted(opts.signal);
+    throwIfSignalAborted(opts.signal, 'Lock acquisition was aborted.');
     const result = tryAcquireGenericLock(lockPath);
     if (result) return asRepositoryLock(result);
     const remainingMs = deadline - now();
@@ -91,7 +92,7 @@ function sleepSync(durationMs: number): void {
 }
 
 function sleepAsync(durationMs: number, signal: AbortSignal | undefined): Promise<void> {
-  if (signal?.aborted) return Promise.reject(abortReason(signal));
+  if (signal?.aborted) return Promise.reject(abortSignalReason(signal, 'Lock acquisition was aborted.'));
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       signal?.removeEventListener('abort', onAbort);
@@ -100,16 +101,12 @@ function sleepAsync(durationMs: number, signal: AbortSignal | undefined): Promis
     const onAbort = (): void => {
       clearTimeout(timer);
       signal?.removeEventListener('abort', onAbort);
-      reject(signal ? abortReason(signal) : new Error('Lock acquisition was aborted.'));
+      reject(
+        signal
+          ? abortSignalReason(signal, 'Lock acquisition was aborted.')
+          : new Error('Lock acquisition was aborted.'),
+      );
     };
     signal?.addEventListener('abort', onAbort, { once: true });
   });
-}
-
-function throwIfAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted) throw abortReason(signal);
-}
-
-function abortReason(signal: AbortSignal): Error {
-  return signal.reason instanceof Error ? signal.reason : new Error('Lock acquisition was aborted.');
 }

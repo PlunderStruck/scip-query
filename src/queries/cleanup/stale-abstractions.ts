@@ -130,6 +130,7 @@ export function staleAbstractions(
         semantic: includeSemantic,
       });
       const possiblyReportableTypes = typeCandidates.filter((definition) => {
+        if (index.hasSuppressionComment(definition)) return false;
         const row = staleCandidateRow(db, definition, consumerFileMap, candidateIndex);
         return (
           row.realConsumers.length <= 1 &&
@@ -146,6 +147,7 @@ export function staleAbstractions(
       };
     },
     evaluate: (definition, evidence) => {
+      if (index.hasSuppressionComment(definition)) return null;
       if (evidence.singletonBackedClassIds.has(definition.symbolId)) return null;
       const row = staleCandidateRow(db, definition, evidence.consumerFileMap, evidence.candidateIndex);
       if (row.transitivelyReachable) return null;
@@ -201,7 +203,6 @@ function staleTypeCandidates(
       // this filter every enum variant gets a separate stale-abstraction
       // entry, which is noise.
       .filter((definition) => !isNestedTypeMember(definition.symbol))
-      .filter((definition) => !index.hasSuppressionComment(definition))
   );
 }
 

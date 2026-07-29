@@ -1,9 +1,9 @@
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { platform } from 'node:os';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
+import { runBoundedProcess } from '../platform/bounded-process.js';
 import {
   projectInputSnapshotOrNull,
   type ProjectFileFingerprint,
@@ -47,6 +47,7 @@ import {
   resolveProjectLocalIndexerBinary,
   trustProjectLocalIndexerBinary,
 } from '../platform/indexer-toolchain.js';
+import { throwIfSignalAborted } from '../platform/abort-signal.js';
 import {
   buildProjectInputFingerprint,
   fingerprintProjectFiles,
@@ -54,6 +55,12 @@ import {
   type ProjectInputFingerprint,
 } from '../platform/project-files.js';
 import type { LastRefreshMetadata, RefreshTrigger, SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
+import {
+  cloneFileWithFallback,
+  createReindexWriteTelemetry,
+  recordFileClone,
+  type ReindexWriteTelemetry,
+} from '../platform/file-clone.js';
 import { writeJsonDurable } from '../storage/atomic-json.js';
 import { ScipDatabase } from '../storage/db.js';
 import { seedTypeScriptReferenceFragments } from '../semantic/typescript/reference-fragment-shadow.js';
@@ -141,6 +148,8 @@ export interface ReindexOptions {
   indexerConcurrency?: number;
   /** Source that requested this refresh, persisted for status and setup diagnostics. */
   trigger?: RefreshTrigger;
+  /** Cancel this reindex and every bounded child process. */
+  signal?: AbortSignal;
 }
 
 // Plan 6 6.5.2 — shard-reuse diagnostics: one entry per cached indexing unit
@@ -181,6 +190,8 @@ export interface ReindexResult {
   lastRefresh?: LastRefreshMetadata;
   /** Per-shard reuse diagnostics (plan6 6.5.2); one entry per language/workspace shard. */
   shards?: ReindexShardDiagnostic[];
+  /** Staging-copy cost split by copy-on-write clones and real byte-copy fallbacks. */
+  writeTelemetry?: ReindexWriteTelemetry;
 }
 
 interface PreparedIndexerPlan {
@@ -397,6 +408,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
     throw error;
   }
   let runDir: string | null = null;
+  const writeTelemetry = createReindexWriteTelemetry();
 
   try {
     ensureImmutableSqliteGeneration(paths.outputDb, paths.outputScip, paths.metaPath);
@@ -455,6 +467,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
           maxHeapMb,
           skipAutoInstall,
           onStatus,
+          writeTelemetry,
         });
         return freshObservation;
       },
@@ -701,6 +714,7 @@ async function runFreshReindex(opts: {
   maxHeapMb: number;
   skipAutoInstall: boolean;
   onStatus: (message: string) => void;
+  writeTelemetry: ReindexWriteTelemetry;
 }): Promise<ReindexResult> {
   const env = {
     ...process.env,
@@ -765,9 +779,10 @@ async function runFreshReindex(opts: {
       skipped: skippedLanguages,
       lastRefresh,
       shards,
+      writeTelemetry: opts.writeTelemetry,
     };
   }
-  const lastRefresh = profileSpan(
+  const lastRefresh = await profileAsyncSpan(
     'reindex.publish',
     () =>
       publishFreshReindexArtifacts(
@@ -798,6 +813,7 @@ async function runFreshReindex(opts: {
     skipped: skippedLanguages,
     lastRefresh,
     shards,
+    writeTelemetry: opts.writeTelemetry,
   };
 }
 
@@ -914,6 +930,7 @@ async function runLanguageIndexersForFreshReindex(
     opts.projectRoot,
     opts.onStatus,
     opts.opts.indexerConcurrency,
+    opts.opts.signal,
   );
 
   // Cache freshly produced project shards BEFORE collectIndexerOutputs runs
@@ -922,13 +939,14 @@ async function runLanguageIndexersForFreshReindex(
   // it could be cached.
   let syntheticResults: IndexerRunResult[] = [];
   if (tsProjectShards) {
-    cacheFreshTypeScriptProjectShards(opts.paths.outputDb, runResults);
+    cacheFreshTypeScriptProjectShards(opts.paths.outputDb, runResults, opts.writeTelemetry);
     const typescriptOutputScipPath = languageOutputScipPaths['typescript'] ?? opts.tempPaths.tempOutputScip;
     syntheticResults = buildCachedTypeScriptProjectRunResults({
       outputDb: opts.paths.outputDb,
       tempOutputScip: opts.tempPaths.tempOutputScip,
       outputScipPath: typescriptOutputScipPath,
       reusedProjects: tsProjectShards.reusedProjects,
+      writeTelemetry: opts.writeTelemetry,
     });
   }
 
@@ -1058,13 +1076,17 @@ function classifyTypeScriptProjectShardReuse(
 }
 
 /** Copies each freshly-indexed project shard into the real cache directory, before `collectIndexerOutputs` can rename the source away. Skips failed runs. */
-function cacheFreshTypeScriptProjectShards(outputDb: string, runResults: readonly IndexerRunResult[]): void {
+function cacheFreshTypeScriptProjectShards(
+  outputDb: string,
+  runResults: readonly IndexerRunResult[],
+  writeTelemetry: ReindexWriteTelemetry,
+): void {
   for (const run of runResults) {
     if (run.skipped || !run.id.startsWith('typescript:')) continue;
     const project = run.id.slice('typescript:'.length);
     const shardPath = typescriptProjectShardPath(outputDb, project);
     mkdirSync(dirname(shardPath), { recursive: true });
-    copyFileSync(run.scipPath, shardPath);
+    recordFileClone(writeTelemetry, cloneFileWithFallback(run.scipPath, shardPath));
   }
 }
 
@@ -1080,11 +1102,12 @@ function buildCachedTypeScriptProjectRunResults(opts: {
   tempOutputScip: string;
   outputScipPath: string;
   reusedProjects: readonly string[];
+  writeTelemetry: ReindexWriteTelemetry;
 }): IndexerRunResult[] {
   return opts.reusedProjects.map((project, index) => {
     const cachedPath = typescriptProjectShardPath(opts.outputDb, project);
     const tempCopyPath = tempScipPath(opts.tempOutputScip, 'typescript-project-cached', index);
-    copyFileSync(cachedPath, tempCopyPath);
+    recordFileClone(opts.writeTelemetry, cloneFileWithFallback(cachedPath, tempCopyPath));
     return {
       id: `typescript:${project}`,
       language: 'typescript' as const,
@@ -1273,7 +1296,7 @@ function languageFingerprintsFromClassification(
 // scip-query: ignore-extract — this is the publish phase for a fresh index:
 // materialize SCIP, convert to SQLite, promote both artifacts, and write
 // metadata are one atomic handoff.
-function publishFreshReindexArtifacts(
+async function publishFreshReindexArtifacts(
   opts: Parameters<typeof runFreshReindex>[0],
   env: NodeJS.ProcessEnv,
   indexedOutputs: readonly IndexedOutput[],
@@ -1282,14 +1305,15 @@ function publishFreshReindexArtifacts(
   languageFingerprints: Partial<Record<SupportedLanguage, ReindexFingerprint>>,
   typescriptProjectShardContext: TypeScriptProjectShardContext | undefined,
   incrementalTypeScript: MaterializedTypeScriptIncrementalIndex | undefined,
-): LastRefreshMetadata {
+): Promise<LastRefreshMetadata> {
+  throwIfSignalAborted(opts.opts.signal, 'Reindex cancelled by its owner.');
   const completeScipAvailable = !incrementalTypeScript || incrementalTypeScript.completeScipUpdated;
   let completeScipSanitized = false;
   if (completeScipAvailable) {
-    cacheLanguageShards(opts.paths.outputDb, indexedOutputs);
+    cacheLanguageShards(opts.paths.outputDb, indexedOutputs, opts.writeTelemetry);
     completeScipSanitized = materializeScipOutput(indexedOutputs, opts.tempPaths.tempOutputScip, opts.onStatus);
   }
-  const sqliteMaterialization = materializeSqliteOutput({
+  const sqliteMaterialization = await materializeSqliteOutput({
     run: opts,
     env,
     indexedOutputs,
@@ -1298,7 +1322,8 @@ function publishFreshReindexArtifacts(
     incrementalTypeScript,
     completeScipAvailable,
     completeScipSanitized,
-    materializeFullFallback: () => {
+    materializeFullFallback: async () => {
+      throwIfSignalAborted(opts.opts.signal, 'Reindex cancelled by its owner.');
       if (!incrementalTypeScript || incrementalTypeScript.completeScipUpdated) {
         return completeScipSanitized;
       }
@@ -1314,12 +1339,13 @@ function publishFreshReindexArtifacts(
           ? { language: output.language, scipPath: incrementalTypeScript.candidateScipPath }
           : output,
       );
-      cacheLanguageShards(opts.paths.outputDb, completeOutputs);
+      cacheLanguageShards(opts.paths.outputDb, completeOutputs, opts.writeTelemetry);
       completeScipSanitized = materializeScipOutput(completeOutputs, opts.tempPaths.tempOutputScip, opts.onStatus);
       return completeScipSanitized;
     },
   });
 
+  throwIfSignalAborted(opts.opts.signal, 'Reindex cancelled by its owner.');
   runPostIndexAugmentation(auxiliaryDocumentsAugmentationStage(), {
     projectRoot: opts.projectRoot,
     dbPath: opts.tempPaths.tempOutputDb,
@@ -1464,7 +1490,7 @@ function publishFullyReusedLanguageShardArtifacts(
   const previousSnapshot = previousProjectInputSnapshot(opts.paths.metaPath);
   let shadowRecord: AffectedSetShadowRecord | null = null;
   try {
-    copyFileSync(opts.paths.outputDb, opts.tempPaths.tempOutputDb);
+    recordFileClone(opts.writeTelemetry, cloneFileWithFallback(opts.paths.outputDb, opts.tempPaths.tempOutputDb));
   } catch (error) {
     shadowRecord = createUnavailableAffectedSetShadowRecord(
       'reused',
@@ -1650,12 +1676,16 @@ function typescriptProjectShardFilesToDelete(
   return existingFiles.filter((file) => !keep.has(file));
 }
 
-function cacheLanguageShards(outputDb: string, indexedOutputs: readonly IndexedOutput[]): void {
+function cacheLanguageShards(
+  outputDb: string,
+  indexedOutputs: readonly IndexedOutput[],
+  writeTelemetry: ReindexWriteTelemetry,
+): void {
   for (const output of indexedOutputs) {
     const shardPath = languageShardPath(outputDb, output.language);
     mkdirSync(dirname(shardPath), { recursive: true });
     if (output.scipPath !== shardPath) {
-      copyFileSync(output.scipPath, shardPath);
+      recordFileClone(writeTelemetry, cloneFileWithFallback(output.scipPath, shardPath));
     }
   }
 }
@@ -1980,7 +2010,7 @@ function materializeScipOutput(
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
-function materializeSqliteOutput(opts: {
+async function materializeSqliteOutput(opts: {
   run: Parameters<typeof runFreshReindex>[0];
   env: NodeJS.ProcessEnv;
   indexedOutputs: readonly IndexedOutput[];
@@ -1989,8 +2019,8 @@ function materializeSqliteOutput(opts: {
   incrementalTypeScript: MaterializedTypeScriptIncrementalIndex | undefined;
   completeScipAvailable: boolean;
   completeScipSanitized: boolean;
-  materializeFullFallback: () => boolean;
-}): SqliteMaterializationResult {
+  materializeFullFallback: () => Promise<boolean>;
+}): Promise<SqliteMaterializationResult> {
   let fallbackReason: string | undefined;
   if (canPublishIncrementalSqlite(opts)) {
     const miniDbPath = join(opts.run.tempPaths.runDir, 'typescript-affected.db');
@@ -2000,13 +2030,21 @@ function materializeSqliteOutput(opts: {
         `Converting ${opts.incrementalTypeScript.affectedFiles.length} affected TypeScript document(s) to SQLite...`,
       );
       const convertStartedAt = performance.now();
-      convertScipToSqlite(opts.incrementalTypeScript.affectedScipPath, miniDbPath, opts.env, opts.run.onStatus);
+      await convertScipToSqlite(
+        opts.incrementalTypeScript.affectedScipPath,
+        miniDbPath,
+        opts.env,
+        opts.run.onStatus,
+        false,
+        opts.run.opts.signal,
+      );
       opts.run.onStatus(`Converted affected SCIP documents in ${(performance.now() - convertStartedAt).toFixed(0)}ms.`);
       const patched = patchIncrementalSqliteGeneration({
         previousDbPath: opts.run.paths.outputDb,
         miniDbPath,
         candidateDbPath: opts.run.tempPaths.tempOutputDb,
         affectedFiles: opts.incrementalTypeScript.affectedFiles,
+        writeTelemetry: opts.run.writeTelemetry,
       });
       opts.run.onStatus(
         `Patched ${patched.affectedDocumentCount} SQLite document(s) in ${(patched.durationMs / 1000).toFixed(3)}s.`,
@@ -2019,6 +2057,7 @@ function materializeSqliteOutput(opts: {
         scipCompanion: opts.incrementalTypeScript.completeScipUpdated ? 'current' : 'deferred',
       };
     } catch (error) {
+      throwIfSignalAborted(opts.run.opts.signal, 'Reindex cancelled by its owner.');
       fallbackReason = error instanceof Error ? error.message : String(error);
       rmSync(miniDbPath, { force: true });
       rmSync(opts.run.tempPaths.tempOutputDb, { force: true });
@@ -2028,14 +2067,15 @@ function materializeSqliteOutput(opts: {
     }
   }
   let completeScipSanitized = opts.completeScipSanitized;
-  if (!opts.completeScipAvailable) completeScipSanitized = opts.materializeFullFallback();
+  if (!opts.completeScipAvailable) completeScipSanitized = await opts.materializeFullFallback();
   const convertStartedAt = performance.now();
-  convertScipToSqlite(
+  await convertScipToSqlite(
     opts.run.tempPaths.tempOutputScip,
     opts.run.tempPaths.tempOutputDb,
     opts.env,
     opts.run.onStatus,
     completeScipSanitized,
+    opts.run.opts.signal,
   );
   return {
     mode: 'full',
@@ -2087,13 +2127,15 @@ function buildIncrementalAffectedSetShadowRecord(
   };
 }
 
-function convertScipToSqlite(
+async function convertScipToSqlite(
   tempOutputScip: string,
   tempOutputDb: string,
   env: NodeJS.ProcessEnv,
   onStatus: (message: string) => void,
   alreadySanitized = false,
-): void {
+  signal?: AbortSignal,
+): Promise<void> {
+  throwIfSignalAborted(signal, 'Reindex cancelled by its owner.');
   onStatus('Converting to SQLite...');
   if (!existsSync(tempOutputScip)) {
     throw new Error(`SCIP index not found at ${tempOutputScip} after indexing`);
@@ -2105,14 +2147,25 @@ function convertScipToSqlite(
     if (!scipBinary) {
       throw new Error('scip CLI is not available');
     }
-    execFileSync(scipBinary, ['expt-convert', '--output', tempOutputDb, tempOutputScip], {
+    const completed = await runBoundedProcess({
+      command: scipBinary,
+      args: ['expt-convert', '--output', tempOutputDb, tempOutputScip],
+      label: 'SCIP SQLite conversion',
       env,
-      stdio: 'pipe',
-      maxBuffer: 50 * 1024 * 1024,
-      timeout: 300_000,
-      killSignal: 'SIGKILL',
+      maxStdoutBytes: 50 * 1024 * 1024,
+      maxStderrBytes: 50 * 1024 * 1024,
+      timeoutMs: 300_000,
+      signal,
     });
+    if (completed.status !== 0) {
+      throw new Error(
+        `scip expt-convert exited with ${completed.status}${
+          completed.stderr.trim() ? `: ${completed.stderr.trim()}` : ''
+        }`,
+      );
+    }
   } catch (err) {
+    throwIfSignalAborted(signal, 'Reindex cancelled by its owner.');
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(`Failed to convert SCIP index to SQLite: ${msg}`, { cause: err });
   }

@@ -118,6 +118,7 @@ export interface LocalSqliteGenerationRetentionResult {
   reason?: string;
 }
 
+// scip-query: ignore-stale -- Status contract separates retention inspection from CLI presentation.
 export interface LocalSqliteGenerationStatus {
   state: 'managed' | 'absent' | 'deferred' | 'error';
   generationCount: number;

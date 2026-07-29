@@ -402,7 +402,7 @@ export interface WatchConfig {
   enabled?: boolean;
   /** Ms to wait after the last file change before triggering reindex (default: 250) */
   debounceMs?: number;
-  /** Minimum ms between reindex completions; 0 disables spacing (default: 5000) */
+  /** Requested ms between reindex completions; values below 5000 use the 5000ms safety floor. */
   cooldownMs?: number;
   /** Ms between Git HEAD/index state checks (default: 2000) */
   gitPollMs?: number;
@@ -412,6 +412,19 @@ export interface WatchConfig {
   autoRefresh?: boolean;
   /** Extra glob patterns to ignore beyond .gitignore */
   ignore?: string[];
+  /** Rolling admission guard for automatic watcher rebuilds. */
+  resourceBudget?: WatchResourceBudgetConfig;
+}
+
+export interface WatchResourceBudgetConfig {
+  /** Enable automatic rebuild admission limits (default: true). */
+  enabled?: boolean;
+  /** Rolling observation window in milliseconds (default: 900000 / 15 minutes). */
+  windowMs?: number;
+  /** Completed rebuilds allowed inside the window before automatic work pauses (default: 4). */
+  maxRebuilds?: number;
+  /** Estimated bytes written inside the window before automatic work pauses (default: 4 GiB). */
+  maxEstimatedWriteBytes?: number;
 }
 
 export interface HookRuntimeConfig {

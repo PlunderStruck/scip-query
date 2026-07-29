@@ -527,7 +527,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       option('--debounce <ms>', 'Process-local ms to wait after last change (default: 250)', parseNonNegativeInteger),
       option(
         '--cooldown <ms>',
-        'Process-local min ms between reindexes; 0 disables spacing (default: 5000)',
+        'Process-local ms between reindexes; values below the 5000ms safety floor are raised (default: 5000)',
         parseNonNegativeInteger,
       ),
       option(

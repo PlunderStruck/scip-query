@@ -5,7 +5,7 @@
     "enabled": true,
     "autoRefresh": true,
     "debounceMs": 250,
-    "cooldownMs": 0,
+    "cooldownMs": 5000,
     "idleTimeoutMs": 600000,
     "gitPollMs": 2000
   },

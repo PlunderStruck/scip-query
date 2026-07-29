@@ -32,6 +32,7 @@ export interface IndexerDependencyStatus {
   note?: string;
 }
 
+// scip-query: ignore-stale -- Security identity contract crosses tool validation and indexer execution.
 export interface TrustedProjectToolIdentity {
   configuredPath: string;
   canonicalPath: string;

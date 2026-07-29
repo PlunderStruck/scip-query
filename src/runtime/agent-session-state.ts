@@ -15,6 +15,7 @@ const MAX_CONTINUATION_COMMAND_CHARACTERS = 16_384;
 
 export type AgentSessionStopOutcome = 'pass' | 'pass-with-suppressions' | 'findings' | 'unresolved';
 
+// scip-query: ignore-stale -- Persisted stop receipt is part of the agent-session state schema.
 export interface AgentSessionStopReceipt {
   attemptedAtMs: number;
   outcome: AgentSessionStopOutcome;
@@ -25,6 +26,7 @@ export interface AgentSessionStopReceipt {
   warning?: string;
 }
 
+// scip-query: ignore-stale -- Persisted pagination obligation is part of the agent-session state schema.
 export interface AgentSessionPendingOutput {
   snapshotId: string;
   pageIndex: number;

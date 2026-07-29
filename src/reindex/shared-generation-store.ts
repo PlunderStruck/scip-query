@@ -123,6 +123,7 @@ export type SharedGenerationPublicationResult = {
   directorySync: Exclude<DirectorySyncStatus, 'not-requested'>;
 };
 
+// scip-query: ignore-stale -- Named publication stages form the durability fault-injection contract.
 export type SharedGenerationPublicationStage =
   | 'after-artifact-flushed'
   | 'after-manifest-flushed'

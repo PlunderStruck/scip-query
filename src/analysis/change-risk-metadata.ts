@@ -11,6 +11,7 @@ export interface ChangeRiskReason {
   detail: string;
 }
 
+// scip-query: ignore-stale -- Analysis result contract separates metadata derivation from change-surface aggregation.
 export interface FileChangeRiskMetadata {
   operationalRoot: boolean;
   publishedApi: boolean;

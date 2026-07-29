@@ -18,7 +18,7 @@ import {
   type RevisionedTextSnapshot,
 } from './revisioned-file.js';
 import { loadProjectConfig, resolveWatchConfig } from './config.js';
-import { getIndexFreshness } from './index-freshness.js';
+import { getIndexFreshness, type IndexFreshness } from './index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from './project-readiness.js';
 import { formatGateBlockReason, isStopHookReentry, readHookInput } from './agent-setup.js';
 import { cliVersion } from './cli-support.js';
@@ -98,7 +98,7 @@ interface HookWorkspace {
 }
 
 export interface StopHookIndexObservation {
-  freshness: ReturnType<typeof getIndexFreshness>;
+  freshness: IndexFreshness;
   generationIdentity?: string;
   generationSource?: 'immutable' | 'legacy';
   worktreeIdentity?: string;
@@ -111,6 +111,7 @@ export interface StopHookEvidenceLease {
   observedAt: string;
 }
 
+// scip-query: ignore-stale -- Clock, refresh, observation, and wait port makes evidence leases deterministic.
 export interface StopHookEvidenceDependencies {
   refresh(workspace: HookWorkspace): Promise<string | undefined>;
   observe(workspace: HookWorkspace): StopHookIndexObservation;
@@ -120,7 +121,7 @@ export interface StopHookEvidenceDependencies {
 
 export class StopHookEvidenceLeaseError extends Error {
   constructor(
-    readonly state: ReturnType<typeof getIndexFreshness>['state'] | 'changed-during-run' | 'unverifiable',
+    readonly state: IndexFreshness['state'] | 'changed-during-run' | 'unverifiable',
     message: string,
   ) {
     super(message);
@@ -1078,7 +1079,7 @@ function observeStopHookIndex(workspace: HookWorkspace): StopHookIndexObservatio
 // generation identity/fallback; generic freshness intentionally reports only freshness.
 function stopHookGenerationObservation(
   workspace: HookWorkspace,
-  freshness: ReturnType<typeof getIndexFreshness>,
+  freshness: IndexFreshness,
 ): Pick<StopHookIndexObservation, 'generationIdentity' | 'generationSource'> {
   const generation = inspectSqliteGeneration(workspace.paths.dbPath, workspace.paths.metaPath);
   if (generation.state === 'current' || generation.state === 'drifted') {
@@ -1358,7 +1359,7 @@ export async function refreshIndexForHookIfNeeded(
 
 function requestIdleServiceRefreshIfStale(
   service: Extract<WatchServiceAutoEnsureResult, { kind: 'started' | 'reused' }>,
-  freshness: ReturnType<typeof getIndexFreshness>['state'],
+  freshness: IndexFreshness['state'],
   cacheDir: string,
   dependencies: HookRefreshDependencies,
 ): void {

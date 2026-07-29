@@ -49,6 +49,7 @@ interface AcceptedReindexMetadata {
   capabilities: ReindexMetadataCapabilities;
 }
 
+// scip-query: ignore-stale -- Discriminated decode result preserves metadata compatibility states.
 export type DecodedReindexMetadata =
   | ({ kind: 'supported'; metadata: ReindexMetadataV3 } & AcceptedReindexMetadata)
   | ({ kind: 'legacy'; metadata: ReindexMetadataV2 } & AcceptedReindexMetadata)

@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, rmSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import Database from 'better-sqlite3';
 import { monotonicNowMs } from '../domain/time.js';
+import { cloneFileWithFallback, recordFileClone, type ReindexWriteTelemetry } from '../platform/file-clone.js';
 
 export type IncrementalSqlitePatchStage =
   | 'after-delete'
@@ -15,6 +16,7 @@ export interface PatchIncrementalSqliteGenerationInput {
   miniDbPath: string;
   candidateDbPath: string;
   affectedFiles: readonly string[];
+  writeTelemetry?: ReindexWriteTelemetry;
   onStage?: (stage: IncrementalSqlitePatchStage) => void;
 }
 
@@ -112,7 +114,8 @@ export function patchIncrementalSqliteGeneration(
   validateStandaloneDatabase(input.previousDbPath, 'previous SQLite generation', false);
   validateStandaloneDatabase(input.miniDbPath, 'incremental SQLite mini database');
 
-  copyFileSync(input.previousDbPath, input.candidateDbPath);
+  const clone = cloneFileWithFallback(input.previousDbPath, input.candidateDbPath);
+  if (input.writeTelemetry) recordFileClone(input.writeTelemetry, clone);
 
   let db: Database.Database | null = null;
   try {

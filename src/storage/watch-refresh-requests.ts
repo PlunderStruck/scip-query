@@ -46,11 +46,13 @@ export interface WatchRefreshCompletion {
   completedAt: string;
 }
 
+// scip-query: ignore-stale -- Durable claim batch crosses refresh-request storage and coordinator ownership.
 export interface WatchRefreshClaimBatch {
   claimId: string;
   requests: WatchRefreshRequest[];
 }
 
+// scip-query: ignore-stale -- Status contract separates durable request inspection from coordinator reporting.
 export interface WatchRefreshRequestStatus {
   pending: number;
   claimed: number;
@@ -60,6 +62,7 @@ export interface WatchRefreshRequestStatus {
   oldestPendingAt?: string;
 }
 
+// scip-query: ignore-stale -- Admission policy and deterministic fault hooks are an explicit storage boundary.
 export interface EnqueueWatchRefreshRequestOptions {
   idempotencyKey?: string;
   ttlMs?: number;

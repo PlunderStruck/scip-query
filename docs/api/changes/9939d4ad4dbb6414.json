@@ -1,0 +1,97 @@
+{
+  "acceptedAt": "2026-07-29T18:44:21.862Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "9939d4ad4dbb6414f6fa829f8525582bbede74bb8b3e5b1b13114fea3ecb338a",
+  "changes": [
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries; review their variance and runtime meaning.",
+      "target": "./queries"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/index; review their variance and runtime meaning.",
+      "target": "./queries/index"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ReindexOptions changed from interface ReindexOptions { projectRoot: string; languages?: SupportedLanguage[]; outputScip?: string; outputDb?: string; maxHeapMb?: number; onStatus?: (message: string) => void... to interface ReindexOptions { projectRoot: string; languages?: SupportedLanguage[]; outputScip?: string; outputDb?: string; maxHeapMb?: number; onStatus?: (message: string) => void....",
+      "target": "./reindex:ReindexOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ReindexResult changed from interface ReindexResult { languages: SupportedLanguage[]; indexPath: string; dbPath: string; durationMs: number; reused: boolean; skipped: { language: SupportedLanguage; reason:... to interface ReindexResult { languages: SupportedLanguage[]; indexPath: string; dbPath: string; durationMs: number; reused: boolean; skipped: { language: SupportedLanguage; reason:....",
+      "target": "./reindex:ReindexResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "Watcher changed from declare class Watcher { private projectRoot; private config; private watchConfig; private languages?; private pnpmWorkspaces; private typescriptProjectMode?; private typescriptP... to declare class Watcher { private projectRoot; private config; private watchConfig; private outputDb; private languages?; private pnpmWorkspaces; private typescriptProjectMode?; p....",
+      "target": "./runtime:Watcher"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "WatcherOptions changed from interface WatcherOptions { projectRoot: string; config: ProjectConfig; languages?: SupportedLanguage[]; reindexRunner?: ReindexRunner; subscriptionFactory?: WatchSubscriptionFac... to interface WatcherOptions { projectRoot: string; config: ProjectConfig; languages?: SupportedLanguage[]; reindexRunner?: ReindexRunner; subscriptionFactory?: WatchSubscriptionFac....",
+      "target": "./runtime:WatcherOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "resolveReindexWorkerLaunch changed from declare function resolveReindexWorkerLaunch(request: ReindexRunRequest): ReindexWorkerLaunch; to declare function resolveReindexWorkerLaunch(request: ReindexRunRequest, resolveParentIdentity?: (pid: number) => ProcessIdentity | null): ReindexWorkerLaunch;.",
+      "target": "./runtime:resolveReindexWorkerLaunch"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration W.",
+      "target": "config-types-<hash>.d.ts:W"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "b changed from type ObservationAuthorityKind = 'index-worktree' | 'index-only' | 'worktree-only' | 'process-local'; to interface WatchResourceBudgetConfig { enabled?: boolean; windowMs?: number; maxRebuilds?: number; maxEstimatedWriteBytes?: number; }.",
+      "target": "config-types-<hash>.d.ts:b"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "c changed from interface ObservationReceipt { schemaVersion: typeof OBSERVATION_RECEIPT_SCHEMA_VERSION; authorityKind: ObservationAuthorityKind; observedAt: string; projectIdentity: string; in... to type ObservationAuthorityKind = 'index-worktree' | 'index-only' | 'worktree-only' | 'process-local';.",
+      "target": "config-types-<hash>.d.ts:c"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "d changed from interface ObservationReceiptComparison { compatible: boolean; reasons: Array<'project-mismatch' | 'index-authority-missing' | 'generation-mismatch' | 'worktree-authority-missing... to interface ObservationReceipt { schemaVersion: typeof OBSERVATION_RECEIPT_SCHEMA_VERSION; authorityKind: ObservationAuthorityKind; observedAt: string; projectIdentity: string; in....",
+      "target": "config-types-<hash>.d.ts:d"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "e changed from declare function compareObservationReceipts(left: ObservationReceipt, right: ObservationReceipt): ObservationReceiptComparison; to interface ObservationReceiptComparison { compatible: boolean; reasons: Array<'project-mismatch' | 'index-authority-missing' | 'generation-mismatch' | 'worktree-authority-missing....",
+      "target": "config-types-<hash>.d.ts:e"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration f.",
+      "target": "config-types-<hash>.d.ts:f"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "W changed from type WatcherStatus = { state: 'idle'; } | { state: 'waiting'; changedFiles: number; reindexAt: number; } | { state: 'indexing'; startedAt: number; } | { state: 'cooldown'; until... to type WatcherStatus = { state: 'idle'; } | { state: 'waiting'; changedFiles: number; reindexAt: number; } | { state: 'indexing'; startedAt: number; } | { state: 'cooldown'; until....",
+      "target": "scip-cli-<hash>.d.ts:W"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "0b3377c86bbfb2278a79d4e6c9ba48d21b98af3028e5cb9c7a361dffbad2f90e",
+  "reason": "Add persisted watcher budget status, owner-loss cancellation, and write telemetry; exhaustive WatcherStatus consumers must handle the new budget-paused state.",
+  "schemaVersion": 1
+}

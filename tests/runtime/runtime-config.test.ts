@@ -60,7 +60,19 @@ describe('loadProjectConfig', () => {
       gitPollMs: 2_000,
       idleTimeoutMs: 600_000,
       autoRefresh: true,
+      resourceBudget: {
+        enabled: true,
+        windowMs: 15 * 60_000,
+        maxRebuilds: 4,
+        maxEstimatedWriteBytes: 4 * 1024 * 1024 * 1024,
+      },
     });
+  });
+
+  it('enforces the cooldown safety floor for legacy and process-local overrides', () => {
+    expect(resolveWatchConfig({ watch: { cooldownMs: 0 } }).cooldownMs).toBe(5_000);
+    expect(resolveWatchConfig({ watch: { cooldownMs: 4_999 } }).cooldownMs).toBe(5_000);
+    expect(resolveWatchConfig({ watch: { cooldownMs: 8_000 } }).cooldownMs).toBe(8_000);
   });
 
   it('returns an empty config when no project config exists', () => {
@@ -131,7 +143,17 @@ describe('automatic indexing config setup', () => {
       $schema: PROJECT_CONFIG_SCHEMA_PATH,
       schemaVersion: CURRENT_PROJECT_CONFIG_SCHEMA_VERSION,
       languages: ['typescript'],
-      watch: { enabled: true, autoRefresh: true, idleTimeoutMs: 600_000 },
+      watch: {
+        enabled: true,
+        autoRefresh: true,
+        idleTimeoutMs: 600_000,
+        resourceBudget: {
+          enabled: true,
+          windowMs: 15 * 60_000,
+          maxRebuilds: 4,
+          maxEstimatedWriteBytes: 4 * 1024 * 1024 * 1024,
+        },
+      },
     });
     expect(JSON.parse(readFileSync(configPath, 'utf8'))).toMatchObject(CURRENT_CONFIG_FORMAT);
   });
@@ -795,6 +817,12 @@ describe('validateProjectConfig', () => {
         gitPollMs: 0,
         idleTimeoutMs: -1,
         autoRefresh: 'yes' as unknown as boolean,
+        resourceBudget: {
+          enabled: 'yes' as unknown as boolean,
+          windowMs: 0,
+          maxRebuilds: 1.5,
+          maxEstimatedWriteBytes: -1,
+        },
       },
     });
 
@@ -804,10 +832,20 @@ describe('validateProjectConfig', () => {
       expect.objectContaining({ level: 'error', path: 'watch.gitPollMs' }),
       expect.objectContaining({ level: 'error', path: 'watch.idleTimeoutMs' }),
       expect.objectContaining({ level: 'error', path: 'watch.autoRefresh' }),
+      expect.objectContaining({ level: 'error', path: 'watch.resourceBudget.enabled' }),
+      expect.objectContaining({ level: 'error', path: 'watch.resourceBudget.windowMs' }),
+      expect.objectContaining({ level: 'error', path: 'watch.resourceBudget.maxRebuilds' }),
+      expect.objectContaining({ level: 'error', path: 'watch.resourceBudget.maxEstimatedWriteBytes' }),
     ]);
 
     expect(validateProjectConfig({ watch: { idleTimeoutMs: 0 } })).toEqual([]);
-    expect(validateProjectConfig({ watch: { cooldownMs: 0 } })).toEqual([]);
+    expect(validateProjectConfig({ watch: { cooldownMs: 0 } })).toEqual([
+      expect.objectContaining({
+        level: 'warning',
+        path: 'watch.cooldownMs',
+        message: expect.stringContaining('5000ms'),
+      }),
+    ]);
   });
 
   it('requires positive integer indexer concurrency', () => {

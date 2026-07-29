@@ -132,6 +132,70 @@ describe('staleAbstractions accuracy', () => {
     );
   });
 
+  it('keeps suppressed container types in the graph used to prove nested types are live', () => {
+    withFixture(
+      'suppressed-transitive-container',
+      {
+        'src/contracts.ts': [
+          'export interface InnerContract {',
+          '  id: string;',
+          '  label: string;',
+          '}',
+          '',
+          '// scip-query: ignore-stale -- Intentional transport boundary.',
+          'export interface PublicEnvelope {',
+          '  inner: InnerContract;',
+          '  status: string;',
+          '}',
+          '',
+        ].join('\n'),
+        'src/consumer.ts': [
+          "import type { PublicEnvelope } from './contracts.js';",
+          'export function render(value: PublicEnvelope): string {',
+          '  return value.inner.label;',
+          '}',
+          '',
+        ].join('\n'),
+      },
+      (sqliteDb) => {
+        sqliteDb.exec(`
+          INSERT INTO documents (id, language, relative_path) VALUES
+            (1, 'typescript', 'src/contracts.ts'),
+            (2, 'typescript', 'src/consumer.ts');
+
+          INSERT INTO global_symbols (id, symbol, display_name, kind) VALUES
+            (1, 'scip-typescript npm fixture 1.0.0 src/\`contracts.ts\`/InnerContract#', 'InnerContract', 11),
+            (2, 'scip-typescript npm fixture 1.0.0 src/\`contracts.ts\`/PublicEnvelope#', 'PublicEnvelope', 11),
+            (3, 'scip-typescript npm fixture 1.0.0 src/\`consumer.ts\`/render().', 'render', 12);
+
+          INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+            (1, 1, 1, 0, 0, 3, 1),
+            (2, 1, 2, 6, 0, 9, 1),
+            (3, 2, 3, 1, 0, 3, 1);
+
+          INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+            (1, 1, 0, 0, 9, X'00'),
+            (2, 2, 0, 0, 3, X'00');
+
+          INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+            (1, 1, 1),
+            (1, 1, 0),
+            (1, 2, 1),
+            (2, 2, 0),
+            (2, 3, 1);
+        `);
+      },
+      (db) => {
+        const results = staleAbstractions(db, { minLoc: 3, includeLowConfidence: true });
+        expect(results.find((result) => result.shortName.endsWith('PublicEnvelope'))).toBeUndefined();
+        expect(
+          results.find((result) => result.shortName.endsWith('InnerContract')),
+          'the suppressed public envelope still proves its nested contract is transitively consumed',
+        ).toBeUndefined();
+      },
+    );
+  });
+
   it('excludes ambient declaration contracts from repository liveness scoring', () => {
     withFixture(
       'ambient-declaration',

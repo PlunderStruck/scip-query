@@ -25,6 +25,7 @@ export interface VueWorkerData {
   taskIds: string[];
 }
 
+// scip-query: ignore-stale -- Worker and temporary-file capability port supports deterministic failure tests.
 export interface VueWorkerRuntimePort {
   createResultDirectory(): string;
   spawn(workerUrl: URL, workerData: VueWorkerData): Worker;

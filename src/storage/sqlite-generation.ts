@@ -39,6 +39,7 @@ export interface SqlitePublicationRecord {
   fallbackReason?: string;
 }
 
+// scip-query: ignore-stale -- Persisted generation-pointer schema shared by validation and publication.
 export interface SqliteGenerationState {
   version: typeof SQLITE_GENERATION_STORE_VERSION;
   currentGeneration: string;
@@ -59,6 +60,7 @@ export interface SqliteGenerationArtifact {
   sha256: string;
 }
 
+// scip-query: ignore-stale -- Versioned immutable-artifact manifest is an on-disk compatibility boundary.
 export interface SqliteGenerationManifest {
   version: typeof SQLITE_GENERATION_MANIFEST_VERSION;
   identity: string;
@@ -72,6 +74,7 @@ export interface SqliteGenerationManifest {
  * metadata bytes are the only companion evidence that may be combined with
  * the open SQLite connection carrying this handle.
  */
+// scip-query: ignore-stale -- Reader handle preserves immutable-versus-legacy generation ownership.
 export interface SqliteGenerationHandle {
   identity: string;
   databasePath: string;

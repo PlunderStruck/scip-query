@@ -1,5 +1,6 @@
 import type { DiffGateCheck } from './diff-gate-types.js';
 
+// scip-query: ignore-stale -- Observer port decouples query checks from CLI progress reporting.
 export interface DiffGateProgressObserver {
   onCheckStart?(check: DiffGateCheck): void;
   onCheckComplete?(check: DiffGateCheck): void;

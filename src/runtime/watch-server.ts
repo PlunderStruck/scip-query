@@ -235,6 +235,7 @@ export async function runWatchServiceServer(
   const watcher = new Watcher({
     projectRoot,
     config: { ...config, watch: watchConfig },
+    outputDb: indexPaths.dbPath,
     languages: config.languages,
     onStatus(status) {
       watcherStatus = status;

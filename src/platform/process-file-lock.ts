@@ -87,6 +87,7 @@ export interface ProcessFileLock {
   release(): boolean;
 }
 
+// scip-query: ignore-stale -- Capability port isolates process and filesystem effects for fault testing.
 export interface ProcessFileLockRuntime {
   wallNow(): number;
   isProcessAlive(pid: number): boolean;

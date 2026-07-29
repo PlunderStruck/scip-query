@@ -91,6 +91,7 @@ export type DurableRustMailboxResponseDecodeResult =
       error: string;
     };
 
+// scip-query: ignore-stale -- Protocol expectation binds durable-session identity, operation, and deadline checks.
 export interface DurableRustMailboxResponseExpectation {
   requestId: string;
   operationKey: string;

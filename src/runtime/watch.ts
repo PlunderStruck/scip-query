@@ -9,13 +9,19 @@ import type {
   SupportedLanguage,
   TypeScriptProjectMode,
 } from '../domain/types.js';
+import type { ProcessIdentity } from '../domain/process-identity.js';
 import { monotonicNowMs } from '../domain/time.js';
-import { resolveIndexStoragePaths } from '../platform/cache-layout.js';
-import { loadProjectConfig, resolveWatchConfig } from './config.js';
+import { resolveCacheDirPath, resolveIndexStoragePaths } from '../platform/cache-layout.js';
+import { loadProjectConfig, resolveWatchConfig, type ResolvedWatchConfig } from './config.js';
 import { createGitignoreFilter } from '../source/primitives/gitignore-filter.js';
 import { gitOutput, resolveGitPath } from '../platform/git-worktree.js';
-import { REINDEX_ACTIVITY_FILE } from '../reindex/reindex-activity.js';
+import {
+  inspectReindexActivityBudget,
+  REINDEX_ACTIVITY_FILE,
+  type ReindexActivityBudgetDecision,
+} from '../reindex/reindex-activity.js';
 import { BoundedProcessError, runBoundedProcess } from '../platform/bounded-process.js';
+import { readProcessIdentity } from '../platform/process-identity.js';
 
 export interface WatcherOptions {
   projectRoot: string;
@@ -23,6 +29,8 @@ export interface WatcherOptions {
   languages?: SupportedLanguage[];
   reindexRunner?: ReindexRunner;
   subscriptionFactory?: WatchSubscriptionFactory;
+  budgetInspector?: WatchBudgetInspector;
+  outputDb?: string;
   clock?: WatchClock;
   stopTimeoutMs?: number;
   onStatus?: (status: WatcherStatus) => void;
@@ -31,6 +39,12 @@ export interface WatcherOptions {
   onRefreshSuppressed?: (trigger: RefreshTrigger) => void;
   onError?: (error: Error) => void;
 }
+
+export type WatchBudgetInspector = (
+  outputDb: string,
+  config: ResolvedWatchConfig['resourceBudget'],
+  now: Date,
+) => ReindexActivityBudgetDecision;
 
 export interface ReindexRunRequest {
   projectRoot: string;
@@ -122,7 +136,8 @@ interface GitStateSnapshot {
 export class Watcher {
   private projectRoot: string;
   private config: ProjectConfig;
-  private watchConfig: Required<NonNullable<ProjectConfig['watch']>>;
+  private watchConfig: ResolvedWatchConfig;
+  private outputDb: string;
   private languages?: SupportedLanguage[];
   private pnpmWorkspaces: boolean;
   private typescriptProjectMode?: TypeScriptProjectMode;
@@ -137,6 +152,7 @@ export class Watcher {
   private onError: (error: Error) => void;
   private reindexRunner: ReindexRunner;
   private subscriptionFactory: WatchSubscriptionFactory;
+  private budgetInspector: WatchBudgetInspector;
   private clock: WatchClock;
   private activeOperation: ReindexOperation | null = null;
   private stopPromise: Promise<WatcherStopResult> | null = null;
@@ -146,6 +162,7 @@ export class Watcher {
   private status: WatcherStatus = { state: 'idle' };
   private debounceTimer: WatchTimer | null = null;
   private cooldownTimer: WatchTimer | null = null;
+  private budgetTimer: WatchTimer | null = null;
   private dirty = false;
   private changedFiles = 0;
   private pendingTrigger: RefreshTrigger | null = null;
@@ -165,6 +182,7 @@ export class Watcher {
     this.projectRoot = opts.projectRoot;
     this.config = opts.config;
     this.watchConfig = resolveWatchConfig(opts.config);
+    this.outputDb = opts.outputDb ?? join(resolveCacheDirPath(this.projectRoot, opts.config), 'index.db');
     this.languages = opts.languages;
     this.pnpmWorkspaces = opts.config.indexer?.typescript?.pnpmWorkspaces ?? false;
     this.typescriptProjectMode = opts.config.indexer?.typescript?.projectMode;
@@ -184,6 +202,7 @@ export class Watcher {
     );
     this.reindexRunner = opts.reindexRunner ?? createReindexRunner();
     this.subscriptionFactory = opts.subscriptionFactory ?? defaultWatchSubscriptionFactory;
+    this.budgetInspector = opts.budgetInspector ?? inspectReindexActivityBudget;
 
     this.gitignoreFilter = createGitignoreFilter(opts.projectRoot);
     this.extraIgnore = ignore();
@@ -223,6 +242,7 @@ export class Watcher {
     this.fsWatchers = [];
     this.clearDebounceTimer();
     this.clearCooldownTimer();
+    this.clearBudgetTimer();
     this.clearGitPollTimer();
     const operation = this.activeOperation;
     if (operation) {
@@ -247,7 +267,12 @@ export class Watcher {
   /** Request a refresh through the same single-flight/coalescing state machine used by file events. */
   requestRefresh(trigger: RefreshTrigger, opts: { immediate?: boolean } = {}): void {
     if (this.stopped) return;
-    if (!opts.immediate || this.reindexInFlight || this.status.state === 'cooldown') {
+    if (
+      !opts.immediate ||
+      this.reindexInFlight ||
+      this.status.state === 'cooldown' ||
+      this.status.state === 'budget-paused'
+    ) {
       this.scheduleReindex(trigger);
       return;
     }
@@ -344,6 +369,11 @@ export class Watcher {
       this.setStatus({ state: 'cooldown', until: (this.status as { until: number }).until, dirty: true });
       return;
     }
+    if (this.status.state === 'budget-paused') {
+      this.dirty = true;
+      this.setStatus({ ...this.status, dirty: true });
+      return;
+    }
 
     // Reset the debounce timer — every new change pushes the trigger out
     this.clearDebounceTimer();
@@ -362,6 +392,32 @@ export class Watcher {
   // visible together.
   private triggerReindex(): void {
     if (this.reindexInFlight || this.stopped) return;
+
+    const budget = this.inspectBudget();
+    if (budget.state === 'paused') {
+      this.dirty = true;
+      const until = Math.max(this.wallNow() + 1, budget.until);
+      this.setStatus({
+        state: 'budget-paused',
+        until,
+        dirty: true,
+        reason: budget.detail,
+        rebuilt: budget.rebuilt,
+        estimatedWriteBytes: budget.estimatedWriteBytes,
+      });
+      this.clearBudgetTimer();
+      this.budgetTimer = this.clock.setTimeout(
+        () => {
+          this.budgetTimer = null;
+          if (this.dirty && !this.stopped) {
+            this.dirty = false;
+            this.triggerReindex();
+          }
+        },
+        Math.min(2_147_483_647, Math.max(1, until - this.wallNow())),
+      );
+      return;
+    }
 
     // Check cooldown
     const timeSinceLastReindex = this.clock.now() - this.lastReindexEnd;
@@ -509,6 +565,23 @@ export class Watcher {
     return this.clock.wallNow?.() ?? this.clock.now();
   }
 
+  private inspectBudget(): ReindexActivityBudgetDecision {
+    try {
+      return this.budgetInspector(this.outputDb, this.watchConfig.resourceBudget, new Date(this.wallNow()));
+    } catch (error) {
+      return {
+        state: 'paused',
+        reason: 'activity-evidence',
+        until: this.wallNow() + this.watchConfig.resourceBudget.windowMs,
+        rebuilt: 0,
+        estimatedWriteBytes: 0,
+        detail: `reindex activity evidence could not be read: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      };
+    }
+  }
+
   private reindexRequest(trigger: RefreshTrigger): ReindexRunRequest {
     return {
       projectRoot: this.projectRoot,
@@ -539,6 +612,13 @@ export class Watcher {
     if (this.cooldownTimer) {
       this.clock.clearTimeout(this.cooldownTimer);
       this.cooldownTimer = null;
+    }
+  }
+
+  private clearBudgetTimer(): void {
+    if (this.budgetTimer) {
+      this.clock.clearTimeout(this.budgetTimer);
+      this.budgetTimer = null;
     }
   }
 
@@ -656,7 +736,10 @@ function retireWatchSubscription(
   void closure.then(() => retirement.closures.delete(closure));
 }
 
-export function resolveReindexWorkerLaunch(request: ReindexRunRequest): ReindexWorkerLaunch {
+export function resolveReindexWorkerLaunch(
+  request: ReindexRunRequest,
+  resolveParentIdentity: (pid: number) => ProcessIdentity | null = readProcessIdentity,
+): ReindexWorkerLaunch {
   const {
     projectRoot,
     config,
@@ -673,6 +756,10 @@ export function resolveReindexWorkerLaunch(request: ReindexRunRequest): ReindexW
   const latestIndexPaths = resolveIndexStoragePaths(projectRoot, latestConfig);
   const latestTypeScript = latestConfig.indexer?.typescript;
   const latestClojure = latestConfig.indexer?.clojure;
+  const parentIdentity = resolveParentIdentity(process.pid);
+  if (!parentIdentity) {
+    throw new Error(`Could not establish watcher process identity for reindex worker ownership (pid ${process.pid}).`);
+  }
   return {
     workerPath: new URL('./reindex-worker.js', import.meta.url).pathname,
     env: {
@@ -691,6 +778,7 @@ export function resolveReindexWorkerLaunch(request: ReindexRunRequest): ReindexW
       SCIP_REINDEX_TRIGGER_KIND: trigger.kind,
       SCIP_REINDEX_TRIGGER_DETAIL: trigger.detail ?? '',
       SCIP_REINDEX_PROCESS_GROUP_LEADER: '1',
+      SCIP_REINDEX_PARENT_IDENTITY: JSON.stringify(parentIdentity),
     },
   };
 }

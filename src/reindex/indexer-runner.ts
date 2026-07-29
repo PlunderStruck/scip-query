@@ -3,6 +3,7 @@ import { cpus } from 'node:os';
 import { join } from 'node:path';
 import type { IndexerConfig, SupportedLanguage } from '../domain/types.js';
 import { monotonicNowMs } from '../domain/time.js';
+import { abortSignalReason, throwIfSignalAborted } from '../platform/abort-signal.js';
 import { toPortableCommand } from '../platform/binary.js';
 import { BoundedProcessError, PROCESS_TIMEOUT_MS, runBoundedProcess } from '../platform/bounded-process.js';
 import { revalidateTrustedProjectTool, type TrustedProjectToolIdentity } from '../platform/indexer-toolchain.js';
@@ -116,14 +117,16 @@ export async function runPreparedIndexers(
   projectRoot: string,
   onStatus: (message: string) => void,
   configuredConcurrency?: number,
+  signal?: AbortSignal,
 ): Promise<IndexerRunResult[]> {
+  throwIfSignalAborted(signal, 'Reindex cancelled by its owner.');
   const defaultOutputRuns = runs.filter((run) => run.config.defaultOutputPath);
   const directOutputRuns = runs.filter((run) => !run.config.defaultOutputPath);
   const results: IndexerRunResult[] = [];
   const concurrency = resolveIndexerConcurrency(directOutputRuns.length, configuredConcurrency);
 
   const directAttempts = await runWithConcurrency(directOutputRuns, concurrency, (run) =>
-    runPreparedIndexer(run, projectRoot, onStatus),
+    runPreparedIndexer(run, projectRoot, onStatus, signal),
   );
 
   if (concurrency > 1) {
@@ -132,7 +135,8 @@ export async function runPreparedIndexers(
       const run = directOutputRuns.find((candidate) => candidate.id === failed.result.id);
       if (!run) continue;
       onStatus(`Retrying ${run.label} indexer serially after parallel failure...`);
-      retryResults.set(run.id, (await runPreparedIndexer(run, projectRoot, onStatus)).result);
+      throwIfSignalAborted(signal, 'Reindex cancelled by its owner.');
+      retryResults.set(run.id, (await runPreparedIndexer(run, projectRoot, onStatus, signal)).result);
     }
     results.push(...directAttempts.map(({ result }) => retryResults.get(result.id) ?? result));
   } else {
@@ -140,7 +144,8 @@ export async function runPreparedIndexers(
   }
 
   for (const run of defaultOutputRuns) {
-    results.push((await runPreparedIndexer(run, projectRoot, onStatus)).result);
+    throwIfSignalAborted(signal, 'Reindex cancelled by its owner.');
+    results.push((await runPreparedIndexer(run, projectRoot, onStatus, signal)).result);
   }
 
   return results.sort((a, b) => runs.findIndex((run) => run.id === a.id) - runs.findIndex((run) => run.id === b.id));
@@ -153,7 +158,9 @@ async function runPreparedIndexer(
   run: PreparedIndexerRun,
   projectRoot: string,
   onStatus: (message: string) => void,
+  signal?: AbortSignal,
 ): Promise<IndexerAttempt> {
+  throwIfSignalAborted(signal, 'Reindex cancelled by its owner.');
   onStatus(`Indexing ${run.label} with ${run.resolvedBinary}...`);
   rmSync(run.scipPath, { force: true });
   const defaultOutputBackup = takeDefaultOutputBackup(run.config, projectRoot, run.scipPath);
@@ -174,6 +181,7 @@ async function runPreparedIndexer(
       timeoutMs: resolveIndexerTimeoutMs(),
       maxStdoutBytes: 50 * 1024 * 1024,
       maxStderrBytes: 50 * 1024 * 1024,
+      signal,
     });
     if (completed.status !== 0) {
       const detail = completed.stderr.trim();
@@ -181,6 +189,7 @@ async function runPreparedIndexer(
     }
     moveDefaultOutputIfNeeded(run.config, projectRoot, run.scipPath);
   } catch (err) {
+    if (signal?.aborted) throw abortSignalReason(signal, 'Reindex cancelled by its owner.');
     const msg = err instanceof Error ? err.message : String(err);
     const reason = `${run.resolvedBinary} indexer failed: ${msg.split('\n')[0]}`;
     const skippedReason = run.label === run.language ? reason : `${run.label}: ${reason}`;

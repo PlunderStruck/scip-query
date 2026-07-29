@@ -22,14 +22,13 @@ import {
   formatHealthScoreSummary as formatHealthScore,
   type ProjectSetupHealthDossier,
 } from './health-dossier.js';
-import { getIndexFreshness } from './index-freshness.js';
+import { getIndexFreshness, type IndexFreshness } from './index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from './project-readiness.js';
 import { installSkills, isScipInstalled } from './setup.js';
 import { ensureWatchService, type WatchServiceEnsureResult } from './watch-service.js';
 import { setupAstParsers, type AstParserSetupResult } from './ast-parser-setup.js';
 
 type HealthAction = HealthReport['actions'][number];
-type IndexFreshness = ReturnType<typeof getIndexFreshness>;
 type IndexerDependencyStatus = ReturnType<typeof getIndexerDependencyStatus>;
 type InstallSkillsResult = ReturnType<typeof installSkills>;
 type ProjectCapabilityReport = ReturnType<typeof getProjectCapabilities>;

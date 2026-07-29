@@ -6,6 +6,7 @@ import {
 } from './config-types.js';
 import { isObservationReceipt } from './observation-receipt.js';
 
+// scip-query: ignore-stale -- Minimal adjudication input deliberately decouples policy from detector result types.
 export interface SuppressionAdjudicationFinding {
   id: string;
   check: string;

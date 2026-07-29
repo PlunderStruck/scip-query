@@ -1512,6 +1512,22 @@ async function loadReindexFixture(opts: {
       runBoundedProcess: async (input: { command: string; args?: readonly string[] }) => {
         const args = input.args ?? [];
         commands.push({ binary: input.command, args });
+        if (input.command === 'scip' && args[0] === 'expt-convert') {
+          if (opts.failConvert) throw new Error('convert failed');
+          const outputPath = outputArg(args);
+          if (outputPath) {
+            fs.mkdirSync(dirname(outputPath), { recursive: true });
+            fs.writeFileSync(outputPath, 'new-db');
+          }
+          return {
+            status: 0,
+            signal: null,
+            stdout: '',
+            stderr: '',
+            timedOut: false,
+            durationMs: 1,
+          };
+        }
         const language = binaryToLanguage(input.command);
         if (language) {
           attempts.set(language, (attempts.get(language) ?? 0) + 1);
@@ -1567,6 +1583,10 @@ async function loadReindexFixture(opts: {
     const execFileSync = vi.fn((cmd: string, args: readonly string[]) => {
       if (cmd === 'git') {
         throw new Error('not a git repo');
+      }
+      if (cmd === '/bin/cp' && args[0] === '-c' && args[1] && args[2]) {
+        fs.copyFileSync(args[1], args[2]);
+        return Buffer.from('');
       }
       if (cmd === 'scip' && args[0] === 'expt-convert') {
         if (opts.failConvert) {

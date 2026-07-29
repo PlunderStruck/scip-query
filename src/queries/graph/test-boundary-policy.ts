@@ -22,6 +22,7 @@ import type { ArchitectureConfig } from '../../domain/config-types.js';
 import { getSourceImports } from '../../language-parsers/index.js';
 import type { ScipDatabase } from '../../storage/db.js';
 
+// scip-query: ignore-stale -- Architecture finding shape is consumed by the aggregate architecture report.
 export interface TestBoundaryViolation {
   testFile: string;
   /** Boundary of the code this test covers, or null when no subject was found. */

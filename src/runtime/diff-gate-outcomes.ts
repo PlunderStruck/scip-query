@@ -41,6 +41,7 @@ export interface DiffGateOutcomeRuntime {
   observation?: ObservationReceipt;
 }
 
+// scip-query: ignore-stale -- Outcome reconciliation result crosses ledger recording and isolated execution.
 export interface DiffGateOutcomeResult {
   ledger: FindingOutcomeRecord[];
   observed: ObservedFinding[];

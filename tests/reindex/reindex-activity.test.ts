@@ -7,7 +7,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { ReindexResult } from '../../src/reindex/index.js';
 import {
   appendReindexActivity,
+  evaluateReindexActivityBudget,
   estimateReindexLogicalOutputBytes,
+  estimateReindexWriteBytes,
+  inspectReindexActivityBudget,
   readReindexActivitySummary,
   recordReindexRunActivity,
   recordSuppressedReindexActivity,
@@ -78,7 +81,27 @@ describe('reindex activity', () => {
         failed: 0,
         suppressed: 1,
         estimatedLogicalOutputBytes: 22,
+        estimatedWriteBytes: 22,
+        reflinkedBytes: 0,
+        fallbackCopiedBytes: 0,
+        oldestRebuildAt: '2026-07-24T12:00:00.000Z',
+        oldestWriteAt: '2026-07-24T12:00:00.000Z',
         byTrigger: { 'manual-cli': 2, 'watch-source': 1 },
+      }),
+    );
+  });
+
+  it('treats a cache with no activity ledger as complete zero activity', () => {
+    const cacheDir = createCache();
+    const summary = readReindexActivitySummary(join(cacheDir, 'index.db'), new Date('2026-07-24T15:00:00.000Z'));
+
+    expect(summary).toEqual(
+      expect.objectContaining({
+        confidence: 'complete',
+        recordsRead: 0,
+        runs: 0,
+        rebuilt: 0,
+        estimatedWriteBytes: 0,
       }),
     );
   });
@@ -203,7 +226,119 @@ describe('reindex activity', () => {
     });
 
     expect(estimateReindexLogicalOutputBytes(rebuilt)).toBe(17);
+    expect(
+      estimateReindexWriteBytes({
+        ...rebuilt,
+        writeTelemetry: { reflinkedBytes: 100, fallbackCopiedBytes: 7 },
+      }),
+    ).toBe(24);
     expect(estimateReindexLogicalOutputBytes({ ...rebuilt, reused: true })).toBe(0);
+  });
+
+  it('pauses the next automatic rebuild at either persisted rolling limit', () => {
+    const nowMs = Date.parse('2026-07-24T12:15:00.000Z');
+    const config = {
+      enabled: true,
+      windowMs: 15 * 60_000,
+      maxRebuilds: 8,
+      maxEstimatedWriteBytes: 1_000,
+    };
+    const summary = {
+      confidence: 'complete' as const,
+      windowStartedAt: '2026-07-24T12:00:00.000Z',
+      windowEndedAt: '2026-07-24T12:15:00.000Z',
+      runs: 8,
+      rebuilt: 8,
+      reused: 0,
+      failed: 0,
+      suppressed: 0,
+      estimatedLogicalOutputBytes: 800,
+      estimatedWriteBytes: 900,
+      oldestRebuildAt: '2026-07-24T12:01:00.000Z',
+      oldestWriteAt: '2026-07-24T12:02:00.000Z',
+      byTrigger: {},
+    };
+
+    expect(evaluateReindexActivityBudget(summary, config, nowMs)).toEqual({
+      state: 'paused',
+      reason: 'rebuild-count',
+      until: Date.parse('2026-07-24T12:16:00.000Z'),
+      rebuilt: 8,
+      estimatedWriteBytes: 900,
+      detail: '8/8 automatic rebuild slots consumed',
+    });
+    expect(
+      evaluateReindexActivityBudget({ ...summary, rebuilt: 1, estimatedWriteBytes: 1_000 }, config, nowMs),
+    ).toEqual(
+      expect.objectContaining({
+        state: 'paused',
+        reason: 'estimated-write-bytes',
+        until: Date.parse('2026-07-24T12:17:00.000Z'),
+      }),
+    );
+    expect(evaluateReindexActivityBudget({ ...summary, rebuilt: 1, estimatedWriteBytes: 999 }, config, nowMs)).toEqual({
+      state: 'allowed',
+      rebuilt: 1,
+      estimatedWriteBytes: 999,
+    });
+  });
+
+  it('reconstructs exhausted budget debt from the persisted ledger after a restart', () => {
+    const cacheDir = createCache();
+    const outputDb = join(cacheDir, 'index.db');
+    for (let minute = 1; minute <= 4; minute += 1) {
+      appendReindexActivity(reindexActivityPath(outputDb), runRecord(`2026-07-24T12:0${minute}:00.000Z`));
+    }
+
+    expect(
+      inspectReindexActivityBudget(
+        outputDb,
+        {
+          enabled: true,
+          windowMs: 15 * 60_000,
+          maxRebuilds: 4,
+          maxEstimatedWriteBytes: 1_000,
+        },
+        new Date('2026-07-24T12:10:00.000Z'),
+      ),
+    ).toEqual({
+      state: 'paused',
+      reason: 'rebuild-count',
+      until: Date.parse('2026-07-24T12:16:00.000Z'),
+      rebuilt: 4,
+      estimatedWriteBytes: 40,
+      detail: '4/4 automatic rebuild slots consumed',
+    });
+  });
+
+  it('fails closed when retained budget evidence is incomplete and allows explicit opt-out', () => {
+    const summary = {
+      confidence: 'partial' as const,
+      windowStartedAt: '2026-07-24T12:00:00.000Z',
+      windowEndedAt: '2026-07-24T12:15:00.000Z',
+      runs: 0,
+      rebuilt: 0,
+      reused: 0,
+      failed: 0,
+      suppressed: 0,
+      estimatedLogicalOutputBytes: 0,
+      byTrigger: {},
+    };
+    const config = {
+      enabled: true,
+      windowMs: 15 * 60_000,
+      maxRebuilds: 8,
+      maxEstimatedWriteBytes: 1_000,
+    };
+
+    expect(evaluateReindexActivityBudget(summary, config, 0)).toEqual(
+      expect.objectContaining({ state: 'paused', reason: 'activity-evidence' }),
+    );
+    expect(evaluateReindexActivityBudget(summary, { ...config, enabled: false }, 0)).toEqual({
+      state: 'allowed',
+      rebuilt: 0,
+      estimatedWriteBytes: 0,
+    });
   });
 });
 

@@ -15,6 +15,7 @@ interface AcceptedProjectConfig {
   needsMigration: boolean;
 }
 
+// scip-query: ignore-stale -- Discriminated decode result preserves supported, legacy, and invalid config states.
 export type DecodedProjectConfig =
   | ({ kind: 'legacy'; sourceVersion: typeof LEGACY_PROJECT_CONFIG_SCHEMA_VERSION } & AcceptedProjectConfig)
   | ({ kind: 'supported'; sourceVersion: typeof CURRENT_PROJECT_CONFIG_SCHEMA_VERSION } & AcceptedProjectConfig)

@@ -199,6 +199,18 @@ describe('watch service contract', () => {
     expect(planWatchServiceAction('status', live)).toEqual({ kind: 'report', classification: live });
   });
 
+  it('returns an idempotent stop result without inventing a process identity', () => {
+    withTempCache((cacheDir) => {
+      const paths = watchServicePaths(cacheDir);
+      const runtime = fakeRuntime(paths.statePath);
+
+      expect(stopWatchService(controllerOptions(cacheDir, runtime))).toEqual({
+        disposition: 'already-stopped',
+      });
+      expect(runtime.signaled).toEqual([]);
+    });
+  });
+
   it('uses shared process liveness for the default lock owner check', () => {
     withTempCache((cacheDir) => {
       const lockPath = join(cacheDir, 'watch.lock');
@@ -218,6 +230,20 @@ describe('watch service contract', () => {
     expect(shouldStop({ state: 'waiting', changedFiles: 1, reindexAt: NOW + 1_000 }, 20_000, 10_000)).toBe(false);
     expect(shouldStop({ state: 'indexing', startedAt: NOW }, 20_000, 10_000)).toBe(false);
     expect(shouldStop({ state: 'cooldown', until: NOW + 1_000, dirty: true }, 20_000, 10_000)).toBe(false);
+    expect(
+      shouldStop(
+        {
+          state: 'budget-paused',
+          until: NOW + 1_000,
+          dirty: true,
+          reason: '8/8 automatic rebuild slots consumed',
+          rebuilt: 8,
+          estimatedWriteBytes: 512,
+        },
+        20_000,
+        10_000,
+      ),
+    ).toBe(false);
     expect(shouldStop({ state: 'draining', startedAt: NOW, reason: 'worker still exiting' }, 20_000, 10_000)).toBe(
       false,
     );

@@ -196,6 +196,14 @@ export function formatStatus(status: WatcherStatus): string {
       const secs = Math.round((status.until - Date.now()) / 1000);
       return `Cooldown (${secs}s)${status.dirty ? ' — changes pending' : ''}`;
     }
+    case 'budget-paused': {
+      const secs = Math.max(0, Math.round((status.until - Date.now()) / 1000));
+      return (
+        `Automatic reindex paused by resource budget (${secs}s; ${status.reason}; ` +
+        `${status.rebuilt} rebuilds, ${formatBytes(status.estimatedWriteBytes)} estimated writes)` +
+        `${status.dirty ? ' — changes pending' : ''}`
+      );
+    }
     case 'draining':
       return `Stopping safely — ${status.reason}`;
     default:

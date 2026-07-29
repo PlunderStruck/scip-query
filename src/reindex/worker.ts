@@ -5,6 +5,8 @@
 import { reindex } from './index.js';
 import type { RefreshTriggerKind, SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
 import { parsePositiveInteger } from '../domain/number-parsing.js';
+import { monitorParentProcess } from '../platform/parent-process-monitor.js';
+import { parseProcessIdentity } from '../platform/process-identity.js';
 import { sanitizeTerminalLine } from '../platform/terminal-output.js';
 
 const projectRoot = process.env['SCIP_REINDEX_PROJECT_ROOT'];
@@ -17,34 +19,57 @@ const typescriptConfig = parseTypeScriptWorkerConfig(process.env['SCIP_REINDEX_T
 const clojureConfigPath = process.env['SCIP_REINDEX_CLOJURE_CONFIG_PATH'] || undefined;
 const triggerKind = parseRefreshTriggerKind(process.env['SCIP_REINDEX_TRIGGER_KIND']);
 const triggerDetail = process.env['SCIP_REINDEX_TRIGGER_DETAIL'];
+const parentIdentity = parseParentIdentity(process.env['SCIP_REINDEX_PARENT_IDENTITY']);
 
-if (!projectRoot || !outputScip || !outputDb) {
+if (!projectRoot || !outputScip || !outputDb || !parentIdentity) {
   console.error('reindex-worker: missing required env vars');
   process.exit(1);
 }
+const requiredProjectRoot = projectRoot;
+const requiredOutputScip = outputScip;
+const requiredOutputDb = outputDb;
+const requiredParentIdentity = parentIdentity;
 
 const languages = languagesRaw ? (languagesRaw.split(',').filter(Boolean) as SupportedLanguage[]) : undefined;
+const cancellation = new AbortController();
+const parentMonitor = monitorParentProcess(requiredParentIdentity, (reason) => {
+  cancellation.abort(new Error(`Reindex worker owner lost: ${reason}`));
+});
 
-reindex({
-  projectRoot,
-  outputScip,
-  outputDb,
-  languages: languages?.length ? languages : undefined,
-  pnpmWorkspaces,
-  typescriptProjectMode: typescriptConfig.projectMode,
-  typescriptProjects: typescriptConfig.projects,
-  clojureConfigPath,
-  indexerConcurrency,
-  trigger: { kind: triggerKind, detail: triggerDetail || undefined },
-  onStatus: (msg) => process.stderr.write(`[reindex] ${sanitizeTerminalLine(msg)}\n`),
-})
-  .then(() => {
-    process.exit(0);
-  })
-  .catch((err) => {
+void run();
+
+async function run(): Promise<void> {
+  try {
+    await reindex({
+      projectRoot: requiredProjectRoot,
+      outputScip: requiredOutputScip,
+      outputDb: requiredOutputDb,
+      languages: languages?.length ? languages : undefined,
+      pnpmWorkspaces,
+      typescriptProjectMode: typescriptConfig.projectMode,
+      typescriptProjects: typescriptConfig.projects,
+      clojureConfigPath,
+      indexerConcurrency,
+      trigger: { kind: triggerKind, detail: triggerDetail || undefined },
+      signal: cancellation.signal,
+      onStatus: (msg) => process.stderr.write(`[reindex] ${sanitizeTerminalLine(msg)}\n`),
+    });
+  } catch (err) {
     console.error(`reindex-worker error: ${sanitizeTerminalLine(String(err))}`);
-    process.exit(1);
-  });
+    process.exitCode = 1;
+  } finally {
+    parentMonitor.stop();
+  }
+}
+
+function parseParentIdentity(value: string | undefined) {
+  if (!value) return null;
+  try {
+    return parseProcessIdentity(JSON.parse(value) as unknown);
+  } catch {
+    return null;
+  }
+}
 
 function parseRefreshTriggerKind(value: string | undefined): RefreshTriggerKind {
   switch (value) {

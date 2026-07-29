@@ -32,6 +32,7 @@ export interface BoundedProcessOptions {
   outputLimitBehavior?: 'terminate' | 'truncate-tail';
 }
 
+// scip-query: ignore-stale -- Explicit process result contract preserves timeout and truncation invariants.
 export interface BoundedProcessResult {
   status: number | null;
   signal: NodeJS.Signals | null;

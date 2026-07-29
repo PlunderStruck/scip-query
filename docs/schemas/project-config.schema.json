@@ -79,11 +79,25 @@
       "properties": {
         "enabled": { "type": "boolean" },
         "debounceMs": { "type": "integer", "exclusiveMinimum": 0 },
-        "cooldownMs": { "type": "integer", "minimum": 0 },
+        "cooldownMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Requested milliseconds between reindexes. Values below 5000 are raised to the 5000ms runtime safety floor."
+        },
         "gitPollMs": { "type": "integer", "exclusiveMinimum": 0 },
         "idleTimeoutMs": { "type": "integer", "minimum": 0 },
         "autoRefresh": { "type": "boolean" },
-        "ignore": { "$ref": "#/$defs/stringArray" }
+        "ignore": { "$ref": "#/$defs/stringArray" },
+        "resourceBudget": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "windowMs": { "type": "integer", "exclusiveMinimum": 0 },
+            "maxRebuilds": { "type": "integer", "exclusiveMinimum": 0 },
+            "maxEstimatedWriteBytes": { "type": "integer", "exclusiveMinimum": 0 }
+          }
+        }
       }
     },
     "hooks": {

@@ -1,4 +1,4 @@
-import { statSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import type {
@@ -6,6 +6,7 @@ import type {
   RefreshTrigger,
   RefreshTriggerKind,
   ReindexActivitySummary,
+  WatchResourceBudgetConfig,
 } from '../domain/types.js';
 import { isNonNegativeFiniteNumber, isValidRecordTimestamp } from '../domain/record-validation.js';
 import type { ReindexResult } from './index.js';
@@ -22,7 +23,7 @@ export const REINDEX_ACTIVITY_PREVIOUS_SUFFIX = ROTATING_JSONL_PREVIOUS_SUFFIX;
 export const REINDEX_ACTIVITY_MAX_BYTES = 1024 * 1024;
 export const REINDEX_ACTIVITY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-interface ReindexRunActivity {
+export interface ReindexRunActivity {
   version: 1;
   event: 'run';
   recordedAt: string;
@@ -30,6 +31,9 @@ interface ReindexRunActivity {
   result: LastRefreshMetadata['result'];
   durationMs: number;
   estimatedLogicalOutputBytes: number;
+  estimatedWriteBytes?: number;
+  reflinkedBytes?: number;
+  fallbackCopiedBytes?: number;
 }
 
 interface ReindexSuppressedActivity {
@@ -60,9 +64,14 @@ export function estimateReindexLogicalOutputBytes(result: ReindexResult): number
   return bytes;
 }
 
+export function estimateReindexWriteBytes(result: ReindexResult): number {
+  return estimateReindexLogicalOutputBytes(result) + (result.writeTelemetry?.fallbackCopiedBytes ?? 0);
+}
+
 export function recordReindexRunActivity(outputDb: string, result: ReindexResult): ReindexActivityWriteResult {
   const refresh = result.lastRefresh;
   if (!refresh) return { state: 'failed', reason: 'reindex result has no refresh metadata' };
+  const estimatedLogicalOutputBytes = estimateReindexLogicalOutputBytes(result);
   return writeReindexActivityBestEffort(reindexActivityPath(outputDb), {
     version: 1,
     event: 'run',
@@ -70,7 +79,10 @@ export function recordReindexRunActivity(outputDb: string, result: ReindexResult
     trigger: refresh.trigger,
     result: refresh.result,
     durationMs: refresh.durationMs,
-    estimatedLogicalOutputBytes: estimateReindexLogicalOutputBytes(result),
+    estimatedLogicalOutputBytes,
+    estimatedWriteBytes: estimatedLogicalOutputBytes + (result.writeTelemetry?.fallbackCopiedBytes ?? 0),
+    reflinkedBytes: result.writeTelemetry?.reflinkedBytes ?? 0,
+    fallbackCopiedBytes: result.writeTelemetry?.fallbackCopiedBytes ?? 0,
   });
 }
 
@@ -145,11 +157,17 @@ export function readReindexActivitySummary(
     failed: 0,
     suppressed: 0,
     estimatedLogicalOutputBytes: 0,
+    estimatedWriteBytes: 0,
+    reflinkedBytes: 0,
+    fallbackCopiedBytes: 0,
     byTrigger: {},
   };
   const path = reindexActivityPath(outputDb);
   let lines: string[] = [];
   if (readFile === defaultReadFile) {
+    if (!existsSync(path) && !existsSync(`${path}${REINDEX_ACTIVITY_PREVIOUS_SUFFIX}`)) {
+      return summary;
+    }
     try {
       const read = readRotatingJsonlLines(path, {
         previousSuffix: REINDEX_ACTIVITY_PREVIOUS_SUFFIX,
@@ -194,6 +212,16 @@ export function readReindexActivitySummary(
     summary.runs += 1;
     summary[record.result] += 1;
     summary.estimatedLogicalOutputBytes += record.estimatedLogicalOutputBytes;
+    summary.estimatedWriteBytes =
+      (summary.estimatedWriteBytes ?? 0) + (record.estimatedWriteBytes ?? record.estimatedLogicalOutputBytes);
+    summary.reflinkedBytes = (summary.reflinkedBytes ?? 0) + (record.reflinkedBytes ?? 0);
+    summary.fallbackCopiedBytes = (summary.fallbackCopiedBytes ?? 0) + (record.fallbackCopiedBytes ?? 0);
+    if (record.result === 'rebuilt' && summary.oldestRebuildAt === undefined) {
+      summary.oldestRebuildAt = record.recordedAt;
+    }
+    if ((record.estimatedWriteBytes ?? record.estimatedLogicalOutputBytes) > 0 && summary.oldestWriteAt === undefined) {
+      summary.oldestWriteAt = record.recordedAt;
+    }
   }
   if (summary.ignoredPartialTailBytes > 0 && summary.confidence !== 'unavailable') {
     summary.confidence = 'partial';
@@ -230,7 +258,10 @@ function parseReindexActivityRecord(line: string): ReindexActivityRecord | null 
       record.event !== 'run' ||
       (record.result !== 'rebuilt' && record.result !== 'reused' && record.result !== 'failed') ||
       !isNonNegativeFiniteNumber(record.durationMs) ||
-      !isNonNegativeFiniteNumber(record.estimatedLogicalOutputBytes)
+      !isNonNegativeFiniteNumber(record.estimatedLogicalOutputBytes) ||
+      (record.estimatedWriteBytes !== undefined && !isNonNegativeFiniteNumber(record.estimatedWriteBytes)) ||
+      (record.reflinkedBytes !== undefined && !isNonNegativeFiniteNumber(record.reflinkedBytes)) ||
+      (record.fallbackCopiedBytes !== undefined && !isNonNegativeFiniteNumber(record.fallbackCopiedBytes))
     ) {
       return null;
     }
@@ -238,6 +269,77 @@ function parseReindexActivityRecord(line: string): ReindexActivityRecord | null 
   } catch {
     return null;
   }
+}
+
+export type ReindexActivityBudgetDecision =
+  | {
+      state: 'allowed';
+      rebuilt: number;
+      estimatedWriteBytes: number;
+    }
+  | {
+      state: 'paused';
+      reason: 'rebuild-count' | 'estimated-write-bytes' | 'activity-evidence';
+      until: number;
+      rebuilt: number;
+      estimatedWriteBytes: number;
+      detail: string;
+    };
+
+export function inspectReindexActivityBudget(
+  outputDb: string,
+  config: Required<WatchResourceBudgetConfig>,
+  now = new Date(),
+): ReindexActivityBudgetDecision {
+  if (!config.enabled) return { state: 'allowed', rebuilt: 0, estimatedWriteBytes: 0 };
+  return evaluateReindexActivityBudget(
+    readReindexActivitySummary(outputDb, now, config.windowMs),
+    config,
+    now.getTime(),
+  );
+}
+
+export function evaluateReindexActivityBudget(
+  summary: ReindexActivitySummary,
+  config: Required<WatchResourceBudgetConfig>,
+  nowMs: number,
+): ReindexActivityBudgetDecision {
+  const estimatedWriteBytes = summary.estimatedWriteBytes ?? summary.estimatedLogicalOutputBytes;
+  const consumption = { rebuilt: summary.rebuilt, estimatedWriteBytes };
+  if (!config.enabled) return { state: 'allowed', ...consumption };
+  if (summary.confidence !== undefined && summary.confidence !== 'complete') {
+    return {
+      state: 'paused',
+      reason: 'activity-evidence',
+      until: nowMs + config.windowMs,
+      ...consumption,
+      detail: `reindex activity evidence is ${summary.confidence}`,
+    };
+  }
+  if (summary.rebuilt >= config.maxRebuilds) {
+    return {
+      state: 'paused',
+      reason: 'rebuild-count',
+      until: budgetRetryAt(summary.oldestRebuildAt, config.windowMs, nowMs),
+      ...consumption,
+      detail: `${summary.rebuilt}/${config.maxRebuilds} automatic rebuild slots consumed`,
+    };
+  }
+  if (estimatedWriteBytes >= config.maxEstimatedWriteBytes) {
+    return {
+      state: 'paused',
+      reason: 'estimated-write-bytes',
+      until: budgetRetryAt(summary.oldestWriteAt, config.windowMs, nowMs),
+      ...consumption,
+      detail: `${estimatedWriteBytes}/${config.maxEstimatedWriteBytes} estimated write bytes consumed`,
+    };
+  }
+  return { state: 'allowed', ...consumption };
+}
+
+function budgetRetryAt(oldestContributingRecord: string | undefined, windowMs: number, nowMs: number): number {
+  const oldestAtMs = oldestContributingRecord ? Date.parse(oldestContributingRecord) : Number.NaN;
+  return Number.isFinite(oldestAtMs) && oldestAtMs + windowMs > nowMs ? oldestAtMs + windowMs : nowMs + windowMs;
 }
 
 function isRefreshTriggerKind(value: unknown): value is RefreshTriggerKind {

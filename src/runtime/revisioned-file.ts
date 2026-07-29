@@ -36,6 +36,7 @@ export type RevisionedTextMutation =
   | { kind: 'write'; text: string; mode?: number }
   | { kind: 'delete' };
 
+// scip-query: ignore-stale -- Mutation policy and deterministic concurrency hooks form a reusable boundary.
 export interface RevisionedFileMutationOptions {
   maxRetries?: number;
   lockTimeoutMs?: number;

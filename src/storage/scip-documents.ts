@@ -9,6 +9,7 @@ export interface IndexedDocumentPathOptions {
   includeIgnored?: boolean;
 }
 
+// scip-query: ignore-stale -- Ranked storage result crosses indexed-document lookup and file resolution.
 export interface IndexedDocumentPathCandidate {
   relativePath: string;
   score: number;

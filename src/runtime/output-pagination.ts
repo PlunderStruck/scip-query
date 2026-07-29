@@ -148,6 +148,7 @@ export type CliOutputPage =
       continuation?: never;
     });
 
+// scip-query: ignore-stale -- Versioned transport envelope is a compatibility contract, not local type ceremony.
 export interface CliOutputPageEnvelopeV1 {
   kind: typeof CLI_OUTPUT_PAGE_KIND;
   schemaVersion: typeof CLI_OUTPUT_PAGE_SCHEMA_VERSION;
@@ -235,6 +236,7 @@ export function requireCliOutputPageEnvelope(input: unknown): CliOutputPageEnvel
   return decoded.envelope;
 }
 
+// scip-query: ignore-stale -- Shared pagination input and deterministic I/O seam used by both render paths.
 export interface CliOutputPaginationOptions {
   command: string;
   producerVersion: string;

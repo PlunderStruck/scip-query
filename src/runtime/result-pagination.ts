@@ -9,6 +9,7 @@ interface ResultCursorPayload {
   indexGeneration: string;
 }
 
+// scip-query: ignore-stale -- Shared keyset identity is the stable boundary between cursors and paged results.
 export interface ResultKeyset {
   relativePath: string;
   line: number;

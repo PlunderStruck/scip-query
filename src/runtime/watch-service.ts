@@ -174,6 +174,7 @@ export interface WatchServiceEnsureResult {
   state: WatchServiceState;
 }
 
+// scip-query: ignore-stale -- Discriminated stop result enforces when a process id may be present.
 export type WatchServiceStopResult =
   | { disposition: 'stopped'; pid: number }
   | { disposition: 'already-stopped'; pid?: never };

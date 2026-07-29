@@ -248,20 +248,18 @@ intended.
 **8. Gate every diff.** `diff-gate` runs a defined set of checks scoped to what a change _introduces_ and exits nonzero with remediation text for each finding. Baseline regressions are included when you pass `--baseline`.
 
 <!-- BEGIN GENERATED DIFF-GATE CHECKS -->
-
-| Check                  | What it catches                                                                                                                   | When it runs                                                                                                                                                                                                                  |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `echo`                 | Changed symbols that newly echo established code elsewhere.                                                                       | Default diff gate.                                                                                                                                                                                                            |
-| `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain.                                                | Default diff gate.                                                                                                                                                                                                            |
-| `co-change-partner`    | Historically coupled files that usually change together but are missing from this diff.                                           | Default diff gate.                                                                                                                                                                                                            |
-| `twin-partner`         | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched.            | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves.                                                                                                                                     |
-| `coverage-contract`    | A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source. | Default diff gate, only when either side of a configured contract changed.                                                                                                                                                    |
-| `architecture`         | A declared architecture boundary rule has a violation absent from the committed health baseline.                                  | Default diff gate when closed dependency rows, requireCompletePolicy, requireAcyclic, requireResolvedBoundaries, requireMinimalPolicy, maxBoundaryFanOut/maxBoundaryFiles, or testPaths are configured and a baseline exists. |
-| `doc-reference`        | Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy.     | Default diff gate. Advisory (21.2) for bare file-mention citations; blocking when the citation has a line anchor or the cited file was deleted/renamed.                                                                       |
-| `unused-params`        | Fresh trailing parameters or options that no changed body uses.                                                                   | Default diff gate.                                                                                                                                                                                                            |
-| `new-dead`             | Changed production symbols with zero indexed consumers.                                                                           | Default diff gate.                                                                                                                                                                                                            |
-| `baseline`             | New health finding identities compared with the committed health baseline.                                                        | Only with `diff-gate --baseline`.                                                                                                                                                                                             |
-
+| Check | What it catches | When it runs |
+| --- | --- | --- |
+| `echo` | Changed symbols that newly echo established code elsewhere. | Default diff gate. |
+| `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain. | Default diff gate. |
+| `co-change-partner` | Historically coupled files that usually change together but are missing from this diff. | Default diff gate. |
+| `twin-partner` | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched. | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves. |
+| `coverage-contract` | A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source. | Default diff gate, only when either side of a configured contract changed. |
+| `architecture` | A declared architecture boundary rule has a violation absent from the committed health baseline. | Default diff gate when closed dependency rows, requireCompletePolicy, requireAcyclic, requireResolvedBoundaries, requireMinimalPolicy, maxBoundaryFanOut/maxBoundaryFiles, or testPaths are configured and a baseline exists. |
+| `doc-reference` | Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy. | Default diff gate. Advisory (21.2) for bare file-mention citations; blocking when the citation has a line anchor or the cited file was deleted/renamed. |
+| `unused-params` | Fresh trailing parameters or options that no changed body uses. | Default diff gate. |
+| `new-dead` | Changed production symbols with zero indexed consumers. | Default diff gate. |
+| `baseline` | New health finding identities compared with the committed health baseline. | Only with `diff-gate --baseline`. |
 <!-- END GENERATED DIFF-GATE CHECKS -->
 
 Illustrative output:
@@ -800,7 +798,13 @@ It creates a minimal `.scipquery.json`:
     "cooldownMs": 5000,
     "gitPollMs": 2000,
     "idleTimeoutMs": 600000,
-    "autoRefresh": true
+    "autoRefresh": true,
+    "resourceBudget": {
+      "enabled": true,
+      "windowMs": 900000,
+      "maxRebuilds": 4,
+      "maxEstimatedWriteBytes": 4294967296
+    }
   }
 }
 ```
@@ -830,14 +834,39 @@ mode, while `watch --daemon`, `watch --status`, and `watch --stop` expose the
 background lifecycle. Command-line timing flags are process-local and apply
 only when a foreground watcher or daemon starts; a live daemon refuses those
 flags and names the required stop/start sequence instead of pretending its
-timing changed. The default 5-second cooldown coalesces change bursts
-into one refresh plus, when necessary, one trailing refresh; explicitly setting
-`cooldownMs` to `0` opts into immediate scheduling. Both modes share one project
-lock, so only one can own an
-index cache. Stopping is an asynchronous drain: the watcher first rejects new
+timing changed. The 5-second minimum cooldown coalesces change bursts
+into one refresh plus, when necessary, one trailing refresh. Older configs and
+command-line overrides below 5,000 ms—including `cooldownMs: 0`—are raised to
+that runtime safety floor. Both modes share one project lock, so only one can own an
+index cache.
+
+Automatic refresh also has a persisted rolling resource budget. By default,
+after four completed rebuilds or 4 GiB of estimated writes within 15 minutes,
+the watcher pauses new automatic work until the oldest contributing activity
+leaves the window. File and Git changes remain coalesced as one pending
+refresh, and `watch --status` reports the reason, consumption, and retry time.
+A missing activity ledger is an empty history; an existing unreadable or
+malformed ledger pauses automatic work because its recent cost cannot be
+proven. `resourceBudget.enabled: false` disables this guard. An explicit
+`scip-query reindex` remains available during a pause, but its result is
+recorded and counts against later automatic admission. The guard controls the
+next run; it cannot impose a portable device-write limit on a rebuild that was
+already admitted.
+
+Large staging artifacts use copy-on-write clones where the filesystem supports
+them and fall back to full byte copies only when clone capability is genuinely
+unavailable. Status separates logical output, reflinked staging bytes, and
+fallback-copied bytes so a large logical index is not mistaken for the same
+amount of physical disk traffic.
+
+Stopping is an asynchronous drain: the watcher first rejects new
 refreshes, continuously consumes a bounded tail of the active worker's output,
 closes every source subscription, and waits for the worker to exit after
 `TERM`/`KILL` escalation before it removes service state or releases the lock.
+Each detached reindex worker also monitors the exact process identity of its
+watcher owner and propagates owner loss through the active indexer process
+tree, preventing a worker from continuing indefinitely after an abrupt watcher
+death.
 `watch --status` reports `Stopping safely` while that work is in progress. If a
 subscription cannot close or worker exit cannot be established, the service
 keeps an explicit degraded draining record and its ownership files instead of

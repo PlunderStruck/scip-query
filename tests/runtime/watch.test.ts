@@ -143,7 +143,7 @@ describe('Watcher', () => {
 
     watcher.requestRefresh({ kind: 'watch-source', detail: 'during-index' });
     controlled.completions[0]?.(100);
-    await vi.advanceTimersByTimeAsync(cooldownMs);
+    await vi.advanceTimersByTimeAsync(Math.max(5_000, cooldownMs));
     expect(controlled.run).toHaveBeenCalledTimes(2);
 
     controlled.completions[1]?.(100);
@@ -170,7 +170,7 @@ describe('Watcher', () => {
     await vi.advanceTimersByTimeAsync(250);
     watcher.requestRefresh({ kind: 'watch-source', detail: 'src/a.ts' });
     controlled.completions[0]?.(100);
-    await vi.advanceTimersByTimeAsync(1_000);
+    await vi.advanceTimersByTimeAsync(5_000);
 
     expect(controlled.run).toHaveBeenCalledTimes(1);
     expect(suppressed).toEqual([{ kind: 'watch-source', detail: 'src/a.ts' }]);
@@ -180,6 +180,72 @@ describe('Watcher', () => {
       detail: 'new request',
     });
     await watcher.stop();
+  });
+
+  it('persists one pending refresh while the resource budget is paused and retries when it reopens', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-29T12:00:00.000Z'));
+    const projectRoot = createProject();
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+    let paused = true;
+    const statuses: Array<{ state: string; dirty?: boolean }> = [];
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { debounceMs: 250, cooldownMs: 0, gitPollMs: 60_000 } },
+      reindexRunner: { start: run },
+      budgetInspector: (_outputDb, _config, now) =>
+        paused
+          ? {
+              state: 'paused',
+              reason: 'rebuild-count',
+              until: now.getTime() + 1_000,
+              rebuilt: 8,
+              estimatedWriteBytes: 512,
+              detail: '8/8 automatic rebuild slots consumed',
+            }
+          : { state: 'allowed', rebuilt: 0, estimatedWriteBytes: 0 },
+      onStatus: (status) => statuses.push(status),
+    });
+
+    watcher.requestRefresh({ kind: 'watch-source', detail: 'src/a.ts' }, { immediate: true });
+    watcher.requestRefresh({ kind: 'watch-source', detail: 'src/b.ts' }, { immediate: true });
+
+    expect(run).not.toHaveBeenCalled();
+    expect(statuses.at(-1)).toEqual(expect.objectContaining({ state: 'budget-paused', dirty: true }));
+
+    paused = false;
+    await vi.advanceTimersByTimeAsync(1_000);
+    await Promise.resolve();
+
+    expect(run).toHaveBeenCalledOnce();
+    await watcher.stop();
+  });
+
+  it('cancels a resource-budget retry when the watcher stops', async () => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { gitPollMs: 60_000 } },
+      reindexRunner: { start: run },
+      budgetInspector: (_outputDb, _config, now) => ({
+        state: 'paused',
+        reason: 'rebuild-count',
+        until: now.getTime() + 1_000,
+        rebuilt: 8,
+        estimatedWriteBytes: 512,
+        detail: '8/8 automatic rebuild slots consumed',
+      }),
+    });
+
+    watcher.requestRefresh({ kind: 'watch-source', detail: 'src/a.ts' }, { immediate: true });
+    await watcher.stop();
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(run).not.toHaveBeenCalled();
   });
 
   it('preserves a dirty rerun when completion freshness cannot be observed', async () => {
@@ -203,7 +269,7 @@ describe('Watcher', () => {
     await vi.advanceTimersByTimeAsync(250);
     watcher.requestRefresh({ kind: 'watch-source', detail: 'src/b.ts' });
     controlled.completions[0]?.(100);
-    await vi.advanceTimersByTimeAsync(1_000);
+    await vi.advanceTimersByTimeAsync(5_000);
 
     expect(controlled.run).toHaveBeenCalledTimes(2);
     expect(errors).toEqual(['freshness unavailable']);
@@ -285,7 +351,12 @@ describe('Watcher', () => {
     watcher.requestRefresh({ kind: 'watch-source', detail: 'src/a.ts' }, { immediate: true });
     await vi.waitFor(() => expect(run).toHaveBeenCalledOnce());
 
-    const launch = resolveReindexWorkerLaunch(captured[0]!);
+    const launch = resolveReindexWorkerLaunch(captured[0]!, (pid) => ({
+      version: 1,
+      pid,
+      platform: process.platform,
+      startToken: 'test-watcher-start',
+    }));
     const canonicalProjectRoot = realpathSync(projectRoot);
     expect(launch.workerPath).toMatch(/reindex-worker\.js$/);
     expect(launch.env).toEqual(
@@ -300,6 +371,7 @@ describe('Watcher', () => {
         }),
         SCIP_REINDEX_TRIGGER_KIND: 'watch-source',
         SCIP_REINDEX_TRIGGER_DETAIL: 'src/a.ts',
+        SCIP_REINDEX_PARENT_IDENTITY: expect.any(String),
       }),
     );
     await watcher.stop();

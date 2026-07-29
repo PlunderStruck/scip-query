@@ -1,3 +1,4 @@
+// scip-query: ignore-stale -- Minimal write capability lets complete-write logic work across filesystem runtimes.
 export interface CompleteWritePort {
   writeFile(fd: number, bytes: Buffer, offset: number, length: number): number;
 }

@@ -104,6 +104,7 @@ export const DEFAULT_SHARED_EVIDENCE_BUDGET_BYTES = 512 * 1024 * 1024;
 export const SHARED_EVIDENCE_ACCESS_TOUCH_INTERVAL_MS = 60_000;
 
 /** Ledger rows are ids + timestamps only — no finding content, no prompt text. */
+// scip-query: ignore-stale -- Storage row contract isolates persisted ledger shape from health-domain records.
 export interface FindingOutcomeRow {
   check: string;
   findingId: string;

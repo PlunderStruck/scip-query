@@ -7,6 +7,14 @@ export type WatcherStatus =
   | { state: 'waiting'; changedFiles: number; reindexAt: number }
   | { state: 'indexing'; startedAt: number }
   | { state: 'cooldown'; until: number; dirty: boolean }
+  | {
+      state: 'budget-paused';
+      until: number;
+      dirty: boolean;
+      reason: string;
+      rebuilt: number;
+      estimatedWriteBytes: number;
+    }
   | { state: 'draining'; startedAt: number; reason: string };
 
 export type RefreshTriggerKind =
@@ -54,5 +62,15 @@ export interface ReindexActivitySummary {
   failed: number;
   suppressed: number;
   estimatedLogicalOutputBytes: number;
+  /** Logical output plus staging bytes that required a real byte-copy fallback. */
+  estimatedWriteBytes?: number;
+  /** Bytes staged through copy-on-write cloning; reported separately because they do not rewrite the payload. */
+  reflinkedBytes?: number;
+  /** Bytes staged by a full byte copy because copy-on-write cloning was unavailable. */
+  fallbackCopiedBytes?: number;
+  /** Oldest completed rebuild retained inside this summary window. */
+  oldestRebuildAt?: string;
+  /** Oldest run with estimated physical writes retained inside this summary window. */
+  oldestWriteAt?: string;
   byTrigger: Partial<Record<RefreshTriggerKind, number>>;
 }

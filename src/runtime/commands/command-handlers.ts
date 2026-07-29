@@ -43,7 +43,7 @@ import {
 import { OUTCOME_EVENTS_DIR, readOutcomeEvents } from '../../storage/outcome-events.js';
 import { computeEffectiveness, parseSinceMs } from '../../queries/health/effectiveness.js';
 import { formatRecordCompatibilityWarning } from '../../domain/record-compatibility.js';
-import { getIndexFreshness } from '../index-freshness.js';
+import { getIndexFreshness, type IndexFreshness } from '../index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from '../project-readiness.js';
 import { Watcher } from '../watch.js';
 import {
@@ -1282,7 +1282,7 @@ function buildProjectDiagnosticReport(command: 'doctor' | 'status'): {
     exists: boolean;
     configDiagnostics: ReturnType<typeof validateProjectConfig>;
     readiness: ReturnType<typeof getProjectReadiness>;
-    freshness: ReturnType<typeof getIndexFreshness>;
+    freshness: IndexFreshness;
     capabilities: ReturnType<typeof getProjectCapabilities>;
     sharedCache: SharedCacheStatus;
     ok: boolean;
@@ -1695,6 +1695,7 @@ export function handleWatch(rawOpts: unknown): void {
   const watcher = new Watcher({
     projectRoot,
     config,
+    outputDb: paths.dbPath,
     languages: config.languages,
     onStatus: (status) => {
       process.stdout.write(`\r\x1b[K${sanitizeTerminalLine(formatStatus(status))}`);
@@ -1830,9 +1831,16 @@ function renderWatchServiceReport(report: ReturnType<typeof watchServiceReport>)
       `Reindex activity (24h): ${activity.runs} run(s) ` +
         `(${activity.rebuilt} rebuilt, ${activity.reused} reused, ${activity.failed} failed), ` +
         `${activity.suppressed} redundant refresh(es) suppressed, ` +
-        `${formatBytes(activity.estimatedLogicalOutputBytes)} estimated logical output` +
+        `${formatBytes(activity.estimatedWriteBytes ?? activity.estimatedLogicalOutputBytes)} estimated writes ` +
+        `(${formatBytes(activity.estimatedLogicalOutputBytes)} logical output)` +
         `${activity.confidence && activity.confidence !== 'complete' ? ` [${activity.confidence} evidence]` : ''}`,
     );
+    if (activity.reflinkedBytes !== undefined || activity.fallbackCopiedBytes !== undefined) {
+      console.log(
+        `Reindex staging: ${formatBytes(activity.reflinkedBytes ?? 0)} reflinked, ` +
+          `${formatBytes(activity.fallbackCopiedBytes ?? 0)} byte-copied`,
+      );
+    }
     if (activity.confidence && activity.confidence !== 'complete') {
       console.log(
         `Reindex evidence: ${activity.recordsRead ?? 0} record(s) read, ` +
@@ -2077,7 +2085,7 @@ function semanticDetailSuffix(
   return '';
 }
 
-function formatLastRefresh(refresh: NonNullable<ReturnType<typeof getIndexFreshness>['lastRefresh']>): string {
+function formatLastRefresh(refresh: NonNullable<IndexFreshness['lastRefresh']>): string {
   const seconds = (refresh.durationMs / 1000).toFixed(1);
   const detail = refresh.trigger.detail ? ` (${refresh.trigger.detail})` : '';
   const error = refresh.error ? `: ${refresh.error}` : '';
