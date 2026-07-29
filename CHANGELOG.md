@@ -4,6 +4,24 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+## [0.20.0]
+
+### Maintained native SQLite distribution
+
+- `better-sqlite3` is upgraded to 13.0.2, whose N-API binaries ship inside
+  the dependency tarball. New installs no longer resolve the abandoned
+  `prebuild-install` helper. The repository explicitly denies npm's inferred
+  `node-gyp rebuild` fallback because the bundled binary needs no lifecycle
+  setup.
+- The public runtime floor is now Node.js 22, matching the required native
+  dependency instead of advertising the obsolete Node 18 contract; every
+  published bundle now targets the same runtime floor. Install output and the
+  README recommend Node.js 24 LTS while distinguishing it from the supported
+  minimum.
+- Runtime-contract tests and a Node 22/24/26 CI matrix exercise a real SQLite
+  database, while install guidance distinguishes bundled SQLite binaries from
+  the remaining Tree-sitter lifecycle scripts.
+
 ## [0.19.10]
 
 ### Safer setup and removal

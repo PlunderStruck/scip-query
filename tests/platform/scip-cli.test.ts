@@ -245,7 +245,7 @@ describe('scip CLI helpers', () => {
     expect(scipHelpers.tryInstallScipCli).not.toHaveBeenCalled();
     expect(scipHelpers.printScipInstallInstructions).not.toHaveBeenCalled();
     expect(log.mock.calls.flat().join('\n')).toContain(
-      "scip-query installed -- run 'scip-query setup' in a repo to enable skills, hooks, and the index.",
+      "scip-query installed (Node.js 24 LTS recommended; minimum Node.js 22) -- run 'scip-query setup' in a repo to enable skills, hooks, and the index.",
     );
   });
 });

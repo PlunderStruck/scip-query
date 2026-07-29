@@ -182,7 +182,9 @@ function toolNameForTarget(targetDir: string): string {
  * Called from the postinstall script.
  */
 export function postinstall(): void {
-  console.log("scip-query installed -- run 'scip-query setup' in a repo to enable skills, hooks, and the index.");
+  console.log(
+    "scip-query installed (Node.js 24 LTS recommended; minimum Node.js 22) -- run 'scip-query setup' in a repo to enable skills, hooks, and the index.",
+  );
 }
 
 export { isScipInstalled, getScipVersion, printScipInstallInstructions } from '../platform/scip-cli.js';

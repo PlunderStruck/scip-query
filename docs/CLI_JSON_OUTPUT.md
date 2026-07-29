@@ -39,7 +39,7 @@ The current envelope is schema version 1:
 {
   "kind": "scip-query-result",
   "schemaVersion": 1,
-  "producer": { "name": "scip-query", "version": "0.19.10" },
+  "producer": { "name": "scip-query", "version": "0.20.0" },
   "command": "refs",
   "resultSchemaVersion": 1,
   "evidence": "graph-fact",
@@ -103,7 +103,7 @@ exact command that opts into output pages. The paged command returns:
 {
   "kind": "scip-query-output-page",
   "schemaVersion": 1,
-  "producer": { "name": "scip-query", "version": "0.19.10" },
+  "producer": { "name": "scip-query", "version": "0.20.0" },
   "command": "architecture",
   "contentType": "application/json",
   "agentInstruction": "INCOMPLETE EVIDENCE: do not draw conclusions or report completion from this partial page. Run page.continuation.command exactly, then repeat until page.complete is true.",

@@ -100,11 +100,19 @@ makes every package-subpath signature change explicit before release.
 
 On npm setups with script approval enabled (`allow-scripts`), the install prints warnings like
 `15 packages have install scripts not yet covered by allowScripts` — and **skips those scripts**,
-which leaves the native modules unbuilt. Every script on that list is expected:
+which leaves the affected native modules unbuilt. Every remaining script on that list is expected:
 
 - `scip-query` — its own postinstall (non-fatal by construction: `... || true`)
-- `better-sqlite3` — builds/downloads the native SQLite binding that backs the index
 - `tree-sitter` + the per-language grammars — native parsers behind multi-language source facts
+
+`better-sqlite3` 13 does not need lifecycle-script approval: it ships stable
+N-API SQLite binaries for the supported platforms inside its npm package.
+Although npm infers a default `node-gyp rebuild` from the addon's source
+metadata, scip-query explicitly denies that unnecessary fallback in its own
+development install policy. A real database test verifies that the bundled
+binary works with scripts disabled.
+Seeing `prebuild-install` during a scip-query install therefore means an older
+scip-query dependency tree was selected.
 
 Approve them and re-run the builds (`--allow-scripts-pending` only _lists_ — the approving forms
 are `npm approve-scripts <pkg> ...` or `--all`):
@@ -240,18 +248,20 @@ intended.
 **8. Gate every diff.** `diff-gate` runs a defined set of checks scoped to what a change _introduces_ and exits nonzero with remediation text for each finding. Baseline regressions are included when you pass `--baseline`.
 
 <!-- BEGIN GENERATED DIFF-GATE CHECKS -->
-| Check | What it catches | When it runs |
-| --- | --- | --- |
-| `echo` | Changed symbols that newly echo established code elsewhere. | Default diff gate. |
-| `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain. | Default diff gate. |
-| `co-change-partner` | Historically coupled files that usually change together but are missing from this diff. | Default diff gate. |
-| `twin-partner` | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched. | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves. |
-| `coverage-contract` | A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source. | Default diff gate, only when either side of a configured contract changed. |
-| `architecture` | A declared architecture boundary rule has a violation absent from the committed health baseline. | Default diff gate when closed dependency rows, requireCompletePolicy, requireAcyclic, requireResolvedBoundaries, requireMinimalPolicy, maxBoundaryFanOut/maxBoundaryFiles, or testPaths are configured and a baseline exists. |
-| `doc-reference` | Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy. | Default diff gate. Advisory (21.2) for bare file-mention citations; blocking when the citation has a line anchor or the cited file was deleted/renamed. |
-| `unused-params` | Fresh trailing parameters or options that no changed body uses. | Default diff gate. |
-| `new-dead` | Changed production symbols with zero indexed consumers. | Default diff gate. |
-| `baseline` | New health finding identities compared with the committed health baseline. | Only with `diff-gate --baseline`. |
+
+| Check                  | What it catches                                                                                                                   | When it runs                                                                                                                                                                                                                  |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `echo`                 | Changed symbols that newly echo established code elsewhere.                                                                       | Default diff gate.                                                                                                                                                                                                            |
+| `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain.                                                | Default diff gate.                                                                                                                                                                                                            |
+| `co-change-partner`    | Historically coupled files that usually change together but are missing from this diff.                                           | Default diff gate.                                                                                                                                                                                                            |
+| `twin-partner`         | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched.            | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves.                                                                                                                                     |
+| `coverage-contract`    | A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source. | Default diff gate, only when either side of a configured contract changed.                                                                                                                                                    |
+| `architecture`         | A declared architecture boundary rule has a violation absent from the committed health baseline.                                  | Default diff gate when closed dependency rows, requireCompletePolicy, requireAcyclic, requireResolvedBoundaries, requireMinimalPolicy, maxBoundaryFanOut/maxBoundaryFiles, or testPaths are configured and a baseline exists. |
+| `doc-reference`        | Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy.     | Default diff gate. Advisory (21.2) for bare file-mention citations; blocking when the citation has a line anchor or the cited file was deleted/renamed.                                                                       |
+| `unused-params`        | Fresh trailing parameters or options that no changed body uses.                                                                   | Default diff gate.                                                                                                                                                                                                            |
+| `new-dead`             | Changed production symbols with zero indexed consumers.                                                                           | Default diff gate.                                                                                                                                                                                                            |
+| `baseline`             | New health finding identities compared with the committed health baseline.                                                        | Only with `diff-gate --baseline`.                                                                                                                                                                                             |
+
 <!-- END GENERATED DIFF-GATE CHECKS -->
 
 Illustrative output:
@@ -537,7 +547,8 @@ scip-query health --write-baseline   # start the ratchet
 
 ## Prerequisites
 
-- Node.js >= 18
+- Node.js 24 LTS is recommended. Node.js 22 is the minimum supported runtime;
+  Node.js 22, 24, and 26 are tested.
 - `scip` CLI, from [Sourcegraph SCIP releases](https://github.com/sourcegraph/scip/releases)
 - A language-specific SCIP indexer for your project
 
@@ -759,7 +770,7 @@ Add `--result-only` when a program needs just the command payload:
 {
   "kind": "scip-query-result",
   "schemaVersion": 1,
-  "producer": { "name": "scip-query", "version": "0.19.10" },
+  "producer": { "name": "scip-query", "version": "0.20.0" },
   "command": "fan-in",
   "resultSchemaVersion": 1,
   "args": ["login"],

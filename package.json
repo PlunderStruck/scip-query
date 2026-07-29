@@ -1,6 +1,6 @@
 {
   "name": "scip-query",
-  "version": "0.19.10",
+  "version": "0.20.0",
   "description": "Evidence and verification for AI coding agents: map code, reuse concepts, finish migrations, and gate diffs.",
   "type": "module",
   "main": "dist/index.js",
@@ -358,14 +358,14 @@
   ],
   "license": "Apache-2.0",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.11.0",
     "@c4312/scip": "^0.1.0",
     "@vue/compiler-dom": "^3.5.40",
     "@vue/compiler-sfc": "^3.5.40",
-    "better-sqlite3": "^12.9.0",
+    "better-sqlite3": "^13.0.2",
     "chokidar": "^4.0.3",
     "commander": "^13.1.0",
     "ignore": "^7.0.3",
@@ -403,7 +403,7 @@
     "vitest": "^3.2.7"
   },
   "allowScripts": {
-    "better-sqlite3@12.9.0": true,
+    "better-sqlite3": false,
     "esbuild@0.27.7": true,
     "fsevents@2.3.3": true,
     "tree-sitter@0.21.1": true,

@@ -20,14 +20,14 @@ export default defineConfig([
     sourcemap: true,
     clean: true,
     minify: true,
-    target: 'node18',
+    target: 'node22',
   },
   {
     entry: { cli: 'src/runtime/cli.ts' },
     format: ['esm'],
     sourcemap: true,
     minify: true,
-    target: 'node18',
+    target: 'node22',
     banner: {
       js: '#!/usr/bin/env node',
     },
@@ -46,6 +46,6 @@ export default defineConfig([
     format: ['esm'],
     sourcemap: true,
     minify: true,
-    target: 'node18',
+    target: 'node22',
   },
 ]);

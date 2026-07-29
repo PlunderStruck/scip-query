@@ -17,18 +17,18 @@ describe('dependency security controls', () => {
   it('removes npm run inherited lifecycle authority before invoking npm audit', () => {
     const inherited = {
       PATH: '/bin',
-      npm_config_allow_scripts: 'better-sqlite3,tree-sitter',
+      npm_config_allow_scripts: 'tree-sitter,esbuild',
       NPM_CONFIG_ALLOW_SCRIPTS: 'mixed-case-alias',
     };
 
     expect(npmAuditEnvironment(inherited)).toEqual({ PATH: '/bin' });
-    expect(inherited.npm_config_allow_scripts).toBe('better-sqlite3,tree-sitter');
+    expect(inherited.npm_config_allow_scripts).toBe('tree-sitter,esbuild');
   });
 
   it('uses the Windows npm shim and propagates a failing audit status', () => {
     const calls: Array<{ command: string; args: readonly string[]; environment: NodeJS.ProcessEnv }> = [];
     const status = runProductionDependencyAudit({
-      environment: { npm_config_allow_scripts: 'better-sqlite3', SAFE: 'yes' },
+      environment: { npm_config_allow_scripts: 'tree-sitter', SAFE: 'yes' },
       platform: 'win32',
       spawn(command, args, options) {
         calls.push({
@@ -62,6 +62,9 @@ describe('dependency security controls', () => {
 
     expect(workflow).toContain('npm ci --ignore-scripts');
     expect(workflow).toContain('npm run audit:prod');
+    expect(workflow).toContain('node: [22, 24, 26]');
+    expect(workflow).toContain('tests/scripts/runtime-support-contract.test.ts');
+    expect(workflow).toContain('tests/storage/db-lifecycle.test.ts');
     expect(workflow).toMatch(/uses: actions\/checkout@[a-f0-9]{40}/u);
     expect(workflow).toMatch(/uses: actions\/setup-node@[a-f0-9]{40}/u);
     expect(workflow).toContain('persist-credentials: false');
