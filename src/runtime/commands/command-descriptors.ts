@@ -436,7 +436,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     description:
       'Bootstrap this project: enable automatic indexing, install agent skills, refresh the index, verify capabilities, and report health',
     options: withJsonOption([
-      option('--guided', 'Open the interactive checklist (the default in a terminal)'),
+      option('--guided', 'Require and open the interactive terminal checklist (the default in a terminal)'),
       option('--yes', 'Accept recommended setup defaults without prompting'),
       option('--git-hook', 'Also install a git pre-commit hook that runs diff-gate'),
       option('--no-hooks', 'Skip Codex and Claude Code lifecycle hook installation'),

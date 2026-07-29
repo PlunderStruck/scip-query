@@ -59,6 +59,7 @@ import {
   planGuidedProjectSetup,
   renderProjectSetupReport,
   runProjectSetup,
+  validateSetupInteractionMode,
   type ProjectSetupGuidedAction,
   type ProjectSetupGuidedFiles,
   type ProjectSetupOptions,
@@ -1300,25 +1301,34 @@ export function handleSetupAgent(rawOpts: unknown): void {
 export async function handleSetup(rawOpts: unknown): Promise<void> {
   const opts = commandOptions(rawOpts);
   try {
+    const guided = booleanOptionValue(opts, 'guided');
+    const yes = booleanOptionValue(opts, 'yes');
+    const json = booleanOptionValue(opts, 'json');
+    validateSetupInteractionMode({
+      guided,
+      yes,
+      json,
+      stdinIsTty: process.stdin.isTTY === true,
+      stdoutIsTty: process.stdout.isTTY === true,
+    });
     const installMissing = booleanOptionValue(opts, 'installMissing');
     let setupOptions: ProjectSetupOptions = {
       gitHook: booleanOptionValue(opts, 'gitHook'),
       noHooks: booleanOptionValue(opts, 'noHooks') || opts['hooks'] === false,
       dossierDir: stringOptionValue(opts, 'dossierDir'),
-      runHealth: booleanOptionValue(opts, 'yes') ? false : opts['health'] !== false,
+      runHealth: yes ? false : opts['health'] !== false,
       installSkills: opts['skills'] !== false,
       installIndexers: installMissing,
       installAstParsers: installMissing && opts['parsers'] !== false,
-      ...(booleanOptionValue(opts, 'yes') ? { automaticRefresh: true } : {}),
+      ...(yes ? { automaticRefresh: true } : {}),
     };
-    const json = booleanOptionValue(opts, 'json');
-    const interactive = !json && !booleanOptionValue(opts, 'yes') && process.stdin.isTTY && process.stdout.isTTY;
-    if (booleanOptionValue(opts, 'guided') || interactive) {
-      setupOptions = await guidedProjectSetupOptions(setupOptions, { json: booleanOptionValue(opts, 'json') });
+    const interactive = !json && !yes && process.stdin.isTTY && process.stdout.isTTY;
+    if (guided || interactive) {
+      setupOptions = await guidedProjectSetupOptions(setupOptions, { json });
     }
     if (!json) setupOptions.onStatus = (message) => console.log(`  ${message}`);
     const report = await runProjectSetup(setupOptions);
-    if (booleanOptionValue(opts, 'json')) {
+    if (json) {
       printJsonEnvelope('setup', [], opts, report);
     } else {
       renderProjectSetupReport(report);

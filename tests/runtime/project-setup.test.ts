@@ -280,6 +280,41 @@ afterEach(() => {
 });
 
 describe('runProjectSetup', () => {
+  it('requires explicit guided setup to remain interactive and unambiguous', async () => {
+    const { module } = await loadProjectSetup();
+    const valid = {
+      guided: true,
+      yes: false,
+      json: false,
+      stdinIsTty: true,
+      stdoutIsTty: true,
+    };
+
+    expect(() => module.validateSetupInteractionMode(valid)).not.toThrow();
+    expect(() => module.validateSetupInteractionMode({ ...valid, yes: true })).toThrow(
+      '--guided cannot be combined with --yes',
+    );
+    expect(() => module.validateSetupInteractionMode({ ...valid, json: true })).toThrow(
+      '--guided cannot be combined with --json',
+    );
+    expect(() => module.validateSetupInteractionMode({ ...valid, stdinIsTty: false })).toThrow(
+      '--guided requires an interactive terminal',
+    );
+    expect(() => module.validateSetupInteractionMode({ ...valid, stdoutIsTty: false })).toThrow(
+      '--guided requires an interactive terminal',
+    );
+    expect(() =>
+      module.validateSetupInteractionMode({
+        ...valid,
+        guided: false,
+        yes: true,
+        json: true,
+        stdinIsTty: false,
+        stdoutIsTty: false,
+      }),
+    ).not.toThrow();
+  });
+
   it('installs detected AST parsers only after explicit setup consent', async () => {
     const { module, setupAstParsers } = await loadProjectSetup({ languages: ['typescript', 'python'] });
     const skipped = await module.runProjectSetup({ runHealth: false });

@@ -42,6 +42,21 @@ export type ProjectSetupStepStatus = 'ok' | 'warn' | 'skipped' | 'failed';
 export type ProjectSetupVerdict = 'ready' | 'partial' | 'blocked';
 export type ProjectSetupSmokeStatus = 'pass' | 'unavailable' | 'fail';
 
+export function validateSetupInteractionMode(opts: {
+  guided: boolean;
+  yes: boolean;
+  json: boolean;
+  stdinIsTty: boolean;
+  stdoutIsTty: boolean;
+}): void {
+  if (!opts.guided) return;
+  if (opts.yes) throw new Error('--guided cannot be combined with --yes; choose interactive or automatic setup.');
+  if (opts.json) throw new Error('--guided cannot be combined with --json; the interactive checklist emits human output.');
+  if (!opts.stdinIsTty || !opts.stdoutIsTty) {
+    throw new Error('--guided requires an interactive terminal; use --yes for non-interactive setup.');
+  }
+}
+
 export interface ProjectSetupStep {
   id: string;
   label: string;
