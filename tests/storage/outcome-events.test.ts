@@ -110,6 +110,34 @@ describe('deriveOutcomeEvents', () => {
       },
     ]);
   });
+
+  it('attaches gate, observer, worktree authority, and suppression policy provenance', () => {
+    const next = [record({ outcome: 'suppressed' })];
+    const observer = { kind: 'local-agent' as const, authority: 'repository-writable' as const };
+    const observation = {
+      schemaVersion: 1 as const,
+      authorityKind: 'process-local' as const,
+      observedAt: '2026-07-28T00:00:00.000Z',
+      projectIdentity: 'project-a',
+    };
+    const events = deriveOutcomeEvents([], next, NO_SYMBOLS, 'head-1', 3_000, {
+      gateRunId: 'gate-1',
+      observer,
+      observation,
+      suppressionPolicyVersionByFinding: new Map([['echo\0SQAAA', 1]]),
+    });
+
+    expect(events).toEqual([
+      expect.objectContaining({ event: 'caught', gateRunId: 'gate-1', observer, observation }),
+      expect.objectContaining({
+        event: 'suppressed',
+        gateRunId: 'gate-1',
+        observer,
+        observation,
+        suppressionPolicyVersion: 1,
+      }),
+    ]);
+  });
 });
 
 describe('append/read round trip', () => {
@@ -284,6 +312,29 @@ describe('append/read round trip', () => {
       expect.objectContaining({ ts: 2, verifiedAgainstCommit: 'c1', comparisonBaseCommit: 'c2' }),
     ]);
   });
+
+  it('prefers provenance-bearing evidence over an otherwise equivalent legacy duplicate', () => {
+    const deduped = dedupeEvents([
+      { ts: 1, check: 'echo', findingId: 'SQAAA', event: 'caught', commit: 'c1' },
+      {
+        ts: 2,
+        check: 'echo',
+        findingId: 'SQAAA',
+        event: 'caught',
+        commit: 'c1',
+        gateRunId: 'gate-1',
+        observer: { kind: 'protected-ci', authority: 'protected-external' },
+      },
+    ]);
+
+    expect(deduped).toEqual([
+      expect.objectContaining({
+        ts: 2,
+        gateRunId: 'gate-1',
+        observer: { kind: 'protected-ci', authority: 'protected-external' },
+      }),
+    ]);
+  });
 });
 
 describe('outcome event record decoder', () => {
@@ -335,6 +386,25 @@ describe('outcome event record decoder', () => {
     expect(decodeOutcomeEventRecord({ ...event, kind: OUTCOME_EVENT_RECORD_KIND })).toEqual({
       state: 'malformed',
       error: 'outcome event envelope metadata requires schemaVersion',
+    });
+    expect(
+      decodeOutcomeEventRecord({
+        ...event,
+        observer: { kind: 'local-agent', authority: 'protected-external' },
+      }),
+    ).toEqual({
+      state: 'malformed',
+      error: 'invalid legacy outcome event fields',
+    });
+    expect(
+      decodeOutcomeEventRecord({
+        ...event,
+        event: 'caught',
+        suppressionPolicyVersion: 1,
+      }),
+    ).toEqual({
+      state: 'malformed',
+      error: 'invalid legacy outcome event fields',
     });
   });
 

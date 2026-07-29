@@ -34,11 +34,19 @@ The worktree cache keeps this internal layout:
       meta.json
 ```
 
-The files inside a named generation directory are immutable. The SHA-256
+The files inside a named generation directory are immutable. Their final
+read-only mode is applied before their final file synchronization, so the
+persisted inode contains both the accepted bytes and the protection metadata.
+The SHA-256
 identity incorporates the database bytes, SCIP bytes when present, and the
 generation-bearing metadata fields. `manifest.json` records the exact size and
 digest of each stored artifact. `state.json` names the accepted directory and
 is the only publication decision read by internal database consumers.
+Opening a named generation authenticates the database, SCIP, and metadata
+bytes against those digests; matching size alone is never sufficient. A
+bounded process-local validation cache is keyed by manifest identity plus
+stable device, inode, size, modification-time, and change-time evidence, so a
+same-size mutation invalidates the cached proof and is rehashed.
 
 The top-level files remain for the SCIP CLI, indexers, older scip-query
 versions, and external inspection. They are derived mirrors, not the internal
@@ -52,22 +60,26 @@ Publication proceeds in this order:
 
 1. Retain the previously published stable artifacts as an immutable
    generation when upgrading a legacy cache.
-2. Copy-on-write clone or copy every accepted candidate artifact into a
-   private staging directory.
-3. Flush the artifact files and manifest, rename the complete staging
-   directory into its content-derived identity, and flush the generation
+2. Durably establish `.scipquery-generations/` from its nearest existing
+   ancestor when this is the cache's first generation.
+3. Copy-on-write clone or copy every accepted candidate artifact into a
+   private staging directory, apply its final read-only mode, and flush the
+   resulting inode.
+4. Flush the manifest and staging namespace, rename the complete staging
+   directory into its content-derived identity, and flush the generation-root
    directory entry.
-4. Remove known redundant SQLite indexes only when schema inspection proves a
-   retained equivalent: the unique symbol index can replace the duplicate
-   symbol index, and a wider document-leading chunk index can replace the
-   single-column document index. Query-plan tests hold those proofs.
-5. Durably replace `state.json` so new internal readers select the complete
+5. Establish the versioned query layout after augmentation: add the
+   definition-only covering index, remove known redundant indexes only when
+   schema inspection proves a retained equivalent, and run `ANALYZE` so the
+   planner sees the final row distribution. Query-plan tests hold those
+   proofs.
+6. Durably replace `state.json` so new internal readers select the complete
    new directory.
-6. Replace the three compatibility mirrors and durably record their file
+7. Replace the three compatibility mirrors and durably record their file
    identities for drift diagnostics.
 
-A crash before step 5 leaves the prior pointer authoritative. A crash after
-step 5 leaves the new immutable generation authoritative even if one or more
+A crash before step 6 leaves the prior pointer authoritative. A crash after
+the pointer step leaves the new immutable generation authoritative even if one or more
 compatibility mirrors are old. `scip-query status` and freshness inspection
 report that mirror drift and a later refresh repairs it; database-backed
 queries remain generation-consistent throughout.
@@ -77,6 +89,14 @@ pointer. Old database handles retain their old metadata bytes. Result cursors
 and TypeScript semantic mailbox requests carry the handle identity, so a
 continuation or numeric symbol identifier from an older generation is rejected
 when a service has moved to a newer one.
+
+Current metadata also records `sqliteLayoutVersion`. A current-version
+metadata record that predates this field remains readable and can reuse its
+language SCIP shards, but it cannot take the whole-SQLite unchanged fast path.
+The next refresh applies query-layout maintenance to the stable mirror,
+publishes a new immutable generation and current layout metadata, and does not
+rerun unchanged language indexers. Later unchanged refreshes resume the
+ordinary whole-generation reuse path.
 
 Mailbox protocol version 3 additionally binds that generation identity into a
 content-derived logical-operation key. The deterministic request ID lets a
@@ -116,10 +136,14 @@ retained set and oldest generation age. Collection failure does not invalidate
 the accepted index; it remains explicit bounded-storage debt for the operator.
 
 The repository-wide shared generation store is a separate cache layer. It
-warms a worktree by copying a complete generation into the worktree's private
-cache; the local publisher then creates the local immutable directory and
-pointer described here. Later worktree writes cannot mutate either the shared
-source or a retained local reader.
+warms a worktree from a complete content-addressed generation. Publication
+flushes each final read-only artifact, the manifest, the staging namespace, the
+rename into `generations/<identity>`, and `generations/` itself before
+returning `directory-durable` on supported hosts. On a host without directory
+sync, it returns `file-flushed`; readers still rehash every artifact and reject
+an incomplete generation. The local publisher then creates the private
+immutable directory and pointer described here. Later worktree writes cannot
+mutate either the shared source or a retained local reader.
 
 ## Shared worktree lease invariant
 

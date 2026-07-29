@@ -321,7 +321,7 @@ describe('skill installation', () => {
       {
         type: 'command',
         command: 'scip-query hook-stop',
-        timeout: 30,
+        timeout: 76,
         statusMessage: 'Running scip-query diff gate',
       },
     ]);

@@ -330,6 +330,8 @@ function isProjectArtifactPath(relativePath: string): boolean {
   const parts = relativePath.split('/');
   return (
     relativePath === 'meta.json' ||
+    (parts[0] === '.scipquery' &&
+      (parts[1] === 'events' || parts[1] === 'ledger' || parts[1] === 'releases' || parts[1] === 'suppressions')) ||
     parts.some((part) => PROJECT_ARTIFACT_DIRS.has(part)) ||
     relativePath.endsWith('.db') ||
     relativePath.endsWith('.db-wal') ||

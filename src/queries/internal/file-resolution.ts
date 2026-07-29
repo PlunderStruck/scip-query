@@ -20,14 +20,11 @@
  */
 import type { ScipDatabase } from '../../storage/db.js';
 import { existsSync as existsSyncFs } from 'node:fs';
-import { basename, isAbsolute as isAbsolutePath, join as pathJoin } from 'node:path';
+import { isAbsolute as isAbsolutePath, join as pathJoin } from 'node:path';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
-import { indexedDocumentPaths } from '../../storage/scip-documents.js';
+import { resolveIndexedDocumentCandidates, type IndexedDocumentPathCandidate } from '../../storage/scip-documents.js';
 
-interface DocumentPathCandidate {
-  relativePath: string;
-  score: number;
-}
+export { normalizeLookupPath, scoreDocumentPath } from '../../storage/scip-documents.js';
 
 export function resolveIndexedFile(db: ScipDatabase, filePattern: string): string | null {
   const indexed = resolveDocumentCandidates(db, filePattern, { allowMultiple: false })[0]?.relativePath;
@@ -64,21 +61,9 @@ export function resolveDocumentCandidates(
   db: ScipDatabase,
   filePattern: string,
   opts: { allowMultiple: boolean },
-): DocumentPathCandidate[] {
-  const normalizedPattern = normalizeLookupPath(filePattern);
-  if (!normalizedPattern) {
-    return [];
-  }
-
-  const scored = indexedDocumentPaths(db, { includeIgnored: false })
-    .map((relativePath) => ({
-      relativePath,
-      score: scoreDocumentPath(relativePath, normalizedPattern),
-    }))
-    .filter((row) => row.score > 0)
-    .sort((a, b) => b.score - a.score || a.relativePath.localeCompare(b.relativePath));
-
-  if (scored.length === 0) {
+): IndexedDocumentPathCandidate[] {
+  const indexed = resolveIndexedDocumentCandidates(db, filePattern, opts);
+  if (indexed.length === 0) {
     const symbolMatch = findFirstSymbolMatch(db, filePattern);
     if (!symbolMatch || db.isIgnored(symbolMatch.relativePath)) {
       return [];
@@ -92,34 +77,5 @@ export function resolveDocumentCandidates(
     ];
   }
 
-  const exactPathMatches = scored.filter((row) => row.score >= 1100);
-  if (exactPathMatches.length > 0) {
-    return opts.allowMultiple ? exactPathMatches : [exactPathMatches[0]!];
-  }
-
-  const basenameMatches = scored.filter((row) => row.score >= 800);
-  if (basenameMatches.length > 0) {
-    return opts.allowMultiple ? basenameMatches : [basenameMatches[0]!];
-  }
-
-  return opts.allowMultiple ? scored : [scored[0]!];
-}
-
-export function scoreDocumentPath(relativePath: string, rawPattern: string): number {
-  const normalizedPath = normalizeLookupPath(relativePath);
-  const pathBase = basename(normalizedPath);
-  const patternBase = basename(rawPattern);
-
-  let score = 0;
-  if (normalizedPath === rawPattern) score += 1200;
-  if (normalizedPath.endsWith(`/${rawPattern}`)) score += 1100;
-  if (pathBase === patternBase) score += 900;
-  if (normalizedPath.startsWith(`${rawPattern}/`)) score += 850;
-  if (normalizedPath.includes(rawPattern)) score += 250;
-
-  return score;
-}
-
-export function normalizeLookupPath(filePattern: string): string {
-  return filePattern.trim().replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '').replace(/\/+$/, '');
+  return indexed;
 }

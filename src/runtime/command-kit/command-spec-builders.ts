@@ -6,19 +6,39 @@ import type {
   CommandScope,
   CoveragePolicy,
 } from './command-descriptor-types.js';
+import { InvalidArgumentError } from 'commander';
 import { collect } from '../cli-context.js';
 
 export const collectValues = collect as CommandOptionParser;
-export const parseInteger = ((value: string) => parseInt(value, 10)) as CommandOptionParser;
-export const parsePositiveInteger = ((value: string) => {
-  const parsed = parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed < 1) {
-    throw new Error(`Expected a positive integer, got ${value}`);
-  }
+const INTEGER_VALUE = /^[+-]?\d+$/u;
+const NUMBER_VALUE = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u;
+
+export const parseInteger = ((value: string) => parseExactInteger(value, 'an integer')) as CommandOptionParser;
+export const parseNonNegativeInteger = ((value: string) => {
+  const parsed = parseExactInteger(value, 'a non-negative integer');
+  if (parsed < 0) throw new InvalidArgumentError(`Expected a non-negative integer, got "${value}".`);
   return parsed;
 }) as CommandOptionParser;
-export const parseNumber = parseFloat as CommandOptionParser;
-export const parseIntegerLoose = parseInt as CommandOptionParser;
+export const parsePositiveInteger = ((value: string) => {
+  const parsed = parseExactInteger(value, 'a positive integer');
+  if (parsed < 1) throw new InvalidArgumentError(`Expected a positive integer, got "${value}".`);
+  return parsed;
+}) as CommandOptionParser;
+export const parseNumber = ((value: string) => {
+  if (!NUMBER_VALUE.test(value)) throw new InvalidArgumentError(`Expected a number, got "${value}".`);
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) throw new InvalidArgumentError(`Expected a finite number, got "${value}".`);
+  return parsed;
+}) as CommandOptionParser;
+/** @deprecated Kept as an import-compatible alias; parsing is now exact. */
+export const parseIntegerLoose = parseInteger;
+
+function parseExactInteger(value: string, expected: string): number {
+  if (!INTEGER_VALUE.test(value)) throw new InvalidArgumentError(`Expected ${expected}, got "${value}".`);
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) throw new InvalidArgumentError(`Expected ${expected}, got "${value}".`);
+  return parsed;
+}
 
 export function option(
   flags: string,
@@ -39,18 +59,22 @@ export function compactOption(): NonNullable<CommandDescriptor['options']>[numbe
   return option('--compact', 'Emit minified one-line JSON (use with --json)');
 }
 
+export function resultOnlyOption(): NonNullable<CommandDescriptor['options']>[number] {
+  return option('--result-only', 'Emit only the command-owned result (use with --json)');
+}
+
 export function withCompactJsonOptions(
   options: NonNullable<CommandDescriptor['options']> = [],
 ): NonNullable<CommandDescriptor['options']> {
-  const withJson = withJsonOption(options);
-  return withJson.some((entry) => entry.flags === '--compact') ? withJson : [...withJson, compactOption()];
+  return withJsonOption(options);
 }
 
 export function withJsonOption(
   options: NonNullable<CommandDescriptor['options']> = [],
 ): NonNullable<CommandDescriptor['options']> {
-  if (options.some((entry) => entry.flags === '--json')) return options;
-  return [...options, jsonOption()];
+  const commonOptions = [jsonOption(), resultOnlyOption(), compactOption()];
+  const commonFlags = new Set(commonOptions.map((entry) => entry.flags));
+  return [...options.filter((entry) => !commonFlags.has(entry.flags)), ...commonOptions];
 }
 
 export function doc(category: string, examples: readonly string[] = []): NonNullable<CommandDescriptor['docs']> {

@@ -203,11 +203,32 @@ export function dedupeEvents(events: readonly OutcomeEvent[]): OutcomeEvent[] {
       byKey.set(key, event);
     }
   }
-  return [...byKey.values()].sort((left, right) => left.ts - right.ts);
+  return [...byKey.values()].sort(
+    (left, right) =>
+      left.ts - right.ts ||
+      left.check.localeCompare(right.check) ||
+      left.findingId.localeCompare(right.findingId) ||
+      outcomeTransitionOrder(left.event) - outcomeTransitionOrder(right.event),
+  );
 }
 
 function eventEvidenceScore(event: OutcomeEvent): number {
-  return Number(event.comparisonBaseCommit !== undefined) + Number(event.verifiedAgainstCommit !== undefined) * 2;
+  return (
+    Number(event.verifiedAgainstCommit !== undefined) * 64 +
+    Number(event.comparisonBaseCommit !== undefined) * 32 +
+    Number(event.observer?.authority === 'protected-external') * 16 +
+    Number(event.observer !== undefined) * 8 +
+    Number(event.observation !== undefined) * 4 +
+    Number(event.gateRunId !== undefined) * 2 +
+    Number(event.suppressionPolicyVersion !== undefined)
+  );
+}
+
+function outcomeTransitionOrder(event: OutcomeEvent['event']): number {
+  if (event === 'caught') return 0;
+  if (event === 'resolved') return 1;
+  if (event === 'suppressed') return 2;
+  return 3;
 }
 
 function outcomeEventReadResult(

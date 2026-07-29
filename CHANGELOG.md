@@ -4,6 +4,56 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+## [0.19.9]
+
+### Agent-readable command output
+
+- Human output is now the default evidence format for agents. `code` renders
+  only the resolved path, one-based range, symbol identity, language, and
+  whitespace-preserved numbered source; complete output no longer receives a
+  pagination wrapper merely because a page size was supplied.
+- Every public JSON-capable command exposes the same `--json`,
+  `--result-only`, and `--compact` modes. The stable envelope remains
+  compatible for programs, while result-only output removes transport
+  metadata and `code` returns a minimal ordered line representation.
+- Partial human pages retain multiline hierarchy and split at complete line
+  boundaries whenever possible. Exact resumable continuations remain
+  mandatory for genuinely partial output, and malformed numeric flags now
+  fail explicitly instead of accepting a numeric prefix.
+- Bundled Claude, Codex, and shared-agent skills prefer ordinary output,
+  reserve JSON for programmatic consumers, and no longer preselect page sizes
+  or recommend compact JSON for model-readable evidence.
+
+### Durable state and concurrency
+
+- Atomic file replacement, committed outcome and suppression records,
+  generation pointers, shared-cache leases, watcher refresh requests, and
+  semantic mailboxes now preserve explicit operation identity across crashes,
+  retries, concurrent owners, stale completions, and partial legacy records.
+- SQLite and SCIP publication use immutable generation artifacts with
+  conservative recovery, retained-reader protection, corruption detection,
+  and bounded garbage collection. Incremental publication rejects incomplete
+  affected sets and preserves rich metadata owned by unaffected documents.
+- Stop hooks and diff-gate runs share bounded evidence leases and execution
+  deadlines. Automatic suppression requires versioned policy evidence,
+  expiration and content-hash checks, and anomaly escalation instead of
+  treating repository-writable metadata as independent authority.
+
+### Query performance and evidence integrity
+
+- SQL-backed navigation, graph-risk, file-resolution, coupling, and re-export
+  analysis reuse prepared data products, parameterized scopes, bounded
+  batches, and indexed lookup paths instead of repeated broad scans. Recorded
+  before/after ledgers preserve command-output equivalence alongside the
+  measured latency gains.
+- Watch refreshes distinguish rebuilt and reused work, suppress redundant
+  requests, preserve cache ownership, and avoid competing manual reindexes.
+  Diff-gate containment now completes the current repository-wide change in
+  seconds rather than allowing duplicate long-running detector processes.
+- Public configuration, reindex metadata, committed records, TypeScript
+  declarations, schemas, command documentation, and downstream consumer
+  fixtures were evolved together with explicit compatibility handling.
+
 ## [0.19.8]
 
 ### Complete agent evidence

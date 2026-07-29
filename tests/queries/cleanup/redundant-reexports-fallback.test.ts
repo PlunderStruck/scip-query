@@ -26,6 +26,7 @@ describe('redundant re-export fallbacks', () => {
       'src/analysis_status_exports.rs': ['pub use crate::analysis_status_core::normalize_status_label;', ''],
       'src/public-api.ts': ["export { publicUtility } from './public-utility.ts';", ''],
       'src/public-utility.ts': ['export function publicUtility(): string {', "  return 'ok';", '}', ''],
+      'src/public-consumer.ts': ["import { publicUtility } from './public-utility.js';", 'publicUtility();', ''],
       'src/named-api.ts': ["export { secondUtility } from './multi.ts';", ''],
       'src/multi.ts': [
         "export function firstUtility(): string { return 'first'; }",
@@ -34,6 +35,8 @@ describe('redundant re-export fallbacks', () => {
       ],
       'src/index.ts': ["import { boot } from './boot.js';", '', 'boot();', ''],
       'src/boot.ts': ['export function boot(): void {', '  // startup work', '}', ''],
+      'src/unused/index.ts': ["export { orphaned } from './source.js';", ''],
+      'src/unused/source.ts': ['export function orphaned(): void {', '  // intentionally unused', '}', ''],
     });
     writeFileSync(
       join(projectRoot, 'package.json'),
@@ -53,6 +56,9 @@ describe('redundant re-export fallbacks', () => {
       .document(6, 'typescript', 'src/public-utility.ts')
       .document(7, 'typescript', 'src/named-api.ts')
       .document(8, 'typescript', 'src/multi.ts')
+      .document(9, 'typescript', 'src/public-consumer.ts')
+      .document(10, 'typescript', 'src/unused/index.ts')
+      .document(11, 'typescript', 'src/unused/source.ts')
       .symbol(
         1,
         'scip-rust cargo fixture crate/src/analysis_status_core.rs/normalize_status_label().',
@@ -63,13 +69,19 @@ describe('redundant re-export fallbacks', () => {
       .symbol(3, 'scip-typescript npm fixture 1.0.0 src/`public-utility.ts`/publicUtility().', 'publicUtility', 12)
       .symbol(4, 'scip-typescript npm fixture 1.0.0 src/`multi.ts`/firstUtility().', 'firstUtility', 12)
       .symbol(5, 'scip-typescript npm fixture 1.0.0 src/`multi.ts`/secondUtility().', 'secondUtility', 12)
+      .symbol(6, 'scip-typescript npm fixture 1.0.0 src/unused/`source.ts`/orphaned().', 'orphaned', 12)
       .definition(1, 1, 1, 0, 0, 2, 1)
       .definition(2, 4, 2, 0, 0, 2, 1)
       .definition(3, 6, 3, 0, 0, 2, 1)
       .definition(4, 8, 4, 0, 0, 0, 1)
       .definition(5, 8, 5, 1, 0, 1, 1)
+      .definition(6, 11, 6, 0, 0, 2, 1)
       .chunk(1, 3, 0, 3)
       .mention(1, 2, 8)
+      .chunk(2, 10, 0, 0)
+      .mention(2, 6, 8)
+      .chunk(3, 11, 0, 2)
+      .mention(3, 6, 1)
       .write();
 
     const config: ScipQueryConfig = {
@@ -106,6 +118,7 @@ describe('redundant re-export fallbacks', () => {
           barrelFile: 'src/public-api.ts',
           originalFile: 'src/public-utility.ts',
           shortName: 'src:public-utility:publicUtility()',
+          directConsumers: 1,
           actionTier: 'signal',
           surfaceEvidence: expect.arrayContaining([
             expect.stringContaining('barrel file is declared on the package public surface'),
@@ -133,6 +146,18 @@ describe('redundant re-export fallbacks', () => {
       expect.objectContaining({
         shortName: 'src:multi:secondUtility()',
         originalFile: 'src/multi.ts',
+      }),
+    ]);
+  });
+
+  it('starts SCIP re-export discovery from the scoped barrel references', () => {
+    expect(redundantReexports(db, { scope: 'src/unused' })).toEqual([
+      expect.objectContaining({
+        barrelFile: 'src/unused/index.ts',
+        originalFile: 'src/unused/source.ts',
+        shortName: 'src:unused:source:orphaned()',
+        barrelConsumers: 0,
+        directConsumers: 0,
       }),
     ]);
   });

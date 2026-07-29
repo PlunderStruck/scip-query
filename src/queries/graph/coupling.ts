@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../../storage/db.js';
+import { TARGET_COUPLING_SQL } from '../internal/target-coupling.js';
 import { resolveIndexedFile } from '../internal/file-resolution.js';
 
 export interface CouplingResult {
@@ -20,39 +21,7 @@ export function coupling(db: ScipDatabase, file1: string, file2: string): Coupli
   const resolvedFile2 = resolveIndexedFile(db, file2) ?? file2;
 
   const row = db.get<{ shared: number }>(
-    `SELECT COUNT(DISTINCT gs.id) AS shared
-    FROM global_symbols gs
-    WHERE (
-      -- Defined in file1, referenced in file2
-      EXISTS (
-        SELECT 1
-        FROM mentions def_m
-        JOIN chunks def_c ON def_m.chunk_id = def_c.id
-        JOIN documents d ON def_c.document_id = d.id
-        WHERE def_m.symbol_id = gs.id AND def_m.role = 1 AND d.relative_path = ?
-      )
-      AND EXISTS (
-        SELECT 1 FROM mentions m
-        JOIN chunks c ON m.chunk_id = c.id
-        JOIN documents d ON c.document_id = d.id
-        WHERE m.symbol_id = gs.id AND m.role != 1 AND d.relative_path = ?
-      )
-    ) OR (
-      -- Defined in file2, referenced in file1
-      EXISTS (
-        SELECT 1
-        FROM mentions def_m
-        JOIN chunks def_c ON def_m.chunk_id = def_c.id
-        JOIN documents d ON def_c.document_id = d.id
-        WHERE def_m.symbol_id = gs.id AND def_m.role = 1 AND d.relative_path = ?
-      )
-      AND EXISTS (
-        SELECT 1 FROM mentions m
-        JOIN chunks c ON m.chunk_id = c.id
-        JOIN documents d ON c.document_id = d.id
-        WHERE m.symbol_id = gs.id AND m.role != 1 AND d.relative_path = ?
-      )
-    )`,
+    TARGET_COUPLING_SQL,
     resolvedFile1,
     resolvedFile2,
     resolvedFile2,

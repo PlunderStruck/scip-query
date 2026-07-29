@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { ScipQueryConfig } from '../../../src/domain/types.js';
+import type { FindingSuppression, ScipQueryConfig } from '../../../src/domain/types.js';
 import { collectBaselineFindings } from '../../../src/queries/health/health-baseline.js';
 import { diffGate } from '../../../src/queries/impact/diff-gate.js';
 import {
@@ -32,6 +32,21 @@ import { createEvidenceSchema } from '../../fixtures/evidence-fixture.js';
 
 let repoRoot: string;
 let db: ScipDatabase;
+
+function adjudicatedSuppression(id: string, reason: string): FindingSuppression {
+  return {
+    id,
+    reason,
+    decision: {
+      kind: 'automated-adjudication',
+      reasonCode: 'detector-counterexample',
+      decidedBy: 'agent',
+      policyVersion: 1,
+      evidence: [{ kind: 'graph', referent: 'scip-query diff-gate --json', claim: reason }],
+      invalidateOn: { targetContentChange: false, detectorMajorChange: true },
+    },
+  };
+}
 
 function gitIn(root: string, ...args: string[]): void {
   execFileSync('git', ['-C', root, ...args], {
@@ -1002,7 +1017,7 @@ describe('incomplete-migration', () => {
       dbPath: join(repoRoot, 'index.db'),
       indexPath: join(repoRoot, 'index.scip'),
       projectRoot: repoRoot,
-      suppressions: [{ id: finding!.id, reason: 'accepted fixture finding' }],
+      suppressions: [adjudicatedSuppression(finding!.id, 'accepted fixture finding')],
     });
     try {
       const result = diffGate(suppressedDb, { base: 'HEAD' });
@@ -1014,6 +1029,7 @@ describe('incomplete-migration', () => {
           suppression: expect.objectContaining({ reason: 'accepted fixture finding' }),
         }),
       ]);
+      expect(result.suppressionSummary?.automaticSuppressionCount).toBe(1);
     } finally {
       suppressedDb.close();
     }
@@ -1029,11 +1045,12 @@ describe('incomplete-migration', () => {
     try {
       const result = diffGate(legacySuppressedDb, { base: 'HEAD' });
 
-      expect(result.findings.some((candidate) => candidate.id === finding!.id)).toBe(false);
-      expect(result.suppressed).toEqual([
+      expect(result.findings.some((candidate) => candidate.id === finding!.id)).toBe(true);
+      expect(result.suppressed).toEqual([]);
+      expect(result.policyEscalations).toEqual([
         expect.objectContaining({
-          finding: expect.objectContaining({ id: finding!.id }),
-          suppression: expect.objectContaining({ id: legacyId, reason: 'accepted legacy fixture finding' }),
+          findingId: finding!.id,
+          reasons: expect.arrayContaining(['exact-finding-id-required', 'legacy-unadjudicated']),
         }),
       ]);
     } finally {

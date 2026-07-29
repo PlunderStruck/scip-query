@@ -1,4 +1,11 @@
-import type { OutcomeEvent, OutcomeEventKind } from './finding-outcomes.js';
+import type {
+  OutcomeEvent,
+  OutcomeEventKind,
+  OutcomeObserverAuthority,
+  OutcomeObserverKind,
+  OutcomeObserverProvenance,
+} from './finding-outcomes.js';
+import { isObservationReceipt } from './observation-receipt.js';
 import type { RecordCompatibilityState } from './record-compatibility.js';
 import { isRecordObject } from './record-validation.js';
 
@@ -111,7 +118,14 @@ function eventFromRecord(candidate: Record<string, unknown>): OutcomeEvent | und
     (candidate['comparisonBaseCommit'] !== undefined && typeof candidate['comparisonBaseCommit'] !== 'string') ||
     (candidate['verifiedAgainstCommit'] !== undefined &&
       (candidate['event'] !== 'resolved' || typeof candidate['verifiedAgainstCommit'] !== 'string')) ||
-    (candidate['symbol'] !== undefined && typeof candidate['symbol'] !== 'string')
+    (candidate['symbol'] !== undefined && typeof candidate['symbol'] !== 'string') ||
+    (candidate['gateRunId'] !== undefined && !isBoundedIdentity(candidate['gateRunId'])) ||
+    (candidate['observer'] !== undefined && !isOutcomeObserverProvenance(candidate['observer'])) ||
+    (candidate['observation'] !== undefined && !isObservationReceipt(candidate['observation'])) ||
+    (candidate['suppressionPolicyVersion'] !== undefined &&
+      (candidate['event'] !== 'suppressed' ||
+        !Number.isSafeInteger(candidate['suppressionPolicyVersion']) ||
+        (candidate['suppressionPolicyVersion'] as number) < 1))
   ) {
     return undefined;
   }
@@ -128,5 +142,33 @@ function eventFromRecord(candidate: Record<string, unknown>): OutcomeEvent | und
       ? { verifiedAgainstCommit: candidate['verifiedAgainstCommit'] }
       : {}),
     ...(typeof candidate['symbol'] === 'string' ? { symbol: candidate['symbol'] } : {}),
+    ...(typeof candidate['gateRunId'] === 'string' ? { gateRunId: candidate['gateRunId'] } : {}),
+    ...(candidate['observer'] !== undefined ? { observer: candidate['observer'] as OutcomeObserverProvenance } : {}),
+    ...(candidate['observation'] !== undefined
+      ? { observation: candidate['observation'] as OutcomeEvent['observation'] }
+      : {}),
+    ...(typeof candidate['suppressionPolicyVersion'] === 'number'
+      ? { suppressionPolicyVersion: candidate['suppressionPolicyVersion'] }
+      : {}),
   };
+}
+
+const OBSERVER_KINDS: readonly OutcomeObserverKind[] = ['local-agent', 'local-human', 'protected-ci'];
+const OBSERVER_AUTHORITIES: readonly OutcomeObserverAuthority[] = ['repository-writable', 'protected-external'];
+
+function isOutcomeObserverProvenance(value: unknown): value is OutcomeObserverProvenance {
+  if (!isRecordObject(value)) return false;
+  const kind = value['kind'] as OutcomeObserverKind;
+  const authority = value['authority'] as OutcomeObserverAuthority;
+  return (
+    OBSERVER_KINDS.includes(kind) &&
+    OBSERVER_AUTHORITIES.includes(authority) &&
+    (authority !== 'protected-external' || kind === 'protected-ci') &&
+    (value['source'] === undefined ||
+      (typeof value['source'] === 'string' && value['source'].length > 0 && value['source'].length <= 256))
+  );
+}
+
+function isBoundedIdentity(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 256 && !/[\0\r\n]/u.test(value);
 }

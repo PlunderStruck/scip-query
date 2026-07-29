@@ -10,7 +10,7 @@ import {
   getAllDefinitions,
   getDefinitionsForFile,
 } from '../definition-catalog.js';
-import { getResolvedReferenceSites } from '../references/reference-sites.js';
+import { getResolvedReferenceSitesMap } from '../references/reference-sites.js';
 import type { IndexedDefinition, SymbolLocation, SymbolMatch } from '../../domain/types.js';
 import { getGlobalLeafIndex, pickAstCallCandidate, sameLanguageCandidates } from '../leaf-symbol-index.js';
 import type { GlobalLeafCandidate } from '../leaf-symbol-index.js';
@@ -98,11 +98,16 @@ export function getCallerRowsMapForSymbols(
 const CALLER_ROWS_CACHE = createPerDbValue<Map<number, CallerRow[]>>('caller-rows', {
   clearGroups: ['whole-project'],
 });
+const TARGETED_CALLER_STRATEGY_CACHE = createPerDbValue<boolean>('targeted-caller-strategy', {
+  clearGroups: ['whole-project'],
+});
 const TARGETED_CALLER_THRESHOLD = 20_000;
 
 function shouldUseTargetedCallerRows(db: ScipDatabase): boolean {
-  const row = db.get<{ count: number }>('SELECT COUNT(*) AS count FROM global_symbols');
-  return (row?.count ?? 0) > TARGETED_CALLER_THRESHOLD;
+  return TARGETED_CALLER_STRATEGY_CACHE.get(db, () => {
+    const row = db.get<{ count: number }>('SELECT COUNT(*) AS count FROM global_symbols');
+    return (row?.count ?? 0) > TARGETED_CALLER_THRESHOLD;
+  });
 }
 
 /**
@@ -168,6 +173,7 @@ function targetedCallerRowsMapForSymbols(
       : [];
   const definitionBySymbolId = new Map(definitions.map((definition) => [definition.symbolId, definition]));
   const semanticReferences = opts.semanticEvidence?.referenceMap(db, definitions) ?? new Map();
+  const resolvedReferences = getResolvedReferenceSitesMap(db, symbols);
   const result = new Map<number, CallerRow[]>();
 
   for (const symbol of symbols) {
@@ -181,7 +187,7 @@ function targetedCallerRowsMapForSymbols(
       rows.push(row);
     };
 
-    for (const site of getResolvedReferenceSites(db, symbol)) {
+    for (const site of resolvedReferences.get(symbol.symbolId) ?? []) {
       if (site.file === symbol.relativePath) continue;
       add({
         symbol: site.enclosingSymbol ?? site.file,

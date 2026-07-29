@@ -75,10 +75,15 @@ For automation, use `scip-query setup --yes` to accept recommended defaults or
 scope is intentionally managed elsewhere. Or run without a global install:
 `npx scip-query@latest setup`.
 
-Every public `--json` response identifies its envelope schema, command result
-schema, and producing package version. See the
-[CLI JSON output contract](docs/CLI_JSON_OUTPUT.md) for the compatibility
-policy, decoder API, and machine-readable schema.
+Human output is the default for people and agents: reports retain their
+sections, while `code` preserves indentation and one-based source line
+numbers. Oversized human results paginate at complete line boundaries whenever
+possible, so continuation pages preserve that hierarchy. Every public
+JSON-capable command also supports the same structured forms: `--json` emits
+the stable envelope, `--json --result-only` emits only the command result, and
+`--json --compact` minifies output for a program. See the
+[CLI output contract](docs/CLI_JSON_OUTPUT.md) for mode selection,
+compatibility, pagination, the decoder API, and machine-readable schemas.
 
 Logical `refs --limit` pages use a generation-bound `(path, line)` cursor, so
 ordinary continuations resume after the prior row instead of rebuilding and
@@ -128,7 +133,7 @@ scip-query incomplete-migration
 
 # Before declaring the work complete: gate the diff. Reindex only when status
 # reports stale and no live watcher or hook refresh is already responsible.
-scip-query diff-gate --json
+scip-query diff-gate
 ```
 
 For a repository-wide cleanup pass:
@@ -229,20 +234,18 @@ When verification _fails_, the errors name the exact references the static evide
 **8. Gate every diff.** `diff-gate` runs a defined set of checks scoped to what a change _introduces_ and exits nonzero with remediation text for each finding. Baseline regressions are included when you pass `--baseline`.
 
 <!-- BEGIN GENERATED DIFF-GATE CHECKS -->
-
-| Check                  | What it catches                                                                                                                   | When it runs                                                                                                                                                                                                                  |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `echo`                 | Changed symbols that newly echo established code elsewhere.                                                                       | Default diff gate.                                                                                                                                                                                                            |
-| `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain.                                                | Default diff gate.                                                                                                                                                                                                            |
-| `co-change-partner`    | Historically coupled files that usually change together but are missing from this diff.                                           | Default diff gate.                                                                                                                                                                                                            |
-| `twin-partner`         | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched.            | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves.                                                                                                                                     |
-| `coverage-contract`    | A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source. | Default diff gate, only when either side of a configured contract changed.                                                                                                                                                    |
-| `architecture`         | A declared architecture boundary rule has a violation absent from the committed health baseline.                                  | Default diff gate when closed dependency rows, requireCompletePolicy, requireAcyclic, requireResolvedBoundaries, requireMinimalPolicy, maxBoundaryFanOut/maxBoundaryFiles, or testPaths are configured and a baseline exists. |
-| `doc-reference`        | Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy.     | Default diff gate. Advisory (21.2) for bare file-mention citations; blocking when the citation has a line anchor or the cited file was deleted/renamed.                                                                       |
-| `unused-params`        | Fresh trailing parameters or options that no changed body uses.                                                                   | Default diff gate.                                                                                                                                                                                                            |
-| `new-dead`             | Changed production symbols with zero indexed consumers.                                                                           | Default diff gate.                                                                                                                                                                                                            |
-| `baseline`             | New health finding identities compared with the committed health baseline.                                                        | Only with `diff-gate --baseline`.                                                                                                                                                                                             |
-
+| Check | What it catches | When it runs |
+| --- | --- | --- |
+| `echo` | Changed symbols that newly echo established code elsewhere. | Default diff gate. |
+| `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain. | Default diff gate. |
+| `co-change-partner` | Historically coupled files that usually change together but are missing from this diff. | Default diff gate. |
+| `twin-partner` | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched. | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves. |
+| `coverage-contract` | A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source. | Default diff gate, only when either side of a configured contract changed. |
+| `architecture` | A declared architecture boundary rule has a violation absent from the committed health baseline. | Default diff gate when closed dependency rows, requireCompletePolicy, requireAcyclic, requireResolvedBoundaries, requireMinimalPolicy, maxBoundaryFanOut/maxBoundaryFiles, or testPaths are configured and a baseline exists. |
+| `doc-reference` | Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy. | Default diff gate. Advisory (21.2) for bare file-mention citations; blocking when the citation has a line anchor or the cited file was deleted/renamed. |
+| `unused-params` | Fresh trailing parameters or options that no changed body uses. | Default diff gate. |
+| `new-dead` | Changed production symbols with zero indexed consumers. | Default diff gate. |
+| `baseline` | New health finding identities compared with the committed health baseline. | Only with `diff-gate --baseline`. |
 <!-- END GENERATED DIFF-GATE CHECKS -->
 
 Illustrative output:
@@ -263,10 +266,37 @@ Baseline finding identities are keyed as `detector:file:shortName`. A rename can
 Accepted findings can be recorded without weakening the rest of the gate:
 
 ```bash
-scip-query suppress SQABC123DEF456 --check echo --reason "intentional compatibility shim"
+scip-query suppress SQABC123DEF456 \
+  --check echo \
+  --reason-code compatibility-shim \
+  --evidence source:src/compat.ts \
+  --reason "the v1 export remains an intentional compatibility surface"
 ```
 
-This writes one file per suppression under `.scipquery/suppressions/` — commit it with your change. One-file-per-suppression means two branches suppressing different findings merge without conflict; the legacy `suppressions[]` array in `.scipquery.json` is still honored (read-only). Every suppression requires a reason plus either a stable finding id or a `check` (optionally narrowed by `file`). Check+file suppressions are allowed but warn because they waive every matching finding in that file. `diff-gate --json` reports both active and suppressed findings.
+This writes one file per suppression under `.scipquery/suppressions/` — commit
+it with your change. One-file-per-suppression means two branches suppressing
+different findings merge without conflict. The command requires an exact
+current finding ID, a controlled reason code, and at least one inspectable
+counterevidence referent. `source:`, `config:`, and `test:` referents are
+content-hashed when the record is written, so changing their bytes reopens the
+finding. A `graph:` referent is an exact `scip-query ...` command:
+
+```bash
+scip-query suppress SQABC123DEF456 \
+  --reason-code detector-counterexample \
+  --evidence 'graph:scip-query refs CompatExport --full' \
+  --reason "all compiler-resolved consumers still require this export"
+```
+
+The model may create these narrow records without human approval. Admission is
+still decided by scip-query's policy: broad, legacy, expired, invalidated,
+incompatible, or anomalously high-volume decisions remain findings and appear
+as policy escalations. A successful gate with accepted records reports
+`pass-with-suppressions`, not an ordinary clean pass. The legacy
+`suppressions[]` array in `.scipquery.json` and v1 record files remain readable,
+but do not automatically waive findings until explicitly replaced with
+structured counterevidence. `diff-gate` reports active findings,
+accepted suppressions, escalation reasons, and summary counts.
 
 The first suppression for an identity is created exclusively. Repeating the
 same decision is idempotent, but a different reason, expiry, check, or file is
@@ -282,32 +312,35 @@ After reviewing the committed decision, replace exactly that revision:
 
 ```bash
 scip-query suppress SQABC123DEF456 --check echo \
+  --reason-code compatibility-shim \
+  --evidence source:src/compat.ts \
   --reason "superseded by a narrower compatibility exception" \
   --replace 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 ```
 
 If another writer changes the record first, the stale replacement is rejected
 and the newer bytes remain intact. New records declare their schema version,
-record kind, stable suppression identity, and writer version. Older
-unversioned and pre-discriminator v1 records remain readable and are upgraded
-only by an explicit replacement. If a malformed or future record cannot be
-used, `diff-gate` reports exact incomplete-coverage counts and keeps findings
-conservatively unsuppressed. The wire schemas and merge rules are documented
-in [`docs/COMMITTED_RECORD_COMPATIBILITY.md`](docs/COMMITTED_RECORD_COMPATIBILITY.md).
+record kind, stable suppression identity, writer version, adjudication policy,
+counterevidence, and invalidation conditions. Older unversioned and v1 records
+remain readable and are upgraded only by an explicit replacement. If a
+malformed or future record cannot be used, `diff-gate` reports exact
+incomplete-coverage counts and keeps findings conservatively unsuppressed. The
+wire schemas and merge rules are documented in
+[`docs/COMMITTED_RECORD_COMPATIBILITY.md`](docs/COMMITTED_RECORD_COMPATIBILITY.md).
 
-**12. Measure whether the gate is earning its keep.** Every completed `diff-gate` run, including JSON and installed Stop-hook runs, writes each finding transition to its own committed `.scipquery/events/*.json` file. Independent branches add independent paths instead of editing one shared ledger file, so ordinary event writes do not create merge conflicts. Each event stores the immutable Git commit used as its comparison base. A finding is a verified fix when it disappears under that same comparison—either directly or after scip-query cleanly replays the original base against a newer committed `HEAD`. Merely committing the finding cannot clear it: if replay still finds it, the outcome stays open; if the worktree is dirty or Git cannot reproduce the base, verification waits. Historical reconciliation is deliberately incremental: one run replays at most one stored comparison base, reports the exact deferred base and finding counts, and leaves every deferred finding open for a later gate. A suppressed finding was noise or an accepted trade-off:
+**12. Observe how the gate is handled.** Every completed `diff-gate` run, including JSON and installed Stop-hook runs, writes each finding transition to its own committed `.scipquery/events/*.json` file. Independent branches add independent paths instead of editing one shared ledger file, so ordinary event writes do not create merge conflicts. Each event stores the logical gate-run identity, observer provenance, index/worktree receipt, and immutable Git commit used as its comparison base. A finding is a verified fix when it disappears under that same comparison—either directly or after scip-query cleanly replays the original base against a newer committed `HEAD`. Merely committing the finding cannot clear it: if replay still finds it, the outcome stays open; if the worktree is dirty or Git cannot reproduce the base, verification waits. Historical reconciliation is deliberately incremental: one run replays at most one stored comparison base, reports the exact deferred base and finding counts, and leaves every deferred finding open for a later gate. A suppressed finding was noise or an accepted trade-off:
 
 ```bash
 scip-query effectiveness --since 30d
 ```
 
 ```
-check       caught  fixed  suppressed  open  moved  unverified  precision  median-days-to-fix
-echo        14      10     2           1     0      1           83%        0.8
-new-dead    6       5      0           1     0      0           100%       0.3
+check       caught  fixed  suppressed  open  moved  unverified  resolution-vs-suppression  evaluation-precision  authority                 median-days-to-fix
+echo        14      10     2           1     0      1           83%                        -                     local-writable-telemetry  0.8
+new-dead    6       5      0           1     0      0           100%                       -                     local-writable-telemetry  0.3
 ```
 
-`precision` is verified fixed ÷ (verified fixed + suppressed). `moved` separates rename churn, while `unverified` is reserved for legacy or otherwise non-comparable resolutions that lack replay proof. Run diff-gate once to record the finding and again after the repair; a pre-commit rerun uses the same base directly, while clean post-commit runs advance through stored bases incrementally. Filter with `--check <name>`, window with `--since 30d|12w|<ISO date>`, and get machine-readable output with `--json`. Because the event files are committed, the numbers survive re-clones and aggregate across every machine and agent working the repo. Current event files carry an additive v1 discriminator, stable semantic identity, and writer version; existing unversioned files remain readable. `effectiveness` reports accepted and omitted record counts when history is partial, and cross-HEAD verification defers fixes rather than trusting an incomplete lifecycle. Legacy `.scipquery/ledger/events.jsonl` records remain readable and are migrated to individual files on the next gate write only when every non-empty line is compatible; otherwise the source ledger is preserved. Historical cross-`HEAD` events without stored comparison evidence remain unverified rather than being reclassified speculatively. Standalone health/cleanup commands are not yet outcome-tracked because they do not all expose a complete-scan contract.
+`resolution-vs-suppression` is verified fixed ÷ (verified fixed + suppressed). Repository-local event and suppression files are writable by the same agent doing the work, so this ratio is operational telemetry, not an independent correctness grade. `evaluation-precision` is populated only when a protected external evaluator supplies both protected-CI records and a separately controlled attestation for their gate-run IDs; a JSON field cannot attest itself. Ordinary local-agent and local-human runs leave it blank. `moved` separates rename churn, while `unverified` is reserved for legacy or otherwise non-comparable resolutions that lack replay proof. Run diff-gate once to record the finding and again after the repair; a pre-commit rerun uses the same base directly, while clean post-commit runs advance through stored bases incrementally. Filter with `--check <name>`, window with `--since 30d|12w|<ISO date>`, and get machine-readable provenance, anomaly samples, and record-compatibility counts with `--json`. Local runs default to `local-agent`; a person running the gate directly may set `SCIP_QUERY_OUTCOME_OBSERVER_KIND=local-human` and optionally `SCIP_QUERY_OUTCOME_OBSERVER_SOURCE=<label>`. Both remain `repository-writable`; neither environment variable can claim protected authority. Because the event files are committed, the numbers survive re-clones and aggregate across every machine and agent working the repo, but missing or deliberately deleted history cannot be inferred from the remaining directory. Current event files carry an additive v1 discriminator, stable semantic identity, writer version, gate-run identity, observer authority, and observation receipt; existing unversioned files remain readable. `effectiveness` reports accepted and omitted record counts when history is partial, and cross-HEAD verification defers fixes rather than trusting an incomplete lifecycle. Legacy `.scipquery/ledger/events.jsonl` records remain readable and are migrated to individual files on the next gate write only when every non-empty line is compatible; otherwise the source ledger is preserved. Historical cross-`HEAD` events without stored comparison evidence remain unverified rather than being reclassified speculatively. Standalone health/cleanup commands are not yet outcome-tracked because they do not all expose a complete-scan contract.
 
 `diff-gate` is also single-flight per project: a second CLI or Stop-hook gate
 returns the live owner's PID and start time instead of duplicating the same
@@ -410,7 +443,8 @@ Project setup writes reviewable checkout-local lifecycle hooks for Codex and Cla
 
 Setup/configuration writers are conflict-aware. They reread the latest file
 under a short token-owned lock, preserve unknown JSON fields and prose outside
-owned Markdown markers, and publish complete bytes durably. An unrelated
+owned Markdown markers, and publish complete bytes with flushed files and,
+where the host supports it, a synchronized complete directory path. An unrelated
 intervening JSON edit is merged; a stale decision about the same project-config
 field, malformed latest JSON, malformed managed markers, or an edit that wins
 the final revision check produces an explicit conflict and leaves the latest
@@ -488,8 +522,8 @@ scip-query status --capabilities
 scip-query stats
 scip-query system src/auth
 scip-query plan-context login
-scip-query diff-impact --json
-scip-query health --json
+scip-query diff-impact
+scip-query health
 scip-query cleanup-plan --verify
 scip-query health --write-baseline   # start the ratchet
 ```
@@ -711,10 +745,20 @@ Clojure projects can pass a project-local `scip-clojure` config file through `.s
 }
 ```
 
-Most read-only commands accept `--json` and use the same envelope:
+Most read-only commands accept `--json` and use the same versioned envelope.
+Add `--result-only` when a program needs just the command payload:
 
 ```json
-{ "command": "fan-in", "args": ["login"], "options": { "json": true }, "result": [] }
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": { "name": "scip-query", "version": "0.19.9" },
+  "command": "fan-in",
+  "resultSchemaVersion": 1,
+  "args": ["login"],
+  "options": { "json": true },
+  "result": []
+}
 ```
 
 ## Configuration

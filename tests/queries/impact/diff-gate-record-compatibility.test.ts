@@ -32,7 +32,7 @@ describe('diff-gate committed suppression compatibility', () => {
     mkdirSync(suppressionDir, { recursive: true });
     writeFileSync(
       join(suppressionDir, 'SQFUTURE.json'),
-      `${JSON.stringify({ kind: 'scip-query-suppression', schemaVersion: 2, id: 'SQFUTURE' })}\n`,
+      `${JSON.stringify({ kind: 'scip-query-suppression', schemaVersion: 3, id: 'SQFUTURE' })}\n`,
     );
 
     const dbPath = join(root, 'index.db');
@@ -70,7 +70,7 @@ describe('diff-gate committed suppression compatibility', () => {
         {
           path: '.scipquery/suppressions/SQFUTURE.json',
           state: 'unsupported-future',
-          reason: 'unsupported schemaVersion 2',
+          reason: 'unsupported schemaVersion 3',
         },
       ],
     });

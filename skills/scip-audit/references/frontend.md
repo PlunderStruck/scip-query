@@ -40,20 +40,20 @@ Then run, all uncapped with `--full --json`:
 
 **React:**
 ```
-scip-query react-component-duplicates --scope <scope> --full --json
-scip-query react-hook-candidates --scope <scope> --full --json
-scip-query react-large-component-pressure --scope <scope> --full --json
-scip-query recent-duplicates --scope <scope> --full --json
-scip-query health --scope <scope> --json
+scip-query react-component-duplicates --scope <scope> --full
+scip-query react-hook-candidates --scope <scope> --full
+scip-query react-large-component-pressure --scope <scope> --full
+scip-query recent-duplicates --scope <scope> --full
+scip-query health --scope <scope>
 ```
 
 **Vue:**
 ```
-scip-query vue-component-duplicates --scope <scope> --full --json
-scip-query vue-composable-candidates --scope <scope> --full --json
-scip-query vue-large-view-pressure --scope <scope> --full --json
-scip-query recent-duplicates --scope <scope> --full --json
-scip-query health --json
+scip-query vue-component-duplicates --scope <scope> --full
+scip-query vue-composable-candidates --scope <scope> --full
+scip-query vue-large-view-pressure --scope <scope> --full
+scip-query recent-duplicates --scope <scope> --full
+scip-query health
 ```
 
 Every `*-duplicates`/`*-candidates`/`*-pressure` command has bounded

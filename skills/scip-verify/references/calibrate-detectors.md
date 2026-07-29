@@ -43,10 +43,10 @@ Run the full detector battery and don't react to any of the numbers yet —
 big counts here are sampling frames, not findings:
 
 ```bash
-scip-query health --json
-scip-query dead --json
+scip-query health
+scip-query dead
 scip-query similar <symbol>
-scip-query twin-drift -s <scope> --json
+scip-query twin-drift -s <scope>
 ```
 
 Complete only when every detector's finding count is recorded.
@@ -57,7 +57,7 @@ Replay the gate against the last 15-20 real commits, using a worktree per
 commit — never the user's live tree:
 
 ```bash
-scip-query diff-gate --base <commit> --json
+scip-query diff-gate --base <commit>
 ```
 
 This is the stage that exposes finding WALLS: one hub file or one convention
@@ -114,7 +114,7 @@ until it's fixed.
 Confirm the repair:
 
 ```bash
-scip-query diff-gate --json
+scip-query diff-gate
 ```
 
 run before and after, to check it worked.
@@ -147,11 +147,11 @@ Each of these has been observed in a real calibration:
 
 The finding-outcome ledger keeps calibrating automatically. Once the repo
 uses `diff-gate`, per-detector precision is recomputed from real outcomes as
-`detectorPrecision` in `health --json`. The committed event ledger under
+`detectorPrecision` in `health`. The committed event ledger under
 `.scipquery/events/*.json` makes those outcomes durable and queryable:
 
 ```bash
-scip-query effectiveness --since 30d --json
+scip-query effectiveness --since 30d
 ```
 
 reports, per check, caught / comparison-verified-fixed / suppressed / open /

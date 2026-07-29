@@ -2,7 +2,16 @@ import { create } from '@bufbuild/protobuf';
 import { deserializeSCIP, IndexSchema, MetadataSchema, serializeSCIP } from '@c4312/scip';
 import Database from 'better-sqlite3';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -22,6 +31,7 @@ import {
   worktreeLeaseOwnershipChecksum,
   writeWorktreeLease,
   type SharedGenerationSnapshot,
+  type SharedGenerationPublicationStage,
   type WorktreeCacheLease,
 } from '../../src/reindex/shared-generation-store.js';
 import { refreshSqliteGenerationMetadata } from '../../src/reindex/sqlite-generation-store.js';
@@ -50,7 +60,19 @@ describe('shared generation store', () => {
     writeFileSync(join(targetCache, TYPESCRIPT_FRAGMENT_STORE_DIRECTORY, 'stale.json'), 'stale');
     const snapshot = createSnapshot(root, targetRoot);
 
-    const manifest = publishSharedGeneration({ snapshot, sourceCacheDir: sourceCache, sourceProjectRoot: sourceRoot });
+    const publication = publishSharedGeneration({
+      snapshot,
+      sourceCacheDir: sourceCache,
+      sourceProjectRoot: sourceRoot,
+    });
+    const manifest = publication.manifest;
+    expect(publication).toEqual(
+      expect.objectContaining({
+        kind: 'published',
+        achievedDurability: 'directory-durable',
+        directorySync: 'synced',
+      }),
+    );
     hydrateSharedGeneration({ snapshot, manifest, targetCacheDir: targetCache, targetProjectRoot: targetRoot });
 
     expect(readValue(join(targetCache, 'index.db'))).toBe('source');
@@ -96,8 +118,15 @@ describe('shared generation store', () => {
     ).toThrow('source index changed');
     expect(readSharedGeneration(snapshot)).toBeNull();
 
-    const manifest = publishSharedGeneration({ snapshot, sourceCacheDir: sourceCache, sourceProjectRoot: sourceRoot });
-    writeFileSync(join(snapshot.repositoryCacheDir, 'generations', snapshot.generationId, 'index.scip'), 'corrupt');
+    const publication = publishSharedGeneration({
+      snapshot,
+      sourceCacheDir: sourceCache,
+      sourceProjectRoot: sourceRoot,
+    });
+    const manifest = publication.manifest;
+    const corruptPath = join(snapshot.repositoryCacheDir, 'generations', snapshot.generationId, 'index.scip');
+    chmodSync(corruptPath, 0o644);
+    writeFileSync(corruptPath, 'corrupt');
     expect(readSharedGeneration(snapshot)).toBeNull();
     expect(() => parseSharedGenerationManifest(JSON.stringify({ ...manifest, artifacts: [] }))).toThrow(
       'missing index.db',
@@ -105,6 +134,40 @@ describe('shared generation store', () => {
     expect(() =>
       parseSharedGenerationManifest(JSON.stringify({ ...manifest, producerIdentity: 'older-producer' })),
     ).toThrow('invalid shared generation manifest');
+  });
+
+  it.each<SharedGenerationPublicationStage>([
+    'after-artifact-flushed',
+    'after-manifest-flushed',
+    'after-staging-directory-synced',
+    'after-generation-renamed',
+    'after-generations-directory-synced',
+  ])('never returns publication success after an injected crash at %s', (crashStage) => {
+    const root = temporaryDirectory(`scip-query-shared-crash-${crashStage}-`);
+    const sourceRoot = join(root, 'source');
+    const sourceCache = join(root, 'source-cache');
+    mkdirSync(sourceRoot);
+    createCache(sourceCache, sourceRoot, 'source');
+    const snapshot = createSnapshot(root, sourceRoot);
+
+    expect(() =>
+      publishSharedGeneration({
+        snapshot,
+        sourceCacheDir: sourceCache,
+        sourceProjectRoot: sourceRoot,
+        onPublicationStage(stage) {
+          if (stage === crashStage) throw new Error(`simulated publication crash at ${stage}`);
+        },
+      }),
+    ).toThrow(`simulated publication crash at ${crashStage}`);
+
+    if (
+      crashStage === 'after-artifact-flushed' ||
+      crashStage === 'after-manifest-flushed' ||
+      crashStage === 'after-staging-directory-synced'
+    ) {
+      expect(readSharedGeneration(snapshot)).toBeNull();
+    }
   });
 
   it('restores the complete previous cache when hydration fails after handoff starts', () => {
@@ -122,7 +185,12 @@ describe('shared generation store', () => {
     mkdirSync(join(targetCache, TYPESCRIPT_FRAGMENT_STORE_DIRECTORY), { recursive: true });
     writeFileSync(join(targetCache, TYPESCRIPT_FRAGMENT_STORE_DIRECTORY, 'old.json'), 'old');
     const snapshot = createSnapshot(root, targetRoot);
-    const manifest = publishSharedGeneration({ snapshot, sourceCacheDir: sourceCache, sourceProjectRoot: sourceRoot });
+    const publication = publishSharedGeneration({
+      snapshot,
+      sourceCacheDir: sourceCache,
+      sourceProjectRoot: sourceRoot,
+    });
+    const manifest = publication.manifest;
 
     expect(() =>
       hydrateSharedGeneration({

@@ -6,6 +6,7 @@ import {
   DEFAULT_DIFF_GATE_TIMEOUT_MS,
   DEFAULT_FULL_DIFF_GATE_TIMEOUT_MS,
   DIFF_GATE_REQUEST_ENV,
+  diffGateDeadlineContract,
   DiffGateBusyError,
   DiffGateDetectorTimeoutError,
   diffGateTimeoutMs,
@@ -50,6 +51,18 @@ describe('diff-gate execution containment', () => {
     expect(diffGateTimeoutMs(false, { SCIP_QUERY_DIFF_GATE_TIMEOUT_MS: '25' })).toBe(25);
     expect(diffGateTimeoutMs(false, { SCIP_QUERY_DIFF_GATE_TIMEOUT_MS: '99999999' })).toBe(600_000);
     expect(diffGateTimeoutMs(false, { SCIP_QUERY_DIFF_GATE_TIMEOUT_MS: 'never' })).toBe(DEFAULT_DIFF_GATE_TIMEOUT_MS);
+  });
+
+  it('derives a host deadline that strictly contains preflight, child execution, reaping, and serialization', () => {
+    const contract = diffGateDeadlineContract(DEFAULT_DIFF_GATE_TIMEOUT_MS, 5_000);
+
+    expect(contract).toMatchObject({
+      childTimeoutMs: DEFAULT_DIFF_GATE_TIMEOUT_MS,
+      preflightMs: 5_000,
+    });
+    expect(contract.hostTimeoutSeconds * 1_000).toBeGreaterThan(
+      contract.preflightMs + contract.childTimeoutMs + contract.processReapGraceMs + contract.serializationGraceMs,
+    );
   });
 
   it('rejects a duplicate while a live process owns the project lease', () => {

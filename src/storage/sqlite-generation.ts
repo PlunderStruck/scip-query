@@ -4,7 +4,7 @@ import { basename, dirname, join } from 'node:path';
 import { canonicalReindexMetadataIdentity, decodeReindexMetadata } from '../domain/reindex-metadata.js';
 import { parseProcessIdentity, sameProcessIdentity, type ProcessIdentity } from '../domain/process-identity.js';
 import type { ScipQueryConfig } from '../domain/types.js';
-import { readSmallArtifactText } from '../filesystem/bounded-file.js';
+import { readSmallArtifactText, sha256FileWithinLimit } from '../filesystem/bounded-file.js';
 import { readProcessIdentity } from '../platform/process-identity.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
 import { acquireProcessFileLock } from '../platform/repository-cache-lock.js';
@@ -16,6 +16,8 @@ export const SQLITE_GENERATION_DIRECTORY = '.scipquery-generations';
 export const SQLITE_GENERATION_MANIFEST = 'manifest.json';
 export const SQLITE_GENERATION_READERS_DIRECTORY = 'readers';
 export const SQLITE_GENERATION_GC_LOCK = 'gc.lock';
+const MAX_VERIFIED_ARTIFACT_CACHE_ENTRIES = 128;
+const verifiedImmutableArtifacts = new Map<string, true>();
 
 export interface SqliteGenerationRecovery {
   generationIdentity: string;
@@ -343,9 +345,9 @@ function readImmutableGeneration(config: ScipQueryConfig, identity: string): Sql
     const indexPath = manifest.index ? artifactPath(directory, manifest.index) : undefined;
     const metadataPath = manifest.metadata ? artifactPath(directory, manifest.metadata) : undefined;
     if (
-      !artifactHasRecordedSize(databasePath, manifest.database) ||
-      (manifest.index && (!indexPath || !artifactHasRecordedSize(indexPath, manifest.index))) ||
-      (manifest.metadata && (!metadataPath || !artifactHasRecordedSize(metadataPath, manifest.metadata)))
+      !artifactMatchesRecordedDigest(databasePath, manifest.database) ||
+      (manifest.index && (!indexPath || !artifactMatchesRecordedDigest(indexPath, manifest.index))) ||
+      (manifest.metadata && (!metadataPath || !artifactMatchesRecordedDigest(metadataPath, manifest.metadata)))
     ) {
       return null;
     }
@@ -395,8 +397,34 @@ function artifactPath(directory: string, artifact: SqliteGenerationArtifact): st
   return join(directory, artifact.file);
 }
 
-function artifactHasRecordedSize(path: string, artifact: SqliteGenerationArtifact): boolean {
-  return existsSync(path) && statSync(path).isFile() && statSync(path).size === artifact.size;
+function artifactMatchesRecordedDigest(path: string, artifact: SqliteGenerationArtifact): boolean {
+  if (!existsSync(path)) return false;
+  const before = immutableArtifactIdentity(path);
+  if (!before || before.size !== artifact.size) return false;
+  const cacheKey = `${path}\0${artifact.sha256}\0${before.identity}`;
+  if (verifiedImmutableArtifacts.has(cacheKey)) return true;
+  const digest = sha256FileWithinLimit(path, {
+    inputKind: 'immutable SQLite generation artifact',
+    maxBytes: artifact.size,
+  });
+  const after = immutableArtifactIdentity(path);
+  if (!after || after.identity !== before.identity || digest !== artifact.sha256) return false;
+  verifiedImmutableArtifacts.set(cacheKey, true);
+  while (verifiedImmutableArtifacts.size > MAX_VERIFIED_ARTIFACT_CACHE_ENTRIES) {
+    const oldest = verifiedImmutableArtifacts.keys().next().value;
+    if (oldest === undefined) break;
+    verifiedImmutableArtifacts.delete(oldest);
+  }
+  return true;
+}
+
+function immutableArtifactIdentity(path: string): { identity: string; size: number } | null {
+  const stat = statSync(path, { bigint: true });
+  if (!stat.isFile()) return null;
+  return {
+    identity: `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`,
+    size: Number(stat.size),
+  };
 }
 
 function validManifest(

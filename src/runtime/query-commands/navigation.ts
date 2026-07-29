@@ -361,10 +361,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       ['file'],
       'bounded',
     ),
-    options: [
-      option('--full', 'Run unbounded semantic analysis on large indexes'),
-      option('--json', 'Output as JSON for programmatic consumption'),
-    ],
+    options: withJsonOption([option('--full', 'Run unbounded semantic analysis on large indexes')]),
     budget: 'semantic',
     renderShape: 'list',
     docs: doc('Navigation'),

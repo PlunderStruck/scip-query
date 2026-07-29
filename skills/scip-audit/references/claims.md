@@ -60,7 +60,7 @@ call site), hedged, or asserted.
 **Complete when:** every producer has one of the three labels with the one
 line of source evidence that justifies it.
 
-Use `scip-query capabilities --matrix --json` as a spot-check: an
+Use `scip-query capabilities --matrix` as a spot-check: an
 already-known example of a fixed derived-status surface, useful for
 calibrating what "derived" looks like in this codebase before judging
 ambiguous cases.

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -106,6 +106,12 @@ describe('SQLite generation handoff', () => {
       },
       now: () => new Date('2026-07-10T09:00:00.000Z'),
     });
+    expect(result).toEqual(
+      expect.objectContaining({
+        achievedDurability: 'directory-durable',
+        directorySync: 'synced',
+      }),
+    );
     const newReader = new Database(fixture.paths.outputDb, { readonly: true });
     try {
       expect(readValueFromDatabase(oldReader)).toBe('old');
@@ -317,6 +323,57 @@ describe('SQLite generation handoff', () => {
     expect(() => openFixtureDatabase(fixture)).toThrow(
       `Published SQLite generation ${result.currentGeneration} is missing or invalid.`,
     );
+  });
+
+  test.each(['database', 'index', 'metadata'] as const)(
+    'rejects same-size %s corruption after a prior successful validation',
+    (artifactKind) => {
+      const fixture = createFixture();
+      const result = promoteReindexArtifacts({ ...fixture.paths });
+      const first = openFixtureDatabase(fixture);
+      first.close();
+      const generationDirectory = join(sqliteGenerationRoot(fixture.paths.outputDb), result.currentGeneration);
+      const artifactPath =
+        artifactKind === 'database'
+          ? join(generationDirectory, 'index.db')
+          : artifactKind === 'index'
+            ? join(generationDirectory, 'index.scip')
+            : join(generationDirectory, 'meta.json');
+      const bytes = readFileSync(artifactPath);
+      const corrupt = Buffer.from(bytes);
+      corrupt[Math.max(0, corrupt.length - 1)] ^= 0xff;
+      chmodSync(artifactPath, 0o644);
+      writeFileSync(artifactPath, corrupt);
+      expect(statSync(artifactPath).size).toBe(bytes.length);
+
+      expect(() => openFixtureDatabase(fixture)).toThrow(
+        `Published SQLite generation ${result.currentGeneration} is missing or invalid.`,
+      );
+    },
+  );
+
+  test('fails closed on a corrupt current generation instead of silently selecting a valid previous generation', () => {
+    const fixture = createFixture();
+    const result = promoteReindexArtifacts({ ...fixture.paths });
+    expect(result.previousGeneration).toBeDefined();
+    const currentScip = join(sqliteGenerationRoot(fixture.paths.outputDb), result.currentGeneration, 'index.scip');
+    chmodSync(currentScip, 0o644);
+    writeFileSync(currentScip, 'bad-scip');
+
+    expect(() => openFixtureDatabase(fixture)).toThrow(
+      `Published SQLite generation ${result.currentGeneration} is missing or invalid.`,
+    );
+  });
+
+  test('publishes immutable generation artifacts with read-only mode on POSIX', () => {
+    const fixture = createFixture();
+    const result = promoteReindexArtifacts({ ...fixture.paths });
+    if (process.platform === 'win32') return;
+    const generationDirectory = join(sqliteGenerationRoot(fixture.paths.outputDb), result.currentGeneration);
+
+    for (const name of ['index.db', 'index.scip', 'meta.json']) {
+      expect(statSync(join(generationDirectory, name)).mode & 0o777).toBe(0o444);
+    }
   });
 
   test('does not open replaceable legacy paths while an older publisher owns the reindex lock', () => {

@@ -94,6 +94,21 @@ describe('CLI contract', () => {
     );
   });
 
+  it('gives every JSON-capable command the same JSON presentation options', () => {
+    const jsonDescriptors = commandDescriptors.filter(
+      (descriptor) => !descriptor.hidden && descriptor.options?.some((option) => option.flags === '--json'),
+    );
+
+    expect(jsonDescriptors.length).toBeGreaterThan(50);
+    for (const descriptor of jsonDescriptors) {
+      expect(descriptor.options?.map((option) => option.flags).slice(-3), descriptor.id).toEqual([
+        '--json',
+        '--result-only',
+        '--compact',
+      ]);
+    }
+  });
+
   it('marks private JSON workers so transport pagination cannot wrap their envelopes', () => {
     for (const name of ['__diff-gate-run', '__diff-impact-batch', '__health-phase']) {
       expect(optionFlags(name), name).toContain('--json');
@@ -175,9 +190,11 @@ describe('CLI contract', () => {
     expect(docs.find((entry) => entry.id === 'health')?.options).toEqual([
       '-s, --scope <path>',
       '--full',
-      '--json',
       '--baseline',
       '--write-baseline',
+      '--json',
+      '--result-only',
+      '--compact',
     ]);
     expect(docs.find((entry) => entry.id === 'setup')?.options).toEqual([
       '--guided',
@@ -190,20 +207,28 @@ describe('CLI contract', () => {
       '--no-health',
       '--dossier-dir <path>',
       '--json',
+      '--result-only',
+      '--compact',
     ]);
     expect(docs.find((entry) => entry.id === 'setup-hooks')?.options).toEqual([
       '--shared',
       '--remove',
       '--force',
       '--json',
+      '--result-only',
+      '--compact',
     ]);
     expect(docs.find((entry) => entry.id === 'suppress')?.options).toEqual([
       '--reason <text>',
+      '--reason-code <code>',
+      '--evidence <kind:referent>',
       '--check <check>',
       '--file <path>',
       '--expires-at <iso>',
       '--replace <revision>',
       '--json',
+      '--result-only',
+      '--compact',
     ]);
     expect(docs.find((entry) => entry.id === 'watch')?.options).toEqual([
       '--daemon',
@@ -214,8 +239,15 @@ describe('CLI contract', () => {
       '--git-poll <ms>',
       '--idle-timeout <ms>',
       '--json',
+      '--result-only',
+      '--compact',
     ]);
-    expect(docs.find((entry) => entry.id === 'diff-impact')?.options).toEqual(['--base <ref>', '--json']);
+    expect(docs.find((entry) => entry.id === 'diff-impact')?.options).toEqual([
+      '--base <ref>',
+      '--json',
+      '--result-only',
+      '--compact',
+    ]);
     expect(docs.find((entry) => entry.id === 'diff-gate')?.options).toContain('--json');
     expect(docs.find((entry) => entry.id === 'plan-context')).toMatchObject({
       command: 'plan-context <target>',

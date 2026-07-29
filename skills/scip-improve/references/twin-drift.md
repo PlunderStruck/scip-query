@@ -6,7 +6,7 @@ A twin drift group is a same-leaf-name family of callables spanning at least two
 
 ## Detect
 
-Run `scip-query twin-drift --json --full` to surface every DIVERGENT and near-name group in scope; scope it with `-s/--scope <path>` when the review should be bounded. Cross-check against `scip-query duplicate-bodies --json --full` — IDENTICAL groups belong there, not here; don't re-report them. Homonyms (similarity below `--min-similarity`, default 0.3) are noise — skip them unless `--include-homonyms` was explicitly requested. Record group count, member count, and `maxDivergence` per group. Done only when every group in scope is enumerated with its relationship (divergent vs. suppressed homonym).
+Run `scip-query twin-drift --full` to surface every DIVERGENT and near-name group in scope; scope it with `-s/--scope <path>` when the review should be bounded. Cross-check against `scip-query duplicate-bodies --full` — IDENTICAL groups belong there, not here; don't re-report them. Homonyms (similarity below `--min-similarity`, default 0.3) are noise — skip them unless `--include-homonyms` was explicitly requested. Record group count, member count, and `maxDivergence` per group. Done only when every group in scope is enumerated with its relationship (divergent vs. suppressed homonym).
 
 ## Classify
 
@@ -26,10 +26,10 @@ Done only when every DIVERGENT group is either consolidated (old copies gone or 
 
 ## Verify
 
-Rerun `scip-query twin-drift --json --full` to confirm consolidated groups no longer appear as DIVERGENT, then run the routed postchecks from `scip-verify`. The twin-partner check inside `diff-gate` is advisory and never blocks the gate by itself — but a finding there on your own diff means you've reproduced the exact defect class this skill exists to catch; treat it as a signal to run this workflow, not just to suppress the finding. Fix it or explicitly accept it before finishing.
+Rerun `scip-query twin-drift --full` to confirm consolidated groups no longer appear as DIVERGENT, then run the routed postchecks from `scip-verify`. The twin-partner check inside `diff-gate` is advisory and never blocks the gate by itself — but a finding there on your own diff means you've reproduced the exact defect class this skill exists to catch; treat it as a signal to run this workflow, not just to suppress the finding. Fix it or explicitly accept it before finishing.
 
 Done only when `twin-drift` shows no unclassified DIVERGENT groups in scope and any `diff-gate` findings are resolved or explained.
 
 ## Report
 
-Scope, groups found (total / divergent / suppressed homonyms), each divergent group with its classification and action taken, and the verification results of `twin-drift --json --full` and `diff-gate --json`.
+Scope, groups found (total / divergent / suppressed homonyms), each divergent group with its classification and action taken, and the verification results of `twin-drift --full` and `diff-gate`.

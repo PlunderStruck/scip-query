@@ -10,7 +10,7 @@ nothing is confirmed yet, run that scenario first, then cross-check, then act.
 
 ## Scan (only if not already done)
 
-React: `scip-query react-component-duplicates`, `react-hook-candidates`, `react-large-component-pressure`, `recent-duplicates`, `health` — all `--scope <scope> --full --json`, uncapped.
+React: `scip-query react-component-duplicates`, `react-hook-candidates`, `react-large-component-pressure`, `recent-duplicates`, `health` — all `--scope <scope> --full`, uncapped.
 
 Vue: same shape, using `vue-component-duplicates`, `vue-composable-candidates`, `vue-large-view-pressure`. Before scanning, when component references, imported composables, script blocks, or linked external scripts matter, run `scip-query augment-vue --project <path-to-tsconfig>` to add compiler-resolved Vue SFC references via Volar — Vue needs this step; React doesn't.
 
@@ -18,7 +18,7 @@ Record scope, counts, and uncapped/full status.
 
 ## Cross-check before acting
 
-Use `scip-query outline <file>`, `deps <file>`, `rdeps <file>`, `similar-files --scope <scope>`, and either `scip-query similar <closest-existing-component-or-hook>` (React) or `scip-query recent-duplicates --scope <scope> --full --json` (Vue) to validate each candidate. Classify every top candidate as reuse, extract, split, skip, or blocked:
+Use `scip-query outline <file>`, `deps <file>`, `rdeps <file>`, `similar-files --scope <scope>`, and either `scip-query similar <closest-existing-component-or-hook>` (React) or `scip-query recent-duplicates --scope <scope> --full` (Vue) to validate each candidate. Classify every top candidate as reuse, extract, split, skip, or blocked:
 
 - Component-duplicate-only → look for a shared presentational component or existing reuse.
 - Hook/composable-candidate-only → look for shared state lifecycle, effects, requests, validation, persistence, or derived-state policy.

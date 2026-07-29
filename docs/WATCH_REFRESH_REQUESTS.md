@@ -21,10 +21,15 @@ A claim is an exclusive processing marker for that admitted request. A
 completion is a durable receipt proving that the attempt associated with the
 claim finished successfully, or that the request expired before execution.
 
-These records provide at-least-once execution for an accepted, unexpired
-request. At-least-once execution means a crash after reindex success but before
-the completion receipt may repeat the safe reindex operation; it never means an
-unacknowledged request can disappear.
+On hosts that support directory synchronization, these records provide
+at-least-once execution across process, operating-system, and machine failure
+for an accepted, unexpired request. At-least-once execution means a crash after
+reindex success but before the completion receipt may repeat the safe reindex
+operation; it never means an acknowledged request can disappear. On Windows
+hosts where Node cannot synchronize directory handles, admission reports
+`achievedDurability: "file-flushed"` and `directorySync: "unsupported"`:
+process-crash recovery remains intact, but the stronger machine-crash
+namespace guarantee is not claimed.
 
 ## Layout
 
@@ -52,18 +57,22 @@ deadline remain authoritative.
 
 ## Lifecycle
 
-1. The requester durably writes a complete staging record.
-2. It exclusively links that record into `requests/`. A collision is a
+1. The requester durably establishes the protocol root, `staging/`, and the
+   target record directory from the nearest existing ancestor.
+2. It writes and flushes a complete staging record.
+3. It exclusively links that record into `requests/`. A collision is a
    duplicate, not an overwrite.
-3. The watch server, while holding the project watch lock, claims pending,
+4. It flushes `requests/` before returning accepted and reports the achieved
+   platform guarantee.
+5. The watch server, while holding the project watch lock, claims pending,
    unexpired requests through exclusive claim records.
-4. It deliberately coalesces one claimed batch into one `watch-demand`
+6. It deliberately coalesces one claimed batch into one `watch-demand`
    refresh. Requests arriving while the watcher is busy remain pending.
-5. A successful corresponding reindex writes every completion receipt before
+7. A successful corresponding reindex writes every completion receipt before
    removing any claim.
-6. A failed reindex removes its claims without writing completion, making the
+8. A failed reindex removes its claims without writing completion, making the
    requests pending after a bounded retry delay.
-7. A successor watch server removes predecessor claims only after acquiring
+9. A successor watch server removes predecessor claims only after acquiring
    the same exclusive watch lock. Completed requests remain completed; all
    other claimed requests become pending.
 
@@ -76,17 +85,21 @@ retention window.
 
 ## Crash and Concurrency Outcomes
 
-| Boundary | Observable outcome |
-| --- | --- |
-| Crash before exclusive admission | No request was accepted; only staging may remain |
+| Boundary                                         | Observable outcome                                                                      |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| Crash before exclusive admission                 | No request was accepted; only staging may remain                                        |
 | Crash after admission before caller sees success | Request remains pending; retrying the same idempotency key returns the admitted request |
-| Two callers use one idempotency key | Exactly one immutable request wins |
-| Two callers use distinct keys | Both requests remain independently visible and may be coalesced deliberately |
-| Crash after claim before reindex | Successor clears the stale claim and retries the request |
-| Reindex failure | Claim is released; request remains pending |
-| Crash after reindex before completion | Request may execute again; it is never lost |
-| Crash after completion before claim removal | Completion prevents replay; successor removes the obsolete claim |
-| Activity writer races any row above | Activity changes only `watch-activity.json` and cannot modify request state |
+| Two callers use one idempotency key              | Exactly one immutable request wins                                                      |
+| Two callers use distinct keys                    | Both requests remain independently visible and may be coalesced deliberately            |
+| Crash after claim before reindex                 | Successor clears the stale claim and retries the request                                |
+| Reindex failure                                  | Claim is released; request remains pending                                              |
+| Crash after reindex before completion            | Request may execute again; it is never lost                                             |
+| Crash after completion before claim removal      | Completion prevents replay; successor removes the obsolete claim                        |
+| Activity writer races any row above              | Activity changes only `watch-activity.json` and cannot modify request state             |
+
+The first two rows are machine-crash claims only when admission returned
+`directory-durable`. A `file-flushed` result is explicit evidence that the
+host could not commit the complete namespace frontier.
 
 ## Compatibility and Diagnostics
 

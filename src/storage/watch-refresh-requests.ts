@@ -1,8 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, linkSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, linkSync, readdirSync, rmSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
-import { syncDirectoryDurable } from './atomic-file.js';
+import {
+  ensureDirectoryDurable,
+  mergeDirectorySyncStatus,
+  syncDirectoryDurable,
+  type AchievedFileDurability,
+  type DirectorySyncStatus,
+} from './atomic-file.js';
 import { writeJsonDurable } from './atomic-json.js';
 import { isValidRecordTimestamp } from '../domain/record-validation.js';
 import { readSmallArtifactText } from '../filesystem/bounded-file.js';
@@ -63,7 +69,12 @@ export interface EnqueueWatchRefreshRequestOptions {
 }
 
 export type EnqueueWatchRefreshRequestResult =
-  | { disposition: 'accepted'; request: WatchRefreshRequest }
+  | {
+      disposition: 'accepted';
+      request: WatchRefreshRequest;
+      achievedDurability: Exclude<AchievedFileDurability, 'visibility'>;
+      directorySync: Exclude<DirectorySyncStatus, 'not-requested'>;
+    }
   | { disposition: 'duplicate'; request: WatchRefreshRequest };
 
 /**
@@ -92,7 +103,14 @@ export function enqueueWatchRefreshRequest(
   };
   const path = requestPath(root, requestId);
   const published = publishImmutableJson(root, path, request, options.onStage);
-  if (published) return { disposition: 'accepted', request };
+  if (published.published) {
+    return {
+      disposition: 'accepted',
+      request,
+      achievedDurability: published.achievedDurability,
+      directorySync: published.directorySync,
+    };
+  }
   const existing = readWatchRefreshRequest(path);
   if (!existing) {
     throw new Error(`Watch refresh request identity ${requestId} exists but is malformed.`);
@@ -132,7 +150,7 @@ export function claimWatchRefreshRequests(
       claimId,
       claimedAt: now.toISOString(),
     };
-    if (!publishImmutableJson(root, claimPath(root, request.requestId), claim)) continue;
+    if (!publishImmutableJson(root, claimPath(root, request.requestId), claim).published) continue;
     if (completionExists(root, request.requestId)) {
       removeClaim(root, request.requestId, claimId);
       continue;
@@ -296,7 +314,7 @@ function readWatchRefreshCompletion(path: string): WatchRefreshCompletion | null
 
 function publishCompletion(root: string, completion: WatchRefreshCompletion): void {
   const path = completionPath(root, completion.requestId);
-  if (publishImmutableJson(root, path, completion)) return;
+  if (publishImmutableJson(root, path, completion).published) return;
   const existing = readWatchRefreshCompletion(path);
   if (!existing || existing.requestId !== completion.requestId || existing.outcome !== completion.outcome) {
     throw new Error(`Watch refresh completion ${completion.requestId} conflicts with an existing record.`);
@@ -308,24 +326,39 @@ function publishImmutableJson(
   targetPath: string,
   value: unknown,
   onStage?: (stage: 'after-staged' | 'after-published') => void,
-): boolean {
+):
+  | { published: false }
+  | {
+      published: true;
+      achievedDurability: Exclude<AchievedFileDurability, 'visibility'>;
+      directorySync: Exclude<DirectorySyncStatus, 'not-requested'>;
+    } {
   const staging = join(root, STAGING_DIRECTORY);
   const parent = dirname(targetPath);
-  mkdirSync(staging, { recursive: true });
-  mkdirSync(parent, { recursive: true });
+  const stagingSync = ensureDirectoryDurable(staging);
+  const parentInitializationSync = ensureDirectoryDurable(parent);
   const temporaryPath = join(staging, `${basename(targetPath)}.${process.pid}.${randomUUID()}.tmp`);
   try {
-    writeJsonDurable(temporaryPath, value, { spacing: 2, trailingNewline: true });
+    const stagingWrite = writeJsonDurable(temporaryPath, value, { spacing: 2, trailingNewline: true });
     onStage?.('after-staged');
     try {
       linkSync(temporaryPath, targetPath);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') return { published: false };
       throw error;
     }
-    syncDirectoryDurable(parent);
+    const directorySync = mergeDirectorySyncStatus(
+      stagingSync,
+      parentInitializationSync,
+      stagingWrite.directorySync,
+      syncDirectoryDurable(parent),
+    ) as Exclude<DirectorySyncStatus, 'not-requested'>;
     onStage?.('after-published');
-    return true;
+    return {
+      published: true,
+      achievedDurability: directorySync === 'synced' ? 'directory-durable' : 'file-flushed',
+      directorySync,
+    };
   } finally {
     rmSync(temporaryPath, { force: true });
   }

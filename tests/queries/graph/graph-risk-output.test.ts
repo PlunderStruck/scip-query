@@ -2,16 +2,22 @@ import Database from 'better-sqlite3';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { bottlenecks } from '../../../src/queries/graph/bottlenecks.js';
 import { coupling, topCoupling } from '../../../src/queries/graph/coupling.js';
 import { deepChains } from '../../../src/queries/graph/deep-chains.js';
+import { TARGET_COUPLING_SQL } from '../../../src/queries/internal/target-coupling.js';
 import { topFanIn, topFanOut } from '../../../src/queries/graph/fan.js';
 import { hotspots } from '../../../src/queries/graph/hotspots.js';
 import { drift } from '../../../src/queries/cleanup/drift.js';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { createEvidenceSchema, evidenceFixtureDb, writeFixtureFiles } from '../../fixtures/evidence-fixture.js';
+import { findFirstSymbolMatch } from '../../../src/symbols/symbol-lookup.js';
+import {
+  getResolvedReferenceSites,
+  getResolvedReferenceSitesMap,
+} from '../../../src/symbols/references/reference-sites.js';
 
 const sym = (path: string, name: string) => `scip-typescript npm fixture 1.0.0 src/\`${path}\`/${name}().`;
 
@@ -224,8 +230,29 @@ function withArchitecturePolicyFixture(run: (db: ScipDatabase) => void): void {
 }
 
 describe('graph-risk output classification', () => {
+  it('batches resolved reference chunks without changing per-symbol sites', () => {
+    withGraphFixture((db) => {
+      const central = findFirstSymbolMatch(db, 'central');
+      const depOne = findFirstSymbolMatch(db, 'depOne');
+      expect(central).not.toBeNull();
+      expect(depOne).not.toBeNull();
+      if (!central || !depOne) return;
+
+      const expected = new Map([
+        [central.symbolId, getResolvedReferenceSites(db, central)],
+        [depOne.symbolId, getResolvedReferenceSites(db, depOne)],
+      ]);
+      const all = vi.spyOn(db, 'all');
+      const actual = getResolvedReferenceSitesMap(db, [central, depOne]);
+
+      expect(actual).toEqual(expected);
+      expect(all.mock.calls.filter(([sql]) => String(sql).includes('SELECT DISTINCT m.symbol_id'))).toHaveLength(1);
+    });
+  });
+
   it('labels bottlenecks and coupling as contextual graph-risk signals', () => {
     withGraphFixture((db) => {
+      const get = vi.spyOn(db, 'get');
       const central = bottlenecks(db, { minFanIn: 2, minFanOut: 2, limit: 10, semantic: false }).find(
         (row) => row.shortName === 'src:central:central()',
       );
@@ -257,6 +284,9 @@ describe('graph-risk output classification', () => {
         ]),
       );
       expect(central?.recommendation).toContain('do not refactor solely from graph centrality');
+      expect(
+        get.mock.calls.filter(([sql]) => String(sql).includes('SELECT COUNT(*) AS count FROM global_symbols')),
+      ).toHaveLength(1);
 
       expect(topFanIn(db, { limit: 20 }).find((row) => row.name === 'src:central:central()')).toMatchObject({
         count: 2,
@@ -280,6 +310,16 @@ describe('graph-risk output classification', () => {
         sharedSymbols: 2,
       });
       expect(pair.recommendation).toContain('intentional boundary');
+
+      const plan = db.all<{ detail: string }>(
+        `EXPLAIN QUERY PLAN ${TARGET_COUPLING_SQL}`,
+        'src/model.ts',
+        'src/view.ts',
+        'src/view.ts',
+        'src/model.ts',
+      );
+      expect(plan.some((row) => row.detail.includes('sqlite_autoindex_documents_1'))).toBe(true);
+      expect(plan.some((row) => /SCAN (?:gs|global_symbols)/u.test(row.detail))).toBe(false);
     });
   });
 

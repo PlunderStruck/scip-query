@@ -107,15 +107,14 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       'repository',
     ),
     description: 'Ordered, batched deletion plan: graph-fact dead code plus the cascade candidates it unlocks',
-    options: [
+    options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--min-loc <n>', 'Only include symbols >= N lines', parseInteger, 1),
       option('--max-depth <n>', 'Maximum cascade depth', parseInteger, 5),
       option('--verify', 'Apply batches in a throwaway worktree and run the project checker (tsc / cargo check)'),
       option('--patch', 'With --verify, print the compiler-verified deletion patch to stdout'),
-      option('--json', 'Output as JSON for programmatic consumption'),
       option('--full', 'Run unbounded analysis on large indexes'),
-    ],
+    ]),
     budget: 'candidate-scan',
     renderShape: 'custom',
     docs: doc('Cleanup', ['scip-query cleanup-plan --min-loc 3', 'scip-query cleanup-plan --verify']),

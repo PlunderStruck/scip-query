@@ -6,6 +6,8 @@
  * orchestration mechanisms owns what an outcome means.
  */
 
+import type { ObservationReceipt } from './observation-receipt.js';
+
 export type FindingOutcome = 'resolved' | 'suppressed' | 'still-open';
 
 export interface FindingOutcomeRecord {
@@ -29,6 +31,20 @@ export function ledgerKey(check: string, findingId: string): string {
 
 export type OutcomeEventKind = 'caught' | 'resolved' | 'suppressed' | 'reopened';
 
+export type OutcomeObserverKind = 'local-agent' | 'local-human' | 'protected-ci';
+export type OutcomeObserverAuthority = 'repository-writable' | 'protected-external';
+
+/**
+ * Identifies who reported an outcome and whether that observer controls the
+ * repository-local evidence it is reporting. Kind is provenance; authority
+ * determines whether the observation can support an independent evaluation.
+ */
+export interface OutcomeObserverProvenance {
+  kind: OutcomeObserverKind;
+  authority: OutcomeObserverAuthority;
+  source?: string;
+}
+
 export interface OutcomeEvent {
   /** Wall-clock ms when the transition was observed. */
   ts: number;
@@ -43,11 +59,23 @@ export interface OutcomeEvent {
   verifiedAgainstCommit?: string;
   /** SCIP symbol of the finding when known — enables rename ("moved") reclassification at query time. */
   symbol?: string;
+  /** One logical diff-gate observation; stable when the same run is retried. */
+  gateRunId?: string;
+  /** Observer provenance. Absent on records written before provenance existed. */
+  observer?: OutcomeObserverProvenance;
+  /** Index/worktree state surrounding the gate observation, when available. */
+  observation?: ObservationReceipt;
+  /** Adjudication policy that admitted a suppressed outcome. */
+  suppressionPolicyVersion?: number;
 }
 
 export interface OutcomeEventEvidence {
   comparisonBaseCommit?: string;
   verifiedAgainstByFinding?: ReadonlyMap<string, string>;
+  gateRunId?: string;
+  observer?: OutcomeObserverProvenance;
+  observation?: ObservationReceipt;
+  suppressionPolicyVersionByFinding?: ReadonlyMap<string, number>;
 }
 
 /** Compare finding-ledger snapshots and emit the immutable events describing their transitions. */
@@ -68,6 +96,10 @@ export function deriveOutcomeEvents(
       event === 'resolved'
         ? evidence.verifiedAgainstByFinding?.get(ledgerKey(record.check, record.findingId))
         : undefined;
+    const suppressionPolicyVersion =
+      event === 'suppressed'
+        ? evidence.suppressionPolicyVersionByFinding?.get(ledgerKey(record.check, record.findingId))
+        : undefined;
     events.push({
       ts: now,
       check: record.check,
@@ -77,6 +109,10 @@ export function deriveOutcomeEvents(
       ...(evidence.comparisonBaseCommit ? { comparisonBaseCommit: evidence.comparisonBaseCommit } : {}),
       ...(verifiedAgainstCommit ? { verifiedAgainstCommit } : {}),
       ...(symbol ? { symbol } : {}),
+      ...(evidence.gateRunId ? { gateRunId: evidence.gateRunId } : {}),
+      ...(evidence.observer ? { observer: evidence.observer } : {}),
+      ...(evidence.observation ? { observation: evidence.observation } : {}),
+      ...(suppressionPolicyVersion !== undefined ? { suppressionPolicyVersion } : {}),
     });
   };
 

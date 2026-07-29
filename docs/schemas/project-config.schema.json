@@ -143,7 +143,88 @@
         "file": { "type": "string", "minLength": 1 },
         "reason": { "type": "string", "minLength": 1 },
         "expiresAt": { "type": "string", "format": "date-time" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "string", "format": "date-time" },
+        "decision": {
+          "type": "object",
+          "required": ["kind", "reasonCode", "decidedBy", "policyVersion", "evidence", "invalidateOn"],
+          "additionalProperties": true,
+          "properties": {
+            "kind": { "const": "automated-adjudication" },
+            "reasonCode": {
+              "enum": [
+                "entry-surface",
+                "generated-code",
+                "compatibility-shim",
+                "reflection-or-registration",
+                "test-fixture",
+                "intentional-twin",
+                "historical-coupling-ended",
+                "detector-counterexample"
+              ]
+            },
+            "decidedBy": { "enum": ["agent", "human"] },
+            "policyVersion": { "const": 1 },
+            "observation": {
+              "type": "object",
+              "required": ["schemaVersion", "authorityKind", "observedAt", "projectIdentity"],
+              "properties": {
+                "schemaVersion": { "const": 1 },
+                "authorityKind": {
+                  "enum": ["index-worktree", "index-only", "worktree-only", "process-local"]
+                },
+                "observedAt": { "type": "string", "format": "date-time" },
+                "projectIdentity": { "type": "string", "minLength": 1 },
+                "index": {
+                  "type": "object",
+                  "required": ["generationIdentity", "source", "alignment"],
+                  "properties": {
+                    "generationIdentity": { "type": "string", "minLength": 1 },
+                    "source": { "enum": ["immutable", "legacy"] },
+                    "alignment": { "enum": ["not-certified", "leased"] }
+                  },
+                  "additionalProperties": true
+                },
+                "worktree": {
+                  "type": "object",
+                  "required": ["identity", "clean"],
+                  "properties": {
+                    "identity": { "type": "string", "minLength": 1 },
+                    "clean": { "type": "boolean" },
+                    "headCommit": { "type": "string", "minLength": 1 },
+                    "treeOid": { "type": "string", "minLength": 1 }
+                  },
+                  "additionalProperties": true
+                }
+              },
+              "additionalProperties": true
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": ["kind", "referent", "claim"],
+                "additionalProperties": true,
+                "properties": {
+                  "kind": { "enum": ["source", "config", "test", "graph"] },
+                  "referent": { "type": "string", "minLength": 1 },
+                  "claim": { "type": "string", "minLength": 1 },
+                  "contentHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+                  "generation": { "type": "string", "minLength": 1 }
+                }
+              }
+            },
+            "invalidateOn": {
+              "type": "object",
+              "required": ["targetContentChange", "detectorMajorChange"],
+              "additionalProperties": true,
+              "properties": {
+                "targetContentChange": { "type": "boolean" },
+                "detectorMajorChange": { "type": "boolean" }
+              }
+            }
+          }
+        }
       },
       "anyOf": [{ "required": ["id"] }, { "required": ["check"] }]
     },

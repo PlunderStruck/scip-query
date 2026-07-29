@@ -591,6 +591,27 @@ describe('command accuracy fixes', () => {
     const thirdMatch = findFirstSymbolMatch(db, 'src/predicates.ts:3-3');
     expect(thirdMatch).not.toBeNull();
     expect(thirdMatch!.symbol).toContain('isBarrelFile');
+
+    expect(findFirstSymbolMatch(db, './src/predicates.ts:2-2')?.symbol).toContain('isWorkerEntrySurface');
+    expect(findFirstSymbolMatch(db, 'src\\predicates.ts:2-2')?.symbol).toContain('isWorkerEntrySurface');
+    expect(findFirstSymbolMatch(db, 'predicates.ts:2-2')?.symbol).toContain('isWorkerEntrySurface');
+
+    const plan = db.all<{ detail: string }>(
+      `EXPLAIN QUERY PLAN
+       SELECT gs.id
+       FROM global_symbols gs
+       JOIN defn_enclosing_ranges der ON gs.id = der.symbol_id
+       JOIN documents d ON der.document_id = d.id
+       WHERE d.relative_path = ?
+         AND der.start_line <= ?
+         AND der.end_line >= ?`,
+      'src/predicates.ts',
+      1,
+      1,
+    );
+    expect(plan.some((row) => row.detail.includes('sqlite_autoindex_documents_1'))).toBe(true);
+    expect(plan.some((row) => row.detail.includes('idx_defn_enclosing_ranges_document'))).toBe(true);
+    expect(plan.some((row) => /SCAN der/u.test(row.detail))).toBe(false);
   });
 
   it('recovers TypeScript method calls and exact reference lines from source fallbacks', () => {

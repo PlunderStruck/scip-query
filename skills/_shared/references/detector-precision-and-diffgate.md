@@ -52,7 +52,7 @@ Every completed diff-gate run — including JSON and hook mode — writes each c
 
 ## Effectiveness
 
-`scip-query effectiveness [--since 30d] [--check <check>] [--json]` reports, per check: findings caught, comparison-verified fixed, suppressed, still open, "moved" (rename noise), legacy/non-comparable "unverified" resolutions, precision (verified-fixed ÷ (verified-fixed + suppressed)), and median days-to-fix.
+`scip-query effectiveness [--since 30d] [--check <check>]` reports, per check: findings caught, comparison-verified fixed, suppressed, still open, "moved" (rename noise), legacy/non-comparable "unverified" resolutions, precision (verified-fixed ÷ (verified-fixed + suppressed)), and median days-to-fix.
 
 A pre-commit rerun of diff-gate reuses the same comparison base directly. After HEAD advances, a clean diff-gate run automatically replays the stored comparison commit. A dirty or unavailable replay leaves the effectiveness finding pending instead of manufacturing a fix result. Standalone detector commands (outside diff-gate) are not outcome-tracked in this ledger until they expose complete-scan evidence.
 

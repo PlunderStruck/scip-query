@@ -504,6 +504,60 @@ describe('reindex reliability', () => {
     expect(second.shards?.map((shard) => shard.language).sort()).toEqual(['python', 'typescript']);
   });
 
+  it('upgrades missing SQLite layout metadata from cached language shards exactly once', async () => {
+    const projectRoot = createProject('scip-query-reindex-layout-upgrade-');
+    const cacheDir = join(projectRoot, '.scipquery-cache');
+    mkdirSync(cacheDir);
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+    const metaPath = join(cacheDir, 'meta.json');
+    const statuses: string[] = [];
+    const { reindex, attempts } = await loadReindexFixture({
+      languages: ['typescript', 'python'],
+    });
+
+    await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      onStatus: () => undefined,
+      indexerConcurrency: 1,
+    });
+    const attemptsAfterBuild = new Map(attempts);
+    const legacyCurrentMeta = JSON.parse(readFileSync(metaPath, 'utf8'));
+    delete legacyCurrentMeta.sqliteLayoutVersion;
+    rmSync(join(cacheDir, '.scipquery-generations'), { recursive: true, force: true });
+    writeFileSync(metaPath, `${JSON.stringify(legacyCurrentMeta, null, 2)}\n`);
+
+    const upgraded = await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      onStatus: (message) => statuses.push(message),
+      indexerConcurrency: 1,
+    });
+    const afterUpgradeAttempts = new Map(attempts);
+    const final = await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      onStatus: (message) => statuses.push(message),
+      indexerConcurrency: 1,
+    });
+
+    expect(upgraded.reused).toBe(true);
+    expect(upgraded.shards?.every((shard) => shard.reused)).toBe(true);
+    expect(attempts).toEqual(attemptsAfterBuild);
+    expect(afterUpgradeAttempts).toEqual(attemptsAfterBuild);
+    expect(JSON.parse(readFileSync(metaPath, 'utf8')).sqliteLayoutVersion).toBe(1);
+    expect(final.reused).toBe(true);
+    expect(final.shards?.every((shard) => shard.reused)).toBe(true);
+    expect(statuses.filter((message) => message.includes('All language shards unchanged'))).toHaveLength(1);
+    expect(
+      statuses.filter((message) => message.includes('Index unchanged; reused existing SQLite index')),
+    ).toHaveLength(1);
+  });
+
   it('recovers a malformed pointer from its complete immutable generation without rerunning indexers', async () => {
     const projectRoot = createProject('scip-query-reindex-generation-repair-');
     const cacheDir = join(projectRoot, '.scipquery-cache');

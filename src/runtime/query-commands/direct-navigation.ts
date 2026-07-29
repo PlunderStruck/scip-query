@@ -1,4 +1,4 @@
-import { code } from '../../queries/navigation/code.js';
+import { code, type CodeResult } from '../../queries/navigation/code.js';
 import { outline } from '../../queries/navigation/outline.js';
 import { refs } from '../../queries/navigation/refs.js';
 import { compareReferenceKey, referencePage } from '../refs-pagination.js';
@@ -7,7 +7,7 @@ import {
   doc,
   agentContract,
   option,
-  parseInteger,
+  parseNonNegativeInteger,
   parsePositiveInteger,
   withCompactJsonOptions,
   withJsonOption,
@@ -24,7 +24,12 @@ import {
 } from '../command-kit/command-execution.js';
 import { decodeCompatibleResultCursor, encodeResultCursor, indexGenerationIdentity } from '../result-pagination.js';
 import { displayLine, displayPathRange, displayRange, render } from '../render.js';
-import { symbolResolutionBefore, symbolResolutionEmptyMessage, withSymbolResolutionJson } from './symbol-resolution.js';
+import {
+  symbolResolutionBefore,
+  symbolResolutionEmptyMessage,
+  symbolResolutionJson,
+  withSymbolResolutionJson,
+} from './symbol-resolution.js';
 
 const handleOutline = dbCommand(({ db, args, opts }) => {
   const filePattern = stringArg(args, 0);
@@ -233,7 +238,9 @@ const handleCode = dbCommand(({ db, args, opts }) => {
   const query = stringArg(args, 0);
   const result = code(db, query, { context: definedNumberOption(opts, 'context', 0) });
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('code', args, opts, withSymbolResolutionJson(db, query, result, 'code'));
+    printJsonEnvelope('code', args, opts, withSymbolResolutionJson(db, query, result, 'code'), {
+      resultOnly: codeResultOnlyJson(db, query, result),
+    });
     return;
   }
   if (!result) return render.empty(symbolResolutionEmptyMessage(db, query, 'Symbol found, but source was unreadable.'));
@@ -246,6 +253,34 @@ const handleCode = dbCommand(({ db, args, opts }) => {
     console.log(`  ${String(displayLine(result.startLine + index)).padStart(4)}  ${lines[index]}`);
   }
 });
+
+function codeResultOnlyJson(db: Parameters<typeof code>[0], query: string, result: CodeResult | null): unknown {
+  if (!result) return symbolResolutionJson(db, query);
+  const projected = {
+    file: result.relativePath,
+    symbol: result.shortName,
+    language: result.language ?? 'unknown',
+    range: {
+      startLine: displayLine(result.startLine),
+      endLine: displayLine(result.endLine),
+    },
+    lines: result.source.split('\n').map((text, index) => ({
+      line: displayLine(result.startLine + index),
+      text,
+    })),
+  };
+  const resolution = symbolResolutionJson(db, query);
+  const totalMatches = resolution.totalMatches ?? 0;
+  if (!resolution.matched || !resolution.resolved || totalMatches <= 1) return projected;
+  return {
+    ...projected,
+    resolution: {
+      selected: resolution.resolved,
+      alternatives: resolution.otherMatches ?? [],
+      totalMatches,
+    },
+  };
+}
 
 /**
  * The three direct-navigation descriptors are command definitions whose
@@ -313,7 +348,9 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
       ),
       resultUnits: { kind: 'field', field: 'code' },
     },
-    options: withJsonOption([option('-C, --context <n>', 'Extra lines of context above/below', parseInteger, 0)]),
+    options: withJsonOption([
+      option('-C, --context <n>', 'Extra lines of context above/below', parseNonNegativeInteger, 0),
+    ]),
     renderShape: 'custom',
     docs: doc('Navigation'),
     handler: handleCode,

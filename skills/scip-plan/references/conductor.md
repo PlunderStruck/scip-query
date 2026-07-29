@@ -2,7 +2,7 @@
 
 This governs running a program of work — planning, delegation, review, closure — across multiple steps, not how to write a single change plan (use the main SKILL.md's ordinary-mode scenario, or `references/high-assurance.md`, for that). Act like a skeptical principal engineer.
 
-Key commands: `scip-query plan-context <target>` anchors each phase's step before delegating it; `scip-query diff-gate --json` verifies a handoff before accepting it and before closing the program; `scip-query health --json` pre-registers or checks a program-level health benchmark.
+Key commands: `scip-query plan-context <target>` anchors each phase's step before delegating it; `scip-query diff-gate` verifies a handoff before accepting it and before closing the program; `scip-query health` pre-registers or checks a program-level health benchmark.
 
 ## The three laws
 
@@ -24,7 +24,7 @@ Working agreement to include in the plan: ONE COMMIT PER STEP — bisectability 
 
 Delegate breadth, keep judgment: fan out mechanical/scoped work to subagents, but personally own anything requiring taste, cross-cutting context, or the final word on "is this real." Concurrent agents must get disjoint write scopes, named in their briefs; if a collision happens anyway, stop racing, apply-verify-commit atomically in one action, and re-sequence to a single writer.
 
-Never accept a report at face value — reproduce its evidence. On every handoff, choose the minimal discriminating probe (the one command most likely to expose the report being wrong: a mutation input, a hand count, the benchmark number) and run it yourself; a report verified only by reading it is not verified. Loop until `scip-query diff-gate --json` is quiet: fix, re-run the discriminating probe, re-run the gate, and only then move on.
+Never accept a report at face value — reproduce its evidence. On every handoff, choose the minimal discriminating probe (the one command most likely to expose the report being wrong: a mutation input, a hand count, the benchmark number) and run it yourself; a report verified only by reading it is not verified. Loop until `scip-query diff-gate` is quiet: fix, re-run the discriminating probe, re-run the gate, and only then move on.
 
 Verify your verifier: a gate check that cannot fail is no gate (e.g. a lint grep that only matches one linter's output, a diff-gate run on a clean tree, a test suite that skips the new path) — prove the check catches a planted failure once before trusting its green. After any "all green," ask what that check does NOT cover (eslint vs prettier; unit vs integration; clean-tree vacuity).
 

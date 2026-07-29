@@ -6,7 +6,7 @@ commands:
     when: "Orient to a module's files, symbols, dependencies, and consumers."
   - template: "scip-query trace <entry-symbol>"
     when: "Connect an entry symbol to its definition and references."
-  - template: "scip-query affected <symbol> --json"
+  - template: "scip-query affected <symbol>"
     when: "Measure the transitive downstream blast radius of a change."
 ---
 
@@ -21,7 +21,7 @@ Build verified understanding of how a system works end to end — entry points, 
 | --- | --- | --- | --- | --- |
 | `scip-query system <module-or-scope>` | Full module map: files, symbols, deps in/out | module file paths; exported symbols with line ranges; internal dependencies; reverse dependencies | `complete` | Orient to a module's files, symbols, dependencies, and consumers. |
 | `scip-query trace <entry-symbol>` | Trace a symbol: definition + all references | definition sites with source and signature; referencing files with line numbers | `bounded` | Connect an entry symbol to its definition and references. |
-| `scip-query affected <symbol> --json` | Transitive closure of symbols that could break if this symbol changes | affected symbol identities, files, and traversal depths | `bounded` | Measure the transitive downstream blast radius of a change. |
+| `scip-query affected <symbol>` | Transitive closure of symbols that could break if this symbol changes | affected symbol identities, files, and traversal depths | `bounded` | Measure the transitive downstream blast radius of a change. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -46,7 +46,7 @@ Done when: module files, key symbols, dependencies, and reverse dependencies are
 **2. Trace entry points.** Run `trace <entry-symbol>` (definition + every reference, bounded), `call-graph <entry-symbol>` (incoming callers, outgoing callees, bounded), `code <entry-symbol>`, `dataflow <entry-symbol>` — repeat for important callees until the path reaches a side effect, a returned value, or a terminal output.
 Done when: the traced path connects entry point to observable effect.
 
-**3. Map dependencies and consumers.** Run `deps <file>`, `rdeps <file>`, `fan-out <file>`, `surface <module>`, `affected <symbol> --json` (transitive closure of symbols that could break if this symbol changes: identities, files, traversal depths, bounded).
+**3. Map dependencies and consumers.** Run `deps <file>`, `rdeps <file>`, `fan-out <file>`, `surface <module>`, `affected <symbol>` (transitive closure of symbols that could break if this symbol changes: identities, files, traversal depths, bounded).
 Done when: direct dependencies, public surface, and downstream blast radius are named.
 
 **4. Follow data and state.** Run `dataflow <symbol-or-variable>` (definition sites, usage sites, producers, consumers, bounded), `slice <symbol-or-variable>`, `slice <symbol-or-variable> --forward`.

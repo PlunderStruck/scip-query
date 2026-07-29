@@ -16,7 +16,8 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
-import type { FindingSuppression } from '../domain/config-types.js';
+import { type FindingSuppression, type SuppressionDecision } from '../domain/config-types.js';
+import { isSuppressionDecision } from '../domain/suppression-adjudication.js';
 import { readSmallArtifactText } from '../filesystem/bounded-file.js';
 import {
   summarizeRecordCompatibility,
@@ -27,11 +28,11 @@ import {
 
 export const SUPPRESSION_DIR = join('.scipquery', 'suppressions');
 export const SUPPRESSION_FILE_KIND = 'scip-query-suppression';
-export const SUPPRESSION_FILE_SCHEMA_VERSION = 1;
+export const LEGACY_SUPPRESSION_FILE_SCHEMA_VERSION = 1;
+export const SUPPRESSION_FILE_SCHEMA_VERSION = 2;
 
-export interface SuppressionFileRecordV1 extends FindingSuppression {
+interface SuppressionFileRecordEnvelope {
   kind: typeof SUPPRESSION_FILE_KIND;
-  schemaVersion: typeof SUPPRESSION_FILE_SCHEMA_VERSION;
   suppressionIdentity: string;
   writer: {
     tool: 'scip-query';
@@ -41,11 +42,25 @@ export interface SuppressionFileRecordV1 extends FindingSuppression {
   updatedAt?: string;
 }
 
+export type SuppressionFileRecordV1 = Omit<FindingSuppression, 'createdAt' | 'decision'> &
+  SuppressionFileRecordEnvelope & {
+    schemaVersion: typeof LEGACY_SUPPRESSION_FILE_SCHEMA_VERSION;
+    decision?: never;
+  };
+
+export type SuppressionFileRecordV2 = Omit<FindingSuppression, 'createdAt' | 'decision'> &
+  SuppressionFileRecordEnvelope & {
+    schemaVersion: typeof SUPPRESSION_FILE_SCHEMA_VERSION;
+    decision: SuppressionDecision;
+  };
+
+export type SuppressionFileRecord = SuppressionFileRecordV1 | SuppressionFileRecordV2;
+
 export interface DecodedSuppressionFile {
   state: 'legacy' | 'current';
   suppression: FindingSuppression;
-  record: FindingSuppression | (Omit<SuppressionFileRecordV1, 'kind'> & { kind?: typeof SUPPRESSION_FILE_KIND });
-  schemaVersion: 0 | typeof SUPPRESSION_FILE_SCHEMA_VERSION;
+  record: FindingSuppression | (Omit<SuppressionFileRecord, 'kind'> & { kind?: typeof SUPPRESSION_FILE_KIND });
+  schemaVersion: 0 | typeof LEGACY_SUPPRESSION_FILE_SCHEMA_VERSION | typeof SUPPRESSION_FILE_SCHEMA_VERSION;
 }
 
 export interface RejectedSuppressionFile {
@@ -87,7 +102,7 @@ export function decodeSuppressionFile(
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return { state: 'malformed', error: 'not a suppression object' };
   }
-  const candidate = value as Partial<SuppressionFileRecordV1> & Record<string, unknown>;
+  const candidate = value as Partial<SuppressionFileRecord> & Record<string, unknown>;
   if (
     candidate.schemaVersion === undefined &&
     (candidate.kind !== undefined || candidate.suppressionIdentity !== undefined || candidate.writer !== undefined)
@@ -98,7 +113,10 @@ export function decodeSuppressionFile(
     if (!Number.isSafeInteger(candidate.schemaVersion)) {
       return { state: 'malformed', error: 'schemaVersion must be a positive safe integer' };
     }
-    if (candidate.schemaVersion !== SUPPRESSION_FILE_SCHEMA_VERSION) {
+    if (
+      candidate.schemaVersion !== LEGACY_SUPPRESSION_FILE_SCHEMA_VERSION &&
+      candidate.schemaVersion !== SUPPRESSION_FILE_SCHEMA_VERSION
+    ) {
       return {
         state: candidate.schemaVersion > SUPPRESSION_FILE_SCHEMA_VERSION ? 'unsupported-future' : 'unsupported-older',
         error: `unsupported schemaVersion ${String(candidate.schemaVersion)}`,
@@ -107,6 +125,12 @@ export function decodeSuppressionFile(
     if (candidate.kind !== undefined && candidate.kind !== SUPPRESSION_FILE_KIND) {
       return { state: 'malformed', error: `kind must be ${SUPPRESSION_FILE_KIND}` };
     }
+  }
+  if (candidate.schemaVersion === LEGACY_SUPPRESSION_FILE_SCHEMA_VERSION && candidate.decision !== undefined) {
+    return { state: 'malformed', error: 'schemaVersion 1 cannot carry automated adjudication metadata' };
+  }
+  if (candidate.schemaVersion === SUPPRESSION_FILE_SCHEMA_VERSION && !isSuppressionDecision(candidate.decision)) {
+    return { state: 'malformed', error: 'schemaVersion 2 requires a valid automated adjudication decision' };
   }
   if (typeof candidate.reason !== 'string' || candidate.reason.trim() === '') {
     return { state: 'malformed', error: 'missing reason' };
@@ -142,11 +166,12 @@ export function decodeSuppressionFile(
   ) {
     return { state: 'malformed', error: 'invalid updatedAt timestamp' };
   }
+  const current = candidate.schemaVersion === SUPPRESSION_FILE_SCHEMA_VERSION;
   return {
-    state: 'current',
+    state: current ? 'current' : 'legacy',
     suppression,
-    record: candidate as Omit<SuppressionFileRecordV1, 'kind'> & { kind?: typeof SUPPRESSION_FILE_KIND },
-    schemaVersion: SUPPRESSION_FILE_SCHEMA_VERSION,
+    record: candidate as Omit<SuppressionFileRecord, 'kind'> & { kind?: typeof SUPPRESSION_FILE_KIND },
+    schemaVersion: candidate.schemaVersion,
   };
 }
 
@@ -193,5 +218,6 @@ function suppressionFromRecord(record: FindingSuppression): FindingSuppression {
     reason: record.reason,
     ...(typeof record.expiresAt === 'string' ? { expiresAt: record.expiresAt } : {}),
     ...(typeof record.createdAt === 'string' ? { createdAt: record.createdAt } : {}),
+    ...(record.decision ? { decision: record.decision } : {}),
   };
 }

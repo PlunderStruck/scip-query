@@ -21,6 +21,34 @@ export const DIFF_GATE_PROGRESS_TOKEN_ENV = 'SCIP_QUERY_DIFF_GATE_PROGRESS_TOKEN
 export const DEFAULT_DIFF_GATE_TIMEOUT_MS = 60_000;
 export const DEFAULT_FULL_DIFF_GATE_TIMEOUT_MS = 180_000;
 export const MAX_DIFF_GATE_TIMEOUT_MS = 600_000;
+export const DIFF_GATE_PROCESS_REAP_GRACE_MS = 5_000;
+export const DIFF_GATE_SERIALIZATION_GRACE_MS = 5_000;
+
+export interface DiffGateDeadlineContract {
+  childTimeoutMs: number;
+  preflightMs: number;
+  processReapGraceMs: number;
+  serializationGraceMs: number;
+  hostTimeoutSeconds: number;
+}
+
+/**
+ * One timing contract for an enclosing host and its owned gate process.
+ * The extra whole second keeps the host inequality strict even when the
+ * component deadlines already land on a whole-second boundary.
+ */
+export function diffGateDeadlineContract(childTimeoutMs: number, preflightMs = 0): DiffGateDeadlineContract {
+  const processReapGraceMs = DIFF_GATE_PROCESS_REAP_GRACE_MS;
+  const serializationGraceMs = DIFF_GATE_SERIALIZATION_GRACE_MS;
+  const ownedMs = preflightMs + childTimeoutMs + processReapGraceMs + serializationGraceMs;
+  return {
+    childTimeoutMs,
+    preflightMs,
+    processReapGraceMs,
+    serializationGraceMs,
+    hostTimeoutSeconds: Math.floor(ownedMs / 1_000) + 1,
+  };
+}
 
 export interface DiffGateExecutionRequest {
   base?: string;

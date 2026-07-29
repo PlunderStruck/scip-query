@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
-import { getCallerRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
+import { getCallerRowsMapForSymbols } from '../../symbols/graph/call-graph-evidence.js';
+import type { CallerRow } from '../../symbols/graph/call-graph-evidence.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../internal/project-index.js';
@@ -55,7 +56,15 @@ export function bottlenecks(
     }),
     scanLimit,
   );
-  const rows = definitions.map((definition) => bottleneckRowFor(db, definition, opts.semantic !== false));
+  const semantic = opts.semantic !== false;
+  const callerRows = getCallerRowsMapForSymbols(db, definitions, {
+    limit: 500,
+    semantic,
+    semanticEvidence: symbolSemanticEvidence,
+  });
+  const rows = definitions.map((definition) =>
+    bottleneckRowFor(db, definition, semantic, callerRows.get(definition.symbolId) ?? []),
+  );
 
   return rows
     .filter((row) => row.fanIn >= minFanIn && row.fanOut >= minFanOut)
@@ -63,16 +72,13 @@ export function bottlenecks(
     .slice(0, limit);
 }
 
-function bottleneckRowFor(db: ScipDatabase, definition: IndexedDefinition, semantic: boolean): BottleneckResult {
-  const callerFiles = [
-    ...new Set(
-      getCallerRowsForSymbol(db, definition, {
-        limit: 500,
-        semantic,
-        semanticEvidence: symbolSemanticEvidence,
-      }).map((row) => row.file),
-    ),
-  ].sort();
+function bottleneckRowFor(
+  db: ScipDatabase,
+  definition: IndexedDefinition,
+  semantic: boolean,
+  callerRows: readonly CallerRow[],
+): BottleneckResult {
+  const callerFiles = [...new Set(callerRows.map((row) => row.file))].sort();
   const externalCalleeByIdentity = new Map<string, { symbol: string; shortName: string; file: string }>();
   for (const row of getCalleeRowsForSymbol(db, definition, {
     limit: 500,

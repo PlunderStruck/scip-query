@@ -9,7 +9,7 @@ function event(overrides: Partial<OutcomeEvent>): OutcomeEvent {
 }
 
 describe('computeEffectiveness', () => {
-  it('classifies fixed vs suppressed vs open and computes precision', () => {
+  it('classifies fixed vs suppressed vs open as repository-writable handling telemetry', () => {
     const events: OutcomeEvent[] = [
       // fixed after 2 days
       event({ ts: 0, findingId: 'SQFIX' }),
@@ -31,9 +31,16 @@ describe('computeEffectiveness', () => {
       open: 1,
       moved: 0,
       unverified: 0,
-      precision: 0.5,
+      authority: 'local-writable-telemetry',
+      resolutionVsSuppressionRate: 0.5,
+      precision: null,
       medianDaysToFix: 2,
     });
+    expect(report.authority).toBe('local-writable-telemetry');
+    expect(report.anomalies.map((anomaly) => anomaly.code)).toEqual([
+      'legacy-provenance-missing',
+      'gate-run-identity-missing',
+    ]);
   });
 
   it('a reopened finding ends as open, not fixed', () => {
@@ -73,7 +80,12 @@ describe('computeEffectiveness', () => {
       }),
     ];
 
-    expect(computeEffectiveness(events).checks[0]).toMatchObject({ fixed: 1, unverified: 0, precision: 1 });
+    expect(computeEffectiveness(events).checks[0]).toMatchObject({
+      fixed: 1,
+      unverified: 0,
+      resolutionVsSuppressionRate: 1,
+      precision: null,
+    });
   });
 
   it('credits a default-base committed fix only when a clean replay records proof', () => {
@@ -89,7 +101,12 @@ describe('computeEffectiveness', () => {
       }),
     ];
 
-    expect(computeEffectiveness(events).checks[0]).toMatchObject({ fixed: 1, unverified: 0, precision: 1 });
+    expect(computeEffectiveness(events).checks[0]).toMatchObject({
+      fixed: 1,
+      unverified: 0,
+      resolutionVsSuppressionRate: 1,
+      precision: null,
+    });
   });
 
   it('does not accept replay proof for a different comparison lifecycle', () => {
@@ -172,7 +189,102 @@ describe('computeEffectiveness', () => {
 
   it('handles an empty ledger', () => {
     const report = computeEffectiveness([]);
-    expect(report).toEqual({ totalEvents: 0, windowStart: null, checks: [] });
+    expect(report).toMatchObject({
+      totalEvents: 0,
+      windowStart: null,
+      authority: 'no-data',
+      anomalies: [],
+      checks: [],
+      provenance: {
+        distinctGateRuns: 0,
+        legacyUnknownEvents: 0,
+        missingGateRunIdEvents: 0,
+      },
+    });
+  });
+
+  it('reserves precision for protected external evaluation', () => {
+    const protectedObserver = {
+      kind: 'protected-ci' as const,
+      authority: 'protected-external' as const,
+      source: 'protected-calibration-corpus',
+    };
+    const events: OutcomeEvent[] = [
+      event({ findingId: 'SQFIX', gateRunId: 'gate-1', observer: protectedObserver }),
+      event({
+        ts: DAY,
+        findingId: 'SQFIX',
+        event: 'resolved',
+        gateRunId: 'gate-2',
+        observer: protectedObserver,
+      }),
+      event({ findingId: 'SQSUP', gateRunId: 'gate-1', observer: protectedObserver }),
+      event({
+        ts: DAY,
+        findingId: 'SQSUP',
+        event: 'suppressed',
+        gateRunId: 'gate-2',
+        observer: protectedObserver,
+      }),
+    ];
+
+    const report = computeEffectiveness(events, { protectedGateRunIds: new Set(['gate-1', 'gate-2']) });
+    expect(report).toMatchObject({
+      authority: 'protected-external-evaluation',
+      provenance: {
+        protectedCiEvents: 4,
+        protectedExternalEvents: 4,
+        attestedProtectedEvents: 4,
+        unattestedProtectedClaims: 0,
+        distinctGateRuns: 2,
+      },
+      anomalies: [],
+    });
+    expect(report.checks[0]).toMatchObject({
+      authority: 'protected-external-evaluation',
+      resolutionVsSuppressionRate: 0.5,
+      precision: 0.5,
+    });
+  });
+
+  it('does not publish precision when protected and writable observations are mixed', () => {
+    const events: OutcomeEvent[] = [
+      event({
+        findingId: 'SQFIX',
+        gateRunId: 'gate-1',
+        observer: { kind: 'local-human', authority: 'repository-writable' },
+      }),
+      event({
+        ts: DAY,
+        findingId: 'SQFIX',
+        event: 'resolved',
+        gateRunId: 'gate-2',
+        observer: { kind: 'protected-ci', authority: 'protected-external' },
+      }),
+    ];
+
+    const report = computeEffectiveness(events, { protectedGateRunIds: new Set(['gate-2']) });
+    expect(report.authority).toBe('mixed-authority-telemetry');
+    expect(report.checks[0]).toMatchObject({
+      authority: 'mixed-authority-telemetry',
+      resolutionVsSuppressionRate: 1,
+      precision: null,
+    });
+    expect(report.anomalies.map((anomaly) => anomaly.code)).toContain('mixed-observer-authority');
+  });
+
+  it('does not let a repository event self-assert protected evaluation authority', () => {
+    const protectedClaim = { kind: 'protected-ci' as const, authority: 'protected-external' as const };
+    const events: OutcomeEvent[] = [
+      event({ findingId: 'SQFIX', gateRunId: 'gate-1', observer: protectedClaim }),
+      event({ ts: DAY, findingId: 'SQFIX', event: 'resolved', gateRunId: 'gate-2', observer: protectedClaim }),
+    ];
+
+    const report = computeEffectiveness(events);
+    expect(report.authority).toBe('local-writable-telemetry');
+    expect(report.checks[0]).toMatchObject({ precision: null, resolutionVsSuppressionRate: 1 });
+    expect(report.provenance).toMatchObject({ attestedProtectedEvents: 0, unattestedProtectedClaims: 2 });
+    expect(report.anomalies.map((anomaly) => anomaly.code)).toContain('unattested-protected-claim');
   });
 });
 

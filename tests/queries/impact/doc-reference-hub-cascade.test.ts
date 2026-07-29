@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ScipQueryConfig } from '../../../src/domain/types.js';
+import type { FindingSuppression, ScipQueryConfig } from '../../../src/domain/types.js';
 import { diffGate, type DiffGateCheck } from '../../../src/queries/impact/diff-gate.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { evidenceFixtureDb } from '../../fixtures/evidence-fixture.js';
@@ -133,7 +133,7 @@ describe('diff-gate doc-reference hub-file cascade damping', () => {
         projectRoot: repoRoot,
         ...(suppressionId === undefined
           ? {}
-          : { suppressions: [{ id: suppressionId, check: 'doc-reference', reason: 'test suppression' }] }),
+          : { suppressions: [adjudicatedSuppression(suppressionId, 'test suppression')] }),
       };
       const db = new ScipDatabase(config);
       openDbs.push(db);
@@ -186,3 +186,19 @@ describe('diff-gate doc-reference hub-file cascade damping', () => {
     expect(docReferenceFindings.map((finding) => finding.file).sort()).toEqual(['docs/about-a.md', 'docs/about-b.md']);
   });
 });
+
+function adjudicatedSuppression(id: string, reason: string): FindingSuppression {
+  return {
+    id,
+    check: 'doc-reference',
+    reason,
+    decision: {
+      kind: 'automated-adjudication',
+      reasonCode: 'detector-counterexample',
+      decidedBy: 'agent',
+      policyVersion: 1,
+      evidence: [{ kind: 'graph', referent: 'scip-query diff-gate --json', claim: reason }],
+      invalidateOn: { targetContentChange: false, detectorMajorChange: true },
+    },
+  };
+}

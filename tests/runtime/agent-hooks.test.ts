@@ -1,9 +1,12 @@
-import { mkdtempSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { DiffGateResult } from '../../src/queries/impact/diff-gate.js';
 import { summarizeRecordCompatibility } from '../../src/domain/record-compatibility.js';
+import { resolveIndexStoragePaths } from '../../src/platform/cache-layout.js';
+import { updateAgentSessionState } from '../../src/runtime/agent-session-state.js';
 import {
   evaluatePreToolUse,
   renderAgentHookContext,
@@ -66,6 +69,42 @@ describe('agent hook context', () => {
     expect(output).toBeUndefined();
   });
 
+  it('restores only the matching session receipt after compaction', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'scip-query-hook-session-'));
+    try {
+      execFileSync('git', ['init', '--quiet'], { cwd });
+      const projectRoot = realpathSync(cwd);
+      const paths = resolveIndexStoragePaths(projectRoot, {});
+      updateAgentSessionState({
+        cacheDir: paths.cacheDir,
+        sessionId: 'session-a',
+        projectRoot,
+        latestStop: {
+          attemptedAtMs: Date.now(),
+          outcome: 'findings',
+          findingCount: 1,
+          automaticSuppressionCount: 0,
+          policyEscalationCount: 0,
+        },
+      });
+
+      const restored = await renderAgentHookContext(
+        JSON.stringify({ hook_event_name: 'PostCompact', cwd, session_id: 'session-a' }),
+      );
+      expect(restored).toMatchObject({
+        hookSpecificOutput: {
+          hookEventName: 'PostCompact',
+          additionalContext: expect.stringContaining('Latest scip-query Stop attempt: findings'),
+        },
+      });
+      await expect(
+        renderAgentHookContext(JSON.stringify({ hook_event_name: 'PostCompact', cwd, session_id: 'session-b' })),
+      ).resolves.toBeUndefined();
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it('routes user prompts toward one prioritized scip skill', () => {
     const context = renderUserPromptContext('Please debug this failing setup and then draw a diagram of the flow');
 
@@ -118,6 +157,39 @@ describe('agent hook context', () => {
           tool_name: 'Bash',
           tool_input: { command: '/repo/node_modules/.bin/scip-query system auth --json | tail -20' },
         },
+        true,
+      ),
+    ).toMatchObject({ kind: 'deny' });
+    expect(
+      evaluatePreToolUse(
+        { tool_name: 'Bash', tool_input: { command: 'node dist/cli.js refs login --json | head -50' } },
+        true,
+      ),
+    ).toMatchObject({ kind: 'deny' });
+    expect(
+      evaluatePreToolUse(
+        {
+          tool_name: 'Bash',
+          tool_input: { command: "node '/repo with spaces/dist/cli.js' affected auth --json | tail -20" },
+        },
+        true,
+      ),
+    ).toMatchObject({ kind: 'deny' });
+    expect(
+      evaluatePreToolUse(
+        { tool_name: 'Bash', tool_input: { command: 'npx scip-query refs login --json | head -50' } },
+        true,
+      ),
+    ).toMatchObject({ kind: 'deny' });
+    expect(
+      evaluatePreToolUse(
+        { tool_name: 'Bash', tool_input: { command: 'pnpm exec scip-query affected auth --json | tail -20' } },
+        true,
+      ),
+    ).toMatchObject({ kind: 'deny' });
+    expect(
+      evaluatePreToolUse(
+        { tool_name: 'Bash', tool_input: { command: 'npm exec -- scip-query deps auth --json | head -20' } },
         true,
       ),
     ).toMatchObject({ kind: 'deny' });
@@ -212,6 +284,71 @@ describe('agent hook context', () => {
     expect(output).toMatchObject({
       systemMessage: expect.stringContaining('Committed suppression coverage is incomplete'),
     });
+  });
+
+  it('keeps an automatically adjudicated stop visible without asking for human approval', () => {
+    const finding = diffGateResult().findings[0]!;
+    const result: DiffGateResult = {
+      ...diffGateResult(),
+      findings: [],
+      suppressed: [{ finding, suppression: { id: finding.id, reason: 'structured fixture' } }],
+      outcome: 'pass-with-suppressions',
+      suppressionSummary: {
+        automaticSuppressionCount: 1,
+        policyEscalationCount: 0,
+        expiredCount: 0,
+        invalidatedCount: 0,
+        legacyUnadjudicatedCount: 0,
+      },
+    };
+
+    const output = renderStopHookOutput(result, 'feedback');
+    expect(output).toMatchObject({
+      hookSpecificOutput: {
+        additionalContext: expect.stringContaining('pass-with-suppressions'),
+      },
+    });
+    expect(JSON.stringify(output)).toContain('without a human approval prompt');
+  });
+
+  it('preserves only relevant analysis, coverage, outcome, and repeat evidence in Stop feedback', () => {
+    const result: DiffGateResult = {
+      ...diffGateResult(),
+      skipped: [{ check: 'architecture', reason: 'baseline unavailable' }],
+      evidenceTiers: [
+        { tier: 'semantic-consumers', state: 'failed', attemptedSymbols: 1, reason: 'provider unavailable' },
+      ],
+    };
+    const output = renderStopHookOutput(result, 'feedback', {
+      outcomes: {
+        observed: [{ check: 'doc-reference', findingId: 'doc-reference:example', suppressed: false }],
+        now: 2 * 86_400_000,
+        warning: 'committed outcome history is incomplete',
+        ledger: [
+          {
+            check: 'doc-reference',
+            findingId: 'doc-reference:example',
+            firstSeen: 0,
+            lastSeen: 2 * 86_400_000,
+            timesShown: 2,
+            outcome: 'still-open',
+          },
+        ],
+      },
+      analysisBudget: {
+        scanLimit: 2_500,
+        semanticEnrichment: false,
+        reason: 'large index default budget; pass --full for unbounded semantic analysis',
+      },
+    });
+    const serialized = JSON.stringify(output);
+
+    expect(serialized).toContain('shown before and unresolved');
+    expect(serialized).toContain('Outcome history warning');
+    expect(serialized).toContain('Evidence coverage is incomplete');
+    expect(serialized).toContain('architecture');
+    expect(serialized).toContain('semantic-consumers');
+    expect(serialized).toContain('analysis budget');
   });
 });
 

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import * as queries from '../../../src/queries/index.js';
+import { fileDependencySql } from '../../../src/queries/internal/file-dependencies.js';
 import { pathMatchesGlob } from '../../../src/queries/navigation/files.js';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
 
@@ -372,6 +373,15 @@ describe('query engine', () => {
       const results = queries.deps(db, 'auth.service.ts');
       const paths = results.map((r) => r.relativePath);
       expect(paths).toContain('src/services/user.service.ts');
+    });
+
+    it('enters through the selected document instead of materializing every definition', () => {
+      const plan = db.all<{ detail: string }>(
+        `EXPLAIN QUERY PLAN ${fileDependencySql(db, 'forward', 1)}`,
+        'src/services/auth.service.ts',
+      );
+      expect(plan.some((row) => row.detail.includes('sqlite_autoindex_documents_1'))).toBe(true);
+      expect(plan.some((row) => /SCAN (?:gs|global_symbols)|MATERIALIZE sym_def/u.test(row.detail))).toBe(false);
     });
   });
 

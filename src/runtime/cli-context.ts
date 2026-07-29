@@ -31,9 +31,14 @@ export interface CliProjectContext {
 }
 
 let activeCliProjectContext: CliProjectContext | undefined;
+let activeCliDatabase: ScipDatabase | undefined;
 
 export function activateCliProjectContext(context: CliProjectContext | undefined): void {
   activeCliProjectContext = context;
+}
+
+export function currentCliDatabase(): ScipDatabase | undefined {
+  return activeCliDatabase;
 }
 
 export function resolveCliProjectContext(
@@ -156,9 +161,12 @@ export function rootIndexFallbackWarning(dbPath: string, configuredDbPath: strin
 
 export function withDb<T>(run: (db: ScipDatabase) => T): T {
   const db = openDb();
+  const previous = activeCliDatabase;
+  activeCliDatabase = db;
   try {
     return run(db);
   } finally {
+    activeCliDatabase = previous;
     db.close();
   }
 }

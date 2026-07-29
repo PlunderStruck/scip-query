@@ -27,12 +27,68 @@
     },
     "comparisonBaseCommit": { "type": "string" },
     "verifiedAgainstCommit": { "type": "string" },
-    "symbol": { "type": "string" }
+    "symbol": { "type": "string" },
+    "gateRunId": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "observer": {
+      "type": "object",
+      "required": ["kind", "authority"],
+      "properties": {
+        "kind": { "enum": ["local-agent", "local-human", "protected-ci"] },
+        "authority": { "enum": ["repository-writable", "protected-external"] },
+        "source": { "type": "string", "minLength": 1, "maxLength": 256 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "authority": { "const": "protected-external" } }, "required": ["authority"] },
+          "then": { "properties": { "kind": { "const": "protected-ci" } } }
+        }
+      ],
+      "additionalProperties": true
+    },
+    "observation": {
+      "type": "object",
+      "required": ["schemaVersion", "authorityKind", "observedAt", "projectIdentity"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "authorityKind": {
+          "enum": ["index-worktree", "index-only", "worktree-only", "process-local"]
+        },
+        "observedAt": { "type": "string", "format": "date-time" },
+        "projectIdentity": { "type": "string", "minLength": 1 },
+        "index": {
+          "type": "object",
+          "required": ["generationIdentity", "source", "alignment"],
+          "properties": {
+            "generationIdentity": { "type": "string", "minLength": 1 },
+            "source": { "enum": ["immutable", "legacy"] },
+            "alignment": { "enum": ["not-certified", "leased"] }
+          },
+          "additionalProperties": true
+        },
+        "worktree": {
+          "type": "object",
+          "required": ["identity", "clean"],
+          "properties": {
+            "identity": { "type": "string", "minLength": 1 },
+            "clean": { "type": "boolean" },
+            "headCommit": { "type": "string", "minLength": 1 },
+            "treeOid": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "suppressionPolicyVersion": { "type": "integer", "minimum": 1 }
   },
   "allOf": [
     {
       "if": { "required": ["verifiedAgainstCommit"] },
       "then": { "properties": { "event": { "const": "resolved" } } }
+    },
+    {
+      "if": { "required": ["suppressionPolicyVersion"] },
+      "then": { "properties": { "event": { "const": "suppressed" } } }
     }
   ],
   "additionalProperties": true

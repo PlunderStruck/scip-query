@@ -28,6 +28,7 @@ import {
   readBoundedMailboxClaim,
   rejectBoundedMailboxClaim,
   type BoundedMailboxPaths,
+  type BoundedMailboxClaimStage,
   type BoundedMailboxRequestIdentity,
 } from '../../src/storage/bounded-mailbox.js';
 
@@ -47,6 +48,8 @@ describe('bounded filesystem mailbox', () => {
       expect.objectContaining({
         disposition: 'accepted',
         authoritativeDeadlineAtMs: NOW + 10_000,
+        achievedDurability: 'directory-durable',
+        directorySync: 'synced',
       }),
     );
     expect(
@@ -66,7 +69,9 @@ describe('bounded filesystem mailbox', () => {
       nowMs: NOW,
       limits: { claimLeaseMs: 100 },
     });
-    expect(abandoned).toEqual(expect.objectContaining({ requestId: request.id, ownerId: 'server-a' }));
+    expect(abandoned).toEqual(
+      expect.objectContaining({ requestId: request.id, ownerId: 'server-a', directorySync: 'synced' }),
+    );
     expect(
       enqueueBoundedMailboxRequest(paths, operation('alpha', NOW + 2, NOW + 10_002), {
         nowMs: NOW + 2,
@@ -164,6 +169,43 @@ describe('bounded filesystem mailbox', () => {
     expect(JSON.parse(readFileSync(join(paths.responseDir, `${request.id}.json`), 'utf8'))).toEqual(
       expect.objectContaining({ result: 'new-owner' }),
     );
+  });
+
+  it.each<BoundedMailboxClaimStage>([
+    'after-owner-directory-durable',
+    'after-owner-record-published',
+    'after-claim-renamed',
+    'after-source-directory-synced',
+    'after-destination-directory-synced',
+  ])('retains exactly one reclaimable request after a claim crash at %s', (crashStage) => {
+    const paths = fixture();
+    const request = operation(`claim-crash-${crashStage}`, NOW, NOW + 100);
+    enqueueBoundedMailboxRequest(paths, request, { nowMs: NOW });
+
+    expect(() =>
+      claimBoundedMailboxRequests(paths, {
+        ownerId: 'crashed-owner',
+        owner: { pid: 2_147_483_647 },
+        nowMs: NOW,
+        limits: { claimLeaseMs: 10 },
+        onClaimStage(stage) {
+          if (stage === crashStage) throw new Error(`simulated claim crash at ${stage}`);
+        },
+      }),
+    ).toThrow(`simulated claim crash at ${crashStage}`);
+    expect(inspectBoundedMailbox(paths).totalItems).toBe(1);
+
+    const recovered = claimBoundedMailboxRequests(paths, {
+      ownerId: 'recovery-owner',
+      nowMs: NOW + 6_000,
+      limits: { claimLeaseMs: 10 },
+      liveness: {
+        isProcessAlive: () => false,
+        readProcessIdentity: () => null,
+      },
+    });
+    expect(recovered).toHaveLength(1);
+    expect(recovered[0]).toEqual(expect.objectContaining({ requestId: request.id, ownerId: 'recovery-owner' }));
   });
 
   it('serializes admission and reports typed item, byte, and per-item backpressure', () => {

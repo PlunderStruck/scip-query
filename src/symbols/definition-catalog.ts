@@ -36,7 +36,7 @@ import {
   parseSymbol,
   shortenSymbol,
 } from './symbol-parser.js';
-import { createPerDbCache } from '../storage/per-db-cache.js';
+import { createPerDbCache, createPerDbValue } from '../storage/per-db-cache.js';
 import { cleanSignature, extractSignature, type SymbolQueryRow } from '../storage/scip-rows.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import { fileContentHash, projectEvidenceFingerprint } from '../storage/evidence-cache.js';
@@ -55,6 +55,13 @@ export const FILE_DEFINITION_CACHE = createPerDbCache<string, IndexedDefinition[
 });
 
 type DefinitionSymbolSqlPrefilter = 'callable' | 'function-like';
+type DefinitionSymbolMatcher = (symbol: string) => boolean;
+
+const SCOPED_MATCHED_DEFINITION_CACHE = createPerDbValue<
+  WeakMap<DefinitionSymbolMatcher, Map<string, readonly IndexedDefinition[]>>
+>('scoped-matched-definitions', {
+  clearGroups: ['definition-catalog'],
+});
 
 const FILE_FUNCTION_LIKE_DEFINITION_CACHE = createPerDbCache<string, IndexedDefinition[]>(
   'file-function-like-definitions',
@@ -335,8 +342,21 @@ export function getScopedFunctionLikeDefinitions(db: ScipDatabase, scope?: strin
 // scip-query: ignore-extract - primary/fallback definition rows must stay merged before symbol predicates run.
 export function getScopedDefinitionsMatchingSymbols(
   db: ScipDatabase,
-  opts: { scope?: string; symbolMatches: (symbol: string) => boolean; sqlPrefilter?: DefinitionSymbolSqlPrefilter },
+  opts: { scope?: string; symbolMatches: DefinitionSymbolMatcher; sqlPrefilter?: DefinitionSymbolSqlPrefilter },
 ): IndexedDefinition[] {
+  const cache = SCOPED_MATCHED_DEFINITION_CACHE.get(db, () => new WeakMap());
+  let byScope = cache.get(opts.symbolMatches);
+  if (!byScope) {
+    byScope = new Map();
+    cache.set(opts.symbolMatches, byScope);
+  }
+  const cacheKey = JSON.stringify({
+    scope: opts.scope ?? null,
+    sqlPrefilter: opts.sqlPrefilter ?? null,
+  });
+  const cached = byScope.get(cacheKey);
+  if (cached) return [...cached];
+
   const primaryByFile = groupRowsByFile(loadScopedPrimaryDefinitionRows(db, opts.scope, opts.sqlPrefilter));
   const fallbackByFile = groupRowsByFile(loadScopedFallbackDefinitionRows(db, opts.scope, opts.sqlPrefilter));
   const files = new Set([...primaryByFile.keys(), ...fallbackByFile.keys()]);
@@ -355,7 +375,8 @@ export function getScopedDefinitionsMatchingSymbols(
     definitions.push(...correctDefinitionRangesFromSource(db, relativePath, rows.map(indexedDefinitionFromRow)));
   }
 
-  return definitions;
+  byScope.set(cacheKey, definitions);
+  return [...definitions];
 }
 
 function loadScopedPrimaryDefinitionRows(
@@ -420,6 +441,11 @@ function loadScopedFallbackDefinitionRows(
      JOIN chunks c ON m.chunk_id = c.id
      JOIN documents d ON c.document_id = d.id
      WHERE m.role = 1
+       AND NOT EXISTS (
+         SELECT 1
+         FROM defn_enclosing_ranges existing_der
+         WHERE existing_der.symbol_id = gs.id
+       )
        ${db.pathExclusionsFor('d')}
        ${scopeFilter}
        ${symbolFilter}

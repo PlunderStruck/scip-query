@@ -81,7 +81,13 @@ export function isLanguageRelevantProjectInputPath(
 ): boolean {
   const basename = relativePath.split('/').at(-1) ?? relativePath;
   if (markerFiles?.includes(relativePath) || markerFiles?.includes(basename)) return true;
-  if (COMMON_INDEX_INPUTS.has(basename)) return true;
+  if (
+    COMMON_INDEX_INPUTS.has(basename) ||
+    basename === '.scipquery.json' ||
+    /^tsconfig(?:\..+)?\.json$/.test(basename)
+  ) {
+    return true;
+  }
   const extension = relativePath.includes('.') ? `.${relativePath.split('.').at(-1)!.toLowerCase()}` : '';
   return (LANGUAGE_SOURCE_EXTENSIONS[language] ?? []).includes(extension);
 }

@@ -6,6 +6,7 @@ import {
   RESERVED_REINDEX_METADATA_VERSION,
   canonicalReindexMetadataIdentity,
 } from '../../src/domain/reindex-metadata.js';
+import { CURRENT_SQLITE_QUERY_LAYOUT_VERSION } from '../../src/domain/sqlite-query-layout.js';
 import {
   FUTURE_REINDEX_METADATA,
   REINDEX_METADATA_CAPABILITY_CASES,
@@ -54,8 +55,27 @@ describe('reindex metadata decoder', () => {
       'invalid project shard',
       { version: 3, ...REINDEX_METADATA_COMMON, typescriptProjectShards: { '.': { files: [{}] } } },
     ],
+    ['zero SQLite layout', { version: 3, ...REINDEX_METADATA_COMMON, sqliteLayoutVersion: 0 }],
+    ['fractional SQLite layout', { version: 3, ...REINDEX_METADATA_COMMON, sqliteLayoutVersion: 1.5 }],
+    ['text SQLite layout', { version: 3, ...REINDEX_METADATA_COMMON, sqliteLayoutVersion: '1' }],
   ])('rejects %s', (_name, record) => {
     expect(decodeReindexMetadata(record)).toEqual(expect.objectContaining({ kind: 'malformed' }));
+  });
+
+  it('accepts both overlap metadata without a layout and current layout metadata', () => {
+    expect(
+      decodeReindexMetadata({
+        version: CURRENT_REINDEX_METADATA_VERSION,
+        ...REINDEX_METADATA_COMMON,
+      }),
+    ).toEqual(expect.objectContaining({ kind: 'supported' }));
+    expect(
+      decodeReindexMetadata({
+        version: CURRENT_REINDEX_METADATA_VERSION,
+        ...REINDEX_METADATA_COMMON,
+        sqliteLayoutVersion: CURRENT_SQLITE_QUERY_LAYOUT_VERSION,
+      }),
+    ).toEqual(expect.objectContaining({ kind: 'supported' }));
   });
 
   it('uses the same canonical identity projection for pretty and compact current records', () => {
@@ -69,5 +89,19 @@ describe('reindex metadata decoder', () => {
     const pretty = decodeReindexMetadata(JSON.stringify(record, null, 2));
     expect(canonicalReindexMetadataIdentity(compact)).toBe(canonicalReindexMetadataIdentity(pretty));
     expect(canonicalReindexMetadataIdentity(compact)).not.toContain('extensionOwnedByFutureWriter');
+  });
+
+  it('includes the query-layout version in stable generation identity', () => {
+    const withoutLayout = decodeReindexMetadata({
+      version: CURRENT_REINDEX_METADATA_VERSION,
+      ...REINDEX_METADATA_COMMON,
+    });
+    const withLayout = decodeReindexMetadata({
+      version: CURRENT_REINDEX_METADATA_VERSION,
+      ...REINDEX_METADATA_COMMON,
+      sqliteLayoutVersion: CURRENT_SQLITE_QUERY_LAYOUT_VERSION,
+    });
+
+    expect(canonicalReindexMetadataIdentity(withLayout)).not.toBe(canonicalReindexMetadataIdentity(withoutLayout));
   });
 });

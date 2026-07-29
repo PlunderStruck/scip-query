@@ -112,37 +112,50 @@ function loadScipReexportRows(db: ScipDatabase, scope?: string): ScipReexportRow
   //   - is mentioned in a barrel file with role=0 (reference/import)
   //   - has its definition (defn_enclosing_ranges) in a DIFFERENT file
   return db.all<ScipReexportRow>(
-    `SELECT DISTINCT
-      barrel_d.id AS barrel_doc_id,
-      barrel_d.relative_path AS barrel_path,
+    `WITH barrel_refs AS MATERIALIZED (
+      SELECT DISTINCT
+        barrel_d.id AS barrel_doc_id,
+        barrel_d.relative_path AS barrel_path,
+        m.symbol_id
+      FROM documents barrel_d
+      JOIN chunks c ON c.document_id = barrel_d.id
+      JOIN mentions m ON m.chunk_id = c.id
+      WHERE m.role != 1
+        AND (barrel_d.relative_path LIKE '%/index.ts'
+          OR barrel_d.relative_path LIKE '%/index.js'
+          OR barrel_d.relative_path = 'index.ts'
+          OR barrel_d.relative_path = 'index.js')
+        ${db.pathExclusionsFor('barrel_d')}
+        ${scopeFilter}
+    ),
+    sym_def AS MATERIALIZED (
+      SELECT m2.symbol_id, c2.document_id
+      FROM barrel_refs br
+      -- Keep the bounded barrel-symbol set on the outer side. An ordinary
+      -- JOIN lets SQLite scan every definition mention before applying the
+      -- barrel-symbol bloom filter on large indexes.
+      CROSS JOIN mentions m2 ON m2.symbol_id = br.symbol_id
+        AND m2.role = 1
+      JOIN chunks c2 ON m2.chunk_id = c2.id
+      GROUP BY m2.symbol_id
+    )
+    SELECT DISTINCT
+      br.barrel_doc_id,
+      br.barrel_path,
       gs.id AS symbol_id,
       gs.symbol AS symbol,
       orig_d.id AS original_doc_id,
       orig_d.relative_path AS original_path
-    FROM mentions m
-    JOIN chunks c ON m.chunk_id = c.id
-    JOIN documents barrel_d ON c.document_id = barrel_d.id
-    JOIN global_symbols gs ON m.symbol_id = gs.id
-    JOIN (
-      SELECT m2.symbol_id, c2.document_id
-      FROM mentions m2
-      JOIN chunks c2 ON m2.chunk_id = c2.id
-      WHERE m2.role = 1
-      GROUP BY m2.symbol_id
-    ) sym_def ON sym_def.symbol_id = gs.id
+    FROM barrel_refs br
+    JOIN global_symbols gs ON br.symbol_id = gs.id
+    JOIN sym_def ON sym_def.symbol_id = gs.id
     JOIN documents orig_d ON sym_def.document_id = orig_d.id
-    WHERE m.role != 1
-      AND (barrel_d.relative_path LIKE '%/index.ts'
-        OR barrel_d.relative_path LIKE '%/index.js'
-        OR barrel_d.relative_path = 'index.ts'
-        OR barrel_d.relative_path = 'index.js')
-      AND orig_d.id != barrel_d.id
-      ${db.pathExclusionsFor('barrel_d', 'orig_d')}
+    WHERE orig_d.id != br.barrel_doc_id
+      ${db.pathExclusionsFor('orig_d')}
       ${db.symbolNoiseFor('gs')}
       -- Only function-level symbols (ending with ().), not module-level
       AND gs.symbol LIKE '%().'
-      ${scopeFilter}
-    ORDER BY barrel_d.relative_path, gs.symbol`,
+    ORDER BY br.barrel_path, gs.symbol`,
     ...scopeParams,
   );
 }
@@ -191,10 +204,11 @@ function countReexportConsumers(db: ScipDatabase, row: ScipReexportRow): Reexpor
 
 function findSourceRedundantReexports(db: ScipDatabase, index: ProjectIndex, scope?: string): RedundantReexport[] {
   const results: RedundantReexport[] = [];
+  const importersByTarget = directImportersByTarget(db);
   for (const barrelPath of sourceBarrelCandidates(db, scope)) {
-    const barrelConsumers = countDirectImporters(db, barrelPath, barrelPath);
+    const barrelConsumers = countDirectImporters(importersByTarget, barrelPath, barrelPath);
     if (barrelConsumers > 0) continue;
-    results.push(...sourceRedundantReexportsForBarrel(db, index, barrelPath));
+    results.push(...sourceRedundantReexportsForBarrel(db, index, barrelPath, importersByTarget));
   }
   return results;
 }
@@ -210,11 +224,12 @@ function sourceRedundantReexportsForBarrel(
   db: ScipDatabase,
   index: ProjectIndex,
   barrelPath: string,
+  importersByTarget: DirectImportersByTarget,
 ): RedundantReexport[] {
   const sourceExportRows = getSourceExports(db, barrelPath)
     .filter((entry) => entry.sourcePath && !db.isIgnored(entry.sourcePath))
     .flatMap((entry) =>
-      sourceRedundantReexportForExport(db, index, barrelPath, entry.sourcePath!, [
+      sourceRedundantReexportForExport(db, index, barrelPath, entry.sourcePath!, importersByTarget, [
         exportSpecifierName(entry.specifier),
       ]),
     );
@@ -226,6 +241,7 @@ function sourceRedundantReexportsForBarrel(
         index,
         barrelPath,
         entry.sourcePath!,
+        importersByTarget,
         entry.kind === 'named' && entry.names.length > 0
           ? entry.names
           : [entry.kind === 'star' ? `* from ${entry.sourcePath}` : `* namespace from ${entry.sourcePath}`],
@@ -239,6 +255,7 @@ function sourceRedundantReexportForExport(
   index: ProjectIndex,
   barrelPath: string,
   sourcePath: string,
+  importersByTarget: DirectImportersByTarget,
   exportedNames: readonly string[],
 ): RedundantReexport[] {
   const definitions = index.definitionsForFile(sourcePath);
@@ -250,7 +267,7 @@ function sourceRedundantReexportForExport(
       shortName: definition ? shortenSymbol(definition.symbol) : exportedName,
       originalFile: sourcePath,
       barrelConsumers: 0,
-      directConsumers: countDirectImporters(db, sourcePath, barrelPath),
+      directConsumers: countDirectImporters(importersByTarget, sourcePath, barrelPath),
       ...redundantReexportCaveat(db, barrelPath),
     };
   });
@@ -291,18 +308,29 @@ function redundantReexportCaveat(
   };
 }
 
-function countDirectImporters(db: ScipDatabase, targetPath: string, excludedPath: string): number {
-  const importers = new Set<string>();
+type DirectImportersByTarget = ReadonlyMap<string, ReadonlySet<string>>;
+
+function directImportersByTarget(db: ScipDatabase): DirectImportersByTarget {
+  const importersByTarget = new Map<string, Set<string>>();
   for (const relativePath of indexedDocumentPaths(db, { includeIgnored: false })) {
-    if (relativePath === excludedPath) continue;
     for (const imported of getSourceImports(db, relativePath)) {
-      if (imported.sourcePath === targetPath) {
-        importers.add(relativePath);
-      }
+      if (!imported.sourcePath) continue;
+      const importers = importersByTarget.get(imported.sourcePath) ?? new Set<string>();
+      importers.add(relativePath);
+      importersByTarget.set(imported.sourcePath, importers);
     }
   }
+  return importersByTarget;
+}
 
-  return importers.size;
+function countDirectImporters(
+  importersByTarget: DirectImportersByTarget,
+  targetPath: string,
+  excludedPath: string,
+): number {
+  const importers = importersByTarget.get(targetPath);
+  if (!importers) return 0;
+  return importers.size - (importers.has(excludedPath) ? 1 : 0);
 }
 
 function dedupeReexports(rows: RedundantReexport[]): RedundantReexport[] {

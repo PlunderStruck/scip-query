@@ -60,10 +60,12 @@ export function registerCommandDescriptors(
     command.action(async (...args: unknown[]) => {
       try {
         const opts = command.optsWithGlobals() as Record<string, unknown>;
+        validateJsonOutputOptions(opts);
         await runWithCliOutputPagination(
           {
             command: descriptor.id,
             producerVersion: cliVersion,
+            invocationPrefix: process.argv[1] ? [process.execPath, process.argv[1]] : ['scip-query'],
             argv: process.argv.slice(2),
             cwd: process.cwd(),
             json: opts['json'] === true,
@@ -78,6 +80,15 @@ export function registerCommandDescriptors(
     });
     return { descriptor, command };
   });
+}
+
+function validateJsonOutputOptions(options: Readonly<Record<string, unknown>>): void {
+  if (options['resultOnly'] === true && options['json'] !== true) {
+    throw new Error('--result-only requires --json.');
+  }
+  if (options['compact'] === true && options['json'] !== true) {
+    throw new Error('--compact requires --json.');
+  }
 }
 
 export function commandResultUnitPolicy(descriptor: CommandDescriptor): CommandResultUnitPolicy {

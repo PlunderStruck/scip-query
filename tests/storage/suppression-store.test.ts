@@ -3,15 +3,21 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FileRevisionConflictError } from '../../src/runtime/revisioned-file.js';
-import { SuppressionWriteConflictError, writeSuppressionFile } from '../../src/runtime/suppression-writer.js';
+import {
+  buildAutomatedSuppressionDecision,
+  SuppressionWriteConflictError,
+  writeSuppressionFile,
+} from '../../src/runtime/suppression-writer.js';
 import {
   decodeSuppressionFile,
+  LEGACY_SUPPRESSION_FILE_SCHEMA_VERSION,
   readSuppressionDir,
   SUPPRESSION_FILE_KIND,
   SUPPRESSION_FILE_SCHEMA_VERSION,
   suppressionDirPath,
   suppressionFileName,
   suppressionIdentity,
+  type SuppressionFileRecord,
   type SuppressionFileRecordV1,
 } from '../../src/storage/suppression-store.js';
 
@@ -30,14 +36,14 @@ function suppressionPath(root: string, id: string): string {
   return join(suppressionDirPath(root), `${id}.json`);
 }
 
-function readRaw(path: string): SuppressionFileRecordV1 {
-  return JSON.parse(readFileSync(path, 'utf8')) as SuppressionFileRecordV1;
+function readRaw(path: string): SuppressionFileRecord {
+  return JSON.parse(readFileSync(path, 'utf8')) as SuppressionFileRecord;
 }
 
 function record(id: string, reason: string): SuppressionFileRecordV1 {
   return {
     kind: SUPPRESSION_FILE_KIND,
-    schemaVersion: SUPPRESSION_FILE_SCHEMA_VERSION,
+    schemaVersion: LEGACY_SUPPRESSION_FILE_SCHEMA_VERSION,
     suppressionIdentity: id,
     writer: { tool: 'scip-query', version: TEST_VERSION },
     id,
@@ -97,8 +103,8 @@ describe('writeSuppressionFile', () => {
         complete: true,
         total: 1,
         accepted: 1,
-        legacy: 0,
-        current: 1,
+        legacy: 1,
+        current: 0,
         unsupportedOlder: 0,
         unsupportedFuture: 0,
         malformed: 0,
@@ -114,6 +120,38 @@ describe('writeSuppressionFile', () => {
         },
       ],
     });
+  });
+
+  it('writes current adjudicated records with content-bound evidence', () => {
+    const root = createRoot();
+    writeFileSync(join(root, 'source.ts'), 'export const value = 1;\n');
+    const decision = buildAutomatedSuppressionDecision(
+      root,
+      'compatibility-shim',
+      ['source:source.ts'],
+      'The v1 export remains public.',
+    );
+
+    const result = writeSuppressionFile(
+      root,
+      { id: 'SQCURRENT', reason: 'The v1 export remains public.', decision },
+      { now: FIRST_TIME, toolVersion: TEST_VERSION },
+    );
+
+    expect(readRaw(result.path)).toMatchObject({
+      schemaVersion: SUPPRESSION_FILE_SCHEMA_VERSION,
+      decision: {
+        reasonCode: 'compatibility-shim',
+        evidence: [
+          {
+            kind: 'source',
+            referent: 'source.ts',
+            contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+          },
+        ],
+      },
+    });
+    expect(readSuppressionDir(root).compatibility).toMatchObject({ legacy: 0, current: 1 });
   });
 
   it('treats an identical replay as idempotent without changing bytes or metadata', () => {
@@ -236,10 +274,10 @@ describe('writeSuppressionFile', () => {
     mkdirSync(dir, { recursive: true });
     const path = suppressionPath(root, 'SQAAA');
 
-    for (const bytes of ['{ malformed', `${JSON.stringify({ ...record('SQAAA', 'future'), schemaVersion: 2 })}\n`]) {
+    for (const bytes of ['{ malformed', `${JSON.stringify({ ...record('SQAAA', 'future'), schemaVersion: 3 })}\n`]) {
       writeFileSync(path, bytes);
       expect(() => writeSuppressionFile(root, { id: 'SQAAA', reason: 'replacement' })).toThrow(
-        /malformed JSON|unsupported schemaVersion 2/,
+        /malformed JSON|unsupported schemaVersion 3/,
       );
       expect(readFileSync(path, 'utf8')).toBe(bytes);
     }
@@ -330,7 +368,7 @@ describe('decodeSuppressionFile / readSuppressionDir', () => {
   it('accepts pre-discriminator v1 and distinguishes malformed, older, and future records', () => {
     const { kind: _kind, ...preDiscriminatorV1 } = record('SQAAA', 'valid');
     expect(decodeSuppressionFile(preDiscriminatorV1, 'SQAAA')).toMatchObject({
-      state: 'current',
+      state: 'legacy',
       schemaVersion: 1,
       suppression: { id: 'SQAAA', reason: 'valid' },
     });
@@ -342,9 +380,9 @@ describe('decodeSuppressionFile / readSuppressionDir', () => {
       state: 'unsupported-older',
       error: 'unsupported schemaVersion 0',
     });
-    expect(decodeSuppressionFile({ ...record('SQAAA', 'future'), schemaVersion: 2 })).toEqual({
+    expect(decodeSuppressionFile({ ...record('SQAAA', 'future'), schemaVersion: 3 })).toEqual({
       state: 'unsupported-future',
-      error: 'unsupported schemaVersion 2',
+      error: 'unsupported schemaVersion 3',
     });
     expect(decodeSuppressionFile({ ...record('SQAAA', 'wrong kind'), kind: 'other' })).toEqual({
       state: 'malformed',
@@ -375,7 +413,8 @@ describe('decodeSuppressionFile / readSuppressionDir', () => {
       complete: false,
       total: 6,
       accepted: 1,
-      current: 1,
+      legacy: 1,
+      current: 0,
       unsupportedFuture: 1,
       malformed: 4,
       omitted: 5,
@@ -399,7 +438,15 @@ describe('decodeSuppressionFile / readSuppressionDir', () => {
     expect(schema.properties['kind']?.const).toBe(SUPPRESSION_FILE_KIND);
     expect(schema.properties['schemaVersion']?.const).toBe(SUPPRESSION_FILE_SCHEMA_VERSION);
     expect(schema.required).toEqual(
-      expect.arrayContaining(['kind', 'schemaVersion', 'suppressionIdentity', 'writer', 'reason', 'createdAt']),
+      expect.arrayContaining([
+        'kind',
+        'schemaVersion',
+        'suppressionIdentity',
+        'writer',
+        'reason',
+        'createdAt',
+        'decision',
+      ]),
     );
     expect(schema.additionalProperties).toBe(true);
   });

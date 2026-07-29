@@ -19,6 +19,7 @@ import {
   MAX_OUTPUT_PAGE_SIZE,
   MIN_OUTPUT_PAGE_SIZE,
   decodeCliOutputPageEnvelope,
+  inspectPendingCliOutputCursor,
   parseOutputPageSize,
   requireCliOutputPageEnvelope,
   runWithCliOutputPagination,
@@ -77,6 +78,19 @@ function parsePage(output: string): CliOutputPageEnvelopeV1 {
   return requireCliOutputPageEnvelope(JSON.parse(output));
 }
 
+function parseHumanPage(output: string): { content: string; cursor?: string } {
+  const contentStart = output.indexOf('\n') + 1;
+  const incompleteStart = output.lastIndexOf('\n[Incomplete:');
+  const completeStart = output.lastIndexOf('\n[scip-query output complete]');
+  const contentEnd = Math.max(incompleteStart, completeStart);
+  if (contentStart <= 0 || contentEnd < contentStart) throw new Error('Expected a rendered human output page.');
+  const cursor = output.match(/--output-cursor ([A-Za-z0-9_-]+)/u)?.[1];
+  return {
+    content: output.slice(contentStart, contentEnd),
+    ...(cursor ? { cursor } : {}),
+  };
+}
+
 function freshSnapshotRoot(): string {
   const path = mkdtempSync(join(tmpdir(), 'scip-query-output-pagination-test-'));
   tempDirs.push(path);
@@ -127,12 +141,14 @@ describe('universal CLI output pagination', () => {
   it('retrieves every character across stable pages with exact continuation commands', async () => {
     const content = Array.from({ length: 730 }, (_, index) => String(index % 10)).join('');
     const argv = ['demo', "O'Reilly", '--json'];
+    const invocationPrefix = ['npx', 'scip-query'];
     const pages: CliOutputPageEnvelopeV1[] = [];
     let cursor: string | undefined;
 
     do {
       const result = await invoke(content, {
         argv: [...argv, '--output-page-size', '256', ...(cursor ? ['--output-cursor', cursor] : [])],
+        invocationPrefix,
         json: true,
         pageSize: 256,
         ...(cursor ? { cursor } : {}),
@@ -159,6 +175,7 @@ describe('universal CLI output pagination', () => {
       },
     });
     expect(pages[0]!.page.continuation?.command).toContain(`'O'"'"'Reilly'`);
+    expect(pages[0]!.page.continuation?.command).toMatch(/^npx scip-query demo/u);
     expect(pages[0]!.page.continuation?.command).toContain('--output-cursor');
     expect(pages[2]!.page).toMatchObject({
       offset: 512,
@@ -171,7 +188,10 @@ describe('universal CLI output pagination', () => {
 
   it('automatically pages oversized human output as readable text with one exact continuation', async () => {
     const content = `${'a'.repeat(DEFAULT_OUTPUT_PAGE_SIZE)}TAIL`;
-    const result = await invoke(content, { argv: ['demo', 'target with spaces'] });
+    const result = await invoke(content, {
+      argv: ['demo', 'target with spaces'],
+      invocationPrefix: ['/usr/local/bin/node', '/repo with spaces/dist/cli.js'],
+    });
 
     expect(result.stdout.startsWith('[scip-query output page:')).toBe(true);
     expect(result.stdout).toContain(`characters 0-${DEFAULT_OUTPUT_PAGE_SIZE - 1} of ${content.length}`);
@@ -180,20 +200,51 @@ describe('universal CLI output pagination', () => {
     expect(result.stdout.match(/Continue exactly:/gu)).toHaveLength(1);
     expect(result.stdout).not.toContain('"content":');
     expect(result.stdout).not.toContain('"kind":');
-    expect(result.stdout).toContain("scip-query demo 'target with spaces' --output-page-size 12000 --output-cursor");
+    expect(result.stdout).toContain(
+      "/usr/local/bin/node '/repo with spaces/dist/cli.js' demo 'target with spaces' --output-page-size 12000 --output-cursor",
+    );
+  });
+
+  it('keeps human page boundaries aligned to complete lines when a newline fits the page', async () => {
+    const content = Array.from(
+      { length: 20 },
+      (_, index) => `${String(index + 1).padStart(4)}  ${`line-${index + 1}`.padEnd(54, '.')}\n`,
+    ).join('');
+    const root = freshSnapshotRoot();
+    const pages: string[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const result = await invoke(content, {
+        argv: ['demo', '--output-page-size', '256', ...(cursor ? ['--output-cursor', cursor] : [])],
+        pageSize: 256,
+        snapshotRoot: root,
+        ...(cursor ? { cursor } : {}),
+      });
+      const page = parseHumanPage(result.stdout);
+      pages.push(page.content);
+      cursor = page.cursor;
+    } while (cursor);
+
+    expect(pages.join('')).toBe(content);
+    expect(pages.slice(0, -1).every((page) => page.endsWith('\n'))).toBe(true);
+    expect(pages.slice(1).every((page) => /^\s*\d+\s{2}line-/u.test(page))).toBe(true);
   });
 
   it('keeps unpaged JSON byte-compatible and warns before oversized output with an exact paging command', async () => {
     const payload = `${JSON.stringify({ rows: ['x'.repeat(DEFAULT_OUTPUT_PAGE_SIZE)] })}\n`;
     const result = await invoke(payload, {
       argv: ['demo', '--json', '--compact'],
+      invocationPrefix: ['pnpm', 'exec', 'scip-query'],
       json: true,
     });
 
     expect(result.stdout).toBe(payload);
     expect(result.stderr).toContain('JSON output exceeds 12000 characters');
     expect(result.stderr).toContain('Do not use possibly partial client output as evidence');
-    expect(result.stderr).toContain('Read every page with: scip-query demo --json --compact --output-page-size 12000');
+    expect(result.stderr).toContain(
+      'Read every page with: pnpm exec scip-query demo --json --compact --output-page-size 12000',
+    );
     expect(result.stderr.match(/Read every page with:/gu)).toHaveLength(2);
   });
 
@@ -219,36 +270,26 @@ describe('universal CLI output pagination', () => {
     });
   });
 
-  it('returns a complete page envelope when paging is explicitly requested for small output', async () => {
+  it('keeps explicitly bounded JSON raw when it fits in one page', async () => {
+    const root = freshSnapshotRoot();
     const result = await invoke('small\n', {
       argv: ['demo', '--json', '--output-page-size', '256'],
       json: true,
       pageSize: 256,
+      snapshotRoot: root,
     });
 
-    expect(parsePage(result.stdout)).toMatchObject({
-      kind: CLI_OUTPUT_PAGE_KIND,
-      agentInstruction: expect.stringContaining('OUTPUT COMPLETE'),
-      page: {
-        offset: 0,
-        returnedCharacters: 6,
-        totalCharacters: 6,
-        remainingCharacters: 0,
-        complete: true,
-      },
-      content: 'small\n',
-    });
+    expect(result).toEqual({ stdout: 'small\n', stderr: '' });
+    expect(readdirSync(root)).toEqual([]);
   });
 
-  it('renders an explicitly requested human page as multiline text, not a JSON wrapper', async () => {
+  it('keeps explicitly bounded human output raw when it fits in one page', async () => {
     const result = await invoke('first line\nsecond line\n', {
       argv: ['demo', '--output-page-size', '256'],
       pageSize: 256,
     });
 
-    expect(result.stdout).toContain('[scip-query output page:');
-    expect(result.stdout).toContain('first line\nsecond line\n');
-    expect(result.stdout).toContain('[scip-query output complete]');
+    expect(result.stdout).toBe('first line\nsecond line\n');
     expect(result.stdout).not.toContain('"content":');
     expect(result.stdout).not.toContain('"page":');
   });
@@ -376,6 +417,14 @@ describe('universal CLI output pagination', () => {
       ).stdout,
     );
     const cursor = first.page.continuation!.cursor;
+    expect(inspectPendingCliOutputCursor(cursor)).toMatchObject({
+      pageIndex: 1,
+      command: 'demo',
+      cwd: '/repo',
+      continuationCommand: first.page.continuation!.command,
+      remainingCharacters: 350,
+      totalCharacters: 606,
+    });
     const second = parsePage(
       (
         await invoke(render, {
@@ -413,15 +462,18 @@ describe('universal CLI output pagination', () => {
     expect(executions).toBe(1);
     expect(`${first.content}${second.content}${third.content}`).toBe(`run:1:${'a'.repeat(600)}`);
     expect(third.page.complete).toBe(true);
+    expect(inspectPendingCliOutputCursor(cursor)).toBeUndefined();
     expect(existsSync(join(snapshotRoot, `${cursorPayload.snapshotId}.output`))).toBe(false);
     expect(existsSync(join(snapshotRoot, `${cursorPayload.snapshotId}.json`))).toBe(false);
   });
 
   it('rejects invocation drift, missing snapshots, oversized cursors, and accumulated output overflow', async () => {
+    const invocationPrefix = ['/usr/local/bin/node', '/repo/dist/cli.js'];
     const first = parsePage(
       (
         await invoke('a'.repeat(600), {
           argv: ['demo', '--json', '--output-page-size', '256'],
+          invocationPrefix,
           json: true,
           pageSize: 256,
         })
@@ -432,6 +484,17 @@ describe('universal CLI output pagination', () => {
     await expect(
       invoke('a'.repeat(600), {
         argv: ['other', '--json', '--output-page-size', '256', '--output-cursor', cursor],
+        invocationPrefix,
+        json: true,
+        pageSize: 256,
+        cursor,
+      }),
+    ).rejects.toThrow(/different command, working directory, or argument set/u);
+
+    await expect(
+      invoke('a'.repeat(600), {
+        argv: ['demo', '--json', '--output-page-size', '256', '--output-cursor', cursor],
+        invocationPrefix: ['scip-query'],
         json: true,
         pageSize: 256,
         cursor,
@@ -450,11 +513,14 @@ describe('universal CLI output pagination', () => {
     await expect(
       invoke('a'.repeat(600), {
         argv: ['demo', '--json', '--output-page-size', '256', '--output-cursor', cursor],
+        invocationPrefix,
         json: true,
         pageSize: 256,
         cursor,
       }),
-    ).rejects.toThrow(/snapshot is unavailable.*Restart with: scip-query demo --json --output-page-size 256/u);
+    ).rejects.toThrow(
+      /snapshot is unavailable.*Restart with: \/usr\/local\/bin\/node \/repo\/dist\/cli\.js demo --json --output-page-size 256/u,
+    );
 
     await expect(invoke('x', { cursor: 'x'.repeat(MAX_OUTPUT_CURSOR_LENGTH + 1) })).rejects.toThrow(/cursor exceeds/u);
     await expect(

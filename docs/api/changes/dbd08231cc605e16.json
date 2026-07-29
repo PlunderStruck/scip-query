@@ -1,0 +1,289 @@
+{
+  "acceptedAt": "2026-07-28T18:01:49.785Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "dbd08231cc605e1693bfb29093c6c887f78efb763519eb8e7b173fe7a2fe8ffc",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CheckEffectiveness.",
+      "target": "./queries:CheckEffectiveness"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "DiffGateResult changed from interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s... to interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s....",
+      "target": "./queries:DiffGateResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EffectivenessAnomaly.",
+      "target": "./queries:EffectivenessAnomaly"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EffectivenessAnomalySample.",
+      "target": "./queries:EffectivenessAnomalySample"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EffectivenessAuthority.",
+      "target": "./queries:EffectivenessAuthority"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EffectivenessOptions.",
+      "target": "./queries:EffectivenessOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EffectivenessProvenanceSummary.",
+      "target": "./queries:EffectivenessProvenanceSummary"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EffectivenessReport.",
+      "target": "./queries:EffectivenessReport"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OutcomeEvent.",
+      "target": "./queries:OutcomeEvent"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OutcomeEventKind.",
+      "target": "./queries:OutcomeEventKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OutcomeObserverAuthority.",
+      "target": "./queries:OutcomeObserverAuthority"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OutcomeObserverKind.",
+      "target": "./queries:OutcomeObserverKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OutcomeObserverProvenance.",
+      "target": "./queries:OutcomeObserverProvenance"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export computeEffectiveness.",
+      "target": "./queries:computeEffectiveness"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export parseSinceMs.",
+      "target": "./queries:parseSinceMs"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "DiffGateResult changed from interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s... to interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s....",
+      "target": "./queries/diff-gate:DiffGateResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CheckEffectiveness.",
+      "target": "./queries/index:CheckEffectiveness"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "DiffGateResult changed from interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s... to interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s....",
+      "target": "./queries/index:DiffGateResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EffectivenessAnomaly.",
+      "target": "./queries/index:EffectivenessAnomaly"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EffectivenessAnomalySample.",
+      "target": "./queries/index:EffectivenessAnomalySample"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EffectivenessAuthority.",
+      "target": "./queries/index:EffectivenessAuthority"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EffectivenessOptions.",
+      "target": "./queries/index:EffectivenessOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EffectivenessProvenanceSummary.",
+      "target": "./queries/index:EffectivenessProvenanceSummary"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EffectivenessReport.",
+      "target": "./queries/index:EffectivenessReport"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OutcomeEvent.",
+      "target": "./queries/index:OutcomeEvent"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OutcomeEventKind.",
+      "target": "./queries/index:OutcomeEventKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OutcomeObserverAuthority.",
+      "target": "./queries/index:OutcomeObserverAuthority"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OutcomeObserverKind.",
+      "target": "./queries/index:OutcomeObserverKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OutcomeObserverProvenance.",
+      "target": "./queries/index:OutcomeObserverProvenance"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export computeEffectiveness.",
+      "target": "./queries/index:computeEffectiveness"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export parseSinceMs.",
+      "target": "./queries/index:parseSinceMs"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CliJsonEnvelopeV1 changed from interface CliJsonEnvelopeV1<Result = unknown> { kind: typeof CLI_JSON_ENVELOPE_KIND; schemaVersion: typeof CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION; producer: CliJsonProducer; c... to interface CliJsonEnvelopeV1<Result = unknown> { kind: typeof CLI_JSON_ENVELOPE_KIND; schemaVersion: typeof CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION; producer: CliJsonProducer; c....",
+      "target": "./runtime:CliJsonEnvelopeV1"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "LegacyCliJsonEnvelope changed from interface LegacyCliJsonEnvelope<Result = unknown> { command: string; args: readonly unknown[]; options: Readonly<Record<string, unknown>>; result: Result; evidence?: 'graph-fact... to interface LegacyCliJsonEnvelope<Result = unknown> { command: string; args: readonly unknown[]; options: Readonly<Record<string, unknown>>; result: Result; evidence?: 'graph-fact....",
+      "target": "./runtime:LegacyCliJsonEnvelope"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OBSERVATION_RECEIPT_SCHEMA_VERSION.",
+      "target": "./runtime:OBSERVATION_RECEIPT_SCHEMA_VERSION"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ObservationAuthorityKind.",
+      "target": "./runtime:ObservationAuthorityKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ObservationReceipt.",
+      "target": "./runtime:ObservationReceipt"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ObservationReceiptComparison.",
+      "target": "./runtime:ObservationReceiptComparison"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export compareObservationReceipts.",
+      "target": "./runtime:compareObservationReceipts"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export isObservationReceipt.",
+      "target": "./runtime:isObservationReceipt"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "F changed from interface FindingSuppression { id?: string; check?: string; file?: string; reason: string; expiresAt?: string; createdAt?: string; } to interface FindingSuppression { id?: string; check?: string; file?: string; reason: string; expiresAt?: string; createdAt?: string; decision?: SuppressionDecision; }.",
+      "target": "config-types-<hash>.d.ts:F"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration O.",
+      "target": "config-types-<hash>.d.ts:O"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration b.",
+      "target": "config-types-<hash>.d.ts:b"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration c.",
+      "target": "config-types-<hash>.d.ts:c"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration d.",
+      "target": "config-types-<hash>.d.ts:d"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration e.",
+      "target": "config-types-<hash>.d.ts:e"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration i.",
+      "target": "config-types-<hash>.d.ts:i"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.19.8",
+  "previousDigest": "d85979e8ebbe2047c2c4d4e7e8de9e4db8bb3fb6b283d7d66773fdd68e3e8339",
+  "reason": "Add structured suppression and diff-gate outcomes, observation receipts, and externally attested effectiveness telemetry without removing existing exports",
+  "schemaVersion": 1
+}

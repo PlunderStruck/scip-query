@@ -1,6 +1,6 @@
 import * as queries from '../../queries/index.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
-import { agentContract, doc, jsonOption } from '../command-kit/command-spec-builders.js';
+import { agentContract, doc, withJsonOption } from '../command-kit/command-spec-builders.js';
 import { booleanOptionValue, dbCommand, printJsonEnvelope } from '../command-kit/command-execution.js';
 import { formatBytes } from '../cli-context.js';
 
@@ -32,7 +32,7 @@ export const coreQueryCommandDescriptors: CommandDescriptor[] = [
       'complete',
       'repository',
     ),
-    options: [jsonOption()],
+    options: withJsonOption(),
     renderShape: 'custom',
     docs: doc('Core'),
     handler: handleStats,

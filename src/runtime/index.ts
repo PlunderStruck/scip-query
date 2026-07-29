@@ -26,6 +26,16 @@ export {
   requireCompatibleCliJsonEnvelope,
   supportedCliResultSchemaVersions,
 } from './cli-json-envelope.js';
+export {
+  OBSERVATION_RECEIPT_SCHEMA_VERSION,
+  compareObservationReceipts,
+  isObservationReceipt,
+} from './observation-receipt.js';
+export type {
+  ObservationAuthorityKind,
+  ObservationReceipt,
+  ObservationReceiptComparison,
+} from './observation-receipt.js';
 export type {
   CliJsonEnvelopeV1,
   CliJsonProducer,

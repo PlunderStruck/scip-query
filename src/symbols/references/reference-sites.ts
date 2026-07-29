@@ -42,9 +42,38 @@ export interface ReferenceEvidenceSite extends ReferenceSite {
 // source-primary reference policy and targeted caller rows; keeping it named
 // prevents those evidence modes from collapsing into one behavior.
 export function getResolvedReferenceSites(db: ScipDatabase, symbol: SymbolLocation): ReferenceSite[] {
-  const prelude = resolveReferencePrelude(db, symbol);
-  if (!prelude) return [];
-  return materializeReferenceSites(db, resolvedCandidateLines(db, prelude.match, prelude.identifier));
+  return getResolvedReferenceSitesMap(db, [symbol]).get(symbol.symbolId) ?? [];
+}
+
+export function getResolvedReferenceSitesMap(
+  db: ScipDatabase,
+  symbols: ReadonlyArray<SymbolLocation>,
+): Map<number, ReferenceSite[]> {
+  const preludes = symbols
+    .map((symbol) => ({ symbolId: symbol.symbolId, prelude: resolveReferencePrelude(db, symbol) }))
+    .filter(
+      (
+        entry,
+      ): entry is {
+        symbolId: number;
+        prelude: NonNullable<ReturnType<typeof resolveReferencePrelude>>;
+      } => entry.prelude !== null,
+    );
+  const chunksBySymbol = referenceChunksBySymbol(
+    db,
+    preludes.map((entry) => entry.symbolId),
+  );
+  const result = new Map<number, ReferenceSite[]>();
+  for (const { symbolId, prelude } of preludes) {
+    const fileLines = resolvedCandidateLinesFromChunks(
+      db,
+      chunksBySymbol.get(symbolId) ?? new Map(),
+      prelude.match,
+      prelude.identifier,
+    );
+    result.set(symbolId, materializeReferenceSites(db, fileLines));
+  }
+  return result;
 }
 
 export function referenceSitesForSymbol(
@@ -90,17 +119,38 @@ export function resolvedCandidateLines(
   match: { symbolId: number; relativePath: string; startLine: number; endLine: number },
   identifier: string | null,
 ): Map<string, number[]> {
+  return resolvedCandidateLinesFromChunks(db, referenceChunksByFile(db, match.symbolId), match, identifier);
+}
+
+function resolvedCandidateLinesFromChunks(
+  db: ScipDatabase,
+  chunksByFile: ReadonlyMap<string, readonly ReferenceChunk[]>,
+  match: { relativePath: string; startLine: number; endLine: number },
+  identifier: string | null,
+): Map<string, number[]> {
   const fileLines = new Map<string, number[]>();
-  for (const [file, chunks] of referenceChunksByFile(db, match.symbolId)) {
+  for (const [file, chunks] of chunksByFile) {
     fileLines.set(file, resolvedLinesForFile(db, file, chunks, match, identifier));
   }
   return fileLines;
 }
 
 function referenceChunksByFile(db: ScipDatabase, symbolId: number): Map<string, ReferenceChunk[]> {
-  const chunksByFile = new Map<string, ReferenceChunk[]>();
-  for (const row of mentionReferenceChunkRows(db, [symbolId])) {
+  return referenceChunksBySymbol(db, [symbolId]).get(symbolId) ?? new Map();
+}
+
+function referenceChunksBySymbol(
+  db: ScipDatabase,
+  symbolIds: readonly number[],
+): Map<number, Map<string, ReferenceChunk[]>> {
+  const chunksBySymbol = new Map<number, Map<string, ReferenceChunk[]>>();
+  for (const row of mentionReferenceChunkRows(db, symbolIds)) {
     if (db.isIgnored(row.relative_path)) continue;
+    let chunksByFile = chunksBySymbol.get(row.symbol_id);
+    if (!chunksByFile) {
+      chunksByFile = new Map();
+      chunksBySymbol.set(row.symbol_id, chunksByFile);
+    }
     let bucket = chunksByFile.get(row.relative_path);
     if (!bucket) {
       bucket = [];
@@ -108,7 +158,7 @@ function referenceChunksByFile(db: ScipDatabase, symbolId: number): Map<string, 
     }
     bucket.push({ start_line: row.chunk_start, end_line: row.chunk_end });
   }
-  return chunksByFile;
+  return chunksBySymbol;
 }
 
 function resolvedLinesForFile(

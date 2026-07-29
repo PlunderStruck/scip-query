@@ -35,21 +35,31 @@ New records conform to
 They carry:
 
 - `kind: "scip-query-suppression"`;
-- `schemaVersion: 1`;
+- `schemaVersion: 2`;
 - the stable `suppressionIdentity`;
 - producer name/version and creation/update timestamps;
-- the existing suppression target and reason fields.
+- the exact suppression target and explanatory reason;
+- a controlled adjudication reason code;
+- inspectable counterevidence, including content hashes for file referents;
+- the policy version, decision provenance, and invalidation conditions.
 
-The discriminator is additive within suppression v1. Older v1 readers permit
-unknown properties, so they continue to read newly written records. Current
-readers also accept v1 records written before the discriminator was added and
-unversioned legacy records. The filename remains the conflict domain:
-different suppression identities merge as different paths, while policy
-changes to one identity require revision-aware replacement.
+Current readers accept v1 and unversioned records as legacy policy so history
+is not lost. Legacy records do not have enough mechanically checkable evidence
+to authorize automatic acceptance: matching findings remain visible as policy
+escalations until the record is explicitly replaced with a v2 decision.
+Earlier readers classify v2 as unsupported-future and therefore fail closed
+instead of silently treating the new evidence fields as optional. The filename
+remains the conflict domain: different suppression identities merge as
+different paths, while policy changes to one identity require revision-aware
+replacement.
 
-If a future or malformed suppression is omitted, it cannot waive a finding.
-`diff-gate` keeps the matching finding unsuppressed and reports incomplete
-suppression coverage in JSON, human output, and Stop-hook feedback.
+If a legacy, future, malformed, expired, or content-invalidated suppression
+cannot pass current policy, it cannot waive a finding. `diff-gate` keeps the
+matching finding unsuppressed and reports incomplete coverage or the exact
+policy-escalation reason in JSON, human output, and Stop-hook feedback. A
+successful gate that did accept one or more v2 decisions reports
+`pass-with-suppressions`, preserving the difference between an ordinary clean
+pass and an adjudicated exception.
 
 ## Current outcome-event records
 
@@ -61,7 +71,12 @@ They retain all semantic event fields at the root and add:
 - `schemaVersion: 1`;
 - `eventIdentity`, the JSON tuple of check, finding ID, transition, and
   observed commit;
-- producer name/version.
+- producer name/version;
+- `gateRunId`, the logical diff-gate observation shared by retries;
+- observer kind and whether its authority is repository-writable or protected
+  externally;
+- the index/worktree observation receipt;
+- the adjudication policy version on suppressed transitions.
 
 Keeping semantic fields at the root lets the immediately prior permissive
 reader consume new records. Current readers accept both these v1 records and
@@ -70,8 +85,17 @@ the existing unversioned event files.
 The immutable filename is still a timestamp plus a hash of the complete
 record bytes. Deduplication does not use that path or producer metadata; it
 uses the semantic `eventIdentity`. If legacy and current records describe the
-same fact, stronger comparison evidence wins and then the earliest timestamp
-wins, as before.
+same fact, comparable-base proof wins first, then protected/provenance-bearing
+evidence, and then the earliest timestamp.
+
+Observer kind says who originated the record: `local-agent`, `local-human`,
+or `protected-ci`. Observer authority says what conclusion the record can
+support. Both local kinds remain `repository-writable`, because the observer
+can edit the same event and suppression files being measured.
+`protected-external` is accepted only with `protected-ci` records produced by
+a separately controlled evaluator and a gate-run attestation delivered
+outside the writable event directory; a record field cannot attest itself
+and ordinary CLI environment settings cannot mint that authority.
 
 ## Partial history is conservative
 
@@ -79,6 +103,18 @@ wins, as before.
 `recordCompatibility.outcomeEvents`. Human output prints the same incomplete
 coverage counts before any metrics. Metrics use only accepted records and are
 therefore explicitly partial when `complete` is false.
+
+`effectiveness` calls the ordinary local ratio
+`resolutionVsSuppressionRate`. It publishes `precision` only when every event
+in the evaluated population claims protected external authority and its
+gate-run ID appears in a separately supplied attestation set. Mixed,
+unattested, repository-writable, and legacy populations remain telemetry and
+carry a null precision field. Provenance gaps, unattested authority claims,
+mixed authority, missing gate-run identity, and anomalous suppression rates
+produce bounded sample reports, not a mandatory per-suppression human queue.
+Git preserves history that is present; deleting an event file cannot be
+detected from the remaining directory, so the command never describes
+repository-local totals as an independent grade.
 
 Cross-HEAD repair verification needs complete committed history to establish
 the prior lifecycle anchor. If any event candidate is incompatible, scip-query
@@ -113,5 +149,6 @@ removing the legacy ledger.
 - Independent event files should normally keep both sides of a merge.
 - Do not delete an unsupported record to make a warning disappear. Use a
   reader that supports it, or deliberately migrate it with verified tooling.
-- Rolling back to the immediately prior release remains safe because new
-  metadata is additive and prior readers ignore unknown fields.
+- Rolling back remains fail-closed: older readers reject v2 suppressions as
+  unsupported-future, so they cannot accidentally waive a finding using a
+  policy they do not understand.

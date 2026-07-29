@@ -16,7 +16,9 @@ import {
   reindexMetadataCapabilities,
   type ReindexMetadata as DecodedReindexMetadata,
   type ReindexMetadataV3,
+  hasCurrentSqliteQueryLayout,
 } from '../domain/reindex-metadata.js';
+import { CURRENT_SQLITE_QUERY_LAYOUT_VERSION } from '../domain/sqlite-query-layout.js';
 import { monotonicNowMs } from '../domain/time.js';
 import { profileAsyncSpan, profileSpan } from '../instrumentation/profile.js';
 import { hardenOwnedCacheTreeIfOwned } from '../platform/cache-layout.js';
@@ -67,7 +69,7 @@ import { detectLanguages } from './detect.js';
 import { getIndexerConfig } from './indexers.js';
 import { mergeAndSanitizeScipFiles, mergeScipFiles } from './merge.js';
 import { patchIncrementalSqliteGeneration } from './incremental-sqlite-publication.js';
-import { removeRedundantSqliteIndexes } from './sqlite-index-maintenance.js';
+import { optimizeSqliteQueryLayout } from './sqlite-index-maintenance.js';
 import { runPostIndexAugmentation } from './augmentation/post-index-augmentation.js';
 import { recordFailedReindexActivity, recordReindexRunActivity } from './reindex-activity.js';
 import {
@@ -192,6 +194,7 @@ type PublishedReindexMetadata = ReindexMetadataV3 & {
   updatedAt: string;
   fingerprint: ReindexFingerprint;
   languageFingerprints: Partial<Record<SupportedLanguage, ReindexFingerprint>>;
+  sqliteLayoutVersion: typeof CURRENT_SQLITE_QUERY_LAYOUT_VERSION;
   /** Whether index.scip is exact or reconstructible from changed-document overlays. */
   scipCompanion?: 'current' | 'deferred';
   /**
@@ -500,10 +503,6 @@ function publishSharedReindexResult(input: {
   onStatus: (message: string) => void;
 }): void {
   if (!input.snapshot) return;
-  if (readSharedGeneration(input.snapshot)) {
-    writeWorktreeLease(input.snapshot, dirname(input.paths.outputDb), 'local-fresh');
-    return;
-  }
   try {
     const postContext = resolveGitWorktreeContext(input.projectRoot);
     const postSnapshot = postContext ? buildSharedGenerationSnapshot(postContext, input.fingerprint) : undefined;
@@ -511,7 +510,7 @@ function publishSharedReindexResult(input: {
       input.onStatus('Skipped shared generation publication because the worktree changed during indexing');
       return;
     }
-    publishSharedGeneration({
+    const publication = publishSharedGeneration({
       snapshot: input.snapshot,
       sourceCacheDir: dirname(input.paths.outputDb),
       sourceProjectRoot: input.projectRoot,
@@ -524,7 +523,11 @@ function publishSharedReindexResult(input: {
       },
     });
     writeWorktreeLease(input.snapshot, dirname(input.paths.outputDb), 'built');
-    input.onStatus(`Published shared generation ${input.snapshot.generationId.slice(0, 12)}`);
+    input.onStatus(
+      publication.kind === 'published'
+        ? `Published shared generation ${input.snapshot.generationId.slice(0, 12)} (${publication.achievedDurability})`
+        : `Shared generation ${input.snapshot.generationId.slice(0, 12)} was already available (${publication.achievedDurability})`,
+    );
   } catch (error) {
     input.onStatus(`Shared generation publication failed; local index remains valid: ${errorMessage(error)}`);
   }
@@ -1322,7 +1325,10 @@ function publishFreshReindexArtifacts(
     dbPath: opts.tempPaths.tempOutputDb,
     onStatus: opts.onStatus,
   });
-  const indexMaintenance = removeRedundantSqliteIndexes(opts.tempPaths.tempOutputDb);
+  const indexMaintenance = optimizeSqliteQueryLayout(opts.tempPaths.tempOutputDb);
+  if (indexMaintenance.added.length > 0) {
+    opts.onStatus(`Added SQLite query indexes: ${indexMaintenance.added.join(', ')}`);
+  }
   if (indexMaintenance.removed.length > 0) {
     opts.onStatus(`Removed redundant SQLite indexes: ${indexMaintenance.removed.join(', ')}`);
   }
@@ -1397,7 +1403,7 @@ function publishFreshReindexArtifacts(
   metadata.scipCompanion = deferredScipCompanion ? 'deferred' : 'current';
   pruneTypeScriptProjectShardCache(opts.paths.outputDb, pruneProjects);
   writeReindexMeta(opts.tempPaths.tempMetaPath, metadata);
-  promoteReindexArtifacts({
+  const localGenerationPublication = promoteReindexArtifacts({
     tempOutputScip: opts.tempPaths.tempOutputScip,
     tempOutputDb: opts.tempPaths.tempOutputDb,
     tempMetaPath: opts.tempPaths.tempMetaPath,
@@ -1430,6 +1436,12 @@ function publishFreshReindexArtifacts(
             ...(sqliteMaterialization.fallbackReason ? { fallbackReason: sqliteMaterialization.fallbackReason } : {}),
           },
   });
+  if (localGenerationPublication.achievedDurability === 'file-flushed') {
+    opts.onStatus(
+      `Published local generation ${localGenerationPublication.currentGeneration.slice(0, 12)} ` +
+        '(file-flushed; directory sync unsupported)',
+    );
+  }
   pruneTypeScriptOverlays(
     dirname(opts.paths.outputDb),
     sqliteMaterialization.mode === 'incremental' && sqliteMaterialization.scipCompanion === 'deferred'
@@ -1466,6 +1478,13 @@ function publishFullyReusedLanguageShardArtifacts(
     dbPath: opts.paths.outputDb,
     onStatus: opts.onStatus,
   });
+  const indexMaintenance = optimizeSqliteQueryLayout(opts.paths.outputDb);
+  if (indexMaintenance.added.length > 0) {
+    opts.onStatus(`Added SQLite query indexes: ${indexMaintenance.added.join(', ')}`);
+  }
+  if (indexMaintenance.removed.length > 0) {
+    opts.onStatus(`Removed redundant SQLite indexes: ${indexMaintenance.removed.join(', ')}`);
+  }
 
   shadowRecord ??= collectAffectedSetShadowRecord({
     projectRoot: opts.projectRoot,
@@ -1548,6 +1567,7 @@ function buildPublishedReindexMetadata(opts: {
       status: opts.skippedLanguages.length === 0 ? 'complete' : 'partial',
       updatedAt: new Date().toISOString(),
       fingerprint: opts.run.fingerprint,
+      sqliteLayoutVersion: CURRENT_SQLITE_QUERY_LAYOUT_VERSION,
       languageFingerprints: opts.languageFingerprints,
       typescriptProjectShards: typescriptProjectShards.field,
       requestedLanguages: opts.run.languages,
@@ -2410,6 +2430,7 @@ function isUnchangedReindex(metaPath: string, fingerprint: ReindexFingerprint): 
     const meta = decoded.metadata;
     return (
       decoded.capabilities.publishableGeneration &&
+      hasCurrentSqliteQueryLayout(meta) &&
       stableJson(meta.fingerprint) === stableJson(fingerprint) &&
       stableJson([...(meta.indexedLanguages ?? [])].sort()) === stableJson(fingerprint.languages)
     );

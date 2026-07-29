@@ -1,8 +1,10 @@
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   statSync,
@@ -15,7 +17,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   assertOwnedCacheDir,
   CACHE_OWNERSHIP_FILE,
+  ensureOwnedCacheDir,
+  ensureOwnedCacheDirWithDurability,
   hardenOwnedCacheTreeIfOwned,
+  NODE_CACHE_OWNERSHIP_RUNTIME,
   resolveIndexStoragePaths,
 } from '../../src/platform/cache-layout.js';
 
@@ -125,6 +130,92 @@ describe('owned project caches', () => {
 
     writeFileSync(firstOwner, '{broken\n');
     expect(() => assertOwnedCacheDir(first, firstPaths.cacheDir)).toThrow('malformed ownership record');
+  });
+
+  it('publishes a complete ownership credential across repeated one-byte writes', () => {
+    const root = project();
+    const cache = join(root, '.short-write-cache');
+    mkdirSync(cache);
+    const physical = ensureOwnedCacheDir(root, cache, {
+      ...NODE_CACHE_OWNERSHIP_RUNTIME,
+      randomToken: () => 'short-writes',
+      writeFile: (fd, bytes, offset) => NODE_CACHE_OWNERSHIP_RUNTIME.writeFile(fd, bytes, offset, 1),
+    });
+
+    expect(assertOwnedCacheDir(root, physical).record.canonicalCacheDir).toBe(realpathSync(cache));
+  });
+
+  it('reports the achieved credential durability without upgrading unsupported directory sync', () => {
+    const root = project();
+    const cache = join(root, '.bounded-durability-cache');
+    mkdirSync(cache);
+    const physicalCache = realpathSync(cache);
+    const result = ensureOwnedCacheDirWithDurability(root, cache, {
+      ...NODE_CACHE_OWNERSHIP_RUNTIME,
+      platform: 'win32',
+      randomToken: () => 'bounded-durability',
+      openFile: (path, flags, mode) => {
+        if (path === physicalCache) {
+          throw Object.assign(new Error('directory handles unsupported'), { code: 'EPERM' });
+        }
+        return NODE_CACHE_OWNERSHIP_RUNTIME.openFile(path, flags, mode);
+      },
+    });
+
+    expect(result).toEqual({
+      kind: 'published',
+      cacheDir: physicalCache,
+      achievedDurability: 'file-flushed',
+      directorySync: 'unsupported',
+    });
+    expect(assertOwnedCacheDir(root, cache).record.canonicalCacheDir).toBe(realpathSync(cache));
+  });
+
+  it('does not report ownership success when credential namespace synchronization fails', () => {
+    const root = project();
+    const cache = join(root, '.sync-failure-cache');
+    mkdirSync(cache);
+    const physicalCache = realpathSync(cache);
+
+    expect(() =>
+      ensureOwnedCacheDirWithDurability(root, cache, {
+        ...NODE_CACHE_OWNERSHIP_RUNTIME,
+        randomToken: () => 'sync-failure',
+        openFile: (path, flags, mode) => {
+          if (path === physicalCache) {
+            throw Object.assign(new Error('directory sync failed'), { code: 'EIO' });
+          }
+          return NODE_CACHE_OWNERSHIP_RUNTIME.openFile(path, flags, mode);
+        },
+      }),
+    ).toThrow('directory sync failed');
+  });
+
+  it('fails without a public credential when the ownership write makes zero progress', () => {
+    const root = project();
+    const cache = join(root, '.zero-write-cache');
+    mkdirSync(cache);
+
+    expect(() =>
+      ensureOwnedCacheDir(root, cache, {
+        ...NODE_CACHE_OWNERSHIP_RUNTIME,
+        randomToken: () => 'zero-progress',
+        writeFile: () => 0,
+      }),
+    ).toThrow('cache ownership record write did not make valid forward progress');
+    expect(existsSync(join(cache, CACHE_OWNERSHIP_FILE))).toBe(false);
+    expect(readdirSync(cache)).toEqual([]);
+  });
+
+  it('does not publish ownership when legacy hardening rejects a symlink', () => {
+    const root = project();
+    const outside = project();
+    const cache = join(root, '.unsafe-legacy-cache');
+    mkdirSync(cache);
+    symlinkSync(join(outside, 'outside.db'), join(cache, 'index.db'));
+
+    expect(() => ensureOwnedCacheDir(root, cache)).toThrow('legacy cache entry index.db is a symlink');
+    expect(existsSync(join(cache, CACHE_OWNERSHIP_FILE))).toBe(false);
   });
 });
 

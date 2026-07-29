@@ -16,6 +16,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
+import { InvalidArgumentError } from 'commander';
 import {
   parseProcessIdentity,
   readProcessIdentity,
@@ -43,11 +44,10 @@ export const MAX_OUTPUT_SNAPSHOT_COUNT = 32;
 export const MAX_OUTPUT_SNAPSHOT_PAGES = 32_768;
 export const OUTPUT_SNAPSHOT_TTL_MS = 60 * 60 * 1_000;
 
-const OUTPUT_SNAPSHOT_VERSION = 2;
-const OUTPUT_SNAPSHOT_ROOT = join(
-  tmpdir(),
-  `scip-query-output-pages-${typeof process.getuid === 'function' ? process.getuid() : 'user'}`,
-);
+const OUTPUT_SNAPSHOT_VERSION = 3;
+function outputSnapshotRoot(): string {
+  return join(tmpdir(), `scip-query-output-pages-${typeof process.getuid === 'function' ? process.getuid() : 'user'}`);
+}
 const OUTPUT_SNAPSHOT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const OUTPUT_RESERVATION_VERSION = 1;
 const OUTPUT_QUOTA_LOCK_NAME = 'quota.lock';
@@ -58,7 +58,7 @@ const OUTPUT_QUOTA_WAIT_BUFFER = new Int32Array(new SharedArrayBuffer(Int32Array
 let outputProcessIdentity: ProcessIdentity | null | undefined;
 
 interface OutputCursorPayload {
-  version: 2;
+  version: 3;
   invocationHash: string;
   pageIndex: number;
   pageSize: number;
@@ -78,6 +78,10 @@ interface OutputSnapshotMetadata {
   version: typeof OUTPUT_SNAPSHOT_VERSION;
   snapshotId: string;
   invocationHash: string;
+  invocationPrefix: string[];
+  command: string;
+  cwd: string;
+  argv: string[];
   outputHash: string;
   pageSize: number;
   pages: OutputSnapshotPage[];
@@ -101,6 +105,19 @@ export interface OutputSnapshotLimits {
   maxSnapshotBytes: number;
   maxAggregateBytes: number;
   maxSnapshotCount: number;
+}
+
+/** Bounded session-restoration metadata for one still-readable output page. */
+export interface PendingCliOutputSnapshot {
+  snapshotId: string;
+  pageIndex: number;
+  command: string;
+  cwd: string;
+  continuationCommand: string;
+  remainingCharacters: number;
+  totalCharacters: number;
+  outputHash: string;
+  createdAtMs: number;
 }
 
 const DEFAULT_OUTPUT_SNAPSHOT_LIMITS: OutputSnapshotLimits = Object.freeze({
@@ -221,6 +238,8 @@ export function requireCliOutputPageEnvelope(input: unknown): CliOutputPageEnvel
 export interface CliOutputPaginationOptions {
   command: string;
   producerVersion: string;
+  /** Executable/package-runner prefix that must be reused for every continuation. */
+  invocationPrefix?: readonly string[];
   argv: readonly string[];
   cwd: string;
   json: boolean;
@@ -263,7 +282,7 @@ export async function runWithCliOutputPagination(
   runtime: CliOutputPaginationRuntime = defaultRuntime,
 ): Promise<void> {
   const pageSize = options.pageSize ?? DEFAULT_OUTPUT_PAGE_SIZE;
-  const snapshotRoot = options.snapshotRoot ?? OUTPUT_SNAPSHOT_ROOT;
+  const snapshotRoot = options.snapshotRoot ?? outputSnapshotRoot();
   const snapshotLimits = resolveOutputSnapshotLimits(options.snapshotLimits);
   const requestedMaxOutputCharacters = options.maxOutputCharacters ?? MAX_TRACKED_OUTPUT_CHARACTERS;
   if (!Number.isSafeInteger(requestedMaxOutputCharacters) || requestedMaxOutputCharacters <= 0) {
@@ -283,7 +302,8 @@ export async function runWithCliOutputPagination(
   }
 
   const filteredArgv = withoutOutputPaginationArgs(options.argv);
-  const invocationHash = hashInvocation(options.command, options.cwd, filteredArgv);
+  const invocationPrefix = normalizeInvocationPrefix(options.invocationPrefix);
+  const invocationHash = hashInvocation(options.command, options.cwd, invocationPrefix, filteredArgv);
   const decodedCursor = options.cursor === undefined ? undefined : decodeOutputCursor(options.cursor, invocationHash);
   let snapshotId = decodedCursor?.snapshotId;
   let completed: {
@@ -305,17 +325,22 @@ export async function runWithCliOutputPagination(
       );
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      throw new Error(`${reason} Restart with: ${renderInitialPageCommand(filteredArgv, pageSize)}`, {
+      throw new Error(`${reason} Restart with: ${renderInitialPageCommand(invocationPrefix, filteredArgv, pageSize)}`, {
         cause: error,
       });
     }
   } else {
     const snapshot = new OutputSnapshotWriter(
       invocationHash,
+      invocationPrefix,
+      options.command,
+      options.cwd,
+      filteredArgv,
       pageSize,
       maxOutputCharacters,
       snapshotRoot,
       snapshotLimits,
+      !options.json,
     );
     const restore = installStdoutCapture((bytes) => snapshot.write(bytes));
     let actionCompleted = false;
@@ -350,6 +375,7 @@ export async function runWithCliOutputPagination(
     ? undefined
     : createContinuation({
         filteredArgv,
+        invocationPrefix,
         invocationHash,
         nextPageIndex: completed.pageIndex + 1,
         outputHash: completed.outputHash,
@@ -357,8 +383,9 @@ export async function runWithCliOutputPagination(
         snapshotId: requireSnapshotId(snapshotId),
       });
 
-  if (completed.offset === 0 && complete && options.pageSize === undefined && options.cursor === undefined) {
+  if (completed.offset === 0 && complete && options.cursor === undefined) {
     runtime.writeStdout(completed.content);
+    if (snapshotId) removeOutputSnapshot(snapshotId, snapshotRoot);
     return;
   }
 
@@ -405,12 +432,18 @@ export async function runWithCliOutputPagination(
 
 export function parseOutputPageSize(value: string): number {
   if (!/^\d+$/u.test(value)) {
-    throw new Error(
+    throw new InvalidArgumentError(
       `Output page size must be an integer from ${MIN_OUTPUT_PAGE_SIZE} through ${MAX_OUTPUT_PAGE_SIZE}.`,
     );
   }
   const parsed = Number(value);
-  validatePageSize(parsed);
+  try {
+    validatePageSize(parsed);
+  } catch {
+    throw new InvalidArgumentError(
+      `Output page size must be an integer from ${MIN_OUTPUT_PAGE_SIZE} through ${MAX_OUTPUT_PAGE_SIZE}.`,
+    );
+  }
   return parsed;
 }
 
@@ -435,6 +468,7 @@ async function runJsonWithOversizeWarning(
   let warningWritten = false;
   const warning = `${sanitizeTerminalLine(
     `scip-query: JSON output exceeds ${DEFAULT_OUTPUT_PAGE_SIZE} characters and may be truncated by the client. Do not use possibly partial client output as evidence. Read every page with: ${renderInitialPageCommand(
+      normalizeInvocationPrefix(options.invocationPrefix),
       withoutOutputPaginationArgs(options.argv),
       DEFAULT_OUTPUT_PAGE_SIZE,
     )}`,
@@ -551,10 +585,15 @@ class OutputSnapshotWriter {
 
   constructor(
     private readonly invocationHash: string,
+    private readonly invocationPrefix: readonly string[],
+    private readonly command: string,
+    private readonly cwd: string,
+    private readonly argv: readonly string[],
     private readonly pageSize: number,
     private readonly maxOutputCharacters: number,
     private readonly snapshotRoot: string,
     private readonly limits: OutputSnapshotLimits,
+    private readonly preferLineBoundaries: boolean,
   ) {
     ensureOutputSnapshotRoot(snapshotRoot);
     this.snapshotId = randomUUID();
@@ -605,6 +644,10 @@ class OutputSnapshotWriter {
         version: OUTPUT_SNAPSHOT_VERSION,
         snapshotId: this.snapshotId,
         invocationHash: this.invocationHash,
+        invocationPrefix: [...this.invocationPrefix],
+        command: this.command,
+        cwd: this.cwd,
+        argv: [...this.argv],
         outputHash,
         pageSize: this.pageSize,
         pages: this.pages,
@@ -650,8 +693,7 @@ class OutputSnapshotWriter {
     this.assertWithinByteLimit(this.byteLength + Buffer.byteLength(this.pending));
     while (this.pending.length > this.pageSize) {
       this.open();
-      let pageEnd = this.pageSize;
-      if (isHighSurrogate(this.pending.charCodeAt(pageEnd - 1))) pageEnd -= 1;
+      const pageEnd = outputPageEnd(this.pending, this.pageSize, this.preferLineBoundaries);
       const page = this.pending.slice(0, pageEnd);
       this.pending = this.pending.slice(pageEnd);
       this.flushPage(page);
@@ -820,6 +862,16 @@ function isOutputSnapshotMetadata(value: unknown): value is OutputSnapshotMetada
     typeof metadata.snapshotId === 'string' &&
     OUTPUT_SNAPSHOT_ID.test(metadata.snapshotId) &&
     isSha256(metadata.invocationHash) &&
+    isInvocationPrefix(metadata.invocationPrefix) &&
+    typeof metadata.command === 'string' &&
+    metadata.command.length > 0 &&
+    metadata.command.length <= 256 &&
+    typeof metadata.cwd === 'string' &&
+    metadata.cwd.length > 0 &&
+    metadata.cwd.length <= 8_192 &&
+    isInvocationArgv(metadata.argv) &&
+    hashInvocation(metadata.command, metadata.cwd, metadata.invocationPrefix, metadata.argv) ===
+      metadata.invocationHash &&
     isSha256(metadata.outputHash) &&
     Number.isSafeInteger(metadata.pageSize) &&
     (metadata.pageSize ?? 0) >= MIN_OUTPUT_PAGE_SIZE &&
@@ -1101,8 +1153,17 @@ function isHighSurrogate(code: number): boolean {
   return code >= 0xd800 && code <= 0xdbff;
 }
 
+function outputPageEnd(content: string, pageSize: number, preferLineBoundaries: boolean): number {
+  if (preferLineBoundaries) {
+    const newline = content.lastIndexOf('\n', pageSize - 1);
+    if (newline >= 0) return newline + 1;
+  }
+  return isHighSurrogate(content.charCodeAt(pageSize - 1)) ? pageSize - 1 : pageSize;
+}
+
 function createContinuation(input: {
   filteredArgv: readonly string[];
+  invocationPrefix: readonly string[];
   invocationHash: string;
   nextPageIndex: number;
   outputHash: string;
@@ -1118,22 +1179,17 @@ function createContinuation(input: {
   });
   return {
     cursor,
-    command: renderContinuationCommand(input.filteredArgv, input.pageSize, cursor),
+    command: renderContinuationCommand(input.invocationPrefix, input.filteredArgv, input.pageSize, cursor),
   };
 }
 
 function encodeOutputCursor(payload: Omit<OutputCursorPayload, 'version'>): string {
-  return encodeCursorPayload({ version: 2, ...payload } satisfies OutputCursorPayload);
+  return encodeCursorPayload({ version: 3, ...payload } satisfies OutputCursorPayload);
 }
 
 function decodeOutputCursor(cursor: string, expectedInvocationHash: string): OutputCursorPayload {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
-  } catch {
-    throw new Error('Invalid output cursor. Run the command again without --output-cursor.');
-  }
-  if (!isOutputCursorPayload(parsed)) {
+  const parsed = parseOutputCursor(cursor);
+  if (!parsed) {
     throw new Error('Invalid output cursor. Run the command again without --output-cursor.');
   }
   if (parsed.invocationHash !== expectedInvocationHash) {
@@ -1144,11 +1200,64 @@ function decodeOutputCursor(cursor: string, expectedInvocationHash: string): Out
   return parsed;
 }
 
+function parseOutputCursor(cursor: string): OutputCursorPayload | null {
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as unknown;
+    return isOutputCursorPayload(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve a cursor found in one provider transcript without reading output
+ * content. Missing, completed, expired, or incompatible snapshots are not
+ * resumable and therefore return undefined.
+ */
+export function inspectPendingCliOutputCursor(
+  cursor: string,
+  snapshotRoot = outputSnapshotRoot(),
+): PendingCliOutputSnapshot | undefined {
+  const parsed = parseOutputCursor(cursor);
+  if (!parsed) return undefined;
+  try {
+    const metadata = readOutputSnapshotMetadata(parsed.snapshotId, snapshotRoot);
+    if (
+      metadata.invocationHash !== parsed.invocationHash ||
+      metadata.outputHash !== parsed.outputHash ||
+      metadata.pageSize !== parsed.pageSize ||
+      Date.now() - metadata.createdAtMs > OUTPUT_SNAPSHOT_TTL_MS ||
+      !metadata.pages[parsed.pageIndex]
+    ) {
+      return undefined;
+    }
+    const page = metadata.pages[parsed.pageIndex]!;
+    return {
+      snapshotId: metadata.snapshotId,
+      pageIndex: parsed.pageIndex,
+      command: metadata.command,
+      cwd: metadata.cwd,
+      continuationCommand: renderContinuationCommand(
+        metadata.invocationPrefix,
+        metadata.argv,
+        metadata.pageSize,
+        cursor,
+      ),
+      remainingCharacters: metadata.totalCharacters - page.characterOffset,
+      totalCharacters: metadata.totalCharacters,
+      outputHash: metadata.outputHash,
+      createdAtMs: metadata.createdAtMs,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 function isOutputCursorPayload(value: unknown): value is OutputCursorPayload {
   if (!value || typeof value !== 'object') return false;
   const cursor = value as Partial<OutputCursorPayload>;
   return (
-    cursor.version === 2 &&
+    cursor.version === 3 &&
     isSha256(cursor.invocationHash) &&
     Number.isSafeInteger(cursor.pageIndex) &&
     (cursor.pageIndex ?? -1) >= 1 &&
@@ -1165,8 +1274,13 @@ function isSha256(value: unknown): value is string {
   return typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value);
 }
 
-function hashInvocation(command: string, cwd: string, argv: readonly string[]): string {
-  return createHash('sha256').update(JSON.stringify({ command, cwd, argv })).digest('hex');
+function hashInvocation(
+  command: string,
+  cwd: string,
+  invocationPrefix: readonly string[],
+  argv: readonly string[],
+): string {
+  return createHash('sha256').update(JSON.stringify({ command, cwd, invocationPrefix, argv })).digest('hex');
 }
 
 function withoutOutputPaginationArgs(argv: readonly string[]): string[] {
@@ -1183,12 +1297,62 @@ function withoutOutputPaginationArgs(argv: readonly string[]): string[] {
   return filtered;
 }
 
-function renderInitialPageCommand(argv: readonly string[], pageSize: number): string {
-  return shellJoin(['scip-query', ...argv, '--output-page-size', String(pageSize)]);
+function renderInitialPageCommand(
+  invocationPrefix: readonly string[],
+  argv: readonly string[],
+  pageSize: number,
+): string {
+  return shellJoin([...invocationPrefix, ...argv, '--output-page-size', String(pageSize)]);
 }
 
-function renderContinuationCommand(argv: readonly string[], pageSize: number, cursor: string): string {
-  return shellJoin(['scip-query', ...argv, '--output-page-size', String(pageSize), '--output-cursor', cursor]);
+function renderContinuationCommand(
+  invocationPrefix: readonly string[],
+  argv: readonly string[],
+  pageSize: number,
+  cursor: string,
+): string {
+  return shellJoin([...invocationPrefix, ...argv, '--output-page-size', String(pageSize), '--output-cursor', cursor]);
+}
+
+function normalizeInvocationPrefix(value: readonly string[] | undefined): string[] {
+  const prefix = value === undefined ? ['scip-query'] : [...value];
+  if (!isInvocationPrefix(prefix)) {
+    throw new Error('Output pagination invocation prefix must contain one to sixteen non-empty shell arguments.');
+  }
+  return prefix;
+}
+
+function isInvocationPrefix(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.length <= 16 &&
+    value.every(
+      (part) =>
+        typeof part === 'string' &&
+        part.length > 0 &&
+        part.length <= 2_048 &&
+        !part.includes('\0') &&
+        !part.includes('\r') &&
+        !part.includes('\n'),
+    )
+  );
+}
+
+function isInvocationArgv(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.length <= 256 &&
+    value.every(
+      (part) =>
+        typeof part === 'string' &&
+        part.length <= 8_192 &&
+        !part.includes('\0') &&
+        !part.includes('\r') &&
+        !part.includes('\n'),
+    )
+  );
 }
 
 function shellJoin(args: readonly string[]): string {

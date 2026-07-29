@@ -18,11 +18,11 @@ Load shared mechanics from [`../../_shared/SKILL.md`](../../_shared/SKILL.md) on
 | `scip-query fan-in <suspect-symbol>` / `scip-query fan-out <suspect-file>` | Follow execution: who depends on the suspect symbol/file, and what it depends on. |
 | `scip-query dataflow <symbol-or-variable>` | Follow data: producers, consumers, and usage sites (bounded coverage). |
 | `scip-query slice <symbol-or-variable>` / `--forward` | Follow data: backward and forward slices from the suspect value. |
-| `scip-query similar <suspect-symbol> --json --full` | Compare nearby implementations for missing guards or handling (bounded coverage: symbol pairs, similarity scores, shared evidence). |
+| `scip-query similar <suspect-symbol> --full` | Compare nearby implementations for missing guards or handling (bounded coverage: symbol pairs, similarity scores, shared evidence). |
 | `scip-query similar <suspect-symbol> <similar-symbol> --plan` | Compare two specific implementations directly. |
-| `scip-query similar-files <suspect-file> --json --full` | Compare nearby files for missing handling. |
-| `scip-query change-surface <suspect-file> --json --full` | Bound the fix: exports, consumers, and blast-radius risk (bounded coverage). |
-| `scip-query affected <suspect-symbol> --json` | Bound the fix: transitive closure of symbols that could break. |
+| `scip-query similar-files <suspect-file> --full` | Compare nearby files for missing handling. |
+| `scip-query change-surface <suspect-file> --full` | Bound the fix: exports, consumers, and blast-radius risk (bounded coverage). |
+| `scip-query affected <suspect-symbol>` | Bound the fix: transitive closure of symbols that could break. |
 
 ## Rules
 
@@ -77,9 +77,9 @@ This step is complete only when the path explains the symptom or the missing evi
 ### 4. Compare nearby implementations
 
 ```bash
-scip-query similar <suspect-symbol> --json --full
+scip-query similar <suspect-symbol> --full
 scip-query similar <suspect-symbol> <similar-symbol> --plan
-scip-query similar-files <suspect-file> --json --full
+scip-query similar-files <suspect-file> --full
 ```
 
 Use implementation comparisons to find missing guards, conversions, lifecycle steps, or error handling, while preserving essential differences.
@@ -89,8 +89,8 @@ This step is complete only when comparisons either support the fix or are reject
 ### 5. Bound and fix
 
 ```bash
-scip-query change-surface <suspect-file> --json --full
-scip-query affected <suspect-symbol> --json
+scip-query change-surface <suspect-file> --full
+scip-query affected <suspect-symbol>
 ```
 
 Make the smallest code change that fixes the root cause.

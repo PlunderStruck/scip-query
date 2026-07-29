@@ -48,7 +48,7 @@ calls `getDefinitionsForFile()` once per file. The source evidence is:
 - `scip-query code runHealthSemanticPrewarm`
 - `scip-query code 'src/runtime/cli-support.ts:227-241'`
 - `scip-query code scopedDefinitions`
-- `scip-query code 'src/symbols/definition-catalog.ts:317-359'`
+- `scip-query code 'src/symbols/definition-catalog.ts:342-379'`
 - `scip-query code getDefinitionsForFile`
 - `scip-query code computeDefinitionsForFile`
 
@@ -60,6 +60,12 @@ The subsequent candidate-language correction also changes only rendering; the
 anchored prewarm runtime remains at the cited lines with the same behavior.
 The architecture-coherence change adds one zero-valued field to deferred drift
 output later in the file and does not change prewarm selection or caching.
+
+2026-07-28 verification: the scoped set-oriented path remains at
+`src/symbols/definition-catalog.ts:342-379`. Repeated calls with the same
+database, scope, prefilter, and matcher now reuse the immutable catalog result;
+the cache keys matcher functions by identity so predicates with different
+closures cannot share rows.
 
 The repository already contains a set-oriented definition path:
 `getScopedDefinitionsMatchingSymbols()` loads primary and fallback rows for the

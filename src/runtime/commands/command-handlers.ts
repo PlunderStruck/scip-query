@@ -82,7 +82,8 @@ import { healthPhases } from '../../queries/health/health.js';
 import { writeProfileEvent } from '../../instrumentation/profile.js';
 import { auditProfileWork, readProfileEvents, renderProfileWorkAudit } from '../profile-work-audit.js';
 import { discloseHealthCapabilities } from '../health-capability-disclosure.js';
-import { writeSuppressionFile } from '../suppression-writer.js';
+import { buildAutomatedSuppressionDecision, writeSuppressionFile } from '../suppression-writer.js';
+import { currentCliObservationReceipt } from '../observation-receipt.js';
 import { inspectWatchRefreshRequests } from '../../storage/watch-refresh-requests.js';
 import {
   collect,
@@ -1082,15 +1083,33 @@ export function handleSuppress(id: unknown, rawOpts: unknown): void {
     process.exitCode = 1;
     return;
   }
+  const reasonCode = stringOptionValue(opts, 'reasonCode');
+  const evidence = stringArrayOptionValue(opts, 'evidence');
+  if (!reasonCode || evidence.length === 0) {
+    console.error(
+      'error: suppress requires --reason-code <code> and at least one --evidence <source|config|test|graph>:<referent> so automatic adjudication has inspectable counterevidence.',
+    );
+    process.exitCode = 1;
+    return;
+  }
   try {
+    const projectRoot = resolveProjectRoot();
+    const observation = (() => {
+      try {
+        return withDb(() => currentCliObservationReceipt());
+      } catch {
+        return undefined;
+      }
+    })();
     const result = writeSuppressionFile(
-      resolveProjectRoot(),
+      projectRoot,
       {
         id: String(id),
         check: stringOptionValue(opts, 'check'),
         file: stringOptionValue(opts, 'file'),
         reason,
         expiresAt: stringOptionValue(opts, 'expiresAt'),
+        decision: buildAutomatedSuppressionDecision(projectRoot, reasonCode, evidence, reason, observation),
       },
       {
         expectedRevision: stringOptionValue(opts, 'replace'),
@@ -1153,7 +1172,9 @@ export function handleEffectiveness(rawOpts: unknown): void {
     'open',
     'moved',
     'unverified',
-    'precision',
+    'resolution-vs-suppression',
+    'evaluation-precision',
+    'authority',
     'median-days-to-fix',
   ];
   const rows = report.checks.map((entry) => [
@@ -1164,7 +1185,9 @@ export function handleEffectiveness(rawOpts: unknown): void {
     String(entry.open),
     String(entry.moved),
     String(entry.unverified),
+    entry.resolutionVsSuppressionRate === null ? '-' : `${Math.round(entry.resolutionVsSuppressionRate * 100)}%`,
     entry.precision === null ? '-' : `${Math.round(entry.precision * 100)}%`,
+    entry.authority,
     entry.medianDaysToFix === null ? '-' : entry.medianDaysToFix.toFixed(1),
   ]);
   const widths = header.map((label, column) => Math.max(label.length, ...rows.map((row) => row[column].length)));
@@ -1177,15 +1200,20 @@ export function handleEffectiveness(rawOpts: unknown): void {
   const totalUnverified = report.checks.reduce((sum, entry) => sum + entry.unverified, 0);
   const concluded = totalFixed + totalSuppressed;
   if (concluded > 0) {
+    const ratio = Math.round((totalFixed / concluded) * 100);
     console.log(
-      `\n${totalFixed} finding(s) verified fixed against a stable comparison base, ${totalSuppressed} suppressed, ${totalUnverified} disappeared without comparable evidence — overall precision ${Math.round(
-        (totalFixed / concluded) * 100,
-      )}%.`,
+      report.authority === 'protected-external-evaluation'
+        ? `\nProtected external evaluation: ${totalFixed} finding(s) verified fixed, ${totalSuppressed} suppressed, ${totalUnverified} unverified — precision ${ratio}%.`
+        : `\nRepository-writable telemetry: ${totalFixed} finding(s) verified fixed, ${totalSuppressed} suppressed, ${totalUnverified} unverified — resolution-vs-suppression ${ratio}%. This is operational handling data, not an independent correctness grade.`,
     );
   } else if (totalUnverified > 0) {
     console.log(
-      `\n${totalUnverified} finding(s) disappeared without comparable comparison-base evidence; precision is not available.`,
+      `\n${totalUnverified} finding(s) disappeared without comparable comparison-base evidence; no correctness metric is available.`,
     );
+  }
+  for (const anomaly of report.anomalies) {
+    const samples = anomaly.samples.map((sample) => `${sample.check}:${sample.findingId}`).join(', ');
+    console.log(`WARN: ${anomaly.message}${samples ? ` Samples: ${samples}.` : ''}`);
   }
 }
 

@@ -125,11 +125,13 @@ implementation whose behavior created the files; including it makes an upgrade
 miss safely instead of adopting artifacts with incompatible semantics.
 Clean worktrees with that exact identity clone the generation into their own
 writable cache before opening SQLite. The clone is rebound to the target SCIP
-project root, then enters through the existing local complete-visibility
-publication and generation-recovery boundary. The generation manifest,
-worktree lease, local pointer, reindex metadata, and SQLite generation state
-use crash-durable file replacement; the wider multi-file generation handoff
-remains a distinct publication protocol. See `docs/DURABILITY.md` for that
+project root, then enters through the local immutable-generation publication
+and recovery boundary. Local and shared multi-file publishers apply final
+read-only modes before flushing every artifact, flush the manifest and staging
+namespace, publish the complete directory, and report the achieved final
+directory-sync result. The generation manifest, worktree lease, local pointer,
+reindex metadata, and SQLite generation state use the same crash-durable file
+replacement boundary. See `docs/DURABILITY.md` for the platform-qualified
 classification. Dirty or partial indexes are never published.
 Before any fingerprint or language comparison,
 `src/domain/reindex-metadata.ts` validates the `meta.json` version and common

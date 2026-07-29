@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { DiffGateFinding, DiffGateResult } from '../../src/queries/impact/diff-gate.js';
 import { computeEffectiveness } from '../../src/queries/health/effectiveness.js';
-import { recordDiffGateOutcomes } from '../../src/runtime/diff-gate-outcomes.js';
+import { outcomeObserverFromEnvironment, recordDiffGateOutcomes } from '../../src/runtime/diff-gate-outcomes.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { readOutcomeEvents } from '../../src/storage/outcome-events.js';
 import { evidenceFixtureDb } from '../fixtures/evidence-fixture.js';
@@ -73,6 +73,18 @@ describe('recordDiffGateOutcomes', () => {
 
       const events = readOutcomeEvents(root).events;
       expect(events.map((event) => event.event)).toEqual(['caught', 'resolved']);
+      expect(events).toEqual([
+        expect.objectContaining({
+          gateRunId: expect.any(String),
+          observer: { kind: 'local-agent', authority: 'repository-writable' },
+          observation: expect.objectContaining({ authorityKind: 'index-only' }),
+        }),
+        expect.objectContaining({
+          gateRunId: expect.any(String),
+          observer: { kind: 'local-agent', authority: 'repository-writable' },
+          observation: expect.objectContaining({ authorityKind: 'index-only' }),
+        }),
+      ]);
       expect(computeEffectiveness(events).checks[0]).toMatchObject({ caught: 1, fixed: 1, open: 0 });
     } finally {
       db.close();
@@ -93,10 +105,73 @@ describe('recordDiffGateOutcomes', () => {
       expect(first.ledger[0]?.timesShown).toBe(1);
       expect(retry.ledger[0]?.timesShown).toBe(1);
       expect(retry.warning).toBeUndefined();
-      expect(readOutcomeEvents(root).events.map((event) => event.event)).toEqual(['caught']);
+      expect(readOutcomeEvents(root).events).toEqual([
+        expect.objectContaining({ event: 'caught', gateRunId: 'stable-observation' }),
+      ]);
     } finally {
       db.close();
     }
+  });
+
+  it('records the adjudication policy version on suppressed outcomes', () => {
+    const { db, root } = openDb();
+    try {
+      const suppressed = result([]);
+      suppressed.suppressed = [
+        {
+          finding: finding(),
+          suppression: {
+            id: 'SQECHO1',
+            reason: 'fixture',
+            decision: {
+              kind: 'automated-adjudication',
+              reasonCode: 'detector-counterexample',
+              decidedBy: 'agent',
+              policyVersion: 1,
+              evidence: [{ kind: 'graph', referent: 'scip-query refs x', claim: 'fixture evidence' }],
+              invalidateOn: { targetContentChange: false, detectorMajorChange: true },
+            },
+          },
+        },
+      ];
+
+      recordDiffGateOutcomes(db, suppressed, {
+        observationId: 'suppressed-gate',
+        now: () => 1_000,
+        headCommit: () => 'commit-1',
+      });
+
+      expect(readOutcomeEvents(root).events).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ event: 'caught', gateRunId: 'suppressed-gate' }),
+          expect.objectContaining({
+            event: 'suppressed',
+            gateRunId: 'suppressed-gate',
+            suppressionPolicyVersion: 1,
+          }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('keeps local human attribution writable and never infers protected authority from CI', () => {
+    expect(
+      outcomeObserverFromEnvironment({
+        SCIP_QUERY_OUTCOME_OBSERVER_KIND: 'local-human',
+        SCIP_QUERY_OUTCOME_OBSERVER_SOURCE: 'terminal',
+        CI: 'true',
+      }),
+    ).toEqual({
+      kind: 'local-human',
+      authority: 'repository-writable',
+      source: 'terminal',
+    });
+    expect(outcomeObserverFromEnvironment({ CI: 'true' })).toEqual({
+      kind: 'local-agent',
+      authority: 'repository-writable',
+    });
   });
 
   it('keeps a cross-HEAD disappearance open when no comparable replay is available', () => {

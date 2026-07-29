@@ -8,7 +8,7 @@ on its own.
 
 ## Find and confirm the move
 
-Run `scip-query locality-candidates --json --full` for directory-locality and ancestry candidates from consumer ownership (symbols, current homes, consumer locality, suggested homes). Cross-check current placement with `scip-query system <scope>` (files, exported symbols with line ranges, internal deps, reverse deps).
+Run `scip-query locality-candidates --full` for directory-locality and ancestry candidates from consumer ownership (symbols, current homes, consumer locality, suggested homes). Cross-check current placement with `scip-query system <scope>` (files, exported symbols with line ranges, internal deps, reverse deps).
 
 Concepts that decide whether a move is safe:
 
@@ -32,7 +32,7 @@ Add mature boundary path patterns to `.scipquery.json` under `architecture.bound
 ] } }
 ```
 
-Then run `scip-query config-validate --json`, then `scip-query architecture --json`.
+Then run `scip-query config-validate`, then `scip-query architecture`.
 
 An `allowedDependencies` row is closed: an outgoing target omitted from a present row is forbidden, but a missing row makes no dependency claim at all. Example: `{ "architecture": { "boundaries": [...], "allowedDependencies": { "domain": [], "runtime": ["domain"] }, "requireAcyclic": true } }`. For each closed row, record the evidence for its intended direction. Never copy the current dependency graph into the allow-list merely to obtain zero findings; leave emerging or disputed rules undeclared rather than closing the row prematurely.
 
@@ -48,6 +48,6 @@ The default `diff-gate` architecture check compares only architecture identities
 
 Run `scip-query incomplete-migration`, `scip-query recent-duplicates`, and `scip-query co-change <moved-file-or-config>`, plus the project's tests or typecheck for the affected workspace.
 
-If `.scipquery.json` locality changed, also run `scip-query config-validate`, `scip-query locality-candidates --json --full`, `scip-query architecture --json`, `scip-query drift --architecture`, and `scip-query diff-gate`.
+If `.scipquery.json` locality changed, also run `scip-query config-validate`, `scip-query locality-candidates --full`, `scip-query architecture`, `scip-query drift --architecture`, and `scip-query diff-gate`.
 
 Then invoke `scip-verify`. The implementation is complete only when imports, tests, locality signals, and verification are all checked.

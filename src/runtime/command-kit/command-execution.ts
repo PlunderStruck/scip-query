@@ -350,6 +350,7 @@ export function printJsonEnvelope(
     coverage?: InvocationCoverage;
     agentResult?: unknown;
     resultSchemaVersion?: number;
+    resultOnly?: unknown;
   } = {},
 ): void {
   const evidence = commandEvidenceById.get(command);
@@ -359,6 +360,11 @@ export function printJsonEnvelope(
   const coverage =
     baseCoverage && resolution && !baseCoverage.resolution ? { ...baseCoverage, resolution } : baseCoverage;
   if (coverage) validateInvocationCoverage(coverage);
+  if (booleanOptionValue(options, 'resultOnly')) {
+    const resultOnly = Object.hasOwn(extra, 'resultOnly') ? extra.resultOnly : result;
+    writeSerializedJson(JSON.stringify(resultOnly, null, booleanOptionValue(options, 'compact') ? 0 : 2));
+    return;
+  }
   const envelope = createCliJsonEnvelope({
     producerVersion: cliVersion,
     command,

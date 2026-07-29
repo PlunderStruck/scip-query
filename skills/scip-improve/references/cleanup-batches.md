@@ -8,7 +8,7 @@ If cleanup findings have not been swept and confirmed yet, run the cleanup
 scenario in `scip-audit` first. Then report a markdown block before touching
 any code:
 
-- current score from `scip-query health --json`
+- current score from `scip-query health`
 - the first confirmed batch: finding, evidence, planned fix, verification plan
 - remaining signals with status
 
@@ -28,9 +28,9 @@ Work top to bottom, one item at a time:
 
 Repeat until stopping:
 
-1. Apply one verified deletion batch — `scip-query cleanup-apply --verified --batch <n>` against the plan from `scip-query cleanup-plan --verify --json` — or one small targeted refactor for the next prioritized item.
+1. Apply one verified deletion batch — `scip-query cleanup-apply --verified --batch <n>` against the plan from `scip-query cleanup-plan --verify` — or one small targeted refactor for the next prioritized item.
 2. Run the narrow project check for the touched behavior (tests/typecheck scoped to what changed).
-3. Run `scip-query health --json`.
+3. Run `scip-query health`.
 4. Invoke the `scip-verify` skill.
 5. If `docs/scip-query/health-dossier.md` exists (or a custom `--dossier-dir` was used), refresh it by rerunning `scip-query setup --json` with the same `--dossier-dir` if one was used.
 6. Pick the next highest-priority confirmed item and repeat.

@@ -134,6 +134,26 @@ describe('CLI JSON envelope compatibility', () => {
     }
   });
 
+  it('prints only the command-owned result when result-only is selected', () => {
+    const writes: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
+
+    printJsonEnvelope(
+      'code',
+      ['Thing'],
+      { json: true, resultOnly: true },
+      { legacyEnvelopeResult: true },
+      { resultOnly: { file: 'src/a.ts', lines: [{ line: 1, text: 'export const a = 1;' }] } },
+    );
+
+    expect(writes).toEqual([
+      `${JSON.stringify({ file: 'src/a.ts', lines: [{ line: 1, text: 'export const a = 1;' }] }, null, 2)}\n`,
+    ]);
+  });
+
   it('keeps the published JSON Schema synchronized with the runtime contract', () => {
     const schema = JSON.parse(
       readFileSync(join(process.cwd(), 'docs', 'schemas', 'cli-json-envelope.schema.json'), 'utf8'),

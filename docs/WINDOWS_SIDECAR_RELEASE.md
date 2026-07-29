@@ -234,10 +234,15 @@ both coordinates and repairs only the absent intended package.
 The path is stable for one pair of package coordinates. Repacking different
 bytes, using a different source revision, or selecting a different registry
 under those same versions therefore collides with the existing record and
-stops before registry work. The record is atomically replaced with directory
-durability while the release lock is owned. It is intentionally ignored by Git
-and omitted from the npm package: it is local recovery state, not portable
-release authority. The normative shape is
+stops before registry work. The record is atomically replaced while the
+release lock is owned. The coordinator reports `directory-durable` when the
+host synchronizes the containing directory and
+`file-flushed; directory sync unsupported` when Windows exposes only the
+bounded file guarantee; a real synchronization failure aborts the run. It is
+intentionally ignored by Git and omitted from the npm package: it is local
+recovery state, not portable release authority. Fresh registry observation,
+immutable npm versions, and exact package identity remain the external safety
+authority regardless of the local result. The normative shape is
 `docs/schemas/npm-release-state.schema.json`.
 
 Current-schema additive fields are tolerated. Malformed JSON, a wrong

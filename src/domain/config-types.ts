@@ -1,3 +1,5 @@
+import type { ObservationReceipt } from './observation-receipt.js';
+
 // ── Auto-Install Types ────────────────────────────────────
 
 export interface InstallMethod {
@@ -312,6 +314,47 @@ export interface DeclaredCouplingConfig {
   reason?: string;
 }
 
+export const SUPPRESSION_REASON_CODES = [
+  'entry-surface',
+  'generated-code',
+  'compatibility-shim',
+  'reflection-or-registration',
+  'test-fixture',
+  'intentional-twin',
+  'historical-coupling-ended',
+  'detector-counterexample',
+] as const;
+
+export type SuppressionReasonCode = (typeof SUPPRESSION_REASON_CODES)[number];
+export type SuppressionEvidenceKind = 'source' | 'config' | 'test' | 'graph';
+
+export interface SuppressionCounterevidence {
+  /** What kind of independently inspectable referent supports the exception. */
+  kind: SuppressionEvidenceKind;
+  /** Project-relative path for source/config/test, or exact scip-query command for graph evidence. */
+  referent: string;
+  /** The concrete claim this referent establishes. */
+  claim: string;
+  /** SHA-256 of source/config/test bytes when target-content invalidation is enabled. */
+  contentHash?: string;
+  /** Index generation that produced graph evidence, when available. */
+  generation?: string;
+}
+
+export interface SuppressionDecision {
+  kind: 'automated-adjudication';
+  reasonCode: SuppressionReasonCode;
+  decidedBy: 'agent' | 'human';
+  policyVersion: 1;
+  /** Repository/index state observed when this adjudication record was created. */
+  observation?: ObservationReceipt;
+  evidence: SuppressionCounterevidence[];
+  invalidateOn: {
+    targetContentChange: boolean;
+    detectorMajorChange: boolean;
+  };
+}
+
 export interface FindingSuppression {
   /** Stable finding id, for example SQABC123DEF456. */
   id?: string;
@@ -325,6 +368,8 @@ export interface FindingSuppression {
   expiresAt?: string;
   /** ISO timestamp stamped when the suppression file was written. */
   createdAt?: string;
+  /** Structured, mechanically adjudicated exception evidence. Omission is readable legacy policy, not automatic authority. */
+  decision?: SuppressionDecision;
 }
 
 export interface SemanticConfig {

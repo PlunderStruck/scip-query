@@ -9,7 +9,7 @@ The core distinction driving every edit:
 
 ## Step 1 — Build the worklist
 
-Run `scip-query doc-drift --json --full` for the ranked worklist (document paths, coupled code subjects, history evidence), plus `scip-query doc-drift <doc-or-tree>` for anything scoped. Prioritize broken references first, then highest staleness, then the docs agents read most. Done only when each target doc is selected for a current-use reason.
+Run `scip-query doc-drift --full` for the ranked worklist (document paths, coupled code subjects, history evidence), plus `scip-query doc-drift <doc-or-tree>` for anything scoped. Prioritize broken references first, then highest staleness, then the docs agents read most. Done only when each target doc is selected for a current-use reason.
 
 ## Step 2 — Reconcile one doc
 

@@ -1,4 +1,30 @@
-# CLI JSON output contract
+# CLI output modes
+
+Human output is the default for people and agents. It is the command-owned
+presentation: reports retain sections and whitespace, and `code` retains a
+path/range header, source indentation, and one-based line numbers. It omits
+transport metadata that does not help answer the command's question.
+
+Public commands that support structured output share the same three options:
+
+```text
+--json         Emit the stable versioned CLI envelope.
+--result-only  With --json, emit only the command-owned result.
+--compact      With --json, minify the selected JSON form for a program.
+```
+
+Use plain `--json` for an integration that depends on producer, schema,
+coverage, evidence, arguments, or invocation options. Use `--json
+--result-only` for a program that needs just the result. Agents should run the
+ordinary command instead; pretty JSON remains structurally noisier than the
+human renderer. Both modifiers are rejected without `--json`.
+
+For example, `scip-query code <symbol>` prints source directly. Its result-only
+form contains only `file`, resolved `symbol`, `language`, a one-based `range`,
+and ordered `{ line, text }` rows. Resolution alternatives are added only when
+the requested symbol is ambiguous.
+
+## Stable JSON envelope
 
 A CLI JSON envelope is the public transport record printed by a scip-query
 command when a caller selects `--json`. Its real-world units are the JSON
@@ -13,12 +39,12 @@ The current envelope is schema version 1:
 {
   "kind": "scip-query-result",
   "schemaVersion": 1,
-  "producer": { "name": "scip-query", "version": "0.19.8" },
+  "producer": { "name": "scip-query", "version": "0.19.9" },
   "command": "refs",
   "resultSchemaVersion": 1,
   "evidence": "graph-fact",
   "args": ["login"],
-  "options": { "json": true, "compact": true },
+  "options": { "json": true },
   "result": {},
   "coverage": {}
 }
@@ -58,11 +84,18 @@ Run commands normally without choosing a page size. Human output larger than
 JSON object. Each incomplete page prints one exact continuation command after
 its content. Agents must run that command unchanged until the output-complete
 marker. Supplying `--output-page-size` changes the character budget; it does
-not select JSON. Do not pipe scip-query through `head`, `tail`, or a line-range
-`sed`; those programs discard output without creating a resumable position.
+not select JSON. The value counts rendered JavaScript string characters, not
+rows, results, model tokens, or bytes. If the complete result fits, scip-query
+returns it unchanged and removes the temporary snapshot; a page wrapper exists
+only when more content remains. Partial human pages end at the last complete
+line within that budget whenever one exists, so the next page begins with its
+own heading or source line number; a single line longer than the budget is the
+only case that requires a character-boundary split. Do not pipe scip-query
+through `head`, `tail`, or a line-range `sed`; those programs discard output
+without creating a resumable position.
 
-Default `--json` output remains the ordinary `scip-query-result` envelope
-byte-for-byte so existing scripts are not broken. When that envelope exceeds
+Default `--json` output remains the ordinary, additively extensible
+`scip-query-result` envelope. When that envelope exceeds
 12,000 characters, scip-query writes an early stderr warning containing the
 exact command that opts into output pages. The paged command returns:
 
@@ -70,7 +103,7 @@ exact command that opts into output pages. The paged command returns:
 {
   "kind": "scip-query-output-page",
   "schemaVersion": 1,
-  "producer": { "name": "scip-query", "version": "0.19.8" },
+  "producer": { "name": "scip-query", "version": "0.19.9" },
   "command": "architecture",
   "contentType": "application/json",
   "agentInstruction": "INCOMPLETE EVIDENCE: do not draw conclusions or report completion from this partial page. Run page.continuation.command exactly, then repeat until page.complete is true.",
@@ -91,13 +124,21 @@ exact command that opts into output pages. The paged command returns:
 }
 ```
 
-The cursor is bound to the command, working directory, complete
-non-pagination argument list, immutable page number and size, private output
-snapshot, and SHA-256 of the complete rendered output. The initial capture
-records each page's UTF-8 byte range and hash. A continuation reads and verifies
-only that range, so retrieving all pages performs linear snapshot I/O and never
-re-runs the command. A changed page, page-size mismatch, missing snapshot, or
-expired snapshot is rejected with the exact page-one restart command.
+The cursor is bound to the executable or package-runner prefix, command,
+working directory, complete non-pagination argument list, immutable page
+number and size, private output snapshot, and SHA-256 of the complete rendered
+output. The initial capture records that invocation identity plus each page's
+UTF-8 byte range and hash. A continuation reads and verifies only that range,
+so retrieving all pages performs linear snapshot I/O and never re-runs the
+command. A changed executable identity, page, page size, missing snapshot, or
+expired snapshot is rejected with the exact page-one restart command using the
+same prefix that created it.
+
+A genuinely partial JSON page must carry `content` as a string because an
+arbitrary character boundary is not necessarily valid nested JSON. Run the
+emitted continuation exactly until completion. Normal agent work should use
+human output, where partial pages remain multiline text rather than a JSON
+string.
 
 One snapshot is bounded to 32 million characters, 64 MiB, and 32,768 pages.
 The per-user pool is bounded to 32 snapshots and 256 MiB under atomic
@@ -167,6 +208,29 @@ removing one requires a major contract transition.
 The committed v0 and v1 fixtures in `tests/fixtures/` prove that the newest
 decoder reads both generations. The v1 fixture also contains an unknown
 additive field so tests prove tolerant reads rather than exact-key coupling.
+
+## Effectiveness telemetry authority
+
+`effectiveness --json` reports both handling outcomes and the authority of the
+observer that produced them. Repository-local agents and humans can edit the
+same `.scipquery/events/` and suppression files being summarized, so their
+rows use `authority: "local-writable-telemetry"` and expose
+`resolutionVsSuppressionRate`. The legacy `precision` result field remains
+present but is `null` for writable, mixed, or self-asserted populations. It is
+numeric only when every event in that population is a `protected-ci`
+observation with `protected-external` authority and the caller supplies its
+gate-run ID through a separately controlled attestation set. The built-in
+repository-history command supplies no such set, so writable JSON cannot
+self-promote into an independent grade. External evaluators can call the
+public `computeEffectiveness()` export from `scip-query/queries` with
+`protectedGateRunIds` obtained from their separately controlled corpus.
+
+The result also includes observer counts, distinct and missing gate-run
+identities, and bounded anomaly samples. Those samples identify calibration
+work without requiring a human to approve every ordinary automated
+suppression. `recordCompatibility.outcomeEvents` remains the independent
+statement about whether every event file was readable; neither compatibility
+nor Git can prove that a writable event file was never deleted.
 
 ## Other JSON protocols
 

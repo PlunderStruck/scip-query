@@ -355,13 +355,15 @@ Evidence: `node dist/cli.js architecture --json`;
 `node dist/cli.js imports src/symbols/identifier-attribution.ts --json`; and
 `node dist/cli.js imports src/symbols/references/reference-callers.ts --json`.
 The atomic-file and atomic-JSON boundary direction was reverified on
-2026-07-25. The complete-descriptor write loop and Windows directory-handle
-classification shared by atomic replacement and platform-owned lock/binary
-publication live in the dependency-free `src/filesystem/file-descriptor.ts`
-boundary. `src/storage/atomic-file.ts` now also owns exclusive first
-publication through a flushed staging inode and hard link. The revision-aware
-coordinator belongs to `runtime-services`, where it combines that storage
-primitive with the platform process-lock protocol.
+2026-07-27. Complete-descriptor writes, durable directory-chain creation, and
+final-mode artifact cloning live in the dependency-free
+`src/filesystem/` boundary. `src/storage/atomic-file.ts` exposes those
+filesystem mechanics as the storage publication boundary and owns replacement
+plus exclusive first publication through flushed staging inodes and durable
+names. Reindex consumes that storage boundary rather than importing filesystem
+mechanics directly. The revision-aware coordinator belongs to
+`runtime-services`, where it combines storage publication with the platform
+process-lock protocol.
 
 The storage-to-platform direction was revised on 2026-07-26 for immutable
 SQLite generation reader leases. A reader lease is a process-owned durable
@@ -391,16 +393,19 @@ predicate in `src/domain/record-validation.ts` and is also reused by config and
 JSON protocol decoders. This keeps future-version rejection identical without
 introducing a reverse domain dependency.
 
-The immutable SQLite generation handoff was reverified on 2026-07-25.
-`src/reindex/index.ts` coordinates publication, but durable directory flushing
-is owned by `src/storage/atomic-file.ts`; the reindex layer does not depend on
-the low-level filesystem boundary. `src/storage/sqlite-generation.ts` resolves
-the current pointer into one retained database, metadata, and SCIP artifact
-set. `src/semantic/typescript/remote-provider.ts` carries that retained
-generation identity into the semantic mailbox instead of rereading a mutable
-compatibility path. The generation identity is part of the mailbox operation
-key, so retries for one immutable generation join the same logical operation
-while a later published generation is necessarily a distinct request.
+The immutable SQLite generation handoff was reverified on 2026-07-27.
+`src/reindex/index.ts` coordinates publication, while
+`src/storage/atomic-file.ts` exposes durable path and artifact publication from
+the low-level filesystem boundary. The reindex layer therefore reports exact
+achieved durability without acquiring a direct `reindex -> filesystem`
+dependency. `src/storage/sqlite-generation.ts` authenticates manifest digests
+and resolves the current pointer into one retained database, metadata, and
+SCIP artifact set. `src/semantic/typescript/remote-provider.ts` carries that
+retained generation identity into the semantic mailbox instead of rereading a
+mutable compatibility path. The generation identity is part of the mailbox
+operation key, so retries for one immutable generation join the same logical
+operation while a later published generation is necessarily a distinct
+request.
 
 The untrusted-artifact read direction was reverified on 2026-07-26.
 `src/filesystem/bounded-file.ts` is the dependency-free owner of

@@ -48,7 +48,7 @@ export function renderCommandReferenceMarkdown(descriptors: readonly CommandDesc
     '',
     'This syntax summary is generated from the CLI command descriptors. Keep workflow guidance hand-authored, but keep command syntax, descriptions, and option flags descriptor-owned.',
     '',
-    'Commands with `--json` emit the versioned public envelope documented in [CLI JSON output contract](CLI_JSON_OUTPUT.md).',
+    'Commands with `--json` share three structured modes: plain `--json` emits the stable public envelope, `--json --result-only` emits only the command payload, and `--json --compact` minifies either form for a program. Agents should prefer ordinary human output. See [CLI output modes](CLI_JSON_OUTPUT.md).',
     '',
     'Every command accepts `--output-page-size <characters>` and `--output-cursor <cursor>`. Run normally without choosing a page size: oversized human output stays readable text and prints one exact continuation command; oversized JSON prints the exact command that opts into versioned JSON page envelopes.',
     '',

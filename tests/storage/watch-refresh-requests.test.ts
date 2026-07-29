@@ -25,7 +25,13 @@ describe('watch refresh request store', () => {
   it('admits immutable intent and leaves activity-like unrelated writes unable to erase it', () => {
     const root = fixtureRoot();
     const accepted = enqueue(root, 'first');
-    expect(accepted.disposition).toBe('accepted');
+    expect(accepted).toEqual(
+      expect.objectContaining({
+        disposition: 'accepted',
+        achievedDurability: 'directory-durable',
+        directorySync: 'synced',
+      }),
+    );
 
     const unrelated = join(root, '..', 'watch-activity.json');
     // Simulates arbitrary last-writer-wins activity replacements after admission.

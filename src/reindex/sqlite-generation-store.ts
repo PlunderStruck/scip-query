@@ -1,11 +1,7 @@
 import { createHash } from 'node:crypto';
 import {
   closeSync,
-  chmodSync,
-  copyFileSync,
-  constants,
   existsSync,
-  fsyncSync,
   mkdirSync,
   openSync,
   readSync,
@@ -15,11 +11,17 @@ import {
   statSync,
 } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
+import {
+  cloneFileDurable,
+  ensureDirectoryDurable,
+  mergeDirectorySyncStatus,
+  syncDirectoryDurable,
+  type DirectorySyncStatus,
+} from '../storage/atomic-file.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
 import { readProcessIdentity } from '../platform/process-identity.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
 import { acquireProcessFileLock } from '../platform/repository-cache-lock.js';
-import { syncDirectoryDurable } from '../storage/atomic-file.js';
 import { writeJsonAtomic, writeJsonDurable } from '../storage/atomic-json.js';
 import {
   SQLITE_GENERATION_DIRECTORY,
@@ -87,6 +89,8 @@ export interface PromoteReindexArtifactsResult {
   currentGeneration: string;
   previousGeneration?: SqliteGenerationRecovery;
   retention?: LocalSqliteGenerationRetentionResult;
+  achievedDurability: 'file-flushed' | 'directory-durable';
+  directorySync: Exclude<DirectorySyncStatus, 'not-requested'>;
 }
 
 export interface LocalSqliteGenerationRetentionLimits {
@@ -154,7 +158,10 @@ export function promoteReindexArtifacts(input: PromoteReindexArtifactsInput): Pr
     ...(input.publication ? { publication: input.publication } : {}),
     publishedAt,
   };
-  writeJsonDurable(join(generationRoot, 'state.json'), state, { spacing: 2, trailingNewline: true });
+  const pointerWrite = writeJsonDurable(join(generationRoot, 'state.json'), state, {
+    spacing: 2,
+    trailingNewline: true,
+  });
   input.onStage?.('after-pointer-handoff');
 
   if (!input.preserveOutputScip) replaceFile(input.tempOutputScip, input.outputScip);
@@ -171,7 +178,17 @@ export function promoteReindexArtifacts(input: PromoteReindexArtifactsInput): Pr
   };
   writeJsonDurable(join(generationRoot, 'state.json'), mirroredState, { spacing: 2, trailingNewline: true });
   const retention = collectLocalSqliteGenerations(input.outputDb, { now: input.now });
-  return { currentGeneration, ...(previousGeneration ? { previousGeneration } : {}), retention };
+  const directorySync = mergeDirectorySyncStatus(candidate.directorySync, pointerWrite.directorySync) as Exclude<
+    DirectorySyncStatus,
+    'not-requested'
+  >;
+  return {
+    currentGeneration,
+    ...(previousGeneration ? { previousGeneration } : {}),
+    retention,
+    achievedDurability: directorySync === 'synced' ? 'directory-durable' : 'file-flushed',
+    directorySync,
+  };
 }
 
 /**
@@ -649,7 +666,7 @@ function materializeGeneration(input: {
   indexPath?: string;
   metadataPath?: string;
   forcedIdentity?: string;
-}): { identity: string } {
+}): { identity: string; directorySync: Exclude<DirectorySyncStatus, 'not-requested'> } {
   const database = describeArtifact(input.databasePath);
   const index = input.indexPath ? describeArtifact(input.indexPath) : undefined;
   const metadata = input.metadataPath ? describeArtifact(input.metadataPath) : undefined;
@@ -664,23 +681,27 @@ function materializeGeneration(input: {
       optionalStoredArtifactMatches(generationDirectory, existing.index, index) &&
       storedMetadataMatches(generationDirectory, existing.metadata, input.metadataPath)
     ) {
-      return { identity };
+      return { identity, directorySync: syncDirectoryDurable(input.generationRoot) };
     }
     throw new Error(`SQLite generation ${identity} already exists with different or corrupt artifacts.`);
   }
 
-  mkdirSync(input.generationRoot, { recursive: true });
+  const directoryStatuses: Exclude<DirectorySyncStatus, 'not-requested'>[] = [
+    ensureDirectoryDurable(input.generationRoot),
+  ];
   removeAbandonedStagingDirectories(input.generationRoot);
   const temporaryDirectory = `${generationDirectory}.${process.pid}.${Date.now()}.tmp`;
   rmSync(temporaryDirectory, { recursive: true, force: true });
   mkdirSync(temporaryDirectory, { recursive: true });
   try {
-    cloneArtifact(input.databasePath, join(temporaryDirectory, database.file));
-    if (index && input.indexPath) cloneArtifact(input.indexPath, join(temporaryDirectory, index.file));
-    if (metadata && input.metadataPath) {
-      cloneArtifact(input.metadataPath, join(temporaryDirectory, metadata.file));
+    directoryStatuses.push(cloneArtifact(input.databasePath, join(temporaryDirectory, database.file)));
+    if (index && input.indexPath) {
+      directoryStatuses.push(cloneArtifact(input.indexPath, join(temporaryDirectory, index.file)));
     }
-    writeJsonDurable(
+    if (metadata && input.metadataPath) {
+      directoryStatuses.push(cloneArtifact(input.metadataPath, join(temporaryDirectory, metadata.file)));
+    }
+    const manifestWrite = writeJsonDurable(
       join(temporaryDirectory, SQLITE_GENERATION_MANIFEST),
       {
         version: SQLITE_GENERATION_MANIFEST_VERSION,
@@ -691,12 +712,14 @@ function materializeGeneration(input: {
       } satisfies SqliteGenerationManifest,
       { spacing: 2, trailingNewline: true },
     );
+    if (manifestWrite.directorySync !== 'not-requested') directoryStatuses.push(manifestWrite.directorySync);
+    directoryStatuses.push(syncDirectoryDurable(temporaryDirectory));
     renameSync(temporaryDirectory, generationDirectory);
-    syncDirectoryDurable(input.generationRoot);
+    directoryStatuses.push(syncDirectoryDurable(input.generationRoot));
   } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });
   }
-  return { identity };
+  return { identity, directorySync: mergeDirectorySyncStatus(...directoryStatuses) };
 }
 
 function generationIdentityFromArtifacts(
@@ -747,15 +770,8 @@ function readFileChunk(fd: number, buffer: Buffer): number {
   return offset;
 }
 
-function cloneArtifact(source: string, target: string): void {
-  copyFileSync(source, target, constants.COPYFILE_FICLONE);
-  const fd = openSync(target, 'r');
-  try {
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
-  chmodSync(target, 0o444);
+function cloneArtifact(source: string, target: string): Exclude<DirectorySyncStatus, 'not-requested'> {
+  return cloneFileDurable(source, target, { mode: 0o444 });
 }
 
 function storedArtifactMatches(

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tryAcquireProcessFileLock } from '../src/platform/process-file-lock.js';
-import { replaceFileAtomic, type DirectorySyncStatus } from '../src/storage/atomic-file.js';
+import { replaceFileAtomic, type AtomicFileWriteResult } from '../src/storage/atomic-file.js';
 import {
   advanceNpmReleaseState,
   assertNpmReleaseStateMatches,
@@ -58,7 +58,7 @@ export interface NpmReleaseRuntime extends WindowsSidecarReleaseRuntime {
   now(): string;
   readOptionalFile(path: string): Buffer | null;
   wait(milliseconds: number): void;
-  writeReleaseState(path: string, bytes: string): DirectorySyncStatus;
+  writeReleaseState(path: string, bytes: string): AtomicFileWriteResult;
 }
 
 export interface RunNpmReleaseOptions {
@@ -98,6 +98,10 @@ export function runNpmRelease(runtime: NpmReleaseRuntime, options: RunNpmRelease
   let releaseDirectory: string | null = null;
   let result: NpmReleaseResult | undefined;
   let operationError: unknown;
+  let lastReleaseStateWrite: AtomicFileWriteResult | undefined;
+  const recordReleaseStateWrite = (write: AtomicFileWriteResult): void => {
+    lastReleaseStateWrite = write;
+  };
   try {
     releaseDirectory = runtime.makeTempDirectory(join(runtime.tempDirectory(), 'scip-query-npm-release-'));
     const gitRevision = requireCleanGitRevision(root, runtime);
@@ -114,7 +118,7 @@ export function runNpmRelease(runtime: NpmReleaseRuntime, options: RunNpmRelease
       now: runtime.now(),
     });
     const statePath = npmReleaseStatePath(root, expectedState.packages.main, expectedState.packages.sidecar);
-    let state = loadOrCreateReleaseState(statePath, expectedState, runtime);
+    let state = loadOrCreateReleaseState(statePath, expectedState, runtime, recordReleaseStateWrite);
 
     const sidecarObservation = observeSidecarRegistry(
       localSidecar,
@@ -127,7 +131,7 @@ export function runNpmRelease(runtime: NpmReleaseRuntime, options: RunNpmRelease
     const observedStages: NpmReleaseStage[] = [];
     if (sidecarObservation.kind === 'verified') observedStages.push('sidecar-registry-verified');
     if (mainObservation.kind === 'verified') observedStages.push('main-registry-verified');
-    state = persistReleaseStages(statePath, state, observedStages, runtime);
+    state = persistReleaseStages(statePath, state, observedStages, runtime, recordReleaseStateWrite);
 
     if (mode === 'dry-run') {
       logDryRunPlan(mainPackage, sidecarPackage, sidecarObservation, mainObservation, statePath, runtime);
@@ -143,7 +147,7 @@ export function runNpmRelease(runtime: NpmReleaseRuntime, options: RunNpmRelease
             observeSidecarRegistry(localSidecar, registry, releaseDirectory, `published-sidecar-${attempt}`, runtime),
           runtime,
         });
-        state = persistReleaseStages(statePath, state, ['sidecar-registry-verified'], runtime);
+        state = persistReleaseStages(statePath, state, ['sidecar-registry-verified'], runtime, recordReleaseStateWrite);
       }
 
       if (mainObservation.kind === 'absent') {
@@ -156,14 +160,18 @@ export function runNpmRelease(runtime: NpmReleaseRuntime, options: RunNpmRelease
             observeMainRegistry(localMain, registry, releaseDirectory, `published-main-${attempt}`, runtime),
           runtime,
         });
-        state = persistReleaseStages(statePath, state, ['main-registry-verified'], runtime);
+        state = persistReleaseStages(statePath, state, ['main-registry-verified'], runtime, recordReleaseStateWrite);
       }
 
       runtime.log(
         `Release complete: ${mainPackage.name}@${mainPackage.version} and ` +
           `${sidecarPackage.name}@${sidecarPackage.version} have verified registry identities.`,
       );
-      runtime.log(`Durable release state: ${statePath}`);
+      runtime.log(
+        lastReleaseStateWrite
+          ? `Release state (${formatAchievedDurability(lastReleaseStateWrite)}): ${statePath}`
+          : `Existing release state reconciled from disk: ${statePath}`,
+      );
       result = { mode, statePath, state };
     }
   } catch (error) {
@@ -237,7 +245,7 @@ export function createNpmReleaseRuntime(): NpmReleaseRuntime {
       Atomics.wait(signal, 0, 0, milliseconds);
     },
     writeReleaseState(path, bytes) {
-      return replaceFileAtomic(path, bytes, { durability: 'durable' }).directorySync;
+      return replaceFileAtomic(path, bytes, { durability: 'durable' });
     },
   };
 }
@@ -395,6 +403,7 @@ function loadOrCreateReleaseState(
   path: string,
   expected: NpmReleaseState,
   runtime: NpmReleaseRuntime,
+  onWrite: (write: AtomicFileWriteResult) => void,
 ): NpmReleaseState {
   const existing = runtime.readOptionalFile(path);
   if (existing) {
@@ -402,8 +411,9 @@ function loadOrCreateReleaseState(
     assertNpmReleaseStateMatches(state, expected);
     return state;
   }
-  const directorySync = runtime.writeReleaseState(path, serializeNpmReleaseState(expected));
-  runtime.log(`Recorded local preflight state (${directorySync}) at ${path}.`);
+  const write = runtime.writeReleaseState(path, serializeNpmReleaseState(expected));
+  onWrite(write);
+  runtime.log(`Recorded local preflight state (${formatAchievedDurability(write)}) at ${path}.`);
   return expected;
 }
 
@@ -412,12 +422,20 @@ function persistReleaseStages(
   state: NpmReleaseState,
   stages: readonly NpmReleaseStage[],
   runtime: NpmReleaseRuntime,
+  onWrite: (write: AtomicFileWriteResult) => void,
 ): NpmReleaseState {
   if (stages.every((stage) => state.completedStages.includes(stage))) return state;
   const next = advanceNpmReleaseState(state, stages, runtime.now());
-  const directorySync = runtime.writeReleaseState(path, serializeNpmReleaseState(next));
-  runtime.log(`Recorded release stages ${next.completedStages.join(', ')} (${directorySync}).`);
+  const write = runtime.writeReleaseState(path, serializeNpmReleaseState(next));
+  onWrite(write);
+  runtime.log(`Recorded release stages ${next.completedStages.join(', ')} (${formatAchievedDurability(write)}).`);
   return next;
+}
+
+function formatAchievedDurability(write: AtomicFileWriteResult): string {
+  return write.achievedDurability === 'file-flushed'
+    ? 'file-flushed; directory sync unsupported'
+    : write.achievedDurability;
 }
 
 function observeSidecarRegistry(

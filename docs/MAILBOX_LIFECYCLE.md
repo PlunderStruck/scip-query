@@ -122,7 +122,12 @@ boundaries.
 A claim is a time-bounded service ownership record made real by renaming one
 pending file into an owner-specific inflight directory. Rename is the
 ownership compare-and-set: only the process whose rename succeeds owns that
-file. The directory's owner record binds the random owner ID to a PID and,
+file. Before a first claim can remove the pending name, the service durably
+establishes the fixed mailbox skeleton, creates the owner directory, and
+flushes `inflight/` so the complete destination path survives. It then writes
+the owner record, renames the request, flushes the source directory, and
+flushes the owner directory in that order. The directory's owner record binds
+the random owner ID to a PID and,
 when the operating system exposes it, a process-start identity. A process-start
 identity is the operating-system fact that distinguishes successive
 executions occupying the same numeric PID slot.
@@ -146,6 +151,14 @@ unverifiable. Work can be retried after both lease expiry and owner death. The
 answer-affecting operations are read-only or rebuildable, the response
 identity is stable, and exclusive completion remains a final defense against
 two observable answers.
+
+Accepted admission and successful claims expose the achieved directory-sync
+result. On POSIX hosts that complete every directory flush this is
+`directory-durable`. When Node reports directory handles unsupported on
+Windows, it is `file-flushed`: complete file bytes and process-crash recovery
+remain, but the protocol does not upgrade that bounded result into a
+machine-crash namespace claim. Any other directory synchronization error
+throws instead of acknowledging the transition.
 
 ## Fairness and maintenance
 
@@ -203,6 +216,7 @@ window. Clock-domain rules for these records are documented in
 Focused contract coverage lives in:
 
 - `tests/storage/bounded-mailbox.test.ts`;
+- `tests/storage/atomic-file-crash.test.ts`;
 - `tests/semantic/typescript/typescript-session-mailbox.test.ts`;
 - `tests/reindex/typescript-index-mailbox.test.ts`;
 - `tests/semantic/rust/durable-session-protocol.test.ts`;

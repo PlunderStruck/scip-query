@@ -2,6 +2,7 @@ import { isProjectFileFingerprint, type ProjectFileFingerprint } from './project
 import { isRecordObject, isValidRecordTimestamp } from './record-validation.js';
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from './config-types.js';
 import type { LastRefreshMetadata } from './maintenance-types.js';
+import { CURRENT_SQLITE_QUERY_LAYOUT_VERSION } from './sqlite-query-layout.js';
 
 export const LEGACY_REINDEX_METADATA_VERSION = 2;
 export const CURRENT_REINDEX_METADATA_VERSION = 3;
@@ -27,6 +28,7 @@ export interface ReindexMetadataV2 extends ReindexMetadataCommon {
 
 export interface ReindexMetadataV3 extends ReindexMetadataCommon {
   version: typeof CURRENT_REINDEX_METADATA_VERSION;
+  sqliteLayoutVersion?: number;
   languageFingerprints?: Partial<Record<SupportedLanguage, unknown>>;
   typescriptProjectShards?: Record<string, { files: ProjectFileFingerprint[] }>;
 }
@@ -108,6 +110,8 @@ export function canonicalReindexMetadataIdentity(decoded: DecodedReindexMetadata
     fingerprint: metadata.fingerprint,
     indexedLanguages: metadata.indexedLanguages,
     scipCompanion: metadata.scipCompanion,
+    sqliteLayoutVersion:
+      metadata.version === CURRENT_REINDEX_METADATA_VERSION ? metadata.sqliteLayoutVersion : undefined,
   });
 }
 
@@ -151,6 +155,13 @@ function validateSupportedMetadata(value: Record<string, unknown>, version: numb
   }
   if (
     version === CURRENT_REINDEX_METADATA_VERSION &&
+    value['sqliteLayoutVersion'] !== undefined &&
+    (!Number.isSafeInteger(value['sqliteLayoutVersion']) || (value['sqliteLayoutVersion'] as number) < 1)
+  ) {
+    return 'sqliteLayoutVersion must be a positive safe integer';
+  }
+  if (
+    version === CURRENT_REINDEX_METADATA_VERSION &&
     value['languageFingerprints'] !== undefined &&
     !isLanguageFingerprintMap(value['languageFingerprints'])
   ) {
@@ -164,6 +175,13 @@ function validateSupportedMetadata(value: Record<string, unknown>, version: numb
     return 'typescriptProjectShards must map project names to file fingerprints';
   }
   return null;
+}
+
+export function hasCurrentSqliteQueryLayout(metadata: ReindexMetadata): boolean {
+  return (
+    metadata.version === CURRENT_REINDEX_METADATA_VERSION &&
+    metadata.sqliteLayoutVersion === CURRENT_SQLITE_QUERY_LAYOUT_VERSION
+  );
 }
 
 function isSupportedLanguageArray(value: unknown): value is SupportedLanguage[] {

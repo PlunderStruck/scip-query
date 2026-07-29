@@ -18,9 +18,9 @@ Load shared mechanics from [`../../_shared/SKILL.md`](../../_shared/SKILL.md) on
 | `scip-query co-change <fix-site-file>` | Assemble the family: files that historically changed together with each fix site without a dependency edge — hidden coupling candidates, and a way to find family members the user forgot (bounded coverage: file pairs, co-change counts, confidence, history context). |
 | `scip-query system <system-scope>` | Define the system's real responsibilities, files, and dependencies in and out (complete coverage: module file paths, exported symbols with line ranges, internal and reverse dependencies). |
 | `scip-query surface <system-scope>` | Define the system: referents for its public surface alongside `system`. |
-| `scip-query similar <fixed-symbol> --json --full` | Predict: hunt latent instances among sibling implementations of the fixed code (bounded coverage). |
+| `scip-query similar <fixed-symbol> --full` | Predict: hunt latent instances among sibling implementations of the fixed code (bounded coverage). |
 | `scip-query refs <invariant-carrier>` | Predict: every site that touches the violated invariant's state (bounded coverage: referencing file paths, reference line numbers grouped by file). |
-| `scip-query affected <remedy-symbol> --json` | Choose the remedy rung: blast radius of the candidate remedy (bounded coverage: transitive closure of symbols that could break). |
+| `scip-query affected <remedy-symbol>` | Choose the remedy rung: blast radius of the candidate remedy (bounded coverage: transitive closure of symbols that could break). |
 
 ## Terms
 
@@ -92,7 +92,7 @@ Retrodiction: derive each family-table row from the flaw in one sentence each. A
 Prediction: the flaw implies unfixed instances exist. Name where they must be, then hunt:
 
 ```bash
-scip-query similar <fixed-symbol> --json --full
+scip-query similar <fixed-symbol> --full
 scip-query refs <invariant-carrier>
 ```
 

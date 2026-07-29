@@ -59,6 +59,11 @@ import { getGlobalLeafIndex } from '../../symbols/leaf-symbol-index.js';
 import { discoverWorkspacePackages } from '../../platform/workspace-packages.js';
 import { profileSpan } from '../../instrumentation/profile.js';
 import { notifyDiffGateCheckComplete, notifyDiffGateCheckStart } from '../internal/diff-gate-progress.js';
+import {
+  automaticSuppressionRateIsAnomalous,
+  evaluateSuppressionAdjudication,
+} from '../../domain/suppression-adjudication.js';
+import { readProjectFileText } from '../../platform/project-files.js';
 
 /** Canonical check list — the CLI validates `--skip` values against this. */
 export const DIFF_GATE_CHECKS: readonly DiffGateCheck[] = [
@@ -188,6 +193,22 @@ export interface DiffGateResult {
   skipped: Array<{ check: DiffGateCheck; reason: string }>;
   /** Findings accepted by structured .scipquery.json suppressions. */
   suppressed: Array<{ finding: DiffGateFinding; suppression: FindingSuppression }>;
+  /** Model-proposed decisions that could not enter the narrow automatic lane. */
+  policyEscalations?: Array<{
+    findingId: string;
+    check: DiffGateCheck;
+    suppressionId?: string;
+    reasons: string[];
+  }>;
+  /** Machine-visible distinction between a clean gate and an automatically adjudicated gate. */
+  outcome?: 'pass' | 'pass-with-suppressions' | 'findings';
+  suppressionSummary?: {
+    automaticSuppressionCount: number;
+    policyEscalationCount: number;
+    expiredCount: number;
+    invalidatedCount: number;
+    legacyUnadjudicatedCount: number;
+  };
   findings: DiffGateFinding[];
   attributionNotes: AttributionNote[];
   evidenceTiers: DiffImpactEvidenceTierStatus[];
@@ -300,6 +321,9 @@ export function diffGate(
     checksRun: [],
     skipped: [],
     suppressed: [],
+    policyEscalations: [],
+    outcome: 'pass',
+    suppressionSummary: emptySuppressionSummary(),
     findings: [],
     attributionNotes: impact.attributionNotes,
     evidenceTiers: impact.evidenceTiers,
@@ -372,7 +396,12 @@ export function diffGate(
   // Suppressions come from two stores: the legacy .scipquery.json array
   // (read-only since 0.15.0) and the conflict-free per-file directory the
   // `suppress` command writes. Matching semantics are identical.
-  applyStructuredSuppressions(result, [...(db.config.suppressions ?? []), ...suppressionStore.suppressions]);
+  applyStructuredSuppressions(
+    result,
+    [...(db.config.suppressions ?? []), ...suppressionStore.suppressions],
+    db.config.projectRoot,
+    suppressionStore.compatibility.complete,
+  );
   result.rootCauseGroups = diffGateRootCauseGroups(result.findings);
 
   return result;
@@ -488,29 +517,124 @@ function actionTierRank(actionTier: DiffGateActionTier): number {
   return actionTier === 'direct' ? 2 : actionTier === 'signal' ? 1 : 0;
 }
 
-function applyStructuredSuppressions(result: DiffGateResult, suppressions: readonly FindingSuppression[]): void {
-  if (suppressions.length === 0 || result.findings.length === 0) return;
+function applyStructuredSuppressions(
+  result: DiffGateResult,
+  suppressions: readonly FindingSuppression[],
+  projectRoot: string,
+  compatibilityComplete: boolean,
+): void {
+  const summary = result.suppressionSummary ?? emptySuppressionSummary();
+  result.suppressionSummary = summary;
+  result.policyEscalations ??= [];
+  if (suppressions.length === 0 || result.findings.length === 0) {
+    result.outcome = result.findings.length > 0 ? 'findings' : 'pass';
+    return;
+  }
+
+  const originalFindings = [...result.findings];
+  const accepted = new Map<string, FindingSuppression>();
+  const escalations = new Map<string, Set<string>>();
+  const now = Date.now();
+  const contentHash = (path: string): string | undefined => {
+    try {
+      return createHash('sha256').update(readProjectFileText(projectRoot, path)).digest('hex');
+    } catch {
+      return undefined;
+    }
+  };
+
+  for (const finding of originalFindings) {
+    const candidates = suppressions.filter((candidate) => suppressionTargetsFinding(candidate, finding));
+    if (candidates.length === 0) continue;
+    const reasons = new Set<string>();
+    for (const suppression of candidates) {
+      const adjudication = evaluateSuppressionAdjudication(suppression, finding, { now, contentHash });
+      if (adjudication.kind === 'accepted' && compatibilityComplete) {
+        accepted.set(finding.id, suppression);
+        break;
+      }
+      const adjudicationReasons =
+        adjudication.kind === 'accepted' ? ['suppression-record-coverage-incomplete'] : adjudication.reasons;
+      for (const reason of adjudicationReasons) reasons.add(reason);
+      if (adjudication.kind === 'expired') summary.expiredCount += 1;
+      if (adjudication.kind === 'invalidated') summary.invalidatedCount += 1;
+      if (adjudicationReasons.includes('legacy-unadjudicated')) summary.legacyUnadjudicatedCount += 1;
+    }
+    if (!accepted.has(finding.id)) escalations.set(finding.id, reasons);
+  }
+
+  const findingsPerCheck = countByCheck(originalFindings);
+  const acceptedPerCheck = countAcceptedByCheck(originalFindings, accepted);
+  const anomalousChecks = new Set<DiffGateCheck>();
+  for (const [check, count] of acceptedPerCheck) {
+    const total = findingsPerCheck.get(check) ?? count;
+    if (automaticSuppressionRateIsAnomalous(count, total)) {
+      anomalousChecks.add(check);
+    }
+  }
+
   const kept: DiffGateFinding[] = [];
-  for (const finding of result.findings) {
-    const suppression = suppressions.find((candidate) => suppressionMatches(candidate, finding));
-    if (suppression) {
+  for (const finding of originalFindings) {
+    const suppression = accepted.get(finding.id);
+    if (suppression && !anomalousChecks.has(finding.check)) {
       result.suppressed.push({ finding, suppression });
-    } else {
-      kept.push(finding);
+      summary.automaticSuppressionCount += 1;
+      continue;
+    }
+    kept.push(finding);
+    const reasons = escalations.get(finding.id) ?? new Set<string>();
+    if (suppression && anomalousChecks.has(finding.check)) reasons.add('automatic-suppression-rate-anomaly');
+    if (reasons.size > 0) {
+      result.policyEscalations.push({
+        findingId: finding.id,
+        check: finding.check,
+        ...(suppression?.id ? { suppressionId: suppression.id } : {}),
+        reasons: [...reasons].sort(),
+      });
     }
   }
   result.findings = kept;
+  summary.policyEscalationCount = result.policyEscalations.length;
+  result.outcome =
+    result.findings.length > 0 ? 'findings' : result.suppressed.length > 0 ? 'pass-with-suppressions' : 'pass';
 }
 
-function suppressionMatches(suppression: FindingSuppression, finding: DiffGateFinding): boolean {
+function suppressionTargetsFinding(suppression: FindingSuppression, finding: DiffGateFinding): boolean {
   if (!suppression.reason || suppression.reason.trim() === '') return false;
-  if (suppression.expiresAt && Date.parse(suppression.expiresAt) <= Date.now()) return false;
   if (suppression.id && suppression.id !== finding.id && !finding.legacySuppressionIds?.includes(suppression.id)) {
     return false;
   }
   if (suppression.check && suppression.check !== finding.check) return false;
   if (suppression.file && suppression.file !== finding.file) return false;
   return Boolean(suppression.id || suppression.check);
+}
+
+function emptySuppressionSummary(): NonNullable<DiffGateResult['suppressionSummary']> {
+  return {
+    automaticSuppressionCount: 0,
+    policyEscalationCount: 0,
+    expiredCount: 0,
+    invalidatedCount: 0,
+    legacyUnadjudicatedCount: 0,
+  };
+}
+
+function countByCheck(findings: readonly DiffGateFinding[]): Map<DiffGateCheck, number> {
+  const counts = new Map<DiffGateCheck, number>();
+  for (const finding of findings) counts.set(finding.check, (counts.get(finding.check) ?? 0) + 1);
+  return counts;
+}
+
+function countAcceptedByCheck(
+  findings: readonly DiffGateFinding[],
+  accepted: ReadonlyMap<string, FindingSuppression>,
+): Map<DiffGateCheck, number> {
+  const counts = new Map<DiffGateCheck, number>();
+  for (const finding of findings) {
+    if (!accepted.has(finding.id)) continue;
+    counts.set(finding.check, (counts.get(finding.check) ?? 0) + 1);
+  }
+  return counts;
 }
 
 function recordFinding(result: DiffGateResult, finding: DiffGateFindingDraft): void {

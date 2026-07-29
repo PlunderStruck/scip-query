@@ -23,12 +23,12 @@ independently in only some of its copies.
 
 ## Detect
 
-Run `scip-query twin-drift --json --full` to surface every DIVERGENT and
+Run `scip-query twin-drift --full` to surface every DIVERGENT and
 near-name group in scope; scope it to a module with `-s/--scope <path>` when
 the review should be bounded. Record group count, member count, and
 `maxDivergence` per group.
 
-Cross-check results against `scip-query duplicate-bodies --json --full` —
+Cross-check results against `scip-query duplicate-bodies --full` —
 IDENTICAL groups belong to `duplicate-bodies`, not here; do not re-report
 them. Homonyms — groups with similarity below `--min-similarity` (default
 0.3) — are noise and should not be chased unless `--include-homonyms` was

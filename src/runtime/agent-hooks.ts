@@ -32,10 +32,27 @@ import {
 } from './watch-service.js';
 import { findGitRoot } from '../platform/git-worktree.js';
 import { resolveSharedEvidenceDbPath } from '../reindex/shared-generation-store.js';
+import { inspectSqliteGeneration } from '../reindex/sqlite-generation-store.js';
 import { formatRecordCompatibilityWarning } from '../domain/record-compatibility.js';
 import { resolveSpawnableExecutable, toPortableCommand } from '../platform/binary.js';
 import { writeSerializedJson } from '../platform/terminal-output.js';
-import { runIsolatedDiffGate } from './diff-gate-execution.js';
+import {
+  DEFAULT_DIFF_GATE_TIMEOUT_MS,
+  diffGateDeadlineContract,
+  runIsolatedDiffGate,
+  type DiffGateExecutionResult,
+} from './diff-gate-execution.js';
+import { formatAnalysisBudgetDisclosure } from './cli-support.js';
+import { formatUnresolvedStreakLine } from '../queries/health/finding-outcome-ledger.js';
+import {
+  pendingOutputFromTranscript,
+  readAgentSessionState,
+  readAgentTranscriptTail,
+  renderAgentSessionRestoration,
+  updateAgentSessionState,
+  type AgentSessionStopReceipt,
+} from './agent-session-state.js';
+import { buildLeasedObservationReceipt } from './observation-receipt.js';
 
 const SKIP_HOOK_INSTALL_ENV = 'SCIP_QUERY_SKIP_HOOK_INSTALL';
 const STOP_HOOK_MODE_ENV = 'SCIP_QUERY_STOP_HOOK_MODE';
@@ -49,6 +66,12 @@ const PROJECT_LOCAL_HOOK_TARGETS = [
 ] as const;
 
 export type StopHookMode = 'warn' | 'feedback' | 'block';
+
+const STOP_HOOK_REFRESH_WAIT_MS = 5_000;
+const STOP_HOOK_REFRESH_POLL_MS = 100;
+const STOP_HOOK_GIT_OBSERVATION_TIMEOUT_MS = 10_000;
+const STOP_HOOK_GIT_OBSERVATION_MAX_BUFFER = 50 * 1024 * 1024;
+const STOP_HOOK_DEADLINE = diffGateDeadlineContract(DEFAULT_DIFF_GATE_TIMEOUT_MS, STOP_HOOK_REFRESH_WAIT_MS);
 
 export interface ClaudeHookJsonOutput {
   decision?: 'block';
@@ -66,6 +89,43 @@ export interface ClaudePreToolHookJsonOutput {
     permissionDecision: 'deny';
     permissionDecisionReason: string;
   };
+}
+
+interface HookWorkspace {
+  projectRoot: string;
+  config: ProjectConfig;
+  paths: ReturnType<typeof resolveIndexStoragePaths>;
+}
+
+export interface StopHookIndexObservation {
+  freshness: ReturnType<typeof getIndexFreshness>;
+  generationIdentity?: string;
+  generationSource?: 'immutable' | 'legacy';
+  worktreeIdentity?: string;
+}
+
+export interface StopHookEvidenceLease {
+  generationIdentity: string;
+  generationSource: 'immutable' | 'legacy';
+  worktreeIdentity: string;
+  observedAt: string;
+}
+
+export interface StopHookEvidenceDependencies {
+  refresh(workspace: HookWorkspace): Promise<string | undefined>;
+  observe(workspace: HookWorkspace): StopHookIndexObservation;
+  now(): number;
+  wait(milliseconds: number): Promise<void>;
+}
+
+export class StopHookEvidenceLeaseError extends Error {
+  constructor(
+    readonly state: ReturnType<typeof getIndexFreshness>['state'] | 'changed-during-run' | 'unverifiable',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'StopHookEvidenceLeaseError';
+  }
 }
 
 // scip-query: ignore-stale — reviewed S1 owned contract; hook installation returns this named result.
@@ -108,6 +168,7 @@ export interface HookPayload {
   prompt?: unknown;
   source?: unknown;
   session_id?: unknown;
+  transcript_path?: unknown;
   tool_name?: unknown;
   tool_input?: unknown;
 }
@@ -622,7 +683,7 @@ function scipHookGroup(_provider: HookProvider, event: HookEventName, commandPre
       {
         type: 'command',
         command: `${commandPrefix} hook-stop`,
-        timeout: 30,
+        timeout: STOP_HOOK_DEADLINE.hostTimeoutSeconds,
         statusMessage: 'Running scip-query diff gate',
       },
     ],
@@ -709,12 +770,27 @@ export function evaluatePreToolUse(payload: HookPayload, alreadyReminded: boolea
 }
 
 function blindlyTruncatesScipQuery(command: string): boolean {
-  const scipQuery = /(?:^|[;&(]\s*|\s)(?:\S*\/)?scip-query\s+[A-Za-z][A-Za-z0-9-]*(?:\s|$)/;
-  if (!scipQuery.test(command)) return false;
+  if (!containsScipQueryInvocation(command)) return false;
   return (
     /\|\s*(?:head|tail)(?:\s|$)/.test(command) ||
     /\|\s*sed\s+(?:-[A-Za-z]+\s+)*(?:['"])?\d+\s*,\s*\d+\s*p/.test(command)
   );
+}
+
+function containsScipQueryInvocation(command: string): boolean {
+  const boundary = String.raw`(?:^|[;&(]\s*|\|\|?\s*|&&\s*|\s)`;
+  const commandName = String.raw`(?:\S*[\\/])?scip-query(?:\.(?:cmd|exe))?`;
+  const direct = new RegExp(`${boundary}${commandName}\\s+[A-Za-z][A-Za-z0-9-]*(?:\\s|$)`, 'u');
+  const packageRunner = new RegExp(
+    `${boundary}(?:(?:npx|bunx|yarn(?:\\s+dlx)?)\\s+|pnpm\\s+(?:exec|dlx)\\s+|npm\\s+exec(?:\\s+--)?\\s+)${commandName}\\s+[A-Za-z][A-Za-z0-9-]*(?:\\s|$)`,
+    'u',
+  );
+  const cliScript = String.raw`(?:"[^"]*(?:dist[\\/]cli\.js|src[\\/]runtime[\\/]cli\.ts)"|'[^']*(?:dist[\\/]cli\.js|src[\\/]runtime[\\/]cli\.ts)'|\S*(?:dist[\\/]cli\.js|src[\\/]runtime[\\/]cli\.ts))`;
+  const nodeEntrypoint = new RegExp(
+    `${boundary}(?:\\S*[\\\\/])?(?:node|bun)(?:\\.exe)?\\s+${cliScript}\\s+[A-Za-z][A-Za-z0-9-]*(?:\\s|$)`,
+    'u',
+  );
+  return direct.test(command) || packageRunner.test(command) || nodeEntrypoint.test(command);
 }
 
 function preToolReminderMarker(cacheDir: string, payload: HookPayload): string | null {
@@ -744,16 +820,20 @@ function resetPreToolReminder(
  * every snapshot-doc citation surfaced as a live doc-reference finding.
  */
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
-export function runStopHookDiffGate(hookInput: string): DiffGateResult | undefined {
+export async function runStopHookDiffGate(
+  hookInput: string,
+  evidenceDependencies: StopHookEvidenceDependencies = DEFAULT_STOP_HOOK_EVIDENCE_DEPENDENCIES,
+): Promise<DiffGateResult | undefined> {
   if (isStopHookReentry(hookInput)) {
     return undefined;
   }
 
   const payload = parseHookPayload(hookInput);
   const workspace = resolveHookWorkspace(payload);
-  if (!workspace || !existsSync(workspace.paths.dbPath)) return undefined;
+  if (!workspace) return undefined;
+  const lease = await prepareStopHookEvidenceLease(workspace, evidenceDependencies);
 
-  return withWorkspaceDb(workspace, (db) => {
+  const result = withWorkspaceDb(workspace, (db) => {
     const gateOptions = {
       minTogether: 6,
       skip: [],
@@ -773,44 +853,239 @@ export function runStopHookDiffGate(hookInput: string): DiffGateResult | undefin
     if (outcomes.warning) console.error(`note: ${outcomes.warning}`);
     return result;
   });
+  assertStopHookEvidenceLease(workspace, lease, evidenceDependencies);
+  return result;
 }
 
-export function handleAgentHookStop(): void {
+export async function handleAgentHookStop(): Promise<void> {
   const hookInput = readHookInput();
-  let result: DiffGateResult | undefined;
+  const payload = parseHookPayload(hookInput);
+  const workspace = resolveHookWorkspace(payload);
+  let execution: StopHookExecution | undefined;
   try {
-    result = runIsolatedStopHookDiffGate(hookInput);
+    execution = await runIsolatedStopHookDiffGate(hookInput);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    persistStopSessionState(workspace, payload, {
+      attemptedAtMs: Date.now(),
+      outcome: 'unresolved',
+      findingCount: 0,
+      automaticSuppressionCount: 0,
+      policyEscalationCount: 0,
+      warning: message,
+    });
     writeStopHookJson(renderStopHookExecutionFailure(message, resolveStopHookMode()));
     return;
   }
-  if (!result || (result.findings.length === 0 && !suppressionCoverageWarning(result))) return;
-  writeStopHookJson(renderStopHookOutput(result, resolveStopHookMode()));
+  const result = execution?.result;
+  if (execution && result) {
+    persistStopSessionState(workspace, payload, {
+      attemptedAtMs: Date.now(),
+      outcome: result.outcome ?? (result.findings.length > 0 ? 'findings' : 'pass'),
+      findingCount: result.findings.length,
+      automaticSuppressionCount: result.suppressionSummary?.automaticSuppressionCount ?? result.suppressed.length,
+      policyEscalationCount: result.suppressionSummary?.policyEscalationCount ?? 0,
+      observation: buildLeasedObservationReceipt({
+        projectRoot: workspace?.projectRoot ?? process.cwd(),
+        generationIdentity: execution.evidenceLease.generationIdentity,
+        generationSource: execution.evidenceLease.generationSource,
+        worktreeIdentity: execution.evidenceLease.worktreeIdentity,
+        observedAt: execution.evidenceLease.observedAt,
+      }),
+      ...(execution.outcomes.warning ? { warning: execution.outcomes.warning } : {}),
+    });
+  }
+  if (
+    !result ||
+    (result.findings.length === 0 &&
+      result.suppressed.length === 0 &&
+      !suppressionCoverageWarning(result) &&
+      !execution?.outcomes.warning &&
+      !stopCoverageWarning(result))
+  ) {
+    return;
+  }
+  writeStopHookJson(renderStopHookOutput(result, resolveStopHookMode(), execution));
 }
 
 function writeStopHookJson(output: ClaudeHookJsonOutput): void {
   writeSerializedJson(JSON.stringify(output));
 }
 
-function runIsolatedStopHookDiffGate(hookInput: string): DiffGateResult | undefined {
+interface StopHookExecution extends DiffGateExecutionResult {
+  evidenceLease: StopHookEvidenceLease;
+}
+
+async function runIsolatedStopHookDiffGate(hookInput: string): Promise<StopHookExecution | undefined> {
   if (isStopHookReentry(hookInput)) return undefined;
   const payload = parseHookPayload(hookInput);
   const workspace = resolveHookWorkspace(payload);
-  if (!workspace || !existsSync(workspace.paths.dbPath)) return undefined;
-  return runIsolatedDiffGate(
+  if (!workspace) return undefined;
+  const lease = await prepareStopHookEvidenceLease(workspace);
+  const execution = runIsolatedDiffGate(
     {
       minTogether: 6,
       includeBaseline: false,
-      includeOutcomeLedger: false,
+      includeOutcomeLedger: true,
       full: false,
       skip: [],
     },
     {
       projectRoot: workspace.projectRoot,
       cacheDir: workspace.paths.cacheDir,
+      timeoutMs: STOP_HOOK_DEADLINE.childTimeoutMs,
     },
-  ).result;
+  );
+  assertStopHookEvidenceLease(workspace, lease);
+  return { ...execution, evidenceLease: lease };
+}
+
+function persistStopSessionState(
+  workspace: ReturnType<typeof resolveHookWorkspace>,
+  payload: HookPayload,
+  receipt: AgentSessionStopReceipt,
+): void {
+  const sessionId = typeof payload.session_id === 'string' ? payload.session_id : undefined;
+  if (!workspace || !sessionId) return;
+  try {
+    updateAgentSessionState({
+      cacheDir: workspace.paths.cacheDir,
+      sessionId,
+      projectRoot: workspace.projectRoot,
+      latestStop: receipt,
+    });
+  } catch {
+    // Session restoration is best-effort and must not change the gate result.
+  }
+}
+
+const DEFAULT_STOP_HOOK_EVIDENCE_DEPENDENCIES: StopHookEvidenceDependencies = {
+  refresh(workspace) {
+    return refreshIndexForHookIfNeeded(workspace, 'Stop');
+  },
+  observe: observeStopHookIndex,
+  now: Date.now,
+  wait(milliseconds) {
+    return new Promise((resolveWait) => setTimeout(resolveWait, milliseconds));
+  },
+};
+
+export async function prepareStopHookEvidenceLease(
+  workspace: HookWorkspace,
+  dependencies: StopHookEvidenceDependencies = DEFAULT_STOP_HOOK_EVIDENCE_DEPENDENCIES,
+  options: { waitMs?: number; pollMs?: number } = {},
+): Promise<StopHookEvidenceLease> {
+  let observation = dependencies.observe(workspace);
+  const immediate = stopHookEvidenceLease(observation);
+  if (immediate) return immediate;
+
+  let refreshNote: string | undefined;
+  if (resolveWatchConfig(workspace.config).autoRefresh !== false) {
+    refreshNote = await dependencies.refresh(workspace);
+    const waitMs = options.waitMs ?? STOP_HOOK_REFRESH_WAIT_MS;
+    const pollMs = options.pollMs ?? STOP_HOOK_REFRESH_POLL_MS;
+    const deadline = dependencies.now() + waitMs;
+    while (dependencies.now() < deadline) {
+      await dependencies.wait(Math.min(pollMs, Math.max(1, deadline - dependencies.now())));
+      observation = dependencies.observe(workspace);
+      const refreshed = stopHookEvidenceLease(observation);
+      if (refreshed) return refreshed;
+    }
+  }
+
+  throw unresolvedStopHookEvidence(observation, refreshNote);
+}
+
+export function assertStopHookEvidenceLease(
+  workspace: HookWorkspace,
+  lease: StopHookEvidenceLease,
+  dependencies: StopHookEvidenceDependencies = DEFAULT_STOP_HOOK_EVIDENCE_DEPENDENCIES,
+): void {
+  const observation = dependencies.observe(workspace);
+  const current = stopHookEvidenceLease(observation);
+  if (!current) throw unresolvedStopHookEvidence(observation);
+  if (current.generationIdentity !== lease.generationIdentity || current.worktreeIdentity !== lease.worktreeIdentity) {
+    throw new StopHookEvidenceLeaseError(
+      'changed-during-run',
+      'The scip-query index generation or Git worktree changed while diff-gate was running. The result was discarded; wait for the watcher to become idle and retry Stop.',
+    );
+  }
+}
+
+function stopHookEvidenceLease(observation: StopHookIndexObservation): StopHookEvidenceLease | undefined {
+  if (observation.freshness.state !== 'fresh' || !observation.generationIdentity || !observation.worktreeIdentity) {
+    return undefined;
+  }
+  return {
+    generationIdentity: observation.generationIdentity,
+    generationSource: observation.generationSource ?? 'legacy',
+    worktreeIdentity: observation.worktreeIdentity,
+    observedAt: observation.freshness.checkedAt,
+  };
+}
+
+function unresolvedStopHookEvidence(
+  observation: StopHookIndexObservation,
+  refreshNote?: string,
+): StopHookEvidenceLeaseError {
+  const state =
+    observation.freshness.state === 'fresh' && (!observation.generationIdentity || !observation.worktreeIdentity)
+      ? 'unverifiable'
+      : observation.freshness.state;
+  const missingIdentity =
+    state === 'unverifiable'
+      ? ' A stable index-generation and Git-worktree identity could not both be established.'
+      : '';
+  const refresh = refreshNote ? ` ${refreshNote}` : '';
+  return new StopHookEvidenceLeaseError(
+    state,
+    `scip-query index evidence is ${state}: ${observation.freshness.reason}.${missingIdentity}${refresh} Diff-gate was not allowed to report a clean Stop result.`,
+  );
+}
+
+function observeStopHookIndex(workspace: HookWorkspace): StopHookIndexObservation {
+  const freshness = getIndexFreshness(workspace.projectRoot, workspace.config, workspace.paths);
+  return {
+    freshness,
+    ...stopHookGenerationObservation(workspace, freshness),
+    worktreeIdentity: stopHookWorktreeIdentity(workspace.projectRoot),
+  };
+}
+
+// scip-query: ignore-incomplete-migration — the Stop lease needs an immutable
+// generation identity/fallback; generic freshness intentionally reports only freshness.
+function stopHookGenerationObservation(
+  workspace: HookWorkspace,
+  freshness: ReturnType<typeof getIndexFreshness>,
+): Pick<StopHookIndexObservation, 'generationIdentity' | 'generationSource'> {
+  const generation = inspectSqliteGeneration(workspace.paths.dbPath, workspace.paths.metaPath);
+  if (generation.state === 'current' || generation.state === 'drifted') {
+    return { generationIdentity: generation.generation.currentGeneration, generationSource: 'immutable' };
+  }
+  if (!existsSync(workspace.paths.metaPath)) return {};
+  try {
+    return {
+      generationIdentity: createHash('sha256')
+        .update(readSmallArtifactText(workspace.paths.metaPath, 'reindex metadata'))
+        .digest('hex'),
+      generationSource: 'legacy',
+    };
+  } catch {
+    return freshness.updatedAt ? { generationIdentity: freshness.updatedAt, generationSource: 'legacy' } : {};
+  }
+}
+
+function stopHookWorktreeIdentity(projectRoot: string): string | undefined {
+  try {
+    const diff = execFileSync('git', ['-C', projectRoot, 'diff', '--no-ext-diff', '--binary', 'HEAD', '--'], {
+      encoding: 'utf8' as const,
+      timeout: STOP_HOOK_GIT_OBSERVATION_TIMEOUT_MS,
+      maxBuffer: STOP_HOOK_GIT_OBSERVATION_MAX_BUFFER,
+    });
+    return createHash('sha256').update(diff).digest('hex');
+  } catch {
+    return undefined;
+  }
 }
 
 export function renderStopHookExecutionFailure(message: string, mode: StopHookMode = 'feedback'): ClaudeHookJsonOutput {
@@ -829,13 +1104,18 @@ export function renderStopHookExecutionFailure(message: string, mode: StopHookMo
   };
 }
 
-export function renderStopHookOutput(result: DiffGateResult, mode: StopHookMode = 'feedback'): ClaudeHookJsonOutput {
+export function renderStopHookOutput(
+  result: DiffGateResult,
+  mode: StopHookMode = 'feedback',
+  execution?: Pick<DiffGateExecutionResult, 'outcomes' | 'analysisBudget'>,
+): ClaudeHookJsonOutput {
   const coverageWarning = suppressionCoverageWarning(result);
   const findingMessage = result.findings.length > 0 ? formatGateBlockReason(result) : undefined;
-  const blockMessage = [coverageWarning, findingMessage]
+  const executionEvidence = formatStopExecutionEvidence(result, execution);
+  const blockMessage = [coverageWarning, ...executionEvidence, findingMessage]
     .filter((value): value is string => Boolean(value))
     .join('\n\n');
-  const advisoryMessage = formatGateAdvisoryReason(result);
+  const advisoryMessage = formatGateAdvisoryReason(result, executionEvidence);
   if (mode === 'block' && result.findings.length > 0) {
     return {
       decision: 'block',
@@ -843,10 +1123,14 @@ export function renderStopHookOutput(result: DiffGateResult, mode: StopHookMode 
     };
   }
   if (mode === 'feedback') {
+    const instruction =
+      result.findings.length > 0
+        ? 'Fix true findings, or provide policy-admissible counterevidence before finishing.'
+        : 'Automatic adjudication completed without a human approval prompt; no finding action is required for this Stop.';
     return {
       hookSpecificOutput: {
         hookEventName: 'Stop',
-        additionalContext: `${advisoryMessage}\n\nThis is non-error Stop hook feedback. Fix true findings, or explain why a finding is intentionally accepted before finishing.`,
+        additionalContext: `${advisoryMessage}\n\nThis is non-error Stop hook feedback. ${instruction}`,
       },
     };
   }
@@ -855,7 +1139,7 @@ export function renderStopHookOutput(result: DiffGateResult, mode: StopHookMode 
   };
 }
 
-function formatGateAdvisoryReason(result: DiffGateResult): string {
+function formatGateAdvisoryReason(result: DiffGateResult, executionEvidence: readonly string[]): string {
   const findingMessage =
     result.findings.length > 0
       ? formatGateBlockReason(result).replace(
@@ -863,9 +1147,50 @@ function formatGateAdvisoryReason(result: DiffGateResult): string {
           ' — review these findings when relevant:',
         )
       : undefined;
-  return [suppressionCoverageWarning(result), findingMessage]
+  const automaticSuppressionMessage =
+    (result.suppressionSummary?.automaticSuppressionCount ?? result.suppressed.length) > 0
+      ? `Diff gate outcome: pass-with-suppressions. ${result.suppressionSummary?.automaticSuppressionCount ?? result.suppressed.length} exact finding(s) passed automated adjudication; ${result.suppressionSummary?.policyEscalationCount ?? 0} policy escalation(s) remain.`
+      : undefined;
+  return [suppressionCoverageWarning(result), ...executionEvidence, findingMessage, automaticSuppressionMessage]
     .filter((value): value is string => Boolean(value))
     .join('\n\n');
+}
+
+function formatStopExecutionEvidence(
+  result: DiffGateResult,
+  execution: Pick<DiffGateExecutionResult, 'outcomes' | 'analysisBudget'> | undefined,
+): string[] {
+  const lines: string[] = [];
+  if (execution?.outcomes.ledger) {
+    const streak = formatUnresolvedStreakLine(
+      execution.outcomes.ledger,
+      execution.outcomes.observed,
+      execution.outcomes.now,
+    );
+    if (streak) lines.push(streak);
+  }
+  if (execution?.outcomes.warning) {
+    lines.push(`Outcome history warning: ${execution.outcomes.warning}`);
+  }
+  const coverage = stopCoverageWarning(result);
+  if (coverage) lines.push(coverage);
+  const budget = formatAnalysisBudgetDisclosure(execution?.analysisBudget);
+  if (budget) lines.push(budget);
+  return lines;
+}
+
+function stopCoverageWarning(result: DiffGateResult): string | undefined {
+  const failedTiers = (result.evidenceTiers ?? []).filter((tier) => tier.state === 'failed');
+  if (result.skipped.length === 0 && failedTiers.length === 0) return undefined;
+  const skipped =
+    result.skipped.length > 0
+      ? `${result.skipped.length} skipped check(s): ${result.skipped.map(({ check }) => check).join(', ')}`
+      : undefined;
+  const failed =
+    failedTiers.length > 0
+      ? `${failedTiers.length} failed evidence tier(s): ${failedTiers.map(({ tier }) => tier).join(', ')}`
+      : undefined;
+  return `Evidence coverage is incomplete — ${[skipped, failed].filter(Boolean).join('; ')}.`;
 }
 
 function suppressionCoverageWarning(result: DiffGateResult): string | undefined {
@@ -885,7 +1210,17 @@ export async function renderAgentHookContext(hookInput: string): Promise<unknown
   const workspace = resolveHookWorkspace(payload);
   if (!workspace) return undefined;
   if (event === 'SessionStart' || event === 'PostCompact') resetPreToolReminder(workspace, payload);
-  if (event === 'PostCompact') return undefined;
+  if (event === 'PostCompact') {
+    const restored = restoreCompactedAgentSession(workspace, payload);
+    return restored
+      ? {
+          hookSpecificOutput: {
+            hookEventName: event,
+            additionalContext: restored,
+          },
+        }
+      : undefined;
+  }
 
   const refreshNote = await refreshIndexForHookIfNeeded(workspace, event);
   const context =
@@ -901,6 +1236,26 @@ export async function renderAgentHookContext(hookInput: string): Promise<unknown
       additionalContext,
     },
   };
+}
+
+function restoreCompactedAgentSession(
+  workspace: NonNullable<ReturnType<typeof resolveHookWorkspace>>,
+  payload: HookPayload,
+): string | undefined {
+  const sessionId = typeof payload.session_id === 'string' ? payload.session_id : undefined;
+  if (!sessionId) return undefined;
+  const transcriptPath = typeof payload.transcript_path === 'string' ? payload.transcript_path : undefined;
+  const transcript = transcriptPath ? readAgentTranscriptTail(transcriptPath) : undefined;
+  const state =
+    transcript === undefined
+      ? readAgentSessionState(workspace.paths.cacheDir, sessionId, workspace.projectRoot)
+      : updateAgentSessionState({
+          cacheDir: workspace.paths.cacheDir,
+          sessionId,
+          projectRoot: workspace.projectRoot,
+          unfinishedOutput: pendingOutputFromTranscript(transcript, workspace.projectRoot),
+        });
+  return state ? renderAgentSessionRestoration(state) : undefined;
 }
 
 interface HookRefreshDependencies {

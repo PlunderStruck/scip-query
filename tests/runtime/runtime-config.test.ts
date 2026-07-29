@@ -449,6 +449,61 @@ describe('validateProjectConfig', () => {
     ]);
   });
 
+  it('rejects malformed adjudication metadata and missing counterevidence referents', () => {
+    const projectRoot = createProject();
+    const validDecision = {
+      kind: 'automated-adjudication' as const,
+      reasonCode: 'compatibility-shim' as const,
+      decidedBy: 'agent' as const,
+      policyVersion: 1 as const,
+      evidence: [
+        {
+          kind: 'source' as const,
+          referent: 'src/missing.ts',
+          claim: 'This path is expected to establish the compatibility surface.',
+          contentHash: 'a'.repeat(64),
+        },
+      ],
+      invalidateOn: {
+        targetContentChange: true,
+        detectorMajorChange: true,
+      },
+    };
+
+    const diagnostics = validateProjectConfig(
+      {
+        suppressions: [
+          {
+            id: 'SQABC123DEF456',
+            reason: 'malformed decision',
+            decision: { ...validDecision, evidence: [] },
+          },
+          {
+            id: 'SQDEF456ABC789',
+            reason: 'missing referent',
+            decision: validDecision,
+          },
+        ],
+      },
+      { projectRoot },
+    );
+
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: 'error',
+          path: 'suppressions[0].decision',
+          message: expect.stringContaining('valid automated-adjudication decision'),
+        }),
+        expect.objectContaining({
+          level: 'error',
+          path: 'suppressions[1].decision.evidence[0].referent',
+          message: 'Suppression counterevidence does not exist: src/missing.ts',
+        }),
+      ]),
+    );
+  });
+
   it('requires declared coupling groups to name at least two files', () => {
     const diagnostics = validateProjectConfig({
       declaredCouplings: [

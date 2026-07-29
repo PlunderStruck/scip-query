@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unpkg.com/scip-query/docs/schemas/suppression-record.schema.json",
-  "title": "scip-query suppression record v1",
+  "title": "scip-query suppression record v2",
   "description": "A repository-owned policy decision stored as one file under .scipquery/suppressions/.",
   "type": "object",
-  "required": ["kind", "schemaVersion", "suppressionIdentity", "writer", "reason", "createdAt"],
+  "required": ["kind", "schemaVersion", "suppressionIdentity", "writer", "reason", "createdAt", "decision"],
   "properties": {
     "kind": { "const": "scip-query-suppression" },
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "const": 2 },
     "suppressionIdentity": { "type": "string", "minLength": 1 },
     "writer": {
       "type": "object",
@@ -22,6 +22,87 @@
     "check": { "type": "string", "minLength": 1 },
     "file": { "type": "string", "minLength": 1 },
     "reason": { "type": "string", "minLength": 1 },
+    "decision": {
+      "type": "object",
+      "required": ["kind", "reasonCode", "decidedBy", "policyVersion", "evidence", "invalidateOn"],
+      "properties": {
+        "kind": { "const": "automated-adjudication" },
+        "reasonCode": {
+          "enum": [
+            "entry-surface",
+            "generated-code",
+            "compatibility-shim",
+            "reflection-or-registration",
+            "test-fixture",
+            "intentional-twin",
+            "historical-coupling-ended",
+            "detector-counterexample"
+          ]
+        },
+        "decidedBy": { "enum": ["agent", "human"] },
+        "policyVersion": { "const": 1 },
+        "observation": {
+          "type": "object",
+          "required": ["schemaVersion", "authorityKind", "observedAt", "projectIdentity"],
+          "properties": {
+            "schemaVersion": { "const": 1 },
+            "authorityKind": {
+              "enum": ["index-worktree", "index-only", "worktree-only", "process-local"]
+            },
+            "observedAt": { "type": "string", "format": "date-time" },
+            "projectIdentity": { "type": "string", "minLength": 1 },
+            "index": {
+              "type": "object",
+              "required": ["generationIdentity", "source", "alignment"],
+              "properties": {
+                "generationIdentity": { "type": "string", "minLength": 1 },
+                "source": { "enum": ["immutable", "legacy"] },
+                "alignment": { "enum": ["not-certified", "leased"] }
+              },
+              "additionalProperties": true
+            },
+            "worktree": {
+              "type": "object",
+              "required": ["identity", "clean"],
+              "properties": {
+                "identity": { "type": "string", "minLength": 1 },
+                "clean": { "type": "boolean" },
+                "headCommit": { "type": "string", "minLength": 1 },
+                "treeOid": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["kind", "referent", "claim"],
+            "properties": {
+              "kind": { "enum": ["source", "config", "test", "graph"] },
+              "referent": { "type": "string", "minLength": 1 },
+              "claim": { "type": "string", "minLength": 1 },
+              "contentHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+              "generation": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": true
+          }
+        },
+        "invalidateOn": {
+          "type": "object",
+          "required": ["targetContentChange", "detectorMajorChange"],
+          "properties": {
+            "targetContentChange": { "type": "boolean" },
+            "detectorMajorChange": { "type": "boolean" }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
     "expiresAt": { "type": "string", "format": "date-time" },
     "createdAt": { "type": "string", "format": "date-time" },
     "updatedAt": { "type": "string", "format": "date-time" }

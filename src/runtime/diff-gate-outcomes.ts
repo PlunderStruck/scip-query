@@ -13,12 +13,15 @@ import {
   type FindingOutcomeRecord,
   type ObservedFinding,
   type OutcomeEvent,
+  type OutcomeObserverProvenance,
 } from '../domain/finding-outcomes.js';
+import type { ObservationReceipt } from '../domain/observation-receipt.js';
 import type { ScipDatabase } from '../storage/db.js';
 import { appendOutcomeEvents, readOutcomeEvents, type OutcomeEventReadResult } from '../storage/outcome-events.js';
 import { gitOutput, resolveGitWorktreeContext } from '../platform/git-worktree.js';
 import { cliVersion } from '../platform/cli-version.js';
 import { formatRecordCompatibilityWarning } from '../domain/record-compatibility.js';
+import { buildObservationReceipt } from './observation-receipt.js';
 
 export interface DiffGateOutcomeRuntime {
   /** Stable across retries of one logical gate observation; retries also reuse its captured `now`. */
@@ -32,6 +35,10 @@ export interface DiffGateOutcomeRuntime {
   /** Maximum historical comparison bases reconciled by one foreground gate. */
   maxReplayBases?: number;
   appendEvents?: (projectRoot: string, events: readonly OutcomeEvent[]) => void;
+  /** Explicit caller provenance; ordinary local gates default conservatively to a writable agent observer. */
+  observer?: OutcomeObserverProvenance;
+  /** Externally captured authority receipt; otherwise the gate captures its current local state. */
+  observation?: ObservationReceipt;
 }
 
 export interface DiffGateOutcomeResult {
@@ -54,6 +61,7 @@ export function recordDiffGateOutcomes(
 ): DiffGateOutcomeResult {
   const now = (runtime.now ?? Date.now)();
   const observationId = runtime.observationId ?? randomUUID();
+  const observer = runtime.observer ?? outcomeObserverFromEnvironment();
   const observed = observationsForResult(result);
   const reconciliationPrevious = readLedgerRecords(db);
   const projectRoot = db.config.projectRoot;
@@ -63,6 +71,7 @@ export function recordDiffGateOutcomes(
   const comparisonBaseCommit = runtime.resolveCommit
     ? runtime.resolveCommit(projectRoot, result.base)
     : resolveCommit(projectRoot, result.base);
+  const observation = runtime.observation ?? diffGateObservationReceipt(db, projectRoot, now);
   const reconciliation = reconcileMissingFindings({
     previous: reconciliationPrevious,
     observed,
@@ -98,10 +107,21 @@ export function recordDiffGateOutcomes(
     for (const entry of result.suppressed) {
       if (entry.finding.symbol) symbolByFindingId.set(entry.finding.id, entry.finding.symbol);
     }
+    const suppressionPolicyVersionByFinding = new Map<string, number>();
+    for (const entry of result.suppressed) {
+      const policyVersion = entry.suppression.decision?.policyVersion;
+      if (policyVersion !== undefined) {
+        suppressionPolicyVersionByFinding.set(ledgerKey(entry.finding.check, entry.finding.id), policyVersion);
+      }
+    }
     for (const [findingId, symbol] of reconciliation.replaySymbols) symbolByFindingId.set(findingId, symbol);
     const events = deriveOutcomeEvents(update.previous, ledger, symbolByFindingId, commit, now, {
       ...(comparisonBaseCommit ? { comparisonBaseCommit } : {}),
       verifiedAgainstByFinding: reconciliation.verifiedAgainstByFinding,
+      gateRunId: observationId,
+      observer,
+      observation,
+      suppressionPolicyVersionByFinding,
     });
     let appendWarning: string | undefined;
     if (runtime.appendEvents) {
@@ -127,6 +147,39 @@ export function recordDiffGateOutcomes(
       ),
     };
   }
+}
+
+export function repositoryWritableObserver(
+  kind: 'local-agent' | 'local-human',
+  source?: string,
+): OutcomeObserverProvenance {
+  return {
+    kind,
+    authority: 'repository-writable',
+    ...(source ? { source } : {}),
+  };
+}
+
+export function outcomeObserverFromEnvironment(env: NodeJS.ProcessEnv = process.env): OutcomeObserverProvenance {
+  const kind = env['SCIP_QUERY_OUTCOME_OBSERVER_KIND'] === 'local-human' ? 'local-human' : 'local-agent';
+  const source = env['SCIP_QUERY_OUTCOME_OBSERVER_SOURCE']?.trim();
+  return repositoryWritableObserver(kind, source && source.length <= 256 ? source : undefined);
+}
+
+function diffGateObservationReceipt(db: ScipDatabase, projectRoot: string, now: number): ObservationReceipt {
+  const gitContext = resolveGitWorktreeContext(projectRoot);
+  return buildObservationReceipt({
+    projectRoot,
+    observedAt: new Date(now),
+    db,
+    ...(gitContext
+      ? {
+          gitContext,
+          statusPorcelain: gitOutput(projectRoot, ['status', '--porcelain=v1', '-z', '--untracked-files=all']) ?? '',
+          trackedDiff: gitOutput(projectRoot, ['diff', '--no-ext-diff', '--binary', 'HEAD', '--']) ?? '',
+        }
+      : {}),
+  });
 }
 
 function withOutcomeWarning(...warnings: Array<string | undefined>): { warning?: string } {

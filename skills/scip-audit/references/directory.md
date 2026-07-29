@@ -124,8 +124,8 @@ Add mature boundary path patterns to `.scipquery.json` under
 }
 ```
 
-After adding boundaries, run `scip-query config-validate --json` then
-`scip-query architecture --json` to check the new boundary configuration.
+After adding boundaries, run `scip-query config-validate` then
+`scip-query architecture` to check the new boundary configuration.
 Use unmapped and ambiguous files to repair boundary membership, and use
 actual boundary edges, reciprocal pairs, and strongly connected groups to
 test whether boundary names describe real separation.
@@ -215,8 +215,8 @@ co-change <moved-file-or-config>`. Also run the project's tests or typecheck
 for the affected workspace.
 
 If `.scipquery.json` locality changed, run `scip-query config-validate`,
-`scip-query locality-candidates --json --full`, `scip-query architecture
---json`, `scip-query drift --architecture`, and `scip-query diff-gate`.
+`scip-query locality-candidates --full`, `scip-query architecture`,
+`scip-query drift --architecture`, and `scip-query diff-gate`.
 
 Then invoke `scip-verify`; the implementation is complete only when imports,
 tests, locality signals, and verification are checked.

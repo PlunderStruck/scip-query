@@ -19,8 +19,8 @@ Three common modes, same underlying workflow:
 ## Step 1 — Establish evidence
 
 Before any sweeping begins, run `scip-query doctor`, `scip-query status
---capabilities`, `scip-query health --json`, `scip-query capabilities
---json`, and `scip-query config-validate --json`.
+--capabilities`, `scip-query health`, `scip-query capabilities`, and
+`scip-query config-validate`.
 
 **Complete when:** unavailable capabilities are explicitly recorded as
 unavailable, not silently skipped.
@@ -33,23 +33,23 @@ unavailable — never silently omit a class.
 Core sweep set:
 
 ```
-scip-query cleanup-plan --verify --json          # compiler-verified batched deletion plan
-scip-query duplicate-bodies --json --full        # exact duplicate small-body candidates
-scip-query recent-duplicates --json --full       # recent code re-implementing established code
-scip-query incomplete-migration --json --full    # partially-completed extractions
-scip-query unused-params --json --full
-scip-query passthrough-candidates --json --full
-scip-query dead --json --full
-scip-query isolated --json --full
+scip-query cleanup-plan --verify                 # compiler-verified batched deletion plan
+scip-query duplicate-bodies --full               # exact duplicate small-body candidates
+scip-query recent-duplicates --full              # recent code re-implementing established code
+scip-query incomplete-migration --full           # partially-completed extractions
+scip-query unused-params --full
+scip-query passthrough-candidates --full
+scip-query dead --full
+scip-query isolated --full
 scip-query cycles
-scip-query co-change --json --full               # hidden file-level coupling from git history
-scip-query doc-drift --json --full                # docs whose referenced/co-changed code kept moving
+scip-query co-change --full                      # hidden file-level coupling from git history
+scip-query doc-drift --full                      # docs whose referenced/co-changed code kept moving
 ```
 
-`scip-query health --json` establishes the composite score and prioritized
-action list; `scip-query cleanup-plan --verify --json` combines graph-fact
+`scip-query health` establishes the composite score and prioritized
+action list; `scip-query cleanup-plan --verify` combines graph-fact
 dead code with the cascade candidates it unlocks. `scip-query doc-drift
---json --full` finds stale-doc candidates: code a doc references, or
+--full` finds stale-doc candidates: code a doc references, or
 co-changed with, that kept changing after the doc stopped — run it whenever
 the audit is about living-doc drift, not just code cleanup.
 
@@ -58,8 +58,8 @@ large-component/view detector commands (see `references/frontend.md`) to the
 sweep.
 
 **Optional deep dives**, run only after the main sweep is exhausted:
-`scip-query stale-abstractions --json --full` and `scip-query
-wrapper-candidates --json --full` have near-zero precision on codebases with
+`scip-query stale-abstractions --full` and `scip-query
+wrapper-candidates --full` have near-zero precision on codebases with
 intentional layering or ambient types — treat every hit as a lead to
 confirm, never a finding on its own.
 
@@ -70,9 +70,8 @@ target**, **intentional design**, **false positive**, or **blocked**.
 
 To confirm a high-priority candidate, inspect source and graph evidence with
 `scip-query code`, `scip-query refs`, `scip-query fan-in`, `scip-query
-fan-out`, `scip-query affected --json`, `scip-query change-surface --json
---full`, `scip-query similar --plan`, and `scip-query co-change --json
---full`.
+fan-out`, `scip-query affected`, `scip-query change-surface --full`,
+`scip-query similar --plan`, and `scip-query co-change --full`.
 
 Because a deletion is this audit's scrutiny-ending verdict, a candidate
 classified "confirmed fix target" that deletes code must survive refutation

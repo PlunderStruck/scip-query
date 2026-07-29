@@ -30,6 +30,7 @@ import {
 } from './symbol-parser.js';
 import { hydrateSymbolMatch, parentTypeName } from './definition-catalog.js';
 import { definitionMentionRows, definitionRangeRows, type SymbolQueryRow } from '../storage/scip-rows.js';
+import { resolveIndexedDocumentCandidates } from '../storage/scip-documents.js';
 import type { SymbolLocation, SymbolMatch, SymbolResolution, SymbolResolutionCandidate } from '../domain/types.js';
 import { mergeMixedSymbolQueryRows } from './symbol-row-policy.js';
 
@@ -189,11 +190,13 @@ function findFileLineSymbolRow(db: ScipDatabase, symbolPattern: string): SymbolQ
   }
 
   const [, filePath, startStr, endStr] = fileLineMatch;
+  const relativePath = resolveIndexedDocumentCandidates(db, filePath!, { allowMultiple: false })[0]?.relativePath;
+  if (!relativePath) return undefined;
   const userStart0 = Math.max(0, parseInt(startStr!, 10) - 1);
   const userEnd0 = Math.max(userStart0, parseInt(endStr!, 10) - 1);
   return (
-    findDefinitionRangeRow(db, filePath!, userStart0, userEnd0) ??
-    findDefinitionChunkRow(db, filePath!, userStart0, userEnd0)
+    findDefinitionRangeRow(db, relativePath, userStart0, userEnd0) ??
+    findDefinitionChunkRow(db, relativePath, userStart0, userEnd0)
   );
 }
 
@@ -204,8 +207,8 @@ function findDefinitionRangeRow(
   endLine: number,
 ): SymbolQueryRow | undefined {
   return definitionRangeRows(db, {
-    where: 'd.relative_path LIKE ? AND der.start_line <= ? AND der.end_line >= ?',
-    params: [`%${filePath}%`, startLine, endLine],
+    where: 'd.relative_path = ? AND der.start_line <= ? AND der.end_line >= ?',
+    params: [filePath, startLine, endLine],
     orderBy: '(der.end_line - der.start_line) ASC',
     limit: 1,
   })[0];
@@ -218,8 +221,8 @@ function findDefinitionChunkRow(
   endLine: number,
 ): SymbolQueryRow | undefined {
   return definitionMentionRows(db, {
-    where: 'd.relative_path LIKE ? AND c.start_line <= ? AND c.end_line >= ?',
-    params: [`%${filePath}%`, startLine, endLine],
+    where: 'd.relative_path = ? AND c.start_line <= ? AND c.end_line >= ?',
+    params: [filePath, startLine, endLine],
     orderBy: '(MAX(c.end_line) - MIN(c.start_line)) ASC',
     limit: 1,
   })[0];

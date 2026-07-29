@@ -4,9 +4,9 @@ description: Use after finishing a change and before committing: ensure the watc
 commands:
   - template: "scip-query doctor"
     when: "Prove the workspace and configuration are usable before trusting evidence."
-  - template: "scip-query diff-impact --json"
+  - template: "scip-query diff-impact"
     when: "Compare changed files, symbols, and affected consumers with the intended diff."
-  - template: "scip-query diff-gate --json --compact"
+  - template: "scip-query diff-gate"
     when: "Run the complete finished-diff gate without blind line truncation."
 ---
 
@@ -32,8 +32,8 @@ Load shared mechanics — command syntax, the evidence contract, diff-gate's
 | Command | Purpose | Returns | Coverage | When |
 | --- | --- | --- | --- | --- |
 | `scip-query doctor` | Diagnose config, index freshness, dependency readiness, and project capabilities | config, freshness, dependency, and capability diagnostics | `complete` | Prove the workspace and configuration are usable before trusting evidence. |
-| `scip-query diff-impact --json` | Compute changed symbols and downstream consumers from current git diff | changed symbols, downstream consumer identities, and impact paths | `bounded` | Compare changed files, symbols, and affected consumers with the intended diff. |
-| `scip-query diff-gate --json --compact` | Runtime-bounded, single-flight gate for the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | blocking findings with check id, message, and remediation; advisory findings; root-cause groups; changed file and symbol counts; process exit status (1 when blocking findings exist) | `bounded` | Run the complete finished-diff gate without blind line truncation. |
+| `scip-query diff-impact` | Compute changed symbols and downstream consumers from current git diff | changed symbols, downstream consumer identities, and impact paths | `bounded` | Compare changed files, symbols, and affected consumers with the intended diff. |
+| `scip-query diff-gate` | Runtime-bounded, single-flight gate for the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | blocking findings with check id, message, and remediation; advisory findings; root-cause groups; changed file and symbol counts; process exit status (1 when blocking findings exist) | `bounded` | Run the complete finished-diff gate without blind line truncation. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -67,7 +67,7 @@ environment and index freshness before trusting any graph fact that follows.
 ### 2. Assess the diff
 
 ```bash
-scip-query diff-impact --json
+scip-query diff-impact
 ```
 
 Compare changed files, changed symbols, and downstream consumers against the
@@ -91,8 +91,8 @@ you expected to need going in:
 | Changed React components or hooks | the React commands in `_shared` |
 | Changed Vue SFCs or composables | the Vue commands in `_shared` |
 
-Add `--json --full` to any of these when an unbounded machine-readable result
-is needed rather than the bounded default. This table is authoritative — the
+Add `--full` to any of these when an unbounded result is needed rather than
+the bounded default. This table is authoritative — the
 shared reference links here instead of duplicating it, so don't assume a
 different mapping. Complete only when each applicable postcheck has a result
 and every actionable finding is fixed, accepted with evidence, or blocked by
@@ -108,7 +108,7 @@ scip-query config-validate
 ### 4. Run the gate
 
 ```bash
-scip-query diff-gate --json
+scip-query diff-gate
 ```
 
 This is the primary blocker for diff-specific risk: architecture regressions
@@ -142,7 +142,7 @@ when a committed baseline exists. If docs, AGENTS.md, CLAUDE.md, command
 docs, generated docs, or skill instructions changed, run
 
 ```bash
-scip-query doc-drift --json --full
+scip-query doc-drift --full
 ```
 
 and read the returned stale-doc candidates against the diff.
@@ -202,7 +202,7 @@ Postchecks:
 - <command>: <result>
 
 Gate:
-- `scip-query diff-gate --json`: <result>
+- `scip-query diff-gate`: <result>
 
 Health/docs/self-audit:
 - <commands and results>

@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runStopHookDiffGate } from '../../src/runtime/agent-hooks.js';
+import { loadProjectConfig } from '../../src/runtime/config.js';
+import { runtimeFingerprint } from '../../src/runtime/index-freshness.js';
 import { diffGate } from '../../src/queries/impact/diff-gate.js';
 import { computeEffectiveness } from '../../src/queries/health/effectiveness.js';
 import { readLedgerRecords } from '../../src/queries/health/finding-outcome-ledger.js';
@@ -64,6 +66,7 @@ function buildRepo(): string {
     join(repoRoot, '.scipquery.json'),
     JSON.stringify({
       dbPath: '.scip-query',
+      watch: { enabled: false, autoRefresh: false },
       docs: { snapshotPaths: ['docs/benchmarks/**', 'docs/validation/**', 'docs/reviews/**', 'docs/plans/**'] },
     }),
   );
@@ -72,6 +75,7 @@ function buildRepo(): string {
   const dbDir = join(repoRoot, '.scip-query');
   mkdirSync(dbDir, { recursive: true });
   evidenceFixtureDb(join(dbDir, 'index.db')).document(1, 'typescript', 'src/a.ts').write();
+  markFixtureIndexFresh(repoRoot);
 
   gitIn(repoRoot, 'add', '-A');
   gitIn(repoRoot, 'commit', '-m', 'base', '--no-gpg-sign');
@@ -80,6 +84,20 @@ function buildRepo(): string {
   writeFile(join(repoRoot, 'src', 'a.ts'), 'export const version = 2;\n');
 
   return repoRoot;
+}
+
+function markFixtureIndexFresh(repoRoot: string): void {
+  const config = loadProjectConfig(repoRoot);
+  writeFile(
+    join(repoRoot, '.scip-query', 'meta.json'),
+    `${JSON.stringify({
+      version: 3,
+      status: 'complete',
+      updatedAt: new Date().toISOString(),
+      fingerprint: runtimeFingerprint(repoRoot, ['typescript'], config),
+      indexedLanguages: ['typescript'],
+    })}\n`,
+  );
 }
 
 function hookInputFor(cwd: string): string {
@@ -91,10 +109,17 @@ afterEach(() => {
 });
 
 describe('Stop hook doc-reference snapshot-doc exemption', () => {
-  it('produces zero doc-reference findings (blocking or advisory) for a snapshot-pathed doc', () => {
+  it('refuses to run against the stale fixture instead of returning a false clean result', async () => {
     const repoRoot = buildRepo();
 
-    const result = runStopHookDiffGate(hookInputFor(repoRoot));
+    await expect(runStopHookDiffGate(hookInputFor(repoRoot))).rejects.toThrow(/evidence is stale/i);
+  });
+
+  it('produces zero doc-reference findings (blocking or advisory) for a snapshot-pathed doc', async () => {
+    const repoRoot = buildRepo();
+    markFixtureIndexFresh(repoRoot);
+
+    const result = await runStopHookDiffGate(hookInputFor(repoRoot));
 
     expect(result).toBeDefined();
     const docFindings = (result?.findings ?? []).filter((finding) => finding.check === 'doc-reference');
@@ -104,27 +129,30 @@ describe('Stop hook doc-reference snapshot-doc exemption', () => {
     expect(snapshotDocFindings).toHaveLength(0);
   });
 
-  it('control: still flags a non-snapshot doc citing the same changed file', () => {
+  it('control: still flags a non-snapshot doc citing the same changed file', async () => {
     const repoRoot = buildRepo();
+    markFixtureIndexFresh(repoRoot);
 
-    const result = runStopHookDiffGate(hookInputFor(repoRoot));
+    const result = await runStopHookDiffGate(hookInputFor(repoRoot));
 
     const docFindings = (result?.findings ?? []).filter((finding) => finding.check === 'doc-reference');
     const guideFindings = docFindings.filter((finding) => finding.file === 'docs/guide.md');
     expect(guideFindings).toHaveLength(1);
   });
 
-  it('records a normal installed-hook finding as fixed after the cited code link is removed', () => {
+  it('records a normal installed-hook finding as fixed after the cited code link is removed', async () => {
     const repoRoot = buildRepo();
+    markFixtureIndexFresh(repoRoot);
 
-    const first = runStopHookDiffGate(hookInputFor(repoRoot));
+    const first = await runStopHookDiffGate(hookInputFor(repoRoot));
     const guideFinding = first?.findings.find(
       (finding) => finding.check === 'doc-reference' && finding.file === 'docs/guide.md',
     );
     expect(guideFinding).toBeDefined();
 
     writeFile(join(repoRoot, 'docs', 'guide.md'), 'General project guidance.\n');
-    const second = runStopHookDiffGate(hookInputFor(repoRoot));
+    markFixtureIndexFresh(repoRoot);
+    const second = await runStopHookDiffGate(hookInputFor(repoRoot));
     expect(second?.findings.some((finding) => finding.id === guideFinding?.id)).toBe(false);
 
     const events = readOutcomeEvents(repoRoot).events.filter((event) => event.findingId === guideFinding?.id);
@@ -132,10 +160,11 @@ describe('Stop hook doc-reference snapshot-doc exemption', () => {
     expect(computeEffectiveness(events).checks[0]).toMatchObject({ caught: 1, fixed: 1, open: 0 });
   });
 
-  it('keeps a committed finding open, then verifies the later committed repair against its original base', () => {
+  it('keeps a committed finding open, then verifies the later committed repair against its original base', async () => {
     const repoRoot = buildRepo();
+    markFixtureIndexFresh(repoRoot);
 
-    const first = runStopHookDiffGate(hookInputFor(repoRoot));
+    const first = await runStopHookDiffGate(hookInputFor(repoRoot));
     const guideFinding = first?.findings.find(
       (finding) => finding.check === 'doc-reference' && finding.file === 'docs/guide.md',
     );
@@ -144,7 +173,8 @@ describe('Stop hook doc-reference snapshot-doc exemption', () => {
     gitIn(repoRoot, 'add', '-A');
     gitIn(repoRoot, 'commit', '-m', 'commit defect', '--no-gpg-sign');
     expect(resolveGitWorktreeContext(repoRoot)?.clean).toBe(true);
-    const committedDefect = runStopHookDiffGate(hookInputFor(repoRoot));
+    markFixtureIndexFresh(repoRoot);
+    const committedDefect = await runStopHookDiffGate(hookInputFor(repoRoot));
     expect(committedDefect?.findings).toEqual([]);
     let events = readOutcomeEvents(repoRoot).events.filter((event) => event.findingId === guideFinding?.id);
     expect(events.map((event) => event.event)).toEqual(['caught']);
@@ -170,7 +200,8 @@ describe('Stop hook doc-reference snapshot-doc exemption', () => {
     } finally {
       replayDb.close();
     }
-    const committedRepair = runStopHookDiffGate(hookInputFor(repoRoot));
+    markFixtureIndexFresh(repoRoot);
+    const committedRepair = await runStopHookDiffGate(hookInputFor(repoRoot));
     expect(committedRepair?.findings).toEqual([]);
 
     const afterDb = new ScipDatabase({

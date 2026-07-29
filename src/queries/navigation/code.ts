@@ -43,10 +43,20 @@ function parseFileLineRange(symbolPattern: string): {
 } | null {
   const fileLineMatch = symbolPattern.match(/^(.+\.\w+):(\d+)-(\d+)$/);
   if (!fileLineMatch) return null;
+  const startLine = Number(fileLineMatch[2]);
+  const endLine = Number(fileLineMatch[3]);
+  if (!Number.isSafeInteger(startLine) || startLine < 1) {
+    throw new RangeError(`Source range start line must be a positive integer, got "${fileLineMatch[2]}".`);
+  }
+  if (!Number.isSafeInteger(endLine) || endLine < startLine) {
+    throw new RangeError(
+      `Source range end line must be an integer at or after ${startLine}, got "${fileLineMatch[3]}".`,
+    );
+  }
   return {
     filePath: fileLineMatch[1]!,
-    startLine: parseInt(fileLineMatch[2]!, 10),
-    endLine: parseInt(fileLineMatch[3]!, 10),
+    startLine,
+    endLine,
   };
 }
 

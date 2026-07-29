@@ -1,4 +1,5 @@
 import { ProjectIndex, parseSymbol, type ScipDatabase, type ScipQueryConfig } from 'scip-query';
+import { computeEffectiveness, type EffectivenessReport, type OutcomeEvent } from 'scip-query/queries';
 import { twinAb, type TwinAbOutcome } from 'scip-query/queries/twin-ab';
 import { pathMatchesGlob } from 'scip-query/queries/files';
 import { symbolPreexistenceChecker } from 'scip-query/queries/diff-gate';
@@ -17,8 +18,10 @@ import {
 import { reindex, type ReindexOptions, type ReindexResult } from 'scip-query/reindex';
 import {
   CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION,
+  compareObservationReceipts,
   decodeCliJsonEnvelope,
   type DecodedCliJsonEnvelope,
+  type ObservationReceipt,
 } from 'scip-query/runtime';
 
 declare const database: ScipDatabase;
@@ -43,6 +46,13 @@ const decoded: DecodedCliJsonEnvelope = decodeCliJsonEnvelope({
   args: [],
   options: {},
   result: [],
+});
+declare const firstObservation: ObservationReceipt;
+declare const secondObservation: ObservationReceipt;
+const _sameObservationState: boolean = compareObservationReceipts(firstObservation, secondObservation).compatible;
+declare const protectedOutcomeEvents: OutcomeEvent[];
+const _protectedEvaluation: EffectivenessReport = computeEffectiveness(protectedOutcomeEvents, {
+  protectedGateRunIds: new Set(['externally-attested-gate']),
 });
 const historical: BaseContentResult = readBaseContent({
   projectRoot: '.',

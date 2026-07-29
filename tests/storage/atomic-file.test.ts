@@ -37,7 +37,11 @@ describe('atomic file replacement', () => {
 
     const result = replaceFileAtomic(target, 'new', { runtime });
 
-    expect(result).toEqual({ durability: 'visibility', directorySync: 'not-requested' });
+    expect(result).toEqual({
+      requestedDurability: 'visibility',
+      achievedDurability: 'visibility',
+      directorySync: 'not-requested',
+    });
     expect(observations).toEqual(['old', 'new']);
     expect(readdirSync(root)).toEqual(['state.json']);
   });
@@ -50,9 +54,12 @@ describe('atomic file replacement', () => {
 
     const result = replaceFileAtomic(target, 'new', { durability: 'durable', runtime });
 
-    expect(result).toEqual({ durability: 'durable', directorySync: 'synced' });
+    expect(result).toEqual({
+      requestedDurability: 'durable',
+      achievedDurability: 'directory-durable',
+      directorySync: 'synced',
+    });
     expect(actions).toEqual([
-      'mkdir',
       'open:state.json.tmp-durable:wx',
       'write:3',
       'sync:file',
@@ -179,7 +186,11 @@ describe('atomic file replacement', () => {
     const result = replaceFileAtomic(target, 'new', { durability: 'durable', runtime });
 
     expect(fileSynced).toBe(true);
-    expect(result).toEqual({ durability: 'durable', directorySync: 'unsupported' });
+    expect(result).toEqual({
+      requestedDurability: 'durable',
+      achievedDurability: 'file-flushed',
+      directorySync: 'unsupported',
+    });
     expect(readFileSync(target, 'utf8')).toBe('new');
   });
 });
@@ -191,7 +202,11 @@ describe('exclusive atomic file creation', () => {
 
     const result = createFileAtomicExclusive(target, 'first', { durability: 'durable' });
 
-    expect(result).toEqual({ durability: 'durable', directorySync: 'synced' });
+    expect(result).toEqual({
+      requestedDurability: 'durable',
+      achievedDurability: 'directory-durable',
+      directorySync: 'synced',
+    });
     expect(readFileSync(target, 'utf8')).toBe('first');
     expect(readdirSync(root)).toEqual(['state.json']);
     expect(() => createFileAtomicExclusive(target, 'second', { durability: 'durable' })).toThrow(/EEXIST/);
@@ -225,7 +240,11 @@ describe('atomic JSON durability contracts', () => {
     expect(writeJsonAtomic(visiblePath, { value: 1 }, { spacing: 2, trailingNewline: true })).toBeUndefined();
     const durable = writeJsonDurable(durablePath, { value: 2 }, { spacing: 2, trailingNewline: true });
 
-    expect(durable).toEqual({ durability: 'durable', directorySync: 'synced' });
+    expect(durable).toEqual({
+      requestedDurability: 'durable',
+      achievedDurability: 'directory-durable',
+      directorySync: 'synced',
+    });
     expect(readFileSync(visiblePath, 'utf8')).toBe('{\n  "value": 1\n}\n');
     expect(readFileSync(durablePath, 'utf8')).toBe('{\n  "value": 2\n}\n');
   });

@@ -127,7 +127,10 @@ moving the whole product surface at once.
   `src/symbols/graph/call-graph-evidence.ts` consumes those optional facts
   through the symbols-owned semantic-evidence port; targeted caller rows expose
   a bulk boundary while preserving each symbol's resolved-reference-first
-  result order.
+  result order. The 2026-07-28 SQL pass additionally batches SCIP reference
+  chunks for all requested definitions and memoizes the per-database choice
+  between targeted and full caller-row strategies; fixture tests preserve the
+  scalar per-symbol results exactly.
 - `src/storage/evidence-cache.ts` accepts both complete and intentional partial
   project fingerprints. The cache key includes the index status, so complete and
   partial indexes do not share project-scoped rows accidentally. It exposes

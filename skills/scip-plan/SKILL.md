@@ -6,7 +6,7 @@ commands:
     when: "Anchor the current flow, consumers, reuse options, and change risks."
   - template: "scip-query refs <symbol>"
     when: "Complete or narrow the direct consumer set for a planned symbol change."
-  - template: "scip-query affected <symbol> --json"
+  - template: "scip-query affected <symbol>"
     when: "Measure transitive impact when the change is not consumer-local."
 ---
 
@@ -19,7 +19,7 @@ commands:
 | --- | --- | --- | --- | --- |
 | `scip-query plan-context <target>` | Pre-edit planning context for a symbol, file, or module | definitions and references; callers and callees; dataflow producers and consumers; backward and forward slices; affected symbols; change-surface risk; dependencies and reverse dependencies; module files and exports; external surface use; complexity; churn; co-change partners; active suppressions | `bounded` | Anchor the current flow, consumers, reuse options, and change risks. |
 | `scip-query refs <symbol>` | Find all files referencing a symbol | referencing file paths; reference line numbers grouped by file | `bounded` | Complete or narrow the direct consumer set for a planned symbol change. |
-| `scip-query affected <symbol> --json` | Transitive closure of symbols that could break if this symbol changes | affected symbol identities, files, and traversal depths | `bounded` | Measure transitive impact when the change is not consumer-local. |
+| `scip-query affected <symbol>` | Transitive closure of symbols that could break if this symbol changes | affected symbol identities, files, and traversal depths | `bounded` | Measure transitive impact when the change is not consumer-local. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->

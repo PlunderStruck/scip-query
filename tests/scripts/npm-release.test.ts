@@ -90,6 +90,18 @@ describe('ordered npm release coordinator', () => {
     });
   });
 
+  it('reports file-flushed release state honestly when directory synchronization is unsupported', async () => {
+    await withFixture(async (fixture) => {
+      fixture.stateDirectorySync = 'unsupported';
+
+      runNpmRelease(fixture.runtime);
+
+      expect(fixture.logs.join('\n')).toContain('file-flushed; directory sync unsupported');
+      expect(fixture.logs.join('\n')).not.toContain('Durable release state');
+      expect(fixture.logs.join('\n')).not.toContain('(directory-durable)');
+    });
+  });
+
   it('makes a main-pack failure occur before state publication or registry mutation', async () => {
     await withFixture(async (fixture) => {
       fixture.failMainPack = true;
@@ -471,6 +483,7 @@ interface ReleaseFixture {
   failCleanup: boolean;
   failTempDirectory: boolean;
   failStateWriteAt?: number;
+  stateDirectorySync: 'synced' | 'unsupported';
   gitRevision: string;
   lockReleaseSucceeds: boolean;
   postPackGitRevision?: string;
@@ -513,6 +526,7 @@ function createFixture(root: string): ReleaseFixture {
     lockReleaseCount: 0,
     failCleanup: false,
     failTempDirectory: false,
+    stateDirectorySync: 'synced',
     gitRevision: 'd'.repeat(40),
     lockReleaseSucceeds: true,
     registryUrl: 'https://registry.npmjs.org/',
@@ -660,7 +674,11 @@ function createFixture(root: string): ReleaseFixture {
         crashAfterStateStage = undefined;
         throw new Error(`simulated crash after ${state.completedStages.at(-1)} state`);
       }
-      return 'synced';
+      return {
+        requestedDurability: 'durable',
+        achievedDurability: fixture.stateDirectorySync === 'synced' ? 'directory-durable' : 'file-flushed',
+        directorySync: fixture.stateDirectorySync,
+      };
     },
   };
   return fixture;

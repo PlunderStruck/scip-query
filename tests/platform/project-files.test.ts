@@ -76,6 +76,35 @@ describe('platform project file fingerprints', () => {
     writeFileSync(join(projectRoot, 'value.ts'), 'export const value = 2;\n');
     expect(buildProjectInputFingerprint(projectRoot, ['typescript'], { pnpmWorkspaces: true })).not.toEqual(first);
   });
+
+  it('fingerprints repository inputs without letting scip-query record writes invalidate the index', () => {
+    const projectRoot = temporaryDirectory('scip-query-project-input-boundary-');
+    mkdirSync(join(projectRoot, 'docs'), { recursive: true });
+    mkdirSync(join(projectRoot, '.scipquery', 'events'), { recursive: true });
+    writeFileSync(join(projectRoot, 'src.ts'), 'export const value = 1;\n');
+    writeFileSync(join(projectRoot, 'tsconfig.scip.json'), '{}\n');
+    writeFileSync(join(projectRoot, '.scipquery.json'), '{}\n');
+    writeFileSync(join(projectRoot, 'docs', 'guide.md'), '# Guide\n');
+    writeFileSync(join(projectRoot, '.scipquery', 'events', 'event.json'), '{}\n');
+
+    const first = buildProjectInputFingerprint(projectRoot, ['typescript'], {});
+    expect(first.files.map((file) => file.path)).toEqual([
+      '.scipquery.json',
+      'docs/guide.md',
+      'src.ts',
+      'tsconfig.scip.json',
+    ]);
+
+    writeFileSync(join(projectRoot, '.scipquery', 'events', 'event.json'), '{"changed":true}\n');
+    expect(buildProjectInputFingerprint(projectRoot, ['typescript'], {})).toEqual(first);
+
+    writeFileSync(join(projectRoot, 'docs', 'guide.md'), '# Changed guide\n');
+    expect(buildProjectInputFingerprint(projectRoot, ['typescript'], {})).not.toEqual(first);
+
+    writeFileSync(join(projectRoot, 'docs', 'guide.md'), '# Guide\n');
+    writeFileSync(join(projectRoot, 'src.ts'), 'export const value = 2;\n');
+    expect(buildProjectInputFingerprint(projectRoot, ['typescript'], {})).not.toEqual(first);
+  });
 });
 
 describe('project file authority boundary', () => {

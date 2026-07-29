@@ -16,12 +16,12 @@ Load shared mechanics from [`../../_shared/SKILL.md`](../../_shared/SKILL.md) on
 | `scip-query code <entry-or-error-symbol>` | Trace the failing path: read the exact source (complete coverage: definition identity, source, line range). For stack traces, read the exact range with `scip-query code 'file:start-end'`. |
 | `scip-query call-graph <entry-symbol>` | Trace the failing path: callers and callees (bounded coverage). |
 | `scip-query dataflow <state-or-input-symbol>` / `scip-query slice <state-or-input-symbol>` | Trace the failing path: data flow and slices from the suspect input or state. |
-| `scip-query similar <suspect-symbol> --json --full` | Compare and bound: nearby implementations for missing handling (bounded coverage: symbol pairs, similarity scores, shared evidence). |
+| `scip-query similar <suspect-symbol> --full` | Compare and bound: nearby implementations for missing handling (bounded coverage: symbol pairs, similarity scores, shared evidence). |
 | `scip-query similar <suspect-symbol> <comparison-symbol> --plan` | Compare and bound: two specific implementations directly. |
-| `scip-query similar-files <suspect-file> --json --full` | Compare and bound: nearby files for missing handling. |
-| `scip-query co-change <suspect-file> --json --full` | Compare and bound: files that historically changed with the suspect file. |
-| `scip-query change-surface <suspect-file> --json --full` | Compare and bound: exports, consumers, and blast-radius risk. |
-| `scip-query affected <suspect-symbol> --json` | Compare and bound: transitive impact bound for the fix plan (bounded coverage). |
+| `scip-query similar-files <suspect-file> --full` | Compare and bound: nearby files for missing handling. |
+| `scip-query co-change <suspect-file> --full` | Compare and bound: files that historically changed with the suspect file. |
+| `scip-query change-surface <suspect-file> --full` | Compare and bound: exports, consumers, and blast-radius risk. |
+| `scip-query affected <suspect-symbol>` | Compare and bound: transitive impact bound for the fix plan (bounded coverage). |
 
 ## Rules
 
@@ -70,12 +70,12 @@ This step is complete only when a suspected root cause is tied to source evidenc
 ### 4. Compare and bound
 
 ```bash
-scip-query similar <suspect-symbol> --json --full
+scip-query similar <suspect-symbol> --full
 scip-query similar <suspect-symbol> <comparison-symbol> --plan
-scip-query similar-files <suspect-file> --json --full
-scip-query co-change <suspect-file> --json --full
-scip-query change-surface <suspect-file> --json --full
-scip-query affected <suspect-symbol> --json
+scip-query similar-files <suspect-file> --full
+scip-query co-change <suspect-file> --full
+scip-query change-surface <suspect-file> --full
+scip-query affected <suspect-symbol>
 ```
 
 This step is complete only when the packet has a narrow test shape and an impact bound.

@@ -1,7 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
-  constants,
-  copyFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -20,6 +18,13 @@ import Database from 'better-sqlite3';
 import { decodeReindexMetadata, type ReindexMetadata } from '../domain/reindex-metadata.js';
 import { monotonicNowMs } from '../domain/time.js';
 import type { ProjectConfig } from '../domain/types.js';
+import {
+  cloneFileDurable,
+  ensureDirectoryDurable,
+  mergeDirectorySyncStatus,
+  syncDirectoryDurable,
+  type DirectorySyncStatus,
+} from '../storage/atomic-file.js';
 import { cliVersion } from '../platform/cli-version.js';
 import { acquireProcessFileLock, acquireRepositoryCacheLock } from '../platform/repository-cache-lock.js';
 import { tryAcquireProcessFileLock, type LegacyProcessLockDecoder } from '../platform/process-file-lock.js';
@@ -110,6 +115,20 @@ export interface SharedGenerationManifest {
   createdAt: string;
   artifacts: SharedGenerationArtifact[];
 }
+
+export type SharedGenerationPublicationResult = {
+  kind: 'existing' | 'published';
+  manifest: SharedGenerationManifest;
+  achievedDurability: 'file-flushed' | 'directory-durable';
+  directorySync: Exclude<DirectorySyncStatus, 'not-requested'>;
+};
+
+export type SharedGenerationPublicationStage =
+  | 'after-artifact-flushed'
+  | 'after-manifest-flushed'
+  | 'after-staging-directory-synced'
+  | 'after-generation-renamed'
+  | 'after-generations-directory-synced';
 
 export type SharedCacheAction =
   | { kind: 'local-fresh' }
@@ -254,9 +273,11 @@ export function publishSharedGeneration(input: {
   sourceProjectRoot: string;
   now?: () => Date;
   sourceStillValid?: () => boolean;
-}): SharedGenerationManifest {
+  /** @internal deterministic crash-boundary probe for persistence tests. */
+  onPublicationStage?: (stage: SharedGenerationPublicationStage, artifactPath?: string) => void;
+}): SharedGenerationPublicationResult {
   const existing = readSharedGeneration(input.snapshot);
-  if (existing) return existing;
+  if (existing) return existingSharedGenerationResult(input.snapshot, existing);
   if (!validateSourceGeneration(input.sourceCacheDir, input.sourceProjectRoot, input.snapshot.fingerprint)) {
     throw new Error('source index is incomplete, incompatible, or corrupt');
   }
@@ -265,14 +286,15 @@ export function publishSharedGeneration(input: {
 
   const artifacts = describeIndexArtifactSet(input.sourceCacheDir);
   const generationsDir = join(input.snapshot.repositoryCacheDir, 'generations');
-  mkdirSync(generationsDir, { recursive: true });
+  const directoryStatuses: Exclude<DirectorySyncStatus, 'not-requested'>[] = [ensureDirectoryDurable(generationsDir)];
   const stagingDir = mkdtempSync(join(generationsDir, `.tmp-${process.pid}-`));
   try {
     const records: SharedGenerationArtifact[] = [];
     for (const relativePath of artifacts.files) {
       const source = indexArtifactPath(input.sourceCacheDir, relativePath);
       const target = indexArtifactPath(stagingDir, relativePath);
-      cloneArtifactFile(source, target);
+      directoryStatuses.push(cloneArtifactFile(source, target, 0o444));
+      input.onPublicationStage?.('after-artifact-flushed', relativePath);
       const size = statSync(target).size;
       records.push({
         path: relativePath,
@@ -313,10 +335,14 @@ export function publishSharedGeneration(input: {
       createdAt: (input.now ?? (() => new Date()))().toISOString(),
       artifacts: records.sort((left, right) => left.path.localeCompare(right.path)),
     };
-    writeJsonDurable(join(stagingDir, SHARED_GENERATION_MANIFEST), manifest, {
+    const manifestWrite = writeJsonDurable(join(stagingDir, SHARED_GENERATION_MANIFEST), manifest, {
       spacing: 2,
       trailingNewline: true,
     });
+    if (manifestWrite.directorySync !== 'not-requested') directoryStatuses.push(manifestWrite.directorySync);
+    input.onPublicationStage?.('after-manifest-flushed');
+    directoryStatuses.push(syncDirectoryDurable(stagingDir));
+    input.onPublicationStage?.('after-staging-directory-synced');
     const targetDir = sharedGenerationDirectory(input.snapshot);
     try {
       if (existsSync(targetDir) && !readSharedGeneration(input.snapshot)) {
@@ -327,13 +353,35 @@ export function publishSharedGeneration(input: {
       renameSync(stagingDir, targetDir);
     } catch (error) {
       const raced = readSharedGeneration(input.snapshot);
-      if (raced) return raced;
+      if (raced) return existingSharedGenerationResult(input.snapshot, raced);
       throw error;
     }
-    return manifest;
+    input.onPublicationStage?.('after-generation-renamed');
+    directoryStatuses.push(syncDirectoryDurable(generationsDir));
+    input.onPublicationStage?.('after-generations-directory-synced');
+    const directorySync = mergeDirectorySyncStatus(...directoryStatuses);
+    return {
+      kind: 'published',
+      manifest,
+      achievedDurability: directorySync === 'synced' ? 'directory-durable' : 'file-flushed',
+      directorySync,
+    };
   } finally {
     rmSync(stagingDir, { recursive: true, force: true });
   }
+}
+
+function existingSharedGenerationResult(
+  snapshot: SharedGenerationSnapshot,
+  manifest: SharedGenerationManifest,
+): SharedGenerationPublicationResult {
+  const directorySync = syncDirectoryDurable(join(snapshot.repositoryCacheDir, 'generations'));
+  return {
+    kind: 'existing',
+    manifest,
+    achievedDurability: directorySync === 'synced' ? 'directory-durable' : 'file-flushed',
+    directorySync,
+  };
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; validation, artifact hydration, and metadata updates stay atomic.
@@ -769,13 +817,12 @@ export function parseSharedGenerationManifest(value: string): SharedGenerationMa
   return parsed as SharedGenerationManifest;
 }
 
-export function cloneArtifactFile(source: string, target: string): void {
-  mkdirSync(dirname(target), { recursive: true });
-  try {
-    copyFileSync(source, target, constants.COPYFILE_FICLONE);
-  } catch {
-    copyFileSync(source, target);
-  }
+export function cloneArtifactFile(
+  source: string,
+  target: string,
+  mode = 0o600,
+): Exclude<DirectorySyncStatus, 'not-requested'> {
+  return cloneFileDurable(source, target, { mode });
 }
 
 // scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
@@ -797,12 +844,12 @@ function importPeerGeneration(
     }
     if (!validateSourceGeneration(cacheDir, record.path, snapshot.fingerprint)) continue;
     try {
-      const manifest = publishSharedGeneration({
+      const publication = publishSharedGeneration({
         snapshot,
         sourceCacheDir: cacheDir,
         sourceProjectRoot: record.path,
       });
-      return { manifest, sourceProjectRoot: record.path };
+      return { manifest: publication.manifest, sourceProjectRoot: record.path };
     } catch {
       continue;
     }

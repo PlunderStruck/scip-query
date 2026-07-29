@@ -1,24 +1,38 @@
 import { randomUUID } from 'node:crypto';
-import { closeSync, fsyncSync, linkSync, mkdirSync, openSync, renameSync, unlinkSync, writeSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  fsyncSync,
+  linkSync,
+  mkdirSync,
+  openSync,
+  renameSync,
+  unlinkSync,
+  writeSync,
+} from 'node:fs';
 import { dirname } from 'node:path';
-import { isDirectorySyncUnsupported, writeFileCompletely } from '../filesystem/file-descriptor.js';
+import {
+  ensureDirectoryDurable,
+  mergeDirectorySyncStatus,
+  syncDirectoryDurable,
+  type DirectoryDurabilityRuntime,
+  type DirectorySyncStatus,
+} from '../filesystem/durable-path.js';
+import { writeFileCompletely } from '../filesystem/file-descriptor.js';
 
 export type AtomicFileDurability = 'visibility' | 'durable';
-export type DirectorySyncStatus = 'not-requested' | 'synced' | 'unsupported';
+export type AchievedFileDurability = 'visibility' | 'file-flushed' | 'directory-durable';
+export type { DirectoryDurabilityRuntime, DirectorySyncStatus } from '../filesystem/durable-path.js';
 
 export interface AtomicFileWriteResult {
-  durability: AtomicFileDurability;
+  requestedDurability: AtomicFileDurability;
+  achievedDurability: AchievedFileDurability;
   directorySync: DirectorySyncStatus;
 }
 
-export interface AtomicFileRuntime {
-  platform: NodeJS.Platform;
+export interface AtomicFileRuntime extends DirectoryDurabilityRuntime {
   randomToken(): string;
-  makeDirectory(path: string): void;
-  openFile(path: string, flags: string, mode?: number): number;
   writeFile(fd: number, bytes: Buffer, offset: number, length: number): number;
-  syncFile(fd: number): void;
-  closeFile(fd: number): void;
   renameFile(source: string, target: string): void;
   linkFile?(source: string, target: string): void;
   removeFile(path: string): void;
@@ -27,6 +41,7 @@ export interface AtomicFileRuntime {
 export const NODE_ATOMIC_FILE_RUNTIME: AtomicFileRuntime = Object.freeze({
   platform: process.platform,
   randomToken: () => randomUUID(),
+  pathExists: (path: string) => existsSync(path),
   makeDirectory: (path: string) => mkdirSync(path, { recursive: true }),
   openFile: (path: string, flags: string, mode?: number) => openSync(path, flags, mode),
   writeFile: (fd: number, bytes: Buffer, offset: number, length: number) => writeSync(fd, bytes, offset, length),
@@ -57,7 +72,10 @@ export function replaceFileAtomic(
   const durability = options.durability ?? 'visibility';
   const runtime = options.runtime ?? NODE_ATOMIC_FILE_RUNTIME;
   const parentDirectory = dirname(targetPath);
-  runtime.makeDirectory(parentDirectory);
+  const parentSync =
+    durability === 'durable'
+      ? ensureDirectoryDurable(parentDirectory, runtime)
+      : (runtime.makeDirectory(parentDirectory), 'not-requested');
   const temporaryPath = `${targetPath}.tmp-${runtime.randomToken()}`;
   const payload = typeof bytes === 'string' ? Buffer.from(bytes) : bytes;
   let fd: number | undefined;
@@ -71,10 +89,11 @@ export function replaceFileAtomic(
     fd = undefined;
     runtime.renameFile(temporaryPath, targetPath);
     temporaryOwned = false;
-    return {
-      durability,
-      directorySync: durability === 'durable' ? syncDirectoryDurable(parentDirectory, runtime) : 'not-requested',
-    };
+    const directorySync =
+      durability === 'durable'
+        ? mergeDirectorySyncStatus(parentSync, syncDirectoryDurable(parentDirectory, runtime))
+        : 'not-requested';
+    return atomicFileWriteResult(durability, directorySync);
   } finally {
     if (fd !== undefined) {
       try {
@@ -112,7 +131,10 @@ export function createFileAtomicExclusive(
     throw new Error('Exclusive atomic file publication requires hard-link support.');
   }
   const parentDirectory = dirname(targetPath);
-  runtime.makeDirectory(parentDirectory);
+  const parentSync =
+    durability === 'durable'
+      ? ensureDirectoryDurable(parentDirectory, runtime)
+      : (runtime.makeDirectory(parentDirectory), 'not-requested');
   const temporaryPath = `${targetPath}.tmp-${runtime.randomToken()}`;
   const payload = typeof bytes === 'string' ? Buffer.from(bytes) : bytes;
   let fd: number | undefined;
@@ -125,12 +147,15 @@ export function createFileAtomicExclusive(
     runtime.closeFile(fd);
     fd = undefined;
     runtime.linkFile(temporaryPath, targetPath);
+    const publicationDirectorySync =
+      durability === 'durable' ? syncDirectoryDurable(parentDirectory, runtime) : 'not-requested';
     runtime.removeFile(temporaryPath);
     temporaryOwned = false;
-    return {
-      durability,
-      directorySync: durability === 'durable' ? syncDirectoryDurable(parentDirectory, runtime) : 'not-requested',
-    };
+    const directorySync =
+      durability === 'durable'
+        ? mergeDirectorySyncStatus(parentSync, publicationDirectorySync, syncDirectoryDurable(parentDirectory, runtime))
+        : 'not-requested';
+    return atomicFileWriteResult(durability, directorySync);
   } finally {
     if (fd !== undefined) {
       try {
@@ -149,29 +174,26 @@ export function createFileAtomicExclusive(
   }
 }
 
-/**
- * Flushes a directory entry when the host exposes that durability primitive.
- * Storage publishers share this boundary so platform-specific unsupported
- * errors are classified consistently.
- */
-export function syncDirectoryDurable(
-  path: string,
-  runtime: AtomicFileRuntime = NODE_ATOMIC_FILE_RUNTIME,
-): Exclude<DirectorySyncStatus, 'not-requested'> {
-  let fd: number;
-  try {
-    fd = runtime.openFile(path, 'r');
-  } catch (error) {
-    if (isDirectorySyncUnsupported(error, runtime.platform)) return 'unsupported';
-    throw error;
-  }
-  try {
-    runtime.syncFile(fd);
-    return 'synced';
-  } catch (error) {
-    if (isDirectorySyncUnsupported(error, runtime.platform)) return 'unsupported';
-    throw error;
-  } finally {
-    runtime.closeFile(fd);
-  }
+function atomicFileWriteResult(
+  requestedDurability: AtomicFileDurability,
+  directorySync: DirectorySyncStatus,
+): AtomicFileWriteResult {
+  return {
+    requestedDurability,
+    achievedDurability:
+      requestedDurability === 'visibility'
+        ? 'visibility'
+        : directorySync === 'synced'
+          ? 'directory-durable'
+          : 'file-flushed',
+    directorySync,
+  };
 }
+
+export { ensureDirectoryDurable, mergeDirectorySyncStatus, syncDirectoryDurable } from '../filesystem/durable-path.js';
+export {
+  cloneFileDurable,
+  NODE_DURABLE_FILE_CLONE_RUNTIME,
+  type DurableFileCloneOptions,
+  type DurableFileCloneRuntime,
+} from '../filesystem/durable-file.js';

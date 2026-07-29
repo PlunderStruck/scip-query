@@ -15,10 +15,12 @@ directory entry survive power loss.
 
 A **crash-durable replacement** is a visibility-atomic replacement that also
 flushes the complete staging file before rename and flushes the containing
-directory after rename. Those ordered flushes are what make acknowledged file
-contents and the name that reaches them recoverable after an operating-system
-or machine crash, subject to the host filesystem and device honoring their
-flush contract.
+directory after rename. When the writer creates a missing directory path, it
+also creates each component from the nearest existing ancestor outward and
+flushes the directory that names each new component. Those ordered flushes are
+what make acknowledged file contents and the complete path that reaches them
+recoverable after an operating-system or machine crash, subject to the host
+filesystem and device honoring their flush contract.
 
 An **authoritative record** is file-backed state whose loss can change which
 generation, owner, policy, or accepted decision the program treats as current.
@@ -35,16 +37,28 @@ from a filename to its file—after the file itself has been flushed. Flushing
 only file contents is insufficient because a crash can otherwise lose the
 rename that made those contents current.
 
+An **achieved durability result** is the guarantee established by the
+operations that actually completed, not the guarantee the caller requested.
+`visibility` means only old-or-new complete process visibility;
+`file-flushed` means the final file bytes were flushed but at least one
+directory namespace could not be synchronized; and `directory-durable` means
+the file plus every newly created ancestor and final directory entry crossed
+the supported persistence frontier.
+
 ## APIs
 
-| API | Staging identity | File flush | Rename | Parent-directory flush |
-| --- | --- | --- | --- | --- |
-| `writeJsonAtomic` / `replaceFileAtomic(..., { durability: "visibility" })` | Exclusive random token | No | Yes | No |
-| `writeJsonDurable` / `replaceFileAtomic(..., { durability: "durable" })` | Exclusive random token | Yes | Yes | Yes where supported |
+| API                                                                        | Staging identity                                | File flush            | Rename/link                       | New-ancestor flush  | Final-directory flush |
+| -------------------------------------------------------------------------- | ----------------------------------------------- | --------------------- | --------------------------------- | ------------------- | --------------------- |
+| `writeJsonAtomic` / `replaceFileAtomic(..., { durability: "visibility" })` | Exclusive random token                          | No                    | Yes                               | No                  | No                    |
+| `writeJsonDurable` / `replaceFileAtomic(..., { durability: "durable" })`   | Exclusive random token                          | Yes                   | Yes                               | Yes where supported | Yes where supported   |
+| `createFileAtomicExclusive(..., { durability: "durable" })`                | Exclusive random token                          | Yes                   | Exclusive hard link               | Yes where supported | Yes where supported   |
+| `cloneFileDurable`                                                         | Final target inside an unpublished staging tree | Yes, after final mode | Caller publishes the staging tree | Yes where supported | Yes where supported   |
 
 `writeJsonAtomic` retains its original `void` return contract for compatibility.
-`writeJsonDurable` and `replaceFileAtomic` return the achieved directory-sync
-status. Verified binary installation owns an equivalent platform-local
+`writeJsonDurable`, `replaceFileAtomic`, and `createFileAtomicExclusive`
+return `requestedDurability`, `achievedDurability`, and `directorySync`.
+Callers must use the achieved fields when logging or forwarding a durability
+claim. Verified binary installation owns an equivalent platform-local
 flush/rename sequence because the enforced architecture forbids dependencies
 between the sibling `platform` and `storage` boundaries.
 
@@ -53,18 +67,25 @@ Known Windows "directory handles unsupported" errors produce
 `directorySync: "unsupported"` after the staged file itself has been flushed
 and renamed. That result means complete visibility plus flushed file contents,
 not the full POSIX directory-entry durability guarantee. Other directory-sync
-errors remain failures.
+errors remain failures. An API that returns only a path or value makes no
+machine-crash claim; protocol APIs that acknowledge work expose the achieved
+result explicitly.
 
 ## Failure Outcomes
 
-| Failure point | Target visible after return/throw | Owned staging file |
-| --- | --- | --- |
-| Exclusive create | Previous target | No owned file was created |
-| Write or short/invalid progress | Previous target | Closed and removed |
-| File flush | Previous target | Closed and removed |
-| Rename | Previous target | Removed by the writer |
-| POSIX directory flush | New complete target; durability unconfirmed and the call throws | Already renamed; no staging path |
-| Unsupported Windows directory flush | New complete target; result reports the limitation | Already renamed; no staging path |
+| Failure point                       | Target visible after return/throw                               | Owned staging file               |
+| ----------------------------------- | --------------------------------------------------------------- | -------------------------------- |
+| Exclusive create                    | Previous target                                                 | No owned file was created        |
+| Write or short/invalid progress     | Previous target                                                 | Closed and removed               |
+| File flush                          | Previous target                                                 | Closed and removed               |
+| Rename                              | Previous target                                                 | Removed by the writer            |
+| POSIX directory flush               | New complete target; durability unconfirmed and the call throws | Already renamed; no staging path |
+| Unsupported Windows directory flush | New complete target; result reports the limitation              | Already renamed; no staging path |
+
+When a parent chain is new, a failure while creating or flushing any ancestor
+also throws before a durable result is returned. The incomplete path can be
+visible to the running process, but recovery may discard every component that
+has not yet been named by a flushed parent.
 
 The post-rename failure row is deliberately explicit. Once rename succeeds,
 rolling back would be another publication with its own crash window. The
@@ -73,25 +94,28 @@ could not confirm the stronger durability guarantee.
 
 ## Call-Site Classification
 
-| Record | Contract | Reason |
-| --- | --- | --- |
-| Reindex `meta.json` | Durable | Names the accepted index status, fingerprint, and generation metadata |
-| SQLite generation manifest and `state.json` | Durable | Flushes one complete immutable artifact set, then atomically selects it for new readers |
-| Shared-generation manifest | Durable file within staging | Authenticates immutable artifacts; the later generation-directory publication remains a separate generation-store operation |
-| Worktree lease and local cache pointer | Durable | Protect generations from collection and bind a worktree to repository cache identity; generation changes, liveness touches, and cleanup serialize through the repository-cache lock |
-| Watch service state | Durable | Publishes the process instance and index generation accepted as current |
-| Rust semantic session `server.json` | Durable | Publishes the live server process and mailbox identity |
-| Project `.scipquery.json` | Durable | Controls indexing, watch, architecture, and detector policy; versioned reads reject unsupported meaning before use, and authorized writes migrate legacy bytes without dropping unknown fields |
-| Codex/Claude hook JSON | Durable | Controls whether and when agent hooks execute |
-| Structured suppression file | Durable | Records an accepted finding and its reason |
-| Health baseline | Durable | Acts as a committed regression policy |
-| Verified binary cache promotion | Durable | Makes checksum-accepted executable or tool bytes current |
-| TypeScript/Rust request and response mailboxes | Visibility-atomic | A timeout or retry reconstructs the ephemeral message |
-| Watch activity | Visibility-atomic | A newer timestamp supersedes an older idle-lifetime observation; it carries no durable intent |
-| Watch refresh request, claim, and completion records | Durable immutable admission and acknowledgement | Accepted intent survives activity replacement and owner crashes; exclusive claims may be recovered only by the next lock owner |
-| TypeScript fragment/overlay manifests | Visibility-atomic | Content-addressed cache artifacts are validated and rebuildable |
-| Repository GC state | Visibility-atomic | Sweep history can be reconstructed conservatively |
-| Affected-set shadow latest record | Visibility-atomic | Calibration telemetry does not control publication |
+| Record                                               | Contract                                                           | Reason                                                                                                                                                                                         |
+| ---------------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reindex `meta.json`                                  | Durable                                                            | Names the accepted index status, fingerprint, and generation metadata                                                                                                                          |
+| SQLite generation manifest and `state.json`          | Directory-durable where supported                                  | Durably establishes the generation root, flushes final read-only artifact bytes and metadata, publishes the immutable directory, then selects it for new readers                               |
+| Shared generation                                    | Directory-durable where supported                                  | Flushes every read-only artifact and manifest, the staging namespace, the final generation rename, and the shared `generations/` namespace                                                     |
+| Worktree lease and local cache pointer               | Durable                                                            | Protect generations from collection and bind a worktree to repository cache identity; generation changes, liveness touches, and cleanup serialize through the repository-cache lock            |
+| Watch service state                                  | Durable                                                            | Publishes the process instance and index generation accepted as current                                                                                                                        |
+| Rust semantic session `server.json`                  | Durable                                                            | Publishes the live server process and mailbox identity                                                                                                                                         |
+| Project `.scipquery.json`                            | Durable                                                            | Controls indexing, watch, architecture, and detector policy; versioned reads reject unsupported meaning before use, and authorized writes migrate legacy bytes without dropping unknown fields |
+| Codex/Claude hook JSON                               | Durable                                                            | Controls whether and when agent hooks execute                                                                                                                                                  |
+| Structured suppression file                          | Durable                                                            | Records an accepted finding and its reason                                                                                                                                                     |
+| Health baseline                                      | Durable                                                            | Acts as a committed regression policy                                                                                                                                                          |
+| Verified binary cache promotion                      | Durable                                                            | Makes checksum-accepted executable or tool bytes current                                                                                                                                       |
+| TypeScript/Rust request and response mailboxes       | Directory-durable where supported                                  | Admission is acknowledged only after the pending name is flushed; a new owner directory is durably named before a request moves from pending to inflight; responses precede claim release      |
+| Watch activity                                       | Visibility-atomic                                                  | A newer timestamp supersedes an older idle-lifetime observation; it carries no durable intent                                                                                                  |
+| Watch refresh request, claim, and completion records | Durable immutable admission and acknowledgement                    | Accepted intent survives activity replacement and owner crashes; exclusive claims may be recovered only by the next lock owner                                                                 |
+| Cache ownership credential                           | Directory-durable where supported                                  | A complete file is flushed privately, hardening is revalidated, the public credential is linked exclusively, and its directory is flushed before detailed publication success                  |
+| npm release state                                    | Directory-durable where supported; file-flushed on bounded hosts   | The registry is freshly reconciled and remains external authority; the local coordinate-pair recovery record reports its exact achieved guarantee                                              |
+| Outcome event                                        | File publication locally; repository-durable only after Git commit | The event becomes shared history through the committed repository record, not merely because a checkout-local file exists                                                                      |
+| TypeScript fragment/overlay manifests                | Visibility-atomic                                                  | Content-addressed cache artifacts are validated and rebuildable                                                                                                                                |
+| Repository GC state                                  | Visibility-atomic                                                  | Sweep history can be reconstructed conservatively                                                                                                                                              |
+| Affected-set shadow latest record                    | Visibility-atomic                                                  | Calibration telemetry does not control publication                                                                                                                                             |
 
 Process locks use exclusive descriptor creation rather than replacement. Their
 durable token ownership, malformed-creation grace, guarded recovery, and
@@ -101,3 +125,29 @@ stable compatibility mirrors, and their crash ordering are defined in
 [Local Index Generations](INDEX_GENERATIONS.md). Durable watch demand,
 idempotency, claim recovery, and acknowledgement ordering are defined in
 [Watch Refresh Requests](WATCH_REFRESH_REQUESTS.md).
+
+## Executable crash model
+
+`tests/helpers/persistence-frontier.ts` models the two states a normal
+filesystem test otherwise conflates. Writes, links, renames, and removals first
+change process-visible state. File synchronization advances persisted inode
+bytes and mode; directory synchronization advances persisted names. A modeled
+power loss discards everything beyond those frontiers.
+
+`tests/storage/atomic-file-crash.test.ts` replays replacement, exclusive
+publication, new ancestor creation, and durable artifact cloning after every
+relevant phase. Boundary-specific tests then hold the higher-level protocol
+order:
+
+- local generation stage and same-size corruption tests;
+- shared-generation artifact, manifest, staging, rename, and final-directory
+  stage tests;
+- watch admission, claim, completion, and retry tests;
+- mailbox owner-directory, claim-transfer, response, and recovery tests;
+- ownership short-write, unsupported-sync, and failed-sync tests; and
+- release-state synchronized, unsupported, and failed-write tests.
+
+The deterministic model proves the filesystem primitive’s persisted-state
+semantics. The boundary tests prove each protocol invokes those primitives in
+the required order. Neither an exception callback alone nor a successful live
+filesystem read is described as a simulated power loss.

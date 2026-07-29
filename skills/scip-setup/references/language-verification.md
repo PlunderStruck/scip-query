@@ -56,6 +56,6 @@ never as a clean semantic analysis.
 
 ```bash
 scip-query status --capabilities
-scip-query reindex --json
-scip-query watch --status --json
+scip-query reindex
+scip-query watch --status
 ```

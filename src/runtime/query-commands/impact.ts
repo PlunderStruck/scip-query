@@ -508,7 +508,7 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     command: 'diff-gate',
     description:
       'Runtime-bounded, single-flight gate for the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings',
-    options: [
+    options: withJsonOption([
       option('--base <ref>', 'Git ref to diff against (default: HEAD)'),
       option('--min-together <n>', 'Minimum historical co-changes for the partner check', parseInteger, 6),
       option('--max-echo-checks <n>', 'Maximum changed symbols to test for echoes (default: all)', parseInteger),
@@ -522,9 +522,7 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
         [],
       ),
       option('--hook', 'Agent Stop-hook mode: silent on pass, exit 2 with findings on stderr to block the stop'),
-      option('--json', 'Output as JSON for programmatic consumption'),
-      option('--compact', 'Emit minified one-line JSON (use with --json)'),
-    ],
+    ]),
     heuristic: { label: 'diff gate candidates' },
     agent: {
       answers: [

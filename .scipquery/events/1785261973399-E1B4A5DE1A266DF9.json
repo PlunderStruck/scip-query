@@ -1,0 +1,38 @@
+{
+  "ts": 1785261973399,
+  "check": "incomplete-migration",
+  "findingId": "SQ5995A80180D0",
+  "event": "caught",
+  "commit": "9de38b98ac75fe0fa620d921c83911e7634e255c",
+  "comparisonBaseCommit": "9de38b98ac75fe0fa620d921c83911e7634e255c",
+  "symbol": "scip-typescript npm scip-query 0.19.8 src/runtime/`agent-hooks.ts`/stopHookGenerationObservation().",
+  "gateRunId": "80ef2385-79d6-4005-8ffe-94d1d6ad2774",
+  "observer": {
+    "kind": "local-agent",
+    "authority": "repository-writable"
+  },
+  "observation": {
+    "schemaVersion": 1,
+    "authorityKind": "index-worktree",
+    "observedAt": "2026-07-28T18:06:13.399Z",
+    "projectIdentity": "178a22f2ce5800603672d10b597d4cf97078e596c64e2eb0293681604557bda7",
+    "index": {
+      "generationIdentity": "eedf8cf08e6f2019d55452851b51a75302c828c270b3362143f08c6b9832b93c",
+      "source": "immutable",
+      "alignment": "not-certified"
+    },
+    "worktree": {
+      "identity": "89eb56c863bcb6f60a5f4e754440e5f184d3a5463a5d1bc7b00735fd1953bb11",
+      "clean": false,
+      "headCommit": "9de38b98ac75fe0fa620d921c83911e7634e255c",
+      "treeOid": "8f9fb0c686fe81fb048e5df440bb6efddec24ba0"
+    }
+  },
+  "kind": "scip-query-outcome-event",
+  "schemaVersion": 1,
+  "eventIdentity": "[\"incomplete-migration\",\"SQ5995A80180D0\",\"caught\",\"9de38b98ac75fe0fa620d921c83911e7634e255c\"]",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.19.8"
+  }
+}

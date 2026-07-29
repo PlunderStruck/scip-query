@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ScipQueryConfig } from '../../../src/domain/types.js';
+import type { FindingSuppression, ScipQueryConfig } from '../../../src/domain/types.js';
 import { blockingFindings, diffGate } from '../../../src/queries/impact/diff-gate.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { evidenceFixtureDb } from '../../fixtures/evidence-fixture.js';
@@ -143,7 +143,7 @@ describe('diff-gate twin-partner check', () => {
       dbPath: suppressedDbPath,
       indexPath: join(repoRoot, 'index.scip'),
       projectRoot: repoRoot,
-      suppressions: [{ id: finding!.id, reason: 'intentional divergence for this test' }],
+      suppressions: [adjudicatedSuppression(finding!.id, 'intentional divergence for this test')],
     });
     openDbs.push(suppressedDb);
 
@@ -155,3 +155,18 @@ describe('diff-gate twin-partner check', () => {
     expect(result.suppressed.some((entry) => entry.finding.check === 'twin-partner')).toBe(true);
   });
 });
+
+function adjudicatedSuppression(id: string, reason: string): FindingSuppression {
+  return {
+    id,
+    reason,
+    decision: {
+      kind: 'automated-adjudication',
+      reasonCode: 'intentional-twin',
+      decidedBy: 'agent',
+      policyVersion: 1,
+      evidence: [{ kind: 'graph', referent: 'scip-query twin-drift --json --full', claim: reason }],
+      invalidateOn: { targetContentChange: false, detectorMajorChange: true },
+    },
+  };
+}

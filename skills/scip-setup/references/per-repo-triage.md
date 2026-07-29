@@ -4,7 +4,7 @@ New repos surface standing findings that are intentional. Encode them once so
 every later gate run is precise, instead of re-litigating the same findings
 every time `diff-gate` runs.
 
-1. Sweep initial findings with `health --json` and `diff-gate --json`. For
+1. Sweep initial findings with `health` and `diff-gate`. For
    each accepted finding, run `suppress <id> --reason <why>` — reasons are
    required and audited.
 2. Declare files that legitimately change together in `.scipquery.json`

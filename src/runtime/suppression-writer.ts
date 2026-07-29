@@ -1,14 +1,27 @@
+import { createHash } from 'node:crypto';
 import { basename, join } from 'node:path';
-import type { FindingSuppression } from '../domain/config-types.js';
+import {
+  SUPPRESSION_REASON_CODES,
+  type FindingSuppression,
+  type SuppressionCounterevidence,
+  type SuppressionDecision,
+  type SuppressionEvidenceKind,
+  type SuppressionReasonCode,
+} from '../domain/config-types.js';
+import { normalizeSafeProjectRelativePath } from '../domain/path-normalization.js';
+import { isSuppressionDecision } from '../domain/suppression-adjudication.js';
+import type { ObservationReceipt } from '../domain/observation-receipt.js';
+import { readProjectFileText } from '../platform/project-files.js';
 import { cliVersion } from '../platform/cli-version.js';
 import {
   decodeSuppressionFile,
+  LEGACY_SUPPRESSION_FILE_SCHEMA_VERSION,
   SUPPRESSION_FILE_KIND,
   SUPPRESSION_FILE_SCHEMA_VERSION,
   suppressionDirPath,
   suppressionFileName,
   suppressionIdentity,
-  type SuppressionFileRecordV1,
+  type SuppressionFileRecord,
 } from '../storage/suppression-store.js';
 import {
   mutateTextFileRevisionAware,
@@ -45,6 +58,36 @@ export class SuppressionWriteConflictError extends Error {
     );
     this.name = 'SuppressionWriteConflictError';
   }
+}
+
+export function buildAutomatedSuppressionDecision(
+  projectRoot: string,
+  reasonCode: string,
+  evidenceSpecs: readonly string[],
+  claim: string,
+  observation?: ObservationReceipt,
+): SuppressionDecision {
+  if (!SUPPRESSION_REASON_CODES.includes(reasonCode as SuppressionReasonCode)) {
+    throw new Error(
+      `unsupported suppression reason code ${JSON.stringify(reasonCode)}; expected one of ${SUPPRESSION_REASON_CODES.join(', ')}`,
+    );
+  }
+  if (evidenceSpecs.length === 0) {
+    throw new Error('automatic suppression requires at least one --evidence <kind:referent>');
+  }
+  const evidence = evidenceSpecs.map((spec) => parseSuppressionEvidence(projectRoot, spec, claim));
+  return {
+    kind: 'automated-adjudication',
+    reasonCode: reasonCode as SuppressionReasonCode,
+    decidedBy: 'agent',
+    policyVersion: 1,
+    ...(observation ? { observation } : {}),
+    evidence,
+    invalidateOn: {
+      targetContentChange: evidence.some((entry) => entry.contentHash !== undefined),
+      detectorMajorChange: true,
+    },
+  };
 }
 
 /**
@@ -137,17 +180,20 @@ function createRecord(
   existing: FindingSuppression | undefined,
   now: Date,
   toolVersion = cliVersion,
-): SuppressionFileRecordV1 {
+): SuppressionFileRecord {
   const timestamp = now.toISOString();
-  return {
-    kind: SUPPRESSION_FILE_KIND,
-    schemaVersion: SUPPRESSION_FILE_SCHEMA_VERSION,
+  const { decision, createdAt, ...policy } = suppression;
+  const envelope = {
+    kind: SUPPRESSION_FILE_KIND as typeof SUPPRESSION_FILE_KIND,
     suppressionIdentity: suppressionIdentity(suppression),
-    writer: { tool: 'scip-query', version: toolVersion },
-    ...suppression,
-    createdAt: existing?.createdAt ?? suppression.createdAt ?? timestamp,
+    writer: { tool: 'scip-query' as const, version: toolVersion },
+    ...policy,
+    createdAt: existing?.createdAt ?? createdAt ?? timestamp,
     ...(existing ? { updatedAt: timestamp } : {}),
   };
+  return decision
+    ? { ...envelope, schemaVersion: SUPPRESSION_FILE_SCHEMA_VERSION, decision }
+    : { ...envelope, schemaVersion: LEGACY_SUPPRESSION_FILE_SCHEMA_VERSION };
 }
 
 function normalizeSuppression(suppression: FindingSuppression): FindingSuppression {
@@ -156,6 +202,9 @@ function normalizeSuppression(suppression: FindingSuppression): FindingSuppressi
   const id = suppression.id?.trim();
   const check = suppression.check?.trim();
   if (!id && !check) throw new Error('suppression requires an id or a check');
+  if (suppression.decision !== undefined && !isSuppressionDecision(suppression.decision)) {
+    throw new Error('suppression decision is malformed');
+  }
   return {
     ...(id ? { id } : {}),
     ...(check ? { check } : {}),
@@ -163,6 +212,7 @@ function normalizeSuppression(suppression: FindingSuppression): FindingSuppressi
     reason,
     ...(suppression.expiresAt ? { expiresAt: suppression.expiresAt } : {}),
     ...(suppression.createdAt ? { createdAt: suppression.createdAt } : {}),
+    ...(suppression.decision ? { decision: suppression.decision } : {}),
   };
 }
 
@@ -189,6 +239,32 @@ function suppressionIdentityFromPath(path: string): string {
   return name.endsWith('.json') ? name.slice(0, -'.json'.length) : name;
 }
 
-function serializeSuppressionRecord(record: SuppressionFileRecordV1): string {
+function serializeSuppressionRecord(record: SuppressionFileRecord): string {
   return `${JSON.stringify(record, null, 2)}\n`;
+}
+
+function parseSuppressionEvidence(projectRoot: string, spec: string, claim: string): SuppressionCounterevidence {
+  const separator = spec.indexOf(':');
+  if (separator <= 0 || separator === spec.length - 1) {
+    throw new Error('--evidence must use <source|config|test|graph>:<referent>');
+  }
+  const kind = spec.slice(0, separator) as SuppressionEvidenceKind;
+  const rawReferent = spec.slice(separator + 1).trim();
+  if (kind === 'graph') {
+    if (!rawReferent.startsWith('scip-query ')) {
+      throw new Error('graph suppression evidence must name the exact scip-query command that produced it');
+    }
+    return { kind, referent: rawReferent, claim };
+  }
+  if (kind !== 'source' && kind !== 'config' && kind !== 'test') {
+    throw new Error(`unsupported suppression evidence kind ${JSON.stringify(kind)}`);
+  }
+  const referent = normalizeSafeProjectRelativePath(rawReferent);
+  const content = readProjectFileText(projectRoot, referent);
+  return {
+    kind,
+    referent,
+    claim,
+    contentHash: createHash('sha256').update(content).digest('hex'),
+  };
 }

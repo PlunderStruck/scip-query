@@ -94,7 +94,7 @@ scope, runtime capability, or pagination change it.
 | `scip-query init` | Can a starter scip-query configuration be created for this project? | configuration path and creation outcome | `complete` |
 | `scip-query config-validate` | Is this project configuration valid and internally consistent? | validation diagnostics with config paths | `complete` |
 | `scip-query suppress <id>` | Can this accepted finding be recorded with an auditable reason? | suppression identity, path, scope, and expiry | `complete` |
-| `scip-query effectiveness` | Which diff-gate checks catch actionable findings with verified outcomes? | per-check caught, fixed, suppressed, unresolved, and precision counts | `complete` |
+| `scip-query effectiveness` | What handling outcomes has diff-gate observed, and what authority produced those observations? | per-check caught, fixed, suppressed, unresolved, provenance, and resolution-vs-suppression telemetry | `complete` |
 | `scip-query doctor` | Why is scip-query unhealthy or unavailable in this project? | config, freshness, dependency, and capability diagnostics | `complete` |
 | `scip-query setup` | Can scip-query be bootstrapped end to end in this project? | setup step outcomes, files, capabilities, smoke tests, and warnings | `complete` |
 | `scip-query setup-agent` | Can project agent guidance and optional git enforcement be seeded? | written, unchanged, and skipped agent files or hooks | `complete` |

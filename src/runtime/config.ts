@@ -11,6 +11,7 @@ import {
   type DecodedProjectConfig,
 } from '../domain/project-config.js';
 import { isRecordObject } from '../domain/record-validation.js';
+import { isSuppressionDecision } from '../domain/suppression-adjudication.js';
 import type { ProjectConfig, SupportedLanguage, WatchConfig } from '../domain/types.js';
 import { compileBoundedRegExp } from '../platform/bounded-regexp.js';
 import { readTextFileWithinLimit, SMALL_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
@@ -93,7 +94,18 @@ const ARCHITECTURE_CONFIG_KEYS = new Set([
 const ARCHITECTURE_BOUNDARY_CONFIG_KEYS = new Set(['name', 'paths', 'subUnits', 'maxFiles']);
 const DOCS_CONFIG_KEYS = new Set(['snapshotPaths']);
 const DECLARED_COUPLING_CONFIG_KEYS = new Set(['name', 'files', 'reason']);
-const SUPPRESSION_CONFIG_KEYS = new Set(['id', 'check', 'file', 'reason', 'expiresAt', 'createdAt']);
+const SUPPRESSION_CONFIG_KEYS = new Set(['id', 'check', 'file', 'reason', 'expiresAt', 'createdAt', 'decision']);
+const SUPPRESSION_DECISION_KEYS = new Set([
+  'kind',
+  'reasonCode',
+  'decidedBy',
+  'policyVersion',
+  'observation',
+  'evidence',
+  'invalidateOn',
+]);
+const SUPPRESSION_EVIDENCE_KEYS = new Set(['kind', 'referent', 'claim', 'contentHash', 'generation']);
+const SUPPRESSION_INVALIDATION_KEYS = new Set(['targetContentChange', 'detectorMajorChange']);
 const COVERAGE_CONTRACT_CONFIG_KEYS = new Set(['name', 'file', 'keys', 'mustEqual', 'allowExtra']);
 const COVERAGE_CONTRACT_KEY_SPEC_KEYS = new Set(['type', 'identifier', 'marker']);
 const COVERAGE_CONTRACT_SOURCE_SPEC_KEYS = new Set(['type', 'path', 'pattern']);
@@ -404,6 +416,23 @@ export function validateProjectConfig(
         diagnostics.push({ level: 'error', path: `${path}.expiresAt`, message: 'Must be an ISO date string.' });
       } else if (expires <= now.getTime()) {
         diagnostics.push({ level: 'warning', path: `${path}.expiresAt`, message: 'Suppression has expired.' });
+      }
+    }
+    if (suppression.decision !== undefined && !isSuppressionDecision(suppression.decision)) {
+      diagnostics.push({
+        level: 'error',
+        path: `${path}.decision`,
+        message: 'Must be a valid automated-adjudication decision with reason code, evidence, and invalidation rules.',
+      });
+    } else if (suppression.decision && opts.projectRoot) {
+      for (const [evidenceIndex, evidence] of suppression.decision.evidence.entries()) {
+        if (evidence.kind !== 'graph' && !existsSync(join(opts.projectRoot, evidence.referent))) {
+          diagnostics.push({
+            level: 'error',
+            path: `${path}.decision.evidence[${evidenceIndex}].referent`,
+            message: `Suppression counterevidence does not exist: ${evidence.referent}`,
+          });
+        }
       }
     }
   }
@@ -880,6 +909,30 @@ function reportUnknownConfigKeys(config: ProjectConfig, diagnostics: ConfigDiagn
   if (Array.isArray(typedConfig.suppressions)) {
     for (const [index, suppression] of typedConfig.suppressions.entries()) {
       reportUnknownObjectKeys(diagnostics, suppression, `suppressions[${index}]`, SUPPRESSION_CONFIG_KEYS);
+      if (isRecordObject(suppression.decision)) {
+        reportUnknownObjectKeys(
+          diagnostics,
+          suppression.decision,
+          `suppressions[${index}].decision`,
+          SUPPRESSION_DECISION_KEYS,
+        );
+        if (Array.isArray(suppression.decision['evidence'])) {
+          for (const [evidenceIndex, evidence] of suppression.decision['evidence'].entries()) {
+            reportUnknownObjectKeys(
+              diagnostics,
+              evidence,
+              `suppressions[${index}].decision.evidence[${evidenceIndex}]`,
+              SUPPRESSION_EVIDENCE_KEYS,
+            );
+          }
+        }
+        reportUnknownObjectKeys(
+          diagnostics,
+          suppression.decision['invalidateOn'],
+          `suppressions[${index}].decision.invalidateOn`,
+          SUPPRESSION_INVALIDATION_KEYS,
+        );
+      }
     }
   }
 

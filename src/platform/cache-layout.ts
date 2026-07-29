@@ -1,20 +1,17 @@
-import { createHash } from 'node:crypto';
-import {
-  chmodSync,
-  closeSync,
-  existsSync,
-  fsyncSync,
-  lstatSync,
-  mkdirSync,
-  openSync,
-  readdirSync,
-  realpathSync,
-  unlinkSync,
-  writeSync,
-} from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import { chmodSync, existsSync, linkSync, lstatSync, readdirSync, realpathSync, unlinkSync, writeSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import type { ProjectConfig } from '../domain/types.js';
+import {
+  ensureDirectoryDurable,
+  mergeDirectorySyncStatus,
+  NODE_DIRECTORY_DURABILITY_RUNTIME,
+  syncDirectoryDurable,
+  type DirectoryDurabilityRuntime,
+  type DirectorySyncStatus,
+} from '../filesystem/durable-path.js';
+import { writeFileCompletely, type CompleteWritePort } from '../filesystem/file-descriptor.js';
 import {
   isPathInsideProject,
   normalizeSafeProjectRelativePath,
@@ -39,6 +36,32 @@ export interface CacheOwnershipProof {
   ownerSha256: string;
   physicalCacheDir: string;
 }
+
+export type CacheOwnershipPublicationResult =
+  | {
+      kind: 'existing';
+      cacheDir: string;
+    }
+  | {
+      kind: 'published';
+      cacheDir: string;
+      achievedDurability: 'file-flushed' | 'directory-durable';
+      directorySync: Exclude<DirectorySyncStatus, 'not-requested'>;
+    };
+
+export interface CacheOwnershipRuntime extends DirectoryDurabilityRuntime, CompleteWritePort {
+  randomToken(): string;
+  linkFile(source: string, target: string): void;
+  removeFile(path: string): void;
+}
+
+export const NODE_CACHE_OWNERSHIP_RUNTIME: CacheOwnershipRuntime = Object.freeze({
+  ...NODE_DIRECTORY_DURABILITY_RUNTIME,
+  randomToken: () => randomUUID(),
+  linkFile: (source: string, target: string) => linkSync(source, target),
+  removeFile: (path: string) => unlinkSync(path),
+  writeFile: (fd: number, bytes: Buffer, offset: number, length: number) => writeSync(fd, bytes, offset, length),
+});
 
 function unsafeCachePathError(configuredPath: string, reason: string): Error {
   return Object.assign(
@@ -132,9 +155,26 @@ export function resolveIndexStoragePaths(
   };
 }
 
-export function ensureOwnedCacheDir(projectRoot: string, cacheDir: string): string {
+export function ensureOwnedCacheDir(
+  projectRoot: string,
+  cacheDir: string,
+  runtime: CacheOwnershipRuntime = NODE_CACHE_OWNERSHIP_RUNTIME,
+): string {
+  return ensureOwnedCacheDirWithDurability(projectRoot, cacheDir, runtime).cacheDir;
+}
+
+/**
+ * Establishes the destructive-safety credential and reports the namespace
+ * guarantee achieved by the host. The path-only wrapper above is retained for
+ * compatibility; callers that make durability claims use this result.
+ */
+export function ensureOwnedCacheDirWithDurability(
+  projectRoot: string,
+  cacheDir: string,
+  runtime: CacheOwnershipRuntime = NODE_CACHE_OWNERSHIP_RUNTIME,
+): CacheOwnershipPublicationResult {
   const canonicalProjectRoot = realpathSync(projectRoot);
-  if (!existsSync(cacheDir)) mkdirPrivate(cacheDir);
+  const cacheDirectorySync = existsSync(cacheDir) ? 'synced' : mkdirPrivate(cacheDir, runtime);
   const physicalCacheDir = realpathSync(cacheDir);
   const ownerPath = join(physicalCacheDir, CACHE_OWNERSHIP_FILE);
 
@@ -142,9 +182,11 @@ export function ensureOwnedCacheDir(projectRoot: string, cacheDir: string): stri
     assertOwnedCacheDir(canonicalProjectRoot, physicalCacheDir);
     chmodPrivateFile(ownerPath);
     chmodPrivateDirectory(physicalCacheDir);
-    return physicalCacheDir;
+    return { kind: 'existing', cacheDir: physicalCacheDir };
   }
 
+  assertAdoptableLegacyCache(physicalCacheDir);
+  hardenLegacyCacheEntries(physicalCacheDir);
   assertAdoptableLegacyCache(physicalCacheDir);
   const record: CacheOwnershipRecord = {
     schemaVersion: CACHE_OWNERSHIP_SCHEMA_VERSION,
@@ -154,23 +196,21 @@ export function ensureOwnedCacheDir(projectRoot: string, cacheDir: string): stri
   };
   const payload = `${JSON.stringify(record, null, 2)}\n`;
   try {
-    writeNewPrivateFile(ownerPath, payload);
+    const credentialDirectorySync = publishPrivateOwnershipFile(ownerPath, payload, runtime);
+    const directorySync = mergeDirectorySyncStatus(cacheDirectorySync, credentialDirectorySync);
+    return {
+      kind: 'published',
+      cacheDir: physicalCacheDir,
+      achievedDurability: directorySync === 'synced' ? 'directory-durable' : 'file-flushed',
+      directorySync,
+    };
   } catch (error) {
     if (isAlreadyExistsError(error)) {
       assertOwnedCacheDir(canonicalProjectRoot, physicalCacheDir);
-      return physicalCacheDir;
+      return { kind: 'existing', cacheDir: physicalCacheDir };
     }
     throw error;
   }
-
-  try {
-    assertAdoptableLegacyCache(physicalCacheDir);
-    hardenLegacyCacheEntries(physicalCacheDir);
-  } catch (error) {
-    unlinkSync(ownerPath);
-    throw error;
-  }
-  return physicalCacheDir;
 }
 
 export function assertOwnedCacheDir(projectRoot: string, cacheDir: string): CacheOwnershipProof {
@@ -295,6 +335,7 @@ function assertAdoptableLegacyCache(cacheDir: string): void {
 }
 
 function isRecognizedCacheEntry(name: string): boolean {
+  if (name.startsWith(`${CACHE_OWNERSHIP_FILE}.tmp-`)) return true;
   if (
     [
       '.scipquery-generations',
@@ -357,18 +398,50 @@ function hardenTree(root: string): void {
   for (const name of readdirSync(root)) hardenTree(join(root, name));
 }
 
-function mkdirPrivate(path: string): void {
-  mkdirSync(path, { recursive: true, mode: 0o700 });
+function mkdirPrivate(
+  path: string,
+  runtime: DirectoryDurabilityRuntime = NODE_DIRECTORY_DURABILITY_RUNTIME,
+): Exclude<DirectorySyncStatus, 'not-requested'> {
+  const directorySync = ensureDirectoryDurable(path, runtime);
   chmodPrivateDirectory(path);
+  return directorySync;
 }
 
-function writeNewPrivateFile(path: string, payload: string): void {
-  const descriptor = openSync(path, 'wx', 0o600);
+function publishPrivateOwnershipFile(
+  path: string,
+  payload: string,
+  runtime: CacheOwnershipRuntime,
+): Exclude<DirectorySyncStatus, 'not-requested'> {
+  const candidate = `${path}.tmp-${process.pid}-${runtime.randomToken()}`;
+  let descriptor: number | undefined;
+  let candidateOwned = false;
   try {
-    writeSync(descriptor, payload);
-    fsyncSync(descriptor);
+    descriptor = runtime.openFile(candidate, 'wx', 0o600);
+    candidateOwned = true;
+    writeFileCompletely(descriptor, Buffer.from(payload), runtime, 'cache ownership record');
+    runtime.syncFile(descriptor);
+    runtime.closeFile(descriptor);
+    descriptor = undefined;
+    runtime.linkFile(candidate, path);
+    const publicationDirectorySync = syncDirectoryDurable(dirname(path), runtime);
+    runtime.removeFile(candidate);
+    candidateOwned = false;
+    return mergeDirectorySyncStatus(publicationDirectorySync, syncDirectoryDurable(dirname(path), runtime));
   } finally {
-    closeSync(descriptor);
+    if (descriptor !== undefined) {
+      try {
+        runtime.closeFile(descriptor);
+      } catch {
+        // Preserve the primary write or synchronization failure.
+      }
+    }
+    if (candidateOwned) {
+      try {
+        runtime.removeFile(candidate);
+      } catch {
+        // A failed create or injected filesystem fault may leave no candidate.
+      }
+    }
   }
 }
 

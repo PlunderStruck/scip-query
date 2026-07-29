@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   fileContentHash,
   projectEvidenceFingerprint,
@@ -10,9 +10,14 @@ import {
 } from '../../src/storage/evidence-cache.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { getSourceText } from '../../src/source/primitives/source-text.js';
-import { findEnclosingDefinition, getDefinitionsForFile } from '../../src/symbols/definition-catalog.js';
+import {
+  findEnclosingDefinition,
+  getDefinitionsForFile,
+  getScopedDefinitionsMatchingSymbols,
+} from '../../src/symbols/definition-catalog.js';
 import type { IndexedDefinition } from '../../src/domain/types.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
+import { isCallableSymbol } from '../../src/symbols/symbol-parser.js';
 
 function definition(symbol: string, startLine: number, endLine: number, symbolId: number): IndexedDefinition {
   return {
@@ -45,6 +50,70 @@ describe('definition catalog line ownership', () => {
     expect(findEnclosingDefinition(definitions, 7)).toBe(equalFirst);
     expect(findEnclosingDefinition(definitions, 1)).toBe(outer);
     expect(findEnclosingDefinition(definitions, 99)).toBeNull();
+  });
+});
+
+describe('scoped matched definition cache', () => {
+  it('reuses an exact matcher/scope query without exposing the cached array to mutation', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-scoped-definition-cache-'));
+    const projectRoot = join(tempDir, 'project');
+    const dbPath = join(tempDir, 'index.db');
+    writeFixtureFiles(projectRoot, {
+      'src/example.ts': [
+        'export function alpha() {',
+        '  return 1;',
+        '}',
+        'export function beta() {',
+        '  return 2;',
+        '}',
+      ],
+    });
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/example.ts')
+      .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`example.ts`/alpha().', 'alpha', 12)
+      .symbol(2, 'scip-typescript npm fixture 1.0.0 src/`example.ts`/beta().', 'beta', 12)
+      .definition(1, 1, 1, 0, 0, 2, 1)
+      .definition(2, 1, 2, 3, 0, 5, 1)
+      .chunk(1, 1, 0, 2)
+      .chunk(2, 1, 3, 5)
+      .mention(1, 1, 1)
+      .mention(2, 2, 1)
+      .write();
+
+    const db = new ScipDatabase({
+      projectRoot,
+      dbPath,
+      indexPath: join(tempDir, 'index.scip'),
+    });
+    const allSpy = vi.spyOn(db, 'all');
+    try {
+      const first = getScopedDefinitionsMatchingSymbols(db, {
+        scope: 'src',
+        symbolMatches: isCallableSymbol,
+        sqlPrefilter: 'callable',
+      });
+      expect(first).toHaveLength(2);
+      const callsAfterFirst = allSpy.mock.calls.length;
+      first.pop();
+
+      const second = getScopedDefinitionsMatchingSymbols(db, {
+        scope: 'src',
+        symbolMatches: isCallableSymbol,
+        sqlPrefilter: 'callable',
+      });
+      expect(second).toHaveLength(2);
+      expect(allSpy).toHaveBeenCalledTimes(callsAfterFirst);
+
+      getScopedDefinitionsMatchingSymbols(db, {
+        scope: 'src',
+        symbolMatches: (symbol) => isCallableSymbol(symbol),
+        sqlPrefilter: 'callable',
+      });
+      expect(allSpy.mock.calls.length).toBeGreaterThan(callsAfterFirst);
+    } finally {
+      db.close();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });
 

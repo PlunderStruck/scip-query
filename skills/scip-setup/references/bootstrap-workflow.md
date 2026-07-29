@@ -58,15 +58,14 @@ every written, skipped, or blocked artifact.
 
 ```bash
 scip-query doctor
-scip-query status --json
+scip-query status
 scip-query capabilities --matrix
-scip-query config-validate --json
+scip-query config-validate
 ```
 
-`doctor` is the human diagnostic surface for config, index freshness, and
-dependency readiness. `status --json` is the machine surface for freshness
-and config. `capabilities --matrix` reports which evidence/verification
-capabilities are available. `config-validate --json` validates
+`doctor` reports config, index freshness, and dependency readiness. `status`
+reports freshness and config. `capabilities --matrix` reports which
+evidence/verification capabilities are available. `config-validate` validates
 `.scipquery.json`.
 
 Fix missing indexers, stale indexes, invalid config, or unavailable
@@ -84,8 +83,8 @@ language and how to interpret `stopped`/idle service states.
 
 ```bash
 scip-query status --capabilities
-scip-query reindex --json
-scip-query watch --status --json
+scip-query reindex
+scip-query watch --status
 ```
 
 Complete only when every selected language has an explicit
