@@ -1251,6 +1251,39 @@ describe('watch command config gate', () => {
       lastActivityAt: now,
       watcher: { state: 'idle' },
       indexGeneration,
+      reindexActivity: {
+        confidence: 'complete',
+        recordsRead: 2,
+        invalidRecords: 0,
+        skippedRecords: 0,
+        readErrors: 0,
+        ignoredPartialTailBytes: 0,
+        windowStartedAt: now,
+        windowEndedAt: now,
+        runs: 2,
+        rebuilt: 1,
+        reused: 1,
+        failed: 0,
+        suppressed: 0,
+        estimatedLogicalOutputBytes: 4_096,
+        estimatedWriteBytes: 4_096,
+        reflinkedBytes: 0,
+        fallbackCopiedBytes: 0,
+        languageAttribution: 'partial',
+        attributedRuns: 1,
+        unattributedRuns: 1,
+        invalidLanguageDetails: 0,
+        byLanguage: {
+          typescript: {
+            runs: 1,
+            rebuilt: 1,
+            reused: 0,
+            producedOutputBytes: 1_024,
+            durationMs: 1_500,
+          },
+        },
+        byTrigger: { 'manual-cli': 2 },
+      },
       refreshRequests: {
         pending: 2,
         claimed: 0,
@@ -1274,12 +1307,29 @@ describe('watch command config gate', () => {
       const payload = JSON.parse(writes[0]!) as { result: Record<string, unknown> };
       expect(payload.result.indexGeneration).toBe(indexGeneration);
       expect(payload.result.refreshRequests).toMatchObject({ pending: 2, claimed: 0, completed: 0, expired: 0 });
+      expect(payload.result.reindexActivity).toMatchObject({
+        languageAttribution: 'partial',
+        byLanguage: {
+          typescript: {
+            runs: 1,
+            rebuilt: 1,
+            reused: 0,
+            producedOutputBytes: 1_024,
+            durationMs: 1_500,
+          },
+        },
+      });
 
       log.mockClear();
       handleWatch({ status: true });
-      expect(log.mock.calls.map((call) => String(call[0])).join('\n')).toContain('Index generation: aaaaaaaaaaaa');
-      expect(log.mock.calls.map((call) => String(call[0])).join('\n')).toContain(
-        'Refresh requests: 2 pending, 0 claimed, 0 completed, 0 expired',
+      const rendered = log.mock.calls.map((call) => String(call[0])).join('\n');
+      expect(rendered).toContain('Index generation: aaaaaaaaaaaa');
+      expect(rendered).toContain('Refresh requests: 2 pending, 0 claimed, 0 completed, 0 expired');
+      expect(rendered).toContain(
+        'Reindex language typescript: 1 run(s) (1 rebuilt, 0 reused), 1 KB produced, 1.5 s cumulative indexer time',
+      );
+      expect(rendered).toContain(
+        'Reindex language attribution: partial; 1 completed run(s) unattributed, 0 invalid detail(s) ignored',
       );
     } finally {
       stdout.mockRestore();

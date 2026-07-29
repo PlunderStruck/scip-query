@@ -46,6 +46,16 @@ export interface LastRefreshMetadata {
   error?: string;
 }
 
+export interface ReindexLanguageActivitySummary {
+  runs: number;
+  rebuilt: number;
+  reused: number;
+  /** Bytes emitted for this language's top-level cached SCIP shard. Reused shards contribute zero. */
+  producedOutputBytes: number;
+  /** Cumulative indexer time for rebuilt top-level shards; this is not end-to-end wall time. */
+  durationMs: number;
+}
+
 export interface ReindexActivitySummary {
   /** Absent only on legacy watch-state records written before confidence reporting. */
   confidence?: 'complete' | 'partial' | 'unavailable';
@@ -72,5 +82,14 @@ export interface ReindexActivitySummary {
   oldestRebuildAt?: string;
   /** Oldest run with estimated physical writes retained inside this summary window. */
   oldestWriteAt?: string;
+  /**
+   * Completeness of optional top-level language-shard attribution. Aggregate
+   * admission evidence remains authoritative when this field is partial.
+   */
+  languageAttribution?: 'complete' | 'partial' | 'unavailable';
+  attributedRuns?: number;
+  unattributedRuns?: number;
+  invalidLanguageDetails?: number;
+  byLanguage?: Partial<Record<SupportedLanguage, ReindexLanguageActivitySummary>>;
   byTrigger: Partial<Record<RefreshTriggerKind, number>>;
 }

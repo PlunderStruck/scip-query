@@ -876,7 +876,15 @@ Large staging artifacts use copy-on-write clones where the filesystem supports
 them and fall back to full byte copies only when clone capability is genuinely
 unavailable. Status separates logical output, reflinked staging bytes, and
 fallback-copied bytes so a large logical index is not mistaken for the same
-amount of physical disk traffic.
+amount of physical disk traffic. It also reports each top-level language
+shard's rebuild/reuse count, bytes newly produced, and cumulative indexer time.
+Those language rows intentionally exclude TypeScript workspace-project detail
+so one top-level language artifact is counted once. Final merged SCIP/SQLite
+outputs, reflink staging, and fallback byte copies remain project aggregates:
+after languages are merged, assigning those shared bytes to one language would
+be a guess rather than measurement. Ledgers written before language
+attribution remain valid and status labels their completed runs as
+unattributed.
 
 Stopping is an asynchronous drain: the watcher first rejects new
 refreshes, continuously consumes a bounded tail of the active worker's output,
@@ -925,8 +933,11 @@ and process-tree reap before a replacement starts; an unproven shutdown blocks
 replacement instead of allowing overlapping language servers.
 It also reports a rolling 24-hour reindex activity summary: rebuilt, reused,
 failed, and freshness-proven suppressed refreshes plus estimated logical output
-bytes. The estimate counts scip-query artifacts emitted by rebuilt refreshes;
-it is not a measurement of physical SSD writes. The underlying
+bytes. Per-language rows report the top-level cached shard bytes actually
+produced and the cumulative time spent in that language's indexer; reused
+shards contribute zero produced bytes and zero indexer time. The aggregate
+estimate counts all scip-query artifacts emitted by rebuilt refreshes; neither
+that estimate nor the language rows measure physical SSD writes. The underlying
 `reindex-activity.jsonl` history uses two bounded 1 MiB segments. Append,
 rotation, and retained-set reads share a process-instance lock; incomplete
 crash tails are trimmed or ignored without deleting earlier complete lines.

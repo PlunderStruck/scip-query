@@ -494,6 +494,21 @@ aggregate admission evidence.
 
 Commit: `feat: report per-language reindex cost`.
 
+Result: **complete.** Each completed run now stores one compact cost row per
+top-level language shard: rebuilt/reused state, current shard size, newly
+produced bytes, and cumulative indexer time. TypeScript workspace project
+shards remain available in command diagnostics but are deliberately rolled up
+before the bounded ledger is written. The decoder preserves aggregate
+admission evidence from old records and from records containing unknown future
+language entries while reporting language attribution as complete, partial, or
+unavailable. Human and JSON watch status expose the summary, and README
+documentation distinguishes language-produced bytes from unassignable merged
+SCIP/SQLite and staging costs. Focused state, ledger, and runtime coverage
+passes at 77/77; typecheck, ESLint, build, and the public API compatibility
+gate pass. Diff-gate's duplicate-helper finding was fixed; its remaining
+architecture citation advisory was inspected and the cited watch-state
+contract remains the intended target.
+
 ### Slice 8 — Program closure
 
 Deployable: yes; documentation/test-only unless verification finds a defect.

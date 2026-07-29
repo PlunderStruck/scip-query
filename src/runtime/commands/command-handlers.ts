@@ -1841,6 +1841,24 @@ function renderWatchServiceReport(report: ReturnType<typeof watchServiceReport>)
           `${formatBytes(activity.fallbackCopiedBytes ?? 0)} byte-copied`,
       );
     }
+    for (const [language, detail] of Object.entries(activity.byLanguage ?? {}).sort(([left], [right]) =>
+      left.localeCompare(right),
+    )) {
+      if (!detail) continue;
+      console.log(
+        `Reindex language ${language}: ${detail.runs} run(s) ` +
+          `(${detail.rebuilt} rebuilt, ${detail.reused} reused), ` +
+          `${formatBytes(detail.producedOutputBytes)} produced, ` +
+          `${formatIndexerDuration(detail.durationMs)} cumulative indexer time`,
+      );
+    }
+    if (activity.languageAttribution && activity.languageAttribution !== 'complete') {
+      console.log(
+        `Reindex language attribution: ${activity.languageAttribution}; ` +
+          `${activity.unattributedRuns ?? 0} completed run(s) unattributed, ` +
+          `${activity.invalidLanguageDetails ?? 0} invalid detail(s) ignored`,
+      );
+    }
     if (activity.confidence && activity.confidence !== 'complete') {
       console.log(
         `Reindex evidence: ${activity.recordsRead ?? 0} record(s) read, ` +
@@ -2090,6 +2108,10 @@ function formatLastRefresh(refresh: NonNullable<IndexFreshness['lastRefresh']>):
   const detail = refresh.trigger.detail ? ` (${refresh.trigger.detail})` : '';
   const error = refresh.error ? `: ${refresh.error}` : '';
   return `${refresh.result} by ${refresh.trigger.kind}${detail} in ${seconds}s at ${refresh.completedAt}${error}`;
+}
+
+function formatIndexerDuration(durationMs: number): string {
+  return durationMs < 1_000 ? `${durationMs} ms` : `${(durationMs / 1_000).toFixed(1)} s`;
 }
 
 function statusStats(exists: boolean):

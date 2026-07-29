@@ -1,7 +1,12 @@
 import { join } from 'node:path';
 
 import type { LastRefreshMetadata, ReindexActivitySummary, WatcherStatus } from '../domain/types.js';
-import { isNonNegativeInteger, isValidRecordTimestamp } from '../domain/record-validation.js';
+import { SUPPORTED_LANGUAGES } from '../domain/config-types.js';
+import {
+  isNonNegativeFiniteNumber,
+  isNonNegativeInteger,
+  isValidRecordTimestamp,
+} from '../domain/record-validation.js';
 import { parseProcessIdentity, type ProcessIdentity } from './process-identity.js';
 import { readSmallArtifactText } from './bounded-file.js';
 
@@ -231,13 +236,48 @@ function validReindexActivitySummary(value: unknown): value is ReindexActivitySu
     (summary.fallbackCopiedBytes !== undefined && !isNonNegativeInteger(summary.fallbackCopiedBytes)) ||
     (summary.oldestRebuildAt !== undefined && !isValidWatchServiceTimestamp(summary.oldestRebuildAt)) ||
     (summary.oldestWriteAt !== undefined && !isValidWatchServiceTimestamp(summary.oldestWriteAt)) ||
+    (summary.languageAttribution !== undefined &&
+      summary.languageAttribution !== 'complete' &&
+      summary.languageAttribution !== 'partial' &&
+      summary.languageAttribution !== 'unavailable') ||
+    (summary.attributedRuns !== undefined && !isNonNegativeInteger(summary.attributedRuns)) ||
+    (summary.unattributedRuns !== undefined && !isNonNegativeInteger(summary.unattributedRuns)) ||
+    (summary.invalidLanguageDetails !== undefined && !isNonNegativeInteger(summary.invalidLanguageDetails)) ||
     summary.estimatedLogicalOutputBytes! < 0 ||
     !summary.byTrigger ||
-    typeof summary.byTrigger !== 'object'
+    typeof summary.byTrigger !== 'object' ||
+    Array.isArray(summary.byTrigger) ||
+    (summary.byLanguage !== undefined && !validLanguageActivitySummary(summary.byLanguage))
   ) {
     return false;
   }
   return Object.values(summary.byTrigger).every((count) => count === undefined || isNonNegativeInteger(count));
+}
+
+function validLanguageActivitySummary(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  for (const [language, candidate] of Object.entries(value)) {
+    if (!(SUPPORTED_LANGUAGES as readonly string[]).includes(language)) return false;
+    if (!candidate || typeof candidate !== 'object') return false;
+    const summary = candidate as {
+      runs?: unknown;
+      rebuilt?: unknown;
+      reused?: unknown;
+      producedOutputBytes?: unknown;
+      durationMs?: unknown;
+    };
+    if (
+      !isNonNegativeInteger(summary.runs) ||
+      !isNonNegativeInteger(summary.rebuilt) ||
+      !isNonNegativeInteger(summary.reused) ||
+      !isNonNegativeInteger(summary.producedOutputBytes) ||
+      !isNonNegativeFiniteNumber(summary.durationMs) ||
+      summary.rebuilt + summary.reused !== summary.runs
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function validWatchRefreshRequestStatus(value: unknown): value is WatchRefreshRequestStatusSnapshot {

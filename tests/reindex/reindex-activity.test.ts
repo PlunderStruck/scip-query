@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -18,6 +18,7 @@ import {
   type ReindexActivityRecord,
 } from '../../src/reindex/reindex-activity.js';
 import { resolveWatchConfig } from '../../src/runtime/config.js';
+import type { SupportedLanguage } from '../../src/domain/types.js';
 
 const tempDirs: string[] = [];
 
@@ -87,6 +88,19 @@ describe('reindex activity', () => {
         fallbackCopiedBytes: 0,
         oldestRebuildAt: '2026-07-24T12:00:00.000Z',
         oldestWriteAt: '2026-07-24T12:00:00.000Z',
+        languageAttribution: 'complete',
+        attributedRuns: 2,
+        unattributedRuns: 0,
+        invalidLanguageDetails: 0,
+        byLanguage: {
+          typescript: {
+            runs: 2,
+            rebuilt: 1,
+            reused: 1,
+            producedOutputBytes: 10,
+            durationMs: 3,
+          },
+        },
         byTrigger: { 'manual-cli': 2, 'watch-source': 1 },
       }),
     );
@@ -103,6 +117,168 @@ describe('reindex activity', () => {
         runs: 0,
         rebuilt: 0,
         estimatedWriteBytes: 0,
+        languageAttribution: 'complete',
+        attributedRuns: 0,
+        unattributedRuns: 0,
+      }),
+    );
+  });
+
+  it('attributes each top-level language once without retaining project-shard detail', () => {
+    const cacheDir = createCache();
+    const outputDb = join(cacheDir, 'index.db');
+    const outputScip = join(cacheDir, 'index.scip');
+    const languageDir = join(cacheDir, 'language-indexes');
+    mkdirSync(languageDir);
+    writeFileSync(outputDb, 'database');
+    writeFileSync(outputScip, 'scip');
+    writeFileSync(join(languageDir, 'typescript.scip'), 'typescript');
+    writeFileSync(join(languageDir, 'rust.scip'), 'rust');
+
+    recordReindexRunActivity(
+      outputDb,
+      result({
+        outputDb,
+        outputScip,
+        completedAt: '2026-07-24T12:00:00.000Z',
+        result: 'rebuilt',
+        reused: false,
+        languages: ['typescript', 'rust'],
+        shards: [
+          {
+            id: 'typescript:packages/app/tsconfig.json',
+            language: 'typescript',
+            reused: false,
+            fingerprint: 'abc',
+            outputBytes: 100,
+            durationMs: 8,
+          },
+          {
+            id: 'typescript:packages/lib/tsconfig.json',
+            language: 'typescript',
+            reused: true,
+            fingerprint: 'def',
+            outputBytes: 200,
+            durationMs: 0,
+          },
+          {
+            id: 'rust',
+            language: 'rust',
+            reused: true,
+            fingerprint: 'ghi',
+            outputBytes: 4,
+            durationMs: 0,
+          },
+        ],
+      }),
+    );
+
+    const raw = JSON.parse(readFileSync(reindexActivityPath(outputDb), 'utf8')) as {
+      byLanguage: Record<string, unknown>;
+    };
+    expect(Object.keys(raw.byLanguage)).toEqual(['typescript', 'rust']);
+    expect(raw.byLanguage).not.toHaveProperty('typescript:packages/app/tsconfig.json');
+    expect(raw.byLanguage).toEqual({
+      typescript: {
+        result: 'rebuilt',
+        outputBytes: 10,
+        producedOutputBytes: 10,
+        durationMs: 8,
+      },
+      rust: {
+        result: 'reused',
+        outputBytes: 4,
+        producedOutputBytes: 0,
+        durationMs: 0,
+      },
+    });
+
+    expect(readReindexActivitySummary(outputDb, new Date('2026-07-24T15:00:00.000Z'))).toEqual(
+      expect.objectContaining({
+        languageAttribution: 'complete',
+        attributedRuns: 1,
+        unattributedRuns: 0,
+        byLanguage: {
+          typescript: {
+            runs: 1,
+            rebuilt: 1,
+            reused: 0,
+            producedOutputBytes: 10,
+            durationMs: 8,
+          },
+          rust: {
+            runs: 1,
+            rebuilt: 0,
+            reused: 1,
+            producedOutputBytes: 0,
+            durationMs: 0,
+          },
+        },
+      }),
+    );
+  });
+
+  it('keeps aggregate evidence when future language detail cannot be decoded', () => {
+    const cacheDir = createCache();
+    const outputDb = join(cacheDir, 'index.db');
+    writeFileSync(
+      reindexActivityPath(outputDb),
+      `${JSON.stringify({
+        ...runRecord('2026-07-24T12:00:00.000Z'),
+        byLanguage: {
+          typescript: {
+            result: 'rebuilt',
+            outputBytes: 7,
+            producedOutputBytes: 7,
+            durationMs: 4,
+          },
+          futurelang: {
+            result: 'rebuilt',
+            outputBytes: 99,
+            producedOutputBytes: 99,
+            durationMs: 12,
+          },
+        },
+      })}\n`,
+    );
+
+    expect(readReindexActivitySummary(outputDb, new Date('2026-07-24T15:00:00.000Z'))).toEqual(
+      expect.objectContaining({
+        confidence: 'complete',
+        runs: 1,
+        rebuilt: 1,
+        estimatedLogicalOutputBytes: 10,
+        languageAttribution: 'partial',
+        attributedRuns: 1,
+        unattributedRuns: 0,
+        invalidLanguageDetails: 1,
+        byLanguage: {
+          typescript: {
+            runs: 1,
+            rebuilt: 1,
+            reused: 0,
+            producedOutputBytes: 7,
+            durationMs: 4,
+          },
+        },
+      }),
+    );
+  });
+
+  it('reads legacy run records as valid aggregate evidence with unavailable language attribution', () => {
+    const cacheDir = createCache();
+    const outputDb = join(cacheDir, 'index.db');
+    appendReindexActivity(reindexActivityPath(outputDb), runRecord('2026-07-24T12:00:00.000Z'));
+
+    expect(readReindexActivitySummary(outputDb, new Date('2026-07-24T15:00:00.000Z'))).toEqual(
+      expect.objectContaining({
+        confidence: 'complete',
+        runs: 1,
+        rebuilt: 1,
+        languageAttribution: 'unavailable',
+        attributedRuns: 0,
+        unattributedRuns: 1,
+        byLanguage: {},
       }),
     );
   });
@@ -307,11 +483,7 @@ describe('reindex activity', () => {
       expect.objectContaining({ state: 'paused', reason: 'rebuild-count', rebuilt: 2 }),
     );
     expect(
-      evaluateReindexActivityBudget(
-        { ...summary, rebuilt: 1, estimatedWriteBytes: 1024 * 1024 * 1024 },
-        config,
-        nowMs,
-      ),
+      evaluateReindexActivityBudget({ ...summary, rebuilt: 1, estimatedWriteBytes: 1024 * 1024 * 1024 }, config, nowMs),
     ).toEqual(expect.objectContaining({ state: 'paused', reason: 'estimated-write-bytes' }));
     expect(
       evaluateReindexActivityBudget(
@@ -405,10 +577,11 @@ function result(input: {
   completedAt: string;
   result: 'rebuilt' | 'reused';
   reused: boolean;
+  languages?: SupportedLanguage[];
   shards?: ReindexResult['shards'];
 }): ReindexResult {
   return {
-    languages: ['typescript'],
+    languages: input.languages ?? ['typescript'],
     indexPath: input.outputScip,
     dbPath: input.outputDb,
     durationMs: 5,

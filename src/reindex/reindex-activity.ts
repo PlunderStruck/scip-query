@@ -6,9 +6,16 @@ import type {
   RefreshTrigger,
   RefreshTriggerKind,
   ReindexActivitySummary,
+  ReindexLanguageActivitySummary,
+  SupportedLanguage,
   WatchResourceBudgetConfig,
 } from '../domain/types.js';
-import { isNonNegativeFiniteNumber, isValidRecordTimestamp } from '../domain/record-validation.js';
+import { SUPPORTED_LANGUAGES } from '../domain/config-types.js';
+import {
+  isNonNegativeFiniteNumber,
+  isNonNegativeInteger,
+  isValidRecordTimestamp,
+} from '../domain/record-validation.js';
 import type { ReindexResult } from './index.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
 import {
@@ -34,6 +41,17 @@ export interface ReindexRunActivity {
   estimatedWriteBytes?: number;
   reflinkedBytes?: number;
   fallbackCopiedBytes?: number;
+  byLanguage?: Partial<Record<SupportedLanguage, ReindexRunLanguageActivity>>;
+}
+
+export interface ReindexRunLanguageActivity {
+  result: 'rebuilt' | 'reused';
+  /** Size of the top-level cached SCIP shard after this run. */
+  outputBytes: number;
+  /** Bytes newly produced by this run. Reused shards always contribute zero. */
+  producedOutputBytes: number;
+  /** Indexer time for this language; reused shards always contribute zero. */
+  durationMs: number;
 }
 
 interface ReindexSuppressedActivity {
@@ -83,6 +101,7 @@ export function recordReindexRunActivity(outputDb: string, result: ReindexResult
     estimatedWriteBytes: estimatedLogicalOutputBytes + (result.writeTelemetry?.fallbackCopiedBytes ?? 0),
     reflinkedBytes: result.writeTelemetry?.reflinkedBytes ?? 0,
     fallbackCopiedBytes: result.writeTelemetry?.fallbackCopiedBytes ?? 0,
+    byLanguage: summarizeLanguageActivity(result),
   });
 }
 
@@ -160,6 +179,11 @@ export function readReindexActivitySummary(
     estimatedWriteBytes: 0,
     reflinkedBytes: 0,
     fallbackCopiedBytes: 0,
+    languageAttribution: 'complete',
+    attributedRuns: 0,
+    unattributedRuns: 0,
+    invalidLanguageDetails: 0,
+    byLanguage: {},
     byTrigger: {},
   };
   const path = reindexActivityPath(outputDb);
@@ -193,17 +217,19 @@ export function readReindexActivitySummary(
   }
   for (const line of lines) {
     summary.recordsRead += 1;
-    const record = parseReindexActivityRecord(line);
-    if (!record) {
+    const parsed = parseReindexActivityRecord(line);
+    if (!parsed) {
       summary.invalidRecords += 1;
       if (summary.confidence !== 'unavailable') summary.confidence = 'partial';
       continue;
     }
+    const { record } = parsed;
     const recordedAtMs = Date.parse(record.recordedAt);
     if (recordedAtMs < startedAtMs || recordedAtMs > endedAtMs) {
       summary.skippedRecords += 1;
       continue;
     }
+    summary.invalidLanguageDetails = (summary.invalidLanguageDetails ?? 0) + parsed.invalidLanguageDetails;
     summary.byTrigger[record.trigger.kind] = (summary.byTrigger[record.trigger.kind] ?? 0) + 1;
     if (record.event === 'suppressed') {
       summary.suppressed += 1;
@@ -216,6 +242,20 @@ export function readReindexActivitySummary(
       (summary.estimatedWriteBytes ?? 0) + (record.estimatedWriteBytes ?? record.estimatedLogicalOutputBytes);
     summary.reflinkedBytes = (summary.reflinkedBytes ?? 0) + (record.reflinkedBytes ?? 0);
     summary.fallbackCopiedBytes = (summary.fallbackCopiedBytes ?? 0) + (record.fallbackCopiedBytes ?? 0);
+    if (record.result !== 'failed') {
+      if (parsed.hasLanguageDetails) {
+        summary.attributedRuns = (summary.attributedRuns ?? 0) + 1;
+      } else {
+        summary.unattributedRuns = (summary.unattributedRuns ?? 0) + 1;
+      }
+    }
+    for (const [language, detail] of typedLanguageEntries(record.byLanguage)) {
+      const languageSummary = ((summary.byLanguage ??= {})[language] ??= emptyLanguageSummary());
+      languageSummary.runs += 1;
+      languageSummary[detail.result] += 1;
+      languageSummary.producedOutputBytes += detail.producedOutputBytes;
+      languageSummary.durationMs += detail.durationMs;
+    }
     if (record.result === 'rebuilt' && summary.oldestRebuildAt === undefined) {
       summary.oldestRebuildAt = record.recordedAt;
     }
@@ -226,6 +266,7 @@ export function readReindexActivitySummary(
   if (summary.ignoredPartialTailBytes > 0 && summary.confidence !== 'unavailable') {
     summary.confidence = 'partial';
   }
+  summary.languageAttribution = languageAttribution(summary);
   return summary;
 }
 
@@ -238,7 +279,13 @@ function writeReindexActivityBestEffort(path: string, record: ReindexActivityRec
   }
 }
 
-function parseReindexActivityRecord(line: string): ReindexActivityRecord | null {
+interface ParsedReindexActivityRecord {
+  record: ReindexActivityRecord;
+  hasLanguageDetails: boolean;
+  invalidLanguageDetails: number;
+}
+
+function parseReindexActivityRecord(line: string): ParsedReindexActivityRecord | null {
   try {
     const value = JSON.parse(line) as unknown;
     if (!value || typeof value !== 'object') return null;
@@ -252,7 +299,13 @@ function parseReindexActivityRecord(line: string): ReindexActivityRecord | null 
       return null;
     }
     if (record.event === 'suppressed') {
-      return record.reason === 'completed-index-is-fresh' ? (record as ReindexSuppressedActivity) : null;
+      return record.reason === 'completed-index-is-fresh'
+        ? {
+            record: record as ReindexSuppressedActivity,
+            hasLanguageDetails: false,
+            invalidLanguageDetails: 0,
+          }
+        : null;
     }
     if (
       record.event !== 'run' ||
@@ -265,7 +318,18 @@ function parseReindexActivityRecord(line: string): ReindexActivityRecord | null 
     ) {
       return null;
     }
-    return record as ReindexRunActivity;
+    const runRecord = record as ReindexRunActivity;
+    const { byLanguage: _untrustedByLanguage, ...baseRecord } = runRecord;
+    const parsedLanguages = parseLanguageActivity(_untrustedByLanguage);
+    const sanitized: ReindexRunActivity = {
+      ...baseRecord,
+      ...(parsedLanguages.byLanguage ? { byLanguage: parsedLanguages.byLanguage } : {}),
+    };
+    return {
+      record: sanitized,
+      hasLanguageDetails: parsedLanguages.hasLanguageDetails,
+      invalidLanguageDetails: parsedLanguages.invalidLanguageDetails,
+    };
   } catch {
     return null;
   }
@@ -362,6 +426,100 @@ function fileSize(path: string): number {
   } catch {
     return 0;
   }
+}
+
+function summarizeLanguageActivity(
+  result: ReindexResult,
+): Partial<Record<SupportedLanguage, ReindexRunLanguageActivity>> {
+  const byLanguage: Partial<Record<SupportedLanguage, ReindexRunLanguageActivity>> = {};
+  for (const language of result.languages) {
+    const diagnostics = (result.shards ?? []).filter((shard) => shard.language === language);
+    const topLevel = diagnostics.find((shard) => shard.id === language);
+    const reused =
+      result.reused ||
+      (topLevel ? topLevel.reused : diagnostics.length > 0 && diagnostics.every((shard) => shard.reused));
+    const cachedOutputBytes = fileSize(join(dirname(result.dbPath), 'language-indexes', `${language}.scip`));
+    const outputBytes = cachedOutputBytes > 0 ? cachedOutputBytes : (topLevel?.outputBytes ?? cachedOutputBytes);
+    const durationMs = reused
+      ? 0
+      : (topLevel?.durationMs ??
+        diagnostics.filter((shard) => !shard.reused).reduce((total, shard) => total + shard.durationMs, 0));
+    byLanguage[language] = {
+      result: reused ? 'reused' : 'rebuilt',
+      outputBytes,
+      producedOutputBytes: reused ? 0 : outputBytes,
+      durationMs,
+    };
+  }
+  return byLanguage;
+}
+
+function parseLanguageActivity(value: unknown): {
+  byLanguage?: Partial<Record<SupportedLanguage, ReindexRunLanguageActivity>>;
+  hasLanguageDetails: boolean;
+  invalidLanguageDetails: number;
+} {
+  if (value === undefined) return { hasLanguageDetails: false, invalidLanguageDetails: 0 };
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { hasLanguageDetails: false, invalidLanguageDetails: 1 };
+  }
+  const byLanguage: Partial<Record<SupportedLanguage, ReindexRunLanguageActivity>> = {};
+  let invalidLanguageDetails = 0;
+  for (const [language, detail] of Object.entries(value)) {
+    if (!isSupportedLanguage(language) || !isValidLanguageActivity(detail)) {
+      invalidLanguageDetails += 1;
+      continue;
+    }
+    byLanguage[language] = detail;
+  }
+  const hasLanguageDetails = Object.keys(byLanguage).length > 0;
+  return {
+    ...(hasLanguageDetails ? { byLanguage } : {}),
+    hasLanguageDetails,
+    invalidLanguageDetails,
+  };
+}
+
+function isValidLanguageActivity(value: unknown): value is ReindexRunLanguageActivity {
+  if (!value || typeof value !== 'object') return false;
+  const detail = value as Partial<ReindexRunLanguageActivity>;
+  return (
+    (detail.result === 'rebuilt' || detail.result === 'reused') &&
+    isNonNegativeInteger(detail.outputBytes) &&
+    isNonNegativeInteger(detail.producedOutputBytes) &&
+    isNonNegativeFiniteNumber(detail.durationMs) &&
+    (detail.result !== 'reused' || (detail.producedOutputBytes === 0 && detail.durationMs === 0)) &&
+    detail.producedOutputBytes! <= detail.outputBytes!
+  );
+}
+
+function isSupportedLanguage(value: string): value is SupportedLanguage {
+  return (SUPPORTED_LANGUAGES as readonly string[]).includes(value);
+}
+
+function typedLanguageEntries(
+  value: Partial<Record<SupportedLanguage, ReindexRunLanguageActivity>> | undefined,
+): [SupportedLanguage, ReindexRunLanguageActivity][] {
+  if (!value) return [];
+  return SUPPORTED_LANGUAGES.flatMap((language) => {
+    const detail = value[language];
+    return detail ? [[language, detail] as [SupportedLanguage, ReindexRunLanguageActivity]] : [];
+  });
+}
+
+function emptyLanguageSummary(): ReindexLanguageActivitySummary {
+  return { runs: 0, rebuilt: 0, reused: 0, producedOutputBytes: 0, durationMs: 0 };
+}
+
+function languageAttribution(
+  summary: ReindexActivitySummary,
+): NonNullable<ReindexActivitySummary['languageAttribution']> {
+  const invalid = summary.invalidLanguageDetails ?? 0;
+  const attributed = summary.attributedRuns ?? 0;
+  const unattributed = summary.unattributedRuns ?? 0;
+  if (unattributed === 0 && invalid === 0) return 'complete';
+  if (attributed === 0) return 'unavailable';
+  return 'partial';
 }
 
 function completeInjectedLines(contents: string): string[] {

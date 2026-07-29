@@ -44,6 +44,40 @@ describe('watch service persisted state', () => {
         reindexActivity: { ...liveState().reindexActivity!, runs: -1 },
       }),
     ).toBeNull();
+    expect(
+      parseWatchServiceState({
+        ...liveState(),
+        reindexActivity: {
+          ...liveState().reindexActivity!,
+          byLanguage: {
+            futurelang: {
+              runs: 1,
+              rebuilt: 1,
+              reused: 0,
+              producedOutputBytes: 10,
+              durationMs: 2,
+            },
+          },
+        },
+      }),
+    ).toBeNull();
+    expect(
+      parseWatchServiceState({
+        ...liveState(),
+        reindexActivity: {
+          ...liveState().reindexActivity!,
+          byLanguage: {
+            typescript: {
+              runs: 1,
+              rebuilt: 1,
+              reused: 1,
+              producedOutputBytes: 10,
+              durationMs: 2,
+            },
+          },
+        },
+      }),
+    ).toBeNull();
     expect(parseWatchServiceState({ ...liveState(), indexGeneration: 'a'.repeat(64) })).toEqual({
       ...liveState(),
       indexGeneration: 'a'.repeat(64),
@@ -131,6 +165,19 @@ function liveState(): WatchServiceState {
       failed: 0,
       suppressed: 4,
       estimatedLogicalOutputBytes: 1024,
+      languageAttribution: 'complete',
+      attributedRuns: 3,
+      unattributedRuns: 0,
+      invalidLanguageDetails: 0,
+      byLanguage: {
+        typescript: {
+          runs: 3,
+          rebuilt: 1,
+          reused: 2,
+          producedOutputBytes: 512,
+          durationMs: 20,
+        },
+      },
       byTrigger: { 'watch-source': 7 },
     },
     typescriptSemantic: {
