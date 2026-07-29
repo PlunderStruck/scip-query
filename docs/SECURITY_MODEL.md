@@ -90,7 +90,9 @@ removed after their final page.
 
 Run commands normally without selecting a page size. If human output is
 oversized, the readable multiline page prints one `Continue exactly:` command;
-run it unchanged until the output-complete marker. Explicit paged `--json`
+run it unchanged until the transport-complete marker. That marker proves every
+rendered character was retrieved; command coverage remains a separate claim.
+Explicit paged `--json`
 returns the versioned object envelope and must be followed until
 `page.complete` is `true`. Do not pipe output through `head`, `tail`, or a
 line-range `sed`; those programs discard data without creating a resumable

@@ -472,8 +472,10 @@ Numeric thresholds below are recommended starting points for review sessions; co
 - **Retrieve complete output**: an incomplete page is not evidence. Before
   making a conclusion, changing to another evidence command, or reporting
   completion, run every emitted `Continue exactly:` command unchanged until
-  `complete: true`. Never pipe scip-query through `head`, `tail`, or a
-  line-range `sed`. The universal `--output-cursor` pages the
+  the human footer reports transport completion or a JSON page reports
+  `complete: true`. Transport completion means every rendered character was
+  retrieved; it does not make bounded command coverage exhaustive. Never pipe
+  scip-query through `head`, `tail`, or a line-range `sed`. The universal `--output-cursor` pages the
   rendered output; a result cursor such as `refs --cursor` advances logical
   query coverage and is a separate obligation. Follow every `refs --cursor`
   continuation before claiming all references. Ordinary limited reference

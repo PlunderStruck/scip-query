@@ -81,7 +81,9 @@ function parsePage(output: string): CliOutputPageEnvelopeV1 {
 function parseHumanPage(output: string): { content: string; cursor?: string } {
   const contentStart = output.indexOf('\n') + 1;
   const incompleteStart = output.lastIndexOf('\n[Incomplete:');
-  const completeStart = output.lastIndexOf('\n[scip-query output complete]');
+  const completeStart = output.lastIndexOf(
+    '\n[scip-query transport complete; evaluate command coverage separately]',
+  );
   const contentEnd = Math.max(incompleteStart, completeStart);
   if (contentStart <= 0 || contentEnd < contentStart) throw new Error('Expected a rendered human output page.');
   const cursor = output.match(/--output-cursor ([A-Za-z0-9_-]+)/u)?.[1];
@@ -212,6 +214,7 @@ describe('universal CLI output pagination', () => {
     ).join('');
     const root = freshSnapshotRoot();
     const pages: string[] = [];
+    let finalOutput = '';
     let cursor: string | undefined;
 
     do {
@@ -221,6 +224,7 @@ describe('universal CLI output pagination', () => {
         snapshotRoot: root,
         ...(cursor ? { cursor } : {}),
       });
+      finalOutput = result.stdout;
       const page = parseHumanPage(result.stdout);
       pages.push(page.content);
       cursor = page.cursor;
@@ -229,6 +233,7 @@ describe('universal CLI output pagination', () => {
     expect(pages.join('')).toBe(content);
     expect(pages.slice(0, -1).every((page) => page.endsWith('\n'))).toBe(true);
     expect(pages.slice(1).every((page) => /^\s*\d+\s{2}line-/u.test(page))).toBe(true);
+    expect(finalOutput).toContain('[scip-query transport complete; evaluate command coverage separately]');
   });
 
   it('keeps unpaged JSON byte-compatible and warns before oversized output with an exact paging command', async () => {

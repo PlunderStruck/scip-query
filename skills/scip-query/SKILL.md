@@ -23,7 +23,9 @@ hierarchy, whitespace, and line numbers without transport metadata. Select
 that program needs only the command result rather than the stable public
 envelope. Do not select `--compact` or `--output-page-size` for readability.
 Follow an emitted continuation command only when the command itself says the
-output is incomplete.
+output is incomplete. The final transport-complete footer means every rendered
+character was retrieved; inspect command coverage separately before claiming
+the logical result is exhaustive.
 
 ## Routes
 

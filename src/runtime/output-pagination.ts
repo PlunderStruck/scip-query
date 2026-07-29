@@ -1370,6 +1370,6 @@ function renderHumanOutputPage(envelope: CliOutputPageEnvelopeV1): string {
   const header = `[scip-query output page: characters ${envelope.page.offset}-${pageEnd} of ${envelope.page.totalCharacters}]\n`;
   const footer = continuation
     ? `\n[Incomplete: ${envelope.page.remainingCharacters} characters remain. Continue exactly:\n${continuation.command}]\n`
-    : '\n[scip-query output complete]\n';
+    : '\n[scip-query transport complete; evaluate command coverage separately]\n';
   return `${header}${envelope.content}${footer}`;
 }
