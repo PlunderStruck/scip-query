@@ -66,6 +66,7 @@ describe('affected-set change manifest', () => {
 
   it('classifies source, ambient, configuration, and unknown inputs', () => {
     expect(classifyProjectInputPath('src/value.ts', ['typescript'])).toBe('source');
+    expect(classifyProjectInputPath('src/View.vue', ['javascript'])).toBe('source');
     expect(classifyProjectInputPath('src/globals.d.ts', ['typescript'])).toBe('ambient');
     expect(classifyProjectInputPath('configs/tsconfig.app.json', ['typescript'])).toBe('config');
     expect(classifyProjectInputPath('.scipquery.json', ['typescript'])).toBe('config');

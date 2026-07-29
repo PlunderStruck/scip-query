@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { GitReader } from '../../src/platform/git-worktree.js';
 import type {
   ReindexDiagnostics,
   ReindexOperation,
@@ -100,6 +101,10 @@ function sourceSubscriptionHarness(): {
     factory: () => subscription,
     emitAll: (eventName, path) => emitter.emit('all', eventName, path),
   };
+}
+
+function rawGitEntry(before: string, after: string, status: string, path: string): string {
+  return `:100644 100644 ${before.padStart(40, '0')} ${after.padStart(40, '0')} ${status}\0${path}\0`;
 }
 
 afterEach(() => {
@@ -421,6 +426,177 @@ describe('Watcher', () => {
     await vi.runAllTimersAsync();
 
     expect(run).not.toHaveBeenCalled();
+    await watcher.stop();
+  });
+
+  it('reindexes source, ambient, and configuration files but ignores non-input and directory events', async () => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const subscription = sourceSubscriptionHarness();
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { debounceMs: 250, gitPollMs: 60_000 } },
+      languages: ['typescript', 'javascript'],
+      reindexRunner: { start: run },
+      subscriptionFactory: subscription.factory,
+    });
+
+    watcher.start();
+    subscription.emitAll('change', 'README.md');
+    subscription.emitAll('change', 'HEY.md');
+    subscription.emitAll('change', '.agents/skills/review/SKILL.md');
+    subscription.emitAll('change', '.claude/settings.local.json');
+    subscription.emitAll('change', '.scipquery/events/audit.json');
+    subscription.emitAll('addDir', 'src/generated');
+    subscription.emitAll('unlinkDir', 'src/removed');
+    await vi.advanceTimersByTimeAsync(500);
+    expect(run).not.toHaveBeenCalled();
+
+    subscription.emitAll('change', 'src/a.ts');
+    subscription.emitAll('add', 'src/globals.d.ts');
+    subscription.emitAll('change', 'src/View.vue');
+    subscription.emitAll('change', '.scipquery.json');
+    await vi.advanceTimersByTimeAsync(249);
+    expect(run).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(run).toHaveBeenCalledOnce();
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trigger: { kind: 'watch-source', detail: 'multiple changes' },
+      }),
+    );
+    await watcher.stop();
+  });
+
+  it('skips proven docs-only Git transitions and reindexes compiler-input transitions', async () => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    const indexPath = join(projectRoot, '.git-index');
+    writeFileSync(indexPath, 'index');
+    let head = 'a'.repeat(40);
+    let changedPaths = 'README.md\0docs/architecture.md\0';
+    const gitReader: GitReader = {
+      run: (_root, args) => {
+        if (args.includes('--git-path')) return indexPath;
+        if (args.includes('HEAD')) return head;
+        return undefined;
+      },
+      runResult: (_root, args) =>
+        args[0] === 'diff' ? { kind: 'success', output: changedPaths } : { kind: 'error', message: 'unexpected' },
+    };
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { debounceMs: 250, gitPollMs: 1_000 } },
+      languages: ['typescript'],
+      gitReader,
+      reindexRunner: { start: run },
+      subscriptionFactory: sourceSubscriptionHarness().factory,
+    });
+
+    watcher.start();
+    head = 'b'.repeat(40);
+    await vi.advanceTimersByTimeAsync(1_250);
+    expect(run).not.toHaveBeenCalled();
+
+    changedPaths = 'src/a.ts\0README.md\0';
+    head = 'c'.repeat(40);
+    await vi.advanceTimersByTimeAsync(1_250);
+    expect(run).toHaveBeenCalledOnce();
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trigger: { kind: 'watch-git-head', detail: 'src/a.ts' },
+      }),
+    );
+    await watcher.stop();
+  });
+
+  it('compares successive staged identities instead of repeatedly charging an unchanged staged source', async () => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    const indexPath = join(projectRoot, '.git-index');
+    writeFileSync(indexPath, 'initial');
+    const head = 'a'.repeat(40);
+    let stagedEntries = `${rawGitEntry('1', '2', 'M', 'src/a.ts')}`;
+    const gitReader: GitReader = {
+      run: (_root, args) => {
+        if (args.includes('--git-path')) return indexPath;
+        if (args.includes('HEAD')) return head;
+        return undefined;
+      },
+      runResult: (_root, args) =>
+        args.includes('--raw')
+          ? { kind: 'success', output: stagedEntries }
+          : { kind: 'error', message: 'unexpected Git command' },
+    };
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { debounceMs: 250, gitPollMs: 1_000 } },
+      languages: ['typescript'],
+      gitReader,
+      reindexRunner: { start: run },
+      subscriptionFactory: sourceSubscriptionHarness().factory,
+    });
+
+    watcher.start();
+    stagedEntries += rawGitEntry('0', '3', 'A', 'README.md');
+    writeFileSync(indexPath, 'docs added to index');
+    await vi.advanceTimersByTimeAsync(1_250);
+    expect(run).not.toHaveBeenCalled();
+
+    stagedEntries = `${rawGitEntry('1', '4', 'M', 'src/a.ts')}${rawGitEntry('0', '3', 'A', 'README.md')}`;
+    writeFileSync(indexPath, 'source restaged with changed blob identity');
+    await vi.advanceTimersByTimeAsync(1_250);
+    expect(run).toHaveBeenCalledOnce();
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trigger: { kind: 'watch-git-index', detail: 'src/a.ts' },
+      }),
+    );
+    await watcher.stop();
+  });
+
+  it('reindexes conservatively when a changed Git path set cannot be established', async () => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    const indexPath = join(projectRoot, '.git-index');
+    writeFileSync(indexPath, 'index');
+    let head = 'a'.repeat(40);
+    const gitReader: GitReader = {
+      run: (_root, args) => {
+        if (args.includes('--git-path')) return indexPath;
+        if (args.includes('HEAD')) return head;
+        return undefined;
+      },
+      runResult: () => ({ kind: 'error', message: 'git diff failed' }),
+    };
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { debounceMs: 250, gitPollMs: 1_000 } },
+      languages: ['typescript'],
+      gitReader,
+      reindexRunner: { start: run },
+      subscriptionFactory: sourceSubscriptionHarness().factory,
+    });
+
+    watcher.start();
+    head = 'b'.repeat(40);
+    await vi.advanceTimersByTimeAsync(1_250);
+
+    expect(run).toHaveBeenCalledOnce();
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trigger: { kind: 'watch-git-head', detail: 'HEAD changed; changed paths unavailable' },
+      }),
+    );
     await watcher.stop();
   });
 

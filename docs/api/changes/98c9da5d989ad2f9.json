@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-07-29T19:41:53.734Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "98c9da5d989ad2f9e9fee8709f4abd0addd578a37c25d973356a0a096bd74695",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "WatcherOptions changed from interface WatcherOptions { projectRoot: string; config: ProjectConfig; languages?: SupportedLanguage[]; reindexRunner?: ReindexRunner; subscriptionFactory?: WatchSubscriptionFac... to interface WatcherOptions { projectRoot: string; config: ProjectConfig; languages?: SupportedLanguage[]; reindexRunner?: ReindexRunner; subscriptionFactory?: WatchSubscriptionFac....",
+      "target": "./runtime:WatcherOptions"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "9939d4ad4dbb6414f6fa829f8525582bbede74bb8b3e5b1b13114fea3ecb338a",
+  "reason": "WatcherOptions accepts an optional GitReader for deterministic Git-transition testing; existing callers and runtime defaults are unchanged.",
+  "schemaVersion": 1
+}

@@ -304,7 +304,8 @@ Deployable: yes.
 
 Change:
 
-- pass Chokidar's event kind into a pure source-change classifier;
+- reject Chokidar directory events before the canonical source-change
+  classifier;
 - ignore directory events and files classified `other`;
 - use configured languages, conservatively falling back to all supported
   languages when configuration is absent;
@@ -322,6 +323,18 @@ commit/stage transitions launch zero; source transitions launch one; failed
 Git comparison launches one.
 
 Commit: `fix: rebuild only for compiler inputs`.
+
+Result: **complete.** Chokidar now admits only configured-language source,
+ambient, and compiler/configuration inputs. The shared classifier now includes
+Vue single-file components for JavaScript indexing. Git polling compares
+successive staged blob identities plus changed HEAD paths, so adding docs to
+an index that already contains a staged source file does not repeatedly charge
+that source; unavailable Git evidence still refreshes conservatively. The
+focused watcher, project-input, and real-worktree suites pass at 50/50 tests;
+typecheck, ESLint, build, and the additive public-API contract pass. The
+unbounded recent-duplicate scan found no reimplementation, complete paginated
+doc-drift output found no Slice-2 documentation defect, and diff-gate passed
+with one unrelated advisory guide-reference candidate.
 
 ### Slice 3 — Two-second burst settling
 

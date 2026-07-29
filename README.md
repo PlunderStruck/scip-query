@@ -844,6 +844,14 @@ command-line overrides below 5,000 ms—including `cooldownMs: 0`—are raised t
 that runtime safety floor. Both modes share one project lock, so only one can own an
 index cache.
 
+Relevant activity means a source file, ambient declaration, compiler/build
+manifest, dependency lock, or `.scipquery.json` change that can affect a
+configured indexer. Directory events, documentation, agent settings, and
+scip-query event records do not request indexing. Git polling compares the
+actual changed paths and skips a transition proven to contain only those
+non-input files; if Git cannot establish the changed path set, the watcher
+conservatively refreshes rather than assuming the index is current.
+
 Automatic refresh also has a persisted rolling resource budget. By default,
 after four completed rebuilds or 4 GiB of estimated writes within 15 minutes,
 the watcher pauses new automatic work until the oldest contributing activity

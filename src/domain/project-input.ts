@@ -222,7 +222,7 @@ const COMMON_INDEX_INPUTS = new Set([
 
 const LANGUAGE_SOURCE_EXTENSIONS: Record<SupportedLanguage, readonly string[]> = {
   typescript: ['.ts', '.tsx', '.mts', '.cts'],
-  javascript: ['.js', '.jsx', '.mjs', '.cjs'],
+  javascript: ['.js', '.jsx', '.mjs', '.cjs', '.vue'],
   java: ['.java'],
   scala: ['.scala'],
   kotlin: ['.kt', '.kts'],

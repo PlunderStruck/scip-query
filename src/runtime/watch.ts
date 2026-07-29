@@ -9,12 +9,13 @@ import type {
   SupportedLanguage,
   TypeScriptProjectMode,
 } from '../domain/types.js';
+import { classifyProjectInputPath } from '../domain/project-input.js';
 import type { ProcessIdentity } from '../domain/process-identity.js';
 import { monotonicNowMs } from '../domain/time.js';
 import { resolveCacheDirPath, resolveIndexStoragePaths } from '../platform/cache-layout.js';
-import { loadProjectConfig, resolveWatchConfig, type ResolvedWatchConfig } from './config.js';
+import { loadProjectConfig, resolveWatchConfig, SUPPORTED_LANGUAGES, type ResolvedWatchConfig } from './config.js';
 import { createGitignoreFilter } from '../source/primitives/gitignore-filter.js';
-import { gitOutput, resolveGitPath } from '../platform/git-worktree.js';
+import { DEFAULT_GIT_READER, gitOutput, resolveGitPath, type GitReader } from '../platform/git-worktree.js';
 import {
   inspectReindexActivityBudget,
   REINDEX_ACTIVITY_FILE,
@@ -30,6 +31,7 @@ export interface WatcherOptions {
   reindexRunner?: ReindexRunner;
   subscriptionFactory?: WatchSubscriptionFactory;
   budgetInspector?: WatchBudgetInspector;
+  gitReader?: GitReader;
   outputDb?: string;
   clock?: WatchClock;
   stopTimeoutMs?: number;
@@ -203,6 +205,11 @@ export class Watcher {
     this.reindexRunner = opts.reindexRunner ?? createReindexRunner();
     this.subscriptionFactory = opts.subscriptionFactory ?? defaultWatchSubscriptionFactory;
     this.budgetInspector = opts.budgetInspector ?? inspectReindexActivityBudget;
+    watcherInputStates.set(this, {
+      gitReader: opts.gitReader ?? DEFAULT_GIT_READER,
+      languages: resolveWatchInputLanguages(opts.languages ?? opts.config.languages),
+      stagedIndexEntries: null,
+    });
 
     this.gitignoreFilter = createGitignoreFilter(opts.projectRoot);
     this.extraIgnore = ignore();
@@ -291,8 +298,8 @@ export class Watcher {
       usePolling,
       ...(usePolling ? { interval: 500, binaryInterval: 1_000 } : {}),
     });
-    watcher.on('all', (_event, path) => {
-      if (!this.stopped) this.handleFileChange(path);
+    watcher.on('all', (event, path) => {
+      if (!this.stopped && event !== 'addDir' && event !== 'unlinkDir') this.handleFileChange(path);
     });
     watcher.on('error', (error) => this.handleSourceWatcherError(watcher, error, usePolling));
     this.fsWatchers.push(watcher);
@@ -330,7 +337,6 @@ export class Watcher {
     if (rel === '.git' || rel.startsWith('.git/')) return;
     if (this.gitignoreFilter.isIgnored(rel)) return;
     if (this.extraIgnore.ignores(rel)) return;
-
     // Skip the index files themselves
     if (
       rel.endsWith('index.db') ||
@@ -340,6 +346,9 @@ export class Watcher {
     ) {
       return;
     }
+
+    if (rel === '.scipquery.json') refreshWatchInputLanguages(this, this.projectRoot);
+    if (!isWatcherIndexInput(this, rel)) return;
 
     this.scheduleReindex({ kind: 'watch-source', detail: rel });
   }
@@ -625,6 +634,10 @@ export class Watcher {
   private startGitStatePolling(): void {
     this.lastGitState = this.readGitState();
     if (!this.lastGitState) return;
+    watcherInputState(this).stagedIndexEntries = readStagedIndexEntries(
+      this.projectRoot,
+      watcherInputState(this).gitReader,
+    );
     this.gitPollTimer = this.clock.setInterval(() => this.pollGitState(), this.watchConfig.gitPollMs);
     this.gitPollTimer.unref?.();
   }
@@ -643,23 +656,52 @@ export class Watcher {
       previous.indexPath !== next.indexPath ||
       previous.indexMtimeMs !== next.indexMtimeMs ||
       previous.indexSize !== next.indexSize;
+    if (!headChanged && !indexChanged) return;
+
+    const inputState = watcherInputState(this);
+    const previousStagedIndexEntries = inputState.stagedIndexEntries;
+    const nextStagedIndexEntries = readStagedIndexEntries(this.projectRoot, inputState.gitReader);
+    inputState.stagedIndexEntries = nextStagedIndexEntries;
+    const changedPaths = readChangedGitPaths(
+      this.projectRoot,
+      inputState.gitReader,
+      previous,
+      next,
+      previousStagedIndexEntries,
+      nextStagedIndexEntries,
+      headChanged,
+      indexChanged,
+    );
+    let relevantPaths: string[] | null = null;
+    if (changedPaths !== null) {
+      if (changedPaths.includes('.scipquery.json')) refreshWatchInputLanguages(this, this.projectRoot);
+      relevantPaths = changedPaths.filter((path) => isWatcherIndexInput(this, path));
+      if (relevantPaths.length === 0) return;
+    }
 
     if (headChanged && indexChanged) {
-      this.scheduleReindex({ kind: 'watch-git-state', detail: 'HEAD and index changed' });
+      this.scheduleReindex({
+        kind: 'watch-git-state',
+        detail: gitChangeDetail('HEAD and index changed', relevantPaths),
+      });
     } else if (headChanged) {
-      this.scheduleReindex({ kind: 'watch-git-head', detail: 'HEAD changed' });
+      this.scheduleReindex({ kind: 'watch-git-head', detail: gitChangeDetail('HEAD changed', relevantPaths) });
     } else if (indexChanged) {
-      this.scheduleReindex({ kind: 'watch-git-index', detail: next.indexPath ?? 'index changed' });
+      this.scheduleReindex({
+        kind: 'watch-git-index',
+        detail: gitChangeDetail(next.indexPath ?? 'index changed', relevantPaths),
+      });
     }
   }
 
   private readGitState(): GitStateSnapshot | null {
-    const rawIndexPath = gitOutput(this.projectRoot, ['rev-parse', '--git-path', 'index']);
+    const gitReader = watcherInputState(this).gitReader;
+    const rawIndexPath = gitOutput(this.projectRoot, ['rev-parse', '--git-path', 'index'], gitReader);
     if (!rawIndexPath) return null;
     const indexPath = resolveGitPath(this.projectRoot, rawIndexPath);
 
     const snapshot: GitStateSnapshot = {
-      head: gitOutput(this.projectRoot, ['rev-parse', '--verify', 'HEAD']),
+      head: gitOutput(this.projectRoot, ['rev-parse', '--verify', 'HEAD'], gitReader),
       indexPath,
     };
 
@@ -705,8 +747,15 @@ interface WatcherRetirementState {
   errors: string[];
 }
 
+interface WatcherInputState {
+  gitReader: GitReader;
+  languages: readonly SupportedLanguage[];
+  stagedIndexEntries: ReadonlyMap<string, string> | null;
+}
+
 const watcherRetirementStates = new WeakMap<Watcher, WatcherRetirementState>();
 const watcherStopTimeouts = new WeakMap<Watcher, number>();
+const watcherInputStates = new WeakMap<Watcher, WatcherInputState>();
 
 function watcherRetirementState(watcher: Watcher): WatcherRetirementState {
   const existing = watcherRetirementStates.get(watcher);
@@ -718,6 +767,12 @@ function watcherRetirementState(watcher: Watcher): WatcherRetirementState {
 
 function watcherStopTimeout(watcher: Watcher): number {
   return watcherStopTimeouts.get(watcher) ?? WATCHER_STOP_TIMEOUT_MS;
+}
+
+function watcherInputState(watcher: Watcher): WatcherInputState {
+  const state = watcherInputStates.get(watcher);
+  if (!state) throw new Error('Watcher input state was not initialized.');
+  return state;
 }
 
 function retireWatchSubscription(
@@ -906,4 +961,96 @@ function isFileDescriptorLimitError(error: unknown): boolean {
 function positiveDuration(value: number, label: string): number {
   if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${label} must be a positive integer.`);
   return value;
+}
+
+function resolveWatchInputLanguages(languages: readonly SupportedLanguage[] | undefined): readonly SupportedLanguage[] {
+  return languages && languages.length > 0 ? [...languages] : SUPPORTED_LANGUAGES;
+}
+
+function refreshWatchInputLanguages(watcher: Watcher, projectRoot: string): void {
+  try {
+    watcherInputState(watcher).languages = resolveWatchInputLanguages(loadProjectConfig(projectRoot).languages);
+  } catch {
+    watcherInputState(watcher).languages = SUPPORTED_LANGUAGES;
+  }
+}
+
+function isWatcherIndexInput(watcher: Watcher, path: string): boolean {
+  return classifyProjectInputPath(path, watcherInputState(watcher).languages) !== 'other';
+}
+
+function readChangedGitPaths(
+  projectRoot: string,
+  gitReader: GitReader,
+  previous: GitStateSnapshot,
+  next: GitStateSnapshot,
+  previousStagedIndexEntries: ReadonlyMap<string, string> | null,
+  nextStagedIndexEntries: ReadonlyMap<string, string> | null,
+  headChanged: boolean,
+  indexChanged: boolean,
+): string[] | null {
+  const paths = new Set<string>();
+  if (headChanged) {
+    if (!previous.head || !next.head) return null;
+    const result = gitReader.runResult(projectRoot, [
+      'diff',
+      '--name-only',
+      '-z',
+      '--no-renames',
+      '--relative',
+      previous.head,
+      next.head,
+      '--',
+    ]);
+    if (result.kind !== 'success') return null;
+    for (const path of parseNulPaths(result.output)) paths.add(path);
+  }
+  if (indexChanged) {
+    if (previousStagedIndexEntries === null || nextStagedIndexEntries === null) return null;
+    for (const path of changedMapKeys(previousStagedIndexEntries, nextStagedIndexEntries)) paths.add(path);
+  }
+  return [...paths].sort();
+}
+
+function readStagedIndexEntries(projectRoot: string, gitReader: GitReader): ReadonlyMap<string, string> | null {
+  const result = gitReader.runResult(projectRoot, [
+    'diff',
+    '--cached',
+    '--raw',
+    '-z',
+    '--no-renames',
+    '--relative',
+    '--',
+  ]);
+  return result.kind === 'success' ? parseRawGitEntries(result.output) : null;
+}
+
+function parseNulPaths(output: string): string[] {
+  return output.split('\0').filter((path) => path.length > 0);
+}
+
+function parseRawGitEntries(output: string): ReadonlyMap<string, string> | null {
+  const fields = output.split('\0');
+  if (fields.at(-1) === '') fields.pop();
+  if (fields.length % 2 !== 0) return null;
+  const entries = new Map<string, string>();
+  for (let index = 0; index < fields.length; index += 2) {
+    const signature = fields[index]!;
+    const path = fields[index + 1]!;
+    if (!signature.startsWith(':') || !path) return null;
+    entries.set(path, signature);
+  }
+  return entries;
+}
+
+function changedMapKeys(previous: ReadonlyMap<string, string>, next: ReadonlyMap<string, string>): string[] {
+  const paths = new Set([...previous.keys(), ...next.keys()]);
+  return [...paths].filter((path) => previous.get(path) !== next.get(path));
+}
+
+function gitChangeDetail(fallback: string, changedPaths: readonly string[] | null): string {
+  if (changedPaths === null) return `${fallback}; changed paths unavailable`;
+  if (changedPaths.length === 0) return fallback;
+  if (changedPaths.length === 1) return changedPaths[0]!;
+  return `${changedPaths.length} compiler inputs changed`;
 }
