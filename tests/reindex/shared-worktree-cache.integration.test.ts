@@ -128,19 +128,74 @@ describe('shared Git worktree cache integration', () => {
     const sharedDb = join(snapshot.repositoryCacheDir, 'generations', snapshot.generationId, 'index.db');
     const sharedHash = fileHash(sharedDb);
     writeFileSync(join(linked, 'src/value.ts'), 'export const value = 2;\n');
+    const dirtyStatuses: string[] = [];
     const dirty = await reindex({
       projectRoot: linked,
       languages: ['typescript'],
       outputScip: linkedPaths.indexPath,
       outputDb: linkedPaths.dbPath,
       skipIfUnchanged: true,
-      onStatus: () => undefined,
+      onStatus: (message) => dirtyStatuses.push(message),
     });
     expect(dirty.reused).toBe(false);
+    expect(dirtyStatuses.some((message) => message.includes('Forked shared baseline'))).toBe(false);
     expect(fileHash(sharedDb)).toBe(sharedHash);
     expect(getIndexFreshness(linked, {}, linkedPaths).state).toBe('fresh');
     expect(getIndexFreshness(primary, {}, primaryPaths).state).toBe('fresh');
   }, 60_000);
+
+  it('forks the committed baseline when a linked worktree is dirty before its first reindex', async () => {
+    const root = temporaryDirectory('scip-query-shared-dirty-first-');
+    process.env['XDG_CACHE_HOME'] = join(root, 'xdg-cache');
+    const primary = join(root, 'primary');
+    const linked = join(root, 'linked');
+    createTypeScriptRepository(primary);
+    writeFileSync(join(primary, 'pyproject.toml'), '[project]\nname = "fixture"\nversion = "1.0.0"\n');
+    writeFileSync(join(primary, 'src/value.py'), 'value = 1\n');
+    git(primary, ['add', '.']);
+    git(primary, ['commit', '-qm', 'add python']);
+    const primaryPaths = resolveIndexStoragePaths(primary, {});
+    await reindex({
+      projectRoot: primary,
+      languages: ['typescript', 'python'],
+      outputScip: primaryPaths.indexPath,
+      outputDb: primaryPaths.dbPath,
+      skipIfUnchanged: true,
+      onStatus: () => undefined,
+    });
+    const context = resolveGitWorktreeContext(primary)!;
+    const fingerprint = buildProjectInputFingerprint(primary, ['typescript', 'python'], {});
+    const snapshot = buildSharedGenerationSnapshot(context, fingerprint)!;
+    const sharedDb = join(snapshot.repositoryCacheDir, 'generations', snapshot.generationId, 'index.db');
+    const sharedHash = fileHash(sharedDb);
+
+    git(primary, ['worktree', 'add', '--detach', linked, 'HEAD']);
+    const linkedPaths = resolveIndexStoragePaths(linked, {});
+    writeFileSync(join(linked, 'src/value.ts'), 'export const value = 2;\n');
+    expect(existsSync(linkedPaths.dbPath)).toBe(false);
+    const statuses: string[] = [];
+
+    const dirty = await reindex({
+      projectRoot: linked,
+      languages: ['typescript', 'python'],
+      outputScip: linkedPaths.indexPath,
+      outputDb: linkedPaths.dbPath,
+      skipIfUnchanged: true,
+      onStatus: (message) => statuses.push(message),
+    });
+
+    expect(statuses.some((message) => message.includes('Forked shared baseline'))).toBe(true);
+    expect(statuses.some((message) => message.includes('Reusing cached python SCIP shard'))).toBe(true);
+    expect(dirty.shards?.find((shard) => shard.language === 'python')).toEqual(
+      expect.objectContaining({ reused: true }),
+    );
+    expect(dirty.shards?.find((shard) => shard.language === 'typescript')).toEqual(
+      expect.objectContaining({ reused: false }),
+    );
+    expect(fileHash(sharedDb)).toBe(sharedHash);
+    expect(getIndexFreshness(linked, {}, linkedPaths).state).toBe('fresh');
+    expect(getIndexFreshness(primary, {}, primaryPaths).state).toBe('fresh');
+  }, 90_000);
 
   it('imports a stable primary cache even after the primary files become dirty', async () => {
     const root = temporaryDirectory('scip-query-shared-peer-');

@@ -90,10 +90,12 @@ import { sanitizeScipFile } from './sanitize.js';
 import {
   acquireSharedGenerationBuildLock,
   buildSharedGenerationSnapshot,
+  findSharedBaselineGeneration,
   hydrateSharedGeneration,
   publishSharedGeneration,
   readSharedGeneration,
   sharedCacheBypassReason,
+  writeManagedWorktreeLease,
   writeWorktreeLease,
   type SharedGenerationSnapshot,
 } from './shared-generation-store.js';
@@ -334,14 +336,42 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
   );
   let sharedSnapshot: SharedGenerationSnapshot | undefined;
   let releaseSharedBuildLock: (() => void) | undefined;
-  if (
+  const sharedCacheEligible =
     opts.skipIfUnchanged !== false &&
     !sharedCacheBypassReason(projectRoot, paths.outputDb) &&
-    resolve(paths.outputScip) === resolve(join(dirname(paths.outputDb), 'index.scip'))
-  ) {
+    resolve(paths.outputScip) === resolve(join(dirname(paths.outputDb), 'index.scip'));
+  if (sharedCacheEligible) {
     const context = resolveGitWorktreeContext(projectRoot);
-    sharedSnapshot = context ? buildSharedGenerationSnapshot(context, fingerprint) : undefined;
-    if (sharedSnapshot) {
+    sharedSnapshot = context?.clean ? buildSharedGenerationSnapshot(context, fingerprint) : undefined;
+    if (context && !context.clean && !localArtifactsCanSeedIncrementalReindex(paths)) {
+      const baseline = findSharedBaselineGeneration(context, languages, {
+        pnpmWorkspaces: opts.pnpmWorkspaces,
+        typescriptProjectMode: opts.typescriptProjectMode,
+        typescriptProjects: opts.typescriptProjects,
+        clojureConfigPath: opts.clojureConfigPath,
+      });
+      if (baseline) {
+        try {
+          hydrateSharedGeneration({
+            snapshot: baseline.snapshot,
+            manifest: baseline.manifest,
+            targetCacheDir: dirname(paths.outputDb),
+            targetProjectRoot: projectRoot,
+            persistLease: false,
+          });
+          writeManagedWorktreeLease(
+            context,
+            dirname(paths.outputDb),
+            'overlay',
+            undefined,
+            `private cache forked from shared baseline ${baseline.snapshot.generationId}`,
+          );
+          onStatus(`Forked shared baseline ${baseline.snapshot.generationId.slice(0, 12)} for dirty worktree reindex`);
+        } catch (error) {
+          onStatus(`Shared baseline fork failed; continuing locally: ${errorMessage(error)}`);
+        }
+      }
+    } else if (sharedSnapshot) {
       const shared = readSharedGeneration(sharedSnapshot);
       if (shared) {
         if (!localArtifactsMatchFingerprint(paths, fingerprint)) {
@@ -552,6 +582,14 @@ function localArtifactsMatchFingerprint(paths: ReindexOutputPaths, fingerprint: 
     !existsSync(paths.outputDb) ||
     !isUnchangedReindex(paths.metaPath, fingerprint)
   ) {
+    return false;
+  }
+  const generation = inspectSqliteGeneration(paths.outputDb, paths.metaPath);
+  return generation.state !== 'invalid' && generation.state !== 'drifted';
+}
+
+function localArtifactsCanSeedIncrementalReindex(paths: ReindexOutputPaths): boolean {
+  if (!existsSync(paths.outputScip) || !existsSync(paths.outputDb) || !readReindexMetaOrNull(paths.metaPath)) {
     return false;
   }
   const generation = inspectSqliteGeneration(paths.outputDb, paths.metaPath);

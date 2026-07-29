@@ -33,6 +33,7 @@ import {
   canonicalCacheIdentity,
   resolveDefaultCacheDir,
   resolveRepositoryCacheDir,
+  resolveScipQueryCacheRoot,
   type resolveIndexStoragePaths,
 } from '../platform/cache-layout.js';
 import { listGitWorktrees, resolveGitWorktreeContext, type GitWorktreeContext } from '../platform/git-worktree.js';
@@ -152,6 +153,7 @@ export type SharedCacheAction =
   | { kind: 'local-fresh' }
   | { kind: 'attached'; generationId: string }
   | { kind: 'peer-imported'; generationId: string; sourceProjectRoot: string }
+  | { kind: 'overlay' }
   | { kind: 'built'; generationId: string }
   | { kind: 'waited'; generationId: string }
   | { kind: 'missed'; reason: string }
@@ -298,7 +300,15 @@ export function findSharedBaselineGeneration(
 ): SharedBaselineGeneration | null {
   if (!context.treeOid) return null;
   const requestedConfiguration = normalizeProjectInputFingerprintConfiguration(languages, options);
-  const repositoryCacheDir = resolveRepositoryCacheDir(context.repositoryId);
+  const unresolvedRepositoryCacheDir = join(resolveScipQueryCacheRoot(), 'repositories', context.repositoryId);
+  let repositoryCacheDir: string;
+  try {
+    const repositoryStat = lstatSync(unresolvedRepositoryCacheDir);
+    if (!repositoryStat.isDirectory() || repositoryStat.isSymbolicLink()) return null;
+    repositoryCacheDir = realpathSync(unresolvedRepositoryCacheDir);
+  } catch {
+    return null;
+  }
   const generationsDir = join(repositoryCacheDir, 'generations');
   const candidates: SharedGenerationManifest[] = [];
 
@@ -490,6 +500,7 @@ export function hydrateSharedGeneration(input: {
   targetProjectRoot: string;
   now?: () => Date;
   action?: WorktreeCacheLease['lastAction'];
+  persistLease?: boolean;
 }): void {
   const generationDir = sharedGenerationDirectory(input.snapshot);
   mkdirSync(input.targetCacheDir, { recursive: true });
@@ -552,7 +563,9 @@ export function hydrateSharedGeneration(input: {
     if (inspection.state === 'invalid' || inspection.state === 'drifted') {
       throw new Error(`hydrated SQLite generation failed validation: ${inspection.reason}`);
     }
-    writeWorktreeLease(input.snapshot, input.targetCacheDir, input.action ?? 'attached', input.now);
+    if (input.persistLease !== false) {
+      writeWorktreeLease(input.snapshot, input.targetCacheDir, input.action ?? 'attached', input.now);
+    }
   } catch (error) {
     if (targetMutationStarted && rollback) restoreHydrationTarget(input.targetCacheDir, rollback);
     throw error;
