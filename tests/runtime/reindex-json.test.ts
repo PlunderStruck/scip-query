@@ -4,10 +4,8 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReindexResult } from '../../src/reindex/index.js';
 
-// Plan 6 6.5.2: `reindex --json` gains a `shards` array while human output
-// stays byte-for-byte compatible with the pre-existing status line. These
-// tests mock the `reindex()` core function (already covered in depth by
-// tests/reindex/reindex-reliability.test.ts) to isolate CLI option wiring.
+// These tests mock the `reindex()` core function (already covered in depth
+// by tests/reindex/reindex-reliability.test.ts) to isolate CLI rendering.
 
 const tempDirs: string[] = [];
 
@@ -136,6 +134,43 @@ describe('handleReindex --json', () => {
     try {
       await withProjectRoot(projectRoot, () => handleReindex({}));
       expect(log.mock.calls.map((call) => call[0])).toEqual(['Reused typescript in 0.3s']);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('makes partial human results unmistakable and names every skipped language', async () => {
+    const projectRoot = createProject();
+    const fakeResult: ReindexResult = {
+      languages: ['typescript'],
+      indexPath: join(projectRoot, 'index.scip'),
+      dbPath: join(projectRoot, 'index.db'),
+      durationMs: 300,
+      reused: false,
+      skipped: [
+        { language: 'rust', reason: 'rust-analyzer was not found' },
+        { language: 'python', reason: 'indexer exited with status 1' },
+      ],
+      shards: [],
+    };
+
+    vi.doMock('../../src/reindex/index.js', () => ({
+      reindex: vi.fn().mockResolvedValue(fakeResult),
+      detectLanguages: () => ['typescript', 'rust', 'python'],
+      augmentAuxiliaryDocuments: vi.fn(),
+      augmentVueResolvedReferences: vi.fn(),
+    }));
+
+    const { handleReindex } = await import('../../src/runtime/commands/command-handlers.js');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    try {
+      await withProjectRoot(projectRoot, () => handleReindex({ allowPartial: true }));
+      expect(log.mock.calls.map((call) => call[0])).toEqual([
+        'Reindex partial: available language output typescript; 2 skipped in 0.3s.',
+        '  skip: rust — rust-analyzer was not found',
+        '  skip: python — indexer exited with status 1',
+      ]);
     } finally {
       log.mockRestore();
     }

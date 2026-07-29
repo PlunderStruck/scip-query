@@ -197,9 +197,17 @@ export async function handleReindex(rawOpts: unknown): Promise<void> {
       printJsonEnvelope('reindex', [], opts, result);
       return;
     }
-    console.log(
-      `${result.reused ? 'Reused' : 'Indexed'} ${result.languages.join(', ')} in ${(result.durationMs / 1000).toFixed(1)}s`,
-    );
+    if (result.skipped.length > 0) {
+      const ready = result.languages.length > 0 ? result.languages.join(', ') : 'none';
+      console.log(
+        `Reindex partial: available language output ${ready}; ${result.skipped.length} skipped in ${(result.durationMs / 1000).toFixed(1)}s.`,
+      );
+      for (const skipped of result.skipped) console.log(`  skip: ${skipped.language} — ${skipped.reason}`);
+    } else {
+      console.log(
+        `${result.reused ? 'Reused' : 'Indexed'} ${result.languages.join(', ')} in ${(result.durationMs / 1000).toFixed(1)}s`,
+      );
+    }
   } catch (err) {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exit(1);
