@@ -214,6 +214,7 @@ describe('CLI contract', () => {
       '--shared',
       '--remove',
       '--force',
+      '--dry-run',
       '--json',
       '--result-only',
       '--compact',

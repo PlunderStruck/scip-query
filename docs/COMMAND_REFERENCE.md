@@ -135,7 +135,7 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 | `bench` | Benchmark indexing and command runtimes for this repository | `--cold-index`<br>`--include-heavy`<br>`--command <cmd>`<br>`--timeout-ms <n>`<br>`--progress`<br>`--profile`<br>`--profile-out <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `work-audit <profile>` | Rank exact repeated computations in a profiling JSONL file by measured avoidable time | `--top <n>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `install-skills` | Install skills (_shared, scip-query, scip-setup, scip-explore, scip-plan, scip-diagnose, scip-audit, scip-improve, scip-verify) into Claude Code, Codex, and shared agent roots | - |
-| `setup-hooks` | Install or refresh project-local Codex and Claude Code lifecycle hooks | `--shared`<br>`--remove`<br>`--force`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `setup-hooks` | Install or refresh project-local Codex and Claude Code lifecycle hooks | `--shared`<br>`--remove`<br>`--force`<br>`--dry-run`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `check-deps` | Check whether scip-query and the detected language indexers are actually runnable | - |
 | `capabilities` | Report which evidence and verification capabilities are available in this project | `--matrix`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `capability-matrix` | Deprecated alias for capabilities --matrix | `--json`<br>`--result-only`<br>`--compact` |

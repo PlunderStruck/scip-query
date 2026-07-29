@@ -54,7 +54,7 @@ import {
   type WatchServiceInspection,
 } from '../watch-service.js';
 import { setupAgent } from '../agent-setup.js';
-import { installProjectAgentHooks } from '../agent-hooks.js';
+import { installProjectAgentHooks, selectSetupHooksMode } from '../agent-hooks.js';
 import {
   planGuidedProjectSetup,
   renderProjectSetupReport,
@@ -951,11 +951,22 @@ export function handleInstallSkills(): void {
 
 export function handleSetupHooks(rawOpts: unknown): void {
   const opts = commandOptions(rawOpts);
+  const mode = selectSetupHooksMode({
+    remove: booleanOptionValue(opts, 'remove'),
+    force: booleanOptionValue(opts, 'force'),
+    dryRun: booleanOptionValue(opts, 'dryRun'),
+  });
+  if (!mode.ok) {
+    console.error(`error: ${mode.message}`);
+    process.exitCode = 1;
+    return;
+  }
   const projectRoot = resolveProjectRoot();
   const result = installProjectAgentHooks(projectRoot, {
     shared: booleanOptionValue(opts, 'shared'),
     remove: booleanOptionValue(opts, 'remove'),
     force: booleanOptionValue(opts, 'force'),
+    dryRun: booleanOptionValue(opts, 'dryRun'),
   });
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('setup-hooks', [], opts, result);
@@ -965,10 +976,29 @@ export function handleSetupHooks(rawOpts: unknown): void {
   for (const target of result.installed) console.log(`  done: ${target}`);
   for (const target of result.updated) console.log(`  update: ${target}`);
   for (const target of result.unchanged) console.log(`  ok:   ${target} (already configured)`);
-  for (const target of result.removed) console.log(`  remove: ${target}`);
+  for (const target of result.removed) {
+    console.log(`  ${mode.mode === 'preview-remove' ? 'would remove' : 'remove'}: ${target}`);
+  }
   for (const target of result.gitExcluded) console.log(`  local: ${target} (excluded through .git/info/exclude)`);
   for (const warning of result.warnings) console.log(`  warning: ${warning}`);
   for (const skip of result.skipped) console.log(`  skip: ${skip.target} — ${skip.reason}`);
+
+  if (mode.mode !== 'install') {
+    if (result.removed.length === 0) {
+      console.log(
+        mode.mode === 'preview-remove'
+          ? '\nNo managed project hooks would be removed.'
+          : '\nNo managed project hooks were removed.',
+      );
+    } else {
+      console.log(
+        mode.mode === 'preview-remove'
+          ? '\nPreview only: no project hook files were changed.'
+          : '\nManaged project hooks were removed; the Claude opt-out marker prevents automatic reinstallation.',
+      );
+    }
+    return;
+  }
 
   const total = result.installed.length + result.updated.length + result.unchanged.length;
   if (total > 0) {

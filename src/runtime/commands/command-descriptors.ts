@@ -243,6 +243,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       option('--shared', 'Deprecated compatibility flag; hooks remain checkout-local and untracked'),
       option('--remove', 'Remove managed project hooks and remember the opt-out'),
       option('--force', 'Reinstall hooks even after a previous --remove opt-out'),
+      option('--dry-run', 'With --remove, preview exact hook changes without writing'),
     ]),
     renderShape: 'custom',
     docs: doc('Maintenance', ['scip-query setup-hooks', 'scip-query setup-hooks --json']),

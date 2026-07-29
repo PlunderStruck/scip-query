@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { installProjectAgentHooks } from '../../src/runtime/agent-hooks.js';
+import { installProjectAgentHooks, selectSetupHooksMode } from '../../src/runtime/agent-hooks.js';
 
 const roots: string[] = [];
 
@@ -19,6 +19,21 @@ afterEach(() => {
 });
 
 describe('checkout-local project hooks', () => {
+  it('keeps setup-hooks modes explicit and rejects contradictory flags', () => {
+    expect(selectSetupHooksMode({})).toEqual({ ok: true, mode: 'install' });
+    expect(selectSetupHooksMode({ force: true })).toEqual({ ok: true, mode: 'install' });
+    expect(selectSetupHooksMode({ remove: true })).toEqual({ ok: true, mode: 'remove' });
+    expect(selectSetupHooksMode({ remove: true, dryRun: true })).toEqual({ ok: true, mode: 'preview-remove' });
+    expect(selectSetupHooksMode({ remove: true, force: true })).toEqual({
+      ok: false,
+      message: '--remove cannot be combined with --force; force only reinstalls hooks.',
+    });
+    expect(selectSetupHooksMode({ dryRun: true })).toEqual({
+      ok: false,
+      message: '--dry-run requires --remove; installation is already non-destructive to user-owned hooks.',
+    });
+  });
+
   it('installs provider configs without creating a Git worktree diff', () => {
     const root = createGitRoot();
 
@@ -159,5 +174,22 @@ describe('checkout-local project hooks', () => {
     });
 
     expect(result.removed).toEqual(['.codex/hooks.json', '.claude/settings.local.json']);
+  });
+
+  it('previews removal without changing either project hook file', () => {
+    const root = createGitRoot();
+    installProjectAgentHooks(root, { removeLegacyUserHooks: false });
+    const codexBefore = readFileSync(join(root, '.codex', 'hooks.json'), 'utf8');
+    const claudeBefore = readFileSync(join(root, '.claude', 'settings.local.json'), 'utf8');
+
+    const result = installProjectAgentHooks(root, {
+      remove: true,
+      dryRun: true,
+      removeLegacyUserHooks: false,
+    });
+
+    expect(result.removed).toEqual(['.codex/hooks.json', '.claude/settings.local.json']);
+    expect(readFileSync(join(root, '.codex', 'hooks.json'), 'utf8')).toBe(codexBefore);
+    expect(readFileSync(join(root, '.claude', 'settings.local.json'), 'utf8')).toBe(claudeBefore);
   });
 });
