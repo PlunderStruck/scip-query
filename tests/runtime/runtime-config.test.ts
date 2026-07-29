@@ -1375,9 +1375,7 @@ describe('watch command config gate', () => {
     try {
       handleWatch({ daemon: true, debounce: 100 });
       expect(process.exitCode).toBe(1);
-      expect(error).toHaveBeenCalledWith(
-        expect.stringContaining('Timing options only apply when the process starts'),
-      );
+      expect(error).toHaveBeenCalledWith(expect.stringContaining('Timing options only apply when the process starts'));
     } finally {
       error.mockRestore();
       process.exitCode = previousExitCode;

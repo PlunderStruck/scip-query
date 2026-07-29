@@ -143,12 +143,19 @@ export type SetupHooksModeSelection =
   | { ok: true; mode: 'install' | 'remove' | 'preview-remove' }
   | { ok: false; message: string };
 
-export function selectSetupHooksMode(opts: { remove?: boolean; force?: boolean; dryRun?: boolean }): SetupHooksModeSelection {
+export function selectSetupHooksMode(opts: {
+  remove?: boolean;
+  force?: boolean;
+  dryRun?: boolean;
+}): SetupHooksModeSelection {
   if (opts.remove && opts.force) {
     return { ok: false, message: '--remove cannot be combined with --force; force only reinstalls hooks.' };
   }
   if (opts.dryRun && !opts.remove) {
-    return { ok: false, message: '--dry-run requires --remove; installation is already non-destructive to user-owned hooks.' };
+    return {
+      ok: false,
+      message: '--dry-run requires --remove; installation is already non-destructive to user-owned hooks.',
+    };
   }
   if (opts.remove) return { ok: true, mode: opts.dryRun ? 'preview-remove' : 'remove' };
   return { ok: true, mode: 'install' };

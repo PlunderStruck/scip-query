@@ -1156,13 +1156,9 @@ export function handleSuppress(id: unknown, rawOpts: unknown): void {
       expiresAt: stringOptionValue(opts, 'expiresAt'),
       decision: buildAutomatedSuppressionDecision(projectRoot, reasonCode, evidence, reason, observation),
     };
-    const result = writeSuppressionFile(
-      projectRoot,
-      suppression,
-      {
-        expectedRevision: stringOptionValue(opts, 'replace'),
-      },
-    );
+    const result = writeSuppressionFile(projectRoot, suppression, {
+      expectedRevision: stringOptionValue(opts, 'replace'),
+    });
     if (booleanOptionValue(opts, 'json')) {
       printJsonEnvelope('suppress', [String(id)], opts, result);
       return;

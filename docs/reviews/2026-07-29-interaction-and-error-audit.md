@@ -4,6 +4,7 @@ Date: 2026-07-29
 Audited revision: `37c8ab7b39e0d346b6186d65bc2a52eb0a88ee92`  
 Audited package version: `0.19.9`  
 SCIP generation: `5e6a6a935f6a` (fresh when the review began)
+Remediation status: all twelve findings implemented and integrated verification complete
 
 Scope: the human- and agent-facing command flows that mutate source,
 configuration, global skills, project hooks, watcher state, suppressions, or
@@ -592,6 +593,28 @@ These observations were investigated and are not findings:
 
 ## 6. Remediation acceptance
 
+### Implementation ledger
+
+| Finding | Resolution | Commit | Focused verification |
+| --- | --- | --- | --- |
+| IE-02 | Hook removal enters its removal branch before resolving an install-only command identity | `fccecbd5` | agent-hook locality and uninstall tests |
+| IE-01 | Real uninstall requires exactly one explicit scope; a scope-free dry run safely previews both | `e046e5ce` | 11 uninstall/hook tests |
+| IE-03 | Default human output aggregates unrelated global skills; `--verbose` preserves the full list | `7b921ce1` | 34 uninstall/CLI-contract tests |
+| IE-04 | Explicit guided mode rejects `--yes`, `--json`, and non-TTY streams before setup | `85c128f5` | 47 setup/CLI-contract tests |
+| IE-05 | Hook removal has an exact dry run, rejects remove-plus-force, and renders mode-specific outcomes | `28eb1d93` | 44 hook/uninstall/CLI-contract tests |
+| IE-06 | Status/stop reject timing flags and a live daemon refuses process-start-only overrides | `3fab8e07` | 111 watcher/config/CLI-contract tests with normal cache access |
+| IE-07 | Human reindex output labels partial publication and names every skipped language and reason | `1d899686` | 3 JSON/human reindex tests |
+| IE-08 | Init feedback comes from the revision-aware mutation result | `3cfc0040` | 9 targeted config-initialization tests |
+| IE-09 | Setup-agent derives ready, partial, or blocked from written/unchanged/skipped targets | `5d89e46f` | 30 agent/project setup tests |
+| IE-10 | Suppression receipts disclose target scope, reason code, evidence count, expiry, and revision | `76a66c7e` | 49 suppression/CLI-contract tests |
+| IE-11 | Cleanup application verifies and prints exact targets; `--dry-run` stops at the mutation boundary | `12e547c7` | 48 cleanup/CLI-contract tests |
+| IE-12 | The final human footer names transport completion and preserves the separate coverage obligation | `94121f7a` | 60 pagination/agent-setup/CLI-contract tests |
+
+Every focused suite passed. The integrated result is **IMPLEMENTED-VERIFIED**:
+all twelve findings have regression coverage, the complete test suite passes,
+and every surviving heuristic gate result has an evidence-backed disposition
+below and in the remediation plan.
+
 The interaction remediation is complete only when:
 
 - all twelve findings have focused regression coverage;
@@ -612,3 +635,65 @@ The interaction remediation is complete only when:
 - focused tests, the full suite, typecheck, lint, build, public API checks,
   `diff-impact`, and `diff-gate` pass or every surviving gate finding has a
   written evidence-backed disposition.
+
+### Integrated verification
+
+- The watcher published fresh generation `4b2757fd852f`; status reported the
+  watcher idle, no pending refresh request, all TypeScript and Rust
+  capabilities available, and a passing affected-set shadow.
+- `pnpm run lint` passed formatting, ESLint, build, the 72-path public
+  TypeScript API contract, and skill-link validation. `pnpm run typecheck`
+  passed the main project and both compile-time protocol fixtures.
+- The unrestricted full suite passed **267 files and 2,126 tests**. A prior
+  restricted-sandbox run had cache-permission and process-timing failures;
+  every one passed when the suite received its normal cache and process
+  permissions.
+- `pnpm run docs:commands` regenerated the command reference without changing
+  it, proving the committed reference already matches the final descriptors.
+- `scip-query diff-impact --base
+  37c8ab7b39e0d346b6186d65bc2a52eb0a88ee92` reported 12 changed source files,
+  31 changed symbols, and six consumer files. All six are the expected setup,
+  invocation, cleanup, runtime-barrel, and query-spec consumers.
+- Relevant cleanup postchecks found no incomplete migration, unused parameter,
+  recent duplicate, or newly introduced wrapper, passthrough, re-export, or
+  stale-abstraction candidate. Targeted similarity results were either empty,
+  the direct consumer of the queried helper, or a distinct domain
+  classification.
+- `scip-query self-audit` sampled 50 symbols. Its compiler oracle reported
+  reference precision and recall of 1.0; callee recall was 0.667 over three
+  comparable samples and explicitly partial. Neither disagreement names a
+  changed interaction helper.
+- `scip-query health --baseline` reported 132 repository-wide findings against
+  an out-of-date stored baseline. None names a helper or type introduced by
+  IE-01 through IE-12, so the baseline was not rewritten as part of this
+  interaction program.
+
+### Gate dispositions and recovery probes
+
+The final `scip-query diff-gate` reported one blocking co-change heuristic and
+one advisory:
+
+- `src/runtime/commands/command-descriptors.ts` changed without
+  `docs/COMMAND_REFERENCE.md` in the final uncommitted diff. The remaining
+  source change is formatter-only; the feature commits already changed the
+  generated reference, and a fresh `pnpm run docs:commands` produced no diff.
+  The finding is accepted without a suppression so a future semantic command
+  change still receives the useful warning.
+- `docs/architecture/rust-semantic-performance-ledger.md` still describes
+  `src/runtime/project-setup.ts` as owning non-interactive setup and the guided
+  planner. Inspection confirmed both responsibilities remain there, so the
+  advisory citation is current.
+
+The gate event is retained in
+`.scipquery/events/1785336885964-6723DCD96D74F0BA.json`, as required by the
+repository evidence policy.
+
+Adversarial built-CLI probes also held:
+
+- bare `uninstall` refused mutation and named the two explicit scope choices;
+- `setup --guided` refused a non-interactive stream and directed automation to
+  `--yes`;
+- `setup-hooks --remove --dry-run` named both project files and made no change;
+- a deliberately small output page retrieved `selectUninstallScope` over five
+  exact continuation commands, preserved line structure, and ended with
+  `[scip-query transport complete; evaluate command coverage separately]`.

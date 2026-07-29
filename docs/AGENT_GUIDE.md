@@ -25,7 +25,8 @@ For analyzer implementation work, follow [Regex Policy](REGEX_POLICY.md): regex 
    install state, smoke tests, health score, issue list, health dossier paths,
    and setup verdict. A project with no watch decision is enabled; an existing
    explicit `watch.enabled: false` is preserved. Use `scip-query setup --guided`
-   for a recommended automatic-indexing choice, or
+   in an interactive terminal for a recommended automatic-indexing choice, use
+   `scip-query setup --yes` for automatic defaults, or
    `scip-query setup --no-hooks --json` when the repo should not write Codex or
    Claude Code lifecycle hooks. Non-interactive setup and ordinary reindex
    diagnose missing global tools without installing them. Pass
@@ -39,8 +40,8 @@ For analyzer implementation work, follow [Regex Policy](REGEX_POLICY.md): regex 
    gate run changes them. Checkout preferences configure only one clone, so do
    not commit `.codex/hooks.json` or `.claude/settings.local.json`; setup keeps
    them out of Git through `.git/info/exclude`. User-environment changes install
-   skills or indexers for the current machine. Use `setup --guided` to answer
-   each repository, checkout, or user-scope question separately; use
+   skills or indexers for the current machine. Use `setup --guided` from a TTY
+   to answer each repository, checkout, or user-scope question separately; use
    `setup --install-missing` for an explicit non-interactive installation
    grant.
 

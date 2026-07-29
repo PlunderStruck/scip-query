@@ -224,6 +224,12 @@ Batch 0: COMPILER-VERIFIED
 ```
 
 When verification _fails_, the errors name the exact references the static evidence missed — that failure has caught real detector mistakes and stopped build-breaking deletions.
+Before applying a verified batch, run
+`scip-query cleanup-apply --verified --batch <n> --dry-run`. The preview reruns
+the verifier and dirty-tree checks, names every file, symbol range, and LOC,
+and stops at the source-mutation boundary. Apply by repeating the command
+without `--dry-run`; use `--all` only when the entire printed target set is
+intended.
 
 **5. Trim speculative generality.** `unused-params` finds trailing parameters no body ever uses (the classic "options for later"), scoped to removals that are type-safe by construction.
 
@@ -439,7 +445,7 @@ classifies current evidence, while `scip-improve` changes confirmed findings.
 challenges a concrete finished diff. `scip-explore` explains working behavior;
 `scip-diagnose` starts from a failure or contradiction.
 
-Project setup writes reviewable checkout-local lifecycle hooks for Codex and Claude Code (`.codex/hooks.json` and `.claude/settings.local.json`). A checkout-local hook is an agent-tool preference whose defining trait is that it applies to one clone rather than expressing team policy. Setup adds both paths to that clone's `.git/info/exclude`, so they do not appear in commits, and refuses to rewrite either path if it is already tracked. `setup-hooks --shared` remains accepted only as a deprecated compatibility flag; it no longer writes `.claude/settings.json`. These hooks add scip-query context at session start, route prompts toward the right skill, and run an advisory Stop-hook wrapper around the diff gate only for that repository. The Stop hook sends feedback to the agent by default instead of blocking; set `SCIP_QUERY_STOP_HOOK_MODE=warn` for a warning-only hook response, or `SCIP_QUERY_STOP_HOOK_MODE=block` to enforce the gate. Set `SCIP_QUERY_SKIP_HOOK_INSTALL=1` or run `scip-query setup --no-hooks` to skip hook installation during setup, and run `scip-query setup-hooks --json` later to repair the current checkout's hooks.
+Project setup writes reviewable checkout-local lifecycle hooks for Codex and Claude Code (`.codex/hooks.json` and `.claude/settings.local.json`). A checkout-local hook is an agent-tool preference whose defining trait is that it applies to one clone rather than expressing team policy. Setup adds both paths to that clone's `.git/info/exclude`, so they do not appear in commits, and refuses to rewrite either path if it is already tracked. `setup-hooks --shared` remains accepted only as a deprecated compatibility flag; it no longer writes `.claude/settings.json`. These hooks add scip-query context at session start, route prompts toward the right skill, and run an advisory Stop-hook wrapper around the diff gate only for that repository. The Stop hook sends feedback to the agent by default instead of blocking; set `SCIP_QUERY_STOP_HOOK_MODE=warn` for a warning-only hook response, or `SCIP_QUERY_STOP_HOOK_MODE=block` to enforce the gate. Set `SCIP_QUERY_SKIP_HOOK_INSTALL=1` or run `scip-query setup --no-hooks` to skip hook installation during setup, and run `scip-query setup-hooks --json` later to repair the current checkout's hooks. Preview hook removal with `scip-query setup-hooks --remove --dry-run`; `--force` is an installation-only mode and cannot be combined with removal. A scope-free `scip-query uninstall --dry-run` safely previews both global and project integrations, while real uninstall requires exactly one of `--global` or `--project`.
 
 Setup/configuration writers are conflict-aware. They reread the latest file
 under a short token-owned lock, preserve unknown JSON fields and prose outside
@@ -465,8 +471,9 @@ refreshes the index, smoke-tests representative command families, writes
 selected, reports the health score and items needing attention, and seeds
 AGENTS.md/CLAUDE.md guidance. Use
 the default terminal checklist to accept or decline the recommended automatic
-indexing action and other project-local changes (`--guided` reopens it
-explicitly). After setup,
+indexing action and other project-local changes (`--guided` requires an
+interactive terminal and reopens it explicitly; automation should use
+`--yes` or `--json`). After setup,
 `scip-audit` confirms raw signals and `scip-improve` keeps
 fixing the worst confirmed items until no safe confirmed cleanup remains. Use
 `scip-query setup --git-hook` when you also want a local pre-commit diff gate.
@@ -809,7 +816,10 @@ background service. Relevant file/Git activity keeps it alive; it exits after
 `idleTimeoutMs` of clean inactivity and wakes on the next command. Set the idle
 timeout to `0` to keep it running. `scip-query watch` still provides foreground
 mode, while `watch --daemon`, `watch --status`, and `watch --stop` expose the
-background lifecycle. The default 5-second cooldown coalesces change bursts
+background lifecycle. Command-line timing flags are process-local and apply
+only when a foreground watcher or daemon starts; a live daemon refuses those
+flags and names the required stop/start sequence instead of pretending its
+timing changed. The default 5-second cooldown coalesces change bursts
 into one refresh plus, when necessary, one trailing refresh; explicitly setting
 `cooldownMs` to `0` opts into immediate scheduling. Both modes share one project
 lock, so only one can own an

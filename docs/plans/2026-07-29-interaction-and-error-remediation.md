@@ -1,7 +1,7 @@
 # Interaction-and-error remediation program
 
 Date: 2026-07-29  
-Status: approved for implementation by the user  
+Status: complete — slices 1-13 implemented and verified
 Source review: `docs/reviews/2026-07-29-interaction-and-error-audit.md`
 
 ## Goal
@@ -599,6 +599,10 @@ Result: **PLANNED-COMPLETE** — 16 attacks, 12 holes to be repaired by Slices
 1-12, 0 accepted holes, 0 blank authority rows, and no persistent-data or
 protocol migration.
 
+Execution result: **IMPLEMENTED-VERIFIED** — all 12 holes repaired, all 16
+attacks defended, all focused suites green, 2,126 full-suite tests green, and
+no unresolved change-specific gate finding.
+
 ## Deviation ledger
 
 - **D1 — Batched SCIP gates while the watcher owns a long refresh.** After
@@ -609,6 +613,89 @@ protocol migration.
   tests and its own commit; `diff-impact` and `diff-gate` are batched once the
   watcher publishes a fresh generation, with a mandatory final full gate
   before program closure.
+
+## Implementation ledger
+
+| Slice | Finding | Commit | Result |
+| --- | --- | --- | --- |
+| 1 | IE-02 | `fccecbd5` | removal no longer resolves installation identity |
+| 2 | IE-01 | `e046e5ce` | destructive uninstall scope is explicit |
+| 3 | IE-03 | `7b921ce1` | retained global skills are concise by default |
+| 4 | IE-04 | `85c128f5` | guided setup remains genuinely interactive |
+| 5 | IE-05 | `28eb1d93` | hook removal modes are exclusive and previewable |
+| 6 | IE-06 | `3fab8e07` | watcher timing flags cannot be accepted and ignored |
+| 7 | IE-07 | `1d899686` | partial reindex publication is explicit |
+| 8 | IE-08 | `3cfc0040` | init output reflects the committed mutation |
+| 9 | IE-09 | `5d89e46f` | setup-agent verdict is derived |
+| 10 | IE-10 | `76a66c7e` | suppression scope and lifetime are visible |
+| 11 | IE-11 | `12e547c7` | cleanup targets can be verified and previewed without writes |
+| 12 | IE-12 | `94121f7a` | transport completion is distinct from command coverage |
+
+Slice 13 owns only mechanical formatting, final documentation status, and
+integrated gates; it introduces no new runtime behavior.
+
+## Integrated verification
+
+### Repository and compiler evidence
+
+- Fresh watcher generation: `4b2757fd852f`, idle with no pending refresh
+  requests, all configured capabilities available, and the affected-set shadow
+  passing.
+- `diff-impact` from audited revision
+  `37c8ab7b39e0d346b6186d65bc2a52eb0a88ee92`: 12 changed source files, 31
+  changed symbols, and six expected consumer files. No unexpected subsystem
+  was reached.
+- Relevant postchecks: no incomplete migration, unused parameter, or recent
+  duplicate; no new change-specific wrapper, passthrough, redundant re-export,
+  or stale abstraction. Targeted similarity candidates were empty, expected
+  consumers, or domain-distinct helpers.
+- `self-audit`: 50 sampled symbols, compiler-reference precision 1.0 and recall
+  1.0. Callee recall was 0.667 over only three comparable partial-oracle
+  samples; neither disagreement concerns this program.
+
+### Build and test evidence
+
+- `pnpm run lint`: pass, including formatting, ESLint, build, 72-path public
+  API compatibility, and skill-link validation.
+- `pnpm run typecheck`: pass for the main project and both compile-time protocol
+  fixtures.
+- `pnpm test` with normal cache/process permissions: **267 files, 2,126 tests,
+  all passing**.
+- `pnpm run docs:commands`: pass with no generated diff.
+- Focused regression suites: every slice passed the test set recorded in the
+  implementation ledger.
+
+### Refutation attempts
+
+1. **Implicit destructive scope:** the freshly built CLI rejected bare
+   `uninstall` before mutation and named `--global`, `--project`, and the safe
+   scope-free dry run.
+2. **Silent automation fallback:** `setup --guided` on a non-TTY stream failed
+   before setup and directed automation to `--yes`.
+3. **Preview impurity:** `setup-hooks --remove --dry-run` named the Codex and
+   Claude files, disclosed the declined Claude target, and reported that no
+   files changed.
+4. **Incomplete evidence mistaken for complete:** a 256-character transport
+   page required five exact continuation commands and ended only after all
+   1,031 rendered characters with the separate command-coverage obligation.
+
+### Detector dispositions
+
+- `health --baseline` reported 132 repository-wide findings against an
+  out-of-date baseline. None names a helper or type introduced by these
+  slices. Updating that baseline would mix unrelated repository debt into this
+  program, so it remains unchanged.
+- Final `diff-gate` reported the formatter-only
+  `command-descriptors.ts`/`COMMAND_REFERENCE.md` co-change mismatch. The
+  semantic descriptor and generated-reference changes landed together in the
+  feature commits, and regeneration after formatting produced no diff. This is
+  accepted without a suppression.
+- The advisory guide reference from
+  `docs/architecture/rust-semantic-performance-ledger.md` to
+  `src/runtime/project-setup.ts` remains accurate: that module still owns both
+  non-interactive setup and the guided planner.
+- The required event record is retained at
+  `.scipquery/events/1785336885964-6723DCD96D74F0BA.json`.
 
 ## Deferred list
 

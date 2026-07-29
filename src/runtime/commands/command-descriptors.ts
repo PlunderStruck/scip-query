@@ -530,7 +530,11 @@ export const commandDescriptors: CommandDescriptor[] = [
         'Process-local min ms between reindexes; 0 disables spacing (default: 5000)',
         parseNonNegativeInteger,
       ),
-      option('--git-poll <ms>', 'Process-local ms between Git HEAD/index checks (default: 2000)', parseNonNegativeInteger),
+      option(
+        '--git-poll <ms>',
+        'Process-local ms between Git HEAD/index checks (default: 2000)',
+        parseNonNegativeInteger,
+      ),
       option(
         '--idle-timeout <ms>',
         'Process-local ms before clean-idle daemon exit; 0 keeps it running (default: 600000)',

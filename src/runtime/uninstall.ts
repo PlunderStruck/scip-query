@@ -50,9 +50,7 @@ export function formatUninstallReport(report: UninstallReport, opts: { verbose?:
   return lines;
 }
 
-export type UninstallScopeSelection =
-  | { ok: true; global: boolean; project: boolean }
-  | { ok: false; message: string };
+export type UninstallScopeSelection = { ok: true; global: boolean; project: boolean } | { ok: false; message: string };
 
 export function selectUninstallScope(opts: {
   global?: boolean;
