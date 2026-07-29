@@ -852,6 +852,12 @@ scip-query event records do not request indexing. Git polling compares the
 actual changed paths and skips a transition proven to contain only those
 non-input files; if Git cannot establish the changed path set, the watcher
 conservatively refreshes rather than assuming the index is current.
+The persisted project fingerprint uses the same input boundary, so a
+documentation-only edit does not make the index stale on the next command.
+Each cached language shard owns only its language's source, build manifests,
+and dependency locks: for example, `package-lock.json` invalidates the
+TypeScript/JavaScript shard but not Rust, while `Cargo.lock` invalidates Rust
+but not TypeScript.
 
 Automatic refresh also has a persisted rolling resource budget. By default,
 after two completed rebuilds or 1 GiB of estimated writes within 15 minutes,

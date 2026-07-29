@@ -10,6 +10,7 @@ import {
   resolveProjectFile,
   UnsafeProjectPathError,
 } from '../../src/platform/project-files.js';
+import { LANGUAGE_INDEX_MARKERS } from '../../src/domain/project-input.js';
 
 const tempDirs: string[] = [];
 
@@ -88,22 +89,58 @@ describe('platform project file fingerprints', () => {
     writeFileSync(join(projectRoot, '.scipquery', 'events', 'event.json'), '{}\n');
 
     const first = buildProjectInputFingerprint(projectRoot, ['typescript'], {});
-    expect(first.files.map((file) => file.path)).toEqual([
-      '.scipquery.json',
-      'docs/guide.md',
-      'src.ts',
-      'tsconfig.scip.json',
-    ]);
+    expect(first.files.map((file) => file.path)).toEqual(['.scipquery.json', 'src.ts', 'tsconfig.scip.json']);
 
     writeFileSync(join(projectRoot, '.scipquery', 'events', 'event.json'), '{"changed":true}\n');
     expect(buildProjectInputFingerprint(projectRoot, ['typescript'], {})).toEqual(first);
 
     writeFileSync(join(projectRoot, 'docs', 'guide.md'), '# Changed guide\n');
-    expect(buildProjectInputFingerprint(projectRoot, ['typescript'], {})).not.toEqual(first);
+    expect(buildProjectInputFingerprint(projectRoot, ['typescript'], {})).toEqual(first);
 
     writeFileSync(join(projectRoot, 'docs', 'guide.md'), '# Guide\n');
     writeFileSync(join(projectRoot, 'src.ts'), 'export const value = 2;\n');
     expect(buildProjectInputFingerprint(projectRoot, ['typescript'], {})).not.toEqual(first);
+  });
+
+  it('isolates language fingerprints from unrelated dependency manifests', () => {
+    const projectRoot = temporaryDirectory('scip-query-language-fingerprint-');
+    mkdirSync(join(projectRoot, 'src'));
+    writeFileSync(join(projectRoot, '.scipquery.json'), '{}\n');
+    writeFileSync(join(projectRoot, 'src/main.ts'), 'export const value = 1;\n');
+    writeFileSync(join(projectRoot, 'src/lib.rs'), 'pub const VALUE: i32 = 1;\n');
+    writeFileSync(join(projectRoot, 'package.json'), '{}\n');
+    writeFileSync(join(projectRoot, 'package-lock.json'), '{"lockfileVersion":3}\n');
+    writeFileSync(join(projectRoot, 'Cargo.toml'), '[package]\nname = "fixture"\nversion = "0.1.0"\n');
+    writeFileSync(join(projectRoot, 'Cargo.lock'), 'version = 3\n');
+    writeFileSync(join(projectRoot, 'README.md'), '# ignored\n');
+
+    const typescript = fingerprintProjectFiles(projectRoot, {
+      language: 'typescript',
+      markerFiles: LANGUAGE_INDEX_MARKERS.typescript,
+    });
+    const rust = fingerprintProjectFiles(projectRoot, {
+      language: 'rust',
+      markerFiles: LANGUAGE_INDEX_MARKERS.rust,
+    });
+
+    expect(typescript.map((file) => file.path)).toEqual([
+      '.scipquery.json',
+      'package-lock.json',
+      'package.json',
+      'src/main.ts',
+    ]);
+    expect(rust.map((file) => file.path)).toEqual(['.scipquery.json', 'Cargo.lock', 'Cargo.toml', 'src/lib.rs']);
+
+    writeFileSync(join(projectRoot, 'package-lock.json'), '{"lockfileVersion":3,"changed":true}\n');
+    expect(
+      fingerprintProjectFiles(projectRoot, { language: 'rust', markerFiles: LANGUAGE_INDEX_MARKERS.rust }),
+    ).toEqual(rust);
+    expect(
+      fingerprintProjectFiles(projectRoot, {
+        language: 'typescript',
+        markerFiles: LANGUAGE_INDEX_MARKERS.typescript,
+      }),
+    ).not.toEqual(typescript);
   });
 });
 

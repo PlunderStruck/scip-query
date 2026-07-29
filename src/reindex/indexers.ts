@@ -1,5 +1,6 @@
 import { readdirSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
+import { LANGUAGE_INDEX_MARKERS } from '../domain/project-input.js';
 import type { SupportedLanguage, IndexerConfig } from '../domain/types.js';
 import { RUST_ANALYZER_TOOLCHAIN } from '../platform/indexer-toolchain.js';
 
@@ -28,7 +29,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       if (pnpmWorkspaces && !projectPath) args.splice(1, 0, '--pnpm-workspaces');
       return { binary: indexerBinary, args };
     },
-    markerFiles: ['tsconfig.json'],
+    markerFiles: [...LANGUAGE_INDEX_MARKERS.typescript],
     installMethods: [
       {
         label: 'npm',
@@ -51,7 +52,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       binary: indexerBinary,
       args: ['index', '--infer-tsconfig', '--output', outputPath, '--no-progress-bar'],
     }),
-    markerFiles: ['package.json'],
+    markerFiles: [...LANGUAGE_INDEX_MARKERS.javascript],
     installMethods: [
       {
         label: 'npm',
@@ -74,7 +75,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       binary: 'scip-java',
       args: ['index', '--output', outputPath],
     }),
-    markerFiles: ['pom.xml', 'build.gradle'],
+    markerFiles: [...LANGUAGE_INDEX_MARKERS.java],
     installMethods: [],
     installUrl: 'https://github.com/sourcegraph/scip-java/releases',
   },
@@ -87,7 +88,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       binary: 'scip-java',
       args: ['index', '--output', outputPath],
     }),
-    markerFiles: ['build.sbt'],
+    markerFiles: [...LANGUAGE_INDEX_MARKERS.scala],
     installMethods: [],
     installUrl: 'https://github.com/sourcegraph/scip-java/releases',
   },
@@ -100,7 +101,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       binary: 'scip-java',
       args: ['index', '--output', outputPath],
     }),
-    markerFiles: ['build.gradle.kts'],
+    markerFiles: [...LANGUAGE_INDEX_MARKERS.kotlin],
     installMethods: [],
     installUrl: 'https://github.com/sourcegraph/scip-java/releases',
   },
@@ -113,7 +114,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       binary: RUST_ANALYZER_TOOLCHAIN.indexerBinary,
       args: ['scip', '.', '--output', outputPath],
     }),
-    markerFiles: ['Cargo.toml'],
+    markerFiles: [...LANGUAGE_INDEX_MARKERS.rust],
     installMethods: [],
     installUrl: RUST_ANALYZER_TOOLCHAIN.installUrl,
   },
@@ -127,7 +128,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       binary: indexerBinary,
       args: ['index', '--output', outputPath, '--project-name', 'project'],
     }),
-    markerFiles: ['pyproject.toml', 'setup.py'],
+    markerFiles: [...LANGUAGE_INDEX_MARKERS.python],
     installMethods: [
       {
         label: 'npm',
@@ -154,7 +155,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       }
       return { binary: indexerBinary, args };
     },
-    markerFiles: ['deps.edn', 'project.clj', 'bb.edn', 'shadow-cljs.edn'],
+    markerFiles: [...LANGUAGE_INDEX_MARKERS.clojure],
     installMethods: [],
     installUrl: 'https://github.com/PlunderStruck/scip-clojure',
   },
@@ -168,7 +169,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       args: ['--dir', '.'],
     }),
     defaultOutputPath: 'index.scip',
-    markerFiles: ['Gemfile'],
+    markerFiles: [...LANGUAGE_INDEX_MARKERS.ruby],
     installMethods: [],
     installUrl: 'https://github.com/sourcegraph/scip-ruby/releases',
   },
@@ -181,7 +182,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       binary: 'scip-go',
       args: ['--output', outputPath],
     }),
-    markerFiles: ['go.mod'],
+    markerFiles: [...LANGUAGE_INDEX_MARKERS.go],
     installMethods: [
       {
         label: 'go install',
@@ -203,7 +204,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       binary: 'scip-clang',
       args: ['--compdb-path', 'compile_commands.json', '--index-output-path', outputPath],
     }),
-    markerFiles: ['CMakeLists.txt', 'Makefile'],
+    markerFiles: [...LANGUAGE_INDEX_MARKERS.cpp],
     installMethods: [],
     installUrl: 'https://github.com/sourcegraph/scip-clang/releases',
   },
@@ -216,7 +217,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       binary: 'scip-clang',
       args: ['--compdb-path', 'compile_commands.json', '--index-output-path', outputPath],
     }),
-    markerFiles: ['CMakeLists.txt', 'Makefile'],
+    markerFiles: [...LANGUAGE_INDEX_MARKERS.c],
     installMethods: [],
     installUrl: 'https://github.com/sourcegraph/scip-clang/releases',
   },
@@ -236,7 +237,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
         projectRoot,
       ],
     }),
-    markerFiles: ['*.csproj', '*.sln'],
+    markerFiles: [...LANGUAGE_INDEX_MARKERS.csharp],
     installMethods: [
       {
         label: 'dotnet',
@@ -265,7 +266,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
         projectRoot,
       ],
     }),
-    markerFiles: ['*.vbproj', '*.sln'],
+    markerFiles: [...LANGUAGE_INDEX_MARKERS.vb],
     installMethods: [
       {
         label: 'dotnet',
@@ -287,7 +288,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       binary: indexerBinary,
       args: ['--output', outputPath],
     }),
-    markerFiles: ['pubspec.yaml'],
+    markerFiles: [...LANGUAGE_INDEX_MARKERS.dart],
     installMethods: [
       {
         label: 'dart pub',
@@ -314,7 +315,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
           }
         : { binary: indexerBinary, args: [] },
     defaultOutputPath: 'index.scip',
-    markerFiles: ['composer.json'],
+    markerFiles: [...LANGUAGE_INDEX_MARKERS.php],
     installMethods: [],
     installUrl: 'https://github.com/davidrjenni/scip-php/releases',
   },

@@ -59,17 +59,23 @@ export type FileDependencyGraph = ReadonlyMap<string, ReadonlySet<string>>;
 export function classifyProjectInputPath(
   relativePath: string,
   languages: readonly SupportedLanguage[],
+  configuredMarkerFiles: readonly string[] = [],
 ): ProjectInputPathKind {
-  const basename = relativePath.split('/').at(-1) ?? relativePath;
+  const normalizedPath = normalizeProjectInputPath(relativePath);
   if (
-    COMMON_INDEX_INPUTS.has(basename) ||
-    basename === '.scipquery.json' ||
-    /^tsconfig(?:\..+)?\.json$/.test(basename)
+    SHARED_INDEX_INPUTS.has(normalizedPath) ||
+    configuredMarkerFiles.some((marker) => matchesProjectInputMarker(normalizedPath, marker)) ||
+    languages.some((language) => isLanguageConfigurationInputPath(normalizedPath, language))
   ) {
     return 'config';
   }
-  if (/\.d\.(?:ts|mts|cts)$/.test(relativePath.toLowerCase())) return 'ambient';
-  const extension = relativePath.includes('.') ? `.${relativePath.split('.').at(-1)!.toLowerCase()}` : '';
+  if (
+    languages.some(isTypeScriptFamilyLanguage) &&
+    /\.d\.(?:ts|mts|cts)$/.test(normalizedPath.toLowerCase())
+  ) {
+    return 'ambient';
+  }
+  const extension = projectInputExtension(normalizedPath);
   if (languages.some((language) => (LANGUAGE_SOURCE_EXTENSIONS[language] ?? []).includes(extension))) return 'source';
   return 'other';
 }
@@ -79,16 +85,12 @@ export function isLanguageRelevantProjectInputPath(
   language: SupportedLanguage,
   markerFiles: readonly string[] | undefined,
 ): boolean {
-  const basename = relativePath.split('/').at(-1) ?? relativePath;
-  if (markerFiles?.includes(relativePath) || markerFiles?.includes(basename)) return true;
-  if (
-    COMMON_INDEX_INPUTS.has(basename) ||
-    basename === '.scipquery.json' ||
-    /^tsconfig(?:\..+)?\.json$/.test(basename)
-  ) {
-    return true;
-  }
-  const extension = relativePath.includes('.') ? `.${relativePath.split('.').at(-1)!.toLowerCase()}` : '';
+  const normalizedPath = normalizeProjectInputPath(relativePath);
+  if (SHARED_INDEX_INPUTS.has(normalizedPath)) return true;
+  if (markerFiles?.some((marker) => matchesProjectInputMarker(normalizedPath, marker))) return true;
+  if (isLanguageConfigurationInputPath(normalizedPath, language)) return true;
+  if (isTypeScriptFamilyLanguage(language) && /\.d\.(?:ts|mts|cts)$/.test(normalizedPath.toLowerCase())) return true;
+  const extension = projectInputExtension(normalizedPath);
   return (LANGUAGE_SOURCE_EXTENSIONS[language] ?? []).includes(extension);
 }
 
@@ -186,39 +188,146 @@ function sameStrings(left: readonly string[], right: readonly string[]): boolean
   return sortedLeft.every((value, index) => value === sortedRight[index]);
 }
 
-const COMMON_INDEX_INPUTS = new Set([
-  'package.json',
-  'package-lock.json',
-  'pnpm-lock.yaml',
-  'yarn.lock',
-  'bun.lockb',
-  'tsconfig.json',
-  'tsconfig.base.json',
-  'pyproject.toml',
-  'setup.py',
-  'setup.cfg',
-  'Cargo.toml',
-  'Cargo.lock',
-  'go.mod',
-  'go.sum',
-  'pom.xml',
-  'build.gradle',
-  'build.gradle.kts',
-  'build.sbt',
-  'compile_commands.json',
-  'CMakeLists.txt',
-  'Makefile',
-  'Gemfile',
-  'Gemfile.lock',
-  'composer.json',
-  'composer.lock',
-  'pubspec.yaml',
-  'pubspec.lock',
-  'deps.edn',
-  'project.clj',
-  'bb.edn',
-  'shadow-cljs.edn',
-]);
+const SHARED_INDEX_INPUTS = new Set(['.scipquery.json']);
+
+/**
+ * Files whose presence identifies a language to its indexer. Indexer
+ * descriptors reuse this table so language detection and cache invalidation
+ * cannot silently assign different meanings to the same marker.
+ */
+export const LANGUAGE_INDEX_MARKERS = {
+  typescript: ['tsconfig.json'],
+  javascript: ['package.json'],
+  java: ['pom.xml', 'build.gradle'],
+  scala: ['build.sbt'],
+  kotlin: ['build.gradle.kts'],
+  rust: ['Cargo.toml'],
+  python: ['pyproject.toml', 'setup.py'],
+  ruby: ['Gemfile'],
+  go: ['go.mod'],
+  cpp: ['CMakeLists.txt', 'Makefile'],
+  c: ['CMakeLists.txt', 'Makefile'],
+  csharp: ['*.csproj', '*.sln'],
+  vb: ['*.vbproj', '*.sln'],
+  dart: ['pubspec.yaml'],
+  php: ['composer.json'],
+  clojure: ['deps.edn', 'project.clj', 'bb.edn', 'shadow-cljs.edn'],
+} satisfies Record<SupportedLanguage, readonly string[]>;
+
+const LANGUAGE_ADDITIONAL_INDEX_INPUTS = {
+  typescript: [
+    'package.json',
+    'package-lock.json',
+    'pnpm-lock.yaml',
+    'yarn.lock',
+    'bun.lock',
+    'bun.lockb',
+    'tsconfig.*.json',
+    'jsconfig.json',
+    'jsconfig.*.json',
+  ],
+  javascript: [
+    'package-lock.json',
+    'pnpm-lock.yaml',
+    'yarn.lock',
+    'bun.lock',
+    'bun.lockb',
+    'tsconfig.json',
+    'tsconfig.*.json',
+    'jsconfig.json',
+    'jsconfig.*.json',
+  ],
+  java: [
+    'build.gradle.kts',
+    'settings.gradle',
+    'settings.gradle.kts',
+    'gradle.properties',
+    'gradle.lockfile',
+    'gradle-wrapper.properties',
+  ],
+  scala: ['plugins.sbt', 'build.properties'],
+  kotlin: [
+    'pom.xml',
+    'build.gradle',
+    'settings.gradle',
+    'settings.gradle.kts',
+    'gradle.properties',
+    'gradle.lockfile',
+    'gradle-wrapper.properties',
+  ],
+  rust: ['Cargo.lock', 'rust-project.json', 'rust-toolchain', 'rust-toolchain.toml'],
+  python: [
+    'setup.cfg',
+    'requirements*.txt',
+    'Pipfile',
+    'Pipfile.lock',
+    'poetry.lock',
+    'uv.lock',
+  ],
+  ruby: ['Gemfile.lock', 'gems.locked'],
+  go: ['go.sum', 'go.work', 'go.work.sum'],
+  cpp: ['compile_commands.json'],
+  c: ['compile_commands.json'],
+  csharp: [
+    'Directory.Build.props',
+    'Directory.Build.targets',
+    'Directory.Packages.props',
+    'packages.lock.json',
+    'NuGet.Config',
+    'global.json',
+  ],
+  vb: [
+    'Directory.Build.props',
+    'Directory.Build.targets',
+    'Directory.Packages.props',
+    'packages.lock.json',
+    'NuGet.Config',
+    'global.json',
+  ],
+  dart: ['pubspec.lock', 'analysis_options.yaml'],
+  php: ['composer.lock'],
+  clojure: [],
+} satisfies Record<SupportedLanguage, readonly string[]>;
+
+const markerPatternCache = new Map<string, RegExp>();
+
+function isLanguageConfigurationInputPath(relativePath: string, language: SupportedLanguage): boolean {
+  return (
+    LANGUAGE_INDEX_MARKERS[language].some((marker) => matchesProjectInputMarker(relativePath, marker)) ||
+    LANGUAGE_ADDITIONAL_INDEX_INPUTS[language].some((marker) => matchesProjectInputMarker(relativePath, marker))
+  );
+}
+
+function matchesProjectInputMarker(relativePath: string, marker: string): boolean {
+  const normalizedMarker = normalizeProjectInputPath(marker).replace(/^\.\//, '');
+  if (!normalizedMarker) return false;
+  const basename = relativePath.split('/').at(-1) ?? relativePath;
+  const candidate = normalizedMarker.includes('/') ? relativePath : basename;
+  if (!normalizedMarker.includes('*') && !normalizedMarker.includes('?')) return candidate === normalizedMarker;
+
+  let matcher = markerPatternCache.get(normalizedMarker);
+  if (!matcher) {
+    const pattern = normalizedMarker
+      .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+      .replace(/\*/g, '[^/]*')
+      .replace(/\?/g, '[^/]');
+    matcher = new RegExp(`^${pattern}$`);
+    markerPatternCache.set(normalizedMarker, matcher);
+  }
+  return matcher.test(candidate);
+}
+
+function normalizeProjectInputPath(path: string): string {
+  return path.replaceAll('\\', '/').replace(/^\.\//, '');
+}
+
+function projectInputExtension(relativePath: string): string {
+  return relativePath.includes('.') ? `.${relativePath.split('.').at(-1)!.toLowerCase()}` : '';
+}
+
+function isTypeScriptFamilyLanguage(language: SupportedLanguage): boolean {
+  return language === 'typescript' || language === 'javascript';
+}
 
 const LANGUAGE_SOURCE_EXTENSIONS: Record<SupportedLanguage, readonly string[]> = {
   typescript: ['.ts', '.tsx', '.mts', '.cts'],

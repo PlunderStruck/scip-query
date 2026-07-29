@@ -2420,15 +2420,21 @@ function computeLanguageFingerprints(
 ): Partial<Record<SupportedLanguage, ReindexFingerprint>> {
   return Object.fromEntries(
     languages.map((language) => {
-      const markerFiles = getIndexerConfig(language).markerFiles;
+      const normalizedTypeScriptProjects =
+        language === 'typescript' ? normalizeTypeScriptProjects(opts.typescriptProjects) : [];
+      const clojureConfigPath = language === 'clojure' ? normalizeOptionalPath(opts.clojureConfigPath) : undefined;
+      const markerFiles = [
+        ...getIndexerConfig(language).markerFiles,
+        ...normalizedTypeScriptProjects,
+        ...(clojureConfigPath ? [clojureConfigPath] : []),
+      ];
       const typeScriptOptions =
         language === 'typescript'
           ? {
               typescriptProjectMode: opts.typescriptProjectMode ?? 'single',
-              typescriptProjects: normalizeTypeScriptProjects(opts.typescriptProjects),
+              typescriptProjects: normalizedTypeScriptProjects,
             }
           : { typescriptProjectMode: 'single' as const, typescriptProjects: [] };
-      const clojureConfigPath = language === 'clojure' ? normalizeOptionalPath(opts.clojureConfigPath) : undefined;
       return [
         language,
         {

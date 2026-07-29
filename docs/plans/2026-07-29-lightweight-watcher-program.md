@@ -455,6 +455,20 @@ results.
 
 Commit: `perf: narrow language shard invalidation`.
 
+Result: **complete.** One exhaustive language-input policy now assigns source
+extensions, discovery markers, build manifests, and dependency locks to the
+indexers that can consume them; indexer descriptors reuse the same marker
+authority. Glob markers such as `*.csproj`, nested/custom exact markers, and
+TypeScript-family ambient declarations are covered. Whole-project freshness
+now fingerprints only canonical index inputs, so documentation, agent files,
+and telemetry cannot make an otherwise current index stale. Mixed-language
+integration proves `package-lock.json` reruns TypeScript but reuses Rust, while
+`Cargo.lock` does the reverse. Focused fingerprint, affected-set, reindex,
+watcher, and indexer suites pass at 130/130; typecheck, ESLint, the public API
+check, scoped unbounded recent-duplicate analysis, and diff-gate pass. A live
+second no-change reindex reused both languages in 0.1 seconds, and the next
+TypeScript source refresh reused the Rust shard.
+
 ### Slice 7 — Per-language write-amplification evidence
 
 Deployable: yes.

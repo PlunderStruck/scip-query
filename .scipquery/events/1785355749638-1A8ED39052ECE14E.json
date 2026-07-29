@@ -1,0 +1,37 @@
+{
+  "ts": 1785355749638,
+  "check": "co-change-partner",
+  "findingId": "SQ5DC1C881FD92",
+  "event": "resolved",
+  "commit": "d33e4bbf261c7b32a7f8b48ae83853460c295d1a",
+  "comparisonBaseCommit": "d33e4bbf261c7b32a7f8b48ae83853460c295d1a",
+  "gateRunId": "44e42a6c-537d-4030-a057-edbba0ec8214",
+  "observer": {
+    "kind": "local-agent",
+    "authority": "repository-writable"
+  },
+  "observation": {
+    "schemaVersion": 1,
+    "authorityKind": "index-worktree",
+    "observedAt": "2026-07-29T20:09:09.638Z",
+    "projectIdentity": "178a22f2ce5800603672d10b597d4cf97078e596c64e2eb0293681604557bda7",
+    "index": {
+      "generationIdentity": "c8f19d105cd5d78e47bdeaf052c07ffd8ed6d1782c690f7ad91890da1337d5cb",
+      "source": "immutable",
+      "alignment": "not-certified"
+    },
+    "worktree": {
+      "identity": "8802006257b9f6cf81ad5e266310b70a86a987a7a2f31b6ce9e27794e5e78636",
+      "clean": false,
+      "headCommit": "d33e4bbf261c7b32a7f8b48ae83853460c295d1a",
+      "treeOid": "b38ecdb18c7309aaa521f1c2094da457f4b76087"
+    }
+  },
+  "kind": "scip-query-outcome-event",
+  "schemaVersion": 1,
+  "eventIdentity": "[\"co-change-partner\",\"SQ5DC1C881FD92\",\"resolved\",\"d33e4bbf261c7b32a7f8b48ae83853460c295d1a\"]",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  }
+}

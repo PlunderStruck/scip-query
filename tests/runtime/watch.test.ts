@@ -515,6 +515,31 @@ describe('Watcher', () => {
     await watcher.stop();
   });
 
+  it('ignores dependency locks owned by an unconfigured language', async () => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const subscription = sourceSubscriptionHarness();
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { debounceMs: 250, gitPollMs: 60_000 } },
+      languages: ['rust'],
+      reindexRunner: { start: run },
+      subscriptionFactory: subscription.factory,
+    });
+
+    watcher.start();
+    subscription.emitAll('change', 'package-lock.json');
+    await vi.advanceTimersByTimeAsync(500);
+    expect(run).not.toHaveBeenCalled();
+
+    subscription.emitAll('change', 'Cargo.lock');
+    await vi.advanceTimersByTimeAsync(250);
+    expect(run).toHaveBeenCalledOnce();
+    await watcher.stop();
+  });
+
   it('skips proven docs-only Git transitions and reindexes compiler-input transitions', async () => {
     vi.useFakeTimers();
     const projectRoot = createProject();

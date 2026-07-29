@@ -581,7 +581,7 @@ describe('reindex reliability', () => {
     );
   });
 
-  it('refreshes metadata only when non-language files change and every language shard is reusable', async () => {
+  it('reuses the whole generation when a non-index input changes', async () => {
     const projectRoot = createProject('scip-query-reindex-shard-metadata-only-');
     const cacheDir = join(projectRoot, '.scipquery-cache');
     mkdirSync(cacheDir);
@@ -625,27 +625,59 @@ describe('reindex reliability', () => {
     expect(readFileSync(outputScip, 'utf-8')).toBe(firstScip);
     expect(readFileSync(outputDb, 'utf-8')).toBe(firstDb);
     expect(secondMeta.languageFingerprints).toEqual(firstMeta.languageFingerprints);
-    expect(secondMeta.fingerprint).not.toEqual(firstMeta.fingerprint);
-    expect(secondMeta.fingerprint.files.some((file: { path: string }) => file.path === 'README.md')).toBe(true);
-    expect(statuses.join('\n')).toContain('Reusing cached typescript SCIP shard');
-    expect(statuses.join('\n')).toContain('Reusing cached python SCIP shard');
-    expect(statuses.join('\n')).toContain('All language shards unchanged; reused existing SQLite index');
+    expect(secondMeta.fingerprint).toEqual(firstMeta.fingerprint);
+    expect(secondMeta.fingerprint.files.some((file: { path: string }) => file.path === 'README.md')).toBe(false);
+    expect(statuses.join('\n')).toContain('Index unchanged; reused existing SQLite index');
     expect(JSON.parse(readFileSync(join(cacheDir, 'affected-shadow-latest.json'), 'utf-8'))).toMatchObject({
       version: 1,
       status: 'unavailable',
-      refreshResult: 'reused',
-      reason: 'oracle-error',
+      refreshResult: 'rebuilt',
+      reason: 'prior-index-unavailable',
     });
     const history = readFileSync(join(cacheDir, 'affected-shadow.jsonl'), 'utf-8')
       .trim()
       .split('\n')
       .map((line) => JSON.parse(line));
-    expect(history).toHaveLength(2);
-    expect(history).toEqual([
-      expect.objectContaining({ historyVersion: 1, sourceVersion: 1 }),
-      expect.objectContaining({ historyVersion: 1, sourceVersion: 1 }),
-    ]);
+    expect(history).toHaveLength(1);
+    expect(history).toEqual([expect.objectContaining({ historyVersion: 1, sourceVersion: 1 })]);
     expect(history.every((record) => !('manifest' in record))).toBe(true);
+  });
+
+  it('reruns only the language shard whose dependency lock changed', async () => {
+    const projectRoot = createProject('scip-query-reindex-language-input-isolation-');
+    writeFileSync(join(projectRoot, 'src/main.rs'), 'pub const ANSWER: i32 = 42;\n');
+    writeFileSync(join(projectRoot, 'Cargo.toml'), '[package]\nname = "fixture"\nversion = "0.1.0"\n');
+    writeFileSync(join(projectRoot, 'package.json'), '{}\n');
+    const cacheDir = join(projectRoot, '.scipquery-cache');
+    mkdirSync(cacheDir);
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+    const { reindex, attempts } = await loadReindexFixture({ languages: ['typescript', 'rust'] });
+
+    await reindex({ projectRoot, outputScip, outputDb, onStatus: () => undefined });
+    writeFileSync(join(projectRoot, 'package-lock.json'), '{"lockfileVersion":3}\n');
+    const afterPackageLock = await reindex({ projectRoot, outputScip, outputDb, onStatus: () => undefined });
+
+    expect(attempts.get('typescript')).toBe(2);
+    expect(attempts.get('rust')).toBe(1);
+    expect(afterPackageLock.shards).toContainEqual(
+      expect.objectContaining({ id: 'rust', reused: true }),
+    );
+    expect(afterPackageLock.shards).toContainEqual(
+      expect.objectContaining({ id: 'typescript', reused: false }),
+    );
+
+    writeFileSync(join(projectRoot, 'Cargo.lock'), 'version = 3\n');
+    const afterCargoLock = await reindex({ projectRoot, outputScip, outputDb, onStatus: () => undefined });
+
+    expect(attempts.get('typescript')).toBe(2);
+    expect(attempts.get('rust')).toBe(2);
+    expect(afterCargoLock.shards).toContainEqual(
+      expect.objectContaining({ id: 'typescript', reused: true }),
+    );
+    expect(afterCargoLock.shards).toContainEqual(
+      expect.objectContaining({ id: 'rust', reused: false }),
+    );
   });
 
   it('indexes TypeScript workspace project shards and publishes one language output', async () => {

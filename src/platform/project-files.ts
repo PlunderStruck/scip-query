@@ -11,7 +11,11 @@ import {
   realpathSync,
 } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { isLanguageRelevantProjectInputPath, type ProjectFileFingerprint } from '../domain/project-input.js';
+import {
+  classifyProjectInputPath,
+  isLanguageRelevantProjectInputPath,
+  type ProjectFileFingerprint,
+} from '../domain/project-input.js';
 import {
   isPathInsideProject,
   normalizeSafeProjectRelativePath,
@@ -268,14 +272,21 @@ export function buildProjectInputFingerprint(
   languages: readonly SupportedLanguage[],
   opts: ProjectInputFingerprintOptions,
 ): ProjectInputFingerprint {
+  const clojureConfigPath = normalizeOptionalPath(opts.clojureConfigPath);
+  const configuredMarkerFiles = [
+    ...normalizeTypeScriptProjects(opts.typescriptProjects),
+    ...(clojureConfigPath ? [clojureConfigPath] : []),
+  ];
   return {
     version: 2,
     languages: [...languages].sort(),
     pnpmWorkspaces: opts.typescriptProjectMode !== 'workspace' && opts.pnpmWorkspaces === true,
     typescriptProjectMode: opts.typescriptProjectMode ?? 'single',
     typescriptProjects: normalizeTypeScriptProjects(opts.typescriptProjects),
-    clojureConfigPath: normalizeOptionalPath(opts.clojureConfigPath),
-    files: fingerprintProjectFiles(projectRoot),
+    clojureConfigPath,
+    files: fingerprintProjectFiles(projectRoot, {
+      includePath: (path) => classifyProjectInputPath(path, languages, configuredMarkerFiles) !== 'other',
+    }),
   };
 }
 

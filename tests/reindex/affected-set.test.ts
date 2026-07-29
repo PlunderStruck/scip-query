@@ -3,11 +3,14 @@ import { classifyAffectedSetFallback, planAffectedFiles } from '../../src/reinde
 import {
   buildProjectChangeManifest,
   classifyProjectInputPath,
+  isLanguageRelevantProjectInputPath,
+  LANGUAGE_INDEX_MARKERS,
   projectInputSnapshotOrNull,
   type FileDependencyGraph,
   type ProjectFileFingerprint,
   type ProjectInputSnapshot,
 } from '../../src/domain/project-input.js';
+import { SUPPORTED_LANGUAGES } from '../../src/domain/config-types.js';
 
 function file(path: string, hash: string, size = hash.length): ProjectFileFingerprint {
   return { path, hash, size };
@@ -71,6 +74,47 @@ describe('affected-set change manifest', () => {
     expect(classifyProjectInputPath('configs/tsconfig.app.json', ['typescript'])).toBe('config');
     expect(classifyProjectInputPath('.scipquery.json', ['typescript'])).toBe('config');
     expect(classifyProjectInputPath('docs/architecture.md', ['typescript'])).toBe('other');
+  });
+
+  it('keeps configuration inputs scoped to the indexers that consume them', () => {
+    expect(classifyProjectInputPath('package-lock.json', ['typescript'])).toBe('config');
+    expect(classifyProjectInputPath('package-lock.json', ['rust'])).toBe('other');
+    expect(classifyProjectInputPath('Cargo.lock', ['rust'])).toBe('config');
+    expect(classifyProjectInputPath('Cargo.lock', ['typescript'])).toBe('other');
+    expect(classifyProjectInputPath('src/globals.d.ts', ['javascript'])).toBe('ambient');
+    expect(classifyProjectInputPath('src/globals.d.ts', ['rust'])).toBe('other');
+    expect(classifyProjectInputPath('src/App.csproj', ['csharp'])).toBe('config');
+    expect(classifyProjectInputPath('src\\App.vbproj', ['vb'])).toBe('config');
+  });
+
+  it('defines marker ownership exhaustively for every supported language', () => {
+    expect(Object.keys(LANGUAGE_INDEX_MARKERS).sort()).toEqual([...SUPPORTED_LANGUAGES].sort());
+  });
+
+  it.each([
+    ['typescript', 'package-lock.json'],
+    ['javascript', 'pnpm-lock.yaml'],
+    ['java', 'settings.gradle'],
+    ['scala', 'project/plugins.sbt'],
+    ['kotlin', 'gradle.lockfile'],
+    ['rust', 'Cargo.lock'],
+    ['python', 'poetry.lock'],
+    ['ruby', 'Gemfile.lock'],
+    ['go', 'go.sum'],
+    ['cpp', 'compile_commands.json'],
+    ['c', 'compile_commands.json'],
+    ['csharp', 'src/App.csproj'],
+    ['vb', 'src/App.vbproj'],
+    ['dart', 'pubspec.lock'],
+    ['php', 'composer.lock'],
+    ['clojure', 'deps.edn'],
+  ] as const)('assigns %s its own configuration input %s', (language, path) => {
+    expect(isLanguageRelevantProjectInputPath(path, language, LANGUAGE_INDEX_MARKERS[language])).toBe(true);
+  });
+
+  it('supports exact custom marker paths without making them global', () => {
+    expect(isLanguageRelevantProjectInputPath('config/custom.edn', 'clojure', ['config/custom.edn'])).toBe(true);
+    expect(isLanguageRelevantProjectInputPath('config/other.edn', 'clojure', ['config/custom.edn'])).toBe(false);
   });
 
   it('keeps a modified ordinary source on the closure path', () => {

@@ -976,6 +976,8 @@ function refreshWatchInputLanguages(watcher: Watcher, projectRoot: string): void
 }
 
 function isWatcherIndexInput(watcher: Watcher, path: string): boolean {
+  // The canonical classifier scopes manifests and dependency locks to the
+  // configured indexers, so an unrelated ecosystem cannot wake this watcher.
   return classifyProjectInputPath(path, watcherInputState(watcher).languages) !== 'other';
 }
 
