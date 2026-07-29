@@ -46,7 +46,9 @@ import {
 } from '../platform/bounded-file.js';
 import {
   buildProjectInputFingerprint,
+  normalizeProjectInputFingerprintConfiguration,
   type ProjectInputFingerprint,
+  type ProjectInputFingerprintConfiguration,
   type ProjectInputFingerprintOptions,
 } from '../platform/project-files.js';
 import { writeJsonDurable } from '../storage/atomic-json.js';
@@ -114,6 +116,11 @@ export interface SharedGenerationManifest {
   scipProjectRoot: string;
   createdAt: string;
   artifacts: SharedGenerationArtifact[];
+}
+
+export interface SharedBaselineGeneration {
+  snapshot: SharedGenerationSnapshot;
+  manifest: SharedGenerationManifest;
 }
 
 export type SharedGenerationPublicationResult = {
@@ -275,6 +282,80 @@ export function readSharedGeneration(
     return null;
   }
   return manifest;
+}
+
+/**
+ * Finds the immutable generation for a worktree's committed HEAD without
+ * pretending the worktree's current dirty files have the baseline fingerprint.
+ *
+ * Manifests are cheap-filtered first. Artifact hashing is then attempted in
+ * deterministic newest-first order until one complete candidate validates.
+ */
+export function findSharedBaselineGeneration(
+  context: GitWorktreeContext,
+  languages: readonly ProjectInputFingerprint['languages'][number][],
+  options: ProjectInputFingerprintOptions,
+): SharedBaselineGeneration | null {
+  if (!context.treeOid) return null;
+  const requestedConfiguration = normalizeProjectInputFingerprintConfiguration(languages, options);
+  const repositoryCacheDir = resolveRepositoryCacheDir(context.repositoryId);
+  const generationsDir = join(repositoryCacheDir, 'generations');
+  const candidates: SharedGenerationManifest[] = [];
+
+  try {
+    for (const generationId of readdirSync(generationsDir)) {
+      if (!/^[a-f0-9]{64}$/.test(generationId)) continue;
+      const generationDir = join(generationsDir, generationId);
+      let generationStat;
+      try {
+        generationStat = lstatSync(generationDir);
+      } catch {
+        continue;
+      }
+      if (!generationStat.isDirectory() || generationStat.isSymbolicLink()) continue;
+      try {
+        const manifest = parseSharedGenerationManifest(
+          readTextFileWithinLimit(join(generationDir, SHARED_GENERATION_MANIFEST), {
+            inputKind: 'shared-generation baseline manifest',
+            maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+          }),
+        );
+        if (
+          manifest.generationId === generationId &&
+          manifest.repositoryId === context.repositoryId &&
+          manifest.treeOid === context.treeOid &&
+          manifest.producerIdentity === SHARED_GENERATION_PRODUCER_IDENTITY &&
+          sameFingerprintConfiguration(manifest.fingerprint, requestedConfiguration)
+        ) {
+          candidates.push(manifest);
+        }
+      } catch {
+        continue;
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  candidates.sort((left, right) => {
+    const created = Date.parse(right.createdAt) - Date.parse(left.createdAt);
+    return created || left.generationId.localeCompare(right.generationId);
+  });
+  for (const candidate of candidates) {
+    const snapshot: SharedGenerationSnapshot = {
+      repositoryId: context.repositoryId,
+      worktreeId: context.worktreeId,
+      projectRoot: context.projectRoot,
+      treeOid: context.treeOid,
+      fingerprint: candidate.fingerprint,
+      producerIdentity: candidate.producerIdentity,
+      generationId: candidate.generationId,
+      repositoryCacheDir,
+    };
+    const manifest = readSharedGeneration(snapshot);
+    if (manifest) return { snapshot, manifest };
+  }
+  return null;
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; staging, manifest publication, and lease updates are one transaction.
@@ -927,6 +1008,14 @@ function configFingerprintOptions(config: ProjectConfig): ProjectInputFingerprin
     typescriptProjects: config.indexer?.typescript?.projects,
     clojureConfigPath: config.indexer?.clojure?.configPath,
   };
+}
+
+function sameFingerprintConfiguration(
+  fingerprint: ProjectInputFingerprint,
+  expected: ProjectInputFingerprintConfiguration,
+): boolean {
+  const actual = normalizeProjectInputFingerprintConfiguration(fingerprint.languages, fingerprint);
+  return JSON.stringify(actual) === JSON.stringify(expected);
 }
 
 function sharedGenerationDirectory(snapshot: SharedGenerationSnapshot): string {

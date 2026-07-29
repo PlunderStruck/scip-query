@@ -16,10 +16,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildProjectInputFingerprint, type ProjectInputFingerprint } from '../../src/platform/project-files.js';
+import {
+  buildProjectInputFingerprint,
+  normalizeProjectInputFingerprintConfiguration,
+  type ProjectInputFingerprint,
+} from '../../src/platform/project-files.js';
 import {
   acquireSharedGenerationBuildLock,
   buildSharedGenerationSnapshot,
+  findSharedBaselineGeneration,
   hydrateSharedGeneration,
   parseSharedGenerationManifest,
   publishFreshLocalGenerationForProject,
@@ -47,6 +52,139 @@ afterEach(() => {
 });
 
 describe('shared generation store', () => {
+  it('normalizes the indexer configuration independently from source files', () => {
+    expect(
+      normalizeProjectInputFingerprintConfiguration(['typescript'], {
+        pnpmWorkspaces: true,
+        typescriptProjectMode: 'workspace',
+        typescriptProjects: [' packages/b ', 'packages/a', 'packages/a'],
+        clojureConfigPath: ' ',
+      }),
+    ).toEqual({
+      version: 2,
+      languages: ['typescript'],
+      pnpmWorkspaces: false,
+      typescriptProjectMode: 'workspace',
+      typescriptProjects: ['packages/a', 'packages/b'],
+      clojureConfigPath: undefined,
+    });
+  });
+
+  it('selects the newest valid exact-HEAD baseline for a dirty worktree', () => {
+    const root = temporaryDirectory('scip-query-shared-baseline-');
+    const cacheHome = temporaryDirectory('scip-query-shared-baseline-cache-');
+    const previousCacheHome = process.env['XDG_CACHE_HOME'];
+    process.env['XDG_CACHE_HOME'] = cacheHome;
+    try {
+      git(root, ['init', '-q', '-b', 'main']);
+      git(root, ['config', 'user.email', 'test@example.com']);
+      git(root, ['config', 'user.name', 'Test User']);
+      writeFileSync(join(root, 'value.ts'), 'export const value = 1;\n');
+      git(root, ['add', '.']);
+      git(root, ['commit', '-qm', 'initial']);
+      const cleanContext = resolveGitWorktreeContext(root)!;
+      const olderFingerprint = buildProjectInputFingerprint(root, ['typescript'], {});
+      const olderSnapshot = buildSharedGenerationSnapshot(cleanContext, olderFingerprint)!;
+      const olderCache = join(root, 'older-cache');
+      createCache(olderCache, root, 'older', { fingerprint: olderFingerprint });
+      publishSharedGeneration({
+        snapshot: olderSnapshot,
+        sourceCacheDir: olderCache,
+        sourceProjectRoot: root,
+        now: () => new Date('2026-07-29T01:00:00.000Z'),
+      });
+
+      const newerFingerprint = {
+        ...olderFingerprint,
+        files: olderFingerprint.files.map((file) => ({ ...file, hash: `${file.hash}-newer` })),
+      };
+      const newerSnapshot = buildSharedGenerationSnapshot(cleanContext, newerFingerprint)!;
+      const newerCache = join(root, 'newer-cache');
+      createCache(newerCache, root, 'newer', { fingerprint: newerFingerprint });
+      publishSharedGeneration({
+        snapshot: newerSnapshot,
+        sourceCacheDir: newerCache,
+        sourceProjectRoot: root,
+        now: () => new Date('2026-07-29T02:00:00.000Z'),
+      });
+
+      writeFileSync(join(root, 'value.ts'), 'export const value = 2;\n');
+      const dirtyContext = resolveGitWorktreeContext(root)!;
+      expect(dirtyContext.clean).toBe(false);
+      expect(findSharedBaselineGeneration(dirtyContext, ['typescript'], {})).toEqual(
+        expect.objectContaining({
+          snapshot: expect.objectContaining({ generationId: newerSnapshot.generationId }),
+          manifest: expect.objectContaining({ generationId: newerSnapshot.generationId }),
+        }),
+      );
+
+      const newerDb = join(newerSnapshot.repositoryCacheDir, 'generations', newerSnapshot.generationId, 'index.db');
+      chmodSync(newerDb, 0o644);
+      writeFileSync(newerDb, 'corrupt');
+      expect(findSharedBaselineGeneration(dirtyContext, ['typescript'], {})).toEqual(
+        expect.objectContaining({
+          snapshot: expect.objectContaining({ generationId: olderSnapshot.generationId }),
+        }),
+      );
+    } finally {
+      if (previousCacheHome === undefined) delete process.env['XDG_CACHE_HOME'];
+      else process.env['XDG_CACHE_HOME'] = previousCacheHome;
+    }
+  });
+
+  it('rejects baseline generations with a different tree or indexer configuration', () => {
+    const root = temporaryDirectory('scip-query-shared-baseline-mismatch-');
+    const cacheHome = temporaryDirectory('scip-query-shared-baseline-mismatch-cache-');
+    const previousCacheHome = process.env['XDG_CACHE_HOME'];
+    process.env['XDG_CACHE_HOME'] = cacheHome;
+    try {
+      git(root, ['init', '-q', '-b', 'main']);
+      git(root, ['config', 'user.email', 'test@example.com']);
+      git(root, ['config', 'user.name', 'Test User']);
+      writeFileSync(join(root, 'value.ts'), 'export const value = 1;\n');
+      git(root, ['add', '.']);
+      git(root, ['commit', '-qm', 'initial']);
+      const cleanContext = resolveGitWorktreeContext(root)!;
+      const baselineFingerprint = buildProjectInputFingerprint(root, ['typescript'], {});
+      const baselineSnapshot = buildSharedGenerationSnapshot(cleanContext, baselineFingerprint)!;
+      const sourceCache = join(root, 'source-cache');
+      createCache(sourceCache, root, 'baseline', { fingerprint: baselineFingerprint });
+      publishSharedGeneration({
+        snapshot: baselineSnapshot,
+        sourceCacheDir: sourceCache,
+        sourceProjectRoot: root,
+      });
+
+      writeFileSync(join(root, 'value.ts'), 'export const value = 2;\n');
+      const dirtyContext = resolveGitWorktreeContext(root)!;
+      expect(findSharedBaselineGeneration(dirtyContext, ['python'], {})).toBeNull();
+      expect(
+        findSharedBaselineGeneration(dirtyContext, ['typescript'], {
+          typescriptProjectMode: 'workspace',
+        }),
+      ).toBeNull();
+      expect(
+        findSharedBaselineGeneration(dirtyContext, ['typescript'], {
+          pnpmWorkspaces: true,
+        }),
+      ).toBeNull();
+      expect(
+        findSharedBaselineGeneration(dirtyContext, ['typescript'], {
+          typescriptProjects: ['packages/a'],
+        }),
+      ).toBeNull();
+      expect(
+        findSharedBaselineGeneration(dirtyContext, ['typescript'], {
+          clojureConfigPath: 'deps.edn',
+        }),
+      ).toBeNull();
+      expect(findSharedBaselineGeneration({ ...dirtyContext, treeOid: 'f'.repeat(40) }, ['typescript'], {})).toBeNull();
+    } finally {
+      if (previousCacheHome === undefined) delete process.env['XDG_CACHE_HOME'];
+      else process.env['XDG_CACHE_HOME'] = previousCacheHome;
+    }
+  });
+
   it('publishes an immutable generation and hydrates a private rebased cache', () => {
     const root = temporaryDirectory('scip-query-shared-generation-');
     const sourceRoot = join(root, 'source');

@@ -90,6 +90,8 @@ export interface ProjectInputFingerprintOptions {
   clojureConfigPath?: string;
 }
 
+export type ProjectInputFingerprintConfiguration = Omit<ProjectInputFingerprint, 'files'>;
+
 /**
  * Dedupe, trim, and sort a `typescript.projects` config list — shared by the
  * fingerprint builder and the freshness check so a re-ordered or
@@ -272,21 +274,36 @@ export function buildProjectInputFingerprint(
   languages: readonly SupportedLanguage[],
   opts: ProjectInputFingerprintOptions,
 ): ProjectInputFingerprint {
-  const clojureConfigPath = normalizeOptionalPath(opts.clojureConfigPath);
+  const configuration = normalizeProjectInputFingerprintConfiguration(languages, opts);
   const configuredMarkerFiles = [
-    ...normalizeTypeScriptProjects(opts.typescriptProjects),
-    ...(clojureConfigPath ? [clojureConfigPath] : []),
+    ...configuration.typescriptProjects,
+    ...(configuration.clojureConfigPath ? [configuration.clojureConfigPath] : []),
   ];
+  return {
+    ...configuration,
+    files: fingerprintProjectFiles(projectRoot, {
+      includePath: (path) => classifyProjectInputPath(path, languages, configuredMarkerFiles) !== 'other',
+    }),
+  };
+}
+
+/**
+ * The non-file part of a project fingerprint identifies the indexer contract
+ * under which source bytes are interpreted. Shared-baseline lookup uses this
+ * projection because a dirty worktree's bytes intentionally differ from its
+ * committed baseline while its indexer contract must remain exact.
+ */
+export function normalizeProjectInputFingerprintConfiguration(
+  languages: readonly SupportedLanguage[],
+  opts: ProjectInputFingerprintOptions,
+): ProjectInputFingerprintConfiguration {
   return {
     version: 2,
     languages: [...languages].sort(),
     pnpmWorkspaces: opts.typescriptProjectMode !== 'workspace' && opts.pnpmWorkspaces === true,
     typescriptProjectMode: opts.typescriptProjectMode ?? 'single',
     typescriptProjects: normalizeTypeScriptProjects(opts.typescriptProjects),
-    clojureConfigPath,
-    files: fingerprintProjectFiles(projectRoot, {
-      includePath: (path) => classifyProjectInputPath(path, languages, configuredMarkerFiles) !== 'other',
-    }),
+    clojureConfigPath: normalizeOptionalPath(opts.clojureConfigPath),
   };
 }
 
