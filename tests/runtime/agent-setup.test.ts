@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { DiffGateResult } from '../../src/queries/impact/diff-gate.js';
 import {
+  evaluateSetupAgentResult,
   formatGateBlockReason,
   isStopHookReentry,
   removeAgentSetup,
@@ -21,6 +22,28 @@ afterEach(() => {
 });
 
 describe('setupAgent', () => {
+  it('derives readiness from actual target outcomes', () => {
+    expect(evaluateSetupAgentResult({ written: ['AGENTS.md'], unchanged: ['CLAUDE.md'], skipped: [] })).toEqual({
+      verdict: 'ready',
+      ready: 2,
+      skipped: 0,
+    });
+    expect(
+      evaluateSetupAgentResult({
+        written: ['AGENTS.md'],
+        unchanged: [],
+        skipped: [{ target: 'CLAUDE.md', reason: 'not writable' }],
+      }),
+    ).toEqual({ verdict: 'partial', ready: 1, skipped: 1 });
+    expect(
+      evaluateSetupAgentResult({
+        written: [],
+        unchanged: [],
+        skipped: [{ target: 'AGENTS.md', reason: 'not writable' }],
+      }),
+    ).toEqual({ verdict: 'blocked', ready: 0, skipped: 1 });
+  });
+
   it('creates AGENTS.md with the block and a CLAUDE.md @AGENTS.md shim on a fresh project', () => {
     const result = setupAgent(projectRoot);
 

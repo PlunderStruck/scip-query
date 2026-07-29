@@ -93,6 +93,22 @@ export interface SetupAgentResult {
   skipped: Array<{ target: string; reason: string }>;
 }
 
+export type SetupAgentVerdict = 'ready' | 'partial' | 'blocked';
+
+export function evaluateSetupAgentResult(result: SetupAgentResult): {
+  verdict: SetupAgentVerdict;
+  ready: number;
+  skipped: number;
+} {
+  const ready = result.written.length + result.unchanged.length;
+  const skipped = result.skipped.length;
+  return {
+    verdict: skipped === 0 ? 'ready' : ready === 0 ? 'blocked' : 'partial',
+    ready,
+    skipped,
+  };
+}
+
 // scip-query: ignore-stale — reviewed S1 owned contract; agent setup removal returns this named result.
 export interface RemoveAgentSetupResult {
   removed: string[];

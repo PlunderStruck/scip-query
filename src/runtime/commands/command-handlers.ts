@@ -53,7 +53,7 @@ import {
   stopWatchService,
   type WatchServiceInspection,
 } from '../watch-service.js';
-import { setupAgent } from '../agent-setup.js';
+import { evaluateSetupAgentResult, setupAgent } from '../agent-setup.js';
 import { installProjectAgentHooks, selectSetupHooksMode } from '../agent-hooks.js';
 import {
   planGuidedProjectSetup,
@@ -1334,10 +1334,24 @@ export function handleSetupAgent(rawOpts: unknown): void {
   for (const target of result.written) console.log(`  done: ${target}`);
   for (const target of result.unchanged) console.log(`  ok:   ${target} (already wired)`);
   for (const skip of result.skipped) console.log(`  skip: ${skip.target} — ${skip.reason}`);
-  console.log('\nAgents reading this project now know to route through the scip-query skills and gate their diffs.');
-  console.log(
-    'Check freshness once per work session. Reuse a fresh generation, let an active watcher refresh after edits, and reindex only when stale and no watcher can refresh it.',
-  );
+  const evaluation = evaluateSetupAgentResult(result);
+  if (evaluation.verdict === 'ready') {
+    console.log('\nProject agent guidance is configured for every selected target.');
+  } else if (evaluation.verdict === 'partial') {
+    console.log(
+      `\nProject agent guidance is only partially configured: ${evaluation.ready} target(s) ready, ${evaluation.skipped} skipped. Resolve the skips before relying on every agent integration.`,
+    );
+  } else {
+    console.log(
+      `\nProject agent guidance was not configured: all ${evaluation.skipped} selected target(s) were skipped.`,
+    );
+  }
+  if (evaluation.ready > 0) {
+    console.log(
+      'Configured agents are instructed to check freshness once per work session, reuse a fresh generation, wait for an active watcher after edits, and reindex only when stale and no watcher can refresh it.',
+    );
+  }
+  process.exitCode = evaluation.verdict === 'ready' ? 0 : 1;
 }
 
 export async function handleSetup(rawOpts: unknown): Promise<void> {
