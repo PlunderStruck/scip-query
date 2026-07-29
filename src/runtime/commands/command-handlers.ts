@@ -67,7 +67,7 @@ import { promptSetupChecklist, type SetupWizardChoice } from '../setup-wizard.js
 import { astParserLanguages } from '../ast-parser-setup.js';
 import { setupCiWorkflow } from '../setup-ci.js';
 import { installSkills, isScipInstalled, printScipInstallInstructions } from '../setup.js';
-import { runUninstall } from '../uninstall.js';
+import { runUninstall, selectUninstallScope } from '../uninstall.js';
 import { inspectSharedCacheStatus, type SharedCacheStatus } from '../repository-cache-lifecycle.js';
 import { ALL_SOURCE_EXTENSIONS } from '../../source/primitives/source-fileset.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
@@ -1466,15 +1466,20 @@ export function handleSetupCi(rawOpts: unknown): void {
 
 export function handleUninstall(rawOpts: unknown): void {
   const opts = commandOptions(rawOpts);
-  if (booleanOptionValue(opts, 'global') && booleanOptionValue(opts, 'project')) {
-    console.error('error: choose either --global or --project, not both.');
+  const selection = selectUninstallScope({
+    global: booleanOptionValue(opts, 'global'),
+    project: booleanOptionValue(opts, 'project'),
+    dryRun: booleanOptionValue(opts, 'dryRun'),
+  });
+  if (!selection.ok) {
+    console.error(`error: ${selection.message}`);
     process.exitCode = 1;
     return;
   }
   const report = runUninstall({
     projectRoot: resolveProjectRoot(),
-    global: booleanOptionValue(opts, 'global'),
-    project: booleanOptionValue(opts, 'project'),
+    global: selection.global,
+    project: selection.project,
     dryRun: booleanOptionValue(opts, 'dryRun'),
   });
 

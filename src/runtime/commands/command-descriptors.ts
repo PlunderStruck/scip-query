@@ -496,7 +496,8 @@ export const commandDescriptors: CommandDescriptor[] = [
       'complete',
       'repository',
     ),
-    description: 'Remove scip-query-owned skill links, project hooks, and managed agent setup blocks',
+    description:
+      'Remove selected scip-query-owned integrations; real removal requires exactly one of --global or --project',
     options: withJsonOption([
       option('--global', 'Remove scip-query-owned skill symlinks from user-level agent skill roots'),
       option('--project', 'Remove project-local hooks and managed AGENTS.md/CLAUDE.md blocks'),

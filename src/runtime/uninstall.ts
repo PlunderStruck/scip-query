@@ -16,6 +16,31 @@ export interface UninstallReport {
   project?: ProjectUninstallResult;
 }
 
+export type UninstallScopeSelection =
+  | { ok: true; global: boolean; project: boolean }
+  | { ok: false; message: string };
+
+export function selectUninstallScope(opts: {
+  global?: boolean;
+  project?: boolean;
+  dryRun?: boolean;
+}): UninstallScopeSelection {
+  const requestedGlobal = opts.global === true;
+  const requestedProject = opts.project === true;
+  if (requestedGlobal && requestedProject) {
+    return { ok: false, message: 'choose either --global or --project, not both.' };
+  }
+  if (!requestedGlobal && !requestedProject) {
+    if (opts.dryRun === true) return { ok: true, global: true, project: true };
+    return {
+      ok: false,
+      message:
+        'uninstall requires an explicit scope: use --global or --project. To preview both scopes without removing anything, run uninstall --dry-run.',
+    };
+  }
+  return { ok: true, global: requestedGlobal, project: requestedProject };
+}
+
 export function runUninstall(opts: {
   projectRoot: string;
   global?: boolean;
@@ -23,18 +48,15 @@ export function runUninstall(opts: {
   dryRun?: boolean;
   homeDir?: string;
 }): UninstallReport {
-  const requestedGlobal = opts.global === true;
-  const requestedProject = opts.project === true;
-  const noScopeRequested = !requestedGlobal && !requestedProject;
-  const removeGlobal = requestedGlobal || noScopeRequested;
-  const removeProject = requestedProject || noScopeRequested;
+  const selection = selectUninstallScope(opts);
+  if (!selection.ok) throw new Error(selection.message);
   const report: UninstallReport = { dryRun: opts.dryRun === true };
 
-  if (removeGlobal) {
+  if (selection.global) {
     report.global = uninstallSkills({ dryRun: opts.dryRun, homeDir: opts.homeDir });
   }
 
-  if (removeProject) {
+  if (selection.project) {
     report.project = uninstallProject(opts.projectRoot, { dryRun: opts.dryRun });
   }
 

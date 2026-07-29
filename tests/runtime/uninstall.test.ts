@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { uninstallProject } from '../../src/runtime/uninstall.js';
+import { runUninstall, selectUninstallScope, uninstallProject } from '../../src/runtime/uninstall.js';
 
 const roots: string[] = [];
 
@@ -12,6 +12,30 @@ afterEach(() => {
 });
 
 describe('uninstallProject', () => {
+  it('requires an explicit scope for removal but previews both scopes safely', () => {
+    expect(selectUninstallScope({})).toEqual({
+      ok: false,
+      message:
+        'uninstall requires an explicit scope: use --global or --project. To preview both scopes without removing anything, run uninstall --dry-run.',
+    });
+    expect(selectUninstallScope({ global: true, project: true })).toEqual({
+      ok: false,
+      message: 'choose either --global or --project, not both.',
+    });
+    expect(selectUninstallScope({ global: true })).toEqual({ ok: true, global: true, project: false });
+    expect(selectUninstallScope({ project: true })).toEqual({ ok: true, global: false, project: true });
+    expect(selectUninstallScope({ dryRun: true })).toEqual({ ok: true, global: true, project: true });
+  });
+
+  it('refuses a destructive scope-free core call before inspecting targets', () => {
+    expect(() =>
+      runUninstall({
+        projectRoot: '/path/that/does/not/need/to/exist',
+        homeDir: '/another/missing/path',
+      }),
+    ).toThrow('uninstall requires an explicit scope');
+  });
+
   it('reports shared suppression and outcome records that are intentionally left in place', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-uninstall-'));
     roots.push(root);
