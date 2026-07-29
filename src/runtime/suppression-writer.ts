@@ -43,6 +43,26 @@ export interface WriteSuppressionResult {
   disposition: 'created' | 'unchanged' | 'replaced';
 }
 
+export function formatSuppressionWriteReceipt(
+  result: WriteSuppressionResult,
+  suppression: FindingSuppression,
+): string[] {
+  const scope = [
+    suppression.id ? `finding ${suppression.id}` : undefined,
+    suppression.check ? `check ${suppression.check}` : undefined,
+    suppression.file ? `file ${suppression.file}` : undefined,
+  ].filter((entry): entry is string => entry !== undefined);
+  const decision = suppression.decision;
+  return [
+    `Suppression ${result.disposition} at ${result.path}.`,
+    `  scope: ${scope.join('; ')}`,
+    `  reason code: ${decision?.reasonCode ?? 'legacy/manual'}`,
+    `  counterevidence: ${decision?.evidence.length ?? 0} item(s)`,
+    `  expires: ${suppression.expiresAt ?? 'none — no time limit; evidence invalidation still applies'}`,
+    `  revision: ${result.revision}`,
+  ];
+}
+
 export class SuppressionWriteConflictError extends Error {
   constructor(
     message: string,

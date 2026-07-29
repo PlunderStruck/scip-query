@@ -83,7 +83,11 @@ import { healthPhases } from '../../queries/health/health.js';
 import { writeProfileEvent } from '../../instrumentation/profile.js';
 import { auditProfileWork, readProfileEvents, renderProfileWorkAudit } from '../profile-work-audit.js';
 import { discloseHealthCapabilities } from '../health-capability-disclosure.js';
-import { buildAutomatedSuppressionDecision, writeSuppressionFile } from '../suppression-writer.js';
+import {
+  buildAutomatedSuppressionDecision,
+  formatSuppressionWriteReceipt,
+  writeSuppressionFile,
+} from '../suppression-writer.js';
 import { currentCliObservationReceipt } from '../observation-receipt.js';
 import { inspectWatchRefreshRequests } from '../../storage/watch-refresh-requests.js';
 import {
@@ -1144,16 +1148,17 @@ export function handleSuppress(id: unknown, rawOpts: unknown): void {
         return undefined;
       }
     })();
+    const suppression = {
+      id: String(id),
+      check: stringOptionValue(opts, 'check'),
+      file: stringOptionValue(opts, 'file'),
+      reason,
+      expiresAt: stringOptionValue(opts, 'expiresAt'),
+      decision: buildAutomatedSuppressionDecision(projectRoot, reasonCode, evidence, reason, observation),
+    };
     const result = writeSuppressionFile(
       projectRoot,
-      {
-        id: String(id),
-        check: stringOptionValue(opts, 'check'),
-        file: stringOptionValue(opts, 'file'),
-        reason,
-        expiresAt: stringOptionValue(opts, 'expiresAt'),
-        decision: buildAutomatedSuppressionDecision(projectRoot, reasonCode, evidence, reason, observation),
-      },
+      suppression,
       {
         expectedRevision: stringOptionValue(opts, 'replace'),
       },
@@ -1162,7 +1167,7 @@ export function handleSuppress(id: unknown, rawOpts: unknown): void {
       printJsonEnvelope('suppress', [String(id)], opts, result);
       return;
     }
-    console.log(`Suppression ${result.disposition} at ${result.path}. Revision: ${result.revision}.`);
+    for (const line of formatSuppressionWriteReceipt(result, suppression)) console.log(line);
   } catch (err) {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exitCode = 1;

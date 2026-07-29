@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { FileRevisionConflictError } from '../../src/runtime/revisioned-file.js';
 import {
   buildAutomatedSuppressionDecision,
+  formatSuppressionWriteReceipt,
   SuppressionWriteConflictError,
   writeSuppressionFile,
 } from '../../src/runtime/suppression-writer.js';
@@ -73,6 +74,46 @@ describe('suppression identity', () => {
 });
 
 describe('writeSuppressionFile', () => {
+  it('renders suppression scope, adjudication evidence, and lifetime explicitly', () => {
+    const suppression = {
+      id: 'SQABC123DEF456',
+      check: 'echo',
+      file: 'src/compat.ts',
+      reason: 'fixture overlap',
+      decision: {
+        kind: 'automated-adjudication' as const,
+        reasonCode: 'compatibility-shim' as const,
+        decidedBy: 'agent' as const,
+        policyVersion: 1 as const,
+        evidence: [
+          {
+            kind: 'graph' as const,
+            referent: 'scip-query refs compat --full',
+            claim: 'the public shim remains reachable',
+          },
+        ],
+        invalidateOn: { targetContentChange: false, detectorMajorChange: true },
+      },
+    };
+    const result = {
+      path: '/repo/.scipquery/suppressions/SQABC123DEF456.json',
+      disposition: 'created' as const,
+      revision: 'a'.repeat(64),
+    };
+
+    expect(formatSuppressionWriteReceipt(result, suppression)).toEqual([
+      'Suppression created at /repo/.scipquery/suppressions/SQABC123DEF456.json.',
+      '  scope: finding SQABC123DEF456; check echo; file src/compat.ts',
+      '  reason code: compatibility-shim',
+      '  counterevidence: 1 item(s)',
+      '  expires: none — no time limit; evidence invalidation still applies',
+      `  revision: ${'a'.repeat(64)}`,
+    ]);
+    expect(formatSuppressionWriteReceipt(result, { ...suppression, expiresAt: SECOND_TIME.toISOString() })[4]).toBe(
+      `  expires: ${SECOND_TIME.toISOString()}`,
+    );
+  });
+
   it('exclusively creates a versioned record and returns its revision', () => {
     const root = createRoot();
     const result = writeSuppressionFile(
