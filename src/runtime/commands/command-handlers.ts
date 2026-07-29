@@ -1557,6 +1557,20 @@ export function handleWatch(rawOpts: unknown): void {
     process.exitCode = 1;
     return;
   }
+  const timingOptions = [
+    ['--debounce', debounce],
+    ['--cooldown', cooldown],
+    ['--git-poll', gitPoll],
+    ['--idle-timeout', idleTimeout],
+  ] as const;
+  const providedTimingOptions = timingOptions.filter(([, value]) => value !== undefined);
+  if ((status || stop) && providedTimingOptions.length > 0) {
+    console.error(
+      `error: timing options (${providedTimingOptions.map(([flag]) => flag).join(', ')}) only apply when starting a foreground or daemon watcher; --status and --stop do not accept them.`,
+    );
+    process.exitCode = 1;
+    return;
+  }
   const invalidTiming = [
     ['--debounce', debounce, false],
     ['--cooldown', cooldown, true],
@@ -1615,12 +1629,27 @@ export function handleWatch(rawOpts: unknown): void {
   }
   if (daemon) {
     try {
+      if (providedTimingOptions.length > 0) {
+        const inspection = inspectWatchService(controllerOptions);
+        if (inspection.classification.kind === 'live') {
+          throw new Error(
+            `watch service pid ${inspection.classification.state.pid} is already running. Timing options only apply when the process starts; run "scip-query watch --stop", then repeat this daemon command.`,
+          );
+        }
+      }
       const result = ensureWatchService(controllerOptions);
       if (json) printJsonEnvelope('watch', [], opts, result);
       else {
         console.log(
           `${result.disposition === 'started' ? 'Started' : 'Reused'} watch service for ${projectRoot} (pid ${result.state.pid}).`,
         );
+        if (providedTimingOptions.length > 0) {
+          console.log(
+            `Process-local timing overrides: ${providedTimingOptions
+              .map(([flag, value]) => `${flag}=${value}`)
+              .join(', ')}. These were not written to .scipquery.json.`,
+          );
+        }
       }
     } catch (error) {
       console.error(`error: ${error instanceof Error ? error.message : String(error)}`);

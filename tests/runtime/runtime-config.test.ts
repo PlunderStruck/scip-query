@@ -1304,6 +1304,74 @@ describe('watch command config gate', () => {
     }
   });
 
+  it('rejects timing options that status and stop cannot apply', () => {
+    const projectRoot = createProject();
+    writeFileSync(join(projectRoot, '.scipquery.json'), '{ "watch": { "enabled": true } }\n');
+    const previousProjectRoot = process.env['SCIP_QUERY_PROJECT_ROOT'];
+    const previousExitCode = process.exitCode;
+    process.env['SCIP_QUERY_PROJECT_ROOT'] = projectRoot;
+    process.exitCode = undefined;
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      handleWatch({ status: true, debounce: 100 });
+      expect(process.exitCode).toBe(1);
+      expect(error).toHaveBeenLastCalledWith(
+        'error: timing options (--debounce) only apply when starting a foreground or daemon watcher; --status and --stop do not accept them.',
+      );
+
+      process.exitCode = undefined;
+      handleWatch({ stop: true, cooldown: 0, idleTimeout: 0 });
+      expect(process.exitCode).toBe(1);
+      expect(error).toHaveBeenLastCalledWith(
+        'error: timing options (--cooldown, --idle-timeout) only apply when starting a foreground or daemon watcher; --status and --stop do not accept them.',
+      );
+    } finally {
+      error.mockRestore();
+      process.exitCode = previousExitCode;
+      if (previousProjectRoot === undefined) delete process.env['SCIP_QUERY_PROJECT_ROOT'];
+      else process.env['SCIP_QUERY_PROJECT_ROOT'] = previousProjectRoot;
+    }
+  });
+
+  it('refuses to pretend timing overrides changed an already-running daemon', () => {
+    const projectRoot = createProject();
+    execFileSync('git', ['-C', projectRoot, 'init', '-q']);
+    writeFileSync(join(projectRoot, '.scipquery.json'), '{ "watch": { "enabled": true } }\n');
+    const identity = resolveGitWorktreeIdentity(projectRoot);
+    if (identity.kind !== 'worktree') throw new Error(`Expected Git worktree, received ${identity.kind}`);
+    const paths = watchServicePaths(resolveIndexStoragePaths(projectRoot, loadProjectConfig(projectRoot)).cacheDir);
+    const now = new Date().toISOString();
+    writeWatchServiceState(paths.statePath, {
+      version: 1,
+      protocolVersion: WATCH_SERVICE_PROTOCOL_VERSION,
+      pid: process.pid,
+      projectRoot: realpathSync(projectRoot),
+      worktreeId: identity.identity.worktreeId,
+      cliVersion,
+      startedAt: now,
+      heartbeatAt: now,
+      lastActivityAt: now,
+      watcher: { state: 'idle' },
+    });
+    const previousProjectRoot = process.env['SCIP_QUERY_PROJECT_ROOT'];
+    const previousExitCode = process.exitCode;
+    process.env['SCIP_QUERY_PROJECT_ROOT'] = projectRoot;
+    process.exitCode = undefined;
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      handleWatch({ daemon: true, debounce: 100 });
+      expect(process.exitCode).toBe(1);
+      expect(error).toHaveBeenCalledWith(
+        expect.stringContaining('Timing options only apply when the process starts'),
+      );
+    } finally {
+      error.mockRestore();
+      process.exitCode = previousExitCode;
+      if (previousProjectRoot === undefined) delete process.env['SCIP_QUERY_PROJECT_ROOT'];
+      else process.env['SCIP_QUERY_PROJECT_ROOT'] = previousProjectRoot;
+    }
+  });
+
   it('refuses to start unless watch.enabled is true', () => {
     const projectRoot = createProject();
     writeFileSync(join(projectRoot, '.scipquery.json'), '{ "languages": [], "watch": { "enabled": false } }\n');
