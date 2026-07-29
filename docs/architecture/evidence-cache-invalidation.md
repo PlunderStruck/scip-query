@@ -139,6 +139,18 @@ fields and grants the named `publishableGeneration` capability.
 `src/reindex/shared-generation-store.ts` therefore rejects malformed,
 partial, and future-version records before artifact validation; version 4
 cannot be adopted accidentally by an older process.
+Dirty worktrees with no usable local generation take a narrower route inside
+reindex. The baseline selector compares the immutable manifest's repository,
+committed Git tree, producer identity, language set, and normalized indexer
+configuration to the worktree's current `HEAD`; it deliberately does not
+compare the dirty file-content fingerprint. Hydration then supplies private
+starting artifacts, while the ordinary current-source fingerprint and shard
+classifiers decide which language and TypeScript project products must be
+rebuilt. This is a cache fork, not a two-database query: all query readers still
+open one complete worktree-local generation, and shared bytes remain immutable.
+An existing valid local generation has precedence, selector or hydration
+failure falls back to an isolated build, and explicit cache paths bypass the
+shared selector.
 Generation attachment, worktree-lease liveness updates, and repository cleanup
 also share the repository-cache lock. A liveness update uses its first pointer
 observation only to select that lock, then rereads and validates the current
@@ -146,6 +158,11 @@ pointer, lease ownership, Git tree, local fingerprint, generation, and
 artifacts before changing only `lastSeenAt`. It therefore cannot replay an old
 lease after a newer generation is attached or move liveness behind a touch
 that completed first.
+The lease distinguishes shared lineage from shared equality. A clean attached
+cache may name one generation as both `baseGenerationId` and
+`activeGenerationId`. A private overlay retains only `baseGenerationId`, uses
+the `overlay` action, and protects that immutable baseline from collection
+without asserting that the locally published generation has shared bytes.
 Peer bootstrap validates the stable cache artifacts, not the peer checkout's
 current files: a dirty checkout may donate an older cache that still exactly
 describes the target `HEAD`, while a cache containing the dirty changes cannot.

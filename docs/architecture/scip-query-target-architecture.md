@@ -376,12 +376,16 @@ atomic storage operation. This is an inward dependency on operating-system
 adapters, not a dependency on runtime orchestration; it avoids both a
 resolve-before-lease race and a second, weaker lock protocol inside storage.
 
-The shared-generation direction was reverified on 2026-07-25. Reindex owns
+The shared-generation direction was reverified on 2026-07-29. Reindex owns
 generation identity, lease validation, and the liveness-only merge; it depends
 on the platform-owned repository-cache lock and storage-owned durable JSON
 publication. Lease attachment, touch, and cleanup use that same lock, so no
 reverse `platform -> reindex` or `storage -> reindex` dependency is needed to
-prevent a stale touch from restoring an older generation.
+prevent a stale touch from restoring an older generation. Dirty worktree cache
+forking preserves the same direction: reindex selects and hydrates an exact
+committed baseline, then records a base-only overlay lease after the private
+publication. Runtime status and cleanup read that lease; they do not participate
+in selecting or mutating index artifacts.
 
 The reindex-metadata direction was reverified on 2026-07-25.
 `src/domain/reindex-metadata.ts` is the dependency-free version, validation,

@@ -633,9 +633,24 @@ copy-on-write cloning is used when available, with an ordinary copy fallback;
 hard links are never used. Dirty edits, watcher refreshes, locks, and local
 `evidence.db` state therefore remain private to the worktree.
 
-Each worktree lease names the exact shared generation protected from
-collection. Lease publication, liveness touches, and repository cleanup share
-one repository-cache lock. A touch rereads the current lease only after
+A new worktree can also reuse its committed baseline after it has already
+acquired uncommitted edits. On its first reindex, scip-query selects an
+immutable generation whose Git tree, language set, indexer configuration,
+artifact schema, and producer version exactly match the worktree's `HEAD`. It
+clones that generation into the private cache, then the normal incremental
+indexer rebuilds only the changed language or project shards. A usable local
+cache always wins, and a missing, incompatible, or corrupt baseline falls back
+to an isolated local build. Baseline attachment happens inside reindex, so a
+query never opens committed baseline evidence before the dirty refresh has
+completed.
+
+Each worktree lease names the shared generation protected from collection. An
+attached clean cache reports the generation as both `base` and `active`. Once a
+dirty reindex produces a private overlay, `status` reports the original shared
+`base`, no shared `active` generation, and the `overlay` action. That distinction
+preserves lineage without claiming private bytes are still identical to the
+shared generation. Lease publication, liveness touches, and repository cleanup
+share one repository-cache lock. A touch rereads the current lease only after
 acquiring that lock, validates its ownership checksum and current local
 generation, and changes only `lastSeenAt`. If a newer generation was attached,
 the lease was deleted or recreated, or its ownership changed while the touch

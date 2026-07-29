@@ -329,3 +329,22 @@ baseline without pretending the dirty worktree's current source fingerprint is
 the baseline fingerprint. Adding that selector and an honest lease transition
 delivers cache forking without introducing a second database authority or a
 Redis consistency protocol.
+
+## Execution record
+
+All four slices were completed on 2026-07-29.
+
+- Slice 1 added deterministic exact-tree/configuration baseline selection.
+- Slice 2 attached that baseline only for a dirty worktree with no usable local
+  cache and proved unchanged Python shard reuse in the mixed-language fixture.
+- Slice 3 added a base-only overlay lease and exposed base/active lineage in
+  status. Its live cleanup test also surfaced and fixed a macOS path-identity
+  defect: managed paths can be spelled through `/var` while `realpath` returns
+  `/private/var`. Cleanup now performs the containment decision on physical
+  paths after retaining the existing symlink and directory checks.
+- Slice 4 records the user contract and the measured validation in
+  `docs/benchmarks/2026-07-29-worktree-cache-fork-overlays.md`.
+
+The implementation did not add Redis, a merged base/delta query path, a new
+watcher, or any instruction that asks an agent to reindex more often. The
+existing watcher/freshness rules remain the sole refresh policy.
