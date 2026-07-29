@@ -537,7 +537,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       ),
       option(
         '--idle-timeout <ms>',
-        'Process-local ms before clean-idle daemon exit; 0 keeps it running (default: 600000)',
+        'Process-local ms before clean-idle daemon exit; 0 keeps it running (default: 180000)',
         parseNonNegativeInteger,
       ),
     ]),

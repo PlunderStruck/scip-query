@@ -25,7 +25,7 @@ const CONFIG_FILENAME = '.scipquery.json';
 const DEFAULT_WATCH_DEBOUNCE_MS = 2_000;
 const MIN_WATCH_COOLDOWN_MS = 5_000;
 const DEFAULT_WATCH_COOLDOWN_MS = MIN_WATCH_COOLDOWN_MS;
-const DEFAULT_WATCH_IDLE_TIMEOUT_MS = 10 * 60_000;
+const DEFAULT_WATCH_IDLE_TIMEOUT_MS = 3 * 60_000;
 const DEFAULT_WATCH_RESOURCE_BUDGET: Required<WatchResourceBudgetConfig> = {
   enabled: true,
   windowMs: 15 * 60_000,

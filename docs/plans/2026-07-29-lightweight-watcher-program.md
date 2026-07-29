@@ -391,6 +391,16 @@ deadline; non-idle states do not exit; zero remains unlimited.
 
 Commit: `perf: shorten idle watcher lifetime`.
 
+Result: **complete.** The runtime default, generated repository setting,
+command help, configuration contract, README, and setup-facing test fixtures
+now agree on a three-minute clean-idle lifetime. Explicit custom lifetimes
+remain exact and `0` still disables idle exit. Boundary tests prove that recent
+activity renews the deadline and that waiting, indexing, cooldown,
+budget-paused, and draining states remain ineligible for idle shutdown.
+Focused config, watcher-service, project-setup, and CLI tests pass at 133/133;
+typecheck, ESLint, the public API check, generated command documentation, and
+diff-gate pass with three evidence-bound co-change counterexamples.
+
 ### Slice 5 — Stricter automatic rebuild budget
 
 Deployable: yes.

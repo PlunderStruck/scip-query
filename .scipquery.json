@@ -6,7 +6,7 @@
     "autoRefresh": true,
     "debounceMs": 2000,
     "cooldownMs": 5000,
-    "idleTimeoutMs": 600000,
+    "idleTimeoutMs": 180000,
     "gitPollMs": 2000
   },
   "indexer": {

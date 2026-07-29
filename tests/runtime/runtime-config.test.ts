@@ -58,7 +58,7 @@ describe('loadProjectConfig', () => {
       debounceMs: 2_000,
       cooldownMs: 5_000,
       gitPollMs: 2_000,
-      idleTimeoutMs: 600_000,
+      idleTimeoutMs: 180_000,
       autoRefresh: true,
       resourceBudget: {
         enabled: true,
@@ -73,6 +73,11 @@ describe('loadProjectConfig', () => {
     expect(resolveWatchConfig({ watch: { cooldownMs: 0 } }).cooldownMs).toBe(5_000);
     expect(resolveWatchConfig({ watch: { cooldownMs: 4_999 } }).cooldownMs).toBe(5_000);
     expect(resolveWatchConfig({ watch: { cooldownMs: 8_000 } }).cooldownMs).toBe(8_000);
+  });
+
+  it('preserves explicit idle lifetimes, including the never-exit opt-out', () => {
+    expect(resolveWatchConfig({ watch: { idleTimeoutMs: 420_000 } }).idleTimeoutMs).toBe(420_000);
+    expect(resolveWatchConfig({ watch: { idleTimeoutMs: 0 } }).idleTimeoutMs).toBe(0);
   });
 
   it('returns an empty config when no project config exists', () => {
@@ -147,7 +152,7 @@ describe('automatic indexing config setup', () => {
         enabled: true,
         autoRefresh: true,
         debounceMs: 2_000,
-        idleTimeoutMs: 600_000,
+        idleTimeoutMs: 180_000,
         resourceBudget: {
           enabled: true,
           windowMs: 15 * 60_000,

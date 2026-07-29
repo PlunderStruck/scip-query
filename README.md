@@ -800,7 +800,7 @@ It creates a minimal `.scipquery.json`:
     "debounceMs": 2000,
     "cooldownMs": 5000,
     "gitPollMs": 2000,
-    "idleTimeoutMs": 600000,
+    "idleTimeoutMs": 180000,
     "autoRefresh": true,
     "resourceBudget": {
       "enabled": true,
@@ -830,9 +830,9 @@ Add optional fields such as `indexerConcurrency`, `indexer`, `entryRoots`,
 existing explicit `watch.enabled: false` remains an opt-out unless guided setup
 selects the recommended enable action. With `watch.enabled`, normal commands
 and agent hooks wake one per-project
-background service. Relevant file/Git activity keeps it alive; it exits after
-`idleTimeoutMs` of clean inactivity and wakes on the next command. Set the idle
-timeout to `0` to keep it running. `scip-query watch` still provides foreground
+background service. Relevant file/Git activity keeps it alive; by default it
+exits after three minutes of clean inactivity and wakes on the next command.
+Set `idleTimeoutMs` to `0` to keep it running. `scip-query watch` still provides foreground
 mode, while `watch --daemon`, `watch --status`, and `watch --stop` expose the
 background lifecycle. Command-line timing flags are process-local and apply
 only when a foreground watcher or daemon starts; a live daemon refuses those

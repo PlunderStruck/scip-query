@@ -225,8 +225,9 @@ describe('watch service contract', () => {
   });
 
   it('allows idle shutdown only from clean idle and lets zero mean always-on', () => {
-    expect(shouldStop({ state: 'idle' }, 10_000, 10_000)).toBe(true);
-    expect(shouldStop({ state: 'idle' }, 9_999, 10_000)).toBe(false);
+    expect(shouldStop({ state: 'idle' }, 180_000, 180_000)).toBe(true);
+    expect(shouldStop({ state: 'idle' }, 179_999, 180_000)).toBe(false);
+    expect(shouldStop({ state: 'idle' }, 60_000, 180_000)).toBe(false);
     expect(shouldStop({ state: 'waiting', changedFiles: 1, reindexAt: NOW + 1_000 }, 20_000, 10_000)).toBe(false);
     expect(shouldStop({ state: 'indexing', startedAt: NOW }, 20_000, 10_000)).toBe(false);
     expect(shouldStop({ state: 'cooldown', until: NOW + 1_000, dirty: true }, 20_000, 10_000)).toBe(false);
@@ -646,7 +647,7 @@ function liveState(): WatchServiceState {
     startedAt: new Date(NOW - 60_000).toISOString(),
     heartbeatAt: new Date(NOW - 1_000).toISOString(),
     lastActivityAt: new Date(NOW - 2_000).toISOString(),
-    idleDeadlineAt: new Date(NOW + 598_000).toISOString(),
+    idleDeadlineAt: new Date(NOW + 178_000).toISOString(),
     watcher: { state: 'idle' },
     typescriptSemantic: {
       protocolVersion: 1,
