@@ -64,6 +64,25 @@ export interface CleanupVerificationOptions {
   workingTreeRuntime?: CleanupVerificationRuntime;
 }
 
+export interface CleanupApplicationTarget {
+  batch: number;
+  file: string;
+  startLine: number;
+  endLine: number;
+  loc: number;
+  symbol: string;
+}
+
+export interface CleanupApplicationReport {
+  dryRun: boolean;
+  batches: number;
+  symbols: number;
+  loc: number;
+  files: string[];
+  filesEmptied: string[];
+  targets: CleanupApplicationTarget[];
+}
+
 const CHECK_TIMEOUT_MS = 300_000;
 const MAX_ERROR_LINES = 12;
 const GIT_STATUS_TIMEOUT_MS = 30_000;
@@ -507,8 +526,41 @@ function applyBatchDeletions(worktree: string, batch: CleanupBatch): void {
   }
 }
 
-export function applyCleanupBatches(projectRoot: string, batches: readonly CleanupBatch[]): void {
-  for (const batch of batches) applyBatchDeletions(projectRoot, batch);
+export function describeCleanupBatches(
+  batches: readonly CleanupBatch[],
+  opts: { dryRun?: boolean } = {},
+): CleanupApplicationReport {
+  const targets = batches.flatMap((batch) =>
+    batch.entries.map((entry) => ({
+      batch: batch.depth,
+      file: entry.file,
+      startLine: entry.startLine,
+      endLine: entry.endLine,
+      loc: entry.loc,
+      symbol: entry.shortName,
+    })),
+  );
+  return {
+    dryRun: opts.dryRun === true,
+    batches: batches.length,
+    symbols: targets.length,
+    loc: batches.reduce((sum, batch) => sum + batch.loc, 0),
+    files: [...new Set(targets.map((target) => target.file))],
+    filesEmptied: [...new Set(batches.flatMap((batch) => batch.filesEmptied))],
+    targets,
+  };
+}
+
+export function applyCleanupBatches(
+  projectRoot: string,
+  batches: readonly CleanupBatch[],
+  opts: { dryRun?: boolean } = {},
+): CleanupApplicationReport {
+  const report = describeCleanupBatches(batches, opts);
+  if (!report.dryRun) {
+    for (const batch of batches) applyBatchDeletions(projectRoot, batch);
+  }
+  return report;
 }
 
 export function createCleanupPatch(projectRoot: string, batches: readonly CleanupBatch[]): string {

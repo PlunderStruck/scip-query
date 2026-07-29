@@ -138,12 +138,19 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       option('--verified', 'Required: verify the selected cleanup batch before applying it'),
       option('--batch <n>', 'Apply one batch depth', parseInteger),
       option('--all', 'Apply every compiler-verified batch in the plan'),
-      option('--force-dirty', 'Allow applying when plan files already have working-tree edits'),
+      option('--dry-run', 'Verify and print exact deletion targets without changing working-tree files'),
+      option(
+        '--force-dirty',
+        'Allow deleting ranges from files with uncommitted edits; those edits can be lost, so preview first',
+      ),
       option('--full', 'Run unbounded analysis on large indexes'),
     ],
     budget: 'candidate-scan',
     renderShape: 'custom',
-    docs: doc('Cleanup', ['scip-query cleanup-apply --verified --batch 0']),
+    docs: doc('Cleanup', [
+      'scip-query cleanup-apply --verified --batch 0 --dry-run',
+      'scip-query cleanup-apply --verified --batch 0',
+    ]),
     handler: handleCleanupApply,
   }),
   cleanupCommand({

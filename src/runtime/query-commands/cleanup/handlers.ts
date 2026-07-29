@@ -8,6 +8,7 @@ import {
   applyCleanupBatches,
   cleanupVerificationFailures,
   createCleanupPatch,
+  describeCleanupBatches,
   selectCleanupBatches,
   verifyCleanupPlan,
 } from '../../cleanup-verify.js';
@@ -940,10 +941,27 @@ export const handleCleanupApply = budgetedDbCommand('cleanup-apply', ({ db, opts
     return;
   }
 
-  applyCleanupBatches(projectRoot, selectedBatches);
-  const symbols = selectedBatches.reduce((sum, cleanupBatch) => sum + cleanupBatch.entries.length, 0);
-  const loc = selectedBatches.reduce((sum, cleanupBatch) => sum + cleanupBatch.loc, 0);
-  console.log(`Applied ${selectedBatches.length} verified cleanup batch(es): ${symbols} symbol(s), ${loc} LOC.`);
+  const dryRun = booleanOptionValue(opts, 'dryRun');
+  const preview = describeCleanupBatches(selectedBatches, { dryRun });
+  console.log(
+    `${dryRun ? 'Cleanup preview' : 'Applying cleanup'}: ${preview.batches} verified batch(es), ${preview.symbols} symbol(s), ${preview.loc} LOC across ${preview.files.length} file(s).`,
+  );
+  console.log(`  verifier: ${verification.checkers.join(', ')}`);
+  for (const target of preview.targets) {
+    console.log(
+      `  batch ${target.batch}  ${target.file}:${target.startLine + 1}-${target.endLine + 1}  ${target.symbol}  (${target.loc} LOC)`,
+    );
+  }
+  if (preview.filesEmptied.length > 0) console.log(`  files emptied: ${preview.filesEmptied.join(', ')}`);
+
+  const application = applyCleanupBatches(projectRoot, selectedBatches, { dryRun });
+  if (application.dryRun) {
+    console.log('Preview complete: verification passed and no working-tree files were changed.');
+    return;
+  }
+  console.log(
+    `Applied ${application.batches} verified cleanup batch(es): ${application.symbols} symbol(s), ${application.loc} LOC.`,
+  );
 });
 
 function verificationOracleSummary(checkers: readonly string[]): string {

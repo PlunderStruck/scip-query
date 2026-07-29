@@ -73,7 +73,7 @@ Top commands per routed skill, generated from each skill's own `commands:` front
 | `scip-audit` | `scip-query health`, `scip-query decorative-checkers --full`, `scip-query doc-drift --full` |
 | `scip-diagnose` | `scip-query files <feature-or-error-term>`, `scip-query trace <candidate-symbol>`, `scip-query call-graph <entry-symbol>` |
 | `scip-explore` | `scip-query system <module-or-scope>`, `scip-query trace <entry-symbol>`, `scip-query affected <symbol>` |
-| `scip-improve` | `scip-query cleanup-plan --verify`, `scip-query cleanup-apply --verified --batch <n>`, `scip-query diff-gate` |
+| `scip-improve` | `scip-query cleanup-plan --verify`, `scip-query cleanup-apply --verified --batch <n> --dry-run`, `scip-query diff-gate` |
 | `scip-plan` | `scip-query plan-context <target>`, `scip-query refs <symbol>`, `scip-query affected <symbol>` |
 | `scip-setup` | `scip-query setup --json`, `scip-query doctor`, `scip-query status --capabilities` |
 | `scip-verify` | `scip-query doctor`, `scip-query diff-impact`, `scip-query diff-gate` |

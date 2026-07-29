@@ -10,6 +10,7 @@ import {
   createCleanupPatch,
   decideBatchStatus,
   deleteLineRanges,
+  describeCleanupBatches,
   detectCheckers,
   errorKey,
   inspectWorkingTree,
@@ -327,6 +328,41 @@ describe('cleanup patch and apply helpers', () => {
       applyCleanupBatches(root, [sampleBatch()]);
 
       expect(readFileSync(join(root, 'src', 'a.ts'), 'utf-8')).toBe('export const keep = 1;\n');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('previews the exact cleanup selection without mutating source files', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-cleanup-preview-test-'));
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      const source = 'export const keep = 1;\nexport const dead = 2;\n';
+      writeFileSync(join(root, 'src', 'a.ts'), source);
+
+      const described = describeCleanupBatches([sampleBatch()], { dryRun: true });
+      const applied = applyCleanupBatches(root, [sampleBatch()], { dryRun: true });
+
+      expect(applied).toEqual(described);
+      expect(applied).toEqual({
+        dryRun: true,
+        batches: 1,
+        symbols: 1,
+        loc: 1,
+        files: ['src/a.ts'],
+        filesEmptied: [],
+        targets: [
+          {
+            batch: 0,
+            file: 'src/a.ts',
+            startLine: 1,
+            endLine: 1,
+            loc: 1,
+            symbol: 'src:a:dead()',
+          },
+        ],
+      });
+      expect(readFileSync(join(root, 'src', 'a.ts'), 'utf-8')).toBe(source);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

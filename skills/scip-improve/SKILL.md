@@ -4,7 +4,7 @@ description: Use when edits should actually be made: fix confirmed cleanup findi
 commands:
   - template: "scip-query cleanup-plan --verify"
     when: "Build compiler-checked deletion batches from confirmed dead-code findings."
-  - template: "scip-query cleanup-apply --verified --batch <n>"
+  - template: "scip-query cleanup-apply --verified --batch <n> --dry-run"
     when: "Apply one already verified cleanup batch."
   - template: "scip-query diff-gate"
     when: "Gate each implemented improvement slice before declaring it complete."
@@ -31,7 +31,7 @@ with its evidence and disposition.
 
 | Situation | Do this | Reference |
 |---|---|---|
-| Fix confirmed cleanup findings, raise health, "keep cleaning" | `health` → `cleanup-plan --verify` → `cleanup-apply --verified --batch <n>` in a loop | `references/cleanup-batches.md` |
+| Fix confirmed cleanup findings, raise health, "keep cleaning" | `health` → `cleanup-plan --verify` → preview then apply one `cleanup-apply --verified --batch <n>` in a loop | `references/cleanup-batches.md` |
 | AGENTS.md/CLAUDE.md/standards/command docs are stale or cite moved code | `doc-drift` → `outline`/`trace`/`code` per doc → rerun `doc-drift` | `references/doc-reconcile.md` |
 | Same-name/near-name functions diverged, one-sided fix, drifted threshold | `twin-drift --full` → classify → consolidate → rerun `twin-drift` | `references/twin-drift.md` |
 | Implement a confirmed maintainability register entry (hidden policy, thin wrapper, dead re-export) | `extract-candidates` / `passthrough-candidates` / `wrapper-candidates` / `stale-abstractions` / `redundant-reexports` to confirm, then implement the disposition | `references/maintainability-mechanism.md` |
@@ -49,7 +49,7 @@ with its evidence and disposition.
 | Command | Purpose | Returns | Coverage | When |
 | --- | --- | --- | --- | --- |
 | `scip-query cleanup-plan --verify` | Ordered, batched deletion plan: graph-fact dead code plus the cascade candidates it unlocks | ordered cleanup batches, evidence, and optional verification outcomes | `bounded` | Build compiler-checked deletion batches from confirmed dead-code findings. |
-| `scip-query cleanup-apply --verified --batch <n>` | Apply a compiler-verified cleanup-plan batch to the working tree | applied files, deletions, verification, and refusal reasons | `bounded` | Apply one already verified cleanup batch. |
+| `scip-query cleanup-apply --verified --batch <n> --dry-run` | Apply a compiler-verified cleanup-plan batch to the working tree | applied files, deletions, verification, and refusal reasons | `bounded` | Apply one already verified cleanup batch. |
 | `scip-query diff-gate` | Runtime-bounded, single-flight gate for the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | blocking findings with check id, message, and remediation; advisory findings; root-cause groups; changed file and symbol counts; process exit status (1 when blocking findings exist) | `bounded` | Gate each implemented improvement slice before declaring it complete. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.

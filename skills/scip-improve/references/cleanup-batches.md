@@ -28,7 +28,7 @@ Work top to bottom, one item at a time:
 
 Repeat until stopping:
 
-1. Apply one verified deletion batch — `scip-query cleanup-apply --verified --batch <n>` against the plan from `scip-query cleanup-plan --verify` — or one small targeted refactor for the next prioritized item.
+1. Preview one verified deletion batch with `scip-query cleanup-apply --verified --batch <n> --dry-run`. Confirm the exact files, symbol ranges, LOC, and verifier match the intended batch; then run the same command without `--dry-run` to apply it. Otherwise make one small targeted refactor for the next prioritized item.
 2. Run the narrow project check for the touched behavior (tests/typecheck scoped to what changed).
 3. Run `scip-query health`.
 4. Invoke the `scip-verify` skill.
