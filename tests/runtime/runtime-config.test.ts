@@ -13,6 +13,7 @@ import { handleDoctor, handleStatus, handleWatch } from '../../src/runtime/comma
 import {
   configureProjectAutomaticRefresh,
   initProjectConfig,
+  initProjectConfigDetailed,
   loadProjectConfig,
   resolveWatchConfig,
   validateProjectConfig,
@@ -133,6 +134,19 @@ describe('automatic indexing config setup', () => {
       watch: { enabled: true, autoRefresh: true, idleTimeoutMs: 600_000 },
     });
     expect(JSON.parse(readFileSync(configPath, 'utf8'))).toMatchObject(CURRENT_CONFIG_FORMAT);
+  });
+
+  it('reports whether init actually created the config and preserves existing bytes', () => {
+    const projectRoot = createProject();
+    const created = initProjectConfigDetailed(projectRoot, ['typescript']);
+    expect(created).toEqual({ configPath: join(projectRoot, '.scipquery.json'), changed: true });
+
+    const custom = '{ "languages": ["rust"], "futureOption": true }\n';
+    writeFileSync(created.configPath, custom);
+    const existing = initProjectConfigDetailed(projectRoot, ['python']);
+
+    expect(existing).toEqual({ configPath: created.configPath, changed: false });
+    expect(readFileSync(created.configPath, 'utf8')).toBe(custom);
   });
 
   it('persists setup enablement without replacing unrelated config', () => {

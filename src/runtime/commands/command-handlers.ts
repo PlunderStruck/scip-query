@@ -36,7 +36,7 @@ import {
 import {
   loadProjectConfig,
   resolveWatchConfig,
-  initProjectConfig,
+  initProjectConfigDetailed,
   validateProjectConfig,
   SUPPORTED_LANGUAGES,
 } from '../config.js';
@@ -1089,8 +1089,12 @@ function renderCapabilities(rawOpts: unknown, command: 'capabilities' | 'capabil
 export function handleInit(): void {
   const projectRoot = resolveProjectRoot();
   const languages = detectLanguages(projectRoot);
-  const configPath = initProjectConfig(projectRoot, languages);
-  console.log(`Config written to ${configPath}`);
+  const result = initProjectConfigDetailed(projectRoot, languages);
+  console.log(
+    result.changed
+      ? `Config written to ${result.configPath}`
+      : `Config already exists at ${result.configPath}; existing contents left unchanged.`,
+  );
   console.log(`Detected languages: ${languages.join(', ') || '(none)'}`);
 }
 

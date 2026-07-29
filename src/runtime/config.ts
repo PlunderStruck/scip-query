@@ -729,6 +729,15 @@ export function resolveWatchConfig(config: ProjectConfig): Required<WatchConfig>
  * Does not overwrite an existing config.
  */
 export function initProjectConfig(projectRoot: string, languages: string[]): string {
+  return initProjectConfigDetailed(projectRoot, languages).configPath;
+}
+
+export interface InitProjectConfigResult {
+  configPath: string;
+  changed: boolean;
+}
+
+export function initProjectConfigDetailed(projectRoot: string, languages: string[]): InitProjectConfigResult {
   const configPath = join(projectRoot, CONFIG_FILENAME);
   const config: ProjectConfig = {
     languages: languages as ProjectConfig['languages'],
@@ -741,10 +750,10 @@ export function initProjectConfig(projectRoot: string, languages: string[]): str
       autoRefresh: true,
     },
   };
-  mutateTextFileRevisionAware(configPath, (snapshot) =>
+  const mutation = mutateTextFileRevisionAware(configPath, (snapshot) =>
     snapshot.revision.exists ? { kind: 'unchanged' } : { kind: 'write', text: serializeProjectConfig(config) },
   );
-  return configPath;
+  return { configPath, changed: mutation.changed };
 }
 
 // scip-query: ignore-stale — reviewed S1 owned contract; config persistence returns this named refresh result.
