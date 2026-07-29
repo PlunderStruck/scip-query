@@ -805,8 +805,8 @@ It creates a minimal `.scipquery.json`:
     "resourceBudget": {
       "enabled": true,
       "windowMs": 900000,
-      "maxRebuilds": 4,
-      "maxEstimatedWriteBytes": 4294967296
+      "maxRebuilds": 2,
+      "maxEstimatedWriteBytes": 1073741824
     }
   }
 }
@@ -854,7 +854,7 @@ non-input files; if Git cannot establish the changed path set, the watcher
 conservatively refreshes rather than assuming the index is current.
 
 Automatic refresh also has a persisted rolling resource budget. By default,
-after four completed rebuilds or 4 GiB of estimated writes within 15 minutes,
+after two completed rebuilds or 1 GiB of estimated writes within 15 minutes,
 the watcher pauses new automatic work until the oldest contributing activity
 leaves the window. File and Git changes remain coalesced as one pending
 refresh, and `watch --status` reports the reason, consumption, and retry time.

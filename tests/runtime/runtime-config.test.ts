@@ -63,8 +63,8 @@ describe('loadProjectConfig', () => {
       resourceBudget: {
         enabled: true,
         windowMs: 15 * 60_000,
-        maxRebuilds: 4,
-        maxEstimatedWriteBytes: 4 * 1024 * 1024 * 1024,
+        maxRebuilds: 2,
+        maxEstimatedWriteBytes: 1024 * 1024 * 1024,
       },
     });
   });
@@ -78,6 +78,26 @@ describe('loadProjectConfig', () => {
   it('preserves explicit idle lifetimes, including the never-exit opt-out', () => {
     expect(resolveWatchConfig({ watch: { idleTimeoutMs: 420_000 } }).idleTimeoutMs).toBe(420_000);
     expect(resolveWatchConfig({ watch: { idleTimeoutMs: 0 } }).idleTimeoutMs).toBe(0);
+  });
+
+  it('preserves explicit resource budgets and the disabled-budget opt-out', () => {
+    expect(
+      resolveWatchConfig({
+        watch: {
+          resourceBudget: {
+            enabled: false,
+            windowMs: 60_000,
+            maxRebuilds: 7,
+            maxEstimatedWriteBytes: 123_456,
+          },
+        },
+      }).resourceBudget,
+    ).toEqual({
+      enabled: false,
+      windowMs: 60_000,
+      maxRebuilds: 7,
+      maxEstimatedWriteBytes: 123_456,
+    });
   });
 
   it('returns an empty config when no project config exists', () => {
@@ -156,8 +176,8 @@ describe('automatic indexing config setup', () => {
         resourceBudget: {
           enabled: true,
           windowMs: 15 * 60_000,
-          maxRebuilds: 4,
-          maxEstimatedWriteBytes: 4 * 1024 * 1024 * 1024,
+          maxRebuilds: 2,
+          maxEstimatedWriteBytes: 1024 * 1024 * 1024,
         },
       },
     });

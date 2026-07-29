@@ -29,8 +29,8 @@ const DEFAULT_WATCH_IDLE_TIMEOUT_MS = 3 * 60_000;
 const DEFAULT_WATCH_RESOURCE_BUDGET: Required<WatchResourceBudgetConfig> = {
   enabled: true,
   windowMs: 15 * 60_000,
-  maxRebuilds: 4,
-  maxEstimatedWriteBytes: 4 * 1024 * 1024 * 1024,
+  maxRebuilds: 2,
+  maxEstimatedWriteBytes: 1024 * 1024 * 1024,
 };
 
 export type ResolvedWatchConfig = Omit<Required<WatchConfig>, 'resourceBudget'> & {

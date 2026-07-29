@@ -422,6 +422,16 @@ explicit overrides remain honored.
 
 Commit: `perf: tighten automatic rebuild budget`.
 
+Result: **complete.** The default persisted rolling window remains 15 minutes,
+while automatic admission now pauses at two completed rebuilds or 1 GiB of
+estimated writes. Generated configuration, public configuration comments, and
+the README agree on those limits. Explicit custom budgets and
+`resourceBudget.enabled: false` remain exact; manual runs remain available and
+continue contributing to later automatic admission. Focused runtime-config,
+activity-ledger, and watcher tests pass at 103/103, including exact default
+boundary checks; typecheck, ESLint, the public API check, and diff-gate pass
+with one evidence-bound config-test co-change counterexample.
+
 ### Slice 6 — Language-specific shard invalidation
 
 Deployable: yes.

@@ -6,9 +6,9 @@
     "version": "0.20.0"
   },
   "id": "SQ562715D7254A",
-  "reason": "This test changes assertions for the central resolved idle default and its explicit overrides; command-handler behavior and inputs are unchanged.",
+  "reason": "This test changes assertions for central resource-budget defaults and explicit overrides; command-handler behavior and inputs are unchanged.",
   "createdAt": "2026-07-29T19:50:55.812Z",
-  "updatedAt": "2026-07-29T19:56:10.380Z",
+  "updatedAt": "2026-07-29T19:59:09.534Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
@@ -18,32 +18,32 @@
     "observation": {
       "schemaVersion": 1,
       "authorityKind": "index-worktree",
-      "observedAt": "2026-07-29T19:56:10.379Z",
+      "observedAt": "2026-07-29T19:59:09.533Z",
       "projectIdentity": "178a22f2ce5800603672d10b597d4cf97078e596c64e2eb0293681604557bda7",
       "index": {
-        "generationIdentity": "0bc31728ab939e5490809d55a6d57ed407c766c4d450e10ebfe8b9c411c082f9",
+        "generationIdentity": "90309dec69525c40e4c3c05c02a672aba01848e96b0155e8d4469ed3f73edc4a",
         "source": "immutable",
         "alignment": "not-certified"
       },
       "worktree": {
-        "identity": "2ea58f2211c50d7dcf3863b6372b1bee8aa2313621e7037d0b283773938edefc",
+        "identity": "7aba04bd78d1ddda6397b7d06bda50d79ca67f83b674d1943f9b25a5a5a158c5",
         "clean": false,
-        "headCommit": "c6811b02299df386e8e694a50fa242de11358a9f",
-        "treeOid": "1751b03e7e2de4e412d14a520e28f3ec7e3316ea"
+        "headCommit": "aa8fe9b42eb211082f2cad2aca139938f53574f5",
+        "treeOid": "9e01ae7fcd82e55d63e3f1d927aaff1043a9dc99"
       }
     },
     "evidence": [
       {
         "kind": "source",
         "referent": "src/runtime/config.ts",
-        "claim": "This test changes assertions for the central resolved idle default and its explicit overrides; command-handler behavior and inputs are unchanged.",
-        "contentHash": "18fde34ad5d1dd80dae39b3d21d4a251c6b7096f97797cca5fcfde536a658d14"
+        "claim": "This test changes assertions for central resource-budget defaults and explicit overrides; command-handler behavior and inputs are unchanged.",
+        "contentHash": "7a1028c43578ca7903653e8623513b79d2fa367cf0e3450a57cd08bcf7cb4459"
       },
       {
         "kind": "test",
         "referent": "tests/runtime/runtime-config.test.ts",
-        "claim": "This test changes assertions for the central resolved idle default and its explicit overrides; command-handler behavior and inputs are unchanged.",
-        "contentHash": "50263a27656ac30359a8b7dc890378ae865ba9417f56cd2174a1b1e28fed784c"
+        "claim": "This test changes assertions for central resource-budget defaults and explicit overrides; command-handler behavior and inputs are unchanged.",
+        "contentHash": "e182c7bdecd51e9b2ebed994085858218b09638f2dcf76f0b0f57529565844c6"
       }
     ],
     "invalidateOn": {

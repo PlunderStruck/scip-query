@@ -17,6 +17,7 @@ import {
   reindexActivityPath,
   type ReindexActivityRecord,
 } from '../../src/reindex/reindex-activity.js';
+import { resolveWatchConfig } from '../../src/runtime/config.js';
 
 const tempDirs: string[] = [];
 
@@ -281,6 +282,44 @@ describe('reindex activity', () => {
       rebuilt: 1,
       estimatedWriteBytes: 999,
     });
+  });
+
+  it('applies the calibrated default budget at two rebuilds or one GiB', () => {
+    const nowMs = Date.parse('2026-07-24T12:15:00.000Z');
+    const config = resolveWatchConfig({}).resourceBudget;
+    const summary = {
+      confidence: 'complete' as const,
+      windowStartedAt: '2026-07-24T12:00:00.000Z',
+      windowEndedAt: '2026-07-24T12:15:00.000Z',
+      runs: 2,
+      rebuilt: 2,
+      reused: 0,
+      failed: 0,
+      suppressed: 0,
+      estimatedLogicalOutputBytes: 512,
+      estimatedWriteBytes: 512,
+      oldestRebuildAt: '2026-07-24T12:01:00.000Z',
+      oldestWriteAt: '2026-07-24T12:02:00.000Z',
+      byTrigger: {},
+    };
+
+    expect(evaluateReindexActivityBudget(summary, config, nowMs)).toEqual(
+      expect.objectContaining({ state: 'paused', reason: 'rebuild-count', rebuilt: 2 }),
+    );
+    expect(
+      evaluateReindexActivityBudget(
+        { ...summary, rebuilt: 1, estimatedWriteBytes: 1024 * 1024 * 1024 },
+        config,
+        nowMs,
+      ),
+    ).toEqual(expect.objectContaining({ state: 'paused', reason: 'estimated-write-bytes' }));
+    expect(
+      evaluateReindexActivityBudget(
+        { ...summary, rebuilt: 1, estimatedWriteBytes: 1024 * 1024 * 1024 - 1 },
+        config,
+        nowMs,
+      ),
+    ).toEqual(expect.objectContaining({ state: 'allowed' }));
   });
 
   it('reconstructs exhausted budget debt from the persisted ledger after a restart', () => {

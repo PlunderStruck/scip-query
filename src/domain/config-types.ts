@@ -421,9 +421,9 @@ export interface WatchResourceBudgetConfig {
   enabled?: boolean;
   /** Rolling observation window in milliseconds (default: 900000 / 15 minutes). */
   windowMs?: number;
-  /** Completed rebuilds allowed inside the window before automatic work pauses (default: 4). */
+  /** Completed rebuilds allowed inside the window before automatic work pauses (default: 2). */
   maxRebuilds?: number;
-  /** Estimated bytes written inside the window before automatic work pauses (default: 4 GiB). */
+  /** Estimated bytes written inside the window before automatic work pauses (default: 1 GiB). */
   maxEstimatedWriteBytes?: number;
 }
 
