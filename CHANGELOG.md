@@ -4,6 +4,35 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+## [0.19.10]
+
+### Safer setup and removal
+
+- Real uninstall now requires an explicit global or project scope, while a
+  scope-free dry run safely previews both. Project-hook removal no longer
+  depends on resolving an install-only command identity, and ordinary
+  uninstall output summarizes retained personal skills unless `--verbose` is
+  requested.
+- Guided setup requires an interactive terminal and rejects conflicting JSON
+  or automatic modes. Hook removal has a non-writing preview, rejects
+  installation-only force semantics, and reports removal-specific outcomes.
+- Watch timing options are explicitly process-local: status and stop reject
+  them, and an already-running daemon refuses overrides it cannot apply.
+
+### Honest outcomes and recoverable evidence
+
+- Partial reindex results identify every skipped language and reason. Project
+  initialization and agent setup derive their messages from actual
+  written/unchanged/skipped results instead of reporting categorical success.
+- Suppression receipts disclose their effective scope, reason code, evidence
+  count, expiration, and revision.
+- Verified cleanup application has a same-plan `--dry-run` that names exact
+  files, symbols, ranges, deleted lines, and the verification oracle before
+  the source-mutation boundary.
+- The final human pagination marker now names transport completion separately
+  from command-result coverage, preventing a fully retrieved bounded or
+  sampled result from being mistaken for complete semantic evidence.
+
 ## [0.19.9]
 
 ### Agent-readable command output

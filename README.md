@@ -759,7 +759,7 @@ Add `--result-only` when a program needs just the command payload:
 {
   "kind": "scip-query-result",
   "schemaVersion": 1,
-  "producer": { "name": "scip-query", "version": "0.19.9" },
+  "producer": { "name": "scip-query", "version": "0.19.10" },
   "command": "fan-in",
   "resultSchemaVersion": 1,
   "args": ["login"],
