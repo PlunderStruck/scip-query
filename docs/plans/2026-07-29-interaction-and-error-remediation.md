@@ -601,7 +601,14 @@ protocol migration.
 
 ## Deviation ledger
 
-None at planning time.
+- **D1 — Batched SCIP gates while the watcher owns a long refresh.** After
+  Slice 1, the active daemon remained in one reindex for more than 76 seconds.
+  Starting another reindex is forbidden, and waiting for a full reindex after
+  every small slice would manufacture the redundant refresh pressure this
+  repository is designed to prevent. Each slice still receives its focused
+  tests and its own commit; `diff-impact` and `diff-gate` are batched once the
+  watcher publishes a fresh generation, with a mandatory final full gate
+  before program closure.
 
 ## Deferred list
 

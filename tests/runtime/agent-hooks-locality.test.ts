@@ -145,4 +145,19 @@ describe('checkout-local project hooks', () => {
       execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], { cwd: root, encoding: 'utf-8' }),
     ).toBe('');
   });
+
+  it('removes hooks without resolving an install-only command identity', () => {
+    const root = createGitRoot();
+    installProjectAgentHooks(root, { removeLegacyUserHooks: false });
+
+    const result = installProjectAgentHooks(root, {
+      remove: true,
+      removeLegacyUserHooks: false,
+      get commandPrefix(): never {
+        throw new Error('removal must not resolve an installation command');
+      },
+    });
+
+    expect(result.removed).toEqual(['.codex/hooks.json', '.claude/settings.local.json']);
+  });
 });

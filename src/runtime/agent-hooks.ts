@@ -229,7 +229,6 @@ export function installProjectAgentHooks(
     return result;
   }
 
-  const commandPrefix = opts.commandPrefix ?? projectHookCommandPrefix(projectRoot);
   if (opts.shared) {
     result.warnings.push('--shared is deprecated; project hooks are always checkout-local and will not be committed.');
   }
@@ -246,6 +245,7 @@ export function installProjectAgentHooks(
     return result;
   }
 
+  const commandPrefix = opts.commandPrefix ?? projectHookCommandPrefix(projectRoot);
   installProjectHookTarget(projectRoot, PROJECT_LOCAL_HOOK_TARGETS[0], result, {
     provider: 'codex',
     commandPrefix,
