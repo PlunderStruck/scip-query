@@ -248,6 +248,7 @@ intended.
 **8. Gate every diff.** `diff-gate` runs a defined set of checks scoped to what a change _introduces_ and exits nonzero with remediation text for each finding. Baseline regressions are included when you pass `--baseline`.
 
 <!-- BEGIN GENERATED DIFF-GATE CHECKS -->
+
 | Check | What it catches | When it runs |
 | --- | --- | --- |
 | `echo` | Changed symbols that newly echo established code elsewhere. | Default diff gate. |
@@ -648,6 +649,9 @@ identified by that checkout's Git worktree ID. A Git worktree ID is a checkout
 identifier derived from its filesystem path after symbolic-link redirects are
 resolved and its checkout-specific Git control directory; that combination
 distinguishes sibling worktrees even though they share repository objects. The
+passive `status`, `doctor`, `effectiveness`, and `install-skills` commands
+inspect or maintain existing state without starting a watcher; index-reading
+graph, semantic, health, and gate commands remain watcher-eligible. The
 daemon observes only that worktree's files and Git index, and every reindex
 child writes only to that worktree's writable `index.scip` and `index.db`. A
 cross-platform source watcher maintains the directory subscriptions needed to

@@ -15,6 +15,7 @@ import {
 } from '../../src/runtime/command-kit/command-execution.js';
 import type { InvocationCoverage } from '../../src/runtime/command-kit/command-descriptor-types.js';
 import { PUBLIC_QUERY_ENTRIES, PUBLIC_QUERY_SOURCE_PATHS } from '../../src/queries/public-query-entries.js';
+import { watchServiceAutoStartEligible } from '../../src/runtime/watch-service.js';
 
 const PRIVATE_QUERY_MODULES = [
   'boundary-evidence',
@@ -79,6 +80,20 @@ describe('CLI contract', () => {
 
     expect(names).toEqual(commandDescriptors.map((descriptor) => descriptor.id));
     expect(names).not.toContain('symbols');
+  });
+
+  it('keeps passive registered commands out of demand-started watcher policy', () => {
+    const commandIds = new Set(commandDescriptors.map((descriptor) => descriptor.id));
+    const passiveCommands = ['doctor', 'effectiveness', 'install-skills', 'status'];
+
+    expect(passiveCommands.every((commandName) => commandIds.has(commandName))).toBe(true);
+    for (const commandName of passiveCommands) {
+      expect(watchServiceAutoStartEligible(commandName, {}), commandName).toBe(false);
+    }
+    for (const commandName of ['refs', 'health', 'plan-context']) {
+      expect(commandIds.has(commandName), commandName).toBe(true);
+      expect(watchServiceAutoStartEligible(commandName, {}), commandName).toBe(true);
+    }
   });
 
   it('registers command descriptions and option flags from descriptors', () => {

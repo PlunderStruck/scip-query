@@ -28,6 +28,7 @@ const originalCacheOverride = process.env['SCIP_QUERY_CACHE_DIR'];
 afterEach(() => {
   vi.doUnmock('node:child_process');
   vi.doUnmock('../../src/platform/bounded-process.js');
+  vi.doUnmock('../../src/platform/process-identity.js');
   vi.restoreAllMocks();
   vi.resetModules();
   restoreEnvironment('XDG_CACHE_HOME', originalXdgCacheHome);
@@ -63,7 +64,7 @@ describe('per-worktree watch service', () => {
     const config = { watch: { enabled: true } } as const;
 
     const primaryResult = ensureWatchServiceForCommand({
-      commandName: 'status',
+      commandName: 'refs',
       projectRoot: primaryAliasProject,
       cacheDir: primaryAliasIndex.cacheDir,
       cliVersion: '0.17.0',
@@ -72,7 +73,7 @@ describe('per-worktree watch service', () => {
       runtime,
     });
     const linkedResult = ensureWatchServiceForCommand({
-      commandName: 'status',
+      commandName: 'refs',
       projectRoot: linkedProject,
       cacheDir: linkedIndex.cacheDir,
       cliVersion: '0.17.0',
@@ -103,7 +104,7 @@ describe('per-worktree watch service', () => {
     expect(primaryState.worktreeId).not.toBe(linkedState.worktreeId);
 
     const reusedPrimary = ensureWatchServiceForCommand({
-      commandName: 'status',
+      commandName: 'refs',
       projectRoot: primaryProject,
       cacheDir: primaryIndex.cacheDir,
       cliVersion: '0.17.0',
@@ -448,6 +449,20 @@ function inertSubscriptionFactory(): WatchSubscriptionFactory {
 }
 
 function mockReindexFork(reindexEnvironments: NodeJS.ProcessEnv[]): void {
+  vi.doMock('../../src/platform/process-identity.js', async () => {
+    const actual = await vi.importActual<typeof import('../../src/platform/process-identity.js')>(
+      '../../src/platform/process-identity.js',
+    );
+    return {
+      ...actual,
+      readProcessIdentity: (pid: number): ProcessIdentity => ({
+        version: 1,
+        pid,
+        platform: process.platform,
+        startToken: `test-parent-${pid}`,
+      }),
+    };
+  });
   vi.doMock('../../src/platform/bounded-process.js', async () => {
     const actual = await vi.importActual<typeof BoundedProcessModule>('../../src/platform/bounded-process.js');
     return {

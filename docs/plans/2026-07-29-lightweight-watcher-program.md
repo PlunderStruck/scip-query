@@ -289,6 +289,15 @@ each passive command and a daemon for a representative graph command;
 
 Commit: `fix: avoid watcher startup for passive commands`.
 
+Result: **complete.** `doctor`, `effectiveness`, `install-skills`, and
+`status` now return the explicit excluded-command outcome without touching an
+existing daemon or spawning a new one. `refs`, `health`, and `plan-context`
+remain eligible. The focused contract and real worktree integration suites
+pass at 60/60 tests, typecheck passes, the full reference set confirms the
+policy has no watch-server or command-handler consumer, and diff-gate passes
+with those two broad-sweep co-change counterexamples recorded as evidence-bound
+adjudications.
+
 ### Slice 2 — Compiler-input-only invalidation
 
 Deployable: yes.

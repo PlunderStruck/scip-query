@@ -1,0 +1,58 @@
+{
+  "kind": "scip-query-suppression",
+  "suppressionIdentity": "SQ0DAFA56EA95B",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  },
+  "id": "SQ0DAFA56EA95B",
+  "reason": "The edited watch-service test proves the pure command auto-start policy and does not exercise command handlers. Complete refs for watchServiceAutoStartEligible show no command-handler consumer, and all reported handler co-edits are broad feature sweeps rather than a focused coordination contract.",
+  "createdAt": "2026-07-29T19:29:56.932Z",
+  "schemaVersion": 2,
+  "decision": {
+    "kind": "automated-adjudication",
+    "reasonCode": "detector-counterexample",
+    "decidedBy": "agent",
+    "policyVersion": 1,
+    "observation": {
+      "schemaVersion": 1,
+      "authorityKind": "index-worktree",
+      "observedAt": "2026-07-29T19:29:56.932Z",
+      "projectIdentity": "178a22f2ce5800603672d10b597d4cf97078e596c64e2eb0293681604557bda7",
+      "index": {
+        "generationIdentity": "21702618b5749ac8c8dbdeaddf60d5bcd6f96f62098a634caf6568488ef2d55a",
+        "source": "immutable",
+        "alignment": "not-certified"
+      },
+      "worktree": {
+        "identity": "84f2f5f375ee5a80b68acd13fbcef2b8a6288af132db6b952a39dcecc9dfe0f1",
+        "clean": false,
+        "headCommit": "6d031d5deca460365d7e95bd275668654ad261aa",
+        "treeOid": "c5bad811c07af58e4464b8de046119d7300b4516"
+      }
+    },
+    "evidence": [
+      {
+        "kind": "test",
+        "referent": "tests/runtime/watch-service.test.ts",
+        "claim": "The edited watch-service test proves the pure command auto-start policy and does not exercise command handlers. Complete refs for watchServiceAutoStartEligible show no command-handler consumer, and all reported handler co-edits are broad feature sweeps rather than a focused coordination contract.",
+        "contentHash": "f6f7378b21a630321eacec526260139b118a399306bc9d44e9cfd01fa3d45c07"
+      },
+      {
+        "kind": "source",
+        "referent": "src/runtime/watch-service.ts",
+        "claim": "The edited watch-service test proves the pure command auto-start policy and does not exercise command handlers. Complete refs for watchServiceAutoStartEligible show no command-handler consumer, and all reported handler co-edits are broad feature sweeps rather than a focused coordination contract.",
+        "contentHash": "bcc67eb079472b3907d7ad203c236eb4f374c9be4ba63b922af5dec45d4ef1b0"
+      },
+      {
+        "kind": "graph",
+        "referent": "scip-query refs watchServiceAutoStartEligible --full",
+        "claim": "The edited watch-service test proves the pure command auto-start policy and does not exercise command handlers. Complete refs for watchServiceAutoStartEligible show no command-handler consumer, and all reported handler co-edits are broad feature sweeps rather than a focused coordination contract."
+      }
+    ],
+    "invalidateOn": {
+      "targetContentChange": true,
+      "detectorMajorChange": true
+    }
+  }
+}

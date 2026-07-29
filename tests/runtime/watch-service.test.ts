@@ -343,7 +343,7 @@ describe('watch service contract', () => {
 
         expect(
           ensureWatchServiceForCommand({
-            commandName: 'status',
+            commandName: 'refs',
             projectRoot: IDENTITY.projectRoot,
             cacheDir,
             cliVersion: IDENTITY.cliVersion,
@@ -372,7 +372,7 @@ describe('watch service contract', () => {
 
       expect(
         ensureWatchServiceForCommand({
-          commandName: 'status',
+          commandName: 'refs',
           projectRoot: IDENTITY.projectRoot,
           cacheDir,
           cliVersion: IDENTITY.cliVersion,
@@ -386,18 +386,38 @@ describe('watch service contract', () => {
   });
 
   it('auto-starts only eligible commands in enabled projects', () => {
-    expect(watchServiceAutoStartEligible('status', {})).toBe(true);
+    for (const commandName of ['doctor', 'effectiveness', 'install-skills', 'status']) {
+      expect(watchServiceAutoStartEligible(commandName, {}), commandName).toBe(false);
+    }
+    expect(watchServiceAutoStartEligible('refs', {})).toBe(true);
+    expect(watchServiceAutoStartEligible('health', {})).toBe(true);
     expect(watchServiceAutoStartEligible('watch', {})).toBe(false);
     expect(watchServiceAutoStartEligible('bench', {})).toBe(false);
     expect(watchServiceAutoStartEligible('work-audit', {})).toBe(false);
     expect(watchServiceAutoStartEligible('__health-phase', {})).toBe(false);
-    expect(watchServiceAutoStartEligible('status', { SCIP_QUERY_SKIP_WATCH_SERVICE: '1' })).toBe(false);
+    expect(watchServiceAutoStartEligible('refs', { SCIP_QUERY_SKIP_WATCH_SERVICE: '1' })).toBe(false);
 
     withTempCache((cacheDir) => {
       const runtime = fakeRuntime(watchServicePaths(cacheDir).statePath);
+      for (const commandName of ['doctor', 'effectiveness', 'install-skills', 'status']) {
+        expect(
+          ensureWatchServiceForCommand({
+            commandName,
+            projectRoot: IDENTITY.projectRoot,
+            cacheDir,
+            cliVersion: IDENTITY.cliVersion,
+            config: { watch: { enabled: true } },
+            env: {},
+            runtime,
+          }),
+          commandName,
+        ).toEqual({ kind: 'skipped', reason: 'excluded-command' });
+      }
+      expect(runtime.spawned).toBe(0);
+
       expect(
         ensureWatchServiceForCommand({
-          commandName: 'status',
+          commandName: 'refs',
           projectRoot: IDENTITY.projectRoot,
           cacheDir,
           cliVersion: IDENTITY.cliVersion,
@@ -408,7 +428,7 @@ describe('watch service contract', () => {
       ).toEqual({ kind: 'skipped', reason: 'disabled' });
       expect(
         ensureWatchServiceForCommand({
-          commandName: 'status',
+          commandName: 'refs',
           projectRoot: IDENTITY.projectRoot,
           cacheDir,
           cliVersion: IDENTITY.cliVersion,
