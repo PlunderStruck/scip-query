@@ -1,4 +1,10 @@
 import { decodeObservationReceipt, type ObservationReceiptV2 } from './observation-receipt.js';
+import {
+  PROTECTED_ARTIFACT_CLASSES,
+  type ProtectedArtifactClass,
+  type ProtectedArtifactRule,
+  type ProtectedArtifactSetSnapshot,
+} from './completion-protection.js';
 import { isRecordObject, isValidRecordTimestamp } from './record-validation.js';
 import { stableJson } from './stable-json.js';
 import {
@@ -30,18 +36,13 @@ const MAX_PROTECTED_CLASSES = 16;
 const MAX_SELECTORS_PER_CLASS = 16;
 const MAX_SELECTOR_CHARACTERS = 300;
 
-export const PROTECTED_ARTIFACT_CLASSES = [
-  'goal',
-  'transition-rule',
-  'evaluator',
-  'test',
-  'baseline',
-  'suppression',
-  'configuration',
-] as const;
-
-export type ProtectedArtifactClass = (typeof PROTECTED_ARTIFACT_CLASSES)[number];
-export type ProtectedArtifactAuthority = 'bootstrap-trust-root' | 'fixed-predecessor';
+export {
+  PROTECTED_ARTIFACT_CLASSES,
+  type ProtectedArtifactAuthority,
+  type ProtectedArtifactClass,
+  type ProtectedArtifactRule,
+  type ProtectedArtifactSetSnapshot,
+} from './completion-protection.js';
 
 export interface CompletionPolicySnapshot {
   policyId: string;
@@ -59,17 +60,6 @@ export interface CompletionEvaluatorSnapshot {
 export interface CompletionCommandRegistrySnapshot {
   registryIdentity: string;
   entries: readonly string[];
-}
-
-export interface ProtectedArtifactRule {
-  class: ProtectedArtifactClass;
-  selectors: readonly string[];
-  authority: ProtectedArtifactAuthority;
-}
-
-export interface ProtectedArtifactSetSnapshot {
-  setIdentity: string;
-  rules: readonly ProtectedArtifactRule[];
 }
 
 export interface CompletionContextSnapshotRequest {

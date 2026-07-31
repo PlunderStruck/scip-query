@@ -1,0 +1,707 @@
+{
+  "kind": "scip-query-completion-evaluation",
+  "schemaVersion": 1,
+  "evaluationId": "SQE-3237716F74060C937A68ED327EC60E1E",
+  "collaborationDomainId": "5ea57d1a-936c-4c91-b58f-5d61e45173a5",
+  "changeId": "SQC-DED67E74D3898BDCA85766BE8D3C93AF",
+  "goalId": "SQG-4061E7D5D360464ED8E8B05D53BBF49D",
+  "context": {
+    "contextId": "SQX-66CEC26FAC86C29AC72B6AFCF29BAC39",
+    "policyId": "SQCX-279B911ACDAEC7BBFE71D72D262A1697",
+    "policyVersion": 1,
+    "evaluatorId": "scip-query:stop-completion-controller",
+    "evaluatorVersion": "373b7fd4e12f2ddd8586690b663e42ea74c6feb59f5f5053adee60282f547a7a",
+    "targetObservation": {
+      "schemaVersion": 2,
+      "observedAt": "2026-07-31T07:09:21.208Z",
+      "facts": {
+        "collaborationDomain": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:collaboration-domain",
+            "version": 1
+          },
+          "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+        },
+        "workspaceInstance": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:workspace-instance",
+            "version": 1
+          },
+          "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+        },
+        "wholeContent": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:repository-content",
+            "version": 1
+          },
+          "digest": "f21abe60addd313de929fbff23d76b55d174dafb1bd3350517728ca2e4582df3"
+        },
+        "relevantInputs": [
+          {
+            "subject": "scip-query:index-inputs",
+            "identity": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:index-inputs",
+                "version": 2
+              },
+              "digest": "c97d85799e90bcfdd66198f7f318d7fea578d077e056195d94da3440aeae023c"
+            }
+          }
+        ]
+      },
+      "observedSources": [
+        {
+          "kind": "repository-snapshot",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:repository-content",
+              "version": 1
+            },
+            "digest": "f21abe60addd313de929fbff23d76b55d174dafb1bd3350517728ca2e4582df3"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "repository-snapshot",
+          "kind": "fixed-snapshot"
+        }
+      ],
+      "diagnostics": {
+        "clean": false,
+        "headCommit": "161b4d5cc7b50bb3bb66cbf44fc06981f0acbb93",
+        "treeOid": "2e14ac32e1d56288d789aeba5cec826500d95017"
+      }
+    }
+  },
+  "predicates": [
+    {
+      "predicate": "goal-fulfilled",
+      "state": "unknown",
+      "reasons": [
+        "Reflexive-authority assessment SQA-61BABEBFD97404A01F304792C5CA7656 blocks candidate-controlled evidence from approving itself.",
+        "The candidate changed the evaluator that produces completion judgments, so those candidate-produced judgments require a fixed predecessor evaluator.",
+        "The diff gate does not yet evaluate the goal’s protected acceptance scenarios."
+      ],
+      "evidenceReceipts": [
+        {
+          "schemaVersion": 2,
+          "observedAt": "2026-07-31T07:09:21.208Z",
+          "facts": {
+            "collaborationDomain": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:collaboration-domain",
+                "version": 1
+              },
+              "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+            },
+            "workspaceInstance": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:workspace-instance",
+                "version": 1
+              },
+              "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+            },
+            "wholeContent": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:repository-content",
+                "version": 1
+              },
+              "digest": "f21abe60addd313de929fbff23d76b55d174dafb1bd3350517728ca2e4582df3"
+            },
+            "relevantInputs": [
+              {
+                "subject": "scip-query:index-inputs",
+                "identity": {
+                  "schemaVersion": 1,
+                  "canonicalizationVersion": 1,
+                  "hashAlgorithm": "sha256",
+                  "projection": {
+                    "name": "scip-query:index-inputs",
+                    "version": 2
+                  },
+                  "digest": "c97d85799e90bcfdd66198f7f318d7fea578d077e056195d94da3440aeae023c"
+                }
+              }
+            ]
+          },
+          "observedSources": [
+            {
+              "kind": "repository-snapshot",
+              "identity": {
+                "schemaVersion": 1,
+                "canonicalizationVersion": 1,
+                "hashAlgorithm": "sha256",
+                "projection": {
+                  "name": "scip-query:repository-content",
+                  "version": 1
+                },
+                "digest": "f21abe60addd313de929fbff23d76b55d174dafb1bd3350517728ca2e4582df3"
+              }
+            }
+          ],
+          "stabilityProofs": [
+            {
+              "source": "repository-snapshot",
+              "kind": "fixed-snapshot"
+            }
+          ],
+          "diagnostics": {
+            "clean": false,
+            "headCommit": "161b4d5cc7b50bb3bb66cbf44fc06981f0acbb93",
+            "treeOid": "2e14ac32e1d56288d789aeba5cec826500d95017"
+          }
+        }
+      ]
+    },
+    {
+      "predicate": "invariants-preserved",
+      "state": "unknown",
+      "reasons": [
+        "No diff-gate finding was observed, but goal-specific invariant coverage is not yet established.",
+        "Reflexive-authority assessment SQA-61BABEBFD97404A01F304792C5CA7656 blocks candidate-controlled evidence from approving itself.",
+        "The candidate changed the evaluator that produces completion judgments, so those candidate-produced judgments require a fixed predecessor evaluator."
+      ],
+      "evidenceReceipts": [
+        {
+          "schemaVersion": 2,
+          "observedAt": "2026-07-31T07:09:21.208Z",
+          "facts": {
+            "collaborationDomain": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:collaboration-domain",
+                "version": 1
+              },
+              "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+            },
+            "workspaceInstance": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:workspace-instance",
+                "version": 1
+              },
+              "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+            },
+            "wholeContent": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:repository-content",
+                "version": 1
+              },
+              "digest": "f21abe60addd313de929fbff23d76b55d174dafb1bd3350517728ca2e4582df3"
+            },
+            "relevantInputs": [
+              {
+                "subject": "scip-query:index-inputs",
+                "identity": {
+                  "schemaVersion": 1,
+                  "canonicalizationVersion": 1,
+                  "hashAlgorithm": "sha256",
+                  "projection": {
+                    "name": "scip-query:index-inputs",
+                    "version": 2
+                  },
+                  "digest": "c97d85799e90bcfdd66198f7f318d7fea578d077e056195d94da3440aeae023c"
+                }
+              }
+            ]
+          },
+          "observedSources": [
+            {
+              "kind": "repository-snapshot",
+              "identity": {
+                "schemaVersion": 1,
+                "canonicalizationVersion": 1,
+                "hashAlgorithm": "sha256",
+                "projection": {
+                  "name": "scip-query:repository-content",
+                  "version": 1
+                },
+                "digest": "f21abe60addd313de929fbff23d76b55d174dafb1bd3350517728ca2e4582df3"
+              }
+            }
+          ],
+          "stabilityProofs": [
+            {
+              "source": "repository-snapshot",
+              "kind": "fixed-snapshot"
+            }
+          ],
+          "diagnostics": {
+            "clean": false,
+            "headCommit": "161b4d5cc7b50bb3bb66cbf44fc06981f0acbb93",
+            "treeOid": "2e14ac32e1d56288d789aeba5cec826500d95017"
+          }
+        }
+      ]
+    },
+    {
+      "predicate": "evidence-compatible",
+      "state": "unknown",
+      "reasons": [
+        "Reflexive-authority assessment SQA-61BABEBFD97404A01F304792C5CA7656 blocks candidate-controlled evidence from approving itself.",
+        "The candidate changed the evaluator that produces completion judgments, so those candidate-produced judgments require a fixed predecessor evaluator.",
+        "The target is a fixed whole-repository observation in the change collaboration domain."
+      ],
+      "evidenceReceipts": [
+        {
+          "schemaVersion": 2,
+          "observedAt": "2026-07-31T07:09:21.208Z",
+          "facts": {
+            "collaborationDomain": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:collaboration-domain",
+                "version": 1
+              },
+              "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+            },
+            "workspaceInstance": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:workspace-instance",
+                "version": 1
+              },
+              "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+            },
+            "wholeContent": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:repository-content",
+                "version": 1
+              },
+              "digest": "f21abe60addd313de929fbff23d76b55d174dafb1bd3350517728ca2e4582df3"
+            },
+            "relevantInputs": [
+              {
+                "subject": "scip-query:index-inputs",
+                "identity": {
+                  "schemaVersion": 1,
+                  "canonicalizationVersion": 1,
+                  "hashAlgorithm": "sha256",
+                  "projection": {
+                    "name": "scip-query:index-inputs",
+                    "version": 2
+                  },
+                  "digest": "c97d85799e90bcfdd66198f7f318d7fea578d077e056195d94da3440aeae023c"
+                }
+              }
+            ]
+          },
+          "observedSources": [
+            {
+              "kind": "repository-snapshot",
+              "identity": {
+                "schemaVersion": 1,
+                "canonicalizationVersion": 1,
+                "hashAlgorithm": "sha256",
+                "projection": {
+                  "name": "scip-query:repository-content",
+                  "version": 1
+                },
+                "digest": "f21abe60addd313de929fbff23d76b55d174dafb1bd3350517728ca2e4582df3"
+              }
+            }
+          ],
+          "stabilityProofs": [
+            {
+              "source": "repository-snapshot",
+              "kind": "fixed-snapshot"
+            }
+          ],
+          "diagnostics": {
+            "clean": false,
+            "headCommit": "161b4d5cc7b50bb3bb66cbf44fc06981f0acbb93",
+            "treeOid": "2e14ac32e1d56288d789aeba5cec826500d95017"
+          }
+        }
+      ]
+    },
+    {
+      "predicate": "coverage-complete",
+      "state": "unknown",
+      "reasons": [
+        "Every registered stop diff-gate check completed without an unresolved coverage condition.",
+        "Reflexive-authority assessment SQA-61BABEBFD97404A01F304792C5CA7656 blocks candidate-controlled evidence from approving itself.",
+        "The candidate changed the evaluator that produces completion judgments, so those candidate-produced judgments require a fixed predecessor evaluator."
+      ],
+      "evidenceReceipts": [
+        {
+          "schemaVersion": 2,
+          "observedAt": "2026-07-31T07:09:21.208Z",
+          "facts": {
+            "collaborationDomain": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:collaboration-domain",
+                "version": 1
+              },
+              "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+            },
+            "workspaceInstance": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:workspace-instance",
+                "version": 1
+              },
+              "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+            },
+            "wholeContent": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:repository-content",
+                "version": 1
+              },
+              "digest": "f21abe60addd313de929fbff23d76b55d174dafb1bd3350517728ca2e4582df3"
+            },
+            "relevantInputs": [
+              {
+                "subject": "scip-query:index-inputs",
+                "identity": {
+                  "schemaVersion": 1,
+                  "canonicalizationVersion": 1,
+                  "hashAlgorithm": "sha256",
+                  "projection": {
+                    "name": "scip-query:index-inputs",
+                    "version": 2
+                  },
+                  "digest": "c97d85799e90bcfdd66198f7f318d7fea578d077e056195d94da3440aeae023c"
+                }
+              }
+            ]
+          },
+          "observedSources": [
+            {
+              "kind": "repository-snapshot",
+              "identity": {
+                "schemaVersion": 1,
+                "canonicalizationVersion": 1,
+                "hashAlgorithm": "sha256",
+                "projection": {
+                  "name": "scip-query:repository-content",
+                  "version": 1
+                },
+                "digest": "f21abe60addd313de929fbff23d76b55d174dafb1bd3350517728ca2e4582df3"
+              }
+            }
+          ],
+          "stabilityProofs": [
+            {
+              "source": "repository-snapshot",
+              "kind": "fixed-snapshot"
+            }
+          ],
+          "diagnostics": {
+            "clean": false,
+            "headCommit": "161b4d5cc7b50bb3bb66cbf44fc06981f0acbb93",
+            "treeOid": "2e14ac32e1d56288d789aeba5cec826500d95017"
+          }
+        }
+      ]
+    },
+    {
+      "predicate": "obligations-reconciled",
+      "state": "unknown",
+      "reasons": [
+        "Reflexive-authority assessment SQA-61BABEBFD97404A01F304792C5CA7656 blocks candidate-controlled evidence from approving itself.",
+        "The candidate changed the evaluator that produces completion judgments, so those candidate-produced judgments require a fixed predecessor evaluator.",
+        "The durable obligation lifecycle has no live, conflicted, orphaned, or unreadable obligation."
+      ],
+      "evidenceReceipts": [
+        {
+          "schemaVersion": 2,
+          "observedAt": "2026-07-31T07:09:21.208Z",
+          "facts": {
+            "collaborationDomain": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:collaboration-domain",
+                "version": 1
+              },
+              "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+            },
+            "workspaceInstance": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:workspace-instance",
+                "version": 1
+              },
+              "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+            },
+            "wholeContent": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:repository-content",
+                "version": 1
+              },
+              "digest": "f21abe60addd313de929fbff23d76b55d174dafb1bd3350517728ca2e4582df3"
+            },
+            "relevantInputs": [
+              {
+                "subject": "scip-query:index-inputs",
+                "identity": {
+                  "schemaVersion": 1,
+                  "canonicalizationVersion": 1,
+                  "hashAlgorithm": "sha256",
+                  "projection": {
+                    "name": "scip-query:index-inputs",
+                    "version": 2
+                  },
+                  "digest": "c97d85799e90bcfdd66198f7f318d7fea578d077e056195d94da3440aeae023c"
+                }
+              }
+            ]
+          },
+          "observedSources": [
+            {
+              "kind": "repository-snapshot",
+              "identity": {
+                "schemaVersion": 1,
+                "canonicalizationVersion": 1,
+                "hashAlgorithm": "sha256",
+                "projection": {
+                  "name": "scip-query:repository-content",
+                  "version": 1
+                },
+                "digest": "f21abe60addd313de929fbff23d76b55d174dafb1bd3350517728ca2e4582df3"
+              }
+            }
+          ],
+          "stabilityProofs": [
+            {
+              "source": "repository-snapshot",
+              "kind": "fixed-snapshot"
+            }
+          ],
+          "diagnostics": {
+            "clean": false,
+            "headCommit": "161b4d5cc7b50bb3bb66cbf44fc06981f0acbb93",
+            "treeOid": "2e14ac32e1d56288d789aeba5cec826500d95017"
+          }
+        }
+      ]
+    },
+    {
+      "predicate": "policy-permitted",
+      "state": "unknown",
+      "reasons": [
+        "Reflexive-authority assessment SQA-61BABEBFD97404A01F304792C5CA7656 blocks candidate-controlled evidence from approving itself.",
+        "Repository policy scip-query:stop-completion-policy@1 authorizes autonomous stop evaluation in block mode.",
+        "The candidate changed the evaluator that produces completion judgments, so those candidate-produced judgments require a fixed predecessor evaluator."
+      ],
+      "evidenceReceipts": [
+        {
+          "schemaVersion": 2,
+          "observedAt": "2026-07-31T07:09:21.208Z",
+          "facts": {
+            "collaborationDomain": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:collaboration-domain",
+                "version": 1
+              },
+              "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+            },
+            "workspaceInstance": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:workspace-instance",
+                "version": 1
+              },
+              "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+            },
+            "wholeContent": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:repository-content",
+                "version": 1
+              },
+              "digest": "f21abe60addd313de929fbff23d76b55d174dafb1bd3350517728ca2e4582df3"
+            },
+            "relevantInputs": [
+              {
+                "subject": "scip-query:index-inputs",
+                "identity": {
+                  "schemaVersion": 1,
+                  "canonicalizationVersion": 1,
+                  "hashAlgorithm": "sha256",
+                  "projection": {
+                    "name": "scip-query:index-inputs",
+                    "version": 2
+                  },
+                  "digest": "c97d85799e90bcfdd66198f7f318d7fea578d077e056195d94da3440aeae023c"
+                }
+              }
+            ]
+          },
+          "observedSources": [
+            {
+              "kind": "repository-snapshot",
+              "identity": {
+                "schemaVersion": 1,
+                "canonicalizationVersion": 1,
+                "hashAlgorithm": "sha256",
+                "projection": {
+                  "name": "scip-query:repository-content",
+                  "version": 1
+                },
+                "digest": "f21abe60addd313de929fbff23d76b55d174dafb1bd3350517728ca2e4582df3"
+              }
+            }
+          ],
+          "stabilityProofs": [
+            {
+              "source": "repository-snapshot",
+              "kind": "fixed-snapshot"
+            }
+          ],
+          "diagnostics": {
+            "clean": false,
+            "headCommit": "161b4d5cc7b50bb3bb66cbf44fc06981f0acbb93",
+            "treeOid": "2e14ac32e1d56288d789aeba5cec826500d95017"
+          }
+        }
+      ]
+    }
+  ],
+  "authority": {
+    "version": 1,
+    "predecessor": {
+      "kind": "git-tree",
+      "treeOid": "2e14ac32e1d56288d789aeba5cec826500d95017"
+    },
+    "candidateControlled": [
+      {
+        "class": "evaluator",
+        "authority": "bootstrap-trust-root",
+        "paths": [
+          "src/domain/autonomous-completion-context.ts",
+          "src/domain/autonomous-completion.ts",
+          "src/domain/completion-protection.ts",
+          "src/runtime/completion-evaluation-context.ts",
+          "src/runtime/observation-receipt.ts"
+        ]
+      },
+      {
+        "class": "test",
+        "authority": "fixed-predecessor",
+        "paths": [
+          "tests/domain/autonomous-completion.test.ts",
+          "tests/runtime/completion-evaluation-context.test.ts"
+        ]
+      }
+    ],
+    "fixedOrAuthorized": [
+      {
+        "class": "goal",
+        "authority": "fixed-predecessor",
+        "referent": "git-tree:2e14ac32e1d56288d789aeba5cec826500d95017#goal"
+      },
+      {
+        "class": "configuration",
+        "authority": "fixed-predecessor",
+        "referent": "git-tree:2e14ac32e1d56288d789aeba5cec826500d95017#configuration"
+      }
+    ],
+    "violations": [
+      {
+        "class": "evaluator",
+        "predicates": [
+          "goal-fulfilled",
+          "invariants-preserved",
+          "evidence-compatible",
+          "coverage-complete",
+          "obligations-reconciled",
+          "policy-permitted"
+        ],
+        "reason": "The candidate changed the evaluator that produces completion judgments, so those candidate-produced judgments require a fixed predecessor evaluator."
+      }
+    ],
+    "assessmentId": "SQA-61BABEBFD97404A01F304792C5CA7656"
+  },
+  "decision": {
+    "state": "blocked",
+    "blockedPredicates": [
+      "goal-fulfilled",
+      "invariants-preserved",
+      "evidence-compatible",
+      "coverage-complete",
+      "obligations-reconciled",
+      "policy-permitted"
+    ],
+    "unknownPredicates": [
+      "goal-fulfilled",
+      "invariants-preserved",
+      "evidence-compatible",
+      "coverage-complete",
+      "obligations-reconciled",
+      "policy-permitted"
+    ]
+  },
+  "idempotency": {
+    "version": 1,
+    "algorithm": "sha256",
+    "keyDigest": "3237716f74060c937a68ed327ec60e1e69d1dd2c8386cf298f836eedc9be6260",
+    "requestDigest": "0d3391b17ff2626ff70505edf04dfb63ccfc23b03b98682b20581faf23a8a648"
+  },
+  "createdAt": "2026-07-31T07:09:29.240Z",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  }
+}

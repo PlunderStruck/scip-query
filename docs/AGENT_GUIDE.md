@@ -81,6 +81,14 @@ For analyzer implementation work, follow [Regex Policy](REGEX_POLICY.md): regex 
    exact `goal status`, `change status`, `attempt status`, `decision status`,
    and `obligation status` commands emitted by the projection.
 
+   Stop evaluation needs no separate approval or metadata narration. It fixes
+   the repository and evaluator before the gate, records which
+   judgment-changing paths belong to the candidate, and fails closed when a
+   changed goal, evaluator, configuration, baseline, or used suppression would
+   be the only authority for its own acceptance. Read the recorded
+   `SQA-...` authority assessment when a completion predicate becomes unknown;
+   it names the exact protected class, paths, and affected predicates.
+
 ### What you should know after this workflow
 
 - Whether the index is current and usable

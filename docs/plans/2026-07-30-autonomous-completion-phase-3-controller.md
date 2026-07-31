@@ -1,7 +1,7 @@
 # Phase 3 — protected completion controller
 
 Date: 2026-07-30
-Status: in progress; slices 3.1 and 3.2 complete
+Status: in progress; slices 3.1 through 3.3 complete
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -123,6 +123,27 @@ Expected validation:
 - legitimate code plus test changes can pass through independent behavioral
   and predecessor-policy evidence; and
 - the decision explains the exact reflexive dependency.
+
+Execution result:
+
+- one versioned `SQA-...` assessment partitions exact Git-overlay paths into
+  candidate-controlled protected classes and fixed or explicitly authorized
+  referents;
+- evaluator protection follows the actual executable boundary: external
+  installations do not claim target source, while a checkout-local built
+  evaluator protects its entrypoint, source tree, and build inputs;
+- the assessment is identity-bound, canonicalized, persisted with each new
+  evaluation, and optional only so earlier schema-version-1 records remain
+  readable;
+- the pure firewall changes an otherwise established predicate to `unknown`
+  when the same changed artifact would supply its only authority, while
+  preserving a `disproven` predicate and its contrary evidence;
+- the Stop controller declares its actual current reliances: goal and
+  evaluator always, configuration for coverage and policy, baseline when that
+  check ran, and suppression only when a suppression was used; and
+- mutation tests cover every protected class, a predecessor-authorized
+  exception, record tampering, no-predecessor failure, and the full evaluator
+  effect across all six predicates.
 
 ### 3.4 Autonomous successor transitions
 

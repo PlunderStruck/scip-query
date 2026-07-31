@@ -14,6 +14,7 @@ import {
   canonicalRepositoryContentSnapshot,
   captureProjectObservationSnapshot,
   type ProjectObservationSnapshot,
+  type RepositoryContentSnapshot,
 } from '../platform/project-observation-snapshot.js';
 import { detectLanguages } from '../reindex/detect.js';
 import type { ScipDatabase } from '../storage/db.js';
@@ -257,28 +258,42 @@ export function buildLeasedObservationReceipt(input: {
  * releasing the snapshot. Callers that require a stable target can bracket
  * an operation with two calls and reject a moved whole-content identity.
  */
-export function captureFixedRepositoryObservationReceipt(input: {
+export interface FixedRepositoryObservation {
+  receipt: ObservationReceiptV2;
+  repositoryContent: RepositoryContentSnapshot;
+}
+
+export function captureFixedRepositoryObservation(input: {
   projectRoot: string;
   config: ProjectConfig;
   observedAt?: Date;
   collaborationDomainId?: string;
   db?: Pick<ScipDatabase, 'generation' | 'config'>;
   gitContext?: GitWorktreeContext;
-}): ObservationReceiptV2 {
+}): FixedRepositoryObservation {
   const gitContext = input.gitContext ?? resolveGitWorktreeContext(input.projectRoot);
   const languages = input.config.languages ?? detectLanguages(input.projectRoot);
   const snapshot = captureProjectObservationSnapshot(input.projectRoot, languages, input.config, gitContext);
   try {
-    return buildObservationReceipt({
-      projectRoot: input.projectRoot,
-      snapshot,
-      ...(input.observedAt ? { observedAt: input.observedAt } : {}),
-      ...(input.collaborationDomainId ? { collaborationDomainId: input.collaborationDomainId } : {}),
-      ...(input.db ? { db: input.db } : {}),
-    });
+    return {
+      receipt: buildObservationReceipt({
+        projectRoot: input.projectRoot,
+        snapshot,
+        ...(input.observedAt ? { observedAt: input.observedAt } : {}),
+        ...(input.collaborationDomainId ? { collaborationDomainId: input.collaborationDomainId } : {}),
+        ...(input.db ? { db: input.db } : {}),
+      }),
+      repositoryContent: snapshot.repositoryContent,
+    };
   } finally {
     snapshot.dispose();
   }
+}
+
+export function captureFixedRepositoryObservationReceipt(
+  input: Parameters<typeof captureFixedRepositoryObservation>[0],
+): ObservationReceiptV2 {
+  return captureFixedRepositoryObservation(input).receipt;
 }
 
 /**

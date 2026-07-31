@@ -131,9 +131,15 @@ and
 [`schemas/completion-transition-record.schema.json`](schemas/completion-transition-record.schema.json).
 An evaluation preserves the governing goal and intended change, evaluator and
 policy versions, fixed target observation, every required predicate, and the
-derived decision. A non-established predicate blocks completion. A completion
-transition can be derived only from a complete evaluation, and its identity is
-derived from that evaluation so retries reuse one semantic event.
+derived decision. New evaluations additionally preserve a versioned
+reflexive-authority assessment: the fixed predecessor, exact protected paths
+changed by the candidate, fixed or explicitly authorized referents, and every
+predicate whose authority remains reflexive. The field is optional in schema
+version 1 so records written before the firewall remain readable; absence does
+not manufacture the authority supplied by a current controller evaluation. A
+non-established predicate blocks completion. A completion transition can be
+derived only from a complete evaluation, and its identity is derived from that
+evaluation so retries reuse one semantic event.
 
 `completion status [change-id]` classifies the context, evaluation, and
 transition directories, validates all goal/change/context/evaluation/transition

@@ -244,6 +244,21 @@ before context or evaluation publication. Context, evaluation, and transition
 records are controller outputs rather than candidate inputs, so they do not
 recursively change the candidate-content identity on every repeated Stop.
 
+Each new evaluation also stores an authority assessment. An authority
+assessment is the immutable partition of judgment-changing artifacts into
+candidate edits and fixed or predecessor-authorized referents; what
+distinguishes it from a changed-file list is that it names which completion
+predicates would otherwise be approved by the same artifact they judge. The
+controller derives changed paths from the fixed Git-tree overlay, not from the
+index-bounded diff report. If a relied-on goal, evaluator, configuration,
+baseline, or suppression has no fixed authority, an established judgment
+becomes `unknown`; contrary evidence remains `disproven`. A repository without
+a fixed predecessor likewise fails closed for authority it cannot establish.
+An evaluator installed outside the checkout is not candidate-controlled. When
+the running evaluator entrypoint is inside the checkout, the context protects
+that entrypoint and, for a built `dist/` entrypoint, its repository `src/**`
+and build inputs.
+
 ```bash
 scip-query completion status SQC-... --json
 scip-query completion read SQCX-...

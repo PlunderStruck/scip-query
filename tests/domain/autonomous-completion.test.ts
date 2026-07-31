@@ -6,15 +6,21 @@ import {
   COMPLETION_EVALUATION_SCHEMA_VERSION,
   COMPLETION_PREDICATES,
   COMPLETION_TRANSITION_SCHEMA_VERSION,
+  applyCompletionAuthorityFirewall,
   beginCompletionEvaluation,
+  createCompletionAuthorityAssessment,
   createCompletionEvaluationRecord,
   createCompletionTransitionRecord,
+  decodeCompletionAuthorityAssessment,
   decodeCompletionEvaluationRecord,
   decodeCompletionTransitionRecord,
   foldCompletionHistory,
+  type CompletionAuthorityReliance,
   type CompletionEvaluationRequest,
   type CompletionPredicateJudgment,
 } from '../../src/domain/autonomous-completion.js';
+import { completionProtectedArtifactSet } from '../../src/domain/autonomous-completion-context.js';
+import type { ProtectedArtifactClass, ProtectedArtifactRule } from '../../src/domain/completion-protection.js';
 import { createObservationIdentity, type ObservationReceiptV2 } from '../../src/domain/observation-receipt.js';
 
 const COLLABORATION_DOMAIN = '5ea57d1a-936c-4c91-b58f-5d61e45173a5';
@@ -165,7 +171,7 @@ describe('autonomous completion domain', () => {
       readFileSync(join(schemas, 'completion-evaluation-record.schema.json'), 'utf8'),
     ) as {
       required: string[];
-      properties: Record<string, { const?: unknown }>;
+      properties: Record<string, { const?: unknown; $ref?: string }>;
       additionalProperties: boolean;
     };
     const transitionSchema = JSON.parse(
@@ -181,6 +187,7 @@ describe('autonomous completion domain', () => {
     expect(evaluationSchema.required).toEqual(
       expect.arrayContaining(['evaluationId', 'changeId', 'goalId', 'context', 'predicates', 'decision']),
     );
+    expect(evaluationSchema.properties['authority']?.$ref).toBe('#/$defs/authority');
     expect(evaluationSchema.additionalProperties).toBe(false);
     expect(transitionSchema.properties['kind']?.const).toBe('scip-query-completion-transition');
     expect(transitionSchema.properties['schemaVersion']?.const).toBe(COMPLETION_TRANSITION_SCHEMA_VERSION);
@@ -201,6 +208,137 @@ describe('autonomous completion domain', () => {
       startedAt: CREATED_AT,
     });
     expect(() => beginCompletionEvaluation(CHANGE_ID, GOAL_ID, 'bad-context', CREATED_AT)).toThrow();
+  });
+
+  it.each([
+    ['goal', '.scipquery/goals/SQG-example.json'],
+    ['transition-rule', '.scipquery/transition-rules/SQTR-example.json'],
+    ['evaluator', 'src/controller.ts'],
+    ['test', 'tests/domain/controller.test.ts'],
+    ['baseline', '.scipquery-baseline.json'],
+    ['suppression', '.scipquery/suppressions/SQS-example.json'],
+    ['configuration', '.scipquery.json'],
+  ] satisfies readonly (readonly [ProtectedArtifactClass, string])[])(
+    'partitions a changed %s artifact as candidate-controlled authority',
+    (artifactClass, changedPath) => {
+      const assessment = createCompletionAuthorityAssessment({
+        predecessor: { kind: 'git-tree', treeOid: 'a'.repeat(40) },
+        changedPaths: [changedPath],
+        protectedArtifacts: protectedArtifactSet(),
+        reliances: [authorityReliance(artifactClass)],
+      });
+
+      expect(assessment.candidateControlled).toEqual([
+        expect.objectContaining({ class: artifactClass, paths: [changedPath] }),
+      ]);
+      expect(assessment.fixedOrAuthorized).toEqual([]);
+      expect(assessment.violations).toEqual([
+        {
+          class: artifactClass,
+          predicates: ['policy-permitted'],
+          reason: `${artifactClass} evidence must not approve itself`,
+        },
+      ]);
+      expect(decodeCompletionAuthorityAssessment(assessment)).toEqual({ ok: true, value: assessment });
+    },
+  );
+
+  it('accepts an explicit predecessor-authorized referent for a changed protected artifact', () => {
+    const assessment = createCompletionAuthorityAssessment({
+      predecessor: { kind: 'git-tree', treeOid: 'a'.repeat(40) },
+      changedPaths: ['.scipquery/suppressions/SQS-example.json'],
+      protectedArtifacts: protectedArtifactSet(),
+      reliances: [authorityReliance('suppression')],
+      authorizedReferents: {
+        suppression: 'SQTR-0123456789ABCDEF0123456789ABCDEF',
+      },
+    });
+
+    expect(assessment.candidateControlled).toEqual([
+      expect.objectContaining({
+        class: 'suppression',
+        paths: ['.scipquery/suppressions/SQS-example.json'],
+      }),
+    ]);
+    expect(assessment.fixedOrAuthorized).toEqual([
+      expect.objectContaining({
+        class: 'suppression',
+        referent: 'SQTR-0123456789ABCDEF0123456789ABCDEF',
+      }),
+    ]);
+    expect(assessment.violations).toEqual([]);
+  });
+
+  it('turns reflexively established predicates unknown without erasing contrary evidence', () => {
+    const assessment = createCompletionAuthorityAssessment({
+      predecessor: { kind: 'git-tree', treeOid: 'a'.repeat(40) },
+      changedPaths: ['src/controller.ts'],
+      protectedArtifacts: protectedArtifactSet(),
+      reliances: [
+        {
+          class: 'evaluator',
+          predicates: ['goal-fulfilled', 'invariants-preserved'],
+          reason: 'The changed evaluator cannot establish its own correctness',
+        },
+      ],
+    });
+    const predicates = evaluationRequest('complete').predicates.map((predicate) =>
+      predicate.predicate === 'invariants-preserved'
+        ? { ...predicate, state: 'disproven' as const, reasons: ['A fixed invariant failed'] }
+        : predicate,
+    );
+
+    const firewalled = applyCompletionAuthorityFirewall(predicates, assessment);
+
+    expect(firewalled.find((predicate) => predicate.predicate === 'goal-fulfilled')).toEqual(
+      expect.objectContaining({
+        state: 'unknown',
+        reasons: expect.arrayContaining([
+          'The changed evaluator cannot establish its own correctness',
+          expect.stringContaining(`assessment ${assessment.assessmentId} blocks`),
+        ]),
+      }),
+    );
+    expect(firewalled.find((predicate) => predicate.predicate === 'invariants-preserved')).toEqual(
+      expect.objectContaining({
+        state: 'disproven',
+        reasons: expect.arrayContaining(['A fixed invariant failed']),
+      }),
+    );
+  });
+
+  it('persists a canonical authority partition and rejects authority tampering', () => {
+    const request = evaluationRequest('complete');
+    request.authority = createCompletionAuthorityAssessment({
+      predecessor: { kind: 'git-tree', treeOid: 'a'.repeat(40) },
+      changedPaths: ['tests/domain/controller.test.ts'],
+      protectedArtifacts: protectedArtifactSet(),
+      reliances: [authorityReliance('test')],
+      authorizedReferents: { test: 'SQTR-0123456789ABCDEF0123456789ABCDEF' },
+    });
+    const record = evaluation(request);
+
+    expect(decodeCompletionEvaluationRecord(record)).toEqual({ state: 'current', record });
+    expect(
+      decodeCompletionEvaluationRecord({
+        ...record,
+        authority: {
+          ...record.authority,
+          candidateControlled: [
+            {
+              class: 'test',
+              authority: 'fixed-predecessor',
+              paths: ['tests/domain/other.test.ts'],
+            },
+          ],
+        },
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        state: 'malformed',
+        error: 'authority assessment identity does not match its evidence partition',
+      }),
+    );
   });
 });
 
@@ -255,5 +393,34 @@ function receipt(observedAt: string, identity: string): ObservationReceiptV2 {
     },
     observedSources: [{ kind: 'repository-snapshot', identity: content }],
     stabilityProofs: [{ source: 'repository-snapshot', kind: 'fixed-snapshot' }],
+  };
+}
+
+function protectedArtifactSet() {
+  const rules: readonly ProtectedArtifactRule[] = [
+    { class: 'goal', selectors: ['.scipquery/goals/*'], authority: 'fixed-predecessor' },
+    {
+      class: 'transition-rule',
+      selectors: ['.scipquery/transition-rules/*'],
+      authority: 'fixed-predecessor',
+    },
+    { class: 'evaluator', selectors: ['src/controller.ts'], authority: 'bootstrap-trust-root' },
+    { class: 'test', selectors: ['tests/**'], authority: 'fixed-predecessor' },
+    { class: 'baseline', selectors: ['.scipquery-baseline.json'], authority: 'fixed-predecessor' },
+    {
+      class: 'suppression',
+      selectors: ['.scipquery/suppressions/*'],
+      authority: 'fixed-predecessor',
+    },
+    { class: 'configuration', selectors: ['.scipquery.json'], authority: 'fixed-predecessor' },
+  ];
+  return completionProtectedArtifactSet(rules);
+}
+
+function authorityReliance(artifactClass: ProtectedArtifactClass): CompletionAuthorityReliance {
+  return {
+    class: artifactClass,
+    predicates: ['policy-permitted'],
+    reason: `${artifactClass} evidence must not approve itself`,
   };
 }

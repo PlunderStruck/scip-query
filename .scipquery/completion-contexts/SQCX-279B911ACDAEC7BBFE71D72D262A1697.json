@@ -1,0 +1,188 @@
+{
+  "kind": "scip-query-completion-context",
+  "schemaVersion": 1,
+  "contextSnapshotId": "SQCX-279B911ACDAEC7BBFE71D72D262A1697",
+  "collaborationDomainId": "5ea57d1a-936c-4c91-b58f-5d61e45173a5",
+  "changeId": "SQC-DED67E74D3898BDCA85766BE8D3C93AF",
+  "goalId": "SQG-4061E7D5D360464ED8E8B05D53BBF49D",
+  "goalRecordDigest": "c2cd63dc602f0dbae05b10c31b1371a25b93016c6ad24d2516501dcdc812dd13",
+  "policy": {
+    "policyId": "scip-query:stop-completion-policy",
+    "policyVersion": 1,
+    "stopMode": "block",
+    "requiredPredicates": [
+      "goal-fulfilled",
+      "invariants-preserved",
+      "evidence-compatible",
+      "coverage-complete",
+      "obligations-reconciled",
+      "policy-permitted"
+    ]
+  },
+  "evaluator": {
+    "evaluatorId": "scip-query:stop-completion-controller",
+    "evaluatorVersion": "0.20.0",
+    "buildIdentity": "373b7fd4e12f2ddd8586690b663e42ea74c6feb59f5f5053adee60282f547a7a"
+  },
+  "commandRegistry": {
+    "registryIdentity": "04a8368b24aae993b68b82d482a3f75dcab20dc613684c7ec686b90f1781ae88",
+    "entries": [
+      "completion-controller:required-predicates-v1",
+      "diff-gate:architecture",
+      "diff-gate:baseline",
+      "diff-gate:co-change-partner",
+      "diff-gate:coverage-contract",
+      "diff-gate:doc-reference",
+      "diff-gate:echo",
+      "diff-gate:incomplete-migration",
+      "diff-gate:new-dead",
+      "diff-gate:twin-partner",
+      "diff-gate:unused-params",
+      "stop-hook:fixed-context-v1"
+    ]
+  },
+  "protectedArtifacts": {
+    "setIdentity": "88da28f57fcb0b8942a3bce7d6c323a2e23b5e6fce42728853165782d159fa2a",
+    "rules": [
+      {
+        "class": "goal",
+        "selectors": [
+          ".scipquery/goals/*"
+        ],
+        "authority": "fixed-predecessor"
+      },
+      {
+        "class": "transition-rule",
+        "selectors": [
+          ".scipquery/transition-rules/*"
+        ],
+        "authority": "fixed-predecessor"
+      },
+      {
+        "class": "evaluator",
+        "selectors": [
+          "dist/cli.js",
+          "package-lock.json",
+          "package.json",
+          "src/**",
+          "tsup.config.ts"
+        ],
+        "authority": "bootstrap-trust-root"
+      },
+      {
+        "class": "test",
+        "selectors": [
+          "__tests__/**",
+          "spec/**",
+          "test/**",
+          "tests/**"
+        ],
+        "authority": "fixed-predecessor"
+      },
+      {
+        "class": "baseline",
+        "selectors": [
+          ".scipquery-baseline.json"
+        ],
+        "authority": "fixed-predecessor"
+      },
+      {
+        "class": "suppression",
+        "selectors": [
+          ".scipquery/suppressions/*"
+        ],
+        "authority": "fixed-predecessor"
+      },
+      {
+        "class": "configuration",
+        "selectors": [
+          ".scipquery.json"
+        ],
+        "authority": "fixed-predecessor"
+      }
+    ]
+  },
+  "targetObservation": {
+    "schemaVersion": 2,
+    "observedAt": "2026-07-31T07:09:21.208Z",
+    "facts": {
+      "collaborationDomain": {
+        "schemaVersion": 1,
+        "canonicalizationVersion": 1,
+        "hashAlgorithm": "sha256",
+        "projection": {
+          "name": "scip-query:collaboration-domain",
+          "version": 1
+        },
+        "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+      },
+      "workspaceInstance": {
+        "schemaVersion": 1,
+        "canonicalizationVersion": 1,
+        "hashAlgorithm": "sha256",
+        "projection": {
+          "name": "scip-query:workspace-instance",
+          "version": 1
+        },
+        "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+      },
+      "wholeContent": {
+        "schemaVersion": 1,
+        "canonicalizationVersion": 1,
+        "hashAlgorithm": "sha256",
+        "projection": {
+          "name": "scip-query:repository-content",
+          "version": 1
+        },
+        "digest": "f21abe60addd313de929fbff23d76b55d174dafb1bd3350517728ca2e4582df3"
+      },
+      "relevantInputs": [
+        {
+          "subject": "scip-query:index-inputs",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-inputs",
+              "version": 2
+            },
+            "digest": "c97d85799e90bcfdd66198f7f318d7fea578d077e056195d94da3440aeae023c"
+          }
+        }
+      ]
+    },
+    "observedSources": [
+      {
+        "kind": "repository-snapshot",
+        "identity": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:repository-content",
+            "version": 1
+          },
+          "digest": "f21abe60addd313de929fbff23d76b55d174dafb1bd3350517728ca2e4582df3"
+        }
+      }
+    ],
+    "stabilityProofs": [
+      {
+        "source": "repository-snapshot",
+        "kind": "fixed-snapshot"
+      }
+    ],
+    "diagnostics": {
+      "clean": false,
+      "headCommit": "161b4d5cc7b50bb3bb66cbf44fc06981f0acbb93",
+      "treeOid": "2e14ac32e1d56288d789aeba5cec826500d95017"
+    }
+  },
+  "capturedAt": "2026-07-31T07:09:21.208Z",
+  "createdAt": "2026-07-31T07:09:21.208Z",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  }
+}

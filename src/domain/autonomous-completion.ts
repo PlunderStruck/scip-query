@@ -1,4 +1,11 @@
 import { decodeObservationReceipt, type ObservationReceiptV2 } from './observation-receipt.js';
+import {
+  PROTECTED_ARTIFACT_CLASSES,
+  type ProtectedArtifactAuthority,
+  type ProtectedArtifactClass,
+  type ProtectedArtifactSetSnapshot,
+} from './completion-protection.js';
+import { matchesPathGlob } from './path-glob.js';
 import { isRecordObject, isValidRecordTimestamp } from './record-validation.js';
 import { stableJson } from './stable-json.js';
 import {
@@ -26,6 +33,7 @@ export const COMPLETION_EVALUATION_SCHEMA_VERSION = 1 as const;
 export const COMPLETION_TRANSITION_RECORD_KIND = 'scip-query-completion-transition' as const;
 export const COMPLETION_TRANSITION_SCHEMA_VERSION = 1 as const;
 export const COMPLETION_CONTEXT_IDENTITY_VERSION = 1 as const;
+export const COMPLETION_AUTHORITY_ASSESSMENT_VERSION = 1 as const;
 
 export const COMPLETION_PREDICATES = [
   'goal-fulfilled',
@@ -42,6 +50,7 @@ export type CompletionPredicateState = 'established' | 'disproven' | 'unknown';
 const COMPLETION_EVALUATION_ID_PATTERN = /^SQE-[A-F0-9]{32}$/u;
 const COMPLETION_TRANSITION_ID_PATTERN = /^SQCT-[A-F0-9]{32}$/u;
 const COMPLETION_CONTEXT_ID_PATTERN = /^SQX-[A-F0-9]{32}$/u;
+const COMPLETION_AUTHORITY_ASSESSMENT_ID_PATTERN = /^SQA-[A-F0-9]{32}$/u;
 const TRANSITION_RULE_ID_PATTERN = /^SQTR-[A-F0-9]{32}$/u;
 const MAX_PREDICATE_REASONS = 16;
 const MAX_REASON_CHARACTERS = 500;
@@ -49,6 +58,8 @@ const MAX_EVIDENCE_RECEIPTS_PER_PREDICATE = 8;
 const MAX_POLICY_ID_CHARACTERS = 200;
 const MAX_EVALUATOR_ID_CHARACTERS = 200;
 const MAX_VERSION_CHARACTERS = 200;
+const MAX_PROTECTED_CHANGED_PATHS = 10_000;
+const MAX_AUTHORITY_REFERENT_CHARACTERS = 500;
 
 export interface CompletionPredicateJudgment {
   predicate: CompletionPredicate;
@@ -74,12 +85,56 @@ export interface AuthorizedSuccessor {
   successorGoalId: string;
 }
 
+export type CompletionAuthorityPredecessor =
+  | { kind: 'git-tree'; treeOid: string }
+  | { kind: 'unavailable'; reason: 'no-fixed-predecessor' };
+
+export interface CandidateControlledAuthorityEvidence {
+  class: ProtectedArtifactClass;
+  authority: ProtectedArtifactAuthority;
+  paths: readonly string[];
+}
+
+export interface FixedOrAuthorizedAuthorityEvidence {
+  class: ProtectedArtifactClass;
+  authority: ProtectedArtifactAuthority;
+  referent: string;
+}
+
+export interface ReflexiveAuthorityViolation {
+  class: ProtectedArtifactClass;
+  predicates: readonly CompletionPredicate[];
+  reason: string;
+}
+
+/**
+ * A completion-authority assessment partitions the artifacts that can define
+ * success into candidate edits and sources fixed outside those edits. A
+ * violation names the exact predicate whose only authority would otherwise be
+ * an artifact changed by the candidate it is judging.
+ */
+export interface CompletionAuthorityAssessment {
+  version: typeof COMPLETION_AUTHORITY_ASSESSMENT_VERSION;
+  assessmentId: string;
+  predecessor: CompletionAuthorityPredecessor;
+  candidateControlled: readonly CandidateControlledAuthorityEvidence[];
+  fixedOrAuthorized: readonly FixedOrAuthorizedAuthorityEvidence[];
+  violations: readonly ReflexiveAuthorityViolation[];
+}
+
+export interface CompletionAuthorityReliance {
+  class: ProtectedArtifactClass;
+  predicates: readonly CompletionPredicate[];
+  reason: string;
+}
+
 export interface CompletionEvaluationRequest {
   changeId: string;
   goalId: string;
   idempotencyKey: string;
   context: CompletionEvaluationContextRequest;
   predicates: readonly CompletionPredicateJudgment[];
+  authority?: CompletionAuthorityAssessment;
   authorizedSuccessor?: AuthorizedSuccessor;
 }
 
@@ -135,6 +190,7 @@ export interface CompletionEvaluationRecordV1 {
   goalId: string;
   context: CompletionEvaluationContext;
   predicates: readonly CompletionPredicateJudgment[];
+  authority?: CompletionAuthorityAssessment;
   decision: CompletionTerminalDecision;
   idempotency: WorkEventIdempotency;
   createdAt: string;
@@ -214,6 +270,148 @@ export interface CompletionHistorySummary {
   orphanTransitionIds: readonly string[];
 }
 
+export function createCompletionAuthorityAssessment(input: {
+  predecessor: CompletionAuthorityPredecessor;
+  changedPaths: readonly string[];
+  protectedArtifacts: ProtectedArtifactSetSnapshot;
+  reliances: readonly CompletionAuthorityReliance[];
+  fixedReferents?: Partial<Record<ProtectedArtifactClass, string>>;
+  authorizedReferents?: Partial<Record<ProtectedArtifactClass, string>>;
+}): CompletionAuthorityAssessment {
+  const predecessor = decodeAuthorityPredecessor(input.predecessor);
+  if (!predecessor.ok) throw new Error(predecessor.error);
+  const changedPaths = canonicalProtectedPaths(input.changedPaths);
+  const reliances = canonicalAuthorityReliances(input.reliances);
+  const relianceByClass = new Map(reliances.map((reliance) => [reliance.class, reliance]));
+  const candidateControlled: CandidateControlledAuthorityEvidence[] = [];
+  const fixedOrAuthorized: FixedOrAuthorizedAuthorityEvidence[] = [];
+  const violations: ReflexiveAuthorityViolation[] = [];
+
+  for (const rule of input.protectedArtifacts.rules) {
+    const paths = changedPaths.filter((path) => rule.selectors.some((selector) => matchesPathGlob(selector, path)));
+    if (paths.length > 0) {
+      candidateControlled.push({ class: rule.class, authority: rule.authority, paths });
+    }
+    const reliance = relianceByClass.get(rule.class);
+    if (!reliance) continue;
+
+    const authorizedReferent = canonicalAuthorityReferent(input.authorizedReferents?.[rule.class]);
+    if (paths.length > 0 && authorizedReferent) {
+      fixedOrAuthorized.push({
+        class: rule.class,
+        authority: rule.authority,
+        referent: authorizedReferent,
+      });
+      continue;
+    }
+    if (paths.length > 0) {
+      violations.push({
+        class: rule.class,
+        predicates: reliance.predicates,
+        reason: reliance.reason,
+      });
+      continue;
+    }
+
+    const fixedReferent = canonicalAuthorityReferent(input.fixedReferents?.[rule.class]);
+    if (fixedReferent) {
+      fixedOrAuthorized.push({ class: rule.class, authority: rule.authority, referent: fixedReferent });
+    } else if (predecessor.value.kind === 'git-tree') {
+      fixedOrAuthorized.push({
+        class: rule.class,
+        authority: rule.authority,
+        referent: `git-tree:${predecessor.value.treeOid}#${rule.class}`,
+      });
+    } else {
+      violations.push({
+        class: rule.class,
+        predicates: reliance.predicates,
+        reason: `No fixed predecessor or bootstrap authority establishes the ${rule.class} evidence used by this evaluation.`,
+      });
+    }
+  }
+
+  const meaning = {
+    version: COMPLETION_AUTHORITY_ASSESSMENT_VERSION,
+    predecessor: predecessor.value,
+    candidateControlled,
+    fixedOrAuthorized,
+    violations,
+  };
+  return {
+    ...meaning,
+    assessmentId: authorityAssessmentId(meaning),
+  };
+}
+
+export function decodeCompletionAuthorityAssessment(
+  value: unknown,
+): { ok: true; value: CompletionAuthorityAssessment } | { ok: false; error: string } {
+  if (
+    !isRecordObject(value) ||
+    value['version'] !== COMPLETION_AUTHORITY_ASSESSMENT_VERSION ||
+    typeof value['assessmentId'] !== 'string' ||
+    !COMPLETION_AUTHORITY_ASSESSMENT_ID_PATTERN.test(value['assessmentId'])
+  ) {
+    return { ok: false, error: 'authority assessment must have a current version and SQA identity' };
+  }
+  const predecessor = decodeAuthorityPredecessor(value['predecessor']);
+  if (!predecessor.ok) return predecessor;
+  const candidateControlled = decodeCandidateControlledEvidence(value['candidateControlled']);
+  if (!candidateControlled.ok) return candidateControlled;
+  const fixedOrAuthorized = decodeFixedAuthorityEvidence(value['fixedOrAuthorized']);
+  if (!fixedOrAuthorized.ok) return fixedOrAuthorized;
+  const violations = decodeAuthorityViolations(value['violations']);
+  if (!violations.ok) return violations;
+  const meaning = {
+    version: COMPLETION_AUTHORITY_ASSESSMENT_VERSION,
+    predecessor: predecessor.value,
+    candidateControlled: candidateControlled.value,
+    fixedOrAuthorized: fixedOrAuthorized.value,
+    violations: violations.value,
+  };
+  if (authorityAssessmentId(meaning) !== value['assessmentId']) {
+    return { ok: false, error: 'authority assessment identity does not match its evidence partition' };
+  }
+  return {
+    ok: true,
+    value: {
+      ...meaning,
+      assessmentId: value['assessmentId'],
+    },
+  };
+}
+
+export function applyCompletionAuthorityFirewall(
+  predicates: readonly CompletionPredicateJudgment[],
+  assessment: CompletionAuthorityAssessment,
+): CompletionPredicateJudgment[] {
+  const decodedAssessment = decodeCompletionAuthorityAssessment(assessment);
+  if (!decodedAssessment.ok) throw new Error(decodedAssessment.error);
+  const violationsByPredicate = new Map<CompletionPredicate, ReflexiveAuthorityViolation[]>();
+  for (const violation of decodedAssessment.value.violations) {
+    for (const predicate of violation.predicates) {
+      const current = violationsByPredicate.get(predicate) ?? [];
+      current.push(violation);
+      violationsByPredicate.set(predicate, current);
+    }
+  }
+  return predicates.map((predicate) => {
+    const violations = violationsByPredicate.get(predicate.predicate);
+    if (!violations || violations.length === 0) return predicate;
+    const reasons = [
+      ...predicate.reasons,
+      ...violations.map((violation) => violation.reason),
+      `Reflexive-authority assessment ${assessment.assessmentId} blocks candidate-controlled evidence from approving itself.`,
+    ];
+    return {
+      ...predicate,
+      state: predicate.state === 'disproven' ? 'disproven' : ('unknown' as const),
+      reasons: [...new Set(reasons)].sort(),
+    };
+  });
+}
+
 export function decodeCompletionEvaluationRequest(
   value: unknown,
 ): WorkStateRequestDecodeResult<CompletionEvaluationRequest> {
@@ -234,6 +432,9 @@ export function decodeCompletionEvaluationRequest(
   if (!context.ok) return context;
   const predicates = decodeCompletionPredicates(value['predicates']);
   if (!predicates.ok) return predicates;
+  const authority =
+    value['authority'] === undefined ? undefined : decodeCompletionAuthorityAssessment(value['authority']);
+  if (authority && !authority.ok) return authority;
   const authorizedSuccessor =
     value['authorizedSuccessor'] === undefined ? undefined : decodeAuthorizedSuccessor(value['authorizedSuccessor']);
   if (authorizedSuccessor && !authorizedSuccessor.ok) return authorizedSuccessor;
@@ -245,6 +446,7 @@ export function decodeCompletionEvaluationRequest(
       idempotencyKey,
       context: context.value,
       predicates: predicates.value,
+      ...(authority?.ok ? { authority: authority.value } : {}),
       ...(authorizedSuccessor?.ok ? { authorizedSuccessor: authorizedSuccessor.value } : {}),
     },
   };
@@ -269,6 +471,7 @@ export function createCompletionEvaluationRecord(input: CreateCompletionEvaluati
     goalId: decoded.request.goalId,
     context: completionEvaluationContext(decoded.request),
     predicates: decoded.request.predicates,
+    ...(decoded.request.authority ? { authority: decoded.request.authority } : {}),
     decision: decideCompletion(decoded.request.predicates, decoded.request.authorizedSuccessor),
     idempotency: workEventIdempotency(
       keyDigest,
@@ -314,6 +517,7 @@ export function decodeCompletionEvaluationRecord(value: unknown): WorkStateDecod
     idempotencyKey: 'record-key-placeholder',
     context: contextRequestFromRecord(fields['context']),
     predicates: fields['predicates'],
+    ...(fields['authority'] === undefined ? {} : { authority: fields['authority'] }),
     ...(isRecordObject(fields['decision']) && fields['decision']['state'] === 'superseded'
       ? {
           authorizedSuccessor: {
@@ -350,6 +554,13 @@ export function decodeCompletionEvaluationRecord(value: unknown): WorkStateDecod
   if (stableJson(fields['predicates']) !== stableJson(decoded.request.predicates)) {
     return { state: 'malformed', error: 'completion predicates must use canonical order and evidence' };
   }
+  if (
+    decoded.request.authority
+      ? stableJson(fields['authority']) !== stableJson(decoded.request.authority)
+      : fields['authority'] !== undefined
+  ) {
+    return { state: 'malformed', error: 'completion authority assessment must be canonical' };
+  }
   const decision = decideCompletion(decoded.request.predicates, decoded.request.authorizedSuccessor);
   if (stableJson(fields['decision']) !== stableJson(decision)) {
     return { state: 'malformed', error: 'completion decision does not follow from its predicates' };
@@ -365,6 +576,7 @@ export function decodeCompletionEvaluationRecord(value: unknown): WorkStateDecod
       goalId: decoded.request.goalId,
       context,
       predicates: decoded.request.predicates,
+      ...(decoded.request.authority ? { authority: decoded.request.authority } : {}),
       decision,
       idempotency: idempotency.value,
       createdAt: envelope.envelope.createdAt,
@@ -733,6 +945,212 @@ function decodeCanonicalLines(
   const unique = [...new Set(normalized as string[])].sort();
   if (unique.length !== normalized.length) return { ok: false, error: 'reasons must be unique' };
   return { ok: true, value: unique };
+}
+
+function decodeAuthorityPredecessor(
+  value: unknown,
+): { ok: true; value: CompletionAuthorityPredecessor } | { ok: false; error: string } {
+  if (!isRecordObject(value)) return { ok: false, error: 'authority predecessor must be an object' };
+  if (
+    value['kind'] === 'git-tree' &&
+    typeof value['treeOid'] === 'string' &&
+    /^[a-f0-9]{40,64}$/u.test(value['treeOid'])
+  ) {
+    return { ok: true, value: { kind: 'git-tree', treeOid: value['treeOid'] } };
+  }
+  if (value['kind'] === 'unavailable' && value['reason'] === 'no-fixed-predecessor') {
+    return { ok: true, value: { kind: 'unavailable', reason: 'no-fixed-predecessor' } };
+  }
+  return { ok: false, error: 'authority predecessor must name one fixed Git tree or disclose its absence' };
+}
+
+function canonicalProtectedPaths(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length > MAX_PROTECTED_CHANGED_PATHS) {
+    throw new Error(`changed protected paths must contain at most ${MAX_PROTECTED_CHANGED_PATHS} entries`);
+  }
+  const normalized = value.map((path) => canonicalProtectedPath(path));
+  if (normalized.some((path) => path === null)) {
+    throw new Error('changed protected paths must be canonical repository-relative paths');
+  }
+  return [...new Set(normalized as string[])].sort();
+}
+
+function canonicalProtectedPath(value: unknown): string | null {
+  if (typeof value !== 'string' || /[\0\r\n]/u.test(value)) return null;
+  const path = value.replaceAll('\\', '/').replace(/^\.\//u, '').replace(/\/+/gu, '/');
+  if (
+    path.length === 0 ||
+    path.length > MAX_AUTHORITY_REFERENT_CHARACTERS ||
+    path.startsWith('/') ||
+    path.endsWith('/') ||
+    path.split('/').some((segment) => segment === '' || segment === '.' || segment === '..')
+  ) {
+    return null;
+  }
+  return path;
+}
+
+function canonicalAuthorityReliances(value: unknown): CompletionAuthorityReliance[] {
+  if (!Array.isArray(value) || value.length > PROTECTED_ARTIFACT_CLASSES.length) {
+    throw new Error('authority reliances must be a bounded array with at most one entry per protected class');
+  }
+  const classes = new Set<ProtectedArtifactClass>();
+  const reliances = value.map((candidate) => {
+    if (
+      !isRecordObject(candidate) ||
+      !PROTECTED_ARTIFACT_CLASSES.includes(candidate['class'] as ProtectedArtifactClass)
+    ) {
+      throw new Error('authority reliance must name a canonical protected artifact class');
+    }
+    const artifactClass = candidate['class'] as ProtectedArtifactClass;
+    if (classes.has(artifactClass)) throw new Error(`authority reliance class ${artifactClass} is duplicated`);
+    classes.add(artifactClass);
+    const predicates = canonicalAuthorityPredicates(candidate['predicates']);
+    const reason = normalizedBoundedLine(candidate['reason'], MAX_REASON_CHARACTERS);
+    if (!reason) throw new Error(`authority reliance ${artifactClass} must state one bounded reason`);
+    return { class: artifactClass, predicates, reason };
+  });
+  return reliances.sort(compareProtectedClasses);
+}
+
+function canonicalAuthorityPredicates(value: unknown): CompletionPredicate[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > COMPLETION_PREDICATES.length) {
+    throw new Error('authority predicates must be a non-empty bounded array');
+  }
+  if (value.some((predicate) => !isCompletionPredicate(predicate))) {
+    throw new Error('authority predicates must name canonical completion predicates');
+  }
+  const unique = [...new Set(value as CompletionPredicate[])];
+  if (unique.length !== value.length) throw new Error('authority predicates must be unique');
+  return COMPLETION_PREDICATES.filter((predicate) => unique.includes(predicate));
+}
+
+function canonicalAuthorityReferent(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  return normalizedBoundedLine(value, MAX_AUTHORITY_REFERENT_CHARACTERS) ?? undefined;
+}
+
+function decodeCandidateControlledEvidence(
+  value: unknown,
+): { ok: true; value: CandidateControlledAuthorityEvidence[] } | { ok: false; error: string } {
+  if (!Array.isArray(value) || value.length > PROTECTED_ARTIFACT_CLASSES.length) {
+    return { ok: false, error: 'candidate-controlled authority evidence must be a bounded array' };
+  }
+  try {
+    const classes = new Set<ProtectedArtifactClass>();
+    const evidence = value.map((candidate) => {
+      const header = decodeAuthorityEvidenceHeader(candidate);
+      if (!header.ok) throw new Error(header.error);
+      if (classes.has(header.value.class)) {
+        throw new Error(`candidate-controlled class ${header.value.class} is duplicated`);
+      }
+      classes.add(header.value.class);
+      if (!isRecordObject(candidate)) throw new Error('candidate-controlled authority evidence must be an object');
+      const paths = canonicalProtectedPaths(candidate['paths']);
+      if (paths.length === 0) throw new Error('candidate-controlled authority evidence must name changed paths');
+      return { ...header.value, paths };
+    });
+    const canonical = evidence.sort(compareProtectedClasses);
+    if (stableJson(value) !== stableJson(canonical)) {
+      return { ok: false, error: 'candidate-controlled authority evidence must use canonical order and paths' };
+    }
+    return { ok: true, value: canonical };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function decodeFixedAuthorityEvidence(
+  value: unknown,
+): { ok: true; value: FixedOrAuthorizedAuthorityEvidence[] } | { ok: false; error: string } {
+  if (!Array.isArray(value) || value.length > PROTECTED_ARTIFACT_CLASSES.length) {
+    return { ok: false, error: 'fixed authority evidence must be a bounded array' };
+  }
+  try {
+    const classes = new Set<ProtectedArtifactClass>();
+    const evidence = value.map((candidate) => {
+      const header = decodeAuthorityEvidenceHeader(candidate);
+      if (!header.ok) throw new Error(header.error);
+      if (classes.has(header.value.class)) throw new Error(`fixed authority class ${header.value.class} is duplicated`);
+      classes.add(header.value.class);
+      if (!isRecordObject(candidate)) throw new Error('fixed authority evidence must be an object');
+      const referent = canonicalAuthorityReferent(candidate['referent']);
+      if (!referent) throw new Error('fixed authority evidence must name one bounded referent');
+      return { ...header.value, referent };
+    });
+    const canonical = evidence.sort(compareProtectedClasses);
+    if (stableJson(value) !== stableJson(canonical)) {
+      return { ok: false, error: 'fixed authority evidence must use canonical order' };
+    }
+    return { ok: true, value: canonical };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function decodeAuthorityViolations(
+  value: unknown,
+): { ok: true; value: ReflexiveAuthorityViolation[] } | { ok: false; error: string } {
+  if (!Array.isArray(value) || value.length > PROTECTED_ARTIFACT_CLASSES.length) {
+    return { ok: false, error: 'reflexive authority violations must be a bounded array' };
+  }
+  try {
+    const classes = new Set<ProtectedArtifactClass>();
+    const violations = value.map((candidate) => {
+      if (
+        !isRecordObject(candidate) ||
+        !PROTECTED_ARTIFACT_CLASSES.includes(candidate['class'] as ProtectedArtifactClass)
+      ) {
+        throw new Error('reflexive authority violation must name a canonical protected class');
+      }
+      const artifactClass = candidate['class'] as ProtectedArtifactClass;
+      if (classes.has(artifactClass)) throw new Error(`reflexive authority class ${artifactClass} is duplicated`);
+      classes.add(artifactClass);
+      const predicates = canonicalAuthorityPredicates(candidate['predicates']);
+      const reason = normalizedBoundedLine(candidate['reason'], MAX_REASON_CHARACTERS);
+      if (!reason) throw new Error(`reflexive authority violation ${artifactClass} must state one bounded reason`);
+      return { class: artifactClass, predicates, reason };
+    });
+    const canonical = violations.sort(compareProtectedClasses);
+    if (stableJson(value) !== stableJson(canonical)) {
+      return { ok: false, error: 'reflexive authority violations must use canonical order' };
+    }
+    return { ok: true, value: canonical };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function decodeAuthorityEvidenceHeader(
+  value: unknown,
+):
+  | { ok: true; value: { class: ProtectedArtifactClass; authority: ProtectedArtifactAuthority } }
+  | { ok: false; error: string } {
+  if (
+    !isRecordObject(value) ||
+    !PROTECTED_ARTIFACT_CLASSES.includes(value['class'] as ProtectedArtifactClass) ||
+    (value['authority'] !== 'bootstrap-trust-root' && value['authority'] !== 'fixed-predecessor')
+  ) {
+    return { ok: false, error: 'authority evidence must name a canonical class and authority rule' };
+  }
+  return {
+    ok: true,
+    value: {
+      class: value['class'] as ProtectedArtifactClass,
+      authority: value['authority'],
+    },
+  };
+}
+
+function compareProtectedClasses(
+  left: { class: ProtectedArtifactClass },
+  right: { class: ProtectedArtifactClass },
+): number {
+  return PROTECTED_ARTIFACT_CLASSES.indexOf(left.class) - PROTECTED_ARTIFACT_CLASSES.indexOf(right.class);
+}
+
+function authorityAssessmentId(meaning: Omit<CompletionAuthorityAssessment, 'assessmentId'>): string {
+  return `SQA-${hashIdentity(meaning).slice(0, 32).toUpperCase()}`;
 }
 
 function decodeAuthorizedSuccessor(

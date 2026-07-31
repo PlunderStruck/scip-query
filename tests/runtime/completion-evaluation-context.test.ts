@@ -45,12 +45,19 @@ describe('fixed completion evaluation context', () => {
       evaluatorEntrypoint: fixture.evaluator,
     });
     const context = first.records[0]!;
-    const left = stopCompletionEvaluationRequest(fixture.root, context, passingGate());
-    const right = stopCompletionEvaluationRequest(fixture.root, context, passingGate());
+    const fixedAuthority = {
+      predecessor: { kind: 'git-tree' as const, treeOid: 'a'.repeat(40) },
+      changedPaths: ['src/feature.ts'],
+    };
+    const left = stopCompletionEvaluationRequest(fixture.root, context, passingGate(), fixedAuthority);
+    const right = stopCompletionEvaluationRequest(fixture.root, context, passingGate(), fixedAuthority);
 
     expect(left).toEqual(right);
     expect(left.context.policyId).toBe(context.contextSnapshotId);
     expect(left.context.evaluatorVersion).toBe(context.evaluator.buildIdentity);
+    expect(context.protectedArtifacts.rules.find((rule) => rule.class === 'evaluator')?.selectors).toEqual([
+      'fixed-evaluator.js',
+    ]);
     expect(left.predicates.find((predicate) => predicate.predicate === 'goal-fulfilled')?.state).toBe('unknown');
     expect(left.predicates.find((predicate) => predicate.predicate === 'coverage-complete')?.state).toBe('established');
 
@@ -107,14 +114,99 @@ describe('fixed completion evaluation context', () => {
     expect(first[0]?.evaluation.evaluation.record.decision).toEqual(
       expect.objectContaining({
         state: 'blocked',
-        unknownPredicates: ['goal-fulfilled', 'invariants-preserved'],
+        unknownPredicates: [
+          'goal-fulfilled',
+          'invariants-preserved',
+          'evidence-compatible',
+          'coverage-complete',
+          'obligations-reconciled',
+          'policy-permitted',
+        ],
       }),
     );
     expect(second[0]?.context.publication).toBe('existing');
     expect(second[0]?.evaluation.evaluation.publication).toBe('existing');
     expect(readCompletionHistory(fixture.root).integrityIssues).toEqual([]);
   });
+
+  it('names and blocks a changed suppression when the gate relies on it', () => {
+    const fixture = contextFixture();
+    const context = captureFixedCompletionContext(fixture.root, fixture.config, 'block', {
+      evaluatorEntrypoint: fixture.evaluator,
+    }).records[0]!;
+    const gate = passingGate();
+    gate.suppressed = [{} as DiffGateResult['suppressed'][number]];
+
+    const request = stopCompletionEvaluationRequest(fixture.root, context, gate, {
+      predecessor: { kind: 'git-tree', treeOid: 'a'.repeat(40) },
+      changedPaths: ['.scipquery/suppressions/SQS-example.json'],
+    });
+
+    expect(request.authority?.candidateControlled).toEqual([
+      expect.objectContaining({
+        class: 'suppression',
+        paths: ['.scipquery/suppressions/SQS-example.json'],
+      }),
+    ]);
+    expect(request.authority?.violations).toEqual([
+      expect.objectContaining({
+        class: 'suppression',
+        predicates: ['invariants-preserved', 'policy-permitted'],
+      }),
+    ]);
+    expect(request.predicates.find((predicate) => predicate.predicate === 'policy-permitted')).toEqual(
+      expect.objectContaining({
+        state: 'unknown',
+        reasons: expect.arrayContaining([expect.stringContaining('suppression changed by this candidate')]),
+      }),
+    );
+  });
+
+  it('blocks every non-disproven judgment produced by a changed evaluator', () => {
+    const fixture = contextFixture();
+    const context = captureFixedCompletionContext(fixture.root, fixture.config, 'block', {
+      evaluatorEntrypoint: fixture.evaluator,
+    }).records[0]!;
+
+    const request = stopCompletionEvaluationRequest(fixture.root, context, passingGate(), {
+      predecessor: { kind: 'git-tree', treeOid: 'a'.repeat(40) },
+      changedPaths: ['fixed-evaluator.js'],
+    });
+
+    expect(request.authority?.violations).toEqual([
+      expect.objectContaining({
+        class: 'evaluator',
+        predicates: [
+          'goal-fulfilled',
+          'invariants-preserved',
+          'evidence-compatible',
+          'coverage-complete',
+          'obligations-reconciled',
+          'policy-permitted',
+        ],
+      }),
+    ]);
+    expect(request.predicates).toEqual(
+      expect.arrayContaining(
+        COMPLETION_PREDICATE_NAMES.map((predicate) =>
+          expect.objectContaining({
+            predicate,
+            state: 'unknown',
+          }),
+        ),
+      ),
+    );
+  });
 });
+
+const COMPLETION_PREDICATE_NAMES = [
+  'goal-fulfilled',
+  'invariants-preserved',
+  'evidence-compatible',
+  'coverage-complete',
+  'obligations-reconciled',
+  'policy-permitted',
+] as const;
 
 function contextFixture(): { root: string; config: ProjectConfig; evaluator: string } {
   const root = mkdtempSync(join(tmpdir(), 'scip-query-fixed-completion-'));

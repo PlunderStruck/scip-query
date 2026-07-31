@@ -1,9 +1,13 @@
 import { createHash } from 'node:crypto';
 import { realpathSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 
 import {
+  applyCompletionAuthorityFirewall,
   COMPLETION_PREDICATES,
+  createCompletionAuthorityAssessment,
+  type CompletionAuthorityPredecessor,
+  type CompletionAuthorityReliance,
   type CompletionEvaluationRequest,
   type CompletionPredicateJudgment,
 } from '../domain/autonomous-completion.js';
@@ -18,6 +22,7 @@ import {
   type ProtectedArtifactRule,
 } from '../domain/autonomous-completion-context.js';
 import type { ObservationReceiptV2 } from '../domain/observation-receipt.js';
+import { isPathInsideProject } from '../domain/path-normalization.js';
 import { stableJson } from '../domain/stable-json.js';
 import type { ProjectConfig } from '../domain/types.js';
 import { sha256FileWithinLimit, SOURCE_ARTIFACT_MAX_BYTES } from '../filesystem/bounded-file.js';
@@ -30,7 +35,7 @@ import {
   readIntendedChangeRecords,
   type WorkStateCreateOptions,
 } from '../storage/autonomous-work-state.js';
-import { captureFixedRepositoryObservationReceipt } from './observation-receipt.js';
+import { captureFixedRepositoryObservation, captureFixedRepositoryObservationReceipt } from './observation-receipt.js';
 import { cliVersion } from './cli-support.js';
 
 export const STOP_COMPLETION_POLICY_ID = 'scip-query:stop-completion-policy' as const;
@@ -41,28 +46,22 @@ export const STOP_COMPLETION_EVALUATOR_CONTRACT_VERSION = 1 as const;
 const PROTECTED_ARTIFACT_RULES: readonly ProtectedArtifactRule[] = [
   {
     class: 'goal',
-    selectors: ['.scipquery/goals/*.json'],
+    selectors: ['.scipquery/goals/*'],
     authority: 'fixed-predecessor',
   },
   {
     class: 'transition-rule',
-    selectors: ['.scipquery/transition-rules/*.json'],
+    selectors: ['.scipquery/transition-rules/*'],
     authority: 'fixed-predecessor',
   },
   {
     class: 'evaluator',
-    selectors: [
-      'src/domain/autonomous-completion*.ts',
-      'src/runtime/agent-hooks.ts',
-      'src/runtime/completion-evaluation-context.ts',
-      'src/runtime/diff-gate-execution.ts',
-      'src/storage/autonomous-completion*.ts',
-    ],
+    selectors: ['.scipquery/evaluator/**'],
     authority: 'bootstrap-trust-root',
   },
   {
     class: 'test',
-    selectors: ['**/*.test.*', '**/*.spec.*', '**/__tests__/**'],
+    selectors: ['__tests__/**', 'spec/**', 'test/**', 'tests/**'],
     authority: 'fixed-predecessor',
   },
   {
@@ -72,7 +71,7 @@ const PROTECTED_ARTIFACT_RULES: readonly ProtectedArtifactRule[] = [
   },
   {
     class: 'suppression',
-    selectors: ['.scipquery/suppressions/*.json'],
+    selectors: ['.scipquery/suppressions/*'],
     authority: 'fixed-predecessor',
   },
   {
@@ -87,8 +86,14 @@ export interface FixedCompletionContextLease {
   collaborationDomainId: string;
   targetObservation: ObservationReceiptV2;
   evaluator: CompletionEvaluatorSnapshot;
+  authority: CompletionAuthorityInputs;
   requests: readonly CompletionContextSnapshotRequest[];
   records: readonly CompletionContextSnapshotRecordV1[];
+}
+
+export interface CompletionAuthorityInputs {
+  predecessor: CompletionAuthorityPredecessor;
+  changedPaths: readonly string[];
 }
 
 export class CompletionEvaluationContextMovedError extends Error {
@@ -115,12 +120,13 @@ export function captureFixedCompletionContext(
   if (!collaborationDomainId) {
     throw new Error('completion evaluation requires a configured collaboration domain');
   }
-  const targetObservation = captureFixedRepositoryObservationReceipt({
+  const observation = captureFixedRepositoryObservation({
     projectRoot,
     config,
     ...(options.observedAt ? { observedAt: options.observedAt } : {}),
     collaborationDomainId,
   });
+  const targetObservation = observation.receipt;
   const goals = readGoalRecords(projectRoot);
   const changes = readIntendedChangeRecords(projectRoot, goals);
   const recordIssues = [
@@ -144,7 +150,9 @@ export function captureFixedCompletionContext(
     'stop-hook:fixed-context-v1',
     ...DIFF_GATE_CHECKS.map((check) => `diff-gate:${check}`),
   ]);
-  const protectedArtifacts = completionProtectedArtifactSet(PROTECTED_ARTIFACT_RULES);
+  const protectedArtifacts = completionProtectedArtifactSet(
+    completionProtectedArtifactRules(projectRoot, options.evaluatorEntrypoint),
+  );
   const requests = changes.records.map((change): CompletionContextSnapshotRequest => {
     const goal = goalsById.get(change.goalId);
     if (!goal) throw new Error(`intended change ${change.changeId} has no current goal ${change.goalId}`);
@@ -172,6 +180,12 @@ export function captureFixedCompletionContext(
     collaborationDomainId,
     targetObservation,
     evaluator,
+    authority: {
+      predecessor: observation.repositoryContent.base
+        ? { kind: 'git-tree', treeOid: observation.repositoryContent.base.treeOid }
+        : { kind: 'unavailable', reason: 'no-fixed-predecessor' },
+      changedPaths: observation.repositoryContent.files.map((entry) => entry.path),
+    },
     requests,
     records,
   };
@@ -223,7 +237,12 @@ export function publishStopCompletionEvaluations(
       ...options,
       now: () => contextRecord.capturedAt,
     });
-    const evaluationRequest = stopCompletionEvaluationRequest(lease.projectRoot, context.record, result);
+    const evaluationRequest = stopCompletionEvaluationRequest(
+      lease.projectRoot,
+      context.record,
+      result,
+      lease.authority,
+    );
     const evaluation = createCompletionEvaluationFiles(
       lease.projectRoot,
       lease.collaborationDomainId,
@@ -238,6 +257,12 @@ export function stopCompletionEvaluationRequest(
   projectRoot: string,
   context: CompletionContextSnapshotRecordV1,
   result: DiffGateResult,
+  authorityInputs: CompletionAuthorityInputs = {
+    predecessor: context.targetObservation.diagnostics?.treeOid
+      ? { kind: 'git-tree', treeOid: context.targetObservation.diagnostics.treeOid }
+      : { kind: 'unavailable', reason: 'no-fixed-predecessor' },
+    changedPaths: result.changedFiles,
+  },
 ): CompletionEvaluationRequest {
   const target = context.targetObservation;
   const hasFindings = result.findings.length > 0;
@@ -248,7 +273,7 @@ export function stopCompletionEvaluationRequest(
     obligations.summary.liveObligationIds.length === 0 &&
     obligations.summary.conflictedObligationIds.length === 0 &&
     obligations.summary.orphanTransitionIds.length === 0;
-  const predicates: CompletionPredicateJudgment[] = [
+  const predicatesBeforeAuthority: CompletionPredicateJudgment[] = [
     judgment(
       'goal-fulfilled',
       'unknown',
@@ -292,6 +317,16 @@ export function stopCompletionEvaluationRequest(
       target,
     ),
   ];
+  const authority = createCompletionAuthorityAssessment({
+    predecessor: authorityInputs.predecessor,
+    changedPaths: authorityInputs.changedPaths,
+    protectedArtifacts: context.protectedArtifacts,
+    reliances: completionAuthorityReliances(result),
+    fixedReferents: {
+      evaluator: `evaluator-build:${context.evaluator.buildIdentity}`,
+    },
+  });
+  const predicates = applyCompletionAuthorityFirewall(predicatesBeforeAuthority, authority);
   return {
     changeId: context.changeId,
     goalId: context.goalId,
@@ -304,7 +339,81 @@ export function stopCompletionEvaluationRequest(
       targetObservation: target,
     },
     predicates,
+    authority,
   };
+}
+
+function completionAuthorityReliances(result: DiffGateResult): CompletionAuthorityReliance[] {
+  return [
+    {
+      class: 'goal',
+      predicates: ['goal-fulfilled'],
+      reason:
+        'The candidate changed the goal that defines fulfillment, so that changed goal cannot be the sole authority for its own acceptance.',
+    },
+    {
+      class: 'evaluator',
+      predicates: COMPLETION_PREDICATES,
+      reason:
+        'The candidate changed the evaluator that produces completion judgments, so those candidate-produced judgments require a fixed predecessor evaluator.',
+    },
+    {
+      class: 'configuration',
+      predicates: ['coverage-complete', 'policy-permitted'],
+      reason:
+        'The candidate changed configuration that selects completion checks or policy, so that changed configuration cannot authorize its own weakened evaluation.',
+    },
+    ...(result.suppressed.length > 0
+      ? [
+          {
+            class: 'suppression' as const,
+            predicates: ['invariants-preserved', 'policy-permitted'] as const,
+            reason:
+              'The gate relied on a suppression changed by this candidate, so that suppression requires predecessor authorization or independent counterevidence.',
+          },
+        ]
+      : []),
+    ...(result.checksRun.includes('baseline')
+      ? [
+          {
+            class: 'baseline' as const,
+            predicates: ['invariants-preserved'] as const,
+            reason:
+              'The evaluation relied on a baseline changed by this candidate, so that baseline cannot be the sole authority for accepting its own movement.',
+          },
+        ]
+      : []),
+  ];
+}
+
+function completionProtectedArtifactRules(
+  projectRoot: string,
+  evaluatorEntrypoint = process.argv[1],
+): readonly ProtectedArtifactRule[] {
+  const evaluatorSelectors = completionEvaluatorProtectedSelectors(projectRoot, evaluatorEntrypoint);
+  return PROTECTED_ARTIFACT_RULES.map((rule) =>
+    rule.class === 'evaluator' ? { ...rule, selectors: evaluatorSelectors } : rule,
+  );
+}
+
+function completionEvaluatorProtectedSelectors(projectRoot: string, evaluatorEntrypoint: string | undefined): string[] {
+  if (!evaluatorEntrypoint) return ['.scipquery/evaluator/**'];
+  let canonicalRoot: string;
+  let canonicalEntrypoint: string;
+  try {
+    canonicalRoot = realpathSync(projectRoot);
+    canonicalEntrypoint = realpathSync(resolve(evaluatorEntrypoint));
+  } catch {
+    return ['.scipquery/evaluator/**'];
+  }
+  if (!isPathInsideProject(canonicalRoot, canonicalEntrypoint)) {
+    return ['.scipquery/evaluator/**'];
+  }
+  const relativeEntrypoint = relative(canonicalRoot, canonicalEntrypoint).replaceAll('\\', '/');
+  if (relativeEntrypoint.startsWith('dist/')) {
+    return ['src/**', 'package.json', 'package-lock.json', 'tsup.config.ts', relativeEntrypoint].sort();
+  }
+  return [relativeEntrypoint];
 }
 
 function completionEvaluatorSnapshot(entrypoint = process.argv[1]): CompletionEvaluatorSnapshot {
