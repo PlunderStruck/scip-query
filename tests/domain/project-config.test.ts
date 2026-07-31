@@ -99,13 +99,16 @@ describe('project config format', () => {
 
   it('keeps the packaged JSON Schema aligned with the runtime discriminator', () => {
     const schema = JSON.parse(readFileSync('docs/schemas/project-config.schema.json', 'utf8')) as {
-      properties?: Record<string, { const?: unknown; type?: unknown }>;
+      properties?: Record<string, { const?: unknown; type?: unknown; pattern?: unknown }>;
       required?: string[];
       additionalProperties?: boolean;
     };
 
     expect(schema.properties?.['schemaVersion']?.const).toBe(CURRENT_PROJECT_CONFIG_SCHEMA_VERSION);
     expect(schema.properties?.['$schema']?.type).toBe('string');
+    expect(schema.properties?.['collaborationDomainId']?.pattern).toBe(
+      '^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[89aAbB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}$',
+    );
     expect(schema.required).toEqual(['schemaVersion']);
     expect(schema.additionalProperties).toBe(true);
   });

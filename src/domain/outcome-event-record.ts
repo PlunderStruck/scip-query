@@ -7,7 +7,7 @@ import type {
 } from './finding-outcomes.js';
 import { isObservationReceipt } from './observation-receipt.js';
 import type { RecordCompatibilityState } from './record-compatibility.js';
-import { isRecordObject } from './record-validation.js';
+import { isBoundedRecordString, isRecordObject } from './record-validation.js';
 
 export const OUTCOME_EVENT_RECORD_KIND = 'scip-query-outcome-event';
 export const OUTCOME_EVENT_RECORD_SCHEMA_VERSION = 1;
@@ -119,7 +119,7 @@ function eventFromRecord(candidate: Record<string, unknown>): OutcomeEvent | und
     (candidate['verifiedAgainstCommit'] !== undefined &&
       (candidate['event'] !== 'resolved' || typeof candidate['verifiedAgainstCommit'] !== 'string')) ||
     (candidate['symbol'] !== undefined && typeof candidate['symbol'] !== 'string') ||
-    (candidate['gateRunId'] !== undefined && !isBoundedIdentity(candidate['gateRunId'])) ||
+    (candidate['gateRunId'] !== undefined && !isBoundedRecordString(candidate['gateRunId'])) ||
     (candidate['observer'] !== undefined && !isOutcomeObserverProvenance(candidate['observer'])) ||
     (candidate['observation'] !== undefined && !isObservationReceipt(candidate['observation'])) ||
     (candidate['suppressionPolicyVersion'] !== undefined &&
@@ -167,8 +167,4 @@ function isOutcomeObserverProvenance(value: unknown): value is OutcomeObserverPr
     (value['source'] === undefined ||
       (typeof value['source'] === 'string' && value['source'].length > 0 && value['source'].length <= 256))
   );
-}
-
-function isBoundedIdentity(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0 && value.length <= 256 && !/[\0\r\n]/u.test(value);
 }

@@ -137,6 +137,7 @@ export function openProjectDb(projectRoot: string, opts: { warnOnRootFallback?: 
     dbPath,
     indexPath: process.env['SCIP_QUERY_INDEX_SCIP'] ?? paths.indexPath,
     projectRoot,
+    collaborationDomainId: config.collaborationDomainId,
     sharedEvidenceDbPath: resolveSharedEvidenceDbPath(projectRoot, config, gitContext),
     entryRoots: config.entryRoots,
     semantic: config.semantic,

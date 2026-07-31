@@ -413,12 +413,13 @@ describe('outcome event record decoder', () => {
       readFileSync(join(process.cwd(), 'docs', 'schemas', 'outcome-event-record.schema.json'), 'utf-8'),
     ) as {
       required: string[];
-      properties: Record<string, { const?: unknown }>;
+      properties: Record<string, { const?: unknown; $ref?: unknown }>;
       additionalProperties: boolean;
     };
 
     expect(schema.properties['kind']?.const).toBe(OUTCOME_EVENT_RECORD_KIND);
     expect(schema.properties['schemaVersion']?.const).toBe(OUTCOME_EVENT_RECORD_SCHEMA_VERSION);
+    expect(schema.properties['observation']?.['$ref']).toBe('./observation-receipt.schema.json');
     expect(schema.required).toEqual(
       expect.arrayContaining(['kind', 'schemaVersion', 'eventIdentity', 'writer', 'event', 'commit']),
     );

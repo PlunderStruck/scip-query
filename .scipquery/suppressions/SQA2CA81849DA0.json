@@ -1,14 +1,13 @@
 {
   "kind": "scip-query-suppression",
-  "suppressionIdentity": "SQ562715D7254A",
+  "suppressionIdentity": "SQA2CA81849DA0",
   "writer": {
     "tool": "scip-query",
     "version": "0.20.0"
   },
-  "id": "SQ562715D7254A",
-  "reason": "This slice changes collaboration-domain config creation and validation together with its focused config tests. command-handlers already delegates initialization to initProjectConfigDetailed without interpreting the new optional field, so its invocation and rendering contract is unchanged.",
-  "createdAt": "2026-07-29T19:50:55.812Z",
-  "updatedAt": "2026-07-31T02:21:49.064Z",
+  "id": "SQA2CA81849DA0",
+  "reason": "This slice adds an internal collaboration-domain setup step inside runProjectSetup. command-handlers still delegates the same parsed setup options and renders the same ProjectSetupReport, so the handler contract requires no coordination edit.",
+  "createdAt": "2026-07-31T02:21:35.568Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
@@ -17,7 +16,7 @@
     "policyVersion": 1,
     "observation": {
       "schemaVersion": 2,
-      "observedAt": "2026-07-31T02:21:49.063Z",
+      "observedAt": "2026-07-31T02:21:35.565Z",
       "facts": {
         "collaborationDomain": {
           "schemaVersion": 1,
@@ -100,21 +99,21 @@
     "evidence": [
       {
         "kind": "source",
-        "referent": "src/runtime/config.ts",
-        "claim": "This slice changes collaboration-domain config creation and validation together with its focused config tests. command-handlers already delegates initialization to initProjectConfigDetailed without interpreting the new optional field, so its invocation and rendering contract is unchanged.",
-        "contentHash": "a74c9bf58dbdd6bd1943f0567486bf09334d0bf92e23172e4720511d3da1f825"
+        "referent": "src/runtime/project-setup.ts",
+        "claim": "This slice adds an internal collaboration-domain setup step inside runProjectSetup. command-handlers still delegates the same parsed setup options and renders the same ProjectSetupReport, so the handler contract requires no coordination edit.",
+        "contentHash": "4833f7a522cc253dd8b0b501b7021a60b5d462cbe80d938458985465f40879ca"
       },
       {
         "kind": "source",
         "referent": "src/runtime/commands/command-handlers.ts",
-        "claim": "This slice changes collaboration-domain config creation and validation together with its focused config tests. command-handlers already delegates initialization to initProjectConfigDetailed without interpreting the new optional field, so its invocation and rendering contract is unchanged.",
+        "claim": "This slice adds an internal collaboration-domain setup step inside runProjectSetup. command-handlers still delegates the same parsed setup options and renders the same ProjectSetupReport, so the handler contract requires no coordination edit.",
         "contentHash": "6048e9d84c6c9b4179456cd8d27d7ff91a5884c9b42f2823d88b5f40239b986c"
       },
       {
         "kind": "test",
-        "referent": "tests/runtime/runtime-config.test.ts",
-        "claim": "This slice changes collaboration-domain config creation and validation together with its focused config tests. command-handlers already delegates initialization to initProjectConfigDetailed without interpreting the new optional field, so its invocation and rendering contract is unchanged.",
-        "contentHash": "364b3246f62738bd404498c7424620a5b5427218e4d6adb02e562a3fd7832ce6"
+        "referent": "tests/runtime/project-setup.test.ts",
+        "claim": "This slice adds an internal collaboration-domain setup step inside runProjectSetup. command-handlers still delegates the same parsed setup options and renders the same ProjectSetupReport, so the handler contract requires no coordination edit.",
+        "contentHash": "7879ef5bd14fb8da462a007e79fc064eba79667b0483e2bec01bb55cb8766c57"
       }
     ],
     "invalidateOn": {

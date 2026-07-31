@@ -186,10 +186,10 @@ checkout-local `watch-refresh-requests/` path. The authoritative request,
 claim, and completion records belong to `storage`; the runtime watch
 coordinator couples those records to watcher transitions, while `platform`
 continues to own only the process-neutral state schema and paths. Persisted
-record decoders share dependency-free object, timestamp, scalar-number, and
-string-or-null-record predicates in `domain/record-validation.ts` rather than
-creating cross-dependencies between storage, reindex, platform, and semantic
-protocols.
+record decoders share dependency-free object, timestamp, scalar-number,
+bounded one-line string, and string-or-null-record predicates in
+`domain/record-validation.ts` rather than creating cross-dependencies between
+storage, reindex, platform, and semantic protocols.
 
 The nested TypeScript semantic and index snapshots now also expose the
 bounded-mailbox state owned by `storage/bounded-mailbox.ts`: pending,
@@ -392,10 +392,11 @@ The reindex-metadata direction was reverified on 2026-07-25.
 and capability boundary. Reindex, runtime services, semantic sessions, and
 storage identity/cache consumers depend inward on it; the domain decoder
 depends only on domain language, record/timestamp, and project-file
-validators. The generic object-record predicate now lives beside the timestamp
-predicate in `src/domain/record-validation.ts` and is also reused by config and
-JSON protocol decoders. This keeps future-version rejection identical without
-introducing a reverse domain dependency.
+validators. Generic object-record and bounded one-line string predicates now
+live beside the timestamp predicate in `src/domain/record-validation.ts` and
+are also reused by config and JSON protocol decoders. This keeps
+future-version rejection identical without introducing a reverse domain
+dependency.
 
 The immutable SQLite generation handoff was reverified on 2026-07-27.
 `src/reindex/index.ts` coordinates publication, while

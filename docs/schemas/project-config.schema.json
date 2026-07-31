@@ -16,6 +16,11 @@
       "const": 2,
       "description": "Persisted project-config format version. Unversioned and explicit version 1 records are readable legacy input."
     },
+    "collaborationDomainId": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[89aAbB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}$",
+      "description": "Opaque UUID v4 inherited by branches, clones, linked worktrees, and contributor forks intended to merge durable project decisions."
+    },
     "languages": {
       "type": "array",
       "uniqueItems": true,
@@ -178,40 +183,7 @@
             },
             "decidedBy": { "enum": ["agent", "human"] },
             "policyVersion": { "const": 1 },
-            "observation": {
-              "type": "object",
-              "required": ["schemaVersion", "authorityKind", "observedAt", "projectIdentity"],
-              "properties": {
-                "schemaVersion": { "const": 1 },
-                "authorityKind": {
-                  "enum": ["index-worktree", "index-only", "worktree-only", "process-local"]
-                },
-                "observedAt": { "type": "string", "format": "date-time" },
-                "projectIdentity": { "type": "string", "minLength": 1 },
-                "index": {
-                  "type": "object",
-                  "required": ["generationIdentity", "source", "alignment"],
-                  "properties": {
-                    "generationIdentity": { "type": "string", "minLength": 1 },
-                    "source": { "enum": ["immutable", "legacy"] },
-                    "alignment": { "enum": ["not-certified", "leased"] }
-                  },
-                  "additionalProperties": true
-                },
-                "worktree": {
-                  "type": "object",
-                  "required": ["identity", "clean"],
-                  "properties": {
-                    "identity": { "type": "string", "minLength": 1 },
-                    "clean": { "type": "boolean" },
-                    "headCommit": { "type": "string", "minLength": 1 },
-                    "treeOid": { "type": "string", "minLength": 1 }
-                  },
-                  "additionalProperties": true
-                }
-              },
-              "additionalProperties": true
-            },
+            "observation": { "$ref": "./observation-receipt.schema.json" },
             "evidence": {
               "type": "array",
               "minItems": 1,

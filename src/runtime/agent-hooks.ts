@@ -1560,6 +1560,7 @@ function withWorkspaceDb<T>(
     dbPath: workspace.paths.dbPath,
     indexPath: workspace.paths.indexPath,
     projectRoot: workspace.projectRoot,
+    collaborationDomainId: workspace.config.collaborationDomainId,
     sharedEvidenceDbPath: resolveSharedEvidenceDbPath(workspace.projectRoot, workspace.config),
     entryRoots: workspace.config.entryRoots,
     semantic: workspace.config.semantic,

@@ -246,7 +246,14 @@ describe('CLI JSON envelope compatibility', () => {
     ) as {
       required: string[];
       properties: Record<string, Record<string, unknown>>;
+      $defs: Record<string, { properties?: Record<string, Record<string, unknown>> }>;
       additionalProperties: boolean;
+    };
+    const receiptSchema = JSON.parse(
+      readFileSync(join(process.cwd(), 'docs', 'schemas', 'observation-receipt.schema.json'), 'utf8'),
+    ) as {
+      oneOf: Array<{ $ref: string }>;
+      $defs: Record<string, { properties?: Record<string, Record<string, unknown>> }>;
     };
     const packageJson = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as {
       files: string[];
@@ -263,6 +270,15 @@ describe('CLI JSON envelope compatibility', () => {
       'tool-information',
     ]);
     expect(schema.properties['evidenceContext']?.['$ref']).toBe('#/$defs/evidenceContextV1');
+    expect(schema.$defs['evidenceContextV1']?.properties?.['receipt']?.['$ref']).toBe(
+      './observation-receipt.schema.json',
+    );
+    expect(receiptSchema.oneOf).toEqual([
+      { $ref: '#/$defs/observationReceiptV1' },
+      { $ref: '#/$defs/observationReceiptV2' },
+    ]);
+    expect(receiptSchema.$defs['observationReceiptV1']?.properties?.['schemaVersion']?.['const']).toBe(1);
+    expect(receiptSchema.$defs['observationReceiptV2']?.properties?.['schemaVersion']?.['const']).toBe(2);
     expect(schema.required).toEqual(
       expect.arrayContaining([
         'kind',

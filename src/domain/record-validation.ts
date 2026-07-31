@@ -26,6 +26,14 @@ export function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 }
 
+/**
+ * True only for a non-empty, one-line record field whose bounded size keeps
+ * diagnostics and durable identity tuples finite.
+ */
+export function isBoundedRecordString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 256 && !/[\0\r\n]/u.test(value);
+}
+
 /** True only for finite numbers at or above zero. */
 export function isNonNegativeFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;

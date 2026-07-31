@@ -68,6 +68,14 @@ hint, the writer still publishes a current record and reports `changed: true`.
 Unknown root and nested fields survive because migration begins from the
 latest complete object and removes only the owned legacy discriminator.
 
+A collaboration domain is the merge-intended family of repository copies that
+share durable project decisions. Its real-world referents are branches,
+clones, linked worktrees, and contributor forks whose records are expected to
+rejoin; the committed `collaborationDomainId` distinguishes that family
+without confusing a filesystem path, host, or mutable remote URL for its
+identity. `init` and `setup` create one opaque UUID when it is missing. A
+concurrent winner is adopted, and later runs never rotate an established ID.
+
 A non-integer discriminator, non-object top level, invalid `$schema` hint, or
 unsupported older/future version fails before options are exposed to runtime
 consumers. The loader names the supported legacy/current versions. A setup

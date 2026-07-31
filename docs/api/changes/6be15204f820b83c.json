@@ -1,0 +1,433 @@
+{
+  "acceptedAt": "2026-07-31T02:13:13.264Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "6be15204f820b83c6bd31fb04dc0ad7ff11539cc4c5667719e13c46a437e8eca",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ScipQueryConfig changed from interface ScipQueryConfig { dbPath: string; indexPath: string; projectRoot: string; sharedEvidenceDbPath?: string; entryRoots?: EntryRootsConfig; gitignorePaths?: string[]; sema... to interface ScipQueryConfig { dbPath: string; indexPath: string; projectRoot: string; collaborationDomainId?: string; sharedEvidenceDbPath?: string; entryRoots?: EntryRootsConfig;....",
+      "target": ".:ScipQueryConfig"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/architecture; review their variance and runtime meaning.",
+      "target": "./queries/architecture"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/diff-gate; review their variance and runtime meaning.",
+      "target": "./queries/diff-gate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export DecodedObservationReceipt.",
+      "target": "./runtime:DecodedObservationReceipt"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export DerivedObservationStateAuthority.",
+      "target": "./runtime:DerivedObservationStateAuthority"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export LEGACY_OBSERVATION_RECEIPT_SCHEMA_VERSION.",
+      "target": "./runtime:LEGACY_OBSERVATION_RECEIPT_SCHEMA_VERSION"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OBSERVATION_IDENTITY_CANONICALIZATION_VERSION.",
+      "target": "./runtime:OBSERVATION_IDENTITY_CANONICALIZATION_VERSION"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OBSERVATION_IDENTITY_HASH_ALGORITHM.",
+      "target": "./runtime:OBSERVATION_IDENTITY_HASH_ALGORITHM"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OBSERVATION_IDENTITY_SCHEMA_VERSION.",
+      "target": "./runtime:OBSERVATION_IDENTITY_SCHEMA_VERSION"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "OBSERVATION_RECEIPT_SCHEMA_VERSION changed from declare const OBSERVATION_RECEIPT_SCHEMA_VERSION: 1; to declare const OBSERVATION_RECEIPT_SCHEMA_VERSION: 2;.",
+      "target": "./runtime:OBSERVATION_RECEIPT_SCHEMA_VERSION"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OBSERVATION_STATE_AUTHORITY_POLICY_VERSION.",
+      "target": "./runtime:OBSERVATION_STATE_AUTHORITY_POLICY_VERSION"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ObservationComparedFact.",
+      "target": "./runtime:ObservationComparedFact"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ObservationComparisonReason.",
+      "target": "./runtime:ObservationComparisonReason"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ObservationIdentity.",
+      "target": "./runtime:ObservationIdentity"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ObservationReceipt changed from interface ObservationReceipt { schemaVersion: typeof OBSERVATION_RECEIPT_SCHEMA_VERSION; authorityKind: ObservationAuthorityKind; observedAt: string; projectIdentity: string; in... to type ObservationReceipt = ObservationReceiptV1 | ObservationReceiptV2;.",
+      "target": "./runtime:ObservationReceipt"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ObservationReceiptComparison changed from interface ObservationReceiptComparison { compatible: boolean; reasons: Array<'project-mismatch' | 'index-authority-missing' | 'generation-mismatch' | 'worktree-authority-missing... to interface ObservationReceiptComparison { collaborationDomain: ObservationRelationshipJudgment; repositoryLineage: ObservationRelationshipJudgment; workspaceInstance: Observation....",
+      "target": "./runtime:ObservationReceiptComparison"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ObservationReceiptV1.",
+      "target": "./runtime:ObservationReceiptV1"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ObservationReceiptV2.",
+      "target": "./runtime:ObservationReceiptV2"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ObservationRelationshipJudgment.",
+      "target": "./runtime:ObservationRelationshipJudgment"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ObservationRelationshipState.",
+      "target": "./runtime:ObservationRelationshipState"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ObservationSourceFact.",
+      "target": "./runtime:ObservationSourceFact"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ObservationSourceKind.",
+      "target": "./runtime:ObservationSourceKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ObservationStabilityProof.",
+      "target": "./runtime:ObservationStabilityProof"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ObservationStabilityProofKind.",
+      "target": "./runtime:ObservationStabilityProofKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ObservationStateAuthority.",
+      "target": "./runtime:ObservationStateAuthority"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RelevantInputIdentity.",
+      "target": "./runtime:RelevantInputIdentity"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RelevantInputRelationshipJudgment.",
+      "target": "./runtime:RelevantInputRelationshipJudgment"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export createObservationIdentity.",
+      "target": "./runtime:createObservationIdentity"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export decodeObservationReceipt.",
+      "target": "./runtime:decodeObservationReceipt"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export deriveObservationStateAuthority.",
+      "target": "./runtime:deriveObservationStateAuthority"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export observationReceiptGenerationIdentity.",
+      "target": "./runtime:observationReceiptGenerationIdentity"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export observationReceiptStabilityLabel.",
+      "target": "./runtime:observationReceiptStabilityLabel"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export observationReceiptWorkspaceIdentity.",
+      "target": "./runtime:observationReceiptWorkspaceIdentity"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "A changed from interface ArchitectureConfig { boundaries: ArchitectureBoundaryConfig[]; allowedDependencies?: Record<string, string[]>; requireCompletePolicy?: boolean; requireAcyclic?: boolea... to declare function deriveObservationStateAuthority(left: ObservationReceipt, right: ObservationReceipt, comparison?: ObservationReceiptComparison): DerivedObservationStateAuthority;.",
+      "target": "config-types-<hash>.d.ts:A"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration B.",
+      "target": "config-types-<hash>.d.ts:B"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration C.",
+      "target": "config-types-<hash>.d.ts:C"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration D.",
+      "target": "config-types-<hash>.d.ts:D"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration E.",
+      "target": "config-types-<hash>.d.ts:E"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "F changed from interface FindingSuppression { id?: string; check?: string; file?: string; reason: string; expiresAt?: string; createdAt?: string; decision?: SuppressionDecision; } to declare function observationReceiptWorkspaceIdentity(receipt: ObservationReceipt): string | undefined;.",
+      "target": "config-types-<hash>.d.ts:F"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration G.",
+      "target": "config-types-<hash>.d.ts:G"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration H.",
+      "target": "config-types-<hash>.d.ts:H"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration L.",
+      "target": "config-types-<hash>.d.ts:L"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "O changed from interface ObservationReceipt { schemaVersion: typeof OBSERVATION_RECEIPT_SCHEMA_VERSION; authorityKind: ObservationAuthorityKind; observedAt: string; projectIdentity: string; in... to type ObservationReceipt = ObservationReceiptV1 | ObservationReceiptV2;.",
+      "target": "config-types-<hash>.d.ts:O"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "P changed from interface ProjectConfig { $schema?: string; schemaVersion?: 2; languages?: SupportedLanguage[]; indexerConcurrency?: number; watch?: WatchConfig; hooks?: HookRuntimeConfig; inde... to interface ProjectConfig { $schema?: string; schemaVersion?: 2; collaborationDomainId?: string; languages?: SupportedLanguage[]; indexerConcurrency?: number; watch?: WatchConfig;....",
+      "target": "config-types-<hash>.d.ts:P"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration R.",
+      "target": "config-types-<hash>.d.ts:R"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "S changed from interface ScipQueryConfig { dbPath: string; indexPath: string; projectRoot: string; sharedEvidenceDbPath?: string; entryRoots?: EntryRootsConfig; gitignorePaths?: string[]; sema... to interface ScipQueryConfig { dbPath: string; indexPath: string; projectRoot: string; collaborationDomainId?: string; sharedEvidenceDbPath?: string; entryRoots?: EntryRootsConfig;....",
+      "target": "config-types-<hash>.d.ts:S"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "c changed from declare const OBSERVATION_RECEIPT_SCHEMA_VERSION: 1; to interface DerivedObservationStateAuthority { policyVersion: typeof OBSERVATION_STATE_AUTHORITY_POLICY_VERSION; authority: ObservationStateAuthority; requiredRelationships: reado....",
+      "target": "config-types-<hash>.d.ts:c"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "d changed from type ObservationAuthorityKind = 'index-worktree' | 'index-only' | 'worktree-only' | 'process-local'; to declare const OBSERVATION_IDENTITY_CANONICALIZATION_VERSION: 1;.",
+      "target": "config-types-<hash>.d.ts:d"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "e changed from interface ObservationReceiptComparison { compatible: boolean; reasons: Array<'project-mismatch' | 'index-authority-missing' | 'generation-mismatch' | 'worktree-authority-missing... to declare const OBSERVATION_IDENTITY_HASH_ALGORITHM: \"sha256\";.",
+      "target": "config-types-<hash>.d.ts:e"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "f changed from declare function compareObservationReceipts(left: ObservationReceipt, right: ObservationReceipt): ObservationReceiptComparison; to declare const OBSERVATION_IDENTITY_SCHEMA_VERSION: 1;.",
+      "target": "config-types-<hash>.d.ts:f"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration g.",
+      "target": "config-types-<hash>.d.ts:g"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration h.",
+      "target": "config-types-<hash>.d.ts:h"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "i changed from declare function isObservationReceipt(value: unknown): value is ObservationReceipt; to type ObservationAuthorityKind = 'index-worktree' | 'index-only' | 'worktree-only' | 'process-local';.",
+      "target": "config-types-<hash>.d.ts:i"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration j.",
+      "target": "config-types-<hash>.d.ts:j"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration k.",
+      "target": "config-types-<hash>.d.ts:k"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration l.",
+      "target": "config-types-<hash>.d.ts:l"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration m.",
+      "target": "config-types-<hash>.d.ts:m"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration n.",
+      "target": "config-types-<hash>.d.ts:n"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration o.",
+      "target": "config-types-<hash>.d.ts:o"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration p.",
+      "target": "config-types-<hash>.d.ts:p"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration q.",
+      "target": "config-types-<hash>.d.ts:q"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration r.",
+      "target": "config-types-<hash>.d.ts:r"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration s.",
+      "target": "config-types-<hash>.d.ts:s"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration t.",
+      "target": "config-types-<hash>.d.ts:t"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration u.",
+      "target": "config-types-<hash>.d.ts:u"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration v.",
+      "target": "config-types-<hash>.d.ts:v"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration w.",
+      "target": "config-types-<hash>.d.ts:w"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration x.",
+      "target": "config-types-<hash>.d.ts:x"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration y.",
+      "target": "config-types-<hash>.d.ts:y"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration z.",
+      "target": "config-types-<hash>.d.ts:z"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "f5bc118615a4a4f9bba157bd1e0820d7461a98d586b314167b7b425295eb7f2f",
+  "reason": "Replace receipt v1's path-derived aggregate compatibility boolean with a versioned fact union, legacy decoder, independent three-valued relationships, and centrally derived authority; old comparison consumers must migrate because preserving the boolean would encode unsound completion semantics.",
+  "schemaVersion": 1
+}

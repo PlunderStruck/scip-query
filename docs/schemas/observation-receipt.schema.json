@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/scip-query/docs/schemas/observation-receipt.schema.json",
+  "title": "scip-query observation receipt",
+  "description": "Versioned facts naming the repository state sources one operation actually observed. Version 1 remains readable legacy provenance; version 2 keeps collaboration, workspace, content, index, source, and stability facts independent.",
+  "oneOf": [{ "$ref": "#/$defs/observationReceiptV1" }, { "$ref": "#/$defs/observationReceiptV2" }],
+  "$defs": {
+    "observationReceiptV1": {
+      "type": "object",
+      "required": ["schemaVersion", "authorityKind", "observedAt", "projectIdentity"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "authorityKind": {
+          "enum": ["index-worktree", "index-only", "worktree-only", "process-local"]
+        },
+        "observedAt": { "type": "string", "format": "date-time" },
+        "projectIdentity": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "index": {
+          "type": "object",
+          "required": ["generationIdentity", "source", "alignment"],
+          "properties": {
+            "generationIdentity": { "type": "string", "minLength": 1, "maxLength": 256 },
+            "source": { "enum": ["immutable", "legacy"] },
+            "alignment": { "enum": ["not-certified", "leased"] }
+          },
+          "additionalProperties": true
+        },
+        "worktree": {
+          "type": "object",
+          "required": ["identity", "clean"],
+          "properties": {
+            "identity": { "type": "string", "minLength": 1, "maxLength": 256 },
+            "clean": { "type": "boolean" },
+            "headCommit": { "type": "string", "minLength": 1, "maxLength": 256 },
+            "treeOid": { "type": "string", "minLength": 1, "maxLength": 256 }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "observationReceiptV2": {
+      "type": "object",
+      "required": ["schemaVersion", "observedAt", "facts", "observedSources", "stabilityProofs"],
+      "properties": {
+        "schemaVersion": { "const": 2 },
+        "observedAt": { "type": "string", "format": "date-time" },
+        "facts": {
+          "type": "object",
+          "properties": {
+            "collaborationDomain": { "$ref": "#/$defs/observationIdentity" },
+            "repositoryLineage": { "$ref": "#/$defs/observationIdentity" },
+            "workspaceInstance": { "$ref": "#/$defs/observationIdentity" },
+            "wholeContent": { "$ref": "#/$defs/observationIdentity" },
+            "relevantInputs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["subject", "identity"],
+                "properties": {
+                  "subject": { "type": "string", "minLength": 1, "maxLength": 256 },
+                  "identity": { "$ref": "#/$defs/observationIdentity" }
+                },
+                "additionalProperties": true
+              }
+            },
+            "index": {
+              "type": "object",
+              "required": ["generation", "source"],
+              "properties": {
+                "generation": { "$ref": "#/$defs/observationIdentity" },
+                "inputs": { "$ref": "#/$defs/observationIdentity" },
+                "source": { "enum": ["immutable", "legacy"] }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "observedSources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/observationSourceFact" }
+        },
+        "stabilityProofs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/observationStabilityProof" }
+        },
+        "diagnostics": {
+          "type": "object",
+          "properties": {
+            "clean": { "type": "boolean" },
+            "headCommit": { "type": "string", "minLength": 1, "maxLength": 256 },
+            "treeOid": { "type": "string", "minLength": 1, "maxLength": 256 }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "observationIdentity": {
+      "type": "object",
+      "required": ["schemaVersion", "canonicalizationVersion", "hashAlgorithm", "projection", "digest"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "canonicalizationVersion": { "const": 1 },
+        "hashAlgorithm": { "const": "sha256" },
+        "projection": {
+          "type": "object",
+          "required": ["name", "version"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+            "version": { "type": "integer", "minimum": 1 }
+          },
+          "additionalProperties": true
+        },
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": true
+    },
+    "observationSourceFact": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "enum": ["index-generation", "repository-snapshot", "live-workspace", "process"]
+        },
+        "identity": { "$ref": "#/$defs/observationIdentity" }
+      },
+      "additionalProperties": true
+    },
+    "observationStabilityProof": {
+      "type": "object",
+      "required": ["source", "kind"],
+      "oneOf": [
+        {
+          "properties": {
+            "source": { "const": "index-generation" },
+            "kind": { "enum": ["immutable", "not-established", "invalidated"] }
+          }
+        },
+        {
+          "properties": {
+            "source": { "const": "repository-snapshot" },
+            "kind": { "enum": ["fixed-snapshot", "not-established", "invalidated"] }
+          }
+        },
+        {
+          "properties": {
+            "source": { "const": "live-workspace" },
+            "kind": { "enum": ["bracketed", "not-established", "invalidated"] }
+          }
+        },
+        {
+          "properties": {
+            "source": { "const": "process" },
+            "kind": { "enum": ["not-established", "invalidated"] }
+          }
+        }
+      ],
+      "additionalProperties": true
+    }
+  }
+}

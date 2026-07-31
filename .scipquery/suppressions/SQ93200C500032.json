@@ -1,23 +1,22 @@
 {
   "kind": "scip-query-suppression",
-  "suppressionIdentity": "SQ562715D7254A",
+  "suppressionIdentity": "SQ93200C500032",
   "writer": {
     "tool": "scip-query",
     "version": "0.20.0"
   },
-  "id": "SQ562715D7254A",
-  "reason": "This slice changes collaboration-domain config creation and validation together with its focused config tests. command-handlers already delegates initialization to initProjectConfigDetailed without interpreting the new optional field, so its invocation and rendering contract is unchanged.",
-  "createdAt": "2026-07-29T19:50:55.812Z",
-  "updatedAt": "2026-07-31T02:21:49.064Z",
+  "id": "SQ93200C500032",
+  "reason": "These predicates validate unrelated closed vocabularies: observation source kinds and Rust mailbox error codes. Their shared membership-check shape is not shared domain behavior, and coupling the domain receipt decoder to the Rust semantic protocol would violate ownership.",
+  "createdAt": "2026-07-31T02:21:30.873Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
-    "reasonCode": "historical-coupling-ended",
+    "reasonCode": "detector-counterexample",
     "decidedBy": "agent",
     "policyVersion": 1,
     "observation": {
       "schemaVersion": 2,
-      "observedAt": "2026-07-31T02:21:49.063Z",
+      "observedAt": "2026-07-31T02:21:30.871Z",
       "facts": {
         "collaborationDomain": {
           "schemaVersion": 1,
@@ -100,21 +99,21 @@
     "evidence": [
       {
         "kind": "source",
-        "referent": "src/runtime/config.ts",
-        "claim": "This slice changes collaboration-domain config creation and validation together with its focused config tests. command-handlers already delegates initialization to initProjectConfigDetailed without interpreting the new optional field, so its invocation and rendering contract is unchanged.",
-        "contentHash": "a74c9bf58dbdd6bd1943f0567486bf09334d0bf92e23172e4720511d3da1f825"
+        "referent": "src/domain/observation-receipt.ts",
+        "claim": "These predicates validate unrelated closed vocabularies: observation source kinds and Rust mailbox error codes. Their shared membership-check shape is not shared domain behavior, and coupling the domain receipt decoder to the Rust semantic protocol would violate ownership.",
+        "contentHash": "99dc822eae9b3bac8ea47152b48f89e262f633f3771a856aff583a0598ece68f"
       },
       {
         "kind": "source",
-        "referent": "src/runtime/commands/command-handlers.ts",
-        "claim": "This slice changes collaboration-domain config creation and validation together with its focused config tests. command-handlers already delegates initialization to initProjectConfigDetailed without interpreting the new optional field, so its invocation and rendering contract is unchanged.",
-        "contentHash": "6048e9d84c6c9b4179456cd8d27d7ff91a5884c9b42f2823d88b5f40239b986c"
+        "referent": "src/semantic/rust/durable-session-protocol.ts",
+        "claim": "These predicates validate unrelated closed vocabularies: observation source kinds and Rust mailbox error codes. Their shared membership-check shape is not shared domain behavior, and coupling the domain receipt decoder to the Rust semantic protocol would violate ownership.",
+        "contentHash": "4b9704bbf9a015a46ba8d09d65c95573a162fe79256c061aa8383b8672672da0"
       },
       {
         "kind": "test",
-        "referent": "tests/runtime/runtime-config.test.ts",
-        "claim": "This slice changes collaboration-domain config creation and validation together with its focused config tests. command-handlers already delegates initialization to initProjectConfigDetailed without interpreting the new optional field, so its invocation and rendering contract is unchanged.",
-        "contentHash": "364b3246f62738bd404498c7424620a5b5427218e4d6adb02e562a3fd7832ce6"
+        "referent": "tests/domain/observation-receipt.test.ts",
+        "claim": "These predicates validate unrelated closed vocabularies: observation source kinds and Rust mailbox error codes. Their shared membership-check shape is not shared domain behavior, and coupling the domain receipt decoder to the Rust semantic protocol would violate ownership.",
+        "contentHash": "db8fb20e5056a1ea539cea4d82fb64b6e422e6981fb6724304487a7443ee4aca"
       }
     ],
     "invalidateOn": {

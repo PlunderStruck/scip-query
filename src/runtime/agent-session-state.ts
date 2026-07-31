@@ -2,7 +2,13 @@ import { createHash } from 'node:crypto';
 import { closeSync, fstatSync, mkdirSync, openSync, readSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { isPathInsideProject } from '../domain/path-normalization.js';
-import { isObservationReceipt, type ObservationReceipt } from '../domain/observation-receipt.js';
+import {
+  isObservationReceipt,
+  observationReceiptGenerationIdentity,
+  observationReceiptStabilityLabel,
+  observationReceiptWorkspaceIdentity,
+  type ObservationReceipt,
+} from '../domain/observation-receipt.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
 import { inspectPendingCliOutputCursor, type PendingCliOutputSnapshot } from './output-pagination.js';
 import { mutateTextFileRevisionAware } from './revisioned-file.js';
@@ -205,8 +211,9 @@ export function renderAgentSessionRestoration(state: AgentSessionState): string 
     );
     if (stop.observation) {
       lines.push(
-        `Observed state: generation=${stop.observation.index?.generationIdentity ?? 'unknown'}, ` +
-          `worktree=${stop.observation.worktree?.identity ?? 'unknown'} (${stop.observation.index?.alignment ?? 'not-certified'}).`,
+        `Observed state: generation=${observationReceiptGenerationIdentity(stop.observation) ?? 'unknown'}, ` +
+          `workspace=${observationReceiptWorkspaceIdentity(stop.observation) ?? 'unknown'} ` +
+          `(${observationReceiptStabilityLabel(stop.observation)}).`,
       );
     }
     if (stop.warning) lines.push(`Stop evidence warning: ${stop.warning}`);

@@ -1,7 +1,7 @@
 # Phase 1 — evidence foundation
 
 Date: 2026-07-30
-Status: in progress — slice 1.1 complete; slice 1.2 next
+Status: in progress — slices 1.1–1.2 complete; slice 1.3 next
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -292,6 +292,95 @@ Deviation:
   was moved to the existing `runtime-services` boundary because its referents
   are CLI invocation effects, not repository-domain entities; no dependency
   allowance or architecture baseline was weakened.
+
+### Slice 1.2 — receipt v2 fact model and legacy decoder
+
+Implemented:
+
+- the receipt is now a v1/v2 discriminated union; v1 values retain their
+  historical fields and decode as legacy facts without acquiring stronger v2
+  meanings;
+- v2 records collaboration domain, repository lineage, workspace instance,
+  whole content, relevant inputs, index inputs, immutable generation, observed
+  sources, and stability proofs as independent optional facts;
+- every content-derived identity binds its projection name/version,
+  canonicalization version, hash algorithm, and digest;
+- comparisons return named three-valued judgments with the facts and reasons
+  supporting each relationship; there is no replacement universal
+  compatibility boolean;
+- one versioned policy function derives completion, advisory, or no state
+  authority at consumption time and requires collaboration, whole-content,
+  fixed-observation, and applicable index-alignment facts;
+- the decoder rejects contradictory source identities and impossible
+  proof/source pairs, preventing a producer from labeling a live workspace
+  immutable;
+- `.scipquery.json` now owns one committed collaboration-domain UUID. `init`
+  and `setup` add it through the existing revision-aware writer, preserve a
+  concurrent winner, and never rotate an established identity;
+- CLI envelopes, suppression records, outcome events, and project config refer
+  to one packaged observation-receipt schema instead of retaining duplicated
+  receipt definitions; and
+- README, CLI output, configuration-safety, and committed-record guidance
+  define clone/fork inheritance, unknown facts, legacy behavior, and central
+  authority derivation.
+
+Observed verification:
+
+- 167 focused receipt, config, setup, envelope, durable-record, outcome, and
+  real CLI-process tests passed, followed by all 2,208 repository tests across
+  273 files;
+- typecheck, build, lint, generated-skill-link checks, config validation, and
+  the public API consumer passed;
+- API change `6be15204f820b83c` was accepted as breaking because retaining the
+  v1 aggregate comparison boolean would preserve an unsound completion
+  inference; the v1 wire decoder remains supported;
+- fresh `diff-impact` found 81 changed symbols and 19 downstream consumer
+  files, matching receipt, config, setup, storage-record, renderer, and public
+  API consumers;
+- complete architecture output reported no declared boundary violations;
+  unbounded recent-duplicate and unused-parameter scans found none;
+- the unbounded stale-abstraction scan reported four older single-consumer
+  types, including the unchanged `ResolvedWatchConfig` declaration in an
+  edited file, but no type introduced by this slice;
+- the full documentation scan was transported to completion. Current receipt,
+  config, CLI, compatibility, and README guidance was updated; remaining
+  results were historical snapshots or broad co-change signals rather than a
+  contradictory current receipt claim;
+- final `diff-gate` passed with zero findings after four detector
+  counterexamples were recorded as shared, evidence-bound decisions: one
+  unrelated closed-vocabulary predicate match and three historical co-change
+  pairs whose command-layer contracts did not change;
+- health-baseline comparison exposed two new heuristic signals from this
+  slice: the cohesive v2 decoder as an extraction candidate and a trivial
+  source-kind membership predicate matching an unrelated enum predicate.
+  Neither represents duplicated domain behavior or an earned reusable
+  abstraction; and
+- `stats --json --compact` measured 286.5 ms median across a second set of nine
+  isolated warm runs, 17.8% above the 243.3 ms preregistered baseline and
+  inside the 20% / 292.0 ms guard. The first set measured 291.4 ms and also
+  remained inside the guard.
+
+Refutation attempts:
+
+- two v2 receipts with equal collaboration and whole-content identities but
+  different workspace-instance identities establish reusable content without
+  equating clones;
+- a receipt with a source identity contradicting its fact, or with an
+  `immutable` proof over a live workspace, is rejected as malformed;
+- bracketed live-workspace equality remains advisory even when content
+  identities match, because endpoint equality cannot prove there was no
+  intermediate mutation; and
+- a valid v1 pair can establish only equal legacy generation values; its
+  collaboration, workspace, content, and stability relationships remain
+  unknown.
+
+Deviation:
+
+- the planned fixed whole-content and index-input facts exist in the v2
+  vocabulary but ordinary producers deliberately leave them absent in this
+  slice. Slice 1.3 will compute both from one fixed snapshot; emitting a
+  convenient live-worktree hash here would have manufactured authority before
+  the required stability mechanism exists.
 
 ## Verification gate
 

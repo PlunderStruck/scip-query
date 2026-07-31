@@ -173,13 +173,7 @@ function diffGateObservationReceipt(db: ScipDatabase, projectRoot: string, now: 
     projectRoot,
     observedAt: new Date(now),
     db,
-    ...(gitContext
-      ? {
-          gitContext,
-          statusPorcelain: gitOutput(projectRoot, ['status', '--porcelain=v1', '-z', '--untracked-files=all']) ?? '',
-          trackedDiff: gitOutput(projectRoot, ['diff', '--no-ext-diff', '--binary', 'HEAD', '--']) ?? '',
-        }
-      : {}),
+    ...(gitContext ? { gitContext } : {}),
   });
 }
 

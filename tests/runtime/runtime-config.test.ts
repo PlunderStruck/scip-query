@@ -12,6 +12,7 @@ import {
 import { handleDoctor, handleStatus, handleWatch } from '../../src/runtime/commands/command-handlers.js';
 import {
   configureProjectAutomaticRefresh,
+  ensureProjectCollaborationDomain,
   initProjectConfig,
   initProjectConfigDetailed,
   loadProjectConfig,
@@ -167,6 +168,9 @@ describe('automatic indexing config setup', () => {
     expect(loadProjectConfig(projectRoot)).toMatchObject({
       $schema: PROJECT_CONFIG_SCHEMA_PATH,
       schemaVersion: CURRENT_PROJECT_CONFIG_SCHEMA_VERSION,
+      collaborationDomainId: expect.stringMatching(
+        /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u,
+      ),
       languages: ['typescript'],
       watch: {
         enabled: true,
@@ -184,7 +188,7 @@ describe('automatic indexing config setup', () => {
     expect(JSON.parse(readFileSync(configPath, 'utf8'))).toMatchObject(CURRENT_CONFIG_FORMAT);
   });
 
-  it('reports whether init actually created the config and preserves existing bytes', () => {
+  it('reports whether init created or adopted the config and preserves unknown existing fields', () => {
     const projectRoot = createProject();
     const created = initProjectConfigDetailed(projectRoot, ['typescript']);
     expect(created).toEqual({ configPath: join(projectRoot, '.scipquery.json'), changed: true });
@@ -193,8 +197,19 @@ describe('automatic indexing config setup', () => {
     writeFileSync(created.configPath, custom);
     const existing = initProjectConfigDetailed(projectRoot, ['python']);
 
-    expect(existing).toEqual({ configPath: created.configPath, changed: false });
-    expect(readFileSync(created.configPath, 'utf8')).toBe(custom);
+    expect(existing).toEqual({ configPath: created.configPath, changed: true });
+    expect(JSON.parse(readFileSync(created.configPath, 'utf8'))).toMatchObject({
+      ...CURRENT_CONFIG_FORMAT,
+      languages: ['rust'],
+      futureOption: true,
+      collaborationDomainId: expect.stringMatching(
+        /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u,
+      ),
+    });
+    expect(initProjectConfigDetailed(projectRoot, ['go'])).toEqual({
+      configPath: created.configPath,
+      changed: false,
+    });
   });
 
   it('persists setup enablement without replacing unrelated config', () => {
@@ -215,6 +230,35 @@ describe('automatic indexing config setup', () => {
         watch: { enabled: true, debounceMs: 500, autoRefresh: true },
       }),
     );
+  });
+
+  it('adds one collaboration domain without replacing a concurrent winner', () => {
+    const projectRoot = createProject();
+    const first = ensureProjectCollaborationDomain(
+      projectRoot,
+      { languages: ['rust'] },
+      '5ea57d1a-936c-4c91-b58f-5d61e45173a5',
+    );
+
+    expect(first).toMatchObject({
+      changed: true,
+      config: {
+        languages: ['rust'],
+        collaborationDomainId: '5ea57d1a-936c-4c91-b58f-5d61e45173a5',
+      },
+    });
+
+    const retry = ensureProjectCollaborationDomain(
+      projectRoot,
+      { languages: ['rust'] },
+      '25d9572d-37f0-47af-8c3b-2dbf939f975f',
+    );
+    expect(retry).toMatchObject({
+      changed: false,
+      config: {
+        collaborationDomainId: '5ea57d1a-936c-4c91-b58f-5d61e45173a5',
+      },
+    });
   });
 
   it('leaves an already-persisted setup state untouched', () => {
@@ -343,6 +387,17 @@ describe('validateProjectConfig', () => {
     ).toEqual([
       expect.objectContaining({ level: 'error', path: 'schemaVersion' }),
       expect.objectContaining({ level: 'error', path: '$schema' }),
+    ]);
+  });
+
+  it('accepts generated collaboration-domain identities and rejects arbitrary labels', () => {
+    expect(
+      validateProjectConfig({
+        collaborationDomainId: '5ea57d1a-936c-4c91-b58f-5d61e45173a5',
+      }),
+    ).toEqual([]);
+    expect(validateProjectConfig({ collaborationDomainId: 'same-repo' })).toEqual([
+      expect.objectContaining({ level: 'error', path: 'collaborationDomainId' }),
     ]);
   });
 

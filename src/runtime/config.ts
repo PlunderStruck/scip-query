@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { SUPPORTED_LANGUAGES } from '../domain/config-types.js';
 import {
@@ -59,6 +60,7 @@ export interface ConfigDiagnostic {
 const ROOT_CONFIG_KEYS = new Set([
   '$schema',
   'schemaVersion',
+  'collaborationDomainId',
   'languages',
   'indexerConcurrency',
   'watch',
@@ -177,6 +179,16 @@ export function validateProjectConfig(
     (typeof configRecord['$schema'] !== 'string' || configRecord['$schema'].trim() === '')
   ) {
     diagnostics.push({ level: 'error', path: '$schema', message: 'Must be a non-empty string.' });
+  }
+  if (
+    config.collaborationDomainId !== undefined &&
+    !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu.test(config.collaborationDomainId)
+  ) {
+    diagnostics.push({
+      level: 'error',
+      path: 'collaborationDomainId',
+      message: 'Must be a lowercase or uppercase UUID v4 generated for this collaboration domain.',
+    });
   }
   const supported = new Set(SUPPORTED_LANGUAGES);
   for (const [index, language] of (config.languages ?? []).entries()) {
@@ -781,7 +793,9 @@ export interface InitProjectConfigResult {
 
 export function initProjectConfigDetailed(projectRoot: string, languages: string[]): InitProjectConfigResult {
   const configPath = join(projectRoot, CONFIG_FILENAME);
+  const collaborationDomainId = randomUUID();
   const config: ProjectConfig = {
+    collaborationDomainId,
     languages: languages as ProjectConfig['languages'],
     watch: {
       enabled: true,
@@ -793,10 +807,47 @@ export function initProjectConfigDetailed(projectRoot: string, languages: string
       resourceBudget: { ...DEFAULT_WATCH_RESOURCE_BUDGET },
     },
   };
-  const mutation = mutateTextFileRevisionAware(configPath, (snapshot) =>
-    snapshot.revision.exists ? { kind: 'unchanged' } : { kind: 'write', text: serializeProjectConfig(config) },
-  );
+  const mutation = mutateTextFileRevisionAware(configPath, (snapshot) => {
+    if (!snapshot.revision.exists) return { kind: 'write', text: serializeProjectConfig(config) };
+    const latest = parseProjectConfigSnapshot(snapshot, config);
+    if (latest.config.collaborationDomainId) return { kind: 'unchanged' };
+    return {
+      kind: 'write',
+      text: serializeProjectConfig({
+        ...latest.config,
+        collaborationDomainId,
+      }),
+    };
+  });
   return { configPath, changed: mutation.changed };
+}
+
+/**
+ * Ensure this project has one committed collaboration namespace without
+ * replacing a concurrently established identity. The generated UUID is an
+ * opaque merge boundary, not a repository path or remote URL.
+ */
+export function ensureProjectCollaborationDomain(
+  projectRoot: string,
+  config: ProjectConfig,
+  collaborationDomainId = randomUUID(),
+): ProjectAutomaticRefreshConfigResult {
+  const configPath = join(projectRoot, CONFIG_FILENAME);
+  let finalConfig = config;
+  const mutation = mutateTextFileRevisionAware(configPath, (snapshot) => {
+    const latest = parseProjectConfigSnapshot(snapshot, config);
+    if (latest.config.collaborationDomainId) {
+      finalConfig = latest.config;
+      return { kind: 'unchanged' };
+    }
+    const next: ProjectConfig = {
+      ...latest.config,
+      collaborationDomainId,
+    };
+    finalConfig = next;
+    return { kind: 'write', text: serializeProjectConfig(next) };
+  });
+  return { configPath, config: finalConfig, changed: mutation.changed };
 }
 
 // scip-query: ignore-stale — reviewed S1 owned contract; config persistence returns this named refresh result.

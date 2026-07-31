@@ -12,6 +12,7 @@ import { cliVersion, runIsolatedHealthReport } from './cli-support.js';
 import {
   configureProjectAutomaticRefresh,
   configureProjectLanguages,
+  ensureProjectCollaborationDomain,
   resolveWatchConfig,
   validateProjectConfig,
   type ProjectAutomaticRefreshConfigResult,
@@ -265,8 +266,22 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
   const context = resolveCliProjectContext();
   const { projectRoot, paths, dbPath } = context;
   const automaticRefresh = opts.automaticRefresh ?? context.config.watch?.enabled ?? true;
-  const languageConfig = opts.languages ? configureProjectLanguages(projectRoot, context.config, opts.languages) : null;
-  const startingConfig = languageConfig?.config ?? context.config;
+  const initialConfigDiagnostics = validateProjectConfig(context.config, { projectRoot });
+  const initialConfigErrors = initialConfigDiagnostics.filter((diagnostic) => diagnostic.level === 'error');
+  let collaborationConfig: ProjectAutomaticRefreshConfigResult | null = null;
+  let collaborationConfigError: string | null = null;
+  if (initialConfigErrors.length === 0 && !context.config.collaborationDomainId) {
+    try {
+      collaborationConfig = ensureProjectCollaborationDomain(projectRoot, context.config);
+    } catch (error) {
+      collaborationConfigError = errorMessage(error);
+    }
+  }
+  const collaborationReadyConfig = collaborationConfig?.config ?? context.config;
+  const languageConfig = opts.languages
+    ? configureProjectLanguages(projectRoot, collaborationReadyConfig, opts.languages)
+    : null;
+  const startingConfig = languageConfig?.config ?? collaborationReadyConfig;
   const existingConfigDiagnostics = validateProjectConfig(startingConfig, { projectRoot });
   const existingConfigErrors = existingConfigDiagnostics.filter((diagnostic) => diagnostic.level === 'error');
   let automaticRefreshConfig: ProjectAutomaticRefreshConfigResult | null = null;
@@ -280,6 +295,20 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
   }
   const config = automaticRefreshConfig?.config ?? startingConfig;
   const scipCliInstalled = isScipInstalled();
+
+  addStep(steps, {
+    id: 'collaboration-domain-config',
+    label: 'Collaboration domain',
+    status: collaborationConfigError !== null ? 'failed' : initialConfigErrors.length > 0 ? 'skipped' : 'ok',
+    message:
+      collaborationConfigError ??
+      (initialConfigErrors.length > 0
+        ? 'Skipped because the existing project config has validation errors.'
+        : collaborationConfig?.changed
+          ? 'Generated the committed identity shared by merge-intended branches, clones, and forks.'
+          : 'The committed collaboration-domain identity is already present.'),
+    ...(collaborationConfig ? { details: [collaborationConfig.configPath] } : {}),
+  });
 
   addStep(steps, {
     id: 'automatic-indexing-config',

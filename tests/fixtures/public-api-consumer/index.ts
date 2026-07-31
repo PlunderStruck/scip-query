@@ -49,7 +49,8 @@ const decoded: DecodedCliJsonEnvelope = decodeCliJsonEnvelope({
 });
 declare const firstObservation: ObservationReceipt;
 declare const secondObservation: ObservationReceipt;
-const _sameObservationState: boolean = compareObservationReceipts(firstObservation, secondObservation).compatible;
+const _sameObservationContent: string = compareObservationReceipts(firstObservation, secondObservation).wholeContent
+  .state;
 declare const protectedOutcomeEvents: OutcomeEvent[];
 const _protectedEvaluation: EffectivenessReport = computeEffectiveness(protectedOutcomeEvents, {
   protectedGateRunIds: new Set(['externally-attested-gate']),

@@ -75,12 +75,29 @@ They retain all semantic event fields at the root and add:
 - `gateRunId`, the logical diff-gate observation shared by retries;
 - observer kind and whether its authority is repository-writable or protected
   externally;
-- the index/worktree observation receipt;
+- the versioned observation receipt;
 - the adjudication policy version on suppressed transitions.
 
 Keeping semantic fields at the root lets the immediately prior permissive
 reader consume new records. Current readers accept both these v1 records and
 the existing unversioned event files.
+
+An observation receipt is the factual record of which repository-state
+sources an operation actually held and how those sources were kept stable
+while it read them. Version 2 separates collaboration domain, workspace
+instance, whole content, relevant inputs, immutable index generation, and
+stability proofs so equality in one relationship cannot silently prove
+another. Every content-derived identity includes its projection and
+canonicalization versions. Missing facts remain unknown, and policy derives
+completion authority when consuming the receipt rather than trusting a
+self-asserted authority label.
+
+Version-1 receipts remain readable without reinterpretation. Their
+path-derived project identity and mixed worktree identity do not establish
+version-2 collaboration, workspace, content, or stability facts. Durable
+suppression and outcome records may therefore contain either receipt version
+during the overlap window; readers fail closed on malformed or unsupported
+receipt versions.
 
 The immutable filename is still a timestamp plus a hash of the complete
 record bytes. Deduplication does not use that path or producer metadata; it

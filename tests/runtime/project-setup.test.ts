@@ -145,6 +145,14 @@ async function loadProjectSetup(
       };
     },
   );
+  const ensureProjectCollaborationDomain = vi.fn((_projectRoot: string, config: Record<string, unknown>) => ({
+    configPath: '/repo/.scipquery.json',
+    config: {
+      ...config,
+      collaborationDomainId: '5ea57d1a-936c-4c91-b58f-5d61e45173a5',
+    },
+    changed: true,
+  }));
   const ensureWatchService = vi.fn(() => {
     if (overrides.watchServiceThrows) throw new Error('watch startup failed');
     return {
@@ -179,6 +187,7 @@ async function loadProjectSetup(
   vi.doMock('../../src/runtime/cli-support.js', () => ({ cliVersion: '0.15.0', runIsolatedHealthReport }));
   vi.doMock('../../src/runtime/config.js', () => ({
     configureProjectAutomaticRefresh,
+    ensureProjectCollaborationDomain,
     validateProjectConfig: vi.fn(() => overrides.configDiagnostics ?? []),
     resolveWatchConfig: vi.fn((config: { watch?: { enabled?: boolean; autoRefresh?: boolean } }) => ({
       enabled: config.watch?.enabled ?? false,
@@ -267,6 +276,7 @@ async function loadProjectSetup(
     setupAgent,
     installProjectAgentHooks,
     configureProjectAutomaticRefresh,
+    ensureProjectCollaborationDomain,
     ensureWatchService,
     rustSemanticSessionStatus,
     tryInstallIndexer,
@@ -470,7 +480,11 @@ describe('runProjectSetup', () => {
       ]),
     );
     expect(runIsolatedHealthReport).toHaveBeenCalledWith({ full: true, json: true });
-    expect(configureProjectAutomaticRefresh).toHaveBeenCalledWith('/repo', {}, true);
+    expect(configureProjectAutomaticRefresh).toHaveBeenCalledWith(
+      '/repo',
+      { collaborationDomainId: '5ea57d1a-936c-4c91-b58f-5d61e45173a5' },
+      true,
+    );
     expect(ensureWatchService).toHaveBeenCalledWith(
       expect.objectContaining({ projectRoot: '/repo', cacheDir: '/repo/.scip', cliVersion: '0.15.0' }),
     );
@@ -580,6 +594,25 @@ describe('runProjectSetup', () => {
     });
     expect(report.smokeTests.find((test) => test.id === 'watch-refresh')).toMatchObject({
       status: 'unavailable',
+    });
+  });
+
+  it('adopts a missing collaboration domain before later setup writes', async () => {
+    const { module, ensureProjectCollaborationDomain, configureProjectAutomaticRefresh } = await loadProjectSetup();
+
+    const report = await module.runProjectSetup();
+
+    expect(ensureProjectCollaborationDomain).toHaveBeenCalledWith('/repo', {});
+    expect(configureProjectAutomaticRefresh).toHaveBeenCalledWith(
+      '/repo',
+      expect.objectContaining({
+        collaborationDomainId: '5ea57d1a-936c-4c91-b58f-5d61e45173a5',
+      }),
+      true,
+    );
+    expect(report.steps.find((step) => step.id === 'collaboration-domain-config')).toMatchObject({
+      status: 'ok',
+      message: expect.stringContaining('Generated the committed identity'),
     });
   });
 
@@ -798,6 +831,14 @@ describe('runProjectSetup', () => {
       })),
     }));
     vi.doMock('../../src/runtime/config.js', () => ({
+      ensureProjectCollaborationDomain: vi.fn((_projectRoot: string, config: Record<string, unknown>) => ({
+        configPath: '/repo/.scipquery.json',
+        config: {
+          ...config,
+          collaborationDomainId: '5ea57d1a-936c-4c91-b58f-5d61e45173a5',
+        },
+        changed: true,
+      })),
       configureProjectAutomaticRefresh: vi.fn(
         (_projectRoot: string, config: Record<string, unknown>, enabled: boolean) => ({
           configPath: '/repo/.scipquery.json',

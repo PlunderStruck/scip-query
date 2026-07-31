@@ -48,15 +48,29 @@ The current envelope is schema version 1:
     "schemaVersion": 1,
     "operationRole": "repository-observation",
     "receipt": {
-      "schemaVersion": 1,
-      "authorityKind": "index-only",
+      "schemaVersion": 2,
       "observedAt": "2026-07-30T12:00:00.000Z",
-      "projectIdentity": "<opaque>",
-      "index": {
-        "generationIdentity": "<opaque>",
-        "source": "immutable",
-        "alignment": "not-certified"
-      }
+      "facts": {
+        "collaborationDomain": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": { "name": "scip-query:collaboration-domain", "version": 1 },
+          "digest": "<64 lowercase hex characters>"
+        },
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": { "name": "scip-query:index-generation", "version": 1 },
+            "digest": "<64 lowercase hex characters>"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [{ "kind": "index-generation" }],
+      "stabilityProofs": [{ "source": "index-generation", "kind": "immutable" }]
     },
     "analysisManifest": {
       "schemaVersion": 1,
@@ -90,13 +104,25 @@ inherit repository-observation authority merely because they emit JSON. The
 context repeats the selected operation role so it remains self-contained; the
 decoder rejects conflicting top-level and nested roles.
 
-The context's `receipt` identifies the immutable index generation the query
-actually held. It deliberately does not hash the live worktree, which the
-query did not read. Its `analysisManifest` separately records how the result
-was produced and how much was examined. The version-1 receipt is local
-provenance: `alignment: "not-certified"` does not establish a fixed repository
-snapshot, whole-content equality, or final completion authority. Consumers
-must not infer those stronger relationships from its presence.
+The context's version-2 `receipt` records independent facts about the
+collaboration domain, workspace instance, whole repository content, relevant
+inputs, index inputs, immutable generation, observed sources, and the
+mechanism—if any—that kept each source fixed. Every content-derived identity
+names its projection and projection version, canonicalization version, and
+hash algorithm. A missing fact means unknown; it is never inferred from a
+neighboring identity.
+
+The example identifies the immutable index generation the query actually
+held, but it does not contain a fixed repository snapshot or an index-input
+alignment proof. Product policy therefore keeps it advisory for completion
+even though the index source itself is immutable. `analysisManifest`
+separately records how the result was produced and how much was examined.
+
+Version-1 receipts remain readable as legacy provenance. Their path-derived
+project identity and mixed worktree hash are not relabeled as collaboration,
+workspace, or content identities. Only a legacy index-generation identity can
+be compared as the same legacy fact; unproved v2 relationships remain
+`unknown`.
 
 The existing top-level `evidence`, `analysisBudget`, and `coverage` fields
 remain during the additive migration so older tolerant consumers continue to

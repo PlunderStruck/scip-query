@@ -248,18 +248,20 @@ intended.
 **8. Gate every diff.** `diff-gate` runs a defined set of checks scoped to what a change _introduces_ and exits nonzero with remediation text for each finding. Baseline regressions are included when you pass `--baseline`.
 
 <!-- BEGIN GENERATED DIFF-GATE CHECKS -->
-| Check | What it catches | When it runs |
-| --- | --- | --- |
-| `echo` | Changed symbols that newly echo established code elsewhere. | Default diff gate. |
-| `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain. | Default diff gate. |
-| `co-change-partner` | Historically coupled files that usually change together but are missing from this diff. | Default diff gate. |
-| `twin-partner` | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched. | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves. |
-| `coverage-contract` | A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source. | Default diff gate, only when either side of a configured contract changed. |
-| `architecture` | A declared architecture boundary rule has a violation absent from the committed health baseline. | Default diff gate when closed dependency rows, requireCompletePolicy, requireAcyclic, requireResolvedBoundaries, requireMinimalPolicy, maxBoundaryFanOut/maxBoundaryFiles, or testPaths are configured and a baseline exists. |
-| `doc-reference` | Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy. | Default diff gate. Advisory (21.2) for bare file-mention citations; blocking when the citation has a line anchor or the cited file was deleted/renamed. |
-| `unused-params` | Fresh trailing parameters or options that no changed body uses. | Default diff gate. |
-| `new-dead` | Changed production symbols with zero indexed consumers. | Default diff gate. |
-| `baseline` | New health finding identities compared with the committed health baseline. | Only with `diff-gate --baseline`. |
+
+| Check                  | What it catches                                                                                                                   | When it runs                                                                                                                                                                                                                  |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `echo`                 | Changed symbols that newly echo established code elsewhere.                                                                       | Default diff gate.                                                                                                                                                                                                            |
+| `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain.                                                | Default diff gate.                                                                                                                                                                                                            |
+| `co-change-partner`    | Historically coupled files that usually change together but are missing from this diff.                                           | Default diff gate.                                                                                                                                                                                                            |
+| `twin-partner`         | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched.            | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves.                                                                                                                                     |
+| `coverage-contract`    | A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source. | Default diff gate, only when either side of a configured contract changed.                                                                                                                                                    |
+| `architecture`         | A declared architecture boundary rule has a violation absent from the committed health baseline.                                  | Default diff gate when closed dependency rows, requireCompletePolicy, requireAcyclic, requireResolvedBoundaries, requireMinimalPolicy, maxBoundaryFanOut/maxBoundaryFiles, or testPaths are configured and a baseline exists. |
+| `doc-reference`        | Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy.     | Default diff gate. Advisory (21.2) for bare file-mention citations; blocking when the citation has a line anchor or the cited file was deleted/renamed.                                                                       |
+| `unused-params`        | Fresh trailing parameters or options that no changed body uses.                                                                   | Default diff gate.                                                                                                                                                                                                            |
+| `new-dead`             | Changed production symbols with zero indexed consumers.                                                                           | Default diff gate.                                                                                                                                                                                                            |
+| `baseline`             | New health finding identities compared with the committed health baseline.                                                        | Only with `diff-gate --baseline`.                                                                                                                                                                                             |
+
 <!-- END GENERATED DIFF-GATE CHECKS -->
 
 Illustrative output:
@@ -809,6 +811,7 @@ It creates a minimal `.scipquery.json`:
 {
   "$schema": "./node_modules/scip-query/docs/schemas/project-config.schema.json",
   "schemaVersion": 2,
+  "collaborationDomainId": "5ea57d1a-936c-4c91-b58f-5d61e45173a5",
   "languages": ["typescript"],
   "watch": {
     "enabled": true,
@@ -835,8 +838,17 @@ version or malformed discriminator fails before any option is used and is
 left byte-for-byte unchanged. `$schema` points editors at the JSON Schema
 bundled with the installed package.
 
+`collaborationDomainId` is an opaque UUID created once and committed with the
+project. Branches, clones, linked worktrees, and contributor forks that intend
+to merge inherit it, so results can establish that they belong to the same
+collaboration without treating an absolute path or mutable remote URL as
+identity. Copying code into an unrelated project does not imply collaboration;
+that project gets its own ID. If an existing config lacks the field, `init` or
+`setup` adds it with a revision-aware narrow write.
+
 Creation is exclusive: if another process creates `.scipquery.json` first,
-`init` preserves that complete file rather than replacing it.
+`init` adopts the complete winning file and adds only a missing collaboration
+identity instead of replacing independent fields.
 
 Add optional fields such as `indexerConcurrency`, `indexer`, `entryRoots`,
 `declaredCouplings`, and `suppressions` only when the project needs them.

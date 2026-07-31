@@ -53,14 +53,19 @@ describe('code CLI output contract', () => {
         schemaVersion: 1,
         operationRole: 'repository-observation',
         receipt: {
-          schemaVersion: 1,
-          authorityKind: 'index-only',
-          projectIdentity: expect.any(String),
-          index: {
-            generationIdentity: expect.any(String),
-            source: expect.stringMatching(/^(immutable|legacy)$/),
-            alignment: 'not-certified',
+          schemaVersion: 2,
+          facts: {
+            index: {
+              generation: {
+                hashAlgorithm: 'sha256',
+                projection: { name: 'scip-query:index-generation', version: 1 },
+                digest: expect.any(String),
+              },
+              source: expect.stringMatching(/^(immutable|legacy)$/),
+            },
           },
+          observedSources: [{ kind: 'index-generation' }],
+          stabilityProofs: [{ source: 'index-generation', kind: expect.any(String) }],
         },
         analysisManifest: {
           schemaVersion: 1,

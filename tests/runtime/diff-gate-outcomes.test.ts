@@ -77,12 +77,18 @@ describe('recordDiffGateOutcomes', () => {
         expect.objectContaining({
           gateRunId: expect.any(String),
           observer: { kind: 'local-agent', authority: 'repository-writable' },
-          observation: expect.objectContaining({ authorityKind: 'index-only' }),
+          observation: expect.objectContaining({
+            schemaVersion: 2,
+            observedSources: [expect.objectContaining({ kind: 'index-generation' })],
+          }),
         }),
         expect.objectContaining({
           gateRunId: expect.any(String),
           observer: { kind: 'local-agent', authority: 'repository-writable' },
-          observation: expect.objectContaining({ authorityKind: 'index-only' }),
+          observation: expect.objectContaining({
+            schemaVersion: 2,
+            observedSources: [expect.objectContaining({ kind: 'index-generation' })],
+          }),
         }),
       ]);
       expect(computeEffectiveness(events).checks[0]).toMatchObject({ caught: 1, fixed: 1, open: 0 });

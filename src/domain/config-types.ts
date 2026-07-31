@@ -106,6 +106,8 @@ export interface ScipQueryConfig {
   indexPath: string;
   /** Project root directory */
   projectRoot: string;
+  /** Committed identity shared by branches, clones, and forks intended to merge into one project history. */
+  collaborationDomainId?: string;
   /** Internal repository-level read-through cache for proven content-addressed evidence products. */
   sharedEvidenceDbPath?: string;
   /** Project-specific externally-live roots for dead-code filtering */
@@ -135,6 +137,12 @@ export interface ProjectConfig {
   $schema?: string;
   /** Persisted project-config format. Omitted only by readable legacy v1 records and in-memory callers. */
   schemaVersion?: 2;
+  /**
+   * Opaque committed identity shared by branches, clones, linked worktrees,
+   * and contributor forks whose durable decisions are intended to merge.
+   * Independent derivatives deliberately replace it.
+   */
+  collaborationDomainId?: string;
   /** Override which languages to index (default: auto-detect) */
   languages?: SupportedLanguage[];
   /** Number of indexer workers to run at once (default: adaptive, max 8) */

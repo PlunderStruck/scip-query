@@ -1,14 +1,13 @@
 {
   "kind": "scip-query-suppression",
-  "suppressionIdentity": "SQ562715D7254A",
+  "suppressionIdentity": "SQB26525BAEF6A",
   "writer": {
     "tool": "scip-query",
     "version": "0.20.0"
   },
-  "id": "SQ562715D7254A",
-  "reason": "This slice changes collaboration-domain config creation and validation together with its focused config tests. command-handlers already delegates initialization to initProjectConfigDetailed without interpreting the new optional field, so its invocation and rendering contract is unchanged.",
-  "createdAt": "2026-07-29T19:50:55.812Z",
-  "updatedAt": "2026-07-31T02:21:49.064Z",
+  "id": "SQB26525BAEF6A",
+  "reason": "This slice propagates the optional collaborationDomainId through the existing hook database configuration. command-handlers neither constructs this hook-local database path nor owns a contract affected by the propagation; the historical co-edits came from broad runtime sweeps, not this dependency.",
+  "createdAt": "2026-07-31T02:21:40.222Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
@@ -17,7 +16,7 @@
     "policyVersion": 1,
     "observation": {
       "schemaVersion": 2,
-      "observedAt": "2026-07-31T02:21:49.063Z",
+      "observedAt": "2026-07-31T02:21:40.221Z",
       "facts": {
         "collaborationDomain": {
           "schemaVersion": 1,
@@ -100,21 +99,21 @@
     "evidence": [
       {
         "kind": "source",
-        "referent": "src/runtime/config.ts",
-        "claim": "This slice changes collaboration-domain config creation and validation together with its focused config tests. command-handlers already delegates initialization to initProjectConfigDetailed without interpreting the new optional field, so its invocation and rendering contract is unchanged.",
-        "contentHash": "a74c9bf58dbdd6bd1943f0567486bf09334d0bf92e23172e4720511d3da1f825"
+        "referent": "src/runtime/agent-hooks.ts",
+        "claim": "This slice propagates the optional collaborationDomainId through the existing hook database configuration. command-handlers neither constructs this hook-local database path nor owns a contract affected by the propagation; the historical co-edits came from broad runtime sweeps, not this dependency.",
+        "contentHash": "1e3ba57fd2050be10bf59a52797e07527ff5c7e4d59dabfc382499ae13f9ef01"
       },
       {
         "kind": "source",
         "referent": "src/runtime/commands/command-handlers.ts",
-        "claim": "This slice changes collaboration-domain config creation and validation together with its focused config tests. command-handlers already delegates initialization to initProjectConfigDetailed without interpreting the new optional field, so its invocation and rendering contract is unchanged.",
+        "claim": "This slice propagates the optional collaborationDomainId through the existing hook database configuration. command-handlers neither constructs this hook-local database path nor owns a contract affected by the propagation; the historical co-edits came from broad runtime sweeps, not this dependency.",
         "contentHash": "6048e9d84c6c9b4179456cd8d27d7ff91a5884c9b42f2823d88b5f40239b986c"
       },
       {
         "kind": "test",
-        "referent": "tests/runtime/runtime-config.test.ts",
-        "claim": "This slice changes collaboration-domain config creation and validation together with its focused config tests. command-handlers already delegates initialization to initProjectConfigDetailed without interpreting the new optional field, so its invocation and rendering contract is unchanged.",
-        "contentHash": "364b3246f62738bd404498c7424620a5b5427218e4d6adb02e562a3fd7832ce6"
+        "referent": "tests/runtime/agent-hooks.test.ts",
+        "claim": "This slice propagates the optional collaborationDomainId through the existing hook database configuration. command-handlers neither constructs this hook-local database path nor owns a contract affected by the propagation; the historical co-edits came from broad runtime sweeps, not this dependency.",
+        "contentHash": "ebe9132b71a903d38bc8d1b5ef1a19a1dc22dd2e40799ca1e5a995fce0412621"
       }
     ],
     "invalidateOn": {

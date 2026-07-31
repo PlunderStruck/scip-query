@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/scip-query/docs/schemas/project-config.schema.json",
   "schemaVersion": 2,
+  "collaborationDomainId": "5ea57d1a-936c-4c91-b58f-5d61e45173a5",
   "watch": {
     "enabled": true,
     "autoRefresh": true,

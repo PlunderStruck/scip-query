@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  isBoundedRecordString,
   isNonNegativeFiniteNumber,
   isNonNegativeInteger,
   isPositiveInteger,
@@ -38,5 +39,13 @@ describe('decoded-record validation primitives', () => {
     expect(isValidRecordTimestamp('2026-07-25T20:00:00.000Z')).toBe(true);
     expect(isValidRecordTimestamp('not-a-time')).toBe(false);
     expect(isValidRecordTimestamp(0)).toBe(false);
+  });
+
+  it('bounds one-line identity and name fields', () => {
+    expect(isBoundedRecordString('identity')).toBe(true);
+    expect(isBoundedRecordString('')).toBe(false);
+    expect(isBoundedRecordString('x'.repeat(257))).toBe(false);
+    expect(isBoundedRecordString('two\nlines')).toBe(false);
+    expect(isBoundedRecordString(42)).toBe(false);
   });
 });

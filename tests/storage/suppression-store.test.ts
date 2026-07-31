@@ -472,12 +472,18 @@ describe('decodeSuppressionFile / readSuppressionDir', () => {
       readFileSync(join(process.cwd(), 'docs', 'schemas', 'suppression-record.schema.json'), 'utf-8'),
     ) as {
       required: string[];
-      properties: Record<string, { const?: unknown }>;
+      properties: Record<
+        string,
+        { const?: unknown; properties?: Record<string, { properties?: Record<string, { $ref?: unknown }> }> }
+      >;
       additionalProperties: boolean;
     };
 
     expect(schema.properties['kind']?.const).toBe(SUPPRESSION_FILE_KIND);
     expect(schema.properties['schemaVersion']?.const).toBe(SUPPRESSION_FILE_SCHEMA_VERSION);
+    expect(schema.properties['decision']?.properties?.['observation']?.['$ref']).toBe(
+      './observation-receipt.schema.json',
+    );
     expect(schema.required).toEqual(
       expect.arrayContaining([
         'kind',

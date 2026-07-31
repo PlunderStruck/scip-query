@@ -18,7 +18,7 @@ classifies an input as:
   invalid field in a recognized version.
 
 The decoder shares only dependency-free object-record, timestamp,
-scalar-number, and string-or-null-record predicates in
+scalar-number, bounded one-line string, and string-or-null-record predicates in
 `src/domain/record-validation.ts`; moving those generic primitives out of
 individual decoders does not change any version or capability decision.
 
