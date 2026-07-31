@@ -8,8 +8,8 @@ commands:
     when: "Compare changed files, symbols, and affected consumers with the intended diff."
   - template: "scip-query diff-gate"
     when: "Run the complete finished-diff gate without blind line truncation."
-  - template: "scip-query mission-trial validate <program> --protected-root <path>"
-    when: "Validate or inspect protected matched trials that evaluate autonomous completion rather than detector output alone."
+  - template: "scip-query mission-trial report <program> --protected-root <path>"
+    when: "Classify protected matched trials when calibrating a release or material workflow change."
 ---
 
 # scip-verify
@@ -36,7 +36,7 @@ Load shared mechanics — command syntax, the evidence contract, diff-gate's
 | `scip-query doctor` | Diagnose config, index freshness, dependency readiness, and project capabilities | config, freshness, dependency, and capability diagnostics | `complete` | Prove the workspace and configuration are usable before trusting evidence. |
 | `scip-query diff-impact` | Compute changed symbols and downstream consumers from current git diff | changed symbols, downstream consumer identities, and impact paths | `bounded` | Compare changed files, symbols, and affected consumers with the intended diff. |
 | `scip-query diff-gate` | Runtime-bounded, single-flight gate for the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | blocking findings with check id, message, and remediation; advisory findings; root-cause groups; changed file and symbol counts; process exit status (1 when blocking findings exist) | `bounded` | Run the complete finished-diff gate without blind line truncation. |
-| `scip-query mission-trial validate <program> --protected-root <path>` | Register, validate, record, list, or report protected autonomous-completion mission trials outside the candidate worktree | program identity, protected artifact observations, exact conditions, run eligibility, exclusions, and immutable run records | `complete` | Validate or inspect protected matched trials that evaluate autonomous completion rather than detector output alone. |
+| `scip-query mission-trial report <program> --protected-root <path>` | Register, validate, record, list, or report protected autonomous-completion mission trials outside the candidate worktree | program identity, protected artifact observations, exact conditions, run eligibility, exclusions, and immutable run records | `complete` | Classify protected matched trials when calibrating a release or material workflow change. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -144,6 +144,23 @@ successor, or halt on its explicit missing-authorization boundary. When hooks
 are unavailable, inspect the same state with
 `scip-query completion status <change-id> --json`; do not replace it with an
 agent-authored completion claim.
+
+A completed change establishes the repository predicates for that change. It
+does not establish the product-level claim that scip-query makes autonomous
+work more complete or efficient. That claim requires matched mission trials
+whose fixtures and evaluators are outside the candidate-editable worktree:
+
+```bash
+scip-query mission-trial report <program> --protected-root <path>
+```
+
+The report preserves completion, safety, elapsed-time, and token evidence
+separately, keeps missing observations unknown, and classifies only the exact
+provider, model, runtime, parameters, and fixtures named by the program.
+`established`, `promising`, `neutral`, `regressed`, and `insufficient` are
+different evidence states; detector effectiveness and health scores cannot
+rewrite them. Run this calibration for a release, provider/model path, or
+material workflow change—not for every ordinary code change.
 
 ### 5. Check health, docs, and generated surfaces when relevant
 

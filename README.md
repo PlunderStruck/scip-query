@@ -26,6 +26,28 @@ The failure mode it targets is specific. Agents are genuinely good at editing th
 
 So the loop this tool enforces is evidence at every step: map the target and its blast radius, plan from repository facts, check for reuse before adding a concept, detect unfinished migrations and hidden coupling, and gate the finished diff. It does not replace the compiler, tests, or review. The point is to make structural evidence so cheap to ask for that agents actually ask — and to make "done" something the repository gets a vote on.
 
+## Capability Status
+
+scip-query has three related jobs: supply repository evidence, coordinate
+long-running autonomous work, and evaluate whether that coordination actually
+improves end-to-end outcomes. The first two are implemented product behavior.
+The third is an empirical claim and remains bounded by protected mission
+trials.
+
+A mission trial is a matched comparison of autonomous repository work from an
+authorized goal to a verified final state. Its distinguishing property is
+independent, protected judgment of the whole change: goal satisfaction,
+preserved invariants, reconciled affected surface, residue, revived behavior,
+architecture constraints, false blocking, and cost. A passing detector or
+health score is not a mission trial.
+
+Until a protected program classifies a specific provider, model, runtime, and
+fixture set as `established`, autonomous-completion effectiveness for that
+scope is experimental. `promising`, `neutral`, `regressed`, `insufficient`,
+and unavailable evidence stay visible as those states. Health can display a
+trial classification, but it cannot change the trial facts or use them to
+improve its score.
+
 ## How Agents Use It
 
 Two layers, wired by `scip-query setup`:
@@ -355,6 +377,32 @@ new-dead    6       5      0           1     0      0           100%            
 ```
 
 `resolution-vs-suppression` is verified fixed ÷ (verified fixed + suppressed). Repository-local event and suppression files are writable by the same agent doing the work, so this ratio is operational telemetry, not an independent correctness grade. `evaluation-precision` is populated only when a protected external evaluator supplies both protected-CI records and a separately controlled attestation for their gate-run IDs; a JSON field cannot attest itself. Ordinary local-agent and local-human runs leave it blank. `moved` separates rename churn, while `unverified` is reserved for legacy or otherwise non-comparable resolutions that lack replay proof. Run diff-gate once to record the finding and again after the repair; a pre-commit rerun uses the same base directly, while clean post-commit runs advance through stored bases incrementally. Filter with `--check <name>`, window with `--since 30d|12w|<ISO date>`, and get machine-readable provenance, anomaly samples, and record-compatibility counts with `--json`. Local runs default to `local-agent`; a person running the gate directly may set `SCIP_QUERY_OUTCOME_OBSERVER_KIND=local-human` and optionally `SCIP_QUERY_OUTCOME_OBSERVER_SOURCE=<label>`. Both remain `repository-writable`; neither environment variable can claim protected authority. Because the event files are committed, the numbers survive re-clones and aggregate across every machine and agent working the repo, but missing or deliberately deleted history cannot be inferred from the remaining directory. Current event files carry an additive v1 discriminator, stable semantic identity, writer version, gate-run identity, observer authority, and observation receipt; existing unversioned files remain readable. `effectiveness` reports accepted and omitted record counts when history is partial, and cross-HEAD verification defers fixes rather than trusting an incomplete lifecycle. Legacy `.scipquery/ledger/events.jsonl` records remain readable and are migrated to individual files on the next gate write only when every non-empty line is compatible; otherwise the source ledger is preserved. Historical cross-`HEAD` events without stored comparison evidence remain unverified rather than being reclassified speculatively. Standalone health/cleanup commands are not yet outcome-tracked because they do not all expose a complete-scan contract.
+
+Protected end-to-end mission evidence is attached separately:
+
+```bash
+scip-query mission-trial report \
+  ../protected-trials/programs/SQTP-....json \
+  --protected-root ../protected-trials
+
+scip-query effectiveness \
+  --mission-trial-program ../protected-trials/programs/SQTP-....json \
+  --mission-trial-root ../protected-trials
+
+scip-query health \
+  --mission-trial-program ../protected-trials/programs/SQTP-....json \
+  --mission-trial-root ../protected-trials
+```
+
+The program content-binds its fixtures, evaluator hashes, exact agent/runtime
+configuration, budgets, rerun policy, and decision thresholds before counted
+runs. Control and treatment differ only by the declared autonomous-completion
+workflow. Reports retain raw paired samples and unknown values, separate
+detector, controller, agent, and apparatus failures, and classify the exact
+scope as `established | promising | neutral | regressed | insufficient`.
+Changing a threshold or supported scope creates a different program identity.
+Mission trials are product calibration, not a per-change ritual; ordinary
+coding work should use the automatic controller and closeout path above.
 
 `diff-gate` is also single-flight per project: a second CLI or Stop-hook gate
 returns the live owner's PID and start time instead of duplicating the same

@@ -1,0 +1,49 @@
+{
+  "acceptedAt": "2026-07-31T11:27:43.586Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "ae532eb623f901eaa693c31359ba3687b3ecc0f9d01dd2aba4b888c9f52860c4",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "EffectivenessReport changed from interface EffectivenessReport { totalEvents: number; windowStart: number | null; authority: EffectivenessAuthority; provenance: EffectivenessProvenanceSummary; anomalies: Effect... to interface EffectivenessReport { totalEvents: number; windowStart: number | null; authority: EffectivenessAuthority; provenance: EffectivenessProvenanceSummary; anomalies: Effect....",
+      "target": "./queries:EffectivenessReport"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "HealthReport changed from interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes... to interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes....",
+      "target": "./queries:HealthReport"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "EffectivenessReport changed from interface EffectivenessReport { totalEvents: number; windowStart: number | null; authority: EffectivenessAuthority; provenance: EffectivenessProvenanceSummary; anomalies: Effect... to interface EffectivenessReport { totalEvents: number; windowStart: number | null; authority: EffectivenessAuthority; provenance: EffectivenessProvenanceSummary; anomalies: Effect....",
+      "target": "./queries/index:EffectivenessReport"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "HealthReport changed from interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes... to interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes....",
+      "target": "./queries/index:HealthReport"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration M.",
+      "target": "health-<hash>.d.ts:M"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "b changed from interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes... to interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes....",
+      "target": "health-<hash>.d.ts:b"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "52c4f4b892586f04bfc206fdb65e19dcc16dc963d3c9132d6a98a96c9603bf1c",
+  "reason": "Health and effectiveness reports may now attach optional protected mission-trial evidence while remaining source-compatible with existing report consumers.",
+  "schemaVersion": 1
+}

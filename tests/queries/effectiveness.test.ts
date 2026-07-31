@@ -200,6 +200,9 @@ describe('computeEffectiveness', () => {
         legacyUnknownEvents: 0,
         missingGateRunIdEvents: 0,
       },
+      missionEffectiveness: {
+        availability: 'unavailable',
+      },
     });
   });
 

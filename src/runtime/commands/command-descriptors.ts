@@ -165,7 +165,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     command: 'health',
     agent: agentContract(
       'What are the highest-priority verified health problems in this codebase?',
-      'health score, findings, priorities, baselines, and coverage notes',
+      'health score, findings, priorities, baselines, coverage notes, and separately attached protected mission effectiveness',
       [],
       'bounded',
       'repository',
@@ -179,9 +179,11 @@ export const commandDescriptors: CommandDescriptor[] = [
       option('--full', 'Run unbounded candidate analyses on large indexes'),
       option('--baseline', 'Compare findings against the committed baseline; exit 1 on new findings'),
       option('--write-baseline', 'Snapshot current finding identities to the baseline file'),
+      option('--mission-trial-program <path>', 'Registered protected mission-trial program record'),
+      option('--mission-trial-root <path>', 'Protected mission-trial apparatus and immutable result root'),
     ]),
     claims: mixedClaimContract(
-      ['index-generation', 'live-workspace'],
+      ['index-generation', 'live-workspace', 'process'],
       [
         fieldClaimFamily('actions', 'actions[]', 'evidence', {
           'graph-fact': 'compiler-graph',
@@ -189,6 +191,7 @@ export const commandDescriptors: CommandDescriptor[] = [
           'change-graph': 'change-history',
         }),
         fixedClaimFamily('coverage-notes', 'coverage', 'repository-source'),
+        fixedClaimFamily('mission-effectiveness', 'missionEffectiveness', 'runtime-measurement'),
       ],
     ),
     renderShape: 'custom',
@@ -610,19 +613,28 @@ export const commandDescriptors: CommandDescriptor[] = [
     id: 'effectiveness',
     command: 'effectiveness',
     agent: agentContract(
-      'What handling outcomes has diff-gate observed, and what authority produced those observations?',
-      'per-check caught, fixed, suppressed, unresolved, provenance, and resolution-vs-suppression telemetry',
+      'What handling outcomes has diff-gate observed, and what protected evidence exists for end-to-end autonomous completion?',
+      'per-check caught, fixed, suppressed, unresolved, provenance, resolution-vs-suppression telemetry, and separately classified protected mission trials',
       [],
       'complete',
       'repository',
     ),
     description:
-      'Per-check repository telemetry from the committed outcome ledger: verified fixes, suppressions, unresolved findings, observer authority, and anomalies',
+      'Per-check detector telemetry plus separately classified protected autonomous-completion mission trials',
     options: withJsonOption([
       option('--since <window>', 'Only count findings first caught in this window (30d, 12w, or an ISO date)'),
       option('--check <check>', 'Restrict to one diff-gate check'),
+      option('--mission-trial-program <path>', 'Registered protected mission-trial program record'),
+      option('--mission-trial-root <path>', 'Protected mission-trial apparatus and immutable result root'),
     ]),
-    claims: fixedClaimContract('repository-source', ['live-workspace']),
+    evidence: 'mixed',
+    claims: mixedClaimContract(
+      ['live-workspace', 'process'],
+      [
+        fixedClaimFamily('detector-outcomes', 'checks[]', 'repository-source'),
+        fixedClaimFamily('mission-effectiveness', 'missionEffectiveness', 'runtime-measurement'),
+      ],
+    ),
     renderShape: 'custom',
     docs: doc('Maintenance', ['scip-query effectiveness --since 30d', 'scip-query effectiveness --check echo --json']),
     handler: handlers.handleEffectiveness,

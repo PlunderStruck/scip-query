@@ -125,7 +125,7 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 | Command | Description | Options |
 |---|---|---|
 | `self-audit` | Score cheap evidence paths against the best available semantic/source oracle on sampled symbols | `--samples <n>`<br>`-s, --scope <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `health` | Composite codebase health report with prioritized action list | `-s, --scope <path>`<br>`--full`<br>`--baseline`<br>`--write-baseline`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `health` | Composite codebase health report with prioritized action list | `-s, --scope <path>`<br>`--full`<br>`--baseline`<br>`--write-baseline`<br>`--mission-trial-program <path>`<br>`--mission-trial-root <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `complexity <symbol>` | Per-symbol complexity: branches, cyclomatic estimate, fan-in/out, callees | `--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 
 ### Maintenance
@@ -142,7 +142,7 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 | `init` | Create a .scipquery.json config file for this project | - |
 | `config-validate` | Validate .scipquery.json, including structured suppressions and declared coupling groups | `--json`<br>`--result-only`<br>`--compact` |
 | `suppress <id>` | Record an accepted finding as a file under .scipquery/suppressions/ with a required reason | `--reason <text>`<br>`--reason-code <code>`<br>`--evidence <kind:referent>`<br>`--check <check>`<br>`--file <path>`<br>`--expires-at <iso>`<br>`--replace <revision>`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `effectiveness` | Per-check repository telemetry from the committed outcome ledger: verified fixes, suppressions, unresolved findings, observer authority, and anomalies | `--since <window>`<br>`--check <check>`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `effectiveness` | Per-check detector telemetry plus separately classified protected autonomous-completion mission trials | `--since <window>`<br>`--check <check>`<br>`--mission-trial-program <path>`<br>`--mission-trial-root <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `mission-trial <operation> <program>` | Register, validate, record, list, or report protected autonomous-completion mission trials outside the candidate worktree | `--protected-root <path>`<br>`--candidate-root <path>`<br>`--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `doctor` | Diagnose config, index freshness, dependency readiness, and project capabilities | `--json`<br>`--result-only`<br>`--compact` |
 | `setup` | Bootstrap this project: enable automatic indexing, install agent skills, refresh the index, verify capabilities, and report health | `--guided`<br>`--yes`<br>`--git-hook`<br>`--no-hooks`<br>`--no-skills`<br>`--no-parsers`<br>`--install-missing`<br>`--no-health`<br>`--dossier-dir <path>`<br>`--json`<br>`--result-only`<br>`--compact` |

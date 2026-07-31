@@ -1,5 +1,9 @@
 import type { ChangeAmplificationSummary, HealthAnalyses } from './health-types.js';
 import type { DetectorPrecisionStats } from './finding-outcome-ledger.js';
+import {
+  unavailableMissionEffectiveness,
+  type MissionEffectivenessEvidence,
+} from '../../domain/mission-effectiveness.js';
 
 export type FindingEvidence = 'graph-fact' | 'heuristic' | 'change-graph';
 
@@ -128,6 +132,11 @@ export interface HealthReport {
    * until the ledger has data.
    */
   detectorPrecision: DetectorPrecisionStats[];
+  /**
+   * Protected end-to-end agent outcome evidence. This is deliberately
+   * separate from detector precision and never changes the health score.
+   */
+  missionEffectiveness?: MissionEffectivenessEvidence;
 }
 
 function healthScoreCount(summary: { count: number; scoreCount?: number }): number {
@@ -188,6 +197,9 @@ export function buildHealthReport(analyses: HealthAnalyses): HealthReport {
     topComplexity: analyses.complexity.top,
     warnings: analyses.warnings.length > 0 ? analyses.warnings : undefined,
     detectorPrecision: [],
+    missionEffectiveness: unavailableMissionEffectiveness(
+      'No protected mission-trial program was attached to this health report.',
+    ),
   };
 }
 

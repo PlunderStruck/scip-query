@@ -83,6 +83,8 @@ import { healthPhases } from '../../queries/health/health.js';
 import { writeProfileEvent } from '../../instrumentation/profile.js';
 import { auditProfileWork, readProfileEvents, renderProfileWorkAudit } from '../profile-work-audit.js';
 import { discloseHealthCapabilities } from '../health-capability-disclosure.js';
+import { loadMissionEffectiveness } from '../mission-effectiveness.js';
+import { formatMissionEffectiveness } from '../mission-effectiveness-render.js';
 import {
   buildAutomatedSuppressionDecision,
   formatSuppressionWriteReceipt,
@@ -334,6 +336,11 @@ export async function handleHealth(rawOpts: unknown): Promise<void> {
       hasIndexedGraph: existsSync(dbPath),
     });
     const disclosedReport = discloseHealthCapabilities(analysis.result, capabilities);
+    disclosedReport.missionEffectiveness = loadMissionEffectiveness({
+      programPath: stringOptionValue(opts, 'missionTrialProgram'),
+      protectedRoot: stringOptionValue(opts, 'missionTrialRoot'),
+      candidateRoot: projectRoot,
+    });
     if (booleanOptionValue(opts, 'json')) {
       printJsonEnvelope('health', [], opts, disclosedReport, {
         observationReceipt: analysis.observationReceipt,
@@ -1192,6 +1199,11 @@ export function handleEffectiveness(rawOpts: unknown): void {
   const projectRoot = resolveProjectRoot();
   const eventStore = readOutcomeEvents(projectRoot);
   const report = computeEffectiveness(eventStore.events, { sinceMs, check: stringOptionValue(opts, 'check') });
+  report.missionEffectiveness = loadMissionEffectiveness({
+    programPath: stringOptionValue(opts, 'missionTrialProgram'),
+    protectedRoot: stringOptionValue(opts, 'missionTrialRoot'),
+    candidateRoot: projectRoot,
+  });
   const compatibilityWarning = formatRecordCompatibilityWarning('Committed outcome history', eventStore.compatibility);
 
   if (booleanOptionValue(opts, 'json')) {
@@ -1203,6 +1215,7 @@ export function handleEffectiveness(rawOpts: unknown): void {
   }
 
   if (compatibilityWarning) console.log(`WARN: ${compatibilityWarning}`);
+  for (const line of formatMissionEffectiveness(report.missionEffectiveness)) console.log(line);
   if (report.checks.length === 0) {
     console.log(
       eventStore.events.length === 0

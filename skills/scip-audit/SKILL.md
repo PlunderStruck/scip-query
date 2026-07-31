@@ -24,7 +24,7 @@ Load shared mechanics (evidence freshness, lookup, the full command
 
 | Command | Purpose | Returns | Coverage | When |
 | --- | --- | --- | --- | --- |
-| `scip-query health` | Composite codebase health report with prioritized action list | health score, findings, priorities, baselines, and coverage notes | `bounded` | Orient to the repository-wide finding inventory before confirming candidates. |
+| `scip-query health` | Composite codebase health report with prioritized action list | health score, findings, priorities, baselines, coverage notes, and separately attached protected mission effectiveness | `bounded` | Orient to the repository-wide finding inventory before confirming candidates. |
 | `scip-query decorative-checkers --full` | Decorative checker candidates: validate*/verify*/check*/assert*/is*/has* callables with no reachable failure exit anywhere in their body | checker identities, call sites, and decorative behavior evidence | `bounded` | Audit whether validation-shaped code has a reachable failure exit. |
 | `scip-query doc-drift --full` | Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped | document paths, coupled code subjects, and history evidence | `bounded` | Find current-guidance documents whose cited or coupled code moved. |
 

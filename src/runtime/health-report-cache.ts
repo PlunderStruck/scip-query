@@ -15,7 +15,10 @@ import { readSmallArtifactText } from '../platform/bounded-file.js';
 // Q2: bumped 2 -> 3 so default health's phase-timeout policy is part of the
 // cache identity. A partial 30s default report and an unbounded report are not
 // interchangeable.
-const HEALTH_REPORT_CACHE_VERSION = 3;
+// Q3: bumped 3 -> 4 when protected mission-effectiveness availability became
+// an explicit field. External trial evidence is attached after cache reads;
+// cached structural reports retain the honest unavailable default.
+const HEALTH_REPORT_CACHE_VERSION = 4;
 const HEALTH_REPORT_CACHE_FILE = 'health-report-cache.json';
 
 export interface HealthReportCacheOptions {
@@ -169,7 +172,8 @@ function isHealthReport(value: unknown): value is HealthReport {
     Array.isArray(candidate.actions) &&
     Array.isArray(candidate.pressure) &&
     Array.isArray(candidate.topComplexity) &&
-    Array.isArray(candidate.detectorPrecision)
+    Array.isArray(candidate.detectorPrecision) &&
+    typeof candidate.missionEffectiveness === 'object'
   );
 }
 

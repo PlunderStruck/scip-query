@@ -104,6 +104,66 @@ For analyzer implementation work, follow [Regex Policy](REGEX_POLICY.md): regex 
 
 ---
 
+## Workflow 0.5: Evaluate autonomous-completion effectiveness
+
+**Goal:** Determine whether the complete workflow improves autonomous outcomes
+for one exact provider, model, runtime, and fixture set without confusing that
+claim with detector telemetry or a health score.
+
+This is a product-calibration workflow, not a ceremony agents repeat for every
+code change. Normal autonomous work uses the restoration, planning, completion,
+and Stop-controller flow. Run matched trials when evaluating a release,
+provider/model path, or material workflow change.
+
+1. Keep the fixture archive, evaluator, registered program, and immutable runs
+   outside the candidate-editable worktree. The candidate must not be able to
+   change the evaluator that judges it.
+
+2. Validate the pre-registered program before counted runs:
+
+   ```bash
+   scip-query mission-trial validate \
+     ../protected-trials/programs/SQTP-....json \
+     --protected-root ../protected-trials
+   ```
+
+3. Record each control and workflow result under its immutable pair, fixture,
+   treatment, and rerun identity. Reruns may replace apparatus failures; they
+   cannot replace a recorded candidate outcome.
+
+4. Derive and classify the protected evidence:
+
+   ```bash
+   scip-query mission-trial report \
+     ../protected-trials/programs/SQTP-....json \
+     --protected-root ../protected-trials
+   ```
+
+   Full completion requires protected confirmation of the goal, invariants,
+   independently known affected surface, and absence of missed artifacts,
+   residue, revived behavior, and architecture violations. Missing judgments
+   and telemetry remain unknown.
+
+5. Attach the same facts to operational reports without changing them:
+
+   ```bash
+   scip-query effectiveness \
+     --mission-trial-program ../protected-trials/programs/SQTP-....json \
+     --mission-trial-root ../protected-trials
+
+   scip-query health \
+     --mission-trial-program ../protected-trials/programs/SQTP-....json \
+     --mission-trial-root ../protected-trials
+   ```
+
+   `effectiveness` continues to report committed per-detector handling
+   telemetry. `health` continues to score codebase signals. Both expose mission
+   effectiveness as a separate protected field that cannot alter those
+   detector facts or scores. A classification supports only the exact agent
+   and fixture scope named by its program.
+
+---
+
 ## Workflow 1: Understand a system before making changes
 
 **Goal:** Build a complete mental model of a module or feature area so you can write a precise implementation plan with no ambiguity about what code exists, what it does, and what depends on it.

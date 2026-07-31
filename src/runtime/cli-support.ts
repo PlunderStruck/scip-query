@@ -31,6 +31,7 @@ import { render } from './render.js';
 import { detectorPrecision, readLedgerRecords } from '../queries/health/finding-outcome-ledger.js';
 import { healthReportCacheKey, readHealthReportCache, writeHealthReportCache } from './health-report-cache.js';
 import { cliVersion } from '../platform/cli-version.js';
+import { formatMissionEffectiveness } from './mission-effectiveness-render.js';
 
 export { cliVersion } from '../platform/cli-version.js';
 export const HEALTH_PHASE_COMMAND = '__health-phase';
@@ -731,6 +732,10 @@ export function renderHealthReport(report: HealthReport): void {
   console.log(
     `  ${report.overview.documents} files | ${report.overview.symbols} symbols | ${formatBytes(report.overview.indexSizeBytes)}\n`,
   );
+  for (const line of formatMissionEffectiveness(report.missionEffectiveness)) {
+    console.log(`  ${line}`);
+  }
+  console.log('');
 
   if (report.warnings && report.warnings.length > 0) {
     console.log('  Warnings:');

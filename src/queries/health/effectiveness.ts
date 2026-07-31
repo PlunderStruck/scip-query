@@ -20,6 +20,10 @@
  */
 
 import { latestOutcomeLifecycleAnchor, type OutcomeEvent } from '../../domain/finding-outcomes.js';
+import {
+  unavailableMissionEffectiveness,
+  type MissionEffectivenessEvidence,
+} from '../../domain/mission-effectiveness.js';
 import { automaticSuppressionRateIsAnomalous } from '../../domain/suppression-adjudication.js';
 
 export type {
@@ -69,6 +73,8 @@ export interface EffectivenessReport {
   provenance: EffectivenessProvenanceSummary;
   anomalies: EffectivenessAnomaly[];
   checks: CheckEffectiveness[];
+  /** Protected end-to-end outcomes, distinct from per-detector handling telemetry. */
+  missionEffectiveness?: MissionEffectivenessEvidence;
 }
 
 export type EffectivenessAuthority =
@@ -214,6 +220,9 @@ export function computeEffectiveness(
     provenance: summarizeEffectivenessProvenance(windowEvents, options.protectedGateRunIds),
     anomalies: effectivenessAnomalies(inWindow, checks, options.protectedGateRunIds),
     checks: checks.sort((left, right) => left.check.localeCompare(right.check)),
+    missionEffectiveness: unavailableMissionEffectiveness(
+      'No protected mission-trial program was attached to this effectiveness report.',
+    ),
   };
 }
 

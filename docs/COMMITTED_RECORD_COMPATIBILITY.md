@@ -33,6 +33,22 @@ A committed record is a repository-owned JSON fact or policy whose value
 comes from surviving clones and branches. Unlike a local cache row, it cannot
 be silently dropped and rebuilt when a reader does not understand it.
 
+Protected mission-trial programs and runs are a different record class. They
+refer to matched autonomous-work executions and belong outside the
+candidate-editable repository under a separately controlled root. They are
+therefore not a fourteenth Git-shared record family and must not be copied
+into `.scipquery/` as if the candidate could independently attest its own
+quality. Registered programs conform to
+[`schemas/mission-trial-program.schema.json`](schemas/mission-trial-program.schema.json);
+new runs conform to
+[`schemas/mission-trial-run.schema.json`](schemas/mission-trial-run.schema.json);
+and derived classifications conform to
+[`schemas/mission-trial-classification.schema.json`](schemas/mission-trial-classification.schema.json).
+The reader accepts version-1 runs by conservatively migrating the absent
+`missedAffectedArtifacts` judgment to unknown; version-2 runs preserve it
+explicitly. Program and run content identities, protected artifact hashes,
+and create-only publication make altered evidence a visible integrity error.
+
 ## Compatibility states
 
 Every JSON candidate is classified exactly once:
