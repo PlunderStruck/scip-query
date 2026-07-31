@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
   compareObservationReceipts,
@@ -8,9 +9,26 @@ import {
   type ObservationReceiptV1,
   type ObservationReceiptV2,
 } from '../../src/domain/observation-receipt.js';
+import { stableJson } from '../../src/domain/stable-json.js';
 import { buildObservationReceipt } from '../../src/runtime/observation-receipt.js';
 
 describe('observation receipts', () => {
+  it('preserves the version-1 identity preimage while using the bounded fast path', () => {
+    const identity = createObservationIdentity('projection', 3, 'canonical value');
+    expect(identity.digest).toBe(
+      createHash('sha256')
+        .update(
+          stableJson({
+            canonicalizationVersion: 1,
+            projection: 'projection',
+            projectionVersion: 3,
+            value: 'canonical value',
+          }),
+        )
+        .digest('hex'),
+    );
+  });
+
   it('records independent v2 collaboration, workspace, generation, source, and stability facts', () => {
     const receipt = buildObservationReceipt({
       projectRoot: '/repo',
@@ -78,6 +96,86 @@ describe('observation receipts', () => {
       authority: 'completion',
       reasons: [],
     });
+  });
+
+  it('establishes exact generation alignment from one fixed snapshot projection', () => {
+    const indexInputs = {
+      version: 2,
+      languages: ['typescript'] as const,
+      pnpmWorkspaces: false,
+      typescriptProjectMode: 'single',
+      typescriptProjects: [],
+      files: [{ path: 'source.ts', size: 24, hash: 'source-hash' }],
+    };
+    const receipt = buildObservationReceipt({
+      projectRoot: '/repo',
+      collaborationDomainId: '5ea57d1a-936c-4c91-b58f-5d61e45173a5',
+      db: {
+        config: {
+          projectRoot: '/repo',
+          dbPath: '/cache/index.db',
+          indexPath: '/cache/index.scip',
+        },
+        generation: {
+          identity: 'generation-a',
+          databasePath: '/cache/generation-a/index.db',
+          source: 'immutable',
+          metadataRaw: JSON.stringify({
+            version: 3,
+            status: 'complete',
+            updatedAt: '2026-07-28T00:00:00.000Z',
+            fingerprint: indexInputs,
+            indexedLanguages: ['typescript'],
+          }),
+        },
+      },
+      snapshot: {
+        projectRoot: '/repo',
+        capturedAt: '2026-07-28T00:00:01.000Z',
+        repositoryContent: {
+          version: 1,
+          files: [
+            {
+              path: 'source.ts',
+              kind: 'file',
+              executable: false,
+              size: 24,
+              sha256: 'source-hash',
+            },
+          ],
+        },
+        indexInputs,
+        paths: [],
+        files: new Map(),
+        missing: new Set(),
+        fingerprints: new Map(),
+        dispose() {},
+      },
+    });
+
+    expect(receipt).toMatchObject({
+      observedAt: '2026-07-28T00:00:01.000Z',
+      facts: {
+        wholeContent: { projection: { name: 'scip-query:repository-content', version: 1 } },
+        relevantInputs: [
+          {
+            subject: 'scip-query:index-inputs',
+            identity: { projection: { name: 'scip-query:index-inputs', version: 2 } },
+          },
+        ],
+        index: {
+          inputs: { projection: { name: 'scip-query:index-inputs', version: 2 } },
+        },
+      },
+      observedSources: [{ kind: 'index-generation' }, { kind: 'repository-snapshot' }],
+      stabilityProofs: [
+        { source: 'index-generation', kind: 'immutable' },
+        { source: 'repository-snapshot', kind: 'fixed-snapshot' },
+      ],
+    });
+    expect(compareObservationReceipts(receipt, receipt).indexInput.state).toBe('established');
+    expect(deriveObservationStateAuthority(receipt, receipt).authority).toBe('completion');
+    expect(isObservationReceipt(receipt)).toBe(true);
   });
 
   it('keeps unknown distinct from disproven and never satisfies completion with either', () => {

@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 import { isBoundedRecordString, isRecordObject } from './record-validation.js';
-import { stableJson } from './stable-json.js';
 
 export const LEGACY_OBSERVATION_RECEIPT_SCHEMA_VERSION = 1 as const;
 export const OBSERVATION_RECEIPT_SCHEMA_VERSION = 2 as const;
@@ -208,16 +207,22 @@ export function createObservationIdentity(
       version: projectionVersion,
     },
     digest: createHash(OBSERVATION_IDENTITY_HASH_ALGORITHM)
-      .update(
-        stableJson({
-          canonicalizationVersion: OBSERVATION_IDENTITY_CANONICALIZATION_VERSION,
-          projection: projectionName,
-          projectionVersion,
-          value: canonicalValue,
-        }),
-      )
+      .update(canonicalObservationIdentityPreimage(projectionName, projectionVersion, canonicalValue))
       .digest('hex'),
   };
+}
+
+function canonicalObservationIdentityPreimage(
+  projectionName: string,
+  projectionVersion: number,
+  canonicalValue: string,
+): string {
+  return (
+    `{"canonicalizationVersion":${OBSERVATION_IDENTITY_CANONICALIZATION_VERSION},` +
+    `"projection":${JSON.stringify(projectionName)},` +
+    `"projectionVersion":${projectionVersion},` +
+    `"value":${JSON.stringify(canonicalValue)}}`
+  );
 }
 
 export function decodeObservationReceipt(value: unknown): DecodedObservationReceipt {

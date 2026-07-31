@@ -118,6 +118,24 @@ alignment proof. Product policy therefore keeps it advisory for completion
 even though the index source itself is immutable. `analysisManifest`
 separately records how the result was produced and how much was examined.
 
+When a producer actually reads repository bytes through the fixed-snapshot
+boundary, its receipt may additionally contain:
+
+- `facts.wholeContent`, derived from the immutable Git tree plus captured
+  dirty, untracked, declared-ignored, deletion, symlink, and executable-mode
+  overlays;
+- one `facts.relevantInputs` entry for `scip-query:index-inputs`;
+- `facts.index.inputs`, derived from the versioned project-input fingerprint
+  already persisted with the held generation; and
+- a `repository-snapshot` observed source with a `fixed-snapshot` stability
+  proof.
+
+Equal `scip-query:index-inputs` projections establish exact alignment between
+that snapshot and the immutable generation. A capture race, unsupported input,
+or producer that never read repository bytes leaves the snapshot facts absent;
+absence remains `unknown`. A producer does not gain whole-content authority
+merely because another command could have taken a snapshot.
+
 Version-1 receipts remain readable as legacy provenance. Their path-derived
 project identity and mixed worktree hash are not relabeled as collaboration,
 workspace, or content identities. Only a legacy index-generation identity can

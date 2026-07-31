@@ -1,5 +1,6 @@
 import { readdirSync, type Dirent } from 'node:fs';
 import { join } from 'node:path';
+import { matchesPathGlob } from '../domain/path-glob.js';
 
 /**
  * Minimal glob matcher for project-relative paths.
@@ -12,22 +13,7 @@ import { join } from 'node:path';
  * in a general-purpose glob dependency for patterns nothing uses.
  */
 export function matchesGlob(pattern: string, relativePath: string): boolean {
-  const normalizedPattern = normalize(pattern);
-  const normalizedPath = normalize(relativePath);
-
-  if (normalizedPattern.endsWith('/**')) {
-    const prefix = normalizedPattern.slice(0, -3);
-    return normalizedPath === prefix || normalizedPath.startsWith(`${prefix}/`);
-  }
-  if (normalizedPattern.endsWith('/*')) {
-    const prefix = normalizedPattern.slice(0, -2);
-    if (!normalizedPath.startsWith(`${prefix}/`)) return false;
-    const rest = normalizedPath.slice(prefix.length + 1);
-    return rest.length > 0 && !rest.includes('/');
-  }
-  if (normalizedPattern === '**') return true;
-  if (normalizedPattern === '*') return normalizedPath.length > 0 && !normalizedPath.includes('/');
-  return normalizedPattern === normalizedPath;
+  return matchesPathGlob(pattern, relativePath);
 }
 
 /** The literal (non-glob) directory prefix — the safe root for an fs walk. */

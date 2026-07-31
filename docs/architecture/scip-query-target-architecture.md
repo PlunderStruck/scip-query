@@ -246,7 +246,11 @@ comparison that reports changed repository facts and uncertainty; reindex
 still owns the separate decision to widen those facts into a dependency
 closure or full-project rebuild.
 
-Git/filesystem enumeration and hashing now live in `platform/project-files.ts`.
+Live Git/filesystem enumeration and hashing live in
+`platform/project-files.ts`. Fixed command observations compose that boundary
+with `platform/project-observation-snapshot.ts` and its async-local snapshot
+context, so a producer reads one stable Git-tree-plus-overlay state instead of
+mixing live bytes across its interval.
 Executable discovery, project-local and bundled indexer resolution,
 dependency status, and .NET runtime probing now live in
 `platform/indexer-toolchain.ts`. Reindex retains indexer invocation and

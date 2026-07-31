@@ -6,7 +6,16 @@ import {
   type ObservationSourceFact,
   type ObservationStabilityProof,
 } from '../domain/observation-receipt.js';
+import { projectInputSnapshotOrNull } from '../domain/project-input.js';
+import { decodeReindexMetadata } from '../domain/reindex-metadata.js';
 import { resolveGitWorktreeContext, type GitWorktreeContext } from '../platform/git-worktree.js';
+import {
+  canonicalProjectInputSnapshot,
+  canonicalRepositoryContentSnapshot,
+  captureProjectObservationSnapshot,
+  type ProjectObservationSnapshot,
+} from '../platform/project-observation-snapshot.js';
+import { detectLanguages } from '../reindex/detect.js';
 import type { ScipDatabase } from '../storage/db.js';
 import { currentCliDatabase, resolveProjectRoot } from './cli-context.js';
 import { loadProjectConfig } from './config.js';
@@ -52,6 +61,9 @@ export type {
 export const COLLABORATION_DOMAIN_IDENTITY_PROJECTION = 'scip-query:collaboration-domain' as const;
 export const WORKSPACE_INSTANCE_IDENTITY_PROJECTION = 'scip-query:workspace-instance' as const;
 export const INDEX_GENERATION_IDENTITY_PROJECTION = 'scip-query:index-generation' as const;
+export const REPOSITORY_CONTENT_IDENTITY_PROJECTION = 'scip-query:repository-content' as const;
+export const INDEX_INPUT_IDENTITY_PROJECTION = 'scip-query:index-inputs' as const;
+export const INDEX_INPUT_RELEVANT_SUBJECT = 'scip-query:index-inputs' as const;
 
 export interface ObservationReceiptInput {
   projectRoot: string;
@@ -59,6 +71,7 @@ export interface ObservationReceiptInput {
   collaborationDomainId?: string;
   db?: Pick<ScipDatabase, 'generation' | 'config'>;
   gitContext?: GitWorktreeContext;
+  snapshot?: ProjectObservationSnapshot;
 }
 
 /**
@@ -68,22 +81,44 @@ export interface ObservationReceiptInput {
  * explicitly not established.
  */
 export function buildObservationReceipt(input: ObservationReceiptInput): ObservationReceiptV2 {
+  const snapshot = input.snapshot;
+  const gitContext = input.gitContext ?? snapshot?.gitContext;
   const collaborationDomainId = input.collaborationDomainId ?? input.db?.config.collaborationDomainId;
   const collaborationDomain = collaborationDomainId
     ? createObservationIdentity(COLLABORATION_DOMAIN_IDENTITY_PROJECTION, 1, collaborationDomainId)
     : undefined;
-  const workspaceInstance = input.gitContext
-    ? createObservationIdentity(WORKSPACE_INSTANCE_IDENTITY_PROJECTION, 1, input.gitContext.worktreeId)
+  const workspaceInstance = gitContext
+    ? createObservationIdentity(WORKSPACE_INSTANCE_IDENTITY_PROJECTION, 1, gitContext.worktreeId)
     : undefined;
+  const repositoryContent = snapshot
+    ? createObservationIdentity(
+        REPOSITORY_CONTENT_IDENTITY_PROJECTION,
+        1,
+        canonicalRepositoryContentSnapshot(snapshot.repositoryContent),
+      )
+    : undefined;
+  const snapshotIndexInputs = snapshot
+    ? createObservationIdentity(
+        INDEX_INPUT_IDENTITY_PROJECTION,
+        snapshot.indexInputs.version,
+        canonicalProjectInputSnapshot(snapshot.indexInputs),
+      )
+    : undefined;
+  const generationInputs =
+    input.db && snapshot ? generationIndexInputIdentity(input.db.generation.metadataRaw) : undefined;
   const index = input.db
     ? {
         generation: createObservationIdentity(INDEX_GENERATION_IDENTITY_PROJECTION, 1, input.db.generation.identity),
+        ...(generationInputs ? { inputs: generationInputs } : {}),
         source: input.db.generation.source,
       }
     : undefined;
   const observedSources: ObservationSourceFact[] = [
     ...(index ? [{ kind: 'index-generation' as const, identity: index.generation }] : []),
-    ...(workspaceInstance ? [{ kind: 'live-workspace' as const, identity: workspaceInstance }] : []),
+    ...(repositoryContent ? [{ kind: 'repository-snapshot' as const, identity: repositoryContent }] : []),
+    ...(workspaceInstance && !repositoryContent
+      ? [{ kind: 'live-workspace' as const, identity: workspaceInstance }]
+      : []),
   ];
   const stabilityProofs: ObservationStabilityProof[] = [
     ...(index
@@ -94,7 +129,10 @@ export function buildObservationReceipt(input: ObservationReceiptInput): Observa
           },
         ]
       : []),
-    ...(workspaceInstance ? [{ source: 'live-workspace' as const, kind: 'not-established' as const }] : []),
+    ...(repositoryContent ? [{ source: 'repository-snapshot' as const, kind: 'fixed-snapshot' as const }] : []),
+    ...(workspaceInstance && !repositoryContent
+      ? [{ source: 'live-workspace' as const, kind: 'not-established' as const }]
+      : []),
   ];
   if (observedSources.length === 0) {
     observedSources.push({ kind: 'process' });
@@ -102,20 +140,31 @@ export function buildObservationReceipt(input: ObservationReceiptInput): Observa
   }
   return {
     schemaVersion: OBSERVATION_RECEIPT_SCHEMA_VERSION,
-    observedAt: (input.observedAt ?? new Date()).toISOString(),
+    observedAt: (input.observedAt ?? (snapshot ? new Date(snapshot.capturedAt) : new Date())).toISOString(),
     facts: {
       ...(collaborationDomain ? { collaborationDomain } : {}),
       ...(workspaceInstance ? { workspaceInstance } : {}),
+      ...(repositoryContent ? { wholeContent: repositoryContent } : {}),
+      ...(snapshotIndexInputs
+        ? {
+            relevantInputs: [
+              {
+                subject: INDEX_INPUT_RELEVANT_SUBJECT,
+                identity: snapshotIndexInputs,
+              },
+            ],
+          }
+        : {}),
       ...(index ? { index } : {}),
     },
     observedSources,
     stabilityProofs,
-    ...(input.gitContext
+    ...(gitContext
       ? {
           diagnostics: {
-            clean: input.gitContext.clean,
-            ...(input.gitContext.headCommit ? { headCommit: input.gitContext.headCommit } : {}),
-            ...(input.gitContext.treeOid ? { treeOid: input.gitContext.treeOid } : {}),
+            clean: gitContext.clean,
+            ...(gitContext.headCommit ? { headCommit: gitContext.headCommit } : {}),
+            ...(gitContext.treeOid ? { treeOid: gitContext.treeOid } : {}),
           },
         }
       : {}),
@@ -187,10 +236,46 @@ export function buildLeasedObservationReceipt(input: {
 export function currentCliObservationReceipt(): ObservationReceipt {
   const db = currentCliDatabase();
   const projectRoot = db?.config.projectRoot ?? resolveProjectRoot();
-  const gitContext = resolveGitWorktreeContext(projectRoot);
+  let gitContext = resolveGitWorktreeContext(projectRoot);
+  if (!db) {
+    return buildObservationReceipt({
+      projectRoot,
+      ...(gitContext ? { gitContext } : {}),
+    });
+  }
+  const config = loadProjectConfig(projectRoot);
+  const languages = config.languages ?? detectLanguages(projectRoot);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const snapshot = captureProjectObservationSnapshot(projectRoot, languages, config, gitContext);
+      try {
+        return buildObservationReceipt({ projectRoot, db, snapshot });
+      } finally {
+        snapshot.dispose();
+      }
+    } catch {
+      // A moving or unsupported workspace cannot prove fixed-snapshot facts.
+      // Retry once for an ordinary race, then return the weaker honest receipt.
+      gitContext = resolveGitWorktreeContext(projectRoot);
+    }
+  }
   return buildObservationReceipt({
     projectRoot,
-    ...(db ? { db } : {}),
+    db,
     ...(gitContext ? { gitContext } : {}),
   });
+}
+
+function generationIndexInputIdentity(metadataRaw: string | undefined) {
+  if (!metadataRaw) return undefined;
+  const decoded = decodeReindexMetadata(metadataRaw);
+  if (decoded.kind !== 'legacy' && decoded.kind !== 'supported') return undefined;
+  const snapshot = projectInputSnapshotOrNull(decoded.metadata.fingerprint);
+  return snapshot && Number.isSafeInteger(snapshot.version) && snapshot.version > 0
+    ? createObservationIdentity(
+        INDEX_INPUT_IDENTITY_PROJECTION,
+        snapshot.version,
+        canonicalProjectInputSnapshot(snapshot),
+      )
+    : undefined;
 }

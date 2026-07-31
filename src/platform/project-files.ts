@@ -23,6 +23,12 @@ import {
 } from '../domain/path-normalization.js';
 import type { SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
 import { hashFileWithinLimit } from './bounded-file.js';
+import {
+  projectSnapshotFile,
+  projectSnapshotFingerprint,
+  projectSnapshotPaths,
+  projectSnapshotPathState,
+} from './project-snapshot-context.js';
 
 export {
   normalizeSafeProjectRelativePath,
@@ -147,6 +153,25 @@ export function resolveProjectFile(
 }
 
 export function readProjectFile(projectRoot: string, candidatePath: string, opts: ProjectFileReadOptions = {}): Buffer {
+  const relativePath = normalizeSafeProjectRelativePath(candidatePath);
+  const snapshotState = projectSnapshotPathState(projectRoot, relativePath);
+  if (snapshotState) {
+    if (snapshotState === 'missing') {
+      throw Object.assign(new Error(`Snapshot project file ${JSON.stringify(relativePath)} does not exist.`), {
+        code: 'ENOENT',
+      });
+    }
+    const snapshotFile = projectSnapshotFile(projectRoot, relativePath);
+    if (!snapshotFile) {
+      throw new UnsafeProjectPathError(relativePath, 'changed-during-read');
+    }
+    const maxBytes = opts.maxBytes ?? DEFAULT_PROJECT_SOURCE_LIMIT_BYTES;
+    assertNonNegativeByteLimit(maxBytes);
+    if (snapshotFile.size > maxBytes) {
+      throw new InputTooLargeError(opts.inputKind ?? 'project file', relativePath, snapshotFile.size, maxBytes);
+    }
+    return Buffer.from(snapshotFile.content);
+  }
   const resolvedFile = resolveProjectFile(projectRoot, candidatePath, opts);
   const maxBytes = opts.maxBytes ?? DEFAULT_PROJECT_SOURCE_LIMIT_BYTES;
 
@@ -215,7 +240,11 @@ function assertNonNegativeByteLimit(maxBytes: number): void {
 }
 
 export function listProjectFiles(projectRoot: string): string[] {
-  return (listGitProjectFiles(projectRoot) ?? listFilesystemProjectFiles(projectRoot))
+  return (
+    projectSnapshotPaths(projectRoot) ??
+    listGitProjectFiles(projectRoot) ??
+    listFilesystemProjectFiles(projectRoot)
+  )
     .filter((file) => file && !isProjectArtifactPath(file))
     .sort();
 }
@@ -226,13 +255,35 @@ export function fingerprintProjectFiles(
     language?: SupportedLanguage;
     markerFiles?: readonly string[];
     includePath?: (relativePath: string) => boolean;
+    includePaths?: readonly string[];
   } = {},
 ): ProjectFileFingerprint[] {
-  const files = listProjectFiles(projectRoot)
+  const explicitlyIncluded = (opts.includePaths ?? []).map(normalizeSafeProjectRelativePath);
+  const files = [...new Set([...listProjectFiles(projectRoot), ...explicitlyIncluded])]
+    .filter((path) => !isProjectArtifactPath(path))
     .filter((path) => !opts.language || isLanguageRelevantProjectInputPath(path, opts.language, opts.markerFiles))
-    .filter((path) => !opts.includePath || opts.includePath(path));
+    .filter((path) => !opts.includePath || opts.includePath(path))
+    .sort();
   const canonicalProjectRoot = realpathSync(projectRoot);
   return files.map((relativePath) => {
+    const snapshotFingerprint = projectSnapshotFingerprint(projectRoot, relativePath);
+    if (snapshotFingerprint) {
+      return {
+        path: relativePath,
+        size: snapshotFingerprint.fingerprintSize ?? snapshotFingerprint.size,
+        hash: snapshotFingerprint.sha256,
+      };
+    }
+    if (projectSnapshotPathState(projectRoot, relativePath) === 'present') {
+      const snapshotFile = projectSnapshotFile(projectRoot, relativePath);
+      if (snapshotFile) {
+        return {
+          path: relativePath,
+          size: snapshotFile.fingerprintSize ?? snapshotFile.size,
+          hash: snapshotFile.sha256,
+        };
+      }
+    }
     const absPath = join(projectRoot, relativePath);
     try {
       if (lstatSync(absPath).isSymbolicLink()) {
@@ -283,6 +334,7 @@ export function buildProjectInputFingerprint(
     ...configuration,
     files: fingerprintProjectFiles(projectRoot, {
       includePath: (path) => classifyProjectInputPath(path, languages, configuredMarkerFiles) !== 'other',
+      includePaths: configuredMarkerFiles,
     }),
   };
 }

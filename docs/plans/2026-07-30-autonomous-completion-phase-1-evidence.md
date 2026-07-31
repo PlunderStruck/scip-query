@@ -1,7 +1,7 @@
 # Phase 1 — evidence foundation
 
 Date: 2026-07-30
-Status: in progress — slices 1.1–1.2 complete; slice 1.3 next
+Status: in progress — slices 1.1–1.3 complete; slice 1.4 next
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -381,6 +381,74 @@ Deviation:
   slice. Slice 1.3 will compute both from one fixed snapshot; emitting a
   convenient live-worktree hash here would have manufactured authority before
   the required stability mechanism exists.
+
+### Slice 1.3 — fixed snapshot and index alignment
+
+Implemented:
+
+- a fixed project observation snapshot now uses the immutable Git tree as its
+  base and captures dirty, untracked, deleted, executable-mode, symlink, and
+  explicitly configured ignored-input overlays before analysis; non-Git and
+  unborn repositories use a bounded in-memory snapshot;
+- repository-content identity is clone-independent and includes committed
+  suppressions while excluding derived artifacts, machine-local state,
+  outcome-event history, and repository-declared historical snapshot paths;
+- project reads, listings, and fingerprints can run inside an async-local
+  snapshot context, so concurrent commands cannot see each other's bytes and a
+  deletion remains a tombstone instead of falling back to the live filesystem;
+- the versioned relevant-input projection is computed from the same snapshot,
+  including an explicitly configured ignored input that ordinary Git file
+  enumeration would omit;
+- the immutable generation's existing metadata fingerprint is decoded into the
+  same versioned identity only when a fixed-snapshot producer needs alignment;
+  no redundant persisted identity field was added; and
+- receipts supplied with that snapshot state the whole-content identity,
+  relevant-input identity, stored generation-input identity, immutable
+  generation source, and fixed-snapshot proof independently. Capture failure
+  yields no such fact.
+
+Observed verification:
+
+- focused snapshot, project-file, and receipt tests prove clone-independent
+  identities, exact generation alignment, ignored configured inputs,
+  executable modes, symlinks, deletion tombstones, post-capture live edits,
+  concurrent isolation, and fail-closed mid-capture mutation;
+- the identity fast path is byte-for-byte compatible with the version-1
+  canonical preimage, and the project-input fast path equals the generic
+  recursively stable encoding;
+- all 2,214 tests across 274 files passed; typecheck, build, lint, formatting,
+  generated skill-link checks, and the unchanged 72-path public API contract
+  passed;
+- fresh `diff-impact` found 55 changed symbols and 14 affected consumer files;
+  complete architecture transport reported no declared boundary violations,
+  and unbounded recent-duplicate and unused-parameter scans found none;
+- `diff-gate` passed with one advisory same-name error-predicate signal whose
+  other implementation handles affected-shadow filesystem races rather than
+  fixed-snapshot capture; and
+- `stats --json --compact` measured 285.2 ms median across nine isolated warm
+  runs, inside the pre-registered 292.0 ms guard.
+
+Refutation attempts:
+
+- mutating a source file at the adapter's validation boundary invalidates the
+  snapshot instead of returning a bracketed or fixed proof;
+- two simultaneous async snapshot contexts read different fixed bytes without
+  cross-command contamination;
+- deleting a tracked file leaves a fixed missing-path tombstone and cannot
+  expose a replacement created later; and
+- an ignored but configured TypeScript project input changes both repository
+  content and relevant-input projections.
+
+Deviation:
+
+- the first integration captured a repository snapshot for every ordinary
+  repository-observation command. It measured 398.9 ms median on the
+  pre-registered `stats` path and falsely implied that every producer consumed
+  repository bytes. The replacement keeps snapshot construction scoped to
+  producers that declare and actually read that source. Slice 1.4 owns that
+  declaration and qualification registry. Graph-only commands therefore pay no
+  snapshot ceremony and retain unknown whole-content alignment until a
+  completion consumer requests a producer that establishes it.
 
 ## Verification gate
 

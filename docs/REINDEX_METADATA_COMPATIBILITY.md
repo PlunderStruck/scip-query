@@ -45,6 +45,15 @@ additionally require it to be an object. Language lists contain unique names
 from the same
 `SUPPORTED_LANGUAGES` catalog used by configuration.
 
+When the fingerprint also decodes as the current versioned
+`ProjectInputSnapshot`, a fixed-snapshot receipt projects it as
+`scip-query:index-inputs`. This is a derived identity over the existing
+fingerprint bytes, not a second persisted identity field. The receipt compares
+that projection only with a current fixed snapshot built under the same
+project-input version; malformed, older, or otherwise unrecognized fingerprint
+shapes remain usable only for the capabilities above and do not acquire an
+index-alignment claim.
+
 The SQLite layout field is an additive v3 upgrade boundary rather than a wire
 version migration. A v3 record without it remains queryable, evidence-usable,
 and eligible for language-shard reuse. It is not eligible for whole-SQLite
