@@ -1,0 +1,161 @@
+{
+  "kind": "scip-query-suppression",
+  "suppressionIdentity": "SQF3097FC5FF5C",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  },
+  "id": "SQF3097FC5FF5C",
+  "check": "co-change-partner",
+  "file": "skills/scip-query/SKILL.md",
+  "reason": "The edited text is hand-authored workflow guidance, while docs/COMMAND_REFERENCE.md is descriptor-owned command syntax; rerunning the descriptor generator produced no command-reference change, so copying the workflow text there would violate that ownership boundary.",
+  "createdAt": "2026-07-31T10:20:01.233Z",
+  "schemaVersion": 2,
+  "decision": {
+    "kind": "automated-adjudication",
+    "reasonCode": "historical-coupling-ended",
+    "decidedBy": "agent",
+    "policyVersion": 1,
+    "observation": {
+      "schemaVersion": 2,
+      "observedAt": "2026-07-31T10:20:01.231Z",
+      "facts": {
+        "collaborationDomain": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:collaboration-domain",
+            "version": 1
+          },
+          "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+        },
+        "workspaceInstance": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:workspace-instance",
+            "version": 1
+          },
+          "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+        },
+        "wholeContent": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:repository-content",
+            "version": 1
+          },
+          "digest": "3c1e2d2f64046aa804f26369b43a9dadbc7574f8ce3574969b97d2e0f66e19a1"
+        },
+        "relevantInputs": [
+          {
+            "subject": "scip-query:index-inputs",
+            "identity": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:index-inputs",
+                "version": 2
+              },
+              "digest": "3e43f4e851a4459211b504c81bdb25eafeb2031658f837561a395226af4daa67"
+            }
+          }
+        ],
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "17466076db86cdbce2e0cc9ebcf0082de993a1397387b018072e721945731cff"
+          },
+          "inputs": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-inputs",
+              "version": 2
+            },
+            "digest": "3e43f4e851a4459211b504c81bdb25eafeb2031658f837561a395226af4daa67"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "17466076db86cdbce2e0cc9ebcf0082de993a1397387b018072e721945731cff"
+          }
+        },
+        {
+          "kind": "repository-snapshot",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:repository-content",
+              "version": 1
+            },
+            "digest": "3c1e2d2f64046aa804f26369b43a9dadbc7574f8ce3574969b97d2e0f66e19a1"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        },
+        {
+          "source": "repository-snapshot",
+          "kind": "fixed-snapshot"
+        }
+      ],
+      "diagnostics": {
+        "clean": false,
+        "headCommit": "a67ca651b7b979b681ec7558299b064fca265892",
+        "treeOid": "1a2ec673a9948339eee4083f73cf10aa3f40a1b1"
+      }
+    },
+    "evidence": [
+      {
+        "kind": "source",
+        "referent": "docs/COMMAND_REFERENCE.md",
+        "claim": "The edited text is hand-authored workflow guidance, while docs/COMMAND_REFERENCE.md is descriptor-owned command syntax; rerunning the descriptor generator produced no command-reference change, so copying the workflow text there would violate that ownership boundary.",
+        "contentHash": "f5d0f9de7fc7896d17a54082a3dd8d42ea8553ef2f164b749755622413ea7321"
+      },
+      {
+        "kind": "source",
+        "referent": "scripts/render-command-reference.ts",
+        "claim": "The edited text is hand-authored workflow guidance, while docs/COMMAND_REFERENCE.md is descriptor-owned command syntax; rerunning the descriptor generator produced no command-reference change, so copying the workflow text there would violate that ownership boundary.",
+        "contentHash": "348122fb0ca440f943d1e9b6fbfc24e5c0f6f45ae51e1887bad7b48986d5d63e"
+      },
+      {
+        "kind": "test",
+        "referent": "tests/runtime/cli-contract.test.ts",
+        "claim": "The edited text is hand-authored workflow guidance, while docs/COMMAND_REFERENCE.md is descriptor-owned command syntax; rerunning the descriptor generator produced no command-reference change, so copying the workflow text there would violate that ownership boundary.",
+        "contentHash": "176a02c9452464495a30791f43abd7192c63ff4aad7d13e156028f9b2d483673"
+      }
+    ],
+    "invalidateOn": {
+      "targetContentChange": true,
+      "detectorMajorChange": true
+    }
+  }
+}

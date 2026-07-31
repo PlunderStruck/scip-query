@@ -44,7 +44,10 @@ installed, or wiped by a settings reset) or need refreshing after a
 scip-query upgrade changed hook contracts.
 
 Output to check: which hook files were written per tool; treat a tool with no
-hook file as not covered.
+hook file as not covered. On a supported provider, confirm the installed
+events cover session restoration, changed prompt state, compaction,
+pre-tool safeguards, and Stop evaluation; partial lifecycle coverage is not an
+autonomous workflow.
 
 ## setup-ci
 
@@ -114,6 +117,8 @@ scip-query-owned skill links, project hooks, and managed agent setup blocks.
 Output to check: confirm the removal list covers every artifact `setup`
 reported writing (skills, hooks, agent guidance blocks). Anything `setup`
 wrote that `uninstall` doesn't list as removed needs manual follow-up — for
-example config files (`.scipquery.json`) and the SQLite index are
-intentionally left in place since they may hold data the user still wants;
-tell the user explicitly if they want those gone too.
+example config files (`.scipquery.json`) and the SQLite index are intentionally
+left in place since they may hold data the user still wants. Shared
+`.scipquery` goals, changes, attempts, decisions, obligations, completion
+records, suppressions, and events are repository history, not installation
+artifacts; uninstall must preserve them.

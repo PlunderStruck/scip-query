@@ -130,6 +130,16 @@ earns verified credit instead; once `HEAD` advances, a clean run replays that
 stored base automatically. Complete only when `diff-gate` passes or every
 finding has a durable explanation.
 
+The supported Stop hook automatically turns this evidence into a fixed
+completion evaluation and one durable next-action decision. A clean
+`diff-gate` is evidence, not permission to declare the goal complete. Follow
+the emitted action: gather its named evidence, repair, retry within the stated
+bound, reconcile an unknown effect, replan, carry work to an authorized
+successor, or halt on its explicit missing-authorization boundary. When hooks
+are unavailable, inspect the same state with
+`scip-query completion status <change-id> --json`; do not replace it with an
+agent-authored completion claim.
+
 ### 5. Check health, docs, and generated surfaces when relevant
 
 Run
@@ -179,9 +189,11 @@ edge input — over an argued one. Pick attacks that fit the diff:
 - **The intent gap** — find one case the stated goal implies that the diff
   does not visibly cover, then show where it's handled or show it's missing.
 
-Record every attempt. An attempt that breaks the diff converts the verdict to
-FAIL with a finding; the attempt stays in the record either way. Complete
-only when every refutation attempt has an executed result.
+Execute every attempt. Supported command integration records it automatically;
+do not add a second manual attempt-log step. An attempt that breaks the diff
+converts the verdict to FAIL with a finding, and its automatic record remains
+part of the work history either way. Complete only when every refutation
+attempt has an executed result.
 
 ### Report
 

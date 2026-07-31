@@ -55,11 +55,20 @@ the logical result is exhaustive.
 
 ## Default non-trivial change loop
 
-1. Invoke `scip-plan`, anchored by
+1. Recover the canonical goal and intended change from the injected
+   restoration state. If none exists and the user's authorized intent is
+   sufficiently clear, invoke `scip-plan` to derive and materialize one concise
+   goal-relative Gherkin request without asking the user to restate metadata.
+2. Invoke `scip-plan`, anchored by
    `scip-query plan-context <target>`.
-2. Implement the smallest coherent planned slice.
-3. Invoke `scip-verify`; do not declare completion until it passes or every
+3. Implement the smallest coherent planned slice. Ordinary scip-query
+   operations update attempt and evidence history automatically; do not add
+   manual ledger commands as workflow ceremony.
+4. Invoke `scip-verify`; do not declare completion until it passes or every
    remaining finding has a specific evidence-backed disposition.
+5. Follow the exact Stop-controller next action. Continue autonomously for
+   work blockers; stop only when the action identifies genuinely missing
+   authorization.
 
 Routing is complete only when exactly one owner is selected for the current
 phase, or the request is small enough that no compiler-resolved relationship

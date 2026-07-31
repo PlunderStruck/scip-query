@@ -41,6 +41,9 @@ The command, in full:
   versions pinned by the installed scip-query package;
 - installs bundled agent skills and checkout-local Codex/Claude hooks unless
   explicitly skipped;
+- installs the minimum managed instructions that tell an agent to recover or
+  derive one concise Gherkin goal, rely on automatic work capture, and obey
+  the protected Stop-controller action;
 - enables demand-started automatic incremental indexing unless the repository
   has or selects an explicit opt-out;
 - builds or reuses language/project shards and publishes one atomic SQLite
@@ -115,5 +118,9 @@ After setup, invoke `scip-audit` when the user wants a report, or
 `scip-improve` when the user wants autonomous cleanup. If the repo is
 new to scip-query, also route through [Per-repo triage](per-repo-triage.md)
 so standing findings get encoded once rather than recurring on every gate run.
+For an authorized implementation request with no existing canonical state,
+route through `scip-plan`; the agent derives and materializes the concise
+Gherkin goal and intended change instead of asking the user to populate
+protocol metadata.
 
 Close with the report template in the top-level `SKILL.md`.

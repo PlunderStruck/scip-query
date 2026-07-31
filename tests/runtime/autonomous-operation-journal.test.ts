@@ -12,7 +12,12 @@ import {
 } from '../../src/runtime/autonomous-operation-journal.js';
 import { buildObservationReceipt } from '../../src/runtime/observation-receipt.js';
 import { createGoalRecordFile, createIntendedChangeRecordFile } from '../../src/storage/autonomous-work-state.js';
-import { readAttemptRecords } from '../../src/storage/autonomous-work-ledger.js';
+import {
+  createAttemptRecordFile,
+  createDecisionRecordFile,
+  readAttemptRecords,
+  readWorkHistory,
+} from '../../src/storage/autonomous-work-ledger.js';
 
 const roots: string[] = [];
 
@@ -125,6 +130,72 @@ describe('automatic autonomous operation journal', () => {
       reusedAttemptIds: [],
       pendingOperationCount: 0,
     });
+  });
+
+  it('turns the next successful observation into a requested unknown-effect reconciliation', () => {
+    const { projectRoot, cacheDir } = fixture();
+    const { changeId } = activeChange(projectRoot);
+    const unknown = createAttemptRecordFile(
+      projectRoot,
+      '5ea57d1a-936c-4c91-b58f-5d61e45173a5',
+      {
+        changeId,
+        idempotencyKey: 'unknown-effect',
+        intendedCondition: 'The external effect is known',
+        action: {
+          family: 'external-write',
+          summary: 'Apply one external write',
+          effectClass: 'non-idempotent-write',
+        },
+        evidenceReceipts: [],
+        observedEffect: 'The process ended before the effect was observed',
+        outcome: 'unknown',
+      },
+      { toolVersion: '0.20.0', now: () => '2026-07-30T10:00:00.000Z' },
+    ).record;
+    const receipt = buildObservationReceipt({ projectRoot });
+    createDecisionRecordFile(
+      projectRoot,
+      '5ea57d1a-936c-4c91-b58f-5d61e45173a5',
+      {
+        changeId,
+        idempotencyKey: 'reconcile-unknown-effect',
+        basisAttemptIds: [unknown.attemptId],
+        evidenceReceipts: [receipt],
+        disposition: 'reconcile-unknown',
+        rationale: 'The final effect is unknown and must be observed before retry',
+        nextAction: `Observe ${unknown.attemptId} without repeating it`,
+      },
+      { toolVersion: '0.20.0', now: () => '2026-07-30T10:01:00.000Z' },
+    );
+    const observation = beginAutomaticOperationCapture({
+      projectRoot,
+      cacheDir,
+      command: 'status',
+      operationRole: 'repository-observation',
+      argv: ['status'],
+      preReceipt: receipt,
+      operationId: 'reconciliation-observation',
+      now: '2026-07-30T10:02:00.000Z',
+    });
+    completeAutomaticOperationCapture({
+      capture: observation!,
+      exitCode: 0,
+      postReceipt: receipt,
+      now: '2026-07-30T10:02:01.000Z',
+    });
+
+    const materialized = materializeAutomaticOperationAttempts(projectRoot, cacheDir, '0.20.0');
+    const reconciliation = readAttemptRecords(projectRoot).records.find(
+      (attempt) => attempt.reconcilesAttemptId === unknown.attemptId,
+    );
+
+    expect(materialized.createdAttemptIds).toContain(reconciliation?.attemptId);
+    expect(reconciliation).toMatchObject({
+      outcome: 'succeeded',
+      action: { family: 'scip-query:status', effectClass: 'read-only' },
+    });
+    expect(readWorkHistory(projectRoot, changeId).summary.unresolvedUnknownAttemptIds).toEqual([]);
   });
 });
 

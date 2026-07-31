@@ -66,13 +66,38 @@ The plan is done only when: the entry-to-effect path is described and evidenced,
 When a repository has adopted canonical autonomous work state, use
 `scip-query goal status` and `scip-query change status` to recover the
 authorized goal and intended change rather than asking the user or transcript
-to restate them. Supported project-local hooks derive the same bounded
-restoration projection automatically on session start and after compaction;
+to restate them. If exactly one active change exists, continue it. If no goal
+or change exists and the user's request both authorizes repository work and
+states a sufficiently clear desired outcome, derive and materialize the
+initial records yourself; do not ask the user to translate their request into
+protocol fields. A real ambiguity about authority or what observable outcome
+would count as success remains unknown rather than being invented.
+
+Keep the goal shorter than the implementation plan. Map it to Gherkin as:
+
+```gherkin
+Feature: <one sentence naming the repository capability or end state>
+
+  Scenario: <one observable acceptance case>
+    Given <relevant starting facts>
+    When <an externally meaningful event occurs>
+    Then <observable repository or user-facing effects hold>
+```
+
+Add only invariants that must remain true across every valid implementation,
+and add only enough scenarios to distinguish success from a technically
+narrow edit. Do not put file names, symbols, algorithms, ordered coding steps,
+or the proposed implementation into the goal unless they are themselves part
+of the authorized external contract. If writing the goal takes more prose than
+the plan slice it governs, move the detail into the intended change or plan.
+
+Supported project-local hooks derive the same bounded restoration projection
+automatically on session start, changed prompt state, and after compaction;
 when it emits exact status commands because its registered context budget was
 reached, run those commands instead of asking for a narrative handoff.
 `scip-query goal create --input <path>` and
 `scip-query change create --input <path>` are repository mutations: use them
-only to materialize an authorized goal/change request, and rely on their
+once to materialize the derived authorized request, and rely on their
 retry-stable identities instead of editing committed record bytes directly.
 Use `scip-query attempt status <change-id>` and
 `scip-query decision status <change-id>` to recover tried strategies,
@@ -87,10 +112,13 @@ Use `scip-query completion status <change-id> --json` to inspect the protected
 completion judgment. An evaluation with an unknown required predicate remains
 blocked, and only a controller-derived complete evaluation has a completion
 transition. Do not infer completion from a passing command or an agent's prose.
-Attempt and decision `create` operations are durable workflow primitives:
-record them as a
-side effect of useful work, never as a parallel narrative ritual, and never
-authorize repetition of an unresolved non-idempotent attempt.
+Attempt and decision records are durable workflow primitives, but supported
+hooks and commands create them as a side effect of useful work and Stop
+evaluation. Do not issue manual `attempt create` or `decision create`
+operations for ordinary exploration, edits, verification, retries, or
+reconciliation. Use those maintenance commands only for an unsupported agent
+adapter or explicit ledger repair. Never authorize repetition of an unresolved
+non-idempotent attempt.
 
 ## Owned command quick-reference
 

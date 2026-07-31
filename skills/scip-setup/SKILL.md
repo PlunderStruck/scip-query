@@ -65,6 +65,13 @@ hand-running its internals. Full step-by-step handling — including what to do
 when it reports `partial` or `blocked` — is in
 [Bootstrap workflow](references/bootstrap-workflow.md).
 
+The installed workflow must be usable without hand-authored glue: session and
+changed-prompt hooks restore canonical goal/change state, useful commands
+capture attempt evidence, and Stop publishes the fixed completion judgment and
+exact bounded next action. Setup is not ready for an agent when any supported
+provider is reported installed but one of those lifecycle boundaries is
+missing.
+
 Do not manually install AST grammar packages before trying `setup`. If npm's
 script-approval gate blocks a native package, report the pending packages and
 ask the user to approve them — a package must not approve its own install

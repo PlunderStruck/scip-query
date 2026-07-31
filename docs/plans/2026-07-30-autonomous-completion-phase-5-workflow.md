@@ -1,7 +1,7 @@
 # Phase 5 — autonomous agent workflow
 
 Date: 2026-07-30
-Status: in progress; slices 5.1–5.3 complete
+Status: complete; protected outcome comparison continues in Phase 6
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -194,12 +194,49 @@ Expected validation:
 - uninstall removes local integration but preserves shared project history; and
 - setup remains idempotent.
 
+Execution result:
+
+- aligned the scip-query, plan, improve, verify, and setup skills around one
+  concise goal, one intended change, automatic work-history capture, and the
+  exact next action emitted by Stop;
+- made an authorized, unambiguous request sufficient for the agent to derive
+  and materialize a short goal-relative Gherkin condition instead of asking the
+  principal to restate metadata;
+- removed manual attempt, decision, receipt, and progress-checklist steps from
+  the ordinary workflow while retaining explicit commands for unsupported or
+  diagnostic use;
+- reduced the managed setup block to the two protocol facts an agent cannot
+  safely infer: where the canonical goal lives and that operation history plus
+  Stop policy are automatic;
+- reused the runtime command descriptors as the source of generated detector
+  tables and added skill/runtime contract checks so repeated command guidance
+  cannot drift silently;
+- made the first successful read-only observation after an
+  `reconcile-unknown` decision automatically reconcile its named attempt,
+  closing the last ordinary path that otherwise required hand-authored work
+  metadata;
+- preserved shared `.scipquery` records across uninstall while removing only
+  provider-local integration, and retained idempotent setup coverage;
+- updated the agent-design skill with the same byproduct-not-ceremony and
+  stopping-is-not-completion rules; and
+- verified the complete repository with 2,357 passing tests across 298 files,
+  lint, generated documentation, focused setup and workflow contracts, and the
+  SCIP postchecks recorded with this slice.
+
 ## Efficiency gate
 
 Compare otherwise identical fixture tasks with event capture/context projection
 on and off. Track added commands, repeated context tokens, tool latency, failed
 attempts, and time to the next correct action. Any mandatory workflow step that
 does not change one of the five decision-relevant state classes is removed.
+
+The structural half of this gate passes in Phase 5: ordinary execution adds no
+metadata command, unchanged prompt boundaries emit zero repeated restoration
+text, and unknown-effect reconciliation is produced by the next useful
+observation. The quantitative protected on/off comparison is intentionally
+performed by the Phase 6 matched-trial harness, where latency and time to the
+next correct action can be measured without substituting unit-test timing for
+agent outcomes.
 
 ## Risks and deferrals
 

@@ -21,11 +21,21 @@ with its evidence and disposition.
 
 ## Ground rules, every scenario
 
-- Work in small, independently verifiable batches or slices — one verified deletion batch, one migration slice, one twin group, one register entry. Never apply everything unattended.
-- State the plan before editing: what's confirmed, the evidence, the intended change, how you'll verify it.
+- Work in small, independently verifiable batches or slices — one verified
+  deletion batch, one migration slice, one twin group, one register entry.
+  Continue through those slices autonomously; do not collapse all findings
+  into one unverified mutation.
+- Preserve the plan in the canonical intended change or plan document when it
+  changes a future decision. Do not narrate a duplicate checklist merely to
+  satisfy the control system.
 - Re-derive evidence from current `scip-query` output, not from memory or the stale text you're replacing.
 - After every applied change, run the routed postchecks in the `scip-verify` skill, in addition to whatever narrow rerun this scenario names.
-- Load command mechanics from `_shared` first; this file only names the commands each scenario needs and what to do with their output.
+- Let useful commands and Stop evaluation capture attempts, evidence, and
+  next-action decisions automatically. Follow the exact restored next action;
+  use manual ledger commands only when the adapter explicitly reports that
+  automatic integration is unavailable.
+- Use this skill's shortlist first. Load command mechanics from `_shared` only
+  when the shortlist is insufficient.
 
 ## Triage
 

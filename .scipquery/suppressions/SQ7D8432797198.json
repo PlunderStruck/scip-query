@@ -1,0 +1,161 @@
+{
+  "kind": "scip-query-suppression",
+  "suppressionIdentity": "SQ7D8432797198",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  },
+  "id": "SQ7D8432797198",
+  "check": "co-change-partner",
+  "file": "skills/scip-query/SKILL.md",
+  "reason": "skills/_shared/SKILL.md is explicitly a command and evidence catalog rather than an owning workflow; the autonomous default loop belongs to skills/scip-query/SKILL.md and its routed specialists, so duplicating it in _shared would create two workflow authorities.",
+  "createdAt": "2026-07-31T10:20:07.931Z",
+  "schemaVersion": 2,
+  "decision": {
+    "kind": "automated-adjudication",
+    "reasonCode": "historical-coupling-ended",
+    "decidedBy": "agent",
+    "policyVersion": 1,
+    "observation": {
+      "schemaVersion": 2,
+      "observedAt": "2026-07-31T10:20:07.929Z",
+      "facts": {
+        "collaborationDomain": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:collaboration-domain",
+            "version": 1
+          },
+          "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+        },
+        "workspaceInstance": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:workspace-instance",
+            "version": 1
+          },
+          "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+        },
+        "wholeContent": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:repository-content",
+            "version": 1
+          },
+          "digest": "98553784e4c6f1965e0ca11fb389b5d46247bbfcc9803b3bd824234c30691cc0"
+        },
+        "relevantInputs": [
+          {
+            "subject": "scip-query:index-inputs",
+            "identity": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:index-inputs",
+                "version": 2
+              },
+              "digest": "3e43f4e851a4459211b504c81bdb25eafeb2031658f837561a395226af4daa67"
+            }
+          }
+        ],
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "17466076db86cdbce2e0cc9ebcf0082de993a1397387b018072e721945731cff"
+          },
+          "inputs": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-inputs",
+              "version": 2
+            },
+            "digest": "3e43f4e851a4459211b504c81bdb25eafeb2031658f837561a395226af4daa67"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "17466076db86cdbce2e0cc9ebcf0082de993a1397387b018072e721945731cff"
+          }
+        },
+        {
+          "kind": "repository-snapshot",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:repository-content",
+              "version": 1
+            },
+            "digest": "98553784e4c6f1965e0ca11fb389b5d46247bbfcc9803b3bd824234c30691cc0"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        },
+        {
+          "source": "repository-snapshot",
+          "kind": "fixed-snapshot"
+        }
+      ],
+      "diagnostics": {
+        "clean": false,
+        "headCommit": "a67ca651b7b979b681ec7558299b064fca265892",
+        "treeOid": "1a2ec673a9948339eee4083f73cf10aa3f40a1b1"
+      }
+    },
+    "evidence": [
+      {
+        "kind": "source",
+        "referent": "skills/_shared/SKILL.md",
+        "claim": "skills/_shared/SKILL.md is explicitly a command and evidence catalog rather than an owning workflow; the autonomous default loop belongs to skills/scip-query/SKILL.md and its routed specialists, so duplicating it in _shared would create two workflow authorities.",
+        "contentHash": "77aa94cd10b7a43dd97439a88d1a2dc2633f072ee8b8df90148a230cfc4d880e"
+      },
+      {
+        "kind": "source",
+        "referent": "skills/scip-query/SKILL.md",
+        "claim": "skills/_shared/SKILL.md is explicitly a command and evidence catalog rather than an owning workflow; the autonomous default loop belongs to skills/scip-query/SKILL.md and its routed specialists, so duplicating it in _shared would create two workflow authorities.",
+        "contentHash": "3d0048eaa1de78b1ae23b0c8802f7f5a932296e87c7eca0540baf71ce4f4d5a8"
+      },
+      {
+        "kind": "test",
+        "referent": "tests/runtime/cli-contract.test.ts",
+        "claim": "skills/_shared/SKILL.md is explicitly a command and evidence catalog rather than an owning workflow; the autonomous default loop belongs to skills/scip-query/SKILL.md and its routed specialists, so duplicating it in _shared would create two workflow authorities.",
+        "contentHash": "176a02c9452464495a30791f43abd7192c63ff4aad7d13e156028f9b2d483673"
+      }
+    ],
+    "invalidateOn": {
+      "targetContentChange": true,
+      "detectorMajorChange": true
+    }
+  }
+}

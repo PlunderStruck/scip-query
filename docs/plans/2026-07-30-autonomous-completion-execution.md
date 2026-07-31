@@ -237,5 +237,5 @@ Before the program can be marked complete:
 - [x] Phase 2: durable autonomous state.
 - [x] Phase 3: protected completion.
 - [x] Phase 4: repository completeness.
-- [ ] Phase 5: agent workflow (slices 5.1–5.3 complete; slice 5.4 next).
+- [x] Phase 5: agent workflow.
 - [ ] Phase 6: outcome trials and product alignment.

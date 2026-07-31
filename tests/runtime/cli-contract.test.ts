@@ -392,6 +392,19 @@ describe('CLI contract', () => {
     expect(extractGeneratedAgentContractCatalog(catalog)).toBe(renderAgentContractCatalogMarkdown(commandDescriptors));
   });
 
+  it('keeps autonomous workflow guidance aligned across the routed skills', () => {
+    const readSkill = (name: string) => readFileSync(join(process.cwd(), 'skills', name, 'SKILL.md'), 'utf8');
+
+    expect(readSkill('scip-query')).toContain('Follow the exact Stop-controller next action');
+    expect(readSkill('scip-plan')).toContain('Keep the goal shorter than the implementation plan');
+    expect(readSkill('scip-plan')).toMatch(
+      /Do not issue manual `attempt create` or `decision create`\s+operations for ordinary/u,
+    );
+    expect(readSkill('scip-improve')).toContain('Continue through those slices autonomously');
+    expect(readSkill('scip-verify')).toContain('A clean\n`diff-gate` is evidence, not permission');
+    expect(readSkill('scip-setup')).toContain('without hand-authored glue');
+  });
+
   it('routes every consolidated workflow skill exactly once', () => {
     const router = readFileSync(join(process.cwd(), 'skills/scip-query/SKILL.md'), 'utf8');
     const routes = router.match(/## Routes\n([\s\S]*?)\n## Disambiguation/)?.[1] ?? '';

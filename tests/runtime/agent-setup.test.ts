@@ -50,6 +50,10 @@ describe('setupAgent', () => {
     expect(result.written).toEqual(['AGENTS.md', 'CLAUDE.md']);
     const agentsMd = readFileSync(join(projectRoot, 'AGENTS.md'), 'utf-8');
     expect(agentsMd).toContain('scip-query diff-gate');
+    expect(agentsMd).toContain('derive one concise Gherkin goal');
+    expect(agentsMd).toContain('without asking the user to restate protocol metadata');
+    expect(agentsMd).toContain('capture attempts, evidence, reconciliations, and next-action decisions automatically');
+    expect(agentsMd).toContain('stop only on a named missing-authorization boundary');
     expect(agentsMd).toContain('let an active watcher finish its refresh');
     expect(agentsMd).toContain('Run `scip-query reindex` only when freshness is stale, missing, or unknown');
     expect(agentsMd).toContain('commit `.scipquery/goals/*.json`');

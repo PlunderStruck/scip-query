@@ -8,7 +8,7 @@ import { stableJson } from '../domain/stable-json.js';
 import { isCommandOperationRole, type CommandOperationRole } from './command-operation.js';
 import { mutateTextFileRevisionAware } from './revisioned-file.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
-import { createAttemptRecordFile } from '../storage/autonomous-work-ledger.js';
+import { createAttemptRecordFile, readWorkHistory } from '../storage/autonomous-work-ledger.js';
 import { readIntendedChangeRecordFile } from '../storage/autonomous-work-state.js';
 import { readAutonomousRestorationProjection } from '../storage/autonomous-work-restoration.js';
 
@@ -176,7 +176,15 @@ export function materializeAutomaticOperationAttempts(
   const createdAttemptIds: string[] = [];
   const reusedAttemptIds: string[] = [];
   const materialized = new Map<string, string>();
+  let reconciliationTarget = automaticReconciliationTarget(
+    readWorkHistory(projectRoot, change.record.changeId).summary,
+  );
   for (const entry of pending) {
+    const evidenceReceipts = uniqueReceipts([entry.preReceipt, entry.postReceipt]);
+    const reconcilesAttemptId =
+      reconciliationTarget && operationCanReconcile(entry, evidenceReceipts, reconciliationTarget.createdAt)
+        ? reconciliationTarget.attemptId
+        : undefined;
     const result = createAttemptRecordFile(
       projectRoot,
       change.record.collaborationDomainId,
@@ -189,12 +197,14 @@ export function materializeAutomaticOperationAttempts(
           summary: `scip-query ${entry.command} completed as ${entry.operationRole}`,
           effectClass: operationEffectClass(entry.operationRole),
         },
-        evidenceReceipts: uniqueReceipts([entry.preReceipt, entry.postReceipt]),
+        evidenceReceipts,
         observedEffect: operationObservedEffect(entry),
         outcome: entry.state === 'started' ? 'unknown' : entry.exitCode === 0 ? 'succeeded' : 'failed',
+        ...(reconcilesAttemptId ? { reconcilesAttemptId } : {}),
       },
       { toolVersion, now: () => entry.completedAt ?? entry.startedAt },
     );
+    if (reconcilesAttemptId) reconciliationTarget = undefined;
     materialized.set(entry.operationId, result.record.attemptId);
     (result.publication === 'created' ? createdAttemptIds : reusedAttemptIds).push(result.record.attemptId);
   }
@@ -311,6 +321,23 @@ function operationObservedEffect(entry: AutomaticOperationJournalEntry): string 
   if (entry.state === 'started') return 'The command process ended before an outcome was durably observed.';
   if (entry.exitCode === 0) return 'The command completed successfully and its post-operation state was observed.';
   return `The command completed with exit code ${entry.exitCode ?? 1}${entry.error ? `: ${entry.error}` : '.'}`;
+}
+
+function automaticReconciliationTarget(history: ReturnType<typeof readWorkHistory>['summary']) {
+  if (history.latestDecision?.disposition !== 'reconcile-unknown') return undefined;
+  const unresolved = new Set(history.unresolvedUnknownAttemptIds);
+  const targetId = history.latestDecision.basisAttemptIds.find((attemptId) => unresolved.has(attemptId));
+  return targetId ? history.attempts.find((attempt) => attempt.attemptId === targetId) : undefined;
+}
+
+function operationCanReconcile(
+  entry: AutomaticOperationJournalEntry,
+  evidenceReceipts: readonly ObservationReceiptV2[],
+  unknownCreatedAt: string,
+): boolean {
+  if (entry.state !== 'completed' || entry.exitCode !== 0 || !operationIsReadOnly(entry.operationRole)) return false;
+  const threshold = Date.parse(unknownCreatedAt);
+  return evidenceReceipts.some((receipt) => Date.parse(receipt.observedAt) >= threshold);
 }
 
 function uniqueReceipts(values: readonly (ObservationReceiptV2 | undefined)[]): ObservationReceiptV2[] {
