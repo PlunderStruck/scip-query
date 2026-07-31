@@ -1,7 +1,7 @@
 # Phase 6 — outcome trials and product alignment
 
 Date: 2026-07-30
-Status: planned; depends on Phase 5
+Status: in progress; slice 6.1 complete
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -71,6 +71,27 @@ Expected validation:
 - control and treatment differ only in the declared workflow;
 - reruns retain separate identities; and
 - incomplete or contaminated trials are excluded with reasons.
+
+Execution result:
+
+- added versioned, content-identified program and run records with published
+  JSON schemas and forward/older-version compatibility states;
+- made agent configuration, budgets, fixtures, and the decision rule shared
+  once at program scope, while the two exact condition objects can differ only
+  by `disabled` versus `autonomous-completion-v1` workflow;
+- bound every fixture archive and protected evaluator to a SHA-256 digest and
+  required pre/post observations so disappearance or mutation produces an
+  explicit exclusion rather than a score;
+- refused to publish protected run records inside the candidate-editable
+  worktree and used durable create-only files so a completed result cannot be
+  replaced;
+- derived rerun identity from program, pair, fixture, treatment, and ordinal,
+  preserving separate immutable evidence for every attempt;
+- retained missing telemetry and evaluator judgments as `null`, never zero or
+  false; and
+- verified schema publication, semantic identity, condition isolation,
+  evaluator contamination, idempotent publication, collision rejection, and
+  protected-root placement in 9 focused tests plus TypeScript and lint.
 
 ### 6.2 Metric derivation
 

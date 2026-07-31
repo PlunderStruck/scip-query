@@ -8,6 +8,8 @@ commands:
     when: "Compare changed files, symbols, and affected consumers with the intended diff."
   - template: "scip-query diff-gate"
     when: "Run the complete finished-diff gate without blind line truncation."
+  - template: "scip-query mission-trial validate <program> --protected-root <path>"
+    when: "Validate or inspect protected matched trials that evaluate autonomous completion rather than detector output alone."
 ---
 
 # scip-verify
@@ -27,23 +29,28 @@ above output is trusted on a repo, someone has to find out which it is.
 Load shared mechanics — command syntax, the evidence contract, diff-gate's
 
 <!-- BEGIN GENERATED SKILL COMMANDS -->
+
 ## Commands for this skill
 
-| Command | Purpose | Returns | Coverage | When |
-| --- | --- | --- | --- | --- |
-| `scip-query doctor` | Diagnose config, index freshness, dependency readiness, and project capabilities | config, freshness, dependency, and capability diagnostics | `complete` | Prove the workspace and configuration are usable before trusting evidence. |
-| `scip-query diff-impact` | Compute changed symbols and downstream consumers from current git diff | changed symbols, downstream consumer identities, and impact paths | `bounded` | Compare changed files, symbols, and affected consumers with the intended diff. |
-| `scip-query diff-gate` | Runtime-bounded, single-flight gate for the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | blocking findings with check id, message, and remediation; advisory findings; root-cause groups; changed file and symbol counts; process exit status (1 when blocking findings exist) | `bounded` | Run the complete finished-diff gate without blind line truncation. |
+| Command                                                               | Purpose                                                                                                                                                                                              | Returns                                                                                                                                                                               | Coverage   | When                                                                                                                |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------- |
+| `scip-query doctor`                                                   | Diagnose config, index freshness, dependency readiness, and project capabilities                                                                                                                     | config, freshness, dependency, and capability diagnostics                                                                                                                             | `complete` | Prove the workspace and configuration are usable before trusting evidence.                                          |
+| `scip-query diff-impact`                                              | Compute changed symbols and downstream consumers from current git diff                                                                                                                               | changed symbols, downstream consumer identities, and impact paths                                                                                                                     | `bounded`  | Compare changed files, symbols, and affected consumers with the intended diff.                                      |
+| `scip-query diff-gate`                                                | Runtime-bounded, single-flight gate for the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | blocking findings with check id, message, and remediation; advisory findings; root-cause groups; changed file and symbol counts; process exit status (1 when blocking findings exist) | `bounded`  | Run the complete finished-diff gate without blind line truncation.                                                  |
+| `scip-query mission-trial validate <program> --protected-root <path>` | Register, validate, record, or list protected autonomous-completion mission trials outside the candidate worktree                                                                                    | program identity, protected artifact observations, exact conditions, run eligibility, exclusions, and immutable run records                                                           | `complete` | Validate or inspect protected matched trials that evaluate autonomous completion rather than detector output alone. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
+
 <!-- END GENERATED SKILL COMMANDS -->
+
 ten checks, detector-precision tiers — from `_shared`. This skill's own
 shortlist covers `doctor`, `status`, `diff-impact`, `diff-gate`, `health`,
-`doc-drift`, `self-audit`, `suppress`, and `config-validate`.
+`doc-drift`, `self-audit`, `mission-trial`, `suppress`, and
+`config-validate`.
 
-| Situation | Go to |
-| --- | --- |
-| You just finished editing and need to verify it before committing | Verify a finished change, below |
+| Situation                                                                                    | Go to                                                                    |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| You just finished editing and need to verify it before committing                            | Verify a finished change, below                                          |
 | Findings on this repo feel too noisy, too clean, or you're adopting scip-query in a new repo | [`references/calibrate-detectors.md`](references/calibrate-detectors.md) |
 
 ## Verify a finished change
@@ -79,17 +86,17 @@ later gate passes. Complete only when the diff's shape is understood.
 Run every row that matches what the diff actually did — not only the check
 you expected to need going in:
 
-| Change made | Check |
-| --- | --- |
-| Extracted a helper or abstraction | `scip-query incomplete-migration` |
-| Added a helper, module, component, hook, composable, or adapter | `scip-query recent-duplicates` (and `similar <symbol>`) |
-| Added parameters, options, props, config flags, or option objects | `scip-query unused-params` |
-| Added a wrapper, facade, forwarding layer, alias, or re-export | `scip-query wrapper-candidates`, `passthrough-candidates`, `redundant-reexports` |
-| Added an interface, base class, adapter contract, or type alias | `scip-query stale-abstractions` |
-| Changed schema, config, generated files, public contracts, command descriptors, or docs-backed behavior | `scip-query co-change <file>` and `doc-drift` |
-| Deleted code | `scip-query cleanup-plan --verify` |
-| Changed React components or hooks | the React commands in `_shared` |
-| Changed Vue SFCs or composables | the Vue commands in `_shared` |
+| Change made                                                                                             | Check                                                                            |
+| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Extracted a helper or abstraction                                                                       | `scip-query incomplete-migration`                                                |
+| Added a helper, module, component, hook, composable, or adapter                                         | `scip-query recent-duplicates` (and `similar <symbol>`)                          |
+| Added parameters, options, props, config flags, or option objects                                       | `scip-query unused-params`                                                       |
+| Added a wrapper, facade, forwarding layer, alias, or re-export                                          | `scip-query wrapper-candidates`, `passthrough-candidates`, `redundant-reexports` |
+| Added an interface, base class, adapter contract, or type alias                                         | `scip-query stale-abstractions`                                                  |
+| Changed schema, config, generated files, public contracts, command descriptors, or docs-backed behavior | `scip-query co-change <file>` and `doc-drift`                                    |
+| Deleted code                                                                                            | `scip-query cleanup-plan --verify`                                               |
+| Changed React components or hooks                                                                       | the React commands in `_shared`                                                  |
+| Changed Vue SFCs or composables                                                                         | the Vue commands in `_shared`                                                    |
 
 Add `--full` to any of these when an unbounded result is needed rather than
 the bounded default. This table is authoritative — the
@@ -203,26 +210,33 @@ End with this fixed template:
 Verification: PASS/FAIL — <n> postchecks, <m> refutation attempts, <k> broke
 
 Environment:
+
 - doctor:
 - status:
 
 Diff:
+
 - changed files/symbols:
 - unexpected blast radius:
 
 Postchecks:
+
 - <command>: <result>
 
 Gate:
+
 - `scip-query diff-gate`: <result>
 
 Health/docs/self-audit:
+
 - <commands and results>
 
 Refutation attempts:
+
 - R1: <attack> → survived (evidence) | broke (finding)
 
 Remaining risk:
+
 - <accepted findings, unavailable capabilities, or checks not run>
 ```
 

@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scip-query.dev/schemas/mission-trial-run.schema.json",
+  "title": "scip-query mission trial run",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "runId",
+    "programId",
+    "pairId",
+    "fixtureId",
+    "treatment",
+    "rerunOrdinal",
+    "startedAt",
+    "completedAt",
+    "programDigest",
+    "conditionDigest",
+    "fixtureArchive",
+    "protectedEvaluator",
+    "status",
+    "exclusionReasons",
+    "telemetry",
+    "evaluation",
+    "failureOrigin",
+    "artifacts",
+    "recordedAt",
+    "writer"
+  ],
+  "properties": {
+    "kind": { "const": "scip-query-mission-trial-run" },
+    "schemaVersion": { "const": 1 },
+    "runId": { "type": "string", "pattern": "^SQTR-[A-F0-9]{32}$" },
+    "programId": { "type": "string", "pattern": "^SQTP-[A-F0-9]{32}$" },
+    "pairId": { "$ref": "#/$defs/boundedLine" },
+    "fixtureId": { "$ref": "#/$defs/boundedLine" },
+    "treatment": { "enum": ["control", "workflow"] },
+    "rerunOrdinal": { "type": "integer", "minimum": 0 },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "completedAt": { "type": "string", "format": "date-time" },
+    "programDigest": { "$ref": "#/$defs/sha256" },
+    "conditionDigest": { "$ref": "#/$defs/sha256" },
+    "fixtureArchive": { "$ref": "#/$defs/observedArtifact" },
+    "protectedEvaluator": { "$ref": "#/$defs/observedArtifact" },
+    "status": { "enum": ["completed", "timed-out", "crashed", "interrupted"] },
+    "exclusionReasons": { "$ref": "#/$defs/boundedLines" },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elapsedMs",
+        "modelTokens",
+        "toolCalls",
+        "failedAttempts",
+        "reworkEdits",
+        "metadataCommands",
+        "repeatedContextTokens"
+      ],
+      "properties": {
+        "elapsedMs": { "$ref": "#/$defs/nonNegativeOrNull" },
+        "modelTokens": { "$ref": "#/$defs/nonNegativeOrNull" },
+        "toolCalls": { "$ref": "#/$defs/nonNegativeOrNull" },
+        "failedAttempts": { "$ref": "#/$defs/nonNegativeOrNull" },
+        "reworkEdits": { "$ref": "#/$defs/nonNegativeOrNull" },
+        "metadataCommands": { "$ref": "#/$defs/nonNegativeOrNull" },
+        "repeatedContextTokens": { "$ref": "#/$defs/nonNegativeOrNull" }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "goalSatisfied",
+        "invariantsPreserved",
+        "affectedSurfaceReconciled",
+        "residueDefects",
+        "reintroducedBehaviors",
+        "architectureViolations",
+        "controllerBlocked",
+        "blockerWasValid"
+      ],
+      "properties": {
+        "goalSatisfied": { "$ref": "#/$defs/booleanOrNull" },
+        "invariantsPreserved": { "$ref": "#/$defs/booleanOrNull" },
+        "affectedSurfaceReconciled": { "$ref": "#/$defs/booleanOrNull" },
+        "residueDefects": { "$ref": "#/$defs/boundedLinesOrNull" },
+        "reintroducedBehaviors": { "$ref": "#/$defs/boundedLinesOrNull" },
+        "architectureViolations": { "$ref": "#/$defs/boundedLinesOrNull" },
+        "controllerBlocked": { "$ref": "#/$defs/booleanOrNull" },
+        "blockerWasValid": { "$ref": "#/$defs/booleanOrNull" }
+      }
+    },
+    "failureOrigin": {
+      "type": ["string", "null"],
+      "enum": ["detector-miss", "controller-miss", "agent-failure", "apparatus-failure", null]
+    },
+    "artifacts": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "allOf": [
+          { "$ref": "#/$defs/artifact" },
+          {
+            "type": "object",
+            "required": ["kind"],
+            "properties": { "kind": { "$ref": "#/$defs/boundedLine" } }
+          }
+        ]
+      }
+    },
+    "recordedAt": { "type": "string", "format": "date-time" },
+    "writer": { "$ref": "#/$defs/writer" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "boundedLine": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[^\\u0000\\r\\n]+$"
+    },
+    "boundedLines": {
+      "type": "array",
+      "maxItems": 256,
+      "items": { "$ref": "#/$defs/boundedLine" }
+    },
+    "boundedLinesOrNull": {
+      "oneOf": [{ "$ref": "#/$defs/boundedLines" }, { "type": "null" }]
+    },
+    "booleanOrNull": { "type": ["boolean", "null"] },
+    "nonNegativeOrNull": {
+      "type": ["number", "null"],
+      "minimum": 0
+    },
+    "artifact": {
+      "type": "object",
+      "required": ["relativePath", "sha256"],
+      "properties": {
+        "relativePath": { "$ref": "#/$defs/boundedLine" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "observedArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expectedSha256", "beforeSha256", "afterSha256"],
+      "properties": {
+        "expectedSha256": { "$ref": "#/$defs/sha256" },
+        "beforeSha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+        "afterSha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] }
+      }
+    },
+    "writer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "version"],
+      "properties": {
+        "tool": { "const": "scip-query" },
+        "version": { "$ref": "#/$defs/boundedLine" }
+      }
+    }
+  }
+}

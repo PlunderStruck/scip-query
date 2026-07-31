@@ -67,7 +67,12 @@ import {
   readCompletenessAdmissionRecordPath,
   readCompletenessAdmissionRecords,
 } from '../../storage/completeness-obligation-admission.js';
-import { commandOptions, printJsonEnvelope, stringOptionValue } from '../command-kit/command-execution.js';
+import {
+  commandOptions,
+  parseEnumArgument,
+  printJsonEnvelope,
+  stringOptionValue,
+} from '../command-kit/command-execution.js';
 import { resolveProjectRoot } from '../cli-context.js';
 import { cliVersion } from '../cli-support.js';
 import { loadProjectConfig } from '../config.js';
@@ -696,24 +701,15 @@ function workStateResultFailed(result: unknown): boolean {
 }
 
 function workStateOperation(value: unknown, command: string): WorkStateOperation {
-  if (typeof value === 'string' && WORK_STATE_OPERATIONS.includes(value as WorkStateOperation)) {
-    return value as WorkStateOperation;
-  }
-  throw new Error(`${command} operation must be one of: ${WORK_STATE_OPERATIONS.join(', ')}`);
+  return parseEnumArgument(value, WORK_STATE_OPERATIONS, `${command} operation`);
 }
 
 function obligationOperation(value: unknown): ObligationOperation {
-  if (typeof value === 'string' && OBLIGATION_OPERATIONS.includes(value as ObligationOperation)) {
-    return value as ObligationOperation;
-  }
-  throw new Error(`obligation operation must be one of: ${OBLIGATION_OPERATIONS.join(', ')}`);
+  return parseEnumArgument(value, OBLIGATION_OPERATIONS, 'obligation operation');
 }
 
 function completionOperation(value: unknown): CompletionOperation {
-  if (typeof value === 'string' && COMPLETION_OPERATIONS.includes(value as CompletionOperation)) {
-    return value as CompletionOperation;
-  }
-  throw new Error(`completion operation must be one of: ${COMPLETION_OPERATIONS.join(', ')}`);
+  return parseEnumArgument(value, COMPLETION_OPERATIONS, 'completion operation');
 }
 
 function optionalTarget(value: unknown): string | undefined {

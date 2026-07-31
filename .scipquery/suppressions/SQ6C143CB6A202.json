@@ -1,25 +1,24 @@
 {
   "kind": "scip-query-suppression",
-  "suppressionIdentity": "SQ8FA34B0BBC01",
+  "suppressionIdentity": "SQ6C143CB6A202",
   "writer": {
     "tool": "scip-query",
     "version": "0.20.0"
   },
-  "id": "SQ8FA34B0BBC01",
-  "check": "co-change-partner",
-  "file": "src/runtime/commands/command-descriptors.ts",
-  "reason": "The mission-trial descriptor routes through its dedicated mission-trial-handlers module, following the existing work-state-handler decomposition; command-handlers owns the older general command families and has no consumer or dispatch responsibility for this command.",
-  "createdAt": "2026-07-29T19:50:55.191Z",
-  "updatedAt": "2026-07-31T10:53:23.614Z",
+  "id": "SQ6C143CB6A202",
+  "check": "echo",
+  "file": "src/domain/mission-trials.ts",
+  "reason": "bounded() normalizes non-empty one-line strings through isBoundedRecordString; optionalNonNegativeInteger() parses numeric values. The reported similarity consists only of generic control tokens and the functions do not share a behavior, caller contract, or reusable abstraction.",
+  "createdAt": "2026-07-31T10:53:16.284Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
-    "reasonCode": "historical-coupling-ended",
+    "reasonCode": "detector-counterexample",
     "decidedBy": "agent",
     "policyVersion": 1,
     "observation": {
       "schemaVersion": 2,
-      "observedAt": "2026-07-31T10:53:23.612Z",
+      "observedAt": "2026-07-31T10:53:16.283Z",
       "facts": {
         "collaborationDomain": {
           "schemaVersion": 1,
@@ -49,7 +48,7 @@
             "name": "scip-query:repository-content",
             "version": 1
           },
-          "digest": "51374e90c29e0af075fe086e39bcf7c96ae022c2be599a8e0a9086b0fde95904"
+          "digest": "7800ac8e2484fd5cf27da7c4f21008909a62bb68242fedbc3ddcd83cb548b82a"
         },
         "relevantInputs": [
           {
@@ -114,7 +113,7 @@
               "name": "scip-query:repository-content",
               "version": 1
             },
-            "digest": "51374e90c29e0af075fe086e39bcf7c96ae022c2be599a8e0a9086b0fde95904"
+            "digest": "7800ac8e2484fd5cf27da7c4f21008909a62bb68242fedbc3ddcd83cb548b82a"
           }
         }
       ],
@@ -137,27 +136,21 @@
     "evidence": [
       {
         "kind": "source",
-        "referent": "src/runtime/commands/command-descriptors.ts",
-        "claim": "The mission-trial descriptor routes through its dedicated mission-trial-handlers module, following the existing work-state-handler decomposition; command-handlers owns the older general command families and has no consumer or dispatch responsibility for this command.",
-        "contentHash": "84814938530dcc68019b635fbf1d8e772237298ed6f15dab8694ffb6ff28500f"
+        "referent": "src/domain/mission-trials.ts",
+        "claim": "bounded() normalizes non-empty one-line strings through isBoundedRecordString; optionalNonNegativeInteger() parses numeric values. The reported similarity consists only of generic control tokens and the functions do not share a behavior, caller contract, or reusable abstraction.",
+        "contentHash": "a385241c8f7773be42c3c08b1ff89b32f58ec62ed56a3c1c93c82390930919e5"
       },
       {
         "kind": "source",
-        "referent": "src/runtime/commands/mission-trial-handlers.ts",
-        "claim": "The mission-trial descriptor routes through its dedicated mission-trial-handlers module, following the existing work-state-handler decomposition; command-handlers owns the older general command families and has no consumer or dispatch responsibility for this command.",
-        "contentHash": "99875e9752a7e95f86a9f6e2c877899b7ae643936040efec61030e3a60c1cd2d"
-      },
-      {
-        "kind": "source",
-        "referent": "src/runtime/commands/command-handlers.ts",
-        "claim": "The mission-trial descriptor routes through its dedicated mission-trial-handlers module, following the existing work-state-handler decomposition; command-handlers owns the older general command families and has no consumer or dispatch responsibility for this command.",
-        "contentHash": "f21beb90cc9ea84926019ea6a3c821358cd18b1c54a26d618cfa6bf7cb6d0283"
+        "referent": "src/semantic/rust/durable-session-protocol.ts",
+        "claim": "bounded() normalizes non-empty one-line strings through isBoundedRecordString; optionalNonNegativeInteger() parses numeric values. The reported similarity consists only of generic control tokens and the functions do not share a behavior, caller contract, or reusable abstraction.",
+        "contentHash": "424e0b67fa48017ed02cce4de8d59e0e2dcd72405ed2130ca6664f1d8f591049"
       },
       {
         "kind": "test",
-        "referent": "tests/runtime/mission-trial-command.test.ts",
-        "claim": "The mission-trial descriptor routes through its dedicated mission-trial-handlers module, following the existing work-state-handler decomposition; command-handlers owns the older general command families and has no consumer or dispatch responsibility for this command.",
-        "contentHash": "e0d9594230ea559f739ff17940dcde7cbae51b3d3a62a0018c61d0d340c0632e"
+        "referent": "tests/domain/mission-trials.test.ts",
+        "claim": "bounded() normalizes non-empty one-line strings through isBoundedRecordString; optionalNonNegativeInteger() parses numeric values. The reported similarity consists only of generic control tokens and the functions do not share a behavior, caller contract, or reusable abstraction.",
+        "contentHash": "2698eb0d316382068a54acd920eb6c81b2291d93f36320fd18352d3fc989d4c0"
       }
     ],
     "invalidateOn": {

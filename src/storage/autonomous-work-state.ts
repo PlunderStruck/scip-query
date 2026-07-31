@@ -22,7 +22,12 @@ import {
   type RecordCompatibilitySummary,
 } from '../domain/record-compatibility.js';
 import { readSmallArtifactText } from '../filesystem/bounded-file.js';
-import { createFileAtomicExclusive, type AchievedFileDurability, type AtomicFileRuntime } from './atomic-file.js';
+import {
+  createFileAtomicExclusive,
+  isExclusivePublicationConflict,
+  type AchievedFileDurability,
+  type AtomicFileRuntime,
+} from './atomic-file.js';
 
 export const GOALS_DIR = join('.scipquery', 'goals');
 export const INTENDED_CHANGES_DIR = join('.scipquery', 'changes');
@@ -163,7 +168,7 @@ export function publishWorkStateRecord<RecordType>(
       achievedDurability: publication.achievedDurability,
     };
   } catch (error) {
-    if (!isExistingPathError(error)) throw error;
+    if (!isExclusivePublicationConflict(error)) throw error;
     if (!recordPathExists(absolutePath, options.atomicRuntime)) throw error;
     const existing = input.readExisting();
     if (existing.state !== 'current' || !input.matchesExisting(existing.record)) {
@@ -310,14 +315,6 @@ export function workStateNow(): string {
   return new Date().toISOString();
 }
 
-function isExistingPathError(error: unknown): boolean {
-  return isErrnoException(error) && error.code === 'EEXIST';
-}
-
 function recordPathExists(path: string, runtime: AtomicFileRuntime | undefined): boolean {
   return runtime ? runtime.pathExists(path) : existsSync(path);
-}
-
-function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && typeof (error as NodeJS.ErrnoException).code === 'string';
 }

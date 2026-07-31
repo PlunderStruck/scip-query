@@ -230,6 +230,7 @@ describe('CLI contract', () => {
     const suppress = commandDescriptors.find((descriptor) => descriptor.id === 'suppress')!.agent!.operation;
     const setupHooks = commandDescriptors.find((descriptor) => descriptor.id === 'setup-hooks')!.agent!.operation;
     const tla = commandDescriptors.find((descriptor) => descriptor.id === 'tla')!.agent!.operation;
+    const missionTrial = commandDescriptors.find((descriptor) => descriptor.id === 'mission-trial')!.agent!.operation;
 
     expect(resolveCommandOperationRole(health, { args: [], options: {} })).toBe('repository-observation');
     expect(resolveCommandOperationRole(health, { args: [], options: { writeBaseline: true } })).toBe('composite');
@@ -242,6 +243,12 @@ describe('CLI contract', () => {
     expect(resolveCommandOperationRole(tla, { args: ['scaffold', 'src/a.ts'], options: {} })).toBe('mutation');
     expect(resolveCommandOperationRole(tla, { args: ['verify', 'specs/A.tla'], options: {} })).toBe(
       'repository-observation',
+    );
+    expect(resolveCommandOperationRole(missionTrial, { args: ['validate', 'program.json'], options: {} })).toBe(
+      'environment-observation',
+    );
+    expect(resolveCommandOperationRole(missionTrial, { args: ['record', 'program.json'], options: {} })).toBe(
+      'mutation',
     );
   });
 

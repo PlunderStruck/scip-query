@@ -26,6 +26,7 @@ import {
   handleIntendedChange,
   handleObligation,
 } from './work-state-handlers.js';
+import { handleMissionTrial } from './mission-trial-handlers.js';
 import { orderedQueryCommandDescriptors } from './query-command-specs.js';
 
 const queryCommandsBeforeDiffImpact = orderedQueryCommandDescriptors.slice(0, queryIndexAfter('plan-context'));
@@ -625,6 +626,34 @@ export const commandDescriptors: CommandDescriptor[] = [
     renderShape: 'custom',
     docs: doc('Maintenance', ['scip-query effectiveness --since 30d', 'scip-query effectiveness --check echo --json']),
     handler: handlers.handleEffectiveness,
+  },
+  {
+    id: 'mission-trial',
+    command: 'mission-trial <operation> <program>',
+    agent: agentContract(
+      'Is a protected matched-trial program valid, and what immutable runs has it recorded?',
+      'program identity, protected artifact observations, exact conditions, run eligibility, exclusions, and immutable run records',
+      ['action', 'record'],
+      'complete',
+      undefined,
+      commandOperation('environment-observation', [
+        { when: { kind: 'argument', index: 0, equals: 'register' }, role: 'mutation' },
+        { when: { kind: 'argument', index: 0, equals: 'record' }, role: 'mutation' },
+      ]),
+    ),
+    description:
+      'Register, validate, record, or list protected autonomous-completion mission trials outside the candidate worktree',
+    options: withJsonOption([
+      option('--protected-root <path>', 'Required protected apparatus and immutable result root'),
+      option('--candidate-root <path>', 'Candidate-editable worktree (default: current project)'),
+      option('--input <path>', 'Completed mission-trial run record for the record operation'),
+    ]),
+    renderShape: 'custom',
+    docs: doc('Maintenance', [
+      'scip-query mission-trial validate protected/programs/program.json --protected-root ../protected-trials',
+      'scip-query mission-trial record protected/programs/program.json --protected-root ../protected-trials --candidate-root ./candidate --input run.json',
+    ]),
+    handler: handleMissionTrial,
   },
   {
     id: 'doctor',
