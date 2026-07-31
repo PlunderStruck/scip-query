@@ -25,6 +25,7 @@ import {
   readRecordFile,
   parseRecordFile,
   requireIntendedChangeRecord,
+  workStateNow,
   type WorkStateCollectionReadResult,
   type WorkStateCreateOptions,
   type WorkStateCreateResult,
@@ -57,7 +58,7 @@ export function createAttemptRecordFile(
   const record = createAttemptRecord({
     collaborationDomainId,
     request,
-    createdAt: (options.now ?? defaultNow)(),
+    createdAt: (options.now ?? workStateNow)(),
     toolVersion: options.toolVersion,
   });
   if (record.changeId !== change.changeId) throw new Error('attempt does not name its validated intended change');
@@ -117,7 +118,7 @@ export function createDecisionRecordFile(
   const record = createDecisionRecord({
     collaborationDomainId,
     request,
-    createdAt: (options.now ?? defaultNow)(),
+    createdAt: (options.now ?? workStateNow)(),
     toolVersion: options.toolVersion,
   });
   return publishWorkStateRecord(
@@ -265,8 +266,4 @@ export function readWorkHistory(projectRoot: string, changeId?: string): WorkHis
     changeCompatibility: changes.compatibility,
     integrityIssues,
   };
-}
-
-function defaultNow(): string {
-  return new Date().toISOString();
 }

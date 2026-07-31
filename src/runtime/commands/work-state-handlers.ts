@@ -2,6 +2,7 @@ import { realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 
 import { decodeAttemptCreateRequest, decodeDecisionCreateRequest } from '../../domain/autonomous-work-ledger.js';
+import { isCompletionEvaluationId, isCompletionTransitionId } from '../../domain/autonomous-completion.js';
 import {
   decodeObligationAdmissionRequest,
   decodeObligationTransitionRequest,
@@ -42,6 +43,12 @@ import {
   readIntendedChangeRecordPath,
   readIntendedChangeRecords,
 } from '../../storage/autonomous-work-state.js';
+import {
+  readCompletionEvaluationRecordFile,
+  readCompletionHistory,
+  readCompletionRecordPath,
+  readCompletionTransitionRecordFile,
+} from '../../storage/autonomous-completion.js';
 import { commandOptions, printJsonEnvelope, stringOptionValue } from '../command-kit/command-execution.js';
 import { resolveProjectRoot } from '../cli-context.js';
 import { cliVersion } from '../cli-support.js';
@@ -51,6 +58,8 @@ const WORK_STATE_OPERATIONS = ['create', 'read', 'validate', 'status'] as const;
 type WorkStateOperation = (typeof WORK_STATE_OPERATIONS)[number];
 const OBLIGATION_OPERATIONS = ['admit', 'transition', 'read', 'validate', 'status'] as const;
 type ObligationOperation = (typeof OBLIGATION_OPERATIONS)[number];
+const COMPLETION_OPERATIONS = ['read', 'validate', 'status'] as const;
+type CompletionOperation = (typeof COMPLETION_OPERATIONS)[number];
 
 export function handleGoal(operationValue: unknown, targetValue: unknown, rawOpts: unknown): void {
   const operation = workStateOperation(operationValue, 'goal');
@@ -99,6 +108,16 @@ export function handleObligation(operationValue: unknown, targetValue: unknown, 
   const projectRoot = resolveProjectRoot();
   const result = runObligationOperation(projectRoot, operation, target, stringOptionValue(opts, 'input'));
   printObligationResult([operation, ...(target ? [target] : [])], opts, result);
+  if (workStateResultFailed(result)) process.exitCode = 1;
+}
+
+export function handleCompletion(operationValue: unknown, targetValue: unknown, rawOpts: unknown): void {
+  const operation = completionOperation(operationValue);
+  const target = optionalTarget(targetValue);
+  const opts = commandOptions(rawOpts);
+  const projectRoot = resolveProjectRoot();
+  const result = runCompletionOperation(projectRoot, operation, target);
+  printCompletionResult([operation, ...(target ? [target] : [])], opts, result);
   if (workStateResultFailed(result)) process.exitCode = 1;
 }
 
@@ -310,6 +329,102 @@ function runObligationOperation(
   }
 }
 
+function runCompletionOperation(
+  projectRoot: string,
+  operation: CompletionOperation,
+  target: string | undefined,
+): unknown {
+  switch (operation) {
+    case 'read': {
+      const identity = requiredTarget(target, 'completion read');
+      if (isCompletionEvaluationId(identity)) {
+        return { operation, ...readCompletionEvaluationRecordFile(projectRoot, identity) };
+      }
+      if (isCompletionTransitionId(identity)) {
+        return { operation, ...readCompletionTransitionRecordFile(projectRoot, identity) };
+      }
+      throw new Error(`invalid completion evaluation or transition identity: ${identity}`);
+    }
+    case 'validate': {
+      const path = repositoryRecordPath(projectRoot, requiredTarget(target, 'completion validate'));
+      return { operation, path: relative(projectRoot, path), ...readCompletionRecordPath(path) };
+    }
+    case 'status': {
+      const history = readCompletionHistory(projectRoot, target);
+      return {
+        operation,
+        records: history.summary.states,
+        compatibility: history.evaluations.compatibility,
+        transitionCompatibility: history.transitions.compatibility,
+        goalCompatibility: history.goalCompatibility,
+        changeCompatibility: history.changeCompatibility,
+        obligationCompatibility: history.obligationCompatibility,
+        warnings: [...history.evaluations.warnings, ...history.transitions.warnings],
+        integrityIssues: history.integrityIssues,
+        summary: history.summary,
+      };
+    }
+  }
+}
+
+function printCompletionResult(
+  args: readonly string[],
+  opts: Readonly<Record<string, unknown>>,
+  result: unknown,
+): void {
+  if (opts['json'] === true) {
+    printJsonEnvelope('completion', args, opts, result);
+    return;
+  }
+  if (!isObject(result)) {
+    console.log(sanitizeTerminalLine(String(result)));
+    return;
+  }
+  if (result['operation'] === 'status' && Array.isArray(result['records'])) {
+    console.log(`Completion: ${result['records'].length} intended change state(s).`);
+    for (const candidate of result['records']) {
+      if (!isObject(candidate)) continue;
+      console.log(
+        `  ${sanitizeTerminalLine(String(candidate['changeId']))}  ${sanitizeTerminalLine(
+          String(candidate['state']),
+        )}  goal ${sanitizeTerminalLine(String(candidate['goalId']))}`,
+      );
+    }
+    const warnings = Array.isArray(result['warnings']) ? result['warnings'] : [];
+    for (const warning of warnings) console.log(`warning: ${sanitizeTerminalLine(String(warning))}`);
+    const issues = Array.isArray(result['integrityIssues']) ? result['integrityIssues'] : [];
+    for (const issue of issues) console.log(`error: ${sanitizeTerminalLine(String(issue))}`);
+    return;
+  }
+  if (result['state'] === 'current' && isObject(result['record'])) {
+    const record = result['record'];
+    if (typeof record['evaluationId'] === 'string' && typeof record['transitionId'] !== 'string') {
+      const decision = isObject(record['decision']) ? record['decision']['state'] : 'unknown';
+      console.log(
+        `${sanitizeTerminalLine(record['evaluationId'])}  ${sanitizeTerminalLine(
+          String(decision),
+        )}\nChange: ${sanitizeTerminalLine(String(record['changeId']))}\nGoal: ${sanitizeTerminalLine(
+          String(record['goalId']),
+        )}\nContext: ${sanitizeTerminalLine(String(isObject(record['context']) ? record['context']['contextId'] : 'unknown'))}`,
+      );
+      return;
+    }
+    if (typeof record['transitionId'] === 'string') {
+      console.log(
+        `${sanitizeTerminalLine(record['transitionId'])}  complete\nChange: ${sanitizeTerminalLine(
+          String(record['changeId']),
+        )}\nEvaluation: ${sanitizeTerminalLine(String(record['evaluationId']))}`,
+      );
+      return;
+    }
+  }
+  console.log(
+    `${sanitizeTerminalLine(String(result['state'] ?? 'unknown'))}: ${sanitizeTerminalLine(
+      String(result['error'] ?? result['path'] ?? 'no detail'),
+    )}`,
+  );
+}
+
 function printObligationResult(
   args: readonly string[],
   opts: Readonly<Record<string, unknown>>,
@@ -502,6 +617,11 @@ function workStateResultFailed(result: unknown): boolean {
   if (isObject(result['transitionCompatibility']) && result['transitionCompatibility']['complete'] === false) {
     return true;
   }
+  if (isObject(result['obligationCompatibility'])) {
+    const obligations = result['obligationCompatibility'];
+    if (isObject(obligations['admissions']) && obligations['admissions']['complete'] === false) return true;
+    if (isObject(obligations['transitions']) && obligations['transitions']['complete'] === false) return true;
+  }
   return Array.isArray(result['integrityIssues']) && result['integrityIssues'].length > 0;
 }
 
@@ -517,6 +637,13 @@ function obligationOperation(value: unknown): ObligationOperation {
     return value as ObligationOperation;
   }
   throw new Error(`obligation operation must be one of: ${OBLIGATION_OPERATIONS.join(', ')}`);
+}
+
+function completionOperation(value: unknown): CompletionOperation {
+  if (typeof value === 'string' && COMPLETION_OPERATIONS.includes(value as CompletionOperation)) {
+    return value as CompletionOperation;
+  }
+  throw new Error(`completion operation must be one of: ${COMPLETION_OPERATIONS.join(', ')}`);
 }
 
 function optionalTarget(value: unknown): string | undefined {

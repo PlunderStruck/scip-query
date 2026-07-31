@@ -20,6 +20,7 @@ import { BUILTIN_SKILLS } from '../setup.js';
 import * as handlers from './command-handlers.js';
 import {
   handleAttempt,
+  handleCompletion,
   handleDecision,
   handleGoal,
   handleIntendedChange,
@@ -535,6 +536,28 @@ export const commandDescriptors: CommandDescriptor[] = [
       'scip-query obligation status SQC-0123456789ABCDEF0123456789ABCDEF --json',
     ]),
     handler: handleObligation,
+  },
+  {
+    id: 'completion',
+    command: 'completion <operation> [target]',
+    agent: agentContract(
+      'Has an intended change passed every required completion predicate under one fixed evaluation context?',
+      'immutable evaluations, idempotent completion transitions, blocked and unknown predicates, compatibility, and integrity',
+      ['action', 'record'],
+      'complete',
+      'repository',
+      commandOperation('repository-observation'),
+    ),
+    description: 'Read, validate, or summarize protected autonomous completion state',
+    options: withJsonOption(),
+    claims: fixedClaimContract('repository-source', ['live-workspace']),
+    renderShape: 'custom',
+    docs: doc('Autonomous work state', [
+      'scip-query completion status SQC-0123456789ABCDEF0123456789ABCDEF --json',
+      'scip-query completion read SQE-0123456789ABCDEF0123456789ABCDEF',
+      'scip-query completion validate .scipquery/completion-transitions/SQCT-....json',
+    ]),
+    handler: handleCompletion,
   },
   {
     id: 'suppress',

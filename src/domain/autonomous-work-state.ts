@@ -222,11 +222,9 @@ export function decodeIntendedChangeCreateRequest(
 }
 
 export function createGoalRecord(input: CreateGoalRecordInput): GoalRecordV1 {
-  assertCollaborationDomain(input.collaborationDomainId);
+  assertWorkRecordInput(input.collaborationDomainId, input.createdAt, input.toolVersion);
   const decoded = decodeGoalCreateRequest(input.request);
   if (!decoded.ok) throw new Error(decoded.error);
-  if (!isValidRecordTimestamp(input.createdAt)) throw new Error('createdAt must be a valid timestamp');
-  if (!isNonEmptyString(input.toolVersion)) throw new Error('toolVersion must be non-empty');
   const gherkin: GoalGherkin = {
     language: 'gherkin',
     feature: decoded.request.feature,
@@ -253,11 +251,9 @@ export function createGoalRecord(input: CreateGoalRecordInput): GoalRecordV1 {
 }
 
 export function createIntendedChangeRecord(input: CreateIntendedChangeRecordInput): IntendedChangeRecordV1 {
-  assertCollaborationDomain(input.collaborationDomainId);
+  assertWorkRecordInput(input.collaborationDomainId, input.createdAt, input.toolVersion);
   const decoded = decodeIntendedChangeCreateRequest(input.request);
   if (!decoded.ok) throw new Error(decoded.error);
-  if (!isValidRecordTimestamp(input.createdAt)) throw new Error('createdAt must be a valid timestamp');
-  if (!isNonEmptyString(input.toolVersion)) throw new Error('toolVersion must be non-empty');
   const keyDigest = hashIdentity({
     version: INTENDED_CHANGE_IDEMPOTENCY_VERSION,
     collaborationDomainId: input.collaborationDomainId,
@@ -661,6 +657,19 @@ export function isSha256(value: unknown): value is string {
   return typeof value === 'string' && SHA256_PATTERN.test(value);
 }
 
-function assertCollaborationDomain(value: string): void {
-  if (!isCollaborationDomainId(value)) throw new Error('collaborationDomainId must be a version-4 UUID');
+export function withoutWorkStateIdempotencyKey<Request extends { idempotencyKey?: string }>(
+  request: Request,
+): Omit<Request, 'idempotencyKey'> {
+  const { idempotencyKey: _idempotencyKey, ...meaning } = request;
+  return meaning;
+}
+
+export function assertWorkRecordInput(collaborationDomainId: string, createdAt: string, toolVersion: string): void {
+  if (!isCollaborationDomainId(collaborationDomainId)) {
+    throw new Error('collaborationDomainId must be a version-4 UUID');
+  }
+  if (!isValidRecordTimestamp(createdAt)) throw new Error('createdAt must be a valid timestamp');
+  if (!normalizedBoundedLine(toolVersion, 256)) {
+    throw new Error('toolVersion must be non-empty and bounded');
+  }
 }

@@ -213,6 +213,45 @@ The request schemas are
 and
 [`schemas/obligation-transition-request.schema.json`](schemas/obligation-transition-request.schema.json).
 
+## Protect completion
+
+A completion evaluation is one immutable application of a named evaluator and
+policy version to one goal, intended change, fixed repository observation, and
+the full required-predicate set. What distinguishes it from a passing test or
+agent assertion is that its decision is derived from preserved inputs: a later
+reader can reproduce what was judged and can distinguish an unknown fact from
+a disproven one.
+
+The required predicates are goal fulfillment, invariant preservation,
+evidence compatibility, coverage completeness, obligation reconciliation, and
+policy permission. Every predicate occurs exactly once. Any `unknown` or
+`disproven` predicate produces `blocked`; unknown is preserved as unknown
+instead of being rewritten as false. Only an evaluation whose six predicates
+are established produces an idempotent completion transition.
+
+The storage boundary independently requires the target observation to identify
+the same collaboration domain and fixed whole-repository content. It also
+reads the complete obligation lifecycle before accepting
+`obligations-reconciled: established`. A caller therefore cannot make the
+change complete merely by supplying favorable fields.
+
+```bash
+scip-query completion status SQC-... --json
+scip-query completion read SQE-...
+scip-query completion read SQCT-...
+scip-query completion validate .scipquery/completion-evaluations/SQE-....json
+```
+
+Evaluation and transition records conform to
+[`schemas/completion-evaluation-record.schema.json`](schemas/completion-evaluation-record.schema.json)
+and
+[`schemas/completion-transition-record.schema.json`](schemas/completion-transition-record.schema.json).
+They are emitted by the completion controller as part of the useful
+verification path; the agent does not perform a separate narration step.
+Distinct branch evaluations occupy distinct files and compose additively.
+Incompatible records, a transition without its exact evaluation, or a live
+obligation merged after completion makes completion status fail closed.
+
 ## Resume without a transcript
 
 A restoration projection is a bounded resumption view derived from the

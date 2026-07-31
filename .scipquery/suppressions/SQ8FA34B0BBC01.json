@@ -6,9 +6,9 @@
     "version": "0.20.0"
   },
   "id": "SQ8FA34B0BBC01",
-  "reason": "The goal, change, attempt, decision, and obligation descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, and CLI contract plus executable dogfood cover registration and behavior.",
+  "reason": "Goal, change, attempt, decision, obligation, and completion descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, while CLI contract tests and executable completion-status dogfood verify registration and behavior.",
   "createdAt": "2026-07-29T19:50:55.191Z",
-  "updatedAt": "2026-07-31T05:02:24.690Z",
+  "updatedAt": "2026-07-31T06:01:35.708Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
@@ -17,7 +17,7 @@
     "policyVersion": 1,
     "observation": {
       "schemaVersion": 2,
-      "observedAt": "2026-07-31T05:02:24.683Z",
+      "observedAt": "2026-07-31T06:01:35.700Z",
       "facts": {
         "collaborationDomain": {
           "schemaVersion": 1,
@@ -47,7 +47,7 @@
             "name": "scip-query:repository-content",
             "version": 1
           },
-          "digest": "5bea4d29a997d39c59c1b728ab6aeadc811e808ed153aa6e695e504c8c415763"
+          "digest": "2fd6670e6e1d31608dca6e7da3f0da37ab5b7a26eb5566ef66e6a6ad4fd2c913"
         },
         "relevantInputs": [
           {
@@ -60,7 +60,7 @@
                 "name": "scip-query:index-inputs",
                 "version": 2
               },
-              "digest": "c57663aa4eb55795a8bfd079f490c5666c91850082accfb1fb83043a60b9d215"
+              "digest": "584ac81808e3e4d5ddea95c5b2b1188e98c636d3688eccd5c5597b9bc78e16e3"
             }
           }
         ],
@@ -73,7 +73,7 @@
               "name": "scip-query:index-generation",
               "version": 1
             },
-            "digest": "6abf8f14ad3e014e8e810b2b9f12a8d125577d03b06aa4de161f539c7921fd45"
+            "digest": "71dd8e0820c5a0a30c1e719d00236bc37c69e14da0898ce8683ea7aa7a17602a"
           },
           "inputs": {
             "schemaVersion": 1,
@@ -83,7 +83,7 @@
               "name": "scip-query:index-inputs",
               "version": 2
             },
-            "digest": "c57663aa4eb55795a8bfd079f490c5666c91850082accfb1fb83043a60b9d215"
+            "digest": "584ac81808e3e4d5ddea95c5b2b1188e98c636d3688eccd5c5597b9bc78e16e3"
           },
           "source": "immutable"
         }
@@ -99,7 +99,7 @@
               "name": "scip-query:index-generation",
               "version": 1
             },
-            "digest": "6abf8f14ad3e014e8e810b2b9f12a8d125577d03b06aa4de161f539c7921fd45"
+            "digest": "71dd8e0820c5a0a30c1e719d00236bc37c69e14da0898ce8683ea7aa7a17602a"
           }
         },
         {
@@ -112,7 +112,7 @@
               "name": "scip-query:repository-content",
               "version": 1
             },
-            "digest": "5bea4d29a997d39c59c1b728ab6aeadc811e808ed153aa6e695e504c8c415763"
+            "digest": "2fd6670e6e1d31608dca6e7da3f0da37ab5b7a26eb5566ef66e6a6ad4fd2c913"
           }
         }
       ],
@@ -128,27 +128,27 @@
       ],
       "diagnostics": {
         "clean": false,
-        "headCommit": "f9fef90c39996f526299ff66c83eea70e1b873fd",
-        "treeOid": "a3eba5cc4c05313d13a97644e23f0295ae80dbfb"
+        "headCommit": "bc4fad9683f43765f9471ceb1c4ab6db46696cdf",
+        "treeOid": "8fc3685c19e44e5a6f9f6765a99c1df568921f3b"
       }
     },
     "evidence": [
       {
         "kind": "source",
         "referent": "src/runtime/commands/work-state-handlers.ts",
-        "claim": "The goal, change, attempt, decision, and obligation descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, and CLI contract plus executable dogfood cover registration and behavior.",
-        "contentHash": "2e7179e1a66f3ac7fea4ea54519bd1ca0d7f06967a5038cc2cb01db5f4af335e"
+        "claim": "Goal, change, attempt, decision, obligation, and completion descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, while CLI contract tests and executable completion-status dogfood verify registration and behavior.",
+        "contentHash": "0158506686739317def5362d0cac0f788f0dc18ce231897f7f86179b9b4829e0"
       },
       {
         "kind": "source",
         "referent": "src/runtime/commands/command-descriptors.ts",
-        "claim": "The goal, change, attempt, decision, and obligation descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, and CLI contract plus executable dogfood cover registration and behavior.",
-        "contentHash": "a2f21bd5653378335f21b31d57d874299ba4c81cc4a7e7194c4fd50ce1fc5c8e"
+        "claim": "Goal, change, attempt, decision, obligation, and completion descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, while CLI contract tests and executable completion-status dogfood verify registration and behavior.",
+        "contentHash": "ea4cb0c4612818fb86284421b24dbce712c3fe9ffb7a9cf510ce72e96c509826"
       },
       {
         "kind": "test",
         "referent": "tests/runtime/cli-contract.test.ts",
-        "claim": "The goal, change, attempt, decision, and obligation descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, and CLI contract plus executable dogfood cover registration and behavior.",
+        "claim": "Goal, change, attempt, decision, obligation, and completion descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, while CLI contract tests and executable completion-status dogfood verify registration and behavior.",
         "contentHash": "19c90650f079e54a0883c67be264a90e99b0c6982104dbc3ed49282695059080"
       }
     ],

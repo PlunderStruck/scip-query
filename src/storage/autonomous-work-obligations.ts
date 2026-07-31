@@ -31,6 +31,7 @@ import {
   readRecordDirectory,
   readRecordFile,
   requireIntendedChangeRecord,
+  workStateNow,
   type WorkStateCollectionReadResult,
   type WorkStateCreateOptions,
   type WorkStateCreateResult,
@@ -65,7 +66,7 @@ export function createObligationAdmissionFile(
   const record = createObligationAdmission({
     collaborationDomainId,
     request,
-    createdAt: (options.now ?? defaultNow)(),
+    createdAt: (options.now ?? workStateNow)(),
     toolVersion: options.toolVersion,
   });
   return publishWorkStateRecord(
@@ -94,7 +95,7 @@ export function createObligationTransitionFile(
   const record = createObligationTransition({
     collaborationDomainId,
     request,
-    createdAt: (options.now ?? defaultNow)(),
+    createdAt: (options.now ?? workStateNow)(),
     toolVersion: options.toolVersion,
   });
   const existing = readObligationTransitionRecordFile(projectRoot, record.transitionId);
@@ -375,8 +376,4 @@ function selectLifecycleSummary(summary: ObligationLifecycleSummary, changeId: s
     conflicts: summary.conflicts.filter((conflict) => [...selectedIds].some((id) => conflict.includes(id))),
     orphanTransitionIds: summary.orphanTransitionIds,
   };
-}
-
-function defaultNow(): string {
-  return new Date().toISOString();
 }

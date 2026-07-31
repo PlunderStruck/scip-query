@@ -115,6 +115,14 @@ function projectFilesLeftInPlace(projectRoot: string): string[] {
       '.scipquery/obligation-transitions/ (repository records)',
       join(projectRoot, '.scipquery', 'obligation-transitions'),
     ],
+    [
+      '.scipquery/completion-evaluations/ (repository records)',
+      join(projectRoot, '.scipquery', 'completion-evaluations'),
+    ],
+    [
+      '.scipquery/completion-transitions/ (repository records)',
+      join(projectRoot, '.scipquery', 'completion-transitions'),
+    ],
     ['.scipquery/suppressions/ (repository records)', join(projectRoot, '.scipquery', 'suppressions')],
     ['.scipquery/events/ (repository records)', join(projectRoot, '.scipquery', 'events')],
     ['.scipquery/ledger/ (repository records)', join(projectRoot, '.scipquery', 'ledger')],

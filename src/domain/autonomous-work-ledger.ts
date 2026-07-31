@@ -1,14 +1,15 @@
 import { decodeObservationReceipt, type ObservationReceiptV2 } from './observation-receipt.js';
-import { isRecordObject, isValidRecordTimestamp } from './record-validation.js';
+import { isRecordObject } from './record-validation.js';
 import { stableJson } from './stable-json.js';
 import {
+  assertWorkRecordInput,
   decodeWorkRecordEnvelope,
   hashIdentity,
-  isCollaborationDomainId,
   isIntendedChangeId,
   isSha256,
   matchesWorkStateIdentity,
   normalizedBoundedLine,
+  withoutWorkStateIdempotencyKey,
   WORK_STATE_IDENTITY_ALGORITHM,
   type WorkStateDecodeResult,
   type WorkStateWriter,
@@ -241,7 +242,7 @@ export function decodeDecisionCreateRequest(value: unknown): WorkLedgerRequestDe
 }
 
 export function createAttemptRecord(input: CreateAttemptRecordInput): AttemptRecordV1 {
-  assertRecordInput(input.collaborationDomainId, input.createdAt, input.toolVersion);
+  assertWorkRecordInput(input.collaborationDomainId, input.createdAt, input.toolVersion);
   const decoded = decodeAttemptCreateRequest(input.request);
   if (!decoded.ok) throw new Error(decoded.error);
   const keyDigest = workEventKeyDigest(
@@ -274,7 +275,7 @@ export function createAttemptRecord(input: CreateAttemptRecordInput): AttemptRec
 }
 
 export function createDecisionRecord(input: CreateDecisionRecordInput): DecisionRecordV1 {
-  assertRecordInput(input.collaborationDomainId, input.createdAt, input.toolVersion);
+  assertWorkRecordInput(input.collaborationDomainId, input.createdAt, input.toolVersion);
   const decoded = decodeDecisionCreateRequest(input.request);
   if (!decoded.ok) throw new Error(decoded.error);
   const keyDigest = workEventKeyDigest(
@@ -592,7 +593,7 @@ function attemptRequestDigest(collaborationDomainId: string, request: AttemptCre
     version: WORK_EVENT_IDEMPOTENCY_VERSION,
     collaborationDomainId,
     recordKind: ATTEMPT_RECORD_KIND,
-    request: withoutIdempotencyKey(request),
+    request: withoutWorkStateIdempotencyKey(request),
   });
 }
 
@@ -601,15 +602,8 @@ function decisionRequestDigest(collaborationDomainId: string, request: DecisionC
     version: WORK_EVENT_IDEMPOTENCY_VERSION,
     collaborationDomainId,
     recordKind: DECISION_RECORD_KIND,
-    request: withoutIdempotencyKey(request),
+    request: withoutWorkStateIdempotencyKey(request),
   });
-}
-
-function withoutIdempotencyKey<Request extends { idempotencyKey?: string }>(
-  request: Request,
-): Omit<Request, 'idempotencyKey'> {
-  const { idempotencyKey: _idempotencyKey, ...meaning } = request;
-  return meaning;
 }
 
 export function workEventKeyDigest(
@@ -661,14 +655,6 @@ function isDecisionDisposition(value: unknown): value is DecisionDisposition {
     value === 'completion-candidate' ||
     value === 'abandon'
   );
-}
-
-function assertRecordInput(collaborationDomainId: string, createdAt: string, toolVersion: string): void {
-  if (!isCollaborationDomainId(collaborationDomainId)) {
-    throw new Error('collaborationDomainId must be a version-4 UUID');
-  }
-  if (!isValidRecordTimestamp(createdAt)) throw new Error('createdAt must be a valid timestamp');
-  if (!normalizedBoundedLine(toolVersion, 256)) throw new Error('toolVersion must be non-empty and bounded');
 }
 
 function hasObservationAtOrAfter(receipts: readonly ObservationReceiptV2[], timestamp: string): boolean {

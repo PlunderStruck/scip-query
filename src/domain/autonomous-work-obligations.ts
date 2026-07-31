@@ -3,7 +3,7 @@ import {
   type ObservationIdentity,
   type ObservationReceiptV2,
 } from './observation-receipt.js';
-import { isRecordObject, isValidRecordTimestamp } from './record-validation.js';
+import { isRecordObject } from './record-validation.js';
 import { stableJson } from './stable-json.js';
 import {
   decodeWorkEvidenceReceipts,
@@ -13,12 +13,13 @@ import {
   type WorkEventIdempotency,
 } from './autonomous-work-ledger.js';
 import {
+  assertWorkRecordInput,
   decodeWorkRecordEnvelope,
   hashIdentity,
-  isCollaborationDomainId,
   isIntendedChangeId,
   matchesWorkStateIdentity,
   normalizedBoundedLine,
+  withoutWorkStateIdempotencyKey,
   type WorkStateDecodeResult,
   type WorkStateWriter,
 } from './autonomous-work-state.js';
@@ -269,7 +270,7 @@ export function decodeObligationTransitionRequest(
 }
 
 export function createObligationAdmission(input: CreateObligationAdmissionInput): ObligationAdmissionRecordV1 {
-  assertRecordInput(input.collaborationDomainId, input.createdAt, input.toolVersion);
+  assertWorkRecordInput(input.collaborationDomainId, input.createdAt, input.toolVersion);
   const decoded = decodeObligationAdmissionRequest(input.request);
   if (!decoded.ok) throw new Error(decoded.error);
   const keyDigest = workEventKeyDigest(
@@ -297,7 +298,7 @@ export function createObligationAdmission(input: CreateObligationAdmissionInput)
 }
 
 export function createObligationTransition(input: CreateObligationTransitionInput): ObligationTransitionRecordV1 {
-  assertRecordInput(input.collaborationDomainId, input.createdAt, input.toolVersion);
+  assertWorkRecordInput(input.collaborationDomainId, input.createdAt, input.toolVersion);
   const decoded = decodeObligationTransitionRequest(input.request);
   if (!decoded.ok) throw new Error(decoded.error);
   const keyDigest = workEventKeyDigest(
@@ -729,7 +730,7 @@ function admissionRequestDigest(collaborationDomainId: string, request: Obligati
     version: 1,
     collaborationDomainId,
     recordKind: OBLIGATION_ADMISSION_RECORD_KIND,
-    request: withoutIdempotencyKey(request),
+    request: withoutWorkStateIdempotencyKey(request),
   });
 }
 
@@ -738,15 +739,8 @@ function transitionRequestDigest(collaborationDomainId: string, request: Obligat
     version: 1,
     collaborationDomainId,
     recordKind: OBLIGATION_TRANSITION_RECORD_KIND,
-    request: withoutIdempotencyKey(request),
+    request: withoutWorkStateIdempotencyKey(request),
   });
-}
-
-function withoutIdempotencyKey<Request extends { idempotencyKey?: string }>(
-  request: Request,
-): Omit<Request, 'idempotencyKey'> {
-  const { idempotencyKey: _idempotencyKey, ...meaning } = request;
-  return meaning;
 }
 
 function obligationIdFromDigest(digest: string): string {
@@ -784,14 +778,6 @@ function isObligationCategory(value: unknown): value is ObligationCategory {
     value === 'verification' ||
     value === 'other'
   );
-}
-
-function assertRecordInput(collaborationDomainId: string, createdAt: string, toolVersion: string): void {
-  if (!isCollaborationDomainId(collaborationDomainId)) {
-    throw new Error('collaborationDomainId must be a version-4 UUID');
-  }
-  if (!isValidRecordTimestamp(createdAt)) throw new Error('createdAt must be a valid timestamp');
-  if (!normalizedBoundedLine(toolVersion, 256)) throw new Error('toolVersion must be non-empty and bounded');
 }
 
 function identitiesEqual(left: ObservationIdentity | undefined, right: ObservationIdentity): boolean {

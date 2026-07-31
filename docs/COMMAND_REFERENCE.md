@@ -160,6 +160,7 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 | `attempt <operation> [target]` | Create, read, validate, or summarize committed autonomous attempt records | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `decision <operation> [target]` | Create, read, validate, or summarize committed autonomous decision records | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `obligation <operation> [target]` | Admit, transition, inspect, or summarize committed completion obligations | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `completion <operation> [target]` | Read, validate, or summarize protected autonomous completion state | `--json`<br>`--result-only`<br>`--compact` |
 
 <!-- END GENERATED COMMAND REFERENCE -->
 

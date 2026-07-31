@@ -72,7 +72,7 @@ export function createGoalRecordFile(
   const record = createGoalRecord({
     collaborationDomainId,
     request,
-    createdAt: (options.now ?? defaultNow)(),
+    createdAt: (options.now ?? workStateNow)(),
     toolVersion: options.toolVersion,
   });
   if (record.predecessorGoalId) {
@@ -113,7 +113,7 @@ export function createIntendedChangeRecordFile(
   const record = createIntendedChangeRecord({
     collaborationDomainId,
     request,
-    createdAt: (options.now ?? defaultNow)(),
+    createdAt: (options.now ?? workStateNow)(),
     toolVersion: options.toolVersion,
   });
   return publishWorkStateRecord(
@@ -306,7 +306,7 @@ export function serializeRecord(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
-function defaultNow(): string {
+export function workStateNow(): string {
   return new Date().toISOString();
 }
 

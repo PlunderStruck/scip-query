@@ -1,6 +1,6 @@
 # Committed record compatibility
 
-scip-query stores six kinds of team-shared records in Git:
+scip-query stores ten kinds of team-shared records in Git:
 
 - `.scipquery/goals/*.json` contains immutable, authorized goal versions.
 - `.scipquery/changes/*.json` contains immutable intended bodies of work tied
@@ -9,6 +9,14 @@ scip-query stores six kinds of team-shared records in Git:
   observed effects.
 - `.scipquery/decisions/*.json` contains immutable evidence-based next-action
   conclusions.
+- `.scipquery/obligations/*.json` contains immutable admissions of unfinished
+  completion conditions.
+- `.scipquery/obligation-transitions/*.json` contains evidence-backed terminal
+  obligation transitions.
+- `.scipquery/completion-evaluations/*.json` contains controller-derived
+  judgments over the complete predicate set.
+- `.scipquery/completion-transitions/*.json` contains idempotent witnesses that
+  an intended change reached complete.
 - `.scipquery/suppressions/*.json` contains accepted detector-policy
   decisions.
 - `.scipquery/events/*.json` contains immutable finding-transition
@@ -96,6 +104,34 @@ integrity failure rather than being resolved by last-writer-wins.
 complete record directories, validate their links to current intended
 changes, and return the deterministic history projection. A `retry-safe`
 decision cannot be created from an unresolved non-idempotent basis attempt.
+
+## Current obligation and completion records
+
+New obligation records conform to
+[`schemas/obligation-admission-record.schema.json`](schemas/obligation-admission-record.schema.json)
+and
+[`schemas/obligation-transition-record.schema.json`](schemas/obligation-transition-record.schema.json).
+An obligation remains live until fixed, same-domain repository evidence
+establishes fulfillment, invalidation, or an authorized carry-forward. Branch
+transitions compose as immutable facts; incompatible terminal meanings remain
+conflicted rather than being resolved by timestamp.
+
+New completion records conform to
+[`schemas/completion-evaluation-record.schema.json`](schemas/completion-evaluation-record.schema.json)
+and
+[`schemas/completion-transition-record.schema.json`](schemas/completion-transition-record.schema.json).
+An evaluation preserves the governing goal and intended change, evaluator and
+policy versions, fixed target observation, every required predicate, and the
+derived decision. A non-established predicate blocks completion. A completion
+transition can be derived only from a complete evaluation, and its identity is
+derived from that evaluation so retries reuse one semantic event.
+
+`completion status [change-id]` classifies both directories, validates all
+goal/change/evaluation/transition links, and folds their branch-independent
+state. A future or malformed record makes coverage incomplete. A completion
+transition whose evaluation is missing or mismatched, or a live obligation
+merged into a completed change, is an integrity failure rather than a clean
+pass.
 
 ## Current suppression records
 

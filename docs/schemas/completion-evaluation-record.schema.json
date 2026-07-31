@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/scip-query/docs/schemas/completion-evaluation-record.schema.json",
+  "title": "scip-query completion evaluation record v1",
+  "description": "One immutable goal-relative completion judgment stored under .scipquery/completion-evaluations/.",
+  "type": "object",
+  "required": [
+    "kind",
+    "schemaVersion",
+    "evaluationId",
+    "collaborationDomainId",
+    "changeId",
+    "goalId",
+    "context",
+    "predicates",
+    "decision",
+    "idempotency",
+    "createdAt",
+    "writer"
+  ],
+  "properties": {
+    "kind": { "const": "scip-query-completion-evaluation" },
+    "schemaVersion": { "const": 1 },
+    "evaluationId": { "type": "string", "pattern": "^SQE-[A-F0-9]{32}$" },
+    "collaborationDomainId": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[89abAB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}$"
+    },
+    "changeId": { "$ref": "./attempt-create-request.schema.json#/$defs/changeId" },
+    "goalId": { "$ref": "./intended-change-create-request.schema.json#/$defs/goalId" },
+    "context": { "$ref": "#/$defs/context" },
+    "predicates": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "prefixItems": [
+        { "allOf": [{ "$ref": "#/$defs/predicate" }, { "properties": { "predicate": { "const": "goal-fulfilled" } } }] },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/predicate" },
+            { "properties": { "predicate": { "const": "invariants-preserved" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/predicate" },
+            { "properties": { "predicate": { "const": "evidence-compatible" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/predicate" },
+            { "properties": { "predicate": { "const": "coverage-complete" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/predicate" },
+            { "properties": { "predicate": { "const": "obligations-reconciled" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/predicate" },
+            { "properties": { "predicate": { "const": "policy-permitted" } } }
+          ]
+        }
+      ],
+      "items": false
+    },
+    "decision": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["state", "blockedPredicates", "unknownPredicates"],
+          "properties": {
+            "state": { "const": "blocked" },
+            "blockedPredicates": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/predicateName" }
+            },
+            "unknownPredicates": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/predicateName" }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["state"],
+          "properties": { "state": { "const": "complete" } },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["state", "transitionRuleId", "successorGoalId"],
+          "properties": {
+            "state": { "const": "superseded" },
+            "transitionRuleId": { "type": "string", "pattern": "^SQTR-[A-F0-9]{32}$" },
+            "successorGoalId": { "$ref": "./intended-change-create-request.schema.json#/$defs/goalId" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "idempotency": { "$ref": "./attempt-record.schema.json#/$defs/idempotency" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "writer": { "$ref": "./goal-record.schema.json#/$defs/writer" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "predicateName": {
+      "enum": [
+        "goal-fulfilled",
+        "invariants-preserved",
+        "evidence-compatible",
+        "coverage-complete",
+        "obligations-reconciled",
+        "policy-permitted"
+      ]
+    },
+    "predicate": {
+      "type": "object",
+      "required": ["predicate", "state", "reasons", "evidenceReceipts"],
+      "properties": {
+        "predicate": { "$ref": "#/$defs/predicateName" },
+        "state": { "enum": ["established", "disproven", "unknown"] },
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+        },
+        "evidenceReceipts": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "$ref": "./observation-receipt.schema.json#/$defs/observationReceiptV2"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "context": {
+      "type": "object",
+      "required": [
+        "contextId",
+        "policyId",
+        "policyVersion",
+        "evaluatorId",
+        "evaluatorVersion",
+        "targetObservation"
+      ],
+      "properties": {
+        "contextId": { "type": "string", "pattern": "^SQX-[A-F0-9]{32}$" },
+        "policyId": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "policyVersion": { "type": "integer", "minimum": 1 },
+        "evaluatorId": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "evaluatorVersion": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "targetObservation": {
+          "$ref": "./observation-receipt.schema.json#/$defs/observationReceiptV2"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
