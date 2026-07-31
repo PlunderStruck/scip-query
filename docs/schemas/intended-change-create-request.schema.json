@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/scip-query/docs/schemas/intended-change-create-request.schema.json",
+  "title": "scip-query intended-change create request",
+  "description": "Transport input for creating one immutable body of repository work.",
+  "type": "object",
+  "required": ["goalId", "idempotencyKey", "title", "intendedOutcome"],
+  "properties": {
+    "goalId": { "type": "string", "pattern": "^SQG-[A-F0-9]{32}$" },
+    "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "intendedOutcome": { "type": "string", "minLength": 1, "maxLength": 1000 }
+  },
+  "additionalProperties": false
+}

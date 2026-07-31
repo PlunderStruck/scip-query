@@ -55,7 +55,7 @@ export type CoveragePolicy =
  * is two symbols, `coupling <f1> <f2>` two files, `tla <operation> [spec]` an
  * action plus a path, and `hotspots` takes nothing.
  */
-export type CommandInputKind = 'symbol' | 'file' | 'module' | 'pattern' | 'path' | 'action' | 'finding';
+export type CommandInputKind = 'symbol' | 'file' | 'module' | 'pattern' | 'path' | 'action' | 'finding' | 'record';
 
 /**
  * What a command reads when it is given no target: the working-tree diff, or

@@ -106,7 +106,10 @@ export function uninstallProject(projectRoot: string, opts: { dryRun?: boolean }
 function projectFilesLeftInPlace(projectRoot: string): string[] {
   return [
     ['.scipquery.json', join(projectRoot, '.scipquery.json')],
+    ['.scipquery/goals/ (repository records)', join(projectRoot, '.scipquery', 'goals')],
+    ['.scipquery/changes/ (repository records)', join(projectRoot, '.scipquery', 'changes')],
     ['.scipquery/suppressions/ (repository records)', join(projectRoot, '.scipquery', 'suppressions')],
+    ['.scipquery/events/ (repository records)', join(projectRoot, '.scipquery', 'events')],
     ['.scipquery/ledger/ (repository records)', join(projectRoot, '.scipquery', 'ledger')],
     ['docs/scip-query/', join(projectRoot, 'docs', 'scip-query')],
   ]

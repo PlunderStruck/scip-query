@@ -148,7 +148,7 @@ describe('CLI contract', () => {
 
   it('keeps every declared agent contract well-formed', () => {
     const coveragePolicies = new Set(['complete', 'bounded', 'sampled', 'unknown']);
-    const inputKinds = new Set(['symbol', 'file', 'module', 'pattern', 'path', 'action', 'finding']);
+    const inputKinds = new Set(['symbol', 'file', 'module', 'pattern', 'path', 'action', 'finding', 'record']);
     const scopes = new Set(['diff', 'repository']);
     const operationRoles = new Set(COMMAND_OPERATION_ROLES);
     const commandIds = new Set(commandDescriptors.map((descriptor) => descriptor.id));

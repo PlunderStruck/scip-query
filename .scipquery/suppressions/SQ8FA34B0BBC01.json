@@ -6,50 +6,150 @@
     "version": "0.20.0"
   },
   "id": "SQ8FA34B0BBC01",
-  "reason": "Command descriptors now declare operation-role metadata that command-registry resolves centrally; command handlers do not read or implement this metadata, and descriptor contract tests cover every public command.",
+  "reason": "The new goal and change descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, and CLI contract plus executable dogfood cover registration and behavior.",
   "createdAt": "2026-07-29T19:50:55.191Z",
-  "updatedAt": "2026-07-31T01:44:34.756Z",
+  "updatedAt": "2026-07-31T04:12:41.902Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
-    "reasonCode": "detector-counterexample",
+    "reasonCode": "historical-coupling-ended",
     "decidedBy": "agent",
     "policyVersion": 1,
     "observation": {
-      "schemaVersion": 1,
-      "authorityKind": "index-worktree",
-      "observedAt": "2026-07-31T01:44:34.755Z",
-      "projectIdentity": "178a22f2ce5800603672d10b597d4cf97078e596c64e2eb0293681604557bda7",
-      "index": {
-        "generationIdentity": "22ac90beda11aeb7c84290b4a0c2339b17e17596a402329d4375bebfc87ef6ee",
-        "source": "immutable",
-        "alignment": "not-certified"
+      "schemaVersion": 2,
+      "observedAt": "2026-07-31T04:12:41.895Z",
+      "facts": {
+        "collaborationDomain": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:collaboration-domain",
+            "version": 1
+          },
+          "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+        },
+        "workspaceInstance": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:workspace-instance",
+            "version": 1
+          },
+          "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+        },
+        "wholeContent": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:repository-content",
+            "version": 1
+          },
+          "digest": "d29e023d84e1cf7a16ade41d8282ab940ac37618097d1d98d132107cb213d9a0"
+        },
+        "relevantInputs": [
+          {
+            "subject": "scip-query:index-inputs",
+            "identity": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:index-inputs",
+                "version": 2
+              },
+              "digest": "543db9891aff9519712c1f0b52ce4f202a9f6ff892d947e2c14ade3e1948d1b6"
+            }
+          }
+        ],
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "15d931b8125d699daf5f13d124f4cb543aaf43f58b2a0bcd8af4731fcab17a5c"
+          },
+          "inputs": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-inputs",
+              "version": 2
+            },
+            "digest": "543db9891aff9519712c1f0b52ce4f202a9f6ff892d947e2c14ade3e1948d1b6"
+          },
+          "source": "immutable"
+        }
       },
-      "worktree": {
-        "identity": "f718141ab24d6e0e4a59c9a4262cf62b54206d661238935c43c3b6448102db19",
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "15d931b8125d699daf5f13d124f4cb543aaf43f58b2a0bcd8af4731fcab17a5c"
+          }
+        },
+        {
+          "kind": "repository-snapshot",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:repository-content",
+              "version": 1
+            },
+            "digest": "d29e023d84e1cf7a16ade41d8282ab940ac37618097d1d98d132107cb213d9a0"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        },
+        {
+          "source": "repository-snapshot",
+          "kind": "fixed-snapshot"
+        }
+      ],
+      "diagnostics": {
         "clean": false,
-        "headCommit": "540c7e1ee30f5da26b85eabd508f9b2f64c09089",
-        "treeOid": "e53a2de842482db3385cf8211291c9d86cbf3d07"
+        "headCommit": "d3e8b17db9c997b32b96d056a56c5d3f12f560a7",
+        "treeOid": "8923296f2f68da00b4157a23f56d8595f4582c3d"
       }
     },
     "evidence": [
       {
         "kind": "source",
-        "referent": "src/runtime/commands/command-handlers.ts",
-        "claim": "Command descriptors now declare operation-role metadata that command-registry resolves centrally; command handlers do not read or implement this metadata, and descriptor contract tests cover every public command.",
-        "contentHash": "6048e9d84c6c9b4179456cd8d27d7ff91a5884c9b42f2823d88b5f40239b986c"
+        "referent": "src/runtime/commands/work-state-handlers.ts",
+        "claim": "The new goal and change descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, and CLI contract plus executable dogfood cover registration and behavior.",
+        "contentHash": "002dbc5b32af472599e18cf133d72c4ab77a635b96f9965e1eb75d541460449f"
       },
       {
         "kind": "source",
-        "referent": "src/runtime/commands/command-registry.ts",
-        "claim": "Command descriptors now declare operation-role metadata that command-registry resolves centrally; command handlers do not read or implement this metadata, and descriptor contract tests cover every public command.",
-        "contentHash": "4dba13401071838e2a9e4b17e86b1abe1e92faec6836b5202596b3750e549927"
+        "referent": "src/runtime/commands/command-descriptors.ts",
+        "claim": "The new goal and change descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, and CLI contract plus executable dogfood cover registration and behavior.",
+        "contentHash": "823a1a7639056a965b13ade90ef6a4c368edcb31ad2fbfd0386a2044d97c2c4d"
       },
       {
         "kind": "test",
         "referent": "tests/runtime/cli-contract.test.ts",
-        "claim": "Command descriptors now declare operation-role metadata that command-registry resolves centrally; command handlers do not read or implement this metadata, and descriptor contract tests cover every public command.",
-        "contentHash": "a1fa0ae004951087efb73533979c0e6a44f220817454ac6811e374c98cb57951"
+        "claim": "The new goal and change descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, and CLI contract plus executable dogfood cover registration and behavior.",
+        "contentHash": "19c90650f079e54a0883c67be264a90e99b0c6982104dbc3ed49282695059080"
       }
     ],
     "invalidateOn": {

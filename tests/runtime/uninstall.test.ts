@@ -62,17 +62,23 @@ describe('uninstallProject', () => {
     ]);
   });
 
-  it('reports shared suppression and outcome records that are intentionally left in place', () => {
+  it('reports shared work-state, suppression, and outcome records that are intentionally left in place', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-uninstall-'));
     roots.push(root);
     execFileSync('git', ['-C', root, 'init'], { stdio: 'ignore' });
+    mkdirSync(join(root, '.scipquery', 'goals'), { recursive: true });
+    mkdirSync(join(root, '.scipquery', 'changes'), { recursive: true });
     mkdirSync(join(root, '.scipquery', 'suppressions'), { recursive: true });
+    mkdirSync(join(root, '.scipquery', 'events'), { recursive: true });
     mkdirSync(join(root, '.scipquery', 'ledger'), { recursive: true });
 
     const result = uninstallProject(root, { dryRun: true });
 
     expect(result.left).toEqual([
+      '.scipquery/goals/ (repository records)',
+      '.scipquery/changes/ (repository records)',
       '.scipquery/suppressions/ (repository records)',
+      '.scipquery/events/ (repository records)',
       '.scipquery/ledger/ (repository records)',
     ]);
   });

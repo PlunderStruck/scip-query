@@ -1,7 +1,10 @@
 # Committed record compatibility
 
-scip-query stores two kinds of team-shared records in Git:
+scip-query stores four kinds of team-shared records in Git:
 
+- `.scipquery/goals/*.json` contains immutable, authorized goal versions.
+- `.scipquery/changes/*.json` contains immutable intended bodies of work tied
+  to goals.
 - `.scipquery/suppressions/*.json` contains accepted detector-policy
   decisions.
 - `.scipquery/events/*.json` contains immutable finding-transition
@@ -27,6 +30,36 @@ Every JSON candidate is classified exactly once:
 Readers return accepted records together with `total`, `accepted`, `omitted`,
 the per-state counts, and path-specific issues. A subset may still support a
 conservative result, but it must not be represented as complete.
+
+## Current goal and intended-change records
+
+New goals conform to
+[`schemas/goal-record.schema.json`](schemas/goal-record.schema.json), and new
+intended changes conform to
+[`schemas/intended-change-record.schema.json`](schemas/intended-change-record.schema.json).
+
+A goal record is one immutable semantic version of an authorized repository
+objective. Its identity is derived from the repository collaboration domain
+and canonical Gherkin meaning. Formatting, writer version, timestamp, clone,
+and branch do not change that identity. A meaningful revision creates a new
+goal and names its predecessor; it does not rewrite the earlier goal.
+
+An intended-change record identifies one mergeable body of repository work.
+Its identity is derived from a caller-provided idempotency key within the
+collaboration domain. Repeating the same key and request returns the existing
+record. Reusing the key for different work is an integrity error.
+
+Both record types use durable exclusive publication. Two clones creating the
+same goal therefore produce the same path and bytes. Independent changes use
+different paths. These facts make ordinary branch merges additive; a conflict
+at one identity is evidence of incompatible meaning or metadata and must not
+be resolved mechanically.
+
+`goal status` and `change status` classify every JSON candidate. Goal
+incompatibility also makes change status incomplete, and an intended change
+whose goal is missing or belongs to another collaboration domain is an
+integrity failure. Records from future schema versions are retained but cannot
+support current conclusions.
 
 ## Current suppression records
 
@@ -157,8 +190,10 @@ removing the legacy ledger.
 
 ## Merge and rollback rules
 
-- Commit suppression and event files with the code or documentation change
+- Commit goal, intended-change, suppression, and event files with the work
   that produced them.
+- Create goals and intended changes through `scip-query goal create` and
+  `scip-query change create`; do not hand-edit their derived identities.
 - Do not rewrite all legacy files just to make compatibility counters
   “current.” Read overlap is the migration mechanism.
 - Resolve a same-suppression-path conflict by reviewing both policy decisions;

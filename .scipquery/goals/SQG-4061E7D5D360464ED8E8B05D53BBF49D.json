@@ -1,0 +1,81 @@
+{
+  "kind": "scip-query-goal",
+  "schemaVersion": 1,
+  "goalId": "SQG-4061E7D5D360464ED8E8B05D53BBF49D",
+  "collaborationDomainId": "5ea57d1a-936c-4c91-b58f-5d61e45173a5",
+  "gherkin": {
+    "language": "gherkin",
+    "feature": "An autonomous coding agent carries an authorized repository change to independently verified completion without routine human intervention or ceremonial work",
+    "invariants": [
+      "Every mandatory action changes state, supplies decision-relevant information, preserves otherwise-lost state, verifies an effect, or preserves a live obligation",
+      "Completion remains relative to the authorized goal and cannot be made easier solely by editing its judging artifacts",
+      "Shared work records survive interruption and merge across clones and branches without silent loss",
+      "Architecture and repository policy constrain every accepted implementation"
+    ],
+    "acceptanceScenarios": [
+      {
+        "name": "Interrupted work resumes autonomously",
+        "given": [
+          "An authorized change remains incomplete after an agent process stops"
+        ],
+        "when": [
+          "Another agent reads the committed repository work state"
+        ],
+        "then": [
+          "The agent can recover the governing goal, remaining obligations, and next evidence-producing action without asking a person to restate them"
+        ]
+      },
+      {
+        "name": "Completion includes repository residue",
+        "given": [
+          "The requested behavior works but obsolete or misleading implementation residue remains"
+        ],
+        "when": [
+          "The agent evaluates completion against the governing goal and repository constraints"
+        ],
+        "then": [
+          "The change remains incomplete until the residue is removed or supported by current evidence"
+        ]
+      },
+      {
+        "name": "Verification remains independent",
+        "given": [
+          "The working agent can edit repository-local plans and records"
+        ],
+        "when": [
+          "The agent claims the intended change is complete"
+        ],
+        "then": [
+          "The claim states the authority and limits of its evidence and does not treat writable self-assertion as independent proof"
+        ]
+      },
+      {
+        "name": "Guidance earns its cost",
+        "given": [
+          "A workflow action consumes time or tokens"
+        ],
+        "when": [
+          "The tool requires the action"
+        ],
+        "then": [
+          "The action produces state, evidence, preserved intent, verification, or risk reduction that a later decision uses"
+        ]
+      }
+    ]
+  },
+  "semanticIdentity": {
+    "algorithm": "sha256",
+    "canonicalizationVersion": 1,
+    "digest": "4061e7d5d360464ed8e8b05d53bbf49de92c262358e64100e29c93ab7c0f26e6"
+  },
+  "authorization": {
+    "kind": "repository-delegation",
+    "principal": "repository-owner",
+    "source": "user-request:autonomous-completion-program"
+  },
+  "createdAt": "2026-07-31T04:03:00.318Z",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  }
+}

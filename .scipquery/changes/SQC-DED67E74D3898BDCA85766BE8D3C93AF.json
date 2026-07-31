@@ -1,0 +1,20 @@
+{
+  "kind": "scip-query-intended-change",
+  "schemaVersion": 1,
+  "changeId": "SQC-DED67E74D3898BDCA85766BE8D3C93AF",
+  "collaborationDomainId": "5ea57d1a-936c-4c91-b58f-5d61e45173a5",
+  "goalId": "SQG-4061E7D5D360464ED8E8B05D53BBF49D",
+  "title": "Autonomous repository completion program",
+  "intendedOutcome": "scip-query durably guides, constrains, and independently verifies long-running agent work from authorized intent through residue-free completion",
+  "idempotency": {
+    "version": 1,
+    "algorithm": "sha256",
+    "keyDigest": "ded67e74d3898bdca85766be8d3c93af2808bf41e308d48812737172e11e1855",
+    "requestDigest": "e720a929f3b40cbe4572537c3dcaf59cfb73006a80f283f5cf8a852858ce0652"
+  },
+  "createdAt": "2026-07-31T04:03:12.537Z",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  }
+}

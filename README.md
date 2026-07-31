@@ -493,7 +493,7 @@ the reviewed immutable package versions. CI setup is intentionally separate.
 
 Setup classifies every change by where its facts belong:
 
-- **Repository records (commit):** shared project policy and history whose value comes from surviving clones and branches, including `.scipquery.json`, AGENTS/CLAUDE guidance, health dossiers, `.scipquery/suppressions/*.json`, and `.scipquery/ledger/`.
+- **Repository records (commit):** shared project intent, policy, and history whose value comes from surviving clones and branches, including `.scipquery.json`, AGENTS/CLAUDE guidance, health dossiers, `.scipquery/goals/*.json`, `.scipquery/changes/*.json`, `.scipquery/suppressions/*.json`, `.scipquery/events/*.json`, and the legacy `.scipquery/ledger/`.
 - **Checkout preferences (do not commit):** integration settings for one clone, including `.codex/hooks.json`, `.claude/settings.local.json`, `.git/info/exclude`, and an optional `.git/hooks/pre-commit` backstop.
 - **User environment:** installed skills and language indexers used across checkouts on that machine.
 

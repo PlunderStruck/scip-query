@@ -60,6 +60,14 @@ Write the plan to `docs/plans/YYYY-MM-DD-<short-name>.md` with these sections:
 
 The plan is done only when: the entry-to-effect path is described and evidenced, every affected consumer is assigned to a slice or explicitly out of scope, every new unit has a reuse decision, every slice has validation, and unknowns are written down rather than resolved by guessing. Then implement in the smallest coherent slice and run `scip-verify` when the change lands.
 
+When a repository has adopted canonical autonomous work state, use
+`scip-query goal status` and `scip-query change status` to recover the
+authorized goal and intended change rather than asking the user or transcript
+to restate them. `scip-query goal create --input <path>` and
+`scip-query change create --input <path>` are repository mutations: use them
+only to materialize an authorized goal/change request, and rely on their
+retry-stable identities instead of editing committed record bytes directly.
+
 ## Owned command quick-reference
 
 `bench`, `work-audit` → performance campaigns, see `references/hyper-optimization.md`.

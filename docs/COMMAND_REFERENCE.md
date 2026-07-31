@@ -151,6 +151,13 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 | `watch` | Watch in the foreground or manage the per-project background refresh service | `--daemon`<br>`--status`<br>`--stop`<br>`--debounce <ms>`<br>`--cooldown <ms>`<br>`--git-poll <ms>`<br>`--idle-timeout <ms>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `status` | Show index status for this project | `--capabilities`<br>`--json`<br>`--result-only`<br>`--compact` |
 
+### Autonomous work state
+
+| Command | Description | Options |
+|---|---|---|
+| `goal <operation> [target]` | Create, read, validate, or list committed autonomous goal records | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `change <operation> [target]` | Create, read, validate, or list committed intended-change records | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
+
 <!-- END GENERATED COMMAND REFERENCE -->
 
 ## `analysisBudget` disclosure contract

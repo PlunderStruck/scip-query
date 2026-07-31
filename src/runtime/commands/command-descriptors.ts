@@ -18,6 +18,7 @@ import { DIFF_GATE_RUN_COMMAND } from '../diff-gate-execution.js';
 import { handleAgentHookContext, handleAgentHookPreToolUse, handleAgentHookStop } from '../agent-hooks.js';
 import { BUILTIN_SKILLS } from '../setup.js';
 import * as handlers from './command-handlers.js';
+import { handleGoal, handleIntendedChange } from './work-state-handlers.js';
 import { orderedQueryCommandDescriptors } from './query-command-specs.js';
 
 const queryCommandsBeforeDiffImpact = orderedQueryCommandDescriptors.slice(0, queryIndexAfter('plan-context'));
@@ -410,6 +411,53 @@ export const commandDescriptors: CommandDescriptor[] = [
     renderShape: 'custom',
     docs: doc('Maintenance', ['scip-query config-validate']),
     handler: handlers.handleConfigValidate,
+  },
+  {
+    id: 'goal',
+    command: 'goal <operation> [target]',
+    agent: agentContract(
+      'Can an authorized repository goal be created, read, validated, or enumerated?',
+      'immutable goal identity, canonical Gherkin, authorization, compatibility, and publication durability',
+      ['action', 'record'],
+      'complete',
+      'repository',
+      commandOperation('repository-observation', [
+        { when: { kind: 'argument', index: 0, equals: 'create' }, role: 'mutation' },
+      ]),
+    ),
+    description: 'Create, read, validate, or list committed autonomous goal records',
+    options: withJsonOption([option('--input <path>', 'Bounded JSON create request for the create operation')]),
+    claims: fixedClaimContract('repository-source', ['live-workspace']),
+    renderShape: 'custom',
+    docs: doc('Autonomous work state', [
+      'scip-query goal create --input goal-request.json --json',
+      'scip-query goal read SQG-0123456789ABCDEF0123456789ABCDEF',
+      'scip-query goal status --json',
+    ]),
+    handler: handleGoal,
+  },
+  {
+    id: 'change',
+    command: 'change <operation> [target]',
+    agent: agentContract(
+      'Can one mergeable intended change be created, read, validated, or enumerated?',
+      'opaque change identity, governing goal, intended outcome, compatibility, integrity, and publication durability',
+      ['action', 'record'],
+      'complete',
+      'repository',
+      commandOperation('repository-observation', [
+        { when: { kind: 'argument', index: 0, equals: 'create' }, role: 'mutation' },
+      ]),
+    ),
+    description: 'Create, read, validate, or list committed intended-change records',
+    options: withJsonOption([option('--input <path>', 'Bounded JSON create request for the create operation')]),
+    claims: fixedClaimContract('repository-source', ['live-workspace']),
+    renderShape: 'custom',
+    docs: doc('Autonomous work state', [
+      'scip-query change create --input change-request.json --json',
+      'scip-query change status --json',
+    ]),
+    handler: handleIntendedChange,
   },
   {
     id: 'suppress',

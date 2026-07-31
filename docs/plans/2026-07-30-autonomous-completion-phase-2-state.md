@@ -1,7 +1,7 @@
 # Phase 2 — durable autonomous state
 
 Date: 2026-07-30
-Status: planned; depends on Phase 1
+Status: in progress — Phase 1 complete; slice 2.1 complete; slice 2.2 next
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -89,6 +89,55 @@ Validation and expected result:
 - two clones read the same committed goal/change identity; and
 - malformed, future, and legacy versions receive explicit compatibility
   outcomes.
+
+Implementation decisions fixed before editing:
+
+- one goal record represents one immutable semantic goal version. Its identity
+  is the SHA-256 digest of normalized Gherkin meaning plus the committed
+  collaboration domain; whitespace-only and writer/timestamp changes are not
+  new goal versions, while a feature, invariant, or acceptance-scenario change
+  is;
+- a semantic revision is a new goal record naming its predecessor. Existing
+  goal bytes are never updated in place;
+- one intended-change record represents one mergeable body of work, independent
+  of process, branch, worktree, or clone. Its opaque identity is derived from a
+  caller-originated idempotency key scoped to the collaboration domain; a retry
+  with the same meaningful request returns the existing record, while reuse
+  with different content is an integrity error;
+- create publication reuses durable, exclusive single-file publication. The
+  filesystem's exclusive link is the uniqueness constraint; no
+  check-then-create preflight is treated as authoritative;
+- `goal` and `change` CLI operations expose `create`, `read`, `validate`, and
+  `status`. Creation accepts one bounded JSON request file and derives record
+  identity, writer metadata, timestamp, path, and collaboration facts
+  automatically; and
+- the committed record directories are canonical. Human output, JSON
+  envelopes, session restoration, and later current-state folds are derived
+  views rather than second stores.
+
+Implemented result:
+
+- canonical program goal:
+  `SQG-4061E7D5D360464ED8E8B05D53BBF49D`;
+- canonical intended change:
+  `SQC-DED67E74D3898BDCA85766BE8D3C93AF`;
+- the executable created both records durably, reused the goal on retry,
+  validated it by repository path, and reported one complete goal/change set;
+- focused domain, storage, setup, uninstall, and CLI-contract checks passed
+  64 of 64, including the linked-but-unacknowledged unknown-outcome case;
+- the storage contract covers canonical identity, semantic successor links,
+  same-key collision, linked-but-unacknowledged retry recovery, forward-version
+  classification, non-symlink reads, and additive two-branch composition;
+- formatting, lint, the 72-path public API contract, and all 2,236 tests in 277
+  files passed;
+- a fresh compiler-resolved index found no architecture violation, the scoped
+  diff gate passed over 7 changed source files and 106 symbols, and an
+  out-of-repository validation path was rejected; and
+- the repository-wide health baseline remains red with 113 accumulated
+  Phase 0–2 heuristic deltas. That broad backlog is not treated as evidence
+  against this slice: the changed-surface gate is clean, and the two new
+  single-consumer record contracts remain deliberate serialized boundaries for
+  the remaining Phase 2 slices.
 
 ### 2.2 Append-only attempts and decisions
 

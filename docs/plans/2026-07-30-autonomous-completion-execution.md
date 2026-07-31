@@ -4,6 +4,8 @@ Date: 2026-07-30
 Status: in progress
 Mission record: [Autonomous repository completion program](./2026-07-30-autonomous-completion-program.md)
 Design record: [Epistemic clarification notes](../reviews/2026-07-30-epistemic-clarification-notes.md)
+Canonical goal: `SQG-4061E7D5D360464ED8E8B05D53BBF49D`
+Canonical intended change: `SQC-DED67E74D3898BDCA85766BE8D3C93AF`
 
 ## What this plan controls
 
@@ -232,7 +234,7 @@ Before the program can be marked complete:
 
 - [x] Phase 0: automatic version-1 evidence context.
 - [x] Phase 1: evidence foundation.
-- [ ] Phase 2: durable autonomous state.
+- [ ] Phase 2: durable autonomous state (slice 2.1 complete; slice 2.2 next).
 - [ ] Phase 3: protected completion.
 - [ ] Phase 4: repository completeness.
 - [ ] Phase 5: agent workflow.

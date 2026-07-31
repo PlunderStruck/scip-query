@@ -36,8 +36,10 @@ For analyzer implementation work, follow [Regex Policy](REGEX_POLICY.md): regex 
    Setup reports three change scopes. Repository records are shared project
    facts and history that must survive clones, so commit `.scipquery.json`,
    managed AGENTS/CLAUDE guidance, health dossiers,
-   `.scipquery/suppressions/*.json`, and `.scipquery/ledger/` when setup or a
-   gate run changes them. Checkout preferences configure only one clone, so do
+   `.scipquery/goals/*.json`, `.scipquery/changes/*.json`,
+   `.scipquery/suppressions/*.json`, `.scipquery/events/*.json`, and the legacy
+   `.scipquery/ledger/` when a work-state or gate operation changes them.
+   Checkout preferences configure only one clone, so do
    not commit `.codex/hooks.json` or `.claude/settings.local.json`; setup keeps
    them out of Git through `.git/info/exclude`. User-environment changes install
    skills or indexers for the current machine. Use `setup --guided` from a TTY
