@@ -403,7 +403,8 @@ slices 5-7 remove these known measurement and product defects.
 - **Order safety:** use owned temporary paths and content identities rather
   than deleting an ambiguous worktree file.
 
-**Partial result (2026-07-31): index residue repaired.** TypeScript and
+**Partial result (2026-07-31): index residue and cleanup-verifier sandbox
+friction repaired.** TypeScript and
 JavaScript indexer invocations no longer pass `--infer-tsconfig`. For an
 unconfigured single project, the runner publishes the same minimal root
 configuration with exclusive creation and records its bytes plus its filesystem
@@ -419,8 +420,18 @@ API compatibility passed; the complete repository suite also passed after its
 reindex mock and bounded-artifact ownership contracts were reconciled. A real
 reindex of the JavaScript policy-routing fixture produced six documents and 45
 symbols while leaving `git status` clean and no root `tsconfig.json`.
-Cleanup-verifier behavior and attempt-journal compaction remain open in this
-slice.
+
+Cleanup verification now materializes committed `HEAD` in an isolated shared
+clone. The clone reads the source object store, but its checkout, index, locks,
+and administrative records all live under the system temporary directory; it
+does not register a linked worktree under the candidate repository's `.git`.
+The same substrate produces cleanup patches. A focused integration test makes
+the source `.git` directory read-only, verifies a deletion batch, confirms no
+`worktrees` record was created, and confirms the candidate file was unchanged.
+If the snapshot cannot be created, JSON and human output carry one explicit
+unavailable reason instead of throwing before an outcome exists. Nineteen
+focused cleanup tests, typecheck, build, and public API compatibility pass.
+Attempt-journal compaction remains open in this slice.
 
 ### 8. Fresh controller and large-repository programs
 

@@ -848,7 +848,7 @@ export const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, args, 
   }
 
   if (verification) {
-    console.log('\nVerifying batches against the project checker (throwaway worktree at HEAD)...');
+    console.log('\nVerifying batches against the project checker (isolated snapshot of committed HEAD)...');
     if (verification.checkers.length === 0) {
       console.log(
         '  No checker detected (need tsconfig.json, go.mod, Python project markers, Clojure project markers, or Cargo.toml) -- skipped.',
@@ -857,6 +857,10 @@ export const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, args, 
     }
     for (const checker of verification.checkers) {
       console.log(`  Checker: ${checker}`);
+    }
+    if (verification.unavailableReason) {
+      console.log(`  UNAVAILABLE: ${verification.unavailableReason}.`);
+      return;
     }
     if (verification.uncoveredFiles.length > 0) {
       console.log(

@@ -257,7 +257,7 @@ staleness 94  product/domain-model.md
   22 change(s) since doc update  src/workflows/serviceTasks.ts  (referenced by doc)
 ```
 
-**4. Delete with project checks.** `cleanup-plan` runs dead-code analysis to a _fixpoint_ — deleting batch 0 makes batch 1 dead, and the plan shows the cascade. `--verify` applies each batch in a throwaway git worktree and runs the supported checker detected for your project (differentially, so pre-existing errors don't drown the signal):
+**4. Delete with project checks.** `cleanup-plan` runs dead-code analysis to a _fixpoint_ — deleting batch 0 makes batch 1 dead, and the plan shows the cascade. `--verify` applies each batch in an isolated temporary clone of committed `HEAD` and runs the supported checker detected for your project (differentially, so pre-existing errors don't drown the signal). The clone keeps verification writes out of both the candidate files and their protected `.git` metadata:
 
 ```
 ── Batch 0: deletable now (graph-fact, 67 LOC) ──

@@ -78,12 +78,17 @@ Several cross-run mechanisms are stronger than pair-specific inference:
   collaboration residue and a material efficiency cost unless it is compacted
   without losing controller-relevant facts.
 
-Remediation status: the index-owned residue is now repaired in the source
-tree. The index runner exclusively creates a temporary config and removes it
-only while its file identity and bytes remain unchanged. The real JavaScript
-fixture reindexed to six documents and 45 symbols with no root `tsconfig.json`
-and a clean Git worktree. This repair does not retroactively change any trial
-outcome; it must be included in a new content-identified program.
+Remediation status: both repeatable product defects are now repaired in the
+source tree. The index runner exclusively creates a temporary config and
+removes it only while its file identity and bytes remain unchanged. The real
+JavaScript fixture reindexed to six documents and 45 symbols with no root
+`tsconfig.json` and a clean Git worktree. Cleanup verification now uses an
+isolated temporary clone of committed `HEAD`; a read-only-`.git` integration
+test verifies a deletion batch without creating linked-worktree metadata or
+changing the candidate file. If even that read-only snapshot cannot be
+materialized, the command returns one explicit unavailable reason. These
+repairs do not retroactively change any trial outcome; they must be included in
+a new content-identified program.
 
 ## Controller-integrity failure
 

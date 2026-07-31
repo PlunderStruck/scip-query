@@ -2,7 +2,7 @@
  * Compile-verified deletion — the universal oracle.
  *
  * Every language ships its own ground truth: tsc, cargo check. Applying a
- * cleanup batch in a throwaway git worktree and running the project's own
+ * cleanup batch in an isolated clone of committed HEAD and running the project's own
  * checker upgrades plan entries from candidates to proofs — and a FAILURE is
  * signal too: the errors name the references the static evidence missed
  * (barrel re-export lines, unused imports, dynamic paths).
@@ -44,8 +44,10 @@ export interface CleanupVerification {
   workingTree: WorkingTreeInspection;
   /** Plan files that are dirty in the working tree — verification runs at HEAD. */
   dirtyOverlap: string[];
-  /** Any dirty/untracked working-tree paths hidden by the HEAD worktree verification. */
+  /** Any dirty/untracked working-tree paths hidden by the committed-HEAD snapshot verification. */
   dirtyWorkingTree: string[];
+  /** Why the isolated HEAD snapshot could not be prepared, when verification is unavailable. */
+  unavailableReason?: string;
   batches: BatchVerification[];
 }
 
@@ -123,28 +125,37 @@ export function verifyCleanupPlan(
   const uncoveredFiles = planFilesWithoutChecker(plan, checkers);
 
   const timeoutMs = opts.timeoutMs ?? CHECK_TIMEOUT_MS;
-  const worktree = mkdtempSync(join(tmpdir(), 'scip-cleanup-verify-'));
   const batches: BatchVerification[] = [];
   // Differential baseline: many projects don't check clean at the root
   // (workspace tsconfigs, pre-existing errors). Pass = no NEW errors.
   const baselineErrorsByChecker = new Map<string, string[]>();
+  let snapshot: HeadSnapshot;
   try {
-    execFileSync('git', ['-C', projectRoot, 'worktree', 'add', '--detach', '--force', worktree, 'HEAD'], {
-      stdio: 'ignore',
-      timeout: 30_000,
-      killSignal: 'SIGKILL',
-    });
-    linkUntrackedDeps(projectRoot, worktree);
+    snapshot = createHeadSnapshot(projectRoot, 'scip-cleanup-verify-');
+  } catch (error) {
+    return {
+      checkers: checkers.map((checker) => checker.label),
+      uncoveredFiles,
+      baselineErrors: 0,
+      workingTree,
+      dirtyOverlap,
+      dirtyWorkingTree,
+      unavailableReason: headSnapshotFailureReason(error),
+      batches: [],
+    };
+  }
+  try {
+    linkUntrackedDeps(projectRoot, snapshot.root);
 
     for (const checker of checkers) {
-      baselineErrorsByChecker.set(checker.label, runChecker(checker, worktree, timeoutMs).rawErrors);
+      baselineErrorsByChecker.set(checker.label, runChecker(checker, snapshot.root, timeoutMs).rawErrors);
     }
 
     for (const batch of plan.batches) {
-      applyBatchDeletions(worktree, batch);
+      applyBatchDeletions(snapshot.root, batch);
       let failure: BatchVerification | null = null;
       for (const checker of checkers) {
-        const result = runChecker(checker, worktree, timeoutMs);
+        const result = runChecker(checker, snapshot.root, timeoutMs);
         const decision = decideBatchStatus(result, baselineErrorsByChecker.get(checker.label) ?? [], result.rawErrors);
         if (decision.status === 'failed') {
           const errors = decision.errors.length > 0 ? decision.errors : result.outputTail;
@@ -165,15 +176,7 @@ export function verifyCleanupPlan(
       }
     }
   } finally {
-    try {
-      execFileSync('git', ['-C', projectRoot, 'worktree', 'remove', '--force', worktree], {
-        stdio: 'ignore',
-        timeout: 30_000,
-        killSignal: 'SIGKILL',
-      });
-    } catch {
-      rmSync(worktree, { recursive: true, force: true });
-    }
+    snapshot.dispose();
   }
 
   return {
@@ -508,6 +511,62 @@ function linkUntrackedDeps(projectRoot: string, worktree: string): void {
   }
 }
 
+interface HeadSnapshot {
+  root: string;
+  dispose(): void;
+}
+
+/**
+ * Materialize committed HEAD without registering a linked worktree. A shared
+ * local clone reads the source object store but confines its index, checkout,
+ * locks, and other Git administration to the temporary directory.
+ */
+function createHeadSnapshot(projectRoot: string, prefix: string): HeadSnapshot {
+  const container = mkdtempSync(join(tmpdir(), prefix));
+  const root = join(container, 'checkout');
+  try {
+    const head = execFileSync('git', ['-C', projectRoot, 'rev-parse', '--verify', 'HEAD'], {
+      encoding: 'utf-8',
+      timeout: 30_000,
+      maxBuffer: GIT_STATUS_MAX_BYTES,
+      killSignal: 'SIGKILL',
+    }).trim();
+    execFileSync('git', ['clone', '--quiet', '--no-checkout', '--shared', '--', projectRoot, root], {
+      stdio: 'ignore',
+      timeout: 30_000,
+      killSignal: 'SIGKILL',
+    });
+    execFileSync('git', ['-C', root, 'checkout', '--quiet', '--detach', '--force', head], {
+      stdio: 'ignore',
+      timeout: 30_000,
+      killSignal: 'SIGKILL',
+    });
+    return {
+      root,
+      dispose() {
+        rmSync(container, { recursive: true, force: true });
+      },
+    };
+  } catch (error) {
+    rmSync(container, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+function headSnapshotFailureReason(error: unknown): string {
+  const failure = error as { code?: unknown; killed?: unknown; signal?: unknown; status?: unknown };
+  if (failure?.code === 'ETIMEDOUT' || failure?.killed === true) {
+    return 'isolated HEAD snapshot timed out after 30000ms';
+  }
+  if (typeof failure?.signal === 'string' && failure.signal !== '') {
+    return `isolated HEAD snapshot was terminated by ${failure.signal}`;
+  }
+  if (typeof failure?.status === 'number') {
+    return `isolated HEAD snapshot failed because Git exited with status ${failure.status}`;
+  }
+  return 'isolated HEAD snapshot failed; confirm that Git can read the repository and committed HEAD';
+}
+
 function applyBatchDeletions(worktree: string, batch: CleanupBatch): void {
   const rangesByFile = new Map<string, Array<{ start: number; end: number }>>();
   for (const entry of batch.entries) {
@@ -564,30 +623,17 @@ export function applyCleanupBatches(
 }
 
 export function createCleanupPatch(projectRoot: string, batches: readonly CleanupBatch[]): string {
-  const worktree = mkdtempSync(join(tmpdir(), 'scip-cleanup-patch-'));
+  const snapshot = createHeadSnapshot(projectRoot, 'scip-cleanup-patch-');
   try {
-    execFileSync('git', ['-C', projectRoot, 'worktree', 'add', '--detach', '--force', worktree, 'HEAD'], {
-      stdio: 'ignore',
-      timeout: 30_000,
-      killSignal: 'SIGKILL',
-    });
-    applyCleanupBatches(worktree, batches);
-    return execFileSync('git', ['-C', worktree, 'diff', '--binary'], {
+    applyCleanupBatches(snapshot.root, batches);
+    return execFileSync('git', ['-C', snapshot.root, 'diff', '--binary'], {
       encoding: 'utf-8',
       maxBuffer: 32 * 1024 * 1024,
       timeout: 30_000,
       killSignal: 'SIGKILL',
     });
   } finally {
-    try {
-      execFileSync('git', ['-C', projectRoot, 'worktree', 'remove', '--force', worktree], {
-        stdio: 'ignore',
-        timeout: 30_000,
-        killSignal: 'SIGKILL',
-      });
-    } catch {
-      rmSync(worktree, { recursive: true, force: true });
-    }
+    snapshot.dispose();
   }
 }
 
@@ -608,6 +654,9 @@ export function cleanupVerificationFailures(
   selectedBatches: readonly CleanupBatch[],
   policy: CleanupVerificationPolicy = {},
 ): string[] {
+  if (verification.unavailableReason) {
+    return [`Cleanup verification is unavailable: ${verification.unavailableReason}.`];
+  }
   const failures: string[] = [];
   if (verification.checkers.length === 0) {
     failures.push('No project checker was detected, so no deletion patch is compiler-verified.');

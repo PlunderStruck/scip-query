@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { RemovedRangeIndex, type CleanupBatch } from '../../../src/queries/cleanup/cleanup-plan.js';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -315,6 +315,41 @@ describe('cleanup patch and apply helpers', () => {
       expect(patch).toContain('-export const dead = 2;');
       expect(readFileSync(join(root, 'src', 'a.ts'), 'utf-8')).toContain('dead');
     } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('verifies from committed HEAD without writing linked-worktree metadata', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-cleanup-readonly-git-test-'));
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(join(root, 'src', 'a.ts'), 'export const keep = 1;\nexport const dead = 2;\n');
+      writeFileSync(join(root, 'tsconfig.json'), '{}\n');
+      execFileSync('git', ['init'], { cwd: root, stdio: 'ignore' });
+      execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: root });
+      execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: root });
+      execFileSync('git', ['add', '.'], { cwd: root });
+      execFileSync('git', ['commit', '-m', 'initial'], { cwd: root, stdio: 'ignore' });
+
+      mkdirSync(join(root, 'node_modules', '.bin'), { recursive: true });
+      const tsc = join(root, 'node_modules', '.bin', 'tsc');
+      writeFileSync(tsc, '#!/bin/sh\nexit 0\n');
+      chmodSync(tsc, 0o755);
+      chmodSync(join(root, '.git'), 0o555);
+
+      const verification = verifyCleanupPlan(root, {
+        batches: [sampleBatch()],
+        totalSymbols: 1,
+        totalLoc: 1,
+        blocked: [],
+      });
+
+      expect(verification.unavailableReason).toBeUndefined();
+      expect(verification.batches).toEqual([{ depth: 0, status: 'verified' }]);
+      expect(existsSync(join(root, '.git', 'worktrees'))).toBe(false);
+      expect(readFileSync(join(root, 'src', 'a.ts'), 'utf-8')).toContain('dead');
+    } finally {
+      if (existsSync(join(root, '.git'))) chmodSync(join(root, '.git'), 0o755);
       rmSync(root, { recursive: true, force: true });
     }
   });

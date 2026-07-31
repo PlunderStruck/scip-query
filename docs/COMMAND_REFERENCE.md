@@ -166,6 +166,13 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 
 <!-- END GENERATED COMMAND REFERENCE -->
 
+`cleanup-plan --verify` applies candidate batches in an isolated temporary
+clone of committed `HEAD`, then runs the detected project checker. The clone
+keeps checkout and Git-administration writes out of both the candidate files
+and their protected `.git` metadata. If the snapshot cannot be prepared, the
+command reports one explicit unavailable reason rather than silently treating
+the batch as verified.
+
 ## `analysisBudget` disclosure contract
 
 On a large index (`stats.symbols >= 25,000` or `stats.documents >= 2,500`), commands built on the
