@@ -172,6 +172,56 @@ describe('agent hook context', () => {
           additionalContext: expect.stringContaining(`LIVE ${obligation.obligationId}`),
         },
       });
+      await expect(
+        renderAgentHookContext(
+          JSON.stringify({
+            hook_event_name: 'UserPromptSubmit',
+            cwd,
+            session_id: 'new-session',
+            prompt: 'continue',
+          }),
+        ),
+      ).resolves.toBeUndefined();
+
+      const changedObligation = createObligationAdmissionFile(
+        cwd,
+        goal.collaborationDomainId,
+        {
+          changeId: change.changeId,
+          idempotencyKey: 'new-live-state',
+          category: 'verification',
+          title: 'Deliver changed state once',
+          requiredCondition: 'The next prompt receives this newly live obligation exactly once',
+          source: { kind: 'agent-discovery', referent: 'changed-state hook test' },
+          basisAttemptIds: [],
+          evidenceReceipts: [],
+        },
+        { toolVersion: '0.20.0' },
+      ).record;
+      const changed = await renderAgentHookContext(
+        JSON.stringify({
+          hook_event_name: 'UserPromptSubmit',
+          cwd,
+          session_id: 'new-session',
+          prompt: 'continue',
+        }),
+      );
+      expect(changed).toMatchObject({
+        hookSpecificOutput: {
+          hookEventName: 'UserPromptSubmit',
+          additionalContext: expect.stringContaining(`LIVE ${changedObligation.obligationId}`),
+        },
+      });
+      await expect(
+        renderAgentHookContext(
+          JSON.stringify({
+            hook_event_name: 'UserPromptSubmit',
+            cwd,
+            session_id: 'new-session',
+            prompt: 'continue',
+          }),
+        ),
+      ).resolves.toBeUndefined();
 
       const compacted = await renderAgentHookContext(
         JSON.stringify({

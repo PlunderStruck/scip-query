@@ -1,7 +1,7 @@
 # Phase 5 — autonomous agent workflow
 
 Date: 2026-07-30
-Status: in progress; slice 5.1 complete
+Status: in progress; slices 5.1–5.2 complete
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -111,6 +111,25 @@ Expected validation:
 - no essential live obligation is omitted;
 - unchanged prompt hooks produce no repeated block; and
 - the agent can recover the full referent behind every compact item.
+
+Execution result:
+
+- reused the committed restoration projection and its 16 KiB registered
+  budget rather than introducing a second context format;
+- projected changed autonomous state at `UserPromptSubmit` as well as session
+  start and post-compaction boundaries;
+- gave session start and ordinary changed-state delivery one stable epoch, so
+  the first prompt cannot repeat the context the session already received;
+- retained a distinct transcript-bound epoch for compaction, where redelivery
+  is necessary because the agent's earlier context was actually discarded;
+- made the projection cursor plus latest Stop evidence and pending output the
+  decision-relevant context identity, so a newly live obligation is delivered
+  once and an unchanged later prompt emits nothing;
+- declined prompt-bound restoration when the provider supplies no session
+  identity, because repeated delivery could not then be suppressed safely; and
+- verified bounded rendering, exact continuation commands, session isolation,
+  changed-obligation delivery, unchanged-state silence, compaction redelivery,
+  and TypeScript contracts in 29 focused tests.
 
 ### 5.3 Autonomous policy loop
 

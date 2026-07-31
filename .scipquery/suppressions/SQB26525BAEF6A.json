@@ -8,9 +8,9 @@
   "id": "SQB26525BAEF6A",
   "check": "co-change-partner",
   "file": "src/runtime/agent-hooks.ts",
-  "reason": "Automatic operation history crosses the command registry, autonomous-operation journal, and Stop adapter directly. command-handlers owns unrelated public CLI handlers, has no consumer of the journal or Stop materialization path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
+  "reason": "Changed-state restoration is derived and cursor-deduplicated inside agent-hooks, agent-session-state, and autonomous-work-restoration. command-handlers has no reader or writer in that delivery path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
   "createdAt": "2026-07-31T02:21:40.222Z",
-  "updatedAt": "2026-07-31T09:48:44.056Z",
+  "updatedAt": "2026-07-31T09:50:42.072Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
@@ -19,7 +19,7 @@
     "policyVersion": 1,
     "observation": {
       "schemaVersion": 2,
-      "observedAt": "2026-07-31T09:48:44.054Z",
+      "observedAt": "2026-07-31T09:50:42.070Z",
       "facts": {
         "collaborationDomain": {
           "schemaVersion": 1,
@@ -49,7 +49,7 @@
             "name": "scip-query:repository-content",
             "version": 1
           },
-          "digest": "0484b68ccb6c69650481c4779327f8debc87153c32d83846e9a6622034900ff3"
+          "digest": "5a04776ae5d442904c5ff4ee4c81c41249c642579cd3531e0366a251e90cc056"
         },
         "relevantInputs": [
           {
@@ -62,7 +62,7 @@
                 "name": "scip-query:index-inputs",
                 "version": 2
               },
-              "digest": "4cf998904d694874cd364e47754bb008fb1249752607ee9d43a5ce6d960c3eab"
+              "digest": "6971a258a9c2e1024916894d0b3d5cc4bb92d0200e235b6fe2932e41d930a325"
             }
           }
         ],
@@ -75,7 +75,7 @@
               "name": "scip-query:index-generation",
               "version": 1
             },
-            "digest": "3cb247371680dc5da6c4d478c2292fb7e4c28c6bffa996dc4032f19eab41b3de"
+            "digest": "376d36b2602385f3a9f205ee25bdb043ea868d4e9fae467de1e9918cb1a5dadb"
           },
           "inputs": {
             "schemaVersion": 1,
@@ -85,7 +85,7 @@
               "name": "scip-query:index-inputs",
               "version": 2
             },
-            "digest": "4cf998904d694874cd364e47754bb008fb1249752607ee9d43a5ce6d960c3eab"
+            "digest": "6971a258a9c2e1024916894d0b3d5cc4bb92d0200e235b6fe2932e41d930a325"
           },
           "source": "immutable"
         }
@@ -101,7 +101,7 @@
               "name": "scip-query:index-generation",
               "version": 1
             },
-            "digest": "3cb247371680dc5da6c4d478c2292fb7e4c28c6bffa996dc4032f19eab41b3de"
+            "digest": "376d36b2602385f3a9f205ee25bdb043ea868d4e9fae467de1e9918cb1a5dadb"
           }
         },
         {
@@ -114,7 +114,7 @@
               "name": "scip-query:repository-content",
               "version": 1
             },
-            "digest": "0484b68ccb6c69650481c4779327f8debc87153c32d83846e9a6622034900ff3"
+            "digest": "5a04776ae5d442904c5ff4ee4c81c41249c642579cd3531e0366a251e90cc056"
           }
         }
       ],
@@ -130,51 +130,51 @@
       ],
       "diagnostics": {
         "clean": false,
-        "headCommit": "cc06a95b7a662413f74b5d62df89abfff446ce73",
-        "treeOid": "38d6f25d89bd2e7e9f3b014fb77ac0cd82732291"
+        "headCommit": "bc7b8b865fc4726e4de0ebddee2ffc3f30447b5f",
+        "treeOid": "9c405c69f918e73fdcc59453ed80a53511f2181d"
       }
     },
     "evidence": [
       {
         "kind": "source",
         "referent": "src/runtime/agent-hooks.ts",
-        "claim": "Automatic operation history crosses the command registry, autonomous-operation journal, and Stop adapter directly. command-handlers owns unrelated public CLI handlers, has no consumer of the journal or Stop materialization path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
-        "contentHash": "f7311180b18073394db8ea09bd1b1bae36922f82f1471002c527a19528abb806"
+        "claim": "Changed-state restoration is derived and cursor-deduplicated inside agent-hooks, agent-session-state, and autonomous-work-restoration. command-handlers has no reader or writer in that delivery path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
+        "contentHash": "10f0fbe89f286b6d55e7b2f1a5b8fb9a1f93008c19df562ebb75dcc174878d1e"
       },
       {
         "kind": "source",
-        "referent": "src/runtime/autonomous-operation-journal.ts",
-        "claim": "Automatic operation history crosses the command registry, autonomous-operation journal, and Stop adapter directly. command-handlers owns unrelated public CLI handlers, has no consumer of the journal or Stop materialization path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
-        "contentHash": "188e37a3749b2d613dd82ce2602c20be68ee7f6167dbafd362efa0c5e08189ac"
+        "referent": "src/runtime/agent-session-state.ts",
+        "claim": "Changed-state restoration is derived and cursor-deduplicated inside agent-hooks, agent-session-state, and autonomous-work-restoration. command-handlers has no reader or writer in that delivery path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
+        "contentHash": "998029c47ae6e04707440b96dda1064ddcfc81764db4f718f635e39aad54a410"
       },
       {
         "kind": "source",
-        "referent": "src/runtime/commands/command-registry.ts",
-        "claim": "Automatic operation history crosses the command registry, autonomous-operation journal, and Stop adapter directly. command-handlers owns unrelated public CLI handlers, has no consumer of the journal or Stop materialization path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
-        "contentHash": "ded8d7d6555c230ff4e0ff38e2f07190f67c18f572c828ab1a080647b8595a37"
+        "referent": "src/domain/autonomous-work-restoration.ts",
+        "claim": "Changed-state restoration is derived and cursor-deduplicated inside agent-hooks, agent-session-state, and autonomous-work-restoration. command-handlers has no reader or writer in that delivery path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
+        "contentHash": "758937a97ac2c0c531aa750a6bb0b0ef7deb4c8d97466158dc29933315ff884e"
       },
       {
         "kind": "source",
         "referent": "src/runtime/commands/command-handlers.ts",
-        "claim": "Automatic operation history crosses the command registry, autonomous-operation journal, and Stop adapter directly. command-handlers owns unrelated public CLI handlers, has no consumer of the journal or Stop materialization path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
+        "claim": "Changed-state restoration is derived and cursor-deduplicated inside agent-hooks, agent-session-state, and autonomous-work-restoration. command-handlers has no reader or writer in that delivery path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
         "contentHash": "f21beb90cc9ea84926019ea6a3c821358cd18b1c54a26d618cfa6bf7cb6d0283"
       },
       {
         "kind": "test",
-        "referent": "tests/runtime/autonomous-operation-journal.test.ts",
-        "claim": "Automatic operation history crosses the command registry, autonomous-operation journal, and Stop adapter directly. command-handlers owns unrelated public CLI handlers, has no consumer of the journal or Stop materialization path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
-        "contentHash": "ea746282516323bfed8cfe77ce0b68bd58af6cb9aa87cb98da42fc4653ad1b61"
+        "referent": "tests/runtime/agent-hooks.test.ts",
+        "claim": "Changed-state restoration is derived and cursor-deduplicated inside agent-hooks, agent-session-state, and autonomous-work-restoration. command-handlers has no reader or writer in that delivery path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
+        "contentHash": "baafe999dd18382d4bb05fceef25aeb378d9123ce74d183a5613a9b747734758"
       },
       {
         "kind": "test",
-        "referent": "tests/runtime/agent-hooks.test.ts",
-        "claim": "Automatic operation history crosses the command registry, autonomous-operation journal, and Stop adapter directly. command-handlers owns unrelated public CLI handlers, has no consumer of the journal or Stop materialization path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
-        "contentHash": "1b5591e9ba21c05a3a7b1ddc33be04c11f8d1dc465b43bc68406162e16eb4397"
+        "referent": "tests/runtime/agent-session-state.test.ts",
+        "claim": "Changed-state restoration is derived and cursor-deduplicated inside agent-hooks, agent-session-state, and autonomous-work-restoration. command-handlers has no reader or writer in that delivery path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
+        "contentHash": "b4ec047d7c148abaafcbc68d60443ec11a957a5556c7e8a63321de4d6fd3f28e"
       },
       {
         "kind": "graph",
-        "referent": "scip-query plan-context registerCommandDescriptors",
-        "claim": "Automatic operation history crosses the command registry, autonomous-operation journal, and Stop adapter directly. command-handlers owns unrelated public CLI handlers, has no consumer of the journal or Stop materialization path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes."
+        "referent": "scip-query plan-context restoreAgentWorkContext",
+        "claim": "Changed-state restoration is derived and cursor-deduplicated inside agent-hooks, agent-session-state, and autonomous-work-restoration. command-handlers has no reader or writer in that delivery path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes."
       }
     ],
     "invalidateOn": {

@@ -1308,7 +1308,12 @@ export async function renderAgentHookContext(hookInput: string): Promise<unknown
         ]
           .filter((line): line is string => Boolean(line?.trim()))
           .join('\n\n')
-      : renderUserPromptContext(String(payload.prompt ?? ''), workspace.config);
+      : [
+          renderUserPromptContext(String(payload.prompt ?? ''), workspace.config),
+          restoreAgentWorkContext(workspace, payload, event),
+        ]
+          .filter((line): line is string => Boolean(line?.trim()))
+          .join('\n\n');
   const additionalContext = [refreshNote, context].filter((line): line is string => Boolean(line?.trim())).join('\n');
   if (!additionalContext.trim()) return undefined;
 
@@ -1323,7 +1328,7 @@ export async function renderAgentHookContext(hookInput: string): Promise<unknown
 function restoreAgentWorkContext(
   workspace: NonNullable<ReturnType<typeof resolveHookWorkspace>>,
   payload: HookPayload,
-  event: 'SessionStart' | 'PostCompact',
+  event: 'SessionStart' | 'UserPromptSubmit' | 'PostCompact',
 ): string | undefined {
   let projectionContext: string | undefined;
   let projectionCursor: string;
@@ -1341,13 +1346,13 @@ function restoreAgentWorkContext(
     ].join('\n');
   }
   const sessionId = typeof payload.session_id === 'string' ? payload.session_id : undefined;
-  if (!sessionId) return projectionContext;
+  if (!sessionId) return event === 'UserPromptSubmit' ? undefined : projectionContext;
   const transcriptPath =
     event === 'PostCompact' && typeof payload.transcript_path === 'string' ? payload.transcript_path : undefined;
   const transcript = transcriptPath ? readAgentTranscriptTail(transcriptPath) : undefined;
   const deliveryEpoch =
-    event === 'SessionStart'
-      ? agentRestorationDeliveryEpoch('session-start')
+    event === 'SessionStart' || event === 'UserPromptSubmit'
+      ? agentRestorationDeliveryEpoch('changed-state')
       : transcript === undefined
         ? undefined
         : agentRestorationDeliveryEpoch(transcript);
