@@ -65,6 +65,12 @@ describe('autonomous work restoration projection', () => {
     expect(projection.changes[0]).toMatchObject({
       changeId: change.changeId,
       currentCondition: 'Reconcile the published artifact before another write',
+      attemptSummary: {
+        total: 3,
+        failed: 1,
+        unresolvedUnknown: 1,
+        supersededWithinFamily: 1,
+      },
       goal: {
         goalId: goal.goalId,
         feature: 'An agent resumes repository work from durable facts',
@@ -79,12 +85,13 @@ describe('autonomous work restoration projection', () => {
     expect(projection.changes[0]?.liveObligations).toEqual([
       expect.objectContaining({ obligationId: obligation.obligationId }),
     ]);
-    expect(renderAutonomousRestorationProjection(projection)).toContain(
-      `Unsafe to repeat until reconciled: ${unknown.attemptId}`,
-    );
-    expect(renderAutonomousRestorationProjection(projection)).toContain(
-      `scip-query obligation status ${change.changeId}`,
-    );
+    const rendered = renderAutonomousRestorationProjection(projection) ?? '';
+    expect(rendered).toContain(`${unknown.attemptId} was unknown/non-idempotent-write and is unsafe to repeat`);
+    expect(rendered).toContain('Attempt history: 3 total; 1 failed; 1 unresolved unknown; 1 superseded');
+    expect(rendered).toContain(`scip-query obligation status ${change.changeId}`);
+    expect(rendered).not.toContain(`scip-query goal read ${goal.goalId}`);
+    expect(rendered).not.toContain(`scip-query change read ${change.changeId}`);
+    expect(rendered).not.toContain(`scip-query decision status ${change.changeId}`);
   });
 
   it('keeps abandoned work visible only while unresolved facts still constrain it', () => {

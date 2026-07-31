@@ -63,6 +63,12 @@ export interface AutonomousRestorationChange {
   path: string;
   goal?: AutonomousRestorationGoal;
   currentCondition: string;
+  attemptSummary: {
+    total: number;
+    failed: number;
+    unresolvedUnknown: number;
+    supersededWithinFamily: number;
+  };
   latestAttempt?: AutonomousRestorationAttempt;
   lastDistinctUnsuccessfulAttempts: readonly AutonomousRestorationAttempt[];
   latestDecision?: AutonomousRestorationDecision;
@@ -128,7 +134,9 @@ export function renderAutonomousRestorationProjection(
     );
   }
 
-  const full = renderProjectionHeader(projection).concat(projection.changes.flatMap(renderChange)).join('\n');
+  const full = renderProjectionHeader(projection)
+    .concat(projection.changes.flatMap(renderChange), renderProjectionIssueResolution(projection))
+    .join('\n');
   if (Buffer.byteLength(full, 'utf8') <= maxBytes) return full;
 
   const continuation = [
@@ -210,17 +218,23 @@ function projectChange(
     path: `.scipquery/changes/${change.changeId}.json`,
     ...(goal ? { goal: projectGoal(goal) } : {}),
     currentCondition: latestDecision?.nextAction ?? latestAttempt?.intendedCondition ?? change.intendedOutcome,
+    attemptSummary: {
+      total: history.attempts.length,
+      failed: history.attempts.filter((attempt) => attempt.outcome === 'failed').length,
+      unresolvedUnknown: history.unresolvedUnknownAttemptIds.length,
+      supersededWithinFamily: Math.max(0, history.attempts.length - latestByFamily.size),
+    },
     ...(latestAttempt ? { latestAttempt: projectAttempt(latestAttempt) } : {}),
     lastDistinctUnsuccessfulAttempts,
     ...(latestDecision ? { latestDecision: projectDecision(latestDecision) } : {}),
     liveObligations,
     unsafeToRepeatAttemptIds: history.unsafeToRepeatAttemptIds,
     continuationCommands: [
-      `scip-query goal read ${change.goalId}`,
-      `scip-query change read ${change.changeId}`,
-      `scip-query attempt status ${change.changeId}`,
-      `scip-query decision status ${change.changeId}`,
-      `scip-query obligation status ${change.changeId}`,
+      ...(goal ? [] : [`scip-query goal read ${change.goalId}`]),
+      ...(lastDistinctUnsuccessfulAttempts.length > 0 || history.unresolvedUnknownAttemptIds.length > 0
+        ? [`scip-query attempt status ${change.changeId}`]
+        : []),
+      ...(liveObligations.length > 0 ? [`scip-query obligation status ${change.changeId}`] : []),
     ],
   };
 }
@@ -283,11 +297,19 @@ function renderProjectionHeader(projection: AutonomousRestorationProjection): st
   return lines;
 }
 
+function renderProjectionIssueResolution(projection: AutonomousRestorationProjection): string[] {
+  if (projection.issues.length === 0) return [];
+  return [
+    '',
+    'Inspect unresolved record safety: scip-query goal status ; scip-query change status ; ' +
+      'scip-query attempt status ; scip-query decision status ; scip-query obligation status',
+  ];
+}
+
 function renderChange(change: AutonomousRestorationChange): string[] {
   const lines = [
     '',
     `Active change ${change.changeId}: ${change.title}`,
-    `Intended outcome: ${change.intendedOutcome}`,
     change.goal
       ? `Goal ${change.goal.goalId}: ${change.goal.feature}`
       : 'Goal: unresolved because its committed record is missing or incompatible.',
@@ -296,38 +318,53 @@ function renderChange(change: AutonomousRestorationChange): string[] {
     for (const invariant of change.goal.invariants) lines.push(`- Goal invariant: ${invariant}`);
     lines.push(`Acceptance scenarios: ${change.goal.acceptanceScenarioNames.join('; ') || 'none'}`);
   }
-  lines.push(`Current condition: ${change.currentCondition}`);
-  if (change.latestAttempt) {
-    lines.push(
-      `Latest attempt ${change.latestAttempt.attemptId}: ${change.latestAttempt.outcome}; ` +
-        `${change.latestAttempt.actionFamily} — ${change.latestAttempt.actionSummary}. ` +
-        `Observed: ${change.latestAttempt.observedEffect}`,
-    );
-  }
+  lines.push(`Next condition: ${change.currentCondition}`);
   if (change.latestDecision) {
     lines.push(
-      `Latest decision ${change.latestDecision.decisionId}: ${change.latestDecision.disposition}; ` +
-        `${change.latestDecision.rationale}` +
-        (change.latestDecision.nextAction ? ` Next: ${change.latestDecision.nextAction}` : ''),
+      `Decision ${change.latestDecision.decisionId}: ${change.latestDecision.disposition}; ${change.latestDecision.rationale}`,
+    );
+  }
+  const unsafeAttemptIds = new Set(change.unsafeToRepeatAttemptIds);
+  if (change.attemptSummary.total > 0) {
+    lines.push(
+      `Attempt history: ${change.attemptSummary.total} total; ${change.attemptSummary.failed} failed; ` +
+        `${change.attemptSummary.unresolvedUnknown} unresolved unknown; ` +
+        `${change.attemptSummary.supersededWithinFamily} superseded within a strategy family.`,
+    );
+  }
+  const latestIsListed = change.lastDistinctUnsuccessfulAttempts.some(
+    (attempt) => attempt.attemptId === change.latestAttempt?.attemptId,
+  );
+  if (change.latestAttempt && !latestIsListed) {
+    lines.push(
+      `- Latest effect ${change.latestAttempt.attemptId} (${change.latestAttempt.actionFamily}, ` +
+        `${change.latestAttempt.outcome}/${change.latestAttempt.effectClass}): ${change.latestAttempt.observedEffect}`,
     );
   }
   for (const attempt of change.lastDistinctUnsuccessfulAttempts) {
     lines.push(
-      `- Do not blindly repeat ${attempt.attemptId} (${attempt.actionFamily}, ${attempt.outcome}, ${attempt.effectClass}): ` +
-        `${attempt.actionSummary}. Observed: ${attempt.observedEffect}`,
+      `- Avoid ${attempt.actionFamily} — ${attempt.actionSummary}: ${attempt.attemptId} was ` +
+        `${attempt.outcome}/${attempt.effectClass}` +
+        `${unsafeAttemptIds.has(attempt.attemptId) ? ' and is unsafe to repeat' : ''}; ` +
+        `observed ${attempt.observedEffect}`,
     );
   }
-  for (const attemptId of change.unsafeToRepeatAttemptIds) {
-    lines.push(`- Unsafe to repeat until reconciled: ${attemptId}`);
+  const unlistedUnsafeAttemptIds = change.unsafeToRepeatAttemptIds.filter(
+    (attemptId) => !change.lastDistinctUnsuccessfulAttempts.some((attempt) => attempt.attemptId === attemptId),
+  );
+  if (unlistedUnsafeAttemptIds.length > 0) {
+    lines.push(`- Unsafe to repeat until reconciled: ${unlistedUnsafeAttemptIds.join(', ')}`);
   }
-  if (change.liveObligations.length === 0) lines.push('Live obligations: none recorded.');
+  if (change.liveObligations.length > 0) lines.push(`Live obligations (${change.liveObligations.length}):`);
   for (const obligation of change.liveObligations) {
     lines.push(
       `- LIVE ${obligation.obligationId} [${obligation.category}] ${obligation.title}: ` +
         `${obligation.requiredCondition} (source: ${formatObligationSource(obligation.source)})`,
     );
   }
-  lines.push(`Full committed records: ${change.continuationCommands.join(' ; ')}`);
+  if (change.continuationCommands.length > 0) {
+    lines.push(`Inspect unresolved detail: ${change.continuationCommands.join(' ; ')}`);
+  }
   return lines;
 }
 

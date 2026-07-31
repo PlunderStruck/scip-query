@@ -79,11 +79,13 @@ For analyzer implementation work, follow [Regex Policy](REGEX_POLICY.md): regex 
    When committed autonomous work records exist, project-local hooks inject a
    bounded restoration projection at session start and after compaction. The
    projection names the active goal and change, current condition, last
-   strategy, settled decision, unsafe retries, and live obligations. Do not
-   ask the user to restate those facts or reproduce them as a progress ritual.
-   If the registered 16 KiB context budget cannot hold every detail, run the
-   exact `goal status`, `change status`, `attempt status`, `decision status`,
-   and `obligation status` commands emitted by the projection.
+   strategy-family summary, settled decision, unsafe retries, and live
+   obligations. Do not ask the user to restate those facts or reproduce them
+   as a progress ritual. Run only the exact status commands emitted for a
+   missing goal, unresolved effect, live obligation, or record-safety issue.
+   If the registered 16 KiB context budget cannot hold every detail, the
+   projection emits the broader exact status-command set instead of truncating
+   a record claim.
 
    Stop evaluation needs no separate approval or metadata narration. It fixes
    the repository and evaluator before the gate, records which
@@ -92,6 +94,9 @@ For analyzer implementation work, follow [Regex Policy](REGEX_POLICY.md): regex 
    be the only authority for its own acceptance. Read the recorded
    `SQA-...` authority assessment when a completion predicate becomes unknown;
    it names the exact protected class, paths, and affected predicates.
+   Stop renders the controller state and its selected action once. Follow that
+   action directly; run the emitted `completion status` command only when a
+   named predicate remains unknown.
 
 ### What you should know after this workflow
 

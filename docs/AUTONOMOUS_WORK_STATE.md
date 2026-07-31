@@ -357,11 +357,12 @@ current purpose without a prior session transcript. The projection:
 - keeps an intended change active until it is abandoned without unresolved
   facts; a live obligation or unresolved effect keeps it visible;
 - retains the latest attempted strategy and the latest still-unsuccessful
-  attempt in each distinct action family, while omitting an older failure
-  superseded by a later success;
+  attempt in each distinct action family, while reporting how many repeated
+  attempts were superseded inside those families;
 - marks unresolved non-idempotent attempts unsafe to repeat;
-- lists every live obligation that fits in the registered context and supplies
-  exact status commands for the complete set;
+- lists every live obligation that fits in the registered context and emits a
+  status command only for a missing goal, unresolved attempt effect, live
+  obligation, or record-safety issue;
 - treats any malformed, unsupported, missing, or inconsistent record as an
   unverified ledger rather than silently summarizing the readable subset; and
 - stays within a 16 KiB UTF-8 hook budget. If complete detail does not fit, it
@@ -375,6 +376,14 @@ inject duplicate context. A changed committed record, changed Stop/output
 evidence, or genuinely later compaction is delivered. If the hook cannot
 observe a stable transcript digest, it favors restoration over deduplication.
 The cache is never a source of project truth and may be discarded.
+
+Stop feedback applies the same decision-equivalence rule. The controller
+state, blocked predicates, unknown predicates, and selected next action appear
+in one block. A `completion status` command appears only while predicate truth
+is unknown; established-false predicates already select repair work and do not
+force a redundant inspection step. Fixed-context and decision-record identities
+remain in committed records and are omitted from the hook prose because they
+cannot change the already-selected action.
 
 ## Collaboration and validation
 

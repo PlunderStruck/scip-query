@@ -510,6 +510,13 @@ challenges a concrete finished diff. `scip-explore` explains working behavior;
 
 Project setup writes reviewable checkout-local lifecycle hooks for Codex and Claude Code (`.codex/hooks.json` and `.claude/settings.local.json`). A checkout-local hook is an agent-tool preference whose defining trait is that it applies to one clone rather than expressing team policy. Setup adds both paths to that clone's `.git/info/exclude`, so they do not appear in commits, and refuses to rewrite either path if it is already tracked. `setup-hooks --shared` remains accepted only as a deprecated compatibility flag; it no longer writes `.claude/settings.json`. These hooks add scip-query context at session start, route prompts toward the right skill, and run an advisory Stop-hook wrapper around the diff gate only for that repository. The Stop hook sends feedback to the agent by default instead of blocking; set `SCIP_QUERY_STOP_HOOK_MODE=warn` for a warning-only hook response, or `SCIP_QUERY_STOP_HOOK_MODE=block` to enforce the gate. Set `SCIP_QUERY_SKIP_HOOK_INSTALL=1` or run `scip-query setup --no-hooks` to skip hook installation during setup, and run `scip-query setup-hooks --json` later to repair the current checkout's hooks. Preview hook removal with `scip-query setup-hooks --remove --dry-run`; `--force` is an installation-only mode and cannot be combined with removal. A scope-free `scip-query uninstall --dry-run` safely previews both global and project integrations, while real uninstall requires exactly one of `--global` or `--project`.
 
+Stop feedback renders each completion decision and its selected autonomous
+action once. It preserves blocked and unknown predicates, but emits a
+`completion status` drill-down only when unresolved predicate truth can still
+change that action. Session restoration similarly summarizes repeated strategy
+history and emits record-status commands only for unresolved detail, while its
+16 KiB budget fallback remains fail-closed.
+
 Setup/configuration writers are conflict-aware. They reread the latest file
 under a short token-owned lock, preserve unknown JSON fields and prose outside
 owned Markdown markers, and publish complete bytes with flushed files and,

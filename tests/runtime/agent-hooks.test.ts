@@ -586,7 +586,8 @@ describe('agent hook context', () => {
     expect(serialized).toContain('analysis budget');
   });
 
-  it('renders the controller decision without treating unknown predicates as false', () => {
+  it('renders one decision-equivalent controller action without treating unknown predicates as false', () => {
+    const changeId = 'SQC-0123456789ABCDEF0123456789ABCDEF';
     const execution = {
       outcomes: { observed: [], now: 0 },
       completion: [
@@ -599,7 +600,7 @@ describe('agent hook context', () => {
           evaluation: {
             evaluation: {
               record: {
-                changeId: 'SQC-0123456789ABCDEF0123456789ABCDEF',
+                changeId,
                 decision: {
                   state: 'blocked',
                   blockedPredicates: ['goal-fulfilled', 'invariants-preserved'],
@@ -610,18 +611,107 @@ describe('agent hook context', () => {
           },
         },
       ],
+      nextActions: [
+        {
+          action: {
+            changeId,
+            kind: 'gather-evidence',
+            blocker: 'work',
+            instruction: 'Gather independent evidence for goal-fulfilled against the fixed goal.',
+            limits: { maxEquivalentAttempts: 3, strategyDeadlineMs: 30 * 60_000 },
+          },
+          decision: {
+            record: {
+              decisionId: 'SQD-0123456789ABCDEF0123456789ABCDEF',
+              nextAction: 'Gather independent evidence for goal-fulfilled against the fixed goal.',
+            },
+          },
+        },
+      ],
     } as unknown as NonNullable<Parameters<typeof renderStopHookOutput>[2]>;
 
     const feedback = renderStopHookOutput(diffGateResult(), 'feedback', execution);
     const blocking = renderStopHookOutput(diffGateResult(), 'block', execution);
+    const context = feedback.hookSpecificOutput?.additionalContext ?? '';
+    const controllerBlock = context.split('\n\n')[0] ?? '';
+    const legacyControllerBlock =
+      `Completion controller: ${changeId} remains blocked under fixed context ` +
+      'SQCX-0123456789ABCDEF0123456789ABCDEF. Unsatisfied predicates: goal-fulfilled, ' +
+      'invariants-preserved. Unknown rather than false: goal-fulfilled.\n\n' +
+      'Autonomous next action (gather-evidence, work): Gather independent evidence for goal-fulfilled ' +
+      'against the fixed goal. [decision SQD-0123456789ABCDEF0123456789ABCDEF; retry limit 3; ' +
+      'strategy deadline 30m]';
 
-    expect(JSON.stringify(feedback)).toContain('Unknown rather than false: goal-fulfilled');
+    expect(controllerBlock).toBe(
+      `Completion ${changeId}: blocked; blocked=goal-fulfilled,invariants-preserved; unknown=goal-fulfilled. ` +
+        'Next gather-evidence/work: Gather independent evidence for goal-fulfilled against the fixed goal. ' +
+        `Inspect: scip-query completion status ${changeId}.`,
+    );
+    expect(Buffer.byteLength(controllerBlock, 'utf8')).toBeLessThanOrEqual(
+      Buffer.byteLength(legacyControllerBlock, 'utf8') * 0.7,
+    );
+    expect(context.match(/Completion SQC-/gu)).toHaveLength(1);
+    expect(context).not.toContain('Autonomous next action');
     expect(blocking).toEqual(
       expect.objectContaining({
         decision: 'block',
-        reason: expect.stringContaining('Unsatisfied predicates: goal-fulfilled, invariants-preserved'),
+        reason: expect.stringContaining('blocked=goal-fulfilled,invariants-preserved; unknown=goal-fulfilled'),
       }),
     );
+  });
+
+  it('preserves terminal decisions and emits drill-down only for unresolved predicate truth', () => {
+    const changeId = 'SQC-11111111111111111111111111111111';
+    const outputFor = (decision: unknown, action: { kind: string; blocker: string; instruction: string }): string => {
+      const execution = {
+        outcomes: { observed: [], now: 0 },
+        completion: [{ evaluation: { evaluation: { record: { changeId, decision } } } }],
+        nextActions: [
+          {
+            action: {
+              changeId,
+              ...action,
+              limits: { maxEquivalentAttempts: 3, strategyDeadlineMs: 30 * 60_000 },
+            },
+            decision: {
+              record: {
+                decisionId: 'SQD-11111111111111111111111111111111',
+                nextAction: action.instruction,
+              },
+            },
+          },
+        ],
+      } as unknown as NonNullable<Parameters<typeof renderStopHookOutput>[2]>;
+      return renderStopHookOutput({ ...diffGateResult(), findings: [] }, 'feedback', execution).hookSpecificOutput!
+        .additionalContext;
+    };
+
+    const complete = outputFor(
+      { state: 'complete' },
+      { kind: 'complete', blocker: 'none', instruction: 'Finish the fixed intended change.' },
+    );
+    const superseded = outputFor(
+      {
+        state: 'superseded',
+        successorGoalId: 'SQG-22222222222222222222222222222222',
+        transitionRuleId: 'SQTR-33333333333333333333333333333333',
+      },
+      { kind: 'carry-forward', blocker: 'none', instruction: 'Carry work into the authorized successor.' },
+    );
+    const disproven = outputFor(
+      { state: 'blocked', blockedPredicates: ['invariants-preserved'], unknownPredicates: [] },
+      { kind: 'repair', blocker: 'work', instruction: 'Repair the disproven invariant.' },
+    );
+
+    expect(complete).toContain(`Completion ${changeId}: complete. Next complete/none`);
+    expect(superseded).toContain(
+      'superseded; successor=SQG-22222222222222222222222222222222; ' +
+        'rule=SQTR-33333333333333333333333333333333. Next carry-forward/none',
+    );
+    expect(disproven).toContain('blocked=invariants-preserved; unknown=none. Next repair/work');
+    expect(complete).not.toContain('scip-query completion status');
+    expect(superseded).not.toContain('scip-query completion status');
+    expect(disproven).not.toContain('scip-query completion status');
   });
 });
 

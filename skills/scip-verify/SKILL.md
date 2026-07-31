@@ -136,12 +136,15 @@ stored base automatically. Complete only when `diff-gate` passes or every
 finding has a durable explanation.
 
 The supported Stop hook automatically turns this evidence into a fixed
-completion evaluation and one durable next-action decision. A clean
+completion evaluation and one durable next-action decision, rendered together
+as one decision-equivalent block. A clean
 `diff-gate` is evidence, not permission to declare the goal complete. Follow
 the emitted action: gather its named evidence, repair, retry within the stated
 bound, reconcile an unknown effect, replan, carry work to an authorized
-successor, or halt on its explicit missing-authorization boundary. When hooks
-are unavailable, inspect the same state with
+successor, or halt on its explicit missing-authorization boundary. When the
+block names an unknown predicate, run the exact emitted `completion status` command;
+established-false predicates already select repair and require no inspection
+ritual. When hooks are unavailable, inspect the same state with
 `scip-query completion status <change-id> --json`; do not replace it with an
 agent-authored completion claim.
 

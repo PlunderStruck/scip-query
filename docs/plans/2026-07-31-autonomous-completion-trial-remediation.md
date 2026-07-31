@@ -1,7 +1,7 @@
 # Autonomous completion protected-trial remediation
 
 Date: 2026-07-31
-Status: in progress — slices 1-2 complete
+Status: in progress — slices 1-3 complete; protected trial pending
 Governing goal: `SQG-4061E7D5D360464ED8E8B05D53BBF49D`
 Governing change: `SQC-DED67E74D3898BDCA85766BE8D3C93AF`
 
@@ -273,6 +273,34 @@ suppression was required.
   pair-02-style blocked state and never exceed the registered restoration
   budget.
 - **Order safety:** detailed immutable records remain unchanged.
+
+**Result (2026-07-31): complete.** Stop now renders each controller judgment
+and its selected autonomous action in one block. The block retains the
+terminal state, exact blocked and unknown predicate sets, successor identity
+when applicable, and exact action text. Context and decision record identities
+remain in the committed records rather than being repeated in prose. Only an
+unknown predicate emits `completion status`; established-false predicates
+already select repair work. The pair-02-style regression fixture measures the
+new block at no more than 70% of the former duplicated controller/action text.
+
+Restoration now reports total, failed, unresolved-unknown, and within-family
+supersession counts; renders a latest attempt only when it is not already the
+latest unsuccessful member of its family; marks unsafe attempts in that same
+line; and emits only commands for a missing goal, unresolved attempt, live
+obligation, or record-safety issue. Its existing 16 KiB fail-closed fallback
+and immutable source records are unchanged.
+
+Validation: 26 focused tests passed across the restoration, hook, and policy
+surfaces; typecheck passed; the complete suite passed (308 files, 2,410 tests);
+lint passed, including formatting, ESLint, build, API compatibility, the public
+consumer fixture, and skill-link validation. `architecture` completed with no
+declared-boundary violation. `recent-duplicates --full` found none;
+`similar --full`, `stale-abstractions --full`, `unused-params --full`,
+`co-change --full`, and `doc-drift --full` completed with full transport.
+Their remaining rows were pre-existing named domain concepts or unrelated
+signals, and no new extraction or documentation repair was warranted.
+`self-audit` reported reference precision 0.966 and recall 1. No new
+suppression was required; the staged diff gate is the slice exit condition.
 
 ### 4. Protected apparatus and fresh program
 

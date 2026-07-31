@@ -1188,6 +1188,7 @@ export function renderStopHookOutput(
   mode: StopHookMode = 'feedback',
   execution?: Pick<DiffGateExecutionResult, 'outcomes' | 'analysisBudget'> & {
     completion?: ReturnType<typeof publishStopCompletionEvaluations>;
+    nextActions?: readonly PublishedAutonomousNextAction[];
   },
 ): ClaudeHookJsonOutput {
   const coverageWarning = suppressionCoverageWarning(result);
@@ -1229,22 +1230,7 @@ function renderStopHookExecutionOutput(
   mode: StopHookMode,
   execution: StopHookExecution,
 ): ClaudeHookJsonOutput {
-  const output = renderStopHookOutput(result, mode, execution);
-  const nextActions = formatAutonomousNextActions(execution.nextActions);
-  if (!nextActions) return output;
-  if (output.reason !== undefined) return { ...output, reason: `${output.reason}\n\n${nextActions}` };
-  if (output.systemMessage !== undefined) {
-    return { ...output, systemMessage: `${output.systemMessage}\n\n${nextActions}` };
-  }
-  const hookSpecificOutput = output.hookSpecificOutput;
-  if (!hookSpecificOutput) return output;
-  return {
-    ...output,
-    hookSpecificOutput: {
-      ...hookSpecificOutput,
-      additionalContext: `${hookSpecificOutput.additionalContext}\n\n${nextActions}`,
-    },
-  };
+  return renderStopHookOutput(result, mode, execution);
 }
 
 function formatGateAdvisoryReason(result: DiffGateResult, executionEvidence: readonly string[]): string {
@@ -1269,6 +1255,7 @@ function formatStopExecutionEvidence(
   execution:
     | (Pick<DiffGateExecutionResult, 'outcomes' | 'analysisBudget'> & {
         completion?: ReturnType<typeof publishStopCompletionEvaluations>;
+        nextActions?: readonly PublishedAutonomousNextAction[];
       })
     | undefined,
 ): string[] {
@@ -1288,25 +1275,48 @@ function formatStopExecutionEvidence(
   if (coverage) lines.push(coverage);
   const budget = formatAnalysisBudgetDisclosure(execution?.analysisBudget);
   if (budget) lines.push(budget);
-  for (const { context, evaluation } of execution?.completion ?? []) {
+  const renderedActionIds = new Set<string>();
+  for (const { evaluation } of execution?.completion ?? []) {
     const decision = evaluation.evaluation.record.decision;
+    const changeId = evaluation.evaluation.record.changeId;
+    const nextAction = execution?.nextActions?.find((published) => published.action.changeId === changeId);
+    if (nextAction) renderedActionIds.add(nextAction.decision.record.decisionId);
+    const action = nextAction ? formatCompactAutonomousNextAction(nextAction) : undefined;
     if (decision.state === 'complete') {
-      lines.push(
-        `Completion controller: ${evaluation.evaluation.record.changeId} is complete under fixed context ${context.record.contextSnapshotId}.`,
-      );
+      lines.push(`Completion ${changeId}: complete.` + (action ? ` ${action}` : ''));
     } else if (decision.state === 'blocked') {
       lines.push(
-        `Completion controller: ${evaluation.evaluation.record.changeId} remains blocked under fixed context ${context.record.contextSnapshotId}. ` +
-          `Unsatisfied predicates: ${decision.blockedPredicates.join(', ')}. ` +
-          `Unknown rather than false: ${decision.unknownPredicates.join(', ') || 'none'}.`,
+        `Completion ${changeId}: blocked; ` +
+          `blocked=${decision.blockedPredicates.join(',')}; unknown=${decision.unknownPredicates.join(',') || 'none'}.` +
+          (action ? ` ${action}` : '') +
+          (decision.unknownPredicates.length > 0 ? ` Inspect: scip-query completion status ${changeId}.` : ''),
       );
     } else {
       lines.push(
-        `Completion controller: ${evaluation.evaluation.record.changeId} was superseded under fixed context ${context.record.contextSnapshotId} by ${decision.successorGoalId}.`,
+        `Completion ${changeId}: superseded; ` +
+          `successor=${decision.successorGoalId}; rule=${decision.transitionRuleId}.` +
+          (action ? ` ${action}` : ''),
       );
     }
   }
+  const unmatchedActions = (execution?.nextActions ?? []).filter(
+    ({ decision }) => !renderedActionIds.has(decision.record.decisionId),
+  );
+  const unmatchedActionOutput = formatAutonomousNextActions(unmatchedActions);
+  if (unmatchedActionOutput) lines.push(unmatchedActionOutput);
   return lines;
+}
+
+function formatCompactAutonomousNextAction({ action, decision }: PublishedAutonomousNextAction): string {
+  const instruction = decision.record.nextAction ?? action.instruction;
+  const boundedRetry = action.kind === 'retry' || action.kind === 'replan';
+  const terminal = /[.!?]$/u.test(instruction) ? '' : '.';
+  return (
+    `Next ${action.kind}/${action.blocker}: ${instruction}` +
+    (boundedRetry
+      ? ` [retry limit ${action.limits.maxEquivalentAttempts}; deadline ${action.limits.strategyDeadlineMs / 60_000}m].`
+      : terminal)
+  );
 }
 
 function stopCoverageWarning(result: DiffGateResult): string | undefined {
