@@ -133,6 +133,25 @@ export type WorkStateRequestDecodeResult<RequestType> =
   | { ok: true; request: RequestType }
   | { ok: false; error: string };
 
+/**
+ * A work-record envelope is the common framing around one immutable
+ * repository-work fact. Its kind and schema select the decoder, while its
+ * collaboration domain and provenance make the fact mergeable and auditable
+ * without defining the fact's specialized meaning.
+ */
+export interface WorkRecordEnvelope {
+  value: Readonly<Record<string, unknown>>;
+  collaborationDomainId: string;
+  createdAt: string;
+  writer: WorkStateWriter;
+}
+
+export interface WorkRecordEnvelopeSpec {
+  recordKind: string;
+  schemaVersion: number;
+  label: string;
+}
+
 export interface CreateGoalRecordInput {
   collaborationDomainId: string;
   request: GoalCreateRequest;
@@ -265,77 +284,72 @@ export function createIntendedChangeRecord(input: CreateIntendedChangeRecordInpu
 }
 
 export function decodeGoalRecord(value: unknown): WorkStateDecodeResult<GoalRecordV1> {
-  const version = recordVersion(value, GOAL_RECORD_KIND);
-  if (!version.ok) return version.result;
-  if (version.version !== GOAL_RECORD_SCHEMA_VERSION) {
-    return unsupportedVersion(version.version, GOAL_RECORD_SCHEMA_VERSION, 'goal');
-  }
-  if (!isRecordObject(value)) return { state: 'malformed', error: 'goal record must be an object' };
-  if (!isGoalId(value['goalId'])) return { state: 'malformed', error: 'goalId must be a goal identity' };
-  if (!isCollaborationDomainId(value['collaborationDomainId'])) {
-    return { state: 'malformed', error: 'collaborationDomainId must be a version-4 UUID' };
-  }
-  const gherkin = normalizeGoalGherkin(value['gherkin']);
+  const envelope = decodeWorkRecordEnvelope(value, {
+    recordKind: GOAL_RECORD_KIND,
+    schemaVersion: GOAL_RECORD_SCHEMA_VERSION,
+    label: 'goal',
+  });
+  if (!envelope.ok) return envelope.result;
+  const fields = envelope.envelope.value;
+  if (!isGoalId(fields['goalId'])) return { state: 'malformed', error: 'goalId must be a goal identity' };
+  const gherkin = normalizeGoalGherkin(fields['gherkin']);
   if (!gherkin.ok) return { state: 'malformed', error: gherkin.error };
-  if (!isCanonicalGherkin(value['gherkin'], gherkin.value)) {
+  if (!isCanonicalGherkin(fields['gherkin'], gherkin.value)) {
     return { state: 'malformed', error: 'goal Gherkin fields must use canonical whitespace' };
   }
-  const expectedIdentity = goalSemanticIdentity(value['collaborationDomainId'], gherkin.value);
-  if (!isGoalSemanticIdentity(value['semanticIdentity'], expectedIdentity)) {
+  const expectedIdentity = goalSemanticIdentity(envelope.envelope.collaborationDomainId, gherkin.value);
+  if (!isGoalSemanticIdentity(fields['semanticIdentity'], expectedIdentity)) {
     return { state: 'malformed', error: 'semanticIdentity does not match collaboration domain and Gherkin meaning' };
   }
-  if (value['goalId'] !== goalIdFromDigest(expectedIdentity.digest)) {
+  if (fields['goalId'] !== goalIdFromDigest(expectedIdentity.digest)) {
     return { state: 'malformed', error: 'goalId does not match semanticIdentity' };
   }
-  if (value['predecessorGoalId'] !== undefined && !isGoalId(value['predecessorGoalId'])) {
+  if (fields['predecessorGoalId'] !== undefined && !isGoalId(fields['predecessorGoalId'])) {
     return { state: 'malformed', error: 'predecessorGoalId must be a goal identity' };
   }
-  if (value['predecessorGoalId'] === value['goalId']) {
+  if (fields['predecessorGoalId'] === fields['goalId']) {
     return { state: 'malformed', error: 'goal cannot name itself as predecessor' };
   }
-  const authorization = decodeAuthorization(value['authorization']);
+  const authorization = decodeAuthorization(fields['authorization']);
   if (!authorization.ok) return { state: 'malformed', error: authorization.error };
-  if (!isValidRecordTimestamp(value['createdAt'])) return { state: 'malformed', error: 'invalid createdAt timestamp' };
-  if (!isWorkStateWriter(value['writer'])) return { state: 'malformed', error: 'invalid writer metadata' };
   return {
     state: 'current',
     record: {
       kind: GOAL_RECORD_KIND,
       schemaVersion: GOAL_RECORD_SCHEMA_VERSION,
-      goalId: value['goalId'],
-      collaborationDomainId: value['collaborationDomainId'],
+      goalId: fields['goalId'],
+      collaborationDomainId: envelope.envelope.collaborationDomainId,
       gherkin: gherkin.value,
       semanticIdentity: expectedIdentity,
-      ...(typeof value['predecessorGoalId'] === 'string' ? { predecessorGoalId: value['predecessorGoalId'] } : {}),
+      ...(typeof fields['predecessorGoalId'] === 'string' ? { predecessorGoalId: fields['predecessorGoalId'] } : {}),
       authorization: authorization.value,
-      createdAt: value['createdAt'],
-      writer: value['writer'],
+      createdAt: envelope.envelope.createdAt,
+      writer: envelope.envelope.writer,
     },
   };
 }
 
 export function decodeIntendedChangeRecord(value: unknown): WorkStateDecodeResult<IntendedChangeRecordV1> {
-  const version = recordVersion(value, INTENDED_CHANGE_RECORD_KIND);
-  if (!version.ok) return version.result;
-  if (version.version !== INTENDED_CHANGE_RECORD_SCHEMA_VERSION) {
-    return unsupportedVersion(version.version, INTENDED_CHANGE_RECORD_SCHEMA_VERSION, 'intended-change');
-  }
-  if (!isRecordObject(value)) return { state: 'malformed', error: 'intended-change record must be an object' };
-  if (!isIntendedChangeId(value['changeId'])) {
+  const envelope = decodeWorkRecordEnvelope(value, {
+    recordKind: INTENDED_CHANGE_RECORD_KIND,
+    schemaVersion: INTENDED_CHANGE_RECORD_SCHEMA_VERSION,
+    label: 'intended-change',
+  });
+  if (!envelope.ok) return envelope.result;
+  const fields = envelope.envelope.value;
+  if (!isIntendedChangeId(fields['changeId'])) {
     return { state: 'malformed', error: 'changeId must be an intended-change identity' };
   }
-  if (!isCollaborationDomainId(value['collaborationDomainId'])) {
-    return { state: 'malformed', error: 'collaborationDomainId must be a version-4 UUID' };
-  }
-  if (!isGoalId(value['goalId'])) return { state: 'malformed', error: 'goalId must be a goal identity' };
-  const title = normalizedBoundedLine(value['title'], MAX_TITLE_CHARACTERS);
-  const intendedOutcome = normalizedBoundedLine(value['intendedOutcome'], MAX_INTENDED_OUTCOME_CHARACTERS);
-  if (!title || title !== value['title']) return { state: 'malformed', error: 'title must use canonical bounded text' };
-  if (!intendedOutcome || intendedOutcome !== value['intendedOutcome']) {
+  if (!isGoalId(fields['goalId'])) return { state: 'malformed', error: 'goalId must be a goal identity' };
+  const title = normalizedBoundedLine(fields['title'], MAX_TITLE_CHARACTERS);
+  const intendedOutcome = normalizedBoundedLine(fields['intendedOutcome'], MAX_INTENDED_OUTCOME_CHARACTERS);
+  if (!title || title !== fields['title'])
+    return { state: 'malformed', error: 'title must use canonical bounded text' };
+  if (!intendedOutcome || intendedOutcome !== fields['intendedOutcome']) {
     return { state: 'malformed', error: 'intendedOutcome must use canonical bounded text' };
   }
-  if (!isRecordObject(value['idempotency'])) return { state: 'malformed', error: 'missing idempotency metadata' };
-  const idempotency = value['idempotency'];
+  if (!isRecordObject(fields['idempotency'])) return { state: 'malformed', error: 'missing idempotency metadata' };
+  const idempotency = fields['idempotency'];
   if (
     idempotency['version'] !== INTENDED_CHANGE_IDEMPOTENCY_VERSION ||
     idempotency['algorithm'] !== WORK_STATE_IDENTITY_ALGORITHM ||
@@ -344,27 +358,25 @@ export function decodeIntendedChangeRecord(value: unknown): WorkStateDecodeResul
   ) {
     return { state: 'malformed', error: 'invalid intended-change idempotency metadata' };
   }
-  if (value['changeId'] !== intendedChangeIdFromDigest(idempotency['keyDigest'])) {
+  if (fields['changeId'] !== intendedChangeIdFromDigest(idempotency['keyDigest'])) {
     return { state: 'malformed', error: 'changeId does not match the idempotency key digest' };
   }
-  const expectedRequestDigest = intendedChangeRequestDigest(value['collaborationDomainId'], {
-    goalId: value['goalId'],
+  const expectedRequestDigest = intendedChangeRequestDigest(envelope.envelope.collaborationDomainId, {
+    goalId: fields['goalId'],
     title,
     intendedOutcome,
   });
   if (idempotency['requestDigest'] !== expectedRequestDigest) {
     return { state: 'malformed', error: 'requestDigest does not match the intended-change meaning' };
   }
-  if (!isValidRecordTimestamp(value['createdAt'])) return { state: 'malformed', error: 'invalid createdAt timestamp' };
-  if (!isWorkStateWriter(value['writer'])) return { state: 'malformed', error: 'invalid writer metadata' };
   return {
     state: 'current',
     record: {
       kind: INTENDED_CHANGE_RECORD_KIND,
       schemaVersion: INTENDED_CHANGE_RECORD_SCHEMA_VERSION,
-      changeId: value['changeId'],
-      collaborationDomainId: value['collaborationDomainId'],
-      goalId: value['goalId'],
+      changeId: fields['changeId'],
+      collaborationDomainId: envelope.envelope.collaborationDomainId,
+      goalId: fields['goalId'],
       title,
       intendedOutcome,
       idempotency: {
@@ -373,8 +385,8 @@ export function decodeIntendedChangeRecord(value: unknown): WorkStateDecodeResul
         keyDigest: idempotency['keyDigest'],
         requestDigest: idempotency['requestDigest'],
       },
-      createdAt: value['createdAt'],
-      writer: value['writer'],
+      createdAt: envelope.envelope.createdAt,
+      writer: envelope.envelope.writer,
     },
   };
 }
@@ -427,15 +439,19 @@ export function renderGoalGherkin(goal: GoalGherkin): string {
 }
 
 export function isGoalId(value: unknown): value is string {
-  return typeof value === 'string' && GOAL_ID_PATTERN.test(value);
+  return matchesWorkStateIdentity(value, GOAL_ID_PATTERN);
 }
 
 export function isIntendedChangeId(value: unknown): value is string {
-  return typeof value === 'string' && INTENDED_CHANGE_ID_PATTERN.test(value);
+  return matchesWorkStateIdentity(value, INTENDED_CHANGE_ID_PATTERN);
 }
 
 export function isCollaborationDomainId(value: unknown): value is string {
-  return typeof value === 'string' && COLLABORATION_DOMAIN_PATTERN.test(value);
+  return matchesWorkStateIdentity(value, COLLABORATION_DOMAIN_PATTERN);
+}
+
+export function matchesWorkStateIdentity(value: unknown, pattern: RegExp): value is string {
+  return typeof value === 'string' && pattern.test(value);
 }
 
 function normalizeGoalGherkin(value: unknown): { ok: true; value: GoalGherkin } | { ok: false; error: string } {
@@ -554,6 +570,38 @@ export function recordVersion(
     return { ok: false, result: { state: 'malformed', error: 'schemaVersion must be a non-negative safe integer' } };
   }
   return { ok: true, version: value['schemaVersion'] };
+}
+
+export function decodeWorkRecordEnvelope(
+  value: unknown,
+  spec: WorkRecordEnvelopeSpec,
+): { ok: true; envelope: WorkRecordEnvelope } | { ok: false; result: WorkStateDecodeResult<never> } {
+  const version = recordVersion(value, spec.recordKind);
+  if (!version.ok) return version;
+  if (version.version !== spec.schemaVersion) {
+    return { ok: false, result: unsupportedVersion(version.version, spec.schemaVersion, spec.label) };
+  }
+  if (!isRecordObject(value)) {
+    return { ok: false, result: { state: 'malformed', error: `${spec.label} record must be an object` } };
+  }
+  if (!isCollaborationDomainId(value['collaborationDomainId'])) {
+    return { ok: false, result: { state: 'malformed', error: 'collaborationDomainId must be a version-4 UUID' } };
+  }
+  if (!isValidRecordTimestamp(value['createdAt'])) {
+    return { ok: false, result: { state: 'malformed', error: 'invalid createdAt timestamp' } };
+  }
+  if (!isWorkStateWriter(value['writer'])) {
+    return { ok: false, result: { state: 'malformed', error: 'invalid writer metadata' } };
+  }
+  return {
+    ok: true,
+    envelope: {
+      value,
+      collaborationDomainId: value['collaborationDomainId'],
+      createdAt: value['createdAt'],
+      writer: value['writer'],
+    },
+  };
 }
 
 export function unsupportedVersion<RecordType>(

@@ -1,21 +1,17 @@
 {
-  "kind": "scip-query-suppression",
-  "suppressionIdentity": "SQ8FA34B0BBC01",
-  "writer": {
-    "tool": "scip-query",
-    "version": "0.20.0"
+  "kind": "scip-query-attempt",
+  "schemaVersion": 1,
+  "attemptId": "SQA-B11782818F89A225F3B886E3856E28DA",
+  "collaborationDomainId": "5ea57d1a-936c-4c91-b58f-5d61e45173a5",
+  "changeId": "SQC-DED67E74D3898BDCA85766BE8D3C93AF",
+  "intendedCondition": "The obligation lifecycle is executable, documented, merge-safe, and passes its required repository verification",
+  "action": {
+    "family": "repository-verification",
+    "summary": "Verify the obligation lifecycle with formatting, lint, build, API, full tests, architecture, migration, duplication, parameter, and changed-surface gates",
+    "effectClass": "read-only"
   },
-  "id": "SQ8FA34B0BBC01",
-  "reason": "The goal, change, attempt, decision, and obligation descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, and CLI contract plus executable dogfood cover registration and behavior.",
-  "createdAt": "2026-07-29T19:50:55.191Z",
-  "updatedAt": "2026-07-31T05:02:24.690Z",
-  "schemaVersion": 2,
-  "decision": {
-    "kind": "automated-adjudication",
-    "reasonCode": "historical-coupling-ended",
-    "decidedBy": "agent",
-    "policyVersion": 1,
-    "observation": {
+  "evidenceReceipts": [
+    {
       "schemaVersion": 2,
       "observedAt": "2026-07-31T05:02:24.683Z",
       "facts": {
@@ -131,30 +127,19 @@
         "headCommit": "f9fef90c39996f526299ff66c83eea70e1b873fd",
         "treeOid": "a3eba5cc4c05313d13a97644e23f0295ae80dbfb"
       }
-    },
-    "evidence": [
-      {
-        "kind": "source",
-        "referent": "src/runtime/commands/work-state-handlers.ts",
-        "claim": "The goal, change, attempt, decision, and obligation descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, and CLI contract plus executable dogfood cover registration and behavior.",
-        "contentHash": "2e7179e1a66f3ac7fea4ea54519bd1ca0d7f06967a5038cc2cb01db5f4af335e"
-      },
-      {
-        "kind": "source",
-        "referent": "src/runtime/commands/command-descriptors.ts",
-        "claim": "The goal, change, attempt, decision, and obligation descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, and CLI contract plus executable dogfood cover registration and behavior.",
-        "contentHash": "a2f21bd5653378335f21b31d57d874299ba4c81cc4a7e7194c4fd50ce1fc5c8e"
-      },
-      {
-        "kind": "test",
-        "referent": "tests/runtime/cli-contract.test.ts",
-        "claim": "The goal, change, attempt, decision, and obligation descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, and CLI contract plus executable dogfood cover registration and behavior.",
-        "contentHash": "19c90650f079e54a0883c67be264a90e99b0c6982104dbc3ed49282695059080"
-      }
-    ],
-    "invalidateOn": {
-      "targetContentChange": true,
-      "detectorMajorChange": true
     }
+  ],
+  "observedEffect": "Formatting, lint, build, the 72-path API contract, 2,261 tests, architecture, migration, duplication, parameter, and changed-surface checks passed",
+  "outcome": "succeeded",
+  "idempotency": {
+    "version": 1,
+    "algorithm": "sha256",
+    "keyDigest": "b11782818f89a225f3b886e3856e28da3119a613d15ddaa2f785adc9555f3d58",
+    "requestDigest": "52596feb7aa03ed73758bc98d79ec2b1baf3a26949924c0182c070bbb108b3b2"
+  },
+  "createdAt": "2026-07-31T05:02:53.428Z",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
   }
 }

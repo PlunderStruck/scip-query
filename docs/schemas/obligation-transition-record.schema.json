@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/scip-query/docs/schemas/obligation-transition-record.schema.json",
+  "title": "scip-query obligation transition record v1",
+  "description": "One immutable evidence-backed lifecycle transition stored under .scipquery/obligation-transitions/.",
+  "type": "object",
+  "required": [
+    "kind",
+    "schemaVersion",
+    "transitionId",
+    "collaborationDomainId",
+    "changeId",
+    "obligationId",
+    "from",
+    "to",
+    "reason",
+    "basisAttemptIds",
+    "evidenceReceipts",
+    "rationale",
+    "idempotency",
+    "createdAt",
+    "writer"
+  ],
+  "properties": {
+    "kind": { "const": "scip-query-obligation-transition" },
+    "schemaVersion": { "const": 1 },
+    "transitionId": { "type": "string", "pattern": "^SQT-[A-F0-9]{32}$" },
+    "collaborationDomainId": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[89abAB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}$"
+    },
+    "changeId": {
+      "$ref": "./obligation-admission-request.schema.json#/$defs/changeId"
+    },
+    "obligationId": {
+      "$ref": "./obligation-admission-request.schema.json#/$defs/obligationId"
+    },
+    "from": { "const": "live" },
+    "to": { "enum": ["fulfilled", "invalidated", "carried-forward"] },
+    "reason": {
+      "enum": ["condition-established", "premise-disproven", "superseded-duplicate", "successor-change-authorized"]
+    },
+    "basisAttemptIds": {
+      "$ref": "./obligation-admission-request.schema.json#/$defs/basisAttemptIds"
+    },
+    "evidenceReceipts": {
+      "allOf": [{ "$ref": "./obligation-admission-request.schema.json#/$defs/evidenceReceipts" }, { "minItems": 1 }]
+    },
+    "rationale": { "type": "string", "minLength": 1, "maxLength": 1000 },
+    "successor": {
+      "type": "object",
+      "required": [
+        "obligationId",
+        "changeId",
+        "category",
+        "title",
+        "requiredCondition",
+        "source",
+        "basisAttemptIds",
+        "evidenceReceipts"
+      ],
+      "properties": {
+        "obligationId": {
+          "$ref": "./obligation-admission-request.schema.json#/$defs/obligationId"
+        },
+        "changeId": {
+          "$ref": "./obligation-admission-request.schema.json#/$defs/changeId"
+        },
+        "category": {
+          "$ref": "./obligation-admission-request.schema.json#/$defs/category"
+        },
+        "title": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "requiredCondition": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "source": {
+          "$ref": "./obligation-admission-request.schema.json#/$defs/source"
+        },
+        "basisAttemptIds": {
+          "$ref": "./obligation-admission-request.schema.json#/$defs/basisAttemptIds"
+        },
+        "evidenceReceipts": {
+          "$ref": "./obligation-admission-request.schema.json#/$defs/evidenceReceipts"
+        }
+      },
+      "additionalProperties": false
+    },
+    "idempotency": { "$ref": "./attempt-record.schema.json#/$defs/idempotency" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "writer": { "$ref": "./goal-record.schema.json#/$defs/writer" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "to": { "const": "fulfilled" } }, "required": ["to"] },
+      "then": {
+        "properties": { "reason": { "const": "condition-established" } },
+        "not": { "required": ["successor"] }
+      }
+    },
+    {
+      "if": { "properties": { "to": { "const": "invalidated" } }, "required": ["to"] },
+      "then": {
+        "properties": {
+          "reason": { "enum": ["premise-disproven", "superseded-duplicate"] }
+        },
+        "not": { "required": ["successor"] }
+      }
+    },
+    {
+      "if": { "properties": { "to": { "const": "carried-forward" } }, "required": ["to"] },
+      "then": {
+        "properties": { "reason": { "const": "successor-change-authorized" } },
+        "required": ["successor"]
+      }
+    }
+  ],
+  "additionalProperties": false
+}

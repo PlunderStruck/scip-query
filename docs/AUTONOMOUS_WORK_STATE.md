@@ -154,19 +154,80 @@ Supported workflows should emit these records as side effects of useful
 actions and evidence-based choices. Asking an agent to narrate the same work a
 second time would be ceremony, not durable state capture.
 
+## Preserve completion obligations
+
+An obligation is a completion condition discovered while doing an intended
+change whose truth has not yet been established. Its real referents are
+concrete unfinished facts such as an untested failure path, obsolete code that
+still has consumers, documentation that still describes removed behavior, or
+an architecture rule the new dependency graph must satisfy. What distinguishes
+an obligation from a task or attempt is that it remains live until current
+evidence establishes that its required condition is fulfilled or that its
+premise is false.
+
+Admit an obligation as a side effect of useful work:
+
+```json
+{
+  "changeId": "SQC-...",
+  "idempotencyKey": "slice-2.3:obsolete-adapter",
+  "category": "residue",
+  "title": "Remove the obsolete adapter",
+  "requiredCondition": "The obsolete adapter has no remaining source or consumer",
+  "source": {
+    "kind": "agent-discovery",
+    "referent": "src/obsolete-adapter.ts"
+  },
+  "basisAttemptIds": [],
+  "evidenceReceipts": []
+}
+```
+
+```bash
+scip-query obligation admit --input /path/to/obligation-request.json
+scip-query obligation status SQC-...
+scip-query obligation read SQO-...
+```
+
+The lifecycle is `live -> fulfilled | invalidated | carried-forward`. Every
+terminal transition requires a supported version-2 observation receipt
+captured after admission. The receipt must identify the same collaboration
+domain and complete repository content, and every repository source it read
+must have an immutable or fixed-snapshot proof. Unknown, stale, bracketed, or
+incompatible evidence cannot make work disappear from the live set.
+
+A carried-forward transition embeds the complete successor obligation in the
+same transition record. Closing the predecessor and introducing its successor
+therefore survives Git merges as one fact; it does not depend on two filenames
+being published atomically. The successor must name another intended change
+under the same goal. If branches record different terminal meanings, status
+reports a conflict and neither meaning wins by timestamp.
+
+```bash
+scip-query obligation transition --input /path/to/transition-request.json
+scip-query obligation validate .scipquery/obligation-transitions/SQT-....json
+```
+
+The request schemas are
+[`schemas/obligation-admission-request.schema.json`](schemas/obligation-admission-request.schema.json)
+and
+[`schemas/obligation-transition-request.schema.json`](schemas/obligation-transition-request.schema.json).
+
 ## Collaboration and validation
 
 Commit `.scipquery/goals/*.json`, `.scipquery/changes/*.json`,
-`.scipquery/attempts/*.json`, and `.scipquery/decisions/*.json` with the work
-they govern. Equivalent goals in two clones have the same content-derived
-identity and path. Distinct changes, attempts, and decisions use distinct
-idempotency keys and therefore distinct paths. A same-path merge conflict is
-not routine branch noise; it means two writers disagreed about one identity
-and requires investigation.
+`.scipquery/attempts/*.json`, `.scipquery/decisions/*.json`,
+`.scipquery/obligations/*.json`, and
+`.scipquery/obligation-transitions/*.json` with the work they govern.
+Equivalent goals in two clones have the same content-derived identity and
+path. Distinct changes, attempts, decisions, obligations, and transitions use
+distinct idempotency keys and therefore distinct paths. A same-path merge
+conflict is not routine branch noise; it means two writers disagreed about one
+identity and requires investigation.
 
 Use `goal validate <repository-relative-path>` or
 `change validate <repository-relative-path>`, with the corresponding
-`attempt validate` and `decision validate` operations, to classify one record.
-Status commands classify the complete directories and fail when a record is
-malformed, unsupported, or has a broken relationship. Do not delete an
-unreadable record merely to make status pass.
+`attempt validate`, `decision validate`, and `obligation validate` operations,
+to classify one record. Status commands classify the complete directories and
+fail when a record is malformed, unsupported, conflicted, or has a broken
+relationship. Do not delete an unreadable record merely to make status pass.

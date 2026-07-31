@@ -56,6 +56,8 @@ describe('setupAgent', () => {
     expect(agentsMd).toContain('`.scipquery/changes/*.json`');
     expect(agentsMd).toContain('`.scipquery/attempts/*.json`');
     expect(agentsMd).toContain('`.scipquery/decisions/*.json`');
+    expect(agentsMd).toContain('`.scipquery/obligations/*.json`');
+    expect(agentsMd).toContain('`.scipquery/obligation-transitions/*.json`');
     expect(agentsMd).toContain('`.scipquery/suppressions/*.json`');
     expect(agentsMd).toContain('`.scipquery/events/*.json`');
     expect(agentsMd).toContain('`.codex/hooks.json` and `.claude/settings.local.json`');

@@ -70,6 +70,8 @@ describe('uninstallProject', () => {
     mkdirSync(join(root, '.scipquery', 'changes'), { recursive: true });
     mkdirSync(join(root, '.scipquery', 'attempts'), { recursive: true });
     mkdirSync(join(root, '.scipquery', 'decisions'), { recursive: true });
+    mkdirSync(join(root, '.scipquery', 'obligations'), { recursive: true });
+    mkdirSync(join(root, '.scipquery', 'obligation-transitions'), { recursive: true });
     mkdirSync(join(root, '.scipquery', 'suppressions'), { recursive: true });
     mkdirSync(join(root, '.scipquery', 'events'), { recursive: true });
     mkdirSync(join(root, '.scipquery', 'ledger'), { recursive: true });
@@ -81,6 +83,8 @@ describe('uninstallProject', () => {
       '.scipquery/changes/ (repository records)',
       '.scipquery/attempts/ (repository records)',
       '.scipquery/decisions/ (repository records)',
+      '.scipquery/obligations/ (repository records)',
+      '.scipquery/obligation-transitions/ (repository records)',
       '.scipquery/suppressions/ (repository records)',
       '.scipquery/events/ (repository records)',
       '.scipquery/ledger/ (repository records)',

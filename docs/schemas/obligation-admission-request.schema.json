@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/scip-query/docs/schemas/obligation-admission-request.schema.json",
+  "title": "scip-query obligation admission request",
+  "description": "Bounded request that admits one completion condition discovered during useful repository work.",
+  "type": "object",
+  "required": [
+    "changeId",
+    "idempotencyKey",
+    "category",
+    "title",
+    "requiredCondition",
+    "source",
+    "basisAttemptIds",
+    "evidenceReceipts"
+  ],
+  "properties": {
+    "changeId": { "$ref": "#/$defs/changeId" },
+    "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "category": { "$ref": "#/$defs/category" },
+    "title": { "type": "string", "minLength": 1, "maxLength": 240 },
+    "requiredCondition": { "type": "string", "minLength": 1, "maxLength": 1000 },
+    "source": { "$ref": "#/$defs/source" },
+    "basisAttemptIds": { "$ref": "#/$defs/basisAttemptIds" },
+    "evidenceReceipts": { "$ref": "#/$defs/evidenceReceipts" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "changeId": { "type": "string", "pattern": "^SQC-[A-F0-9]{32}$" },
+    "obligationId": { "type": "string", "pattern": "^SQO-[A-F0-9]{32}$" },
+    "attemptId": { "type": "string", "pattern": "^SQA-[A-F0-9]{32}$" },
+    "category": {
+      "enum": ["test", "documentation", "residue", "architecture", "migration", "verification", "other"]
+    },
+    "source": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind", "check", "findingId"],
+          "properties": {
+            "kind": { "const": "detector-finding" },
+            "check": { "type": "string", "minLength": 1, "maxLength": 1000 },
+            "findingId": { "type": "string", "minLength": 1, "maxLength": 1000 }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["kind", "referent"],
+          "properties": {
+            "kind": { "enum": ["agent-discovery", "policy"] },
+            "referent": { "type": "string", "minLength": 1, "maxLength": 1000 }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "basisAttemptIds": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/attemptId" }
+    },
+    "evidenceReceipts": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "$ref": "./observation-receipt.schema.json#/$defs/observationReceiptV2"
+      }
+    },
+    "successor": {
+      "type": "object",
+      "required": [
+        "changeId",
+        "category",
+        "title",
+        "requiredCondition",
+        "source",
+        "basisAttemptIds",
+        "evidenceReceipts"
+      ],
+      "properties": {
+        "changeId": { "$ref": "#/$defs/changeId" },
+        "category": { "$ref": "#/$defs/category" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "requiredCondition": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "source": { "$ref": "#/$defs/source" },
+        "basisAttemptIds": { "$ref": "#/$defs/basisAttemptIds" },
+        "evidenceReceipts": { "$ref": "#/$defs/evidenceReceipts" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

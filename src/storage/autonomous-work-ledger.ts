@@ -20,11 +20,11 @@ import { isIntendedChangeId, type IntendedChangeRecordV1 } from '../domain/auton
 import {
   publishWorkStateRecord,
   readGoalRecords,
-  readIntendedChangeRecordFile,
   readIntendedChangeRecords,
   readRecordDirectory,
   readRecordFile,
   parseRecordFile,
+  requireIntendedChangeRecord,
   type WorkStateCollectionReadResult,
   type WorkStateCreateOptions,
   type WorkStateCreateResult,
@@ -53,7 +53,7 @@ export function createAttemptRecordFile(
   request: AttemptCreateRequest,
   options: WorkStateCreateOptions,
 ): WorkStateCreateResult<AttemptRecordV1> {
-  const change = requireChange(projectRoot, collaborationDomainId, request.changeId);
+  const change = requireIntendedChangeRecord(projectRoot, collaborationDomainId, request.changeId);
   const record = createAttemptRecord({
     collaborationDomainId,
     request,
@@ -97,7 +97,7 @@ export function createDecisionRecordFile(
   request: DecisionCreateRequest,
   options: WorkStateCreateOptions,
 ): WorkStateCreateResult<DecisionRecordV1> {
-  requireChange(projectRoot, collaborationDomainId, request.changeId);
+  requireIntendedChangeRecord(projectRoot, collaborationDomainId, request.changeId);
   const attempts = readAttemptRecords(projectRoot);
   const attemptsById = new Map(attempts.records.map((attempt) => [attempt.attemptId, attempt]));
   for (const attemptId of request.basisAttemptIds) {
@@ -265,15 +265,6 @@ export function readWorkHistory(projectRoot: string, changeId?: string): WorkHis
     changeCompatibility: changes.compatibility,
     integrityIssues,
   };
-}
-
-function requireChange(projectRoot: string, collaborationDomainId: string, changeId: string): IntendedChangeRecordV1 {
-  const change = readIntendedChangeRecordFile(projectRoot, changeId);
-  if (change.state !== 'current') throw new Error(`intended change ${changeId} is not a readable current record`);
-  if (change.record.collaborationDomainId !== collaborationDomainId) {
-    throw new Error(`intended change ${changeId} belongs to another collaboration domain`);
-  }
-  return change.record;
 }
 
 function defaultNow(): string {

@@ -70,7 +70,14 @@ retry-stable identities instead of editing committed record bytes directly.
 Use `scip-query attempt status <change-id>` and
 `scip-query decision status <change-id>` to recover tried strategies,
 unresolved effects, and settled next actions before proposing another slice.
-Their `create` operations are durable workflow primitives: record them as a
+Use `scip-query obligation status <change-id>` to recover every completion
+condition that remains live or conflicted. Admit an obligation when useful
+work discovers a condition that completion must establish; transition it only
+with fixed current observation evidence. Carry-forward embeds the successor
+in the same immutable transition, so unfinished work survives branch merges
+without a coordination-only write.
+Attempt and decision `create` operations are durable workflow primitives:
+record them as a
 side effect of useful work, never as a parallel narrative ritual, and never
 authorize repetition of an unresolved non-idempotent attempt.
 

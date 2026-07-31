@@ -18,7 +18,13 @@ import { DIFF_GATE_RUN_COMMAND } from '../diff-gate-execution.js';
 import { handleAgentHookContext, handleAgentHookPreToolUse, handleAgentHookStop } from '../agent-hooks.js';
 import { BUILTIN_SKILLS } from '../setup.js';
 import * as handlers from './command-handlers.js';
-import { handleAttempt, handleDecision, handleGoal, handleIntendedChange } from './work-state-handlers.js';
+import {
+  handleAttempt,
+  handleDecision,
+  handleGoal,
+  handleIntendedChange,
+  handleObligation,
+} from './work-state-handlers.js';
 import { orderedQueryCommandDescriptors } from './query-command-specs.js';
 
 const queryCommandsBeforeDiffImpact = orderedQueryCommandDescriptors.slice(0, queryIndexAfter('plan-context'));
@@ -504,6 +510,31 @@ export const commandDescriptors: CommandDescriptor[] = [
       'scip-query decision status SQC-0123456789ABCDEF0123456789ABCDEF --json',
     ]),
     handler: handleDecision,
+  },
+  {
+    id: 'obligation',
+    command: 'obligation <operation> [target]',
+    agent: agentContract(
+      'Which completion conditions remain live, and what evidence supports every terminal transition?',
+      'immutable obligation admissions and transitions, live and terminal states, carry-forward successors, conflicts, compatibility, integrity, and publication durability',
+      ['action', 'record'],
+      'complete',
+      'repository',
+      commandOperation('repository-observation', [
+        { when: { kind: 'argument', index: 0, equals: 'admit' }, role: 'mutation' },
+        { when: { kind: 'argument', index: 0, equals: 'transition' }, role: 'mutation' },
+      ]),
+    ),
+    description: 'Admit, transition, inspect, or summarize committed completion obligations',
+    options: withJsonOption([option('--input <path>', 'Bounded JSON request for admit or transition')]),
+    claims: fixedClaimContract('repository-source', ['live-workspace']),
+    renderShape: 'custom',
+    docs: doc('Autonomous work state', [
+      'scip-query obligation admit --input obligation-request.json --json',
+      'scip-query obligation transition --input transition-request.json --json',
+      'scip-query obligation status SQC-0123456789ABCDEF0123456789ABCDEF --json',
+    ]),
+    handler: handleObligation,
   },
   {
     id: 'suppress',

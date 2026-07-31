@@ -1,7 +1,7 @@
 # Phase 2 — durable autonomous state
 
 Date: 2026-07-30
-Status: in progress — Phase 1 complete; slices 2.1–2.2 complete; slice 2.3 next
+Status: in progress — Phase 1 complete; slices 2.1–2.3 complete; slice 2.4 next
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -219,6 +219,47 @@ Validation and expected result:
 - carry-forward creates the successor and closes the predecessor atomically in
   one transition record; and
 - terminal conflicts are exposed rather than resolved by last-writer-wins.
+
+Implemented result:
+
+- admission records under `.scipquery/obligations/` use `SQO-...` identities,
+  transition records under `.scipquery/obligation-transitions/` use `SQT-...`
+  identities, and both derive stable filenames from collaboration-scoped
+  caller idempotency keys while binding complete meaning through a separate
+  request digest;
+- the deterministic fold starts every admitted obligation at `live`, accepts
+  only the closed terminal states and controlled reason codes above, never
+  resurrects a terminal obligation, and reports incompatible terminal
+  meanings as conflicts instead of choosing by timestamp or merge order;
+- terminal transitions require supported version-2 observation receipts from
+  the same collaboration domain, observed after admission, with fixed
+  repository-source proofs and whole-content identity. Future, stale,
+  moving-workspace, and wrong-domain receipts fail closed;
+- a carried-forward transition embeds the complete successor obligation and
+  derives its identity from the transition, so the predecessor closure and
+  successor admission cannot split across branches or crashes;
+- storage validates goal, intended-change, attempt, obligation, transition,
+  and cross-record relationships together. Any incomplete compatibility or
+  integrity view prevents terminal publication rather than hiding unreadable
+  work;
+- `obligation admit|transition|read|validate|status` exposes the lifecycle to
+  agents, setup and uninstall own both committed record directories, and the
+  agent contract now requires these records to travel with the code or docs
+  change that produced them;
+- domain and storage tests cover retry recovery, same-key collision, partial
+  and future records, stale and unstable evidence, concurrent branch
+  transitions, explicit conflicts, atomic carry-forward, scoped successor
+  visibility, and terminal non-resurrection;
+- the shared immutable work-record envelope now validates kind, version,
+  collaboration domain, timestamp, and writer once for goals, intended
+  changes, attempts, decisions, admissions, and transitions without merging
+  their distinct meanings; and
+- formatting, lint, build, the 72-path public API contract, and all 2,261 tests
+  in 281 files passed. A fresh compiler-resolved index found no declared
+  architecture violation, recent reimplementation, unused parameter, or
+  incomplete migration; the changed-surface diff gate passed after renewing
+  the content-bound decision that the dedicated work-state handler owns these
+  commands.
 
 ### 2.4 Restoration projection
 

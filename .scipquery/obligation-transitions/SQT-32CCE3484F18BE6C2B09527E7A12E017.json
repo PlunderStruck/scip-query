@@ -1,21 +1,18 @@
 {
-  "kind": "scip-query-suppression",
-  "suppressionIdentity": "SQ8FA34B0BBC01",
-  "writer": {
-    "tool": "scip-query",
-    "version": "0.20.0"
-  },
-  "id": "SQ8FA34B0BBC01",
-  "reason": "The goal, change, attempt, decision, and obligation descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, and CLI contract plus executable dogfood cover registration and behavior.",
-  "createdAt": "2026-07-29T19:50:55.191Z",
-  "updatedAt": "2026-07-31T05:02:24.690Z",
-  "schemaVersion": 2,
-  "decision": {
-    "kind": "automated-adjudication",
-    "reasonCode": "historical-coupling-ended",
-    "decidedBy": "agent",
-    "policyVersion": 1,
-    "observation": {
+  "kind": "scip-query-obligation-transition",
+  "schemaVersion": 1,
+  "transitionId": "SQT-32CCE3484F18BE6C2B09527E7A12E017",
+  "collaborationDomainId": "5ea57d1a-936c-4c91-b58f-5d61e45173a5",
+  "changeId": "SQC-DED67E74D3898BDCA85766BE8D3C93AF",
+  "obligationId": "SQO-37EA75860FEC6E3325763FE7ABB8B795",
+  "from": "live",
+  "to": "fulfilled",
+  "reason": "condition-established",
+  "basisAttemptIds": [
+    "SQA-B11782818F89A225F3B886E3856E28DA"
+  ],
+  "evidenceReceipts": [
+    {
       "schemaVersion": 2,
       "observedAt": "2026-07-31T05:02:24.683Z",
       "facts": {
@@ -131,30 +128,18 @@
         "headCommit": "f9fef90c39996f526299ff66c83eea70e1b873fd",
         "treeOid": "a3eba5cc4c05313d13a97644e23f0295ae80dbfb"
       }
-    },
-    "evidence": [
-      {
-        "kind": "source",
-        "referent": "src/runtime/commands/work-state-handlers.ts",
-        "claim": "The goal, change, attempt, decision, and obligation descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, and CLI contract plus executable dogfood cover registration and behavior.",
-        "contentHash": "2e7179e1a66f3ac7fea4ea54519bd1ca0d7f06967a5038cc2cb01db5f4af335e"
-      },
-      {
-        "kind": "source",
-        "referent": "src/runtime/commands/command-descriptors.ts",
-        "claim": "The goal, change, attempt, decision, and obligation descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, and CLI contract plus executable dogfood cover registration and behavior.",
-        "contentHash": "a2f21bd5653378335f21b31d57d874299ba4c81cc4a7e7194c4fd50ce1fc5c8e"
-      },
-      {
-        "kind": "test",
-        "referent": "tests/runtime/cli-contract.test.ts",
-        "claim": "The goal, change, attempt, decision, and obligation descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, and CLI contract plus executable dogfood cover registration and behavior.",
-        "contentHash": "19c90650f079e54a0883c67be264a90e99b0c6982104dbc3ed49282695059080"
-      }
-    ],
-    "invalidateOn": {
-      "targetContentChange": true,
-      "detectorMajorChange": true
     }
+  ],
+  "rationale": "Current fixed-snapshot evidence and the successful verification attempt establish every condition required by the Phase 2.3 obligation",
+  "idempotency": {
+    "version": 1,
+    "algorithm": "sha256",
+    "keyDigest": "32cce3484f18be6c2b09527e7a12e017a6df301ce3c84518415ad0328706d02a",
+    "requestDigest": "78f3814cfcaf59865a7d5bc506d9170cd66395cf2cce0077f9adc1675d82f6ed"
+  },
+  "createdAt": "2026-07-31T05:03:19.468Z",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
   }
 }

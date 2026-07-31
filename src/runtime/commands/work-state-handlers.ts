@@ -3,6 +3,12 @@ import { isAbsolute, relative, resolve } from 'node:path';
 
 import { decodeAttemptCreateRequest, decodeDecisionCreateRequest } from '../../domain/autonomous-work-ledger.js';
 import {
+  decodeObligationAdmissionRequest,
+  decodeObligationTransitionRequest,
+  isObligationId,
+  isObligationTransitionId,
+} from '../../domain/autonomous-work-obligations.js';
+import {
   decodeGoalCreateRequest,
   decodeIntendedChangeCreateRequest,
   renderGoalGherkin,
@@ -20,6 +26,13 @@ import {
   readWorkHistory,
 } from '../../storage/autonomous-work-ledger.js';
 import {
+  createObligationAdmissionFile,
+  createObligationTransitionFile,
+  readObligationLifecycle,
+  readObligationRecordPath,
+  readObligationTransitionRecordFile,
+} from '../../storage/autonomous-work-obligations.js';
+import {
   createGoalRecordFile,
   createIntendedChangeRecordFile,
   readGoalRecordFile,
@@ -36,6 +49,8 @@ import { loadProjectConfig } from '../config.js';
 
 const WORK_STATE_OPERATIONS = ['create', 'read', 'validate', 'status'] as const;
 type WorkStateOperation = (typeof WORK_STATE_OPERATIONS)[number];
+const OBLIGATION_OPERATIONS = ['admit', 'transition', 'read', 'validate', 'status'] as const;
+type ObligationOperation = (typeof OBLIGATION_OPERATIONS)[number];
 
 export function handleGoal(operationValue: unknown, targetValue: unknown, rawOpts: unknown): void {
   const operation = workStateOperation(operationValue, 'goal');
@@ -74,6 +89,16 @@ export function handleDecision(operationValue: unknown, targetValue: unknown, ra
   const projectRoot = resolveProjectRoot();
   const result = runDecisionOperation(projectRoot, operation, target, stringOptionValue(opts, 'input'));
   printWorkStateResult('decision', [operation, ...(target ? [target] : [])], opts, result);
+  if (workStateResultFailed(result)) process.exitCode = 1;
+}
+
+export function handleObligation(operationValue: unknown, targetValue: unknown, rawOpts: unknown): void {
+  const operation = obligationOperation(operationValue);
+  const target = optionalTarget(targetValue);
+  const opts = commandOptions(rawOpts);
+  const projectRoot = resolveProjectRoot();
+  const result = runObligationOperation(projectRoot, operation, target, stringOptionValue(opts, 'input'));
+  printObligationResult([operation, ...(target ? [target] : [])], opts, result);
   if (workStateResultFailed(result)) process.exitCode = 1;
 }
 
@@ -222,6 +247,144 @@ function runDecisionOperation(
   }
 }
 
+function runObligationOperation(
+  projectRoot: string,
+  operation: ObligationOperation,
+  target: string | undefined,
+  input: string | undefined,
+): unknown {
+  switch (operation) {
+    case 'admit': {
+      const request = decodeObligationAdmissionRequest(readJsonRequest(requiredInput(input, 'obligation admit')));
+      if (!request.ok) throw new Error(request.error);
+      return {
+        operation,
+        ...createObligationAdmissionFile(projectRoot, requiredCollaborationDomain(projectRoot), request.request, {
+          toolVersion: cliVersion,
+        }),
+      };
+    }
+    case 'transition': {
+      const request = decodeObligationTransitionRequest(readJsonRequest(requiredInput(input, 'obligation transition')));
+      if (!request.ok) throw new Error(request.error);
+      return {
+        operation,
+        ...createObligationTransitionFile(projectRoot, requiredCollaborationDomain(projectRoot), request.request, {
+          toolVersion: cliVersion,
+        }),
+      };
+    }
+    case 'read': {
+      const identity = requiredTarget(target, 'obligation read');
+      if (isObligationTransitionId(identity)) {
+        return { operation, ...readObligationTransitionRecordFile(projectRoot, identity) };
+      }
+      if (!isObligationId(identity)) throw new Error(`invalid obligation identity: ${identity}`);
+      const lifecycle = readObligationLifecycle(projectRoot);
+      const obligation = lifecycle.summary.obligations.find(
+        (candidate) => candidate.obligation.obligationId === identity,
+      );
+      return obligation
+        ? { operation, state: 'current', obligation }
+        : { operation, state: 'missing', error: `obligation does not exist: ${identity}` };
+    }
+    case 'validate': {
+      const path = repositoryRecordPath(projectRoot, requiredTarget(target, 'obligation validate'));
+      return { operation, path: relative(projectRoot, path), ...readObligationRecordPath(path) };
+    }
+    case 'status': {
+      const lifecycle = readObligationLifecycle(projectRoot, target);
+      return {
+        operation,
+        records: lifecycle.summary.obligations,
+        compatibility: lifecycle.admissions.compatibility,
+        transitionCompatibility: lifecycle.transitions.compatibility,
+        goalCompatibility: lifecycle.goalCompatibility,
+        changeCompatibility: lifecycle.changeCompatibility,
+        attemptCompatibility: lifecycle.attemptCompatibility,
+        warnings: [...lifecycle.admissions.warnings, ...lifecycle.transitions.warnings],
+        integrityIssues: lifecycle.integrityIssues,
+        summary: lifecycle.summary,
+      };
+    }
+  }
+}
+
+function printObligationResult(
+  args: readonly string[],
+  opts: Readonly<Record<string, unknown>>,
+  result: unknown,
+): void {
+  if (opts['json'] === true) {
+    printJsonEnvelope('obligation', args, opts, result);
+    return;
+  }
+  if (!isObject(result)) {
+    console.log(sanitizeTerminalLine(String(result)));
+    return;
+  }
+  if ((result['operation'] === 'admit' || result['operation'] === 'transition') && isObject(result['record'])) {
+    const record = result['record'];
+    const identity = String(record['obligationId'] ?? record['transitionId']);
+    console.log(
+      `${result['publication'] === 'created' ? 'Created' : 'Reused'} ${sanitizeTerminalLine(
+        String(result['operation']),
+      )} ${sanitizeTerminalLine(identity)} at ${sanitizeTerminalLine(String(result['path']))}.`,
+    );
+    return;
+  }
+  if (result['operation'] === 'status' && Array.isArray(result['records'])) {
+    console.log(`Obligations: ${result['records'].length} current state(s).`);
+    for (const candidate of result['records']) {
+      if (!isObject(candidate) || !isObject(candidate['obligation'])) continue;
+      console.log(
+        `  ${sanitizeTerminalLine(String(candidate['obligation']['obligationId']))}  ${sanitizeTerminalLine(
+          String(candidate['state']),
+        )}  ${sanitizeTerminalLine(String(candidate['obligation']['title']))}`,
+      );
+    }
+    const warnings = Array.isArray(result['warnings']) ? result['warnings'] : [];
+    for (const warning of warnings) console.log(`warning: ${sanitizeTerminalLine(String(warning))}`);
+    const issues = Array.isArray(result['integrityIssues']) ? result['integrityIssues'] : [];
+    for (const issue of issues) console.log(`error: ${sanitizeTerminalLine(String(issue))}`);
+    return;
+  }
+  if (result['state'] === 'current' && isObject(result['obligation'])) {
+    const folded = result['obligation'];
+    const obligation = isObject(folded['obligation']) ? folded['obligation'] : folded;
+    console.log(
+      `${sanitizeTerminalLine(String(obligation['obligationId']))}  ${sanitizeTerminalLine(
+        String(folded['state']),
+      )}\nChange: ${sanitizeTerminalLine(String(obligation['changeId']))}\nCondition: ${sanitizeTerminalLine(
+        String(obligation['requiredCondition']),
+      )}`,
+    );
+    return;
+  }
+  if (result['state'] === 'current' && isObject(result['record'])) {
+    const record = result['record'];
+    if (typeof record['transitionId'] === 'string') {
+      console.log(
+        `${sanitizeTerminalLine(record['transitionId'])}  ${sanitizeTerminalLine(
+          String(record['from']),
+        )} -> ${sanitizeTerminalLine(String(record['to']))}\nObligation: ${sanitizeTerminalLine(
+          String(record['obligationId']),
+        )}\nReason: ${sanitizeTerminalLine(String(record['reason']))}`,
+      );
+      return;
+    }
+    if (typeof record['obligationId'] === 'string') {
+      console.log(
+        `${sanitizeTerminalLine(record['obligationId'])}  live\nChange: ${sanitizeTerminalLine(
+          String(record['changeId']),
+        )}\nCondition: ${sanitizeTerminalLine(String(record['requiredCondition']))}`,
+      );
+      return;
+    }
+  }
+  printWorkStateResult('obligation', args, opts, result);
+}
+
 function printWorkStateResult(
   command: WorkStateCommand,
   args: readonly string[],
@@ -295,7 +458,7 @@ function printWorkStateResult(
   );
 }
 
-type WorkStateCommand = 'goal' | 'change' | 'attempt' | 'decision';
+type WorkStateCommand = 'goal' | 'change' | 'attempt' | 'decision' | 'obligation';
 
 function workStateRecordIdentity(command: WorkStateCommand, record: Readonly<Record<string, unknown>>): string {
   const field = {
@@ -303,6 +466,7 @@ function workStateRecordIdentity(command: WorkStateCommand, record: Readonly<Rec
     change: 'changeId',
     attempt: 'attemptId',
     decision: 'decisionId',
+    obligation: 'obligationId',
   }[command];
   return String(record[field]);
 }
@@ -313,6 +477,7 @@ function workStateRecordLabel(command: WorkStateCommand, record: Readonly<Record
     change: 'title',
     attempt: 'intendedCondition',
     decision: 'rationale',
+    obligation: 'requiredCondition',
   }[command];
   return record[field];
 }
@@ -323,6 +488,7 @@ function workStateCollectionLabel(command: WorkStateCommand): string {
     change: 'Intended changes',
     attempt: 'Attempts',
     decision: 'Decisions',
+    obligation: 'Obligations',
   }[command];
 }
 
@@ -332,6 +498,10 @@ function workStateResultFailed(result: unknown): boolean {
   if (isObject(result['compatibility']) && result['compatibility']['complete'] === false) return true;
   if (isObject(result['goalCompatibility']) && result['goalCompatibility']['complete'] === false) return true;
   if (isObject(result['changeCompatibility']) && result['changeCompatibility']['complete'] === false) return true;
+  if (isObject(result['attemptCompatibility']) && result['attemptCompatibility']['complete'] === false) return true;
+  if (isObject(result['transitionCompatibility']) && result['transitionCompatibility']['complete'] === false) {
+    return true;
+  }
   return Array.isArray(result['integrityIssues']) && result['integrityIssues'].length > 0;
 }
 
@@ -340,6 +510,13 @@ function workStateOperation(value: unknown, command: string): WorkStateOperation
     return value as WorkStateOperation;
   }
   throw new Error(`${command} operation must be one of: ${WORK_STATE_OPERATIONS.join(', ')}`);
+}
+
+function obligationOperation(value: unknown): ObligationOperation {
+  if (typeof value === 'string' && OBLIGATION_OPERATIONS.includes(value as ObligationOperation)) {
+    return value as ObligationOperation;
+  }
+  throw new Error(`obligation operation must be one of: ${OBLIGATION_OPERATIONS.join(', ')}`);
 }
 
 function optionalTarget(value: unknown): string | undefined {

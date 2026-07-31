@@ -131,6 +131,19 @@ export function createIntendedChangeRecordFile(
   );
 }
 
+export function requireIntendedChangeRecord(
+  projectRoot: string,
+  collaborationDomainId: string,
+  changeId: string,
+): IntendedChangeRecordV1 {
+  const change = readIntendedChangeRecordFile(projectRoot, changeId);
+  if (change.state !== 'current') throw new Error(`intended change ${changeId} is not a readable current record`);
+  if (change.record.collaborationDomainId !== collaborationDomainId) {
+    throw new Error(`intended change ${changeId} belongs to another collaboration domain`);
+  }
+  return change.record;
+}
+
 export function publishWorkStateRecord<RecordType>(
   projectRoot: string,
   input: WorkStatePublicationInput<RecordType>,

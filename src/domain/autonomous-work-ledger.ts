@@ -2,14 +2,13 @@ import { decodeObservationReceipt, type ObservationReceiptV2 } from './observati
 import { isRecordObject, isValidRecordTimestamp } from './record-validation.js';
 import { stableJson } from './stable-json.js';
 import {
+  decodeWorkRecordEnvelope,
   hashIdentity,
   isCollaborationDomainId,
   isIntendedChangeId,
   isSha256,
-  isWorkStateWriter,
+  matchesWorkStateIdentity,
   normalizedBoundedLine,
-  recordVersion,
-  unsupportedVersion,
   WORK_STATE_IDENTITY_ALGORITHM,
   type WorkStateDecodeResult,
   type WorkStateWriter,
@@ -171,7 +170,7 @@ export function decodeAttemptCreateRequest(value: unknown): WorkLedgerRequestDec
   if (!intendedCondition) return { ok: false, error: 'intendedCondition must be canonical bounded text' };
   const action = decodeAttemptAction(value['action']);
   if (!action.ok) return action;
-  const evidenceReceipts = decodeEvidenceReceipts(value['evidenceReceipts']);
+  const evidenceReceipts = decodeWorkEvidenceReceipts(value['evidenceReceipts']);
   if (!evidenceReceipts.ok) return evidenceReceipts;
   const observedEffect = normalizedBoundedLine(value['observedEffect'], MAX_EFFECT_CHARACTERS);
   if (!observedEffect) return { ok: false, error: 'observedEffect must be canonical bounded text' };
@@ -214,7 +213,7 @@ export function decodeDecisionCreateRequest(value: unknown): WorkLedgerRequestDe
   }
   const basisAttemptIds = decodeAttemptIds(value['basisAttemptIds']);
   if (!basisAttemptIds.ok) return basisAttemptIds;
-  const evidenceReceipts = decodeEvidenceReceipts(value['evidenceReceipts']);
+  const evidenceReceipts = decodeWorkEvidenceReceipts(value['evidenceReceipts']);
   if (!evidenceReceipts.ok) return evidenceReceipts;
   if (!isDecisionDisposition(value['disposition'])) {
     return { ok: false, error: 'disposition is not a supported autonomous decision' };
@@ -302,46 +301,42 @@ export function createDecisionRecord(input: CreateDecisionRecordInput): Decision
 }
 
 export function decodeAttemptRecord(value: unknown): WorkStateDecodeResult<AttemptRecordV1> {
-  const version = recordVersion(value, ATTEMPT_RECORD_KIND);
-  if (!version.ok) return version.result;
-  if (version.version !== ATTEMPT_RECORD_SCHEMA_VERSION) {
-    return unsupportedVersion(version.version, ATTEMPT_RECORD_SCHEMA_VERSION, 'attempt');
-  }
-  if (!isRecordObject(value)) return { state: 'malformed', error: 'attempt record must be an object' };
+  const envelope = decodeWorkRecordEnvelope(value, {
+    recordKind: ATTEMPT_RECORD_KIND,
+    schemaVersion: ATTEMPT_RECORD_SCHEMA_VERSION,
+    label: 'attempt',
+  });
+  if (!envelope.ok) return envelope.result;
+  const fields = envelope.envelope.value;
   const decoded = decodeAttemptCreateRequest({
-    changeId: value['changeId'],
+    changeId: fields['changeId'],
     idempotencyKey: 'record-key-placeholder',
-    intendedCondition: value['intendedCondition'],
-    action: value['action'],
-    evidenceReceipts: value['evidenceReceipts'],
-    observedEffect: value['observedEffect'],
-    outcome: value['outcome'],
-    ...(value['reconcilesAttemptId'] !== undefined ? { reconcilesAttemptId: value['reconcilesAttemptId'] } : {}),
+    intendedCondition: fields['intendedCondition'],
+    action: fields['action'],
+    evidenceReceipts: fields['evidenceReceipts'],
+    observedEffect: fields['observedEffect'],
+    outcome: fields['outcome'],
+    ...(fields['reconcilesAttemptId'] !== undefined ? { reconcilesAttemptId: fields['reconcilesAttemptId'] } : {}),
   });
   if (!decoded.ok) return { state: 'malformed', error: decoded.error };
-  if (!attemptFieldsAreCanonical(value, decoded.request)) {
+  if (!attemptFieldsAreCanonical(fields, decoded.request)) {
     return { state: 'malformed', error: 'attempt fields must use canonical bounded values and ordering' };
   }
-  if (!isAttemptId(value['attemptId'])) return { state: 'malformed', error: 'attemptId must be an attempt identity' };
-  if (!isCollaborationDomainId(value['collaborationDomainId'])) {
-    return { state: 'malformed', error: 'collaborationDomainId must be a version-4 UUID' };
-  }
-  const idempotency = decodeIdempotency(value['idempotency']);
+  if (!isAttemptId(fields['attemptId'])) return { state: 'malformed', error: 'attemptId must be an attempt identity' };
+  const idempotency = decodeWorkEventIdempotency(fields['idempotency']);
   if (!idempotency.ok) return { state: 'malformed', error: idempotency.error };
-  if (value['attemptId'] !== attemptIdFromDigest(idempotency.value.keyDigest)) {
+  if (fields['attemptId'] !== attemptIdFromDigest(idempotency.value.keyDigest)) {
     return { state: 'malformed', error: 'attemptId does not match the idempotency key digest' };
   }
-  const expectedDigest = attemptRequestDigest(value['collaborationDomainId'], decoded.request);
+  const expectedDigest = attemptRequestDigest(envelope.envelope.collaborationDomainId, decoded.request);
   if (idempotency.value.requestDigest !== expectedDigest) {
     return { state: 'malformed', error: 'requestDigest does not match the attempt meaning' };
   }
-  const metadata = decodeRecordMetadata(value);
-  if (!metadata.ok) return metadata.result;
   const record: AttemptRecordV1 = {
     kind: ATTEMPT_RECORD_KIND,
     schemaVersion: ATTEMPT_RECORD_SCHEMA_VERSION,
-    attemptId: value['attemptId'],
-    collaborationDomainId: value['collaborationDomainId'],
+    attemptId: fields['attemptId'],
+    collaborationDomainId: envelope.envelope.collaborationDomainId,
     changeId: decoded.request.changeId,
     intendedCondition: decoded.request.intendedCondition,
     action: decoded.request.action,
@@ -350,8 +345,8 @@ export function decodeAttemptRecord(value: unknown): WorkStateDecodeResult<Attem
     outcome: decoded.request.outcome,
     ...(decoded.request.reconcilesAttemptId ? { reconcilesAttemptId: decoded.request.reconcilesAttemptId } : {}),
     idempotency: idempotency.value,
-    createdAt: metadata.createdAt,
-    writer: metadata.writer,
+    createdAt: envelope.envelope.createdAt,
+    writer: envelope.envelope.writer,
   };
   if (record.reconcilesAttemptId === record.attemptId) {
     return { state: 'malformed', error: 'attempt cannot reconcile itself' };
@@ -360,49 +355,45 @@ export function decodeAttemptRecord(value: unknown): WorkStateDecodeResult<Attem
 }
 
 export function decodeDecisionRecord(value: unknown): WorkStateDecodeResult<DecisionRecordV1> {
-  const version = recordVersion(value, DECISION_RECORD_KIND);
-  if (!version.ok) return version.result;
-  if (version.version !== DECISION_RECORD_SCHEMA_VERSION) {
-    return unsupportedVersion(version.version, DECISION_RECORD_SCHEMA_VERSION, 'decision');
-  }
-  if (!isRecordObject(value)) return { state: 'malformed', error: 'decision record must be an object' };
+  const envelope = decodeWorkRecordEnvelope(value, {
+    recordKind: DECISION_RECORD_KIND,
+    schemaVersion: DECISION_RECORD_SCHEMA_VERSION,
+    label: 'decision',
+  });
+  if (!envelope.ok) return envelope.result;
+  const fields = envelope.envelope.value;
   const decoded = decodeDecisionCreateRequest({
-    changeId: value['changeId'],
+    changeId: fields['changeId'],
     idempotencyKey: 'record-key-placeholder',
-    basisAttemptIds: value['basisAttemptIds'],
-    evidenceReceipts: value['evidenceReceipts'],
-    disposition: value['disposition'],
-    rationale: value['rationale'],
-    ...(value['nextAction'] !== undefined ? { nextAction: value['nextAction'] } : {}),
+    basisAttemptIds: fields['basisAttemptIds'],
+    evidenceReceipts: fields['evidenceReceipts'],
+    disposition: fields['disposition'],
+    rationale: fields['rationale'],
+    ...(fields['nextAction'] !== undefined ? { nextAction: fields['nextAction'] } : {}),
   });
   if (!decoded.ok) return { state: 'malformed', error: decoded.error };
-  if (!decisionFieldsAreCanonical(value, decoded.request)) {
+  if (!decisionFieldsAreCanonical(fields, decoded.request)) {
     return { state: 'malformed', error: 'decision fields must use canonical bounded values and ordering' };
   }
-  if (!isDecisionId(value['decisionId'])) {
+  if (!isDecisionId(fields['decisionId'])) {
     return { state: 'malformed', error: 'decisionId must be a decision identity' };
   }
-  if (!isCollaborationDomainId(value['collaborationDomainId'])) {
-    return { state: 'malformed', error: 'collaborationDomainId must be a version-4 UUID' };
-  }
-  const idempotency = decodeIdempotency(value['idempotency']);
+  const idempotency = decodeWorkEventIdempotency(fields['idempotency']);
   if (!idempotency.ok) return { state: 'malformed', error: idempotency.error };
-  if (value['decisionId'] !== decisionIdFromDigest(idempotency.value.keyDigest)) {
+  if (fields['decisionId'] !== decisionIdFromDigest(idempotency.value.keyDigest)) {
     return { state: 'malformed', error: 'decisionId does not match the idempotency key digest' };
   }
-  const expectedDigest = decisionRequestDigest(value['collaborationDomainId'], decoded.request);
+  const expectedDigest = decisionRequestDigest(envelope.envelope.collaborationDomainId, decoded.request);
   if (idempotency.value.requestDigest !== expectedDigest) {
     return { state: 'malformed', error: 'requestDigest does not match the decision meaning' };
   }
-  const metadata = decodeRecordMetadata(value);
-  if (!metadata.ok) return metadata.result;
   return {
     state: 'current',
     record: {
       kind: DECISION_RECORD_KIND,
       schemaVersion: DECISION_RECORD_SCHEMA_VERSION,
-      decisionId: value['decisionId'],
-      collaborationDomainId: value['collaborationDomainId'],
+      decisionId: fields['decisionId'],
+      collaborationDomainId: envelope.envelope.collaborationDomainId,
       changeId: decoded.request.changeId,
       basisAttemptIds: decoded.request.basisAttemptIds,
       evidenceReceipts: decoded.request.evidenceReceipts,
@@ -410,8 +401,8 @@ export function decodeDecisionRecord(value: unknown): WorkStateDecodeResult<Deci
       rationale: decoded.request.rationale,
       ...(decoded.request.nextAction ? { nextAction: decoded.request.nextAction } : {}),
       idempotency: idempotency.value,
-      createdAt: metadata.createdAt,
-      writer: metadata.writer,
+      createdAt: envelope.envelope.createdAt,
+      writer: envelope.envelope.writer,
     },
   };
 }
@@ -502,11 +493,11 @@ export function foldWorkHistory(
 }
 
 export function isAttemptId(value: unknown): value is string {
-  return typeof value === 'string' && ATTEMPT_ID_PATTERN.test(value);
+  return matchesWorkStateIdentity(value, ATTEMPT_ID_PATTERN);
 }
 
 export function isDecisionId(value: unknown): value is string {
-  return typeof value === 'string' && DECISION_ID_PATTERN.test(value);
+  return matchesWorkStateIdentity(value, DECISION_ID_PATTERN);
 }
 
 function decodeAttemptAction(value: unknown): { ok: true; action: AttemptAction } | { ok: false; error: string } {
@@ -520,7 +511,7 @@ function decodeAttemptAction(value: unknown): { ok: true; action: AttemptAction 
   return { ok: true, action: { family, summary, effectClass: value['effectClass'] } };
 }
 
-function decodeEvidenceReceipts(
+export function decodeWorkEvidenceReceipts(
   value: unknown,
 ): { ok: true; receipts: ObservationReceiptV2[] } | { ok: false; error: string } {
   if (!Array.isArray(value) || value.length > MAX_EVIDENCE_RECEIPTS) {
@@ -550,7 +541,9 @@ function decodeAttemptIds(value: unknown): { ok: true; attemptIds: string[] } | 
   return { ok: true, attemptIds: [...new Set(value as string[])].sort() };
 }
 
-function decodeIdempotency(value: unknown): { ok: true; value: WorkEventIdempotency } | { ok: false; error: string } {
+export function decodeWorkEventIdempotency(
+  value: unknown,
+): { ok: true; value: WorkEventIdempotency } | { ok: false; error: string } {
   if (
     !isRecordObject(value) ||
     value['version'] !== WORK_EVENT_IDEMPOTENCY_VERSION ||
@@ -594,18 +587,6 @@ function decisionFieldsAreCanonical(value: Readonly<Record<string, unknown>>, re
   );
 }
 
-function decodeRecordMetadata(
-  value: Record<string, unknown>,
-): { ok: true; createdAt: string; writer: WorkStateWriter } | { ok: false; result: WorkStateDecodeResult<never> } {
-  if (!isValidRecordTimestamp(value['createdAt'])) {
-    return { ok: false, result: { state: 'malformed', error: 'invalid createdAt timestamp' } };
-  }
-  if (!isWorkStateWriter(value['writer'])) {
-    return { ok: false, result: { state: 'malformed', error: 'invalid writer metadata' } };
-  }
-  return { ok: true, createdAt: value['createdAt'], writer: value['writer'] };
-}
-
 function attemptRequestDigest(collaborationDomainId: string, request: AttemptCreateRequest): string {
   return hashIdentity({
     version: WORK_EVENT_IDEMPOTENCY_VERSION,
@@ -631,11 +612,11 @@ function withoutIdempotencyKey<Request extends { idempotencyKey?: string }>(
   return meaning;
 }
 
-function workEventKeyDigest(
+export function workEventKeyDigest(
   collaborationDomainId: string,
   changeId: string,
   idempotencyKey: string,
-  recordKind: 'attempt' | 'decision',
+  recordKind: string,
 ): string {
   return hashIdentity({
     version: WORK_EVENT_IDEMPOTENCY_VERSION,
@@ -646,7 +627,7 @@ function workEventKeyDigest(
   });
 }
 
-function workEventIdempotency(keyDigest: string, requestDigest: string): WorkEventIdempotency {
+export function workEventIdempotency(keyDigest: string, requestDigest: string): WorkEventIdempotency {
   return {
     version: WORK_EVENT_IDEMPOTENCY_VERSION,
     algorithm: WORK_STATE_IDENTITY_ALGORITHM,
