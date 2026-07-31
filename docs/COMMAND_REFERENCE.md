@@ -162,6 +162,7 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 | `decision <operation> [target]` | Create, read, validate, or summarize committed autonomous decision records | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `obligation <operation> [target]` | Admit, transition, inspect, or summarize committed completion obligations | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `completion <operation> [target]` | Create successor rules or read, validate, and summarize protected completion state | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `work-authorization <operation> [target]` | Issue, inspect, or activate exact work authority stored outside the candidate worktree | `--protected-root <path>`<br>`--candidate-root <path>`<br>`--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 
 <!-- END GENERATED COMMAND REFERENCE -->
 

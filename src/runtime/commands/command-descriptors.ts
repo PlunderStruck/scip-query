@@ -640,6 +640,34 @@ export const commandDescriptors: CommandDescriptor[] = [
     handler: handlers.handleEffectiveness,
   },
   {
+    id: 'work-authorization',
+    command: 'work-authorization <operation> [target]',
+    agent: agentContract(
+      'Which exact principal-fixed goal, intended change, and protected artifact transitions may this candidate activate?',
+      'content-identified authorization, prompt digest, exact goal/change records, exact artifact transitions, external-root integrity, and activation result',
+      ['action', 'record'],
+      'complete',
+      'repository',
+      commandOperation('environment-observation', [
+        { when: { kind: 'argument', index: 0, equals: 'issue' }, role: 'mutation' },
+        { when: { kind: 'argument', index: 0, equals: 'activate' }, role: 'mutation' },
+      ]),
+    ),
+    description: 'Issue, inspect, or activate exact work authority stored outside the candidate worktree',
+    options: withJsonOption([
+      option('--protected-root <path>', 'Required principal-controlled authorization root'),
+      option('--candidate-root <path>', 'Candidate-editable worktree (default: current project)'),
+      option('--input <path>', 'Bounded authorization request for the issue operation'),
+    ]),
+    renderShape: 'custom',
+    docs: doc('Autonomous work state', [
+      'scip-query work-authorization issue --protected-root ../protected-authority --candidate-root ./candidate --input authorization-request.json',
+      'scip-query work-authorization activate SQWA-0123456789ABCDEF0123456789ABCDEF --protected-root ../protected-authority',
+      'scip-query work-authorization status --protected-root ../protected-authority --json',
+    ]),
+    handler: handlers.handleProtectedWorkAuthorization,
+  },
+  {
     id: 'mission-trial',
     command: 'mission-trial <operation> <program>',
     agent: agentContract(

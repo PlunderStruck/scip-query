@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/scip-query/docs/schemas/protected-work-authorization-record.schema.json",
+  "title": "scip-query protected work authorization record v1",
+  "description": "An immutable external execution envelope whose exact goal, change, and artifact transitions may be activated in one collaboration domain.",
+  "type": "object",
+  "required": [
+    "kind",
+    "schemaVersion",
+    "authorizationId",
+    "collaborationDomainId",
+    "principal",
+    "promptSha256",
+    "intentDigest",
+    "goal",
+    "changeRequest",
+    "change",
+    "artifactTransitions",
+    "createdAt",
+    "writer"
+  ],
+  "properties": {
+    "kind": { "const": "scip-query-protected-work-authorization" },
+    "schemaVersion": { "const": 1 },
+    "authorizationId": { "type": "string", "pattern": "^SQWA-[A-F0-9]{32}$" },
+    "collaborationDomainId": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[89abAB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}$"
+    },
+    "principal": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "promptSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "intentDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "goal": { "$ref": "./goal-record.schema.json" },
+    "changeRequest": { "$ref": "./protected-work-authorization-request.schema.json#/$defs/changeRequest" },
+    "change": { "$ref": "./intended-change-record.schema.json" },
+    "artifactTransitions": {
+      "type": "array",
+      "maxItems": 32,
+      "items": { "$ref": "./completion-transition-rule-request.schema.json#/$defs/artifactTransition" }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "writer": { "$ref": "./goal-record.schema.json#/$defs/writer" }
+  },
+  "additionalProperties": false
+}

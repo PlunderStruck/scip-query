@@ -1,7 +1,7 @@
 # Autonomous completion protected-trial remediation
 
 Date: 2026-07-31
-Status: ready to implement
+Status: in progress — slice 1 complete
 Governing goal: `SQG-4061E7D5D360464ED8E8B05D53BBF49D`
 Governing change: `SQC-DED67E74D3898BDCA85766BE8D3C93AF`
 
@@ -191,6 +191,27 @@ side-effect seam.
   tests, activation retry/conflict tests, command-contract tests, typecheck and
   build.
 - **Order safety:** no controller trusts the record in this slice.
+
+**Result (2026-07-31): complete.** The slice added the canonical request and
+record schemas, domain decoder/identity, durable external create/read/list
+storage, exact idempotent goal/change activation, and the principal-facing
+`work-authorization` command. Root validation now rejects lexical nesting,
+root symlinks, resolved nesting, authorization-directory symlinks, record
+symlinks, immutable collisions, and collaboration-domain mismatch before any
+repository record is written. The command reuses the established work-state
+request/domain helpers and central handler registry after the first diff gate
+identified avoidable echoes and a forbidden command-to-filesystem edge.
+
+Validation: 63 focused tests passed before the final cleanup; 47 focused tests
+and typecheck passed after it; the complete suite passed (307 files, 2,398
+tests); lint, build, public-API compatibility, skill-link validation,
+`recent-duplicates --full`, `similar --full`, `stale-abstractions --full`,
+`unused-params --full`, `co-change --full`, fully paginated `doc-drift --full`,
+and `self-audit` completed. The final `scip-query diff-gate` passed. Three
+remaining heuristic echo matches were recorded as content-invalidating,
+evidence-backed suppressions: separate persisted-record decoders and prefix
+guards intentionally retain record-owned semantics, while the two command
+renderers shared only generic console/error vocabulary.
 
 ### 2. Fixed authorization lease and automatic prompt activation
 

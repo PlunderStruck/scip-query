@@ -136,7 +136,7 @@ export function decodeCompletionTransitionRuleRequest(
   if (!permittedGoalFields.ok) return permittedGoalFields;
   const preservedInvariants = decodeCanonicalLines(value['preservedInvariants'], 'preservedInvariants');
   if (!preservedInvariants.ok) return preservedInvariants;
-  const artifactTransitions = decodeArtifactTransitions(value['artifactTransitions']);
+  const artifactTransitions = decodeProtectedArtifactTransitions(value['artifactTransitions']);
   if (!artifactTransitions.ok) return artifactTransitions;
   const requiredEvidence = decodeRequiredEvidence(value['requiredEvidence']);
   if (!requiredEvidence.ok) return requiredEvidence;
@@ -267,7 +267,7 @@ export function decodeCompletionTransitionRuleRecord(
   if (!permittedGoalFields.ok) return { state: 'malformed', error: permittedGoalFields.error };
   const preservedInvariants = decodeCanonicalLines(value['preservedInvariants'], 'preservedInvariants');
   if (!preservedInvariants.ok) return { state: 'malformed', error: preservedInvariants.error };
-  const artifactTransitions = decodeArtifactTransitions(value['artifactTransitions']);
+  const artifactTransitions = decodeProtectedArtifactTransitions(value['artifactTransitions']);
   if (!artifactTransitions.ok) return { state: 'malformed', error: artifactTransitions.error };
   const requiredEvidence = decodeRequiredEvidence(value['requiredEvidence']);
   if (!requiredEvidence.ok) return { state: 'malformed', error: requiredEvidence.error };
@@ -539,7 +539,7 @@ function decodeCanonicalLines(
   return { ok: true, value: canonical };
 }
 
-function decodeArtifactTransitions(
+export function decodeProtectedArtifactTransitions(
   value: unknown,
 ): { ok: true; value: ProtectedArtifactTransition[] } | { ok: false; error: string } {
   if (!Array.isArray(value) || value.length > MAX_ARTIFACT_TRANSITIONS) {

@@ -712,7 +712,7 @@ function completionOperation(value: unknown): CompletionOperation {
   return parseEnumArgument(value, COMPLETION_OPERATIONS, 'completion operation');
 }
 
-function optionalTarget(value: unknown): string | undefined {
+export function optionalTarget(value: unknown): string | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== 'string' || value.trim() === '') throw new Error('record target must be non-empty');
   return value;
@@ -728,7 +728,7 @@ function requiredInput(value: string | undefined, operation: string): string {
   return value;
 }
 
-function requiredCollaborationDomain(projectRoot: string): string {
+export function requiredCollaborationDomain(projectRoot: string): string {
   const collaborationDomainId = loadProjectConfig(projectRoot).collaborationDomainId;
   if (!collaborationDomainId) {
     throw new Error('project config has no collaborationDomainId; run scip-query init or scip-query setup');
@@ -736,14 +736,13 @@ function requiredCollaborationDomain(projectRoot: string): string {
   return collaborationDomainId;
 }
 
-function readJsonRequest(path: string): unknown {
+export function readJsonRequest(path: string, label = 'work-state create request'): unknown {
   try {
-    return JSON.parse(readSmallArtifactText(resolve(path), 'work-state create request'));
+    return JSON.parse(readSmallArtifactText(resolve(path), label));
   } catch (error) {
-    throw new Error(
-      `cannot read work-state create request ${path}: ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
-    );
+    throw new Error(`cannot read ${label} ${path}: ${error instanceof Error ? error.message : String(error)}`, {
+      cause: error,
+    });
   }
 }
 

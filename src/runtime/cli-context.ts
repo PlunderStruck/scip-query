@@ -114,6 +114,7 @@ const SHARED_CACHE_PREPARATION_EXCLUDED_COMMANDS = new Set([
   'uninstall',
   'watch',
   'work-audit',
+  'work-authorization',
 ]);
 
 export function openDb(): ScipDatabase {

@@ -17,6 +17,38 @@ These are not prose progress logs. Plans may be revised as evidence changes;
 the committed records are immutable anchors and facts from which current state
 is derived.
 
+## Authorize protected autonomous work
+
+A protected work authorization is an immutable execution envelope created by
+the principal-controlled runner outside the candidate worktree. It binds the
+exact initiating prompt to one exact goal, one intended change, and any exact
+protected-artifact byte transitions the work requires. The candidate may
+activate that authority, but cannot broaden it by rewriting repository state.
+
+Before candidate work begins, the runner writes a request conforming to
+[`schemas/protected-work-authorization-request.schema.json`](schemas/protected-work-authorization-request.schema.json),
+creates the authorization in an existing external directory, and passes its
+identity to the candidate environment:
+
+```bash
+scip-query work-authorization issue \
+  --input /principal/request.json \
+  --protected-root /principal/protected-state \
+  --candidate-root /candidate/repository
+
+scip-query work-authorization activate SQWA-... \
+  --protected-root /principal/protected-state \
+  --candidate-root /candidate/repository
+```
+
+Issuance is a principal operation, not a candidate planning step. Activation
+is retry-safe: it publishes only the embedded goal and intended-change bytes,
+and it fails before writing if the authorization belongs to another repository
+collaboration domain. The protected root and its `work-authorizations/`
+directory must be real directories outside the candidate worktree rather than
+symlinks. The immutable record schema is
+[`schemas/protected-work-authorization-record.schema.json`](schemas/protected-work-authorization-record.schema.json).
+
 ## Create a goal
 
 Write a temporary request such as:

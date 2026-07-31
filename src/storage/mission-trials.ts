@@ -180,7 +180,19 @@ export function assertProtectedRootOutsideCandidate(protectedRoot: string, candi
   const protectedPath = resolve(protectedRoot);
   const candidatePath = resolve(candidateRoot);
   if (protectedPath === candidatePath || pathIsWithin(candidatePath, protectedPath)) {
-    throw new Error('mission trial protected root must be outside the candidate-editable worktree');
+    throw new Error('protected root must be outside the candidate-editable worktree');
+  }
+  if (!existsSync(protectedPath)) {
+    throw new Error('protected root must already exist as a real non-symlink directory');
+  }
+  const protectedStat = lstatSync(protectedPath);
+  if (!protectedStat.isDirectory() || protectedStat.isSymbolicLink()) {
+    throw new Error('protected root must be a real non-symlink directory');
+  }
+  const realProtectedPath = realpathSync(protectedPath);
+  const realCandidatePath = realpathSync(candidatePath);
+  if (realProtectedPath === realCandidatePath || pathIsWithin(realCandidatePath, realProtectedPath)) {
+    throw new Error('protected root must resolve outside the candidate-editable worktree');
   }
 }
 

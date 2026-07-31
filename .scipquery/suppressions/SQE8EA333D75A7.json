@@ -1,0 +1,153 @@
+{
+  "kind": "scip-query-suppression",
+  "suppressionIdentity": "SQE8EA333D75A7",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  },
+  "id": "SQE8EA333D75A7",
+  "reason": "Versioned record decoders intentionally share envelope-validation structure, but each owns a different persisted schema, canonical identity, and field invariants; merging them would erase the protected-authorization boundary.",
+  "createdAt": "2026-07-31T14:02:24.636Z",
+  "schemaVersion": 2,
+  "decision": {
+    "kind": "automated-adjudication",
+    "reasonCode": "intentional-twin",
+    "decidedBy": "agent",
+    "policyVersion": 1,
+    "observation": {
+      "schemaVersion": 2,
+      "observedAt": "2026-07-31T14:02:24.634Z",
+      "facts": {
+        "collaborationDomain": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:collaboration-domain",
+            "version": 1
+          },
+          "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+        },
+        "workspaceInstance": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:workspace-instance",
+            "version": 1
+          },
+          "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+        },
+        "wholeContent": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:repository-content",
+            "version": 1
+          },
+          "digest": "6b6542fad952b6fba014eb3b078a9f35e03d96bda62482b2f20990a7b79cdf67"
+        },
+        "relevantInputs": [
+          {
+            "subject": "scip-query:index-inputs",
+            "identity": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:index-inputs",
+                "version": 2
+              },
+              "digest": "42f5f059dcb75ae610efd0130117c7230835b2ace961ecbeb7afcef5c75bbb0b"
+            }
+          }
+        ],
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "902fc98257e76e5cb0d33657c85f93730fdf59228738f7c5dea218627a63d861"
+          },
+          "inputs": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-inputs",
+              "version": 2
+            },
+            "digest": "42f5f059dcb75ae610efd0130117c7230835b2ace961ecbeb7afcef5c75bbb0b"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "902fc98257e76e5cb0d33657c85f93730fdf59228738f7c5dea218627a63d861"
+          }
+        },
+        {
+          "kind": "repository-snapshot",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:repository-content",
+              "version": 1
+            },
+            "digest": "6b6542fad952b6fba014eb3b078a9f35e03d96bda62482b2f20990a7b79cdf67"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        },
+        {
+          "source": "repository-snapshot",
+          "kind": "fixed-snapshot"
+        }
+      ],
+      "diagnostics": {
+        "clean": false,
+        "headCommit": "7252bb0cf255be10d8dcef4d13d7e0a09e054c65",
+        "treeOid": "b48e92a1ea40029764a146def20ed91a73332c2d"
+      }
+    },
+    "evidence": [
+      {
+        "kind": "source",
+        "referent": "src/domain/protected-work-authorization.ts",
+        "claim": "Versioned record decoders intentionally share envelope-validation structure, but each owns a different persisted schema, canonical identity, and field invariants; merging them would erase the protected-authorization boundary.",
+        "contentHash": "50532a169e26e5009edcbf7822d20cd76468de10532689282b52c8a474d94668"
+      },
+      {
+        "kind": "source",
+        "referent": "src/domain/autonomous-completion.ts",
+        "claim": "Versioned record decoders intentionally share envelope-validation structure, but each owns a different persisted schema, canonical identity, and field invariants; merging them would erase the protected-authorization boundary.",
+        "contentHash": "5b0f5175382de8ad5aa7df1e8c352389da04342df4215e8bcfa200dd72927eee"
+      }
+    ],
+    "invalidateOn": {
+      "targetContentChange": true,
+      "detectorMajorChange": true
+    }
+  }
+}

@@ -176,7 +176,7 @@ export function selectCompletionTransitionRule(
     const artifactMatches = new Map(
       rule.artifactTransitions.map((transition) => [
         transition.path,
-        artifactTransitionMatches(projectRoot, predecessor, transition),
+        protectedArtifactTransitionMatches(projectRoot, predecessor, transition),
       ]),
     );
     return evaluateCompletionTransitionRule(rule, evaluation, artifactMatches).state === 'applicable';
@@ -259,7 +259,7 @@ function predecessorArtifactIssues(projectRoot: string, rule: CompletionTransiti
   });
 }
 
-function artifactTransitionMatches(
+export function protectedArtifactTransitionMatches(
   projectRoot: string,
   predecessor: CompletionAuthorityPredecessor,
   transition: CompletionTransitionRuleRecordV1['artifactTransitions'][number],
