@@ -6,7 +6,6 @@ import type { DiffGateResult } from '../../src/queries/impact/diff-gate.js';
 import {
   evaluateSetupAgentResult,
   formatGateBlockReason,
-  isStopHookReentry,
   removeAgentSetup,
   setupAgent,
 } from '../../src/runtime/agent-setup.js';
@@ -193,14 +192,6 @@ describe('setupAgent', () => {
 });
 
 describe('stop-hook helpers (diff-gate --hook)', () => {
-  it('detects reentry from stop_hook_active', () => {
-    expect(isStopHookReentry(JSON.stringify({ stop_hook_active: true }))).toBe(true);
-    expect(isStopHookReentry(JSON.stringify({ stop_hook_active: false }))).toBe(false);
-    expect(isStopHookReentry(JSON.stringify({ hook_event_name: 'Stop' }))).toBe(false);
-    expect(isStopHookReentry('')).toBe(false);
-    expect(isStopHookReentry('not json')).toBe(false);
-  });
-
   it('formats a block reason with every finding and its remediation', () => {
     const result: DiffGateResult = {
       base: 'HEAD',

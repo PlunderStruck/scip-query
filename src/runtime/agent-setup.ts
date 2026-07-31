@@ -9,8 +9,8 @@
  *
  * Skills remain the primary routing layer (see skills/scip-query). For users
  * who want in-session enforcement, `diff-gate --hook` speaks the turn-end
- * hook contract shared by Claude Code, Codex, and Gemini CLI (JSON on stdin
- * with stop_hook_active, exit 2 + stderr blocks the turn) — this module owns
+ * hook contract shared by Claude Code, Codex, and Gemini CLI (JSON on stdin;
+ * exit 2 + stderr blocks the turn) — this module owns
  * its stdin/formatting helpers, but deliberately does NOT write any tool's
  * hook config: those schemas are three independent implementations, and
  * silently-drifting config is worse than asking users to wire one line.
@@ -46,20 +46,6 @@ export function readHookInput(): string {
     });
   } catch {
     return '';
-  }
-}
-
-/**
- * True when this turn was already continued by a previous block from this
- * hook — blocking again would loop the agent forever.
- */
-export function isStopHookReentry(hookInput: string): boolean {
-  if (!hookInput.trim()) return false;
-  try {
-    const payload = JSON.parse(hookInput) as { stop_hook_active?: unknown };
-    return payload.stop_hook_active === true;
-  } catch {
-    return false;
   }
 }
 

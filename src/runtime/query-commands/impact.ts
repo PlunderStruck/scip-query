@@ -26,7 +26,7 @@ import {
   stringArg,
   stringOptionValue,
 } from '../command-kit/command-execution.js';
-import { formatGateBlockReason, isStopHookReentry, readHookInput } from '../agent-setup.js';
+import { formatGateBlockReason } from '../agent-setup.js';
 import { formatLowResolutionNudges, formatUnresolvedStreakLine } from '../../queries/health/finding-outcome-ledger.js';
 import { formatAnalysisBudgetDisclosure, renderHeuristicNotice } from '../cli-support.js';
 import { runIsolatedDiffGate } from '../diff-gate-execution.js';
@@ -234,9 +234,6 @@ function parseSkipChecks(value: unknown): DiffGateCheck[] {
 
 const handleDiffGate = dbCommand(({ db, opts }) => {
   const hookMode = opts['hook'] === true;
-  if (hookMode && isStopHookReentry(readHookInput())) {
-    return; // this turn was already continued by a previous block — don't loop
-  }
   const full = booleanOptionValue(opts, 'full');
   let execution: ReturnType<typeof runIsolatedDiffGate>;
   try {

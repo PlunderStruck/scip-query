@@ -20,7 +20,7 @@ import {
 import { loadProjectConfig, resolveWatchConfig } from './config.js';
 import { getIndexFreshness, type IndexFreshness } from './index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from './project-readiness.js';
-import { formatGateBlockReason, isStopHookReentry, readHookInput } from './agent-setup.js';
+import { formatGateBlockReason, readHookInput } from './agent-setup.js';
 import { cliVersion } from './cli-support.js';
 import { recordDiffGateOutcomes } from './diff-gate-outcomes.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
@@ -875,10 +875,6 @@ export async function runStopHookDiffGate(
   hookInput: string,
   evidenceDependencies: StopHookEvidenceDependencies = DEFAULT_STOP_HOOK_EVIDENCE_DEPENDENCIES,
 ): Promise<DiffGateResult | undefined> {
-  if (isStopHookReentry(hookInput)) {
-    return undefined;
-  }
-
   const payload = parseHookPayload(hookInput);
   const workspace = resolveHookWorkspace(payload);
   if (!workspace) return undefined;
@@ -973,7 +969,6 @@ interface StopHookExecution extends DiffGateExecutionResult {
 }
 
 async function runIsolatedStopHookDiffGate(hookInput: string): Promise<StopHookExecution | undefined> {
-  if (isStopHookReentry(hookInput)) return undefined;
   const payload = parseHookPayload(hookInput);
   const workspace = resolveHookWorkspace(payload);
   if (!workspace) return undefined;

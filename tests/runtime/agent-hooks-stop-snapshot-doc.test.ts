@@ -100,8 +100,8 @@ function markFixtureIndexFresh(repoRoot: string): void {
   );
 }
 
-function hookInputFor(cwd: string): string {
-  return JSON.stringify({ hook_event_name: 'Stop', cwd });
+function hookInputFor(cwd: string, stopHookActive = false): string {
+  return JSON.stringify({ hook_event_name: 'Stop', cwd, stop_hook_active: stopHookActive });
 }
 
 afterEach(() => {
@@ -140,7 +140,7 @@ describe('Stop hook doc-reference snapshot-doc exemption', () => {
     expect(guideFindings).toHaveLength(1);
   });
 
-  it('records a normal installed-hook finding as fixed after the cited code link is removed', async () => {
+  it('re-evaluates a continued Stop after the agent fixes a reported finding', async () => {
     const repoRoot = buildRepo();
     markFixtureIndexFresh(repoRoot);
 
@@ -152,7 +152,7 @@ describe('Stop hook doc-reference snapshot-doc exemption', () => {
 
     writeFile(join(repoRoot, 'docs', 'guide.md'), 'General project guidance.\n');
     markFixtureIndexFresh(repoRoot);
-    const second = await runStopHookDiffGate(hookInputFor(repoRoot));
+    const second = await runStopHookDiffGate(hookInputFor(repoRoot, true));
     expect(second?.findings.some((finding) => finding.id === guideFinding?.id)).toBe(false);
 
     const events = readOutcomeEvents(repoRoot).events.filter((event) => event.findingId === guideFinding?.id);
