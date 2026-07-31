@@ -533,8 +533,8 @@ export function decodeWorkEvidenceReceipts(
 }
 
 function decodeAttemptIds(value: unknown): { ok: true; attemptIds: string[] } | { ok: false; error: string } {
-  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_BASIS_ATTEMPTS) {
-    return { ok: false, error: `basisAttemptIds must contain 1-${MAX_BASIS_ATTEMPTS} attempt identities` };
+  if (!Array.isArray(value) || value.length > MAX_BASIS_ATTEMPTS) {
+    return { ok: false, error: `basisAttemptIds must contain 0-${MAX_BASIS_ATTEMPTS} attempt identities` };
   }
   if (value.some((attemptId) => !isAttemptId(attemptId))) {
     return { ok: false, error: 'basisAttemptIds must contain only attempt identities' };

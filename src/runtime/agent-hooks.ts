@@ -65,6 +65,11 @@ import {
   materializeAutomaticOperationAttempts,
   type MaterializeAutomaticOperationAttemptsResult,
 } from './autonomous-operation-journal.js';
+import {
+  formatAutonomousNextActions,
+  publishAutonomousNextAction,
+  type PublishedAutonomousNextAction,
+} from './autonomous-policy-loop.js';
 
 const SKIP_HOOK_INSTALL_ENV = 'SCIP_QUERY_SKIP_HOOK_INSTALL';
 const STOP_HOOK_MODE_ENV = 'SCIP_QUERY_STOP_HOOK_MODE';
@@ -931,6 +936,7 @@ export async function handleAgentHookStop(): Promise<void> {
     });
   }
   if (
+    !execution ||
     !result ||
     (result.findings.length === 0 &&
       result.suppressed.length === 0 &&
@@ -941,7 +947,7 @@ export async function handleAgentHookStop(): Promise<void> {
   ) {
     return;
   }
-  writeStopHookJson(renderStopHookOutput(result, resolveStopHookMode(), execution));
+  writeStopHookJson(renderStopHookExecutionOutput(result, resolveStopHookMode(), execution));
 }
 
 function writeStopHookJson(output: ClaudeHookJsonOutput): void {
@@ -952,6 +958,7 @@ interface StopHookExecution extends DiffGateExecutionResult {
   evidenceLease: StopHookEvidenceLease;
   completion: ReturnType<typeof publishStopCompletionEvaluations>;
   automaticAttempts: MaterializeAutomaticOperationAttemptsResult;
+  nextActions: PublishedAutonomousNextAction[];
 }
 
 async function runIsolatedStopHookDiffGate(hookInput: string): Promise<StopHookExecution | undefined> {
@@ -986,7 +993,16 @@ async function runIsolatedStopHookDiffGate(hookInput: string): Promise<StopHookE
   const completion = publishStopCompletionEvaluations(completionContext, execution.result, {
     toolVersion: cliVersion,
   });
-  return { ...execution, evidenceLease: lease, completion, automaticAttempts };
+  const nextActions = completion.map(({ evaluation }) =>
+    publishAutonomousNextAction({
+      projectRoot: workspace.projectRoot,
+      collaborationDomainId: completionContext.collaborationDomainId,
+      evaluation: evaluation.evaluation.record,
+      result: execution.result,
+      options: { toolVersion: cliVersion },
+    }),
+  );
+  return { ...execution, evidenceLease: lease, completion, automaticAttempts, nextActions };
 }
 
 function persistStopSessionState(
@@ -1191,6 +1207,29 @@ export function renderStopHookOutput(
   }
   return {
     systemMessage: `${advisoryMessage}\n\nStop hook allowed this turn to finish. Review these findings when relevant. Set ${STOP_HOOK_MODE_ENV}=feedback to ask the agent to continue without a hook error, or ${STOP_HOOK_MODE_ENV}=block to enforce the gate.`,
+  };
+}
+
+function renderStopHookExecutionOutput(
+  result: DiffGateResult,
+  mode: StopHookMode,
+  execution: StopHookExecution,
+): ClaudeHookJsonOutput {
+  const output = renderStopHookOutput(result, mode, execution);
+  const nextActions = formatAutonomousNextActions(execution.nextActions);
+  if (!nextActions) return output;
+  if (output.reason !== undefined) return { ...output, reason: `${output.reason}\n\n${nextActions}` };
+  if (output.systemMessage !== undefined) {
+    return { ...output, systemMessage: `${output.systemMessage}\n\n${nextActions}` };
+  }
+  const hookSpecificOutput = output.hookSpecificOutput;
+  if (!hookSpecificOutput) return output;
+  return {
+    ...output,
+    hookSpecificOutput: {
+      ...hookSpecificOutput,
+      additionalContext: `${hookSpecificOutput.additionalContext}\n\n${nextActions}`,
+    },
   };
 }
 

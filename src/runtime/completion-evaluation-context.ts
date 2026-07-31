@@ -43,6 +43,7 @@ import {
   readIntendedChangeRecords,
   type WorkStateCreateOptions,
 } from '../storage/autonomous-work-state.js';
+import { readWorkHistory } from '../storage/autonomous-work-ledger.js';
 import { captureFixedRepositoryObservation, captureFixedRepositoryObservationReceipt } from './observation-receipt.js';
 import { cliVersion } from './cli-support.js';
 import { evaluateArchitectureCompleteness } from './architecture-completeness.js';
@@ -319,6 +320,9 @@ export function stopCompletionEvaluationRequest(
   const blocking = blockingFindings(result.findings);
   const hasFindings = blocking.length > 0;
   const coverageUnknown = diffGateCoverageUnknown(result);
+  const workHistory = readWorkHistory(projectRoot, context.changeId);
+  const workEvidenceCompatible =
+    workHistory.integrityIssues.length === 0 && workHistory.summary.unresolvedUnknownAttemptIds.length === 0;
   const obligations = readObligationLifecycle(projectRoot, context.changeId);
   const obligationsReconciled =
     obligations.integrityIssues.length === 0 &&
@@ -342,8 +346,10 @@ export function stopCompletionEvaluationRequest(
     ),
     judgment(
       'evidence-compatible',
-      'established',
-      'The target is a fixed whole-repository observation in the change collaboration domain.',
+      workEvidenceCompatible ? 'established' : 'unknown',
+      workEvidenceCompatible
+        ? 'The target is a fixed whole-repository observation and the durable work ledger has no unresolved effect.'
+        : `The durable work ledger has ${workHistory.summary.unresolvedUnknownAttemptIds.length} unresolved effect(s) and ${workHistory.integrityIssues.length} integrity issue(s).`,
       target,
     ),
     judgment(

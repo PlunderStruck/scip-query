@@ -13,8 +13,13 @@ import {
   stopCompletionEvaluationRequest,
 } from '../../src/runtime/completion-evaluation-context.js';
 import { readCompletionHistory } from '../../src/storage/autonomous-completion.js';
+import { createAttemptRecordFile } from '../../src/storage/autonomous-work-ledger.js';
 import { readObligationLifecycle } from '../../src/storage/autonomous-work-obligations.js';
-import { createGoalRecordFile, createIntendedChangeRecordFile } from '../../src/storage/autonomous-work-state.js';
+import {
+  createGoalRecordFile,
+  createIntendedChangeRecordFile,
+  readIntendedChangeRecords,
+} from '../../src/storage/autonomous-work-state.js';
 
 const COLLABORATION_DOMAIN = '5ea57d1a-936c-4c91-b58f-5d61e45173a5';
 const fixtureDirectories = new Set<string>();
@@ -316,6 +321,42 @@ describe('fixed completion evaluation context', () => {
 
     expect(request.predicates.find((predicate) => predicate.predicate === 'invariants-preserved')).toMatchObject({
       state: 'unknown',
+    });
+  });
+
+  it('keeps an unresolved operation effect incompatible with completion evidence', () => {
+    const fixture = contextFixture();
+    const change = readIntendedChangeRecords(fixture.root).records[0]!;
+    createAttemptRecordFile(
+      fixture.root,
+      COLLABORATION_DOMAIN,
+      {
+        changeId: change.changeId,
+        idempotencyKey: 'interrupted-side-effect',
+        intendedCondition: 'The repository write has one known effect',
+        action: {
+          family: 'repository-write',
+          summary: 'Apply one external mutation',
+          effectClass: 'non-idempotent-write',
+        },
+        evidenceReceipts: [],
+        observedEffect: 'The process ended before its effect was observed',
+        outcome: 'unknown',
+      },
+      { toolVersion: '0.20.0', now: () => '2026-07-30T12:02:00.000Z' },
+    );
+    const context = captureFixedCompletionContext(fixture.root, fixture.config, 'block', {
+      evaluatorEntrypoint: fixture.evaluator,
+    }).records[0]!;
+
+    const request = stopCompletionEvaluationRequest(fixture.root, context, passingGate(), {
+      predecessor: { kind: 'git-tree', treeOid: 'a'.repeat(40) },
+      changedPaths: ['src/feature.ts'],
+    });
+
+    expect(request.predicates.find((predicate) => predicate.predicate === 'evidence-compatible')).toMatchObject({
+      state: 'unknown',
+      reasons: [expect.stringContaining('1 unresolved effect')],
     });
   });
 

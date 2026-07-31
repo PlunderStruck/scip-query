@@ -101,6 +101,24 @@ describe('autonomous work ledger domain', () => {
     expect(first.latestDecision).toEqual(first.decisions.at(-1));
   });
 
+  it('allows a decision to rest on repository evidence without manufacturing an attempt', () => {
+    const decision = decisionRecord(
+      {
+        changeId: CHANGE_ID,
+        idempotencyKey: 'fixed-evaluation',
+        basisAttemptIds: [],
+        evidenceReceipts: [receipt(CREATED_AT, 'fixed-evaluation')],
+        disposition: 'continue',
+        rationale: 'A fixed completion evaluation named the next action directly',
+        nextAction: 'Gather the missing goal evidence',
+      },
+      CREATED_AT,
+    );
+
+    expect(decodeDecisionRecord(decision)).toEqual({ state: 'current', record: decision });
+    expect(decision.basisAttemptIds).toEqual([]);
+  });
+
   it('classifies versions and rejects unsupported evidence or an evidence-free reconciliation', () => {
     const attempt = attemptRecord(attemptRequest('attempt', 'failed'), CREATED_AT);
     const decision = decisionRecord(decisionRequest(attempt.attemptId, 'decision'), CREATED_AT);

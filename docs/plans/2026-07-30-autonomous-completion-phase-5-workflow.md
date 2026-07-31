@@ -1,7 +1,7 @@
 # Phase 5 — autonomous agent workflow
 
 Date: 2026-07-30
-Status: in progress; slices 5.1–5.2 complete
+Status: in progress; slices 5.1–5.3 complete
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -150,6 +150,32 @@ Expected validation:
   explicit terminal blocker;
 - unknown side-effect outcomes are reconciled before retry; and
 - no policy path silently weakens the goal.
+
+Execution result:
+
+- added one deterministic next-action policy over the protected completion
+  judgment and immutable work history, rather than embedding retry behavior in
+  the completion controller;
+- selected exactly one of completion, continuation, named evidence gathering,
+  repair, safe retry, unknown-effect reconciliation, replanning, authorized
+  successor carry-forward, or missing-authorization halt;
+- treated candidate-controlled authority as repairable work while reserving an
+  authority halt for a required source that has neither a fixed predecessor nor
+  an authorized referent;
+- reconciled every unresolved operation effect before accepting completion or
+  retry, and made the completion evidence predicate fail closed while any such
+  effect or ledger-integrity issue remains;
+- bounded an equivalent strategy to three failed attempts or 30 minutes,
+  retained every attempted strategy key, and made a failed non-idempotent
+  strategy ineligible for repetition;
+- published the selected action as one replay-stable committed decision from
+  the fixed evaluation receipt and rendered that exact action in Stop feedback;
+- allowed an evidence-backed decision to have no manufactured attempt basis,
+  removing a metadata-only ritual while preserving the existing 32-attempt
+  upper bound; and
+- verified 50 focused policy, storage, completion, publication, and hook tests,
+  TypeScript, lint, build, the unchanged 72-path public API, unbounded migration
+  and duplication checks, declared architecture, and the diff gate.
 
 ### 5.4 Skill and setup alignment
 
