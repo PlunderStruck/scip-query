@@ -675,7 +675,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       'evaluator artifact identity, fixed goal/change authority, whole-content identity, protected judgments, and immutable receipt publication',
       ['action', 'record'],
       'complete',
-      undefined,
+      'repository',
       commandOperation('environment-observation', [
         { when: { kind: 'argument', index: 0, equals: 'evaluate' }, role: 'mutation' },
       ]),

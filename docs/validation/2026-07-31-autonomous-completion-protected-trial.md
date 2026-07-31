@@ -4,7 +4,46 @@ Date: 2026-07-31
 Initial outcome: `insufficient`
 First authorized-program registered outcome: `regressed` — invalidated by hook apparatus
 Hook-verified registered outcome: `neutral` — controller conclusion invalidated by audit
-Current evidential outcome: `inconclusive`
+Current evidential outcome: protected lifecycle `established`; mission effectiveness `insufficient`
+
+## Fresh protected-controller lifecycle probe
+
+Program `SQTP-182228C19EB1E390F39BBA7CB829E7CD` fixed runner SHA-256
+`fefe8e2aec9bd4712a60ef0a440abef7d05dec575292ee7edd272ba8dbc108e6`,
+parameter SHA-256
+`1e888387a13ee91874a6cfbacc33cebac7c6d3bccc90c29c1ab839aca876fe2e`,
+fixture SHA-256
+`15d4f7bc9f8edd242ae8b9e0b36bc0ba99f5e121560349b43453c23bec42d05f`,
+and evaluator SHA-256
+`573c1cbc25fc343e3397b3148c2c2d287baeb18d75387fd6148e5b2b05fb6d61`
+before candidate work. Principal-owned protected commands ran outside the
+candidate worktree with candidate operation capture disabled.
+
+One fresh pair produced:
+
+| Condition | Full completion | Elapsed | Model tokens | Tool calls | False block | Architecture regression |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| Control | yes | 311,227 ms | 1,049,360 | 38 | no | no |
+| Workflow | yes | 294,824 ms | 738,105 | 18 | no | no |
+
+The workflow/control ratios were `0.947` elapsed, `0.703` model tokens, and
+`0.474` tool calls. The hidden evaluator established the goal, invariants, and
+affected surface with no missed artifacts, residue, revived behavior, or
+architecture violation. Receipt
+`SQGE-D3CF57FB2ADA3A9235E05105F885FEE7` and completion evaluation
+`SQE-1F526D96939107A59E7FB489812EB30E` both name whole-content digest
+`81b939e901340eb03d3e2c007d979552cdc8f51a553ea6620660d19e657c03dc`.
+Transition `SQCT-1CC5D8E009F531A7C18CB9B47EAF7B39` durably moved the exact
+authorized change to `complete`.
+
+This establishes the protected lifecycle that earlier programs failed to
+exercise. It does not establish an effectiveness advantage: the classifier is
+correctly `insufficient` with one matched pair, and both conditions completed
+the small task. Transcript audit shows the workflow used fewer commands and
+also repaired the affected default-audit test surface after a health finding;
+the control left that pre-existing finding alone. That is a bounded qualitative
+thoroughness signal, not a completion-rate result. The next causal test is the
+separately registered large-repository no-scip/ordinary-scip comparison.
 
 ## Hook-verified rerun
 

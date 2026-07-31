@@ -1,7 +1,7 @@
 # Autonomous completion execution plan
 
 Date: 2026-07-30
-Status: implementation complete; protected program exit not met
+Status: implementation and protected lifecycle complete; mission-effectiveness exit not met
 Mission record: [Autonomous repository completion program](./2026-07-30-autonomous-completion-program.md)
 Design record: [Epistemic clarification notes](../reviews/2026-07-30-epistemic-clarification-notes.md)
 Canonical goal: `SQG-4061E7D5D360464ED8E8B05D53BBF49D`
@@ -239,12 +239,15 @@ Before the program can be marked complete:
 - [x] Phase 4: repository completeness.
 - [x] Phase 5: agent workflow.
 - [x] Phase 6: outcome trials and product alignment.
-- [ ] Program exit: protected mission classification is `insufficient`;
-  externally authorized intent is not yet independently available to the Stop
-  controller, and median model-token ratio regressed beyond the registered
-  bound.
+- [ ] Program exit: a fresh protected small-fixture pair now proves external
+  authorization, exact protected goal evidence, and a durable completion
+  transition, with workflow/control elapsed and model-token ratios of `0.947`
+  and `0.703`. The registered result remains `insufficient` because one task
+  completed by both conditions cannot establish a completion-rate advantage;
+  the pre-registered large-repository comparison remains outstanding.
 
 The exact protected result and remediation boundary are recorded in
 [the Phase 6 validation record](../validation/2026-07-31-autonomous-completion-protected-trial.md).
-The implementation phases are complete, but the product mission is not
-established and must remain labeled experimental for the tested scope.
+The implementation phases and supported lifecycle are complete, but the
+product's effectiveness advantage is not established and must remain labeled
+experimental for the tested scope.

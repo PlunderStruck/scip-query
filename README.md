@@ -48,15 +48,17 @@ and unavailable evidence stay visible as those states. Health can display a
 trial classification, but it cannot change the trial facts or use them to
 improve its score.
 
-The latest 2026-07-31 hook-verified `openai/gpt-5.6-sol` policy-routing report
-registered `neutral`: both conditions passed its hidden evaluator, while the
-workflow's median elapsed and model-token ratios were `0.84` and `0.86`.
-Transcript and durable-record audit then found that every workflow controller
-still selected `continue`, the runner trusted candidate final prose instead,
-and indexing left untracked configuration residue that the evaluator ignored.
-The report is therefore a useful efficiency signal, not valid evidence of
-autonomous completion. The exact programs, earlier results, mechanisms, and
-remediation boundary are recorded in
+The latest 2026-07-31 protected lifecycle probe for
+`openai/gpt-5.6-sol` is valid but statistically insufficient: both conditions
+completed the policy-routing fixture, and the workflow produced protected goal
+evidence plus a durable controller transition for the exact evaluated
+repository state. In its single matched pair the workflow/control elapsed and
+model-token ratios were `0.947` and `0.703`, with no false block or architecture
+regression. One pair on a task both conditions completed cannot establish a
+quality advantage or generalize beyond that fixture. Earlier programs exposed
+hook, residue, authority, and runner-state defects and remain immutable invalid
+or bounded evidence. The exact programs, results, mechanisms, and remaining
+large-repository comparison are recorded in
 [the protected-trial validation](docs/validation/2026-07-31-autonomous-completion-protected-trial.md);
 none generalizes to other models, runtimes, or repository tasks.
 

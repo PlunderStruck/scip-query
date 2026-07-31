@@ -6,9 +6,9 @@
     "version": "0.20.0"
   },
   "id": "SQ8FA34B0BBC01",
-  "reason": "The mission-trial descriptor routes through its dedicated mission-trial-handlers module, including its report operation; command-handlers owns the older general command families and has no consumer or dispatch responsibility for this command.",
+  "reason": "The protected-evidence change corrects only the descriptor's repository-scope metadata. Its dedicated protected-goal-evidence handler already evaluates the whole candidate repository, and the runtime handler signature and dispatch are unchanged; editing command-handlers would add no behavior.",
   "createdAt": "2026-07-29T19:50:55.191Z",
-  "updatedAt": "2026-07-31T11:05:20.419Z",
+  "updatedAt": "2026-07-31T19:45:11.389Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
@@ -17,7 +17,7 @@
     "policyVersion": 1,
     "observation": {
       "schemaVersion": 2,
-      "observedAt": "2026-07-31T11:05:20.417Z",
+      "observedAt": "2026-07-31T19:45:11.387Z",
       "facts": {
         "collaborationDomain": {
           "schemaVersion": 1,
@@ -47,7 +47,7 @@
             "name": "scip-query:repository-content",
             "version": 1
           },
-          "digest": "5a01a79baddd00edf44eb5487a03d32ca4fd53c276bee1b2fd866f8fc002dd16"
+          "digest": "382b19bf5d2c235dc13500c34017a06fe4d397d558133b9af7a6dbee5546d3a5"
         },
         "relevantInputs": [
           {
@@ -60,7 +60,7 @@
                 "name": "scip-query:index-inputs",
                 "version": 2
               },
-              "digest": "6b662b95b1c3e96b9f2ea00fc32a6067723e58e9bef8153bf667a0d7892e639e"
+              "digest": "6828ddf17ee26292713bf4af757937618e2c760ae4d5726966df80fa8b7d6e74"
             }
           }
         ],
@@ -73,7 +73,7 @@
               "name": "scip-query:index-generation",
               "version": 1
             },
-            "digest": "222c7363637af7cc516967818ef4182752e0773d643953e2042d40046f42ac18"
+            "digest": "69bdcd1ec04b02ec05f09f108fe9fe3ec1ba9e1871775b2c25e02e996b7ba053"
           },
           "inputs": {
             "schemaVersion": 1,
@@ -83,7 +83,7 @@
               "name": "scip-query:index-inputs",
               "version": 2
             },
-            "digest": "6b662b95b1c3e96b9f2ea00fc32a6067723e58e9bef8153bf667a0d7892e639e"
+            "digest": "6828ddf17ee26292713bf4af757937618e2c760ae4d5726966df80fa8b7d6e74"
           },
           "source": "immutable"
         }
@@ -99,7 +99,7 @@
               "name": "scip-query:index-generation",
               "version": 1
             },
-            "digest": "222c7363637af7cc516967818ef4182752e0773d643953e2042d40046f42ac18"
+            "digest": "69bdcd1ec04b02ec05f09f108fe9fe3ec1ba9e1871775b2c25e02e996b7ba053"
           }
         },
         {
@@ -112,7 +112,7 @@
               "name": "scip-query:repository-content",
               "version": 1
             },
-            "digest": "5a01a79baddd00edf44eb5487a03d32ca4fd53c276bee1b2fd866f8fc002dd16"
+            "digest": "382b19bf5d2c235dc13500c34017a06fe4d397d558133b9af7a6dbee5546d3a5"
           }
         }
       ],
@@ -128,34 +128,34 @@
       ],
       "diagnostics": {
         "clean": false,
-        "headCommit": "8c1bc4bf0822f628b49c2c7061328e2d9bf89210",
-        "treeOid": "34db36d2896476c3d4d94c13937770ac171d117b"
+        "headCommit": "ae60f3ee450a60060b5d6f4d3eb69b97f7e72699",
+        "treeOid": "594e0852fd73279e503fe5996e7f7e489437109a"
       }
     },
     "evidence": [
       {
         "kind": "source",
         "referent": "src/runtime/commands/command-descriptors.ts",
-        "claim": "The mission-trial descriptor routes through its dedicated mission-trial-handlers module, including its report operation; command-handlers owns the older general command families and has no consumer or dispatch responsibility for this command.",
-        "contentHash": "09cf981b5a39472705514246c4a16b3237644109e18d409c745e9a0711121158"
+        "claim": "The protected-evidence change corrects only the descriptor's repository-scope metadata. Its dedicated protected-goal-evidence handler already evaluates the whole candidate repository, and the runtime handler signature and dispatch are unchanged; editing command-handlers would add no behavior.",
+        "contentHash": "821fdf853a6ad87447c849cb87f9061f2f021b748a8d446127c824539e57f84c"
       },
       {
         "kind": "source",
-        "referent": "src/runtime/commands/mission-trial-handlers.ts",
-        "claim": "The mission-trial descriptor routes through its dedicated mission-trial-handlers module, including its report operation; command-handlers owns the older general command families and has no consumer or dispatch responsibility for this command.",
-        "contentHash": "33ad30063fdd94df379ac66bce6802d74c07c81422a9c9d555ff0134775ebbe5"
+        "referent": "src/runtime/commands/protected-goal-evidence-handlers.ts",
+        "claim": "The protected-evidence change corrects only the descriptor's repository-scope metadata. Its dedicated protected-goal-evidence handler already evaluates the whole candidate repository, and the runtime handler signature and dispatch are unchanged; editing command-handlers would add no behavior.",
+        "contentHash": "7ff640d0398e059e4d0af1e990bd9a188c1955548e558565f28f3b4ae2d73580"
       },
       {
         "kind": "source",
         "referent": "src/runtime/commands/command-handlers.ts",
-        "claim": "The mission-trial descriptor routes through its dedicated mission-trial-handlers module, including its report operation; command-handlers owns the older general command families and has no consumer or dispatch responsibility for this command.",
-        "contentHash": "f21beb90cc9ea84926019ea6a3c821358cd18b1c54a26d618cfa6bf7cb6d0283"
+        "claim": "The protected-evidence change corrects only the descriptor's repository-scope metadata. Its dedicated protected-goal-evidence handler already evaluates the whole candidate repository, and the runtime handler signature and dispatch are unchanged; editing command-handlers would add no behavior.",
+        "contentHash": "ff1953ee7954a9ffc015bd17f53eb111053c410b3255d18d06f636fe2c19fe79"
       },
       {
         "kind": "test",
-        "referent": "tests/runtime/mission-trial-command.test.ts",
-        "claim": "The mission-trial descriptor routes through its dedicated mission-trial-handlers module, including its report operation; command-handlers owns the older general command families and has no consumer or dispatch responsibility for this command.",
-        "contentHash": "55c9401985eef8d695c5507f4173fbd93c12fe38b928c17afe45cd44f0b26141"
+        "referent": "tests/runtime/cli-contract.test.ts",
+        "claim": "The protected-evidence change corrects only the descriptor's repository-scope metadata. Its dedicated protected-goal-evidence handler already evaluates the whole candidate repository, and the runtime handler signature and dispatch are unchanged; editing command-handlers would add no behavior.",
+        "contentHash": "e8c1fd675dda03aef06de9bf6eeb15812dccf4dae70d4119067b483f957f6bfa"
       }
     ],
     "invalidateOn": {

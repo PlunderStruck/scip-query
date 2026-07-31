@@ -1,7 +1,7 @@
 # Autonomous completion protected-trial remediation
 
 Date: 2026-07-31
-Status: in progress — product slices 1-3 and 6-7 implemented; apparatus slice 5 and evidence programs remain
+Status: in progress — product slices 1-3 and 6-7, apparatus slice 5, and the small protected lifecycle probe are complete; large-repository evidence remains
 Governing goal: `SQG-4061E7D5D360464ED8E8B05D53BBF49D`
 Governing change: `SQC-DED67E74D3898BDCA85766BE8D3C93AF`
 
@@ -369,6 +369,18 @@ slices 5-7 remove these known measurement and product defects.
   setup-time configuration mutation is impossible after program registration.
 - **Order safety:** old program and run records remain immutable.
 
+**Result (2026-07-31): complete.** The runner now starts both conditions from
+the same preconfigured immutable fixture, captures tracked, deleted, and
+untracked candidate changes, derives controller state only from durable
+completion history, and records provider token telemetry rather than treating
+missing values as zero. Principal-owned authorization and protected-evidence
+commands run from the protected apparatus root with candidate automatic
+operation capture disabled, so evaluator publication cannot alter the state it
+judges. A fresh workflow run observed all three lifecycle events and produced a
+protected receipt and completion transition over the same whole-content
+digest. Earlier contaminated programs and receipts remain immutable and are
+not selected by the new program.
+
 ### 6. Protected goal evidence
 
 - **Anchors:** completion predicate evaluation, protected evaluator output,
@@ -484,6 +496,44 @@ preserving failures, unknown effects, and reconciliation behavior.
 - **Order safety:** each changed fixture, evaluator, threshold, runtime, or
   treatment produces a new content-identified program.
 
+**Progress (2026-07-31): controller lifecycle established; causal program
+open.** Program `SQTP-182228C19EB1E390F39BBA7CB829E7CD` recorded one fresh
+matched pair. Both candidates satisfied the full-worktree evaluator. The
+workflow candidate's protected receipt `SQGE-D3CF57FB2ADA3A9235E05105F885FEE7`
+and completion evaluation `SQE-1F526D96939107A59E7FB489812EB30E` named the
+same repository-content digest, and transition
+`SQCT-1CC5D8E009F531A7C18CB9B47EAF7B39` durably completed the authorized
+change. Workflow/control ratios were `0.947` elapsed, `0.703` model tokens,
+`0.474` tool calls, and `0.680` cached-input tokens, with no false block or
+architecture regression. The program correctly classifies `insufficient`
+because it has one pair and a tied completion outcome. The large-repository
+no-scip/ordinary-scip comparison remains the evidence needed to test a
+thoroughness advantage rather than merely lifecycle validity.
+
+**Repository closeout verification (2026-07-31).** The first complete-suite
+rerun caught one descriptor-contract regression that the focused protected-
+evidence tests had missed: `protected-evidence <operation> [target]` did not
+declare whether its targetless `status` operation was diff- or repository-
+scoped. Declaring its existing whole-repository behavior as `repository` made
+the narrow CLI contract pass; removing that exact fix reproduced the failure,
+and reapplying it restored the pass. The corrected tree passed all 2,423 tests
+in 310 files, TypeScript and fixture contracts, formatting, ESLint, build,
+declaration generation, the unchanged 72-path public API, the public consumer,
+and skill-link validation. Complete architecture output found no declared
+boundary violation. Self-audit observed 1.0 reference precision and recall on
+its 50-symbol sample; callee precision remained unclaimed because that oracle
+was partial. The final diff gate passed with zero findings after replacing the
+content-invalidated descriptor/handler co-change suppression with current
+source and CLI-contract counterevidence.
+
+`scip-query health --baseline` still fails against the deliberately empty
+2026-07-23 repository baseline, now with 139 accumulated heuristic candidates
+(the earlier program records reported 96 and then 113). This is a reproduced
+program-wide baseline exception, not a green result and not attributed to the
+descriptor-only closeout fix. It remains separate from the change-relative
+architecture, residue, migration, dead-code, documentation, and coordination
+checks that passed in `diff-gate`.
+
 ## Attack record
 
 | ID  | Invariant/lens          | Attack                                                                                           | Outcome                                                                                                                              |
@@ -497,9 +547,9 @@ preserving failures, unknown effects, and reconciliation behavior.
 | A7  | 2 / replay              | Candidate replays `UserPromptSubmit` with the known prompt                                       | HELD by slice 2: replay can only idempotently materialize the same protected goal/change                                             |
 | A8  | 2 / prompt substitution | Candidate tries a different prompt against the configured authorization                          | HELD by slice 2 prompt SHA-256 equality before first activation                                                                      |
 | A9  | 6 / efficiency          | Compression hides a blocker or drill-down needed for a different next action                     | HOLE in draft; repaired by slice 3 decision-equivalence snapshot matrix and exact status-command escape hatch                        |
-| A10 | purpose / measurement   | New code passes unit tests but does not improve autonomous outcomes                              | OPEN: slice 4 produced a favorable median signal, but slices 5-8 are required for valid mission evidence                             |
-| A11 | measurement authority   | Runner trusts the candidate's final `completed` claim despite a durable `continue` decision      | OPEN: slice 5 makes the durable controller records the only controller-status source                                                 |
-| A12 | worktree completeness   | Evaluator and patch omit generated untracked residue                                             | PRODUCT HELD: protected evaluation snapshots include tracked, deleted, and untracked state and indexing leaves no config; runner capture remains in slice 5 |
+| A10 | purpose / measurement   | New code passes unit tests but does not improve autonomous outcomes                              | OPEN: the valid small pair establishes lifecycle and a favorable cost sample, but both conditions completed; the large-repository causal comparison remains |
+| A11 | measurement authority   | Runner trusts the candidate's final `completed` claim despite a durable `continue` decision      | HELD: slice 5 derives status from durable completion history, and the fresh workflow coordinate recorded a real completion transition |
+| A12 | worktree completeness   | Evaluator and patch omit generated untracked residue                                             | HELD: protected evaluation and runner capture include tracked, deleted, and untracked state; the fresh evaluator and controller matched exact whole-content identity |
 | A13 | goal evidence           | Hidden evaluator passes behavior but controller never receives independent goal evidence         | HELD: slice 6 binds a pre-authorized evaluator receipt to exact goal/change records and whole content                                |
 | A14 | useful work             | Verification repeatedly fails for an apparatus reason and agents compensate ceremonially         | HELD: slice 7 made cleanup verification usable and groups decision-equivalent successful observations                               |
 
@@ -518,9 +568,10 @@ Coverage matrix:
 | Independent completion evidence    | A13                                                                                          |
 
 The original three design holes were repaired in slices 1-3. The transcript
-and durable-record audit exposed five empirical holes assigned to slices 5-8;
-the product portions of A12 and all of A13-A14 are now held, while A10-A11 and
-the runner portion of A12 remain open. None is accepted. The external
+and durable-record audit exposed five empirical holes assigned to slices 5-8.
+A11-A14 are now held by product, apparatus, and fresh durable evidence; A10
+remains open because the small fixture produced a quality tie. None is
+accepted. The external
 root's non-writability by the candidate is an environment precondition, not a
 property pathname validation can manufacture. Supported adapters and trials
 must enforce it with sandbox or mount permissions and report the protection
@@ -561,10 +612,10 @@ A plan is PLANNED-COMPLETE iff every state writer/reader row is covered, every
 attack is held by a cited slice and premise, and no premise fails
 reverification.
 
-Result: **PLAN REOPENED FROM EVIDENCE** — 14 attacks, 3 original holes repaired,
-2 empirical holes held, 3 empirical holes still open across A10-A12, and 0
-accepted holes. Program completion remains open pending apparatus slice 5 and
-the slice-8 evidence programs.
+Result: **PLAN REOPENED FROM EVIDENCE** — 14 attacks, every authority,
+worktree, and lifecycle hole is now held, A10 remains open, and 0 holes are
+accepted. Program completion remains open only for the slice-8
+large-repository effectiveness program.
 
 ## Files expected to change
 
