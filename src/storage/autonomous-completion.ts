@@ -33,6 +33,13 @@ import { stableJson } from '../domain/stable-json.js';
 import { readObligationLifecycle, type ObligationLifecycleReadResult } from './autonomous-work-obligations.js';
 import { readCompletionContextSnapshotFile, readCompletionContextSnapshots } from './autonomous-completion-context.js';
 import {
+  materializeCompletionTransitionSuccessor,
+  readCompletionTransitionRuleFile,
+  readCompletionTransitionRules,
+  selectCompletionTransitionRule,
+  type MaterializedTransitionSuccessor,
+} from './completion-transition-rule.js';
+import {
   parseRecordFile,
   publishWorkStateRecord,
   readGoalRecords,
@@ -53,6 +60,7 @@ export const COMPLETION_TRANSITIONS_DIR = join('.scipquery', 'completion-transit
 export interface CompletionEvaluationCreateResult {
   evaluation: WorkStateCreateResult<CompletionEvaluationRecordV1>;
   transition?: WorkStateCreateResult<CompletionTransitionRecordV1>;
+  successor?: MaterializedTransitionSuccessor;
 }
 
 export interface CompletionCollectionReadResult<RecordType> extends WorkStateCollectionReadResult<RecordType> {
@@ -61,6 +69,7 @@ export interface CompletionCollectionReadResult<RecordType> extends WorkStateCol
 
 export interface CompletionHistoryReadResult {
   contexts: ReturnType<typeof readCompletionContextSnapshots>;
+  transitionRules: ReturnType<typeof readCompletionTransitionRules>;
   evaluations: CompletionCollectionReadResult<CompletionEvaluationRecordV1>;
   transitions: CompletionCollectionReadResult<CompletionTransitionRecordV1>;
   summary: CompletionHistorySummary;
@@ -70,6 +79,7 @@ export interface CompletionHistoryReadResult {
     admissions: ObligationLifecycleReadResult['admissions']['compatibility'];
     transitions: ObligationLifecycleReadResult['transitions']['compatibility'];
   };
+  transitionRuleCompatibility: ReturnType<typeof readCompletionTransitionRules>['compatibility'];
   integrityIssues: string[];
 }
 
@@ -85,9 +95,6 @@ export function createCompletionEvaluationFiles(
   request: CompletionEvaluationRequest,
   options: WorkStateCreateOptions,
 ): CompletionEvaluationCreateResult {
-  if (request.authorizedSuccessor) {
-    throw new Error('successor completion requires a stored transition rule; direct authorization is refused');
-  }
   const change = requireIntendedChangeRecord(projectRoot, collaborationDomainId, request.changeId);
   if (change.goalId !== request.goalId) {
     throw new Error(`intended change ${request.changeId} is governed by goal ${change.goalId}, not ${request.goalId}`);
@@ -100,6 +107,9 @@ export function createCompletionEvaluationFiles(
     readObligationLifecycle(projectRoot, request.changeId),
     createdAt,
   );
+  const selectedRule = request.authorizedSuccessor
+    ? requireStoredSuccessorAuthorization(projectRoot, request)
+    : undefined;
   const record = createCompletionEvaluationRecord({
     collaborationDomainId,
     request,
@@ -119,6 +129,18 @@ export function createCompletionEvaluationFiles(
     },
     options,
   );
+  if (evaluation.record.decision.state === 'superseded') {
+    if (!selectedRule) {
+      throw new Error('superseded completion evaluation has no validated stored transition rule');
+    }
+    const successor = materializeCompletionTransitionSuccessor(
+      projectRoot,
+      collaborationDomainId,
+      selectedRule,
+      options,
+    );
+    return { evaluation, successor };
+  }
   if (evaluation.record.decision.state !== 'complete') return { evaluation };
   const transitionRecord = createCompletionTransitionRecord(evaluation.record);
   const transition = publishWorkStateRecord(
@@ -173,6 +195,34 @@ export function readCompletionRecordPath(path: string) {
       ? decodeCompletionContextSnapshotRecord(value)
       : decodeCompletionRecord(value),
   );
+}
+
+function requireStoredSuccessorAuthorization(projectRoot: string, request: CompletionEvaluationRequest) {
+  const authorized = request.authorizedSuccessor;
+  if (!authorized) throw new Error('successor authorization is missing');
+  if (!request.authority) {
+    throw new Error('successor completion requires a fixed authority assessment and stored transition rule');
+  }
+  const changedPaths = request.authority.candidateControlled.flatMap((entry) => entry.paths);
+  const selection = selectCompletionTransitionRule(projectRoot, request, request.authority.predecessor, changedPaths);
+  if (selection.state !== 'selected') {
+    const detail =
+      selection.state === 'conflicted'
+        ? selection.reasons.join('; ')
+        : `no applicable fixed rule among ${selection.consideredRuleIds.join(', ') || 'none'}`;
+    throw new Error(`successor completion requires one applicable stored transition rule: ${detail}`);
+  }
+  if (
+    selection.rule.transitionRuleId !== authorized.transitionRuleId ||
+    selection.rule.successorGoal.goalId !== authorized.successorGoalId
+  ) {
+    throw new Error('authorized successor does not match the uniquely applicable stored transition rule');
+  }
+  const stored = readCompletionTransitionRuleFile(projectRoot, authorized.transitionRuleId);
+  if (stored.state !== 'current') {
+    throw new Error(`stored transition rule ${authorized.transitionRuleId} is ${stored.state}`);
+  }
+  return stored.record;
 }
 
 export function readCompletionEvaluations(
@@ -252,8 +302,38 @@ export function readCompletionTransitions(
   return { ...result, integrityIssues };
 }
 
+export function recoverCompletionSuccessorMaterializations(
+  projectRoot: string,
+  collaborationDomainId: string,
+  options: WorkStateCreateOptions,
+): MaterializedTransitionSuccessor[] {
+  const rules = readCompletionTransitionRules(projectRoot);
+  if (!rules.compatibility.complete || rules.integrityIssues.length > 0) return [];
+  const goals = readGoalRecords(projectRoot);
+  const changes = readIntendedChangeRecords(projectRoot, goals);
+  const evaluations = readCompletionEvaluations(projectRoot);
+  const transitions = readCompletionTransitions(projectRoot, evaluations.records);
+  const summary = foldCompletionHistory(changes.records, evaluations.records, transitions.records);
+  if (summary.conflicts.length > 0) return [];
+  const rulesById = new Map(rules.records.map((rule) => [rule.transitionRuleId, rule]));
+  return summary.states.flatMap((state) => {
+    if (state.state !== 'superseded') return [];
+    const rule = rulesById.get(state.transitionRuleId);
+    if (
+      !rule ||
+      rule.collaborationDomainId !== collaborationDomainId ||
+      rule.predecessorGoal.goalId !== state.goalId ||
+      rule.successorGoal.goalId !== state.successorGoalId
+    ) {
+      return [];
+    }
+    return [materializeCompletionTransitionSuccessor(projectRoot, collaborationDomainId, rule, options)];
+  });
+}
+
 export function readCompletionHistory(projectRoot: string, changeId?: string): CompletionHistoryReadResult {
   const contexts = readCompletionContextSnapshots(projectRoot);
+  const transitionRules = readCompletionTransitionRules(projectRoot);
   const goals = readGoalRecords(projectRoot);
   const changes = readIntendedChangeRecords(projectRoot, goals);
   const evaluations = readCompletionEvaluations(projectRoot);
@@ -276,8 +356,33 @@ export function readCompletionHistory(projectRoot: string, changeId?: string): C
       (obligation) =>
         `${obligation.obligation.changeId} is complete but obligation ${obligation.obligation.obligationId} is live`,
     );
+  const transitionRulesById = new Map(transitionRules.records.map((rule) => [rule.transitionRuleId, rule]));
+  const successorIssues = selectedEvaluations.flatMap((evaluation) => {
+    if (evaluation.decision.state !== 'superseded') return [];
+    const rule = transitionRulesById.get(evaluation.decision.transitionRuleId);
+    if (!rule) {
+      return [`${evaluation.evaluationId} references missing transition rule ${evaluation.decision.transitionRuleId}`];
+    }
+    const issues: string[] = [];
+    if (
+      rule.predecessorGoal.goalId !== evaluation.goalId ||
+      rule.successorGoal.goalId !== evaluation.decision.successorGoalId
+    ) {
+      issues.push(`${evaluation.evaluationId} does not match transition rule ${rule.transitionRuleId}`);
+    }
+    const successorGoal = goals.records.find((goal) => goal.goalId === rule.successorGoal.goalId);
+    if (!successorGoal || stableJson(successorGoal) !== stableJson(rule.successorGoal)) {
+      issues.push(`${evaluation.evaluationId} successor goal materialization is missing or conflicting`);
+    }
+    const successorChange = changes.records.find((change) => change.changeId === rule.successorChange.changeId);
+    if (!successorChange || stableJson(successorChange) !== stableJson(rule.successorChange)) {
+      issues.push(`${evaluation.evaluationId} successor change materialization is missing or conflicting`);
+    }
+    return issues;
+  });
   const integrityIssues = [
     ...contexts.integrityIssues,
+    ...transitionRules.integrityIssues,
     ...changes.integrityIssues,
     ...(changeId && selectedChanges.length === 0
       ? [`intended change ${changeId} is not a readable current record`]
@@ -290,9 +395,11 @@ export function readCompletionHistory(projectRoot: string, changeId?: string): C
     ),
     ...obligations.integrityIssues,
     ...liveAfterCompletion,
+    ...successorIssues,
   ];
   return {
     contexts,
+    transitionRules,
     evaluations,
     transitions,
     summary,
@@ -302,6 +409,7 @@ export function readCompletionHistory(projectRoot: string, changeId?: string): C
       admissions: obligations.admissions.compatibility,
       transitions: obligations.transitions.compatibility,
     },
+    transitionRuleCompatibility: transitionRules.compatibility,
     integrityIssues: [...new Set(integrityIssues)].sort(),
   };
 }

@@ -259,8 +259,22 @@ the running evaluator entrypoint is inside the checkout, the context protects
 that entrypoint and, for a built `dist/` entrypoint, its repository `src/**`
 and build inputs.
 
+A transition rule is fixed repository policy that pre-authorizes one exact
+successor rather than letting the candidate rewrite its own completion
+standard. The rule embeds the predecessor and successor goal records, the
+successor intended change, the exact goal fields that differ, every retained
+invariant, optional protected-artifact predecessor/successor digests, and
+evidence qualifications for all six predicates. The controller selects only
+an unchanged rule whose artifact versions and evidence qualifications match.
+Zero applicable rules means ordinary completion; more than one applicable
+successor is a conflict. A superseding evaluation is the atomic handoff fact.
+The embedded goal and change are then materialized through retry-safe ordinary
+record publication, so a crash cannot make two competing successors current.
+
 ```bash
 scip-query completion status SQC-... --json
+scip-query completion rule-create --input transition-rule-request.json --json
+scip-query completion read SQTR-...
 scip-query completion read SQCX-...
 scip-query completion read SQE-...
 scip-query completion read SQCT-...
@@ -320,6 +334,7 @@ Commit `.scipquery/goals/*.json`, `.scipquery/changes/*.json`,
 `.scipquery/attempts/*.json`, `.scipquery/decisions/*.json`,
 `.scipquery/obligations/*.json`, and
 `.scipquery/obligation-transitions/*.json`,
+`.scipquery/transition-rules/*.json`,
 `.scipquery/completion-contexts/*.json`,
 `.scipquery/completion-evaluations/*.json`, and
 `.scipquery/completion-transitions/*.json` with the work they govern.

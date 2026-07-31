@@ -1,13 +1,19 @@
-import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   COMPLETION_PREDICATES,
+  createCompletionAuthorityAssessment,
   type CompletionEvaluationRequest,
   type CompletionPredicate,
 } from '../../src/domain/autonomous-completion.js';
+import { completionProtectedArtifactSet } from '../../src/domain/autonomous-completion-context.js';
+import type { CompletionTransitionRuleRequest } from '../../src/domain/completion-transition-rule.js';
+import type { ProtectedArtifactRule } from '../../src/domain/completion-protection.js';
 import type { ObligationAdmissionRequest } from '../../src/domain/autonomous-work-obligations.js';
 import type { GoalCreateRequest, IntendedChangeCreateRequest } from '../../src/domain/autonomous-work-state.js';
 import { createObservationIdentity, type ObservationReceiptV2 } from '../../src/domain/observation-receipt.js';
@@ -16,6 +22,7 @@ import {
   createCompletionEvaluationFiles,
   readCompletionHistory,
 } from '../../src/storage/autonomous-completion.js';
+import { createCompletionTransitionRuleFile } from '../../src/storage/completion-transition-rule.js';
 import { createObligationAdmissionFile } from '../../src/storage/autonomous-work-obligations.js';
 import { createGoalRecordFile, createIntendedChangeRecordFile } from '../../src/storage/autonomous-work-state.js';
 import { NODE_ATOMIC_FILE_RUNTIME, type AtomicFileRuntime } from '../../src/storage/atomic-file.js';
@@ -174,6 +181,189 @@ describe('autonomous completion storage', () => {
     ).toThrow(/goal-fulfilled cannot be established without fixed, same-domain evidence/u);
   });
 
+  it('atomically supersedes through one stored rule and materializes its exact successor', () => {
+    const root = fixtureDirectory();
+    const { goalId, changeId } = createChange(root);
+    const rule = createCompletionTransitionRuleFile(root, COLLABORATION_DOMAIN, transitionRuleRequest(goalId), {
+      toolVersion: TOOL_VERSION,
+      now: () => '2026-07-30T12:01:00.000Z',
+    }).record;
+    const treeOid = commitFixedPredecessor(root);
+    const request = authorizedSuccessorRequest(
+      goalId,
+      changeId,
+      rule.transitionRuleId,
+      rule.successorGoal.goalId,
+      treeOid,
+    );
+
+    const result = createCompletionEvaluationFiles(root, COLLABORATION_DOMAIN, request, {
+      toolVersion: TOOL_VERSION,
+      now: () => EVALUATED_AT,
+    });
+
+    expect(result.evaluation.record.decision).toEqual({
+      state: 'superseded',
+      transitionRuleId: rule.transitionRuleId,
+      successorGoalId: rule.successorGoal.goalId,
+    });
+    expect(result.transition).toBeUndefined();
+    expect(result.successor?.goal.record).toEqual(rule.successorGoal);
+    expect(result.successor?.change.record).toEqual(rule.successorChange);
+    expect(readCompletionHistory(root).integrityIssues).toEqual([]);
+    expect(readCompletionHistory(root).summary.states).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ state: 'superseded', changeId }),
+        expect.objectContaining({ state: 'pending', changeId: rule.successorChange.changeId }),
+      ]),
+    );
+  });
+
+  it('recovers successor materialization after the superseding evaluation is durable', () => {
+    const root = fixtureDirectory();
+    const { goalId, changeId } = createChange(root);
+    const rule = createCompletionTransitionRuleFile(root, COLLABORATION_DOMAIN, transitionRuleRequest(goalId), {
+      toolVersion: TOOL_VERSION,
+      now: () => '2026-07-30T12:01:00.000Z',
+    }).record;
+    const treeOid = commitFixedPredecessor(root);
+    const request = authorizedSuccessorRequest(
+      goalId,
+      changeId,
+      rule.transitionRuleId,
+      rule.successorGoal.goalId,
+      treeOid,
+    );
+    let publications = 0;
+    const runtime: AtomicFileRuntime = {
+      ...NODE_ATOMIC_FILE_RUNTIME,
+      randomToken: () => `successor-${publications}`,
+      linkFile: (source, target) => {
+        NODE_ATOMIC_FILE_RUNTIME.linkFile!(source, target);
+        publications += 1;
+        if (publications === 2) {
+          throw Object.assign(new Error('simulated disconnect during successor materialization'), {
+            code: 'EIO',
+          });
+        }
+      },
+    };
+
+    expect(() =>
+      createCompletionEvaluationFiles(root, COLLABORATION_DOMAIN, request, {
+        toolVersion: TOOL_VERSION,
+        now: () => EVALUATED_AT,
+        atomicRuntime: runtime,
+      }),
+    ).toThrow('simulated disconnect during successor materialization');
+
+    const retry = createCompletionEvaluationFiles(root, COLLABORATION_DOMAIN, request, {
+      toolVersion: '99.0.0',
+      now: () => '2026-07-31T12:10:00.000Z',
+    });
+    expect(retry.evaluation.publication).toBe('existing');
+    expect(retry.successor?.goal.publication).toBe('existing');
+    expect(retry.successor?.change.record).toEqual(rule.successorChange);
+    expect(readCompletionHistory(root).integrityIssues).toEqual([]);
+  });
+
+  it('refuses conflicting fixed successor rules instead of choosing by file order', () => {
+    const root = fixtureDirectory();
+    const { goalId, changeId } = createChange(root);
+    const left = createCompletionTransitionRuleFile(root, COLLABORATION_DOMAIN, transitionRuleRequest(goalId, 'left'), {
+      toolVersion: TOOL_VERSION,
+      now: () => '2026-07-30T12:01:00.000Z',
+    }).record;
+    createCompletionTransitionRuleFile(root, COLLABORATION_DOMAIN, transitionRuleRequest(goalId, 'right'), {
+      toolVersion: TOOL_VERSION,
+      now: () => '2026-07-30T12:02:00.000Z',
+    });
+    const treeOid = commitFixedPredecessor(root);
+
+    expect(() =>
+      createCompletionEvaluationFiles(
+        root,
+        COLLABORATION_DOMAIN,
+        authorizedSuccessorRequest(goalId, changeId, left.transitionRuleId, left.successorGoal.goalId, treeOid),
+        { toolVersion: TOOL_VERSION, now: () => EVALUATED_AT },
+      ),
+    ).toThrow(/multiple fixed transition rules authorize different successors/u);
+  });
+
+  it('does not let a candidate-created transition rule authorize itself', () => {
+    const root = fixtureDirectory();
+    const { goalId, changeId } = createChange(root);
+    const predecessorTree = commitFixedPredecessor(root);
+    const rule = createCompletionTransitionRuleFile(
+      root,
+      COLLABORATION_DOMAIN,
+      transitionRuleRequest(goalId, 'candidate-controlled'),
+      { toolVersion: TOOL_VERSION, now: () => '2026-07-30T12:01:00.000Z' },
+    ).record;
+
+    expect(() =>
+      createCompletionEvaluationFiles(
+        root,
+        COLLABORATION_DOMAIN,
+        authorizedSuccessorRequest(goalId, changeId, rule.transitionRuleId, rule.successorGoal.goalId, predecessorTree),
+        { toolVersion: TOOL_VERSION, now: () => EVALUATED_AT },
+      ),
+    ).toThrow(/no applicable fixed rule/u);
+  });
+
+  it('permits one exact baseline transition while retaining predecessor evidence', () => {
+    const root = fixtureDirectory();
+    const { goalId, changeId } = createChange(root);
+    const baselinePath = join(root, '.scipquery-baseline.json');
+    writeFileSync(baselinePath, '{"allowed":[]}\n');
+    const nextBaseline = '{"allowed":["SQ-EXISTING"]}\n';
+    const request = transitionRuleRequest(goalId, 'baseline');
+    request.artifactTransitions = [
+      {
+        class: 'baseline',
+        path: '.scipquery-baseline.json',
+        predecessorDigest: sha256(readFileSync(baselinePath)),
+        successorDigest: sha256(Buffer.from(nextBaseline)),
+      },
+    ];
+    const rule = createCompletionTransitionRuleFile(root, COLLABORATION_DOMAIN, request, {
+      toolVersion: TOOL_VERSION,
+      now: () => '2026-07-30T12:01:00.000Z',
+    }).record;
+    const treeOid = commitFixedPredecessor(root);
+    writeFileSync(baselinePath, nextBaseline);
+
+    const evaluation = authorizedSuccessorRequest(
+      goalId,
+      changeId,
+      rule.transitionRuleId,
+      rule.successorGoal.goalId,
+      treeOid,
+    );
+    evaluation.authority = createCompletionAuthorityAssessment({
+      predecessor: { kind: 'git-tree', treeOid },
+      changedPaths: ['.scipquery-baseline.json'],
+      protectedArtifacts: completionProtectedArtifactSet(protectedArtifactRules()),
+      reliances: [
+        {
+          class: 'baseline',
+          predicates: ['invariants-preserved'],
+          reason: 'The changed baseline requires the fixed transition rule.',
+        },
+      ],
+      authorizedReferents: {
+        baseline: `transition-rule:${rule.transitionRuleId}#baseline`,
+      },
+    });
+
+    const result = createCompletionEvaluationFiles(root, COLLABORATION_DOMAIN, evaluation, {
+      toolVersion: TOOL_VERSION,
+      now: () => EVALUATED_AT,
+    });
+    expect(result.evaluation.record.decision.state).toBe('superseded');
+    expect(result.evaluation.record.authority?.violations).toEqual([]);
+  });
+
   it('composes distinct branch evaluations without filename conflicts', () => {
     const left = fixtureDirectory();
     const right = fixtureDirectory();
@@ -305,6 +495,88 @@ function admissionRequest(changeId: string): ObligationAdmissionRequest {
     basisAttemptIds: [],
     evidenceReceipts: [],
   };
+}
+
+function transitionRuleRequest(predecessorGoalId: string, suffix = 'successor'): CompletionTransitionRuleRequest {
+  return {
+    predecessorGoalId,
+    successorGoal: {
+      feature: `An agent continues under the exact ${suffix} goal`,
+      invariants: ['Unknown completion facts block completion without becoming false'],
+      acceptanceScenarios: [
+        {
+          name: `Protected ${suffix}`,
+          given: ['one completed predecessor'],
+          when: ['the stored transition rule qualifies every predicate'],
+          then: ['the exact successor becomes active'],
+        },
+      ],
+      authorization: {
+        kind: 'repository-delegation',
+        principal: 'repository-owner',
+        source: 'test-fixture',
+      },
+    },
+    successorChange: {
+      idempotencyKey: `successor-change-${suffix}`,
+      title: `Continue ${suffix} work`,
+      intendedOutcome: `The ${suffix} goal governs the next autonomous change`,
+    },
+    permittedGoalFields: ['feature', 'acceptance-scenarios'],
+    preservedInvariants: ['Unknown completion facts block completion without becoming false'],
+    artifactTransitions: [],
+    requiredEvidence: COMPLETION_PREDICATES.map((predicate) => ({
+      predicate,
+      minimumReceipts: 1,
+      requiredSources: ['repository-snapshot'],
+    })),
+  };
+}
+
+function authorizedSuccessorRequest(
+  goalId: string,
+  changeId: string,
+  transitionRuleId: string,
+  successorGoalId: string,
+  predecessorTreeOid: string,
+): CompletionEvaluationRequest {
+  const request = evaluationRequest(goalId, changeId, `successor:${transitionRuleId}`);
+  request.authority = createCompletionAuthorityAssessment({
+    predecessor: { kind: 'git-tree', treeOid: predecessorTreeOid },
+    changedPaths: [],
+    protectedArtifacts: completionProtectedArtifactSet(protectedArtifactRules()),
+    reliances: [],
+  });
+  request.authorizedSuccessor = { transitionRuleId, successorGoalId };
+  return request;
+}
+
+function commitFixedPredecessor(root: string): string {
+  execFileSync('git', ['init', '-q'], { cwd: root });
+  execFileSync('git', ['config', 'user.email', 'completion@example.test'], { cwd: root });
+  execFileSync('git', ['config', 'user.name', 'Completion Test'], { cwd: root });
+  execFileSync('git', ['add', '.'], { cwd: root });
+  execFileSync('git', ['commit', '-qm', 'fixed transition predecessor'], { cwd: root });
+  return execFileSync('git', ['rev-parse', 'HEAD^{tree}'], {
+    cwd: root,
+    encoding: 'utf8',
+  }).trim();
+}
+
+function protectedArtifactRules(): readonly ProtectedArtifactRule[] {
+  return [
+    { class: 'goal', selectors: ['.scipquery/goals/*'], authority: 'fixed-predecessor' },
+    { class: 'transition-rule', selectors: ['.scipquery/transition-rules/*'], authority: 'fixed-predecessor' },
+    { class: 'evaluator', selectors: ['src/controller.ts'], authority: 'bootstrap-trust-root' },
+    { class: 'test', selectors: ['tests/**'], authority: 'fixed-predecessor' },
+    { class: 'baseline', selectors: ['.scipquery-baseline.json'], authority: 'fixed-predecessor' },
+    { class: 'suppression', selectors: ['.scipquery/suppressions/*'], authority: 'fixed-predecessor' },
+    { class: 'configuration', selectors: ['.scipquery.json'], authority: 'fixed-predecessor' },
+  ];
+}
+
+function sha256(value: Buffer): string {
+  return createHash('sha256').update(value).digest('hex');
 }
 
 function receipt(observedAt: string, identity: string): ObservationReceiptV2 {

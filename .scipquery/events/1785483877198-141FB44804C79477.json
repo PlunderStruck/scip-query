@@ -1,0 +1,103 @@
+{
+  "ts": 1785483877198,
+  "check": "echo",
+  "findingId": "SQ08A788DEC78A",
+  "event": "caught",
+  "commit": "1ac3352c705bf633f859a4b3699ee424bfda1728",
+  "comparisonBaseCommit": "1ac3352c705bf633f859a4b3699ee424bfda1728",
+  "symbol": "scip-typescript npm scip-query 0.20.0 src/domain/`completion-transition-rule.ts`/isCompletionTransitionRuleId().",
+  "gateRunId": "5411c815-2f5c-464d-9f4e-a1540f265d00",
+  "observer": {
+    "kind": "local-agent",
+    "authority": "repository-writable"
+  },
+  "observation": {
+    "schemaVersion": 2,
+    "observedAt": "2026-07-31T07:44:37.198Z",
+    "facts": {
+      "collaborationDomain": {
+        "schemaVersion": 1,
+        "canonicalizationVersion": 1,
+        "hashAlgorithm": "sha256",
+        "projection": {
+          "name": "scip-query:collaboration-domain",
+          "version": 1
+        },
+        "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+      },
+      "workspaceInstance": {
+        "schemaVersion": 1,
+        "canonicalizationVersion": 1,
+        "hashAlgorithm": "sha256",
+        "projection": {
+          "name": "scip-query:workspace-instance",
+          "version": 1
+        },
+        "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+      },
+      "index": {
+        "generation": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:index-generation",
+            "version": 1
+          },
+          "digest": "d922b7660e1d571f3b8d5f0d7bcb97876585bc684a9d67334359fc8914bd2cbd"
+        },
+        "source": "immutable"
+      }
+    },
+    "observedSources": [
+      {
+        "kind": "index-generation",
+        "identity": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:index-generation",
+            "version": 1
+          },
+          "digest": "d922b7660e1d571f3b8d5f0d7bcb97876585bc684a9d67334359fc8914bd2cbd"
+        }
+      },
+      {
+        "kind": "live-workspace",
+        "identity": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:workspace-instance",
+            "version": 1
+          },
+          "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+        }
+      }
+    ],
+    "stabilityProofs": [
+      {
+        "source": "index-generation",
+        "kind": "immutable"
+      },
+      {
+        "source": "live-workspace",
+        "kind": "not-established"
+      }
+    ],
+    "diagnostics": {
+      "clean": false,
+      "headCommit": "1ac3352c705bf633f859a4b3699ee424bfda1728",
+      "treeOid": "292287fd21661bd13cdcfdc17d2a21509277a4c4"
+    }
+  },
+  "kind": "scip-query-outcome-event",
+  "schemaVersion": 1,
+  "eventIdentity": "[\"echo\",\"SQ08A788DEC78A\",\"caught\",\"1ac3352c705bf633f859a4b3699ee424bfda1728\"]",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  }
+}

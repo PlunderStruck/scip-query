@@ -1,25 +1,24 @@
 {
   "kind": "scip-query-suppression",
-  "suppressionIdentity": "SQ8FA34B0BBC01",
+  "suppressionIdentity": "SQ2248E181FC9D",
   "writer": {
     "tool": "scip-query",
     "version": "0.20.0"
   },
-  "id": "SQ8FA34B0BBC01",
-  "check": "co-change-partner",
-  "file": "src/runtime/commands/command-descriptors.ts",
-  "reason": "The completion descriptor routes to handleCompletion in work-state-handlers, which changed with this surface and owns all autonomous record operations; command-handlers owns unrelated handlers, while 12 of 15 historical co-edits were broad sweeps rather than this feature contract.",
-  "createdAt": "2026-07-29T19:50:55.191Z",
-  "updatedAt": "2026-07-31T07:47:03.151Z",
+  "id": "SQ2248E181FC9D",
+  "check": "echo",
+  "file": "src/domain/completion-transition-rule.ts",
+  "reason": "The exact-body match is an accidental shared SHA-256 encoding shape: one function creates an authoritative SQTR record identity and the other creates a disposable graph-cache key, so sharing them would merge different domains and change neither repetition nor behavior.",
+  "createdAt": "2026-07-31T07:46:01.147Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
-    "reasonCode": "historical-coupling-ended",
+    "reasonCode": "detector-counterexample",
     "decidedBy": "agent",
     "policyVersion": 1,
     "observation": {
       "schemaVersion": 2,
-      "observedAt": "2026-07-31T07:47:03.143Z",
+      "observedAt": "2026-07-31T07:46:01.140Z",
       "facts": {
         "collaborationDomain": {
           "schemaVersion": 1,
@@ -49,7 +48,7 @@
             "name": "scip-query:repository-content",
             "version": 1
           },
-          "digest": "40c40f2d957df80ab899abc7292f31c86663b822d24cad061f5dd70bdf43516a"
+          "digest": "82b678fe6b85f5400cc1df8ca14a772fe78adf6825669d23d939790ac90d9c3a"
         },
         "relevantInputs": [
           {
@@ -114,7 +113,7 @@
               "name": "scip-query:repository-content",
               "version": 1
             },
-            "digest": "40c40f2d957df80ab899abc7292f31c86663b822d24cad061f5dd70bdf43516a"
+            "digest": "82b678fe6b85f5400cc1df8ca14a772fe78adf6825669d23d939790ac90d9c3a"
           }
         }
       ],
@@ -137,21 +136,15 @@
     "evidence": [
       {
         "kind": "source",
-        "referent": "src/runtime/commands/command-descriptors.ts",
-        "claim": "The completion descriptor routes to handleCompletion in work-state-handlers, which changed with this surface and owns all autonomous record operations; command-handlers owns unrelated handlers, while 12 of 15 historical co-edits were broad sweeps rather than this feature contract.",
-        "contentHash": "d1fac77c303dc8e9e977758033238a971957137c1eb54bbe0cbc4623e7683f5f"
+        "referent": "src/domain/completion-transition-rule.ts",
+        "claim": "The exact-body match is an accidental shared SHA-256 encoding shape: one function creates an authoritative SQTR record identity and the other creates a disposable graph-cache key, so sharing them would merge different domains and change neither repetition nor behavior.",
+        "contentHash": "d9a469d03be973c5ee4e7b120d24391100d89ab614994705d9be584e2269797c"
       },
       {
         "kind": "source",
-        "referent": "src/runtime/commands/work-state-handlers.ts",
-        "claim": "The completion descriptor routes to handleCompletion in work-state-handlers, which changed with this surface and owns all autonomous record operations; command-handlers owns unrelated handlers, while 12 of 15 historical co-edits were broad sweeps rather than this feature contract.",
-        "contentHash": "d5d5d2f4e46e919d10178389455007d71f4aecc3dac6cfbc572eb9f41ee33ac3"
-      },
-      {
-        "kind": "source",
-        "referent": "src/runtime/commands/command-handlers.ts",
-        "claim": "The completion descriptor routes to handleCompletion in work-state-handlers, which changed with this surface and owns all autonomous record operations; command-handlers owns unrelated handlers, while 12 of 15 historical co-edits were broad sweeps rather than this feature contract.",
-        "contentHash": "f21beb90cc9ea84926019ea6a3c821358cd18b1c54a26d618cfa6bf7cb6d0283"
+        "referent": "src/symbols/graph/file-dep-graph.ts",
+        "claim": "The exact-body match is an accidental shared SHA-256 encoding shape: one function creates an authoritative SQTR record identity and the other creates a disposable graph-cache key, so sharing them would merge different domains and change neither repetition nor behavior.",
+        "contentHash": "89015964446554e1142fe3010c2a0bd4dc5dd9bc3213b9aed51f12afad94fab5"
       }
     ],
     "invalidateOn": {

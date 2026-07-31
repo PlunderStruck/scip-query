@@ -40,6 +40,7 @@ For analyzer implementation work, follow [Regex Policy](REGEX_POLICY.md): regex 
    `.scipquery/attempts/*.json`, `.scipquery/decisions/*.json`,
    `.scipquery/obligations/*.json`,
    `.scipquery/obligation-transitions/*.json`,
+   `.scipquery/transition-rules/*.json`,
    `.scipquery/completion-contexts/*.json`,
    `.scipquery/completion-evaluations/*.json`,
    `.scipquery/completion-transitions/*.json`,
@@ -64,10 +65,12 @@ For analyzer implementation work, follow [Regex Policy](REGEX_POLICY.md): regex 
    `doctor` is the human diagnostic. `status --json` is the machine-readable freshness/config surface. `check-deps` and `capability-matrix` remain compatibility aliases, but new workflows should prefer `doctor`, `status`, and `capabilities --matrix`.
 
 3. **Start health follow-through**
+
    ```bash
    scip-query health --json
    scip-query diff-gate --json
    ```
+
    Before cleanup, tell the user the health score, confirmed items, unavailable checks, and recommended first cleanup batch. Use `scip-audit` for confirmation and `scip-improve` when the user wants autonomous score improvement.
 
 4. **Use automatic work restoration**

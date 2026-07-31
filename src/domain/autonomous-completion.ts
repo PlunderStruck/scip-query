@@ -773,6 +773,26 @@ function foldCompletionChangeState(
   conflicts: string[],
 ): FoldedCompletionState {
   const changeIdentity = { changeId: change.changeId, goalId: change.goalId };
+  const supersededEvaluations = evaluations.filter(
+    (
+      evaluation,
+    ): evaluation is CompletionEvaluationRecordV1 & {
+      decision: Extract<CompletionTerminalDecision, { state: 'superseded' }>;
+    } => evaluation.decision.state === 'superseded',
+  );
+  const terminalMeanings = new Set([
+    ...(transitions.length > 0 ? ['complete'] : []),
+    ...supersededEvaluations.map(
+      (evaluation) => `superseded:${evaluation.decision.transitionRuleId}:${evaluation.decision.successorGoalId}`,
+    ),
+  ]);
+  if (terminalMeanings.size > 1) {
+    const reason = `${change.changeId} has conflicting terminal completion meanings: ${[...terminalMeanings]
+      .sort()
+      .join(', ')}`;
+    conflicts.push(reason);
+    return { state: 'conflicted', ...changeIdentity, reasons: [reason] };
+  }
   if (transitions.length > 0) {
     const goalIds = new Set(transitions.map((transition) => transition.goalId));
     if (goalIds.size !== 1 || !goalIds.has(change.goalId)) {
@@ -787,22 +807,26 @@ function foldCompletionChangeState(
       transitionIds: [...new Set(transitions.map((transition) => transition.transitionId))].sort(),
     };
   }
-  const latest = evaluations.at(-1);
-  if (!latest) return { state: 'pending', ...changeIdentity };
-  if (latest.decision.state === 'superseded') {
+  const superseded = supersededEvaluations.at(-1);
+  if (superseded) {
     return {
       state: 'superseded',
       ...changeIdentity,
-      evaluationId: latest.evaluationId,
-      contextId: latest.context.contextId,
-      transitionRuleId: latest.decision.transitionRuleId,
-      successorGoalId: latest.decision.successorGoalId,
+      evaluationId: superseded.evaluationId,
+      contextId: superseded.context.contextId,
+      transitionRuleId: superseded.decision.transitionRuleId,
+      successorGoalId: superseded.decision.successorGoalId,
     };
   }
+  const latest = evaluations.at(-1);
+  if (!latest) return { state: 'pending', ...changeIdentity };
   if (latest.decision.state === 'complete') {
     const reason = `${latest.evaluationId} is complete but its transition is missing`;
     conflicts.push(reason);
     return { state: 'conflicted', ...changeIdentity, reasons: [reason] };
+  }
+  if (latest.decision.state === 'superseded') {
+    throw new Error('superseded evaluation was not included in the terminal fold');
   }
   return {
     state: 'blocked',

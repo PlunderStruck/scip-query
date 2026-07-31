@@ -1,4 +1,5 @@
 <!-- scip-query:agent-setup:begin -->
+
 ## scip-query
 
 This repo is indexed by scip-query (compiler-resolved code intelligence).
@@ -12,7 +13,7 @@ This repo is indexed by scip-query (compiler-resolved code intelligence).
 - After the change, run the postchecks matching what you actually edited — the table is in the `scip-verify` skill — then `scip-query diff-gate`. Fix findings or state why each is accepted.
 - Prefer ordinary human output for agent reading: it preserves hierarchy, whitespace, and source line numbers without the JSON transport envelope. Use `--json` only for a programmatic consumer; add `--result-only` when that consumer needs only the command result. Do not use `--compact` for model-readable evidence.
 - Run scip-query commands normally, without choosing `--output-page-size` in advance. If and only if scip-query emits `Continue exactly:`, run each emitted command unchanged until the human footer reports transport completion or a JSON page reports `complete: true`; incomplete output is not evidence. Transport completion means every rendered character was retrieved, not that bounded command coverage became exhaustive. Never pipe scip-query through `head`, `tail`, or line-range `sed`. The emitted transport cursor is separate from a command result cursor such as `refs --cursor`.
-- Repository records: commit `.scipquery/goals/*.json`, `.scipquery/changes/*.json`, `.scipquery/attempts/*.json`, `.scipquery/decisions/*.json`, `.scipquery/obligations/*.json`, `.scipquery/obligation-transitions/*.json`, `.scipquery/suppressions/*.json`, and `.scipquery/events/*.json` with the work that produced them; do not ignore or drop these shared records.
+- Repository records: commit `.scipquery/goals/*.json`, `.scipquery/changes/*.json`, `.scipquery/attempts/*.json`, `.scipquery/decisions/*.json`, `.scipquery/obligations/*.json`, `.scipquery/obligation-transitions/*.json`, `.scipquery/transition-rules/*.json`, `.scipquery/completion-contexts/*.json`, `.scipquery/completion-evaluations/*.json`, `.scipquery/completion-transitions/*.json`, `.scipquery/suppressions/*.json`, and `.scipquery/events/*.json` with the work that produced them; do not ignore or drop these shared records.
 - Checkout preferences: `.codex/hooks.json` and `.claude/settings.local.json` are local agent-tool settings and must not be committed.
 <!-- scip-query:agent-setup:end -->
 

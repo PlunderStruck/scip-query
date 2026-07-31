@@ -1,7 +1,7 @@
 # Phase 3 — protected completion controller
 
 Date: 2026-07-30
-Status: in progress; slices 3.1 through 3.3 complete
+Status: complete — slices 3.1 through 3.4 implemented and verified
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -162,12 +162,47 @@ Expected validation:
 - conflicting successor transitions are explicit; and
 - crash recovery cannot leave both predecessor and successor current.
 
+Execution result:
+
+- one content-addressed `SQTR-...` rule fixes the complete predecessor goal,
+  exact successor goal and change, permitted goal fields, retained invariants,
+  protected artifact byte transitions, and evidence qualifications;
+- applicability is decided from the fixed Git predecessor, including the rule
+  bytes themselves, so a candidate-created or candidate-edited rule cannot
+  authorize that same candidate;
+- completion publishes one superseding evaluation as the atomic
+  meaning-bearing transition, then materializes its embedded successor goal
+  and change idempotently;
+- context capture repairs an interrupted materialization from the immutable
+  evaluation before selecting current work, so a crash cannot leave the
+  predecessor and successor semantically current together;
+- exact baseline evolution is permitted only when both predecessor and
+  successor byte identities match a pre-authorized transition;
+- independently applicable successor rules and merged terminal meanings fail
+  explicitly instead of relying on filesystem order; and
+- the CLI, committed-record compatibility reader, schemas, setup guidance, and
+  uninstall surface all recognize shared `.scipquery/transition-rules`
+  records.
+
 ## Verification gate
 
 Use model-based state-machine tests plus real stop-hook integration. Protect
 the evaluator fixtures outside candidate diffs. Run mutation tests that attempt
 to self-approve through each artifact class. Measure the ordinary no-finding
 stop path and require no new agent command.
+
+Verification result:
+
+- the full suite passed: 288 test files and 2,312 tests;
+- lint, formatting, build, declaration generation, public API compatibility,
+  generated command documentation, and skill-link checks passed;
+- unbounded `incomplete-migration` and `recent-duplicates` reported no
+  findings;
+- all 35 declared architecture dependency rows were present and no declared
+  boundary violation was found; and
+- the final `diff-gate` passed after six parallel record-adapter shapes and one
+  historical co-change signal were reviewed and recorded as evidence-bound
+  suppressions rather than treated as unexamined exceptions.
 
 ## Risks and deferrals
 

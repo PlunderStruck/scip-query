@@ -1,25 +1,24 @@
 {
   "kind": "scip-query-suppression",
-  "suppressionIdentity": "SQ8FA34B0BBC01",
+  "suppressionIdentity": "SQ9977B532BEA7",
   "writer": {
     "tool": "scip-query",
     "version": "0.20.0"
   },
-  "id": "SQ8FA34B0BBC01",
-  "check": "co-change-partner",
-  "file": "src/runtime/commands/command-descriptors.ts",
-  "reason": "The completion descriptor routes to handleCompletion in work-state-handlers, which changed with this surface and owns all autonomous record operations; command-handlers owns unrelated handlers, while 12 of 15 historical co-edits were broad sweeps rather than this feature contract.",
-  "createdAt": "2026-07-29T19:50:55.191Z",
-  "updatedAt": "2026-07-31T07:47:03.151Z",
+  "id": "SQ9977B532BEA7",
+  "check": "echo",
+  "file": "src/storage/completion-transition-rule.ts",
+  "reason": "Both operations publish immutable work-state records, but transition-rule creation uniquely verifies predecessor goal identity and predecessor artifact bytes before publication; the shared publication primitive is already reused and the remaining policy must stay record-specific.",
+  "createdAt": "2026-07-31T07:46:11.269Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
-    "reasonCode": "historical-coupling-ended",
+    "reasonCode": "intentional-twin",
     "decidedBy": "agent",
     "policyVersion": 1,
     "observation": {
       "schemaVersion": 2,
-      "observedAt": "2026-07-31T07:47:03.143Z",
+      "observedAt": "2026-07-31T07:46:11.262Z",
       "facts": {
         "collaborationDomain": {
           "schemaVersion": 1,
@@ -49,7 +48,7 @@
             "name": "scip-query:repository-content",
             "version": 1
           },
-          "digest": "40c40f2d957df80ab899abc7292f31c86663b822d24cad061f5dd70bdf43516a"
+          "digest": "55edc6ebb67afb9a41511ecd6540e5d5c13f2e662e82c337ff27f9c8b3a63e22"
         },
         "relevantInputs": [
           {
@@ -114,7 +113,7 @@
               "name": "scip-query:repository-content",
               "version": 1
             },
-            "digest": "40c40f2d957df80ab899abc7292f31c86663b822d24cad061f5dd70bdf43516a"
+            "digest": "55edc6ebb67afb9a41511ecd6540e5d5c13f2e662e82c337ff27f9c8b3a63e22"
           }
         }
       ],
@@ -137,21 +136,15 @@
     "evidence": [
       {
         "kind": "source",
-        "referent": "src/runtime/commands/command-descriptors.ts",
-        "claim": "The completion descriptor routes to handleCompletion in work-state-handlers, which changed with this surface and owns all autonomous record operations; command-handlers owns unrelated handlers, while 12 of 15 historical co-edits were broad sweeps rather than this feature contract.",
-        "contentHash": "d1fac77c303dc8e9e977758033238a971957137c1eb54bbe0cbc4623e7683f5f"
+        "referent": "src/storage/completion-transition-rule.ts",
+        "claim": "Both operations publish immutable work-state records, but transition-rule creation uniquely verifies predecessor goal identity and predecessor artifact bytes before publication; the shared publication primitive is already reused and the remaining policy must stay record-specific.",
+        "contentHash": "3b14450bf2e3aec80826474b5e1b4dcae44525589f2fb325adbcc5ea3dd38d45"
       },
       {
         "kind": "source",
-        "referent": "src/runtime/commands/work-state-handlers.ts",
-        "claim": "The completion descriptor routes to handleCompletion in work-state-handlers, which changed with this surface and owns all autonomous record operations; command-handlers owns unrelated handlers, while 12 of 15 historical co-edits were broad sweeps rather than this feature contract.",
-        "contentHash": "d5d5d2f4e46e919d10178389455007d71f4aecc3dac6cfbc572eb9f41ee33ac3"
-      },
-      {
-        "kind": "source",
-        "referent": "src/runtime/commands/command-handlers.ts",
-        "claim": "The completion descriptor routes to handleCompletion in work-state-handlers, which changed with this surface and owns all autonomous record operations; command-handlers owns unrelated handlers, while 12 of 15 historical co-edits were broad sweeps rather than this feature contract.",
-        "contentHash": "f21beb90cc9ea84926019ea6a3c821358cd18b1c54a26d618cfa6bf7cb6d0283"
+        "referent": "src/storage/autonomous-work-state.ts",
+        "claim": "Both operations publish immutable work-state records, but transition-rule creation uniquely verifies predecessor goal identity and predecessor artifact bytes before publication; the shared publication primitive is already reused and the remaining policy must stay record-specific.",
+        "contentHash": "5f8b905314dd7ff4e5b995f5b5aa0ec8b27b28c8c07d83c4296619548cef55b1"
       }
     ],
     "invalidateOn": {

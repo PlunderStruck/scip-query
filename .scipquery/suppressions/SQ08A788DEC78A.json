@@ -1,25 +1,24 @@
 {
   "kind": "scip-query-suppression",
-  "suppressionIdentity": "SQ8FA34B0BBC01",
+  "suppressionIdentity": "SQ08A788DEC78A",
   "writer": {
     "tool": "scip-query",
     "version": "0.20.0"
   },
-  "id": "SQ8FA34B0BBC01",
-  "check": "co-change-partner",
-  "file": "src/runtime/commands/command-descriptors.ts",
-  "reason": "The completion descriptor routes to handleCompletion in work-state-handlers, which changed with this surface and owns all autonomous record operations; command-handlers owns unrelated handlers, while 12 of 15 historical co-edits were broad sweeps rather than this feature contract.",
-  "createdAt": "2026-07-29T19:50:55.191Z",
-  "updatedAt": "2026-07-31T07:47:03.151Z",
+  "id": "SQ08A788DEC78A",
+  "check": "echo",
+  "file": "src/domain/completion-transition-rule.ts",
+  "reason": "Opaque record identities intentionally use record-owned prefix patterns; keeping this predicate beside the SQTR identity definition preserves its type guard and prevents a generic validator from accepting the wrong record family.",
+  "createdAt": "2026-07-31T07:45:49.903Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
-    "reasonCode": "historical-coupling-ended",
+    "reasonCode": "intentional-twin",
     "decidedBy": "agent",
     "policyVersion": 1,
     "observation": {
       "schemaVersion": 2,
-      "observedAt": "2026-07-31T07:47:03.143Z",
+      "observedAt": "2026-07-31T07:45:49.896Z",
       "facts": {
         "collaborationDomain": {
           "schemaVersion": 1,
@@ -49,7 +48,7 @@
             "name": "scip-query:repository-content",
             "version": 1
           },
-          "digest": "40c40f2d957df80ab899abc7292f31c86663b822d24cad061f5dd70bdf43516a"
+          "digest": "52eced5842f92a3d4d594c6a8d1d1cbcd2be83fe0d13d06edb1b4336d3ceec29"
         },
         "relevantInputs": [
           {
@@ -114,7 +113,7 @@
               "name": "scip-query:repository-content",
               "version": 1
             },
-            "digest": "40c40f2d957df80ab899abc7292f31c86663b822d24cad061f5dd70bdf43516a"
+            "digest": "52eced5842f92a3d4d594c6a8d1d1cbcd2be83fe0d13d06edb1b4336d3ceec29"
           }
         }
       ],
@@ -137,21 +136,15 @@
     "evidence": [
       {
         "kind": "source",
-        "referent": "src/runtime/commands/command-descriptors.ts",
-        "claim": "The completion descriptor routes to handleCompletion in work-state-handlers, which changed with this surface and owns all autonomous record operations; command-handlers owns unrelated handlers, while 12 of 15 historical co-edits were broad sweeps rather than this feature contract.",
-        "contentHash": "d1fac77c303dc8e9e977758033238a971957137c1eb54bbe0cbc4623e7683f5f"
+        "referent": "src/domain/completion-transition-rule.ts",
+        "claim": "Opaque record identities intentionally use record-owned prefix patterns; keeping this predicate beside the SQTR identity definition preserves its type guard and prevents a generic validator from accepting the wrong record family.",
+        "contentHash": "d9a469d03be973c5ee4e7b120d24391100d89ab614994705d9be584e2269797c"
       },
       {
         "kind": "source",
-        "referent": "src/runtime/commands/work-state-handlers.ts",
-        "claim": "The completion descriptor routes to handleCompletion in work-state-handlers, which changed with this surface and owns all autonomous record operations; command-handlers owns unrelated handlers, while 12 of 15 historical co-edits were broad sweeps rather than this feature contract.",
-        "contentHash": "d5d5d2f4e46e919d10178389455007d71f4aecc3dac6cfbc572eb9f41ee33ac3"
-      },
-      {
-        "kind": "source",
-        "referent": "src/runtime/commands/command-handlers.ts",
-        "claim": "The completion descriptor routes to handleCompletion in work-state-handlers, which changed with this surface and owns all autonomous record operations; command-handlers owns unrelated handlers, while 12 of 15 historical co-edits were broad sweeps rather than this feature contract.",
-        "contentHash": "f21beb90cc9ea84926019ea6a3c821358cd18b1c54a26d618cfa6bf7cb6d0283"
+        "referent": "src/domain/autonomous-completion-context.ts",
+        "claim": "Opaque record identities intentionally use record-owned prefix patterns; keeping this predicate beside the SQTR identity definition preserves its type guard and prevents a generic validator from accepting the wrong record family.",
+        "contentHash": "1b9dd282483d832a47bac1d1e8fe6f710b5ee7605f048d1c786b11bbb7c22f1c"
       }
     ],
     "invalidateOn": {

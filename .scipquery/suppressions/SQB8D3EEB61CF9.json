@@ -1,25 +1,24 @@
 {
   "kind": "scip-query-suppression",
-  "suppressionIdentity": "SQ8FA34B0BBC01",
+  "suppressionIdentity": "SQB8D3EEB61CF9",
   "writer": {
     "tool": "scip-query",
     "version": "0.20.0"
   },
-  "id": "SQ8FA34B0BBC01",
-  "check": "co-change-partner",
-  "file": "src/runtime/commands/command-descriptors.ts",
-  "reason": "The completion descriptor routes to handleCompletion in work-state-handlers, which changed with this surface and owns all autonomous record operations; command-handlers owns unrelated handlers, while 12 of 15 historical co-edits were broad sweeps rather than this feature contract.",
-  "createdAt": "2026-07-29T19:50:55.191Z",
-  "updatedAt": "2026-07-31T07:47:03.151Z",
+  "id": "SQB8D3EEB61CF9",
+  "check": "echo",
+  "file": "src/storage/completion-transition-rule.ts",
+  "reason": "Path readers are deliberately thin typed adapters over the shared bounded parser; each supplies a distinct decoder and result type, and extracting that one-line dispatch would obscure rather than reduce the record boundary.",
+  "createdAt": "2026-07-31T07:46:31.772Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
-    "reasonCode": "historical-coupling-ended",
+    "reasonCode": "intentional-twin",
     "decidedBy": "agent",
     "policyVersion": 1,
     "observation": {
       "schemaVersion": 2,
-      "observedAt": "2026-07-31T07:47:03.143Z",
+      "observedAt": "2026-07-31T07:46:31.765Z",
       "facts": {
         "collaborationDomain": {
           "schemaVersion": 1,
@@ -49,7 +48,7 @@
             "name": "scip-query:repository-content",
             "version": 1
           },
-          "digest": "40c40f2d957df80ab899abc7292f31c86663b822d24cad061f5dd70bdf43516a"
+          "digest": "357bd712e4a852d19cf6a66627c2923a341d1bc69ad3bac1ff11bbe6ba3f55a0"
         },
         "relevantInputs": [
           {
@@ -114,7 +113,7 @@
               "name": "scip-query:repository-content",
               "version": 1
             },
-            "digest": "40c40f2d957df80ab899abc7292f31c86663b822d24cad061f5dd70bdf43516a"
+            "digest": "357bd712e4a852d19cf6a66627c2923a341d1bc69ad3bac1ff11bbe6ba3f55a0"
           }
         }
       ],
@@ -137,21 +136,15 @@
     "evidence": [
       {
         "kind": "source",
-        "referent": "src/runtime/commands/command-descriptors.ts",
-        "claim": "The completion descriptor routes to handleCompletion in work-state-handlers, which changed with this surface and owns all autonomous record operations; command-handlers owns unrelated handlers, while 12 of 15 historical co-edits were broad sweeps rather than this feature contract.",
-        "contentHash": "d1fac77c303dc8e9e977758033238a971957137c1eb54bbe0cbc4623e7683f5f"
+        "referent": "src/storage/completion-transition-rule.ts",
+        "claim": "Path readers are deliberately thin typed adapters over the shared bounded parser; each supplies a distinct decoder and result type, and extracting that one-line dispatch would obscure rather than reduce the record boundary.",
+        "contentHash": "3b14450bf2e3aec80826474b5e1b4dcae44525589f2fb325adbcc5ea3dd38d45"
       },
       {
         "kind": "source",
-        "referent": "src/runtime/commands/work-state-handlers.ts",
-        "claim": "The completion descriptor routes to handleCompletion in work-state-handlers, which changed with this surface and owns all autonomous record operations; command-handlers owns unrelated handlers, while 12 of 15 historical co-edits were broad sweeps rather than this feature contract.",
-        "contentHash": "d5d5d2f4e46e919d10178389455007d71f4aecc3dac6cfbc572eb9f41ee33ac3"
-      },
-      {
-        "kind": "source",
-        "referent": "src/runtime/commands/command-handlers.ts",
-        "claim": "The completion descriptor routes to handleCompletion in work-state-handlers, which changed with this surface and owns all autonomous record operations; command-handlers owns unrelated handlers, while 12 of 15 historical co-edits were broad sweeps rather than this feature contract.",
-        "contentHash": "f21beb90cc9ea84926019ea6a3c821358cd18b1c54a26d618cfa6bf7cb6d0283"
+        "referent": "src/storage/autonomous-work-ledger.ts",
+        "claim": "Path readers are deliberately thin typed adapters over the shared bounded parser; each supplies a distinct decoder and result type, and extracting that one-line dispatch would obscure rather than reduce the record boundary.",
+        "contentHash": "8f037c412214b9f4c57e134fb00771f988110dfead90104d5835afc687c0bab1"
       }
     ],
     "invalidateOn": {

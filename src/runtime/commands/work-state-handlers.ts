@@ -5,6 +5,10 @@ import { decodeAttemptCreateRequest, decodeDecisionCreateRequest } from '../../d
 import { isCompletionEvaluationId, isCompletionTransitionId } from '../../domain/autonomous-completion.js';
 import { isCompletionContextSnapshotId } from '../../domain/autonomous-completion-context.js';
 import {
+  decodeCompletionTransitionRuleRequest,
+  isCompletionTransitionRuleId,
+} from '../../domain/completion-transition-rule.js';
+import {
   decodeObligationAdmissionRequest,
   decodeObligationTransitionRequest,
   isObligationId,
@@ -51,6 +55,12 @@ import {
   readCompletionTransitionRecordFile,
 } from '../../storage/autonomous-completion.js';
 import { readCompletionContextSnapshotFile } from '../../storage/autonomous-completion-context.js';
+import {
+  createCompletionTransitionRuleFile,
+  readCompletionTransitionRuleFile,
+  readCompletionTransitionRulePath,
+  readCompletionTransitionRules,
+} from '../../storage/completion-transition-rule.js';
 import { commandOptions, printJsonEnvelope, stringOptionValue } from '../command-kit/command-execution.js';
 import { resolveProjectRoot } from '../cli-context.js';
 import { cliVersion } from '../cli-support.js';
@@ -60,7 +70,7 @@ const WORK_STATE_OPERATIONS = ['create', 'read', 'validate', 'status'] as const;
 type WorkStateOperation = (typeof WORK_STATE_OPERATIONS)[number];
 const OBLIGATION_OPERATIONS = ['admit', 'transition', 'read', 'validate', 'status'] as const;
 type ObligationOperation = (typeof OBLIGATION_OPERATIONS)[number];
-const COMPLETION_OPERATIONS = ['read', 'validate', 'status'] as const;
+const COMPLETION_OPERATIONS = ['rule-create', 'read', 'validate', 'status'] as const;
 type CompletionOperation = (typeof COMPLETION_OPERATIONS)[number];
 
 export function handleGoal(operationValue: unknown, targetValue: unknown, rawOpts: unknown): void {
@@ -118,7 +128,7 @@ export function handleCompletion(operationValue: unknown, targetValue: unknown, 
   const target = optionalTarget(targetValue);
   const opts = commandOptions(rawOpts);
   const projectRoot = resolveProjectRoot();
-  const result = runCompletionOperation(projectRoot, operation, target);
+  const result = runCompletionOperation(projectRoot, operation, target, stringOptionValue(opts, 'input'));
   printCompletionResult([operation, ...(target ? [target] : [])], opts, result);
   if (workStateResultFailed(result)) process.exitCode = 1;
 }
@@ -335,8 +345,21 @@ function runCompletionOperation(
   projectRoot: string,
   operation: CompletionOperation,
   target: string | undefined,
+  input: string | undefined,
 ): unknown {
   switch (operation) {
+    case 'rule-create': {
+      const request = decodeCompletionTransitionRuleRequest(
+        readJsonRequest(requiredInput(input, 'completion rule-create')),
+      );
+      if (!request.ok) throw new Error(request.error);
+      return {
+        operation,
+        ...createCompletionTransitionRuleFile(projectRoot, requiredCollaborationDomain(projectRoot), request.request, {
+          toolVersion: cliVersion,
+        }),
+      };
+    }
     case 'read': {
       const identity = requiredTarget(target, 'completion read');
       if (isCompletionContextSnapshotId(identity)) {
@@ -348,14 +371,25 @@ function runCompletionOperation(
       if (isCompletionTransitionId(identity)) {
         return { operation, ...readCompletionTransitionRecordFile(projectRoot, identity) };
       }
-      throw new Error(`invalid completion context, evaluation, or transition identity: ${identity}`);
+      if (isCompletionTransitionRuleId(identity)) {
+        return { operation, ...readCompletionTransitionRuleFile(projectRoot, identity) };
+      }
+      throw new Error(`invalid completion context, evaluation, transition, or rule identity: ${identity}`);
     }
     case 'validate': {
       const path = repositoryRecordPath(projectRoot, requiredTarget(target, 'completion validate'));
-      return { operation, path: relative(projectRoot, path), ...readCompletionRecordPath(path) };
+      const relativePath = relative(projectRoot, path).replaceAll('\\', '/');
+      return {
+        operation,
+        path: relativePath,
+        ...(relativePath.startsWith('.scipquery/transition-rules/')
+          ? readCompletionTransitionRulePath(path)
+          : readCompletionRecordPath(path)),
+      };
     }
     case 'status': {
       const history = readCompletionHistory(projectRoot, target);
+      const transitionRules = readCompletionTransitionRules(projectRoot);
       return {
         operation,
         records: history.summary.states,
@@ -365,7 +399,13 @@ function runCompletionOperation(
         goalCompatibility: history.goalCompatibility,
         changeCompatibility: history.changeCompatibility,
         obligationCompatibility: history.obligationCompatibility,
-        warnings: [...history.contexts.warnings, ...history.evaluations.warnings, ...history.transitions.warnings],
+        transitionRuleCompatibility: transitionRules.compatibility,
+        warnings: [
+          ...history.contexts.warnings,
+          ...transitionRules.warnings,
+          ...history.evaluations.warnings,
+          ...history.transitions.warnings,
+        ],
         integrityIssues: history.integrityIssues,
         summary: history.summary,
       };

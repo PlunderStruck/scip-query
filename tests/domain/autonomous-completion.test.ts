@@ -149,6 +149,35 @@ describe('autonomous completion domain', () => {
     ]);
   });
 
+  it('keeps merged successor branches conflicted when they authorize different terminal meanings', () => {
+    const leftRequest = evaluationRequest('complete');
+    leftRequest.idempotencyKey = 'successor-left';
+    leftRequest.authorizedSuccessor = {
+      transitionRuleId: 'SQTR-11111111111111111111111111111111',
+      successorGoalId: SUCCESSOR_GOAL_ID,
+    };
+    const rightRequest = evaluationRequest('complete');
+    rightRequest.idempotencyKey = 'successor-right';
+    rightRequest.authorizedSuccessor = {
+      transitionRuleId: 'SQTR-22222222222222222222222222222222',
+      successorGoalId: 'SQG-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+    };
+
+    const summary = foldCompletionHistory(
+      [{ changeId: CHANGE_ID, goalId: GOAL_ID }],
+      [evaluation(leftRequest, '2026-07-30T12:05:00.000Z'), evaluation(rightRequest, '2026-07-30T12:06:00.000Z')],
+      [],
+    );
+
+    expect(summary.states).toEqual([
+      expect.objectContaining({
+        state: 'conflicted',
+        reasons: [expect.stringContaining('conflicting terminal completion meanings')],
+      }),
+    ]);
+    expect(summary.conflicts).toEqual([expect.stringContaining('conflicting terminal completion meanings')]);
+  });
+
   it('classifies future schemas and keeps packaged record discriminators aligned', () => {
     const complete = evaluation(evaluationRequest('complete'));
     const transition = createCompletionTransitionRecord(complete);

@@ -1,6 +1,6 @@
 # Committed record compatibility
 
-scip-query stores eleven kinds of team-shared records in Git:
+scip-query stores twelve kinds of team-shared records in Git:
 
 - `.scipquery/goals/*.json` contains immutable, authorized goal versions.
 - `.scipquery/changes/*.json` contains immutable intended bodies of work tied
@@ -13,6 +13,8 @@ scip-query stores eleven kinds of team-shared records in Git:
   completion conditions.
 - `.scipquery/obligation-transitions/*.json` contains evidence-backed terminal
   obligation transitions.
+- `.scipquery/transition-rules/*.json` contains exact, pre-authorized
+  predecessor-to-successor policy bundles.
 - `.scipquery/completion-contexts/*.json` fixes the goal, policy, evaluator
   build, command registry, protected-artifact rules, and repository target
   used by one completion judgment.
@@ -140,6 +142,19 @@ not manufacture the authority supplied by a current controller evaluation. A
 non-established predicate blocks completion. A completion transition can be
 derived only from a complete evaluation, and its identity is derived from that
 evaluation so retries reuse one semantic event.
+
+New autonomous successor rules conform to
+[`schemas/completion-transition-rule-request.schema.json`](schemas/completion-transition-rule-request.schema.json)
+and
+[`schemas/completion-transition-rule-record.schema.json`](schemas/completion-transition-rule-record.schema.json).
+A rule embeds the exact predecessor goal, successor goal, successor intended
+change, fields whose semantic values differ, every retained predecessor
+invariant, exact protected-artifact byte transitions, and evidence
+qualifications for all six predicates. A rule changed by the candidate cannot
+authorize itself. When exactly one fixed rule applies, the superseding
+evaluation activates the embedded successor meaning atomically; ordinary goal
+and change files are idempotent materializations that a retry can reconstruct.
+Different applicable successors remain an explicit conflict.
 
 `completion status [change-id]` classifies the context, evaluation, and
 transition directories, validates all goal/change/context/evaluation/transition

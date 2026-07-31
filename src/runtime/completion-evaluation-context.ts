@@ -21,6 +21,7 @@ import {
   type CompletionPolicySnapshot,
   type ProtectedArtifactRule,
 } from '../domain/autonomous-completion-context.js';
+import { transitionRuleAuthorizedReferents } from '../domain/completion-transition-rule.js';
 import type { ObservationReceiptV2 } from '../domain/observation-receipt.js';
 import { isPathInsideProject } from '../domain/path-normalization.js';
 import { stableJson } from '../domain/stable-json.js';
@@ -29,7 +30,12 @@ import { sha256FileWithinLimit, SOURCE_ARTIFACT_MAX_BYTES } from '../filesystem/
 import { DIFF_GATE_CHECKS, type DiffGateResult } from '../queries/impact/diff-gate.js';
 import { readObligationLifecycle } from '../storage/autonomous-work-obligations.js';
 import { createCompletionContextSnapshotFile } from '../storage/autonomous-completion-context.js';
-import { createCompletionEvaluationFiles } from '../storage/autonomous-completion.js';
+import {
+  createCompletionEvaluationFiles,
+  readCompletionHistory,
+  recoverCompletionSuccessorMaterializations,
+} from '../storage/autonomous-completion.js';
+import { selectCompletionTransitionRule } from '../storage/completion-transition-rule.js';
 import {
   readGoalRecords,
   readIntendedChangeRecords,
@@ -120,6 +126,9 @@ export function captureFixedCompletionContext(
   if (!collaborationDomainId) {
     throw new Error('completion evaluation requires a configured collaboration domain');
   }
+  recoverCompletionSuccessorMaterializations(projectRoot, collaborationDomainId, {
+    toolVersion: cliVersion,
+  });
   const observation = captureFixedRepositoryObservation({
     projectRoot,
     config,
@@ -128,11 +137,22 @@ export function captureFixedCompletionContext(
   });
   const targetObservation = observation.receipt;
   const goals = readGoalRecords(projectRoot);
-  const changes = readIntendedChangeRecords(projectRoot, goals);
+  const allChanges = readIntendedChangeRecords(projectRoot, goals);
+  const completionHistory = readCompletionHistory(projectRoot);
+  const terminalChangeIds = new Set(
+    completionHistory.summary.states
+      .filter((state) => state.state === 'complete' || state.state === 'superseded')
+      .map((state) => state.changeId),
+  );
+  const changes = {
+    ...allChanges,
+    records: allChanges.records.filter((change) => !terminalChangeIds.has(change.changeId)),
+  };
   const recordIssues = [
     ...goals.compatibility.issues.map((issue) => `goal ${issue.path}: ${issue.reason}`),
-    ...changes.compatibility.issues.map((issue) => `intended change ${issue.path}: ${issue.reason}`),
-    ...changes.integrityIssues,
+    ...allChanges.compatibility.issues.map((issue) => `intended change ${issue.path}: ${issue.reason}`),
+    ...allChanges.integrityIssues,
+    ...completionHistory.integrityIssues.map((issue) => `completion ${issue}`),
   ];
   if (recordIssues.length > 0) {
     throw new Error(`completion context could not fix current goal/change state: ${recordIssues.join('; ')}`);
@@ -273,7 +293,7 @@ export function stopCompletionEvaluationRequest(
     obligations.summary.liveObligationIds.length === 0 &&
     obligations.summary.conflictedObligationIds.length === 0 &&
     obligations.summary.orphanTransitionIds.length === 0;
-  const predicatesBeforeAuthority: CompletionPredicateJudgment[] = [
+  const rawPredicates: CompletionPredicateJudgment[] = [
     judgment(
       'goal-fulfilled',
       'unknown',
@@ -317,14 +337,41 @@ export function stopCompletionEvaluationRequest(
       target,
     ),
   ];
+  const transitionRule = selectCompletionTransitionRule(
+    projectRoot,
+    {
+      goalId: context.goalId,
+      predicates: rawPredicates,
+    },
+    authorityInputs.predecessor,
+    authorityInputs.changedPaths,
+  );
+  const predicatesBeforeAuthority =
+    transitionRule.state === 'conflicted'
+      ? rawPredicates.map((judgment) =>
+          judgment.predicate === 'policy-permitted'
+            ? {
+                ...judgment,
+                state: 'disproven' as const,
+                reasons: [
+                  ...judgment.reasons,
+                  ...transitionRule.reasons.map((reason) => `Successor transition conflict: ${reason}`),
+                ],
+              }
+            : judgment,
+        )
+      : rawPredicates;
   const authority = createCompletionAuthorityAssessment({
     predecessor: authorityInputs.predecessor,
     changedPaths: authorityInputs.changedPaths,
     protectedArtifacts: context.protectedArtifacts,
-    reliances: completionAuthorityReliances(result),
+    reliances: completionAuthorityReliances(result, transitionRule.state === 'selected'),
     fixedReferents: {
       evaluator: `evaluator-build:${context.evaluator.buildIdentity}`,
     },
+    ...(transitionRule.state === 'selected'
+      ? { authorizedReferents: transitionRuleAuthorizedReferents(transitionRule.rule) }
+      : {}),
   });
   const predicates = applyCompletionAuthorityFirewall(predicatesBeforeAuthority, authority);
   return {
@@ -340,10 +387,21 @@ export function stopCompletionEvaluationRequest(
     },
     predicates,
     authority,
+    ...(transitionRule.state === 'selected'
+      ? {
+          authorizedSuccessor: {
+            transitionRuleId: transitionRule.rule.transitionRuleId,
+            successorGoalId: transitionRule.rule.successorGoal.goalId,
+          },
+        }
+      : {}),
   };
 }
 
-function completionAuthorityReliances(result: DiffGateResult): CompletionAuthorityReliance[] {
+function completionAuthorityReliances(
+  result: DiffGateResult,
+  selectedTransitionRule: boolean,
+): CompletionAuthorityReliance[] {
   return [
     {
       class: 'goal',
@@ -363,6 +421,16 @@ function completionAuthorityReliances(result: DiffGateResult): CompletionAuthori
       reason:
         'The candidate changed configuration that selects completion checks or policy, so that changed configuration cannot authorize its own weakened evaluation.',
     },
+    ...(selectedTransitionRule
+      ? [
+          {
+            class: 'transition-rule' as const,
+            predicates: COMPLETION_PREDICATES,
+            reason:
+              'The candidate changed the transition rule selected to authorize its successor, so that candidate-controlled rule cannot authorize itself.',
+          },
+        ]
+      : []),
     ...(result.suppressed.length > 0
       ? [
           {
