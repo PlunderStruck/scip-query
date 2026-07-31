@@ -48,8 +48,10 @@ describe('code CLI output contract', () => {
       kind: 'scip-query-result',
       schemaVersion: 1,
       command: 'code',
+      operationRole: 'repository-observation',
       evidenceContext: {
         schemaVersion: 1,
+        operationRole: 'repository-observation',
         receipt: {
           schemaVersion: 1,
           authorityKind: 'index-only',

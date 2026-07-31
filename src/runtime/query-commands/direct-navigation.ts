@@ -1,6 +1,7 @@
 import { code, type CodeResult } from '../../queries/navigation/code.js';
 import { outline } from '../../queries/navigation/outline.js';
 import { refs } from '../../queries/navigation/refs.js';
+import { REPOSITORY_OBSERVATION_OPERATION } from '../command-operation.js';
 import { compareReferenceKey, referencePage } from '../refs-pagination.js';
 import type { CommandDescriptor, InvocationCoverage } from '../command-kit/command-descriptor-types.js';
 import {
@@ -299,6 +300,7 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
     ]),
     budget: 'semantic',
     agent: {
+      operation: REPOSITORY_OBSERVATION_OPERATION,
       answers: ['Which files reference this symbol?', 'Is this symbol used anywhere, or only defined?'],
       returns: ['referencing file paths', 'reference line numbers grouped by file'],
       inputs: ['symbol'],

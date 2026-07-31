@@ -30,6 +30,16 @@
       "type": "string",
       "minLength": 1
     },
+    "operationRole": {
+      "enum": [
+        "repository-observation",
+        "repository-preview",
+        "mutation",
+        "composite",
+        "environment-observation",
+        "tool-information"
+      ]
+    },
     "resultSchemaVersion": {
       "type": "integer",
       "minimum": 1
@@ -59,6 +69,16 @@
       "properties": {
         "schemaVersion": {
           "const": 1
+        },
+        "operationRole": {
+          "enum": [
+            "repository-observation",
+            "repository-preview",
+            "mutation",
+            "composite",
+            "environment-observation",
+            "tool-information"
+          ]
         },
         "receipt": {
           "$ref": "#/$defs/observationReceiptV1"

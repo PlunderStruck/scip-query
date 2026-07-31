@@ -1,10 +1,15 @@
 import type { Command } from 'commander';
 import type { CommandDescriptor, CommandResultUnitPolicy } from '../command-kit/command-descriptor-types.js';
-import { setCommandAgentContractMap, setCommandEvidenceMap } from '../command-kit/command-execution.js';
+import {
+  runWithCommandOperationRole,
+  setCommandAgentContractMap,
+  setCommandEvidenceMap,
+} from '../command-kit/command-execution.js';
 import { descriptorEvidenceTier } from '../command-kit/command-docs.js';
 import { sanitizeTerminalLine } from '../../platform/terminal-output.js';
 import { cliVersion } from '../cli-support.js';
 import { runWithCliOutputPagination } from '../output-pagination.js';
+import { resolveCommandOperationRole } from '../command-operation.js';
 
 type PlainCommanderDefault = string | boolean | string[] | undefined;
 
@@ -61,19 +66,27 @@ export function registerCommandDescriptors(
       try {
         const opts = command.optsWithGlobals() as Record<string, unknown>;
         validateJsonOutputOptions(opts);
-        await runWithCliOutputPagination(
-          {
-            command: descriptor.id,
-            producerVersion: cliVersion,
-            invocationPrefix: process.argv[1] ? [process.execPath, process.argv[1]] : ['scip-query'],
-            argv: process.argv.slice(2),
-            cwd: process.cwd(),
-            json: opts['json'] === true,
-            ...(typeof opts['outputPageSize'] === 'number' ? { pageSize: opts['outputPageSize'] } : {}),
-            ...(typeof opts['outputCursor'] === 'string' ? { cursor: opts['outputCursor'] } : {}),
-          },
-          () => descriptor.handler(...args),
-        );
+        const run = () =>
+          runWithCliOutputPagination(
+            {
+              command: descriptor.id,
+              producerVersion: cliVersion,
+              invocationPrefix: process.argv[1] ? [process.execPath, process.argv[1]] : ['scip-query'],
+              argv: process.argv.slice(2),
+              cwd: process.cwd(),
+              json: opts['json'] === true,
+              ...(typeof opts['outputPageSize'] === 'number' ? { pageSize: opts['outputPageSize'] } : {}),
+              ...(typeof opts['outputCursor'] === 'string' ? { cursor: opts['outputCursor'] } : {}),
+            },
+            () => descriptor.handler(...args),
+          );
+        const operation = descriptor.agent
+          ? resolveCommandOperationRole(descriptor.agent.operation, {
+              args: args.slice(0, -1),
+              options: opts,
+            })
+          : undefined;
+        await (operation ? runWithCommandOperationRole(operation, run) : run());
       } catch (err) {
         handleCommandError(err);
       }

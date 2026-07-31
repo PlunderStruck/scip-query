@@ -29,6 +29,21 @@ export {
   supportedCliResultSchemaVersions,
 } from './cli-json-envelope.js';
 export {
+  COMMAND_OPERATION_ROLES,
+  commandOperation,
+  commandOperationRoles,
+  isCommandOperationRole,
+  operationObservesRepository,
+  resolveCommandOperationRole,
+} from './command-operation.js';
+export type {
+  CommandOperationInvocation,
+  CommandOperationRole,
+  CommandOperationRule,
+  CommandOperationRuleCondition,
+  CommandOperationSelector,
+} from './command-operation.js';
+export {
   OBSERVATION_RECEIPT_SCHEMA_VERSION,
   compareObservationReceipts,
   isObservationReceipt,

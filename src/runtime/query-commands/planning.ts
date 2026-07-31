@@ -1,4 +1,5 @@
 import * as queries from '../../queries/index.js';
+import { REPOSITORY_OBSERVATION_OPERATION } from '../command-operation.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
 import { doc, option, parseInteger, withCompactJsonOptions } from '../command-kit/command-spec-builders.js';
 import {
@@ -95,6 +96,7 @@ export const planningQueryCommandDescriptors: CommandDescriptor[] = [
     ]),
     budget: 'semantic',
     agent: {
+      operation: REPOSITORY_OBSERVATION_OPERATION,
       answers: [
         'What must I know before editing this target?',
         'Who consumes it, and what breaks if I change it?',

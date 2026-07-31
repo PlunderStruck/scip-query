@@ -116,6 +116,7 @@
           "src/runtime/ast-parser-setup.ts",
           "src/runtime/cleanup-verify.ts",
           "src/runtime/cli-context.ts",
+          "src/runtime/command-operation.ts",
           "src/runtime/cli-support.ts",
           "src/runtime/config.ts",
           "src/runtime/diff-gate-outcomes.ts",

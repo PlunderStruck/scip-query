@@ -106,11 +106,41 @@ describe('CLI JSON envelope compatibility', () => {
       kind: 'malformed',
       reason: expect.stringContaining('evidenceContext'),
     });
+    expect(decodeCliJsonEnvelope({ ...current, operationRole: 'read-ish' })).toMatchObject({
+      kind: 'malformed',
+      reason: expect.stringContaining('operationRole'),
+    });
+    expect(
+      decodeCliJsonEnvelope({
+        ...current,
+        operationRole: 'repository-observation',
+        evidenceContext: {
+          schemaVersion: CLI_EVIDENCE_CONTEXT_SCHEMA_VERSION,
+          operationRole: 'mutation',
+          receipt: {
+            schemaVersion: 1,
+            authorityKind: 'index-only',
+            observedAt: '2026-07-30T12:00:00.000Z',
+            projectIdentity: 'project',
+            index: {
+              generationIdentity: 'generation',
+              source: 'immutable',
+              alignment: 'not-certified',
+            },
+          },
+          analysisManifest: { schemaVersion: CLI_ANALYSIS_MANIFEST_SCHEMA_VERSION },
+        },
+      }),
+    ).toMatchObject({
+      kind: 'malformed',
+      reason: expect.stringContaining('must agree'),
+    });
   });
 
   it('carries receipt and analysis metadata as separate nested contracts', () => {
     const evidenceContext = {
       schemaVersion: CLI_EVIDENCE_CONTEXT_SCHEMA_VERSION,
+      operationRole: 'repository-observation' as const,
       receipt: {
         schemaVersion: 1,
         authorityKind: 'index-worktree' as const,
@@ -136,6 +166,7 @@ describe('CLI JSON envelope compatibility', () => {
     const envelope = createCliJsonEnvelope({
       producerVersion: '1.2.3',
       command: 'stats',
+      operationRole: 'repository-observation',
       args: [],
       options: { json: true },
       result: { documents: 1 },
@@ -223,6 +254,14 @@ describe('CLI JSON envelope compatibility', () => {
 
     expect(schema.properties['kind']?.['const']).toBe(CLI_JSON_ENVELOPE_KIND);
     expect(schema.properties['schemaVersion']?.['const']).toBe(CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION);
+    expect(schema.properties['operationRole']?.['enum']).toEqual([
+      'repository-observation',
+      'repository-preview',
+      'mutation',
+      'composite',
+      'environment-observation',
+      'tool-information',
+    ]);
     expect(schema.properties['evidenceContext']?.['$ref']).toBe('#/$defs/evidenceContextV1');
     expect(schema.required).toEqual(
       expect.arrayContaining([

@@ -1,0 +1,91 @@
+{
+  "acceptedAt": "2026-07-31T01:29:53.024Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "f5bc118615a4a4f9bba157bd1e0820d7461a98d586b314167b7b425295eb7f2f",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export COMMAND_OPERATION_ROLES.",
+      "target": "./runtime:COMMAND_OPERATION_ROLES"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CliEvidenceContextV1 changed from interface CliEvidenceContextV1 { schemaVersion: typeof CLI_EVIDENCE_CONTEXT_SCHEMA_VERSION; receipt: ObservationReceipt; analysisManifest: CliAnalysisManifestV1; } to interface CliEvidenceContextV1 { schemaVersion: typeof CLI_EVIDENCE_CONTEXT_SCHEMA_VERSION; operationRole?: CommandOperationRole; receipt: ObservationReceipt; analysisManifest: ....",
+      "target": "./runtime:CliEvidenceContextV1"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CliJsonEnvelopeV1 changed from interface CliJsonEnvelopeV1<Result = unknown> { kind: typeof CLI_JSON_ENVELOPE_KIND; schemaVersion: typeof CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION; producer: CliJsonProducer; c... to interface CliJsonEnvelopeV1<Result = unknown> { kind: typeof CLI_JSON_ENVELOPE_KIND; schemaVersion: typeof CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION; producer: CliJsonProducer; c....",
+      "target": "./runtime:CliJsonEnvelopeV1"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CommandOperationInvocation.",
+      "target": "./runtime:CommandOperationInvocation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CommandOperationRole.",
+      "target": "./runtime:CommandOperationRole"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CommandOperationRule.",
+      "target": "./runtime:CommandOperationRule"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CommandOperationRuleCondition.",
+      "target": "./runtime:CommandOperationRuleCondition"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CommandOperationSelector.",
+      "target": "./runtime:CommandOperationSelector"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export commandOperation.",
+      "target": "./runtime:commandOperation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export commandOperationRoles.",
+      "target": "./runtime:commandOperationRoles"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export isCommandOperationRole.",
+      "target": "./runtime:isCommandOperationRole"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export operationObservesRepository.",
+      "target": "./runtime:operationObservesRepository"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export resolveCommandOperationRole.",
+      "target": "./runtime:resolveCommandOperationRole"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "8fc0fde6f867fbf7fdc4b3f7205d742686a204acd63af6d4ce398681703275ec",
+  "reason": "Expose descriptor-owned command operation roles and optional envelope labels so agents can distinguish observations, previews, mutations, and composite operations without breaking existing JSON consumers.",
+  "schemaVersion": 1
+}

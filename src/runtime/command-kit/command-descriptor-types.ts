@@ -1,3 +1,5 @@
+import type { CommandOperationSelector } from '../command-operation.js';
+
 export type CommandOptionParser = (value: string, previous: unknown) => unknown;
 export type CommandHandler = (...args: unknown[]) => void | Promise<void>;
 
@@ -151,6 +153,11 @@ export interface CommandAgentContract {
   scope?: CommandScope;
   /** Default coverage policy; the invocation reports what actually happened. */
   coverage: CoveragePolicy;
+  /**
+   * Observable effect selected from parsed arguments/options. This is
+   * independent from evidence origin and result coverage.
+   */
+  operation: CommandOperationSelector;
   /**
    * Descriptor-owned semantic unit extraction. When omitted, registration
    * derives rows vs. one report from the descriptor's render shape.

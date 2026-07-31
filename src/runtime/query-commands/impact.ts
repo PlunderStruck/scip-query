@@ -1,4 +1,5 @@
 import * as queries from '../../queries/index.js';
+import { REPOSITORY_OBSERVATION_OPERATION } from '../command-operation.js';
 import { dirname } from 'node:path';
 import type { DiffGateCheck } from '../../queries/impact/diff-gate.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
@@ -525,6 +526,7 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     ]),
     heuristic: { label: 'diff gate candidates' },
     agent: {
+      operation: REPOSITORY_OBSERVATION_OPERATION,
       answers: [
         'Does my current diff introduce something this repo blocks on?',
         'What must I fix or explicitly accept before reporting the work done?',

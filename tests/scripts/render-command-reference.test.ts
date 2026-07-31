@@ -150,6 +150,9 @@ describe('renderAgentContractCatalogMarkdown', () => {
           returns: ['referencing files'],
           inputs: ['symbol'],
           coverage: 'bounded',
+          operation: {
+            defaultRole: 'repository-observation',
+          },
         },
       },
     ]);
@@ -158,6 +161,7 @@ describe('renderAgentContractCatalogMarkdown', () => {
     expect(markdown).toContain('`scip-query example <symbol>`');
     expect(markdown).toContain('Who references this symbol?');
     expect(markdown).toContain('referencing files');
+    expect(markdown).toContain('`repository-observation`');
     expect(markdown).toContain('`bounded`');
     expect(markdown).toContain('<!-- END GENERATED AGENT CONTRACT CATALOG -->');
   });

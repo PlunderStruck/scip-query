@@ -41,10 +41,12 @@ The current envelope is schema version 1:
   "schemaVersion": 1,
   "producer": { "name": "scip-query", "version": "0.20.0" },
   "command": "refs",
+  "operationRole": "repository-observation",
   "resultSchemaVersion": 1,
   "evidence": "graph-fact",
   "evidenceContext": {
     "schemaVersion": 1,
+    "operationRole": "repository-observation",
     "receipt": {
       "schemaVersion": 1,
       "authorityKind": "index-only",
@@ -75,14 +77,26 @@ the transport version. `producer.version` is the installed package version
 that emitted the record. `kind` prevents a consumer from mistaking another
 JSON protocol for a CLI result.
 
-Database-backed repository queries attach `evidenceContext` automatically at
-the shared renderer. Its `receipt` identifies the immutable index generation
-the query actually held. It deliberately does not hash the live worktree,
-which the query did not read. Its `analysisManifest` separately records how
-the result was produced and how much was examined. The version-1 receipt is
-local provenance: `alignment: "not-certified"` does not establish a fixed
-repository snapshot, whole-content equality, or final completion authority.
-Consumers must not infer those stronger relationships from its presence.
+`operationRole` names the effect of the parsed invocation, independently from
+how its result was derived. The closed roles distinguish repository
+observation, repository preview, mutation, combined mutation/observation,
+environment observation, and tool information. A command with several modes
+selects its role from parsed arguments and options before its handler runs.
+
+Repository observations, previews, and composite operations attach
+`evidenceContext` automatically at the shared renderer when they hold an open
+database. Pure mutations and environment/tool-information results do not
+inherit repository-observation authority merely because they emit JSON. The
+context repeats the selected operation role so it remains self-contained; the
+decoder rejects conflicting top-level and nested roles.
+
+The context's `receipt` identifies the immutable index generation the query
+actually held. It deliberately does not hash the live worktree, which the
+query did not read. Its `analysisManifest` separately records how the result
+was produced and how much was examined. The version-1 receipt is local
+provenance: `alignment: "not-certified"` does not establish a fixed repository
+snapshot, whole-content equality, or final completion authority. Consumers
+must not infer those stronger relationships from its presence.
 
 The existing top-level `evidence`, `analysisBudget`, and `coverage` fields
 remain during the additive migration so older tolerant consumers continue to

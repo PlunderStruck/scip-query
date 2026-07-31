@@ -1,5 +1,6 @@
 import * as queries from '../../../queries/index.js';
 import type { CommandDescriptor } from '../../command-kit/command-descriptor-types.js';
+import { commandOperation } from '../../command-operation.js';
 import { definedLimitOption, stringOptionValue } from '../../command-kit/command-execution.js';
 import {
   agentContract,
@@ -105,6 +106,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       [],
       'bounded',
       'repository',
+      commandOperation('repository-preview'),
     ),
     description: 'Ordered, batched deletion plan: graph-fact dead code plus the cascade candidates it unlocks',
     options: withJsonOption([
@@ -129,6 +131,9 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       [],
       'bounded',
       'repository',
+      commandOperation('mutation', [
+        { when: { kind: 'option', name: 'dryRun', equals: true }, role: 'repository-preview' },
+      ]),
     ),
     description: 'Apply a compiler-verified cleanup-plan batch to the working tree',
     options: [
@@ -839,6 +844,8 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
       'side-by-side symbol evidence and divergence classification',
       ['symbol', 'symbol'],
       'complete',
+      undefined,
+      commandOperation('mutation'),
     ),
     description:
       'Generate a behavioral A/B scaffold comparing two same-concept twins (scip-audit integrity scenario) — a ready-to-fill vitest file, not an auto-executor',

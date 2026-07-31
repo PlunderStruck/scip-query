@@ -11,11 +11,17 @@ import {
   commandOptions,
   definedLimitOption,
   printJsonEnvelope,
+  runWithCommandOperationRole,
   validateInvocationCoverage,
 } from '../../src/runtime/command-kit/command-execution.js';
 import type { InvocationCoverage } from '../../src/runtime/command-kit/command-descriptor-types.js';
 import { PUBLIC_QUERY_ENTRIES, PUBLIC_QUERY_SOURCE_PATHS } from '../../src/queries/public-query-entries.js';
 import { watchServiceAutoStartEligible } from '../../src/runtime/watch-service.js';
+import {
+  COMMAND_OPERATION_ROLES,
+  commandOperationRoles,
+  resolveCommandOperationRole,
+} from '../../src/runtime/command-operation.js';
 
 const PRIVATE_QUERY_MODULES = [
   'boundary-evidence',
@@ -144,6 +150,7 @@ describe('CLI contract', () => {
     const coveragePolicies = new Set(['complete', 'bounded', 'sampled', 'unknown']);
     const inputKinds = new Set(['symbol', 'file', 'module', 'pattern', 'path', 'action', 'finding']);
     const scopes = new Set(['diff', 'repository']);
+    const operationRoles = new Set(COMMAND_OPERATION_ROLES);
     const commandIds = new Set(commandDescriptors.map((descriptor) => descriptor.id));
 
     for (const descriptor of commandDescriptors) {
@@ -157,6 +164,27 @@ describe('CLI contract', () => {
       expect(commandResultUnitPolicy(descriptor), `${where}: missing result-unit policy`).toMatchObject({
         kind: expect.stringMatching(/^(rows|report|field)$/),
       });
+      expect(commandOperationRoles(contract.operation).length, `${where}: needs an operation role`).toBeGreaterThan(0);
+      expect(operationRoles.has(contract.operation.defaultRole), `${where}: bad default operation role`).toBe(true);
+      for (const rule of contract.operation.rules ?? []) {
+        expect(operationRoles.has(rule.role), `${where}: bad selected operation role`).toBe(true);
+        if (rule.when.kind === 'argument') {
+          expect(Number.isSafeInteger(rule.when.index) && rule.when.index >= 0, `${where}: bad argument selector`).toBe(
+            true,
+          );
+          expect(rule.when.index, `${where}: selector exceeds positional arity`).toBeLessThan(contract.inputs.length);
+        } else {
+          const optionNames = new Set(
+            (descriptor.options ?? []).flatMap((option) => {
+              const longFlag = option.flags.match(/--([a-z][a-z0-9-]*)/u)?.[1];
+              return longFlag ? [longFlag.replace(/-([a-z])/gu, (_, letter: string) => letter.toUpperCase())] : [];
+            }),
+          );
+          expect(optionNames.has(rule.when.name), `${where}: selector names unknown option "${rule.when.name}"`).toBe(
+            true,
+          );
+        }
+      }
 
       for (const slot of contract.inputs) {
         for (const kind of Array.isArray(slot) ? slot : [slot]) {
@@ -189,6 +217,52 @@ describe('CLI contract', () => {
         expect(contrast.command, `${where}: contrasts itself`).not.toBe(descriptor.id);
       }
     }
+  });
+
+  it('selects operation roles from parsed invocation values before execution', () => {
+    const health = commandDescriptors.find((descriptor) => descriptor.id === 'health')!.agent!.operation;
+    const bench = commandDescriptors.find((descriptor) => descriptor.id === 'bench')!.agent!.operation;
+    const setup = commandDescriptors.find((descriptor) => descriptor.id === 'setup')!.agent!.operation;
+    const suppress = commandDescriptors.find((descriptor) => descriptor.id === 'suppress')!.agent!.operation;
+    const setupHooks = commandDescriptors.find((descriptor) => descriptor.id === 'setup-hooks')!.agent!.operation;
+    const tla = commandDescriptors.find((descriptor) => descriptor.id === 'tla')!.agent!.operation;
+
+    expect(resolveCommandOperationRole(health, { args: [], options: {} })).toBe('repository-observation');
+    expect(resolveCommandOperationRole(health, { args: [], options: { writeBaseline: true } })).toBe('composite');
+    expect(resolveCommandOperationRole(bench, { args: [], options: { profileOut: 'bench.cpuprofile' } })).toBe(
+      'composite',
+    );
+    expect(resolveCommandOperationRole(setup, { args: [], options: {} })).toBe('composite');
+    expect(resolveCommandOperationRole(suppress, { args: ['finding-id'], options: {} })).toBe('mutation');
+    expect(resolveCommandOperationRole(setupHooks, { args: [], options: { dryRun: true } })).toBe('repository-preview');
+    expect(resolveCommandOperationRole(tla, { args: ['scaffold', 'src/a.ts'], options: {} })).toBe('mutation');
+    expect(resolveCommandOperationRole(tla, { args: ['verify', 'specs/A.tla'], options: {} })).toBe(
+      'repository-observation',
+    );
+  });
+
+  it('rejects a role that changes between pre-execution selection and result rendering', () => {
+    expect(() =>
+      runWithCommandOperationRole('mutation', () =>
+        printJsonEnvelope('fan-in', ['symbolName'], { json: true }, { rows: [] }),
+      ),
+    ).toThrow(/changed operation role.*selected mutation.*rendered repository-observation/);
+  });
+
+  it('emits mutation results without inheriting repository observation context', () => {
+    const writes: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
+
+    runWithCommandOperationRole('mutation', () =>
+      printJsonEnvelope('suppress', ['finding-id'], { json: true, compact: true }, { path: 'suppression.json' }),
+    );
+
+    const payload = JSON.parse(writes[0]!) as Record<string, unknown>;
+    expect(payload.operationRole).toBe('mutation');
+    expect(payload).not.toHaveProperty('evidenceContext');
   });
 
   it('keeps heuristic classification descriptor-owned', () => {
@@ -363,6 +437,7 @@ describe('CLI contract', () => {
       producer: { name: 'scip-query', version: expect.any(String) },
       resultSchemaVersion: 1,
       command: 'fan-in',
+      operationRole: 'repository-observation',
       evidence: 'graph-fact',
       args: ['symbolName'],
       options: { json: true },
@@ -457,6 +532,7 @@ describe('CLI contract', () => {
       'producer',
       'resultSchemaVersion',
       'command',
+      'operationRole',
       'evidence',
       'analysisBudget',
       'args',

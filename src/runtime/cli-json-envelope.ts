@@ -1,5 +1,6 @@
 import { isRecordObject } from '../domain/record-validation.js';
 import { isObservationReceipt, type ObservationReceipt } from '../domain/observation-receipt.js';
+import { isCommandOperationRole, type CommandOperationRole } from './command-operation.js';
 
 export const CLI_JSON_ENVELOPE_KIND = 'scip-query-result' as const;
 export const LEGACY_CLI_JSON_ENVELOPE_SCHEMA_VERSION = 0 as const;
@@ -33,6 +34,8 @@ export interface CliAnalysisManifestV1 {
  */
 export interface CliEvidenceContextV1 {
   schemaVersion: typeof CLI_EVIDENCE_CONTEXT_SCHEMA_VERSION;
+  /** Optional only so evidence contexts written before operation roles remain readable. */
+  operationRole?: CommandOperationRole;
   receipt: ObservationReceipt;
   analysisManifest: CliAnalysisManifestV1;
 }
@@ -47,6 +50,8 @@ export interface CliJsonEnvelopeV1<Result = unknown> {
   schemaVersion: typeof CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION;
   producer: CliJsonProducer;
   command: string;
+  /** Optional only for additive compatibility with envelopes written before this field existed. */
+  operationRole?: CommandOperationRole;
   resultSchemaVersion: number;
   evidence?: 'graph-fact' | 'heuristic' | 'mixed';
   analysisBudget?: unknown;
@@ -195,6 +200,23 @@ export function decodeCliJsonEnvelope<Result = unknown>(input: unknown): Decoded
       reason: 'CLI JSON envelope v1: evidenceContext must contain a supported receipt and analysis manifest.',
     };
   }
+  if (input['operationRole'] !== undefined && !isCommandOperationRole(input['operationRole'])) {
+    return {
+      kind: 'malformed',
+      reason: 'CLI JSON envelope v1: operationRole must be a supported command operation role.',
+    };
+  }
+  if (
+    isRecordObject(input['evidenceContext']) &&
+    input['operationRole'] !== undefined &&
+    input['evidenceContext']['operationRole'] !== undefined &&
+    input['operationRole'] !== input['evidenceContext']['operationRole']
+  ) {
+    return {
+      kind: 'malformed',
+      reason: 'CLI JSON envelope v1: top-level and evidence-context operation roles must agree.',
+    };
+  }
 
   return {
     kind: 'supported',
@@ -256,6 +278,7 @@ function isPositiveSafeInteger(value: unknown): value is number {
 
 function isCliEvidenceContextV1(value: unknown): value is CliEvidenceContextV1 {
   if (!isRecordObject(value) || value['schemaVersion'] !== CLI_EVIDENCE_CONTEXT_SCHEMA_VERSION) return false;
+  if (value['operationRole'] !== undefined && !isCommandOperationRole(value['operationRole'])) return false;
   if (!isObservationReceipt(value['receipt'])) return false;
   const manifest = value['analysisManifest'];
   return (

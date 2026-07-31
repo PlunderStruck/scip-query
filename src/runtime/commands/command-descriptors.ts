@@ -1,4 +1,5 @@
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
+import { commandOperation } from '../command-operation.js';
 import {
   agentContract,
   collectValues,
@@ -36,6 +37,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       [],
       'complete',
       'repository',
+      commandOperation('composite'),
     ),
     description: 'Index the codebase and convert to SQLite',
     options: withJsonOption([
@@ -60,6 +62,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       [],
       'complete',
       'repository',
+      commandOperation('composite'),
     ),
     description: 'Add source files skipped by upstream SCIP indexers to the SQLite documents table',
     renderShape: 'custom',
@@ -75,6 +78,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       [],
       'complete',
       'repository',
+      commandOperation('composite'),
     ),
     description: 'Add compiler-resolved Vue SFC references to the SQLite index using Volar',
     options: [option('--project <tsconfig>', 'Vue tsconfig path', undefined, 'frontend/tsconfig.scip.json')],
@@ -144,6 +148,9 @@ export const commandDescriptors: CommandDescriptor[] = [
       [],
       'bounded',
       'repository',
+      commandOperation('repository-observation', [
+        { when: { kind: 'option', name: 'writeBaseline', equals: true }, role: 'composite' },
+      ]),
     ),
     description: 'Composite codebase health report with prioritized action list',
     options: withJsonOption([
@@ -165,6 +172,10 @@ export const commandDescriptors: CommandDescriptor[] = [
       [],
       'sampled',
       'repository',
+      commandOperation('environment-observation', [
+        { when: { kind: 'option', name: 'coldIndex', equals: true }, role: 'composite' },
+        { when: { kind: 'option-present', name: 'profileOut' }, role: 'composite' },
+      ]),
     ),
     description: 'Benchmark indexing and command runtimes for this repository',
     options: withJsonOption([
@@ -188,6 +199,8 @@ export const commandDescriptors: CommandDescriptor[] = [
       'ranked repeated-work groups, counts, and avoidable duration',
       ['path'],
       'bounded',
+      undefined,
+      commandOperation('environment-observation'),
     ),
     description: 'Rank exact repeated computations in a profiling JSONL file by measured avoidable time',
     options: withJsonOption([option('--top <n>', 'Maximum repeated-work groups to show', parsePositiveInteger, 20)]),
@@ -222,6 +235,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       [],
       'complete',
       'repository',
+      commandOperation('mutation'),
     ),
     description: `Install skills (${BUILTIN_SKILLS.join(', ')}) into Claude Code, Codex, and shared agent roots`,
     renderShape: 'custom',
@@ -237,6 +251,9 @@ export const commandDescriptors: CommandDescriptor[] = [
       [],
       'complete',
       'repository',
+      commandOperation('mutation', [
+        { when: { kind: 'option', name: 'dryRun', equals: true }, role: 'repository-preview' },
+      ]),
     ),
     description: 'Install or refresh project-local Codex and Claude Code lifecycle hooks',
     options: withJsonOption([
@@ -282,6 +299,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       [],
       'complete',
       'repository',
+      commandOperation('environment-observation'),
     ),
     description: 'Check whether scip-query and the detected language indexers are actually runnable',
     renderShape: 'custom',
@@ -297,6 +315,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       [],
       'complete',
       'repository',
+      commandOperation('environment-observation'),
     ),
     description: 'Report which evidence and verification capabilities are available in this project',
     options: withJsonOption([option('--matrix', 'Render the project capability matrix (default output)')]),
@@ -313,6 +332,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       [],
       'complete',
       'repository',
+      commandOperation('environment-observation'),
     ),
     description: 'Deprecated alias for capabilities --matrix',
     options: withJsonOption(),
@@ -330,6 +350,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       [],
       'complete',
       'repository',
+      commandOperation('mutation'),
     ),
     description: 'Create a .scipquery.json config file for this project',
     renderShape: 'custom',
@@ -360,6 +381,8 @@ export const commandDescriptors: CommandDescriptor[] = [
       'suppression identity, path, scope, and expiry',
       ['finding'],
       'complete',
+      undefined,
+      commandOperation('mutation'),
     ),
     description: 'Record an accepted finding as a file under .scipquery/suppressions/ with a required reason',
     options: withJsonOption([
@@ -417,6 +440,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       [],
       'complete',
       'repository',
+      commandOperation('environment-observation'),
     ),
     description: 'Diagnose config, index freshness, dependency readiness, and project capabilities',
     options: withJsonOption(),
@@ -433,6 +457,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       [],
       'complete',
       'repository',
+      commandOperation('composite'),
     ),
     description:
       'Bootstrap this project: enable automatic indexing, install agent skills, refresh the index, verify capabilities, and report health',
@@ -460,6 +485,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       [],
       'complete',
       'repository',
+      commandOperation('mutation'),
     ),
     description:
       'Seed agent guidance for this project: AGENTS.md/CLAUDE.md block pointing agents at the scip-query skills and diff gate, plus an optional git pre-commit backstop',
@@ -477,6 +503,9 @@ export const commandDescriptors: CommandDescriptor[] = [
       [],
       'complete',
       'repository',
+      commandOperation('mutation', [
+        { when: { kind: 'option', name: 'dryRun', equals: true }, role: 'repository-preview' },
+      ]),
     ),
     description: 'Write a GitHub Actions workflow that runs scip-query reindex and diff-gate on pull requests',
     options: [
@@ -496,6 +525,9 @@ export const commandDescriptors: CommandDescriptor[] = [
       [],
       'complete',
       'repository',
+      commandOperation('mutation', [
+        { when: { kind: 'option', name: 'dryRun', equals: true }, role: 'repository-preview' },
+      ]),
     ),
     description:
       'Remove selected scip-query-owned integrations; real removal requires exactly one of --global or --project',
@@ -518,6 +550,9 @@ export const commandDescriptors: CommandDescriptor[] = [
       [],
       'complete',
       'repository',
+      commandOperation('composite', [
+        { when: { kind: 'option', name: 'status', equals: true }, role: 'environment-observation' },
+      ]),
     ),
     description: 'Watch in the foreground or manage the per-project background refresh service',
     options: withJsonOption([
@@ -559,6 +594,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       [],
       'complete',
       'repository',
+      commandOperation('environment-observation'),
     ),
     description: 'Show index status for this project',
     options: withJsonOption([option('--capabilities', 'Include the project capability matrix')]),

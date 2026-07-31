@@ -1,4 +1,5 @@
 import * as queries from '../../queries/index.js';
+import { REPOSITORY_OBSERVATION_OPERATION } from '../command-operation.js';
 import type { CommandDescriptor, InvocationCoverage } from '../command-kit/command-descriptor-types.js';
 import {
   agentContract,
@@ -214,6 +215,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     options: [option('--full', 'Run unbounded semantic analysis on large indexes'), compactOption()],
     budget: 'semantic',
     agent: {
+      operation: REPOSITORY_OBSERVATION_OPERATION,
       answers: ['Where is this symbol defined, and everywhere is it referenced?'],
       returns: ['definition sites with source and signature', 'referencing files with line numbers'],
       inputs: ['symbol'],
@@ -287,6 +289,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     description: 'Full module map: files, symbols, deps in/out',
     options: [compactOption()],
     agent: {
+      operation: REPOSITORY_OBSERVATION_OPERATION,
       answers: ['What is in this module?', 'What does this module depend on, and what depends on it?'],
       returns: [
         'module file paths',

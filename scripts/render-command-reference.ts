@@ -4,6 +4,7 @@ import { DIFF_GATE_CHECKS, type DiffGateCheck } from '../src/queries/impact/diff
 import { commandDescriptors } from '../src/runtime/commands/command-descriptors.js';
 import { commandDocEntries, renderCommandReferenceMarkdown } from '../src/runtime/command-kit/command-docs.js';
 import type { CommandDescriptor } from '../src/runtime/command-kit/command-descriptor-types.js';
+import { commandOperationRoles } from '../src/runtime/command-operation.js';
 
 const generated = renderCommandReferenceMarkdown(commandDescriptors);
 
@@ -195,17 +196,21 @@ export function renderAgentContractCatalogMarkdown(
 ): string {
   const rows = [
     '<!-- BEGIN GENERATED AGENT CONTRACT CATALOG -->',
-    '| Command | Questions it answers | Returns | Default coverage |',
-    '| --- | --- | --- | --- |',
+    '| Command | Questions it answers | Returns | Operation role(s) | Default coverage |',
+    '| --- | --- | --- | --- | --- |',
   ];
   for (const descriptor of descriptors.filter((entry) => !entry.hidden)) {
     const contract = descriptor.agent;
     rows.push(
       `| \`scip-query ${descriptor.command}\` | ${escapeSkillTableCell(
         contract?.answers.join('; ') ?? 'Undeclared',
-      )} | ${escapeSkillTableCell(contract?.returns.join('; ') ?? 'Undeclared')} | \`${
-        contract?.coverage ?? 'unknown'
-      }\` |`,
+      )} | ${escapeSkillTableCell(contract?.returns.join('; ') ?? 'Undeclared')} | ${
+        contract
+          ? commandOperationRoles(contract.operation)
+              .map((role) => `\`${role}\``)
+              .join('<br>')
+          : 'Undeclared'
+      } | \`${contract?.coverage ?? 'unknown'}\` |`,
     );
   }
   rows.push('<!-- END GENERATED AGENT CONTRACT CATALOG -->');

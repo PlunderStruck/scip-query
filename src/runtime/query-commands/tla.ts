@@ -47,6 +47,7 @@ import { buildInstrumentation } from '../../tla/instrument.js';
 import { runTraceCheck, traceHarnessBaseName, type TraceActionCoverage } from '../../tla/trace-spec.js';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { commandOperation } from '../command-operation.js';
 
 interface TlaVerifyResult {
   operation: 'verify';
@@ -419,6 +420,11 @@ export const tlaQueryCommandDescriptors: CommandDescriptor[] = [
       ['action', 'path'],
       'bounded',
       'repository',
+      commandOperation('repository-observation', [
+        { when: { kind: 'argument', index: 0, equals: 'scaffold' }, role: 'mutation' },
+        { when: { kind: 'argument', index: 0, equals: 'instrument' }, role: 'mutation' },
+        { when: { kind: 'argument', index: 0, equals: 'fetch-tools' }, role: 'composite' },
+      ]),
     ),
     options: withJsonOption([
       option('--map <file>', 'scip-query TLA mapping JSON file'),

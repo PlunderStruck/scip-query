@@ -1,4 +1,10 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ScipDatabase } from '../../storage/db.js';
+import {
+  operationObservesRepository,
+  resolveCommandOperationRole,
+  type CommandOperationRole,
+} from '../command-operation.js';
 import type {
   CommandAgentContract,
   CommandEvidenceTier,
@@ -31,6 +37,15 @@ type CommandOptionsWithSources = CommandOptions & {
 
 let commandEvidenceById = new Map<string, CommandEvidenceTier>();
 let commandAgentContractById = new Map<string, CommandAgentContract>();
+const commandOperationStorage = new AsyncLocalStorage<CommandOperationRole>();
+
+/**
+ * Bind the role selected from parsed invocation arguments before the handler
+ * runs. AsyncLocalStorage keeps concurrent embedded CLI invocations isolated.
+ */
+export function runWithCommandOperationRole<T>(role: CommandOperationRole, run: () => T): T {
+  return commandOperationStorage.run(role, run);
+}
 
 export function setCommandEvidenceMap(entries: ReadonlyMap<string, CommandEvidenceTier>): void {
   commandEvidenceById = new Map(entries);
@@ -362,6 +377,20 @@ export function printJsonEnvelope(
 ): void {
   const evidence = commandEvidenceById.get(command);
   const contract = commandAgentContractById.get(command);
+  const declaredOperationRole = contract
+    ? resolveCommandOperationRole(contract.operation, { args, options })
+    : undefined;
+  const selectedOperationRole = commandOperationStorage.getStore();
+  if (
+    selectedOperationRole !== undefined &&
+    declaredOperationRole !== undefined &&
+    selectedOperationRole !== declaredOperationRole
+  ) {
+    throw new Error(
+      `Command ${command} changed operation role during execution: selected ${selectedOperationRole}, rendered ${declaredOperationRole}.`,
+    );
+  }
+  const operationRole = selectedOperationRole ?? declaredOperationRole;
   const resolution = invocationResolutionCoverage(result);
   const baseCoverage = extra.coverage ?? defaultInvocationCoverage(contract, result, extra.analysisBudget);
   const coverage =
@@ -375,6 +404,7 @@ export function printJsonEnvelope(
   const envelope = createCliJsonEnvelope({
     producerVersion: cliVersion,
     command,
+    ...(operationRole ? { operationRole } : {}),
     ...(evidence ? { evidence } : {}),
     ...(extra.analysisBudget ? { analysisBudget: extra.analysisBudget } : {}),
     args: jsonPositionals(args),
@@ -382,22 +412,25 @@ export function printJsonEnvelope(
     result,
     ...(coverage ? { coverage } : {}),
     ...(extra.agentResult !== undefined ? { agentResult: extra.agentResult } : {}),
-    ...optionalEvidenceContext(evidence, extra.analysisBudget, coverage),
+    ...optionalEvidenceContext(operationRole, evidence, extra.analysisBudget, coverage),
     ...(extra.resultSchemaVersion === undefined ? {} : { resultSchemaVersion: extra.resultSchemaVersion }),
   });
   writeSerializedJson(serializeCliJsonEnvelope(envelope, booleanOptionValue(options, 'compact')));
 }
 
 function optionalEvidenceContext(
+  operationRole: CommandOperationRole | undefined,
   evidence: CommandEvidenceTier | undefined,
   analysisBudget: AnalysisBudgetDisclosure | undefined,
   coverage: InvocationCoverage | undefined,
 ): { evidenceContext?: CliEvidenceContextV1 } {
+  if (!operationRole || !operationObservesRepository(operationRole)) return {};
   const db = currentCliDatabase();
   if (!db) return {};
   return {
     evidenceContext: {
       schemaVersion: CLI_EVIDENCE_CONTEXT_SCHEMA_VERSION,
+      operationRole,
       receipt: buildObservationReceipt({
         projectRoot: db.config.projectRoot,
         db,

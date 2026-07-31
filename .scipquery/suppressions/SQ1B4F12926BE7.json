@@ -1,0 +1,60 @@
+{
+  "kind": "scip-query-suppression",
+  "suppressionIdentity": "SQ1B4F12926BE7",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  },
+  "id": "SQ1B4F12926BE7",
+  "reason": "Cleanup descriptor operation roles are declarative invocation metadata resolved by command-registry before execution; cleanup handlers retain the same inputs and effects, while CLI contract tests cover cleanup role selection.",
+  "createdAt": "2026-07-31T01:38:29.566Z",
+  "updatedAt": "2026-07-31T01:44:40.313Z",
+  "schemaVersion": 2,
+  "decision": {
+    "kind": "automated-adjudication",
+    "reasonCode": "detector-counterexample",
+    "decidedBy": "agent",
+    "policyVersion": 1,
+    "observation": {
+      "schemaVersion": 1,
+      "authorityKind": "index-worktree",
+      "observedAt": "2026-07-31T01:44:40.312Z",
+      "projectIdentity": "178a22f2ce5800603672d10b597d4cf97078e596c64e2eb0293681604557bda7",
+      "index": {
+        "generationIdentity": "22ac90beda11aeb7c84290b4a0c2339b17e17596a402329d4375bebfc87ef6ee",
+        "source": "immutable",
+        "alignment": "not-certified"
+      },
+      "worktree": {
+        "identity": "5c4aa59381876e7771eb9f47a9bdbedcc225dfb4724b6cdd0af29da0aef35529",
+        "clean": false,
+        "headCommit": "540c7e1ee30f5da26b85eabd508f9b2f64c09089",
+        "treeOid": "e53a2de842482db3385cf8211291c9d86cbf3d07"
+      }
+    },
+    "evidence": [
+      {
+        "kind": "source",
+        "referent": "src/runtime/query-commands/cleanup/handlers.ts",
+        "claim": "Cleanup descriptor operation roles are declarative invocation metadata resolved by command-registry before execution; cleanup handlers retain the same inputs and effects, while CLI contract tests cover cleanup role selection.",
+        "contentHash": "fc896b5d8b0d5ce2fedf510c5892f52956c1d68d2ac671e1ec50c96963947d49"
+      },
+      {
+        "kind": "source",
+        "referent": "src/runtime/commands/command-registry.ts",
+        "claim": "Cleanup descriptor operation roles are declarative invocation metadata resolved by command-registry before execution; cleanup handlers retain the same inputs and effects, while CLI contract tests cover cleanup role selection.",
+        "contentHash": "4dba13401071838e2a9e4b17e86b1abe1e92faec6836b5202596b3750e549927"
+      },
+      {
+        "kind": "test",
+        "referent": "tests/runtime/cli-contract.test.ts",
+        "claim": "Cleanup descriptor operation roles are declarative invocation metadata resolved by command-registry before execution; cleanup handlers retain the same inputs and effects, while CLI contract tests cover cleanup role selection.",
+        "contentHash": "a1fa0ae004951087efb73533979c0e6a44f220817454ac6811e374c98cb57951"
+      }
+    ],
+    "invalidateOn": {
+      "targetContentChange": true,
+      "detectorMajorChange": true
+    }
+  }
+}

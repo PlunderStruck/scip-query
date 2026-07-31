@@ -6,6 +6,7 @@ import type {
   CommandScope,
   CoveragePolicy,
 } from './command-descriptor-types.js';
+import { REPOSITORY_OBSERVATION_OPERATION, type CommandOperationSelector } from '../command-operation.js';
 import { InvalidArgumentError } from 'commander';
 import { collect } from '../cli-context.js';
 
@@ -88,12 +89,14 @@ export function agentContract(
   inputs: readonly CommandInputSlot[],
   coverage: CoveragePolicy,
   scope?: CommandScope,
+  operation: CommandOperationSelector = REPOSITORY_OBSERVATION_OPERATION,
 ): CommandAgentContract {
   return {
     answers: typeof answers === 'string' ? [answers] : answers,
     returns: typeof returns === 'string' ? [returns] : returns,
     inputs,
     coverage,
+    operation,
     ...(scope ? { scope } : {}),
   };
 }

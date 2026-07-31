@@ -1,7 +1,7 @@
 # Phase 1 — evidence foundation
 
 Date: 2026-07-30
-Status: ready for execution
+Status: in progress — slice 1.1 complete; slice 1.2 next
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -232,6 +232,66 @@ Testability:
 Order rationale:
 
 - this closes the evidence foundation consumed by durable state and completion.
+
+## Execution record
+
+### Slice 1.1 — descriptor-owned operation roles
+
+Implemented:
+
+- every public command descriptor now owns a closed operation selector over
+  parsed arguments and options;
+- the registry selects the role before handler execution and binds it through
+  concurrent async execution;
+- the shared JSON renderer verifies that the role did not change, emits it at
+  the envelope boundary, and attaches repository observation context only to
+  observation, preview, and composite roles;
+- value-bearing options such as `--profile-out <path>` use an explicit
+  presence selector rather than being mistaken for booleans;
+- the decoder accepts legacy envelopes, validates known roles, and rejects
+  contradictory top-level and nested roles;
+- the JSON schema, CLI guide, generated agent-contract catalog, and public API
+  acceptance record describe the additive contract; and
+- runtime structure explicitly owns `command-operation.ts` in the
+  `runtime-services` boundary, which both command-kit and runtime-entry are
+  already permitted to consume.
+
+Observed verification:
+
+- 85 focused descriptor, renderer, envelope, pagination, and real CLI process
+  tests passed, followed by all 2,198 repository tests across 273 files;
+- typecheck, build, lint, generated-doc checks, and public API consumer checks
+  passed;
+- API change `f5bc118615a4a4f9` was accepted as additive;
+- scoped architecture reported no declared boundary violations after the
+  ownership correction;
+- health remained at the pre-registered 96 older baseline deltas, with no new
+  wrapper residue;
+- `stats --json --compact` measured 261.4 ms median across nine warm runs,
+  7.4% above the nearest 243.3 ms baseline and inside the 20% / 292.0 ms guard;
+  and
+- `diff-gate` passed with one advisory historical doc citation and three
+  content-invalidated coupling decisions replaced by specific, evidence-bound
+  shared suppression records.
+
+Refutation attempts:
+
+- a value-bearing `profileOut` option selects `composite`, proving mutation
+  classification does not depend on comparing every option to `true`;
+- a role selected as `mutation` and re-resolved as
+  `repository-observation` is rejected before rendering; and
+- a synthetic `suppress` result emits `mutation` without an
+  `evidenceContext`, proving mutation output does not inherit observation
+  authority.
+
+Deviation:
+
+- the first implementation placed the operation vocabulary under the broad
+  `domain` boundary. The architecture gate rejected
+  `runtime-command-kit -> domain` and `runtime-entry -> domain`. The contract
+  was moved to the existing `runtime-services` boundary because its referents
+  are CLI invocation effects, not repository-domain entities; no dependency
+  allowance or architecture baseline was weakened.
 
 ## Verification gate
 

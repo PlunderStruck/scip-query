@@ -6,9 +6,9 @@
     "version": "0.20.0"
   },
   "id": "SQ8FA34B0BBC01",
-  "reason": "The descriptor changes only the displayed idle default; resolveWatchConfig supplies that default before the unchanged handler applies explicit overrides.",
+  "reason": "Command descriptors now declare operation-role metadata that command-registry resolves centrally; command handlers do not read or implement this metadata, and descriptor contract tests cover every public command.",
   "createdAt": "2026-07-29T19:50:55.191Z",
-  "updatedAt": "2026-07-29T19:56:09.697Z",
+  "updatedAt": "2026-07-31T01:44:34.756Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
@@ -18,32 +18,38 @@
     "observation": {
       "schemaVersion": 1,
       "authorityKind": "index-worktree",
-      "observedAt": "2026-07-29T19:56:09.696Z",
+      "observedAt": "2026-07-31T01:44:34.755Z",
       "projectIdentity": "178a22f2ce5800603672d10b597d4cf97078e596c64e2eb0293681604557bda7",
       "index": {
-        "generationIdentity": "0bc31728ab939e5490809d55a6d57ed407c766c4d450e10ebfe8b9c411c082f9",
+        "generationIdentity": "22ac90beda11aeb7c84290b4a0c2339b17e17596a402329d4375bebfc87ef6ee",
         "source": "immutable",
         "alignment": "not-certified"
       },
       "worktree": {
-        "identity": "c448ae19047a35276cb9f3dda90e294810dbac0c832af92fa96fc48514c9b5c6",
+        "identity": "f718141ab24d6e0e4a59c9a4262cf62b54206d661238935c43c3b6448102db19",
         "clean": false,
-        "headCommit": "c6811b02299df386e8e694a50fa242de11358a9f",
-        "treeOid": "1751b03e7e2de4e412d14a520e28f3ec7e3316ea"
+        "headCommit": "540c7e1ee30f5da26b85eabd508f9b2f64c09089",
+        "treeOid": "e53a2de842482db3385cf8211291c9d86cbf3d07"
       }
     },
     "evidence": [
       {
         "kind": "source",
-        "referent": "src/runtime/config.ts",
-        "claim": "The descriptor changes only the displayed idle default; resolveWatchConfig supplies that default before the unchanged handler applies explicit overrides.",
-        "contentHash": "18fde34ad5d1dd80dae39b3d21d4a251c6b7096f97797cca5fcfde536a658d14"
+        "referent": "src/runtime/commands/command-handlers.ts",
+        "claim": "Command descriptors now declare operation-role metadata that command-registry resolves centrally; command handlers do not read or implement this metadata, and descriptor contract tests cover every public command.",
+        "contentHash": "6048e9d84c6c9b4179456cd8d27d7ff91a5884c9b42f2823d88b5f40239b986c"
       },
       {
         "kind": "source",
-        "referent": "src/runtime/commands/command-handlers.ts",
-        "claim": "The descriptor changes only the displayed idle default; resolveWatchConfig supplies that default before the unchanged handler applies explicit overrides.",
-        "contentHash": "181f458f5bc1974aa6669d023621b96821abe5bc160f86d9400cb1bcc09d03df"
+        "referent": "src/runtime/commands/command-registry.ts",
+        "claim": "Command descriptors now declare operation-role metadata that command-registry resolves centrally; command handlers do not read or implement this metadata, and descriptor contract tests cover every public command.",
+        "contentHash": "4dba13401071838e2a9e4b17e86b1abe1e92faec6836b5202596b3750e549927"
+      },
+      {
+        "kind": "test",
+        "referent": "tests/runtime/cli-contract.test.ts",
+        "claim": "Command descriptors now declare operation-role metadata that command-registry resolves centrally; command handlers do not read or implement this metadata, and descriptor contract tests cover every public command.",
+        "contentHash": "a1fa0ae004951087efb73533979c0e6a44f220817454ac6811e374c98cb57951"
       }
     ],
     "invalidateOn": {
