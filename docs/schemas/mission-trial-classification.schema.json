@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scip-query.dev/schemas/mission-trial-classification.schema.json",
+  "title": "scip-query mission trial classification",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "programId",
+    "programDigest",
+    "metricsVersion",
+    "decisionRuleVersion",
+    "thresholds",
+    "classification",
+    "matchedPairs",
+    "sufficiencyIssues",
+    "reasonCodes",
+    "completion",
+    "safety",
+    "efficiency",
+    "uncertainty"
+  ],
+  "properties": {
+    "version": { "const": 1 },
+    "programId": { "type": "string", "pattern": "^SQTP-[A-F0-9]{32}$" },
+    "programDigest": { "$ref": "#/$defs/sha256" },
+    "metricsVersion": { "const": 1 },
+    "decisionRuleVersion": { "const": 1 },
+    "thresholds": { "$ref": "#/$defs/thresholds" },
+    "classification": {
+      "enum": ["established", "promising", "neutral", "regressed", "insufficient"]
+    },
+    "matchedPairs": { "type": "integer", "minimum": 0 },
+    "sufficiencyIssues": { "$ref": "#/$defs/lines" },
+    "reasonCodes": { "$ref": "#/$defs/lines" },
+    "completion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result",
+        "controlRate",
+        "workflowRate",
+        "rateDifference",
+        "minimumRateDifference",
+        "probabilityTreatmentBetter",
+        "requiredProbability"
+      ],
+      "properties": {
+        "result": { "enum": ["established", "positive", "neutral", "regressed", "unknown"] },
+        "controlRate": { "$ref": "#/$defs/rateOrNull" },
+        "workflowRate": { "$ref": "#/$defs/rateOrNull" },
+        "rateDifference": { "$ref": "#/$defs/signedRateOrNull" },
+        "minimumRateDifference": { "$ref": "#/$defs/rate" },
+        "probabilityTreatmentBetter": { "$ref": "#/$defs/rate" },
+        "requiredProbability": { "$ref": "#/$defs/rate" }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result",
+        "treatmentFalseBlockingRate",
+        "maximumTreatmentFalseBlockingRate",
+        "architectureRegressionRate",
+        "maximumArchitectureRegressionRate"
+      ],
+      "properties": {
+        "result": { "enum": ["within-bounds", "regressed", "unknown"] },
+        "treatmentFalseBlockingRate": { "$ref": "#/$defs/rateOrNull" },
+        "maximumTreatmentFalseBlockingRate": { "$ref": "#/$defs/rate" },
+        "architectureRegressionRate": { "$ref": "#/$defs/rateOrNull" },
+        "maximumArchitectureRegressionRate": { "$ref": "#/$defs/rate" }
+      }
+    },
+    "efficiency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result",
+        "elapsedRatio",
+        "maximumElapsedRegressionRatio",
+        "tokenRatio",
+        "maximumTokenRegressionRatio",
+        "improvedDimensions"
+      ],
+      "properties": {
+        "result": { "enum": ["improved", "within-bounds", "regressed", "unknown"] },
+        "elapsedRatio": { "$ref": "#/$defs/nonNegativeOrNull" },
+        "maximumElapsedRegressionRatio": { "type": "number", "minimum": 1 },
+        "tokenRatio": { "$ref": "#/$defs/nonNegativeOrNull" },
+        "maximumTokenRegressionRatio": { "type": "number", "minimum": 1 },
+        "improvedDimensions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["elapsed", "model-tokens"] }
+        }
+      }
+    },
+    "uncertainty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "improvedPairs",
+        "regressedPairs",
+        "discordantPairs",
+        "directionEstimate",
+        "probabilityTreatmentBetter",
+        "interval"
+      ],
+      "properties": {
+        "method": { "const": "beta-1-1-posterior-and-wilson-direction-interval" },
+        "improvedPairs": { "type": "integer", "minimum": 0 },
+        "regressedPairs": { "type": "integer", "minimum": 0 },
+        "discordantPairs": { "type": "integer", "minimum": 0 },
+        "directionEstimate": { "$ref": "#/$defs/rateOrNull" },
+        "probabilityTreatmentBetter": { "$ref": "#/$defs/rate" },
+        "interval": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["level", "lower", "upper"],
+          "properties": {
+            "level": { "$ref": "#/$defs/rate" },
+            "lower": { "$ref": "#/$defs/rate" },
+            "upper": { "$ref": "#/$defs/rate" }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "line": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[^\\u0000\\r\\n]+$"
+    },
+    "lines": {
+      "type": "array",
+      "maxItems": 256,
+      "items": { "$ref": "#/$defs/line" }
+    },
+    "rate": { "type": "number", "minimum": 0, "maximum": 1 },
+    "rateOrNull": {
+      "anyOf": [{ "$ref": "#/$defs/rate" }, { "type": "null" }]
+    },
+    "signedRateOrNull": {
+      "anyOf": [{ "type": "number", "minimum": -1, "maximum": 1 }, { "type": "null" }]
+    },
+    "nonNegativeOrNull": {
+      "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }]
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "minimumPairs",
+        "minimumFullCompletionRateDelta",
+        "maximumTreatmentFalseBlockingRate",
+        "maximumArchitectureRegressionRate",
+        "maximumElapsedRegressionRatio",
+        "maximumTokenRegressionRatio",
+        "confidenceLevel",
+        "requireEfficiencyImprovement"
+      ],
+      "properties": {
+        "version": { "const": 1 },
+        "minimumPairs": { "type": "integer", "minimum": 1 },
+        "minimumFullCompletionRateDelta": { "$ref": "#/$defs/rate" },
+        "maximumTreatmentFalseBlockingRate": { "$ref": "#/$defs/rate" },
+        "maximumArchitectureRegressionRate": { "$ref": "#/$defs/rate" },
+        "maximumElapsedRegressionRatio": { "type": "number", "minimum": 1 },
+        "maximumTokenRegressionRatio": { "type": "number", "minimum": 1 },
+        "confidenceLevel": { "$ref": "#/$defs/rate" },
+        "requireEfficiencyImprovement": { "const": "elapsed-or-tokens" }
+      }
+    }
+  }
+}

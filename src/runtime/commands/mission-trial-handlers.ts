@@ -1,5 +1,9 @@
 import { resolve } from 'node:path';
 
+import {
+  classifyMissionTrialReport,
+  type MissionTrialClassificationResult,
+} from '../../domain/mission-trial-classification.js';
 import { sanitizeTerminalLine } from '../../platform/terminal-output.js';
 import { deriveMissionTrialMetrics, type MissionTrialMetricReport } from '../../domain/mission-trial-metrics.js';
 import type { MissionTrialProgramV1 } from '../../domain/mission-trials.js';
@@ -116,11 +120,13 @@ function runMissionTrialOperation(
   }
   const runs = readMissionTrialRuns(protectedRoot, program.programId);
   if (operation === 'report') {
+    const report = deriveMissionTrialMetrics(program, runs.records);
     return {
       operation,
       programId: program.programId,
       runCount: runs.records.length,
-      report: deriveMissionTrialMetrics(program, runs.records),
+      report,
+      classification: classifyMissionTrialReport(program, report),
       issues: runs.issues,
     };
   }
@@ -146,6 +152,7 @@ function renderMissionTrialResult(operation: MissionTrialOperation, result: unkn
     runCount?: number;
     issues?: readonly unknown[];
     report?: MissionTrialMetricReport;
+    classification?: MissionTrialClassificationResult;
   };
   if (operation === 'register' || operation === 'record') {
     console.log(
@@ -172,6 +179,7 @@ function renderMissionTrialResult(operation: MissionTrialOperation, result: unkn
   console.log(`Program ${sanitizeTerminalLine(value.programId ?? 'unknown')}: ${value.runCount ?? 0} run(s)`);
   console.log(`Record issues: ${value.issues?.length ?? 0}`);
   if (operation === 'report' && value.report) {
+    console.log(`Classification: ${sanitizeTerminalLine(value.classification?.classification ?? 'unavailable')}`);
     console.log(`Matched pairs: ${value.report.matchedPairCount}`);
     console.log(
       `Full completion: control ${formatRate(value.report.quality.control.fullCompletion.rate)}, workflow ${formatRate(value.report.quality.workflow.fullCompletion.rate)}, difference ${formatSignedRate(value.report.quality.fullCompletionRateDifference)}`,
@@ -184,6 +192,14 @@ function renderMissionTrialResult(operation: MissionTrialOperation, result: unkn
     );
     const excluded = value.report.rawSamples.filter((sample) => sample.selection !== 'selected').length;
     console.log(`Selected outcomes: ${value.report.selectedRunCount}; excluded or superseded records: ${excluded}`);
+    if (value.classification) {
+      console.log(
+        `Paired probability of treatment improvement: ${formatRate(value.classification.uncertainty.probabilityTreatmentBetter)} (${value.classification.uncertainty.discordantPairs} discordant pair(s))`,
+      );
+      for (const issue of value.classification.sufficiencyIssues) {
+        console.log(`  insufficient: ${sanitizeTerminalLine(issue)}`);
+      }
+    }
   }
 }
 

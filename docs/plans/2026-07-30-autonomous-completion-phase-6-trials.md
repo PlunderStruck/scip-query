@@ -1,7 +1,7 @@
 # Phase 6 — outcome trials and product alignment
 
 Date: 2026-07-30
-Status: in progress; slices 6.1–6.2 complete
+Status: in progress; slices 6.1–6.3 complete
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -155,6 +155,31 @@ Expected validation:
   new versioned trial program;
 - mixed results remain mixed; and
 - one fast but incomplete run cannot establish success.
+
+Execution result:
+
+- added a deterministic v1 classifier whose inputs are the content-identified
+  program and derived metric report, so changing a threshold, fixture, agent
+  configuration, budget, or condition produces a different program identity;
+- require the pre-registered minimum matched-pair count and complete paired
+  observations for completion, treatment false blocking, treatment
+  architecture outcomes, elapsed time, and model tokens; missing required
+  evidence classifies as `insufficient`;
+- report completion, safety, and efficiency assessments independently, then
+  assign `regressed` for any unacceptable bound, `established` only when
+  completion improvement clears both the rate and uncertainty thresholds while
+  safety stays bounded and elapsed or tokens improve, `promising` for a
+  positive but not fully established completion direction, and `neutral` when
+  no completion advantage or unacceptable regression is observed;
+- report paired uncertainty with a fixed Beta(1,1) prior for the probability
+  that a discordant pair favors treatment and a Wilson interval for the paired
+  direction, without using the observed result to alter thresholds;
+- publish the classification vocabulary and dimension shapes as a JSON schema
+  and include the classification in both human and JSON `mission-trial report`
+  output; and
+- verify established, promising, neutral, regressed, insufficient, mixed,
+  threshold-identity, uncertainty, and fast-but-incomplete cases in focused
+  tests.
 
 ### 6.4 Product identity and calibration
 

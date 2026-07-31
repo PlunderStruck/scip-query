@@ -75,6 +75,7 @@ describe('mission-trial command', () => {
     handleMissionTrial('report', stored.path, { protectedRoot, candidateRoot });
 
     expect(process.exitCode).not.toBe(1);
+    expect(output).toContain('Classification: insufficient');
     expect(output).toContain('Matched pairs: 1');
     expect(output).toContain('Full completion: control 100.0%, workflow 100.0%, difference +0.0pp');
     expect(output).toContain('Median workflow/control ratio: elapsed 0.75x, model tokens unknown');
