@@ -90,6 +90,17 @@ materialized, the command returns one explicit unavailable reason. These
 repairs do not retroactively change any trial outcome; they must be included in
 a new content-identified program.
 
+The attempt-volume cause is also repaired prospectively. Successful read-only
+commands with equivalent pre/post observation facts now materialize as one
+observation-phase attempt rather than one committed JSON record per command.
+Observation time by itself no longer defeats equality. Failed, interrupted,
+and mutating operations remain separate, and the grouped receipt still
+supports an explicitly requested unknown-effect reconciliation. Exact command
+invocations remain available in the local journal and the protected transcript.
+The old counts of 42, 47, 28, and 55 remain facts about this immutable program;
+the fresh program must report its new counts before an efficiency claim is
+made.
+
 ## Controller-integrity failure
 
 A durable controller evaluation is the repository record that combines fixed

@@ -67,7 +67,13 @@ export interface MaterializeAutomaticOperationAttemptsResult {
   createdAttemptIds: readonly string[];
   reusedAttemptIds: readonly string[];
   pendingOperationCount: number;
+  materializedUnitCount: number;
   skippedReason?: string;
+}
+
+interface AutomaticOperationMaterializationUnit {
+  entries: readonly AutomaticOperationJournalEntry[];
+  representative: AutomaticOperationJournalEntry;
 }
 
 /**
@@ -124,7 +130,7 @@ export function completeAutomaticOperationCapture(input: CompleteAutomaticOperat
           entry.state === 'completed' &&
           entry.exitCode === 0 &&
           entry.semanticIdentity === completed.semanticIdentity &&
-          receiptMeaning(entry.postReceipt) === receiptMeaning(completed.postReceipt),
+          operationObservationMeaning(entry) === operationObservationMeaning(completed),
       );
       if (duplicate) return { ...journal, entries: withoutCurrent };
     }
@@ -140,7 +146,7 @@ export function materializeAutomaticOperationAttempts(
   const journal = readJournal(cacheDir);
   const pending = journal.entries.filter((entry) => !entry.materializedAttemptId);
   if (pending.length === 0) {
-    return { createdAttemptIds: [], reusedAttemptIds: [], pendingOperationCount: 0 };
+    return { createdAttemptIds: [], reusedAttemptIds: [], pendingOperationCount: 0, materializedUnitCount: 0 };
   }
   const projection = readAutonomousRestorationProjection(projectRoot);
   if (!projection.safeToContinue) {
@@ -148,6 +154,7 @@ export function materializeAutomaticOperationAttempts(
       createdAttemptIds: [],
       reusedAttemptIds: [],
       pendingOperationCount: pending.length,
+      materializedUnitCount: 0,
       skippedReason: 'committed autonomous work state is not internally safe to extend',
     };
   }
@@ -156,6 +163,7 @@ export function materializeAutomaticOperationAttempts(
       createdAttemptIds: [],
       reusedAttemptIds: [],
       pendingOperationCount: pending.length,
+      materializedUnitCount: 0,
       skippedReason:
         projection.changes.length === 0
           ? 'no active intended change exists'
@@ -169,6 +177,7 @@ export function materializeAutomaticOperationAttempts(
       createdAttemptIds: [],
       reusedAttemptIds: [],
       pendingOperationCount: pending.length,
+      materializedUnitCount: 0,
       skippedReason: `active intended change ${projectedChange.changeId} is not readable`,
     };
   }
@@ -176,36 +185,45 @@ export function materializeAutomaticOperationAttempts(
   const createdAttemptIds: string[] = [];
   const reusedAttemptIds: string[] = [];
   const materialized = new Map<string, string>();
+  const units = automaticOperationMaterializationUnits(pending);
   let reconciliationTarget = automaticReconciliationTarget(
     readWorkHistory(projectRoot, change.record.changeId).summary,
   );
-  for (const entry of pending) {
-    const evidenceReceipts = uniqueReceipts([entry.preReceipt, entry.postReceipt]);
+  for (const unit of units) {
+    const entry = unit.representative;
+    const evidenceReceipts = uniqueReceipts(
+      unit.entries.flatMap((candidate) => [candidate.preReceipt, candidate.postReceipt]),
+    );
     const reconcilesAttemptId =
       reconciliationTarget && operationCanReconcile(entry, evidenceReceipts, reconciliationTarget.createdAt)
         ? reconciliationTarget.attemptId
         : undefined;
+    const compacted = unit.entries.length > 1;
     const result = createAttemptRecordFile(
       projectRoot,
       change.record.collaborationDomainId,
       {
         changeId: change.record.changeId,
-        idempotencyKey: `automatic-operation:${entry.operationId}`,
+        idempotencyKey: automaticOperationIdempotencyKey(unit),
         intendedCondition: projectedChange.currentCondition,
         action: {
-          family: `scip-query:${entry.command}`,
-          summary: `scip-query ${entry.command} completed as ${entry.operationRole}`,
+          family: compacted ? `scip-query:observation-phase:${entry.operationRole}` : `scip-query:${entry.command}`,
+          summary: compacted
+            ? automaticObservationPhaseSummary(unit.entries, entry.operationRole)
+            : `scip-query ${entry.command} completed as ${entry.operationRole}`,
           effectClass: operationEffectClass(entry.operationRole),
         },
         evidenceReceipts,
-        observedEffect: operationObservedEffect(entry),
+        observedEffect: compacted
+          ? `${unit.entries.length} successful read-only commands observed one equivalent state; their exact invocations remain in the local operation journal.`
+          : operationObservedEffect(entry),
         outcome: entry.state === 'started' ? 'unknown' : entry.exitCode === 0 ? 'succeeded' : 'failed',
         ...(reconcilesAttemptId ? { reconcilesAttemptId } : {}),
       },
       { toolVersion, now: () => entry.completedAt ?? entry.startedAt },
     );
     if (reconcilesAttemptId) reconciliationTarget = undefined;
-    materialized.set(entry.operationId, result.record.attemptId);
+    for (const candidate of unit.entries) materialized.set(candidate.operationId, result.record.attemptId);
     (result.publication === 'created' ? createdAttemptIds : reusedAttemptIds).push(result.record.attemptId);
   }
   updateJournal(cacheDir, (current) => ({
@@ -219,6 +237,7 @@ export function materializeAutomaticOperationAttempts(
     createdAttemptIds,
     reusedAttemptIds,
     pendingOperationCount: pending.length,
+    materializedUnitCount: units.length,
   };
 }
 
@@ -323,6 +342,64 @@ function operationObservedEffect(entry: AutomaticOperationJournalEntry): string 
   return `The command completed with exit code ${entry.exitCode ?? 1}${entry.error ? `: ${entry.error}` : '.'}`;
 }
 
+function automaticOperationMaterializationUnits(
+  pending: readonly AutomaticOperationJournalEntry[],
+): AutomaticOperationMaterializationUnit[] {
+  const compactedByState = new Map<string, AutomaticOperationJournalEntry[]>();
+  const individual: AutomaticOperationMaterializationUnit[] = [];
+  for (const entry of pending) {
+    if (entry.state !== 'completed' || entry.exitCode !== 0 || !operationIsReadOnly(entry.operationRole)) {
+      individual.push({ entries: [entry], representative: entry });
+      continue;
+    }
+    const key = `${entry.operationRole}:${operationObservationMeaning(entry)}`;
+    const group = compactedByState.get(key) ?? [];
+    group.push(entry);
+    compactedByState.set(key, group);
+  }
+  const compacted = [...compactedByState.values()].map((entries) => ({
+    entries,
+    representative: entries.at(-1)!,
+  }));
+  return [...individual, ...compacted].sort((left, right) =>
+    operationTimestamp(left.representative).localeCompare(operationTimestamp(right.representative)),
+  );
+}
+
+function automaticOperationIdempotencyKey(unit: AutomaticOperationMaterializationUnit): string {
+  if (unit.entries.length === 1) return `automatic-operation:${unit.representative.operationId}`;
+  return `automatic-observation-phase:${hashMeaning(unit.entries.map((entry) => entry.operationId))}`;
+}
+
+function automaticObservationPhaseSummary(
+  entries: readonly AutomaticOperationJournalEntry[],
+  role: CommandOperationRole,
+): string {
+  const commands = [...new Set(entries.map((entry) => entry.command))].sort();
+  const shown: string[] = [];
+  for (const command of commands) {
+    const candidate = [...shown, command];
+    if (candidate.join(', ').length > 760) break;
+    shown.push(command);
+  }
+  const omitted = commands.length - shown.length;
+  return (
+    `${entries.length} successful ${role} commands observed one state: ${shown.join(', ')}` +
+    (omitted > 0 ? `, plus ${omitted} more command kind(s)` : '')
+  );
+}
+
+function operationTimestamp(entry: AutomaticOperationJournalEntry): string {
+  return entry.completedAt ?? entry.startedAt;
+}
+
+function operationObservationMeaning(entry: AutomaticOperationJournalEntry): string {
+  return hashMeaning({
+    pre: receiptStateMeaning(entry.preReceipt),
+    post: receiptStateMeaning(entry.postReceipt),
+  });
+}
+
 function automaticReconciliationTarget(history: ReturnType<typeof readWorkHistory>['summary']) {
   if (history.latestDecision?.disposition !== 'reconcile-unknown') return undefined;
   const unresolved = new Set(history.unresolvedUnknownAttemptIds);
@@ -344,13 +421,15 @@ function uniqueReceipts(values: readonly (ObservationReceiptV2 | undefined)[]): 
   const byMeaning = new Map<string, ObservationReceiptV2>();
   for (const value of values) {
     if (!value) continue;
-    byMeaning.set(receiptMeaning(value), value);
+    byMeaning.set(receiptStateMeaning(value), value);
   }
   return [...byMeaning.values()].slice(0, 16);
 }
 
-function receiptMeaning(receipt: ObservationReceiptV2 | undefined): string {
-  return receipt ? hashMeaning(receipt) : 'none';
+function receiptStateMeaning(receipt: ObservationReceiptV2 | undefined): string {
+  if (!receipt) return 'none';
+  const { observedAt: _observedAt, ...state } = receipt;
+  return hashMeaning(state);
 }
 
 function hashMeaning(value: unknown): string {

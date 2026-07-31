@@ -431,7 +431,18 @@ the source `.git` directory read-only, verifies a deletion batch, confirms no
 If the snapshot cannot be created, JSON and human output carry one explicit
 unavailable reason instead of throwing before an outcome exists. Nineteen
 focused cleanup tests, typecheck, build, and public API compatibility pass.
-Attempt-journal compaction remains open in this slice.
+
+Automatic operation publication now groups successful read-only commands by
+operation role and equivalent pre/post observation state. A state is equivalent
+when the receipt facts, sources, and stability proofs match; the observation
+timestamp alone does not manufacture a new state. One observation-phase
+attempt retains the command kinds, latest equivalent receipt, and journal
+links for the group. Interrupted, failed, and mutating operations remain
+individual records, and a grouped successful observation can still reconcile
+one requested unknown effect. The local journal and protected trial transcript
+retain each exact invocation. Focused journal, next-action, and restoration
+tests establish one record for three successful same-state reads while
+preserving failures, unknown effects, and reconciliation behavior.
 
 ### 8. Fresh controller and large-repository programs
 

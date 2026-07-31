@@ -522,6 +522,15 @@ change that action. Session restoration similarly summarizes repeated strategy
 history and emits record-status commands only for unresolved detail, while its
 16 KiB budget fallback remains fail-closed.
 
+Automatic attempt publication preserves every interrupted operation, failed
+command, and mutating command as its own immutable record. Successful read-only
+commands that observed the same repository state are published as one
+observation-phase attempt instead: their command kinds and strongest receipt
+remain in shared history, while their exact invocations remain in the local
+operation journal and agent transcript. This keeps retry, reconciliation,
+failure, and completion evidence intact without making ordinary exploration
+produce one committed JSON file per query.
+
 Setup/configuration writers are conflict-aware. They reread the latest file
 under a short token-owned lock, preserve unknown JSON fields and prose outside
 owned Markdown markers, and publish complete bytes with flushed files and,

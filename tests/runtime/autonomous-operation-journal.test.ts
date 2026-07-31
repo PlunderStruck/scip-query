@@ -53,14 +53,14 @@ describe('automatic autonomous operation journal', () => {
       command: 'status',
       operationRole: 'repository-observation',
       argv: ['status', '--result-only', '--output-cursor', 'transport-only'],
-      preReceipt: receipt,
+      preReceipt: { ...receipt, observedAt: '2026-07-31T10:01:00.000Z' },
       operationId: 'replay',
       now: '2026-07-31T10:01:00.000Z',
     });
     completeAutomaticOperationCapture({
       capture: replay!,
       exitCode: 0,
-      postReceipt: receipt,
+      postReceipt: { ...receipt, observedAt: '2026-07-31T10:01:01.000Z' },
       now: '2026-07-31T10:01:01.000Z',
     });
 
@@ -129,7 +129,59 @@ describe('automatic autonomous operation journal', () => {
       createdAttemptIds: [],
       reusedAttemptIds: [],
       pendingOperationCount: 0,
+      materializedUnitCount: 0,
     });
+  });
+
+  it('publishes one decision-bearing attempt for successful reads of the same observed state', () => {
+    const { projectRoot, cacheDir } = fixture();
+    activeChange(projectRoot);
+    const commands = ['status', 'refs', 'code'];
+    commands.forEach((command, index) => {
+      const before = buildObservationReceipt({
+        projectRoot,
+        observedAt: new Date(`2026-07-31T10:0${index}:00.000Z`),
+      });
+      const after = { ...before, observedAt: `2026-07-31T10:0${index}:01.000Z` };
+      const capture = beginAutomaticOperationCapture({
+        projectRoot,
+        cacheDir,
+        command,
+        operationRole: 'repository-observation',
+        argv: [command],
+        preReceipt: before,
+        operationId: `read-${index}`,
+        now: before.observedAt,
+      });
+      completeAutomaticOperationCapture({
+        capture: capture!,
+        exitCode: 0,
+        postReceipt: after,
+        now: after.observedAt,
+      });
+    });
+
+    const materialized = materializeAutomaticOperationAttempts(projectRoot, cacheDir, '0.20.0');
+    const attempts = readAttemptRecords(projectRoot).records;
+
+    expect(materialized).toMatchObject({
+      pendingOperationCount: 3,
+      materializedUnitCount: 1,
+      createdAttemptIds: [attempts[0]?.attemptId],
+    });
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0]).toMatchObject({
+      action: {
+        family: 'scip-query:observation-phase:repository-observation',
+        effectClass: 'read-only',
+      },
+      outcome: 'succeeded',
+      evidenceReceipts: [{ observedAt: '2026-07-31T10:02:01.000Z' }],
+    });
+    expect(attempts[0]?.action.summary).toContain('code, refs, status');
+    expect(new Set(readAutomaticOperationJournal(cacheDir).map((entry) => entry.materializedAttemptId))).toEqual(
+      new Set([attempts[0]?.attemptId]),
+    );
   });
 
   it('turns the next successful observation into a requested unknown-effect reconciliation', () => {
