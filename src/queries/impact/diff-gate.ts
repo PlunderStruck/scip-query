@@ -45,7 +45,8 @@ import {
 } from '../cleanup/coverage-contracts.js';
 import { checkHealthBaseline } from '../health/health-baseline.js';
 import { resolveBaselinePath } from '../internal/baseline-file.js';
-import { checkArchitectureBaseline } from '../graph/architecture-baseline.js';
+import { evaluateArchitectureBaseline } from '../graph/architecture-baseline.js';
+import { architectureFindingEvidence } from '../graph/architecture-finding-evidence.js';
 import { ARCHITECTURE_BASELINE_PREFIX, hasEnforceableArchitecturePolicy } from '../graph/architecture.js';
 import { incompleteMigration } from './incomplete-migration.js';
 import { similar } from '../cleanup/similar.js';
@@ -1577,7 +1578,7 @@ function runArchitectureCheck(db: ScipDatabase, result: DiffGateResult): void {
   if (!hasEnforceableArchitecturePolicy(db.config.architecture)) {
     result.skipped.push({
       check: 'architecture',
-      reason: 'no closed architecture dependency rows, requireCompletePolicy rule, or requireAcyclic rule configured',
+      reason: 'no closed architecture dependency rows or explicit architecture enforcement flag configured',
     });
     return;
   }
@@ -1590,9 +1591,10 @@ function runArchitectureCheck(db: ScipDatabase, result: DiffGateResult): void {
   }
 
   result.checksRun.push('architecture');
-  const comparison = checkArchitectureBaseline(db);
+  const { comparison, report } = evaluateArchitectureBaseline(db);
   for (const finding of comparison.newFindings) {
     const metadata = baselineFindingMetadata(finding);
+    const currentEvidence = architectureFindingEvidence(finding, report, db.config.architecture, result.changedFiles);
     const id = findingId('architecture', finding);
     recordFinding(result, {
       id,
@@ -1602,6 +1604,8 @@ function runArchitectureCheck(db: ScipDatabase, result: DiffGateResult): void {
       evidence: 'baseline',
       actionTier: 'direct',
       confidence: 1,
+      file: currentEvidence.file,
+      relatedFiles: currentEvidence.relatedFiles.length > 0 ? currentEvidence.relatedFiles : undefined,
       sourceAnalyzer: 'architecture',
       rootCauseKey: metadata.rootCauseKey,
       message: `new ${metadata.label} vs committed baseline: ${finding}`,
@@ -1609,6 +1613,7 @@ function runArchitectureCheck(db: ScipDatabase, result: DiffGateResult): void {
         'The project declares an enforceable architecture rule.',
         'The current boundary graph contains a violation not present in the committed baseline.',
         ...metadata.why,
+        ...currentEvidence.why,
       ],
       remediation: metadata.remediation,
     });

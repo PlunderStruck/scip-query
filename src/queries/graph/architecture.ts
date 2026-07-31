@@ -69,6 +69,7 @@ export interface ArchitecturePolicyCoverage {
   totalBoundaries: number;
   missingRows: string[];
   requiresCompletePolicy: boolean;
+  requiresCompleteCoverage?: boolean;
   requiresMinimalPolicy: boolean;
 }
 
@@ -182,6 +183,7 @@ export function analyzeArchitectureGraph(
         totalBoundaries: 0,
         missingRows: [],
         requiresCompletePolicy: false,
+        requiresCompleteCoverage: false,
         requiresMinimalPolicy: false,
       },
     };
@@ -298,6 +300,7 @@ export function analyzeArchitectureGraph(
       totalBoundaries: config.boundaries.length,
       missingRows,
       requiresCompletePolicy: config.requireCompletePolicy === true,
+      requiresCompleteCoverage: config.requireCompleteCoverage === true,
       requiresMinimalPolicy: config.requireMinimalPolicy === true,
     },
   };
@@ -366,6 +369,19 @@ export function architectureFindingIdentities(report: ArchitectureReport): strin
       identities.push(`${ARCHITECTURE_BASELINE_PREFIX}missing-policy-row:${encodeURIComponent(boundary)}`);
     }
   }
+  if (report.policyCoverage.requiresCompleteCoverage) {
+    for (const file of report.coverage.unmappedFiles) {
+      identities.push(`${ARCHITECTURE_BASELINE_PREFIX}unmapped-file:${encodeURIComponent(file)}`);
+    }
+    for (const ambiguous of report.coverage.ambiguousFiles) {
+      identities.push(
+        `${ARCHITECTURE_BASELINE_PREFIX}ambiguous-file:${encodeURIComponent(ambiguous.file)}:${ambiguous.boundaries
+          .map((boundary) => encodeURIComponent(boundary))
+          .sort()
+          .join('|')}`,
+      );
+    }
+  }
   if (report.policyCoverage.requiresMinimalPolicy) {
     for (const allowance of report.staleAllowances) {
       identities.push(
@@ -416,6 +432,7 @@ export function hasEnforceableArchitecturePolicy(config?: ArchitectureConfig): b
     !!config &&
     (Object.keys(config.allowedDependencies ?? {}).length > 0 ||
       config.requireCompletePolicy === true ||
+      config.requireCompleteCoverage === true ||
       config.requireAcyclic === true ||
       config.requireResolvedBoundaries === true ||
       config.requireMinimalPolicy === true ||

@@ -758,6 +758,7 @@ describe('validateProjectConfig', () => {
           domain: [],
         },
         requireCompletePolicy: false,
+        requireCompleteCoverage: true,
         requireAcyclic: false,
       },
     });
@@ -819,6 +820,7 @@ describe('validateProjectConfig', () => {
         maxBoundaryFanOut: -1,
         maxBoundaryFiles: 1.5 as unknown as number,
         testPaths: [7] as unknown as string[],
+        requireCompleteCoverage: 'yes' as unknown as boolean,
         requireMinimalPolicy: 'yes' as unknown as boolean,
       },
     });
@@ -827,6 +829,7 @@ describe('validateProjectConfig', () => {
       'architecture.maxBoundaryFanOut',
       'architecture.maxBoundaryFiles',
       'architecture.testPaths',
+      'architecture.requireCompleteCoverage',
       'architecture.requireMinimalPolicy',
     ]) {
       expect(diagnostics).toContainEqual(expect.objectContaining({ level: 'error', path }));

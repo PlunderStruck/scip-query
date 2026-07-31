@@ -107,6 +107,7 @@ describe('architecture graph analysis', () => {
       totalBoundaries: 2,
       missingRows: ['runtime'],
       requiresCompletePolicy: false,
+      requiresCompleteCoverage: false,
       requiresMinimalPolicy: false,
     });
   });
@@ -136,6 +137,32 @@ describe('architecture graph analysis', () => {
         file: 'src/features/orders/model.ts',
         boundaries: ['features', 'orders'],
       },
+    ]);
+  });
+
+  it('turns unmapped and ambiguous ownership into policy findings only when complete coverage is required', () => {
+    const dependencyGraph = graph([
+      ['src/features/orders/model.ts', ['src/runtime/start.ts']],
+      ['scripts/generate.ts', ['src/runtime/start.ts']],
+    ]);
+    const files = ['src/features/orders/model.ts', 'src/runtime/start.ts', 'scripts/generate.ts'];
+    const config: ArchitectureConfig = {
+      boundaries: [
+        { name: 'features', paths: ['src/features/**'] },
+        { name: 'orders', paths: ['src/features/orders/**'] },
+        { name: 'runtime', paths: ['src/runtime/**'] },
+      ],
+    };
+    const descriptive = analyzeArchitectureGraph(dependencyGraph, files, config);
+    const enforced = analyzeArchitectureGraph(dependencyGraph, files, {
+      ...config,
+      requireCompleteCoverage: true,
+    });
+
+    expect(architectureFindingIdentities(descriptive)).toEqual([]);
+    expect(architectureFindingIdentities(enforced)).toEqual([
+      'architecture:ambiguous-file:src%2Ffeatures%2Forders%2Fmodel.ts:features|orders',
+      'architecture:unmapped-file:scripts%2Fgenerate.ts',
     ]);
   });
 
@@ -194,6 +221,7 @@ describe('architecture graph analysis', () => {
     expect(hasEnforceableArchitecturePolicy(baseConfig)).toBe(false);
     expect(hasEnforceableArchitecturePolicy({ ...baseConfig, allowedDependencies: { domain: [] } })).toBe(true);
     expect(hasEnforceableArchitecturePolicy({ ...baseConfig, requireCompletePolicy: true })).toBe(true);
+    expect(hasEnforceableArchitecturePolicy({ ...baseConfig, requireCompleteCoverage: true })).toBe(true);
     expect(hasEnforceableArchitecturePolicy({ ...baseConfig, requireAcyclic: true })).toBe(true);
     expect(
       hasEnforceableArchitecturePolicy({

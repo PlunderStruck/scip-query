@@ -178,10 +178,12 @@ const handleArchitecture = reportCommand({
       console.log(`Missing dependency rows: ${result.policyCoverage.missingRows.join(', ')}${policy}`);
     }
     if (result.coverage.unmappedFiles.length > 0) {
-      console.log(`Unmapped files: ${result.coverage.unmappedFiles.length}`);
+      const policy = result.policyCoverage.requiresCompleteCoverage ? ' [violates requireCompleteCoverage]' : '';
+      console.log(`Unmapped files: ${result.coverage.unmappedFiles.length}${policy}`);
     }
     if (result.coverage.ambiguousFiles.length > 0) {
-      console.log(`Ambiguous files: ${result.coverage.ambiguousFiles.length}`);
+      const policy = result.policyCoverage.requiresCompleteCoverage ? ' [violates requireCompleteCoverage]' : '';
+      console.log(`Ambiguous files: ${result.coverage.ambiguousFiles.length}${policy}`);
       for (const row of result.coverage.ambiguousFiles.slice(0, 5)) {
         console.log(`  ${row.file} -> ${row.boundaries.join(', ')}`);
       }

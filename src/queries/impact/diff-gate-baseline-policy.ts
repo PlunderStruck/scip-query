@@ -95,6 +95,80 @@ export function baselineFindingMetadata(finding: string): BaselineFindingMetadat
         remediation: `Declare the allowed outgoing dependencies for ${boundary}, including an empty row when it must depend on nothing.`,
       });
     }
+    if (architectureKind === 'coarse-boundary') {
+      const [encodedBoundary] = splitFirst(rest, ':');
+      const boundary = decodeIdentityPart(encodedBoundary);
+      return base({
+        actionTier: 'direct',
+        rootCauseKey: payload,
+        label: 'unresolved internal boundary cycle',
+        why: [`requireResolvedBoundaries rejects a dependency cycle hidden inside ${boundary}.`],
+        remediation: `Break the internal cycle in ${boundary}, split the boundary, or deliberately revise its sub-unit policy and baseline.`,
+      });
+    }
+    if (architectureKind === 'stale-allowance') {
+      const [encodedFrom, encodedTo] = splitFirst(rest, ':');
+      const from = decodeIdentityPart(encodedFrom);
+      const to = decodeIdentityPart(encodedTo);
+      return base({
+        actionTier: 'direct',
+        rootCauseKey: payload,
+        label: 'stale architecture allowance',
+        why: [`requireMinimalPolicy rejects the unused ${from} -> ${to} allowance.`],
+        remediation: `Remove ${to} from ${from}'s allowed dependencies, or restore and justify a current edge before updating the baseline.`,
+      });
+    }
+    if (architectureKind === 'boundary-limit') {
+      const [limitKind, encodedBoundary] = splitFirst(rest, ':');
+      const boundary = decodeIdentityPart(encodedBoundary);
+      return base({
+        actionTier: 'direct',
+        rootCauseKey: payload,
+        label: 'architecture boundary limit violation',
+        why: [`The declared ${limitKind} limit for ${boundary} is exceeded.`],
+        remediation: `Reduce ${boundary}'s ${limitKind}, split the boundary, or deliberately revise the declared limit and baseline.`,
+      });
+    }
+    if (architectureKind === 'test-boundary') {
+      const [encodedTest, encodedBoundary] = splitFirst(rest, ':');
+      const test = decodeIdentityPart(encodedTest);
+      const boundary = decodeIdentityPart(encodedBoundary);
+      return base({
+        actionTier: 'direct',
+        rootCauseKey: payload,
+        label: 'test boundary violation',
+        file: test,
+        relatedFiles: [test],
+        why: [`${test} reaches the unrelated ${boundary} boundary.`],
+        remediation: `Exercise ${test}'s subject through its allowed boundary surface, or move the test to a declared integration-test policy.`,
+      });
+    }
+    if (architectureKind === 'unmapped-file') {
+      const file = decodeIdentityPart(rest);
+      return base({
+        actionTier: 'direct',
+        rootCauseKey: payload,
+        label: 'unmapped architecture file',
+        file,
+        relatedFiles: [file],
+        why: [`requireCompleteCoverage rejects ${file} because it belongs to no declared boundary.`],
+        remediation: `Assign ${file} to exactly one architecture boundary, or move it under an existing boundary path.`,
+      });
+    }
+    if (architectureKind === 'ambiguous-file') {
+      const [encodedFile, encodedBoundaries] = splitFirst(rest, ':');
+      const file = decodeIdentityPart(encodedFile);
+      const boundaries = encodedBoundaries.split('|').filter(Boolean).map(decodeIdentityPart);
+      return base({
+        actionTier: 'direct',
+        rootCauseKey: payload,
+        label: 'ambiguous architecture file',
+        file,
+        relatedFiles: [file],
+        why: [`requireCompleteCoverage rejects ${file} because it matches ${boundaries.join(', ')}.`],
+        remediation: `Narrow the boundary path rules so ${file} belongs to exactly one declared boundary.`,
+      });
+    }
   }
 
   if (analyzer === 'drift') {

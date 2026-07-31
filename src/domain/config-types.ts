@@ -244,6 +244,12 @@ export interface ArchitectureConfig {
    * row. This prevents an omitted row from silently weakening enforcement.
    */
   requireCompletePolicy?: boolean;
+  /**
+   * Require every indexed, non-ignored file to belong to exactly one declared
+   * boundary. Unmapped and ambiguously mapped files otherwise remain visible
+   * coverage facts without being policy violations.
+   */
+  requireCompleteCoverage?: boolean;
   /** Treat every multi-boundary dependency cycle as a declared violation. */
   requireAcyclic?: boolean;
   /**

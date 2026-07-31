@@ -1,0 +1,25 @@
+{
+  "acceptedAt": "2026-07-31T08:34:38.957Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "735299269c2e3af15aaf119c0d2b141bb3b498febfd954a29a7f0d2f3cb675de",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ArchitecturePolicyCoverage changed from interface ArchitecturePolicyCoverage { declaredRows: number; totalBoundaries: number; missingRows: string[]; requiresCompletePolicy: boolean; requiresMinimalPolicy: boolean; } to interface ArchitecturePolicyCoverage { declaredRows: number; totalBoundaries: number; missingRows: string[]; requiresCompletePolicy: boolean; requiresCompleteCoverage?: boolean;....",
+      "target": "./queries/architecture:ArchitecturePolicyCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "G changed from interface ArchitectureConfig { boundaries: ArchitectureBoundaryConfig[]; allowedDependencies?: Record<string, string[]>; requireCompletePolicy?: boolean; requireAcyclic?: boolea... to interface ArchitectureConfig { boundaries: ArchitectureBoundaryConfig[]; allowedDependencies?: Record<string, string[]>; requireCompletePolicy?: boolean; requireCompleteCoverage....",
+      "target": "config-types-<hash>.d.ts:G"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "7d108e1d15a04969b916401122806bea2a019f19b5a7bf09423ec2d5a038af4f",
+  "reason": "Add opt-in complete architecture coverage policy and expose whether the report enforces it; existing inputs and output fields retain their meanings.",
+  "schemaVersion": 1
+}

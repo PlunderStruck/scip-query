@@ -265,6 +265,7 @@
           "additionalProperties": { "$ref": "#/$defs/stringArray" }
         },
         "requireCompletePolicy": { "type": "boolean" },
+        "requireCompleteCoverage": { "type": "boolean" },
         "requireAcyclic": { "type": "boolean" },
         "requireResolvedBoundaries": { "type": "boolean" },
         "requireMinimalPolicy": { "type": "boolean" },

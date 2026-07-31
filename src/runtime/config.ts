@@ -100,6 +100,7 @@ const ARCHITECTURE_CONFIG_KEYS = new Set([
   'boundaries',
   'allowedDependencies',
   'requireCompletePolicy',
+  'requireCompleteCoverage',
   'requireAcyclic',
   'requireResolvedBoundaries',
   'requireMinimalPolicy',
@@ -615,7 +616,7 @@ function validateArchitectureConfig(config: ProjectConfig, diagnostics: ConfigDi
   if (config.architecture.requireAcyclic !== undefined && typeof config.architecture.requireAcyclic !== 'boolean') {
     diagnostics.push({ level: 'error', path: 'architecture.requireAcyclic', message: 'Must be a boolean.' });
   }
-  for (const flag of ['requireResolvedBoundaries', 'requireMinimalPolicy'] as const) {
+  for (const flag of ['requireCompleteCoverage', 'requireResolvedBoundaries', 'requireMinimalPolicy'] as const) {
     if (config.architecture[flag] !== undefined && typeof config.architecture[flag] !== 'boolean') {
       diagnostics.push({ level: 'error', path: `architecture.${flag}`, message: 'Must be a boolean.' });
     }

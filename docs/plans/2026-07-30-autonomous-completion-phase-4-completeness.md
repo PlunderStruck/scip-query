@@ -1,7 +1,7 @@
 # Phase 4 — repository completeness
 
 Date: 2026-07-30
-Status: in progress; slice 4.1 complete
+Status: in progress; slices 4.1–4.2 complete
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -122,6 +122,31 @@ Expected validation:
   being silently treated allowed;
 - removing an edge closes the obligation only against current evidence; and
 - baseline writing cannot self-approve a new forbidden edge.
+
+Execution result:
+
+- added opt-in `requireCompleteCoverage`, which turns every indexed,
+  non-ignored file with zero or multiple boundary memberships into a stable
+  architecture violation while leaving the same facts descriptive by default;
+- kept the existing architecture engine and stable baseline identities, then
+  joined those identities back to their current source, target, test, coverage,
+  or policy files for actionable evidence;
+- adapted qualified, change-relative architecture findings to the Phase 4.1
+  admission contract without giving an incomplete producer or a non-fixed
+  observation receipt blocking authority;
+- kept `checkArchitectureBaseline` source-compatible and recorded the new
+  configuration/report surface as an additive public API change;
+- made every enforceable architecture identity actionable, including boundary
+  limits, stale allowances, test placement, missing policy rows, and explicit
+  coverage failures; and
+- verified the focused contracts, TypeScript, lint, public API, and all 2,330
+  tests.
+
+SCIP verification found no declared architecture violation, incomplete
+migration, or recent reimplementation. The final diff gate passed after
+removing a local comparison echo, refreshing the affected documentation, and
+revalidating a narrow historical-coupling suppression whose evidence changed
+with the configuration tests.
 
 ### 4.3 Residue evidence and current-role proof
 

@@ -6,9 +6,11 @@
     "version": "0.20.0"
   },
   "id": "SQ562715D7254A",
-  "reason": "This slice changes collaboration-domain config creation and validation together with its focused config tests. command-handlers already delegates initialization to initProjectConfigDetailed without interpreting the new optional field, so its invocation and rendering contract is unchanged.",
+  "check": "co-change-partner",
+  "file": "tests/runtime/runtime-config.test.ts",
+  "reason": "The edited test covers ArchitectureConfig boolean validation in src/runtime/config.ts. command-handlers delegates project configuration and neither parses requireCompleteCoverage nor participates in the validated code path; the 11/13 broad-sweep co-edits do not establish a current coordination contract.",
   "createdAt": "2026-07-29T19:50:55.812Z",
-  "updatedAt": "2026-07-31T02:21:49.064Z",
+  "updatedAt": "2026-07-31T08:43:34.541Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
@@ -17,7 +19,7 @@
     "policyVersion": 1,
     "observation": {
       "schemaVersion": 2,
-      "observedAt": "2026-07-31T02:21:49.063Z",
+      "observedAt": "2026-07-31T08:43:34.533Z",
       "facts": {
         "collaborationDomain": {
           "schemaVersion": 1,
@@ -39,6 +41,31 @@
           },
           "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
         },
+        "wholeContent": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:repository-content",
+            "version": 1
+          },
+          "digest": "3e3c561e8585d4f7fe077e569d71db7a9916d4565ef9031076cde46e363eb2ea"
+        },
+        "relevantInputs": [
+          {
+            "subject": "scip-query:index-inputs",
+            "identity": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:index-inputs",
+                "version": 2
+              },
+              "digest": "d64a279b049cc8d19c021a5dec1ab5dccb4cfa784740a9b82cb36a8ee05552d0"
+            }
+          }
+        ],
         "index": {
           "generation": {
             "schemaVersion": 1,
@@ -48,7 +75,17 @@
               "name": "scip-query:index-generation",
               "version": 1
             },
-            "digest": "b75443e4cbaa0c921617f5606054df7fbed0af8d10eaa2119788cf3046b5fcdc"
+            "digest": "70e63b75608574595c903ce2c8e159714b7edecdd8ea00eb0fb9fdaedffd5c20"
+          },
+          "inputs": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-inputs",
+              "version": 2
+            },
+            "digest": "d64a279b049cc8d19c021a5dec1ab5dccb4cfa784740a9b82cb36a8ee05552d0"
           },
           "source": "immutable"
         }
@@ -64,20 +101,20 @@
               "name": "scip-query:index-generation",
               "version": 1
             },
-            "digest": "b75443e4cbaa0c921617f5606054df7fbed0af8d10eaa2119788cf3046b5fcdc"
+            "digest": "70e63b75608574595c903ce2c8e159714b7edecdd8ea00eb0fb9fdaedffd5c20"
           }
         },
         {
-          "kind": "live-workspace",
+          "kind": "repository-snapshot",
           "identity": {
             "schemaVersion": 1,
             "canonicalizationVersion": 1,
             "hashAlgorithm": "sha256",
             "projection": {
-              "name": "scip-query:workspace-instance",
+              "name": "scip-query:repository-content",
               "version": 1
             },
-            "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+            "digest": "3e3c561e8585d4f7fe077e569d71db7a9916d4565ef9031076cde46e363eb2ea"
           }
         }
       ],
@@ -87,34 +124,34 @@
           "kind": "immutable"
         },
         {
-          "source": "live-workspace",
-          "kind": "not-established"
+          "source": "repository-snapshot",
+          "kind": "fixed-snapshot"
         }
       ],
       "diagnostics": {
         "clean": false,
-        "headCommit": "a1a69a3e4478370402fe4f3a86bbfefa0a73d386",
-        "treeOid": "2021414b0e11305fa2dcde17a01aafeab658b76e"
+        "headCommit": "785b8f878387b563f011214261d92fa1596eff7e",
+        "treeOid": "263f4e5c68c10209d2cf5b1a5952ce594a2abe4a"
       }
     },
     "evidence": [
       {
+        "kind": "test",
+        "referent": "tests/runtime/runtime-config.test.ts",
+        "claim": "The edited test covers ArchitectureConfig boolean validation in src/runtime/config.ts. command-handlers delegates project configuration and neither parses requireCompleteCoverage nor participates in the validated code path; the 11/13 broad-sweep co-edits do not establish a current coordination contract.",
+        "contentHash": "957a3da9b969b63ba0776b134184a1d10ec7ce6043d074de11830bf05c1fe2e4"
+      },
+      {
         "kind": "source",
         "referent": "src/runtime/config.ts",
-        "claim": "This slice changes collaboration-domain config creation and validation together with its focused config tests. command-handlers already delegates initialization to initProjectConfigDetailed without interpreting the new optional field, so its invocation and rendering contract is unchanged.",
-        "contentHash": "a74c9bf58dbdd6bd1943f0567486bf09334d0bf92e23172e4720511d3da1f825"
+        "claim": "The edited test covers ArchitectureConfig boolean validation in src/runtime/config.ts. command-handlers delegates project configuration and neither parses requireCompleteCoverage nor participates in the validated code path; the 11/13 broad-sweep co-edits do not establish a current coordination contract.",
+        "contentHash": "92621724b24d583ab32fc630391c7da570c538633c88279d749700fcd9832f2f"
       },
       {
         "kind": "source",
         "referent": "src/runtime/commands/command-handlers.ts",
-        "claim": "This slice changes collaboration-domain config creation and validation together with its focused config tests. command-handlers already delegates initialization to initProjectConfigDetailed without interpreting the new optional field, so its invocation and rendering contract is unchanged.",
-        "contentHash": "6048e9d84c6c9b4179456cd8d27d7ff91a5884c9b42f2823d88b5f40239b986c"
-      },
-      {
-        "kind": "test",
-        "referent": "tests/runtime/runtime-config.test.ts",
-        "claim": "This slice changes collaboration-domain config creation and validation together with its focused config tests. command-handlers already delegates initialization to initProjectConfigDetailed without interpreting the new optional field, so its invocation and rendering contract is unchanged.",
-        "contentHash": "364b3246f62738bd404498c7424620a5b5427218e4d6adb02e562a3fd7832ce6"
+        "claim": "The edited test covers ArchitectureConfig boolean validation in src/runtime/config.ts. command-handlers delegates project configuration and neither parses requireCompleteCoverage nor participates in the validated code path; the 11/13 broad-sweep co-edits do not establish a current coordination contract.",
+        "contentHash": "f21beb90cc9ea84926019ea6a3c821358cd18b1c54a26d618cfa6bf7cb6d0283"
       }
     ],
     "invalidateOn": {

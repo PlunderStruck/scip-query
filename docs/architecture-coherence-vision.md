@@ -87,7 +87,12 @@ row for a boundary that may depend on nothing. `requireAcyclic` independently
 forbids multi-boundary strongly connected components. A project should enable
 both only after the observed graph has been classified and repaired.
 
-`requireResolvedBoundaries` closes the gap those two leave open. Same-boundary
+`requireCompleteCoverage` gives boundary ownership normative force: every
+indexed, non-ignored file must match exactly one declared boundary. Without the
+flag, unmapped and ambiguous files remain visible coverage facts but cannot
+block work.
+
+`requireResolvedBoundaries` closes the gap the dependency rules leave open. Same-boundary
 dependencies are always allowed, so every edge inside a boundary is discarded
 before `requireAcyclic` runs — which means a boundary coarse enough to contain
 both sides of a cycle passes the check while saying nothing about the code

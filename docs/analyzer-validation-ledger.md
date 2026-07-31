@@ -416,26 +416,27 @@ files depending on one of its own sub-directories is the most common real
 intra-boundary cycle, not module bookkeeping.
 
 **Known limits, not yet calibrated.** Sub-units are one directory level, so a
-layer inversion _inside_ a single directory is invisible; the `src/source`
-primitives/facts/products tangle had to be derived by hand and was fixed by
-splitting the directory. Test files are not SCIP-indexed and are therefore
-outside boundary enforcement entirely. `requireCompletePolicy` checks that a
+layer inversion _inside_ a single directory is invisible unless file
+sub-units are declared. Test files require declared test roots because they are
+not SCIP-indexed. Boundary ownership remains descriptive unless
+`requireCompleteCoverage` is enabled. `requireCompletePolicy` checks that a
 dependency row exists, not that it is minimal, so an allowance can outlive the
 edge that justified it.
 
 ## 2026-07-24 Boundary Enforcement Gap Closure
 
-Five rules were added to `architecture` after auditing what boundary
+Six rules were added to `architecture` after auditing what boundary
 enforcement still could not see. Each is opt-in and defaults to off, so
 upgrading tightens no existing project's gate.
 
-| Rule                                                                      | Closes                                                                                                                                                                                                                                       | Finding identity                                |
-| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `requireMinimalPolicy`                                                    | A declared allowance outliving the edge that justified it. `requireCompletePolicy` checks a row _exists_, never that it is _minimal_, so policy widens silently.                                                                             | `architecture:stale-allowance:<from>:<to>`      |
-| `maxBoundaryFanOut` / global `maxBoundaryFiles` / per-boundary `maxFiles` | A boundary growing until it is coupled to most of the system. A local file ceiling overrides the global default only for its reviewed boundary. Coarseness was previously caught only when it _hid a cycle_, never when it merely got large. | `architecture:boundary-limit:<kind>:<boundary>` |
-| `testPaths`                                                               | Test files are excluded from the compiler project and therefore from the index, leaving them outside every boundary rule.                                                                                                                    | `architecture:test-boundary:<test>:<boundary>`  |
-| `subUnits: 'file'`                                                        | A layer inversion _inside_ one directory, invisible when sub-units are directories.                                                                                                                                                          | (reuses `coarse-boundary`)                      |
-| `fragileEdges` (report-only)                                              | No signal distinguishing a load-bearing dependency from one resting on a single import. 60 of 251 edges here are single-import.                                                                                                              | none — advisory                                 |
+| Rule                                                                      | Closes                                                                                                                                                                                                                                       | Finding identity                                                                        |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `requireCompleteCoverage`                                                 | Indexed files that match no boundary or multiple boundaries remaining outside normative structure while still appearing in coverage counts.                                                                                                  | `architecture:unmapped-file:<file>` / `architecture:ambiguous-file:<file>:<boundaries>` |
+| `requireMinimalPolicy`                                                    | A declared allowance outliving the edge that justified it. `requireCompletePolicy` checks a row _exists_, never that it is _minimal_, so policy widens silently.                                                                             | `architecture:stale-allowance:<from>:<to>`                                              |
+| `maxBoundaryFanOut` / global `maxBoundaryFiles` / per-boundary `maxFiles` | A boundary growing until it is coupled to most of the system. A local file ceiling overrides the global default only for its reviewed boundary. Coarseness was previously caught only when it _hid a cycle_, never when it merely got large. | `architecture:boundary-limit:<kind>:<boundary>`                                         |
+| `testPaths`                                                               | Test files are excluded from the compiler project and therefore from the index, leaving them outside every boundary rule.                                                                                                                    | `architecture:test-boundary:<test>:<boundary>`                                          |
+| `subUnits: 'file'`                                                        | A layer inversion _inside_ one directory, invisible when sub-units are directories.                                                                                                                                                          | (reuses `coarse-boundary`)                                                              |
+| `fragileEdges` (report-only)                                              | No signal distinguishing a load-bearing dependency from one resting on a single import. 60 of 251 edges here are single-import.                                                                                                              | none — advisory                                                                         |
 
 **Test-boundary calibration.** The first rule shape — "a test may import only what
 its subject's boundary may import" — produced 91 findings, nearly all

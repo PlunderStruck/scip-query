@@ -126,6 +126,8 @@ describe('architecture diff-gate ratchet', () => {
         evidence: 'baseline',
         sourceAnalyzer: 'architecture',
         rootCauseKey: 'forbidden-edge:storage:queries',
+        file: 'src/storage/store.ts',
+        relatedFiles: ['src/queries/api.ts', 'src/storage/store.ts'],
         message: expect.stringContaining(ARCHITECTURE_IDENTITY),
       });
       expect(finding?.why).toContain('Declared boundary rule rejects storage -> queries.');

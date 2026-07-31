@@ -41,6 +41,7 @@ const PRIVATE_QUERY_MODULES = [
   'public-query-entries',
   'query-utils',
   'architecture-baseline',
+  'architecture-finding-evidence',
   'test-boundary-policy',
 ] as const;
 
@@ -62,6 +63,7 @@ const PRIVATE_QUERY_SOURCE_PATHS = {
   'public-query-entries': 'src/queries/public-query-entries.ts',
   'query-utils': 'src/queries/query-utils.ts',
   'architecture-baseline': 'src/queries/graph/architecture-baseline.ts',
+  'architecture-finding-evidence': 'src/queries/graph/architecture-finding-evidence.ts',
   'test-boundary-policy': 'src/queries/graph/test-boundary-policy.ts',
 } as const satisfies Record<(typeof PRIVATE_QUERY_MODULES)[number], string>;
 
