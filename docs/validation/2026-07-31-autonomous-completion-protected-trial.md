@@ -6,6 +6,40 @@ First authorized-program registered outcome: `regressed` — invalidated by hook
 Hook-verified registered outcome: `neutral` — controller conclusion invalidated by audit
 Current evidential outcome: protected lifecycle `established`; mission effectiveness `insufficient`
 
+## Large-repository panel-resize comparison — invalid evidence
+
+The first Vega panel-resize comparison does not establish either benefit or
+regression. Control program `SQTP-9653E594D17A1F010336F96937264D69`
+completed its agent work in 1,076,204 ms with 11,813,721 counted tokens and 69
+tool calls. Corrected treatment program
+`SQTP-CB8225D17510EA43A539214EC2B88783` completed its agent work in
+1,334,368 ms with 17,418,595 counted tokens and 81 tool calls, including 22
+scip-query metadata commands. Most counted tokens were cached. The treatment's
+26-second repository activation happened before the primary timer and produced
+no model tokens, so setup is not included in those ratios.
+
+The raw treatment was 258,164 ms slower and used 5,604,874 more counted tokens,
+but the pair is not valid causal evidence. Its Stop hook failed while capturing
+configured TypeScript project directories such as `apps/api` as if they were
+files. The hook returned feedback rather than a blocking decision, so the agent
+exited without the intended autonomous repair loop. The hidden evaluator also
+required one exact hook path, callback API, and documentation wording. Its
+pointer tests omitted `PointerEvent.isPrimary` while rejecting implementations
+that correctly enforce the prompt's primary-pointer requirement.
+
+There is one implementation-independent negative result. Both conditions left
+duplicate seam borders in `ChatFileGallery`, `ChatThread`, and
+`ChatThreadsList`, while the treatment diff gate passed. Thus the run exposes a
+real completeness false negative and no demonstrated treatment advantage.
+
+The product repair adds regression coverage for configured workspace
+directories and makes a host-fixed protected authorization select blocking
+Stop behavior by default. The replacement trial must begin from one
+preconfigured, indexed, dependency-ready golden fixture; disable scip-query and
+its hooks only in the control; reject readiness failures before launching a
+model; use a behavior-based evaluator; and read durable completion records.
+Until that pair finishes, the mission-level conclusion remains `insufficient`.
+
 ## Fresh protected-controller lifecycle probe
 
 Program `SQTP-182228C19EB1E390F39BBA7CB829E7CD` fixed runner SHA-256

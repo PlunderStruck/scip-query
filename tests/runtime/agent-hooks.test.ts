@@ -482,6 +482,26 @@ describe('agent hook context', () => {
     });
   });
 
+  it('blocks by default when the host has authorized protected autonomous work', () => {
+    expect(
+      resolveStopHookMode({
+        [PROTECTED_WORK_AUTHORIZATION_ROOT_ENV]: '/protected/evidence',
+        [PROTECTED_WORK_AUTHORIZATION_ID_ENV]: 'SQWA-protected',
+      }),
+    ).toBe('block');
+    expect(resolveStopHookMode({ [PROTECTED_WORK_AUTHORIZATION_ROOT_ENV]: '/incomplete-configuration' })).toBe('block');
+  });
+
+  it('honors an explicit feedback override for protected work', () => {
+    expect(
+      resolveStopHookMode({
+        SCIP_QUERY_STOP_HOOK_MODE: 'feedback',
+        [PROTECTED_WORK_AUTHORIZATION_ROOT_ENV]: '/protected/evidence',
+        [PROTECTED_WORK_AUTHORIZATION_ID_ENV]: 'SQWA-protected',
+      }),
+    ).toBe('feedback');
+  });
+
   it('turns an incomplete gate execution into explicit stop feedback', () => {
     expect(renderStopHookExecutionFailure('timed out after 60000ms', 'feedback')).toMatchObject({
       hookSpecificOutput: {

@@ -106,6 +106,30 @@ describe('fixed project observation snapshots', () => {
     ).toThrow(/changed|moved/);
   });
 
+  it('treats configured TypeScript project directories as roots rather than file inputs', () => {
+    const root = repositoryFixture('typescript-project-directory');
+    const snapshot = captureProjectObservationSnapshot(
+      root,
+      ['typescript'],
+      {
+        projectRoot: root,
+        dbPath: join(root, 'index.db'),
+        indexPath: join(root, 'index.scip'),
+        languages: ['typescript'],
+        indexer: { typescript: { projects: ['apps/web'] } },
+      },
+      resolveGitWorktreeContext(root),
+    );
+
+    try {
+      expect(snapshot.paths).toContain('apps/web/tsconfig.json');
+      expect(snapshot.repositoryContent.files).not.toContainEqual(expect.objectContaining({ path: 'apps/web' }));
+      expect(snapshot.indexInputs.typescriptProjects).toContain('apps/web');
+    } finally {
+      snapshot.dispose();
+    }
+  });
+
   it('keeps concurrent command snapshots isolated', async () => {
     const firstRoot = repositoryFixture('concurrent-first');
     const secondRoot = repositoryFixture('concurrent-second');
@@ -183,6 +207,7 @@ function repositoryFixture(label: string): string {
   execFileSync('git', ['init', '--quiet', root]);
   mkdirSync(join(root, '.scipquery', 'events'), { recursive: true });
   mkdirSync(join(root, '.scipquery', 'suppressions'), { recursive: true });
+  mkdirSync(join(root, 'apps', 'web'), { recursive: true });
   mkdirSync(join(root, 'docs', 'benchmarks'), { recursive: true });
   writeFileSync(join(root, '.gitignore'), 'ignored.txt\nignored-tsconfig.json\n');
   writeFileSync(join(root, '.scipquery.json'), '{}\n');
@@ -195,6 +220,7 @@ function repositoryFixture(label: string): string {
   chmodSync(join(root, 'script.sh'), 0o644);
   writeFileSync(join(root, 'ignored.txt'), 'machine state\n');
   writeFileSync(join(root, 'ignored-tsconfig.json'), '{"compilerOptions":{}}\n');
+  writeFileSync(join(root, 'apps', 'web', 'tsconfig.json'), '{"compilerOptions":{},"files":[]}\n');
   writeFileSync(join(root, '.scipquery', 'events', 'outcome.json'), '{}\n');
   writeFileSync(join(root, '.scipquery', 'suppressions', 'review.json'), '{}\n');
   writeFileSync(join(root, 'docs', 'benchmarks', 'historical.json'), '{"large":"snapshot"}\n');

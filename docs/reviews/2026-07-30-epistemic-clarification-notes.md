@@ -1,7 +1,7 @@
 # scip-query epistemic redesign — session notes
 
 Date opened: 2026-07-30
-Updated: 2026-07-30
+Updated: 2026-07-31
 Status: live
 Parent review: [Epistemic review](./2026-07-30-epistemic-review.md)
 
@@ -14,9 +14,43 @@ that was intentionally replaced.
 
 ## Where we are
 
-Phase 5 — the first automatic-evidence slice is implemented and verified.
-The next slice makes operation roles and receipt version 2 honest enough for
-collaborative, completion-authoritative use.
+All six implementation phases now exist in the product, but mission
+effectiveness remains unproven. A first large-repository Vega comparison did
+not establish a benefit: its raw workflow condition cost more, both conditions
+missed the same real cleanup, and treatment execution was invalidated by a
+Stop-hook snapshot failure. The immediate work is to repair those product and
+apparatus failures, reduce repeated verification work, and rerun one
+already-configured behavior-judged pair before making an effectiveness claim.
+
+## Latest large-repository evidence
+
+- Repository setup is not part of the intended comparison. The treatment's
+  26-second activation occurred before counted agent execution and contributed
+  zero model tokens, but preparing a neutral fixture still modeled adoption
+  rather than normal use and created avoidable apparatus work. The replacement
+  fixture must already be configured, indexed, dependency-ready, and pass a
+  readiness check before either timer starts.
+- The first panel-resize control completed in 1,076,204 ms with 11,813,721
+  counted tokens; the treatment completed in 1,334,368 ms with 17,418,595
+  counted tokens. Most counted tokens were cached. These raw values show cost,
+  not a valid causal result, because the treatment did not receive the intended
+  enforced Stop lifecycle and the hidden evaluator required one exact API and
+  file location rather than the authorized behavior.
+- Both agents produced broadly equivalent shared-resize implementations and
+  both missed duplicate seam borders in three chat surfaces. scip-query's diff
+  gate passed, so this trial supplies a real completeness false negative rather
+  than evidence of treatment advantage.
+- The treatment Stop hook found that configured TypeScript workspace
+  directories were being captured as files, then returned advisory feedback
+  and allowed the agent to exit. The product repair treats existing configured
+  directories as project roots and makes host-authorized protected work block
+  by default when Stop cannot certify completion. Ordinary non-protected work
+  remains advisory unless explicitly configured otherwise.
+- The next pair must clone both conditions from one preconfigured golden
+  repository, disable scip-query only in the control, reject either condition
+  before model execution when dependencies or lifecycle preflight fail, judge
+  behavior independently of implementation shape, and derive treatment
+  completion from durable controller records rather than final prose.
 
 ## Settled
 

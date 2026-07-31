@@ -63,6 +63,8 @@ import {
 } from './completion-evaluation-context.js';
 import {
   activateConfiguredProtectedWorkAuthorization,
+  PROTECTED_WORK_AUTHORIZATION_ID_ENV,
+  PROTECTED_WORK_AUTHORIZATION_ROOT_ENV,
   readConfiguredProtectedWorkAuthorization,
   type ProtectedWorkAuthorizationEnvironment,
 } from './protected-work-authorization-controller.js';
@@ -467,6 +469,9 @@ export function resolveStopHookMode(env: Record<string, string | undefined> = pr
   }
   if (value === 'feedback' || value === 'continue' || value === '1' || value === 'true' || value === 'yes') {
     return 'feedback';
+  }
+  if (env[PROTECTED_WORK_AUTHORIZATION_ROOT_ENV] || env[PROTECTED_WORK_AUTHORIZATION_ID_ENV]) {
+    return 'block';
   }
   return 'feedback';
 }

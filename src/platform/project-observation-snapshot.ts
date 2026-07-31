@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { lstatSync, readlinkSync, readdirSync, realpathSync, type Stats } from 'node:fs';
+import { lstatSync, readlinkSync, readdirSync, realpathSync, statSync, type Stats } from 'node:fs';
 import { dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 import { matchesPathGlob } from '../domain/path-glob.js';
 import { classifyProjectInputPath, type ProjectInputSnapshot } from '../domain/project-input.js';
@@ -76,7 +76,7 @@ export function captureProjectObservationSnapshot(
   hooks?: ProjectObservationSnapshotHooks,
 ): ProjectObservationSnapshot {
   const canonicalProjectRoot = realpathSync(projectRoot);
-  const declaredInputPaths = configuredInputPaths(config);
+  const declaredInputPaths = configuredInputPaths(canonicalProjectRoot, config);
   const captured =
     gitContext?.headCommit && gitContext.treeOid
       ? captureGitOverlaySnapshot(
@@ -590,12 +590,28 @@ function isMissingFileError(error: unknown): boolean {
   return code === 'ENOENT' || code === 'ENOTDIR';
 }
 
-function configuredInputPaths(config: ProjectConfig): string[] {
+function configuredInputPaths(projectRoot: string, config: ProjectConfig): string[] {
   const candidates = [
     ...(config.indexer?.typescript?.projects ?? []),
     ...(config.indexer?.clojure?.configPath ? [config.indexer.clojure.configPath] : []),
   ];
-  return [...new Set(candidates.map((path) => normalizeConfiguredInputPath(path)).filter(Boolean))].sort();
+  return [
+    ...new Set(
+      candidates
+        .map((path) => normalizeConfiguredInputPath(path))
+        .filter(Boolean)
+        .filter((path) => !isConfiguredInputDirectory(projectRoot, path)),
+    ),
+  ].sort();
+}
+
+function isConfiguredInputDirectory(projectRoot: string, relativePath: string): boolean {
+  try {
+    return statSync(join(projectRoot, relativePath)).isDirectory();
+  } catch (error) {
+    if (isMissingFileError(error)) return false;
+    throw error;
+  }
 }
 
 function normalizeConfiguredInputPath(path: string): string {
