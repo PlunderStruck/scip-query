@@ -61,6 +61,10 @@ import {
   captureFixedCompletionContext,
   publishStopCompletionEvaluations,
 } from './completion-evaluation-context.js';
+import {
+  materializeAutomaticOperationAttempts,
+  type MaterializeAutomaticOperationAttemptsResult,
+} from './autonomous-operation-journal.js';
 
 const SKIP_HOOK_INSTALL_ENV = 'SCIP_QUERY_SKIP_HOOK_INSTALL';
 const STOP_HOOK_MODE_ENV = 'SCIP_QUERY_STOP_HOOK_MODE';
@@ -947,6 +951,7 @@ function writeStopHookJson(output: ClaudeHookJsonOutput): void {
 interface StopHookExecution extends DiffGateExecutionResult {
   evidenceLease: StopHookEvidenceLease;
   completion: ReturnType<typeof publishStopCompletionEvaluations>;
+  automaticAttempts: MaterializeAutomaticOperationAttemptsResult;
 }
 
 async function runIsolatedStopHookDiffGate(hookInput: string): Promise<StopHookExecution | undefined> {
@@ -954,6 +959,11 @@ async function runIsolatedStopHookDiffGate(hookInput: string): Promise<StopHookE
   const payload = parseHookPayload(hookInput);
   const workspace = resolveHookWorkspace(payload);
   if (!workspace) return undefined;
+  const automaticAttempts = materializeAutomaticOperationAttempts(
+    workspace.projectRoot,
+    workspace.paths.cacheDir,
+    cliVersion,
+  );
   const lease = await prepareStopHookEvidenceLease(workspace);
   const stopMode = resolveStopHookMode();
   const completionContext = captureFixedCompletionContext(workspace.projectRoot, workspace.config, stopMode);
@@ -976,7 +986,7 @@ async function runIsolatedStopHookDiffGate(hookInput: string): Promise<StopHookE
   const completion = publishStopCompletionEvaluations(completionContext, execution.result, {
     toolVersion: cliVersion,
   });
-  return { ...execution, evidenceLease: lease, completion };
+  return { ...execution, evidenceLease: lease, completion, automaticAttempts };
 }
 
 function persistStopSessionState(

@@ -11,6 +11,16 @@ import { sanitizeTerminalLine } from '../../platform/terminal-output.js';
 import { cliVersion } from '../cli-support.js';
 import { runWithCliOutputPagination } from '../output-pagination.js';
 import { resolveCommandOperationRole } from '../command-operation.js';
+import { findGitRoot } from '../../platform/git-worktree.js';
+import { resolveIndexStoragePaths } from '../../platform/cache-layout.js';
+import { loadProjectConfig } from '../config.js';
+import { currentCliObservationReceipt } from '../observation-receipt.js';
+import { decodeObservationReceipt, type ObservationReceiptV2 } from '../../domain/observation-receipt.js';
+import {
+  beginAutomaticOperationCapture,
+  completeAutomaticOperationCapture,
+  type AutomaticOperationCapture,
+} from '../autonomous-operation-journal.js';
 
 type PlainCommanderDefault = string | boolean | string[] | undefined;
 
@@ -90,7 +100,14 @@ export function registerCommandDescriptors(
               options: opts,
             })
           : undefined;
-        await (operation ? runWithCommandOperationRole(operation, run) : run());
+        const capture = operation ? beginCliOperationCapture(descriptor.id, operation) : undefined;
+        try {
+          await (operation ? runWithCommandOperationRole(operation, run) : run());
+          completeCliOperationCapture(capture, typeof process.exitCode === 'number' ? process.exitCode : 0);
+        } catch (error) {
+          completeCliOperationCapture(capture, 1, error);
+          throw error;
+        }
       } catch (err) {
         handleCommandError(err);
       }
@@ -125,4 +142,57 @@ function handleCommandError(err: unknown): void {
   const message = err instanceof Error ? err.message : String(err);
   console.error(`error: ${sanitizeTerminalLine(message)}`);
   process.exitCode = 1;
+}
+
+function beginCliOperationCapture(
+  command: string,
+  operationRole: Parameters<typeof beginAutomaticOperationCapture>[0]['operationRole'],
+): AutomaticOperationCapture | undefined {
+  try {
+    const projectRoot = findGitRoot(process.cwd());
+    if (!projectRoot) return undefined;
+    const config = loadProjectConfig(projectRoot);
+    return beginAutomaticOperationCapture({
+      projectRoot,
+      cacheDir: resolveIndexStoragePaths(projectRoot, config).cacheDir,
+      command,
+      operationRole,
+      argv: process.argv.slice(2),
+      preReceipt: supportedCurrentReceipt(),
+    });
+  } catch (error) {
+    if (process.env['SCIP_QUERY_DEBUG']) {
+      console.error(`automatic-workflow: could not start operation capture: ${String(error)}`);
+    }
+    return undefined;
+  }
+}
+
+function completeCliOperationCapture(
+  capture: AutomaticOperationCapture | undefined,
+  exitCode: number,
+  error?: unknown,
+): void {
+  if (!capture) return;
+  try {
+    completeAutomaticOperationCapture({
+      capture,
+      exitCode,
+      postReceipt: supportedCurrentReceipt(),
+      ...(error ? { error: error instanceof Error ? error.message : String(error) } : {}),
+    });
+  } catch (captureError) {
+    if (process.env['SCIP_QUERY_DEBUG']) {
+      console.error(`automatic-workflow: could not finish operation capture: ${String(captureError)}`);
+    }
+  }
+}
+
+function supportedCurrentReceipt(): ObservationReceiptV2 | undefined {
+  try {
+    const decoded = decodeObservationReceipt(currentCliObservationReceipt());
+    return decoded.kind === 'supported' ? decoded.receipt : undefined;
+  } catch {
+    return undefined;
+  }
 }

@@ -8,9 +8,9 @@
   "id": "SQB26525BAEF6A",
   "check": "co-change-partner",
   "file": "src/runtime/agent-hooks.ts",
-  "reason": "The stop hook is registered directly by command-descriptors and implemented in agent-hooks; command-handlers has no completion-controller consumer, while hook tests cover the changed boundary and all reported historical co-edits were broad sweeps.",
+  "reason": "Automatic operation history crosses the command registry, autonomous-operation journal, and Stop adapter directly. command-handlers owns unrelated public CLI handlers, has no consumer of the journal or Stop materialization path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
   "createdAt": "2026-07-31T02:21:40.222Z",
-  "updatedAt": "2026-07-31T06:41:25.140Z",
+  "updatedAt": "2026-07-31T09:48:44.056Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
@@ -19,7 +19,7 @@
     "policyVersion": 1,
     "observation": {
       "schemaVersion": 2,
-      "observedAt": "2026-07-31T06:41:25.132Z",
+      "observedAt": "2026-07-31T09:48:44.054Z",
       "facts": {
         "collaborationDomain": {
           "schemaVersion": 1,
@@ -49,7 +49,7 @@
             "name": "scip-query:repository-content",
             "version": 1
           },
-          "digest": "d68290dff55e65324f9bd706b3085edc1df258b04f50c108464e70dfb070da56"
+          "digest": "0484b68ccb6c69650481c4779327f8debc87153c32d83846e9a6622034900ff3"
         },
         "relevantInputs": [
           {
@@ -62,7 +62,7 @@
                 "name": "scip-query:index-inputs",
                 "version": 2
               },
-              "digest": "8e4c09977cf9f13fd31d58d068d25b752f5241baf5e03c1f5d6103756a31e3c4"
+              "digest": "4cf998904d694874cd364e47754bb008fb1249752607ee9d43a5ce6d960c3eab"
             }
           }
         ],
@@ -75,7 +75,7 @@
               "name": "scip-query:index-generation",
               "version": 1
             },
-            "digest": "ea44c0ecc35c58b45aa67e2cf0330118ab484371215ef9a182fb0abd71eb2cf9"
+            "digest": "3cb247371680dc5da6c4d478c2292fb7e4c28c6bffa996dc4032f19eab41b3de"
           },
           "inputs": {
             "schemaVersion": 1,
@@ -85,7 +85,7 @@
               "name": "scip-query:index-inputs",
               "version": 2
             },
-            "digest": "8e4c09977cf9f13fd31d58d068d25b752f5241baf5e03c1f5d6103756a31e3c4"
+            "digest": "4cf998904d694874cd364e47754bb008fb1249752607ee9d43a5ce6d960c3eab"
           },
           "source": "immutable"
         }
@@ -101,7 +101,7 @@
               "name": "scip-query:index-generation",
               "version": 1
             },
-            "digest": "ea44c0ecc35c58b45aa67e2cf0330118ab484371215ef9a182fb0abd71eb2cf9"
+            "digest": "3cb247371680dc5da6c4d478c2292fb7e4c28c6bffa996dc4032f19eab41b3de"
           }
         },
         {
@@ -114,7 +114,7 @@
               "name": "scip-query:repository-content",
               "version": 1
             },
-            "digest": "d68290dff55e65324f9bd706b3085edc1df258b04f50c108464e70dfb070da56"
+            "digest": "0484b68ccb6c69650481c4779327f8debc87153c32d83846e9a6622034900ff3"
           }
         }
       ],
@@ -130,28 +130,51 @@
       ],
       "diagnostics": {
         "clean": false,
-        "headCommit": "cd68864c0326b955f300cfb6ddafe3e3c83b9384",
-        "treeOid": "4b278b1c74f2831aedc99143c060cc531871640e"
+        "headCommit": "cc06a95b7a662413f74b5d62df89abfff446ce73",
+        "treeOid": "38d6f25d89bd2e7e9f3b014fb77ac0cd82732291"
       }
     },
     "evidence": [
       {
         "kind": "source",
         "referent": "src/runtime/agent-hooks.ts",
-        "claim": "The stop hook is registered directly by command-descriptors and implemented in agent-hooks; command-handlers has no completion-controller consumer, while hook tests cover the changed boundary and all reported historical co-edits were broad sweeps.",
-        "contentHash": "c5f063fd6c851ae5064b9280ed66f6c40ff589191076a5cf56f6336451e9d6f0"
+        "claim": "Automatic operation history crosses the command registry, autonomous-operation journal, and Stop adapter directly. command-handlers owns unrelated public CLI handlers, has no consumer of the journal or Stop materialization path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
+        "contentHash": "f7311180b18073394db8ea09bd1b1bae36922f82f1471002c527a19528abb806"
+      },
+      {
+        "kind": "source",
+        "referent": "src/runtime/autonomous-operation-journal.ts",
+        "claim": "Automatic operation history crosses the command registry, autonomous-operation journal, and Stop adapter directly. command-handlers owns unrelated public CLI handlers, has no consumer of the journal or Stop materialization path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
+        "contentHash": "188e37a3749b2d613dd82ce2602c20be68ee7f6167dbafd362efa0c5e08189ac"
+      },
+      {
+        "kind": "source",
+        "referent": "src/runtime/commands/command-registry.ts",
+        "claim": "Automatic operation history crosses the command registry, autonomous-operation journal, and Stop adapter directly. command-handlers owns unrelated public CLI handlers, has no consumer of the journal or Stop materialization path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
+        "contentHash": "ded8d7d6555c230ff4e0ff38e2f07190f67c18f572c828ab1a080647b8595a37"
       },
       {
         "kind": "source",
         "referent": "src/runtime/commands/command-handlers.ts",
-        "claim": "The stop hook is registered directly by command-descriptors and implemented in agent-hooks; command-handlers has no completion-controller consumer, while hook tests cover the changed boundary and all reported historical co-edits were broad sweeps.",
+        "claim": "Automatic operation history crosses the command registry, autonomous-operation journal, and Stop adapter directly. command-handlers owns unrelated public CLI handlers, has no consumer of the journal or Stop materialization path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
         "contentHash": "f21beb90cc9ea84926019ea6a3c821358cd18b1c54a26d618cfa6bf7cb6d0283"
       },
       {
         "kind": "test",
+        "referent": "tests/runtime/autonomous-operation-journal.test.ts",
+        "claim": "Automatic operation history crosses the command registry, autonomous-operation journal, and Stop adapter directly. command-handlers owns unrelated public CLI handlers, has no consumer of the journal or Stop materialization path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
+        "contentHash": "ea746282516323bfed8cfe77ce0b68bd58af6cb9aa87cb98da42fc4653ad1b61"
+      },
+      {
+        "kind": "test",
         "referent": "tests/runtime/agent-hooks.test.ts",
-        "claim": "The stop hook is registered directly by command-descriptors and implemented in agent-hooks; command-handlers has no completion-controller consumer, while hook tests cover the changed boundary and all reported historical co-edits were broad sweeps.",
+        "claim": "Automatic operation history crosses the command registry, autonomous-operation journal, and Stop adapter directly. command-handlers owns unrelated public CLI handlers, has no consumer of the journal or Stop materialization path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
         "contentHash": "1b5591e9ba21c05a3a7b1ddc33be04c11f8d1dc465b43bc68406162e16eb4397"
+      },
+      {
+        "kind": "graph",
+        "referent": "scip-query plan-context registerCommandDescriptors",
+        "claim": "Automatic operation history crosses the command registry, autonomous-operation journal, and Stop adapter directly. command-handlers owns unrelated public CLI handlers, has no consumer of the journal or Stop materialization path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes."
       }
     ],
     "invalidateOn": {

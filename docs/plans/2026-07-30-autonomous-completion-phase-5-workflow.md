@@ -1,7 +1,7 @@
 # Phase 5 — autonomous agent workflow
 
 Date: 2026-07-30
-Status: planned; depends on Phases 2–4
+Status: in progress; slice 5.1 complete
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -71,6 +71,29 @@ Expected validation:
 - a command failure or timeout records failed/unknown rather than success;
 - mutation results link pre-state evidence and post-state observation; and
 - replay does not duplicate events.
+
+Execution result:
+
+- bracketed every operation-role-aware public command with a reconstructable,
+  concurrency-safe local journal entry before execution and its observed exit
+  state afterward;
+- preserved a process interruption as `unknown`, rather than inferring success
+  from an absent error;
+- removed transport-only pagination and rendering options from operation
+  meaning, then coalesced an equal successful read against the same repository
+  receipt;
+- materialized novel journal entries automatically at Stop into the one active
+  intended change, with pre/post receipts and conservative effect classes;
+- deferred zero-change and ambiguous multi-change attribution instead of
+  guessing, and retained `SCIP_QUERY_AUTONOMOUS_CAPTURE=0` as the explicit
+  unsupported/manual-workflow opt-out;
+- excluded the manual goal/change/attempt/decision/obligation/completion
+  maintenance commands so the protocol cannot recursively describe its own
+  bookkeeping as useful repository work; and
+- verified successful read coalescing, failed command capture, interrupted
+  non-idempotent effects, idempotent materialization, Stop integration,
+  TypeScript, unbounded migration and duplication scans, declared
+  architecture, and the diff gate.
 
 ### 5.2 Bounded context projection
 
