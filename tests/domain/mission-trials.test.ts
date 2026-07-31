@@ -56,6 +56,28 @@ describe('mission trial records', () => {
     expect(decodeMissionTrialRun(run)).toEqual({ state: 'current', record: run });
   });
 
+  it('migrates v1 runs with the newly observable affected-artifact judgment left unknown', () => {
+    const program = createProgram();
+    const run = createMissionTrialRun(runRequest(program), {
+      now: () => '2026-07-30T12:06:00.000Z',
+      toolVersion: '0.20.0',
+    });
+    const v1 = structuredClone(run) as unknown as Record<string, unknown>;
+    v1['schemaVersion'] = 1;
+    delete (v1['evaluation'] as Record<string, unknown>)['missedAffectedArtifacts'];
+
+    expect(decodeMissionTrialRun(v1)).toEqual({
+      state: 'current',
+      record: {
+        ...run,
+        evaluation: {
+          ...run.evaluation,
+          missedAffectedArtifacts: null,
+        },
+      },
+    });
+  });
+
   it('gives every rerun a distinct immutable identity', () => {
     const program = createProgram();
     const first = createMissionTrialRun(runRequest(program), {
@@ -100,7 +122,7 @@ describe('mission trial records', () => {
     expect(program.properties.kind.const).toBe('scip-query-mission-trial-program');
     expect(program.properties.schemaVersion.const).toBe(1);
     expect(run.properties.kind.const).toBe('scip-query-mission-trial-run');
-    expect(run.properties.schemaVersion.const).toBe(1);
+    expect(run.properties.schemaVersion.const).toBe(2);
   });
 });
 
@@ -193,6 +215,7 @@ function runRequest(program: ReturnType<typeof createProgram>): MissionTrialRunR
       goalSatisfied: null,
       invariantsPreserved: true,
       affectedSurfaceReconciled: true,
+      missedAffectedArtifacts: [],
       residueDefects: [],
       reintroducedBehaviors: [],
       architectureViolations: [],

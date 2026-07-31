@@ -642,7 +642,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       ]),
     ),
     description:
-      'Register, validate, record, or list protected autonomous-completion mission trials outside the candidate worktree',
+      'Register, validate, record, list, or report protected autonomous-completion mission trials outside the candidate worktree',
     options: withJsonOption([
       option('--protected-root <path>', 'Required protected apparatus and immutable result root'),
       option('--candidate-root <path>', 'Candidate-editable worktree (default: current project)'),
@@ -651,6 +651,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     renderShape: 'custom',
     docs: doc('Maintenance', [
       'scip-query mission-trial validate protected/programs/program.json --protected-root ../protected-trials',
+      'scip-query mission-trial report protected/programs/program.json --protected-root ../protected-trials',
       'scip-query mission-trial record protected/programs/program.json --protected-root ../protected-trials --candidate-root ./candidate --input run.json',
     ]),
     handler: handleMissionTrial,

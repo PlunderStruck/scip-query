@@ -174,6 +174,7 @@ function runRequest(
       goalSatisfied: true,
       invariantsPreserved: true,
       affectedSurfaceReconciled: true,
+      missedAffectedArtifacts: [],
       residueDefects: [],
       reintroducedBehaviors: [],
       architectureViolations: [],

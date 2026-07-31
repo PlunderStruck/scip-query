@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 
 import { sanitizeTerminalLine } from '../../platform/terminal-output.js';
+import { deriveMissionTrialMetrics, type MissionTrialMetricReport } from '../../domain/mission-trial-metrics.js';
 import type { MissionTrialProgramV1 } from '../../domain/mission-trials.js';
 import {
   assertProtectedRootOutsideCandidate,
@@ -23,7 +24,7 @@ import {
 import { resolveProjectRoot } from '../cli-context.js';
 import { cliVersion } from '../cli-support.js';
 
-const MISSION_TRIAL_OPERATIONS = ['register', 'validate', 'record', 'list'] as const;
+const MISSION_TRIAL_OPERATIONS = ['register', 'validate', 'record', 'list', 'report'] as const;
 type MissionTrialOperation = (typeof MISSION_TRIAL_OPERATIONS)[number];
 
 export function handleMissionTrial(operationValue: unknown, programValue: unknown, rawOpts: unknown): void {
@@ -114,6 +115,15 @@ function runMissionTrialOperation(
     };
   }
   const runs = readMissionTrialRuns(protectedRoot, program.programId);
+  if (operation === 'report') {
+    return {
+      operation,
+      programId: program.programId,
+      runCount: runs.records.length,
+      report: deriveMissionTrialMetrics(program, runs.records),
+      issues: runs.issues,
+    };
+  }
   return {
     operation,
     programId: program.programId,
@@ -135,6 +145,7 @@ function renderMissionTrialResult(operation: MissionTrialOperation, result: unkn
     exclusionReasons?: readonly string[];
     runCount?: number;
     issues?: readonly unknown[];
+    report?: MissionTrialMetricReport;
   };
   if (operation === 'register' || operation === 'record') {
     console.log(
@@ -160,6 +171,20 @@ function renderMissionTrialResult(operation: MissionTrialOperation, result: unkn
   }
   console.log(`Program ${sanitizeTerminalLine(value.programId ?? 'unknown')}: ${value.runCount ?? 0} run(s)`);
   console.log(`Record issues: ${value.issues?.length ?? 0}`);
+  if (operation === 'report' && value.report) {
+    console.log(`Matched pairs: ${value.report.matchedPairCount}`);
+    console.log(
+      `Full completion: control ${formatRate(value.report.quality.control.fullCompletion.rate)}, workflow ${formatRate(value.report.quality.workflow.fullCompletion.rate)}, difference ${formatSignedRate(value.report.quality.fullCompletionRateDifference)}`,
+    );
+    console.log(
+      `Workflow false blocking: ${formatRate(value.report.quality.workflow.falseBlocking.rate)}; architecture regression: ${formatRate(value.report.quality.workflow.architectureRegression.rate)}`,
+    );
+    console.log(
+      `Median workflow/control ratio: elapsed ${formatRatio(value.report.efficiency.elapsedMs.medianRatio)}, model tokens ${formatRatio(value.report.efficiency.modelTokens.medianRatio)}`,
+    );
+    const excluded = value.report.rawSamples.filter((sample) => sample.selection !== 'selected').length;
+    console.log(`Selected outcomes: ${value.report.selectedRunCount}; excluded or superseded records: ${excluded}`);
+  }
 }
 
 function artifactMatches(artifact: {
@@ -177,4 +202,18 @@ function missionTrialOperation(value: unknown): MissionTrialOperation {
 function requiredString(value: unknown, message: string): string {
   if (typeof value === 'string' && value.trim().length > 0) return value;
   throw new Error(message);
+}
+
+function formatRate(value: number | null): string {
+  return value === null ? 'unknown' : `${(value * 100).toFixed(1)}%`;
+}
+
+function formatSignedRate(value: number | null): string {
+  if (value === null) return 'unknown';
+  const percentage = value * 100;
+  return `${percentage >= 0 ? '+' : ''}${percentage.toFixed(1)}pp`;
+}
+
+function formatRatio(value: number | null): string {
+  return value === null ? 'unknown' : `${value.toFixed(2)}x`;
 }

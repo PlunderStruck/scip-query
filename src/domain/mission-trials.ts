@@ -11,7 +11,7 @@ import { hashIdentity, isSha256 } from './autonomous-work-state.js';
 export const MISSION_TRIAL_PROGRAM_KIND = 'scip-query-mission-trial-program' as const;
 export const MISSION_TRIAL_PROGRAM_SCHEMA_VERSION = 1 as const;
 export const MISSION_TRIAL_RUN_KIND = 'scip-query-mission-trial-run' as const;
-export const MISSION_TRIAL_RUN_SCHEMA_VERSION = 1 as const;
+export const MISSION_TRIAL_RUN_SCHEMA_VERSION = 2 as const;
 export const MISSION_TRIAL_DECISION_RULE_VERSION = 1 as const;
 
 const GIT_COMMIT_PATTERN = /^[a-f0-9]{40,64}$/u;
@@ -106,6 +106,7 @@ export interface MissionTrialEvaluation {
   goalSatisfied: boolean | null;
   invariantsPreserved: boolean | null;
   affectedSurfaceReconciled: boolean | null;
+  missedAffectedArtifacts: readonly string[] | null;
   residueDefects: readonly string[] | null;
   reintroducedBehaviors: readonly string[] | null;
   architectureViolations: readonly string[] | null;
@@ -245,19 +246,31 @@ export function decodeMissionTrialRun(value: unknown): MissionTrialDecodeResult<
   }
   const version = value['schemaVersion'];
   if (!isNonNegativeInteger(version)) return { state: 'malformed', error: 'schemaVersion must be an integer' };
-  if (version < MISSION_TRIAL_RUN_SCHEMA_VERSION) {
+  if (version < 1) {
     return { state: 'unsupported-older', error: `mission trial run schema ${version} requires migration` };
   }
   if (version > MISSION_TRIAL_RUN_SCHEMA_VERSION) {
     return { state: 'unsupported-future', error: `mission trial run schema ${version} is newer than supported` };
   }
-  const normalized = normalizeMissionTrialRun(value);
+  const normalized = normalizeMissionTrialRun(version === 1 ? migrateMissionTrialRunV1(value) : value);
   if (!normalized.ok) return { state: 'malformed', error: normalized.error };
   const runId = missionTrialRunId(normalized.value);
   if (typeof value['runId'] !== 'string' || !RUN_ID_PATTERN.test(value['runId']) || value['runId'] !== runId) {
     return { state: 'malformed', error: 'runId does not match the immutable run coordinates' };
   }
   return { state: 'current', record: { ...normalized.value, runId } };
+}
+
+function migrateMissionTrialRunV1(value: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+  if (!isRecordObject(value['evaluation'])) return value;
+  return {
+    ...value,
+    schemaVersion: MISSION_TRIAL_RUN_SCHEMA_VERSION,
+    evaluation: {
+      ...value['evaluation'],
+      missedAffectedArtifacts: null,
+    },
+  };
 }
 
 export function missionTrialConditionDigest(program: MissionTrialProgramV1, treatment: MissionTrialTreatment): string {
@@ -586,6 +599,11 @@ function normalizeEvaluation(
   }
   const residueDefects = nullableBoundedStringList(value['residueDefects'], 'residueDefects');
   if (!residueDefects.ok) return residueDefects;
+  const missedAffectedArtifacts = nullableBoundedStringList(
+    value['missedAffectedArtifacts'],
+    'missedAffectedArtifacts',
+  );
+  if (!missedAffectedArtifacts.ok) return missedAffectedArtifacts;
   const reintroducedBehaviors = nullableBoundedStringList(value['reintroducedBehaviors'], 'reintroducedBehaviors');
   if (!reintroducedBehaviors.ok) return reintroducedBehaviors;
   const architectureViolations = nullableBoundedStringList(value['architectureViolations'], 'architectureViolations');
@@ -596,6 +614,7 @@ function normalizeEvaluation(
       goalSatisfied: value['goalSatisfied'] as boolean | null,
       invariantsPreserved: value['invariantsPreserved'] as boolean | null,
       affectedSurfaceReconciled: value['affectedSurfaceReconciled'] as boolean | null,
+      missedAffectedArtifacts: missedAffectedArtifacts.value,
       residueDefects: residueDefects.value,
       reintroducedBehaviors: reintroducedBehaviors.value,
       architectureViolations: architectureViolations.value,

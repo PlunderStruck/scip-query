@@ -4,8 +4,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createMissionTrialProgram, type MissionTrialProgramRequest } from '../../src/domain/mission-trials.js';
-import { writeMissionTrialProgram } from '../../src/storage/mission-trials.js';
+import {
+  createMissionTrialProgram,
+  createMissionTrialRun,
+  missionTrialConditionDigest,
+  type MissionTrialProgramRequest,
+  type MissionTrialProgramV1,
+  type MissionTrialTreatment,
+} from '../../src/domain/mission-trials.js';
+import { writeMissionTrialProgram, writeMissionTrialRun } from '../../src/storage/mission-trials.js';
 import { handleMissionTrial } from '../../src/runtime/commands/mission-trial-handlers.js';
 
 const roots: string[] = [];
@@ -48,6 +55,29 @@ describe('mission-trial command', () => {
 
     expect(process.exitCode).toBe(1);
     expect(errors).toContainEqual(expect.stringContaining('outside the candidate-editable worktree'));
+  });
+
+  it('reports paired quality and efficiency without hiding unknown measurements', () => {
+    const protectedRoot = temporary('mission-protected-');
+    const candidateRoot = temporary('mission-candidate-');
+    writeFileSync(join(protectedRoot, 'fixture.tar'), 'fixture');
+    writeFileSync(join(protectedRoot, 'evaluator.mjs'), 'evaluator');
+    const program = createMissionTrialProgram(programRequest(), {
+      now: () => '2026-07-30T14:00:00.000Z',
+      toolVersion: '0.20.0',
+    });
+    const stored = writeMissionTrialProgram(protectedRoot, program);
+    writeMissionTrialRun(protectedRoot, candidateRoot, completedRun(program, 'control', 120));
+    writeMissionTrialRun(protectedRoot, candidateRoot, completedRun(program, 'workflow', 90));
+    const output: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((line) => output.push(String(line)));
+
+    handleMissionTrial('report', stored.path, { protectedRoot, candidateRoot });
+
+    expect(process.exitCode).not.toBe(1);
+    expect(output).toContain('Matched pairs: 1');
+    expect(output).toContain('Full completion: control 100.0%, workflow 100.0%, difference +0.0pp');
+    expect(output).toContain('Median workflow/control ratio: elapsed 0.75x, model tokens unknown');
   });
 });
 
@@ -100,4 +130,59 @@ function programRequest(): MissionTrialProgramRequest {
       requireEfficiencyImprovement: 'elapsed-or-tokens',
     },
   };
+}
+
+function completedRun(program: MissionTrialProgramV1, treatment: MissionTrialTreatment, elapsedMs: number) {
+  const fixture = program.fixtures[0]!;
+  return createMissionTrialRun(
+    {
+      programId: program.programId,
+      pairId: 'pair-1',
+      fixtureId: fixture.fixtureId,
+      treatment,
+      rerunOrdinal: 0,
+      startedAt: '2026-07-30T14:01:00.000Z',
+      completedAt: '2026-07-30T14:02:00.000Z',
+      programDigest: program.semanticDigest,
+      conditionDigest: missionTrialConditionDigest(program, treatment),
+      fixtureArchive: {
+        expectedSha256: fixture.repositoryArchive.sha256,
+        beforeSha256: fixture.repositoryArchive.sha256,
+        afterSha256: fixture.repositoryArchive.sha256,
+      },
+      protectedEvaluator: {
+        expectedSha256: fixture.protectedEvaluator.sha256,
+        beforeSha256: fixture.protectedEvaluator.sha256,
+        afterSha256: fixture.protectedEvaluator.sha256,
+      },
+      status: 'completed',
+      exclusionReasons: [],
+      telemetry: {
+        elapsedMs,
+        modelTokens: null,
+        toolCalls: 10,
+        failedAttempts: 0,
+        reworkEdits: 0,
+        metadataCommands: 0,
+        repeatedContextTokens: 0,
+      },
+      evaluation: {
+        goalSatisfied: true,
+        invariantsPreserved: true,
+        affectedSurfaceReconciled: true,
+        missedAffectedArtifacts: [],
+        residueDefects: [],
+        reintroducedBehaviors: [],
+        architectureViolations: [],
+        controllerBlocked: false,
+        blockerWasValid: null,
+      },
+      failureOrigin: null,
+      artifacts: [],
+    },
+    {
+      now: () => '2026-07-30T14:03:00.000Z',
+      toolVersion: '0.20.0',
+    },
+  );
 }

@@ -1,7 +1,7 @@
 # Phase 6 — outcome trials and product alignment
 
 Date: 2026-07-30
-Status: in progress; slice 6.1 complete
+Status: in progress; slices 6.1–6.2 complete
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -110,6 +110,31 @@ Expected validation:
 - protected hand-calculated fixtures match;
 - missing telemetry never becomes zero; and
 - quality and efficiency dimensions remain separate.
+
+Execution result:
+
+- added a deterministic metric report that retains every immutable raw sample,
+  selects the first eligible candidate outcome per condition, permits reruns to
+  replace apparatus failures but never recorded candidate outcomes, and reports
+  contamination, supersession, missing primaries, and unpaired outcomes;
+- defined full completion as a completed run whose protected evaluator confirms
+  the goal, invariants, independently known affected surface, and absence of
+  missed artifacts, residue, reintroduced behavior, and architecture
+  violations;
+- preserved unknown evaluator judgments and telemetry as `null`, while treating
+  an observed timeout, crash, or interruption as an incomplete candidate
+  outcome rather than missing evidence;
+- separated paired quality rates from elapsed time, token, tool-call,
+  failed-attempt, rework, metadata-command, and repeated-context summaries;
+- retained detector misses, controller misses, agent failures, apparatus
+  failures, false blocking, and architecture regressions as distinct
+  observations;
+- added `mission-trial report` for human and JSON consumers without mutating
+  protected records; and
+- advanced mission-trial run records to schema v2, with an explicit v1
+  migration that leaves the newly added missed-artifact judgment unknown,
+  verified by 53 focused domain, storage, command, and contract tests plus
+  TypeScript and lint.
 
 ### 6.3 Pre-registered decision rule
 
