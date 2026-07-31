@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { buildFileExclusionClassifier, buildFileExclusionPredicate } from './dead-exclusions.js';
 import { getInactiveBarrelPaths, isEntrySurface, isRootedSymbol } from '../../analysis/file-classifier.js';
-import { getScopedDefinitionsMatchingSymbols } from '../../symbols/definition-catalog.js';
+import { definitionsGroupedByLeaf, getScopedDefinitionsMatchingSymbols } from '../../symbols/definition-catalog.js';
 import type { DeadOptions, IndexedDefinition } from '../../domain/types.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { getCallerRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
@@ -453,7 +453,7 @@ function supplementDeadCodeOnlySourceReferences(
   if (definitions.length === 0) return;
 
   const index = new ProjectIndex(db);
-  const candidatesByLeaf = definitionsByLeaf(definitions);
+  const candidatesByLeaf = definitionsGroupedByLeaf(definitions);
   const scanPaths = new Set<string>(index.sourceFiles());
   for (const path of listIndexedDocumentPaths(db)) scanPaths.add(path);
   const candidateNames = new Set(candidatesByLeaf.keys());
@@ -508,17 +508,6 @@ function supplementDeadCodeOnlySourceReferences(
       recordReference(referencesBySymbol, hit.target.symbolId, hit.sourceFile, occurrences, 'source-fallback');
     },
   );
-}
-
-function definitionsByLeaf(definitions: readonly IndexedDefinition[]): Map<string, IndexedDefinition[]> {
-  const result = new Map<string, IndexedDefinition[]>();
-  for (const definition of definitions) {
-    if (!definition.leaf) continue;
-    const bucket = result.get(definition.leaf) ?? [];
-    bucket.push(definition);
-    result.set(definition.leaf, bucket);
-  }
-  return result;
 }
 
 function deadSourceTargets(

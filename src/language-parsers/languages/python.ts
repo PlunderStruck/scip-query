@@ -25,6 +25,7 @@ export function parsePythonImports(db: ScipDatabase, importerPath: string, sourc
       collectPythonImportStatements(source).flatMap((statement) =>
         parsePythonImportStatement(db, importerPath, statement, source),
       ),
+    source,
   );
 }
 

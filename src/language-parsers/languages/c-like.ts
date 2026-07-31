@@ -24,6 +24,7 @@ export function parseCLikeImports(db: ScipDatabase, importerPath: string, source
     importerPath,
     (tree) => parseCLikeImportsAst(db, importerPath, tree),
     () => parseCLikeImportsRegex(db, importerPath, source),
+    source,
   );
 }
 

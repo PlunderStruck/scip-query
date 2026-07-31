@@ -48,7 +48,7 @@ calls `getDefinitionsForFile()` once per file. The source evidence is:
 - `scip-query code runHealthSemanticPrewarm`
 - `scip-query code 'src/runtime/cli-support.ts:242-256'`
 - `scip-query code scopedDefinitions`
-- `scip-query code 'src/symbols/definition-catalog.ts:342-379'`
+- `scip-query code getScopedDefinitionsMatchingSymbols`
 - `scip-query code getDefinitionsForFile`
 - `scip-query code computeDefinitionsForFile`
 
@@ -64,8 +64,10 @@ The claim-qualification change adds observation receipts to isolated child
 results after analysis and does not change candidate selection or cache
 identity.
 
-2026-07-28 verification: the scoped set-oriented path remains at
-`src/symbols/definition-catalog.ts:342-379`. Repeated calls with the same
+2026-07-31 verification: `scip-query code
+getScopedDefinitionsMatchingSymbols` resolves the scoped set-oriented path
+without relying on a line range that moves when neighboring helpers change.
+Repeated calls with the same
 database, scope, prefilter, and matcher now reuse the immutable catalog result;
 the cache keys matcher functions by identity so predicates with different
 closures cannot share rows.

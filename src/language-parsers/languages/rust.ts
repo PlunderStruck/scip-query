@@ -37,6 +37,7 @@ export function parseRustImports(db: ScipDatabase, importerPath: string, source:
         if (!clause) return [];
         return parseRustUseClause(db, importerPath, clause, body);
       }),
+    source,
   );
 }
 

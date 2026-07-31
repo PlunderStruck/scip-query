@@ -55,6 +55,7 @@ export function parseDotNetImports(db: ScipDatabase, importerPath: string, sourc
         ];
       });
     },
+    source,
   );
 }
 

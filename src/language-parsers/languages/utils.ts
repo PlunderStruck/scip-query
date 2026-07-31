@@ -15,7 +15,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { extensionFamilyFor, resolveQualifiedImportPath } from '../../source/primitives/import-path-resolver.js';
 import { buildUsageBody, hasIdentifierUsage } from '../../source/primitives/source-stripper.js';
-import { detectAstLanguage, getAst, type SyntaxNode, type Tree } from '../../source/ast.js';
+import { detectAstLanguage, parseAstSourceText, type SyntaxNode, type Tree } from '../../source/ast.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
 
 const REFERENCE_IDENTIFIER_TYPES = new Set([
@@ -199,8 +199,9 @@ export function parseWithAstFallback<T>(
   importerPath: string,
   parseAst: (tree: Tree) => T[] | null,
   parseFallback: () => T[],
+  source: string,
 ): T[] {
-  const tree = getAst(db, importerPath);
+  const tree = parseAstSourceText(db, importerPath, source)?.tree ?? null;
   if (tree) {
     const parsed = parseAst(tree);
     if (parsed) return parsed;
@@ -213,8 +214,9 @@ export function parseWithAstLanguageDispatch<T>(
   importerPath: string,
   parsers: Readonly<Record<string, (tree: Tree) => T[]>>,
   parseFallback: () => T[],
+  source: string,
 ): T[] {
-  const tree = getAst(db, importerPath);
+  const tree = parseAstSourceText(db, importerPath, source)?.tree ?? null;
   const lang = detectAstLanguage(importerPath);
   const parseAst = lang ? parsers[lang] : undefined;
   return tree && parseAst ? parseAst(tree) : parseFallback();

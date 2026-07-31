@@ -44,6 +44,7 @@ export function parsePhpImports(db: ScipDatabase, importerPath: string, source: 
           ];
         });
       }),
+    source,
   );
 }
 

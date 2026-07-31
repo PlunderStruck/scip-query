@@ -36,6 +36,7 @@ export function parseJvmImports(db: ScipDatabase, importerPath: string, source: 
         if (!clause) return [];
         return parseJvmImportClause(db, importerPath, clause, body);
       }),
+    source,
   );
 }
 

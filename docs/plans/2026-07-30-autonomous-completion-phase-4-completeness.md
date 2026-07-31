@@ -1,7 +1,7 @@
 # Phase 4 — repository completeness
 
 Date: 2026-07-30
-Status: in progress; slices 4.1–4.2 complete
+Status: complete; slices 4.1–4.4 complete
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -170,6 +170,33 @@ Expected validation:
 - deleting a candidate without verifying affected consumers does not
   automatically establish completeness.
 
+Execution result:
+
+- defined a versioned residue observation around a current callable referent,
+  the exact call or reference removed by this change, bounded producer
+  coverage, and referent-matching current-role proofs;
+- added a fixed-base/current-source comparison that finds a pre-existing
+  implementation after its last registration or call is removed, while
+  disclosing parser omissions and ambiguous or unresolved callable names;
+- made a concrete production consumer, declared external root, entry surface,
+  or framework dispatch path defeat residue suspicion for the same callable;
+- projected qualified residue, new-dead, incomplete-migration, and strong
+  surviving-alternative evidence into the Phase 4.1 admission contract while
+  keeping documentation and twin signals advisory;
+- assigned direct action tiers only to confirmed new-dead findings and
+  same-scope, high-confidence migration leftovers; known resolution gaps and
+  possible subtype variants remain signals; and
+- verified the protected abandoned-implementation, compatibility-shim, and
+  unrelated-old-smell cases, plus claim authority, TypeScript, lint, build,
+  and public API compatibility.
+
+The full suite passed 2,338 of 2,339 tests on the first run. The sole failure
+was the pre-existing timing-sensitive child-process reaping test; its focused
+9-test file passed immediately on rerun. The residue producer deliberately
+claims completeness only over changed-source reference deltas resolved to
+current production callables. It does not claim that no other kind of residue
+exists.
+
 ### 4.4 Completion reconciliation
 
 Exact change:
@@ -188,6 +215,43 @@ Expected validation:
 - resolving a root cause closes its dependent obligations without repeated
   ceremony; and
 - no advisory-only finding prevents completion.
+
+Execution result:
+
+- extended the existing `new-dead` gate, without adding a public check enum
+  value, to cover pre-existing production callables whose last attributable
+  call or registration disappeared in the candidate diff;
+- preserved the fixed-base parser contract by parsing supplied historical
+  bytes directly instead of allowing AST import discovery to read the current
+  working-tree file;
+- captured declared architecture policy in the same fixed completion lease as
+  the target receipt, then persisted qualified architecture and residue
+  admission decisions before the controller reads the obligation lifecycle;
+- made a newly admitted obligation block the same stop rather than waiting for
+  another hook boundary;
+- automatically invalidated a prior detector obligation only when a later
+  fixed run completed the same check and its stable identity was absent from
+  active, suppressed, and escalated findings;
+- kept incomplete coverage, unreadable suppression records, advisory-only
+  findings, and current-role proofs from creating or closing blocking work;
+- reused one canonical diff-finding projection and one definition-leaf catalog
+  operation instead of leaving parallel adapters behind; and
+- verified protected feature-replacement, current-role, unrelated-smell,
+  same-stop admission, later reconciliation, incomplete-coverage, advisory,
+  obligation-storage, dead-code, multilingual parser, source-fact, TypeScript,
+  and public integration paths.
+
+The production path now runs from fixed diff evidence to admission, durable
+obligation state, reconciliation, and the Phase 3 controller in one bracketed
+stop evaluation. Absence is authoritative only for the bounded producer that
+completed; it is not represented as proof that no conceivable residue exists.
+The final repository suite passed all 2,345 tests. Unbounded SCIP checks found
+no incomplete migration, recent reimplementation, or declared architecture
+violation, and the final diff gate passed with one advisory documentation
+reference. Its sole code finding was adjudicated as a detector counterexample:
+the versioned `SQR` residue-record identity and the disposable dependency-graph
+cache selector have different referents and policies despite a normalized-body
+similarity score.
 
 ## Verification gate
 

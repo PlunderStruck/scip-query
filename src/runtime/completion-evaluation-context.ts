@@ -21,15 +21,17 @@ import {
   type CompletionPolicySnapshot,
   type ProtectedArtifactRule,
 } from '../domain/autonomous-completion-context.js';
+import type { ArchitectureConfig } from '../domain/config-types.js';
 import { transitionRuleAuthorizedReferents } from '../domain/completion-transition-rule.js';
 import type { ObservationReceiptV2 } from '../domain/observation-receipt.js';
 import { isPathInsideProject } from '../domain/path-normalization.js';
 import { stableJson } from '../domain/stable-json.js';
 import type { ProjectConfig } from '../domain/types.js';
 import { sha256FileWithinLimit, SOURCE_ARTIFACT_MAX_BYTES } from '../filesystem/bounded-file.js';
-import { DIFF_GATE_CHECKS, type DiffGateResult } from '../queries/impact/diff-gate.js';
+import { DIFF_GATE_CHECKS, blockingFindings, type DiffGateResult } from '../queries/impact/diff-gate.js';
 import { readObligationLifecycle } from '../storage/autonomous-work-obligations.js';
 import { createCompletionContextSnapshotFile } from '../storage/autonomous-completion-context.js';
+import { recordCompletenessAdmissionDecision } from '../storage/completeness-obligation-admission.js';
 import {
   createCompletionEvaluationFiles,
   readCompletionHistory,
@@ -43,6 +45,9 @@ import {
 } from '../storage/autonomous-work-state.js';
 import { captureFixedRepositoryObservation, captureFixedRepositoryObservationReceipt } from './observation-receipt.js';
 import { cliVersion } from './cli-support.js';
+import { evaluateArchitectureCompleteness } from './architecture-completeness.js';
+import { reconcileCompletenessObligations } from './completeness-reconciliation.js';
+import { evaluateResidueCompleteness } from './residue-completeness.js';
 
 export const STOP_COMPLETION_POLICY_ID = 'scip-query:stop-completion-policy' as const;
 export const STOP_COMPLETION_POLICY_VERSION = 1 as const;
@@ -92,6 +97,7 @@ export interface FixedCompletionContextLease {
   collaborationDomainId: string;
   targetObservation: ObservationReceiptV2;
   evaluator: CompletionEvaluatorSnapshot;
+  architecture?: ArchitectureConfig;
   authority: CompletionAuthorityInputs;
   requests: readonly CompletionContextSnapshotRequest[];
   records: readonly CompletionContextSnapshotRecordV1[];
@@ -200,6 +206,7 @@ export function captureFixedCompletionContext(
     collaborationDomainId,
     targetObservation,
     evaluator,
+    ...(config.architecture ? { architecture: JSON.parse(stableJson(config.architecture)) as ArchitectureConfig } : {}),
     authority: {
       predecessor: observation.repositoryContent.base
         ? { kind: 'git-tree', treeOid: observation.repositoryContent.base.treeOid }
@@ -257,6 +264,30 @@ export function publishStopCompletionEvaluations(
       ...options,
       now: () => contextRecord.capturedAt,
     });
+    const decisions = [
+      ...evaluateArchitectureCompleteness({
+        changeId: request.change.changeId,
+        architecture: lease.architecture,
+        diffGate: result,
+        receipt: context.record.targetObservation,
+      }),
+      ...evaluateResidueCompleteness({
+        changeId: request.change.changeId,
+        diffGate: result,
+        receipt: context.record.targetObservation,
+      }).decisions,
+    ];
+    const admissions = decisions.map((decision) =>
+      recordCompletenessAdmissionDecision(lease.projectRoot, lease.collaborationDomainId, decision, options),
+    );
+    const reconciliations = reconcileCompletenessObligations({
+      projectRoot: lease.projectRoot,
+      collaborationDomainId: lease.collaborationDomainId,
+      changeId: request.change.changeId,
+      diffGate: result,
+      receipt: context.record.targetObservation,
+      options,
+    });
     const evaluationRequest = stopCompletionEvaluationRequest(
       lease.projectRoot,
       context.record,
@@ -269,7 +300,7 @@ export function publishStopCompletionEvaluations(
       evaluationRequest,
       options,
     );
-    return { context, evaluation };
+    return { context, admissions, reconciliations, evaluation };
   });
 }
 
@@ -285,7 +316,8 @@ export function stopCompletionEvaluationRequest(
   },
 ): CompletionEvaluationRequest {
   const target = context.targetObservation;
-  const hasFindings = result.findings.length > 0;
+  const blocking = blockingFindings(result.findings);
+  const hasFindings = blocking.length > 0;
   const coverageUnknown = diffGateCoverageUnknown(result);
   const obligations = readObligationLifecycle(projectRoot, context.changeId);
   const obligationsReconciled =
@@ -304,8 +336,8 @@ export function stopCompletionEvaluationRequest(
       'invariants-preserved',
       hasFindings ? 'disproven' : 'unknown',
       hasFindings
-        ? `${result.findings.length} diff-gate finding(s) contradict the current invariant policy.`
-        : 'No diff-gate finding was observed, but goal-specific invariant coverage is not yet established.',
+        ? `${blocking.length} blocking diff-gate finding(s) contradict the current invariant policy.`
+        : 'No blocking diff-gate finding was observed, but goal-specific invariant coverage is not yet established.',
       target,
     ),
     judgment(

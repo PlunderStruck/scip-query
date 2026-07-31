@@ -9,13 +9,13 @@ import {
   evaluateCompletenessAdmission,
   type CompletenessAdmissionDecision,
   type CompletenessAdmissionObservation,
-  type CompletenessFindingCandidate,
   type CompletenessObligationPolicy,
 } from '../domain/completeness-obligation-admission.js';
 import { hashIdentity } from '../domain/autonomous-work-state.js';
 import type { ObservationReceiptV2 } from '../domain/observation-receipt.js';
 import { hasEnforceableArchitecturePolicy } from '../queries/graph/architecture.js';
 import type { DiffGateFinding, DiffGateResult } from '../queries/impact/diff-gate.js';
+import { completenessFindingCandidate } from './completeness-finding.js';
 
 export const ARCHITECTURE_COMPLETENESS_POLICY_PROJECTION_VERSION = 1 as const;
 
@@ -93,7 +93,7 @@ function architectureAdmissionObservation(input: {
   producerComplete: boolean;
   receipt: ObservationReceiptV2;
 }): CompletenessAdmissionObservation {
-  const candidate = architectureFindingCandidate(input.finding);
+  const candidate = completenessFindingCandidate(input.finding);
   const paths = [...new Set([...(candidate.file ? [candidate.file] : []), ...candidate.relatedFiles])].sort();
   const changed = new Set(input.changedFiles);
   const relevantPaths = paths.filter((path) => changed.has(path));
@@ -141,21 +141,6 @@ function architectureAdmissionObservation(input: {
       },
     }),
     evidenceReceipts: [input.receipt],
-  };
-}
-
-function architectureFindingCandidate(finding: DiffGateFinding): CompletenessFindingCandidate {
-  return {
-    findingId: finding.id,
-    check: finding.check,
-    evidence: finding.evidence,
-    actionTier: finding.actionTier ?? 'signal',
-    confidence: finding.confidence ?? 0,
-    advisory: finding.advisory === true,
-    ...(finding.file ? { file: finding.file } : {}),
-    relatedFiles: [...new Set(finding.relatedFiles ?? [])].sort(),
-    message: finding.message,
-    remediation: finding.remediation,
   };
 }
 

@@ -48,6 +48,23 @@ import { escapeRegex } from '../source/primitives/regex-utils.js';
 
 export { parentTypeName } from './symbol-parser.js';
 
+/**
+ * Group indexed definitions by their compiler-resolved leaf identity.
+ *
+ * The catalog has already normalized each definition's leaf, so callers should
+ * reuse that value instead of reparsing the symbol independently.
+ */
+export function definitionsGroupedByLeaf(definitions: readonly IndexedDefinition[]): Map<string, IndexedDefinition[]> {
+  const grouped = new Map<string, IndexedDefinition[]>();
+  for (const definition of definitions) {
+    if (!definition.leaf) continue;
+    const bucket = grouped.get(definition.leaf) ?? [];
+    bucket.push(definition);
+    grouped.set(definition.leaf, bucket);
+  }
+  return grouped;
+}
+
 // Opt-in group: definition rows come from the read-only index, so they only
 // clear per file when a scan explicitly refines definitions from source.
 export const FILE_DEFINITION_CACHE = createPerDbCache<string, IndexedDefinition[]>('file-definitions', {

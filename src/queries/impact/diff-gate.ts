@@ -65,6 +65,7 @@ import {
   evaluateSuppressionAdjudication,
 } from '../../domain/suppression-adjudication.js';
 import { readProjectFileText } from '../../platform/project-files.js';
+import { newlyUnreferencedResidue } from './newly-unreferenced-residue.js';
 
 /** Canonical check list — the CLI validates `--skip` values against this. */
 export const DIFF_GATE_CHECKS: readonly DiffGateCheck[] = [
@@ -392,6 +393,16 @@ export function diffGate(
       return;
     }
     runNewDeadCheck(db, impact.changedSymbols, symbolPreexistedAtBase, result);
+    runNewlyUnreferencedResidueCheck(
+      db,
+      {
+        base,
+        diffPlan: impactPlan,
+        baseContentResultAt: baseContentAt,
+        semantic,
+      },
+      result,
+    );
   });
   if (includeBaseline) runUnlessSkipped('baseline', () => runBaselineCheck(db, result));
   // Suppressions come from two stores: the legacy .scipquery.json array
@@ -879,6 +890,7 @@ function runIncompleteMigrationCheck(
         ? undefined
         : Math.max(...finding.leftovers.map((leftover) => Math.min(leftover.containment, leftover.siteCoverage)));
     const hasPossibleSubtype = finding.leftovers.some((leftover) => leftover.migrationScope === 'possible-subtype');
+    const actionTier = !hasPossibleSubtype && (confidence ?? 0) >= 0.8 ? 'direct' : 'signal';
     const legacyId = findingId(
       'incomplete-migration',
       finding.helperSymbol,
@@ -892,6 +904,7 @@ function runIncompleteMigrationCheck(
       check: 'incomplete-migration',
       severity: 'warning',
       evidence: 'heuristic',
+      actionTier,
       confidence,
       file: finding.helperFile,
       symbol: finding.helperSymbol,
@@ -1405,6 +1418,7 @@ function runNewDeadCheck(
       check: 'new-dead',
       severity: 'warning',
       evidence: unconfirmed ? 'heuristic' : 'graph-fact',
+      actionTier: unconfirmed ? 'signal' : 'direct',
       confidence: unconfirmed ? 0.4 : 0.9,
       file: changedSymbol.file,
       symbol: changedSymbol.symbol,
@@ -1425,6 +1439,71 @@ function runNewDeadCheck(
       remediation: unconfirmed
         ? 'Verify with a direct code search before deleting; this tool cannot confidently resolve this symbol.'
         : 'Wire it up, or remove it before it becomes permanent dead code.',
+    });
+  }
+}
+
+/**
+ * Extend the established `new-dead` change gate with the pre-existing-symbol
+ * case: a callable can become newly dead when this diff removes its former
+ * route into behavior even though the callable's own source line is unchanged.
+ */
+function runNewlyUnreferencedResidueCheck(
+  db: ScipDatabase,
+  input: {
+    base: string;
+    diffPlan: DiffImpactPlan;
+    baseContentResultAt: BaseContentResultReader;
+    semantic: boolean;
+  },
+  result: DiffGateResult,
+): void {
+  const residue = newlyUnreferencedResidue(db, input);
+  if (!residue.available || residue.coverage.state !== 'complete') {
+    const omissions = [
+      ...residue.coverage.omitted.map((entry) => `${entry.file}: ${entry.reason}`),
+      ...residue.coverage.unresolvedReferences.map((entry) => `${entry.changedFile}:${entry.leaf}: ${entry.reason}`),
+    ];
+    result.skipped.push({
+      check: 'new-dead',
+      reason:
+        omissions.length > 0
+          ? `newly-unreferenced subtype coverage incomplete: ${omissions.join('; ')}`
+          : residue.note
+            ? `newly-unreferenced subtype unavailable: ${residue.note}`
+            : 'newly-unreferenced subtype coverage incomplete',
+    });
+    return;
+  }
+  for (const evaluation of residue.evaluations) {
+    if (evaluation.disposition !== 'candidate') continue;
+    const observation = evaluation.observation;
+    const changedEvidencePaths = [
+      ...new Set(observation.changeEvidence.map((evidence) => evidence.changedFile)),
+    ].sort();
+    const removedCalls = observation.changeEvidence.filter((evidence) => evidence.kind === 'removed-call').length;
+    recordFinding(result, {
+      id: observation.observationId,
+      check: 'new-dead',
+      severity: 'warning',
+      evidence: 'change-graph',
+      actionTier: 'direct',
+      confidence: removedCalls > 0 ? 0.95 : 0.9,
+      file: observation.referent.file,
+      symbol: observation.referent.symbol,
+      relatedFiles: changedEvidencePaths,
+      sourceAnalyzer: 'newly-unreferenced-residue',
+      rootCauseKey: `newly-unreferenced:${observation.referent.symbol}`,
+      message: `${observation.referent.displayName} remains after this change removed its former call or reference`,
+      why: [
+        `${observation.referent.displayName} is a current production callable that existed at the fixed Git base.`,
+        ...observation.changeEvidence.map(
+          (evidence) =>
+            `${evidence.changedFile} reduced ${evidence.kind === 'removed-call' ? 'call' : 'reference'} occurrences from ${evidence.baseOccurrences} to ${evidence.currentOccurrences}.`,
+        ),
+        'No current production consumer, declared external root, entry surface, or framework dispatch path proves a current role.',
+      ],
+      remediation: `Remove ${observation.referent.displayName}, wire it to a current production role, or establish a concrete current-role proof.`,
     });
   }
 }

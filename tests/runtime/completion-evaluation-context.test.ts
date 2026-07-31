@@ -13,6 +13,7 @@ import {
   stopCompletionEvaluationRequest,
 } from '../../src/runtime/completion-evaluation-context.js';
 import { readCompletionHistory } from '../../src/storage/autonomous-completion.js';
+import { readObligationLifecycle } from '../../src/storage/autonomous-work-obligations.js';
 import { createGoalRecordFile, createIntendedChangeRecordFile } from '../../src/storage/autonomous-work-state.js';
 
 const COLLABORATION_DOMAIN = '5ea57d1a-936c-4c91-b58f-5d61e45173a5';
@@ -127,6 +128,195 @@ describe('fixed completion evaluation context', () => {
     expect(second[0]?.context.publication).toBe('existing');
     expect(second[0]?.evaluation.evaluation.publication).toBe('existing');
     expect(readCompletionHistory(fixture.root).integrityIssues).toEqual([]);
+  });
+
+  it('admits a qualified architecture obligation before evaluating the same stop', () => {
+    const fixture = contextFixture();
+    fixture.config.architecture = {
+      boundaries: [
+        { name: 'feature', paths: ['src/feature.ts'] },
+        { name: 'runtime', paths: ['src/runtime/**'] },
+      ],
+      allowedDependencies: { feature: [], runtime: ['feature'] },
+      requireCompletePolicy: true,
+    };
+    const lease = captureFixedCompletionContext(fixture.root, fixture.config, 'block', {
+      evaluatorEntrypoint: fixture.evaluator,
+    });
+    const gate = passingGate();
+    gate.findings = [
+      {
+        id: 'SQ-ARCH-SAME-STOP',
+        check: 'architecture',
+        severity: 'error',
+        evidence: 'baseline',
+        actionTier: 'direct',
+        confidence: 1,
+        file: 'src/feature.ts',
+        relatedFiles: ['src/runtime/start.ts'],
+        sourceAnalyzer: 'architecture',
+        rootCauseKey: 'forbidden-edge:feature:runtime',
+        message: 'feature depends on forbidden runtime code',
+        why: ['The declared architecture rejects feature -> runtime.'],
+        remediation: 'Remove the forbidden feature-to-runtime dependency.',
+      },
+    ];
+
+    const [published] = publishStopCompletionEvaluations(lease, gate, {
+      toolVersion: '0.20.0',
+      now: () => '2026-07-30T12:05:00.000Z',
+    });
+
+    expect(published?.admissions).toEqual([
+      expect.objectContaining({
+        obligation: expect.objectContaining({ publication: 'created' }),
+      }),
+    ]);
+    expect(
+      published?.evaluation.evaluation.record.predicates.find(
+        (predicate) => predicate.predicate === 'obligations-reconciled',
+      ),
+    ).toMatchObject({ state: 'unknown' });
+    expect(readObligationLifecycle(fixture.root).summary.liveObligationIds).toHaveLength(1);
+  });
+
+  it('reconciles a prior detector obligation when a later complete gate no longer observes it', () => {
+    const fixture = contextFixture();
+    fixture.config.architecture = {
+      boundaries: [
+        { name: 'feature', paths: ['src/feature.ts'] },
+        { name: 'runtime', paths: ['src/runtime/**'] },
+      ],
+      allowedDependencies: { feature: [], runtime: ['feature'] },
+      requireCompletePolicy: true,
+    };
+    const firstLease = captureFixedCompletionContext(fixture.root, fixture.config, 'block', {
+      evaluatorEntrypoint: fixture.evaluator,
+    });
+    const firstGate = passingGate();
+    firstGate.findings = [
+      {
+        id: 'SQ-ARCH-RECONCILE',
+        check: 'architecture',
+        severity: 'error',
+        evidence: 'baseline',
+        actionTier: 'direct',
+        confidence: 1,
+        file: 'src/feature.ts',
+        relatedFiles: ['src/runtime/start.ts'],
+        sourceAnalyzer: 'architecture',
+        rootCauseKey: 'forbidden-edge:feature:runtime',
+        message: 'feature depends on forbidden runtime code',
+        why: ['The declared architecture rejects feature -> runtime.'],
+        remediation: 'Remove the forbidden feature-to-runtime dependency.',
+      },
+    ];
+    publishStopCompletionEvaluations(firstLease, firstGate, {
+      toolVersion: '0.20.0',
+      now: () => firstLease.targetObservation.observedAt,
+    });
+
+    const laterLease = captureFixedCompletionContext(fixture.root, fixture.config, 'block', {
+      evaluatorEntrypoint: fixture.evaluator,
+    });
+    const [later] = publishStopCompletionEvaluations(laterLease, passingGate(), {
+      toolVersion: '0.20.0',
+      now: () => new Date(Date.parse(laterLease.targetObservation.observedAt) + 1_000).toISOString(),
+    });
+
+    expect(later?.reconciliations).toEqual([
+      expect.objectContaining({
+        publication: 'created',
+        record: expect.objectContaining({
+          to: 'invalidated',
+          reason: 'premise-disproven',
+        }),
+      }),
+    ]);
+    const lifecycle = readObligationLifecycle(fixture.root);
+    expect(lifecycle.integrityIssues).toEqual([]);
+    expect(lifecycle.summary.liveObligationIds).toEqual([]);
+    expect(lifecycle.summary.invalidatedObligationIds).toHaveLength(1);
+    const reconciledRequest = stopCompletionEvaluationRequest(fixture.root, later!.context.record, passingGate(), {
+      predecessor: { kind: 'git-tree', treeOid: 'a'.repeat(40) },
+      changedPaths: ['src/feature.ts'],
+    });
+    expect(
+      reconciledRequest.predicates.find((predicate) => predicate.predicate === 'obligations-reconciled'),
+    ).toMatchObject({ state: 'established' });
+  });
+
+  it('keeps a prior obligation live when its producer coverage is incomplete', () => {
+    const fixture = contextFixture();
+    fixture.config.architecture = {
+      boundaries: [{ name: 'feature', paths: ['src/feature.ts'] }],
+      allowedDependencies: { feature: [] },
+      requireCompletePolicy: true,
+    };
+    const firstLease = captureFixedCompletionContext(fixture.root, fixture.config, 'block', {
+      evaluatorEntrypoint: fixture.evaluator,
+    });
+    const firstGate = passingGate();
+    firstGate.findings = [
+      {
+        id: 'SQ-ARCH-INCOMPLETE',
+        check: 'architecture',
+        severity: 'error',
+        evidence: 'baseline',
+        actionTier: 'direct',
+        confidence: 1,
+        file: 'src/feature.ts',
+        sourceAnalyzer: 'architecture',
+        rootCauseKey: 'unmapped-file:src/feature.ts',
+        message: 'feature is not covered',
+        why: ['Complete coverage is required.'],
+        remediation: 'Map src/feature.ts to exactly one declared boundary.',
+      },
+    ];
+    publishStopCompletionEvaluations(firstLease, firstGate, {
+      toolVersion: '0.20.0',
+      now: () => firstLease.targetObservation.observedAt,
+    });
+
+    const laterLease = captureFixedCompletionContext(fixture.root, fixture.config, 'block', {
+      evaluatorEntrypoint: fixture.evaluator,
+    });
+    const incompleteGate = passingGate();
+    incompleteGate.skipped = [{ check: 'architecture', reason: 'coverage unavailable' }];
+    const [later] = publishStopCompletionEvaluations(laterLease, incompleteGate, {
+      toolVersion: '0.20.0',
+      now: () => new Date(Date.parse(laterLease.targetObservation.observedAt) + 1_000).toISOString(),
+    });
+
+    expect(later?.reconciliations).toEqual([]);
+    expect(readObligationLifecycle(fixture.root).summary.liveObligationIds).toHaveLength(1);
+  });
+
+  it('does not treat an advisory-only diff signal as an invariant contradiction', () => {
+    const fixture = contextFixture();
+    const context = captureFixedCompletionContext(fixture.root, fixture.config, 'block', {
+      evaluatorEntrypoint: fixture.evaluator,
+    }).records[0]!;
+    const gate = passingGate();
+    gate.findings = [
+      {
+        id: 'SQ-ADVISORY',
+        check: 'twin-partner',
+        severity: 'warning',
+        evidence: 'heuristic',
+        actionTier: 'signal',
+        advisory: true,
+        message: 'review a possible twin',
+        why: ['The relationship is descriptive.'],
+        remediation: 'Review the possible twin if useful.',
+      },
+    ];
+
+    const request = stopCompletionEvaluationRequest(fixture.root, context, gate);
+
+    expect(request.predicates.find((predicate) => predicate.predicate === 'invariants-preserved')).toMatchObject({
+      state: 'unknown',
+    });
   });
 
   it('names and blocks a changed suppression when the gate relies on it', () => {

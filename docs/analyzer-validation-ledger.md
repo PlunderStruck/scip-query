@@ -515,3 +515,21 @@ instrumentation does not add, remove, or reorder any `DIFF_GATE_CHECKS` entry:
 `diffGate()` emits process-local start and completion notifications around
 each check, while isolated CLI execution turns those notifications into
 diagnostic progress and active-detector timeout evidence.
+
+## 2026-07-31 Completion-Reconciliation Follow-Up
+
+The `new-dead` check now also covers a pre-existing production callable when
+the candidate diff removes its last attributable call or registration and no
+current production consumer, declared external root, entry surface, or
+framework dispatch path proves a current role. This is an extension of the
+existing deletability claim, not a new public check identifier. It is direct
+only when the fixed-base parser comparison has complete coverage; omissions
+and ambiguous attribution make the check coverage incomplete.
+
+The stop controller admits qualified `architecture`, `new-dead`,
+`incomplete-migration`, and strong `echo` facts as durable obligations before
+evaluating the same stop. A later fixed run may invalidate one of those
+obligations only when the same check completed, its stable finding identity is
+absent from both active and suppressed facts, and the committed record stores
+the later receipt. Advisory-only findings do not become invariant
+contradictions, and incomplete or unreadable evidence never closes work.

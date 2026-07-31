@@ -4,7 +4,7 @@ import { fileContentHash } from '../../storage/evidence-cache.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';
 import { createPerDbSourceCache } from '../../storage/per-db-cache.js';
 import { detectAstLanguage, isVueSfcPath, type AstLanguage } from '../ast/ast-language.js';
-import { getAst } from '../ast/ast-core.js';
+import { getAst, parseAstSourceText } from '../ast/ast-core.js';
 import type { SyntaxNode, Tree } from '../ast/ast-types.js';
 import { getSourceText } from '../primitives/source-text.js';
 import { extractVueScriptBlock } from '../ast/vue-script.js';
@@ -62,6 +62,24 @@ export function getSourceFactsResult(db: ScipDatabase, relativePath: string): So
   return SOURCE_FACTS_CACHE.get(db, relativePath, source, () =>
     loadOrBuildSourceFacts(db, relativePath, language, source),
   );
+}
+
+/**
+ * Build the same source facts from fixed bytes rather than the live project
+ * file. This is the comparison boundary used by change-relative analyzers:
+ * a Git-base blob and the current repository snapshot can be parsed under one
+ * fact contract without temporarily replacing either file.
+ */
+export function sourceFactsFromText(db: ScipDatabase, relativePath: string, source: string): SourceFactsResult {
+  const language = detectAstLanguage(relativePath);
+  if (!language && !isVueSfcPath(relativePath)) return { facts: null };
+  if (language === 'clojure') return { facts: buildClojureSourceFacts(source) };
+  const parsed = parseAstSourceText(db, relativePath, source);
+  if (parsed) return { facts: buildSourceFacts(parsed.tree, parsed.language) };
+  const unavailableLanguage = language ?? extractVueScriptBlock(db, relativePath, source)?.language;
+  return unavailableLanguage
+    ? { facts: null, unavailable: { language: unavailableLanguage, reason: 'parser-unavailable' } }
+    : { facts: null };
 }
 
 function sourceFactsLanguage(db: ScipDatabase, relativePath: string, source: string): AstLanguage | null {

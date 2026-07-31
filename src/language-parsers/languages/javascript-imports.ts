@@ -33,6 +33,7 @@ export function parseJavaScriptImports(db: ScipDatabase, importerPath: string, s
     importerPath,
     (tree) => parseJavaScriptImportsAst(db, importerPath, tree),
     () => parseJavaScriptImportsRegex(db, importerPath, source),
+    source,
   );
 }
 

@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-07-31T09:30:30.545Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "52c4f4b892586f04bfc206fdb65e19dcc16dc963d3c9132d6a98a96c9603bf1c",
+  "changes": [
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./runtime; review their variance and runtime meaning.",
+      "target": "./runtime"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "735299269c2e3af15aaf119c0d2b141bb3b498febfd954a29a7f0d2f3cb675de",
+  "reason": "Public runtime exports and signatures are unchanged; the declaration bundler only reordered an identical referenced internal block after the new private completion modules were added.",
+  "schemaVersion": 1
+}

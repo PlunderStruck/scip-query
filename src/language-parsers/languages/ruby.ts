@@ -26,6 +26,7 @@ export function parseRubyImports(db: ScipDatabase, importerPath: string, source:
     importerPath,
     (tree) => parseRubyImportsAst(db, importerPath, tree),
     () => parseRubyImportsRegex(db, importerPath, source),
+    source,
   );
 }
 

@@ -7,7 +7,7 @@
  */
 import type { ScipDatabase } from '../../storage/db.js';
 import { createPerDbSourceCache } from '../../storage/per-db-cache.js';
-import { detectAstLanguage, isVueSfcPath } from './ast-language.js';
+import { detectAstLanguage, isVueSfcPath, type AstLanguage } from './ast-language.js';
 import { parseAstSource } from './ast-runtime.js';
 import type { Tree } from './ast-types.js';
 import { getSourceText } from '../primitives/source-text.js';
@@ -40,6 +40,28 @@ export function getAst(db: ScipDatabase, relativePath: string): Tree | null {
   return TREE_CACHE.get(db, relativePath, source, () => {
     return parseAstSource(lang, source);
   });
+}
+
+/**
+ * Parse caller-supplied bytes under the same language and Vue policy as the
+ * live-file AST path. Change-relative analyzers use this boundary so a parser
+ * cannot silently substitute the current worktree for a fixed Git-base blob.
+ */
+export function parseAstSourceText(
+  db: ScipDatabase,
+  relativePath: string,
+  source: string,
+): { tree: Tree; language: AstLanguage } | null {
+  if (isVueSfcPath(relativePath)) {
+    const block = extractVueScriptBlock(db, relativePath, source);
+    if (!block) return null;
+    const tree = parseAstSource(block.language, '\n'.repeat(block.startLine) + block.body);
+    return tree ? { tree, language: block.language } : null;
+  }
+  const language = detectAstLanguage(relativePath);
+  if (!language) return null;
+  const tree = parseAstSource(language, source);
+  return tree ? { tree, language } : null;
 }
 
 /**
