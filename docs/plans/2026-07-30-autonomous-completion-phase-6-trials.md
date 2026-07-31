@@ -1,7 +1,7 @@
 # Phase 6 — outcome trials and product alignment
 
 Date: 2026-07-30
-Status: in progress; slices 6.1–6.3 complete
+Status: complete; protected outcome insufficient
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -198,6 +198,26 @@ Expected validation:
 - unsupported agent/provider paths are labeled;
 - health distinguishes unavailable evidence from failing performance; and
 - docs/API contract checks prevent drift.
+
+Execution result:
+
+- added a protected mission-effectiveness projection to `effectiveness` and
+  `health`, while keeping repository-writable detector telemetry and the
+  repository health score causally separate from protected matched trials;
+- represented mission evidence as explicitly available, unavailable, or
+  invalid, and scoped every available classification to its exact program,
+  provider, model, runtime, parameters digest, fixtures, run IDs, and raw
+  metrics;
+- added optional CLI inputs for a registered program and protected root,
+  additive API fields, cache invalidation, command documentation, setup
+  guidance, schemas, and compatibility records;
+- verified the product integration with focused tests, the full test suite,
+  typecheck, lint, build, public API compatibility, SCIP impact/cleanup
+  postchecks, and `diff-gate`; and
+- ran the protected exit probe documented in
+  [the protected-trial result](../validation/2026-07-31-autonomous-completion-protected-trial.md).
+  The counted program classified `insufficient`, and both product views expose
+  that exact bound without changing the 93/100 repository health score.
 
 ## Pre-registered thresholds
 

@@ -48,6 +48,13 @@ and unavailable evidence stay visible as those states. Health can display a
 trial classification, but it cannot change the trial facts or use them to
 improve its score.
 
+The 2026-07-31 protected `openai/gpt-5.6-sol` policy-routing program is
+`insufficient`: completion direction was neutral, median model-token ratio
+regressed beyond its registered bound, and three controller-block validity
+observations remained unknown. That exact result and scope are recorded in
+[the protected-trial validation](docs/validation/2026-07-31-autonomous-completion-protected-trial.md);
+it is not evidence about other models, runtimes, or repository tasks.
+
 ## How Agents Use It
 
 Two layers, wired by `scip-query setup`:
