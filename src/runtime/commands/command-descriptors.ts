@@ -533,7 +533,9 @@ export const commandDescriptors: CommandDescriptor[] = [
     docs: doc('Autonomous work state', [
       'scip-query obligation admit --input obligation-request.json --json',
       'scip-query obligation transition --input transition-request.json --json',
+      'scip-query obligation read SQCA-0123456789ABCDEF0123456789ABCDEF',
       'scip-query obligation status SQC-0123456789ABCDEF0123456789ABCDEF --json',
+      'scip-query obligation validate .scipquery/completeness-admissions/SQCA-....json',
     ]),
     handler: handleObligation,
   },

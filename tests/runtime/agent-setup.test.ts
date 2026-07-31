@@ -58,6 +58,7 @@ describe('setupAgent', () => {
     expect(agentsMd).toContain('`.scipquery/decisions/*.json`');
     expect(agentsMd).toContain('`.scipquery/obligations/*.json`');
     expect(agentsMd).toContain('`.scipquery/obligation-transitions/*.json`');
+    expect(agentsMd).toContain('`.scipquery/completeness-admissions/*.json`');
     expect(agentsMd).toContain('`.scipquery/transition-rules/*.json`');
     expect(agentsMd).toContain('`.scipquery/completion-contexts/*.json`');
     expect(agentsMd).toContain('`.scipquery/completion-evaluations/*.json`');

@@ -206,12 +206,19 @@ reports a conflict and neither meaning wins by timestamp.
 ```bash
 scip-query obligation transition --input /path/to/transition-request.json
 scip-query obligation validate .scipquery/obligation-transitions/SQT-....json
+scip-query obligation validate .scipquery/completeness-admissions/SQCA-....json
 ```
 
 The request schemas are
 [`schemas/obligation-admission-request.schema.json`](schemas/obligation-admission-request.schema.json)
 and
 [`schemas/obligation-transition-request.schema.json`](schemas/obligation-transition-request.schema.json).
+Automatic completeness admission observations conform to
+[`schemas/completeness-admission-record.schema.json`](schemas/completeness-admission-record.schema.json).
+They preserve every qualified, advisory, insufficient, or out-of-scope
+finding without requiring an agent to restate detector output as a manual
+attempt. Repeated admitted observations refresh the evidence history while
+reusing the same change-and-finding-specific obligation.
 
 ## Protect completion
 
@@ -334,6 +341,7 @@ Commit `.scipquery/goals/*.json`, `.scipquery/changes/*.json`,
 `.scipquery/attempts/*.json`, `.scipquery/decisions/*.json`,
 `.scipquery/obligations/*.json`, and
 `.scipquery/obligation-transitions/*.json`,
+`.scipquery/completeness-admissions/*.json`,
 `.scipquery/transition-rules/*.json`,
 `.scipquery/completion-contexts/*.json`,
 `.scipquery/completion-evaluations/*.json`, and

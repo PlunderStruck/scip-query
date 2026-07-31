@@ -1,7 +1,7 @@
 # Phase 4 — repository completeness
 
 Date: 2026-07-30
-Status: planned; depends on Phases 1 and 3
+Status: in progress; slice 4.1 complete
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -82,6 +82,27 @@ Expected validation:
   advisory under another without changing its factual payload;
 - unknown state authority never admits a blocking obligation; and
 - duplicate observations update evidence without duplicating obligations.
+
+Execution result:
+
+- added a pure, versioned admission decision that preserves the detector fact
+  while classifying it as `admit`, `advisory`, `insufficient-evidence`, or
+  `out-of-scope`;
+- made policy, intended-change relevance, independent claim qualification,
+  action authority, and the fixed observation receipt explicit inputs;
+- persisted every decision as a mergeable `SQCA` record while creating a live
+  obligation only for `admit`;
+- keyed obligations by change, policy, rule, and finding so repeated
+  observations retain fresh evidence without duplicating required work; and
+- verified the domain and storage contracts, CLI/status decoding, setup and
+  uninstall behavior, public API compatibility, lint, and all 2,320 tests.
+
+SCIP verification found no declared architecture violation or recent
+reimplementation. The unbounded migration scan reported the intentional
+admission-storage wrapper that refreshes evidence while reusing one obligation;
+the ordinary storage creator cannot replace it because its request identity
+includes the refreshed receipt. The diff gate passes with only advisory
+same-name signals for two record-specific validators.
 
 ### 4.2 Architecture obligations
 

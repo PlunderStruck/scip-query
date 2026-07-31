@@ -1,25 +1,24 @@
 {
   "kind": "scip-query-suppression",
-  "suppressionIdentity": "SQ8FA34B0BBC01",
+  "suppressionIdentity": "SQAA97E33F3ADC",
   "writer": {
     "tool": "scip-query",
     "version": "0.20.0"
   },
-  "id": "SQ8FA34B0BBC01",
-  "check": "co-change-partner",
-  "file": "src/runtime/commands/command-descriptors.ts",
-  "reason": "The descriptor examples now expose SQCA records through the existing obligation read and validate dispatcher in work-state-handlers; command-handlers owns the unrelated code-query command family, and 12 of 15 historical co-edits were broad sweeps rather than this routing contract.",
-  "createdAt": "2026-07-29T19:50:55.191Z",
-  "updatedAt": "2026-07-31T08:15:09.475Z",
+  "id": "SQAA97E33F3ADC",
+  "check": "echo",
+  "file": "src/storage/completeness-obligation-admission.ts",
+  "reason": "This one-line adapter intentionally binds generic file parsing to the admission-specific label and decoder used by obligation validate; the similar adapters bind other persisted record types.",
+  "createdAt": "2026-07-31T08:14:51.860Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
-    "reasonCode": "historical-coupling-ended",
+    "reasonCode": "detector-counterexample",
     "decidedBy": "agent",
     "policyVersion": 1,
     "observation": {
       "schemaVersion": 2,
-      "observedAt": "2026-07-31T08:15:09.468Z",
+      "observedAt": "2026-07-31T08:14:51.848Z",
       "facts": {
         "collaborationDomain": {
           "schemaVersion": 1,
@@ -49,7 +48,7 @@
             "name": "scip-query:repository-content",
             "version": 1
           },
-          "digest": "61a6ff6d951037622580c7f87723ff90c672ae5a3ef83ed2b921788eaeaa81d1"
+          "digest": "33fe9fdb61e6db751be23bcb1e5a8c00ddd687b7be4b5f98d10a0fb1e8e104bf"
         },
         "relevantInputs": [
           {
@@ -114,7 +113,7 @@
               "name": "scip-query:repository-content",
               "version": 1
             },
-            "digest": "61a6ff6d951037622580c7f87723ff90c672ae5a3ef83ed2b921788eaeaa81d1"
+            "digest": "33fe9fdb61e6db751be23bcb1e5a8c00ddd687b7be4b5f98d10a0fb1e8e104bf"
           }
         }
       ],
@@ -137,21 +136,15 @@
     "evidence": [
       {
         "kind": "source",
-        "referent": "src/runtime/commands/command-descriptors.ts",
-        "claim": "The descriptor examples now expose SQCA records through the existing obligation read and validate dispatcher in work-state-handlers; command-handlers owns the unrelated code-query command family, and 12 of 15 historical co-edits were broad sweeps rather than this routing contract.",
-        "contentHash": "597e1b7771eb77b127e62ad1b74d3d65b7d38c38715b5cc44a9983b8ac0cd1fe"
+        "referent": "src/storage/completeness-obligation-admission.ts",
+        "claim": "This one-line adapter intentionally binds generic file parsing to the admission-specific label and decoder used by obligation validate; the similar adapters bind other persisted record types.",
+        "contentHash": "41d7d3bc3e09685770281c5177e980b8f151f6cdc562c72d31a74b2578886485"
       },
       {
-        "kind": "source",
-        "referent": "src/runtime/commands/work-state-handlers.ts",
-        "claim": "The descriptor examples now expose SQCA records through the existing obligation read and validate dispatcher in work-state-handlers; command-handlers owns the unrelated code-query command family, and 12 of 15 historical co-edits were broad sweeps rather than this routing contract.",
-        "contentHash": "3960b5de2dac8c92a888c83cb8d02b668a8d1cf72f4a67ac24dc790c707853c9"
-      },
-      {
-        "kind": "source",
-        "referent": "src/runtime/commands/command-handlers.ts",
-        "claim": "The descriptor examples now expose SQCA records through the existing obligation read and validate dispatcher in work-state-handlers; command-handlers owns the unrelated code-query command family, and 12 of 15 historical co-edits were broad sweeps rather than this routing contract.",
-        "contentHash": "f21beb90cc9ea84926019ea6a3c821358cd18b1c54a26d618cfa6bf7cb6d0283"
+        "kind": "test",
+        "referent": "tests/runtime/cli-contract.test.ts",
+        "claim": "This one-line adapter intentionally binds generic file parsing to the admission-specific label and decoder used by obligation validate; the similar adapters bind other persisted record types.",
+        "contentHash": "19c90650f079e54a0883c67be264a90e99b0c6982104dbc3ed49282695059080"
       }
     ],
     "invalidateOn": {

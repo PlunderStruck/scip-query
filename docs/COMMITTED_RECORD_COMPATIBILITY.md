@@ -1,6 +1,6 @@
 # Committed record compatibility
 
-scip-query stores twelve kinds of team-shared records in Git:
+scip-query stores thirteen kinds of team-shared records in Git:
 
 - `.scipquery/goals/*.json` contains immutable, authorized goal versions.
 - `.scipquery/changes/*.json` contains immutable intended bodies of work tied
@@ -13,6 +13,8 @@ scip-query stores twelve kinds of team-shared records in Git:
   completion conditions.
 - `.scipquery/obligation-transitions/*.json` contains evidence-backed terminal
   obligation transitions.
+- `.scipquery/completeness-admissions/*.json` contains qualified admission,
+  advisory, insufficient-evidence, and out-of-scope observations.
 - `.scipquery/transition-rules/*.json` contains exact, pre-authorized
   predecessor-to-successor policy bundles.
 - `.scipquery/completion-contexts/*.json` fixes the goal, policy, evaluator
@@ -120,6 +122,15 @@ An obligation remains live until fixed, same-domain repository evidence
 establishes fulfillment, invalidation, or an authorized carry-forward. Branch
 transitions compose as immutable facts; incompatible terminal meanings remain
 conflicted rather than being resolved by timestamp.
+
+New completeness-admission observations conform to
+[`schemas/completeness-admission-record.schema.json`](schemas/completeness-admission-record.schema.json).
+Each record keeps the detector payload separate from the exact policy rule,
+change-relevance judgment, claim qualification, fixed observation, and
+resulting disposition. Only `admit` names an obligation. Re-observing the same
+finding under the same rule reuses one stable obligation while publishing a
+distinct evidence record; advisory observations remain inspectable without
+manufacturing required work.
 
 New completion context records conform to
 [`schemas/completion-context-record.schema.json`](schemas/completion-context-record.schema.json).

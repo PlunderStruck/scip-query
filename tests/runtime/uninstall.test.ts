@@ -72,6 +72,7 @@ describe('uninstallProject', () => {
     mkdirSync(join(root, '.scipquery', 'decisions'), { recursive: true });
     mkdirSync(join(root, '.scipquery', 'obligations'), { recursive: true });
     mkdirSync(join(root, '.scipquery', 'obligation-transitions'), { recursive: true });
+    mkdirSync(join(root, '.scipquery', 'completeness-admissions'), { recursive: true });
     mkdirSync(join(root, '.scipquery', 'transition-rules'), { recursive: true });
     mkdirSync(join(root, '.scipquery', 'completion-contexts'), { recursive: true });
     mkdirSync(join(root, '.scipquery', 'completion-evaluations'), { recursive: true });
@@ -89,6 +90,7 @@ describe('uninstallProject', () => {
       '.scipquery/decisions/ (repository records)',
       '.scipquery/obligations/ (repository records)',
       '.scipquery/obligation-transitions/ (repository records)',
+      '.scipquery/completeness-admissions/ (repository records)',
       '.scipquery/transition-rules/ (repository records)',
       '.scipquery/completion-contexts/ (repository records)',
       '.scipquery/completion-evaluations/ (repository records)',

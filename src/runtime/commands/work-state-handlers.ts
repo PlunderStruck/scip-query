@@ -8,6 +8,7 @@ import {
   decodeCompletionTransitionRuleRequest,
   isCompletionTransitionRuleId,
 } from '../../domain/completion-transition-rule.js';
+import { isCompletenessAdmissionId } from '../../domain/completeness-obligation-admission.js';
 import {
   decodeObligationAdmissionRequest,
   decodeObligationTransitionRequest,
@@ -61,6 +62,11 @@ import {
   readCompletionTransitionRulePath,
   readCompletionTransitionRules,
 } from '../../storage/completion-transition-rule.js';
+import {
+  readCompletenessAdmissionRecordFile,
+  readCompletenessAdmissionRecordPath,
+  readCompletenessAdmissionRecords,
+} from '../../storage/completeness-obligation-admission.js';
 import { commandOptions, printJsonEnvelope, stringOptionValue } from '../command-kit/command-execution.js';
 import { resolveProjectRoot } from '../cli-context.js';
 import { cliVersion } from '../cli-support.js';
@@ -310,6 +316,9 @@ function runObligationOperation(
       if (isObligationTransitionId(identity)) {
         return { operation, ...readObligationTransitionRecordFile(projectRoot, identity) };
       }
+      if (isCompletenessAdmissionId(identity)) {
+        return { operation, ...readCompletenessAdmissionRecordFile(projectRoot, identity) };
+      }
       if (!isObligationId(identity)) throw new Error(`invalid obligation identity: ${identity}`);
       const lifecycle = readObligationLifecycle(projectRoot);
       const obligation = lifecycle.summary.obligations.find(
@@ -321,20 +330,34 @@ function runObligationOperation(
     }
     case 'validate': {
       const path = repositoryRecordPath(projectRoot, requiredTarget(target, 'obligation validate'));
-      return { operation, path: relative(projectRoot, path), ...readObligationRecordPath(path) };
+      const relativePath = relative(projectRoot, path).replaceAll('\\', '/');
+      return {
+        operation,
+        path: relativePath,
+        ...(relativePath.startsWith('.scipquery/completeness-admissions/')
+          ? readCompletenessAdmissionRecordPath(path)
+          : readObligationRecordPath(path)),
+      };
     }
     case 'status': {
       const lifecycle = readObligationLifecycle(projectRoot, target);
+      const completenessAdmissions = readCompletenessAdmissionRecords(projectRoot);
       return {
         operation,
         records: lifecycle.summary.obligations,
+        completenessAdmissions: completenessAdmissions.records,
         compatibility: lifecycle.admissions.compatibility,
         transitionCompatibility: lifecycle.transitions.compatibility,
+        completenessAdmissionCompatibility: completenessAdmissions.compatibility,
         goalCompatibility: lifecycle.goalCompatibility,
         changeCompatibility: lifecycle.changeCompatibility,
         attemptCompatibility: lifecycle.attemptCompatibility,
-        warnings: [...lifecycle.admissions.warnings, ...lifecycle.transitions.warnings],
-        integrityIssues: lifecycle.integrityIssues,
+        warnings: [
+          ...lifecycle.admissions.warnings,
+          ...lifecycle.transitions.warnings,
+          ...completenessAdmissions.warnings,
+        ],
+        integrityIssues: [...new Set([...lifecycle.integrityIssues, ...completenessAdmissions.integrityIssues])].sort(),
         summary: lifecycle.summary,
       };
     }

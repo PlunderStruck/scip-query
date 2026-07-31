@@ -40,6 +40,7 @@ For analyzer implementation work, follow [Regex Policy](REGEX_POLICY.md): regex 
    `.scipquery/attempts/*.json`, `.scipquery/decisions/*.json`,
    `.scipquery/obligations/*.json`,
    `.scipquery/obligation-transitions/*.json`,
+   `.scipquery/completeness-admissions/*.json`,
    `.scipquery/transition-rules/*.json`,
    `.scipquery/completion-contexts/*.json`,
    `.scipquery/completion-evaluations/*.json`,

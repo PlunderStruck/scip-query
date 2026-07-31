@@ -1,25 +1,25 @@
 {
   "kind": "scip-query-suppression",
-  "suppressionIdentity": "SQ8FA34B0BBC01",
+  "suppressionIdentity": "SQEEC0C2376D9B",
   "writer": {
     "tool": "scip-query",
     "version": "0.20.0"
   },
-  "id": "SQ8FA34B0BBC01",
-  "check": "co-change-partner",
-  "file": "src/runtime/commands/command-descriptors.ts",
-  "reason": "The descriptor examples now expose SQCA records through the existing obligation read and validate dispatcher in work-state-handlers; command-handlers owns the unrelated code-query command family, and 12 of 15 historical co-edits were broad sweeps rather than this routing contract.",
-  "createdAt": "2026-07-29T19:50:55.191Z",
-  "updatedAt": "2026-07-31T08:15:09.475Z",
+  "id": "SQEEC0C2376D9B",
+  "check": "echo",
+  "file": "src/domain/completeness-obligation-admission.ts",
+  "reason": "The similarity is the shared record-envelope protocol: this decoder must retain its admission-specific discriminator, canonical fields, and forward-version failure semantics, all covered by its own schema and tamper tests.",
+  "createdAt": "2026-07-31T08:14:51.856Z",
+  "updatedAt": "2026-07-31T08:18:45.422Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
-    "reasonCode": "historical-coupling-ended",
+    "reasonCode": "detector-counterexample",
     "decidedBy": "agent",
     "policyVersion": 1,
     "observation": {
       "schemaVersion": 2,
-      "observedAt": "2026-07-31T08:15:09.468Z",
+      "observedAt": "2026-07-31T08:18:45.412Z",
       "facts": {
         "collaborationDomain": {
           "schemaVersion": 1,
@@ -49,7 +49,7 @@
             "name": "scip-query:repository-content",
             "version": 1
           },
-          "digest": "61a6ff6d951037622580c7f87723ff90c672ae5a3ef83ed2b921788eaeaa81d1"
+          "digest": "c60df61aa9035e687eb4df679008787127c0d203ea514e7b8467c8ae1af51f28"
         },
         "relevantInputs": [
           {
@@ -62,7 +62,7 @@
                 "name": "scip-query:index-inputs",
                 "version": 2
               },
-              "digest": "e33e3fce327e43a6661f95872e85429d90099f7ac99a17bc14e03a1cee70b26e"
+              "digest": "befc462feef5175712b23a9e6f93108b202171f9276f07e34d741f2cf71fab65"
             }
           }
         ],
@@ -114,7 +114,7 @@
               "name": "scip-query:repository-content",
               "version": 1
             },
-            "digest": "61a6ff6d951037622580c7f87723ff90c672ae5a3ef83ed2b921788eaeaa81d1"
+            "digest": "c60df61aa9035e687eb4df679008787127c0d203ea514e7b8467c8ae1af51f28"
           }
         }
       ],
@@ -137,21 +137,21 @@
     "evidence": [
       {
         "kind": "source",
-        "referent": "src/runtime/commands/command-descriptors.ts",
-        "claim": "The descriptor examples now expose SQCA records through the existing obligation read and validate dispatcher in work-state-handlers; command-handlers owns the unrelated code-query command family, and 12 of 15 historical co-edits were broad sweeps rather than this routing contract.",
-        "contentHash": "597e1b7771eb77b127e62ad1b74d3d65b7d38c38715b5cc44a9983b8ac0cd1fe"
+        "referent": "src/domain/completeness-obligation-admission.ts",
+        "claim": "The similarity is the shared record-envelope protocol: this decoder must retain its admission-specific discriminator, canonical fields, and forward-version failure semantics, all covered by its own schema and tamper tests.",
+        "contentHash": "e1b03ef80d73bf8a8f2880e259f93918e62dee3f407abe837135201699b4facd"
+      },
+      {
+        "kind": "test",
+        "referent": "tests/domain/completeness-obligation-admission.test.ts",
+        "claim": "The similarity is the shared record-envelope protocol: this decoder must retain its admission-specific discriminator, canonical fields, and forward-version failure semantics, all covered by its own schema and tamper tests.",
+        "contentHash": "c9c4d907cdb0f320815583f28b4d22fae0191f008dbfc8ac3bf4c858249621b5"
       },
       {
         "kind": "source",
-        "referent": "src/runtime/commands/work-state-handlers.ts",
-        "claim": "The descriptor examples now expose SQCA records through the existing obligation read and validate dispatcher in work-state-handlers; command-handlers owns the unrelated code-query command family, and 12 of 15 historical co-edits were broad sweeps rather than this routing contract.",
-        "contentHash": "3960b5de2dac8c92a888c83cb8d02b668a8d1cf72f4a67ac24dc790c707853c9"
-      },
-      {
-        "kind": "source",
-        "referent": "src/runtime/commands/command-handlers.ts",
-        "claim": "The descriptor examples now expose SQCA records through the existing obligation read and validate dispatcher in work-state-handlers; command-handlers owns the unrelated code-query command family, and 12 of 15 historical co-edits were broad sweeps rather than this routing contract.",
-        "contentHash": "f21beb90cc9ea84926019ea6a3c821358cd18b1c54a26d618cfa6bf7cb6d0283"
+        "referent": "docs/schemas/completeness-admission-record.schema.json",
+        "claim": "The similarity is the shared record-envelope protocol: this decoder must retain its admission-specific discriminator, canonical fields, and forward-version failure semantics, all covered by its own schema and tamper tests.",
+        "contentHash": "7758cde93147dd94fe387d065acf886c0e73f827aa583a40db02b031d2c034a0"
       }
     ],
     "invalidateOn": {
