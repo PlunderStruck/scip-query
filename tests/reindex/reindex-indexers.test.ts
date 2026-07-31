@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { INDEXER_CONFIGS, getIndexerConfig } from '../../src/reindex/indexers.js';
+import { INDEXER_CONFIGS, getIndexerConfig, temporaryRootConfigContent } from '../../src/reindex/indexers.js';
 
 const tempDirs: string[] = [];
 
@@ -30,15 +30,28 @@ describe('indexer configs', () => {
 
     expect(command).toEqual({
       binary: '/tmp/scip-typescript',
-      args: [
-        'index',
-        '--pnpm-workspaces',
-        '--infer-tsconfig',
-        '--output',
-        '/tmp/project/index.scip',
-        '--no-progress-bar',
-      ],
+      args: ['index', '--pnpm-workspaces', '--output', '/tmp/project/index.scip', '--no-progress-bar'],
     });
+  });
+
+  it('uses an owned temporary root config instead of asking scip-typescript to write one', () => {
+    const typescript = getIndexerConfig('typescript').indexArgs({
+      projectRoot: '/tmp/project',
+      outputPath: '/tmp/project/index.scip',
+      indexerBinary: '/tmp/scip-typescript',
+    });
+    const javascript = getIndexerConfig('javascript').indexArgs({
+      projectRoot: '/tmp/project',
+      outputPath: '/tmp/project/index.scip',
+      indexerBinary: '/tmp/scip-typescript',
+    });
+
+    expect(typescript.args).not.toContain('--infer-tsconfig');
+    expect(temporaryRootConfigContent({ language: 'typescript' })).toBe('{}');
+    expect(javascript.args).not.toContain('--infer-tsconfig');
+    expect(temporaryRootConfigContent({ language: 'javascript' })).toBe('{"compilerOptions":{"allowJs":true}}');
+    expect(temporaryRootConfigContent({ language: 'typescript', projectPath: 'packages/web' })).toBeUndefined();
+    expect(temporaryRootConfigContent({ language: 'typescript', pnpmWorkspaces: true })).toBeUndefined();
   });
 
   it('passes an explicit TypeScript project without infer or workspace flags', () => {

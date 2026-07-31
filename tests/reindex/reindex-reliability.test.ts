@@ -1634,6 +1634,7 @@ async function loadReindexFixture(opts: {
   vi.doMock('../../src/reindex/indexers.js', () => ({
     INDEXER_CONFIGS: Object.fromEntries(opts.languages.map((language) => [language, configFor(language)])),
     getIndexerConfig: (language: SupportedLanguage) => configFor(language),
+    temporaryRootConfigContent: () => undefined,
   }));
   vi.doMock('../../src/platform/indexer-toolchain.js', () => ({
     describeIndexerBinary: (config: { indexerBinary: string }) => config.indexerBinary,

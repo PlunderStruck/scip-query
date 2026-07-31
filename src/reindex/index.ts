@@ -73,7 +73,7 @@ import {
   type AffectedSetShadowRecord,
 } from './affected-shadow.js';
 import { detectLanguages } from './detect.js';
-import { getIndexerConfig } from './indexers.js';
+import { getIndexerConfig, temporaryRootConfigContent } from './indexers.js';
 import { mergeAndSanitizeScipFiles, mergeScipFiles } from './merge.js';
 import { patchIncrementalSqliteGeneration } from './incremental-sqlite-publication.js';
 import { optimizeSqliteQueryLayout } from './sqlite-index-maintenance.js';
@@ -1909,6 +1909,11 @@ function prepareIndexerRun(opts: {
     projectPath: opts.projectPath,
     configPath: opts.language === 'clojure' ? opts.clojureConfigPath : undefined,
   });
+  const rootConfigContent = temporaryRootConfigContent({
+    language: opts.language,
+    projectPath: opts.projectPath,
+    pnpmWorkspaces: opts.pnpmWorkspaces,
+  });
   if (trustedProjectTool && !trustedProjectTool.executable) {
     const reason = `${trustedProjectTool.relativePath} is not executable; refusing project-local indexer.`;
     opts.onStatus(`Skipping ${opts.language}: ${reason}`);
@@ -1933,6 +1938,7 @@ function prepareIndexerRun(opts: {
       binary,
       args,
       env: getIndexerExecutionEnv(config, opts.env, resolvedBinary),
+      ...(rootConfigContent === undefined ? {} : { temporaryRootConfigContent: rootConfigContent }),
       ...(trustedProjectTool ? { trustedProjectTool } : {}),
     },
   };

@@ -403,6 +403,25 @@ slices 5-7 remove these known measurement and product defects.
 - **Order safety:** use owned temporary paths and content identities rather
   than deleting an ambiguous worktree file.
 
+**Partial result (2026-07-31): index residue repaired.** TypeScript and
+JavaScript indexer invocations no longer pass `--infer-tsconfig`. For an
+unconfigured single project, the runner publishes the same minimal root
+configuration with exclusive creation and records its bytes plus its filesystem
+identity—the device/inode pair the operating system uses to distinguish that
+exact underlying file. It removes the path only when all three still match;
+pre-existing, replaced, or edited files are retained. Pnpm workspace runs no
+longer authorize the upstream indexer to create missing workspace configs.
+
+Focused tests cover exact cleanup after success and failure, a pre-existing
+user config, an in-place concurrent edit, command construction, cancellation,
+and trusted project-tool execution. Twenty tests, typecheck, build, and public
+API compatibility passed; the complete repository suite also passed after its
+reindex mock and bounded-artifact ownership contracts were reconciled. A real
+reindex of the JavaScript policy-routing fixture produced six documents and 45
+symbols while leaving `git status` clean and no root `tsconfig.json`.
+Cleanup-verifier behavior and attempt-journal compaction remain open in this
+slice.
+
 ### 8. Fresh controller and large-repository programs
 
 - **Anchors:** slices 5-7, protected program registration, this validation

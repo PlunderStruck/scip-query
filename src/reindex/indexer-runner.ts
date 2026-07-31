@@ -1,9 +1,20 @@
-import { existsSync, renameSync, rmSync, statSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  fstatSync,
+  lstatSync,
+  openSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeSync,
+} from 'node:fs';
 import { cpus } from 'node:os';
 import { join } from 'node:path';
 import type { IndexerConfig, SupportedLanguage } from '../domain/types.js';
 import { monotonicNowMs } from '../domain/time.js';
 import { abortSignalReason, throwIfSignalAborted } from '../platform/abort-signal.js';
+import { readFileWithinLimit } from '../platform/bounded-file.js';
 import { toPortableCommand } from '../platform/binary.js';
 import { BoundedProcessError, PROCESS_TIMEOUT_MS, runBoundedProcess } from '../platform/bounded-process.js';
 import { revalidateTrustedProjectTool, type TrustedProjectToolIdentity } from '../platform/indexer-toolchain.js';
@@ -22,6 +33,7 @@ export interface PreparedIndexerRun {
   binary: string;
   args: string[];
   env: NodeJS.ProcessEnv;
+  temporaryRootConfigContent?: string;
   trustedProjectTool?: TrustedProjectToolIdentity;
 }
 
@@ -50,6 +62,55 @@ interface IndexerAttempt {
 interface DefaultOutputBackup {
   defaultOutputPath: string;
   backupPath: string | null;
+}
+
+interface OwnedTemporaryRootConfig {
+  path: string;
+  content: Buffer;
+  device: number;
+  inode: number;
+}
+
+function takeTemporaryRootConfig(run: PreparedIndexerRun, projectRoot: string): OwnedTemporaryRootConfig | null {
+  if (run.temporaryRootConfigContent === undefined) return null;
+  const path = join(projectRoot, 'tsconfig.json');
+  const content = Buffer.from(run.temporaryRootConfigContent, 'utf8');
+  let descriptor: number;
+  try {
+    descriptor = openSync(path, 'wx', 0o600);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return null;
+    throw error;
+  }
+  try {
+    writeSync(descriptor, content);
+    const stats = fstatSync(descriptor);
+    return { path, content, device: stats.dev, inode: stats.ino };
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
+function releaseTemporaryRootConfig(owned: OwnedTemporaryRootConfig | null): void {
+  if (!owned) return;
+  try {
+    const current = lstatSync(owned.path);
+    if (!current.isFile() || current.dev !== owned.device || current.ino !== owned.inode) return;
+    if (current.size !== owned.content.byteLength) return;
+    let currentContent: Buffer;
+    try {
+      currentContent = readFileWithinLimit(owned.path, {
+        maxBytes: owned.content.byteLength,
+        inputKind: 'temporary TypeScript index configuration',
+      });
+    } catch {
+      return;
+    }
+    if (!currentContent.equals(owned.content)) return;
+    rmSync(owned.path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
 }
 
 function moveDefaultOutputIfNeeded(config: IndexerConfig, projectRoot: string, outputScip: string): void {
@@ -164,6 +225,7 @@ async function runPreparedIndexer(
   onStatus(`Indexing ${run.label} with ${run.resolvedBinary}...`);
   rmSync(run.scipPath, { force: true });
   const defaultOutputBackup = takeDefaultOutputBackup(run.config, projectRoot, run.scipPath);
+  const temporaryRootConfig = takeTemporaryRootConfig(run, projectRoot);
   const command = [run.binary, ...run.args].join(' ');
   const startedAt = monotonicNowMs();
 
@@ -209,6 +271,7 @@ async function runPreparedIndexer(
     };
   } finally {
     restoreDefaultOutputBackup(defaultOutputBackup);
+    releaseTemporaryRootConfig(temporaryRootConfig);
   }
 
   if (!existsSync(run.scipPath)) {

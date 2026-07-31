@@ -78,6 +78,13 @@ Several cross-run mechanisms are stronger than pair-specific inference:
   collaboration residue and a material efficiency cost unless it is compacted
   without losing controller-relevant facts.
 
+Remediation status: the index-owned residue is now repaired in the source
+tree. The index runner exclusively creates a temporary config and removes it
+only while its file identity and bytes remain unchanged. The real JavaScript
+fixture reindexed to six documents and 45 symbols with no root `tsconfig.json`
+and a clean Git worktree. This repair does not retroactively change any trial
+outcome; it must be included in a new content-identified program.
+
 ## Controller-integrity failure
 
 A durable controller evaluation is the repository record that combines fixed

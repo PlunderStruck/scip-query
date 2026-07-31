@@ -23,11 +23,22 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     indexerBinary: 'scip-typescript',
     checkCommand: 'npx scip-typescript --version',
     indexArgs: ({ outputPath, pnpmWorkspaces, indexerBinary, projectPath }) => {
-      const args = projectPath
-        ? ['index', '--output', outputPath, '--no-progress-bar', projectPath]
-        : ['index', '--infer-tsconfig', '--output', outputPath, '--no-progress-bar'];
-      if (pnpmWorkspaces && !projectPath) args.splice(1, 0, '--pnpm-workspaces');
-      return { binary: indexerBinary, args };
+      if (projectPath) {
+        return {
+          binary: indexerBinary,
+          args: ['index', '--output', outputPath, '--no-progress-bar', projectPath],
+        };
+      }
+      if (pnpmWorkspaces) {
+        return {
+          binary: indexerBinary,
+          args: ['index', '--pnpm-workspaces', '--output', outputPath, '--no-progress-bar'],
+        };
+      }
+      return {
+        binary: indexerBinary,
+        args: ['index', '--output', outputPath, '--no-progress-bar'],
+      };
     },
     markerFiles: [...LANGUAGE_INDEX_MARKERS.typescript],
     installMethods: [
@@ -50,7 +61,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     checkCommand: 'npx scip-typescript --version',
     indexArgs: ({ outputPath, indexerBinary }) => ({
       binary: indexerBinary,
-      args: ['index', '--infer-tsconfig', '--output', outputPath, '--no-progress-bar'],
+      args: ['index', '--output', outputPath, '--no-progress-bar'],
     }),
     markerFiles: [...LANGUAGE_INDEX_MARKERS.javascript],
     installMethods: [
@@ -320,6 +331,17 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     installUrl: 'https://github.com/davidrjenni/scip-php/releases',
   },
 };
+
+export function temporaryRootConfigContent(opts: {
+  language: SupportedLanguage;
+  projectPath?: string;
+  pnpmWorkspaces?: boolean;
+}): string | undefined {
+  if (opts.projectPath || opts.pnpmWorkspaces) return undefined;
+  if (opts.language === 'typescript') return '{}';
+  if (opts.language === 'javascript') return '{"compilerOptions":{"allowJs":true}}';
+  return undefined;
+}
 
 /** Get the indexer config for a language */
 export function getIndexerConfig(language: SupportedLanguage): IndexerConfig {
