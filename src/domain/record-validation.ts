@@ -16,6 +16,11 @@ export function isStringOrNullRecord(value: unknown): value is Record<string, st
   return isRecordObject(value) && Object.values(value).every((entry) => typeof entry === 'string' || entry === null);
 }
 
+/** True only for strings containing at least one code unit. */
+export function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
 /** True only for finite integers at or above zero. */
 export function isNonNegativeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;

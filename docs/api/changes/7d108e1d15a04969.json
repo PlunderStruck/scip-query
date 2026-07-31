@@ -1,0 +1,313 @@
+{
+  "acceptedAt": "2026-07-31T03:22:20.420Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "7d108e1d15a04969b916401122806bea2a019f19b5a7bf09423ec2d5a038af4f",
+  "changes": [
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries; review their variance and runtime meaning.",
+      "target": "./queries"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/index; review their variance and runtime meaning.",
+      "target": "./queries/index"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CLAIM_ACTION_PERMISSIONS.",
+      "target": "./runtime:CLAIM_ACTION_PERMISSIONS"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CLAIM_ACTION_POLICY_VERSION.",
+      "target": "./runtime:CLAIM_ACTION_POLICY_VERSION"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CLAIM_COVERAGE_STATES.",
+      "target": "./runtime:CLAIM_COVERAGE_STATES"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CLAIM_ORIGINS.",
+      "target": "./runtime:CLAIM_ORIGINS"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CLAIM_QUALIFICATION_SCHEMA_VERSION.",
+      "target": "./runtime:CLAIM_QUALIFICATION_SCHEMA_VERSION"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ClaimActionPermission.",
+      "target": "./runtime:ClaimActionPermission"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ClaimCoverage.",
+      "target": "./runtime:ClaimCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ClaimCoverageInput.",
+      "target": "./runtime:ClaimCoverageInput"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ClaimCoverageState.",
+      "target": "./runtime:ClaimCoverageState"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ClaimFamilyContract.",
+      "target": "./runtime:ClaimFamilyContract"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ClaimFamilyOriginBinding.",
+      "target": "./runtime:ClaimFamilyOriginBinding"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ClaimOrigin.",
+      "target": "./runtime:ClaimOrigin"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ClaimQualificationEvaluation.",
+      "target": "./runtime:ClaimQualificationEvaluation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ClaimQualificationPredicate.",
+      "target": "./runtime:ClaimQualificationPredicate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ClaimQualificationPredicateResult.",
+      "target": "./runtime:ClaimQualificationPredicateResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ClaimQualificationRequirements.",
+      "target": "./runtime:ClaimQualificationRequirements"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ClaimQualificationV1.",
+      "target": "./runtime:ClaimQualificationV1"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CliAnalysisManifestV1 changed from interface CliAnalysisManifestV1 { schemaVersion: typeof CLI_ANALYSIS_MANIFEST_SCHEMA_VERSION; evidence?: 'graph-fact' | 'heuristic' | 'mixed'; analysisBudget?: unknown; coverage... to interface CliAnalysisManifestV1 { schemaVersion: typeof CLI_ANALYSIS_MANIFEST_SCHEMA_VERSION; evidence?: 'graph-fact' | 'heuristic' | 'mixed'; analysisBudget?: unknown; coverage....",
+      "target": "./runtime:CliAnalysisManifestV1"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CommandClaimContract.",
+      "target": "./runtime:CommandClaimContract"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export DEFAULT_REPOSITORY_POLICY_ACTION.",
+      "target": "./runtime:DEFAULT_REPOSITORY_POLICY_ACTION"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export DeriveClaimQualificationInput.",
+      "target": "./runtime:DeriveClaimQualificationInput"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PRODUCER_VALIDATION_STATUSES.",
+      "target": "./runtime:PRODUCER_VALIDATION_STATUSES"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ProducerValidation.",
+      "target": "./runtime:ProducerValidation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ProducerValidationStatus.",
+      "target": "./runtime:ProducerValidationStatus"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RepositoryPolicyAction.",
+      "target": "./runtime:RepositoryPolicyAction"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export deriveClaimCoverage.",
+      "target": "./runtime:deriveClaimCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export deriveClaimQualification.",
+      "target": "./runtime:deriveClaimQualification"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export evaluateClaimQualification.",
+      "target": "./runtime:evaluateClaimQualification"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export isClaimQualificationV1.",
+      "target": "./runtime:isClaimQualificationV1"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "D changed from type DecodedObservationReceipt = { kind: 'legacy'; schemaVersion: 1; receipt: ObservationReceiptV1; } | { kind: 'supported'; schemaVersion: 2; receipt: ObservationReceiptV2; } |... to interface DerivedObservationStateAuthority { policyVersion: typeof OBSERVATION_STATE_AUTHORITY_POLICY_VERSION; authority: ObservationStateAuthority; requiredRelationships: reado....",
+      "target": "config-types-<hash>.d.ts:D"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "O changed from type ObservationReceipt = ObservationReceiptV1 | ObservationReceiptV2; to type ObservationSourceKind = 'index-generation' | 'repository-snapshot' | 'live-workspace' | 'process';.",
+      "target": "config-types-<hash>.d.ts:O"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "c changed from interface DerivedObservationStateAuthority { policyVersion: typeof OBSERVATION_STATE_AUTHORITY_POLICY_VERSION; authority: ObservationStateAuthority; requiredRelationships: reado... to type ObservationReceipt = ObservationReceiptV1 | ObservationReceiptV2;.",
+      "target": "config-types-<hash>.d.ts:c"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "d changed from declare const OBSERVATION_IDENTITY_CANONICALIZATION_VERSION: 1; to type DecodedObservationReceipt = { kind: 'legacy'; schemaVersion: 1; receipt: ObservationReceiptV1; } | { kind: 'supported'; schemaVersion: 2; receipt: ObservationReceiptV2; } |....",
+      "target": "config-types-<hash>.d.ts:d"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "e changed from declare const OBSERVATION_IDENTITY_HASH_ALGORITHM: \"sha256\"; to declare const OBSERVATION_IDENTITY_CANONICALIZATION_VERSION: 1;.",
+      "target": "config-types-<hash>.d.ts:e"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "f changed from declare const OBSERVATION_IDENTITY_SCHEMA_VERSION: 1; to declare const OBSERVATION_IDENTITY_HASH_ALGORITHM: \"sha256\";.",
+      "target": "config-types-<hash>.d.ts:f"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "g changed from declare const OBSERVATION_RECEIPT_SCHEMA_VERSION: 2; to declare const OBSERVATION_IDENTITY_SCHEMA_VERSION: 1;.",
+      "target": "config-types-<hash>.d.ts:g"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "h changed from declare const OBSERVATION_STATE_AUTHORITY_POLICY_VERSION: 1; to declare const OBSERVATION_RECEIPT_SCHEMA_VERSION: 2;.",
+      "target": "config-types-<hash>.d.ts:h"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "i changed from type ObservationAuthorityKind = 'index-worktree' | 'index-only' | 'worktree-only' | 'process-local'; to declare const OBSERVATION_STATE_AUTHORITY_POLICY_VERSION: 1;.",
+      "target": "config-types-<hash>.d.ts:i"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "j changed from type ObservationComparedFact = { kind: 'identity'; identity: ObservationIdentity; } | { kind: 'legacy-index-generation'; value: string; } | { kind: 'stability'; proof: Observati... to type ObservationAuthorityKind = 'index-worktree' | 'index-only' | 'worktree-only' | 'process-local';.",
+      "target": "config-types-<hash>.d.ts:j"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "k changed from type ObservationComparisonReason = 'identities-equal' | 'identities-different' | 'left-fact-missing' | 'right-fact-missing' | 'both-facts-missing' | 'identity-projections-not-co... to type ObservationComparedFact = { kind: 'identity'; identity: ObservationIdentity; } | { kind: 'legacy-index-generation'; value: string; } | { kind: 'stability'; proof: Observati....",
+      "target": "config-types-<hash>.d.ts:k"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "l changed from interface ObservationIdentity { schemaVersion: typeof OBSERVATION_IDENTITY_SCHEMA_VERSION; canonicalizationVersion: typeof OBSERVATION_IDENTITY_CANONICALIZATION_VERSION; hashAlg... to type ObservationComparisonReason = 'identities-equal' | 'identities-different' | 'left-fact-missing' | 'right-fact-missing' | 'both-facts-missing' | 'identity-projections-not-co....",
+      "target": "config-types-<hash>.d.ts:l"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "m changed from interface ObservationReceiptComparison { collaborationDomain: ObservationRelationshipJudgment; repositoryLineage: ObservationRelationshipJudgment; workspaceInstance: Observation... to interface ObservationIdentity { schemaVersion: typeof OBSERVATION_IDENTITY_SCHEMA_VERSION; canonicalizationVersion: typeof OBSERVATION_IDENTITY_CANONICALIZATION_VERSION; hashAlg....",
+      "target": "config-types-<hash>.d.ts:m"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "n changed from interface ObservationReceiptV1 { schemaVersion: typeof LEGACY_OBSERVATION_RECEIPT_SCHEMA_VERSION; authorityKind: ObservationAuthorityKind; observedAt: string; projectIdentity: s... to interface ObservationReceiptComparison { collaborationDomain: ObservationRelationshipJudgment; repositoryLineage: ObservationRelationshipJudgment; workspaceInstance: Observation....",
+      "target": "config-types-<hash>.d.ts:n"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "o changed from interface ObservationReceiptV2 { schemaVersion: typeof OBSERVATION_RECEIPT_SCHEMA_VERSION; observedAt: string; facts: { collaborationDomain?: ObservationIdentity; repositoryLine... to interface ObservationReceiptV1 { schemaVersion: typeof LEGACY_OBSERVATION_RECEIPT_SCHEMA_VERSION; authorityKind: ObservationAuthorityKind; observedAt: string; projectIdentity: s....",
+      "target": "config-types-<hash>.d.ts:o"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "p changed from interface ObservationRelationshipJudgment { state: ObservationRelationshipState; reasons: readonly ObservationComparisonReason[]; facts: { left: readonly ObservationComparedFact... to interface ObservationReceiptV2 { schemaVersion: typeof OBSERVATION_RECEIPT_SCHEMA_VERSION; observedAt: string; facts: { collaborationDomain?: ObservationIdentity; repositoryLine....",
+      "target": "config-types-<hash>.d.ts:p"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "q changed from type ObservationRelationshipState = 'established' | 'disproven' | 'unknown'; to interface ObservationRelationshipJudgment { state: ObservationRelationshipState; reasons: readonly ObservationComparisonReason[]; facts: { left: readonly ObservationComparedFact....",
+      "target": "config-types-<hash>.d.ts:q"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "r changed from interface ObservationSourceFact { kind: ObservationSourceKind; identity?: ObservationIdentity; } to type ObservationRelationshipState = 'established' | 'disproven' | 'unknown';.",
+      "target": "config-types-<hash>.d.ts:r"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "s changed from type ObservationSourceKind = 'index-generation' | 'repository-snapshot' | 'live-workspace' | 'process'; to interface ObservationSourceFact { kind: ObservationSourceKind; identity?: ObservationIdentity; }.",
+      "target": "config-types-<hash>.d.ts:s"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "6be15204f820b83c6bd31fb04dc0ad7ff11539cc4c5667719e13c46a437e8eca",
+  "reason": "The checker conservatively reports declaration-chunk alias renumbering as breaking after adding runtime qualification exports. Named query exports and meanings are unchanged; the wire change is one optional nested field, legacy evidence fields remain, and both old and new envelopes decode. Accept the alias normalization as a compatible correction while recording the public additions.",
+  "schemaVersion": 1
+}

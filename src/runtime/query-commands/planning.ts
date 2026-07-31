@@ -1,7 +1,14 @@
 import * as queries from '../../queries/index.js';
 import { REPOSITORY_OBSERVATION_OPERATION } from '../command-operation.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
-import { doc, option, parseInteger, withCompactJsonOptions } from '../command-kit/command-spec-builders.js';
+import {
+  doc,
+  fixedClaimFamily,
+  mixedClaimContract,
+  option,
+  parseInteger,
+  withCompactJsonOptions,
+} from '../command-kit/command-spec-builders.js';
 import {
   booleanOptionValue,
   budgetedDbCommand,
@@ -95,6 +102,15 @@ export const planningQueryCommandDescriptors: CommandDescriptor[] = [
       option('--full', 'Run unbounded semantic analysis on large indexes'),
     ]),
     budget: 'semantic',
+    claims: mixedClaimContract(
+      ['index-generation', 'live-workspace'],
+      [
+        fixedClaimFamily('compiler-graph', 'trace', 'compiler-graph'),
+        fixedClaimFamily('semantic-flow', 'dataflow', 'semantic-analysis'),
+        fixedClaimFamily('change-history', 'history', 'change-history'),
+        fixedClaimFamily('planning-notes', 'warnings[]', 'heuristic'),
+      ],
+    ),
     agent: {
       operation: REPOSITORY_OBSERVATION_OPERATION,
       answers: [

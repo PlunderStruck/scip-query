@@ -10,6 +10,7 @@ import {
   runAnalysisTasks,
   runIsolatedJsonProcess,
   runIsolatedJsonProcessAsync,
+  runIsolatedJsonProcessWithEvidenceAsync,
 } from '../../src/runtime/isolated-analysis-runner.js';
 
 function delay(ms: number): Promise<void> {
@@ -100,6 +101,45 @@ describe('analysis scheduler', () => {
         label: 'Scheduler child',
       }),
     ).resolves.toEqual({ command: 'probe', args: ['--json', 'alpha', 'beta'] });
+  });
+
+  it('retains an isolated worker observation receipt for the parent renderer', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-analysis-evidence-'));
+    tempDirs.push(tempDir);
+    const scriptPath = join(tempDir, 'child.cjs');
+    writeFileSync(
+      scriptPath,
+      [
+        'process.stdout.write(JSON.stringify({',
+        `  protocol: ${JSON.stringify(ISOLATED_ANALYSIS_PROTOCOL)},`,
+        `  schemaVersion: ${ISOLATED_ANALYSIS_SCHEMA_VERSION},`,
+        "  producer: { name: 'scip-query', version: 'test' },",
+        '  command: process.argv[2],',
+        '  result: { ok: true },',
+        '  observationReceipt: {',
+        '    schemaVersion: 2,',
+        "    observedAt: '2026-07-30T00:00:00.000Z',",
+        '    facts: {},',
+        "    observedSources: [{ kind: 'process' }],",
+        "    stabilityProofs: [{ source: 'process', kind: 'not-established' }],",
+        '  },',
+        '}));',
+      ].join('\n'),
+    );
+
+    await expect(
+      runIsolatedJsonProcessWithEvidenceAsync<{ ok: boolean }>({
+        cliPath: scriptPath,
+        command: 'probe',
+        label: 'Evidence child',
+      }),
+    ).resolves.toMatchObject({
+      result: { ok: true },
+      observationReceipt: {
+        schemaVersion: 2,
+        observedSources: [{ kind: 'process' }],
+      },
+    });
   });
 
   it('rejects an unsupported isolated-analysis protocol version before using the result', async () => {

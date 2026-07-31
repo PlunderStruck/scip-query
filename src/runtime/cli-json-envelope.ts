@@ -1,6 +1,7 @@
 import { isRecordObject } from '../domain/record-validation.js';
 import { isObservationReceipt, type ObservationReceipt } from '../domain/observation-receipt.js';
 import { isCommandOperationRole, type CommandOperationRole } from './command-operation.js';
+import { isClaimQualificationV1, type ClaimQualificationV1 } from './claim-qualification.js';
 
 export const CLI_JSON_ENVELOPE_KIND = 'scip-query-result' as const;
 export const LEGACY_CLI_JSON_ENVELOPE_SCHEMA_VERSION = 0 as const;
@@ -25,6 +26,7 @@ export interface CliAnalysisManifestV1 {
   evidence?: 'graph-fact' | 'heuristic' | 'mixed';
   analysisBudget?: unknown;
   coverage?: unknown;
+  claimQualification?: ClaimQualificationV1;
 }
 
 /**
@@ -287,7 +289,8 @@ function isCliEvidenceContextV1(value: unknown): value is CliEvidenceContextV1 {
     (manifest['evidence'] === undefined ||
       manifest['evidence'] === 'graph-fact' ||
       manifest['evidence'] === 'heuristic' ||
-      manifest['evidence'] === 'mixed')
+      manifest['evidence'] === 'mixed') &&
+    (manifest['claimQualification'] === undefined || isClaimQualificationV1(manifest['claimQualification']))
   );
 }
 

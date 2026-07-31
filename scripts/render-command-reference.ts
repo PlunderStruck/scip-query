@@ -2,7 +2,11 @@ import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DIFF_GATE_CHECKS, type DiffGateCheck } from '../src/queries/impact/diff-gate.js';
 import { commandDescriptors } from '../src/runtime/commands/command-descriptors.js';
-import { commandDocEntries, renderCommandReferenceMarkdown } from '../src/runtime/command-kit/command-docs.js';
+import {
+  commandDocEntries,
+  descriptorClaimContract,
+  renderCommandReferenceMarkdown,
+} from '../src/runtime/command-kit/command-docs.js';
 import type { CommandDescriptor } from '../src/runtime/command-kit/command-descriptor-types.js';
 import { commandOperationRoles } from '../src/runtime/command-operation.js';
 
@@ -196,11 +200,12 @@ export function renderAgentContractCatalogMarkdown(
 ): string {
   const rows = [
     '<!-- BEGIN GENERATED AGENT CONTRACT CATALOG -->',
-    '| Command | Questions it answers | Returns | Operation role(s) | Default coverage |',
-    '| --- | --- | --- | --- | --- |',
+    '| Command | Questions it answers | Returns | Operation role(s) | Default coverage | Claim origin | Observed sources | Producer validation | Mixed-family bindings |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
   ];
   for (const descriptor of descriptors.filter((entry) => !entry.hidden)) {
     const contract = descriptor.agent;
+    const claims = descriptorClaimContract(descriptor);
     rows.push(
       `| \`scip-query ${descriptor.command}\` | ${escapeSkillTableCell(
         contract?.answers.join('; ') ?? 'Undeclared',
@@ -210,7 +215,11 @@ export function renderAgentContractCatalogMarkdown(
               .map((role) => `\`${role}\``)
               .join('<br>')
           : 'Undeclared'
-      } | \`${contract?.coverage ?? 'unknown'}\` |`,
+      } | \`${contract?.coverage ?? 'unknown'}\` | \`${claims.origin}\` | ${claims.observedSources
+        .map((source) => `\`${source}\``)
+        .join('<br>')} | \`${claims.producerValidation.status}\` | ${
+        claims.families?.map((family) => `\`${family.id}\` → \`${family.selector}\``).join('<br>') ?? '-'
+      } |`,
     );
   }
   rows.push('<!-- END GENERATED AGENT CONTRACT CATALOG -->');

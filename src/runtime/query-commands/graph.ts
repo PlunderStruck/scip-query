@@ -1,6 +1,14 @@
 import * as queries from '../../queries/index.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
-import { agentContract, doc, option, parseInteger, withJsonOption } from '../command-kit/command-spec-builders.js';
+import {
+  agentContract,
+  doc,
+  fixedClaimFamily,
+  mixedClaimContract,
+  option,
+  parseInteger,
+  withJsonOption,
+} from '../command-kit/command-spec-builders.js';
 import {
   budgetedTableCommand,
   booleanOptionValue,
@@ -427,6 +435,14 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     ),
     options: withJsonOption([option('-s, --scope <path>', 'Limit to files matching path')]),
     evidence: 'mixed',
+    claims: mixedClaimContract(
+      ['index-generation', 'live-workspace'],
+      [
+        fixedClaimFamily('declared-policy', 'boundaries', 'repository-source'),
+        fixedClaimFamily('dependency-observations', 'edges', 'compiler-graph'),
+        fixedClaimFamily('policy-findings', 'forbiddenEdges', 'compiler-graph'),
+      ],
+    ),
     renderShape: 'custom',
     docs: doc('Graph', ['scip-query architecture --json']),
     handler: handleArchitecture,

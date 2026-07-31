@@ -187,7 +187,7 @@ claim, and completion records belong to `storage`; the runtime watch
 coordinator couples those records to watcher transitions, while `platform`
 continues to own only the process-neutral state schema and paths. Persisted
 record decoders share dependency-free object, timestamp, scalar-number,
-bounded one-line string, and string-or-null-record predicates in
+non-empty string, bounded one-line string, and string-or-null-record predicates in
 `domain/record-validation.ts` rather than creating cross-dependencies between
 storage, reindex, platform, and semantic protocols.
 
@@ -396,9 +396,10 @@ The reindex-metadata direction was reverified on 2026-07-25.
 and capability boundary. Reindex, runtime services, semantic sessions, and
 storage identity/cache consumers depend inward on it; the domain decoder
 depends only on domain language, record/timestamp, and project-file
-validators. Generic object-record and bounded one-line string predicates now
-live beside the timestamp predicate in `src/domain/record-validation.ts` and
-are also reused by config and JSON protocol decoders. This keeps
+validators. Generic object-record, non-empty string, and bounded one-line
+string predicates now live beside the timestamp predicate in
+`src/domain/record-validation.ts` and are also reused by config and JSON
+protocol decoders. This keeps
 future-version rejection identical without introducing a reverse domain
 dependency.
 

@@ -72,6 +72,8 @@ export interface ObservationReceiptInput {
   db?: Pick<ScipDatabase, 'generation' | 'config'>;
   gitContext?: GitWorktreeContext;
   snapshot?: ProjectObservationSnapshot;
+  /** Sources the producer actually read; omitted only for legacy adapters that infer all supplied inputs. */
+  observedSourceKinds?: readonly ObservationSourceFact['kind'][];
 }
 
 /**
@@ -82,7 +84,11 @@ export interface ObservationReceiptInput {
  */
 export function buildObservationReceipt(input: ObservationReceiptInput): ObservationReceiptV2 {
   const snapshot = input.snapshot;
-  const gitContext = input.gitContext ?? snapshot?.gitContext;
+  const declaredSources = input.observedSourceKinds ? new Set(input.observedSourceKinds) : undefined;
+  const gitContext =
+    input.gitContext ??
+    snapshot?.gitContext ??
+    (declaredSources?.has('live-workspace') ? resolveGitWorktreeContext(input.projectRoot) : undefined);
   const collaborationDomainId = input.collaborationDomainId ?? input.db?.config.collaborationDomainId;
   const collaborationDomain = collaborationDomainId
     ? createObservationIdentity(COLLABORATION_DOMAIN_IDENTITY_PROJECTION, 1, collaborationDomainId)
@@ -113,15 +119,30 @@ export function buildObservationReceipt(input: ObservationReceiptInput): Observa
         source: input.db.generation.source,
       }
     : undefined;
+  const observedSourceKinds =
+    declaredSources ??
+    new Set([
+      ...(index ? (['index-generation'] as const) : []),
+      ...(repositoryContent
+        ? (['repository-snapshot'] as const)
+        : workspaceInstance
+          ? (['live-workspace'] as const)
+          : []),
+    ]);
   const observedSources: ObservationSourceFact[] = [
-    ...(index ? [{ kind: 'index-generation' as const, identity: index.generation }] : []),
-    ...(repositoryContent ? [{ kind: 'repository-snapshot' as const, identity: repositoryContent }] : []),
-    ...(workspaceInstance && !repositoryContent
+    ...(index && observedSourceKinds.has('index-generation')
+      ? [{ kind: 'index-generation' as const, identity: index.generation }]
+      : []),
+    ...(repositoryContent && observedSourceKinds.has('repository-snapshot')
+      ? [{ kind: 'repository-snapshot' as const, identity: repositoryContent }]
+      : []),
+    ...(workspaceInstance && observedSourceKinds.has('live-workspace')
       ? [{ kind: 'live-workspace' as const, identity: workspaceInstance }]
       : []),
+    ...(observedSourceKinds.has('process') ? [{ kind: 'process' as const }] : []),
   ];
   const stabilityProofs: ObservationStabilityProof[] = [
-    ...(index
+    ...(index && observedSourceKinds.has('index-generation')
       ? [
           {
             source: 'index-generation' as const,
@@ -129,10 +150,13 @@ export function buildObservationReceipt(input: ObservationReceiptInput): Observa
           },
         ]
       : []),
-    ...(repositoryContent ? [{ source: 'repository-snapshot' as const, kind: 'fixed-snapshot' as const }] : []),
-    ...(workspaceInstance && !repositoryContent
+    ...(repositoryContent && observedSourceKinds.has('repository-snapshot')
+      ? [{ source: 'repository-snapshot' as const, kind: 'fixed-snapshot' as const }]
+      : []),
+    ...(workspaceInstance && observedSourceKinds.has('live-workspace')
       ? [{ source: 'live-workspace' as const, kind: 'not-established' as const }]
       : []),
+    ...(observedSourceKinds.has('process') ? [{ source: 'process' as const, kind: 'not-established' as const }] : []),
   ];
   if (observedSources.length === 0) {
     observedSources.push({ kind: 'process' });

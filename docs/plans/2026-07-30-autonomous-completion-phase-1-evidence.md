@@ -1,7 +1,7 @@
 # Phase 1 — evidence foundation
 
 Date: 2026-07-30
-Status: in progress — slices 1.1–1.3 complete; slice 1.4 next
+Status: complete — slices 1.1–1.4 verified
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -449,6 +449,90 @@ Deviation:
   declaration and qualification registry. Graph-only commands therefore pay no
   snapshot ceremony and retain unknown whole-content alignment until a
   completion consumer requests a producer that establishes it.
+
+### Slice 1.4 — composable claim metadata
+
+Implemented:
+
+- the descriptor registry now owns independent, closed claim dimensions for
+  origin, enumeration coverage, producer validation, observed-state authority,
+  and repository-policy action permission;
+- qualification is derived by one pure function from a descriptor contract and
+  the operation's actual observation receipt. A producer cannot acquire
+  authority merely by calling its output complete or compiler-derived;
+- repository-observation and preview operations receive conservative defaults,
+  while mutation, composite, environment, and tool-information operations
+  remain explicitly unknown unless their descriptor supplies a contract;
+- mixed operations declare provenance for each result family. `diff-impact`,
+  for example, distinguishes repository-source changed files from
+  compiler-graph changed symbols and downstream consumers;
+- the version-2 receipt builder emits only source kinds the operation declared
+  and actually read. Graph-only commands therefore avoid both fixed-snapshot
+  work and live-Git resolution;
+- isolated analysis workers return their exact observation receipt with their
+  result. The parent retains immutable-generation authority only when every
+  participating worker names the same generation digest; a missing or
+  different worker generation fails closed to weaker live/process evidence;
+- the machine-readable envelope carries additive `claimQualification` metadata
+  while preserving the legacy top-level evidence field. The decoder validates
+  the new vocabulary and continues to accept old envelopes;
+- the JSON schema, CLI guide, generated agent-contract catalog, and public API
+  report are generated from or checked against the same descriptor-owned
+  vocabulary; and
+- runtime architecture owns qualification and receipt services below the
+  command-kit boundary, so the implementation did not require a new forbidden
+  dependency allowance.
+
+Observed verification:
+
+- a real `diff-impact --json --compact` result reports live-workspace and
+  immutable-generation sources, mixed family provenance, and advisory state
+  authority; a real `health` result reports the same two source classes with
+  its health-family provenance;
+- all 2,223 repository tests across 275 files passed, including focused
+  receipt, descriptor, schema, envelope, isolated-worker, and real CLI
+  refutations;
+- typecheck, build, formatting, lint, generated skill-link checks, the public
+  API consumer, and the accepted 72-path API surface passed;
+- API change `7d108e1d15a04969` was accepted as a compatible correction: the
+  wire addition is optional, old and new envelopes decode, and a declaration
+  chunk-alias renumbering did not change named exports;
+- complete architecture transport reported no declared boundary violations;
+  unbounded recent-duplicate, unused-parameter, and incomplete-migration scans
+  found none;
+- the unbounded stale-abstraction scan reported one new low-confidence
+  four-line result/receipt message type. It names the private cross-process
+  protocol used by the isolated runner and CLI adapter, so it is retained as an
+  earned contract rather than inlined across that boundary; and
+- `stats --json --compact` measured 225.5 ms median across eleven measured warm
+  runs after two discarded warmups, inside the pre-registered 292.0 ms guard;
+  and
+- the final `diff-gate` reported zero findings after generic record validators
+  were reused and every affected behavioral or guide citation was rechecked.
+
+Refutation attempts:
+
+- a complete heuristic scan remains heuristic and keeps producer validation
+  independent from coverage;
+- a compiler-graph result without established fixed-content and generation
+  relationships remains advisory rather than completion-authoritative;
+- repository policy can keep an otherwise authoritative result advisory and
+  non-actionable;
+- a missing or mismatched isolated-worker generation drops index authority
+  instead of borrowing the parent process's open generation;
+- two workspace instances with equal clone-independent content establish
+  reusable content while retaining distinct workspace identities; and
+- a graph-only command resolves no live Git context, proving that evidence
+  qualification does not impose a ceremonial repository-snapshot cost.
+
+Deviation:
+
+- the first renderer-only integration derived evidence after isolated health
+  and impact workers had closed their index handles. A real `diff-impact`
+  invocation refuted that design by emitting no immutable-generation source.
+  The internal worker protocol now returns the exact receipt captured while
+  its generation lease is live, and the parent combines receipts only under
+  explicit generation equality.
 
 ## Verification gate
 

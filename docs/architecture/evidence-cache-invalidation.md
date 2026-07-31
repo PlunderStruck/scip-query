@@ -42,6 +42,12 @@ cache identity. Public health JSON is emitted by the shared versioned CLI
 envelope after the cached report is assembled; private health-phase child
 messages use their own versioned protocol.
 
+2026-07-30 verification: returning an observation receipt with the private
+health child result changes that child protocol but not the
+`project:health-semantic-prewarm` product, payload owner, cache key, marker, or
+invalidation triggers. Claim qualification is derived after the cached health
+report is assembled.
+
 ## Access recency and eviction
 
 `last_accessed_at` is cache recency, not creation time. A successful shared

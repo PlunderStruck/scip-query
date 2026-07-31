@@ -66,7 +66,169 @@
         "schemaVersion": { "const": 1 },
         "evidence": { "enum": ["graph-fact", "heuristic", "mixed"] },
         "analysisBudget": {},
-        "coverage": {}
+        "coverage": {},
+        "claimQualification": { "$ref": "#/$defs/claimQualificationV1" }
+      },
+      "additionalProperties": true
+    },
+    "claimQualificationV1": {
+      "type": "object",
+      "required": ["schemaVersion", "origin", "coverage", "producerValidation", "stateAuthority", "repositoryPolicy"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "origin": {
+          "enum": [
+            "compiler-graph",
+            "semantic-analysis",
+            "repository-source",
+            "change-history",
+            "runtime-measurement",
+            "heuristic",
+            "mixed",
+            "unknown"
+          ]
+        },
+        "coverage": { "$ref": "#/$defs/claimCoverage" },
+        "producerValidation": { "$ref": "#/$defs/producerValidation" },
+        "stateAuthority": { "$ref": "#/$defs/stateAuthority" },
+        "repositoryPolicy": { "$ref": "#/$defs/repositoryPolicyAction" },
+        "families": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/claimFamily" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "claimCoverage": {
+      "type": "object",
+      "required": ["state", "returned", "totalKnown"],
+      "properties": {
+        "state": { "enum": ["complete", "partial", "unknown"] },
+        "returned": { "type": "integer", "minimum": 0 },
+        "totalKnown": { "type": "boolean" },
+        "total": { "type": "integer", "minimum": 0 },
+        "omitted": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "producerValidation": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["validated", "failed", "not-evaluated", "not-applicable"] },
+        "certification": {
+          "type": "object",
+          "required": ["id", "version", "corpus"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "version": { "type": "integer", "minimum": 1 },
+            "corpus": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": true
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["status", "certification"],
+          "properties": {
+            "status": { "enum": ["validated", "failed"] }
+          }
+        },
+        {
+          "required": ["status"],
+          "properties": {
+            "status": { "enum": ["not-evaluated", "not-applicable"] },
+            "certification": false
+          }
+        }
+      ],
+      "additionalProperties": true
+    },
+    "stateAuthority": {
+      "type": "object",
+      "required": ["policyVersion", "authority", "requiredRelationships", "reasons"],
+      "properties": {
+        "policyVersion": { "type": "integer", "minimum": 1 },
+        "authority": { "enum": ["completion", "advisory", "none"] },
+        "requiredRelationships": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "reasons": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": true
+    },
+    "repositoryPolicyAction": {
+      "type": "object",
+      "required": ["policyId", "policyVersion", "permission", "reasons"],
+      "properties": {
+        "policyId": { "type": "string", "minLength": 1 },
+        "policyVersion": { "const": 1 },
+        "permission": {
+          "enum": ["observe", "advise", "require-adjudication", "block", "not-established"]
+        },
+        "reasons": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": true
+    },
+    "claimFamily": {
+      "type": "object",
+      "required": ["id", "selector", "origin"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "selector": { "type": "string", "minLength": 1 },
+        "origin": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["kind", "origin"],
+              "properties": {
+                "kind": { "const": "fixed" },
+                "origin": {
+                  "enum": [
+                    "compiler-graph",
+                    "semantic-analysis",
+                    "repository-source",
+                    "change-history",
+                    "runtime-measurement",
+                    "heuristic",
+                    "unknown"
+                  ]
+                }
+              },
+              "additionalProperties": true
+            },
+            {
+              "type": "object",
+              "required": ["kind", "field", "values"],
+              "properties": {
+                "kind": { "const": "result-field" },
+                "field": { "type": "string", "minLength": 1 },
+                "values": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "enum": [
+                      "compiler-graph",
+                      "semantic-analysis",
+                      "repository-source",
+                      "change-history",
+                      "runtime-measurement",
+                      "heuristic",
+                      "unknown"
+                    ]
+                  }
+                }
+              },
+              "additionalProperties": true
+            }
+          ]
+        }
       },
       "additionalProperties": true
     }

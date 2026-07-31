@@ -75,7 +75,25 @@ The current envelope is schema version 1:
     "analysisManifest": {
       "schemaVersion": 1,
       "evidence": "graph-fact",
-      "coverage": {}
+      "coverage": {},
+      "claimQualification": {
+        "schemaVersion": 1,
+        "origin": "compiler-graph",
+        "coverage": { "state": "complete", "returned": 1, "totalKnown": true, "total": 1, "omitted": 0 },
+        "producerValidation": { "status": "not-evaluated" },
+        "stateAuthority": {
+          "policyVersion": 1,
+          "authority": "advisory",
+          "requiredRelationships": ["collaborationDomain", "wholeContent", "observationStability"],
+          "reasons": ["wholeContent:unknown"]
+        },
+        "repositoryPolicy": {
+          "policyId": "scip-query:unresolved-repository-policy",
+          "policyVersion": 1,
+          "permission": "not-established",
+          "reasons": ["No repository action policy was supplied for this claim."]
+        }
+      }
     }
   },
   "args": ["login"],
@@ -117,6 +135,22 @@ held, but it does not contain a fixed repository snapshot or an index-input
 alignment proof. Product policy therefore keeps it advisory for completion
 even though the index source itself is immutable. `analysisManifest`
 separately records how the result was produced and how much was examined.
+
+`claimQualification` keeps five questions independent. `origin` identifies
+the method that produced support for the result. `coverage` identifies how
+much of the relevant answer the invocation enumerated. `producerValidation`
+reports performance against a named versioned corpus when such certification
+exists. `stateAuthority` is product policy derived from the receipt rather
+than a producer-authored strength label. `repositoryPolicy.permission` states
+what response the repository permits. A strong value in one field never
+upgrades another.
+
+For a command whose aggregate origin is `mixed`, `families` binds a stable
+result selector either to one fixed origin or to an existing per-row
+provenance field. This retains the actual origins of findings and result
+families instead of forcing a consumer to treat every row as generically
+mixed. The legacy top-level and manifest `evidence` values remain during the
+additive compatibility window.
 
 When a producer actually reads repository bytes through the fixed-snapshot
 boundary, its receipt may additionally contain:

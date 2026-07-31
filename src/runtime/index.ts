@@ -29,6 +29,38 @@ export {
   supportedCliResultSchemaVersions,
 } from './cli-json-envelope.js';
 export {
+  CLAIM_ACTION_PERMISSIONS,
+  CLAIM_ACTION_POLICY_VERSION,
+  CLAIM_COVERAGE_STATES,
+  CLAIM_ORIGINS,
+  CLAIM_QUALIFICATION_SCHEMA_VERSION,
+  DEFAULT_REPOSITORY_POLICY_ACTION,
+  PRODUCER_VALIDATION_STATUSES,
+  deriveClaimCoverage,
+  deriveClaimQualification,
+  evaluateClaimQualification,
+  isClaimQualificationV1,
+} from './claim-qualification.js';
+export type {
+  ClaimActionPermission,
+  ClaimCoverage,
+  ClaimCoverageInput,
+  ClaimCoverageState,
+  ClaimFamilyContract,
+  ClaimFamilyOriginBinding,
+  ClaimOrigin,
+  ClaimQualificationEvaluation,
+  ClaimQualificationPredicate,
+  ClaimQualificationPredicateResult,
+  ClaimQualificationRequirements,
+  ClaimQualificationV1,
+  CommandClaimContract,
+  DeriveClaimQualificationInput,
+  ProducerValidation,
+  ProducerValidationStatus,
+  RepositoryPolicyAction,
+} from './claim-qualification.js';
+export {
   COMMAND_OPERATION_ROLES,
   commandOperation,
   commandOperationRoles,

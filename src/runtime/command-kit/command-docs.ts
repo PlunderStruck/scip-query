@@ -1,5 +1,7 @@
 import type { CommandDescriptor } from './command-descriptor-types.js';
 import type { CommandEvidenceTier } from './command-descriptor-types.js';
+import type { CommandClaimContract } from '../claim-qualification.js';
+import { commandOperationRoles } from '../command-operation.js';
 
 export interface CommandDocEntry {
   id: string;
@@ -10,6 +12,7 @@ export interface CommandDocEntry {
   hidden: boolean;
   heuristic: boolean;
   evidence: CommandEvidenceTier;
+  claims: CommandClaimContract;
 }
 
 export function commandDocEntries(descriptors: readonly CommandDescriptor[]): CommandDocEntry[] {
@@ -24,6 +27,7 @@ export function commandDocEntries(descriptors: readonly CommandDescriptor[]): Co
       hidden: Boolean(descriptor.hidden),
       heuristic: Boolean(descriptor.heuristic),
       evidence: descriptorEvidenceTier(descriptor),
+      claims: descriptorClaimContract(descriptor),
     }));
 }
 
@@ -37,6 +41,39 @@ export function descriptorEvidenceTier(descriptor: CommandDescriptor): CommandEv
 }
 
 const MIXED_EVIDENCE_COMMANDS = new Set(['diff-gate', 'health', 'plan-context', 'co-change']);
+
+/**
+ * Normalize descriptor declarations into the one registry contract consumed
+ * by runtime output and generated documentation. Legacy evidence remains the
+ * additive compatibility label; it is not reused as a claim qualification.
+ */
+export function descriptorClaimContract(descriptor: CommandDescriptor): CommandClaimContract {
+  if (descriptor.claims) {
+    if (descriptor.claims.origin === 'mixed' && !descriptor.claims.families?.length) {
+      throw new Error(`Mixed command ${descriptor.id} must declare at least one claim family.`);
+    }
+    return descriptor.claims;
+  }
+  const evidence = descriptorEvidenceTier(descriptor);
+  if (evidence === 'mixed') {
+    throw new Error(`Mixed command ${descriptor.id} must declare claim families.`);
+  }
+  const roles = descriptor.agent ? commandOperationRoles(descriptor.agent.operation) : [];
+  const repositoryEvidenceOnly =
+    roles.length > 0 && roles.every((role) => role === 'repository-observation' || role === 'repository-preview');
+  if (!repositoryEvidenceOnly) {
+    return {
+      origin: 'unknown',
+      observedSources: ['process'],
+      producerValidation: { status: 'not-evaluated' },
+    };
+  }
+  return {
+    origin: evidence === 'heuristic' ? 'heuristic' : 'compiler-graph',
+    observedSources: ['index-generation'],
+    producerValidation: { status: 'not-evaluated' },
+  };
+}
 
 // scip-query: ignore-extract — the generated-reference renderer is one
 // formatting pipeline; its sections have no other consumers.

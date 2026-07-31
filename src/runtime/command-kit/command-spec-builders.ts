@@ -6,6 +6,7 @@ import type {
   CommandScope,
   CoveragePolicy,
 } from './command-descriptor-types.js';
+import type { ClaimFamilyContract, ClaimOrigin, CommandClaimContract } from '../claim-qualification.js';
 import { REPOSITORY_OBSERVATION_OPERATION, type CommandOperationSelector } from '../command-operation.js';
 import { InvalidArgumentError } from 'commander';
 import { collect } from '../cli-context.js';
@@ -80,6 +81,47 @@ export function withJsonOption(
 
 export function doc(category: string, examples: readonly string[] = []): NonNullable<CommandDescriptor['docs']> {
   return { category, examples };
+}
+
+/**
+ * Declare a mixed producer without granting it validation, state authority,
+ * or action permission. Result-family bindings retain the actual origins that
+ * the old aggregate `mixed` label erased.
+ */
+export function mixedClaimContract(
+  observedSources: CommandClaimContract['observedSources'],
+  families: readonly ClaimFamilyContract[],
+): CommandClaimContract {
+  return {
+    origin: 'mixed',
+    observedSources,
+    producerValidation: { status: 'not-evaluated' },
+    families,
+  };
+}
+
+export function fixedClaimContract(
+  origin: Exclude<ClaimOrigin, 'mixed'>,
+  observedSources: CommandClaimContract['observedSources'],
+): CommandClaimContract {
+  return {
+    origin,
+    observedSources,
+    producerValidation: { status: 'not-evaluated' },
+  };
+}
+
+export function fixedClaimFamily(id: string, selector: string, origin: Exclude<ClaimOrigin, 'mixed'>) {
+  return { id, selector, origin: { kind: 'fixed' as const, origin } };
+}
+
+export function fieldClaimFamily(
+  id: string,
+  selector: string,
+  field: string,
+  values: Readonly<Record<string, Exclude<ClaimOrigin, 'mixed'>>>,
+) {
+  return { id, selector, origin: { kind: 'result-field' as const, field, values } };
 }
 
 /** Concise descriptor-local constructor; the declaration remains beside the command it describes. */

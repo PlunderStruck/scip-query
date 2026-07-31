@@ -7,6 +7,9 @@ import {
   agentContract,
   collectValues,
   doc,
+  fieldClaimFamily,
+  fixedClaimFamily,
+  mixedClaimContract,
   option,
   parseInteger,
   parseNumber,
@@ -525,6 +528,20 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
       option('--hook', 'Agent Stop-hook mode: silent on pass, exit 2 with findings on stderr to block the stop'),
     ]),
     heuristic: { label: 'diff gate candidates' },
+    claims: mixedClaimContract(
+      ['index-generation', 'live-workspace'],
+      [
+        fieldClaimFamily('findings', 'findings[]', 'evidence', {
+          'graph-fact': 'compiler-graph',
+          semantic: 'semantic-analysis',
+          heuristic: 'heuristic',
+          'change-graph': 'change-history',
+          baseline: 'repository-source',
+        }),
+        fixedClaimFamily('changed-files', 'changedFiles[]', 'repository-source'),
+        fixedClaimFamily('root-cause-groups', 'rootCauseGroups[]', 'heuristic'),
+      ],
+    ),
     agent: {
       operation: REPOSITORY_OBSERVATION_OPERATION,
       answers: [
@@ -597,6 +614,13 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
       option('--full', 'Run unbounded analysis on large indexes'),
     ]),
     heuristic: { label: 'co-change candidates' },
+    claims: mixedClaimContract(
+      ['index-generation', 'live-workspace'],
+      [
+        fixedClaimFamily('historical-pairs', 'findings[]', 'change-history'),
+        fixedClaimFamily('structural-link-classification', 'findings[].structurallyLinked', 'compiler-graph'),
+      ],
+    ),
     renderShape: 'custom',
     docs: doc('Impact', ['scip-query co-change', 'scip-query co-change src/runtime/config.ts']),
     handler: handleCoChange,

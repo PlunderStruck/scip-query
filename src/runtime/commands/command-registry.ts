@@ -3,9 +3,10 @@ import type { CommandDescriptor, CommandResultUnitPolicy } from '../command-kit/
 import {
   runWithCommandOperationRole,
   setCommandAgentContractMap,
+  setCommandClaimContractMap,
   setCommandEvidenceMap,
 } from '../command-kit/command-execution.js';
-import { descriptorEvidenceTier } from '../command-kit/command-docs.js';
+import { descriptorClaimContract, descriptorEvidenceTier } from '../command-kit/command-docs.js';
 import { sanitizeTerminalLine } from '../../platform/terminal-output.js';
 import { cliVersion } from '../cli-support.js';
 import { runWithCliOutputPagination } from '../output-pagination.js';
@@ -23,6 +24,9 @@ export function registerCommandDescriptors(
   descriptors: readonly CommandDescriptor[],
 ): RegisteredCommandDescriptor[] {
   setCommandEvidenceMap(new Map(descriptors.map((descriptor) => [descriptor.id, descriptorEvidenceTier(descriptor)])));
+  setCommandClaimContractMap(
+    new Map(descriptors.map((descriptor) => [descriptor.id, descriptorClaimContract(descriptor)])),
+  );
   setCommandAgentContractMap(
     new Map(
       descriptors.flatMap((descriptor) =>

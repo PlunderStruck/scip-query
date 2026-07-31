@@ -9,11 +9,13 @@ import {
   healthPhaseConcurrency,
   healthPhaseTasks,
   healthPhaseTimeoutMs,
+  operationObservationReceipt,
   prewarmHealthSemanticEvidence,
   shouldRunHealthPhase,
   skippedHealthPhaseResult,
   type HealthSemanticPrewarmRuntime,
 } from '../../src/runtime/cli-support.js';
+import { buildObservationReceipt } from '../../src/runtime/observation-receipt.js';
 import type { IndexedDefinition } from '../../src/domain/types.js';
 import type { ScipDatabase } from '../../src/storage/db.js';
 
@@ -50,6 +52,52 @@ function fakeDefinition(id: number, relativePath: string): IndexedDefinition {
     enclosingSymbol: null,
   } as IndexedDefinition;
 }
+
+describe('operationObservationReceipt', () => {
+  const database = {
+    config: { projectRoot: process.cwd() },
+    generation: {
+      identity: 'generation-a',
+      databasePath: '/tmp/generation-a/index.db',
+      source: 'immutable' as const,
+    },
+  };
+  const workerReceipt = buildObservationReceipt({
+    projectRoot: process.cwd(),
+    db: database,
+    observedSourceKinds: ['index-generation'],
+  });
+  const anchor = {
+    database,
+    generationDigest: workerReceipt.facts.index!.generation.digest,
+  };
+
+  it('retains index identity when every parent and worker used the same generation', () => {
+    expect(operationObservationReceipt([anchor], [workerReceipt], ['index-generation'])).toMatchObject({
+      observedSources: [{ kind: 'index-generation' }],
+      facts: { index: { generation: { digest: anchor.generationDigest } } },
+    });
+  });
+
+  it('drops index authority when a worker generation is missing or different', () => {
+    const mismatched = {
+      ...workerReceipt,
+      facts: {
+        ...workerReceipt.facts,
+        index: {
+          ...workerReceipt.facts.index!,
+          generation: { ...workerReceipt.facts.index!.generation, digest: 'different-generation' },
+        },
+      },
+    };
+
+    for (const worker of [undefined, mismatched]) {
+      const receipt = operationObservationReceipt([anchor], [worker], ['index-generation']);
+      expect(receipt.facts).not.toHaveProperty('index');
+      expect(receipt.observedSources).toEqual([{ kind: 'process' }]);
+    }
+  });
+});
 
 function fakePrewarmRuntime(overrides: Partial<HealthSemanticPrewarmRuntime> = {}): HealthSemanticPrewarmRuntime {
   return {

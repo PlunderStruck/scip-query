@@ -1,4 +1,5 @@
 import type { CommandOperationSelector } from '../command-operation.js';
+import type { CommandClaimContract } from '../claim-qualification.js';
 
 export type CommandOptionParser = (value: string, previous: unknown) => unknown;
 export type CommandHandler = (...args: unknown[]) => void | Promise<void>;
@@ -175,6 +176,12 @@ export interface CommandDescriptor {
   arguments?: readonly CommandArgumentDescriptor[];
   options?: readonly CommandOptionDescriptor[];
   evidence?: CommandEvidenceTier;
+  /**
+   * Producer facts used to qualify claims. Commands with one evidence origin
+   * receive a conservative generated contract; mixed commands must declare
+   * the result families that keep their origins distinguishable.
+   */
+  claims?: CommandClaimContract;
   /** Agent-facing return/coverage contract. Required for public commands — see cli-contract. */
   agent?: CommandAgentContract;
   heuristic?: CommandHeuristicNotice;

@@ -13,6 +13,12 @@ import {
 } from '../../src/runtime/cli-json-envelope.js';
 import { printJsonEnvelope } from '../../src/runtime/command-kit/command-execution.js';
 import { commandDescriptors } from '../../src/runtime/commands/command-descriptors.js';
+import {
+  CLAIM_ACTION_PERMISSIONS,
+  CLAIM_COVERAGE_STATES,
+  CLAIM_ORIGINS,
+  PRODUCER_VALIDATION_STATUSES,
+} from '../../src/runtime/claim-qualification.js';
 
 const fixture = (name: string): unknown =>
   JSON.parse(readFileSync(join(process.cwd(), 'tests', 'fixtures', name), 'utf8')) as unknown;
@@ -177,6 +183,38 @@ describe('CLI JSON envelope compatibility', () => {
       kind: 'supported',
       envelope: { evidenceContext },
     });
+    expect(
+      decodeCliJsonEnvelope({
+        ...envelope,
+        evidenceContext: {
+          ...evidenceContext,
+          analysisManifest: {
+            ...evidenceContext.analysisManifest,
+            claimQualification: {
+              schemaVersion: 1,
+              origin: 'compiler-graph',
+              coverage: { state: 'complete', returned: 1, totalKnown: true, total: 1, omitted: 0 },
+              producerValidation: { status: 'validated' },
+              stateAuthority: {
+                policyVersion: 1,
+                authority: 'completion',
+                requiredRelationships: ['collaborationDomain', 'wholeContent', 'observationStability'],
+                reasons: [],
+              },
+              repositoryPolicy: {
+                policyId: 'repo',
+                policyVersion: 1,
+                permission: 'block',
+                reasons: [],
+              },
+            },
+          },
+        },
+      }),
+    ).toMatchObject({
+      kind: 'malformed',
+      reason: expect.stringContaining('evidenceContext'),
+    });
   });
 
   it('serializes compact and pretty representations with identical meaning', () => {
@@ -272,6 +310,12 @@ describe('CLI JSON envelope compatibility', () => {
     expect(schema.properties['evidenceContext']?.['$ref']).toBe('#/$defs/evidenceContextV1');
     expect(schema.$defs['evidenceContextV1']?.properties?.['receipt']?.['$ref']).toBe(
       './observation-receipt.schema.json',
+    );
+    expect(schema.$defs['claimQualificationV1']?.properties?.['origin']?.['enum']).toEqual(CLAIM_ORIGINS);
+    expect(schema.$defs['claimCoverage']?.properties?.['state']?.['enum']).toEqual(CLAIM_COVERAGE_STATES);
+    expect(schema.$defs['producerValidation']?.properties?.['status']?.['enum']).toEqual(PRODUCER_VALIDATION_STATUSES);
+    expect(schema.$defs['repositoryPolicyAction']?.properties?.['permission']?.['enum']).toEqual(
+      CLAIM_ACTION_PERMISSIONS,
     );
     expect(receiptSchema.oneOf).toEqual([
       { $ref: '#/$defs/observationReceiptV1' },

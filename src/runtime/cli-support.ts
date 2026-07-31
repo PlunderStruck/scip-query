@@ -1,5 +1,6 @@
 import { availableParallelism } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import type { ObservationReceiptV2, ObservationSourceKind } from '../domain/observation-receipt.js';
 import type { IndexedDefinition } from '../domain/types.js';
 import { ProjectIndex } from '../queries/internal/project-index.js';
 import type { ScipDatabase } from '../storage/db.js';
@@ -22,8 +23,10 @@ import {
   groupAnalysisTasks,
   IsolatedProcessTimeoutError,
   runAnalysisTasks,
-  runIsolatedJsonProcessAsync,
+  runIsolatedJsonProcessWithEvidenceAsync,
+  type IsolatedAnalysisResult,
 } from './isolated-analysis-runner.js';
+import { buildObservationReceipt } from './observation-receipt.js';
 import { render } from './render.js';
 import { detectorPrecision, readLedgerRecords } from '../queries/health/finding-outcome-ledger.js';
 import { healthReportCacheKey, readHealthReportCache, writeHealthReportCache } from './health-report-cache.js';
@@ -110,6 +113,16 @@ type DiffImpactPartial = ReturnType<typeof queries.diffImpactPartial>;
 type AvailableCpus = () => number;
 type ConcurrencyResolver = (itemCount: number, env?: NodeJS.ProcessEnv, availableCpus?: AvailableCpus) => number;
 type HealthPhaseTask = HealthPhaseName[];
+
+export interface EvidenceBoundAnalysis<T> {
+  result: T;
+  observationReceipt: ObservationReceiptV2;
+}
+
+export interface IndexObservationAnchor {
+  database: Pick<ScipDatabase, 'config' | 'generation'>;
+  generationDigest: string;
+}
 
 export interface HealthCliOptions {
   scope?: string;
@@ -406,11 +419,55 @@ function healthSemanticPrewarmProfileMetadata(result: HealthSemanticPrewarmResul
   };
 }
 
+function withIndexObservation<T>(run: (db: ScipDatabase) => T): { value: T; anchor: IndexObservationAnchor } {
+  return withDb((db) => {
+    const receipt = buildObservationReceipt({
+      projectRoot: db.config.projectRoot,
+      db,
+      observedSourceKinds: ['index-generation'],
+    });
+    return {
+      value: run(db),
+      anchor: {
+        database: { config: db.config, generation: db.generation },
+        generationDigest: receipt.facts.index!.generation.digest,
+      },
+    };
+  });
+}
+
+export function operationObservationReceipt(
+  anchors: readonly IndexObservationAnchor[],
+  isolatedReceipts: readonly (ObservationReceiptV2 | undefined)[],
+  observedSources: readonly ObservationSourceKind[],
+): ObservationReceiptV2 {
+  const first = anchors[0];
+  if (!first) {
+    throw new Error('An evidence-bound analysis requires at least one index observation anchor.');
+  }
+  const expectedGeneration = first.generationDigest;
+  const parentAligned = anchors.every((anchor) => anchor.generationDigest === expectedGeneration);
+  const childrenAligned = isolatedReceipts.every(
+    (receipt) => receipt?.facts.index?.generation.digest === expectedGeneration,
+  );
+  return buildObservationReceipt({
+    projectRoot: first.database.config.projectRoot,
+    ...(parentAligned && childrenAligned ? { db: first.database } : {}),
+    observedSourceKinds: observedSources,
+  });
+}
+
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export async function runIsolatedHealthReport(opts: HealthCliOptions): Promise<HealthReport> {
+  return (await runIsolatedHealthReportWithEvidence(opts)).result;
+}
+
+export async function runIsolatedHealthReportWithEvidence(
+  opts: HealthCliOptions,
+): Promise<EvidenceBoundAnalysis<HealthReport>> {
   const phaseTimeoutMs = healthPhaseTimeoutMs(opts);
   const cacheOptions = { ...opts, phaseTimeoutMs: phaseTimeoutMs ?? null };
-  const cachedReport = withDb((db) => {
+  const cachedObservation = withIndexObservation((db) => {
     const key = healthReportCacheKey(db, cacheOptions, cliVersion);
     if (!key) return null;
     const report = readHealthReportCache(db, key);
@@ -418,12 +475,23 @@ export async function runIsolatedHealthReport(opts: HealthCliOptions): Promise<H
     report.detectorPrecision = detectorPrecision(readLedgerRecords(db), Date.now());
     return report;
   });
-  if (cachedReport) return cachedReport;
+  if (cachedObservation.value) {
+    return {
+      result: cachedObservation.value,
+      observationReceipt: operationObservationReceipt(
+        [cachedObservation.anchor],
+        [],
+        ['index-generation', 'live-workspace'],
+      ),
+    };
+  }
 
-  const { applicability, overview } = withDb((db) => ({
+  const overviewObservation = withIndexObservation((db) => ({
     applicability: healthPhaseApplicability(db, opts),
     overview: queries.healthPhase(db, 'overview', opts),
   }));
+  const { applicability, overview } = overviewObservation.value;
+  const anchors = [cachedObservation.anchor, overviewObservation.anchor];
   const resultByPhase = new Map<HealthPhaseName, HealthPhaseResult>();
   resultByPhase.set('overview', overview);
   const runnablePhases = queries.HEALTH_PHASES.filter((phase) => {
@@ -434,12 +502,16 @@ export async function runIsolatedHealthReport(opts: HealthCliOptions): Promise<H
   });
 
   const runnableTasks = healthPhaseTasks(runnablePhases);
-  if (opts.full) withDb((db) => prewarmHealthSemanticEvidence(db, opts));
-  const runnableResults = await runAnalysisTasks(runnableTasks, healthPhaseConcurrency(runnableTasks.length), (task) =>
+  if (opts.full) {
+    const prewarmObservation = withIndexObservation((db) => prewarmHealthSemanticEvidence(db, opts));
+    anchors.push(prewarmObservation.anchor);
+  }
+  const runnableMessages = await runAnalysisTasks(runnableTasks, healthPhaseConcurrency(runnableTasks.length), (task) =>
     runHealthPhaseTaskProcess(task, opts, phaseTimeoutMs),
   );
+  const runnableResults = runnableMessages.flatMap((message) => message.result);
   const phaseWarnings: string[] = [];
-  runnableResults.flat().forEach((result) => {
+  runnableResults.forEach((result) => {
     if (result.healthPhaseMeta) {
       phaseWarnings.push(
         `Health phase "${result.phase}" deferred: ${result.healthPhaseMeta.reason}. Run health --full for exhaustive analysis.`,
@@ -459,12 +531,21 @@ export async function runIsolatedHealthReport(opts: HealthCliOptions): Promise<H
   const report = queries.healthReportFromPhases(queries.HEALTH_PHASES.map((phase) => resultByPhase.get(phase)!));
   // Phase results come back from worker processes with no live db handle —
   // the finding-outcome ledger is read here, once, back on the main process.
-  report.detectorPrecision = withDb((db) => detectorPrecision(readLedgerRecords(db), Date.now()));
+  const precisionObservation = withIndexObservation((db) => detectorPrecision(readLedgerRecords(db), Date.now()));
+  anchors.push(precisionObservation.anchor);
+  report.detectorPrecision = precisionObservation.value;
   withDb((db) => {
     const key = healthReportCacheKey(db, cacheOptions, cliVersion);
     if (key) writeHealthReportCache(db, key, report);
   });
-  return report;
+  return {
+    result: report,
+    observationReceipt: operationObservationReceipt(
+      anchors,
+      runnableMessages.map((message) => message.observationReceipt),
+      ['index-generation', 'live-workspace'],
+    ),
+  };
 }
 
 function healthPhaseApplicability(db: ScipDatabase, opts: HealthCliOptions) {
@@ -507,8 +588,13 @@ function runHealthPhaseTaskProcess(
   phases: HealthPhaseTask,
   opts: HealthCliOptions,
   timeoutMs: number | undefined,
-): Promise<HealthPhaseResultWithMeta[]> {
-  if (phases.length === 1) return runHealthPhaseProcess(phases[0]!, opts, timeoutMs).then((result) => [result]);
+): Promise<IsolatedAnalysisResult<HealthPhaseResultWithMeta[]>> {
+  if (phases.length === 1) {
+    return runHealthPhaseProcess(phases[0]!, opts, timeoutMs).then((message) => ({
+      result: [message.result],
+      ...(message.observationReceipt ? { observationReceipt: message.observationReceipt } : {}),
+    }));
+  }
 
   const phaseArg = phases.join(',');
   const cliPath = process.argv[1] ?? fileURLToPath(import.meta.url);
@@ -516,7 +602,7 @@ function runHealthPhaseTaskProcess(
   if (opts.scope) args.push('--scope', opts.scope);
   if (opts.full) args.push('--full');
 
-  return runIsolatedJsonProcessAsync<HealthPhaseResult[]>({
+  return runIsolatedJsonProcessWithEvidenceAsync<HealthPhaseResult[]>({
     cliPath,
     command: HEALTH_PHASE_COMMAND,
     args,
@@ -524,9 +610,11 @@ function runHealthPhaseTaskProcess(
     timeoutMs,
   }).catch((error) => {
     if (opts.full || !(error instanceof IsolatedProcessTimeoutError)) throw error;
-    return phases.map((phase) =>
-      deferredHealthPhaseResult(phase, error.timeoutMs, `timed out after ${error.timeoutMs}ms`),
-    );
+    return {
+      result: phases.map((phase) =>
+        deferredHealthPhaseResult(phase, error.timeoutMs, `timed out after ${error.timeoutMs}ms`),
+      ),
+    };
   });
 }
 
@@ -534,13 +622,13 @@ function runHealthPhaseProcess(
   phase: HealthPhaseName,
   opts: HealthCliOptions,
   timeoutMs: number | undefined,
-): Promise<HealthPhaseResultWithMeta> {
+): Promise<IsolatedAnalysisResult<HealthPhaseResultWithMeta>> {
   const cliPath = process.argv[1] ?? fileURLToPath(import.meta.url);
   const args: string[] = [phase];
   if (opts.scope) args.push('--scope', opts.scope);
   if (opts.full) args.push('--full');
 
-  return runIsolatedJsonProcessAsync<HealthPhaseResult>({
+  return runIsolatedJsonProcessWithEvidenceAsync<HealthPhaseResult>({
     cliPath,
     command: HEALTH_PHASE_COMMAND,
     args,
@@ -548,7 +636,9 @@ function runHealthPhaseProcess(
     timeoutMs,
   }).catch((error) => {
     if (opts.full || !(error instanceof IsolatedProcessTimeoutError)) throw error;
-    return deferredHealthPhaseResult(phase, error.timeoutMs, `timed out after ${error.timeoutMs}ms`);
+    return {
+      result: deferredHealthPhaseResult(phase, error.timeoutMs, `timed out after ${error.timeoutMs}ms`),
+    };
   });
 }
 
@@ -781,7 +871,13 @@ function renderHealthAxes(report: HealthReport): void {
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export async function runIsolatedDiffImpactReport(opts: DiffImpactCliOptions): Promise<DiffImpactResult> {
-  const plan = withDb((db) => {
+  return (await runIsolatedDiffImpactReportWithEvidence(opts)).result;
+}
+
+export async function runIsolatedDiffImpactReportWithEvidence(
+  opts: DiffImpactCliOptions,
+): Promise<EvidenceBoundAnalysis<DiffImpactResult>> {
+  const planObservation = withIndexObservation((db) => {
     const plan = queries.diffImpactPlan(db, { base: opts.base });
     if (plan.note) {
       return { kind: 'complete' as const, result: queries.diffImpact(db, { base: opts.base }) };
@@ -791,14 +887,34 @@ export async function runIsolatedDiffImpactReport(opts: DiffImpactCliOptions): P
     }
     return { kind: 'batched' as const, plan };
   });
+  const plan = planObservation.value;
 
-  if (plan.kind === 'complete') return plan.result;
+  if (plan.kind === 'complete') {
+    return {
+      result: plan.result,
+      observationReceipt: operationObservationReceipt(
+        [planObservation.anchor],
+        [],
+        ['index-generation', 'live-workspace'],
+      ),
+    };
+  }
 
   const batches = chunked(plan.plan.changedFiles, DIFF_IMPACT_BATCH_SIZE);
   const partials = await runAnalysisTasks(batches, diffImpactBatchConcurrency(batches.length), (batch) =>
     runDiffImpactBatchProcess(batch, opts),
   );
-  return queries.mergeDiffImpactPartials(plan.plan.changedFiles, partials);
+  return {
+    result: queries.mergeDiffImpactPartials(
+      plan.plan.changedFiles,
+      partials.map((partial) => partial.result),
+    ),
+    observationReceipt: operationObservationReceipt(
+      [planObservation.anchor],
+      partials.map((partial) => partial.observationReceipt),
+      ['index-generation', 'live-workspace'],
+    ),
+  };
 }
 
 // scip-query: ignore-similar — parallel to healthPhaseConcurrency by design:
@@ -840,12 +956,15 @@ function defaultAdaptiveConcurrency(
   return Math.min(opts.defaultMaximum, Math.max(opts.defaultMinimum, adaptive));
 }
 
-function runDiffImpactBatchProcess(files: readonly string[], opts: DiffImpactCliOptions): Promise<DiffImpactPartial> {
+function runDiffImpactBatchProcess(
+  files: readonly string[],
+  opts: DiffImpactCliOptions,
+): Promise<IsolatedAnalysisResult<DiffImpactPartial>> {
   const cliPath = process.argv[1] ?? fileURLToPath(import.meta.url);
   const args: string[] = [];
   if (opts.base) args.push('--base', opts.base);
 
-  return runIsolatedJsonProcessAsync<DiffImpactPartial>({
+  return runIsolatedJsonProcessWithEvidenceAsync<DiffImpactPartial>({
     cliPath,
     command: DIFF_IMPACT_BATCH_COMMAND,
     args,

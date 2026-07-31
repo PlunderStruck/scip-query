@@ -46,20 +46,23 @@ two existing materializers. The current default candidate loader calls
 calls `getDefinitionsForFile()` once per file. The source evidence is:
 
 - `scip-query code runHealthSemanticPrewarm`
-- `scip-query code 'src/runtime/cli-support.ts:227-241'`
+- `scip-query code 'src/runtime/cli-support.ts:242-256'`
 - `scip-query code scopedDefinitions`
 - `scip-query code 'src/symbols/definition-catalog.ts:342-379'`
 - `scip-query code getDefinitionsForFile`
 - `scip-query code computeDefinitionsForFile`
 
-2026-07-23 verification: the anchored `src/runtime/cli-support.ts:227-241`
+2026-07-30 verification: the anchored `src/runtime/cli-support.ts:242-256`
 reference names `DEFAULT_HEALTH_SEMANTIC_PREWARM_RUNTIME` and its bulk
 candidate-definition path. The later health capability-disclosure change only
 affects command rendering after the cached detector report is assembled.
 The subsequent candidate-language correction also changes only rendering; the
-anchored prewarm runtime remains at the cited lines with the same behavior.
+anchored prewarm runtime remains at the updated lines with the same behavior.
 The architecture-coherence change adds one zero-valued field to deferred drift
 output later in the file and does not change prewarm selection or caching.
+The claim-qualification change adds observation receipts to isolated child
+results after analysis and does not change candidate selection or cache
+identity.
 
 2026-07-28 verification: the scoped set-oriented path remains at
 `src/symbols/definition-catalog.ts:342-379`. Repeated calls with the same

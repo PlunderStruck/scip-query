@@ -11,6 +11,7 @@ import type {
   CommandHandler,
   InvocationCoverage,
 } from './command-descriptor-types.js';
+import { deriveClaimQualification, type CommandClaimContract } from '../claim-qualification.js';
 import { currentCliDatabase, withDb } from '../cli-context.js';
 import {
   cliVersion,
@@ -25,7 +26,7 @@ import {
   serializeCliJsonEnvelope,
   type CliEvidenceContextV1,
 } from '../cli-json-envelope.js';
-import { buildObservationReceipt } from '../observation-receipt.js';
+import { buildObservationReceipt, type ObservationReceiptV2 } from '../observation-receipt.js';
 import { render, writeSerializedJson } from '../render.js';
 import type { ReportSection } from '../render.js';
 
@@ -37,6 +38,7 @@ type CommandOptionsWithSources = CommandOptions & {
 
 let commandEvidenceById = new Map<string, CommandEvidenceTier>();
 let commandAgentContractById = new Map<string, CommandAgentContract>();
+let commandClaimContractById = new Map<string, CommandClaimContract>();
 const commandOperationStorage = new AsyncLocalStorage<CommandOperationRole>();
 
 /**
@@ -53,6 +55,10 @@ export function setCommandEvidenceMap(entries: ReadonlyMap<string, CommandEviden
 
 export function setCommandAgentContractMap(entries: ReadonlyMap<string, CommandAgentContract>): void {
   commandAgentContractById = new Map(entries);
+}
+
+export function setCommandClaimContractMap(entries: ReadonlyMap<string, CommandClaimContract>): void {
+  commandClaimContractById = new Map(entries);
 }
 
 export interface DbCommandContext {
@@ -373,10 +379,12 @@ export function printJsonEnvelope(
     agentResult?: unknown;
     resultSchemaVersion?: number;
     resultOnly?: unknown;
+    observationReceipt?: ObservationReceiptV2;
   } = {},
 ): void {
   const evidence = commandEvidenceById.get(command);
   const contract = commandAgentContractById.get(command);
+  const claimContract = commandClaimContractById.get(command);
   const declaredOperationRole = contract
     ? resolveCommandOperationRole(contract.operation, { args, options })
     : undefined;
@@ -412,7 +420,14 @@ export function printJsonEnvelope(
     result,
     ...(coverage ? { coverage } : {}),
     ...(extra.agentResult !== undefined ? { agentResult: extra.agentResult } : {}),
-    ...optionalEvidenceContext(operationRole, evidence, extra.analysisBudget, coverage),
+    ...optionalEvidenceContext(
+      operationRole,
+      evidence,
+      extra.analysisBudget,
+      coverage,
+      claimContract,
+      extra.observationReceipt,
+    ),
     ...(extra.resultSchemaVersion === undefined ? {} : { resultSchemaVersion: extra.resultSchemaVersion }),
   });
   writeSerializedJson(serializeCliJsonEnvelope(envelope, booleanOptionValue(options, 'compact')));
@@ -423,23 +438,40 @@ function optionalEvidenceContext(
   evidence: CommandEvidenceTier | undefined,
   analysisBudget: AnalysisBudgetDisclosure | undefined,
   coverage: InvocationCoverage | undefined,
+  claimContract: CommandClaimContract | undefined,
+  suppliedReceipt: ObservationReceiptV2 | undefined,
 ): { evidenceContext?: CliEvidenceContextV1 } {
   if (!operationRole || !operationObservesRepository(operationRole)) return {};
   const db = currentCliDatabase();
-  if (!db) return {};
+  const receipt =
+    suppliedReceipt ??
+    (db
+      ? buildObservationReceipt({
+          projectRoot: db.config.projectRoot,
+          db,
+          ...(claimContract ? { observedSourceKinds: claimContract.observedSources } : {}),
+        })
+      : undefined);
+  if (!receipt) return {};
   return {
     evidenceContext: {
       schemaVersion: CLI_EVIDENCE_CONTEXT_SCHEMA_VERSION,
       operationRole,
-      receipt: buildObservationReceipt({
-        projectRoot: db.config.projectRoot,
-        db,
-      }),
+      receipt,
       analysisManifest: {
         schemaVersion: CLI_ANALYSIS_MANIFEST_SCHEMA_VERSION,
         ...(evidence ? { evidence } : {}),
         ...(analysisBudget ? { analysisBudget } : {}),
         ...(coverage ? { coverage } : {}),
+        ...(claimContract
+          ? {
+              claimQualification: deriveClaimQualification({
+                contract: claimContract,
+                receipt,
+                ...(coverage ? { coverage } : {}),
+              }),
+            }
+          : {}),
       },
     },
   };

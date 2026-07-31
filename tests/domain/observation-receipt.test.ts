@@ -1,4 +1,8 @@
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   compareObservationReceipts,
@@ -79,6 +83,71 @@ describe('observation receipts', () => {
     });
     expect(receipt.facts).not.toHaveProperty('wholeContent');
     expect(isObservationReceipt(receipt)).toBe(true);
+  });
+
+  it('records only the state sources declared by the evidence producer', () => {
+    const receipt = buildObservationReceipt({
+      projectRoot: '/repo',
+      collaborationDomainId: '5ea57d1a-936c-4c91-b58f-5d61e45173a5',
+      db: {
+        config: {
+          projectRoot: '/repo',
+          dbPath: '/cache/index.db',
+          indexPath: '/cache/index.scip',
+        },
+        generation: {
+          identity: 'generation-a',
+          databasePath: '/cache/generation-a/index.db',
+          source: 'immutable',
+        },
+      },
+      gitContext: {
+        projectRoot: '/repo',
+        gitDir: '/repo/.git',
+        commonDir: '/repo/.git',
+        repositoryId: 'repository-a',
+        worktreeId: 'worktree-a',
+        headCommit: 'head-a',
+        treeOid: 'tree-a',
+        clean: false,
+      },
+      observedSourceKinds: ['index-generation'],
+    });
+
+    expect(receipt.observedSources).toEqual([
+      {
+        kind: 'index-generation',
+        identity: expect.objectContaining({ projection: { name: 'scip-query:index-generation', version: 1 } }),
+      },
+    ]);
+    expect(receipt.stabilityProofs).toEqual([{ source: 'index-generation', kind: 'immutable' }]);
+  });
+
+  it('resolves live-workspace identity only when the producer declares that source', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-receipt-source-'));
+    try {
+      execFileSync('git', ['-C', projectRoot, 'init'], { stdio: 'ignore' });
+
+      const receipt = buildObservationReceipt({
+        projectRoot,
+        observedSourceKinds: ['live-workspace'],
+      });
+
+      expect(receipt.facts.workspaceInstance).toMatchObject({
+        projection: { name: 'scip-query:workspace-instance', version: 1 },
+      });
+      expect(receipt.observedSources).toEqual([
+        {
+          kind: 'live-workspace',
+          identity: expect.objectContaining({
+            projection: { name: 'scip-query:workspace-instance', version: 1 },
+          }),
+        },
+      ]);
+      expect(receipt.stabilityProofs).toEqual([{ source: 'live-workspace', kind: 'not-established' }]);
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
   });
 
   it('establishes equal content across separate clones without equating their workspaces', () => {

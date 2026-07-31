@@ -18,9 +18,10 @@ classifies an input as:
   invalid field in a recognized version.
 
 The decoder shares only dependency-free object-record, timestamp,
-scalar-number, bounded one-line string, and string-or-null-record predicates in
-`src/domain/record-validation.ts`; moving those generic primitives out of
-individual decoders does not change any version or capability decision.
+scalar-number, non-empty string, bounded one-line string, and
+string-or-null-record predicates in `src/domain/record-validation.ts`; moving
+those generic primitives out of individual decoders does not change any
+version or capability decision.
 
 No consumer may cast an unsupported or malformed record to the current model.
 The decoder returns the original accepted v2/v3 object, so an authorized

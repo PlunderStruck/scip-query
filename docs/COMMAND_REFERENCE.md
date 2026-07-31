@@ -191,3 +191,6 @@ subprocess; standalone command behavior is unchanged.
 The setup-scope follow-up rechecked this implementation citation; extracting
 shared hook outcome recording changed imports in the same runtime module but
 did not change the `co-change` budget boundary described here.
+The 2026-07-30 claim-qualification change adds descriptor-owned provenance to
+the same `co-change` command without changing `budgetedDbCommand`, its
+`scanLimit`, or the history snapshot passed to the query.

@@ -231,7 +231,7 @@ Before the program can be marked complete:
 ## Live progress
 
 - [x] Phase 0: automatic version-1 evidence context.
-- [ ] Phase 1: evidence foundation.
+- [x] Phase 1: evidence foundation.
 - [ ] Phase 2: durable autonomous state.
 - [ ] Phase 3: protected completion.
 - [ ] Phase 4: repository completeness.

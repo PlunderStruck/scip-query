@@ -343,6 +343,17 @@ describe('CLI contract', () => {
       command: 'plan-context <target>',
       category: 'Planning',
     });
+    const mixed = docs.filter((entry) => entry.claims.origin === 'mixed');
+    expect(mixed.map((entry) => entry.id).sort()).toEqual([
+      'architecture',
+      'co-change',
+      'diff-gate',
+      'diff-impact',
+      'health',
+      'plan-context',
+      'work-audit',
+    ]);
+    expect(mixed.every((entry) => (entry.claims.families?.length ?? 0) > 0)).toBe(true);
   });
 
   it('keeps public command references descriptor-backed', () => {
@@ -688,9 +699,15 @@ describe('CLI contract', () => {
   it('runs the visible health command in full mode only when --full is supplied', () => {
     const source = readFileSync(join(process.cwd(), 'src/runtime/commands/command-handlers.ts'), 'utf8');
 
-    expect(source).toContain('const report = await runIsolatedHealthReport({');
+    expect(source).toContain('const analysis = await runIsolatedHealthReportWithEvidence({');
     expect(source).toMatch(
-      /runIsolatedHealthReport\(\{\s*scope: stringOptionValue\(opts, 'scope'\),\s*full: booleanOptionValue\(opts, 'full'\),/,
+      /runIsolatedHealthReportWithEvidence\(\{\s*scope: stringOptionValue\(opts, 'scope'\),\s*full: booleanOptionValue\(opts, 'full'\),/,
+    );
+    expect(source).toMatch(
+      /printJsonEnvelope\('health', \[\], opts, disclosedReport, \{\s*observationReceipt: analysis\.observationReceipt,/,
+    );
+    expect(source).toMatch(
+      /printJsonEnvelope\('diff-impact', \[\], opts, analysis\.result, \{\s*observationReceipt: analysis\.observationReceipt,/,
     );
   });
 

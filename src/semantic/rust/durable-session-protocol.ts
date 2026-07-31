@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import {
   isNonNegativeFiniteNumber,
   isNonNegativeInteger,
+  isNonEmptyString,
   isPositiveInteger,
   isRecordObject,
   isStringOrNullRecord,
@@ -382,8 +383,8 @@ function decodeDurableRustSessionRequest(value: unknown): DurableRustSessionRequ
 function isRustReferenceWorkerRequest(value: unknown): value is RustReferenceWorkerRequest {
   if (
     !isRecordObject(value) ||
-    !nonEmptyString(value.projectRoot) ||
-    !nonEmptyString(value.rustAnalyzerBinary) ||
+    !isNonEmptyString(value.projectRoot) ||
+    !isNonEmptyString(value.rustAnalyzerBinary) ||
     !isIndexedDefinitionArray(value.definitions)
   ) {
     return false;
@@ -407,15 +408,15 @@ function isRustReferenceWorkerRequest(value: unknown): value is RustReferenceWor
 function isRustImportDefinitionWorkerRequest(value: unknown): value is RustImportDefinitionWorkerRequest {
   if (
     !isRecordObject(value) ||
-    !nonEmptyString(value.projectRoot) ||
-    !nonEmptyString(value.rustAnalyzerBinary) ||
-    !nonEmptyString(value.file) ||
+    !isNonEmptyString(value.projectRoot) ||
+    !isNonEmptyString(value.rustAnalyzerBinary) ||
+    !isNonEmptyString(value.file) ||
     !Array.isArray(value.positions) ||
     !value.positions.every(
       (position) =>
         isRecordObject(position) &&
-        nonEmptyString(position.id) &&
-        nonEmptyString(position.file) &&
+        isNonEmptyString(position.id) &&
+        isNonEmptyString(position.file) &&
         isNonNegativeInteger(position.line) &&
         isNonNegativeInteger(position.column),
     )
@@ -556,10 +557,6 @@ function incompatibleResponse(error: string): Extract<DurableRustMailboxResponse
 
 function isSha256(value: string): boolean {
   return /^[a-f0-9]{64}$/.test(value);
-}
-
-function nonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0;
 }
 
 function optionalPositiveInteger(value: unknown): boolean {

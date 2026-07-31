@@ -105,8 +105,8 @@ import {
   cliVersion,
   renderDiffImpactReport,
   renderHealthReport,
-  runIsolatedDiffImpactReport,
-  runIsolatedHealthReport,
+  runIsolatedDiffImpactReportWithEvidence,
+  runIsolatedHealthReportWithEvidence,
 } from '../cli-support.js';
 import {
   booleanOptionValue,
@@ -277,12 +277,14 @@ export function handleDiffGateRun(): void {
 export async function handleDiffImpact(rawOpts: unknown): Promise<void> {
   const opts = commandOptions(rawOpts);
   try {
-    const result = await runIsolatedDiffImpactReport({ base: stringOptionValue(opts, 'base') });
+    const analysis = await runIsolatedDiffImpactReportWithEvidence({ base: stringOptionValue(opts, 'base') });
     if (booleanOptionValue(opts, 'json')) {
-      printJsonEnvelope('diff-impact', [], opts, result);
+      printJsonEnvelope('diff-impact', [], opts, analysis.result, {
+        observationReceipt: analysis.observationReceipt,
+      });
       return;
     }
-    renderDiffImpactReport(result);
+    renderDiffImpactReport(analysis.result);
   } catch (err) {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exit(1);
@@ -322,7 +324,7 @@ export async function handleHealth(rawOpts: unknown): Promise<void> {
     return;
   }
   try {
-    const report = await runIsolatedHealthReport({
+    const analysis = await runIsolatedHealthReportWithEvidence({
       scope: stringOptionValue(opts, 'scope'),
       full: booleanOptionValue(opts, 'full'),
       json: booleanOptionValue(opts, 'json'),
@@ -331,9 +333,11 @@ export async function handleHealth(rawOpts: unknown): Promise<void> {
     const capabilities = getProjectCapabilities(getProjectReadiness(projectRoot, config), {
       hasIndexedGraph: existsSync(dbPath),
     });
-    const disclosedReport = discloseHealthCapabilities(report, capabilities);
+    const disclosedReport = discloseHealthCapabilities(analysis.result, capabilities);
     if (booleanOptionValue(opts, 'json')) {
-      printJsonEnvelope('health', [], opts, disclosedReport);
+      printJsonEnvelope('health', [], opts, disclosedReport, {
+        observationReceipt: analysis.observationReceipt,
+      });
       return;
     }
     renderHealthReport(disclosedReport);

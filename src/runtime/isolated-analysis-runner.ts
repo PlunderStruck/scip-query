@@ -3,6 +3,9 @@ import { BoundedProcessError, PROCESS_TIMEOUT_MS, runBoundedProcess } from '../p
 import { cliVersion } from '../platform/cli-version.js';
 import { isRecordObject } from '../domain/record-validation.js';
 import { writeSerializedJson } from '../platform/terminal-output.js';
+import { isObservationReceipt, type ObservationReceiptV2 } from '../domain/observation-receipt.js';
+import { currentCliDatabase } from './cli-context.js';
+import { buildObservationReceipt } from './observation-receipt.js';
 
 export const ISOLATED_ANALYSIS_PROTOCOL = 'scip-query-isolated-analysis' as const;
 export const ISOLATED_ANALYSIS_SCHEMA_VERSION = 1 as const;
@@ -13,6 +16,12 @@ interface IsolatedAnalysisEnvelope<T> {
   producer: { name: 'scip-query'; version: string };
   command: string;
   result: T;
+  observationReceipt?: ObservationReceiptV2;
+}
+
+export interface IsolatedAnalysisResult<T> {
+  result: T;
+  observationReceipt?: ObservationReceiptV2;
 }
 
 interface IsolatedJsonProcessOptions {
@@ -44,12 +53,22 @@ export class IsolatedProcessTimeoutError extends Error {
 }
 
 export function printIsolatedAnalysisResult(command: string, result: unknown): void {
+  const db = currentCliDatabase();
   const envelope: IsolatedAnalysisEnvelope<unknown> = {
     protocol: ISOLATED_ANALYSIS_PROTOCOL,
     schemaVersion: ISOLATED_ANALYSIS_SCHEMA_VERSION,
     producer: { name: 'scip-query', version: cliVersion },
     command,
     result,
+    ...(db
+      ? {
+          observationReceipt: buildObservationReceipt({
+            projectRoot: db.config.projectRoot,
+            db,
+            observedSourceKinds: ['index-generation'],
+          }),
+        }
+      : {}),
   };
   writeSerializedJson(JSON.stringify(envelope));
 }
@@ -77,7 +96,7 @@ export function runIsolatedJsonProcess<T>(opts: IsolatedJsonProcessOptions): T {
     const stderr = result.stderr.trim();
     throw new Error(`${opts.label} failed${stderr ? `:\n${stderr}` : ''}`);
   }
-  return parseIsolatedAnalysisResult<T>(result.stdout, opts);
+  return parseIsolatedAnalysisResult<T>(result.stdout, opts).result;
 }
 
 // scip-query: ignore-wrapper — batch helper owned by the isolated analysis
@@ -91,6 +110,12 @@ export function chunked<T>(items: readonly T[], size: number): T[][] {
 }
 
 export function runIsolatedJsonProcessAsync<T>(opts: IsolatedJsonProcessOptions): Promise<T> {
+  return runIsolatedJsonProcessWithEvidenceAsync<T>(opts).then((message) => message.result);
+}
+
+export function runIsolatedJsonProcessWithEvidenceAsync<T>(
+  opts: IsolatedJsonProcessOptions,
+): Promise<IsolatedAnalysisResult<T>> {
   const timeoutMs = opts.timeoutMs ?? PROCESS_TIMEOUT_MS.analysis;
   const maxBuffer = opts.maxBuffer ?? 10 * 1024 * 1024;
   return runBoundedProcess({
@@ -109,7 +134,7 @@ export function runIsolatedJsonProcessAsync<T>(opts: IsolatedJsonProcessOptions)
       }
       throw error;
     })
-    .then((result): T => {
+    .then((result): IsolatedAnalysisResult<T> => {
       const stderrText = result.stderr.trim();
       if (result.status !== 0) {
         throw new Error(`${opts.label} failed${stderrText ? `:\n${stderrText}` : ''}`);
@@ -118,7 +143,7 @@ export function runIsolatedJsonProcessAsync<T>(opts: IsolatedJsonProcessOptions)
     });
 }
 
-function parseIsolatedAnalysisResult<T>(stdout: string, opts: IsolatedJsonProcessOptions): T {
+function parseIsolatedAnalysisResult<T>(stdout: string, opts: IsolatedJsonProcessOptions): IsolatedAnalysisResult<T> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(stdout);
@@ -151,7 +176,17 @@ function parseIsolatedAnalysisResult<T>(stdout: string, opts: IsolatedJsonProces
   if (!Object.hasOwn(parsed, 'result')) {
     throw new Error(`${opts.label} omitted the isolated-analysis result.`);
   }
-  return parsed['result'] as T;
+  const observationReceipt = parsed['observationReceipt'];
+  if (
+    observationReceipt !== undefined &&
+    (!isObservationReceipt(observationReceipt) || observationReceipt.schemaVersion !== 2)
+  ) {
+    throw new Error(`${opts.label} returned an invalid observation receipt.`);
+  }
+  return {
+    result: parsed['result'] as T,
+    ...(observationReceipt ? { observationReceipt } : {}),
+  };
 }
 
 function isScipQueryProducer(value: unknown): boolean {

@@ -69,6 +69,20 @@ describe('code CLI output contract', () => {
         },
         analysisManifest: {
           schemaVersion: 1,
+          claimQualification: {
+            schemaVersion: 1,
+            origin: 'compiler-graph',
+            coverage: {
+              state: 'complete',
+              returned: 1,
+              totalKnown: true,
+              total: 1,
+              omitted: 0,
+            },
+            producerValidation: { status: 'not-evaluated' },
+            stateAuthority: { authority: 'advisory' },
+            repositoryPolicy: { permission: 'not-established' },
+          },
         },
       },
       result: {
