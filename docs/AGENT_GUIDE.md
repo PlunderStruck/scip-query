@@ -40,6 +40,9 @@ For analyzer implementation work, follow [Regex Policy](REGEX_POLICY.md): regex 
    `.scipquery/attempts/*.json`, `.scipquery/decisions/*.json`,
    `.scipquery/obligations/*.json`,
    `.scipquery/obligation-transitions/*.json`,
+   `.scipquery/completion-contexts/*.json`,
+   `.scipquery/completion-evaluations/*.json`,
+   `.scipquery/completion-transitions/*.json`,
    `.scipquery/suppressions/*.json`, `.scipquery/events/*.json`, and the legacy
    `.scipquery/ledger/` when a work-state or gate operation changes them.
    Checkout preferences configure only one clone, so do

@@ -554,6 +554,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     renderShape: 'custom',
     docs: doc('Autonomous work state', [
       'scip-query completion status SQC-0123456789ABCDEF0123456789ABCDEF --json',
+      'scip-query completion read SQCX-0123456789ABCDEF0123456789ABCDEF',
       'scip-query completion read SQE-0123456789ABCDEF0123456789ABCDEF',
       'scip-query completion validate .scipquery/completion-transitions/SQCT-....json',
     ]),

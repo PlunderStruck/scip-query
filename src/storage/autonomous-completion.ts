@@ -18,12 +18,20 @@ import {
   type CompletionTransitionRecordV1,
 } from '../domain/autonomous-completion.js';
 import {
+  COMPLETION_CONTEXT_RECORD_KIND,
+  decodeCompletionContextSnapshotRecord,
+  isCompletionContextSnapshotId,
+  type CompletionContextSnapshotRecordV1,
+} from '../domain/autonomous-completion-context.js';
+import { isRecordObject } from '../domain/record-validation.js';
+import {
   createObservationIdentity,
   observationReceiptStabilityLabel,
   type ObservationReceiptV2,
 } from '../domain/observation-receipt.js';
 import { stableJson } from '../domain/stable-json.js';
 import { readObligationLifecycle, type ObligationLifecycleReadResult } from './autonomous-work-obligations.js';
+import { readCompletionContextSnapshotFile, readCompletionContextSnapshots } from './autonomous-completion-context.js';
 import {
   parseRecordFile,
   publishWorkStateRecord,
@@ -52,6 +60,7 @@ export interface CompletionCollectionReadResult<RecordType> extends WorkStateCol
 }
 
 export interface CompletionHistoryReadResult {
+  contexts: ReturnType<typeof readCompletionContextSnapshots>;
   evaluations: CompletionCollectionReadResult<CompletionEvaluationRecordV1>;
   transitions: CompletionCollectionReadResult<CompletionTransitionRecordV1>;
   summary: CompletionHistorySummary;
@@ -83,6 +92,7 @@ export function createCompletionEvaluationFiles(
   if (change.goalId !== request.goalId) {
     throw new Error(`intended change ${request.changeId} is governed by goal ${change.goalId}, not ${request.goalId}`);
   }
+  validateStoredEvaluationContext(projectRoot, collaborationDomainId, request);
   const createdAt = (options.now ?? workStateNow)();
   validateRepositoryPredicates(
     collaborationDomainId,
@@ -155,8 +165,14 @@ export function readCompletionTransitionRecordFile(
   );
 }
 
-export function readCompletionRecordPath(path: string): ReturnType<typeof decodeCompletionRecord> {
-  return parseRecordFile(path, 'completion record', decodeCompletionRecord);
+export function readCompletionRecordPath(path: string) {
+  return parseRecordFile<
+    CompletionContextSnapshotRecordV1 | CompletionEvaluationRecordV1 | CompletionTransitionRecordV1
+  >(path, 'completion record', (value) =>
+    isRecordObject(value) && value['kind'] === COMPLETION_CONTEXT_RECORD_KIND
+      ? decodeCompletionContextSnapshotRecord(value)
+      : decodeCompletionRecord(value),
+  );
 }
 
 export function readCompletionEvaluations(
@@ -182,6 +198,14 @@ export function readCompletionEvaluations(
       }
       if (change.collaborationDomainId !== record.collaborationDomainId) {
         issues.push(`${record.evaluationId} and change ${record.changeId} belong to different collaboration domains`);
+      }
+    }
+    if (isCompletionContextSnapshotId(record.context.policyId)) {
+      const context = readCompletionContextSnapshotFile(projectRoot, record.context.policyId);
+      if (context.state !== 'current') {
+        issues.push(`${record.evaluationId} references missing completion context ${record.context.policyId}`);
+      } else {
+        issues.push(...evaluationContextIssues(record, context.record));
       }
     }
     if (
@@ -229,6 +253,7 @@ export function readCompletionTransitions(
 }
 
 export function readCompletionHistory(projectRoot: string, changeId?: string): CompletionHistoryReadResult {
+  const contexts = readCompletionContextSnapshots(projectRoot);
   const goals = readGoalRecords(projectRoot);
   const changes = readIntendedChangeRecords(projectRoot, goals);
   const evaluations = readCompletionEvaluations(projectRoot);
@@ -252,6 +277,7 @@ export function readCompletionHistory(projectRoot: string, changeId?: string): C
         `${obligation.obligation.changeId} is complete but obligation ${obligation.obligation.obligationId} is live`,
     );
   const integrityIssues = [
+    ...contexts.integrityIssues,
     ...changes.integrityIssues,
     ...(changeId && selectedChanges.length === 0
       ? [`intended change ${changeId} is not a readable current record`]
@@ -266,6 +292,7 @@ export function readCompletionHistory(projectRoot: string, changeId?: string): C
     ...liveAfterCompletion,
   ];
   return {
+    contexts,
     evaluations,
     transitions,
     summary,
@@ -277,6 +304,61 @@ export function readCompletionHistory(projectRoot: string, changeId?: string): C
     },
     integrityIssues: [...new Set(integrityIssues)].sort(),
   };
+}
+
+function validateStoredEvaluationContext(
+  projectRoot: string,
+  collaborationDomainId: string,
+  request: CompletionEvaluationRequest,
+): void {
+  if (!isCompletionContextSnapshotId(request.context.policyId)) return;
+  const context = readCompletionContextSnapshotFile(projectRoot, request.context.policyId);
+  if (context.state !== 'current') {
+    throw new Error(`completion context ${request.context.policyId} is not a readable current record`);
+  }
+  if (context.record.collaborationDomainId !== collaborationDomainId) {
+    throw new Error(`completion context ${request.context.policyId} belongs to another collaboration domain`);
+  }
+  const issues = evaluationContextRequestIssues(request, context.record);
+  if (issues.length > 0) throw new Error(issues.join('; '));
+}
+
+function evaluationContextRequestIssues(
+  request: CompletionEvaluationRequest,
+  context: CompletionContextSnapshotRecordV1,
+): string[] {
+  return [
+    ...(request.changeId !== context.changeId ? ['completion context names a different intended change'] : []),
+    ...(request.goalId !== context.goalId ? ['completion context names a different goal'] : []),
+    ...(request.context.policyVersion !== context.policy.policyVersion
+      ? ['completion context policy version does not match the evaluation']
+      : []),
+    ...(request.context.evaluatorId !== context.evaluator.evaluatorId
+      ? ['completion context evaluator does not match the evaluation']
+      : []),
+    ...(request.context.evaluatorVersion !== context.evaluator.buildIdentity
+      ? ['completion context evaluator build does not match the evaluation']
+      : []),
+    ...(stableJson(request.context.targetObservation) !== stableJson(context.targetObservation)
+      ? ['completion context target observation does not match the evaluation']
+      : []),
+  ];
+}
+
+function evaluationContextIssues(
+  evaluation: CompletionEvaluationRecordV1,
+  context: CompletionContextSnapshotRecordV1,
+): string[] {
+  return evaluationContextRequestIssues(
+    {
+      changeId: evaluation.changeId,
+      goalId: evaluation.goalId,
+      idempotencyKey: 'integrity-check',
+      context: evaluation.context,
+      predicates: evaluation.predicates,
+    },
+    context,
+  ).map((issue) => `${evaluation.evaluationId}: ${issue}`);
 }
 
 function validateRepositoryPredicates(

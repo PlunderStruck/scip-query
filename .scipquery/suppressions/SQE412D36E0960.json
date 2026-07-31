@@ -1,25 +1,24 @@
 {
   "kind": "scip-query-suppression",
-  "suppressionIdentity": "SQB26525BAEF6A",
+  "suppressionIdentity": "SQE412D36E0960",
   "writer": {
     "tool": "scip-query",
     "version": "0.20.0"
   },
-  "id": "SQB26525BAEF6A",
-  "check": "co-change-partner",
-  "file": "src/runtime/agent-hooks.ts",
-  "reason": "The stop hook is registered directly by command-descriptors and implemented in agent-hooks; command-handlers has no completion-controller consumer, while hook tests cover the changed boundary and all reported historical co-edits were broad sweeps.",
-  "createdAt": "2026-07-31T02:21:40.222Z",
-  "updatedAt": "2026-07-31T06:41:25.140Z",
+  "id": "SQE412D36E0960",
+  "check": "echo",
+  "file": "src/storage/autonomous-completion-context.ts",
+  "reason": "This typed adapter already delegates durable publication to publishWorkStateRecord and must retain completion-context construction, identity, and collision semantics; further extraction would combine distinct record meanings.",
+  "createdAt": "2026-07-31T06:40:27.168Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
-    "reasonCode": "historical-coupling-ended",
+    "reasonCode": "detector-counterexample",
     "decidedBy": "agent",
     "policyVersion": 1,
     "observation": {
       "schemaVersion": 2,
-      "observedAt": "2026-07-31T06:41:25.132Z",
+      "observedAt": "2026-07-31T06:40:27.161Z",
       "facts": {
         "collaborationDomain": {
           "schemaVersion": 1,
@@ -49,7 +48,7 @@
             "name": "scip-query:repository-content",
             "version": 1
           },
-          "digest": "d68290dff55e65324f9bd706b3085edc1df258b04f50c108464e70dfb070da56"
+          "digest": "ab9ea355a61d554ded24cdf50128c1c11572631859261c2029dcb8ecbca8ec75"
         },
         "relevantInputs": [
           {
@@ -114,7 +113,7 @@
               "name": "scip-query:repository-content",
               "version": 1
             },
-            "digest": "d68290dff55e65324f9bd706b3085edc1df258b04f50c108464e70dfb070da56"
+            "digest": "ab9ea355a61d554ded24cdf50128c1c11572631859261c2029dcb8ecbca8ec75"
           }
         }
       ],
@@ -137,21 +136,15 @@
     "evidence": [
       {
         "kind": "source",
-        "referent": "src/runtime/agent-hooks.ts",
-        "claim": "The stop hook is registered directly by command-descriptors and implemented in agent-hooks; command-handlers has no completion-controller consumer, while hook tests cover the changed boundary and all reported historical co-edits were broad sweeps.",
-        "contentHash": "c5f063fd6c851ae5064b9280ed66f6c40ff589191076a5cf56f6336451e9d6f0"
+        "referent": "src/storage/autonomous-completion-context.ts",
+        "claim": "This typed adapter already delegates durable publication to publishWorkStateRecord and must retain completion-context construction, identity, and collision semantics; further extraction would combine distinct record meanings.",
+        "contentHash": "790575a00a0538a4e88425a5012b1cc9c934e374a01672b66c4dc9be8ed15a7f"
       },
       {
         "kind": "source",
-        "referent": "src/runtime/commands/command-handlers.ts",
-        "claim": "The stop hook is registered directly by command-descriptors and implemented in agent-hooks; command-handlers has no completion-controller consumer, while hook tests cover the changed boundary and all reported historical co-edits were broad sweeps.",
-        "contentHash": "f21beb90cc9ea84926019ea6a3c821358cd18b1c54a26d618cfa6bf7cb6d0283"
-      },
-      {
-        "kind": "test",
-        "referent": "tests/runtime/agent-hooks.test.ts",
-        "claim": "The stop hook is registered directly by command-descriptors and implemented in agent-hooks; command-handlers has no completion-controller consumer, while hook tests cover the changed boundary and all reported historical co-edits were broad sweeps.",
-        "contentHash": "1b5591e9ba21c05a3a7b1ddc33be04c11f8d1dc465b43bc68406162e16eb4397"
+        "referent": "src/storage/autonomous-work-state.ts",
+        "claim": "This typed adapter already delegates durable publication to publishWorkStateRecord and must retain completion-context construction, identity, and collision semantics; further extraction would combine distinct record meanings.",
+        "contentHash": "5f8b905314dd7ff4e5b995f5b5aa0ec8b27b28c8c07d83c4296619548cef55b1"
       }
     ],
     "invalidateOn": {

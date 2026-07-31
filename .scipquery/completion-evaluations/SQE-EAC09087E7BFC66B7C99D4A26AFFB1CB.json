@@ -1,0 +1,631 @@
+{
+  "kind": "scip-query-completion-evaluation",
+  "schemaVersion": 1,
+  "evaluationId": "SQE-EAC09087E7BFC66B7C99D4A26AFFB1CB",
+  "collaborationDomainId": "5ea57d1a-936c-4c91-b58f-5d61e45173a5",
+  "changeId": "SQC-DED67E74D3898BDCA85766BE8D3C93AF",
+  "goalId": "SQG-4061E7D5D360464ED8E8B05D53BBF49D",
+  "context": {
+    "contextId": "SQX-9444146D78797F9F4F43346CF19F1B2B",
+    "policyId": "SQCX-B8C5B34801BABBCEB0981AC285561DC0",
+    "policyVersion": 1,
+    "evaluatorId": "scip-query:stop-completion-controller",
+    "evaluatorVersion": "d5b457f8a3b2fd8865534719688af4dbedc605279e506daf972a66652a6f8ed6",
+    "targetObservation": {
+      "schemaVersion": 2,
+      "observedAt": "2026-07-31T06:37:09.500Z",
+      "facts": {
+        "collaborationDomain": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:collaboration-domain",
+            "version": 1
+          },
+          "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+        },
+        "workspaceInstance": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:workspace-instance",
+            "version": 1
+          },
+          "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+        },
+        "wholeContent": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:repository-content",
+            "version": 1
+          },
+          "digest": "6a2f9affb967bbacd42e1bd63e1b65336ec48babb9939fff024b4742dee2185c"
+        },
+        "relevantInputs": [
+          {
+            "subject": "scip-query:index-inputs",
+            "identity": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:index-inputs",
+                "version": 2
+              },
+              "digest": "a056931662dc16841bdb6fc9ab06ccaa0680b938a08a9ed6b6dc2634d743e60f"
+            }
+          }
+        ]
+      },
+      "observedSources": [
+        {
+          "kind": "repository-snapshot",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:repository-content",
+              "version": 1
+            },
+            "digest": "6a2f9affb967bbacd42e1bd63e1b65336ec48babb9939fff024b4742dee2185c"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "repository-snapshot",
+          "kind": "fixed-snapshot"
+        }
+      ],
+      "diagnostics": {
+        "clean": false,
+        "headCommit": "cd68864c0326b955f300cfb6ddafe3e3c83b9384",
+        "treeOid": "4b278b1c74f2831aedc99143c060cc531871640e"
+      }
+    }
+  },
+  "predicates": [
+    {
+      "predicate": "goal-fulfilled",
+      "state": "unknown",
+      "reasons": [
+        "The diff gate does not yet evaluate the goal’s protected acceptance scenarios."
+      ],
+      "evidenceReceipts": [
+        {
+          "schemaVersion": 2,
+          "observedAt": "2026-07-31T06:37:09.500Z",
+          "facts": {
+            "collaborationDomain": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:collaboration-domain",
+                "version": 1
+              },
+              "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+            },
+            "workspaceInstance": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:workspace-instance",
+                "version": 1
+              },
+              "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+            },
+            "wholeContent": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:repository-content",
+                "version": 1
+              },
+              "digest": "6a2f9affb967bbacd42e1bd63e1b65336ec48babb9939fff024b4742dee2185c"
+            },
+            "relevantInputs": [
+              {
+                "subject": "scip-query:index-inputs",
+                "identity": {
+                  "schemaVersion": 1,
+                  "canonicalizationVersion": 1,
+                  "hashAlgorithm": "sha256",
+                  "projection": {
+                    "name": "scip-query:index-inputs",
+                    "version": 2
+                  },
+                  "digest": "a056931662dc16841bdb6fc9ab06ccaa0680b938a08a9ed6b6dc2634d743e60f"
+                }
+              }
+            ]
+          },
+          "observedSources": [
+            {
+              "kind": "repository-snapshot",
+              "identity": {
+                "schemaVersion": 1,
+                "canonicalizationVersion": 1,
+                "hashAlgorithm": "sha256",
+                "projection": {
+                  "name": "scip-query:repository-content",
+                  "version": 1
+                },
+                "digest": "6a2f9affb967bbacd42e1bd63e1b65336ec48babb9939fff024b4742dee2185c"
+              }
+            }
+          ],
+          "stabilityProofs": [
+            {
+              "source": "repository-snapshot",
+              "kind": "fixed-snapshot"
+            }
+          ],
+          "diagnostics": {
+            "clean": false,
+            "headCommit": "cd68864c0326b955f300cfb6ddafe3e3c83b9384",
+            "treeOid": "4b278b1c74f2831aedc99143c060cc531871640e"
+          }
+        }
+      ]
+    },
+    {
+      "predicate": "invariants-preserved",
+      "state": "disproven",
+      "reasons": [
+        "7 diff-gate finding(s) contradict the current invariant policy."
+      ],
+      "evidenceReceipts": [
+        {
+          "schemaVersion": 2,
+          "observedAt": "2026-07-31T06:37:09.500Z",
+          "facts": {
+            "collaborationDomain": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:collaboration-domain",
+                "version": 1
+              },
+              "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+            },
+            "workspaceInstance": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:workspace-instance",
+                "version": 1
+              },
+              "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+            },
+            "wholeContent": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:repository-content",
+                "version": 1
+              },
+              "digest": "6a2f9affb967bbacd42e1bd63e1b65336ec48babb9939fff024b4742dee2185c"
+            },
+            "relevantInputs": [
+              {
+                "subject": "scip-query:index-inputs",
+                "identity": {
+                  "schemaVersion": 1,
+                  "canonicalizationVersion": 1,
+                  "hashAlgorithm": "sha256",
+                  "projection": {
+                    "name": "scip-query:index-inputs",
+                    "version": 2
+                  },
+                  "digest": "a056931662dc16841bdb6fc9ab06ccaa0680b938a08a9ed6b6dc2634d743e60f"
+                }
+              }
+            ]
+          },
+          "observedSources": [
+            {
+              "kind": "repository-snapshot",
+              "identity": {
+                "schemaVersion": 1,
+                "canonicalizationVersion": 1,
+                "hashAlgorithm": "sha256",
+                "projection": {
+                  "name": "scip-query:repository-content",
+                  "version": 1
+                },
+                "digest": "6a2f9affb967bbacd42e1bd63e1b65336ec48babb9939fff024b4742dee2185c"
+              }
+            }
+          ],
+          "stabilityProofs": [
+            {
+              "source": "repository-snapshot",
+              "kind": "fixed-snapshot"
+            }
+          ],
+          "diagnostics": {
+            "clean": false,
+            "headCommit": "cd68864c0326b955f300cfb6ddafe3e3c83b9384",
+            "treeOid": "4b278b1c74f2831aedc99143c060cc531871640e"
+          }
+        }
+      ]
+    },
+    {
+      "predicate": "evidence-compatible",
+      "state": "established",
+      "reasons": [
+        "The target is a fixed whole-repository observation in the change collaboration domain."
+      ],
+      "evidenceReceipts": [
+        {
+          "schemaVersion": 2,
+          "observedAt": "2026-07-31T06:37:09.500Z",
+          "facts": {
+            "collaborationDomain": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:collaboration-domain",
+                "version": 1
+              },
+              "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+            },
+            "workspaceInstance": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:workspace-instance",
+                "version": 1
+              },
+              "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+            },
+            "wholeContent": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:repository-content",
+                "version": 1
+              },
+              "digest": "6a2f9affb967bbacd42e1bd63e1b65336ec48babb9939fff024b4742dee2185c"
+            },
+            "relevantInputs": [
+              {
+                "subject": "scip-query:index-inputs",
+                "identity": {
+                  "schemaVersion": 1,
+                  "canonicalizationVersion": 1,
+                  "hashAlgorithm": "sha256",
+                  "projection": {
+                    "name": "scip-query:index-inputs",
+                    "version": 2
+                  },
+                  "digest": "a056931662dc16841bdb6fc9ab06ccaa0680b938a08a9ed6b6dc2634d743e60f"
+                }
+              }
+            ]
+          },
+          "observedSources": [
+            {
+              "kind": "repository-snapshot",
+              "identity": {
+                "schemaVersion": 1,
+                "canonicalizationVersion": 1,
+                "hashAlgorithm": "sha256",
+                "projection": {
+                  "name": "scip-query:repository-content",
+                  "version": 1
+                },
+                "digest": "6a2f9affb967bbacd42e1bd63e1b65336ec48babb9939fff024b4742dee2185c"
+              }
+            }
+          ],
+          "stabilityProofs": [
+            {
+              "source": "repository-snapshot",
+              "kind": "fixed-snapshot"
+            }
+          ],
+          "diagnostics": {
+            "clean": false,
+            "headCommit": "cd68864c0326b955f300cfb6ddafe3e3c83b9384",
+            "treeOid": "4b278b1c74f2831aedc99143c060cc531871640e"
+          }
+        }
+      ]
+    },
+    {
+      "predicate": "coverage-complete",
+      "state": "established",
+      "reasons": [
+        "Every registered stop diff-gate check completed without an unresolved coverage condition."
+      ],
+      "evidenceReceipts": [
+        {
+          "schemaVersion": 2,
+          "observedAt": "2026-07-31T06:37:09.500Z",
+          "facts": {
+            "collaborationDomain": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:collaboration-domain",
+                "version": 1
+              },
+              "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+            },
+            "workspaceInstance": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:workspace-instance",
+                "version": 1
+              },
+              "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+            },
+            "wholeContent": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:repository-content",
+                "version": 1
+              },
+              "digest": "6a2f9affb967bbacd42e1bd63e1b65336ec48babb9939fff024b4742dee2185c"
+            },
+            "relevantInputs": [
+              {
+                "subject": "scip-query:index-inputs",
+                "identity": {
+                  "schemaVersion": 1,
+                  "canonicalizationVersion": 1,
+                  "hashAlgorithm": "sha256",
+                  "projection": {
+                    "name": "scip-query:index-inputs",
+                    "version": 2
+                  },
+                  "digest": "a056931662dc16841bdb6fc9ab06ccaa0680b938a08a9ed6b6dc2634d743e60f"
+                }
+              }
+            ]
+          },
+          "observedSources": [
+            {
+              "kind": "repository-snapshot",
+              "identity": {
+                "schemaVersion": 1,
+                "canonicalizationVersion": 1,
+                "hashAlgorithm": "sha256",
+                "projection": {
+                  "name": "scip-query:repository-content",
+                  "version": 1
+                },
+                "digest": "6a2f9affb967bbacd42e1bd63e1b65336ec48babb9939fff024b4742dee2185c"
+              }
+            }
+          ],
+          "stabilityProofs": [
+            {
+              "source": "repository-snapshot",
+              "kind": "fixed-snapshot"
+            }
+          ],
+          "diagnostics": {
+            "clean": false,
+            "headCommit": "cd68864c0326b955f300cfb6ddafe3e3c83b9384",
+            "treeOid": "4b278b1c74f2831aedc99143c060cc531871640e"
+          }
+        }
+      ]
+    },
+    {
+      "predicate": "obligations-reconciled",
+      "state": "established",
+      "reasons": [
+        "The durable obligation lifecycle has no live, conflicted, orphaned, or unreadable obligation."
+      ],
+      "evidenceReceipts": [
+        {
+          "schemaVersion": 2,
+          "observedAt": "2026-07-31T06:37:09.500Z",
+          "facts": {
+            "collaborationDomain": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:collaboration-domain",
+                "version": 1
+              },
+              "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+            },
+            "workspaceInstance": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:workspace-instance",
+                "version": 1
+              },
+              "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+            },
+            "wholeContent": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:repository-content",
+                "version": 1
+              },
+              "digest": "6a2f9affb967bbacd42e1bd63e1b65336ec48babb9939fff024b4742dee2185c"
+            },
+            "relevantInputs": [
+              {
+                "subject": "scip-query:index-inputs",
+                "identity": {
+                  "schemaVersion": 1,
+                  "canonicalizationVersion": 1,
+                  "hashAlgorithm": "sha256",
+                  "projection": {
+                    "name": "scip-query:index-inputs",
+                    "version": 2
+                  },
+                  "digest": "a056931662dc16841bdb6fc9ab06ccaa0680b938a08a9ed6b6dc2634d743e60f"
+                }
+              }
+            ]
+          },
+          "observedSources": [
+            {
+              "kind": "repository-snapshot",
+              "identity": {
+                "schemaVersion": 1,
+                "canonicalizationVersion": 1,
+                "hashAlgorithm": "sha256",
+                "projection": {
+                  "name": "scip-query:repository-content",
+                  "version": 1
+                },
+                "digest": "6a2f9affb967bbacd42e1bd63e1b65336ec48babb9939fff024b4742dee2185c"
+              }
+            }
+          ],
+          "stabilityProofs": [
+            {
+              "source": "repository-snapshot",
+              "kind": "fixed-snapshot"
+            }
+          ],
+          "diagnostics": {
+            "clean": false,
+            "headCommit": "cd68864c0326b955f300cfb6ddafe3e3c83b9384",
+            "treeOid": "4b278b1c74f2831aedc99143c060cc531871640e"
+          }
+        }
+      ]
+    },
+    {
+      "predicate": "policy-permitted",
+      "state": "established",
+      "reasons": [
+        "Repository policy scip-query:stop-completion-policy@1 authorizes autonomous stop evaluation in feedback mode."
+      ],
+      "evidenceReceipts": [
+        {
+          "schemaVersion": 2,
+          "observedAt": "2026-07-31T06:37:09.500Z",
+          "facts": {
+            "collaborationDomain": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:collaboration-domain",
+                "version": 1
+              },
+              "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+            },
+            "workspaceInstance": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:workspace-instance",
+                "version": 1
+              },
+              "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+            },
+            "wholeContent": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:repository-content",
+                "version": 1
+              },
+              "digest": "6a2f9affb967bbacd42e1bd63e1b65336ec48babb9939fff024b4742dee2185c"
+            },
+            "relevantInputs": [
+              {
+                "subject": "scip-query:index-inputs",
+                "identity": {
+                  "schemaVersion": 1,
+                  "canonicalizationVersion": 1,
+                  "hashAlgorithm": "sha256",
+                  "projection": {
+                    "name": "scip-query:index-inputs",
+                    "version": 2
+                  },
+                  "digest": "a056931662dc16841bdb6fc9ab06ccaa0680b938a08a9ed6b6dc2634d743e60f"
+                }
+              }
+            ]
+          },
+          "observedSources": [
+            {
+              "kind": "repository-snapshot",
+              "identity": {
+                "schemaVersion": 1,
+                "canonicalizationVersion": 1,
+                "hashAlgorithm": "sha256",
+                "projection": {
+                  "name": "scip-query:repository-content",
+                  "version": 1
+                },
+                "digest": "6a2f9affb967bbacd42e1bd63e1b65336ec48babb9939fff024b4742dee2185c"
+              }
+            }
+          ],
+          "stabilityProofs": [
+            {
+              "source": "repository-snapshot",
+              "kind": "fixed-snapshot"
+            }
+          ],
+          "diagnostics": {
+            "clean": false,
+            "headCommit": "cd68864c0326b955f300cfb6ddafe3e3c83b9384",
+            "treeOid": "4b278b1c74f2831aedc99143c060cc531871640e"
+          }
+        }
+      ]
+    }
+  ],
+  "decision": {
+    "state": "blocked",
+    "blockedPredicates": [
+      "goal-fulfilled",
+      "invariants-preserved"
+    ],
+    "unknownPredicates": [
+      "goal-fulfilled"
+    ]
+  },
+  "idempotency": {
+    "version": 1,
+    "algorithm": "sha256",
+    "keyDigest": "eac09087e7bfc66b7c99d4a26affb1cbcf2adb570a7e99464ef2d23cbdaa478a",
+    "requestDigest": "0c6680b1e449ff6f75b010ccf98a37bfd553d58259c3d5d160d2322d42c08a9d"
+  },
+  "createdAt": "2026-07-31T06:37:18.006Z",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  }
+}

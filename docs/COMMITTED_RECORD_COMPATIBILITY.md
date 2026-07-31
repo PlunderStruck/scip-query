@@ -1,6 +1,6 @@
 # Committed record compatibility
 
-scip-query stores ten kinds of team-shared records in Git:
+scip-query stores eleven kinds of team-shared records in Git:
 
 - `.scipquery/goals/*.json` contains immutable, authorized goal versions.
 - `.scipquery/changes/*.json` contains immutable intended bodies of work tied
@@ -13,6 +13,9 @@ scip-query stores ten kinds of team-shared records in Git:
   completion conditions.
 - `.scipquery/obligation-transitions/*.json` contains evidence-backed terminal
   obligation transitions.
+- `.scipquery/completion-contexts/*.json` fixes the goal, policy, evaluator
+  build, command registry, protected-artifact rules, and repository target
+  used by one completion judgment.
 - `.scipquery/completion-evaluations/*.json` contains controller-derived
   judgments over the complete predicate set.
 - `.scipquery/completion-transitions/*.json` contains idempotent witnesses that
@@ -116,7 +119,13 @@ establishes fulfillment, invalidation, or an authorized carry-forward. Branch
 transitions compose as immutable facts; incompatible terminal meanings remain
 conflicted rather than being resolved by timestamp.
 
-New completion records conform to
+New completion context records conform to
+[`schemas/completion-context-record.schema.json`](schemas/completion-context-record.schema.json).
+Their semantic identity excludes capture time but includes the fixed target
+facts, so replaying unchanged inputs reuses one record while a later repository
+state receives another identity.
+
+New completion judgment records conform to
 [`schemas/completion-evaluation-record.schema.json`](schemas/completion-evaluation-record.schema.json)
 and
 [`schemas/completion-transition-record.schema.json`](schemas/completion-transition-record.schema.json).
@@ -126,12 +135,12 @@ derived decision. A non-established predicate blocks completion. A completion
 transition can be derived only from a complete evaluation, and its identity is
 derived from that evaluation so retries reuse one semantic event.
 
-`completion status [change-id]` classifies both directories, validates all
-goal/change/evaluation/transition links, and folds their branch-independent
-state. A future or malformed record makes coverage incomplete. A completion
-transition whose evaluation is missing or mismatched, or a live obligation
-merged into a completed change, is an integrity failure rather than a clean
-pass.
+`completion status [change-id]` classifies the context, evaluation, and
+transition directories, validates all goal/change/context/evaluation/transition
+links, and folds their branch-independent state. A future or malformed record
+makes coverage incomplete. A completion transition whose evaluation is
+missing or mismatched, or a live obligation merged into a completed change,
+is an integrity failure rather than a clean pass.
 
 ## Current suppression records
 

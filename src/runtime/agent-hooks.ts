@@ -56,6 +56,11 @@ import {
   type AgentSessionStopReceipt,
 } from './agent-session-state.js';
 import { buildLeasedObservationReceipt } from './observation-receipt.js';
+import {
+  assertFixedCompletionContext,
+  captureFixedCompletionContext,
+  publishStopCompletionEvaluations,
+} from './completion-evaluation-context.js';
 
 const SKIP_HOOK_INSTALL_ENV = 'SCIP_QUERY_SKIP_HOOK_INSTALL';
 const STOP_HOOK_MODE_ENV = 'SCIP_QUERY_STOP_HOOK_MODE';
@@ -927,7 +932,8 @@ export async function handleAgentHookStop(): Promise<void> {
       result.suppressed.length === 0 &&
       !suppressionCoverageWarning(result) &&
       !execution?.outcomes.warning &&
-      !stopCoverageWarning(result))
+      !stopCoverageWarning(result) &&
+      !execution?.completion.some(({ evaluation }) => evaluation.evaluation.record.decision.state !== 'complete'))
   ) {
     return;
   }
@@ -940,6 +946,7 @@ function writeStopHookJson(output: ClaudeHookJsonOutput): void {
 
 interface StopHookExecution extends DiffGateExecutionResult {
   evidenceLease: StopHookEvidenceLease;
+  completion: ReturnType<typeof publishStopCompletionEvaluations>;
 }
 
 async function runIsolatedStopHookDiffGate(hookInput: string): Promise<StopHookExecution | undefined> {
@@ -948,6 +955,8 @@ async function runIsolatedStopHookDiffGate(hookInput: string): Promise<StopHookE
   const workspace = resolveHookWorkspace(payload);
   if (!workspace) return undefined;
   const lease = await prepareStopHookEvidenceLease(workspace);
+  const stopMode = resolveStopHookMode();
+  const completionContext = captureFixedCompletionContext(workspace.projectRoot, workspace.config, stopMode);
   const execution = runIsolatedDiffGate(
     {
       minTogether: 6,
@@ -963,7 +972,11 @@ async function runIsolatedStopHookDiffGate(hookInput: string): Promise<StopHookE
     },
   );
   assertStopHookEvidenceLease(workspace, lease);
-  return { ...execution, evidenceLease: lease };
+  assertFixedCompletionContext(completionContext, workspace.config);
+  const completion = publishStopCompletionEvaluations(completionContext, execution.result, {
+    toolVersion: cliVersion,
+  });
+  return { ...execution, evidenceLease: lease, completion };
 }
 
 function persistStopSessionState(
@@ -1133,7 +1146,9 @@ export function renderStopHookExecutionFailure(message: string, mode: StopHookMo
 export function renderStopHookOutput(
   result: DiffGateResult,
   mode: StopHookMode = 'feedback',
-  execution?: Pick<DiffGateExecutionResult, 'outcomes' | 'analysisBudget'>,
+  execution?: Pick<DiffGateExecutionResult, 'outcomes' | 'analysisBudget'> & {
+    completion?: ReturnType<typeof publishStopCompletionEvaluations>;
+  },
 ): ClaudeHookJsonOutput {
   const coverageWarning = suppressionCoverageWarning(result);
   const findingMessage = result.findings.length > 0 ? formatGateBlockReason(result) : undefined;
@@ -1142,15 +1157,19 @@ export function renderStopHookOutput(
     .filter((value): value is string => Boolean(value))
     .join('\n\n');
   const advisoryMessage = formatGateAdvisoryReason(result, executionEvidence);
-  if (mode === 'block' && result.findings.length > 0) {
+  const completionBlocked = execution?.completion?.some(
+    ({ evaluation }) => evaluation.evaluation.record.decision.state !== 'complete',
+  );
+  if (mode === 'block' && (result.findings.length > 0 || completionBlocked)) {
     return {
       decision: 'block',
       reason: blockMessage,
     };
   }
   if (mode === 'feedback') {
-    const instruction =
-      result.findings.length > 0
+    const instruction = completionBlocked
+      ? 'Continue with the named unsatisfied completion predicates; do not declare the intended change complete yet.'
+      : result.findings.length > 0
         ? 'Fix true findings, or provide policy-admissible counterevidence before finishing.'
         : 'Automatic adjudication completed without a human approval prompt; no finding action is required for this Stop.';
     return {
@@ -1184,7 +1203,11 @@ function formatGateAdvisoryReason(result: DiffGateResult, executionEvidence: rea
 
 function formatStopExecutionEvidence(
   result: DiffGateResult,
-  execution: Pick<DiffGateExecutionResult, 'outcomes' | 'analysisBudget'> | undefined,
+  execution:
+    | (Pick<DiffGateExecutionResult, 'outcomes' | 'analysisBudget'> & {
+        completion?: ReturnType<typeof publishStopCompletionEvaluations>;
+      })
+    | undefined,
 ): string[] {
   const lines: string[] = [];
   if (execution?.outcomes.ledger) {
@@ -1202,6 +1225,24 @@ function formatStopExecutionEvidence(
   if (coverage) lines.push(coverage);
   const budget = formatAnalysisBudgetDisclosure(execution?.analysisBudget);
   if (budget) lines.push(budget);
+  for (const { context, evaluation } of execution?.completion ?? []) {
+    const decision = evaluation.evaluation.record.decision;
+    if (decision.state === 'complete') {
+      lines.push(
+        `Completion controller: ${evaluation.evaluation.record.changeId} is complete under fixed context ${context.record.contextSnapshotId}.`,
+      );
+    } else if (decision.state === 'blocked') {
+      lines.push(
+        `Completion controller: ${evaluation.evaluation.record.changeId} remains blocked under fixed context ${context.record.contextSnapshotId}. ` +
+          `Unsatisfied predicates: ${decision.blockedPredicates.join(', ')}. ` +
+          `Unknown rather than false: ${decision.unknownPredicates.join(', ') || 'none'}.`,
+      );
+    } else {
+      lines.push(
+        `Completion controller: ${evaluation.evaluation.record.changeId} was superseded under fixed context ${context.record.contextSnapshotId} by ${decision.successorGoalId}.`,
+      );
+    }
+  }
   return lines;
 }
 

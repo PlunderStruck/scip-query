@@ -17,6 +17,7 @@ import {
 } from '../platform/project-observation-snapshot.js';
 import { detectLanguages } from '../reindex/detect.js';
 import type { ScipDatabase } from '../storage/db.js';
+import type { ProjectConfig } from '../domain/types.js';
 import { currentCliDatabase, resolveProjectRoot } from './cli-context.js';
 import { loadProjectConfig } from './config.js';
 
@@ -252,6 +253,35 @@ export function buildLeasedObservationReceipt(input: {
 }
 
 /**
+ * Capture one fixed whole-repository state and derive its receipt before
+ * releasing the snapshot. Callers that require a stable target can bracket
+ * an operation with two calls and reject a moved whole-content identity.
+ */
+export function captureFixedRepositoryObservationReceipt(input: {
+  projectRoot: string;
+  config: ProjectConfig;
+  observedAt?: Date;
+  collaborationDomainId?: string;
+  db?: Pick<ScipDatabase, 'generation' | 'config'>;
+  gitContext?: GitWorktreeContext;
+}): ObservationReceiptV2 {
+  const gitContext = input.gitContext ?? resolveGitWorktreeContext(input.projectRoot);
+  const languages = input.config.languages ?? detectLanguages(input.projectRoot);
+  const snapshot = captureProjectObservationSnapshot(input.projectRoot, languages, input.config, gitContext);
+  try {
+    return buildObservationReceipt({
+      projectRoot: input.projectRoot,
+      snapshot,
+      ...(input.observedAt ? { observedAt: input.observedAt } : {}),
+      ...(input.collaborationDomainId ? { collaborationDomainId: input.collaborationDomainId } : {}),
+      ...(input.db ? { db: input.db } : {}),
+    });
+  } finally {
+    snapshot.dispose();
+  }
+}
+
+/**
  * Build the strongest receipt available at JSON-render time. Database-backed
  * commands expose the immutable generation held by their open connection.
  * Non-database commands retain process provenance without claiming repository
@@ -268,15 +298,9 @@ export function currentCliObservationReceipt(): ObservationReceipt {
     });
   }
   const config = loadProjectConfig(projectRoot);
-  const languages = config.languages ?? detectLanguages(projectRoot);
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const snapshot = captureProjectObservationSnapshot(projectRoot, languages, config, gitContext);
-      try {
-        return buildObservationReceipt({ projectRoot, db, snapshot });
-      } finally {
-        snapshot.dispose();
-      }
+      return captureFixedRepositoryObservationReceipt({ projectRoot, config, db, gitContext });
     } catch {
       // A moving or unsupported workspace cannot prove fixed-snapshot facts.
       // Retry once for an ordinary race, then return the weaker honest receipt.

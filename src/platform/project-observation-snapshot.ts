@@ -514,7 +514,15 @@ function isExcludedObservationArtifact(relativePath: string): boolean {
   ) {
     return true;
   }
-  if (parts[0] === '.scipquery' && (parts[1] === 'events' || parts[1] === 'ledger' || parts[1] === 'releases')) {
+  if (
+    parts[0] === '.scipquery' &&
+    (parts[1] === 'events' ||
+      parts[1] === 'ledger' ||
+      parts[1] === 'releases' ||
+      parts[1] === 'completion-contexts' ||
+      parts[1] === 'completion-evaluations' ||
+      parts[1] === 'completion-transitions')
+  ) {
     return true;
   }
   return (

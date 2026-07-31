@@ -447,6 +447,44 @@ describe('agent hook context', () => {
     expect(serialized).toContain('semantic-consumers');
     expect(serialized).toContain('analysis budget');
   });
+
+  it('renders the controller decision without treating unknown predicates as false', () => {
+    const execution = {
+      outcomes: { observed: [], now: 0 },
+      completion: [
+        {
+          context: {
+            record: {
+              contextSnapshotId: 'SQCX-0123456789ABCDEF0123456789ABCDEF',
+            },
+          },
+          evaluation: {
+            evaluation: {
+              record: {
+                changeId: 'SQC-0123456789ABCDEF0123456789ABCDEF',
+                decision: {
+                  state: 'blocked',
+                  blockedPredicates: ['goal-fulfilled', 'invariants-preserved'],
+                  unknownPredicates: ['goal-fulfilled'],
+                },
+              },
+            },
+          },
+        },
+      ],
+    } as unknown as NonNullable<Parameters<typeof renderStopHookOutput>[2]>;
+
+    const feedback = renderStopHookOutput(diffGateResult(), 'feedback', execution);
+    const blocking = renderStopHookOutput(diffGateResult(), 'block', execution);
+
+    expect(JSON.stringify(feedback)).toContain('Unknown rather than false: goal-fulfilled');
+    expect(blocking).toEqual(
+      expect.objectContaining({
+        decision: 'block',
+        reason: expect.stringContaining('Unsatisfied predicates: goal-fulfilled, invariants-preserved'),
+      }),
+    );
+  });
 });
 
 function diffGateResult(): DiffGateResult {

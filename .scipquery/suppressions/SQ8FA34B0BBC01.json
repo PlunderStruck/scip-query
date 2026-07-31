@@ -6,9 +6,11 @@
     "version": "0.20.0"
   },
   "id": "SQ8FA34B0BBC01",
-  "reason": "Goal, change, attempt, decision, obligation, and completion descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, while CLI contract tests and executable completion-status dogfood verify registration and behavior.",
+  "check": "co-change-partner",
+  "file": "src/runtime/commands/command-descriptors.ts",
+  "reason": "The descriptor change extends the completion work-state command, whose implementation is in work-state-handlers and changed in this slice; command-handlers owns unrelated side-effect lifecycles and has no completion operation to update.",
   "createdAt": "2026-07-29T19:50:55.191Z",
-  "updatedAt": "2026-07-31T06:01:35.708Z",
+  "updatedAt": "2026-07-31T06:41:01.297Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
@@ -17,7 +19,7 @@
     "policyVersion": 1,
     "observation": {
       "schemaVersion": 2,
-      "observedAt": "2026-07-31T06:01:35.700Z",
+      "observedAt": "2026-07-31T06:41:01.290Z",
       "facts": {
         "collaborationDomain": {
           "schemaVersion": 1,
@@ -47,7 +49,7 @@
             "name": "scip-query:repository-content",
             "version": 1
           },
-          "digest": "2fd6670e6e1d31608dca6e7da3f0da37ab5b7a26eb5566ef66e6a6ad4fd2c913"
+          "digest": "b6c7ec009a8a8e45b369e84e7aa4e3109dd4fe9ba375b318b8542a525c6ef71e"
         },
         "relevantInputs": [
           {
@@ -60,7 +62,7 @@
                 "name": "scip-query:index-inputs",
                 "version": 2
               },
-              "digest": "584ac81808e3e4d5ddea95c5b2b1188e98c636d3688eccd5c5597b9bc78e16e3"
+              "digest": "8e4c09977cf9f13fd31d58d068d25b752f5241baf5e03c1f5d6103756a31e3c4"
             }
           }
         ],
@@ -73,7 +75,7 @@
               "name": "scip-query:index-generation",
               "version": 1
             },
-            "digest": "71dd8e0820c5a0a30c1e719d00236bc37c69e14da0898ce8683ea7aa7a17602a"
+            "digest": "ea44c0ecc35c58b45aa67e2cf0330118ab484371215ef9a182fb0abd71eb2cf9"
           },
           "inputs": {
             "schemaVersion": 1,
@@ -83,7 +85,7 @@
               "name": "scip-query:index-inputs",
               "version": 2
             },
-            "digest": "584ac81808e3e4d5ddea95c5b2b1188e98c636d3688eccd5c5597b9bc78e16e3"
+            "digest": "8e4c09977cf9f13fd31d58d068d25b752f5241baf5e03c1f5d6103756a31e3c4"
           },
           "source": "immutable"
         }
@@ -99,7 +101,7 @@
               "name": "scip-query:index-generation",
               "version": 1
             },
-            "digest": "71dd8e0820c5a0a30c1e719d00236bc37c69e14da0898ce8683ea7aa7a17602a"
+            "digest": "ea44c0ecc35c58b45aa67e2cf0330118ab484371215ef9a182fb0abd71eb2cf9"
           }
         },
         {
@@ -112,7 +114,7 @@
               "name": "scip-query:repository-content",
               "version": 1
             },
-            "digest": "2fd6670e6e1d31608dca6e7da3f0da37ab5b7a26eb5566ef66e6a6ad4fd2c913"
+            "digest": "b6c7ec009a8a8e45b369e84e7aa4e3109dd4fe9ba375b318b8542a525c6ef71e"
           }
         }
       ],
@@ -128,27 +130,27 @@
       ],
       "diagnostics": {
         "clean": false,
-        "headCommit": "bc4fad9683f43765f9471ceb1c4ab6db46696cdf",
-        "treeOid": "8fc3685c19e44e5a6f9f6765a99c1df568921f3b"
+        "headCommit": "cd68864c0326b955f300cfb6ddafe3e3c83b9384",
+        "treeOid": "4b278b1c74f2831aedc99143c060cc531871640e"
       }
     },
     "evidence": [
       {
         "kind": "source",
         "referent": "src/runtime/commands/work-state-handlers.ts",
-        "claim": "Goal, change, attempt, decision, obligation, and completion descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, while CLI contract tests and executable completion-status dogfood verify registration and behavior.",
-        "contentHash": "0158506686739317def5362d0cac0f788f0dc18ce231897f7f86179b9b4829e0"
+        "claim": "The descriptor change extends the completion work-state command, whose implementation is in work-state-handlers and changed in this slice; command-handlers owns unrelated side-effect lifecycles and has no completion operation to update.",
+        "contentHash": "89840129c26fafabe4a396e05efbd9728d0943ba82b8d37ee3c37083ac6e9ffd"
       },
       {
         "kind": "source",
         "referent": "src/runtime/commands/command-descriptors.ts",
-        "claim": "Goal, change, attempt, decision, obligation, and completion descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, while CLI contract tests and executable completion-status dogfood verify registration and behavior.",
-        "contentHash": "ea4cb0c4612818fb86284421b24dbce712c3fe9ffb7a9cf510ce72e96c509826"
+        "claim": "The descriptor change extends the completion work-state command, whose implementation is in work-state-handlers and changed in this slice; command-handlers owns unrelated side-effect lifecycles and has no completion operation to update.",
+        "contentHash": "e08f122b65d0fa86711887c7c63e2340e43dc2bc34d2e65c0f6c1e49e20b1078"
       },
       {
         "kind": "test",
         "referent": "tests/runtime/cli-contract.test.ts",
-        "claim": "Goal, change, attempt, decision, obligation, and completion descriptors deliberately bind to the dedicated work-state-handlers module; the legacy command-handlers module has no role in these commands, while CLI contract tests and executable completion-status dogfood verify registration and behavior.",
+        "claim": "The descriptor change extends the completion work-state command, whose implementation is in work-state-handlers and changed in this slice; command-handlers owns unrelated side-effect lifecycles and has no completion operation to update.",
         "contentHash": "19c90650f079e54a0883c67be264a90e99b0c6982104dbc3ed49282695059080"
       }
     ],

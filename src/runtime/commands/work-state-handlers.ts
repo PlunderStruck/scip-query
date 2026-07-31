@@ -3,6 +3,7 @@ import { isAbsolute, relative, resolve } from 'node:path';
 
 import { decodeAttemptCreateRequest, decodeDecisionCreateRequest } from '../../domain/autonomous-work-ledger.js';
 import { isCompletionEvaluationId, isCompletionTransitionId } from '../../domain/autonomous-completion.js';
+import { isCompletionContextSnapshotId } from '../../domain/autonomous-completion-context.js';
 import {
   decodeObligationAdmissionRequest,
   decodeObligationTransitionRequest,
@@ -49,6 +50,7 @@ import {
   readCompletionRecordPath,
   readCompletionTransitionRecordFile,
 } from '../../storage/autonomous-completion.js';
+import { readCompletionContextSnapshotFile } from '../../storage/autonomous-completion-context.js';
 import { commandOptions, printJsonEnvelope, stringOptionValue } from '../command-kit/command-execution.js';
 import { resolveProjectRoot } from '../cli-context.js';
 import { cliVersion } from '../cli-support.js';
@@ -337,13 +339,16 @@ function runCompletionOperation(
   switch (operation) {
     case 'read': {
       const identity = requiredTarget(target, 'completion read');
+      if (isCompletionContextSnapshotId(identity)) {
+        return { operation, ...readCompletionContextSnapshotFile(projectRoot, identity) };
+      }
       if (isCompletionEvaluationId(identity)) {
         return { operation, ...readCompletionEvaluationRecordFile(projectRoot, identity) };
       }
       if (isCompletionTransitionId(identity)) {
         return { operation, ...readCompletionTransitionRecordFile(projectRoot, identity) };
       }
-      throw new Error(`invalid completion evaluation or transition identity: ${identity}`);
+      throw new Error(`invalid completion context, evaluation, or transition identity: ${identity}`);
     }
     case 'validate': {
       const path = repositoryRecordPath(projectRoot, requiredTarget(target, 'completion validate'));
@@ -354,12 +359,13 @@ function runCompletionOperation(
       return {
         operation,
         records: history.summary.states,
+        contextCompatibility: history.contexts.compatibility,
         compatibility: history.evaluations.compatibility,
         transitionCompatibility: history.transitions.compatibility,
         goalCompatibility: history.goalCompatibility,
         changeCompatibility: history.changeCompatibility,
         obligationCompatibility: history.obligationCompatibility,
-        warnings: [...history.evaluations.warnings, ...history.transitions.warnings],
+        warnings: [...history.contexts.warnings, ...history.evaluations.warnings, ...history.transitions.warnings],
         integrityIssues: history.integrityIssues,
         summary: history.summary,
       };
@@ -611,6 +617,7 @@ function workStateResultFailed(result: unknown): boolean {
   if (!isObject(result)) return true;
   if (typeof result['state'] === 'string' && result['state'] !== 'current') return true;
   if (isObject(result['compatibility']) && result['compatibility']['complete'] === false) return true;
+  if (isObject(result['contextCompatibility']) && result['contextCompatibility']['complete'] === false) return true;
   if (isObject(result['goalCompatibility']) && result['goalCompatibility']['complete'] === false) return true;
   if (isObject(result['changeCompatibility']) && result['changeCompatibility']['complete'] === false) return true;
   if (isObject(result['attemptCompatibility']) && result['attemptCompatibility']['complete'] === false) return true;

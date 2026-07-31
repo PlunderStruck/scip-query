@@ -250,7 +250,10 @@ Live Git/filesystem enumeration and hashing live in
 `platform/project-files.ts`. Fixed command observations compose that boundary
 with `platform/project-observation-snapshot.ts` and its async-local snapshot
 context, so a producer reads one stable Git-tree-plus-overlay state instead of
-mixing live bytes across its interval.
+mixing live bytes across its interval. Completion contexts and evaluations are
+derived evidence about that state, so the snapshot boundary excludes those
+output directories while retaining goals, intended changes, obligations,
+suppressions, and configuration as completion-relevant inputs.
 Executable discovery, project-local and bundled indexer resolution,
 dependency status, and .NET runtime probing now live in
 `platform/indexer-toolchain.ts`. Reindex retains indexer invocation and

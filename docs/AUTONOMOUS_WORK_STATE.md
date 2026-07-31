@@ -235,14 +235,25 @@ reads the complete obligation lifecycle before accepting
 `obligations-reconciled: established`. A caller therefore cannot make the
 change complete merely by supplying favorable fields.
 
+Before the stop gate begins, the hook captures a completion-context record
+that fixes the complete goal record, stop policy, evaluator entrypoint build
+identity, registered checks, protected-artifact selectors, and a
+whole-repository target observation. After the isolated gate returns, the hook
+captures the target and evaluator again. Any movement discards the result
+before context or evaluation publication. Context, evaluation, and transition
+records are controller outputs rather than candidate inputs, so they do not
+recursively change the candidate-content identity on every repeated Stop.
+
 ```bash
 scip-query completion status SQC-... --json
+scip-query completion read SQCX-...
 scip-query completion read SQE-...
 scip-query completion read SQCT-...
 scip-query completion validate .scipquery/completion-evaluations/SQE-....json
 ```
 
 Evaluation and transition records conform to
+[`schemas/completion-context-record.schema.json`](schemas/completion-context-record.schema.json),
 [`schemas/completion-evaluation-record.schema.json`](schemas/completion-evaluation-record.schema.json)
 and
 [`schemas/completion-transition-record.schema.json`](schemas/completion-transition-record.schema.json).
@@ -293,7 +304,10 @@ The cache is never a source of project truth and may be discarded.
 Commit `.scipquery/goals/*.json`, `.scipquery/changes/*.json`,
 `.scipquery/attempts/*.json`, `.scipquery/decisions/*.json`,
 `.scipquery/obligations/*.json`, and
-`.scipquery/obligation-transitions/*.json` with the work they govern.
+`.scipquery/obligation-transitions/*.json`,
+`.scipquery/completion-contexts/*.json`,
+`.scipquery/completion-evaluations/*.json`, and
+`.scipquery/completion-transitions/*.json` with the work they govern.
 Equivalent goals in two clones have the same content-derived identity and
 path. Distinct changes, attempts, decisions, obligations, and transitions use
 distinct idempotency keys and therefore distinct paths. A same-path merge

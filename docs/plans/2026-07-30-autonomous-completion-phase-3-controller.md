@@ -1,7 +1,7 @@
 # Phase 3 — protected completion controller
 
 Date: 2026-07-30
-Status: planned; depends on Phases 1 and 2
+Status: in progress; slices 3.1 and 3.2 complete
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -92,6 +92,18 @@ Expected validation:
 - replay against the same context yields the same pure decision; and
 - a future reader can distinguish the evaluated candidate from the later
   repository.
+
+Execution result:
+
+- the stop adapter captures and durably publishes one content-addressed
+  context snapshot for each current intended change;
+- the context fixes the complete goal record, policy, evaluator entrypoint
+  build, diff-gate registry, protected-artifact rules, and whole-repository
+  target before isolated evaluation;
+- a second fixed observation and evaluator hash must match before any
+  controller record is published; and
+- controller output directories are excluded from candidate-content identity,
+  preventing repeated Stop calls from manufacturing endless novel contexts.
 
 ### 3.3 Reflexive-authority firewall
 
