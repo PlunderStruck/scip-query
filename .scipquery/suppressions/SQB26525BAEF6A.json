@@ -6,8 +6,11 @@
     "version": "0.20.0"
   },
   "id": "SQB26525BAEF6A",
-  "reason": "This slice propagates the optional collaborationDomainId through the existing hook database configuration. command-handlers neither constructs this hook-local database path nor owns a contract affected by the propagation; the historical co-edits came from broad runtime sweeps, not this dependency.",
+  "check": "co-change-partner",
+  "file": "src/runtime/agent-hooks.ts",
+  "reason": "This slice adds committed restoration projection only to supported hook callbacks. Exhaustive SCIP plan-context shows command-handlers imports agent-hooks for setup but has no consumer of the restoration projection or its delivery claim; no command descriptor or handler contract changes. All six historical co-edits were broad sweeps, so changing the handler would add ceremony without preserving a real coordination contract.",
   "createdAt": "2026-07-31T02:21:40.222Z",
+  "updatedAt": "2026-07-31T05:26:07.274Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
@@ -16,7 +19,7 @@
     "policyVersion": 1,
     "observation": {
       "schemaVersion": 2,
-      "observedAt": "2026-07-31T02:21:40.221Z",
+      "observedAt": "2026-07-31T05:26:07.266Z",
       "facts": {
         "collaborationDomain": {
           "schemaVersion": 1,
@@ -38,6 +41,31 @@
           },
           "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
         },
+        "wholeContent": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:repository-content",
+            "version": 1
+          },
+          "digest": "9bbd67a07d50c1a3843c88a8bfa85397c91d3ccabd27ce42929842372bed45eb"
+        },
+        "relevantInputs": [
+          {
+            "subject": "scip-query:index-inputs",
+            "identity": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:index-inputs",
+                "version": 2
+              },
+              "digest": "cf109957b86014e034c1e21f34e50fc65697eb9748e7c6fee9379ccda6749acd"
+            }
+          }
+        ],
         "index": {
           "generation": {
             "schemaVersion": 1,
@@ -47,7 +75,17 @@
               "name": "scip-query:index-generation",
               "version": 1
             },
-            "digest": "b75443e4cbaa0c921617f5606054df7fbed0af8d10eaa2119788cf3046b5fcdc"
+            "digest": "a25c9bceaff940276f4473b6b6f9d154cb43c6be369db3e9518d3af5a7aa54bb"
+          },
+          "inputs": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-inputs",
+              "version": 2
+            },
+            "digest": "cf109957b86014e034c1e21f34e50fc65697eb9748e7c6fee9379ccda6749acd"
           },
           "source": "immutable"
         }
@@ -63,20 +101,20 @@
               "name": "scip-query:index-generation",
               "version": 1
             },
-            "digest": "b75443e4cbaa0c921617f5606054df7fbed0af8d10eaa2119788cf3046b5fcdc"
+            "digest": "a25c9bceaff940276f4473b6b6f9d154cb43c6be369db3e9518d3af5a7aa54bb"
           }
         },
         {
-          "kind": "live-workspace",
+          "kind": "repository-snapshot",
           "identity": {
             "schemaVersion": 1,
             "canonicalizationVersion": 1,
             "hashAlgorithm": "sha256",
             "projection": {
-              "name": "scip-query:workspace-instance",
+              "name": "scip-query:repository-content",
               "version": 1
             },
-            "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+            "digest": "9bbd67a07d50c1a3843c88a8bfa85397c91d3ccabd27ce42929842372bed45eb"
           }
         }
       ],
@@ -86,34 +124,39 @@
           "kind": "immutable"
         },
         {
-          "source": "live-workspace",
-          "kind": "not-established"
+          "source": "repository-snapshot",
+          "kind": "fixed-snapshot"
         }
       ],
       "diagnostics": {
         "clean": false,
-        "headCommit": "a1a69a3e4478370402fe4f3a86bbfefa0a73d386",
-        "treeOid": "2021414b0e11305fa2dcde17a01aafeab658b76e"
+        "headCommit": "4f0e01491ffca00afd94a51d5bf4a157ddd9cbf0",
+        "treeOid": "e9671b5f5fad6ea3331119078744f281635c9638"
       }
     },
     "evidence": [
       {
         "kind": "source",
         "referent": "src/runtime/agent-hooks.ts",
-        "claim": "This slice propagates the optional collaborationDomainId through the existing hook database configuration. command-handlers neither constructs this hook-local database path nor owns a contract affected by the propagation; the historical co-edits came from broad runtime sweeps, not this dependency.",
-        "contentHash": "1e3ba57fd2050be10bf59a52797e07527ff5c7e4d59dabfc382499ae13f9ef01"
+        "claim": "This slice adds committed restoration projection only to supported hook callbacks. Exhaustive SCIP plan-context shows command-handlers imports agent-hooks for setup but has no consumer of the restoration projection or its delivery claim; no command descriptor or handler contract changes. All six historical co-edits were broad sweeps, so changing the handler would add ceremony without preserving a real coordination contract.",
+        "contentHash": "0523dc6a7e119e31468f058c7cdd2dc4e2a7b05e1187987d8dfe3e9cd8f34f8a"
       },
       {
         "kind": "source",
         "referent": "src/runtime/commands/command-handlers.ts",
-        "claim": "This slice propagates the optional collaborationDomainId through the existing hook database configuration. command-handlers neither constructs this hook-local database path nor owns a contract affected by the propagation; the historical co-edits came from broad runtime sweeps, not this dependency.",
-        "contentHash": "6048e9d84c6c9b4179456cd8d27d7ff91a5884c9b42f2823d88b5f40239b986c"
+        "claim": "This slice adds committed restoration projection only to supported hook callbacks. Exhaustive SCIP plan-context shows command-handlers imports agent-hooks for setup but has no consumer of the restoration projection or its delivery claim; no command descriptor or handler contract changes. All six historical co-edits were broad sweeps, so changing the handler would add ceremony without preserving a real coordination contract.",
+        "contentHash": "f21beb90cc9ea84926019ea6a3c821358cd18b1c54a26d618cfa6bf7cb6d0283"
       },
       {
         "kind": "test",
         "referent": "tests/runtime/agent-hooks.test.ts",
-        "claim": "This slice propagates the optional collaborationDomainId through the existing hook database configuration. command-handlers neither constructs this hook-local database path nor owns a contract affected by the propagation; the historical co-edits came from broad runtime sweeps, not this dependency.",
-        "contentHash": "ebe9132b71a903d38bc8d1b5ef1a19a1dc22dd2e40799ca1e5a995fce0412621"
+        "claim": "This slice adds committed restoration projection only to supported hook callbacks. Exhaustive SCIP plan-context shows command-handlers imports agent-hooks for setup but has no consumer of the restoration projection or its delivery claim; no command descriptor or handler contract changes. All six historical co-edits were broad sweeps, so changing the handler would add ceremony without preserving a real coordination contract.",
+        "contentHash": "4a06e7c6797613a4073d2e9776d7f5cd42aeb0ae1d9d24a31651e4912cfe5245"
+      },
+      {
+        "kind": "graph",
+        "referent": "scip-query plan-context src/runtime/commands/command-handlers.ts --full",
+        "claim": "This slice adds committed restoration projection only to supported hook callbacks. Exhaustive SCIP plan-context shows command-handlers imports agent-hooks for setup but has no consumer of the restoration projection or its delivery claim; no command descriptor or handler contract changes. All six historical co-edits were broad sweeps, so changing the handler would add ceremony without preserving a real coordination contract."
       }
     ],
     "invalidateOn": {

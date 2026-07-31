@@ -20,6 +20,7 @@ import {
   type ObligationTransitionRecordV1,
   type ObligationTransitionRequest,
 } from '../domain/autonomous-work-obligations.js';
+import type { AttemptRecordV1 } from '../domain/autonomous-work-ledger.js';
 import { isIntendedChangeId, type IntendedChangeRecordV1 } from '../domain/autonomous-work-state.js';
 import { readAttemptRecords, type WorkLedgerCollectionReadResult } from './autonomous-work-ledger.js';
 import {
@@ -163,6 +164,7 @@ export function readObligationRecordPath(path: string) {
 export function readObligationAdmissions(
   projectRoot: string,
   changes: readonly IntendedChangeRecordV1[] = readIntendedChangeRecords(projectRoot).records,
+  attempts: readonly AttemptRecordV1[] = readAttemptRecords(projectRoot, changes).records,
 ): ObligationCollectionReadResult<ObligationAdmissionRecordV1> {
   const result = readRecordDirectory(
     projectRoot,
@@ -171,10 +173,7 @@ export function readObligationAdmissions(
     decodeObligationAdmissionRecord,
     (record) => record.obligationId,
   );
-  const attempts = readAttemptRecords(projectRoot, changes);
-  const integrityIssues = result.records.flatMap((record) =>
-    obligationRelationshipIssues(record, changes, attempts.records),
-  );
+  const integrityIssues = result.records.flatMap((record) => obligationRelationshipIssues(record, changes, attempts));
   return { ...result, integrityIssues };
 }
 
@@ -182,6 +181,7 @@ export function readObligationTransitions(
   projectRoot: string,
   changes: readonly IntendedChangeRecordV1[] = readIntendedChangeRecords(projectRoot).records,
   admissions: readonly ObligationAdmissionRecordV1[] = readObligationAdmissions(projectRoot, changes).records,
+  attempts: readonly AttemptRecordV1[] = readAttemptRecords(projectRoot, changes).records,
 ): ObligationCollectionReadResult<ObligationTransitionRecordV1> {
   const result = readRecordDirectory(
     projectRoot,
@@ -190,14 +190,13 @@ export function readObligationTransitions(
     decodeObligationTransitionRecord,
     (record) => record.transitionId,
   );
-  const attempts = readAttemptRecords(projectRoot, changes);
   const summary = foldObligationLifecycle(admissions, result.records);
   const obligationsById = new Map(
     summary.obligations.map((state) => [state.obligation.obligationId, state.obligation]),
   );
   const changesById = new Map(changes.map((change) => [change.changeId, change]));
   const integrityIssues = result.records.flatMap((record) => {
-    const issues = relationshipIssues(record, changesById, attempts.records);
+    const issues = relationshipIssues(record, changesById, attempts);
     const obligation = obligationsById.get(record.obligationId);
     if (!obligation) {
       issues.push(`${record.transitionId} references missing obligation ${record.obligationId}`);
@@ -210,7 +209,7 @@ export function readObligationTransitions(
       issues.push(`${record.transitionId} lacks fixed current evidence for ${record.obligationId}`);
     }
     if (record.successor) {
-      issues.push(...successorRelationshipIssues(record, changesById, attempts.records));
+      issues.push(...successorRelationshipIssues(record, changesById, attempts));
     }
     return issues;
   });
@@ -224,8 +223,8 @@ export function readObligationLifecycle(projectRoot: string, changeId?: string):
   const goals = readGoalRecords(projectRoot);
   const changes = readIntendedChangeRecords(projectRoot, goals);
   const attempts = readAttemptRecords(projectRoot, changes.records);
-  const admissions = readObligationAdmissions(projectRoot, changes.records);
-  const allTransitions = readObligationTransitions(projectRoot, changes.records, admissions.records);
+  const admissions = readObligationAdmissions(projectRoot, changes.records, attempts.records);
+  const allTransitions = readObligationTransitions(projectRoot, changes.records, admissions.records, attempts.records);
   const completeSummary = foldObligationLifecycle(admissions.records, allTransitions.records);
   const summary = changeId ? selectLifecycleSummary(completeSummary, changeId) : completeSummary;
   const integrityIssues = [
@@ -289,7 +288,7 @@ function requireBasisAttempts(projectRoot: string, changeId: string, attemptIds:
 function obligationRelationshipIssues(
   record: ObligationAdmissionRecordV1,
   changes: readonly IntendedChangeRecordV1[],
-  attempts: ReturnType<typeof readAttemptRecords>['records'],
+  attempts: readonly AttemptRecordV1[],
 ): string[] {
   return relationshipIssues(record, new Map(changes.map((change) => [change.changeId, change])), attempts);
 }
@@ -303,7 +302,7 @@ function relationshipIssues(
     basisAttemptIds: readonly string[];
   },
   changesById: ReadonlyMap<string, IntendedChangeRecordV1>,
-  attempts: ReturnType<typeof readAttemptRecords>['records'],
+  attempts: readonly AttemptRecordV1[],
 ): string[] {
   const identity = record.transitionId ?? record.obligationId ?? 'obligation record';
   const issues: string[] = [];
@@ -327,7 +326,7 @@ function relationshipIssues(
 function successorRelationshipIssues(
   transition: ObligationTransitionRecordV1,
   changesById: ReadonlyMap<string, IntendedChangeRecordV1>,
-  attempts: ReturnType<typeof readAttemptRecords>['records'],
+  attempts: readonly AttemptRecordV1[],
 ): string[] {
   if (!transition.successor) return [];
   const issues = relationshipIssues(

@@ -1,0 +1,145 @@
+{
+  "kind": "scip-query-attempt",
+  "schemaVersion": 1,
+  "attemptId": "SQA-283B608E2DF954FF101445F6FD59943C",
+  "collaborationDomainId": "5ea57d1a-936c-4c91-b58f-5d61e45173a5",
+  "changeId": "SQC-DED67E74D3898BDCA85766BE8D3C93AF",
+  "intendedCondition": "The final restoration-projection slice, including canonical ordering reuse and its evidence-bound adjudication, passes repository-wide verification",
+  "action": {
+    "family": "repository-verification",
+    "summary": "Verify the final restoration projection with focused and full tests, typecheck, formatting, lint, build, API compatibility, exhaustive SCIP relationship analysis, and the changed-surface gate",
+    "effectClass": "read-only"
+  },
+  "evidenceReceipts": [
+    {
+      "schemaVersion": 2,
+      "observedAt": "2026-07-31T05:28:40.001Z",
+      "facts": {
+        "collaborationDomain": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:collaboration-domain",
+            "version": 1
+          },
+          "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+        },
+        "workspaceInstance": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:workspace-instance",
+            "version": 1
+          },
+          "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+        },
+        "wholeContent": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:repository-content",
+            "version": 1
+          },
+          "digest": "2e60a92216dfd778a69957937b30ed9548703cfb48626ec2378549f09d3dfc7d"
+        },
+        "relevantInputs": [
+          {
+            "subject": "scip-query:index-inputs",
+            "identity": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:index-inputs",
+                "version": 2
+              },
+              "digest": "cf109957b86014e034c1e21f34e50fc65697eb9748e7c6fee9379ccda6749acd"
+            }
+          }
+        ],
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "a25c9bceaff940276f4473b6b6f9d154cb43c6be369db3e9518d3af5a7aa54bb"
+          },
+          "inputs": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-inputs",
+              "version": 2
+            },
+            "digest": "cf109957b86014e034c1e21f34e50fc65697eb9748e7c6fee9379ccda6749acd"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "a25c9bceaff940276f4473b6b6f9d154cb43c6be369db3e9518d3af5a7aa54bb"
+          }
+        },
+        {
+          "kind": "repository-snapshot",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:repository-content",
+              "version": 1
+            },
+            "digest": "2e60a92216dfd778a69957937b30ed9548703cfb48626ec2378549f09d3dfc7d"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        },
+        {
+          "source": "repository-snapshot",
+          "kind": "fixed-snapshot"
+        }
+      ],
+      "diagnostics": {
+        "clean": false,
+        "headCommit": "4f0e01491ffca00afd94a51d5bf4a157ddd9cbf0",
+        "treeOid": "e9671b5f5fad6ea3331119078744f281635c9638"
+      }
+    }
+  ],
+  "observedEffect": "All 2,268 tests in 283 files passed after the final ordering reuse; typecheck, formatting, lint, build, the unchanged 72-path API contract, exhaustive SCIP relationship analysis, and diff-gate passed with the only historical-coupling candidate resolved by current content-bound counterevidence",
+  "outcome": "succeeded",
+  "idempotency": {
+    "version": 1,
+    "algorithm": "sha256",
+    "keyDigest": "283b608e2df954ff101445f6fd59943c79e88af5dadf1fcf3c9126d4122e7828",
+    "requestDigest": "4413f00768b320ccab6fa82c902edb10fc1fcb62fa7ca825124c480118b0cd9a"
+  },
+  "createdAt": "2026-07-31T05:29:18.904Z",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  }
+}

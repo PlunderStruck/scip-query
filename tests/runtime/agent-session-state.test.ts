@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   AGENT_SESSION_STATE_TTL_MS,
   MAX_AGENT_SESSION_PENDING_OUTPUTS,
+  agentRestorationDeliveryEpoch,
   agentSessionStatePath,
+  claimAgentSessionRestoration,
   pendingOutputFromTranscript,
   readAgentSessionState,
   readAgentTranscriptTail,
@@ -140,6 +142,50 @@ describe('agent session evidence continuity', () => {
     expect(rendered).toContain('Continue exactly');
     expect(rendered).toContain('pass-with-suppressions');
     expect(rendered).toContain('generation=generation-a');
+  });
+
+  it('atomically suppresses only an equal restoration meaning for the same hook event', () => {
+    const cacheDir = root();
+    const base = {
+      cacheDir,
+      sessionId: 'session',
+      projectRoot: '/repo',
+      projectionCursor: 'a'.repeat(64),
+      deliveryEpoch: agentRestorationDeliveryEpoch('transcript-one'),
+      nowMs: 1_000,
+    };
+
+    expect(claimAgentSessionRestoration(base).claimed).toBe(true);
+    expect(claimAgentSessionRestoration({ ...base, nowMs: 1_001 }).claimed).toBe(false);
+    expect(
+      claimAgentSessionRestoration({
+        ...base,
+        projectionCursor: 'b'.repeat(64),
+        nowMs: 1_002,
+      }).claimed,
+    ).toBe(true);
+    expect(
+      claimAgentSessionRestoration({
+        ...base,
+        projectionCursor: 'b'.repeat(64),
+        deliveryEpoch: agentRestorationDeliveryEpoch('transcript-two'),
+        nowMs: 1_003,
+      }).claimed,
+    ).toBe(true);
+  });
+
+  it('redelivers when no stable hook-event epoch can be observed', () => {
+    const cacheDir = root();
+    const input = {
+      cacheDir,
+      sessionId: 'session',
+      projectRoot: '/repo',
+      projectionCursor: 'a'.repeat(64),
+      nowMs: 1_000,
+    };
+
+    expect(claimAgentSessionRestoration(input).claimed).toBe(true);
+    expect(claimAgentSessionRestoration({ ...input, nowMs: 1_001 }).claimed).toBe(true);
   });
 });
 

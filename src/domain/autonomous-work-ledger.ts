@@ -676,7 +676,7 @@ function hasObservationAtOrAfter(receipts: readonly ObservationReceiptV2[], time
   return receipts.some((receipt) => Date.parse(receipt.observedAt) >= threshold);
 }
 
-function compareAttemptRecords(left: AttemptRecordV1, right: AttemptRecordV1): number {
+export function compareAttemptRecords(left: AttemptRecordV1, right: AttemptRecordV1): number {
   return left.createdAt.localeCompare(right.createdAt) || left.attemptId.localeCompare(right.attemptId);
 }
 

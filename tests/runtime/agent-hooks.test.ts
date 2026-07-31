@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -7,6 +7,8 @@ import type { DiffGateResult } from '../../src/queries/impact/diff-gate.js';
 import { summarizeRecordCompatibility } from '../../src/domain/record-compatibility.js';
 import { resolveIndexStoragePaths } from '../../src/platform/cache-layout.js';
 import { updateAgentSessionState } from '../../src/runtime/agent-session-state.js';
+import { createObligationAdmissionFile } from '../../src/storage/autonomous-work-obligations.js';
+import { createGoalRecordFile, createIntendedChangeRecordFile } from '../../src/storage/autonomous-work-state.js';
 import {
   evaluatePreToolUse,
   renderAgentHookContext,
@@ -99,6 +101,101 @@ describe('agent hook context', () => {
       });
       await expect(
         renderAgentHookContext(JSON.stringify({ hook_event_name: 'PostCompact', cwd, session_id: 'session-b' })),
+      ).resolves.toBeUndefined();
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('restores committed autonomous work on process start and deduplicates an unchanged compaction event', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'scip-query-hook-restoration-'));
+    try {
+      execFileSync('git', ['init', '--quiet'], { cwd });
+      writeFileSync(join(cwd, '.scipquery.json'), JSON.stringify({ watch: { autoRefresh: false } }));
+      const goal = createGoalRecordFile(
+        cwd,
+        '5ea57d1a-936c-4c91-b58f-5d61e45173a5',
+        {
+          feature: 'An agent resumes autonomous work after process death',
+          invariants: ['Every live obligation is restored'],
+          acceptanceScenarios: [
+            {
+              name: 'Fresh process',
+              given: ['committed work records exist'],
+              when: ['a session starts'],
+              then: ['the current goal and obligations are injected'],
+            },
+          ],
+          authorization: {
+            kind: 'repository-delegation',
+            principal: 'repository-owner',
+            source: 'test',
+          },
+        },
+        { toolVersion: '0.20.0' },
+      ).record;
+      const change = createIntendedChangeRecordFile(
+        cwd,
+        goal.collaborationDomainId,
+        {
+          goalId: goal.goalId,
+          idempotencyKey: 'hook-restoration',
+          title: 'Restore committed state',
+          intendedOutcome: 'A fresh process resumes the authorized change',
+        },
+        { toolVersion: '0.20.0' },
+      ).record;
+      const obligation = createObligationAdmissionFile(
+        cwd,
+        goal.collaborationDomainId,
+        {
+          changeId: change.changeId,
+          idempotencyKey: 'live',
+          category: 'verification',
+          title: 'Verify hook restoration',
+          requiredCondition: 'Session start and compaction recover this obligation',
+          source: { kind: 'agent-discovery', referent: 'agent hook test' },
+          basisAttemptIds: [],
+          evidenceReceipts: [],
+        },
+        { toolVersion: '0.20.0' },
+      ).record;
+      const transcriptPath = join(cwd, 'transcript.jsonl');
+      writeFileSync(transcriptPath, '{"event":"compacted"}\n');
+
+      const started = await renderAgentHookContext(
+        JSON.stringify({ hook_event_name: 'SessionStart', cwd, session_id: 'new-session' }),
+      );
+      expect(started).toMatchObject({
+        hookSpecificOutput: {
+          hookEventName: 'SessionStart',
+          additionalContext: expect.stringContaining(`LIVE ${obligation.obligationId}`),
+        },
+      });
+
+      const compacted = await renderAgentHookContext(
+        JSON.stringify({
+          hook_event_name: 'PostCompact',
+          cwd,
+          session_id: 'new-session',
+          transcript_path: transcriptPath,
+        }),
+      );
+      expect(compacted).toMatchObject({
+        hookSpecificOutput: {
+          hookEventName: 'PostCompact',
+          additionalContext: expect.stringContaining(`Goal ${goal.goalId}`),
+        },
+      });
+      await expect(
+        renderAgentHookContext(
+          JSON.stringify({
+            hook_event_name: 'PostCompact',
+            cwd,
+            session_id: 'new-session',
+            transcript_path: transcriptPath,
+          }),
+        ),
       ).resolves.toBeUndefined();
     } finally {
       rmSync(cwd, { recursive: true, force: true });

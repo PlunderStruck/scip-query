@@ -63,7 +63,11 @@ The plan is done only when: the entry-to-effect path is described and evidenced,
 When a repository has adopted canonical autonomous work state, use
 `scip-query goal status` and `scip-query change status` to recover the
 authorized goal and intended change rather than asking the user or transcript
-to restate them. `scip-query goal create --input <path>` and
+to restate them. Supported project-local hooks derive the same bounded
+restoration projection automatically on session start and after compaction;
+when it emits exact status commands because its registered context budget was
+reached, run those commands instead of asking for a narrative handoff.
+`scip-query goal create --input <path>` and
 `scip-query change create --input <path>` are repository mutations: use them
 only to materialize an authorized goal/change request, and rely on their
 retry-stable identities instead of editing committed record bytes directly.

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { closeSync, fstatSync, mkdirSync, openSync, readSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { isPathInsideProject } from '../domain/path-normalization.js';
+import { stableJson } from '../domain/stable-json.js';
 import {
   isObservationReceipt,
   observationReceiptGenerationIdentity,
@@ -13,7 +14,7 @@ import { readSmallArtifactText } from '../platform/bounded-file.js';
 import { inspectPendingCliOutputCursor, type PendingCliOutputSnapshot } from './output-pagination.js';
 import { mutateTextFileRevisionAware } from './revisioned-file.js';
 
-export const AGENT_SESSION_STATE_SCHEMA_VERSION = 1 as const;
+export const AGENT_SESSION_STATE_SCHEMA_VERSION = 2 as const;
 export const AGENT_SESSION_STATE_TTL_MS = 24 * 60 * 60 * 1_000;
 export const AGENT_SESSION_TRANSCRIPT_TAIL_BYTES = 2 * 1024 * 1024;
 export const MAX_AGENT_SESSION_PENDING_OUTPUTS = 8;
@@ -44,6 +45,17 @@ export interface AgentSessionPendingOutput {
   createdAtMs: number;
 }
 
+/**
+ * One delivery receipt identifies the exact restoration meaning injected for
+ * one stable hook event. It suppresses duplicate hook invocations without
+ * treating the reconstructable session cache as repository truth.
+ */
+export interface AgentSessionRestorationDelivery {
+  projectionCursor: string;
+  contextCursor: string;
+  deliveryEpoch: string;
+}
+
 export interface AgentSessionState {
   schemaVersion: typeof AGENT_SESSION_STATE_SCHEMA_VERSION;
   sessionIdentity: string;
@@ -52,6 +64,7 @@ export interface AgentSessionState {
   expiresAtMs: number;
   latestStop?: AgentSessionStopReceipt;
   unfinishedOutput: AgentSessionPendingOutput[];
+  lastRestorationDelivery?: AgentSessionRestorationDelivery;
 }
 
 export interface UpdateAgentSessionStateInput {
@@ -61,6 +74,21 @@ export interface UpdateAgentSessionStateInput {
   nowMs?: number;
   latestStop?: AgentSessionStopReceipt;
   unfinishedOutput?: readonly AgentSessionPendingOutput[];
+}
+
+export interface ClaimAgentSessionRestorationInput {
+  cacheDir: string;
+  sessionId: string;
+  projectRoot: string;
+  projectionCursor: string;
+  deliveryEpoch?: string;
+  nowMs?: number;
+  unfinishedOutput?: readonly AgentSessionPendingOutput[];
+}
+
+export interface ClaimAgentSessionRestorationResult {
+  state: AgentSessionState;
+  claimed: boolean;
 }
 
 export function agentSessionStatePath(cacheDir: string, sessionId: string): string {
@@ -115,6 +143,7 @@ export function updateAgentSessionState(input: UpdateAgentSessionStateInput): Ag
           ? { latestStop: input.latestStop ?? existing!.latestStop! }
           : {}),
         unfinishedOutput: normalizePendingOutputs(input.unfinishedOutput ?? existing?.unfinishedOutput ?? []),
+        ...(existing?.lastRestorationDelivery ? { lastRestorationDelivery: existing.lastRestorationDelivery } : {}),
       };
       return { kind: 'write', text: `${JSON.stringify(next, null, 2)}\n`, mode: 0o600 };
     },
@@ -123,6 +152,70 @@ export function updateAgentSessionState(input: UpdateAgentSessionStateInput): Ag
   const parsed = JSON.parse(mutation.current.text) as unknown;
   if (!isAgentSessionState(parsed)) throw new Error('Agent session state failed validation after publication.');
   return parsed;
+}
+
+/**
+ * Atomically claim one restoration delivery. Equal repository meaning and an
+ * equal hook-event epoch are delivered once; a changed projection, changed
+ * session evidence, or changed epoch is new resumable context.
+ */
+export function claimAgentSessionRestoration(
+  input: ClaimAgentSessionRestorationInput,
+): ClaimAgentSessionRestorationResult {
+  if (!isSha256(input.projectionCursor)) throw new Error('projectionCursor must be a SHA-256 digest');
+  if (input.deliveryEpoch !== undefined && !isSha256(input.deliveryEpoch)) {
+    throw new Error('deliveryEpoch must be a SHA-256 digest when present');
+  }
+  const nowMs = input.nowMs ?? Date.now();
+  const path = agentSessionStatePath(input.cacheDir, input.sessionId);
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  const expectedSession = sessionIdentity(input.sessionId);
+  const expectedProject = projectIdentity(input.projectRoot);
+  let claimed = true;
+  const mutation = mutateTextFileRevisionAware(
+    path,
+    (snapshot) => {
+      const existing = parseCurrentState(snapshot.text, expectedSession, expectedProject, nowMs);
+      const unfinishedOutput = normalizePendingOutputs(input.unfinishedOutput ?? existing?.unfinishedOutput ?? []);
+      const contextCursor = restorationContextCursor(input.projectionCursor, existing?.latestStop, unfinishedOutput);
+      const duplicate =
+        input.deliveryEpoch !== undefined &&
+        existing?.lastRestorationDelivery?.projectionCursor === input.projectionCursor &&
+        existing.lastRestorationDelivery.contextCursor === contextCursor &&
+        existing.lastRestorationDelivery.deliveryEpoch === input.deliveryEpoch;
+      claimed = !duplicate;
+      if (duplicate) return { kind: 'unchanged' };
+      const next: AgentSessionState = {
+        schemaVersion: AGENT_SESSION_STATE_SCHEMA_VERSION,
+        sessionIdentity: expectedSession,
+        projectIdentity: expectedProject,
+        updatedAtMs: nowMs,
+        expiresAtMs: nowMs + AGENT_SESSION_STATE_TTL_MS,
+        ...(existing?.latestStop ? { latestStop: existing.latestStop } : {}),
+        unfinishedOutput,
+        ...(input.deliveryEpoch
+          ? {
+              lastRestorationDelivery: {
+                projectionCursor: input.projectionCursor,
+                contextCursor,
+                deliveryEpoch: input.deliveryEpoch,
+              },
+            }
+          : existing?.lastRestorationDelivery
+            ? { lastRestorationDelivery: existing.lastRestorationDelivery }
+            : {}),
+      };
+      return { kind: 'write', text: `${JSON.stringify(next, null, 2)}\n`, mode: 0o600 };
+    },
+    { maxRetries: 3 },
+  );
+  const parsed = JSON.parse(mutation.current.text) as unknown;
+  if (!isAgentSessionState(parsed)) throw new Error('Agent session state failed validation after delivery claim.');
+  return { state: parsed, claimed };
+}
+
+export function agentRestorationDeliveryEpoch(referent: string): string {
+  return createHash('sha256').update(referent).digest('hex');
 }
 
 export function pendingOutputFromTranscript(
@@ -274,8 +367,25 @@ function isAgentSessionState(value: unknown): value is AgentSessionState {
     (state.latestStop === undefined || isAgentSessionStopReceipt(state.latestStop)) &&
     Array.isArray(state.unfinishedOutput) &&
     state.unfinishedOutput.length <= MAX_AGENT_SESSION_PENDING_OUTPUTS &&
-    state.unfinishedOutput.every(isAgentSessionPendingOutput)
+    state.unfinishedOutput.every(isAgentSessionPendingOutput) &&
+    (state.lastRestorationDelivery === undefined || isAgentSessionRestorationDelivery(state.lastRestorationDelivery))
   );
+}
+
+function restorationContextCursor(
+  projectionCursor: string,
+  latestStop: AgentSessionStopReceipt | undefined,
+  unfinishedOutput: readonly AgentSessionPendingOutput[],
+): string {
+  return createHash('sha256')
+    .update(stableJson({ projectionCursor, latestStop: latestStop ?? null, unfinishedOutput }))
+    .digest('hex');
+}
+
+function isAgentSessionRestorationDelivery(value: unknown): value is AgentSessionRestorationDelivery {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const delivery = value as Partial<AgentSessionRestorationDelivery>;
+  return isSha256(delivery.projectionCursor) && isSha256(delivery.contextCursor) && isSha256(delivery.deliveryEpoch);
 }
 
 function isAgentSessionStopReceipt(value: unknown): value is AgentSessionStopReceipt {

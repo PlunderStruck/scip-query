@@ -67,12 +67,25 @@ For analyzer implementation work, follow [Regex Policy](REGEX_POLICY.md): regex 
    ```
    Before cleanup, tell the user the health score, confirmed items, unavailable checks, and recommended first cleanup batch. Use `scip-audit` for confirmation and `scip-improve` when the user wants autonomous score improvement.
 
+4. **Use automatic work restoration**
+
+   When committed autonomous work records exist, project-local hooks inject a
+   bounded restoration projection at session start and after compaction. The
+   projection names the active goal and change, current condition, last
+   strategy, settled decision, unsafe retries, and live obligations. Do not
+   ask the user to restate those facts or reproduce them as a progress ritual.
+   If the registered 16 KiB context budget cannot hold every detail, run the
+   exact `goal status`, `change status`, `attempt status`, `decision status`,
+   and `obligation status` commands emitted by the projection.
+
 ### What you should know after this workflow
 
 - Whether the index is current and usable
 - Which capabilities are available, partial, or unavailable
 - Where the health dossier was written
 - What needs to be fixed before the repo can be called ready
+- Which committed goal, intended change, unsafe effects, and live obligations
+  constrain the next autonomous action
 
 ---
 

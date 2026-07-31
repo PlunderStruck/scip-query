@@ -213,6 +213,42 @@ The request schemas are
 and
 [`schemas/obligation-transition-request.schema.json`](schemas/obligation-transition-request.schema.json).
 
+## Resume without a transcript
+
+A restoration projection is a bounded resumption view derived from the
+immutable records above. Its real referents are the governing goal, active
+intended changes, last strategies and observations, settled decisions,
+unresolved effects, and live obligations that constrain what an agent may do
+next. What distinguishes it from a transcript summary is that every included
+fact comes from committed repository state and every condensation links back
+to exact commands for the complete records.
+
+Project-local agent hooks build this projection automatically on
+`SessionStart` and `PostCompact`. A fresh process therefore receives the
+current purpose without a prior session transcript. The projection:
+
+- keeps an intended change active until it is abandoned without unresolved
+  facts; a live obligation or unresolved effect keeps it visible;
+- retains the latest attempted strategy and the latest still-unsuccessful
+  attempt in each distinct action family, while omitting an older failure
+  superseded by a later success;
+- marks unresolved non-idempotent attempts unsafe to repeat;
+- lists every live obligation that fits in the registered context and supplies
+  exact status commands for the complete set;
+- treats any malformed, unsupported, missing, or inconsistent record as an
+  unverified ledger rather than silently summarizing the readable subset; and
+- stays within a 16 KiB UTF-8 hook budget. If complete detail does not fit, it
+  emits exact `goal`, `change`, `attempt`, `decision`, and `obligation` status
+  commands instead of cutting record meaning mid-field.
+
+The projection has a deterministic content cursor. The reconstructable
+session cache records that cursor together with the rendered evidence meaning
+and a stable hook-event digest, so an identical compaction callback does not
+inject duplicate context. A changed committed record, changed Stop/output
+evidence, or genuinely later compaction is delivered. If the hook cannot
+observe a stable transcript digest, it favors restoration over deduplication.
+The cache is never a source of project truth and may be discarded.
+
 ## Collaboration and validation
 
 Commit `.scipquery/goals/*.json`, `.scipquery/changes/*.json`,

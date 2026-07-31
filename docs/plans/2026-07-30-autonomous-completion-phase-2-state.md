@@ -1,7 +1,7 @@
 # Phase 2 — durable autonomous state
 
 Date: 2026-07-30
-Status: in progress — Phase 1 complete; slices 2.1–2.3 complete; slice 2.4 next
+Status: complete — slices 2.1–2.4 implemented and verified; Phase 3 is next
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -282,6 +282,50 @@ Validation and expected result:
   strategy, and every live obligation without transcript access;
 - the summary stays within a pre-registered byte/token budget; and
 - unchanged hooks add no repeated context.
+
+Implemented result:
+
+- a deterministic restoration projection folds committed goals, intended
+  changes, attempts, decisions, admissions, and transitions without promoting
+  the 24-hour session cache into a canonical store;
+- active changes retain their governing Gherkin goal, intended outcome,
+  current condition, latest strategy, latest settled decision, unresolved
+  non-idempotent effects, the latest still-unsuccessful attempt in each action
+  family, and every live obligation;
+- abandoned changes disappear only after no live obligation, unresolved
+  unknown effect, or reconciliation conflict remains. Completion-candidate
+  changes stay active until Phase 3 supplies an independently protected
+  completion transition;
+- all six work-record collections are read once for the projection. Their
+  compatibility and relationship failures make it explicitly unverified
+  instead of allowing the readable subset to masquerade as complete history;
+- rendering is pre-registered at 16 KiB of UTF-8 hook context. Overflow emits
+  complete change identities and exact `goal`, `change`, `attempt`,
+  `decision`, and `obligation` status commands rather than truncating record
+  meaning;
+- `SessionStart` reconstructs purpose from committed records without any
+  transcript, while `PostCompact` combines the same durable projection with
+  unfinished output and the last Stop receipt;
+- session-cache schema 2 atomically records the projection cursor, complete
+  rendered-evidence cursor, and stable hook-event digest under the existing
+  revision-aware lock. Identical compaction callbacks are suppressed; changed
+  work facts, session evidence, or compaction epochs are delivered; and an
+  unavailable transcript digest favors safe redelivery;
+- focused domain, storage, session-state, and hook tests passed 29 of 29,
+  including fresh-process recovery, superseded-failure removal, unsafe retry
+  retention, live-obligation recovery, malformed-record failure, budget
+  overflow, and duplicate compaction delivery; and
+- all 2,268 tests in 283 files passed, together with typecheck, formatting,
+  lint, build, the unchanged 72-path public API contract, doctor,
+  architecture, recent-duplication, incomplete-migration, unused-parameter,
+  dead-code, documentation, and scoped health checks;
+- fixed-snapshot verification attempts
+  `SQA-94C510F964AE68ADC2D7DD6DAF6EE8B9` and
+  `SQA-283B608E2DF954FF101445F6FD59943C` establish the behavior before and
+  after the final canonical-ordering reuse and detector reconciliation; and
+- obligation `SQO-E74312A179E0DB48E9AA78F8F9F8E62F` is fulfilled by transition
+  `SQT-95D3845A2388AAF64748320F1A78510C`, so Phase 2 closes with no live
+  obligation hidden by the projection.
 
 ## Durability and concurrency gate
 

@@ -34,7 +34,9 @@ import { findGitRoot } from '../platform/git-worktree.js';
 import { resolveSharedEvidenceDbPath } from '../reindex/shared-generation-store.js';
 import { inspectSqliteGeneration } from '../reindex/sqlite-generation-store.js';
 import { formatRecordCompatibilityWarning } from '../domain/record-compatibility.js';
+import { renderAutonomousRestorationProjection } from '../domain/autonomous-work-restoration.js';
 import { resolveSpawnableExecutable, toPortableCommand } from '../platform/binary.js';
+import { readAutonomousRestorationProjection } from '../storage/autonomous-work-restoration.js';
 import { writeSerializedJson } from '../platform/terminal-output.js';
 import {
   DEFAULT_DIFF_GATE_TIMEOUT_MS,
@@ -45,8 +47,9 @@ import {
 import { formatAnalysisBudgetDisclosure } from './cli-support.js';
 import { formatUnresolvedStreakLine } from '../queries/health/finding-outcome-ledger.js';
 import {
+  agentRestorationDeliveryEpoch,
+  claimAgentSessionRestoration,
   pendingOutputFromTranscript,
-  readAgentSessionState,
   readAgentTranscriptTail,
   renderAgentSessionRestoration,
   updateAgentSessionState,
@@ -1234,7 +1237,7 @@ export async function renderAgentHookContext(hookInput: string): Promise<unknown
   if (!workspace) return undefined;
   if (event === 'SessionStart' || event === 'PostCompact') resetPreToolReminder(workspace, payload);
   if (event === 'PostCompact') {
-    const restored = restoreCompactedAgentSession(workspace, payload);
+    const restored = restoreAgentWorkContext(workspace, payload, event);
     return restored
       ? {
           hookSpecificOutput: {
@@ -1248,7 +1251,12 @@ export async function renderAgentHookContext(hookInput: string): Promise<unknown
   const refreshNote = await refreshIndexForHookIfNeeded(workspace, event);
   const context =
     event === 'SessionStart'
-      ? renderSessionStartContext(workspace.projectRoot, workspace.config, workspace.paths)
+      ? [
+          renderSessionStartContext(workspace.projectRoot, workspace.config, workspace.paths),
+          restoreAgentWorkContext(workspace, payload, event),
+        ]
+          .filter((line): line is string => Boolean(line?.trim()))
+          .join('\n\n')
       : renderUserPromptContext(String(payload.prompt ?? ''), workspace.config);
   const additionalContext = [refreshNote, context].filter((line): line is string => Boolean(line?.trim())).join('\n');
   if (!additionalContext.trim()) return undefined;
@@ -1261,24 +1269,60 @@ export async function renderAgentHookContext(hookInput: string): Promise<unknown
   };
 }
 
-function restoreCompactedAgentSession(
+function restoreAgentWorkContext(
   workspace: NonNullable<ReturnType<typeof resolveHookWorkspace>>,
   payload: HookPayload,
+  event: 'SessionStart' | 'PostCompact',
 ): string | undefined {
+  let projectionContext: string | undefined;
+  let projectionCursor: string;
+  try {
+    const projection = readAutonomousRestorationProjection(workspace.projectRoot);
+    projectionCursor = projection.cursor;
+    projectionContext = renderAutonomousRestorationProjection(projection);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    projectionCursor = createHash('sha256').update(`restoration-error:${message}`).digest('hex');
+    projectionContext = [
+      `Autonomous work restoration is UNVERIFIED because committed records could not be projected: ${message}`,
+      'Do not claim completion or repeat an uncertain effect until the ledger is readable.',
+      'Inspect exactly with: scip-query goal status ; scip-query change status ; scip-query attempt status ; scip-query decision status ; scip-query obligation status',
+    ].join('\n');
+  }
   const sessionId = typeof payload.session_id === 'string' ? payload.session_id : undefined;
-  if (!sessionId) return undefined;
-  const transcriptPath = typeof payload.transcript_path === 'string' ? payload.transcript_path : undefined;
+  if (!sessionId) return projectionContext;
+  const transcriptPath =
+    event === 'PostCompact' && typeof payload.transcript_path === 'string' ? payload.transcript_path : undefined;
   const transcript = transcriptPath ? readAgentTranscriptTail(transcriptPath) : undefined;
-  const state =
-    transcript === undefined
-      ? readAgentSessionState(workspace.paths.cacheDir, sessionId, workspace.projectRoot)
-      : updateAgentSessionState({
-          cacheDir: workspace.paths.cacheDir,
-          sessionId,
-          projectRoot: workspace.projectRoot,
-          unfinishedOutput: pendingOutputFromTranscript(transcript, workspace.projectRoot),
-        });
-  return state ? renderAgentSessionRestoration(state) : undefined;
+  const deliveryEpoch =
+    event === 'SessionStart'
+      ? agentRestorationDeliveryEpoch('session-start')
+      : transcript === undefined
+        ? undefined
+        : agentRestorationDeliveryEpoch(transcript);
+  let claim: ReturnType<typeof claimAgentSessionRestoration>;
+  try {
+    claim = claimAgentSessionRestoration({
+      cacheDir: workspace.paths.cacheDir,
+      sessionId,
+      projectRoot: workspace.projectRoot,
+      projectionCursor,
+      ...(deliveryEpoch ? { deliveryEpoch } : {}),
+      ...(transcript !== undefined
+        ? { unfinishedOutput: pendingOutputFromTranscript(transcript, workspace.projectRoot) }
+        : {}),
+    });
+  } catch {
+    // The cache is reconstructable session state. Failure to update it must
+    // not hide a successfully derived committed-work projection.
+    return projectionContext;
+  }
+  if (!claim.claimed) return undefined;
+  return (
+    [projectionContext, renderAgentSessionRestoration(claim.state)]
+      .filter((line): line is string => Boolean(line?.trim()))
+      .join('\n\n') || undefined
+  );
 }
 
 interface HookRefreshDependencies {
