@@ -54,6 +54,8 @@ describe('setupAgent', () => {
     expect(agentsMd).toContain('Run `scip-query reindex` only when freshness is stale, missing, or unknown');
     expect(agentsMd).toContain('commit `.scipquery/goals/*.json`');
     expect(agentsMd).toContain('`.scipquery/changes/*.json`');
+    expect(agentsMd).toContain('`.scipquery/attempts/*.json`');
+    expect(agentsMd).toContain('`.scipquery/decisions/*.json`');
     expect(agentsMd).toContain('`.scipquery/suppressions/*.json`');
     expect(agentsMd).toContain('`.scipquery/events/*.json`');
     expect(agentsMd).toContain('`.codex/hooks.json` and `.claude/settings.local.json`');

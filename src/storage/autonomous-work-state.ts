@@ -54,6 +54,15 @@ export interface IntendedChangeCollectionReadResult extends WorkStateCollectionR
   integrityIssues: string[];
 }
 
+export interface WorkStatePublicationInput<RecordType> {
+  relativeDirectory: string;
+  identity: string;
+  record: RecordType;
+  readExisting: () => WorkStateRecordReadResult<RecordType>;
+  matchesExisting: (record: RecordType) => boolean;
+  collisionMessage: (relativePath: string) => string;
+}
+
 export function createGoalRecordFile(
   projectRoot: string,
   collaborationDomainId: string,
@@ -75,35 +84,19 @@ export function createGoalRecordFile(
       throw new Error(`predecessor goal ${record.predecessorGoalId} belongs to another collaboration domain`);
     }
   }
-  const relativePath = join(GOALS_DIR, `${record.goalId}.json`);
-  const absolutePath = join(projectRoot, relativePath);
-  try {
-    const publication = createFileAtomicExclusive(absolutePath, serializeRecord(record), {
-      durability: 'durable',
-      ...(options.atomicRuntime ? { runtime: options.atomicRuntime } : {}),
-    });
-    return {
+  return publishWorkStateRecord(
+    projectRoot,
+    {
+      relativeDirectory: GOALS_DIR,
+      identity: record.goalId,
       record,
-      path: relativePath,
-      publication: 'created',
-      achievedDurability: publication.achievedDurability,
-    };
-  } catch (error) {
-    if (!isExistingPathError(error)) throw error;
-    if (!recordPathExists(absolutePath, options.atomicRuntime)) throw error;
-    const existing = readGoalRecordFile(projectRoot, record.goalId);
-    if (existing.state !== 'current' || !goalRequestMatchesRecord(collaborationDomainId, request, existing.record)) {
-      throw new Error(`goal identity collision at ${relativePath}: existing record has different meaning or metadata`, {
-        cause: error,
-      });
-    }
-    return {
-      record: existing.record,
-      path: relativePath,
-      publication: 'existing',
-      achievedDurability: 'existing',
-    };
-  }
+      readExisting: () => readGoalRecordFile(projectRoot, record.goalId),
+      matchesExisting: (existing) => goalRequestMatchesRecord(collaborationDomainId, request, existing),
+      collisionMessage: (relativePath) =>
+        `goal identity collision at ${relativePath}: existing record has different meaning or metadata`,
+    },
+    options,
+  );
 }
 
 export function createIntendedChangeRecordFile(
@@ -123,15 +116,35 @@ export function createIntendedChangeRecordFile(
     createdAt: (options.now ?? defaultNow)(),
     toolVersion: options.toolVersion,
   });
-  const relativePath = join(INTENDED_CHANGES_DIR, `${record.changeId}.json`);
+  return publishWorkStateRecord(
+    projectRoot,
+    {
+      relativeDirectory: INTENDED_CHANGES_DIR,
+      identity: record.changeId,
+      record,
+      readExisting: () => readIntendedChangeRecordFile(projectRoot, record.changeId),
+      matchesExisting: (existing) => intendedChangeRequestMatchesRecord(collaborationDomainId, request, existing),
+      collisionMessage: (relativePath) =>
+        `intended-change idempotency collision at ${relativePath}: this key already names a different request`,
+    },
+    options,
+  );
+}
+
+export function publishWorkStateRecord<RecordType>(
+  projectRoot: string,
+  input: WorkStatePublicationInput<RecordType>,
+  options: Pick<WorkStateCreateOptions, 'atomicRuntime'>,
+): WorkStateCreateResult<RecordType> {
+  const relativePath = join(input.relativeDirectory, `${input.identity}.json`);
   const absolutePath = join(projectRoot, relativePath);
   try {
-    const publication = createFileAtomicExclusive(absolutePath, serializeRecord(record), {
+    const publication = createFileAtomicExclusive(absolutePath, serializeRecord(input.record), {
       durability: 'durable',
       ...(options.atomicRuntime ? { runtime: options.atomicRuntime } : {}),
     });
     return {
-      record,
+      record: input.record,
       path: relativePath,
       publication: 'created',
       achievedDurability: publication.achievedDurability,
@@ -139,15 +152,9 @@ export function createIntendedChangeRecordFile(
   } catch (error) {
     if (!isExistingPathError(error)) throw error;
     if (!recordPathExists(absolutePath, options.atomicRuntime)) throw error;
-    const existing = readIntendedChangeRecordFile(projectRoot, record.changeId);
-    if (
-      existing.state !== 'current' ||
-      !intendedChangeRequestMatchesRecord(collaborationDomainId, request, existing.record)
-    ) {
-      throw new Error(
-        `intended-change idempotency collision at ${relativePath}: this key already names a different request`,
-        { cause: error },
-      );
+    const existing = input.readExisting();
+    if (existing.state !== 'current' || !input.matchesExisting(existing.record)) {
+      throw new Error(input.collisionMessage(relativePath), { cause: error });
     }
     return {
       record: existing.record,
@@ -208,7 +215,7 @@ export function readIntendedChangeRecords(
   return { ...result, integrityIssues };
 }
 
-function readRecordFile<RecordType>(
+export function readRecordFile<RecordType>(
   projectRoot: string,
   relativePath: string,
   decode: (value: unknown) => WorkStateDecodeResult<RecordType>,
@@ -220,7 +227,7 @@ function readRecordFile<RecordType>(
   return { path: relativePath, ...parseRecordFile(absolutePath, 'work-state record', decode) };
 }
 
-function readRecordDirectory<RecordType>(
+export function readRecordDirectory<RecordType>(
   projectRoot: string,
   relativeDirectory: string,
   label: string,
@@ -261,7 +268,7 @@ function readRecordDirectory<RecordType>(
   };
 }
 
-function parseRecordFile<RecordType>(
+export function parseRecordFile<RecordType>(
   path: string,
   label: string,
   decode: (value: unknown) => WorkStateDecodeResult<RecordType>,
@@ -282,7 +289,7 @@ function parseRecordFile<RecordType>(
   return decode(parsed);
 }
 
-function serializeRecord(value: unknown): string {
+export function serializeRecord(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 

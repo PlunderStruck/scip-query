@@ -1,0 +1,27 @@
+{
+  "kind": "scip-query-attempt",
+  "schemaVersion": 1,
+  "attemptId": "SQA-C1F519DED08E91C766F719FA00C2D603",
+  "collaborationDomainId": "5ea57d1a-936c-4c91-b58f-5d61e45173a5",
+  "changeId": "SQC-DED67E74D3898BDCA85766BE8D3C93AF",
+  "intendedCondition": "Attempts and evidence-based decisions survive interruption and collaboration without permitting an unsafe repeated effect",
+  "action": {
+    "family": "repository-implementation",
+    "summary": "Implement immutable attempt and decision records, deterministic folding, CLI operations, schemas, documentation, and safety checks",
+    "effectClass": "idempotent-write"
+  },
+  "evidenceReceipts": [],
+  "observedEffect": "The focused ledger and CLI suites, formatting, lint, build, API contract, and compiler-resolved architecture checks pass",
+  "outcome": "succeeded",
+  "idempotency": {
+    "version": 1,
+    "algorithm": "sha256",
+    "keyDigest": "c1f519ded08e91c766f719fa00c2d6036a340d258dcc28f9be09790ddb2d9959",
+    "requestDigest": "be4a0b6d939ddb12e6b66e4e50b793cbf8d0c5f4ef7b6953b0e08e35ed730508"
+  },
+  "createdAt": "2026-07-31T04:27:21.041Z",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  }
+}

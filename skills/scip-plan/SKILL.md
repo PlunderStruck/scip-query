@@ -67,6 +67,12 @@ to restate them. `scip-query goal create --input <path>` and
 `scip-query change create --input <path>` are repository mutations: use them
 only to materialize an authorized goal/change request, and rely on their
 retry-stable identities instead of editing committed record bytes directly.
+Use `scip-query attempt status <change-id>` and
+`scip-query decision status <change-id>` to recover tried strategies,
+unresolved effects, and settled next actions before proposing another slice.
+Their `create` operations are durable workflow primitives: record them as a
+side effect of useful work, never as a parallel narrative ritual, and never
+authorize repetition of an unresolved non-idempotent attempt.
 
 ## Owned command quick-reference
 

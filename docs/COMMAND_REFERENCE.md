@@ -157,6 +157,8 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 |---|---|---|
 | `goal <operation> [target]` | Create, read, validate, or list committed autonomous goal records | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `change <operation> [target]` | Create, read, validate, or list committed intended-change records | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `attempt <operation> [target]` | Create, read, validate, or summarize committed autonomous attempt records | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `decision <operation> [target]` | Create, read, validate, or summarize committed autonomous decision records | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 
 <!-- END GENERATED COMMAND REFERENCE -->
 

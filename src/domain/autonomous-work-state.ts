@@ -542,7 +542,7 @@ function intendedChangeRequestDigest(
   });
 }
 
-function recordVersion(
+export function recordVersion(
   value: unknown,
   expectedKind: string,
 ): { ok: true; version: number } | { ok: false; result: WorkStateDecodeResult<never> } {
@@ -556,7 +556,7 @@ function recordVersion(
   return { ok: true, version: value['schemaVersion'] };
 }
 
-function unsupportedVersion<RecordType>(
+export function unsupportedVersion<RecordType>(
   version: number,
   current: number,
   label: string,
@@ -576,7 +576,7 @@ function isGoalSemanticIdentity(value: unknown, expected: GoalSemanticIdentity):
   );
 }
 
-function isWorkStateWriter(value: unknown): value is WorkStateWriter {
+export function isWorkStateWriter(value: unknown): value is WorkStateWriter {
   return (
     isRecordObject(value) &&
     value['tool'] === 'scip-query' &&
@@ -589,7 +589,7 @@ function isCanonicalGherkin(value: unknown, normalized: GoalGherkin): boolean {
   return isRecordObject(value) && stableJson(value) === stableJson(normalized);
 }
 
-function normalizedBoundedLine(value: unknown, maximumCharacters: number): string | null {
+export function normalizedBoundedLine(value: unknown, maximumCharacters: number): string | null {
   if (typeof value !== 'string') return null;
   const normalized = value.trim().replace(/\s+/gu, ' ');
   return normalized.length > 0 && normalized.length <= maximumCharacters && !/[\0\r\n]/u.test(normalized)
@@ -605,11 +605,11 @@ function intendedChangeIdFromDigest(digest: string): string {
   return `SQC-${digest.slice(0, 32).toUpperCase()}`;
 }
 
-function hashIdentity(value: unknown): string {
+export function hashIdentity(value: unknown): string {
   return createHash(WORK_STATE_IDENTITY_ALGORITHM).update(stableJson(value)).digest('hex');
 }
 
-function isSha256(value: unknown): value is string {
+export function isSha256(value: unknown): value is string {
   return typeof value === 'string' && SHA256_PATTERN.test(value);
 }
 

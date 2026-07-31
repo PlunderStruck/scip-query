@@ -37,6 +37,7 @@ For analyzer implementation work, follow [Regex Policy](REGEX_POLICY.md): regex 
    facts and history that must survive clones, so commit `.scipquery.json`,
    managed AGENTS/CLAUDE guidance, health dossiers,
    `.scipquery/goals/*.json`, `.scipquery/changes/*.json`,
+   `.scipquery/attempts/*.json`, `.scipquery/decisions/*.json`,
    `.scipquery/suppressions/*.json`, `.scipquery/events/*.json`, and the legacy
    `.scipquery/ledger/` when a work-state or gate operation changes them.
    Checkout preferences configure only one clone, so do

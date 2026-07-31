@@ -1,10 +1,14 @@
 # Committed record compatibility
 
-scip-query stores four kinds of team-shared records in Git:
+scip-query stores six kinds of team-shared records in Git:
 
 - `.scipquery/goals/*.json` contains immutable, authorized goal versions.
 - `.scipquery/changes/*.json` contains immutable intended bodies of work tied
   to goals.
+- `.scipquery/attempts/*.json` contains immutable purposeful actions and their
+  observed effects.
+- `.scipquery/decisions/*.json` contains immutable evidence-based next-action
+  conclusions.
 - `.scipquery/suppressions/*.json` contains accepted detector-policy
   decisions.
 - `.scipquery/events/*.json` contains immutable finding-transition
@@ -60,6 +64,38 @@ incompatibility also makes change status incomplete, and an intended change
 whose goal is missing or belongs to another collaboration domain is an
 integrity failure. Records from future schema versions are retained but cannot
 support current conclusions.
+
+## Current attempt and decision records
+
+New attempts conform to
+[`schemas/attempt-record.schema.json`](schemas/attempt-record.schema.json), and
+new decisions conform to
+[`schemas/decision-record.schema.json`](schemas/decision-record.schema.json).
+
+An attempt is one immutable purposeful action and its observed effect. Its
+identity is derived from its intended change and a caller-stable idempotency
+key, while a separate request digest binds the condition, action effect class,
+evidence receipts, observed effect, outcome, and optional reconciliation
+target. A retry with the same meaning reuses the existing file; different
+meaning under the same key is an integrity error.
+
+A decision is one immutable conclusion about what action should follow a set
+of attempts. It preserves the basis attempts, evidence receipts, disposition,
+rationale, and optional next action. Its identity and publication rules match
+attempts, but the attempt and decision domains are separate so the same caller
+key cannot conflate an action with a conclusion.
+
+The reader folds records by timestamp and opaque identity, so directory order
+and branch merge order do not change the projection. An unknown
+non-idempotent attempt remains unsafe to repeat until a later terminal attempt
+names it and supplies a supported observation receipt taken at or after the
+unknown action. Conflicting terminal reconciliations remain an explicit
+integrity failure rather than being resolved by last-writer-wins.
+
+`attempt status [change-id]` and `decision status [change-id]` classify the
+complete record directories, validate their links to current intended
+changes, and return the deterministic history projection. A `retry-safe`
+decision cannot be created from an unresolved non-idempotent basis attempt.
 
 ## Current suppression records
 
@@ -190,15 +226,17 @@ removing the legacy ledger.
 
 ## Merge and rollback rules
 
-- Commit goal, intended-change, suppression, and event files with the work
-  that produced them.
-- Create goals and intended changes through `scip-query goal create` and
-  `scip-query change create`; do not hand-edit their derived identities.
+- Commit goal, intended-change, attempt, decision, suppression, and event files
+  with the work that produced them.
+- Create autonomous work records through their `scip-query <record> create`
+  operations; do not hand-edit their derived identities.
 - Do not rewrite all legacy files just to make compatibility counters
   “current.” Read overlap is the migration mechanism.
 - Resolve a same-suppression-path conflict by reviewing both policy decisions;
   never choose a side mechanically.
 - Independent event files should normally keep both sides of a merge.
+- Independent attempt and decision files should normally keep both sides of a
+  merge.
 - Do not delete an unsupported record to make a warning disappear. Use a
   reader that supports it, or deliberately migrate it with verified tooling.
 - Rolling back remains fail-closed: older readers reject v2 suppressions as

@@ -18,7 +18,7 @@ import { DIFF_GATE_RUN_COMMAND } from '../diff-gate-execution.js';
 import { handleAgentHookContext, handleAgentHookPreToolUse, handleAgentHookStop } from '../agent-hooks.js';
 import { BUILTIN_SKILLS } from '../setup.js';
 import * as handlers from './command-handlers.js';
-import { handleGoal, handleIntendedChange } from './work-state-handlers.js';
+import { handleAttempt, handleDecision, handleGoal, handleIntendedChange } from './work-state-handlers.js';
 import { orderedQueryCommandDescriptors } from './query-command-specs.js';
 
 const queryCommandsBeforeDiffImpact = orderedQueryCommandDescriptors.slice(0, queryIndexAfter('plan-context'));
@@ -458,6 +458,52 @@ export const commandDescriptors: CommandDescriptor[] = [
       'scip-query change status --json',
     ]),
     handler: handleIntendedChange,
+  },
+  {
+    id: 'attempt',
+    command: 'attempt <operation> [target]',
+    agent: agentContract(
+      'What purposeful actions and observed effects are durably recorded for an intended change?',
+      'opaque attempt identity, intended condition, action effect class, consumed observation receipts, observed effect, outcome, reconciliation link, compatibility, integrity, and publication durability',
+      ['action', 'record'],
+      'complete',
+      'repository',
+      commandOperation('repository-observation', [
+        { when: { kind: 'argument', index: 0, equals: 'create' }, role: 'mutation' },
+      ]),
+    ),
+    description: 'Create, read, validate, or summarize committed autonomous attempt records',
+    options: withJsonOption([option('--input <path>', 'Bounded JSON create request for the create operation')]),
+    claims: fixedClaimContract('repository-source', ['live-workspace']),
+    renderShape: 'custom',
+    docs: doc('Autonomous work state', [
+      'scip-query attempt create --input attempt-request.json --json',
+      'scip-query attempt status SQC-0123456789ABCDEF0123456789ABCDEF --json',
+    ]),
+    handler: handleAttempt,
+  },
+  {
+    id: 'decision',
+    command: 'decision <operation> [target]',
+    agent: agentContract(
+      'What evidence-based next actions are durably settled for an intended change?',
+      'opaque decision identity, basis attempts, consumed observation receipts, disposition, rationale, next action, compatibility, integrity, and publication durability',
+      ['action', 'record'],
+      'complete',
+      'repository',
+      commandOperation('repository-observation', [
+        { when: { kind: 'argument', index: 0, equals: 'create' }, role: 'mutation' },
+      ]),
+    ),
+    description: 'Create, read, validate, or summarize committed autonomous decision records',
+    options: withJsonOption([option('--input <path>', 'Bounded JSON create request for the create operation')]),
+    claims: fixedClaimContract('repository-source', ['live-workspace']),
+    renderShape: 'custom',
+    docs: doc('Autonomous work state', [
+      'scip-query decision create --input decision-request.json --json',
+      'scip-query decision status SQC-0123456789ABCDEF0123456789ABCDEF --json',
+    ]),
+    handler: handleDecision,
   },
   {
     id: 'suppress',

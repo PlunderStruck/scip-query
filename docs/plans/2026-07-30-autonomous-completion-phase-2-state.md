@@ -1,7 +1,7 @@
 # Phase 2 — durable autonomous state
 
 Date: 2026-07-30
-Status: in progress — Phase 1 complete; slice 2.1 complete; slice 2.2 next
+Status: in progress — Phase 1 complete; slices 2.1–2.2 complete; slice 2.3 next
 Parent: [Autonomous completion execution plan](./2026-07-30-autonomous-completion-execution.md)
 
 ## Goal
@@ -163,6 +163,38 @@ Validation and expected result:
 - an unknown action outcome remains unknown until reconciled by current
   observation; and
 - merging branches with distinct attempts is conflict-free by filename.
+
+Implemented result:
+
+- attempt records use `SQA-...` identities and decision records use `SQD-...`
+  identities derived from collaboration-scoped caller idempotency keys, with
+  separate request digests that bind their complete meaning;
+- both record families use the durable exclusive publication seam shared with
+  goals and intended changes, so retries recover a linked-but-unacknowledged
+  publication and same-key semantic drift fails as an integrity error;
+- the deterministic history fold orders by timestamp and opaque identity,
+  retains unresolved unknown outcomes, marks unresolved non-idempotent actions
+  unsafe to repeat, and exposes conflicting terminal reconciliations instead
+  of choosing a last writer;
+- a terminal reconciliation requires a supported version-2 observation
+  receipt observed at or after the unknown attempt, and `retry-safe` decisions
+  cannot use an unresolved non-idempotent basis;
+- branch-composition tests keep distinct attempts and decisions from both
+  branches, while status validates goal, intended-change, attempt, decision,
+  and relationship compatibility together;
+- the executable dogfood history contains implementation attempts
+  `SQA-C1F519DED08E91C766F719FA00C2D603` and
+  `SQA-7C59A62D596039935252632AC66325A0`, followed by completion-candidate
+  decision `SQD-B000B29DF89059251CC82AFB3CF85722`;
+- focused work-ledger, CLI, setup, and uninstall checks passed 63 of 63;
+  formatting, lint, build, the unchanged 72-path API contract, and all 2,248
+  tests in 279 files passed; and
+- a fresh compiler-resolved index established the domain-fold-to-storage-to-CLI
+  consumer path, found no architecture violations, no recent
+  reimplementations, and no unused parameters. The final diff gate passed over
+  8 changed source files and 103 symbols after renewing the existing
+  content-bound adjudication that the dedicated work-state handler—not the
+  legacy command monolith—owns these descriptors.
 
 ### 2.3 Obligation lifecycle
 

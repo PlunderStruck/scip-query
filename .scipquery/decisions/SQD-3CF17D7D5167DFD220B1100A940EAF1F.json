@@ -1,0 +1,25 @@
+{
+  "kind": "scip-query-decision",
+  "schemaVersion": 1,
+  "decisionId": "SQD-3CF17D7D5167DFD220B1100A940EAF1F",
+  "collaborationDomainId": "5ea57d1a-936c-4c91-b58f-5d61e45173a5",
+  "changeId": "SQC-DED67E74D3898BDCA85766BE8D3C93AF",
+  "basisAttemptIds": [
+    "SQA-C1F519DED08E91C766F719FA00C2D603"
+  ],
+  "evidenceReceipts": [],
+  "disposition": "continue",
+  "rationale": "The implementation establishes the slice behavior and the focused evidence is clean; repository-wide verification remains before the slice can be committed",
+  "nextAction": "Run the full test suite and SCIP postchecks, reconcile any findings, update the live plan, and commit Slice 2.2",
+  "idempotency": {
+    "version": 1,
+    "algorithm": "sha256",
+    "keyDigest": "3cf17d7d5167dfd220b1100a940eaf1f4840ec3ba90a641fc05d47f941b4bc1a",
+    "requestDigest": "cfc657b194e89404548256ebf0f336f45bdff4f7e1854ffd7153768883a76c12"
+  },
+  "createdAt": "2026-07-31T04:27:31.862Z",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  }
+}

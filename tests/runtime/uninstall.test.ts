@@ -68,6 +68,8 @@ describe('uninstallProject', () => {
     execFileSync('git', ['-C', root, 'init'], { stdio: 'ignore' });
     mkdirSync(join(root, '.scipquery', 'goals'), { recursive: true });
     mkdirSync(join(root, '.scipquery', 'changes'), { recursive: true });
+    mkdirSync(join(root, '.scipquery', 'attempts'), { recursive: true });
+    mkdirSync(join(root, '.scipquery', 'decisions'), { recursive: true });
     mkdirSync(join(root, '.scipquery', 'suppressions'), { recursive: true });
     mkdirSync(join(root, '.scipquery', 'events'), { recursive: true });
     mkdirSync(join(root, '.scipquery', 'ledger'), { recursive: true });
@@ -77,6 +79,8 @@ describe('uninstallProject', () => {
     expect(result.left).toEqual([
       '.scipquery/goals/ (repository records)',
       '.scipquery/changes/ (repository records)',
+      '.scipquery/attempts/ (repository records)',
+      '.scipquery/decisions/ (repository records)',
       '.scipquery/suppressions/ (repository records)',
       '.scipquery/events/ (repository records)',
       '.scipquery/ledger/ (repository records)',

@@ -1,0 +1,26 @@
+{
+  "kind": "scip-query-decision",
+  "schemaVersion": 1,
+  "decisionId": "SQD-B000B29DF89059251CC82AFB3CF85722",
+  "collaborationDomainId": "5ea57d1a-936c-4c91-b58f-5d61e45173a5",
+  "changeId": "SQC-DED67E74D3898BDCA85766BE8D3C93AF",
+  "basisAttemptIds": [
+    "SQA-7C59A62D596039935252632AC66325A0",
+    "SQA-C1F519DED08E91C766F719FA00C2D603"
+  ],
+  "evidenceReceipts": [],
+  "disposition": "completion-candidate",
+  "rationale": "The immutable history contracts, unsafe-retry guard, collaboration behavior, CLI surfaces, documentation, and repository-wide verification all satisfy the Slice 2.2 acceptance cases",
+  "nextAction": "Commit Slice 2.2 and begin the immutable completion-obligation lifecycle in Slice 2.3",
+  "idempotency": {
+    "version": 1,
+    "algorithm": "sha256",
+    "keyDigest": "b000b29df89059251cc82afb3cf85722c91f77403fbf975b20a4fcda6c8f92dc",
+    "requestDigest": "a8487f38ac08723404c270ddb535fd07c7ce347ed756b88e686d3e78c600cacc"
+  },
+  "createdAt": "2026-07-31T04:30:21.479Z",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  }
+}

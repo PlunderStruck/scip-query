@@ -234,7 +234,7 @@ Before the program can be marked complete:
 
 - [x] Phase 0: automatic version-1 evidence context.
 - [x] Phase 1: evidence foundation.
-- [ ] Phase 2: durable autonomous state (slice 2.1 complete; slice 2.2 next).
+- [ ] Phase 2: durable autonomous state (slices 2.1–2.2 complete; slice 2.3 next).
 - [ ] Phase 3: protected completion.
 - [ ] Phase 4: repository completeness.
 - [ ] Phase 5: agent workflow.

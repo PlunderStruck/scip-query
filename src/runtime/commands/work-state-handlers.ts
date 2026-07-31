@@ -1,6 +1,7 @@
 import { realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 
+import { decodeAttemptCreateRequest, decodeDecisionCreateRequest } from '../../domain/autonomous-work-ledger.js';
 import {
   decodeGoalCreateRequest,
   decodeIntendedChangeCreateRequest,
@@ -9,6 +10,15 @@ import {
 } from '../../domain/autonomous-work-state.js';
 import { readSmallArtifactText } from '../../platform/bounded-file.js';
 import { sanitizeTerminalLine, sanitizeTerminalText } from '../../platform/terminal-output.js';
+import {
+  createAttemptRecordFile,
+  createDecisionRecordFile,
+  readAttemptRecordFile,
+  readAttemptRecordPath,
+  readDecisionRecordFile,
+  readDecisionRecordPath,
+  readWorkHistory,
+} from '../../storage/autonomous-work-ledger.js';
 import {
   createGoalRecordFile,
   createIntendedChangeRecordFile,
@@ -44,6 +54,26 @@ export function handleIntendedChange(operationValue: unknown, targetValue: unkno
   const projectRoot = resolveProjectRoot();
   const result = runIntendedChangeOperation(projectRoot, operation, target, stringOptionValue(opts, 'input'));
   printWorkStateResult('change', [operation, ...(target ? [target] : [])], opts, result);
+  if (workStateResultFailed(result)) process.exitCode = 1;
+}
+
+export function handleAttempt(operationValue: unknown, targetValue: unknown, rawOpts: unknown): void {
+  const operation = workStateOperation(operationValue, 'attempt');
+  const target = optionalTarget(targetValue);
+  const opts = commandOptions(rawOpts);
+  const projectRoot = resolveProjectRoot();
+  const result = runAttemptOperation(projectRoot, operation, target, stringOptionValue(opts, 'input'));
+  printWorkStateResult('attempt', [operation, ...(target ? [target] : [])], opts, result);
+  if (workStateResultFailed(result)) process.exitCode = 1;
+}
+
+export function handleDecision(operationValue: unknown, targetValue: unknown, rawOpts: unknown): void {
+  const operation = workStateOperation(operationValue, 'decision');
+  const target = optionalTarget(targetValue);
+  const opts = commandOptions(rawOpts);
+  const projectRoot = resolveProjectRoot();
+  const result = runDecisionOperation(projectRoot, operation, target, stringOptionValue(opts, 'input'));
+  printWorkStateResult('decision', [operation, ...(target ? [target] : [])], opts, result);
   if (workStateResultFailed(result)) process.exitCode = 1;
 }
 
@@ -114,8 +144,86 @@ function runIntendedChangeOperation(
   }
 }
 
+function runAttemptOperation(
+  projectRoot: string,
+  operation: WorkStateOperation,
+  target: string | undefined,
+  input: string | undefined,
+): unknown {
+  switch (operation) {
+    case 'create': {
+      const request = decodeAttemptCreateRequest(readJsonRequest(requiredInput(input, 'attempt create')));
+      if (!request.ok) throw new Error(request.error);
+      return {
+        operation,
+        ...createAttemptRecordFile(projectRoot, requiredCollaborationDomain(projectRoot), request.request, {
+          toolVersion: cliVersion,
+        }),
+      };
+    }
+    case 'read':
+      return { operation, ...readAttemptRecordFile(projectRoot, requiredTarget(target, 'attempt read')) };
+    case 'validate': {
+      const path = repositoryRecordPath(projectRoot, requiredTarget(target, 'attempt validate'));
+      return { operation, path: relative(projectRoot, path), ...readAttemptRecordPath(path) };
+    }
+    case 'status': {
+      const history = readWorkHistory(projectRoot, target);
+      return {
+        operation,
+        records: history.summary.attempts,
+        compatibility: history.attempts.compatibility,
+        goalCompatibility: history.goalCompatibility,
+        changeCompatibility: history.changeCompatibility,
+        warnings: history.attempts.warnings,
+        integrityIssues: history.integrityIssues,
+        summary: history.summary,
+      };
+    }
+  }
+}
+
+function runDecisionOperation(
+  projectRoot: string,
+  operation: WorkStateOperation,
+  target: string | undefined,
+  input: string | undefined,
+): unknown {
+  switch (operation) {
+    case 'create': {
+      const request = decodeDecisionCreateRequest(readJsonRequest(requiredInput(input, 'decision create')));
+      if (!request.ok) throw new Error(request.error);
+      return {
+        operation,
+        ...createDecisionRecordFile(projectRoot, requiredCollaborationDomain(projectRoot), request.request, {
+          toolVersion: cliVersion,
+        }),
+      };
+    }
+    case 'read':
+      return { operation, ...readDecisionRecordFile(projectRoot, requiredTarget(target, 'decision read')) };
+    case 'validate': {
+      const path = repositoryRecordPath(projectRoot, requiredTarget(target, 'decision validate'));
+      return { operation, path: relative(projectRoot, path), ...readDecisionRecordPath(path) };
+    }
+    case 'status': {
+      const history = readWorkHistory(projectRoot, target);
+      return {
+        operation,
+        records: history.summary.decisions,
+        compatibility: history.decisions.compatibility,
+        goalCompatibility: history.goalCompatibility,
+        changeCompatibility: history.changeCompatibility,
+        warnings: history.decisions.warnings,
+        integrityIssues: history.integrityIssues,
+        summary: history.summary,
+      };
+    }
+  }
+}
+
 function printWorkStateResult(
-  command: 'goal' | 'change',
+  command: WorkStateCommand,
   args: readonly string[],
   opts: Readonly<Record<string, unknown>>,
   result: unknown,
@@ -129,7 +237,7 @@ function printWorkStateResult(
     return;
   }
   if (result['operation'] === 'create' && isObject(result['record'])) {
-    const identity = command === 'goal' ? String(result['record']['goalId']) : String(result['record']['changeId']);
+    const identity = workStateRecordIdentity(command, result['record']);
     console.log(
       `${result['publication'] === 'created' ? 'Created' : 'Reused'} ${command} ${sanitizeTerminalLine(identity)} at ${sanitizeTerminalLine(String(result['path']))}.`,
     );
@@ -140,11 +248,11 @@ function printWorkStateResult(
     return;
   }
   if (result['operation'] === 'status' && Array.isArray(result['records'])) {
-    console.log(`${command === 'goal' ? 'Goals' : 'Intended changes'}: ${result['records'].length} current record(s).`);
+    console.log(`${workStateCollectionLabel(command)}: ${result['records'].length} current record(s).`);
     for (const record of result['records']) {
       if (!isObject(record)) continue;
-      const identity = command === 'goal' ? record['goalId'] : record['changeId'];
-      const label = command === 'goal' ? record['gherkin'] : record['title'];
+      const identity = workStateRecordIdentity(command, record);
+      const label = workStateRecordLabel(command, record);
       console.log(`  ${sanitizeTerminalLine(String(identity))}  ${recordLabel(label)}`);
     }
     const warnings = Array.isArray(result['warnings']) ? result['warnings'] : [];
@@ -165,6 +273,18 @@ function printWorkStateResult(
       );
       return;
     }
+    if (command === 'attempt') {
+      console.log(
+        `${sanitizeTerminalLine(String(record['attemptId']))}  ${sanitizeTerminalLine(String(record['outcome']))}\nChange: ${sanitizeTerminalLine(String(record['changeId']))}\nCondition: ${sanitizeTerminalLine(String(record['intendedCondition']))}\nEffect: ${sanitizeTerminalLine(String(record['observedEffect']))}`,
+      );
+      return;
+    }
+    if (command === 'decision') {
+      console.log(
+        `${sanitizeTerminalLine(String(record['decisionId']))}  ${sanitizeTerminalLine(String(record['disposition']))}\nChange: ${sanitizeTerminalLine(String(record['changeId']))}\nRationale: ${sanitizeTerminalLine(String(record['rationale']))}`,
+      );
+      return;
+    }
     console.log(
       `${sanitizeTerminalLine(String(record['changeId']))}  ${sanitizeTerminalLine(String(record['title']))}\nGoal: ${sanitizeTerminalLine(String(record['goalId']))}\nOutcome: ${sanitizeTerminalLine(String(record['intendedOutcome']))}`,
     );
@@ -175,11 +295,43 @@ function printWorkStateResult(
   );
 }
 
+type WorkStateCommand = 'goal' | 'change' | 'attempt' | 'decision';
+
+function workStateRecordIdentity(command: WorkStateCommand, record: Readonly<Record<string, unknown>>): string {
+  const field = {
+    goal: 'goalId',
+    change: 'changeId',
+    attempt: 'attemptId',
+    decision: 'decisionId',
+  }[command];
+  return String(record[field]);
+}
+
+function workStateRecordLabel(command: WorkStateCommand, record: Readonly<Record<string, unknown>>): unknown {
+  const field = {
+    goal: 'gherkin',
+    change: 'title',
+    attempt: 'intendedCondition',
+    decision: 'rationale',
+  }[command];
+  return record[field];
+}
+
+function workStateCollectionLabel(command: WorkStateCommand): string {
+  return {
+    goal: 'Goals',
+    change: 'Intended changes',
+    attempt: 'Attempts',
+    decision: 'Decisions',
+  }[command];
+}
+
 function workStateResultFailed(result: unknown): boolean {
   if (!isObject(result)) return true;
   if (typeof result['state'] === 'string' && result['state'] !== 'current') return true;
   if (isObject(result['compatibility']) && result['compatibility']['complete'] === false) return true;
   if (isObject(result['goalCompatibility']) && result['goalCompatibility']['complete'] === false) return true;
+  if (isObject(result['changeCompatibility']) && result['changeCompatibility']['complete'] === false) return true;
   return Array.isArray(result['integrityIssues']) && result['integrityIssues'].length > 0;
 }
 
