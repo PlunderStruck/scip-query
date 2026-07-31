@@ -37,7 +37,7 @@ the logical result is exhaustive.
 | A question about whether problems exist, without permission to edit | `scip-audit` | The scoped items are classified and ranked with evidence; no code or docs are changed. |
 | Confirmed cleanup, drift, maintainability, frontend, directory, twin, or documentation findings that should be fixed | `scip-improve` | One coherent finding slice is changed and passes its routed postchecks. |
 | First adoption, broken setup, missing capabilities, skill installation, hooks, CI, or uninstall | `scip-setup` | The workspace is ready, or every unavailable capability has an explicit blocker. |
-| A finished diff that must be challenged before commit or release | `scip-verify` | Workspace, impact, applicable postchecks, gate findings, and refutation attempts are all accounted for. |
+| A finished diff that must be challenged before commit or release | `scip-verify` | Every requirement has direct evidence, the diff has one gate owner, and unresolved findings are accounted for. |
 
 ## Disambiguation
 
@@ -64,8 +64,9 @@ the logical result is exhaustive.
 3. Implement the smallest coherent planned slice. Ordinary scip-query
    operations update attempt and evidence history automatically; do not add
    manual ledger commands as workflow ceremony.
-4. Invoke `scip-verify`; do not declare completion until it passes or every
-   remaining finding has a specific evidence-backed disposition.
+4. Invoke `scip-verify` once for the coherent finished slice. Reuse checks that
+   already ran, let a protected blocking Stop hook own the final diff gate, and
+   add a probe only for a requirement that still lacks discriminating evidence.
 5. Follow the exact Stop-controller next action. Continue autonomously for
    work blockers; stop only when the action identifies genuinely missing
    authorization.
@@ -87,5 +88,5 @@ Top commands per routed skill, generated from each skill's own `commands:` front
 | `scip-improve` | `scip-query cleanup-plan --verify`, `scip-query cleanup-apply --verified --batch <n> --dry-run`, `scip-query diff-gate` |
 | `scip-plan` | `scip-query plan-context <target>`, `scip-query refs <symbol>`, `scip-query affected <symbol>` |
 | `scip-setup` | `scip-query setup --json`, `scip-query doctor`, `scip-query status --capabilities` |
-| `scip-verify` | `scip-query doctor`, `scip-query diff-impact`, `scip-query diff-gate` |
+| `scip-verify` | `scip-query status --capabilities`, `scip-query diff-impact`, `scip-query diff-gate` |
 <!-- END GENERATED ROUTER COMMAND PREVIEW -->

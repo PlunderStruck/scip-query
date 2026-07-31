@@ -411,7 +411,12 @@ describe('CLI contract', () => {
       /Do not issue manual `attempt create` or `decision create`\s+operations for ordinary/u,
     );
     expect(readSkill('scip-improve')).toContain('Continue through those slices autonomously');
-    expect(readSkill('scip-verify')).toContain('A clean\n`diff-gate` is evidence, not permission');
+    const verifySkill = readSkill('scip-verify');
+    expect(verifySkill).toContain('A clean\n`diff-gate` is evidence, not permission');
+    expect(verifySkill).toContain('Give the diff gate one owner');
+    expect(verifySkill).toContain('Do not run their standalone\nforms as a fixed pre-gate battery');
+    expect(verifySkill).not.toContain('Construct at least two refutation attempts');
+    expect(verifySkill).not.toContain('Run every row that matches');
     expect(readSkill('scip-setup')).toContain('without hand-authored glue');
   });
 

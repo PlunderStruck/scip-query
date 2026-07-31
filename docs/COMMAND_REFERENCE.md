@@ -174,6 +174,16 @@ and their protected `.git` metadata. If the snapshot cannot be prepared, the
 command reports one explicit unavailable reason rather than silently treating
 the batch as verified.
 
+## Agent closeout
+
+This command catalog is not a verification battery. At closeout, reuse current
+freshness and direct test evidence, run `diff-impact` when compiler-resolved
+impact can change the verdict, and give `diff-gate` one owner. A protected
+blocking Stop hook owns that final gate; otherwise run it once manually. The
+gate already invokes its built-in detector family, so run a standalone
+detector only for an uncovered requirement or to investigate a finding. See
+the bundled `scip-verify` skill for the complete usefulness rule.
+
 ## `analysisBudget` disclosure contract
 
 On a large index (`stats.symbols >= 25,000` or `stats.documents >= 2,500`), commands built on the

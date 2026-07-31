@@ -77,7 +77,7 @@ Two layers, wired by `scip-query setup`:
 | Diagnose | `scip-diagnose`                                  | `files`, `trace`, `call-graph`, `outline`       |
 | Audit    | `scip-audit`                                     | `cleanup-plan --verify`, `dead`, `twin-drift`   |
 | Improve  | `scip-improve`                                   | `incomplete-migration`, `recent-duplicates`     |
-| Verify   | `scip-verify` (closeout) + the ambient diff gate | `diff-impact`, `diff-gate`, `health --baseline` |
+| Verify   | `scip-verify` + one final gate owner              | `status` as needed, `diff-impact`, `diff-gate`  |
 | Set up   | `scip-setup`                                     | `doctor`, `setup`, `setup-hooks`, `setup-agent` |
 
 The consolidated skills retain the former specialist lenses as routed

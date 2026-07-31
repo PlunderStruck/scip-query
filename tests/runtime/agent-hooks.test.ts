@@ -144,6 +144,7 @@ describe('agent hook context', () => {
           ),
         },
       });
+      expect(JSON.stringify(output)).toContain('Final Stop enforcement is blocking and owns the diff gate');
       expect(replay).toBeUndefined();
       expect(readGoalRecordFile(cwd, authorization.goal.goalId)).toMatchObject({
         state: 'current',

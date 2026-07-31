@@ -293,6 +293,11 @@ already-configured behavior-judged pair before making an effectiveness claim.
   boundaries, cached by compatible state identity, and triggered by uncertainty
   or changed effects rather than repeated as fixed rituals — because the tool
   should remove re-discovery and rework instead of replacing them with forms.
+- Verification gives each claim one cheapest discriminating proof and each
+  final gate one execution owner; standalone detectors run only for uncovered
+  risks or reported findings, and repeated checks require changed evidence —
+  because duplicating direct tests, a detector battery, and an ambient Stop
+  gate burns resources without increasing completion coverage.
 - Efficiency is measured to verified completion, including failed attempts and
   rework, rather than per command — because a cheap narrow run that leaves
   residue is not efficient and an expensive check that prevents a larger retry

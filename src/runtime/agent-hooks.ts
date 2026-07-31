@@ -1367,6 +1367,7 @@ export async function renderAgentHookContext(
 
   const workspace = resolveHookWorkspace(payload);
   if (!workspace) return undefined;
+  const environment = options.environment ?? process.env;
   if (event === 'SessionStart' || event === 'PostCompact') resetPreToolReminder(workspace, payload);
   if (event === 'PostCompact') {
     const restored = restoreAgentWorkContext(workspace, payload, event);
@@ -1387,7 +1388,7 @@ export async function renderAgentHookContext(
           projectRoot: workspace.projectRoot,
           collaborationDomainId: workspace.config.collaborationDomainId,
           prompt,
-          environment: options.environment ?? process.env,
+          environment,
         })
       : undefined;
 
@@ -1402,7 +1403,7 @@ export async function renderAgentHookContext(
           .join('\n\n')
       : [
           activation?.publication === 'activated'
-            ? `Activated protected work authorization ${activation.lease.record.authorizationId}: exact goal ${activation.lease.record.goal.goalId} and change ${activation.lease.record.change.changeId} are now the durable work state. Continue directly from that intent.`
+            ? `Activated protected work authorization ${activation.lease.record.authorizationId}: exact goal ${activation.lease.record.goal.goalId} and change ${activation.lease.record.change.changeId} are now the durable work state. Continue directly from that intent.${resolveStopHookMode(environment) === 'block' ? ' Final Stop enforcement is blocking and owns the diff gate; do not duplicate it manually before closeout.' : ''}`
             : undefined,
           renderUserPromptContext(prompt, workspace.config),
           restoreAgentWorkContext(workspace, payload, event),

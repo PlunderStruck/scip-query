@@ -1,6 +1,6 @@
 ---
 name: scip-plan
-description: Use before, during, AND after non-trivial work: plan a change, migration, or refactor; assess what breaks when changing a public export, module boundary, schema, route, CLI command, config field, generated artifact, signature, or documented behaviour; conduct a multi-phase program and review a delegated agent's work mid-flight; plan a performance campaign; scaffold a TLA+ model before implementing, and trace-check it against the real system afterward. Distinct from the `review` skill, which reviews a finished branch or PR against coding standards and the originating spec — this one oversees a program you are conducting.
+description: Use before non-trivial work to plan a change, migration, refactor, public-surface edit, multi-phase program, performance campaign, or TLA+ model. Revisit it only when new evidence changes the route, scope, or handoff; a finished diff routes to scip-verify instead.
 commands:
   - template: "scip-query plan-context <target>"
     when: "Anchor the current flow, consumers, reuse options, and change risks."
@@ -48,11 +48,15 @@ Picking the mode matters: running the high-assurance certificate on routine work
 
 ## Scenario: plan a single non-trivial change (ordinary mode, the default)
 
-Apply `_shared`'s freshness gate once before citing the first graph fact; let an active watcher handle refreshes and use manual reindex only as the documented fallback. Then run `scip-query plan-context <target>` — the single anchoring call for planning. Its composite return already includes definitions, references, callers, callees, dataflow producers/consumers, forward and backward slices, affected symbols, change-surface risk, dependencies and reverse dependencies, module exports, external surface use, complexity, churn, co-change partners, and active suppressions, so the job is to interpret this composite rather than rebuild a proof system on top of it.
+Apply `_shared`'s freshness gate once before citing the first graph fact; let an active watcher handle refreshes and use manual reindex only as the documented fallback. Then run one `scip-query plan-context <target>` as the anchoring call for planning. Its composite return already includes definitions, references, callers, callees, dataflow producers/consumers, forward and backward slices, affected symbols, change-surface risk, dependencies and reverse dependencies, module exports, external surface use, complexity, churn, co-change partners, and active suppressions, so the job is to interpret this composite rather than rebuild a proof system on top of it.
 
-Reach for a second command only when a section `plan-context` returned came back bounded (not complete) or the target wasn't indexed: `scip-query refs <symbol>` to enumerate consumers in full, `scip-query affected <symbol>` for the transitive blast radius when the change isn't consumer-local, `scip-query code <symbol>` to read the source behind a behavior claim before writing it into the plan.
+Reach for a second command only when a section `plan-context` returned came back bounded (not complete) or the target wasn't indexed: `scip-query refs <symbol>` to enumerate consumers in full, `scip-query affected <symbol>` for the transitive blast radius when the change isn't consumer-local, `scip-query code <symbol>` to read the source behind a behavior claim before writing it into the plan. Do not rerun `plan-context` for every consumer it already named; read those source locations directly. A second anchor is warranted only for a distinct subsystem whose entry-to-effect path remains unknown and can change the plan.
 
-Write the plan to `docs/plans/YYYY-MM-DD-<short-name>.md` with these sections:
+For a long, multi-slice, cross-session, or multi-contributor program, write the
+durable plan to `docs/plans/YYYY-MM-DD-<short-name>.md`. For one coherent
+change, keep the same information in the active working plan or intended-change
+record; creating a repository document that will immediately become history is
+not required. Use these sections wherever the plan lives:
 
 - **Goal** — what the user is trying to accomplish, and what done looks like for them.
 - **Current Flow** — the affected path from entry point to observable effect, in prose, with evidence behind each claim; if current behavior can't be described end to end, the change isn't ready to make.

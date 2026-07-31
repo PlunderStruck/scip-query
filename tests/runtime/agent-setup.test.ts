@@ -54,6 +54,9 @@ describe('setupAgent', () => {
     expect(agentsMd).toContain('without asking the user to restate protocol metadata');
     expect(agentsMd).toContain('capture attempts, evidence, reconciliations, and next-action decisions automatically');
     expect(agentsMd).toContain('stop only on a named missing-authorization boundary');
+    expect(agentsMd).toContain('do not run those detectors as a fixed pre-gate battery');
+    expect(agentsMd).toContain('Give the final diff gate one owner');
+    expect(agentsMd).toContain('When protected work activation says Stop is blocking, let Stop run it');
     expect(agentsMd).toContain('let an active watcher finish its refresh');
     expect(agentsMd).toContain('Run `scip-query reindex` only when freshness is stale, missing, or unknown');
     expect(agentsMd).toContain('commit `.scipquery/goals/*.json`');

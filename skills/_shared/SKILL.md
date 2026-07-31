@@ -20,7 +20,7 @@ A SCIP index is the compiler-derived map of a repository: source files, symbols,
 | Descriptor-owned questions, returned units, and default coverage for every command | `references/agent-contract-catalog.md` |
 | Detector precision tiers, diff-gate's ten checks, root-cause groups, event ledger, effectiveness | `references/detector-precision-and-diffgate.md` |
 | Subagent evidence-boundary contract, dead-code reference-counting status and residual gap | `references/evidence-and-dead-code.md` |
-| The edit-to-postcheck table (which postcheck to run after which kind of edit) | `scip-verify` skill — authoritative, do not duplicate it here |
+| Finished-diff requirement evidence, specialist-check usefulness, and final gate ownership | `scip-verify` skill — authoritative, do not duplicate it here |
 
 ## Freshness gate
 
@@ -89,7 +89,16 @@ Standalone detector commands (outside diff-gate) are not outcome-tracked in this
 
 ## Postcheck
 
-At final verification for a coherent diff, run `scip-query status --capabilities` once and `scip-query diff-gate`. Repeat them only if the diff changes afterward. Fix each finding, or record a specific acceptance reason for each one left unresolved (findings marked `(advisory)` never block — treat them as context, not obligations). Do not report success while a diff-gate finding is unexplained. The authoritative table of *which* postcheck to run for *which* kind of edit lives in `scip-verify`; invoke that skill rather than re-deriving it here.
+At final verification for a coherent diff, reuse current-generation freshness
+evidence or run `scip-query status --capabilities` once when none exists. Map
+material requirements to direct evidence before adding commands. A protected
+blocking Stop hook owns the final diff gate; without one, run
+`scip-query diff-gate` once. The gate already owns its built-in detector
+family, so standalone detectors are not a pre-gate battery. Use one only for
+an uncovered risk or to investigate a reported finding, and repeat a check only
+after relevant evidence changes. Fix each blocking finding or record a specific
+evidence-backed disposition; treat advisory findings as context. The
+authoritative usefulness and ownership rules live in `scip-verify`.
 
 ## Subagent evidence boundary
 

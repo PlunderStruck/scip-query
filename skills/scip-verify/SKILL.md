@@ -1,13 +1,13 @@
 ---
 name: scip-verify
-description: Use after finishing a change and before committing: ensure the watcher has produced a fresh index generation, run the postchecks matching what you edited, diff-gate, and try to refute your own PASS — including verifying that a React or Vue refactor actually achieved the reuse it claimed. Also use to calibrate detector precision once a repo is already set up and its findings look too noisy or too clean. For an existing status claim with no just-finished diff, use scip-audit instead. Distinct from the `review` skill: that one reviews a branch against coding standards and the originating spec; this one runs freshness, routed postchecks and diff-gate checks on a change you just made.
+description: Use once after a coherent finished change: reuse current freshness evidence, prove each requirement with the cheapest discriminating check, inspect final impact when relevant, and give the diff gate exactly one owner. Add standalone detectors only for uncovered risks or reported findings. Also use to calibrate detector precision when findings look too noisy or too clean.
 commands:
-  - template: "scip-query doctor"
-    when: "Prove the workspace and configuration are usable before trusting evidence."
+  - template: "scip-query status --capabilities"
+    when: "Confirm final source freshness only when current-generation status was not already established."
   - template: "scip-query diff-impact"
     when: "Compare changed files, symbols, and affected consumers with the intended diff."
   - template: "scip-query diff-gate"
-    when: "Run the complete finished-diff gate without blind line truncation."
+    when: "Own the final gate when no protected blocking Stop hook will do so, or inspect a reported gate failure."
   - template: "scip-query mission-trial report <program> --protected-root <path>"
     when: "Classify protected matched trials when calibrating a release or material workflow change."
 ---
@@ -16,258 +16,168 @@ commands:
 
 ## Purpose
 
-Verification is the evidence pass that proves a finished change is wired,
-safe, and regression-free: the workspace can answer, the index is current,
-the changed symbols and files match intent, every postcheck the edit calls
-for ran, and diff-gate findings are resolved. A PASS is the verdict nobody
-re-checks, so the flow below ends by trying to break it before it's claimed.
-
-Calibration is the companion problem: a detector tuned on one codebase's
-conventions can be precise there and noisy elsewhere, so before any of the
-above output is trusted on a repo, someone has to find out which it is.
-
-Load shared mechanics — command syntax, the evidence contract, diff-gate's
+Verification is the evidence pass that proves a finished change embodies its
+goal without leaving affected artifacts unresolved. It is not a prescribed
+number of commands. A useful verification action either tests an uncovered
+requirement, investigates an unexpected result, or supplies the one final
+enforcement decision. Repeating equivalent checks against unchanged evidence
+is ceremony and is not part of this workflow.
 
 <!-- BEGIN GENERATED SKILL COMMANDS -->
 ## Commands for this skill
 
 | Command | Purpose | Returns | Coverage | When |
 | --- | --- | --- | --- | --- |
-| `scip-query doctor` | Diagnose config, index freshness, dependency readiness, and project capabilities | config, freshness, dependency, and capability diagnostics | `complete` | Prove the workspace and configuration are usable before trusting evidence. |
+| `scip-query status --capabilities` | Show index status for this project | freshness, generation, language shards, watcher, and optional capabilities | `complete` | Confirm final source freshness only when current-generation status was not already established. |
 | `scip-query diff-impact` | Compute changed symbols and downstream consumers from current git diff | changed symbols, downstream consumer identities, and impact paths | `bounded` | Compare changed files, symbols, and affected consumers with the intended diff. |
-| `scip-query diff-gate` | Runtime-bounded, single-flight gate for the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | blocking findings with check id, message, and remediation; advisory findings; root-cause groups; changed file and symbol counts; process exit status (1 when blocking findings exist) | `bounded` | Run the complete finished-diff gate without blind line truncation. |
+| `scip-query diff-gate` | Runtime-bounded, single-flight gate for the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | blocking findings with check id, message, and remediation; advisory findings; root-cause groups; changed file and symbol counts; process exit status (1 when blocking findings exist) | `bounded` | Own the final gate when no protected blocking Stop hook will do so, or inspect a reported gate failure. |
 | `scip-query mission-trial report <program> --protected-root <path>` | Register, validate, record, list, or report protected autonomous-completion mission trials outside the candidate worktree | program identity, protected artifact observations, exact conditions, run eligibility, exclusions, and immutable run records | `complete` | Classify protected matched trials when calibrating a release or material workflow change. |
 
 Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.
 <!-- END GENERATED SKILL COMMANDS -->
 
-ten checks, detector-precision tiers — from `_shared`. This skill's own
-shortlist covers `doctor`, `status`, `diff-impact`, `diff-gate`, `health`,
-`doc-drift`, `self-audit`, `mission-trial`, `suppress`, and
-`config-validate`.
-
-| Situation                                                                                    | Go to                                                                    |
-| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| You just finished editing and need to verify it before committing                            | Verify a finished change, below                                          |
-| Findings on this repo feel too noisy, too clean, or you're adopting scip-query in a new repo | [`references/calibrate-detectors.md`](references/calibrate-detectors.md) |
+Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md)
+only when it is insufficient. For detector calibration rather than a finished
+diff, use
+[`references/calibrate-detectors.md`](references/calibrate-detectors.md).
 
 ## Verify a finished change
 
-### 1. Prove the workspace
+### 1. Reuse current evidence
+
+Do not restart setup or diagnose a workspace that already supplied fresh
+current-generation evidence. After the final source edit, use the installed
+hook's refresh result when it names the current generation; otherwise run:
 
 ```bash
-scip-query doctor
 scip-query status --capabilities
 ```
 
-Apply `_shared`'s freshness gate here: if the watcher is already refreshing or
-has accepted a refresh request, wait and check once more rather than launching
-a parallel reindex. Use manual `scip-query reindex` only when the index is
-stale, missing, or unknown and the watcher is disabled, unavailable, or failed.
+If the watcher is refreshing, wait and check once more. Run
+`scip-query doctor` only when status reports an invalid configuration, missing
+dependency, stale index, or unavailable capability whose cause must be
+diagnosed. Run manual `scip-query reindex` only when freshness is stale,
+missing, or unknown and no watcher can complete the refresh. A fresh status is
+reusable until source or index inputs change.
 
-Complete only when missing indexers, invalid config, stale indexes, or
-unavailable relevant capabilities are fixed or reported as blockers. Verify
-environment and index freshness before trusting any graph fact that follows.
+### 2. Map requirements to direct evidence
 
-### 2. Assess the diff
+List the goal, invariants, explicit cleanup requirements, and affected
+consumers. For each one, name an already-executed test, checker, source
+inspection, or command result that could have failed if the requirement were
+false. Reuse that result; do not rerun it merely to populate a verification
+template.
+
+Run the repository's focused tests and native checkers for requirements that
+still lack evidence. Expand to a broader suite only when the affected surface
+or repository policy warrants it. A narrow unit test cannot prove a
+repository-wide migration, while a full suite need not be repeated after an
+unrelated documentation edit.
+
+This requirement map is the completeness check. If the goal says obsolete
+seams, duplicate behavior, compatibility paths, generated outputs, or docs
+must be reconciled, each named consequence needs evidence; a general test pass
+cannot silently stand in for it.
+
+### 3. Inspect final impact when it can change the verdict
+
+For a non-trivial source change, public-contract change, migration, or new
+abstraction, run:
 
 ```bash
 scip-query diff-impact
 ```
 
-Compare changed files, changed symbols, and downstream consumers against the
-intended work. An unexpected blast radius is itself a finding even if every
-later gate passes. Complete only when the diff's shape is understood.
+Compare its changed symbols and consumers with the planned surface. Follow a
+bounded result with `refs --full` or `affected --full` only when a complete set
+is necessary to judge the change. Skip this command for docs-only or literal
+edits whose compiler-resolved impact cannot change the decision.
 
-### 3. Run routed postchecks
+### 4. Add only discriminating specialist checks
 
-Run every row that matches what the diff actually did — not only the check
-you expected to need going in:
+The default diff gate already owns echo, incomplete-migration,
+co-change-partner, twin-partner, coverage-contract, architecture,
+doc-reference, unused-params, and new-dead checks. Do not run their standalone
+forms as a fixed pre-gate battery. Use a standalone command only when all three
+conditions hold:
 
-| Change made                                                                                             | Check                                                                            |
-| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Extracted a helper or abstraction                                                                       | `scip-query incomplete-migration`                                                |
-| Added a helper, module, component, hook, composable, or adapter                                         | `scip-query recent-duplicates` (and `similar <symbol>`)                          |
-| Added parameters, options, props, config flags, or option objects                                       | `scip-query unused-params`                                                       |
-| Added a wrapper, facade, forwarding layer, alias, or re-export                                          | `scip-query wrapper-candidates`, `passthrough-candidates`, `redundant-reexports` |
-| Added an interface, base class, adapter contract, or type alias                                         | `scip-query stale-abstractions`                                                  |
-| Changed schema, config, generated files, public contracts, command descriptors, or docs-backed behavior | `scip-query co-change <file>` and `doc-drift`                                    |
-| Deleted code                                                                                            | `scip-query cleanup-plan --verify`                                               |
-| Changed React components or hooks                                                                       | the React commands in `_shared`                                                  |
-| Changed Vue SFCs or composables                                                                         | the Vue commands in `_shared`                                                    |
+1. the change introduces a specific risk not already proved by direct tests;
+2. the command can distinguish success from failure for that risk; and
+3. an equivalent result has not already run against the same state.
 
-Add `--full` to any of these when an unbounded result is needed rather than
-the bounded default. This table is authoritative — the
-shared reference links here instead of duplicating it, so don't assume a
-different mapping. Complete only when each applicable postcheck has a result
-and every actionable finding is fixed, accepted with evidence, or blocked by
-a named constraint.
+Typical examples:
 
-If `.scipquery.json` or a suppression file changed as part of the diff, also
-run:
+- `similar <new-symbol>` when a new helper, hook, component, or adapter still
+  has an unresolved reuse question;
+- `recent-duplicates` when several new units create a repository-wide
+  duplication risk that one targeted comparison cannot answer;
+- `config-validate` when `.scipquery.json` or a suppression changed;
+- a project-native generator or doc check when generated output or documented
+  behavior changed;
+- `self-audit` when detector, parser, semantic-oracle, or evidence-labeling
+  behavior changed; and
+- `cleanup-plan --verify` only when deleting detector-selected code through
+  the cleanup workflow, not whenever an ordinary refactor removes lines.
 
-```bash
-scip-query config-validate
-```
+Health scans and mission trials are product or repository calibration, not
+ordinary closeout steps. Run them only when the user, release policy, or the
+change itself makes that broader claim relevant.
 
-### 4. Run the gate
+### 5. Give the diff gate one owner
 
-```bash
-scip-query diff-gate
-```
+When the prompt hook says it activated protected work, the blocking Stop hook
+owns the final diff gate and completion judgment. Do not run a manual final
+gate first; finish the direct evidence, attempt to stop, and follow the exact
+controller action if it blocks. This lets the same fixed observation drive
+both findings and completion.
 
-This is the primary blocker for diff-specific risk: architecture regressions
-plus echo, migration, coordination, doc-drift, unused-param, and new-dead
-candidates, exiting 1 on blocking findings. Fix findings or record the
-acceptance reason. Prefer fixing a real finding over suppressing it — only
-suppress intentional design, compatibility shims, framework entry points, or
-an accepted false positive, and only with a specific reason:
+When no blocking Stop hook is available, run `scip-query diff-gate` once. If it
+reports a finding, use the narrow command or source read needed to understand
+that finding, repair or explicitly disposition it, and rerun after the state
+changes. Do not run the whole standalone detector family before and after the
+gate.
 
-```bash
-scip-query suppress <id> --reason "<specific reason>"
-```
+A clean
+`diff-gate` is evidence, not permission to declare the goal complete. It does
+not replace the requirement map, and skipped checks or failed evidence tiers
+remain unresolved. Supported hooks convert the same evidence into a fixed
+completion evaluation and durable next action. Follow that action; do not
+infer completion from a passing command or final prose.
 
-`suppress` writes one file per suppression under `.scipquery/suppressions/` —
-commit it with the change that produced it. Suppressing is a real decision,
-not a bypass: every suppression counts against that detector's precision in
-`scip-query effectiveness`. A rerun against the same resolved comparison base
-earns verified credit instead; once `HEAD` advances, a clean run replays that
-stored base automatically. Complete only when `diff-gate` passes or every
-finding has a durable explanation.
+### 6. Close only real evidence gaps
 
-The supported Stop hook automatically turns this evidence into a fixed
-completion evaluation and one durable next-action decision, rendered together
-as one decision-equivalent block. A clean
-`diff-gate` is evidence, not permission to declare the goal complete. Follow
-the emitted action: gather its named evidence, repair, retry within the stated
-bound, reconcile an unknown effect, replan, carry work to an authorized
-successor, or halt on its explicit missing-authorization boundary. When the
-block names an unknown predicate, run the exact emitted `completion status` command;
-established-false predicates already select repair and require no inspection
-ritual. When hooks are unavailable, inspect the same state with
-`scip-query completion status <change-id> --json`; do not replace it with an
-agent-authored completion claim.
+Before concluding, inspect the requirement map once. For every missing row,
+run the cheapest probe that would expose the implementation as incomplete: a
+consumer test, an edge input, an exact residue search, a generated-file check,
+or a targeted architecture query. Zero extra probes is valid when every row
+already has discriminating evidence. An arbitrary quota of adversarial checks
+is not.
 
-A completed change establishes the repository predicates for that change. It
-does not establish the product-level claim that scip-query makes autonomous
-work more complete or efficient. That claim requires matched mission trials
-whose fixtures and evaluators are outside the candidate-editable worktree:
+Complete only when every authorized requirement has evidence, unexpected
+impact is reconciled, the one gate owner passed or produced a followed next
+action, and every remaining risk is named honestly.
+
+## Report
+
+Report the verdict, the direct evidence covering each material requirement,
+the final impact/gate result, and any remaining risk. Do not reproduce command
+transcripts or fill a fixed checklist whose fields add no decision-relevant
+information.
+
+A completed change establishes repository predicates for that change. It does
+not establish that scip-query improves autonomous work. That claim requires a
+protected matched mission trial for the exact provider, model, runtime, and
+fixture:
 
 ```bash
 scip-query mission-trial report <program> --protected-root <path>
 ```
 
-The report preserves completion, safety, elapsed-time, and token evidence
-separately, keeps missing observations unknown, and classifies only the exact
-provider, model, runtime, parameters, and fixtures named by the program.
-`established`, `promising`, `neutral`, `regressed`, and `insufficient` are
-different evidence states; detector effectiveness and health scores cannot
-rewrite them. Run this calibration for a release, provider/model path, or
-material workflow change—not for every ordinary code change.
+## Detector reliability for this flow
 
-### 5. Check health, docs, and generated surfaces when relevant
-
-Run
-
-```bash
-scip-query health --baseline
-```
-
-when a committed baseline exists. If docs, AGENTS.md, CLAUDE.md, command
-docs, generated docs, or skill instructions changed, run
-
-```bash
-scip-query doc-drift --full
-```
-
-and read the returned stale-doc candidates against the diff.
-
-If the change touches generated command surfaces, detectors/analyzers, or
-evidence-labeling behavior, also run
-
-```bash
-scip-query self-audit
-```
-
-It scores scip-query's own cheap evidence paths (source-fallback, regex)
-against the best available semantic/compiler oracle on sampled symbols. Read
-whether the surface you just changed still agrees with the oracle at the
-sampled sites before trusting its output elsewhere in this flow — a
-regression here means every downstream postcheck may be reading
-degraded evidence, not just this one command.
-
-Complete only when changed documentation and config surfaces are checked or
-explicitly declared out of scope.
-
-### 6. Refute the PASS
-
-A PASS ends scrutiny, so attack it before making it. Construct at least two
-refutation attempts and run the cheapest check that would expose each. Prefer
-an executed probe — run the consumer's test, invoke the command, feed the
-edge input — over an argued one. Pick attacks that fit the diff:
-
-- **Unexercised consumer** — take a caller from step 2's `diff-impact` output
-  whose tests did not run, and either run them or trace the contract it
-  depends on.
-- **Unexercised input** — find an edge the changed code newly handles or
-  newly rejects, and execute it.
-- **The intent gap** — find one case the stated goal implies that the diff
-  does not visibly cover, then show where it's handled or show it's missing.
-
-Execute every attempt. Supported command integration records it automatically;
-do not add a second manual attempt-log step. An attempt that breaks the diff
-converts the verdict to FAIL with a finding, and its automatic record remains
-part of the work history either way. Complete only when every refutation
-attempt has an executed result.
-
-### Report
-
-End with this fixed template:
-
-```markdown
-Verification: PASS/FAIL — <n> postchecks, <m> refutation attempts, <k> broke
-
-Environment:
-
-- doctor:
-- status:
-
-Diff:
-
-- changed files/symbols:
-- unexpected blast radius:
-
-Postchecks:
-
-- <command>: <result>
-
-Gate:
-
-- `scip-query diff-gate`: <result>
-
-Health/docs/self-audit:
-
-- <commands and results>
-
-Refutation attempts:
-
-- R1: <attack> → survived (evidence) | broke (finding)
-
-Remaining risk:
-
-- <accepted findings, unavailable capabilities, or checks not run>
-```
-
-Do not claim ready-to-ship unless index freshness is `fresh` after the final
-edit, `diff-gate` is passed or fully explained, and the PASS survived every
-refutation attempt.
-
-### Detector reliability for this flow
-
-`dead`/`new-dead` correctly resolve `import type` consumers, tsconfig
-`paths` aliases, pnpm/npm/yarn workspace cross-package imports, and Vue
-`<script setup>` composables — these are not sources of false positives. The
-one residual gap is a same-named symbol reached only through a re-exporting
-barrel file in a workspace package; that shape self-labels `unconfirmed
-(cross-package ambiguous-name resolution gap)` in the finding, and only that
-specific label should be treated as unconfirmed until `refs` agrees.
+`dead` and `new-dead` resolve `import type` consumers, tsconfig `paths`
+aliases, workspace-package imports, and Vue `<script setup>` composables. The
+known residual gap is a same-named symbol reached only through a re-exporting
+barrel in a workspace package; that shape labels itself `unconfirmed
+(cross-package ambiguous-name resolution gap)` and remains unconfirmed until
+`refs` agrees.
