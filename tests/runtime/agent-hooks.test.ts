@@ -1,14 +1,26 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { DiffGateResult } from '../../src/queries/impact/diff-gate.js';
 import { summarizeRecordCompatibility } from '../../src/domain/record-compatibility.js';
+import { createProtectedWorkAuthorization } from '../../src/domain/protected-work-authorization.js';
 import { resolveIndexStoragePaths } from '../../src/platform/cache-layout.js';
 import { updateAgentSessionState } from '../../src/runtime/agent-session-state.js';
+import {
+  PROTECTED_WORK_AUTHORIZATION_ID_ENV,
+  PROTECTED_WORK_AUTHORIZATION_ROOT_ENV,
+} from '../../src/runtime/protected-work-authorization-controller.js';
 import { createObligationAdmissionFile } from '../../src/storage/autonomous-work-obligations.js';
-import { createGoalRecordFile, createIntendedChangeRecordFile } from '../../src/storage/autonomous-work-state.js';
+import {
+  createGoalRecordFile,
+  createIntendedChangeRecordFile,
+  readGoalRecordFile,
+  readIntendedChangeRecordFile,
+} from '../../src/storage/autonomous-work-state.js';
+import { writeProtectedWorkAuthorization } from '../../src/storage/protected-work-authorization.js';
 import {
   evaluatePreToolUse,
   renderAgentHookContext,
@@ -69,6 +81,82 @@ describe('agent hook context', () => {
     );
 
     expect(output).toBeUndefined();
+  });
+
+  it('activates host-fixed intent at the matching prompt boundary without an agent metadata command', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'scip-query-hook-authorization-'));
+    const protectedRoot = mkdtempSync(join(tmpdir(), 'scip-query-hook-protected-'));
+    const prompt = 'Implement the fixed alert routing change';
+    const collaborationDomainId = '123e4567-e89b-42d3-a456-426614174000';
+    try {
+      execFileSync('git', ['init', '--quiet'], { cwd });
+      writeFileSync(
+        join(cwd, '.scipquery.json'),
+        `${JSON.stringify({ collaborationDomainId, watch: { autoRefresh: false } })}\n`,
+      );
+      const authorization = createProtectedWorkAuthorization({
+        collaborationDomainId,
+        request: {
+          principal: 'repository-owner',
+          promptSha256: createHash('sha256').update(prompt).digest('hex'),
+          goal: {
+            feature: 'Fixed alert routing is complete',
+            invariants: ['The candidate cannot broaden the routing intent'],
+            acceptanceScenarios: [
+              {
+                name: 'matching prompt',
+                given: ['a host-fixed authorization exists'],
+                when: ['the matching prompt is submitted'],
+                then: ['its exact work records exist before candidate action'],
+              },
+            ],
+          },
+          change: {
+            idempotencyKey: 'fixed-alert-routing',
+            title: 'Implement fixed alert routing',
+            intendedOutcome: 'The authorized routing change is complete',
+          },
+          artifactTransitions: [],
+        },
+        createdAt: '2026-07-31T12:00:00.000Z',
+        toolVersion: '0.20.0',
+      });
+      writeProtectedWorkAuthorization(protectedRoot, cwd, authorization);
+      const environment = {
+        [PROTECTED_WORK_AUTHORIZATION_ROOT_ENV]: protectedRoot,
+        [PROTECTED_WORK_AUTHORIZATION_ID_ENV]: authorization.authorizationId,
+      };
+
+      const output = await renderAgentHookContext(
+        JSON.stringify({ hook_event_name: 'UserPromptSubmit', cwd, prompt }),
+        { environment },
+      );
+      const replay = await renderAgentHookContext(
+        JSON.stringify({ hook_event_name: 'UserPromptSubmit', cwd, prompt: 'continue' }),
+        { environment },
+      );
+
+      expect(output).toMatchObject({
+        hookSpecificOutput: {
+          hookEventName: 'UserPromptSubmit',
+          additionalContext: expect.stringContaining(
+            `Activated protected work authorization ${authorization.authorizationId}`,
+          ),
+        },
+      });
+      expect(replay).toBeUndefined();
+      expect(readGoalRecordFile(cwd, authorization.goal.goalId)).toMatchObject({
+        state: 'current',
+        record: authorization.goal,
+      });
+      expect(readIntendedChangeRecordFile(cwd, authorization.change.changeId)).toMatchObject({
+        state: 'current',
+        record: authorization.change,
+      });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+      rmSync(protectedRoot, { recursive: true, force: true });
+    }
   });
 
   it('restores only the matching session receipt after compaction', async () => {

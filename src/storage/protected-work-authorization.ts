@@ -1,4 +1,6 @@
+import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readdirSync } from 'node:fs';
+import type { Stats } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import {
@@ -37,7 +39,7 @@ export interface ProtectedWorkAuthorizationWriteResult {
 }
 
 export type ProtectedWorkAuthorizationReadResult =
-  | { state: 'current'; path: string; record: ProtectedWorkAuthorizationV1 }
+  | { state: 'current'; path: string; recordSha256: string; record: ProtectedWorkAuthorizationV1 }
   | {
       state: 'missing' | Exclude<ReturnType<typeof decodeProtectedWorkAuthorization>['state'], 'current'>;
       path: string;
@@ -113,11 +115,24 @@ export function readProtectedWorkAuthorization(
         error: 'protected work authorization path must be a regular non-symlink file',
       };
     }
-    const decoded = decodeProtectedWorkAuthorization(
-      JSON.parse(readSmallArtifactText(path, 'protected work authorization')),
-    );
+    const before = lstatSync(path);
+    const source = readSmallArtifactText(path, 'protected work authorization');
+    const after = lstatSync(path);
+    if (!sameFileObservation(before, after)) {
+      return {
+        state: 'malformed',
+        path,
+        error: 'protected work authorization moved while it was being read',
+      };
+    }
+    const decoded = decodeProtectedWorkAuthorization(JSON.parse(source));
     return decoded.state === 'current'
-      ? { state: 'current', path, record: decoded.record }
+      ? {
+          state: 'current',
+          path,
+          recordSha256: createHash('sha256').update(source).digest('hex'),
+          record: decoded.record,
+        }
       : { state: decoded.state, path, error: decoded.error };
   } catch (error) {
     return { state: 'malformed', path, error: error instanceof Error ? error.message : String(error) };
@@ -207,4 +222,18 @@ function assertAuthorizationDirectory(protectedRoot: string): void {
   if (!stat.isDirectory() || stat.isSymbolicLink()) {
     throw new Error('protected work authorization directory must be a real non-symlink directory');
   }
+}
+
+function sameFileObservation(before: Stats, after: Stats): boolean {
+  return (
+    before.isFile() &&
+    !before.isSymbolicLink() &&
+    after.isFile() &&
+    !after.isSymbolicLink() &&
+    before.dev === after.dev &&
+    before.ino === after.ino &&
+    before.size === after.size &&
+    before.mtimeMs === after.mtimeMs &&
+    before.ctimeMs === after.ctimeMs
+  );
 }

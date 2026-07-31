@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { realpathSync } from 'node:fs';
-import { relative, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 
 import {
   applyCompletionAuthorityFirewall,
@@ -19,12 +19,17 @@ import {
   type CompletionContextSnapshotRequest,
   type CompletionEvaluatorSnapshot,
   type CompletionPolicySnapshot,
+  type ProtectedWorkAuthorizationSnapshot,
   type ProtectedArtifactRule,
 } from '../domain/autonomous-completion-context.js';
+import type { ProtectedArtifactClass } from '../domain/completion-protection.js';
 import type { ArchitectureConfig } from '../domain/config-types.js';
 import { transitionRuleAuthorizedReferents } from '../domain/completion-transition-rule.js';
 import type { ObservationReceiptV2 } from '../domain/observation-receipt.js';
 import { isPathInsideProject } from '../domain/path-normalization.js';
+import { matchesPathGlob } from '../domain/path-glob.js';
+import { protectedWorkAuthorizationMatchesRecords } from '../domain/protected-work-authorization.js';
+import { hashIdentity } from '../domain/autonomous-work-state.js';
 import { stableJson } from '../domain/stable-json.js';
 import type { ProjectConfig } from '../domain/types.js';
 import { sha256FileWithinLimit, SOURCE_ARTIFACT_MAX_BYTES } from '../filesystem/bounded-file.js';
@@ -37,10 +42,14 @@ import {
   readCompletionHistory,
   recoverCompletionSuccessorMaterializations,
 } from '../storage/autonomous-completion.js';
-import { selectCompletionTransitionRule } from '../storage/completion-transition-rule.js';
+import {
+  protectedArtifactTransitionMatches,
+  selectCompletionTransitionRule,
+} from '../storage/completion-transition-rule.js';
 import {
   readGoalRecords,
   readIntendedChangeRecords,
+  GOALS_DIR,
   type WorkStateCreateOptions,
 } from '../storage/autonomous-work-state.js';
 import { readWorkHistory } from '../storage/autonomous-work-ledger.js';
@@ -49,6 +58,10 @@ import { cliVersion } from './cli-support.js';
 import { evaluateArchitectureCompleteness } from './architecture-completeness.js';
 import { reconcileCompletenessObligations } from './completeness-reconciliation.js';
 import { evaluateResidueCompleteness } from './residue-completeness.js';
+import {
+  assertFixedProtectedWorkAuthorization,
+  type FixedProtectedWorkAuthorizationLease,
+} from './protected-work-authorization-controller.js';
 
 export const STOP_COMPLETION_POLICY_ID = 'scip-query:stop-completion-policy' as const;
 export const STOP_COMPLETION_POLICY_VERSION = 1 as const;
@@ -102,11 +115,13 @@ export interface FixedCompletionContextLease {
   authority: CompletionAuthorityInputs;
   requests: readonly CompletionContextSnapshotRequest[];
   records: readonly CompletionContextSnapshotRecordV1[];
+  protectedWorkAuthorization?: FixedProtectedWorkAuthorizationLease;
 }
 
 export interface CompletionAuthorityInputs {
   predecessor: CompletionAuthorityPredecessor;
   changedPaths: readonly string[];
+  protectedWorkAuthorization?: FixedProtectedWorkAuthorizationLease;
 }
 
 export class CompletionEvaluationContextMovedError extends Error {
@@ -127,11 +142,22 @@ export function captureFixedCompletionContext(
   projectRoot: string,
   config: ProjectConfig,
   stopMode: CompletionPolicySnapshot['stopMode'],
-  options: { observedAt?: Date; evaluatorEntrypoint?: string } = {},
+  options: {
+    observedAt?: Date;
+    evaluatorEntrypoint?: string;
+    protectedWorkAuthorization?: FixedProtectedWorkAuthorizationLease;
+  } = {},
 ): FixedCompletionContextLease {
   const collaborationDomainId = config.collaborationDomainId;
   if (!collaborationDomainId) {
     throw new Error('completion evaluation requires a configured collaboration domain');
+  }
+  if (
+    options.protectedWorkAuthorization &&
+    (options.protectedWorkAuthorization.projectRoot !== realpathSync(projectRoot) ||
+      options.protectedWorkAuthorization.record.collaborationDomainId !== collaborationDomainId)
+  ) {
+    throw new Error('protected work authorization lease does not belong to this repository collaboration domain');
   }
   recoverCompletionSuccessorMaterializations(projectRoot, collaborationDomainId, {
     toolVersion: cliVersion,
@@ -191,6 +217,12 @@ export function captureFixedCompletionContext(
       commandRegistry,
       protectedArtifacts,
       targetObservation,
+      ...(options.protectedWorkAuthorization &&
+      protectedWorkAuthorizationMatchesRecords(options.protectedWorkAuthorization.record, goal, change)
+        ? {
+            protectedWorkAuthorization: protectedWorkAuthorizationSnapshot(options.protectedWorkAuthorization),
+          }
+        : {}),
     };
   });
   const capturedAt = targetObservation.observedAt;
@@ -213,9 +245,11 @@ export function captureFixedCompletionContext(
         ? { kind: 'git-tree', treeOid: observation.repositoryContent.base.treeOid }
         : { kind: 'unavailable', reason: 'no-fixed-predecessor' },
       changedPaths: observation.repositoryContent.files.map((entry) => entry.path),
+      ...(options.protectedWorkAuthorization ? { protectedWorkAuthorization: options.protectedWorkAuthorization } : {}),
     },
     requests,
     records,
+    ...(options.protectedWorkAuthorization ? { protectedWorkAuthorization: options.protectedWorkAuthorization } : {}),
   };
 }
 
@@ -245,6 +279,15 @@ export function assertFixedCompletionContext(
     throw new CompletionEvaluationContextMovedError(
       'The completion evaluator build changed while completion was being evaluated. The judgment was discarded; retry with one fixed evaluator.',
     );
+  }
+  if (lease.protectedWorkAuthorization) {
+    try {
+      assertFixedProtectedWorkAuthorization(lease.protectedWorkAuthorization);
+    } catch (error) {
+      throw new CompletionEvaluationContextMovedError(
+        error instanceof Error ? error.message : 'Protected work authorization moved during completion evaluation.',
+      );
+    }
   }
 }
 
@@ -407,9 +450,10 @@ export function stopCompletionEvaluationRequest(
     fixedReferents: {
       evaluator: `evaluator-build:${context.evaluator.buildIdentity}`,
     },
-    ...(transitionRule.state === 'selected'
-      ? { authorizedReferents: transitionRuleAuthorizedReferents(transitionRule.rule) }
-      : {}),
+    authorizedReferents: {
+      ...(transitionRule.state === 'selected' ? transitionRuleAuthorizedReferents(transitionRule.rule) : {}),
+      ...protectedWorkAuthorizationReferents(projectRoot, context, authorityInputs),
+    },
   });
   const predicates = applyCompletionAuthorityFirewall(predicatesBeforeAuthority, authority);
   return {
@@ -434,6 +478,82 @@ export function stopCompletionEvaluationRequest(
         }
       : {}),
   };
+}
+
+export function protectedWorkAuthorizationReferents(
+  projectRoot: string,
+  context: CompletionContextSnapshotRecordV1,
+  authorityInputs: CompletionAuthorityInputs,
+): Partial<Record<ProtectedArtifactClass, string>> {
+  const fixed = authorityInputs.protectedWorkAuthorization;
+  const snapshot = context.protectedWorkAuthorization;
+  if (!fixed || !snapshot || !fixedAuthorizationMatchesContext(fixed, snapshot, context)) return {};
+  const referentPrefix = `protected-work-authorization:${fixed.record.authorizationId}`;
+  const referents: Partial<Record<ProtectedArtifactClass, string>> = {};
+  const goalRule = context.protectedArtifacts.rules.find((rule) => rule.class === 'goal');
+  const changedGoalPaths = goalRule
+    ? [
+        ...new Set(
+          authorityInputs.changedPaths.filter((path) =>
+            goalRule.selectors.some((selector) => matchesPathGlob(selector, path)),
+          ),
+        ),
+      ]
+    : [];
+  const authorizedGoalPath = join(GOALS_DIR, `${fixed.record.goal.goalId}.json`).replaceAll('\\', '/');
+  if (changedGoalPaths.length === 1 && changedGoalPaths[0] === authorizedGoalPath) {
+    referents.goal = `${referentPrefix}#goal`;
+  }
+  for (const rule of context.protectedArtifacts.rules) {
+    if (rule.class === 'goal' || rule.class === 'transition-rule') continue;
+    const changed = authorityInputs.changedPaths.filter((path) =>
+      rule.selectors.some((selector) => matchesPathGlob(selector, path)),
+    );
+    if (changed.length === 0) continue;
+    const everyTransitionMatches = changed.every((path) => {
+      const transitions = fixed.record.artifactTransitions.filter(
+        (transition) => transition.class === rule.class && transition.path === path,
+      );
+      return (
+        transitions.length === 1 &&
+        protectedArtifactTransitionMatches(projectRoot, authorityInputs.predecessor, transitions[0]!)
+      );
+    });
+    if (everyTransitionMatches) referents[rule.class] = `${referentPrefix}#${rule.class}`;
+  }
+  return referents;
+}
+
+function protectedWorkAuthorizationSnapshot(
+  lease: FixedProtectedWorkAuthorizationLease,
+): ProtectedWorkAuthorizationSnapshot {
+  return {
+    authorizationId: lease.record.authorizationId,
+    recordSha256: lease.recordSha256,
+    goalRecordDigest: hashRecord(lease.record.goal),
+    changeRecordDigest: hashRecord(lease.record.change),
+  };
+}
+
+function fixedAuthorizationMatchesContext(
+  fixed: FixedProtectedWorkAuthorizationLease,
+  snapshot: ProtectedWorkAuthorizationSnapshot,
+  context: CompletionContextSnapshotRecordV1,
+): boolean {
+  return (
+    snapshot.authorizationId === fixed.record.authorizationId &&
+    snapshot.recordSha256 === fixed.recordSha256 &&
+    snapshot.goalRecordDigest === hashRecord(fixed.record.goal) &&
+    snapshot.changeRecordDigest === hashRecord(fixed.record.change) &&
+    context.goalId === fixed.record.goal.goalId &&
+    context.changeId === fixed.record.change.changeId &&
+    context.goalRecordDigest === snapshot.goalRecordDigest &&
+    context.changeRecordDigest === snapshot.changeRecordDigest
+  );
+}
+
+function hashRecord(record: unknown): string {
+  return hashIdentity(stableJson(record));
 }
 
 function completionAuthorityReliances(

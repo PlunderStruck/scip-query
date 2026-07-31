@@ -36,17 +36,26 @@ scip-query work-authorization issue \
   --protected-root /principal/protected-state \
   --candidate-root /candidate/repository
 
-scip-query work-authorization activate SQWA-... \
-  --protected-root /principal/protected-state \
-  --candidate-root /candidate/repository
+export SCIP_QUERY_WORK_AUTHORIZATION_ROOT=/principal/protected-state
+export SCIP_QUERY_WORK_AUTHORIZATION_ID=SQWA-...
 ```
 
-Issuance is a principal operation, not a candidate planning step. Activation
-is retry-safe: it publishes only the embedded goal and intended-change bytes,
-and it fails before writing if the authorization belongs to another repository
-collaboration domain. The protected root and its `work-authorizations/`
-directory must be real directories outside the candidate worktree rather than
-symlinks. The immutable record schema is
+Issuance is a principal operation, not a candidate planning step. A supported
+`UserPromptSubmit` hook verifies the first prompt's exact SHA-256 digest and
+activates the embedded goal and intended change before the coding model acts.
+Later prompts reuse the already-exact records without requiring the user to
+repeat the original text. Stop fixes the authorization ID and source-byte
+digest in the completion context, grants authority only to exact goal/change
+and predecessor/successor artifact matches, then re-reads the external bytes;
+movement discards the judgment.
+
+Activation is retry-safe and fails before writing on prompt or collaboration-
+domain mismatch. The protected root and its `work-authorizations/` directory
+must be real directories outside the candidate worktree rather than symlinks,
+and the execution host must prevent candidate writes to that root. The manual
+`work-authorization activate` command remains an inspection/recovery surface
+for unsupported adapters; supported agents do not run it as ceremony. The
+immutable record schema is
 [`schemas/protected-work-authorization-record.schema.json`](schemas/protected-work-authorization-record.schema.json).
 
 ## Create a goal

@@ -20,6 +20,7 @@ import {
   type WorkStateWriter,
 } from './autonomous-work-state.js';
 import { COMPLETION_PREDICATES, type CompletionPredicate } from './autonomous-completion.js';
+import { isProtectedWorkAuthorizationId } from './protected-work-authorization.js';
 
 export const COMPLETION_CONTEXT_RECORD_KIND = 'scip-query-completion-context' as const;
 export const COMPLETION_CONTEXT_RECORD_SCHEMA_VERSION = 1 as const;
@@ -62,6 +63,13 @@ export interface CompletionCommandRegistrySnapshot {
   entries: readonly string[];
 }
 
+export interface ProtectedWorkAuthorizationSnapshot {
+  authorizationId: string;
+  recordSha256: string;
+  goalRecordDigest: string;
+  changeRecordDigest: string;
+}
+
 export interface CompletionContextSnapshotRequest {
   goal: GoalRecordV1;
   change: IntendedChangeRecordV1;
@@ -70,14 +78,15 @@ export interface CompletionContextSnapshotRequest {
   commandRegistry: CompletionCommandRegistrySnapshot;
   protectedArtifacts: ProtectedArtifactSetSnapshot;
   targetObservation: ObservationReceiptV2;
+  protectedWorkAuthorization?: ProtectedWorkAuthorizationSnapshot;
 }
 
 /**
  * A completion context snapshot is one immutable bundle of every input that
  * can change the meaning of a completion judgment. It differs from a target
- * receipt by also fixing the authorized goal, policy, evaluator build, check
- * registry, and the classes of candidate-editable artifacts that require
- * predecessor authority.
+ * receipt by also fixing the authorized goal and intended change, policy,
+ * evaluator build, check registry, and the classes of candidate-editable
+ * artifacts that require predecessor authority.
  */
 export interface CompletionContextSnapshotRecordV1 {
   kind: typeof COMPLETION_CONTEXT_RECORD_KIND;
@@ -87,11 +96,13 @@ export interface CompletionContextSnapshotRecordV1 {
   changeId: string;
   goalId: string;
   goalRecordDigest: string;
+  changeRecordDigest?: string;
   policy: CompletionPolicySnapshot;
   evaluator: CompletionEvaluatorSnapshot;
   commandRegistry: CompletionCommandRegistrySnapshot;
   protectedArtifacts: ProtectedArtifactSetSnapshot;
   targetObservation: ObservationReceiptV2;
+  protectedWorkAuthorization?: ProtectedWorkAuthorizationSnapshot;
   capturedAt: string;
   createdAt: string;
   writer: WorkStateWriter;
@@ -118,11 +129,15 @@ export function createCompletionContextSnapshotRecord(
     changeId: input.request.change.changeId,
     goalId: input.request.goal.goalId,
     goalRecordDigest: hashIdentity(stableJson(input.request.goal)),
+    changeRecordDigest: hashIdentity(stableJson(input.request.change)),
     policy: input.request.policy,
     evaluator: input.request.evaluator,
     commandRegistry: input.request.commandRegistry,
     protectedArtifacts: input.request.protectedArtifacts,
     targetObservation: input.request.targetObservation,
+    ...(input.request.protectedWorkAuthorization
+      ? { protectedWorkAuthorization: input.request.protectedWorkAuthorization }
+      : {}),
     capturedAt: input.capturedAt,
     createdAt: input.capturedAt,
     writer: { tool: 'scip-query', version: input.toolVersion },
@@ -159,6 +174,12 @@ export function decodeCompletionContextSnapshotRecord(
   if (typeof record['goalRecordDigest'] !== 'string' || !SHA256_PATTERN.test(record['goalRecordDigest'])) {
     return { state: 'malformed', error: 'goalRecordDigest must be a lowercase SHA-256 digest' };
   }
+  if (
+    record['changeRecordDigest'] !== undefined &&
+    (typeof record['changeRecordDigest'] !== 'string' || !SHA256_PATTERN.test(record['changeRecordDigest']))
+  ) {
+    return { state: 'malformed', error: 'changeRecordDigest must be a lowercase SHA-256 digest' };
+  }
   const policy = decodePolicy(record['policy']);
   if (!policy.ok) return { state: 'malformed', error: policy.error };
   const evaluator = decodeEvaluator(record['evaluator']);
@@ -176,6 +197,18 @@ export function decodeCompletionContextSnapshotRecord(
       }`,
     };
   }
+  const protectedWorkAuthorization = decodeProtectedWorkAuthorizationSnapshot(record['protectedWorkAuthorization']);
+  if (!protectedWorkAuthorization.ok) return { state: 'malformed', error: protectedWorkAuthorization.error };
+  if (protectedWorkAuthorization.value && record['changeRecordDigest'] === undefined) {
+    return { state: 'malformed', error: 'authorized completion context must fix its intended-change digest' };
+  }
+  if (
+    protectedWorkAuthorization.value &&
+    (protectedWorkAuthorization.value.goalRecordDigest !== record['goalRecordDigest'] ||
+      protectedWorkAuthorization.value.changeRecordDigest !== record['changeRecordDigest'])
+  ) {
+    return { state: 'malformed', error: 'protectedWorkAuthorization record digests must match the fixed work records' };
+  }
   if (!isValidRecordTimestamp(record['capturedAt'])) {
     return { state: 'malformed', error: 'capturedAt must be a canonical UTC timestamp' };
   }
@@ -190,11 +223,13 @@ export function decodeCompletionContextSnapshotRecord(
     changeId: record['changeId'],
     goalId: record['goalId'],
     goalRecordDigest: record['goalRecordDigest'],
+    ...(typeof record['changeRecordDigest'] === 'string' ? { changeRecordDigest: record['changeRecordDigest'] } : {}),
     policy: policy.value,
     evaluator: evaluator.value,
     commandRegistry: commandRegistry.value,
     protectedArtifacts: protectedArtifacts.value,
     targetObservation: target.receipt,
+    ...(protectedWorkAuthorization.value ? { protectedWorkAuthorization: protectedWorkAuthorization.value } : {}),
     capturedAt: record['capturedAt'],
     createdAt: envelope.envelope.createdAt,
     writer: envelope.envelope.writer,
@@ -275,6 +310,15 @@ function assertCompletionContextRequest(
   if (!registry.ok) throw new Error(registry.error);
   const protectedArtifacts = decodeProtectedArtifacts(request.protectedArtifacts);
   if (!protectedArtifacts.ok) throw new Error(protectedArtifacts.error);
+  const protectedWorkAuthorization = decodeProtectedWorkAuthorizationSnapshot(request.protectedWorkAuthorization);
+  if (!protectedWorkAuthorization.ok) throw new Error(protectedWorkAuthorization.error);
+  if (
+    protectedWorkAuthorization.value &&
+    (protectedWorkAuthorization.value.goalRecordDigest !== hashIdentity(stableJson(request.goal)) ||
+      protectedWorkAuthorization.value.changeRecordDigest !== hashIdentity(stableJson(request.change)))
+  ) {
+    throw new Error('protectedWorkAuthorization record digests must match the fixed work records');
+  }
   const target = decodeObservationReceipt(request.targetObservation);
   if (target.kind !== 'supported') {
     throw new Error(`target observation is not current: ${target.kind === 'malformed' ? target.reason : target.kind}`);
@@ -291,11 +335,13 @@ function completionContextMeaning(
     changeId: request.change.changeId,
     goalId: request.goal.goalId,
     goalRecordDigest: hashIdentity(stableJson(request.goal)),
+    changeRecordDigest: hashIdentity(stableJson(request.change)),
     policy: request.policy,
     evaluator: request.evaluator,
     commandRegistry: request.commandRegistry,
     protectedArtifacts: request.protectedArtifacts,
     targetObservation: targetObservationMeaning(request.targetObservation),
+    ...(request.protectedWorkAuthorization ? { protectedWorkAuthorization: request.protectedWorkAuthorization } : {}),
   };
 }
 
@@ -306,11 +352,40 @@ function completionRecordMeaning(record: CompletionContextSnapshotRecordV1): Rec
     changeId: record.changeId,
     goalId: record.goalId,
     goalRecordDigest: record.goalRecordDigest,
+    ...(record.changeRecordDigest ? { changeRecordDigest: record.changeRecordDigest } : {}),
     policy: record.policy,
     evaluator: record.evaluator,
     commandRegistry: record.commandRegistry,
     protectedArtifacts: record.protectedArtifacts,
     targetObservation: targetObservationMeaning(record.targetObservation),
+    ...(record.protectedWorkAuthorization ? { protectedWorkAuthorization: record.protectedWorkAuthorization } : {}),
+  };
+}
+
+function decodeProtectedWorkAuthorizationSnapshot(
+  value: unknown,
+): { ok: true; value?: ProtectedWorkAuthorizationSnapshot } | { ok: false; error: string } {
+  if (value === undefined) return { ok: true };
+  if (
+    !isRecordObject(value) ||
+    !isProtectedWorkAuthorizationId(value['authorizationId']) ||
+    typeof value['recordSha256'] !== 'string' ||
+    !SHA256_PATTERN.test(value['recordSha256']) ||
+    typeof value['goalRecordDigest'] !== 'string' ||
+    !SHA256_PATTERN.test(value['goalRecordDigest']) ||
+    typeof value['changeRecordDigest'] !== 'string' ||
+    !SHA256_PATTERN.test(value['changeRecordDigest'])
+  ) {
+    return { ok: false, error: 'protectedWorkAuthorization must fix one authorization and its exact record digests' };
+  }
+  return {
+    ok: true,
+    value: {
+      authorizationId: value['authorizationId'],
+      recordSha256: value['recordSha256'],
+      goalRecordDigest: value['goalRecordDigest'],
+      changeRecordDigest: value['changeRecordDigest'],
+    },
   };
 }
 

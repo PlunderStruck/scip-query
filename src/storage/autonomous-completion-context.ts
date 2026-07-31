@@ -99,6 +99,8 @@ export function readCompletionContextSnapshots(projectRoot: string): CompletionC
       change.record.collaborationDomainId !== record.collaborationDomainId
     ) {
       issues.push(`${record.contextSnapshotId} is not aligned with intended change ${record.changeId}`);
+    } else if (record.changeRecordDigest && hashIdentity(stableJson(change.record)) !== record.changeRecordDigest) {
+      issues.push(`${record.contextSnapshotId} does not match current intended change record ${record.changeId}`);
     }
     return issues;
   });

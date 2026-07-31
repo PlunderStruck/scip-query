@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unpkg.com/scip-query/docs/schemas/completion-context-record.schema.json",
   "title": "scip-query completion context record v1",
-  "description": "One immutable goal, policy, evaluator, check-registry, protected-artifact, and target bundle stored under .scipquery/completion-contexts/.",
+  "description": "One immutable goal, intended change, policy, evaluator, check-registry, protected-artifact, optional external authorization, and target bundle stored under .scipquery/completion-contexts/.",
   "type": "object",
   "required": [
     "kind",
@@ -32,6 +32,7 @@
     "changeId": { "$ref": "./attempt-create-request.schema.json#/$defs/changeId" },
     "goalId": { "$ref": "./intended-change-create-request.schema.json#/$defs/goalId" },
     "goalRecordDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "changeRecordDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "policy": {
       "type": "object",
       "required": ["policyId", "policyVersion", "stopMode", "requiredPredicates"],
@@ -97,6 +98,17 @@
     },
     "targetObservation": {
       "$ref": "./observation-receipt.schema.json#/$defs/observationReceiptV2"
+    },
+    "protectedWorkAuthorization": {
+      "type": "object",
+      "required": ["authorizationId", "recordSha256", "goalRecordDigest", "changeRecordDigest"],
+      "properties": {
+        "authorizationId": { "type": "string", "pattern": "^SQWA-[A-F0-9]{32}$" },
+        "recordSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "goalRecordDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "changeRecordDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
     },
     "capturedAt": { "type": "string", "format": "date-time" },
     "createdAt": { "type": "string", "format": "date-time" },

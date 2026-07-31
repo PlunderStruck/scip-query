@@ -1,7 +1,7 @@
 # Autonomous completion protected-trial remediation
 
 Date: 2026-07-31
-Status: in progress — slice 1 complete
+Status: in progress — slices 1-2 complete
 Governing goal: `SQG-4061E7D5D360464ED8E8B05D53BBF49D`
 Governing change: `SQC-DED67E74D3898BDCA85766BE8D3C93AF`
 
@@ -230,6 +230,33 @@ renderers shared only generic console/error vocabulary.
   moved external bytes, partial activation, and missing config all fail closed.
 - **Order safety:** activation and trust consumption land together, so there is
   no enforcement window in which a loose record is trusted.
+
+**Result (2026-07-31): complete.** The supported prompt hook now consumes only
+the host-configured external authorization root and identity, verifies the
+first prompt before any publication, and idempotently materializes the exact
+embedded goal and intended change. Completion snapshots fix both work-record
+digests plus the authorization ID and source-byte digest. The firewall grants
+goal authority only when the sole changed goal is the embedded goal, and
+grants each other protected class only when every changed path has one exact
+predecessor/current transition. A post-evaluation reread turns external byte
+movement into a discarded context rather than a published judgment.
+
+Validation covers matched activation, prompt substitution, continuation,
+partial-write recovery, missing or partial environment configuration, relative
+and candidate-owned roots, collaboration-domain mismatch, symlinked storage,
+candidate goal widening, wrong protected successor bytes, and authorization
+movement. The complete repository suite, typecheck, lint/build/API contracts,
+architecture policy, fully paginated relationship postchecks, self-audit, and
+the final staged `scip-query diff-gate` are the slice exit conditions.
+
+Exit evidence: the complete suite passed (308 files, 2,409 tests); lint passed,
+including formatting, ESLint, build, public-API compatibility, the public
+consumer fixture, and skill-link validation. `architecture`,
+`recent-duplicates --full`, fully paginated `similar --full`,
+`stale-abstractions --full`, `unused-params --full`, fully paginated
+`co-change --full`, fully paginated `doc-drift --full`, and `self-audit`
+completed. The staged `scip-query diff-gate` passed with no findings. No new
+suppression was required.
 
 ### 3. Decision-equivalent verification compression
 

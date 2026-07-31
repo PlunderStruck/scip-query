@@ -25,6 +25,7 @@ describe('autonomous completion context domain', () => {
     expect(first.contextSnapshotId).toMatch(/^SQCX-[A-F0-9]{32}$/u);
     expect(replay.contextSnapshotId).toBe(first.contextSnapshotId);
     expect(first.goalRecordDigest).toMatch(/^[a-f0-9]{64}$/u);
+    expect(first.changeRecordDigest).toMatch(/^[a-f0-9]{64}$/u);
     expect(first.commandRegistry.entries).toEqual(['diff-gate:architecture', 'diff-gate:new-dead']);
     expect(first.protectedArtifacts.rules.map((rule) => rule.class)).toEqual([
       'goal',
@@ -36,6 +37,32 @@ describe('autonomous completion context domain', () => {
       'configuration',
     ]);
     expect(decodeCompletionContextSnapshotRecord(first)).toEqual({ state: 'current', record: first });
+  });
+
+  it('binds protected authorization identity to the same exact goal and intended-change digests', () => {
+    const request = contextRequest();
+    const unprotected = contextRecord(request);
+    const protectedRequest: CompletionContextSnapshotRequest = {
+      ...request,
+      protectedWorkAuthorization: {
+        authorizationId: `SQWA-${'A'.repeat(32)}`,
+        recordSha256: 'b'.repeat(64),
+        goalRecordDigest: unprotected.goalRecordDigest,
+        changeRecordDigest: unprotected.changeRecordDigest!,
+      },
+    };
+    const record = contextRecord(protectedRequest);
+
+    expect(decodeCompletionContextSnapshotRecord(record)).toEqual({ state: 'current', record });
+    expect(() =>
+      contextRecord({
+        ...protectedRequest,
+        protectedWorkAuthorization: {
+          ...protectedRequest.protectedWorkAuthorization!,
+          changeRecordDigest: 'c'.repeat(64),
+        },
+      }),
+    ).toThrow('must match the fixed work records');
   });
 
   it('rejects a future schema and an identity that no longer matches its fixed target', () => {

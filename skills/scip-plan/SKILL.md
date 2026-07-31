@@ -99,12 +99,13 @@ reached, run those commands instead of asking for a narrative handoff.
 `scip-query change create --input <path>` are repository mutations: use them
 once to materialize the derived authorized request, and rely on their
 retry-stable identities instead of editing committed record bytes directly.
-When the execution host supplies a principal-controlled authorization root,
-use `scip-query work-authorization activate <authorization-id>
---protected-root <root>` instead: it materializes the exact preflight-fixed
-goal and change without asking the coding candidate to restate authority. The
-`issue` operation belongs to the principal or orchestration stage outside the
-candidate run; a candidate must never issue the envelope that judges itself.
+When the execution host supplies `SCIP_QUERY_WORK_AUTHORIZATION_ROOT` and
+`SCIP_QUERY_WORK_AUTHORIZATION_ID`, the prompt hook automatically materializes
+the exact preflight-fixed goal and change before candidate work. Do not repeat
+that activation as an agent step. The `issue` operation belongs to the
+principal or orchestration stage outside the candidate run; a candidate must
+never issue the envelope that judges itself. Use the manual `activate`
+operation only to recover an unsupported adapter that has no prompt hook.
 Use `scip-query attempt status <change-id>` and
 `scip-query decision status <change-id>` to recover tried strategies,
 unresolved effects, and settled next actions before proposing another slice.

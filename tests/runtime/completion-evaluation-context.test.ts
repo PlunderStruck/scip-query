@@ -1,17 +1,26 @@
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { ProjectConfig } from '../../src/domain/types.js';
+import { createProtectedWorkAuthorization } from '../../src/domain/protected-work-authorization.js';
 import type { DiffGateResult } from '../../src/queries/impact/diff-gate.js';
 import {
   CompletionEvaluationContextMovedError,
   assertFixedCompletionContext,
   captureFixedCompletionContext,
   publishStopCompletionEvaluations,
+  protectedWorkAuthorizationReferents,
   stopCompletionEvaluationRequest,
 } from '../../src/runtime/completion-evaluation-context.js';
+import {
+  PROTECTED_WORK_AUTHORIZATION_ID_ENV,
+  PROTECTED_WORK_AUTHORIZATION_ROOT_ENV,
+  readConfiguredProtectedWorkAuthorization,
+} from '../../src/runtime/protected-work-authorization-controller.js';
 import { readCompletionHistory } from '../../src/storage/autonomous-completion.js';
 import { createAttemptRecordFile } from '../../src/storage/autonomous-work-ledger.js';
 import { readObligationLifecycle } from '../../src/storage/autonomous-work-obligations.js';
@@ -20,6 +29,10 @@ import {
   createIntendedChangeRecordFile,
   readIntendedChangeRecords,
 } from '../../src/storage/autonomous-work-state.js';
+import {
+  activateProtectedWorkAuthorization,
+  writeProtectedWorkAuthorization,
+} from '../../src/storage/protected-work-authorization.js';
 
 const COLLABORATION_DOMAIN = '5ea57d1a-936c-4c91-b58f-5d61e45173a5';
 const fixtureDirectories = new Set<string>();
@@ -428,6 +441,100 @@ describe('fixed completion evaluation context', () => {
       ),
     );
   });
+
+  it('authorizes only the exact goal, intended change, and protected byte transitions fixed before candidate work', () => {
+    const fixture = authorizedContextFixture();
+    const lease = captureFixedCompletionContext(fixture.root, fixture.config, 'block', {
+      evaluatorEntrypoint: fixture.evaluator,
+      protectedWorkAuthorization: fixture.authorizationLease,
+    });
+    const context = lease.records[0]!;
+
+    const referents = protectedWorkAuthorizationReferents(fixture.root, context, lease.authority);
+    const request = stopCompletionEvaluationRequest(fixture.root, context, passingGate(), lease.authority);
+
+    expect(context.changeRecordDigest).toBe(context.protectedWorkAuthorization?.changeRecordDigest);
+    expect(context.protectedWorkAuthorization).toMatchObject({
+      authorizationId: fixture.authorizationLease.record.authorizationId,
+      recordSha256: fixture.authorizationLease.recordSha256,
+    });
+    expect(referents).toMatchObject({
+      goal: expect.stringContaining(fixture.authorizationLease.record.authorizationId),
+      configuration: expect.stringContaining(fixture.authorizationLease.record.authorizationId),
+    });
+    expect(request.authority?.fixedOrAuthorized).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ class: 'goal', referent: referents.goal }),
+        expect.objectContaining({ class: 'configuration', referent: referents.configuration }),
+      ]),
+    );
+    expect(request.authority?.violations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ class: 'goal' }),
+        expect.objectContaining({ class: 'configuration' }),
+      ]),
+    );
+    expect(() =>
+      assertFixedCompletionContext(lease, fixture.config, { evaluatorEntrypoint: fixture.evaluator }),
+    ).not.toThrow();
+  });
+
+  it('keeps a protected configuration candidate-controlled when its successor bytes differ from the grant', () => {
+    const fixture = authorizedContextFixture();
+    writeFileSync(
+      join(fixture.root, '.scipquery.json'),
+      `${JSON.stringify({ collaborationDomainId: COLLABORATION_DOMAIN, watch: { enabled: false } })}\n`,
+    );
+    const lease = captureFixedCompletionContext(fixture.root, fixture.config, 'block', {
+      evaluatorEntrypoint: fixture.evaluator,
+      protectedWorkAuthorization: fixture.authorizationLease,
+    });
+    const context = lease.records[0]!;
+
+    const referents = protectedWorkAuthorizationReferents(fixture.root, context, lease.authority);
+    const request = stopCompletionEvaluationRequest(fixture.root, context, passingGate(), lease.authority);
+
+    expect(referents.goal).toContain(fixture.authorizationLease.record.authorizationId);
+    expect(referents.configuration).toBeUndefined();
+    expect(request.authority?.violations).toEqual(
+      expect.arrayContaining([expect.objectContaining({ class: 'configuration' })]),
+    );
+    expect(request.predicates.find((predicate) => predicate.predicate === 'policy-permitted')).toMatchObject({
+      state: 'unknown',
+    });
+  });
+
+  it('withholds class-wide goal authority when the candidate also changes an ungranted goal', () => {
+    const fixture = authorizedContextFixture();
+    const lease = captureFixedCompletionContext(fixture.root, fixture.config, 'block', {
+      evaluatorEntrypoint: fixture.evaluator,
+      protectedWorkAuthorization: fixture.authorizationLease,
+    });
+    const context = lease.records[0]!;
+    const widenedAuthority = {
+      ...lease.authority,
+      changedPaths: [...lease.authority.changedPaths, `.scipquery/goals/SQG-${'F'.repeat(32)}.json`],
+    };
+
+    const referents = protectedWorkAuthorizationReferents(fixture.root, context, widenedAuthority);
+    const request = stopCompletionEvaluationRequest(fixture.root, context, passingGate(), widenedAuthority);
+
+    expect(referents.goal).toBeUndefined();
+    expect(request.authority?.violations).toEqual(expect.arrayContaining([expect.objectContaining({ class: 'goal' })]));
+  });
+
+  it('discards the completion context when protected authorization bytes move after capture', () => {
+    const fixture = authorizedContextFixture();
+    const lease = captureFixedCompletionContext(fixture.root, fixture.config, 'block', {
+      evaluatorEntrypoint: fixture.evaluator,
+      protectedWorkAuthorization: fixture.authorizationLease,
+    });
+    writeFileSync(fixture.authorizationLease.path, `${JSON.stringify(fixture.authorizationLease.record)}\n\n`);
+
+    expect(() =>
+      assertFixedCompletionContext(lease, fixture.config, { evaluatorEntrypoint: fixture.evaluator }),
+    ).toThrow(CompletionEvaluationContextMovedError);
+  });
 });
 
 const COMPLETION_PREDICATE_NAMES = [
@@ -486,6 +593,75 @@ function contextFixture(): { root: string; config: ProjectConfig; evaluator: str
     languages: ['typescript'],
   };
   return { root, config, evaluator };
+}
+
+function authorizedContextFixture() {
+  const root = mkdtempSync(join(tmpdir(), 'scip-query-authorized-completion-'));
+  const protectedRoot = mkdtempSync(join(tmpdir(), 'scip-query-protected-completion-'));
+  fixtureDirectories.add(root);
+  fixtureDirectories.add(protectedRoot);
+  mkdirSync(join(root, 'src'), { recursive: true });
+  writeFileSync(join(root, 'src', 'feature.ts'), 'export const feature = 1;\n');
+  const evaluator = join(root, 'fixed-evaluator.js');
+  writeFileSync(evaluator, 'export const evaluator = 1;\n');
+  const predecessorConfig = `${JSON.stringify({ collaborationDomainId: COLLABORATION_DOMAIN, watch: { autoRefresh: true } })}\n`;
+  const successorConfig = `${JSON.stringify({ collaborationDomainId: COLLABORATION_DOMAIN, watch: { autoRefresh: false } })}\n`;
+  writeFileSync(join(root, '.scipquery.json'), predecessorConfig);
+  execFileSync('git', ['init', '--quiet'], { cwd: root });
+  execFileSync('git', ['add', '.'], { cwd: root });
+  execFileSync(
+    'git',
+    ['-c', 'user.name=scip-query', '-c', 'user.email=scip-query@example.com', 'commit', '--quiet', '-m', 'base'],
+    { cwd: root },
+  );
+  const authorization = createProtectedWorkAuthorization({
+    collaborationDomainId: COLLABORATION_DOMAIN,
+    request: {
+      principal: 'repository-owner',
+      promptSha256: createHash('sha256').update('authorized prompt').digest('hex'),
+      goal: {
+        feature: 'One protected change reaches autonomous completion',
+        invariants: ['Only fixed intent and exact protected bytes can authorize completion'],
+        acceptanceScenarios: [
+          {
+            name: 'fixed completion authority',
+            given: ['the principal fixed an external work authorization'],
+            when: ['the candidate reaches Stop'],
+            then: ['the exact goal and configuration transition have independent authority'],
+          },
+        ],
+      },
+      change: {
+        idempotencyKey: 'authorized-completion-context',
+        title: 'Exercise protected completion authority',
+        intendedOutcome: 'The completion firewall accepts only the fixed authorization consequences',
+      },
+      artifactTransitions: [
+        {
+          class: 'configuration',
+          path: '.scipquery.json',
+          predecessorDigest: createHash('sha256').update(predecessorConfig).digest('hex'),
+          successorDigest: createHash('sha256').update(successorConfig).digest('hex'),
+        },
+      ],
+    },
+    createdAt: '2026-07-31T12:00:00.000Z',
+    toolVersion: '0.20.0',
+  });
+  writeProtectedWorkAuthorization(protectedRoot, root, authorization);
+  activateProtectedWorkAuthorization(root, COLLABORATION_DOMAIN, authorization);
+  writeFileSync(join(root, '.scipquery.json'), successorConfig);
+  const authorizationLease = readConfiguredProtectedWorkAuthorization(root, COLLABORATION_DOMAIN, {
+    [PROTECTED_WORK_AUTHORIZATION_ROOT_ENV]: protectedRoot,
+    [PROTECTED_WORK_AUTHORIZATION_ID_ENV]: authorization.authorizationId,
+  })!;
+  const config: ProjectConfig = {
+    projectRoot: root,
+    dbPath: join(root, '.scipquery-cache', 'index.db'),
+    collaborationDomainId: COLLABORATION_DOMAIN,
+    languages: ['typescript'],
+  };
+  return { root, config, evaluator, authorizationLease };
 }
 
 function passingGate(): DiffGateResult {

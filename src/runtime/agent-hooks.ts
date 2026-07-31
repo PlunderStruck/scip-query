@@ -62,6 +62,11 @@ import {
   publishStopCompletionEvaluations,
 } from './completion-evaluation-context.js';
 import {
+  activateConfiguredProtectedWorkAuthorization,
+  readConfiguredProtectedWorkAuthorization,
+  type ProtectedWorkAuthorizationEnvironment,
+} from './protected-work-authorization-controller.js';
+import {
   materializeAutomaticOperationAttempts,
   type MaterializeAutomaticOperationAttemptsResult,
 } from './autonomous-operation-journal.js';
@@ -973,7 +978,16 @@ async function runIsolatedStopHookDiffGate(hookInput: string): Promise<StopHookE
   );
   const lease = await prepareStopHookEvidenceLease(workspace);
   const stopMode = resolveStopHookMode();
-  const completionContext = captureFixedCompletionContext(workspace.projectRoot, workspace.config, stopMode);
+  const protectedWorkAuthorization = workspace.config.collaborationDomainId
+    ? readConfiguredProtectedWorkAuthorization(
+        workspace.projectRoot,
+        workspace.config.collaborationDomainId,
+        process.env,
+      )
+    : undefined;
+  const completionContext = captureFixedCompletionContext(workspace.projectRoot, workspace.config, stopMode, {
+    ...(protectedWorkAuthorization ? { protectedWorkAuthorization } : {}),
+  });
   const execution = runIsolatedDiffGate(
     {
       minTogether: 6,
@@ -1316,7 +1330,10 @@ function suppressionCoverageWarning(result: DiffGateResult): string | undefined 
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
-export async function renderAgentHookContext(hookInput: string): Promise<unknown | undefined> {
+export async function renderAgentHookContext(
+  hookInput: string,
+  options: { environment?: ProtectedWorkAuthorizationEnvironment } = {},
+): Promise<unknown | undefined> {
   const payload = parseHookPayload(hookInput);
   const event = hookEventName(payload);
   if (event !== 'SessionStart' && event !== 'UserPromptSubmit' && event !== 'PostCompact') {
@@ -1338,6 +1355,17 @@ export async function renderAgentHookContext(hookInput: string): Promise<unknown
       : undefined;
   }
 
+  const prompt = String(payload.prompt ?? '');
+  const activation =
+    event === 'UserPromptSubmit' && workspace.config.collaborationDomainId
+      ? activateConfiguredProtectedWorkAuthorization({
+          projectRoot: workspace.projectRoot,
+          collaborationDomainId: workspace.config.collaborationDomainId,
+          prompt,
+          environment: options.environment ?? process.env,
+        })
+      : undefined;
+
   const refreshNote = await refreshIndexForHookIfNeeded(workspace, event);
   const context =
     event === 'SessionStart'
@@ -1348,7 +1376,10 @@ export async function renderAgentHookContext(hookInput: string): Promise<unknown
           .filter((line): line is string => Boolean(line?.trim()))
           .join('\n\n')
       : [
-          renderUserPromptContext(String(payload.prompt ?? ''), workspace.config),
+          activation?.publication === 'activated'
+            ? `Activated protected work authorization ${activation.lease.record.authorizationId}: exact goal ${activation.lease.record.goal.goalId} and change ${activation.lease.record.change.changeId} are now the durable work state. Continue directly from that intent.`
+            : undefined,
+          renderUserPromptContext(prompt, workspace.config),
           restoreAgentWorkContext(workspace, payload, event),
         ]
           .filter((line): line is string => Boolean(line?.trim()))
