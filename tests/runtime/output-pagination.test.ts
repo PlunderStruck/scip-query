@@ -186,6 +186,57 @@ describe('universal CLI output pagination', () => {
     expect(pages[2]!.agentInstruction).toContain('OUTPUT COMPLETE');
   });
 
+  it('preserves one original evidence context across every JSON output page', async () => {
+    const envelope = {
+      kind: 'scip-query-result',
+      schemaVersion: 1,
+      producer: { name: 'scip-query', version: 'test' },
+      command: 'stats',
+      resultSchemaVersion: 1,
+      args: [],
+      options: { json: true },
+      result: { rows: ['x'.repeat(700)] },
+      evidenceContext: {
+        schemaVersion: 1,
+        receipt: {
+          schemaVersion: 1,
+          authorityKind: 'index-only',
+          observedAt: '2026-07-30T12:00:00.000Z',
+          projectIdentity: 'project',
+          index: {
+            generationIdentity: 'generation',
+            source: 'immutable',
+            alignment: 'not-certified',
+          },
+        },
+        analysisManifest: { schemaVersion: 1, evidence: 'graph-fact' },
+      },
+    };
+    const content = `${JSON.stringify(envelope)}\n`;
+    const root = freshSnapshotRoot();
+    const pages: CliOutputPageEnvelopeV1[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const result = await invoke(content, {
+        argv: ['stats', '--json', '--output-page-size', '256', ...(cursor ? ['--output-cursor', cursor] : [])],
+        command: 'stats',
+        json: true,
+        pageSize: 256,
+        snapshotRoot: root,
+        ...(cursor ? { cursor } : {}),
+      });
+      const page = parsePage(result.stdout);
+      pages.push(page);
+      cursor = page.page.continuation?.cursor;
+    } while (cursor);
+
+    expect(JSON.parse(pages.map((page) => page.content).join(''))).toEqual(envelope);
+    expect(pages.map((page) => page.page.outputHash)).toEqual(
+      Array.from({ length: pages.length }, () => pages[0]!.page.outputHash),
+    );
+  });
+
   it('automatically pages oversized human output as readable text with one exact continuation', async () => {
     const content = `${'a'.repeat(DEFAULT_OUTPUT_PAGE_SIZE)}TAIL`;
     const result = await invoke(content, {

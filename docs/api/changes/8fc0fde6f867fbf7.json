@@ -1,0 +1,73 @@
+{
+  "acceptedAt": "2026-07-31T00:25:11.471Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "8fc0fde6f867fbf7fdc4b3f7205d742686a204acd63af6d4ce398681703275ec",
+  "changes": [
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries; review their variance and runtime meaning.",
+      "target": "./queries"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/index; review their variance and runtime meaning.",
+      "target": "./queries/index"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CLI_ANALYSIS_MANIFEST_SCHEMA_VERSION.",
+      "target": "./runtime:CLI_ANALYSIS_MANIFEST_SCHEMA_VERSION"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CLI_EVIDENCE_CONTEXT_SCHEMA_VERSION.",
+      "target": "./runtime:CLI_EVIDENCE_CONTEXT_SCHEMA_VERSION"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CliAnalysisManifestV1.",
+      "target": "./runtime:CliAnalysisManifestV1"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CliEvidenceContextV1.",
+      "target": "./runtime:CliEvidenceContextV1"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CliJsonEnvelopeV1 changed from interface CliJsonEnvelopeV1<Result = unknown> { kind: typeof CLI_JSON_ENVELOPE_KIND; schemaVersion: typeof CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION; producer: CliJsonProducer; c... to interface CliJsonEnvelopeV1<Result = unknown> { kind: typeof CLI_JSON_ENVELOPE_KIND; schemaVersion: typeof CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION; producer: CliJsonProducer; c....",
+      "target": "./runtime:CliJsonEnvelopeV1"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "O changed from declare const OBSERVATION_RECEIPT_SCHEMA_VERSION: 1; to interface ObservationReceipt { schemaVersion: typeof OBSERVATION_RECEIPT_SCHEMA_VERSION; authorityKind: ObservationAuthorityKind; observedAt: string; projectIdentity: string; in....",
+      "target": "config-types-<hash>.d.ts:O"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "c changed from type ObservationAuthorityKind = 'index-worktree' | 'index-only' | 'worktree-only' | 'process-local'; to declare const OBSERVATION_RECEIPT_SCHEMA_VERSION: 1;.",
+      "target": "config-types-<hash>.d.ts:c"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "d changed from interface ObservationReceipt { schemaVersion: typeof OBSERVATION_RECEIPT_SCHEMA_VERSION; authorityKind: ObservationAuthorityKind; observedAt: string; projectIdentity: string; in... to type ObservationAuthorityKind = 'index-worktree' | 'index-only' | 'worktree-only' | 'process-local';.",
+      "target": "config-types-<hash>.d.ts:d"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "98c9da5d989ad2f9e9fee8709f4abd0addd578a37c25d973356a0a096bd74695",
+  "reason": "The runtime contract only adds optional fields and exports; bundled declaration alias renumbering is a build artifact, so existing consumers remain valid.",
+  "schemaVersion": 1
+}

@@ -5,14 +5,21 @@ import type {
   CommandHandler,
   InvocationCoverage,
 } from './command-descriptor-types.js';
-import { withDb } from '../cli-context.js';
+import { currentCliDatabase, withDb } from '../cli-context.js';
 import {
   cliVersion,
   commandAnalysisBudget,
   renderHeuristicNotice,
   type AnalysisBudgetDisclosure,
 } from '../cli-support.js';
-import { createCliJsonEnvelope, serializeCliJsonEnvelope } from '../cli-json-envelope.js';
+import {
+  CLI_ANALYSIS_MANIFEST_SCHEMA_VERSION,
+  CLI_EVIDENCE_CONTEXT_SCHEMA_VERSION,
+  createCliJsonEnvelope,
+  serializeCliJsonEnvelope,
+  type CliEvidenceContextV1,
+} from '../cli-json-envelope.js';
+import { buildObservationReceipt } from '../observation-receipt.js';
 import { render, writeSerializedJson } from '../render.js';
 import type { ReportSection } from '../render.js';
 
@@ -375,9 +382,34 @@ export function printJsonEnvelope(
     result,
     ...(coverage ? { coverage } : {}),
     ...(extra.agentResult !== undefined ? { agentResult: extra.agentResult } : {}),
+    ...optionalEvidenceContext(evidence, extra.analysisBudget, coverage),
     ...(extra.resultSchemaVersion === undefined ? {} : { resultSchemaVersion: extra.resultSchemaVersion }),
   });
   writeSerializedJson(serializeCliJsonEnvelope(envelope, booleanOptionValue(options, 'compact')));
+}
+
+function optionalEvidenceContext(
+  evidence: CommandEvidenceTier | undefined,
+  analysisBudget: AnalysisBudgetDisclosure | undefined,
+  coverage: InvocationCoverage | undefined,
+): { evidenceContext?: CliEvidenceContextV1 } {
+  const db = currentCliDatabase();
+  if (!db) return {};
+  return {
+    evidenceContext: {
+      schemaVersion: CLI_EVIDENCE_CONTEXT_SCHEMA_VERSION,
+      receipt: buildObservationReceipt({
+        projectRoot: db.config.projectRoot,
+        db,
+      }),
+      analysisManifest: {
+        schemaVersion: CLI_ANALYSIS_MANIFEST_SCHEMA_VERSION,
+        ...(evidence ? { evidence } : {}),
+        ...(analysisBudget ? { analysisBudget } : {}),
+        ...(coverage ? { coverage } : {}),
+      },
+    },
+  };
 }
 
 export function validateInvocationCoverage(coverage: InvocationCoverage): void {

@@ -47,7 +47,108 @@
     },
     "result": {},
     "coverage": {},
-    "agentResult": {}
+    "agentResult": {},
+    "evidenceContext": {
+      "$ref": "#/$defs/evidenceContextV1"
+    }
+  },
+  "$defs": {
+    "evidenceContextV1": {
+      "type": "object",
+      "required": ["schemaVersion", "receipt", "analysisManifest"],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "receipt": {
+          "$ref": "#/$defs/observationReceiptV1"
+        },
+        "analysisManifest": {
+          "$ref": "#/$defs/analysisManifestV1"
+        }
+      },
+      "additionalProperties": true
+    },
+    "analysisManifestV1": {
+      "type": "object",
+      "required": ["schemaVersion"],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "evidence": {
+          "enum": ["graph-fact", "heuristic", "mixed"]
+        },
+        "analysisBudget": {},
+        "coverage": {}
+      },
+      "additionalProperties": true
+    },
+    "observationReceiptV1": {
+      "type": "object",
+      "required": ["schemaVersion", "authorityKind", "observedAt", "projectIdentity"],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "authorityKind": {
+          "enum": ["index-worktree", "index-only", "worktree-only", "process-local"]
+        },
+        "observedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "projectIdentity": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "index": {
+          "type": "object",
+          "required": ["generationIdentity", "source", "alignment"],
+          "properties": {
+            "generationIdentity": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "source": {
+              "enum": ["immutable", "legacy"]
+            },
+            "alignment": {
+              "enum": ["not-certified", "leased"]
+            }
+          },
+          "additionalProperties": true
+        },
+        "worktree": {
+          "type": "object",
+          "required": ["identity", "clean"],
+          "properties": {
+            "identity": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "clean": {
+              "type": "boolean"
+            },
+            "headCommit": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "treeOid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    }
   },
   "additionalProperties": true
 }

@@ -48,6 +48,22 @@ describe('code CLI output contract', () => {
       kind: 'scip-query-result',
       schemaVersion: 1,
       command: 'code',
+      evidenceContext: {
+        schemaVersion: 1,
+        receipt: {
+          schemaVersion: 1,
+          authorityKind: 'index-only',
+          projectIdentity: expect.any(String),
+          index: {
+            generationIdentity: expect.any(String),
+            source: expect.stringMatching(/^(immutable|legacy)$/),
+            alignment: 'not-certified',
+          },
+        },
+        analysisManifest: {
+          schemaVersion: 1,
+        },
+      },
       result: {
         code: {
           relativePath: 'src/watch.ts',

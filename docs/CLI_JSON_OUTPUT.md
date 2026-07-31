@@ -43,6 +43,25 @@ The current envelope is schema version 1:
   "command": "refs",
   "resultSchemaVersion": 1,
   "evidence": "graph-fact",
+  "evidenceContext": {
+    "schemaVersion": 1,
+    "receipt": {
+      "schemaVersion": 1,
+      "authorityKind": "index-only",
+      "observedAt": "2026-07-30T12:00:00.000Z",
+      "projectIdentity": "<opaque>",
+      "index": {
+        "generationIdentity": "<opaque>",
+        "source": "immutable",
+        "alignment": "not-certified"
+      }
+    },
+    "analysisManifest": {
+      "schemaVersion": 1,
+      "evidence": "graph-fact",
+      "coverage": {}
+    }
+  },
   "args": ["login"],
   "options": { "json": true },
   "result": {},
@@ -55,6 +74,21 @@ governs the payload selected by `command`; it can advance without changing
 the transport version. `producer.version` is the installed package version
 that emitted the record. `kind` prevents a consumer from mistaking another
 JSON protocol for a CLI result.
+
+Database-backed repository queries attach `evidenceContext` automatically at
+the shared renderer. Its `receipt` identifies the immutable index generation
+the query actually held. It deliberately does not hash the live worktree,
+which the query did not read. Its `analysisManifest` separately records how
+the result was produced and how much was examined. The version-1 receipt is
+local provenance: `alignment: "not-certified"` does not establish a fixed
+repository snapshot, whole-content equality, or final completion authority.
+Consumers must not infer those stronger relationships from its presence.
+
+The existing top-level `evidence`, `analysisBudget`, and `coverage` fields
+remain during the additive migration so older tolerant consumers continue to
+work. New consumers may read the nested context. `--result-only` deliberately
+omits the common envelope, including this context, and therefore cannot stand
+alone as completion evidence.
 
 The machine-readable schema is
 [`schemas/cli-json-envelope.schema.json`](schemas/cli-json-envelope.schema.json).

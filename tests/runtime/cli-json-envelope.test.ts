@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  CLI_ANALYSIS_MANIFEST_SCHEMA_VERSION,
+  CLI_EVIDENCE_CONTEXT_SCHEMA_VERSION,
   CLI_JSON_ENVELOPE_KIND,
   CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION,
   createCliJsonEnvelope,
@@ -91,6 +93,59 @@ describe('CLI JSON envelope compatibility', () => {
       kind: 'malformed',
       reason: expect.stringContaining('command'),
     });
+    expect(
+      decodeCliJsonEnvelope({
+        ...current,
+        evidenceContext: {
+          schemaVersion: CLI_EVIDENCE_CONTEXT_SCHEMA_VERSION,
+          receipt: { schemaVersion: 1 },
+          analysisManifest: { schemaVersion: CLI_ANALYSIS_MANIFEST_SCHEMA_VERSION },
+        },
+      }),
+    ).toMatchObject({
+      kind: 'malformed',
+      reason: expect.stringContaining('evidenceContext'),
+    });
+  });
+
+  it('carries receipt and analysis metadata as separate nested contracts', () => {
+    const evidenceContext = {
+      schemaVersion: CLI_EVIDENCE_CONTEXT_SCHEMA_VERSION,
+      receipt: {
+        schemaVersion: 1,
+        authorityKind: 'index-worktree' as const,
+        observedAt: '2026-07-30T12:00:00.000Z',
+        projectIdentity: 'project',
+        index: {
+          generationIdentity: 'generation',
+          source: 'immutable' as const,
+          alignment: 'not-certified' as const,
+        },
+        worktree: {
+          identity: 'worktree',
+          clean: false,
+          headCommit: 'head',
+        },
+      },
+      analysisManifest: {
+        schemaVersion: CLI_ANALYSIS_MANIFEST_SCHEMA_VERSION,
+        evidence: 'graph-fact' as const,
+        coverage: { complete: true, totalKnown: true, returned: 1, total: 1, omitted: 0 },
+      },
+    };
+    const envelope = createCliJsonEnvelope({
+      producerVersion: '1.2.3',
+      command: 'stats',
+      args: [],
+      options: { json: true },
+      result: { documents: 1 },
+      evidenceContext,
+    });
+
+    expect(requireCompatibleCliJsonEnvelope(envelope)).toMatchObject({
+      kind: 'supported',
+      envelope: { evidenceContext },
+    });
   });
 
   it('serializes compact and pretty representations with identical meaning', () => {
@@ -168,6 +223,7 @@ describe('CLI JSON envelope compatibility', () => {
 
     expect(schema.properties['kind']?.['const']).toBe(CLI_JSON_ENVELOPE_KIND);
     expect(schema.properties['schemaVersion']?.['const']).toBe(CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION);
+    expect(schema.properties['evidenceContext']?.['$ref']).toBe('#/$defs/evidenceContextV1');
     expect(schema.required).toEqual(
       expect.arrayContaining([
         'kind',

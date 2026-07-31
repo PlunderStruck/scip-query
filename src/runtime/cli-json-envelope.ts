@@ -1,13 +1,40 @@
 import { isRecordObject } from '../domain/record-validation.js';
+import { isObservationReceipt, type ObservationReceipt } from '../domain/observation-receipt.js';
 
 export const CLI_JSON_ENVELOPE_KIND = 'scip-query-result' as const;
 export const LEGACY_CLI_JSON_ENVELOPE_SCHEMA_VERSION = 0 as const;
 export const CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION = 1 as const;
 export const DEFAULT_CLI_RESULT_SCHEMA_VERSION = 1 as const;
+export const CLI_EVIDENCE_CONTEXT_SCHEMA_VERSION = 1 as const;
+export const CLI_ANALYSIS_MANIFEST_SCHEMA_VERSION = 1 as const;
 
 export interface CliJsonProducer {
   name: 'scip-query';
   version: string;
+}
+
+/**
+ * How one CLI result was produced and how much of the possible answer the
+ * invocation examined. These fields remain separate from the receipt because
+ * changing an analysis budget does not change which repository state was
+ * observed.
+ */
+export interface CliAnalysisManifestV1 {
+  schemaVersion: typeof CLI_ANALYSIS_MANIFEST_SCHEMA_VERSION;
+  evidence?: 'graph-fact' | 'heuristic' | 'mixed';
+  analysisBudget?: unknown;
+  coverage?: unknown;
+}
+
+/**
+ * The self-contained evidence carried by one repository-observation result.
+ * A version-1 receipt supplies local provenance; it does not by itself claim
+ * the fixed-snapshot and content relationships required for final completion.
+ */
+export interface CliEvidenceContextV1 {
+  schemaVersion: typeof CLI_EVIDENCE_CONTEXT_SCHEMA_VERSION;
+  receipt: ObservationReceipt;
+  analysisManifest: CliAnalysisManifestV1;
 }
 
 /**
@@ -28,6 +55,7 @@ export interface CliJsonEnvelopeV1<Result = unknown> {
   result: Result;
   coverage?: unknown;
   agentResult?: unknown;
+  evidenceContext?: CliEvidenceContextV1;
 }
 
 export interface LegacyCliJsonEnvelope<Result = unknown> {
@@ -161,6 +189,12 @@ export function decodeCliJsonEnvelope<Result = unknown>(input: unknown): Decoded
       supportedResultSchemaVersions,
     };
   }
+  if (input['evidenceContext'] !== undefined && !isCliEvidenceContextV1(input['evidenceContext'])) {
+    return {
+      kind: 'malformed',
+      reason: 'CLI JSON envelope v1: evidenceContext must contain a supported receipt and analysis manifest.',
+    };
+  }
 
   return {
     kind: 'supported',
@@ -218,6 +252,20 @@ function isProducer(value: unknown): value is { name: 'scip-query'; version: str
 
 function isPositiveSafeInteger(value: unknown): value is number {
   return Number.isSafeInteger(value) && Number(value) > 0;
+}
+
+function isCliEvidenceContextV1(value: unknown): value is CliEvidenceContextV1 {
+  if (!isRecordObject(value) || value['schemaVersion'] !== CLI_EVIDENCE_CONTEXT_SCHEMA_VERSION) return false;
+  if (!isObservationReceipt(value['receipt'])) return false;
+  const manifest = value['analysisManifest'];
+  return (
+    isRecordObject(manifest) &&
+    manifest['schemaVersion'] === CLI_ANALYSIS_MANIFEST_SCHEMA_VERSION &&
+    (manifest['evidence'] === undefined ||
+      manifest['evidence'] === 'graph-fact' ||
+      manifest['evidence'] === 'heuristic' ||
+      manifest['evidence'] === 'mixed')
+  );
 }
 
 function describeValue(value: unknown): string {
