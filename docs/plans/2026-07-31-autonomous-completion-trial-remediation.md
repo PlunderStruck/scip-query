@@ -1,7 +1,7 @@
 # Autonomous completion protected-trial remediation
 
 Date: 2026-07-31
-Status: in progress — slices 1-3 complete; protected trial pending
+Status: in progress — slices 1-4 implemented; trial audit exposed slices 5-8
 Governing goal: `SQG-4061E7D5D360464ED8E8B05D53BBF49D`
 Governing change: `SQC-DED67E74D3898BDCA85766BE8D3C93AF`
 
@@ -11,10 +11,12 @@ An autonomous coding run begins from an independently fixed execution
 authorization, carries its exact repository consequences to protected
 completion, and receives only the evidence capable of changing its next action.
 
-Done means a fresh protected matched-pair program satisfies the registered
-completion-quality rule while keeping median workflow/control model-token use
-at or below `1.2`. The old program
-`SQTP-2FB7335FEA79CDF6BA5FD67542C1B297` remains immutable evidence and is not
+Done means a fresh protected matched-pair program observes genuine durable
+completion transitions, satisfies the full-worktree completion-quality rule,
+and keeps median workflow/control model-token use at or below `1.2`. Programs
+`SQTP-2FB7335FEA79CDF6BA5FD67542C1B297`,
+`SQTP-01A727B209830757B5612B57AE9F0453`, and
+`SQTP-84CD5CE42556A96AD9E06AAD5C135E83` remain immutable evidence and are not
 reused.
 
 ```gherkin
@@ -83,13 +85,13 @@ The following invariants must always hold:
   hook parses the raw prompt and currently performs only routing plus durable
   work restoration. Source: `src/runtime/agent-hooks.ts:667-692` and
   `src/runtime/agent-hooks.ts:1319-1355`; `scip-query plan-context
-  renderUserPromptContext --full` completed transport and found its sole direct
+renderUserPromptContext --full` completed transport and found its sole direct
   consumer in `renderAgentHookContext`.
 - **P2 — Goal writers.** The complete compiler-resolved production writer set
   for `createGoalRecordFile` is `runGoalOperation` and
   `materializeCompletionTransitionSuccessor`. Source: `scip-query refs
-  createGoalRecordFile --full` and `scip-query dataflow createGoalRecordFile
-  --full`.
+createGoalRecordFile --full` and `scip-query dataflow createGoalRecordFile
+--full`.
 - **P3 — Goal readers.** The complete compiler-resolved reader set for the goal
   collection reaches command status, completion context/evaluation, work
   ledger, obligations, restoration, and transition-rule selection. Source:
@@ -98,7 +100,7 @@ The following invariants must always hold:
   `createCompletionAuthorityAssessment` has one production caller,
   `stopCompletionEvaluationRequest`, and the result is passed through
   `applyCompletionAuthorityFirewall`. Source: `scip-query dataflow
-  createCompletionAuthorityAssessment --full` and
+createCompletionAuthorityAssessment --full` and
   `src/runtime/completion-evaluation-context.ts:402-414`.
 - **P5 — Current authority limitation.** Goal and configuration paths changed
   from the Git predecessor are candidate-controlled unless a selected fixed
@@ -117,20 +119,23 @@ The following invariants must always hold:
   `src/storage/mission-trials.ts:70-105`,
   `src/storage/mission-trials.ts:179-185`, and
   `src/storage/mission-trials.ts:218-264`.
-- **P8 — Trial failure and efficiency baseline.** The counted workflow had the
-  same 25% full-completion rate as control, a `1.255` median token ratio, and
-  three unknown blocker-validity judgments; pairs 02-04 had technically clean
-  code but candidate-controlled goal/configuration blockers. Source:
-  `docs/validation/2026-07-31-autonomous-completion-protected-trial.md:47-108`.
+- **P8 — Trial evidence boundary.** The hook-verified registered report was
+  `neutral`, with 100% hidden-evaluator completion in both conditions, median
+  elapsed ratio `0.84`, and median token ratio `0.86`. Audit found all four
+  durable workflow evaluations blocked with no completion transition and all
+  eight worktrees carrying generated `tsconfig.json` residue. The report
+  runner trusted candidate prose for controller state and the evaluator did
+  not inspect the complete worktree. Source:
+  `docs/validation/2026-07-31-autonomous-completion-protected-trial.md`.
 
 State-authority map:
 
-| State | Complete writers | Complete readers | Authority rule |
-| --- | --- | --- | --- |
-| Repository goal files | goal command; fixed successor materializer; planned protected activation | command status, completion context/history, ledger, obligations, restoration, transition selection | Candidate publication is data; exact protected activation or fixed predecessor supplies authority |
-| Protected work authorization | planned principal/orchestrator issue command only | planned activation and completion-context lease | Configured external root must be outside and non-writable by the candidate |
-| Completion authority assessment | controller pure constructor only | firewall, evaluation persistence, next-action policy | Derived from fixed predecessor, evaluator build, fixed transition rule, and planned authorization lease |
-| Agent-facing restoration/Stop projection | lifecycle hooks only; reconstructable cache claims | supported coding agent | Projection is advisory input; repository records and controller decisions remain canonical |
+| State                                    | Complete writers                                                         | Complete readers                                                                                   | Authority rule                                                                                          |
+| ---------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Repository goal files                    | goal command; fixed successor materializer; planned protected activation | command status, completion context/history, ledger, obligations, restoration, transition selection | Candidate publication is data; exact protected activation or fixed predecessor supplies authority       |
+| Protected work authorization             | planned principal/orchestrator issue command only                        | planned activation and completion-context lease                                                    | Configured external root must be outside and non-writable by the candidate                              |
+| Completion authority assessment          | controller pure constructor only                                         | firewall, evaluation persistence, next-action policy                                               | Derived from fixed predecessor, evaluator build, fixed transition rule, and planned authorization lease |
+| Agent-facing restoration/Stop projection | lifecycle hooks only; reconstructable cache claims                       | supported coding agent                                                                             | Projection is advisory input; repository records and controller decisions remain canonical              |
 
 The compiler establishes the current goal and completion rows through P2-P4.
 The planned authorization and projection rows do not exist yet; their writer
@@ -318,34 +323,138 @@ suppression was required; the staged diff gate is the slice exit condition.
 - **Order safety:** old outcomes remain immutable and excluded from the new
   decision dataset.
 
+**Result (2026-07-31): apparatus hardened; governing goal not satisfied.** The
+first fresh program `SQTP-01A727B209830757B5612B57AE9F0453` registered
+`regressed`, but its runner passed Codex `--ignore-user-config` and thereby
+disabled the checkout hooks that constituted the treatment. A real-runtime
+lifecycle experiment reproduced the failure and ruled out the Homebrew Node
+update. This program is immutable but invalid for the intended comparison.
+
+The replacement program `SQTP-84CD5CE42556A96AD9E06AAD5C135E83` required a
+real `SessionStart`/`UserPromptSubmit`/`Stop` preflight, captured hook events
+and untracked files, and verified exact prompt activation in all four workflow
+candidates. Its registered report was `neutral`: both conditions had 100%
+resource-envelope completion, median elapsed ratio was `0.84`, and median
+token ratio was `0.86`.
+
+Transcript and durable-record audit then invalidated the controller-specific
+interpretation. All four durable controller decisions said `continue` and no
+completion transition existed; the runner had inferred controller success
+from candidate final JSON. Setup also bound the authorization to post-setup
+configuration bytes while the controller compared the Git predecessor. The
+hidden evaluator never supplied goal/invariant evidence to the controller and
+ignored a generated untracked `tsconfig.json` left in every candidate. All
+eight `cleanup-plan --verify` calls also failed against read-only `.git`
+metadata. The retained transcripts explain several favorable and unfavorable
+mechanisms, but pair 02's token regression needs per-turn telemetry before its
+cause can be distinguished from context replay or model variance.
+
+No new controller trial or large-repository causal baseline may start until
+slices 5-7 remove these known measurement and product defects.
+
+### 5. Experimental-integrity boundary
+
+- **Anchors:** external protected runner, mission-trial observation schema,
+  candidate patch capture, and the fixed fixture setup path.
+- **Premise:** P8.
+- **Deployable:** no; this is apparatus, schema, and fixed-fixture work.
+- **Change:** create one already-configured immutable fixture shared by both
+  conditions; bind protected transitions to its Git predecessor; derive
+  controller status only from durable evaluations and transitions; evaluate
+  tracked, untracked, and deleted paths; and record per-turn token/context
+  telemetry when the provider exposes it.
+- **Validation:** a lying candidate final response cannot change the recorded
+  controller state; a missing transition fails the coordinate; a new untracked
+  file fails residue checks; preflight proves all lifecycle events; and a
+  setup-time configuration mutation is impossible after program registration.
+- **Order safety:** old program and run records remain immutable.
+
+### 6. Protected goal evidence
+
+- **Anchors:** completion predicate evaluation, protected evaluator output,
+  completion context, and transition materialization.
+- **Premise:** the deterministic gate cannot prove arbitrary protected Gherkin
+  merely by inspecting its own detector results.
+- **Deployable:** yes, behind explicit protected-evaluator configuration.
+- **Change:** add a content-identified evidence receipt issued by an
+  independent evaluator for the fixed goal and exact observed candidate state;
+  consume it as authority for goal, invariant, and affected-surface predicates
+  without accepting candidate assertions as evidence.
+- **Validation:** wrong goal, wrong worktree receipt, moved receipt, forged
+  candidate receipt, evaluator error, and unknown scenario all fail closed;
+  exact independently issued evidence permits a durable completion transition.
+- **Order safety:** absence preserves the current blocked behavior.
+
+### 7. Remove verification residue and ceremony
+
+- **Anchors:** TypeScript reindex invocation, cleanup verification, attempt
+  journal and restoration projection.
+- **Premise:** P8 and the retained transcript audit.
+- **Deployable:** yes.
+- **Change:** infer JavaScript index configuration without leaving a worktree
+  `tsconfig.json`; make cleanup verification function in the supported
+  workspace-write sandbox or report a single actionable unavailable result;
+  and compact superseded attempt records without losing live failure,
+  obligation, or controller evidence.
+- **Validation:** reindex leaves a clean fixture clean; concurrent user-created
+  configuration is never deleted or overwritten; cleanup verification does not
+  cause eight identical fallback loops; and record compaction is decision-
+  equivalent under restoration and completion.
+- **Order safety:** use owned temporary paths and content identities rather
+  than deleting an ambiguous worktree file.
+
+### 8. Fresh controller and large-repository programs
+
+- **Anchors:** slices 5-7, protected program registration, this validation
+  record, README capability status, and the selected Vega fixture.
+- **Deployable:** no; these are immutable evidence events.
+- **Change:** first run a fresh ordinary-control/controller matched program on
+  the small fixture. If apparatus and durable completion are valid, run the
+  separately registered large-repository no-scip/ordinary-scip comparison with
+  the exact same user prompt and independent whole-system evaluator.
+- **Validation:** complete worktree and durable transitions for the controller
+  program; pre-registered architecture, thoroughness, residue, behavior, cost,
+  and false-blocking judgments for both programs; transcript audit before any
+  generalized claim.
+- **Order safety:** each changed fixture, evaluator, threshold, runtime, or
+  treatment produces a new content-identified program.
+
 ## Attack record
 
-| ID | Invariant/lens | Attack | Outcome |
-| --- | --- | --- | --- |
-| A1 | 1 / authority | Candidate points a manual command at a fake root containing a forged envelope | HOLE in draft; repaired by slice 2: Stop consumes only the host-configured root/ID fixed in its context, not command-local overrides |
-| A2 | 1 / boundary | Configured root is inside the worktree or a symlinked record escapes it | HELD by slice 1 regular-file/non-symlink checks and external-root assertion (P7) |
-| A3 | 2 / self-easing | Candidate changes the activated Gherkin or authorization source | HELD by slice 2 full canonical goal digest equality before granting a referent |
-| A4 | 3 / policy weakening | Candidate changes `.scipquery.json` to different bytes than the pre-authorized transition | HELD by slice 2 predecessor and successor digest equality using P6 |
-| A5 | 4 / concurrency | Principal replaces an authorization while the gate runs | HOLE in draft; repaired by slice 2 pre/post byte-digest lease assertion |
-| A6 | 5 / availability | Authorization file is missing, future-versioned, malformed, or from another collaboration domain | HELD by slices 1-2: activation reports the boundary and the existing firewall remains in force |
-| A7 | 2 / replay | Candidate replays `UserPromptSubmit` with the known prompt | HELD by slice 2: replay can only idempotently materialize the same protected goal/change |
-| A8 | 2 / prompt substitution | Candidate tries a different prompt against the configured authorization | HELD by slice 2 prompt SHA-256 equality before first activation |
-| A9 | 6 / efficiency | Compression hides a blocker or drill-down needed for a different next action | HOLE in draft; repaired by slice 3 decision-equivalence snapshot matrix and exact status-command escape hatch |
-| A10 | purpose / measurement | New code passes unit tests but does not improve autonomous outcomes | HELD only by slice 4 fresh protected matched trials; program exit remains open until then |
+| ID  | Invariant/lens          | Attack                                                                                           | Outcome                                                                                                                              |
+| --- | ----------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| A1  | 1 / authority           | Candidate points a manual command at a fake root containing a forged envelope                    | HOLE in draft; repaired by slice 2: Stop consumes only the host-configured root/ID fixed in its context, not command-local overrides |
+| A2  | 1 / boundary            | Configured root is inside the worktree or a symlinked record escapes it                          | HELD by slice 1 regular-file/non-symlink checks and external-root assertion (P7)                                                     |
+| A3  | 2 / self-easing         | Candidate changes the activated Gherkin or authorization source                                  | HELD by slice 2 full canonical goal digest equality before granting a referent                                                       |
+| A4  | 3 / policy weakening    | Candidate changes `.scipquery.json` to different bytes than the pre-authorized transition        | HELD by slice 2 predecessor and successor digest equality using P6                                                                   |
+| A5  | 4 / concurrency         | Principal replaces an authorization while the gate runs                                          | HOLE in draft; repaired by slice 2 pre/post byte-digest lease assertion                                                              |
+| A6  | 5 / availability        | Authorization file is missing, future-versioned, malformed, or from another collaboration domain | HELD by slices 1-2: activation reports the boundary and the existing firewall remains in force                                       |
+| A7  | 2 / replay              | Candidate replays `UserPromptSubmit` with the known prompt                                       | HELD by slice 2: replay can only idempotently materialize the same protected goal/change                                             |
+| A8  | 2 / prompt substitution | Candidate tries a different prompt against the configured authorization                          | HELD by slice 2 prompt SHA-256 equality before first activation                                                                      |
+| A9  | 6 / efficiency          | Compression hides a blocker or drill-down needed for a different next action                     | HOLE in draft; repaired by slice 3 decision-equivalence snapshot matrix and exact status-command escape hatch                        |
+| A10 | purpose / measurement   | New code passes unit tests but does not improve autonomous outcomes                              | OPEN: slice 4 produced a favorable median signal, but slices 5-8 are required for valid mission evidence                             |
+| A11 | measurement authority   | Runner trusts the candidate's final `completed` claim despite a durable `continue` decision      | OPEN: slice 5 makes the durable controller records the only controller-status source                                                 |
+| A12 | worktree completeness   | Evaluator and patch omit generated untracked residue                                             | OPEN: slices 5 and 7 capture the full worktree and prevent index-owned residue                                                       |
+| A13 | goal evidence           | Hidden evaluator passes behavior but controller never receives independent goal evidence         | OPEN: slice 6 adds a protected receipt bound to the fixed goal and candidate observation                                             |
+| A14 | useful work             | Verification repeatedly fails for an apparatus reason and agents compensate ceremonially         | OPEN: slice 7 makes verification usable or singularly and explicitly unavailable                                                     |
 
 Coverage matrix:
 
-| Surface or lens | Attack |
-| --- | --- |
-| Protected authorization writer | A1, A2, A5 |
-| Goal/change activation writer | A3, A7, A8 |
-| Completion authority reader | A1, A3-A6 |
-| Hook/restoration projection writer | A8, A9 |
-| Valid intermediate state | A5-A7 |
-| Reversibility and compatibility | A6; optional fields preserve old records and absent configuration preserves current behavior |
-| Efficiency and purpose | A9, A10 |
+| Surface or lens                    | Attack                                                                                       |
+| ---------------------------------- | -------------------------------------------------------------------------------------------- |
+| Protected authorization writer     | A1, A2, A5                                                                                   |
+| Goal/change activation writer      | A3, A7, A8                                                                                   |
+| Completion authority reader        | A1, A3-A6                                                                                    |
+| Hook/restoration projection writer | A8, A9                                                                                       |
+| Valid intermediate state           | A5-A7                                                                                        |
+| Reversibility and compatibility    | A6; optional fields preserve old records and absent configuration preserves current behavior |
+| Efficiency and purpose             | A9, A10, A14                                                                                 |
+| Experimental integrity             | A11, A12                                                                                     |
+| Independent completion evidence    | A13                                                                                          |
 
-Three holes were found and repaired in the plan; none is accepted. The external
+The original three design holes were repaired in slices 1-3. The transcript
+and durable-record audit exposed five open empirical holes assigned to slices
+5-8; none is accepted. The external
 root's non-writability by the candidate is an environment precondition, not a
 property pathname validation can manufacture. Supported adapters and trials
 must enforce it with sandbox or mount permissions and report the protection
@@ -365,15 +474,20 @@ mode; environments that do not establish it receive no authorization grant.
 - General provider adapters beyond the current Codex/Claude hook surface are
   deferred until a real provider supplies a lifecycle boundary and protected
   storage contract.
+- Provider aggregate token totals can identify a regression but cannot by
+  themselves attribute it to a turn, hook payload, retrieved result, or hidden
+  model variance. Per-turn telemetry is required where the runtime exposes it;
+  otherwise the causal claim remains bounded to observable tool behavior.
 
 ## Execution and ship order
 
 One commit per numbered slice. After each source change: wait for the watcher,
 run the slice's focused tests, typecheck, build, matching `scip-verify`
-postchecks, and `scip-query diff-gate`; record every deviation. Slices 1-3 are
-additive and rollbackable. Slice 4 is a one-way evidence event because counted
-records are immutable, so its program and thresholds must be registered only
-after the implementation gates are green.
+postchecks, and `scip-query diff-gate`; record every deviation. Slices 5-7 must
+land and pass adversarial fixtures before either slice-8 program is registered.
+Counted programs are one-way evidence events because their records are
+immutable, so every fixture, evaluator, runner, treatment, and threshold must
+be content-bound before candidates start.
 
 ## Verdict
 
@@ -381,9 +495,9 @@ A plan is PLANNED-COMPLETE iff every state writer/reader row is covered, every
 attack is held by a cited slice and premise, and no premise fails
 reverification.
 
-Result: **PLANNED-COMPLETE** — 10 attacks, 3 holes repaired, 0 accepted holes,
-and 0 unresolved design items. Program completion itself remains open pending
-the fresh protected trial.
+Result: **PLAN REOPENED FROM EVIDENCE** — 14 attacks, 3 original holes repaired,
+5 empirical holes open across A10-A14, and 0 accepted holes. Program completion
+remains open pending slices 5-8.
 
 ## Files expected to change
 
@@ -392,6 +506,10 @@ the fresh protected trial.
 - Edit goal/completion context, hook, command registry, docs/schema, and skill
   contracts only where the new exact authority or compact projection is
   consumed.
-- Edit the external protected runner and register a new program only in slice
-  4.
+- Edit the external protected runner and register a new program only in slice 4.
+- Edit the protected runner, fixed fixture, observation schema, and full-
+  worktree evaluator in slice 5.
+- Edit completion evidence domain/storage/runtime surfaces in slice 6.
+- Edit indexing, cleanup verification, and attempt-journal behavior in slice 7.
+- Register new controller and large-repository programs only in slice 8.
 - Delete no existing evidence or trial records.

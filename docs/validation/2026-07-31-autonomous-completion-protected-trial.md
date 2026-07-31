@@ -1,7 +1,192 @@
 # Autonomous completion protected-trial result
 
 Date: 2026-07-31
-Outcome: `insufficient`
+Initial outcome: `insufficient`
+First authorized-program registered outcome: `regressed` — invalidated by hook apparatus
+Hook-verified registered outcome: `neutral` — controller conclusion invalidated by audit
+Current evidential outcome: `inconclusive`
+
+## Hook-verified rerun
+
+Program `SQTP-84CD5CE42556A96AD9E06AAD5C135E83` was registered before
+candidate execution. Its program-record SHA-256 is
+`f1553287a757c2a5db1dd954c29c1404a58b8df4624345f2a7632b7559ceae62`;
+its parameters SHA-256 is
+`37ed1148c32bf70ca345c56d83120c848e1bd23fcc184c30737405e030d7fbce`;
+and its runner SHA-256 is
+`f5829ba306fece20dd9c8b68f1649c03f0935d7e5c0cb0c8d93e8a3acf4004a8`.
+It bound the same provider, model, runtime, prompt, fixture, evaluator, and
+resource envelopes as the first authorized program, but removed the Codex
+`--ignore-user-config` option, isolated each candidate's cache and home, and
+required a real lifecycle preflight before counted work.
+
+The preflight observed exactly one `SessionStart`, one `UserPromptSubmit`, and
+one `Stop` event. Every counted workflow candidate then recorded the exact
+prompt hook and materialized the exact protected goal and change before its
+first model action. All eight candidates passed the registered hidden
+evaluator within their resource envelopes:
+
+| Pair | Control                                 | Workflow                              | Elapsed ratio | Token ratio | Tool ratio |
+| ---- | --------------------------------------- | ------------------------------------- | ------------: | ----------: | ---------: |
+| 01   | completed; 350,120 ms; 1,196,352 tokens | completed; 286,284 ms; 712,219 tokens |         0.818 |       0.595 |      0.679 |
+| 02   | completed; 252,843 ms; 557,315 tokens   | completed; 275,459 ms; 857,182 tokens |         1.089 |       1.538 |      0.588 |
+| 03   | completed; 342,496 ms; 1,155,381 tokens | completed; 257,523 ms; 766,969 tokens |         0.752 |       0.664 |      0.925 |
+| 04   | completed; 351,631 ms; 861,496 tokens   | completed; 303,171 ms; 909,306 tokens |         0.862 |       1.055 |      1.228 |
+
+The immutable report registered `neutral`: 100% resource-envelope completion
+in both conditions, no architecture regression, median elapsed ratio `0.84`,
+median token ratio `0.86`, and two favorable versus two unfavorable paired
+directions. That report also recorded zero false blocking. The transcript and
+durable-record audit below establishes that the last value was derived from
+the wrong source and that the protected evaluator omitted a completeness
+failure. The registered report remains immutable, but it is not valid evidence
+that the completion controller succeeded.
+
+## What the transcripts explain
+
+A retained run transcript is the observable event stream of one candidate:
+the model's visible messages, tool calls and results, file events, hook events,
+elapsed time, and aggregate token accounting. It differs from private model
+reasoning because the latter is not exposed. The transcripts can therefore
+support causal explanations tied to visible actions, but cannot establish why
+the model internally selected an action when several explanations fit the same
+events.
+
+| Pair | Observable difference                                                                                                                                             | Supported interpretation                                                                                                                                                                                                  |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 01   | Control executed 48 commands versus workflow's 34, repeated reindexing four times, and performed more verification passes.                                        | The workflow's direct repository map and shorter closeout plausibly explain its 18% elapsed and 41% token reductions.                                                                                                     |
+| 02   | Workflow executed only 17 commands versus control's 32, but one skill-loading command returned 32,397 characters and three commands failed.                       | Command count does not explain the 54% token regression. Per-turn context/token telemetry is required to distinguish context replay, hook/restoration overhead, and ordinary model variance.                              |
+| 03   | Control executed 20 commands before its first edit versus workflow's 10 and pursued a broader graph/API path.                                                     | Earlier convergence and less retrieved context plausibly explain the workflow's 25% elapsed and 34% token reductions.                                                                                                     |
+| 04   | Workflow executed 66 commands versus control's 54, removed two delivery-record readers after a health finding, added another test, and repeated health/gate work. | Detector-induced cleanup explains the extra tool work and likely contributes to the 5.5% token increase. The deletion is semantically questionable because default recording can still accumulate now-unobservable state. |
+
+Several cross-run mechanisms are stronger than pair-specific inference:
+
+- All eight candidates invoked `cleanup-plan --verify`; all eight invocations
+  failed because the workspace-write sandbox exposed required `.git` metadata
+  as read-only. Every agent then spent work on fallback checks. This is
+  repeatable ceremonial friction, not useful verification.
+- All eight candidates ended with an unrequested untracked `tsconfig.json`
+  containing only `{"compilerOptions":{"allowJs":true}}`. Several transcripts
+  said the file had been removed, after which `scip-query reindex` recreated
+  it. The cause reproduces independently: the JavaScript indexer invokes
+  `scip-typescript index --infer-tsconfig`, which writes the file into the
+  worktree. The evaluator ignored it, and the earlier patch capture omitted
+  untracked files. Consequently, the 100% hidden-evaluator result does not
+  establish residue-free completeness.
+- The four workflows wrote 42, 47, 28, and 55 attempt records for this small
+  change. The immutable journal is useful evidence, but this volume is likely
+  collaboration residue and a material efficiency cost unless it is compacted
+  without losing controller-relevant facts.
+
+## Controller-integrity failure
+
+A durable controller evaluation is the repository record that combines fixed
+authority, observed evidence, and policy into the next allowed action. What
+distinguishes it from the agent's final prose is that the candidate cannot
+make itself complete merely by saying it is complete.
+
+Every hook-verified workflow had one durable completion evaluation in
+`blocked` state, with `goal-fulfilled`, `invariants-preserved`,
+`coverage-complete`, and `policy-permitted` blocked. Every decision's
+disposition was `continue`; no candidate had a completion-transition record.
+The runner instead inferred controller success from the candidate-controlled
+final JSON field `status: completed`. Its zero-false-blocking observation is
+therefore invalid.
+
+Two independent gaps caused the durable controller result:
+
+1. Setup changed `.scipquery.json` after the Git fixture baseline. The protected
+   authorization bound the post-setup predecessor digest, while the controller
+   compared the fixed Git predecessor. The successor bytes matched exactly,
+   but the predecessor identities could never agree. Both conditions must use
+   one already-configured fixed fixture, and the runner must read the durable
+   evaluation and transition rather than candidate prose.
+2. The deterministic diff gate explicitly does not judge the protected
+   natural-language acceptance scenarios. The hidden evaluator proved the
+   code behavior to the apparatus but never supplied protected evidence to the
+   controller. Even after repairing configuration authority, arbitrary Gherkin
+   goals cannot currently reach a genuine completion transition. Completion
+   needs an independent goal-evidence receipt, tied to the protected goal and
+   observed candidate state, whose result the controller consumes.
+
+The hook-verified program therefore supplies a promising efficiency signal—
+three workflows were faster and median elapsed/token cost improved—but it does
+not establish autonomous completion, residue-free work, or correct false-
+blocking behavior. A new immutable program is required after the apparatus,
+evaluator, and product gaps are repaired.
+
+## First authorized program (invalidated)
+
+The fresh protected-authority program
+`SQTP-01A727B209830757B5612B57AE9F0453` was registered before candidate
+execution. Its program-record SHA-256 is
+`d696e17803681e5120de7e206eb3d4e00f7fd5b4cd3135be4271195e4f9963d5`;
+its parameters SHA-256 is
+`52e5bc5b19083d0e74708cce16808579014eed43cf92f784e46787baa7e4da58`.
+It bound `gpt-5.6-sol`, medium reasoning, `codex-cli@0.144.6`, the same
+fixture and prompt, a fresh external work authorization for every workflow
+coordinate, and the original 900,000 ms, 2,000,000-token, 400-tool-call
+budgets. The earlier registered program
+`SQTP-076D3DA5A6BC9FE76BB18DFD921F1A13` had no candidate run; an ESM loader
+preflight rejected its runner before execution, so it remains an unused
+immutable registration rather than outcome evidence.
+
+All eight follow-up repositories passed the protected behavior, invariant,
+affected-surface, residue, reintroduced-behavior, and architecture checks.
+Resource-envelope completion differed:
+
+| Pair | Control                                   | Workflow                                  | Completion direction |
+| ---- | ----------------------------------------- | ----------------------------------------- | -------------------- |
+| 01   | completed; 419,787 ms; 1,543,123 tokens   | completed; 456,352 ms; 1,999,680 tokens   | tie                  |
+| 02   | completed; 288,122 ms; 820,937 tokens     | interrupted; 682,535 ms; 4,620,406 tokens | workflow regressed   |
+| 03   | completed; 310,346 ms; 914,152 tokens     | interrupted; 573,117 ms; 2,235,678 tokens | workflow regressed   |
+| 04   | interrupted; 461,614 ms; 2,067,193 tokens | completed; 504,449 ms; 1,959,800 tokens   | workflow improved    |
+
+The complete immutable report contains eight eligible selected outcomes, four
+matched pairs, no integrity issue, and no architecture regression. The
+pre-registered classifier reports `regressed` for all three decision groups:
+
+- completion: control 75%, workflow 50%, difference -25 percentage points;
+- safety: workflow false blocking 25% against a maximum 10%;
+- efficiency: median elapsed ratio 1.470 and median token ratio 1.871, both
+  beyond the maximum 1.2;
+- paired direction: one improvement, two regressions, and one tie; and
+- probability that treatment is better: 31.25% against the required 80%.
+
+The external authorization record was issued successfully before every
+workflow run, but the process did not invoke the configured
+`UserPromptSubmit` hook before its first model action. The first `goal status`
+and `change status` observations therefore saw zero records. Every workflow
+agent followed the canonical skill fallback and created a second goal/change
+pair. In the long pair-02 tail, the agent eventually found the external
+authorization and manually invoked `hook-context`, which materialized the
+principal-fixed records and left two active goals and changes.
+
+The cause was apparatus configuration, not the Homebrew Node update and not a
+missing product lifecycle. The runner passed Codex `--ignore-user-config`,
+which also suppressed checkout-local project hooks. An isolated real-runtime
+preflight produced all three configured lifecycle events when that option was
+absent and none when it was present. The hook command itself used the stable
+`/opt/homebrew/bin/node`, so the changed Homebrew Cellar version was never
+reached. The immutable registered outcome remains `regressed`, but the program
+is invalid evidence about the intended workflow.
+
+The follow-up also exposed an artifact limitation. The protected evaluator
+judged each live candidate directory, but `git diff --binary` omitted new
+untracked files from the saved `candidate.patch`. The immutable run records and
+their artifact hashes must not be rewritten. Future apparatus must capture
+tracked and untracked candidate changes; conclusions here rely on the direct
+protected evaluator and recorded metrics, not on treating those patches as
+complete snapshots. The substantive tracked file set was identical within
+each matched pair; pair 04 added the same infrastructure audit edit on both
+sides.
+
+This program does not establish that the controller integration regresses the
+named fixture. Its condition did not receive the registered treatment. It also
+does not establish whether ordinary scip-query improves large-repository work
+relative to no scip-query. That causal question requires identical outcome
+prompts on a large protected repository, with the conditions differing only in
+ordinary scip-query availability and setup.
 
 ## What was tested
 
@@ -51,12 +236,12 @@ invariants, affected-surface, residue, reintroduced-behavior, and architecture
 checks. Mission completion additionally required `completed` status within the
 registered resource envelope.
 
-| Pair | Control | Workflow | Completion direction |
-| --- | --- | --- | --- |
-| 01 | interrupted; 593,560 ms; 3,187,255 tokens | completed; 355,203 ms; 1,778,806 tokens | workflow improved |
-| 02 | interrupted; 522,303 ms; 2,435,529 tokens | interrupted; 564,317 ms; 3,960,551 tokens | tie |
-| 03 | interrupted; 506,191 ms; 2,635,388 tokens | interrupted; 493,536 ms; 2,329,578 tokens | tie |
-| 04 | completed; 401,411 ms; 1,426,196 tokens | interrupted; 480,322 ms; 2,758,020 tokens | workflow regressed |
+| Pair | Control                                   | Workflow                                  | Completion direction |
+| ---- | ----------------------------------------- | ----------------------------------------- | -------------------- |
+| 01   | interrupted; 593,560 ms; 3,187,255 tokens | completed; 355,203 ms; 1,778,806 tokens   | workflow improved    |
+| 02   | interrupted; 522,303 ms; 2,435,529 tokens | interrupted; 564,317 ms; 3,960,551 tokens | tie                  |
+| 03   | interrupted; 506,191 ms; 2,635,388 tokens | interrupted; 493,536 ms; 2,329,578 tokens | tie                  |
+| 04   | completed; 401,411 ms; 1,426,196 tokens   | interrupted; 480,322 ms; 2,758,020 tokens | workflow regressed   |
 
 The immutable report contains eight eligible selected outcomes, four matched
 pairs, no record issue, and no architecture regression. Its registered
@@ -107,22 +292,27 @@ used fewer median tool calls and metadata commands than control, yet consumed
 occasionally very large SCIP output, so command selection, bounded coverage,
 and restoration/closeout summaries need to become more decision-selective.
 
-## Established and not established
+## Current established boundary
 
-The run establishes, for this exact fixture and runtime, that:
+Across the three immutable programs, the evidence establishes that:
 
-- all eight autonomous agents could produce the technically complete,
-  residue-free, architecture-conformant repository without human input;
-- the workflow did not introduce an architecture regression;
-- the current protected controller can refuse technically correct work when
-  its goal or configuration authority was not fixed independently; and
-- the workflow's token efficiency does not meet the registered bound.
+- lifecycle hooks execute in the real Codex runtime when the runner does not
+  suppress project configuration;
+- all hook-verified candidates satisfied the registered behavior and
+  architecture evaluator within their resource envelopes;
+- the workflow condition was faster in three of four hook-verified pairs and
+  had favorable median elapsed and token ratios; and
+- transcript retention can expose repeated work, tool failures, generated
+  residue, detector-induced cleanup, and divergence between candidate claims
+  and durable controller decisions.
 
-It does not establish that autonomous completion v1 improves full-completion
-rate, avoids false blocking, or improves operating efficiency. It also does not
+It does not establish residue-free completeness, genuine controller
+completion, correct false-blocking behavior, or a causal efficiency benefit.
+The hidden evaluator's omission, runner authority error, and unavailable
+per-turn token attribution prevent those stronger claims. It also does not
 generalize beyond the named provider, model, runtime, parameters, and fixture.
 
-The next counted program must not reuse these outcomes. It requires a new
-content-identified program after an authorization bridge and verification
-compression are implemented, followed by fresh matched candidates under a
-new pre-registered parameters digest.
+No outcome may be reused as if those defects were absent. The next counted
+program requires the shared fixed fixture, full-worktree evaluator, durable
+controller observation, protected goal-evidence path, residue repair, and
+verification-friction repair specified in the remediation plan.
