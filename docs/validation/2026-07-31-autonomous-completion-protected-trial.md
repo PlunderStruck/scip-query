@@ -138,6 +138,17 @@ not establish autonomous completion, residue-free work, or correct false-
 blocking behavior. A new immutable program is required after the apparatus,
 evaluator, and product gaps are repaired.
 
+The product-side goal-evidence gap is now repaired prospectively. A fresh
+program may pre-authorize the protected evaluator's exact artifact digest,
+run it against an isolated snapshot containing tracked, deleted, and untracked
+candidate state, publish a content-identified external `SQGE` receipt, and
+retry Stop with that fixed receipt. Unit/integration evidence demonstrates a
+real durable `complete` evaluation and completion transition; stale-state,
+wrong-evaluator, moved-receipt, evaluator-error, and explicit-unknown cases all
+fail closed. This does not revise the immutable outcome above. The runner must
+still adopt the new boundary and derive status only from durable controller
+records before another program is registered.
+
 ## First authorized program (invalidated)
 
 The fresh protected-authority program

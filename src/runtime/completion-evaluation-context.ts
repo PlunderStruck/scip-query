@@ -19,6 +19,7 @@ import {
   type CompletionContextSnapshotRequest,
   type CompletionEvaluatorSnapshot,
   type CompletionPolicySnapshot,
+  type ProtectedGoalEvidenceSnapshot,
   type ProtectedWorkAuthorizationSnapshot,
   type ProtectedArtifactRule,
 } from '../domain/autonomous-completion-context.js';
@@ -62,6 +63,11 @@ import {
   assertFixedProtectedWorkAuthorization,
   type FixedProtectedWorkAuthorizationLease,
 } from './protected-work-authorization-controller.js';
+import {
+  assertFixedProtectedGoalEvidence,
+  assertProtectedGoalEvidenceMatchesTarget,
+  type FixedProtectedGoalEvidenceLease,
+} from './protected-goal-evidence-controller.js';
 
 export const STOP_COMPLETION_POLICY_ID = 'scip-query:stop-completion-policy' as const;
 export const STOP_COMPLETION_POLICY_VERSION = 1 as const;
@@ -116,12 +122,14 @@ export interface FixedCompletionContextLease {
   requests: readonly CompletionContextSnapshotRequest[];
   records: readonly CompletionContextSnapshotRecordV1[];
   protectedWorkAuthorization?: FixedProtectedWorkAuthorizationLease;
+  protectedGoalEvidence?: FixedProtectedGoalEvidenceLease;
 }
 
 export interface CompletionAuthorityInputs {
   predecessor: CompletionAuthorityPredecessor;
   changedPaths: readonly string[];
   protectedWorkAuthorization?: FixedProtectedWorkAuthorizationLease;
+  protectedGoalEvidence?: FixedProtectedGoalEvidenceLease;
 }
 
 export class CompletionEvaluationContextMovedError extends Error {
@@ -146,6 +154,7 @@ export function captureFixedCompletionContext(
     observedAt?: Date;
     evaluatorEntrypoint?: string;
     protectedWorkAuthorization?: FixedProtectedWorkAuthorizationLease;
+    protectedGoalEvidence?: FixedProtectedGoalEvidenceLease;
   } = {},
 ): FixedCompletionContextLease {
   const collaborationDomainId = config.collaborationDomainId;
@@ -169,6 +178,18 @@ export function captureFixedCompletionContext(
     collaborationDomainId,
   });
   const targetObservation = observation.receipt;
+  if (options.protectedGoalEvidence) {
+    if (!options.protectedWorkAuthorization) {
+      throw new Error('protected goal evidence requires a fixed protected work authorization');
+    }
+    if (
+      options.protectedGoalEvidence.projectRoot !== realpathSync(projectRoot) ||
+      options.protectedGoalEvidence.record.collaborationDomainId !== collaborationDomainId
+    ) {
+      throw new Error('protected goal evidence lease does not belong to this repository collaboration domain');
+    }
+    assertProtectedGoalEvidenceMatchesTarget(options.protectedGoalEvidence, targetObservation);
+  }
   const goals = readGoalRecords(projectRoot);
   const allChanges = readIntendedChangeRecords(projectRoot, goals);
   const completionHistory = readCompletionHistory(projectRoot);
@@ -221,6 +242,11 @@ export function captureFixedCompletionContext(
       protectedWorkAuthorizationMatchesRecords(options.protectedWorkAuthorization.record, goal, change)
         ? {
             protectedWorkAuthorization: protectedWorkAuthorizationSnapshot(options.protectedWorkAuthorization),
+            ...(options.protectedGoalEvidence &&
+            options.protectedGoalEvidence.record.goalId === goal.goalId &&
+            options.protectedGoalEvidence.record.changeId === change.changeId
+              ? { protectedGoalEvidence: protectedGoalEvidenceSnapshot(options.protectedGoalEvidence) }
+              : {}),
           }
         : {}),
     };
@@ -246,10 +272,12 @@ export function captureFixedCompletionContext(
         : { kind: 'unavailable', reason: 'no-fixed-predecessor' },
       changedPaths: observation.repositoryContent.files.map((entry) => entry.path),
       ...(options.protectedWorkAuthorization ? { protectedWorkAuthorization: options.protectedWorkAuthorization } : {}),
+      ...(options.protectedGoalEvidence ? { protectedGoalEvidence: options.protectedGoalEvidence } : {}),
     },
     requests,
     records,
     ...(options.protectedWorkAuthorization ? { protectedWorkAuthorization: options.protectedWorkAuthorization } : {}),
+    ...(options.protectedGoalEvidence ? { protectedGoalEvidence: options.protectedGoalEvidence } : {}),
   };
 }
 
@@ -286,6 +314,15 @@ export function assertFixedCompletionContext(
     } catch (error) {
       throw new CompletionEvaluationContextMovedError(
         error instanceof Error ? error.message : 'Protected work authorization moved during completion evaluation.',
+      );
+    }
+  }
+  if (lease.protectedGoalEvidence) {
+    try {
+      assertFixedProtectedGoalEvidence(lease.protectedGoalEvidence);
+    } catch (error) {
+      throw new CompletionEvaluationContextMovedError(
+        error instanceof Error ? error.message : 'Protected goal evidence moved during completion evaluation.',
       );
     }
   }
@@ -363,6 +400,7 @@ export function stopCompletionEvaluationRequest(
   const blocking = blockingFindings(result.findings);
   const hasFindings = blocking.length > 0;
   const coverageUnknown = diffGateCoverageUnknown(result);
+  const protectedEvidence = protectedGoalEvidenceForContext(context, authorityInputs);
   const workHistory = readWorkHistory(projectRoot, context.changeId);
   const workEvidenceCompatible =
     workHistory.integrityIssues.length === 0 && workHistory.summary.unresolvedUnknownAttemptIds.length === 0;
@@ -375,16 +413,20 @@ export function stopCompletionEvaluationRequest(
   const rawPredicates: CompletionPredicateJudgment[] = [
     judgment(
       'goal-fulfilled',
-      'unknown',
-      'The diff gate does not yet evaluate the goal’s protected acceptance scenarios.',
+      protectedEvidence?.record.judgments.goalFulfilled ?? 'unknown',
+      protectedEvidence
+        ? `Protected evaluator evidence ${protectedEvidence.record.evidenceId} judged the exact authorized goal against this repository content.`
+        : 'The diff gate does not evaluate the goal’s protected acceptance scenarios, and no matching protected evaluator evidence was configured.',
       target,
     ),
     judgment(
       'invariants-preserved',
-      hasFindings ? 'disproven' : 'unknown',
+      hasFindings ? 'disproven' : (protectedEvidence?.record.judgments.invariantsPreserved ?? 'unknown'),
       hasFindings
         ? `${blocking.length} blocking diff-gate finding(s) contradict the current invariant policy.`
-        : 'No blocking diff-gate finding was observed, but goal-specific invariant coverage is not yet established.',
+        : protectedEvidence
+          ? `Protected evaluator evidence ${protectedEvidence.record.evidenceId} judged the fixed invariants against this repository content.`
+          : 'No blocking diff-gate finding was observed, but goal-specific invariant coverage is not yet established.',
       target,
     ),
     judgment(
@@ -397,10 +439,12 @@ export function stopCompletionEvaluationRequest(
     ),
     judgment(
       'coverage-complete',
-      coverageUnknown ? 'unknown' : 'established',
+      coverageUnknown ? 'unknown' : (protectedEvidence?.record.judgments.affectedSurfaceReconciled ?? 'established'),
       coverageUnknown
         ? 'One or more configured diff-gate checks did not complete with decision-authoritative coverage.'
-        : 'Every registered stop diff-gate check completed without an unresolved coverage condition.',
+        : protectedEvidence
+          ? `Every registered stop check completed, and protected evaluator evidence ${protectedEvidence.record.evidenceId} judged the affected surface against this repository content.`
+          : 'Every registered stop diff-gate check completed without an unresolved coverage condition.',
       target,
     ),
     judgment(
@@ -448,7 +492,9 @@ export function stopCompletionEvaluationRequest(
     protectedArtifacts: context.protectedArtifacts,
     reliances: completionAuthorityReliances(result, transitionRule.state === 'selected'),
     fixedReferents: {
-      evaluator: `evaluator-build:${context.evaluator.buildIdentity}`,
+      evaluator: protectedEvidence
+        ? `protected-goal-evidence:${protectedEvidence.record.evidenceId}@${protectedEvidence.recordSha256}`
+        : `evaluator-build:${context.evaluator.buildIdentity}`,
     },
     authorizedReferents: {
       ...(transitionRule.state === 'selected' ? transitionRuleAuthorizedReferents(transitionRule.rule) : {}),
@@ -533,6 +579,42 @@ function protectedWorkAuthorizationSnapshot(
     goalRecordDigest: hashRecord(lease.record.goal),
     changeRecordDigest: hashRecord(lease.record.change),
   };
+}
+
+function protectedGoalEvidenceSnapshot(lease: FixedProtectedGoalEvidenceLease): ProtectedGoalEvidenceSnapshot {
+  return {
+    evidenceId: lease.record.evidenceId,
+    recordSha256: lease.recordSha256,
+    authorizationId: lease.record.authorizationId,
+    evaluatorArtifactSha256: lease.record.evaluator.artifactSha256,
+  };
+}
+
+function protectedGoalEvidenceForContext(
+  context: CompletionContextSnapshotRecordV1,
+  authorityInputs: CompletionAuthorityInputs,
+): FixedProtectedGoalEvidenceLease | undefined {
+  const fixed = authorityInputs.protectedGoalEvidence;
+  const snapshot = context.protectedGoalEvidence;
+  if (
+    !fixed ||
+    !snapshot ||
+    snapshot.evidenceId !== fixed.record.evidenceId ||
+    snapshot.recordSha256 !== fixed.recordSha256 ||
+    snapshot.authorizationId !== fixed.record.authorizationId ||
+    snapshot.evaluatorArtifactSha256 !== fixed.record.evaluator.artifactSha256 ||
+    context.goalId !== fixed.record.goalId ||
+    context.goalRecordDigest !== fixed.record.goalRecordDigest ||
+    context.changeId !== fixed.record.changeId ||
+    context.changeRecordDigest !== fixed.record.changeRecordDigest ||
+    stableJson(context.targetObservation.facts.collaborationDomain) !==
+      stableJson(fixed.record.targetObservation.facts.collaborationDomain) ||
+    stableJson(context.targetObservation.facts.wholeContent) !==
+      stableJson(fixed.record.targetObservation.facts.wholeContent)
+  ) {
+    return undefined;
+  }
+  return fixed;
 }
 
 function fixedAuthorizationMatchesContext(

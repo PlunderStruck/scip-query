@@ -66,7 +66,7 @@ export function writeProtectedWorkAuthorization(
   assertProtectedRootOutsideCandidate(protectedRoot, candidateRoot);
   const decoded = decodeProtectedWorkAuthorization(record);
   if (decoded.state !== 'current') throw new Error(decoded.error);
-  assertAuthorizationDirectory(protectedRoot);
+  assertProtectedStorageDirectory(protectedRoot, PROTECTED_WORK_AUTHORIZATIONS_DIR, 'work authorization');
   const path = protectedWorkAuthorizationPath(protectedRoot, record.authorizationId);
   try {
     const publication = createFileAtomicExclusive(path, `${JSON.stringify(record, null, 2)}\n`, {
@@ -103,7 +103,7 @@ export function readProtectedWorkAuthorization(
   if (!isProtectedWorkAuthorizationId(authorizationId)) {
     throw new Error(`invalid protected work authorization identity: ${authorizationId}`);
   }
-  assertAuthorizationDirectory(protectedRoot);
+  assertProtectedStorageDirectory(protectedRoot, PROTECTED_WORK_AUTHORIZATIONS_DIR, 'work authorization');
   const path = protectedWorkAuthorizationPath(protectedRoot, authorizationId);
   if (!existsSync(path)) return { state: 'missing', path, error: 'protected work authorization is missing' };
   try {
@@ -118,7 +118,7 @@ export function readProtectedWorkAuthorization(
     const before = lstatSync(path);
     const source = readSmallArtifactText(path, 'protected work authorization');
     const after = lstatSync(path);
-    if (!sameFileObservation(before, after)) {
+    if (!sameProtectedFileObservation(before, after)) {
       return {
         state: 'malformed',
         path,
@@ -146,7 +146,7 @@ export function readProtectedWorkAuthorizations(
   assertProtectedRootOutsideCandidate(protectedRoot, candidateRoot);
   const directory = join(resolve(protectedRoot), PROTECTED_WORK_AUTHORIZATIONS_DIR);
   if (!existsSync(directory)) return { records: [], issues: [] };
-  assertAuthorizationDirectory(protectedRoot);
+  assertProtectedStorageDirectory(protectedRoot, PROTECTED_WORK_AUTHORIZATIONS_DIR, 'work authorization');
   const records: ProtectedWorkAuthorizationV1[] = [];
   const issues: ProtectedWorkAuthorizationCollection['issues'] = [];
   for (const entry of readdirSync(directory).sort()) {
@@ -215,16 +215,16 @@ export function protectedWorkAuthorizationPath(protectedRoot: string, authorizat
   return join(resolve(protectedRoot), PROTECTED_WORK_AUTHORIZATIONS_DIR, `${authorizationId}.json`);
 }
 
-function assertAuthorizationDirectory(protectedRoot: string): void {
-  const directory = join(resolve(protectedRoot), PROTECTED_WORK_AUTHORIZATIONS_DIR);
+export function assertProtectedStorageDirectory(protectedRoot: string, relativeDirectory: string, label: string): void {
+  const directory = join(resolve(protectedRoot), relativeDirectory);
   if (!existsSync(directory)) return;
   const stat = lstatSync(directory);
   if (!stat.isDirectory() || stat.isSymbolicLink()) {
-    throw new Error('protected work authorization directory must be a real non-symlink directory');
+    throw new Error(`protected ${label} directory must be a real non-symlink directory`);
   }
 }
 
-function sameFileObservation(before: Stats, after: Stats): boolean {
+export function sameProtectedFileObservation(before: Stats, after: Stats): boolean {
   return (
     before.isFile() &&
     !before.isSymbolicLink() &&

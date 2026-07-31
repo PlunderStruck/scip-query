@@ -110,6 +110,17 @@
       },
       "additionalProperties": false
     },
+    "protectedGoalEvidence": {
+      "type": "object",
+      "required": ["evidenceId", "recordSha256", "authorizationId", "evaluatorArtifactSha256"],
+      "properties": {
+        "evidenceId": { "type": "string", "pattern": "^SQGE-[A-F0-9]{32}$" },
+        "recordSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "authorizationId": { "type": "string", "pattern": "^SQWA-[A-F0-9]{32}$" },
+        "evaluatorArtifactSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
     "capturedAt": { "type": "string", "format": "date-time" },
     "createdAt": { "type": "string", "format": "date-time" },
     "writer": { "$ref": "./goal-record.schema.json#/$defs/writer" }

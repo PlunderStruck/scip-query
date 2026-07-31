@@ -26,6 +26,13 @@ export const PROTECTED_WORK_AUTHORIZATION_SCHEMA_VERSION = 1 as const;
 const AUTHORIZATION_ID_PATTERN = /^SQWA-[A-F0-9]{32}$/u;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const MAX_PRINCIPAL_CHARACTERS = 256;
+const MAX_EVALUATOR_ID_CHARACTERS = 256;
+
+export interface ProtectedEvaluatorAuthorization {
+  evaluatorId: string;
+  contractVersion: number;
+  artifactSha256: string;
+}
 
 export interface ProtectedWorkAuthorizationRequest {
   principal: string;
@@ -40,6 +47,7 @@ export interface ProtectedWorkAuthorizationRequest {
     title: string;
     intendedOutcome: string;
   };
+  protectedEvaluator?: ProtectedEvaluatorAuthorization;
   artifactTransitions: readonly ProtectedArtifactTransition[];
 }
 
@@ -60,6 +68,7 @@ export interface ProtectedWorkAuthorizationV1 {
   goal: GoalRecordV1;
   changeRequest: ProtectedWorkAuthorizationRequest['change'];
   change: IntendedChangeRecordV1;
+  protectedEvaluator?: ProtectedEvaluatorAuthorization;
   artifactTransitions: readonly ProtectedArtifactTransition[];
   createdAt: string;
   writer: WorkStateWriter;
@@ -102,6 +111,8 @@ export function decodeProtectedWorkAuthorizationRequest(
   if (!change.ok) return change;
   const artifactTransitions = decodeProtectedArtifactTransitions(value['artifactTransitions']);
   if (!artifactTransitions.ok) return artifactTransitions;
+  const protectedEvaluator = decodeProtectedEvaluatorAuthorization(value['protectedEvaluator']);
+  if (!protectedEvaluator.ok) return protectedEvaluator;
   return {
     ok: true,
     request: {
@@ -117,6 +128,7 @@ export function decodeProtectedWorkAuthorizationRequest(
         title: change.request.title,
         intendedOutcome: change.request.intendedOutcome,
       },
+      ...(protectedEvaluator.value ? { protectedEvaluator: protectedEvaluator.value } : {}),
       artifactTransitions: artifactTransitions.value,
     },
   };
@@ -161,6 +173,7 @@ export function createProtectedWorkAuthorization(
     goal,
     changeRequest: request.change,
     change,
+    ...(request.protectedEvaluator ? { protectedEvaluator: request.protectedEvaluator } : {}),
     artifactTransitions: request.artifactTransitions,
   };
   return {
@@ -210,6 +223,8 @@ export function decodeProtectedWorkAuthorization(value: unknown): WorkStateDecod
   }
   const artifactTransitions = decodeProtectedArtifactTransitions(fields['artifactTransitions']);
   if (!artifactTransitions.ok) return { state: 'malformed', error: artifactTransitions.error };
+  const protectedEvaluator = decodeProtectedEvaluatorAuthorization(fields['protectedEvaluator']);
+  if (!protectedEvaluator.ok) return { state: 'malformed', error: protectedEvaluator.error };
   const request: ProtectedWorkAuthorizationRequest = {
     principal,
     promptSha256: fields['promptSha256'],
@@ -223,6 +238,7 @@ export function decodeProtectedWorkAuthorization(value: unknown): WorkStateDecod
       title: changeRequest.request.title,
       intendedOutcome: changeRequest.request.intendedOutcome,
     },
+    ...(protectedEvaluator.value ? { protectedEvaluator: protectedEvaluator.value } : {}),
     artifactTransitions: artifactTransitions.value,
   };
   let expected: ProtectedWorkAuthorizationV1;
@@ -240,6 +256,29 @@ export function decodeProtectedWorkAuthorization(value: unknown): WorkStateDecod
     return { state: 'malformed', error: 'protected work authorization fields or identity are not canonical' };
   }
   return { state: 'current', record: expected };
+}
+
+function decodeProtectedEvaluatorAuthorization(
+  value: unknown,
+): { ok: true; value?: ProtectedEvaluatorAuthorization } | { ok: false; error: string } {
+  if (value === undefined) return { ok: true };
+  if (!isRecordObject(value)) return { ok: false, error: 'protectedEvaluator must be an object' };
+  const evaluatorId = normalizedBoundedLine(value['evaluatorId'], MAX_EVALUATOR_ID_CHARACTERS);
+  if (!evaluatorId) return { ok: false, error: 'protectedEvaluator.evaluatorId must be a bounded non-empty line' };
+  if (!Number.isSafeInteger(value['contractVersion']) || (value['contractVersion'] as number) < 1) {
+    return { ok: false, error: 'protectedEvaluator.contractVersion must be a positive integer' };
+  }
+  if (typeof value['artifactSha256'] !== 'string' || !SHA256_PATTERN.test(value['artifactSha256'])) {
+    return { ok: false, error: 'protectedEvaluator.artifactSha256 must be a lowercase SHA-256 digest' };
+  }
+  return {
+    ok: true,
+    value: {
+      evaluatorId,
+      contractVersion: value['contractVersion'] as number,
+      artifactSha256: value['artifactSha256'],
+    },
+  };
 }
 
 export function protectedWorkAuthorizationMatchesRecords(

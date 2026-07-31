@@ -668,6 +668,33 @@ export const commandDescriptors: CommandDescriptor[] = [
     handler: handlers.handleProtectedWorkAuthorization,
   },
   {
+    id: 'protected-evidence',
+    command: 'protected-evidence <operation> [target]',
+    agent: agentContract(
+      'Did the pre-authorized independent evaluator establish the exact goal against this exact repository content?',
+      'evaluator artifact identity, fixed goal/change authority, whole-content identity, protected judgments, and immutable receipt publication',
+      ['action', 'record'],
+      'complete',
+      undefined,
+      commandOperation('environment-observation', [
+        { when: { kind: 'argument', index: 0, equals: 'evaluate' }, role: 'mutation' },
+      ]),
+    ),
+    description: 'Run a pre-authorized evaluator and issue or inspect goal evidence outside the candidate worktree',
+    options: withJsonOption([
+      option('--protected-root <path>', 'Required principal-controlled evidence and authorization root'),
+      option('--candidate-root <path>', 'Candidate-editable worktree (default: current project)'),
+      option('--evaluator <path>', 'Absolute protected evaluator executable or JavaScript module'),
+    ]),
+    renderShape: 'custom',
+    docs: doc('Autonomous work state', [
+      'scip-query protected-evidence evaluate SQWA-0123456789ABCDEF0123456789ABCDEF --protected-root ../protected-authority --candidate-root ./candidate --evaluator /protected/evaluator.mjs --json',
+      'scip-query protected-evidence read SQGE-0123456789ABCDEF0123456789ABCDEF --protected-root ../protected-authority',
+      'scip-query protected-evidence status --protected-root ../protected-authority --json',
+    ]),
+    handler: handlers.handleProtectedGoalEvidence,
+  },
+  {
     id: 'mission-trial',
     command: 'mission-trial <operation> <program>',
     agent: agentContract(

@@ -66,6 +66,7 @@ import {
   readConfiguredProtectedWorkAuthorization,
   type ProtectedWorkAuthorizationEnvironment,
 } from './protected-work-authorization-controller.js';
+import { readConfiguredProtectedGoalEvidence } from './protected-goal-evidence-controller.js';
 import {
   materializeAutomaticOperationAttempts,
   type MaterializeAutomaticOperationAttemptsResult,
@@ -985,8 +986,17 @@ async function runIsolatedStopHookDiffGate(hookInput: string): Promise<StopHookE
         process.env,
       )
     : undefined;
+  const protectedGoalEvidence = workspace.config.collaborationDomainId
+    ? readConfiguredProtectedGoalEvidence(
+        workspace.projectRoot,
+        workspace.config.collaborationDomainId,
+        protectedWorkAuthorization,
+        process.env,
+      )
+    : undefined;
   const completionContext = captureFixedCompletionContext(workspace.projectRoot, workspace.config, stopMode, {
     ...(protectedWorkAuthorization ? { protectedWorkAuthorization } : {}),
+    ...(protectedGoalEvidence ? { protectedGoalEvidence } : {}),
   });
   const execution = runIsolatedDiffGate(
     {

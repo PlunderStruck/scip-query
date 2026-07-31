@@ -2186,3 +2186,4 @@ function renderCapabilityReport(report: ReturnType<typeof getProjectCapabilities
 
 export { collect };
 export { handleProtectedWorkAuthorization } from './protected-work-authorization-handlers.js';
+export { handleProtectedGoalEvidence } from './protected-goal-evidence-handlers.js';

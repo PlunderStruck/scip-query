@@ -718,6 +718,11 @@ export function optionalTarget(value: unknown): string | undefined {
   return value;
 }
 
+export function requiredString(value: unknown, message: string): string {
+  if (typeof value === 'string' && value.trim().length > 0) return value;
+  throw new Error(message);
+}
+
 function requiredTarget(value: string | undefined, operation: string): string {
   if (!value) throw new Error(`${operation} requires a record identity or repository-relative path`);
   return value;

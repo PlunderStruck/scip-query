@@ -1,7 +1,7 @@
 # Autonomous completion protected-trial remediation
 
 Date: 2026-07-31
-Status: in progress — slices 1-4 implemented; trial audit exposed slices 5-8
+Status: in progress — product slices 1-3 and 6-7 implemented; apparatus slice 5 and evidence programs remain
 Governing goal: `SQG-4061E7D5D360464ED8E8B05D53BBF49D`
 Governing change: `SQC-DED67E74D3898BDCA85766BE8D3C93AF`
 
@@ -385,6 +385,31 @@ slices 5-7 remove these known measurement and product defects.
   exact independently issued evidence permits a durable completion transition.
 - **Order safety:** absence preserves the current blocked behavior.
 
+**Result (2026-07-31): complete.** A protected work authorization can now fix
+one evaluator by logical identity, contract version, and exact artifact
+SHA-256 before candidate work. The principal-facing `protected-evidence
+evaluate` command verifies those bytes, materializes the candidate's exact
+tracked, deleted, and untracked state in an isolated shared checkout, and runs
+the evaluator only against that snapshot. It rejects evaluator, authorization,
+candidate, or snapshot movement and publishes no receipt on evaluator failure.
+
+The resulting content-identified `SQGE` receipt binds the external
+authorization byte digest, exact goal/change record digests, evaluator, and
+whole-content/collaboration identities to goal, invariant, and affected-surface
+judgments. Completion contexts fix the evidence ID and source digest. Stop
+accepts its judgments only when the configured read-only receipt, fixed work
+authorization, active goal/change, and newly observed repository content all
+match exactly, then re-reads the receipt before publication. Unknown and
+disproven outcomes remain blocked; established outcomes can produce a genuine
+durable completion transition without trusting candidate prose.
+
+Six end-to-end tests cover a real transition, untracked/deleted snapshot
+materialization, stale-state rejection, wrong evaluator bytes, moved receipt
+bytes, explicit unknown evidence, and evaluator failure. The complete
+repository suite, typecheck, lint, build, API compatibility, public consumer,
+and skill links pass. The command reference, agent contract catalog, autonomous
+work-state documentation, and JSON schemas describe the new boundary.
+
 ### 7. Remove verification residue and ceremony
 
 - **Anchors:** TypeScript reindex invocation, cleanup verification, attempt
@@ -403,8 +428,7 @@ slices 5-7 remove these known measurement and product defects.
 - **Order safety:** use owned temporary paths and content identities rather
   than deleting an ambiguous worktree file.
 
-**Partial result (2026-07-31): index residue and cleanup-verifier sandbox
-friction repaired.** TypeScript and
+**Result (2026-07-31): complete.** TypeScript and
 JavaScript indexer invocations no longer pass `--infer-tsconfig`. For an
 unconfigured single project, the runner publishes the same minimal root
 configuration with exclusive creation and records its bytes plus its filesystem
@@ -475,9 +499,9 @@ preserving failures, unknown effects, and reconciliation behavior.
 | A9  | 6 / efficiency          | Compression hides a blocker or drill-down needed for a different next action                     | HOLE in draft; repaired by slice 3 decision-equivalence snapshot matrix and exact status-command escape hatch                        |
 | A10 | purpose / measurement   | New code passes unit tests but does not improve autonomous outcomes                              | OPEN: slice 4 produced a favorable median signal, but slices 5-8 are required for valid mission evidence                             |
 | A11 | measurement authority   | Runner trusts the candidate's final `completed` claim despite a durable `continue` decision      | OPEN: slice 5 makes the durable controller records the only controller-status source                                                 |
-| A12 | worktree completeness   | Evaluator and patch omit generated untracked residue                                             | OPEN: slices 5 and 7 capture the full worktree and prevent index-owned residue                                                       |
-| A13 | goal evidence           | Hidden evaluator passes behavior but controller never receives independent goal evidence         | OPEN: slice 6 adds a protected receipt bound to the fixed goal and candidate observation                                             |
-| A14 | useful work             | Verification repeatedly fails for an apparatus reason and agents compensate ceremonially         | OPEN: slice 7 makes verification usable or singularly and explicitly unavailable                                                     |
+| A12 | worktree completeness   | Evaluator and patch omit generated untracked residue                                             | PRODUCT HELD: protected evaluation snapshots include tracked, deleted, and untracked state and indexing leaves no config; runner capture remains in slice 5 |
+| A13 | goal evidence           | Hidden evaluator passes behavior but controller never receives independent goal evidence         | HELD: slice 6 binds a pre-authorized evaluator receipt to exact goal/change records and whole content                                |
+| A14 | useful work             | Verification repeatedly fails for an apparatus reason and agents compensate ceremonially         | HELD: slice 7 made cleanup verification usable and groups decision-equivalent successful observations                               |
 
 Coverage matrix:
 
@@ -494,8 +518,9 @@ Coverage matrix:
 | Independent completion evidence    | A13                                                                                          |
 
 The original three design holes were repaired in slices 1-3. The transcript
-and durable-record audit exposed five open empirical holes assigned to slices
-5-8; none is accepted. The external
+and durable-record audit exposed five empirical holes assigned to slices 5-8;
+the product portions of A12 and all of A13-A14 are now held, while A10-A11 and
+the runner portion of A12 remain open. None is accepted. The external
 root's non-writability by the candidate is an environment precondition, not a
 property pathname validation can manufacture. Supported adapters and trials
 must enforce it with sandbox or mount permissions and report the protection
@@ -537,8 +562,9 @@ attack is held by a cited slice and premise, and no premise fails
 reverification.
 
 Result: **PLAN REOPENED FROM EVIDENCE** — 14 attacks, 3 original holes repaired,
-5 empirical holes open across A10-A14, and 0 accepted holes. Program completion
-remains open pending slices 5-8.
+2 empirical holes held, 3 empirical holes still open across A10-A12, and 0
+accepted holes. Program completion remains open pending apparatus slice 5 and
+the slice-8 evidence programs.
 
 ## Files expected to change
 

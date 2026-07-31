@@ -30,6 +30,7 @@
       "additionalProperties": false
     },
     "change": { "$ref": "#/$defs/changeRequest" },
+    "protectedEvaluator": { "$ref": "#/$defs/protectedEvaluator" },
     "artifactTransitions": {
       "type": "array",
       "maxItems": 32,
@@ -37,6 +38,16 @@
     }
   },
   "$defs": {
+    "protectedEvaluator": {
+      "type": "object",
+      "required": ["evaluatorId", "contractVersion", "artifactSha256"],
+      "properties": {
+        "evaluatorId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "contractVersion": { "type": "integer", "minimum": 1 },
+        "artifactSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
     "changeRequest": {
       "type": "object",
       "required": ["idempotencyKey", "title", "intendedOutcome"],

@@ -20,7 +20,7 @@ import {
 } from '../command-kit/command-execution.js';
 import { resolveProjectRoot } from '../cli-context.js';
 import { cliVersion } from '../cli-support.js';
-import { optionalTarget, readJsonRequest, requiredCollaborationDomain } from './work-state-handlers.js';
+import { optionalTarget, readJsonRequest, requiredCollaborationDomain, requiredString } from './work-state-handlers.js';
 
 const PROTECTED_WORK_AUTHORIZATION_OPERATIONS = ['issue', 'read', 'activate', 'status'] as const;
 type ProtectedWorkAuthorizationOperation = (typeof PROTECTED_WORK_AUTHORIZATION_OPERATIONS)[number];
@@ -144,9 +144,4 @@ function renderProtectedWorkAuthorizationResult(operation: ProtectedWorkAuthoriz
     console.log(`  ${record.authorizationId}  ${record.goal.goalId}  ${record.change.changeId}`);
   }
   console.log(`Record issues: ${value.issues?.length ?? 0}`);
-}
-
-function requiredString(value: string | undefined, message: string): string {
-  if (!value) throw new Error(message);
-  return value;
 }

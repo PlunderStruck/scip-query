@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/scip-query/docs/schemas/protected-goal-evidence-record.schema.json",
+  "title": "scip-query protected goal evidence record v1",
+  "description": "An immutable external evaluator receipt binding one fixed authorization and one exact whole-repository state to goal, invariant, and affected-surface judgments.",
+  "type": "object",
+  "required": [
+    "kind",
+    "schemaVersion",
+    "evidenceId",
+    "collaborationDomainId",
+    "authorizationId",
+    "authorizationRecordSha256",
+    "goalId",
+    "goalRecordDigest",
+    "changeId",
+    "changeRecordDigest",
+    "evaluator",
+    "targetObservation",
+    "result",
+    "judgments",
+    "createdAt",
+    "writer"
+  ],
+  "properties": {
+    "kind": { "const": "scip-query-protected-goal-evidence" },
+    "schemaVersion": { "const": 1 },
+    "evidenceId": { "type": "string", "pattern": "^SQGE-[A-F0-9]{32}$" },
+    "collaborationDomainId": { "type": "string" },
+    "authorizationId": { "type": "string", "pattern": "^SQWA-[A-F0-9]{32}$" },
+    "authorizationRecordSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "goalId": { "type": "string", "pattern": "^SQG-[A-F0-9]{32}$" },
+    "goalRecordDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "changeId": { "type": "string", "pattern": "^SQC-[A-F0-9]{32}$" },
+    "changeRecordDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "evaluator": { "$ref": "./protected-work-authorization-request.schema.json#/$defs/protectedEvaluator" },
+    "targetObservation": { "$ref": "./observation-receipt.schema.json#/$defs/observationReceiptV2" },
+    "result": {
+      "type": "object",
+      "required": [
+        "goalSatisfied",
+        "invariantsPreserved",
+        "affectedSurfaceReconciled",
+        "missedAffectedArtifacts",
+        "residueDefects",
+        "reintroducedBehaviors",
+        "architectureViolations"
+      ],
+      "properties": {
+        "goalSatisfied": { "type": ["boolean", "null"] },
+        "invariantsPreserved": { "type": ["boolean", "null"] },
+        "affectedSurfaceReconciled": { "type": ["boolean", "null"] },
+        "missedAffectedArtifacts": { "$ref": "#/$defs/findings" },
+        "residueDefects": { "$ref": "#/$defs/findings" },
+        "reintroducedBehaviors": { "$ref": "#/$defs/findings" },
+        "architectureViolations": { "$ref": "#/$defs/findings" }
+      },
+      "additionalProperties": false
+    },
+    "judgments": {
+      "type": "object",
+      "required": ["goalFulfilled", "invariantsPreserved", "affectedSurfaceReconciled"],
+      "properties": {
+        "goalFulfilled": { "$ref": "#/$defs/state" },
+        "invariantsPreserved": { "$ref": "#/$defs/state" },
+        "affectedSurfaceReconciled": { "$ref": "#/$defs/state" }
+      },
+      "additionalProperties": false
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "writer": { "$ref": "./goal-record.schema.json#/$defs/writer" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "state": { "enum": ["established", "disproven", "unknown"] },
+    "findings": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 1000 }
+    }
+  }
+}

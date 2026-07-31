@@ -1,0 +1,161 @@
+{
+  "kind": "scip-query-suppression",
+  "suppressionIdentity": "SQ50B53B7F0833",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  },
+  "id": "SQ50B53B7F0833",
+  "check": "echo",
+  "file": "src/runtime/protected-goal-evidence-controller.ts",
+  "reason": "Authorization and goal-evidence leases intentionally share fail-closed environment loading, but goal evidence additionally depends on and must be checked against the exact authorization; their record readers and invariants are not interchangeable.",
+  "createdAt": "2026-07-31T18:35:35.272Z",
+  "schemaVersion": 2,
+  "decision": {
+    "kind": "automated-adjudication",
+    "reasonCode": "intentional-twin",
+    "decidedBy": "agent",
+    "policyVersion": 1,
+    "observation": {
+      "schemaVersion": 2,
+      "observedAt": "2026-07-31T18:35:35.270Z",
+      "facts": {
+        "collaborationDomain": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:collaboration-domain",
+            "version": 1
+          },
+          "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+        },
+        "workspaceInstance": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:workspace-instance",
+            "version": 1
+          },
+          "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+        },
+        "wholeContent": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:repository-content",
+            "version": 1
+          },
+          "digest": "fbf66285791a30a7ad09c7aa77e0e080e0b5b779ee373da88fe356d5ee4ee022"
+        },
+        "relevantInputs": [
+          {
+            "subject": "scip-query:index-inputs",
+            "identity": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:index-inputs",
+                "version": 2
+              },
+              "digest": "f48317e32b8432266b3eba43641cb8c9f66c17693aa7a0996228a7ff4268debd"
+            }
+          }
+        ],
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "9b06a810b3dd79b3f85638c69ab79938bf0038de9665370813b0701f7a9b2c14"
+          },
+          "inputs": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-inputs",
+              "version": 2
+            },
+            "digest": "f48317e32b8432266b3eba43641cb8c9f66c17693aa7a0996228a7ff4268debd"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "9b06a810b3dd79b3f85638c69ab79938bf0038de9665370813b0701f7a9b2c14"
+          }
+        },
+        {
+          "kind": "repository-snapshot",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:repository-content",
+              "version": 1
+            },
+            "digest": "fbf66285791a30a7ad09c7aa77e0e080e0b5b779ee373da88fe356d5ee4ee022"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        },
+        {
+          "source": "repository-snapshot",
+          "kind": "fixed-snapshot"
+        }
+      ],
+      "diagnostics": {
+        "clean": false,
+        "headCommit": "0d4b3b622cdc68613a7128c6186c44eb811af4b3",
+        "treeOid": "06ea3e3b4bf92bbf005fe4dad4ac85d4130fb6d5"
+      }
+    },
+    "evidence": [
+      {
+        "kind": "source",
+        "referent": "src/runtime/protected-goal-evidence-controller.ts",
+        "claim": "Authorization and goal-evidence leases intentionally share fail-closed environment loading, but goal evidence additionally depends on and must be checked against the exact authorization; their record readers and invariants are not interchangeable.",
+        "contentHash": "91c2838fdcf553a60d37599e8a019e36667b328ea307e68cf716348608670e95"
+      },
+      {
+        "kind": "source",
+        "referent": "src/runtime/protected-work-authorization-controller.ts",
+        "claim": "Authorization and goal-evidence leases intentionally share fail-closed environment loading, but goal evidence additionally depends on and must be checked against the exact authorization; their record readers and invariants are not interchangeable.",
+        "contentHash": "e50afe4bcdf6a3b912be904cead3904088118a83d3d20fa46de403e308ad7543"
+      },
+      {
+        "kind": "test",
+        "referent": "tests/runtime/protected-goal-evidence-controller.test.ts",
+        "claim": "Authorization and goal-evidence leases intentionally share fail-closed environment loading, but goal evidence additionally depends on and must be checked against the exact authorization; their record readers and invariants are not interchangeable.",
+        "contentHash": "52e9c43605b8c97673c8e3c43b99d9a947ae69f16d667da46ce2ee6b6aea8cc1"
+      }
+    ],
+    "invalidateOn": {
+      "targetContentChange": true,
+      "detectorMajorChange": true
+    }
+  }
+}

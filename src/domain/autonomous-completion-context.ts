@@ -21,6 +21,7 @@ import {
 } from './autonomous-work-state.js';
 import { COMPLETION_PREDICATES, type CompletionPredicate } from './autonomous-completion.js';
 import { isProtectedWorkAuthorizationId } from './protected-work-authorization.js';
+import { isProtectedGoalEvidenceId } from './protected-goal-evidence.js';
 
 export const COMPLETION_CONTEXT_RECORD_KIND = 'scip-query-completion-context' as const;
 export const COMPLETION_CONTEXT_RECORD_SCHEMA_VERSION = 1 as const;
@@ -70,6 +71,13 @@ export interface ProtectedWorkAuthorizationSnapshot {
   changeRecordDigest: string;
 }
 
+export interface ProtectedGoalEvidenceSnapshot {
+  evidenceId: string;
+  recordSha256: string;
+  authorizationId: string;
+  evaluatorArtifactSha256: string;
+}
+
 export interface CompletionContextSnapshotRequest {
   goal: GoalRecordV1;
   change: IntendedChangeRecordV1;
@@ -79,6 +87,7 @@ export interface CompletionContextSnapshotRequest {
   protectedArtifacts: ProtectedArtifactSetSnapshot;
   targetObservation: ObservationReceiptV2;
   protectedWorkAuthorization?: ProtectedWorkAuthorizationSnapshot;
+  protectedGoalEvidence?: ProtectedGoalEvidenceSnapshot;
 }
 
 /**
@@ -103,6 +112,7 @@ export interface CompletionContextSnapshotRecordV1 {
   protectedArtifacts: ProtectedArtifactSetSnapshot;
   targetObservation: ObservationReceiptV2;
   protectedWorkAuthorization?: ProtectedWorkAuthorizationSnapshot;
+  protectedGoalEvidence?: ProtectedGoalEvidenceSnapshot;
   capturedAt: string;
   createdAt: string;
   writer: WorkStateWriter;
@@ -138,6 +148,7 @@ export function createCompletionContextSnapshotRecord(
     ...(input.request.protectedWorkAuthorization
       ? { protectedWorkAuthorization: input.request.protectedWorkAuthorization }
       : {}),
+    ...(input.request.protectedGoalEvidence ? { protectedGoalEvidence: input.request.protectedGoalEvidence } : {}),
     capturedAt: input.capturedAt,
     createdAt: input.capturedAt,
     writer: { tool: 'scip-query', version: input.toolVersion },
@@ -199,6 +210,8 @@ export function decodeCompletionContextSnapshotRecord(
   }
   const protectedWorkAuthorization = decodeProtectedWorkAuthorizationSnapshot(record['protectedWorkAuthorization']);
   if (!protectedWorkAuthorization.ok) return { state: 'malformed', error: protectedWorkAuthorization.error };
+  const protectedGoalEvidence = decodeProtectedGoalEvidenceSnapshot(record['protectedGoalEvidence']);
+  if (!protectedGoalEvidence.ok) return { state: 'malformed', error: protectedGoalEvidence.error };
   if (protectedWorkAuthorization.value && record['changeRecordDigest'] === undefined) {
     return { state: 'malformed', error: 'authorized completion context must fix its intended-change digest' };
   }
@@ -230,6 +243,7 @@ export function decodeCompletionContextSnapshotRecord(
     protectedArtifacts: protectedArtifacts.value,
     targetObservation: target.receipt,
     ...(protectedWorkAuthorization.value ? { protectedWorkAuthorization: protectedWorkAuthorization.value } : {}),
+    ...(protectedGoalEvidence.value ? { protectedGoalEvidence: protectedGoalEvidence.value } : {}),
     capturedAt: record['capturedAt'],
     createdAt: envelope.envelope.createdAt,
     writer: envelope.envelope.writer,
@@ -319,6 +333,14 @@ function assertCompletionContextRequest(
   ) {
     throw new Error('protectedWorkAuthorization record digests must match the fixed work records');
   }
+  const protectedGoalEvidence = decodeProtectedGoalEvidenceSnapshot(request.protectedGoalEvidence);
+  if (!protectedGoalEvidence.ok) throw new Error(protectedGoalEvidence.error);
+  if (
+    protectedGoalEvidence.value &&
+    protectedGoalEvidence.value.authorizationId !== protectedWorkAuthorization.value?.authorizationId
+  ) {
+    throw new Error('protectedGoalEvidence must name the fixed protectedWorkAuthorization');
+  }
   const target = decodeObservationReceipt(request.targetObservation);
   if (target.kind !== 'supported') {
     throw new Error(`target observation is not current: ${target.kind === 'malformed' ? target.reason : target.kind}`);
@@ -342,6 +364,7 @@ function completionContextMeaning(
     protectedArtifacts: request.protectedArtifacts,
     targetObservation: targetObservationMeaning(request.targetObservation),
     ...(request.protectedWorkAuthorization ? { protectedWorkAuthorization: request.protectedWorkAuthorization } : {}),
+    ...(request.protectedGoalEvidence ? { protectedGoalEvidence: request.protectedGoalEvidence } : {}),
   };
 }
 
@@ -359,6 +382,7 @@ function completionRecordMeaning(record: CompletionContextSnapshotRecordV1): Rec
     protectedArtifacts: record.protectedArtifacts,
     targetObservation: targetObservationMeaning(record.targetObservation),
     ...(record.protectedWorkAuthorization ? { protectedWorkAuthorization: record.protectedWorkAuthorization } : {}),
+    ...(record.protectedGoalEvidence ? { protectedGoalEvidence: record.protectedGoalEvidence } : {}),
   };
 }
 
@@ -385,6 +409,32 @@ function decodeProtectedWorkAuthorizationSnapshot(
       recordSha256: value['recordSha256'],
       goalRecordDigest: value['goalRecordDigest'],
       changeRecordDigest: value['changeRecordDigest'],
+    },
+  };
+}
+
+function decodeProtectedGoalEvidenceSnapshot(
+  value: unknown,
+): { ok: true; value?: ProtectedGoalEvidenceSnapshot } | { ok: false; error: string } {
+  if (value === undefined) return { ok: true };
+  if (
+    !isRecordObject(value) ||
+    !isProtectedGoalEvidenceId(value['evidenceId']) ||
+    typeof value['recordSha256'] !== 'string' ||
+    !SHA256_PATTERN.test(value['recordSha256']) ||
+    !isProtectedWorkAuthorizationId(value['authorizationId']) ||
+    typeof value['evaluatorArtifactSha256'] !== 'string' ||
+    !SHA256_PATTERN.test(value['evaluatorArtifactSha256'])
+  ) {
+    return { ok: false, error: 'protectedGoalEvidence must fix one evidence receipt and evaluator artifact' };
+  }
+  return {
+    ok: true,
+    value: {
+      evidenceId: value['evidenceId'],
+      recordSha256: value['recordSha256'],
+      authorizationId: value['authorizationId'],
+      evaluatorArtifactSha256: value['evaluatorArtifactSha256'],
     },
   };
 }

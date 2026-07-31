@@ -58,6 +58,33 @@ for unsupported adapters; supported agents do not run it as ceremony. The
 immutable record schema is
 [`schemas/protected-work-authorization-record.schema.json`](schemas/protected-work-authorization-record.schema.json).
 
+When a goal contains behavior that the deterministic diff gate cannot prove,
+the same authorization may also fix one protected evaluator by logical ID,
+contract version, and exact artifact SHA-256. After candidate work stops, the
+execution host runs that evaluator—not the candidate—against the complete
+worktree:
+
+```bash
+scip-query protected-evidence evaluate SQWA-... \
+  --protected-root /principal/protected-state \
+  --candidate-root /candidate/repository \
+  --evaluator /principal/evaluators/goal-check.mjs \
+  --json
+
+export SCIP_QUERY_GOAL_EVIDENCE_ROOT=/principal/protected-state
+export SCIP_QUERY_GOAL_EVIDENCE_ID=SQGE-...
+```
+
+Evaluation brackets both the evaluator bytes and the candidate's entire
+tracked, deleted, and untracked repository content. Movement rejects the
+result. The immutable receipt binds that exact state to the authorized goal,
+change, and evaluator, then records goal, invariant, and affected-surface
+judgments. An adapter can automatically retry `Stop` with those two evidence
+variables; matching established judgments can then produce the durable
+completion transition. Missing, stale, moved, unknown, or disproven evidence
+continues to block. The receipt schema is
+[`schemas/protected-goal-evidence-record.schema.json`](schemas/protected-goal-evidence-record.schema.json).
+
 ## Create a goal
 
 Write a temporary request such as:

@@ -33,6 +33,9 @@
     "goal": { "$ref": "./goal-record.schema.json" },
     "changeRequest": { "$ref": "./protected-work-authorization-request.schema.json#/$defs/changeRequest" },
     "change": { "$ref": "./intended-change-record.schema.json" },
+    "protectedEvaluator": {
+      "$ref": "./protected-work-authorization-request.schema.json#/$defs/protectedEvaluator"
+    },
     "artifactTransitions": {
       "type": "array",
       "maxItems": 32,

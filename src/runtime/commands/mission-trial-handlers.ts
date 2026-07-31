@@ -27,6 +27,7 @@ import {
 } from '../command-kit/command-execution.js';
 import { resolveProjectRoot } from '../cli-context.js';
 import { cliVersion } from '../cli-support.js';
+import { requiredString } from './work-state-handlers.js';
 
 const MISSION_TRIAL_OPERATIONS = ['register', 'validate', 'record', 'list', 'report'] as const;
 type MissionTrialOperation = (typeof MISSION_TRIAL_OPERATIONS)[number];
@@ -213,11 +214,6 @@ function artifactMatches(artifact: {
 
 function missionTrialOperation(value: unknown): MissionTrialOperation {
   return parseEnumArgument(value, MISSION_TRIAL_OPERATIONS, 'mission-trial operation');
-}
-
-function requiredString(value: unknown, message: string): string {
-  if (typeof value === 'string' && value.trim().length > 0) return value;
-  throw new Error(message);
 }
 
 function formatRate(value: number | null): string {
