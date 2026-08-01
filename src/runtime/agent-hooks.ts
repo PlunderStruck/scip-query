@@ -1023,6 +1023,17 @@ async function runIsolatedStopHookDiffGate(hookInput: string): Promise<StopHookE
       collaborationDomainId: completionContext.collaborationDomainId,
       evaluation: evaluation.evaluation.record,
       result: execution.result,
+      ...(protectedGoalEvidence?.record.goalId === evaluation.evaluation.record.goalId &&
+      protectedGoalEvidence.record.changeId === evaluation.evaluation.record.changeId
+        ? {
+            protectedGoalEvidence: {
+              evidenceId: protectedGoalEvidence.record.evidenceId,
+              goalId: protectedGoalEvidence.record.goalId,
+              changeId: protectedGoalEvidence.record.changeId,
+              result: protectedGoalEvidence.record.result,
+            },
+          }
+        : {}),
       options: { toolVersion: cliVersion },
     }),
   );

@@ -4,7 +4,60 @@ Date: 2026-07-31
 Initial outcome: `insufficient`
 First authorized-program registered outcome: `regressed` — invalidated by hook apparatus
 Hook-verified registered outcome: `neutral` — controller conclusion invalidated by audit
-Current evidential outcome: protected lifecycle `established`; mission effectiveness `insufficient`
+Current evidential outcome: protected lifecycle `established`; v11 feedback design `regressed`; revised feedback design `untested`
+
+## Valid v11 large-repository result — negative
+
+Program `SQTP-5D931AE91C6D903732E823213AAA505F` is the first panel-resize
+program whose setup, control isolation, protected evaluator, and in-run Stop
+transport all passed preflight. It fixed runner SHA-256
+`f3b85c498eeb996c34d40b851627e0e02c83d0585d8c1d75b0`, evaluator SHA-256
+`b845dd750adadcd42a5c4462d2e7ce406bbaab3e30da415735b0252f9338a1fb`,
+and parameter SHA-256
+`f14e4dbb427a70c175049b892bf2c2e19b0d004832c3b7dcbef87ab48776426d`
+before either candidate started.
+
+| Condition | Protected score | Outcome | Elapsed | Model tokens | Tool calls |
+| --- | ---: | --- | ---: | ---: | ---: |
+| Control | 101/106 | completed, goal false | 1,005,636 ms | 8,809,056 | 73 |
+| Workflow | 101/106 | timed out, goal false | 2,700,024 ms | unavailable | 111 |
+
+Both candidates missed the same five protected conditions: the subpixel handle
+centering correction, duplicate seams in `ChatFileGallery` and
+`ChatThreadsList`, desktop thread-root/sidebar bounds, and the `ChatThread`
+scroll-container/seam integration. The control passed the ordinary repository
+suite but therefore made a false completeness claim. The workflow's protected
+Stop path rejected `goal-fulfilled` four times, so scip-query did detect the
+false finish. It nevertheless made no protected-quality improvement and used
+2.68 times the wall time before timing out. For this task and build, the net
+result is a regression, not merely insufficient evidence.
+
+The workflow token value in the immutable run record is invalid. Codex was
+terminated before emitting a `turn.completed` usage event, while the runner
+initialized missing usage to zero. Exact tokens cannot be recovered from the
+retained transcript. Future runners record token totals as unavailable when no
+completed usage event exists and request graceful interruption before forced
+termination.
+
+Transcript audit identified a causal product defect. A protected feedback
+contract is the principal-controlled, bounded diagnostic record that tells the
+candidate what failed without exposing the hidden evaluator. The product
+persisted four safe finding lists, but the autonomous next-action path consumed
+only completion-predicate states and diff-gate findings. Every rejection
+therefore reduced to `Repair the disproven completion predicates:
+goal-fulfilled.` The v11 evaluator compounded the defect by reducing all five
+failures to one generic safe finding even though its private output held more
+detail. Repeated unchanged protected rejections also did not count as failed
+strategies, so the advertised three-attempt/30-minute replan limit never
+applied.
+
+The remediation gate is intentionally bounded. First surface only the existing
+principal-approved finding lists, fall back to a clause-by-clause audit when
+they are empty or coarse, and reject unrelated hardening. Then run one new
+workflow diagnostic with behavior-level safe findings. It must improve on
+101/106 by repairing named goal clauses. Repeating the same five failures or
+timing out without improvement falsifies the revised design for this task; a
+new matched pair is justified only after that diagnostic clears the gate.
 
 ## Large-repository panel-resize comparison — invalid evidence
 

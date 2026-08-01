@@ -238,7 +238,10 @@ Before the program can be marked complete:
 - [x] Phase 3: protected completion.
 - [x] Phase 4: repository completeness.
 - [x] Phase 5: agent workflow.
-- [x] Phase 6: outcome trials and product alignment.
+- [ ] Phase 6: outcome trials and product alignment. The protected lifecycle is
+  established, but valid v11 large-repository evidence found no quality gain
+  and a 2.68x wall-time regression; the bounded actionable-feedback diagnostic
+  remains open.
 - [ ] Program exit: a fresh protected small-fixture pair now proves external
   authorization, exact protected goal evidence, and a durable completion
   transition, with workflow/control elapsed and model-token ratios of `0.947`

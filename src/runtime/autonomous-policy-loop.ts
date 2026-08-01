@@ -10,6 +10,7 @@ import { blockingFindings, type DiffGateResult } from '../queries/impact/diff-ga
 import type { WorkStateCreateOptions, WorkStateCreateResult } from '../storage/autonomous-work-state.js';
 import { createDecisionRecordFile, readWorkHistory } from '../storage/autonomous-work-ledger.js';
 import type { DecisionRecordV1 } from '../domain/autonomous-work-ledger.js';
+import type { ProtectedGoalEvaluatorResult } from '../domain/protected-goal-evidence.js';
 
 export interface PublishedAutonomousNextAction {
   action: AutonomousNextAction;
@@ -21,6 +22,12 @@ export function publishAutonomousNextAction(input: {
   collaborationDomainId: string;
   evaluation: CompletionEvaluationRecordV1;
   result: DiffGateResult;
+  protectedGoalEvidence?: {
+    evidenceId: string;
+    goalId: string;
+    changeId: string;
+    result: ProtectedGoalEvaluatorResult;
+  };
   options: WorkStateCreateOptions;
 }): PublishedAutonomousNextAction {
   const history = readWorkHistory(input.projectRoot, input.evaluation.changeId);
@@ -28,7 +35,17 @@ export function publishAutonomousNextAction(input: {
     id: finding.id,
     check: finding.check,
     remediation: finding.remediation,
+    source: 'diff-gate',
+    predicates: ['invariants-preserved'],
   }));
+  findings.push(
+    ...protectedEvaluatorFindings(
+      input.protectedGoalEvidence?.goalId === input.evaluation.goalId &&
+        input.protectedGoalEvidence.changeId === input.evaluation.changeId
+        ? input.protectedGoalEvidence
+        : undefined,
+    ),
+  );
   const action = selectAutonomousNextAction({
     changeId: input.evaluation.changeId,
     goalId: input.evaluation.goalId,
@@ -62,6 +79,54 @@ export function publishAutonomousNextAction(input: {
     input.options,
   );
   return { action, decision };
+}
+
+function protectedEvaluatorFindings(
+  evidence:
+    | {
+        evidenceId: string;
+        goalId: string;
+        changeId: string;
+        result: ProtectedGoalEvaluatorResult;
+      }
+    | undefined,
+): AutonomousPolicyFinding[] {
+  if (!evidence) return [];
+  const rows: Array<{
+    key: string;
+    findings: readonly string[];
+    predicates: AutonomousPolicyFinding['predicates'];
+  }> = [
+    {
+      key: 'missed-affected-artifact',
+      findings: evidence.result.missedAffectedArtifacts,
+      predicates: ['goal-fulfilled', 'coverage-complete'],
+    },
+    {
+      key: 'residue-defect',
+      findings: evidence.result.residueDefects,
+      predicates: ['goal-fulfilled', 'coverage-complete'],
+    },
+    {
+      key: 'reintroduced-behavior',
+      findings: evidence.result.reintroducedBehaviors,
+      predicates: ['goal-fulfilled'],
+    },
+    {
+      key: 'architecture-violation',
+      findings: evidence.result.architectureViolations,
+      predicates: ['invariants-preserved'],
+    },
+  ];
+  return rows.flatMap((row) =>
+    row.findings.map((finding, index) => ({
+      id: `protected:${row.key}:${index + 1}`,
+      check: `protected-evaluator:${evidence.evidenceId}`,
+      remediation: finding,
+      source: 'protected-evaluator' as const,
+      predicates: row.predicates,
+    })),
+  );
 }
 
 export function formatAutonomousNextActions(actions: readonly PublishedAutonomousNextAction[]): string | undefined {

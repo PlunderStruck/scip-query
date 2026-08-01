@@ -112,13 +112,21 @@ describe('autonomous next-action policy', () => {
       policyInput({
         decision: blocked(['invariants-preserved']),
         predicates: [predicate('invariants-preserved', 'disproven')],
-        findings: [{ id: 'SQ-FINDING', check: 'architecture', remediation: 'Remove the forbidden dependency.' }],
+        findings: [
+          {
+            id: 'SQ-FINDING',
+            check: 'architecture',
+            remediation: 'Remove the forbidden dependency.',
+            source: 'diff-gate',
+            predicates: ['invariants-preserved'],
+          },
+        ],
       }),
     );
     expect(repair).toMatchObject({
       kind: 'repair',
       blocker: 'work',
-      instruction: 'Repair SQ-FINDING: Remove the forbidden dependency.',
+      instruction: 'Repair 1 blocking finding(s): SQ-FINDING: Remove the forbidden dependency.',
     });
 
     const gather = selectAutonomousNextAction(
@@ -133,6 +141,51 @@ describe('autonomous next-action policy', () => {
       namedPredicates: ['goal-fulfilled', 'coverage-complete'],
     });
     expect(gather.instruction).toContain('do not edit the goal or evaluator');
+  });
+
+  it('repairs every bounded protected finding instead of collapsing them into one predicate', () => {
+    const action = selectAutonomousNextAction(
+      policyInput({
+        decision: blocked(['goal-fulfilled', 'coverage-complete']),
+        predicates: [predicate('goal-fulfilled', 'disproven'), predicate('coverage-complete', 'disproven')],
+        findings: [
+          {
+            id: 'protected:reintroduced-behavior:1',
+            check: 'protected-evaluator:SQGE-EXAMPLE',
+            remediation: 'Center the straddled grip on the one-pixel seam.',
+            source: 'protected-evaluator',
+            predicates: ['goal-fulfilled'],
+          },
+          {
+            id: 'protected:residue-defect:1',
+            check: 'protected-evaluator:SQGE-EXAMPLE',
+            remediation: 'Remove the duplicate border from the thread panel.',
+            source: 'protected-evaluator',
+            predicates: ['goal-fulfilled', 'coverage-complete'],
+          },
+        ],
+      }),
+    );
+
+    expect(action).toMatchObject({
+      kind: 'repair',
+      namedPredicates: ['goal-fulfilled', 'coverage-complete'],
+    });
+    expect(action.instruction).toContain('Center the straddled grip');
+    expect(action.instruction).toContain('Remove the duplicate border');
+    expect(action.instruction).toContain('do not add adjacent hardening');
+  });
+
+  it('falls back to a clause-by-clause goal audit when no protected finding is available', () => {
+    const action = selectAutonomousNextAction(
+      policyInput({
+        decision: blocked(['goal-fulfilled']),
+        predicates: [predicate('goal-fulfilled', 'disproven')],
+      }),
+    );
+
+    expect(action.instruction).toContain('Audit the fixed goal clause-by-clause');
+    expect(action.instruction).toContain('do not add adjacent hardening');
   });
 
   it('distinguishes repairable candidate-controlled authority from genuinely missing authorization', () => {

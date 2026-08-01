@@ -534,6 +534,39 @@ descriptor-only closeout fix. It remains separate from the change-relative
 architecture, residue, migration, dead-code, documentation, and coordination
 checks that passed in `diff-gate`.
 
+### 9. Actionable protected feedback and bounded diagnostic
+
+- **Anchors:** protected evaluator result, Stop completion evaluation,
+  autonomous policy publication, next-action selection, and the v11 Vega
+  transcript.
+- **Premise:** enforcement helps autonomous work only when a failed protected
+  judgment preserves enough principal-approved information to select a repair,
+  or explicitly directs the agent back through the fixed goal when no safe
+  detail exists.
+- **Deployable:** yes; protected findings remain bounded contract fields and
+  raw evaluator output remains inaccessible.
+- **Change:** map missed artifacts, residue defects, reintroduced behaviors,
+  and architecture violations to predicate-tagged autonomous findings only
+  when evidence goal/change identity matches the evaluated work. Render all
+  bounded findings as closure targets. With no detailed finding, require a
+  clause-by-clause audit of the fixed goal and affected surface and reject
+  adjacent hardening.
+- **Validation:** focused domain and publication tests; an unrelated evidence
+  result must not influence another change; one newly registered workflow-only
+  diagnostic must improve the fixed 101/106 protected score before another
+  matched comparison is allowed.
+- **Follow-up:** include repeated unchanged protected outcome digests in the
+  strategy/replan budget so successful shell commands cannot conceal an
+  unchanged completion failure.
+
+**Evidence (2026-07-31): implementation in verification; diagnostic open.**
+Valid v11 program `SQTP-5D931AE91C6D903732E823213AAA505F` blocked four false
+finishes but timed out at 2,700,024 ms with the same five protected failures as
+control. The autonomous policy path discarded the evaluator's four safe
+finding arrays, while the evaluator populated those arrays with only one
+generic regression string. This reopens decision-equivalent compression and
+makes a quality-improving treatment-only diagnostic the next evidence event.
+
 ## Attack record
 
 | ID  | Invariant/lens          | Attack                                                                                           | Outcome                                                                                                                              |
@@ -546,8 +579,8 @@ checks that passed in `diff-gate`.
 | A6  | 5 / availability        | Authorization file is missing, future-versioned, malformed, or from another collaboration domain | HELD by slices 1-2: activation reports the boundary and the existing firewall remains in force                                       |
 | A7  | 2 / replay              | Candidate replays `UserPromptSubmit` with the known prompt                                       | HELD by slice 2: replay can only idempotently materialize the same protected goal/change                                             |
 | A8  | 2 / prompt substitution | Candidate tries a different prompt against the configured authorization                          | HELD by slice 2 prompt SHA-256 equality before first activation                                                                      |
-| A9  | 6 / efficiency          | Compression hides a blocker or drill-down needed for a different next action                     | HOLE in draft; repaired by slice 3 decision-equivalence snapshot matrix and exact status-command escape hatch                        |
-| A10 | purpose / measurement   | New code passes unit tests but does not improve autonomous outcomes                              | OPEN: the valid small pair establishes lifecycle and a favorable cost sample, but both conditions completed; the large-repository causal comparison remains |
+| A9  | 6 / efficiency          | Compression hides a blocker or drill-down needed for a different next action                     | REOPENED by v11: protected failures became a predicate-only repair; slice 9 surfaces bounded safe findings and adds a goal-clause fallback |
+| A10 | purpose / measurement   | New code passes unit tests but does not improve autonomous outcomes                              | NEGATIVE for v11: both conditions scored 101/106 while workflow took 2.68x wall time and timed out; the revised slice-9 design remains untested |
 | A11 | measurement authority   | Runner trusts the candidate's final `completed` claim despite a durable `continue` decision      | HELD: slice 5 derives status from durable completion history, and the fresh workflow coordinate recorded a real completion transition |
 | A12 | worktree completeness   | Evaluator and patch omit generated untracked residue                                             | HELD: protected evaluation and runner capture include tracked, deleted, and untracked state; the fresh evaluator and controller matched exact whole-content identity |
 | A13 | goal evidence           | Hidden evaluator passes behavior but controller never receives independent goal evidence         | HELD: slice 6 binds a pre-authorized evaluator receipt to exact goal/change records and whole content                                |
@@ -569,9 +602,10 @@ Coverage matrix:
 
 The original three design holes were repaired in slices 1-3. The transcript
 and durable-record audit exposed five empirical holes assigned to slices 5-8.
-A11-A14 are now held by product, apparatus, and fresh durable evidence; A10
-remains open because the small fixture produced a quality tie. None is
-accepted. The external
+Valid v11 evidence reopened A9 and produced a negative A10 result for the
+tested design. Slice 9 repairs the known feedback-path loss, but only a fresh
+quality-improving diagnostic can hold A9 empirically or justify another
+matched comparison. None is accepted. The external
 root's non-writability by the candidate is an environment precondition, not a
 property pathname validation can manufacture. Supported adapters and trials
 must enforce it with sandbox or mount permissions and report the protection
@@ -612,10 +646,10 @@ A plan is PLANNED-COMPLETE iff every state writer/reader row is covered, every
 attack is held by a cited slice and premise, and no premise fails
 reverification.
 
-Result: **PLAN REOPENED FROM EVIDENCE** — 14 attacks, every authority,
-worktree, and lifecycle hole is now held, A10 remains open, and 0 holes are
-accepted. Program completion remains open only for the slice-8
-large-repository effectiveness program.
+Result: **PLAN REOPENED FROM EVIDENCE** — 14 attacks; authority, worktree, and
+lifecycle properties remain held, A9 is reopened, A10 is negative for v11,
+and 0 holes are accepted. Program completion now requires the bounded slice-9
+diagnostic before any further large-repository matched program.
 
 ## Files expected to change
 

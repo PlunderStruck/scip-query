@@ -408,9 +408,17 @@ Stop feedback applies the same decision-equivalence rule. The controller
 state, blocked predicates, unknown predicates, and selected next action appear
 in one block. A `completion status` command appears only while predicate truth
 is unknown; established-false predicates already select repair work and do not
-force a redundant inspection step. Fixed-context and decision-record identities
-remain in committed records and are omitted from the hook prose because they
-cannot change the already-selected action.
+force a redundant inspection step. When a matched protected evaluator supplies
+missed artifacts, residue defects, reintroduced behaviors, or architecture
+violations, those principal-approved findings appear as bounded closure targets
+in the selected repair action. Protected evidence for a different goal or
+change is ignored. If a disproven predicate has no actionable protected
+finding, the action directs a clause-by-clause audit of the fixed goal and its
+declared affected surface and rejects unrelated hardening. Raw evaluator
+stdout, private checks, and protected artifacts remain unavailable. Fixed-
+context and decision-record identities remain in committed records and are
+omitted from the hook prose because they cannot change the already-selected
+action.
 
 ## Collaboration and validation
 

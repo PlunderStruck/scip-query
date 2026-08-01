@@ -26,6 +26,8 @@ export interface AutonomousPolicyFinding {
   id: string;
   check: string;
   remediation: string;
+  source: 'diff-gate' | 'protected-evaluator';
+  predicates: readonly CompletionPredicate[];
 }
 
 export interface AutonomousNextAction {
@@ -171,15 +173,18 @@ export function selectAutonomousNextAction(input: AutonomousNextActionInput): Au
 
   if (input.findings.length > 0) {
     const finding = input.findings[0]!;
+    const namedPredicates = [...new Set(input.findings.flatMap((candidate) => candidate.predicates))];
     return {
       ...base,
       kind: 'repair',
       blocker: 'work',
       disposition: 'continue',
-      rationale: `${input.findings.length} blocking finding(s) remain; first is ${finding.id} (${finding.check})`,
-      instruction: `Repair ${finding.id}: ${finding.remediation}`,
+      rationale:
+        `${input.findings.length} blocking finding(s) remain; first is ${finding.id} (${finding.check}); ` +
+        `sources=${[...new Set(input.findings.map((candidate) => candidate.source))].join(',')}`,
+      instruction: repairFindingInstruction(input.findings),
       basisAttemptIds: latestAttemptIds(input.history.attempts),
-      namedPredicates: ['invariants-preserved'],
+      namedPredicates,
     };
   }
 
@@ -191,9 +196,12 @@ export function selectAutonomousNextAction(input: AutonomousNextActionInput): Au
       blocker: 'work',
       disposition: 'continue',
       rationale: predicateReasons(disproven),
-      instruction: `Repair the disproven completion predicates: ${disproven
-        .map((predicate) => predicate.predicate)
-        .join(', ')}.`,
+      instruction:
+        `Repair the disproven completion predicates: ${disproven
+          .map((predicate) => predicate.predicate)
+          .join(', ')}. ` +
+        'Audit the fixed goal clause-by-clause and its declared affected surface; do not add adjacent hardening ' +
+        'unless it closes a named failed condition.',
       basisAttemptIds: latestAttemptIds(input.history.attempts),
       namedPredicates: disproven.map((predicate) => predicate.predicate),
     };
@@ -251,6 +259,28 @@ export function selectAutonomousNextAction(input: AutonomousNextActionInput): Au
     basisAttemptIds: latestAttemptIds(input.history.attempts),
     namedPredicates: input.decision.blockedPredicates,
   };
+}
+
+function repairFindingInstruction(findings: readonly AutonomousPolicyFinding[]): string {
+  const prefix = `Repair ${findings.length} blocking finding(s): `;
+  const suffix = findings.some((finding) => finding.source === 'protected-evaluator')
+    ? ' Use each protected finding as a closure target; do not add adjacent hardening unless it closes one.'
+    : '';
+  const maximumDetailCharacters = Math.max(0, 900 - prefix.length - suffix.length);
+  const details: string[] = [];
+  let used = 0;
+  for (const finding of findings) {
+    const detail = `${finding.id}: ${finding.remediation}`;
+    const additional = detail.length + (details.length > 0 ? 2 : 0);
+    if (used + additional > maximumDetailCharacters) break;
+    details.push(detail);
+    used += additional;
+  }
+  const omitted = findings.length - details.length;
+  const omission = omitted > 0 ? `; +${omitted} more blocking finding(s)` : '';
+  const body = `${prefix}${details.join('; ')}${omission}`;
+  const terminator = /[.!?]$/u.test(body) ? '' : '.';
+  return `${body}${terminator}${suffix}`;
 }
 
 export function autonomousStrategyKey(attempt: AttemptRecordV1): string {

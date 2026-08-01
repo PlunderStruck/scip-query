@@ -83,9 +83,104 @@ describe('autonomous policy publication', () => {
     expect(formatAutonomousNextActions([first])).toContain(`Autonomous next action (gather-evidence, work):`);
     expect(formatAutonomousNextActions([first])).toContain('retry limit 3; strategy deadline 30m');
   });
+
+  it('publishes protected evaluator findings as the decision-equivalent repair action', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-query-policy-loop-protected-'));
+    roots.push(root);
+    execFileSync('git', ['init', '--quiet'], { cwd: root });
+    const goal = createGoalRecordFile(
+      root,
+      COLLABORATION_DOMAIN,
+      {
+        feature: 'An independently evaluated feature is complete',
+        invariants: ['Protected evaluator findings remain authoritative'],
+        acceptanceScenarios: [
+          {
+            name: 'Actionable protected repair',
+            given: ['a fixed protected evaluator result'],
+            when: ['the evaluator disproves completion'],
+            then: ['the next action carries each failed condition'],
+          },
+        ],
+        authorization: {
+          kind: 'repository-delegation',
+          principal: 'repository-owner',
+          source: 'protected policy-loop test',
+        },
+      },
+      { toolVersion: '0.20.0' },
+    ).record;
+    const change = createIntendedChangeRecordFile(
+      root,
+      COLLABORATION_DOMAIN,
+      {
+        goalId: goal.goalId,
+        idempotencyKey: 'protected-policy-loop-test',
+        title: 'Publish actionable protected findings',
+        intendedOutcome: 'The Stop controller names the failed goal conditions',
+      },
+      { toolVersion: '0.20.0' },
+    ).record;
+    const evaluation = blockedEvaluation(root, goal.goalId, change.changeId, 'disproven');
+    const published = publishAutonomousNextAction({
+      projectRoot: root,
+      collaborationDomainId: COLLABORATION_DOMAIN,
+      evaluation,
+      result: passingGate(),
+      protectedGoalEvidence: {
+        evidenceId: 'SQGE-0123456789ABCDEF0123456789ABCDEF',
+        goalId: goal.goalId,
+        changeId: change.changeId,
+        result: {
+          goalSatisfied: false,
+          invariantsPreserved: true,
+          affectedSurfaceReconciled: false,
+          missedAffectedArtifacts: ['Reconcile the desktop sidebar width bounds.'],
+          residueDefects: ['Remove duplicate seam borders from chat side panels.'],
+          reintroducedBehaviors: [],
+          architectureViolations: [],
+        },
+      },
+      options: { toolVersion: '0.20.0', now: () => '2026-07-30T13:00:01.000Z' },
+    });
+
+    expect(published.action.namedPredicates).toEqual(['goal-fulfilled', 'coverage-complete']);
+    expect(published.decision.record.nextAction).toContain('desktop sidebar width bounds');
+    expect(published.decision.record.nextAction).toContain('duplicate seam borders');
+    expect(formatAutonomousNextActions([published])).toContain('2 blocking finding(s)');
+
+    const unrelated = publishAutonomousNextAction({
+      projectRoot: root,
+      collaborationDomainId: COLLABORATION_DOMAIN,
+      evaluation,
+      result: passingGate(),
+      protectedGoalEvidence: {
+        evidenceId: 'SQGE-FEDCBA9876543210FEDCBA9876543210',
+        goalId: 'SQG-UNRELATED',
+        changeId: change.changeId,
+        result: {
+          goalSatisfied: false,
+          invariantsPreserved: true,
+          affectedSurfaceReconciled: false,
+          missedAffectedArtifacts: ['This finding belongs to another goal.'],
+          residueDefects: [],
+          reintroducedBehaviors: [],
+          architectureViolations: [],
+        },
+      },
+      options: { toolVersion: '0.20.0', now: () => '2026-07-30T13:00:02.000Z' },
+    });
+    expect(unrelated.action.instruction).toContain('Audit the fixed goal clause-by-clause');
+    expect(unrelated.action.instruction).not.toContain('another goal');
+  });
 });
 
-function blockedEvaluation(root: string, goalId: string, changeId: string): CompletionEvaluationRecordV1 {
+function blockedEvaluation(
+  root: string,
+  goalId: string,
+  changeId: string,
+  goalState: 'unknown' | 'disproven' = 'unknown',
+): CompletionEvaluationRecordV1 {
   const targetObservation = buildObservationReceipt({ projectRoot: root });
   return {
     kind: 'scip-query-completion-evaluation',
@@ -105,7 +200,7 @@ function blockedEvaluation(root: string, goalId: string, changeId: string): Comp
     predicates: [
       {
         predicate: 'goal-fulfilled',
-        state: 'unknown',
+        state: goalState,
         reasons: ['The goal scenario still needs independent evidence.'],
         evidenceReceipts: [targetObservation],
       },
@@ -125,7 +220,7 @@ function blockedEvaluation(root: string, goalId: string, changeId: string): Comp
     decision: {
       state: 'blocked',
       blockedPredicates: ['goal-fulfilled'],
-      unknownPredicates: ['goal-fulfilled'],
+      unknownPredicates: goalState === 'unknown' ? ['goal-fulfilled'] : [],
     },
     idempotency: {
       version: 1,
