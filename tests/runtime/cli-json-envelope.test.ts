@@ -347,7 +347,7 @@ describe('CLI JSON envelope compatibility', () => {
 
     expect(handlers).not.toContain('console.log(JSON.stringify');
     expect(cliSupport).not.toContain('console.log(JSON.stringify');
-    expect(hooks.match(/writeSerializedJson\(JSON\.stringify/g)).toHaveLength(3);
+    expect(hooks.match(/writeSerializedJson\(JSON\.stringify/g)).toHaveLength(4);
     expect(isolated.match(/writeSerializedJson\(JSON\.stringify/g)).toHaveLength(1);
   });
 });

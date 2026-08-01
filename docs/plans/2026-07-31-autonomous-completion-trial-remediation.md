@@ -1,7 +1,7 @@
 # Autonomous completion protected-trial remediation
 
 Date: 2026-07-31
-Status: in progress — product slices 1-3 and 6-7, apparatus slice 5, and the small protected lifecycle probe are complete; large-repository evidence remains
+Status: in progress — protected feedback now reaches the agent, but the v12 efficacy result is invalid because frozen-dependency readiness did not cover the repository gate; operational verification alignment remains
 Governing goal: `SQG-4061E7D5D360464ED8E8B05D53BBF49D`
 Governing change: `SQC-DED67E74D3898BDCA85766BE8D3C93AF`
 
@@ -559,7 +559,7 @@ checks that passed in `diff-gate`.
   strategy/replan budget so successful shell commands cannot conceal an
   unchanged completion failure.
 
-**Evidence (2026-07-31): implementation in verification; diagnostic open.**
+**Evidence (2026-07-31): implementation complete; efficacy diagnostic invalidated by apparatus.**
 Valid v11 program `SQTP-5D931AE91C6D903732E823213AAA505F` blocked four false
 finishes but timed out at 2,700,024 ms with the same five protected failures as
 control. The autonomous policy path discarded the evaluator's four safe
@@ -567,24 +567,86 @@ finding arrays, while the evaluator populated those arrays with only one
 generic regression string. This reopens decision-equivalent compression and
 makes a quality-improving treatment-only diagnostic the next evidence event.
 
+Product commit `b4b91ebdd1c48c54019a1917bca5640d224e9feb` now carries all
+four protected finding arrays through exact goal/change matching into the
+autonomous next action, renders every bounded closure target, and falls back to
+a clause-by-clause goal audit without adjacent hardening. Focused tests, the
+complete 2,428-test suite, typecheck, lint/build/API contracts, relationship
+postchecks, and `diff-gate` passed.
+
+V12 diagnostic `SQTP-169FE0C9CC801463D195EA36536E6AAE` proved that transport:
+the first protected rejection named four safe findings, and the agent traced
+all four to three concrete corrections. It also reduced the old five hidden
+test failures to two before feedback. The run still timed out at 1,800,070 ms.
+The prepared dependency tree made an unchanged isolated API suite fail three
+of 38 tests; the same source passed all 38 after an ordinary pnpm install. The
+preflight did not exercise the applicable repository gate under that exact
+dependency mode, so elapsed efficacy is invalid rather than negative. The
+serialized ordinary-gate/evaluator/ordinary-gate Stop path independently
+consumed roughly six minutes. The follow-up is therefore no longer merely
+repeated-outcome accounting: preflight must prove the repository gate under
+candidate-exact dependencies, and closeout must avoid redundant analysis and
+reserve time for a protected repair cycle before another diagnostic.
+
+### 10. Candidate-exact readiness and single-gate protected closeout
+
+- **Current flow:** `hook-stop` materializes the local operation journal, runs
+  the isolated diff gate, publishes a completion evaluation, and selects the
+  next action. A protected adapter must materialize that journal before its
+  evaluator observes the complete worktree, so v12 invoked the entire Stop
+  path once without evidence and again with the resulting receipt.
+- **Affected consumers:** compiler-resolved references show
+  `runIsolatedStopHookDiffGate` has one caller, `handleAgentHookStop`, and
+  `materializeAutomaticOperationAttempts` has one production consumer in that
+  Stop path. The hidden command registry, cache preparation, watch auto-start,
+  and update-notice boundaries also consume lifecycle command identity.
+- **Reuse decision:** extract no second journal or gate. A hidden
+  `hook-stop-prepare` command reuses the exact existing operation materializer;
+  final `hook-stop` continues to own all diff, completion, and next-action
+  judgments.
+- **Product change:** let a principal adapter freeze pending operation history,
+  evaluate that stable worktree, and invoke the expensive final gate once with
+  the protected receipt. Candidate-facing hooks and actions remain unchanged.
+- **Apparatus change:** supply the fixture's non-secret test environment before
+  work and run the actual repository pre-commit gate against the exact prepared
+  dependencies before measured execution. Reject a gate failure or worktree
+  mutation as setup failure.
+- **Validation:** focused lifecycle/journal/registry tests, typecheck, build,
+  command-contract checks, a generated-principal syntax probe, a
+  candidate-exact repository-gate preflight, and the normal final diff gate.
+
+**Evidence (2026-07-31): product slice verified; candidate preflight pending.**
+The product now has one hidden preparation boundary that returns the
+materialized attempt summary without refreshing the index, running detectors,
+publishing completion, or selecting an action. The external runner uses that
+boundary instead of its first full `hook-stop`, fixes the test environment
+before candidate launch, and treats the full repository gate as preflight
+rather than measured setup. The complete 2,431-test suite, lint, typecheck,
+build, focused lifecycle/registry/JSON-contract tests, API compatibility
+contract, generated-principal syntax probe, and source-diff checks pass. The
+new internal declaration is recorded as a compatible correction because the
+public runtime names and signatures are unchanged. Candidate-exact repository
+gate readiness remains the required apparatus proof before another measured
+diagnostic starts.
+
 ## Attack record
 
-| ID  | Invariant/lens          | Attack                                                                                           | Outcome                                                                                                                              |
-| --- | ----------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| A1  | 1 / authority           | Candidate points a manual command at a fake root containing a forged envelope                    | HOLE in draft; repaired by slice 2: Stop consumes only the host-configured root/ID fixed in its context, not command-local overrides |
-| A2  | 1 / boundary            | Configured root is inside the worktree or a symlinked record escapes it                          | HELD by slice 1 regular-file/non-symlink checks and external-root assertion (P7)                                                     |
-| A3  | 2 / self-easing         | Candidate changes the activated Gherkin or authorization source                                  | HELD by slice 2 full canonical goal digest equality before granting a referent                                                       |
-| A4  | 3 / policy weakening    | Candidate changes `.scipquery.json` to different bytes than the pre-authorized transition        | HELD by slice 2 predecessor and successor digest equality using P6                                                                   |
-| A5  | 4 / concurrency         | Principal replaces an authorization while the gate runs                                          | HOLE in draft; repaired by slice 2 pre/post byte-digest lease assertion                                                              |
-| A6  | 5 / availability        | Authorization file is missing, future-versioned, malformed, or from another collaboration domain | HELD by slices 1-2: activation reports the boundary and the existing firewall remains in force                                       |
-| A7  | 2 / replay              | Candidate replays `UserPromptSubmit` with the known prompt                                       | HELD by slice 2: replay can only idempotently materialize the same protected goal/change                                             |
-| A8  | 2 / prompt substitution | Candidate tries a different prompt against the configured authorization                          | HELD by slice 2 prompt SHA-256 equality before first activation                                                                      |
-| A9  | 6 / efficiency          | Compression hides a blocker or drill-down needed for a different next action                     | REOPENED by v11: protected failures became a predicate-only repair; slice 9 surfaces bounded safe findings and adds a goal-clause fallback |
-| A10 | purpose / measurement   | New code passes unit tests but does not improve autonomous outcomes                              | NEGATIVE for v11: both conditions scored 101/106 while workflow took 2.68x wall time and timed out; the revised slice-9 design remains untested |
-| A11 | measurement authority   | Runner trusts the candidate's final `completed` claim despite a durable `continue` decision      | HELD: slice 5 derives status from durable completion history, and the fresh workflow coordinate recorded a real completion transition |
-| A12 | worktree completeness   | Evaluator and patch omit generated untracked residue                                             | HELD: protected evaluation and runner capture include tracked, deleted, and untracked state; the fresh evaluator and controller matched exact whole-content identity |
-| A13 | goal evidence           | Hidden evaluator passes behavior but controller never receives independent goal evidence         | HELD: slice 6 binds a pre-authorized evaluator receipt to exact goal/change records and whole content                                |
-| A14 | useful work             | Verification repeatedly fails for an apparatus reason and agents compensate ceremonially         | HELD: slice 7 made cleanup verification usable and groups decision-equivalent successful observations                               |
+| ID  | Invariant/lens          | Attack                                                                                           | Outcome                                                                                                                                                                                                 |
+| --- | ----------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1  | 1 / authority           | Candidate points a manual command at a fake root containing a forged envelope                    | HOLE in draft; repaired by slice 2: Stop consumes only the host-configured root/ID fixed in its context, not command-local overrides                                                                    |
+| A2  | 1 / boundary            | Configured root is inside the worktree or a symlinked record escapes it                          | HELD by slice 1 regular-file/non-symlink checks and external-root assertion (P7)                                                                                                                        |
+| A3  | 2 / self-easing         | Candidate changes the activated Gherkin or authorization source                                  | HELD by slice 2 full canonical goal digest equality before granting a referent                                                                                                                          |
+| A4  | 3 / policy weakening    | Candidate changes `.scipquery.json` to different bytes than the pre-authorized transition        | HELD by slice 2 predecessor and successor digest equality using P6                                                                                                                                      |
+| A5  | 4 / concurrency         | Principal replaces an authorization while the gate runs                                          | HOLE in draft; repaired by slice 2 pre/post byte-digest lease assertion                                                                                                                                 |
+| A6  | 5 / availability        | Authorization file is missing, future-versioned, malformed, or from another collaboration domain | HELD by slices 1-2: activation reports the boundary and the existing firewall remains in force                                                                                                          |
+| A7  | 2 / replay              | Candidate replays `UserPromptSubmit` with the known prompt                                       | HELD by slice 2: replay can only idempotently materialize the same protected goal/change                                                                                                                |
+| A8  | 2 / prompt substitution | Candidate tries a different prompt against the configured authorization                          | HELD by slice 2 prompt SHA-256 equality before first activation                                                                                                                                         |
+| A9  | 6 / efficiency          | Compression hides a blocker or drill-down needed for a different next action                     | HELD by v12: all four bounded protected findings reached the agent and changed its diagnosis without exposing private evaluator output                                                                  |
+| A10 | purpose / measurement   | New code passes unit tests but does not improve autonomous outcomes                              | INVALID for v12 efficacy: feedback and three repaired hidden failures are real observations, but frozen-dependency gate failure confounded elapsed completion                                           |
+| A11 | measurement authority   | Runner trusts the candidate's final `completed` claim despite a durable `continue` decision      | HELD: slice 5 derives status from durable completion history, and the fresh workflow coordinate recorded a real completion transition                                                                   |
+| A12 | worktree completeness   | Evaluator and patch omit generated untracked residue                                             | HELD: protected evaluation and runner capture include tracked, deleted, and untracked state; the fresh evaluator and controller matched exact whole-content identity                                    |
+| A13 | goal evidence           | Hidden evaluator passes behavior but controller never receives independent goal evidence         | HELD: slice 6 binds a pre-authorized evaluator receipt to exact goal/change records and whole content                                                                                                   |
+| A14 | useful work             | Verification repeatedly fails for an apparatus reason and agents compensate ceremonially         | REOPENED by v12: candidate-exact dependency readiness omitted the repository gate, causing three compensating pre-commit attempts; serialized Stop then left less than two minutes for protected repair |
 
 Coverage matrix:
 
@@ -603,9 +665,11 @@ Coverage matrix:
 The original three design holes were repaired in slices 1-3. The transcript
 and durable-record audit exposed five empirical holes assigned to slices 5-8.
 Valid v11 evidence reopened A9 and produced a negative A10 result for the
-tested design. Slice 9 repairs the known feedback-path loss, but only a fresh
-quality-improving diagnostic can hold A9 empirically or justify another
-matched comparison. None is accepted. The external
+tested design. V12 holds A9 narrowly by showing that protected findings reach
+and redirect the agent, but A10 is invalid for efficacy and A14 is reopened
+because the apparatus manufactured gate work and left no practical repair
+window. No matched comparison is accepted.
+The external
 root's non-writability by the candidate is an environment precondition, not a
 property pathname validation can manufacture. Supported adapters and trials
 must enforce it with sandbox or mount permissions and report the protection
@@ -647,9 +711,10 @@ attack is held by a cited slice and premise, and no premise fails
 reverification.
 
 Result: **PLAN REOPENED FROM EVIDENCE** — 14 attacks; authority, worktree, and
-lifecycle properties remain held, A9 is reopened, A10 is negative for v11,
-and 0 holes are accepted. Program completion now requires the bounded slice-9
-diagnostic before any further large-repository matched program.
+lifecycle properties remain held, A9 is held by direct v12 transcript evidence,
+A10 is invalid for efficacy, A14 is reopened, and 0 holes are accepted. Program
+completion now requires candidate-exact gate readiness and an operational
+closeout slice before another bounded large-repository diagnostic.
 
 ## Files expected to change
 

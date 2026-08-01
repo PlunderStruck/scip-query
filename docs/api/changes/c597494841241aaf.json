@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-08-01T02:52:57.937Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "c597494841241aaf3bf84991c32d68418c164fe247adaca1c1d7294ec1d00661",
+  "changes": [
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./runtime; review their variance and runtime meaning.",
+      "target": "./runtime"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "ae532eb623f901eaa693c31359ba3687b3ecc0f9d01dd2aba4b888c9f52860c4",
+  "reason": "Public runtime exports and signatures are unchanged; this adds a private hidden hook preparation protocol used only by CLI orchestration and tests.",
+  "schemaVersion": 1
+}

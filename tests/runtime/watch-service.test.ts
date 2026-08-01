@@ -387,7 +387,16 @@ describe('watch service contract', () => {
   });
 
   it('auto-starts only eligible commands in enabled projects', () => {
-    for (const commandName of ['doctor', 'effectiveness', 'install-skills', 'status']) {
+    const excludedCommands = [
+      'doctor',
+      'effectiveness',
+      'hook-context',
+      'hook-stop',
+      'hook-stop-prepare',
+      'install-skills',
+      'status',
+    ];
+    for (const commandName of excludedCommands) {
       expect(watchServiceAutoStartEligible(commandName, {}), commandName).toBe(false);
     }
     expect(watchServiceAutoStartEligible('refs', {})).toBe(true);
@@ -400,7 +409,7 @@ describe('watch service contract', () => {
 
     withTempCache((cacheDir) => {
       const runtime = fakeRuntime(watchServicePaths(cacheDir).statePath);
-      for (const commandName of ['doctor', 'effectiveness', 'install-skills', 'status']) {
+      for (const commandName of excludedCommands) {
         expect(
           ensureWatchServiceForCommand({
             commandName,

@@ -103,6 +103,7 @@ const SHARED_CACHE_PREPARATION_EXCLUDED_COMMANDS = new Set([
   'effectiveness',
   'hook-context',
   'hook-stop',
+  'hook-stop-prepare',
   'init',
   'install-skills',
   'reindex',

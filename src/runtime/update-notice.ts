@@ -45,7 +45,7 @@ export async function maybePrintUpdateNotice(opts: UpdateNoticeOptions = {}): Pr
 }
 
 function isUpdateNoticeExemptCommand(commandName: string): boolean {
-  return commandName === 'hook-context' || commandName === 'hook-stop';
+  return commandName === 'hook-context' || commandName === 'hook-stop' || commandName === 'hook-stop-prepare';
 }
 
 export function renderUpdateNotice(currentVersion: string, latestVersion: string): string {

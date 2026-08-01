@@ -239,15 +239,20 @@ Before the program can be marked complete:
 - [x] Phase 4: repository completeness.
 - [x] Phase 5: agent workflow.
 - [ ] Phase 6: outcome trials and product alignment. The protected lifecycle is
-  established, but valid v11 large-repository evidence found no quality gain
-  and a 2.68x wall-time regression; the bounded actionable-feedback diagnostic
-  remains open.
+      established, but valid v11 large-repository evidence found no quality gain
+      and a 2.68x wall-time regression. V12 proved that behavior-level protected
+      findings now reach and redirect the agent, and repaired three of the five old
+      hidden failures before Stop, but still timed out because broad verification
+      and serialized Stop work left no repair window. Its efficacy result is
+      invalid because the frozen dependency setup made an unchanged API suite fail
+      during the run; candidate-exact gate readiness and operational closeout
+      alignment remain open.
 - [ ] Program exit: a fresh protected small-fixture pair now proves external
-  authorization, exact protected goal evidence, and a durable completion
-  transition, with workflow/control elapsed and model-token ratios of `0.947`
-  and `0.703`. The registered result remains `insufficient` because one task
-  completed by both conditions cannot establish a completion-rate advantage;
-  the pre-registered large-repository comparison remains outstanding.
+      authorization, exact protected goal evidence, and a durable completion
+      transition, with workflow/control elapsed and model-token ratios of `0.947`
+      and `0.703`. The registered result remains `insufficient` because one task
+      completed by both conditions cannot establish a completion-rate advantage;
+      the pre-registered large-repository comparison remains outstanding.
 
 The exact protected result and remediation boundary are recorded in
 [the Phase 6 validation record](../validation/2026-07-31-autonomous-completion-protected-trial.md).

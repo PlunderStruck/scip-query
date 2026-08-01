@@ -108,6 +108,19 @@ export interface ClaudeHookJsonOutput {
   };
 }
 
+export interface StopHookPreparation {
+  projectRoot: string;
+  automaticAttempts: MaterializeAutomaticOperationAttemptsResult;
+}
+
+export interface StopHookPreparationDependencies {
+  materializeAutomaticAttempts(
+    projectRoot: string,
+    cacheDir: string,
+    toolVersion: string,
+  ): MaterializeAutomaticOperationAttemptsResult;
+}
+
 export interface ClaudePreToolHookJsonOutput {
   hookSpecificOutput: {
     hookEventName: 'PreToolUse';
@@ -957,6 +970,29 @@ export async function handleAgentHookStop(): Promise<void> {
   writeStopHookJson(renderStopHookExecutionOutput(result, resolveStopHookMode(), execution));
 }
 
+/**
+ * Freeze pending operation history before a principal-owned evaluator observes
+ * the candidate worktree. This preparation changes only durable controller
+ * metadata; the later `hook-stop` remains the sole diff and completion gate.
+ */
+export function prepareAgentHookStop(
+  hookInput: string,
+  dependencies: StopHookPreparationDependencies = DEFAULT_STOP_HOOK_PREPARATION_DEPENDENCIES,
+): StopHookPreparation | undefined {
+  const prepared = prepareAgentHookStopState(hookInput, dependencies);
+  return prepared
+    ? {
+        projectRoot: prepared.workspace.projectRoot,
+        automaticAttempts: prepared.automaticAttempts,
+      }
+    : undefined;
+}
+
+export async function handleAgentHookStopPrepare(): Promise<void> {
+  const preparation = prepareAgentHookStop(readHookInput());
+  if (preparation) writeSerializedJson(JSON.stringify(preparation));
+}
+
 function writeStopHookJson(output: ClaudeHookJsonOutput): void {
   writeSerializedJson(JSON.stringify(output));
 }
@@ -969,14 +1005,9 @@ interface StopHookExecution extends DiffGateExecutionResult {
 }
 
 async function runIsolatedStopHookDiffGate(hookInput: string): Promise<StopHookExecution | undefined> {
-  const payload = parseHookPayload(hookInput);
-  const workspace = resolveHookWorkspace(payload);
-  if (!workspace) return undefined;
-  const automaticAttempts = materializeAutomaticOperationAttempts(
-    workspace.projectRoot,
-    workspace.paths.cacheDir,
-    cliVersion,
-  );
+  const prepared = prepareAgentHookStopState(hookInput, DEFAULT_STOP_HOOK_PREPARATION_DEPENDENCIES);
+  if (!prepared) return undefined;
+  const { workspace, automaticAttempts } = prepared;
   const lease = await prepareStopHookEvidenceLease(workspace);
   const stopMode = resolveStopHookMode();
   const protectedWorkAuthorization = workspace.config.collaborationDomainId
@@ -1038,6 +1069,32 @@ async function runIsolatedStopHookDiffGate(hookInput: string): Promise<StopHookE
     }),
   );
   return { ...execution, evidenceLease: lease, completion, automaticAttempts, nextActions };
+}
+
+interface StopHookPreparationState extends StopHookPreparation {
+  workspace: HookWorkspace;
+}
+
+const DEFAULT_STOP_HOOK_PREPARATION_DEPENDENCIES: StopHookPreparationDependencies = {
+  materializeAutomaticAttempts: materializeAutomaticOperationAttempts,
+};
+
+function prepareAgentHookStopState(
+  hookInput: string,
+  dependencies: StopHookPreparationDependencies,
+): StopHookPreparationState | undefined {
+  const payload = parseHookPayload(hookInput);
+  const workspace = resolveHookWorkspace(payload);
+  if (!workspace) return undefined;
+  return {
+    projectRoot: workspace.projectRoot,
+    workspace,
+    automaticAttempts: dependencies.materializeAutomaticAttempts(
+      workspace.projectRoot,
+      workspace.paths.cacheDir,
+      cliVersion,
+    ),
+  };
 }
 
 function persistStopSessionState(

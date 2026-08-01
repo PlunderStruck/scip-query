@@ -6,9 +6,11 @@
     "version": "0.20.0"
   },
   "id": "SQ8FA34B0BBC01",
-  "reason": "The protected-evidence change corrects only the descriptor's repository-scope metadata. Its dedicated protected-goal-evidence handler already evaluates the whole candidate repository, and the runtime handler signature and dispatch are unchanged; editing command-handlers would add no behavior.",
+  "check": "co-change-partner",
+  "file": "src/runtime/commands/command-descriptors.ts",
+  "reason": "The new hidden hook-stop-prepare descriptor directly binds the lifecycle handler in agent-hooks, following the existing custom hook descriptor path. Generic command-handlers neither dispatches nor renders custom lifecycle commands, so changing it would add unrelated code rather than complete this command.",
   "createdAt": "2026-07-29T19:50:55.191Z",
-  "updatedAt": "2026-07-31T19:45:11.389Z",
+  "updatedAt": "2026-08-01T02:56:41.740Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
@@ -17,7 +19,7 @@
     "policyVersion": 1,
     "observation": {
       "schemaVersion": 2,
-      "observedAt": "2026-07-31T19:45:11.387Z",
+      "observedAt": "2026-08-01T02:56:41.737Z",
       "facts": {
         "collaborationDomain": {
           "schemaVersion": 1,
@@ -47,7 +49,7 @@
             "name": "scip-query:repository-content",
             "version": 1
           },
-          "digest": "382b19bf5d2c235dc13500c34017a06fe4d397d558133b9af7a6dbee5546d3a5"
+          "digest": "87027822b18fb239b36a9c18c7e7023a0b84e55b6b10d54de0c8029c0a192bba"
         },
         "relevantInputs": [
           {
@@ -60,7 +62,7 @@
                 "name": "scip-query:index-inputs",
                 "version": 2
               },
-              "digest": "6828ddf17ee26292713bf4af757937618e2c760ae4d5726966df80fa8b7d6e74"
+              "digest": "33ea279154b09864c5a49ef79f62358c6e8d07540a9e173953b53ba741444350"
             }
           }
         ],
@@ -73,7 +75,7 @@
               "name": "scip-query:index-generation",
               "version": 1
             },
-            "digest": "69bdcd1ec04b02ec05f09f108fe9fe3ec1ba9e1871775b2c25e02e996b7ba053"
+            "digest": "765436ead3ce71a882c83236c46b59ee7f111e71dbb3be07d05008b0e9f5cebc"
           },
           "inputs": {
             "schemaVersion": 1,
@@ -83,7 +85,7 @@
               "name": "scip-query:index-inputs",
               "version": 2
             },
-            "digest": "6828ddf17ee26292713bf4af757937618e2c760ae4d5726966df80fa8b7d6e74"
+            "digest": "62ed588fbee2eb5426168198127952048a5103dee3232c9443fe4a000305b097"
           },
           "source": "immutable"
         }
@@ -99,7 +101,7 @@
               "name": "scip-query:index-generation",
               "version": 1
             },
-            "digest": "69bdcd1ec04b02ec05f09f108fe9fe3ec1ba9e1871775b2c25e02e996b7ba053"
+            "digest": "765436ead3ce71a882c83236c46b59ee7f111e71dbb3be07d05008b0e9f5cebc"
           }
         },
         {
@@ -112,7 +114,7 @@
               "name": "scip-query:repository-content",
               "version": 1
             },
-            "digest": "382b19bf5d2c235dc13500c34017a06fe4d397d558133b9af7a6dbee5546d3a5"
+            "digest": "87027822b18fb239b36a9c18c7e7023a0b84e55b6b10d54de0c8029c0a192bba"
           }
         }
       ],
@@ -128,34 +130,39 @@
       ],
       "diagnostics": {
         "clean": false,
-        "headCommit": "ae60f3ee450a60060b5d6f4d3eb69b97f7e72699",
-        "treeOid": "594e0852fd73279e503fe5996e7f7e489437109a"
+        "headCommit": "b4b91ebdd1c48c54019a1917bca5640d224e9feb",
+        "treeOid": "51b3a1b15cb480bc43b6f5c5a775bc3ce3bc362b"
       }
     },
     "evidence": [
       {
         "kind": "source",
         "referent": "src/runtime/commands/command-descriptors.ts",
-        "claim": "The protected-evidence change corrects only the descriptor's repository-scope metadata. Its dedicated protected-goal-evidence handler already evaluates the whole candidate repository, and the runtime handler signature and dispatch are unchanged; editing command-handlers would add no behavior.",
-        "contentHash": "821fdf853a6ad87447c849cb87f9061f2f021b748a8d446127c824539e57f84c"
+        "claim": "The new hidden hook-stop-prepare descriptor directly binds the lifecycle handler in agent-hooks, following the existing custom hook descriptor path. Generic command-handlers neither dispatches nor renders custom lifecycle commands, so changing it would add unrelated code rather than complete this command.",
+        "contentHash": "2f6d5e398e3a59e1e69ff7523c40caa545c2263a48b45cbf84d2114923f4fb19"
       },
       {
         "kind": "source",
-        "referent": "src/runtime/commands/protected-goal-evidence-handlers.ts",
-        "claim": "The protected-evidence change corrects only the descriptor's repository-scope metadata. Its dedicated protected-goal-evidence handler already evaluates the whole candidate repository, and the runtime handler signature and dispatch are unchanged; editing command-handlers would add no behavior.",
-        "contentHash": "7ff640d0398e059e4d0af1e990bd9a188c1955548e558565f28f3b4ae2d73580"
+        "referent": "src/runtime/agent-hooks.ts",
+        "claim": "The new hidden hook-stop-prepare descriptor directly binds the lifecycle handler in agent-hooks, following the existing custom hook descriptor path. Generic command-handlers neither dispatches nor renders custom lifecycle commands, so changing it would add unrelated code rather than complete this command.",
+        "contentHash": "cf0b537018b1a3cd212ad2fec24d222b0e878fa25edd2b2c4fac7a90f7e77a2f"
       },
       {
         "kind": "source",
         "referent": "src/runtime/commands/command-handlers.ts",
-        "claim": "The protected-evidence change corrects only the descriptor's repository-scope metadata. Its dedicated protected-goal-evidence handler already evaluates the whole candidate repository, and the runtime handler signature and dispatch are unchanged; editing command-handlers would add no behavior.",
+        "claim": "The new hidden hook-stop-prepare descriptor directly binds the lifecycle handler in agent-hooks, following the existing custom hook descriptor path. Generic command-handlers neither dispatches nor renders custom lifecycle commands, so changing it would add unrelated code rather than complete this command.",
         "contentHash": "ff1953ee7954a9ffc015bd17f53eb111053c410b3255d18d06f636fe2c19fe79"
       },
       {
         "kind": "test",
         "referent": "tests/runtime/cli-contract.test.ts",
-        "claim": "The protected-evidence change corrects only the descriptor's repository-scope metadata. Its dedicated protected-goal-evidence handler already evaluates the whole candidate repository, and the runtime handler signature and dispatch are unchanged; editing command-handlers would add no behavior.",
-        "contentHash": "e8c1fd675dda03aef06de9bf6eeb15812dccf4dae70d4119067b483f957f6bfa"
+        "claim": "The new hidden hook-stop-prepare descriptor directly binds the lifecycle handler in agent-hooks, following the existing custom hook descriptor path. Generic command-handlers neither dispatches nor renders custom lifecycle commands, so changing it would add unrelated code rather than complete this command.",
+        "contentHash": "fcb4bf0c4f0e86f3a458000712996287e967914cc6d01b212f84d4251a411f47"
+      },
+      {
+        "kind": "graph",
+        "referent": "scip-query refs handleAgentHookStopPrepare --full",
+        "claim": "The new hidden hook-stop-prepare descriptor directly binds the lifecycle handler in agent-hooks, following the existing custom hook descriptor path. Generic command-handlers neither dispatches nor renders custom lifecycle commands, so changing it would add unrelated code rather than complete this command."
       }
     ],
     "invalidateOn": {

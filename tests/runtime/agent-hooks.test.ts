@@ -23,6 +23,7 @@ import {
 import { writeProtectedWorkAuthorization } from '../../src/storage/protected-work-authorization.js';
 import {
   evaluatePreToolUse,
+  prepareAgentHookStop,
   renderAgentHookContext,
   refreshIndexForHookIfNeeded,
   renderStopHookExecutionFailure,
@@ -33,6 +34,40 @@ import {
 } from '../../src/runtime/agent-hooks.js';
 
 describe('agent hook context', () => {
+  it('prepares durable operation history without running the Stop gate', () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'scip-query-hook-prepare-'));
+    try {
+      execFileSync('git', ['init', '--quiet'], { cwd });
+      const materializeAutomaticAttempts = vi.fn(() => ({
+        createdAttemptIds: ['SQA-PREPARED'],
+        reusedAttemptIds: [],
+        pendingOperationCount: 1,
+        materializedUnitCount: 1,
+      }));
+
+      const result = prepareAgentHookStop(JSON.stringify({ hook_event_name: 'Stop', cwd }), {
+        materializeAutomaticAttempts,
+      });
+
+      expect(result).toEqual({
+        projectRoot: realpathSync(cwd),
+        automaticAttempts: {
+          createdAttemptIds: ['SQA-PREPARED'],
+          reusedAttemptIds: [],
+          pendingOperationCount: 1,
+          materializedUnitCount: 1,
+        },
+      });
+      expect(materializeAutomaticAttempts).toHaveBeenCalledWith(
+        realpathSync(cwd),
+        expect.stringContaining('scip-query'),
+        expect.any(String),
+      );
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it('wakes an enabled idle service and requests refresh when the index is stale', async () => {
     const requestRefresh = vi.fn();
     const note = await refreshIndexForHookIfNeeded(

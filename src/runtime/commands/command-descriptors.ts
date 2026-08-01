@@ -15,7 +15,12 @@ import {
 } from '../command-kit/command-spec-builders.js';
 import { DIFF_IMPACT_BATCH_COMMAND, HEALTH_PHASE_COMMAND } from '../cli-support.js';
 import { DIFF_GATE_RUN_COMMAND } from '../diff-gate-execution.js';
-import { handleAgentHookContext, handleAgentHookPreToolUse, handleAgentHookStop } from '../agent-hooks.js';
+import {
+  handleAgentHookContext,
+  handleAgentHookPreToolUse,
+  handleAgentHookStop,
+  handleAgentHookStopPrepare,
+} from '../agent-hooks.js';
 import { BUILTIN_SKILLS } from '../setup.js';
 import * as handlers from './command-handlers.js';
 import {
@@ -338,6 +343,14 @@ export const commandDescriptors: CommandDescriptor[] = [
     hidden: true,
     renderShape: 'custom',
     handler: handleAgentHookStop,
+  },
+  {
+    id: 'hook-stop-prepare',
+    command: 'hook-stop-prepare',
+    description: 'Internal protected Stop preparation without diff evaluation',
+    hidden: true,
+    renderShape: 'custom',
+    handler: handleAgentHookStopPrepare,
   },
   {
     id: 'check-deps',

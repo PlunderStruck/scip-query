@@ -85,6 +85,16 @@ completion transition. Missing, stale, moved, unknown, or disproven evidence
 continues to block. The receipt schema is
 [`schemas/protected-goal-evidence-record.schema.json`](schemas/protected-goal-evidence-record.schema.json).
 
+Before observing the worktree, a protected adapter runs the hidden
+`hook-stop-prepare` lifecycle command with the original Stop payload. Stop
+preparation is the host-facing step that materializes pending operation
+history into durable repository records while making no diff or completion
+judgment. The adapter then evaluates that stable state and invokes `hook-stop`
+once with the resulting evidence identity. This prevents the expensive diff
+and completion gate from running both before and after protected evaluation;
+the final `hook-stop` remains the sole enforcement owner. Candidates do not
+run preparation themselves and receive no extra metadata ceremony.
+
 ## Create a goal
 
 Write a temporary request such as:

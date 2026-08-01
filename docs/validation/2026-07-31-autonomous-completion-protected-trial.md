@@ -4,7 +4,71 @@ Date: 2026-07-31
 Initial outcome: `insufficient`
 First authorized-program registered outcome: `regressed` — invalidated by hook apparatus
 Hook-verified registered outcome: `neutral` — controller conclusion invalidated by audit
-Current evidential outcome: protected lifecycle `established`; v11 feedback design `regressed`; revised feedback design `untested`
+Current evidential outcome: protected lifecycle `established`; v11 feedback design `regressed`; revised feedback transport `established`; revised end-to-end efficacy `invalidated by apparatus`
+
+## Revised v12 workflow diagnostic — actionable feedback, incomplete run
+
+Treatment-only program `SQTP-169FE0C9CC801463D195EA36536E6AAE`
+tested product commit `b4b91ebdd1c48c54019a1917bca5640d224e9feb`
+against the same Vega panel-resize mission. The program fixed runner SHA-256
+`c2bb66e2d6b5bc93782f1bf581ec4b7ae22f7082aece64922c7c270707880804`,
+evaluator SHA-256
+`51210ac8f0134c18ff702f67382fc177e19432c4b83d341fa2d4760eed8ef218`,
+and parameter SHA-256
+`ee2839e09f749873f0d945f096ee30c01a3998771750d82e98f118f41ab7f360`
+before candidate work. Run `SQTR-C31D2194069D6CCC926094ED510A24A7`
+timed out at the fixed 1,800,070 ms limit after 90 tool calls, including 14
+scip-query metadata commands. Exact model tokens are unavailable because the
+interrupted turn emitted no completed usage event.
+
+The candidate improved the implementation before its first protected Stop. It
+passed 97 of 99 protected tests, compared with five protected failures in the
+valid v11 candidates, and repaired three of those five previously missed
+surfaces: both side-panel seam/scroll defects and the thread
+stick-to-bottom/seam integration. Typecheck, lint, architecture, the complete
+555-file web suite, and focused consumer tests passed. The protected evaluator
+still disproved completion for four closure targets:
+
+- the floating dock reached the shared mechanic through an unexpected private
+  `useChatDockResize` wrapper instead of consuming it at the panel boundary;
+- that wrapper therefore remained as residue;
+- the desktop sidebar omitted an existing layout-gap constraint and rendered
+  the handle inset rather than straddling the seam; and
+- the straddled grip was still displaced by half a pixel.
+
+The revised product preserved and rendered every behavior-level safe finding
+on the first protected rejection. The agent then traced them to the wrapper,
+the 16-pixel layout gap, and the half-pixel transform. This establishes the
+feedback transport: a protected evaluator's bounded findings now reach the
+coding agent as concrete repair targets without exposing hidden test names or
+assertions. V11 never did this; four rejections collapsed to the generic
+instruction to repair `goal-fulfilled`.
+
+The whole workflow nevertheless timed out. The agent first spent substantial
+time on three broad pre-commit attempts whose API authentication failures were
+unrelated to the web change. The isolated 38-test authentication suite failed
+three tests under the runner's prepared dependency tree even though no API
+source changed; the same fixed source passed all 38 after an ordinary pnpm
+dependency installation. The preflight had tested scip-query readiness but not
+the repository gate under the exact frozen dependency mode used by the
+candidate. V12's operational outcome is therefore invalid apparatus evidence,
+not an attributable scip-query regression.
+
+Two timings remain valid observations rather than causal efficacy results. The
+first Stop began about 21 minutes 46 seconds into the counted run. Its
+serialized choreography then took roughly six minutes to run the ordinary
+completion gate, snapshot the worktree, run the protected evaluator, and run
+the completion gate again with the receipt. The specific repair targets
+reached the agent with less than two minutes left; it diagnosed them but could
+not edit and reverify before the cap.
+
+The result is therefore not a scip-query quality win or loss and does not
+justify a matched comparison yet. It is positive evidence that the slice-9
+feedback defect is repaired, an apparatus requirement to prove the repository
+gate under the exact prepared dependencies before candidate launch, and a
+direct optimization target in the serialized Stop path. A new
+content-identified diagnostic is allowed only after those conditions change;
+rerunning the same invalid apparatus would add no information.
 
 ## Valid v11 large-repository result — negative
 
@@ -17,10 +81,10 @@ and parameter SHA-256
 `f14e4dbb427a70c175049b892bf2c2e19b0d004832c3b7dcbef87ab48776426d`
 before either candidate started.
 
-| Condition | Protected score | Outcome | Elapsed | Model tokens | Tool calls |
-| --- | ---: | --- | ---: | ---: | ---: |
-| Control | 101/106 | completed, goal false | 1,005,636 ms | 8,809,056 | 73 |
-| Workflow | 101/106 | timed out, goal false | 2,700,024 ms | unavailable | 111 |
+| Condition | Protected score | Outcome               |      Elapsed | Model tokens | Tool calls |
+| --------- | --------------: | --------------------- | -----------: | -----------: | ---------: |
+| Control   |         101/106 | completed, goal false | 1,005,636 ms |    8,809,056 |         73 |
+| Workflow  |         101/106 | timed out, goal false | 2,700,024 ms |  unavailable |        111 |
 
 Both candidates missed the same five protected conditions: the subpixel handle
 centering correction, duplicate seams in `ChatFileGallery` and
@@ -108,10 +172,10 @@ candidate worktree with candidate operation capture disabled.
 
 One fresh pair produced:
 
-| Condition | Full completion | Elapsed | Model tokens | Tool calls | False block | Architecture regression |
-| --- | --- | ---: | ---: | ---: | --- | --- |
-| Control | yes | 311,227 ms | 1,049,360 | 38 | no | no |
-| Workflow | yes | 294,824 ms | 738,105 | 18 | no | no |
+| Condition | Full completion |    Elapsed | Model tokens | Tool calls | False block | Architecture regression |
+| --------- | --------------- | ---------: | -----------: | ---------: | ----------- | ----------------------- |
+| Control   | yes             | 311,227 ms |    1,049,360 |         38 | no          | no                      |
+| Workflow  | yes             | 294,824 ms |      738,105 |         18 | no          | no                      |
 
 The workflow/control ratios were `0.947` elapsed, `0.703` model tokens, and
 `0.474` tool calls. The hidden evaluator established the goal, invariants, and

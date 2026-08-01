@@ -94,7 +94,15 @@ describe('CLI contract', () => {
 
   it('keeps passive registered commands out of demand-started watcher policy', () => {
     const commandIds = new Set(commandDescriptors.map((descriptor) => descriptor.id));
-    const passiveCommands = ['doctor', 'effectiveness', 'install-skills', 'status'];
+    const passiveCommands = [
+      'doctor',
+      'effectiveness',
+      'hook-context',
+      'hook-stop',
+      'hook-stop-prepare',
+      'install-skills',
+      'status',
+    ];
 
     expect(passiveCommands.every((commandName) => commandIds.has(commandName))).toBe(true);
     for (const commandName of passiveCommands) {
