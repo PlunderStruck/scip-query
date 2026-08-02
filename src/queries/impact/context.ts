@@ -23,6 +23,7 @@ import { findExactSymbolMatch, findFirstSymbolMatch } from '../../symbols/symbol
 import { leafName } from '../../symbols/symbol-parser.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { preferCallablePlanSourceCandidates } from '../internal/plan-source-candidates.js';
+import { enclosingSourceUnitSnippet } from '../navigation/source-snippet.js';
 
 export interface RepositoryContextOptions {
   semantic?: boolean;
@@ -460,20 +461,25 @@ function buildRepositoryContextSourcePacket(
   const definitionSlices = new Map<string, RepositoryContextSourceSlice>();
   for (const candidate of preferCallablePlanSourceCandidates(definitionCandidates)) {
     if (definitionSlices.has(candidate.definition.symbol)) continue;
-    const source = definitionSourceSnippet(db, candidate.definition);
+    const lineLimit = candidate.role === 'target' ? SOURCE_PACKET_TARGET_LINE_LIMIT : SOURCE_PACKET_REUSE_LINE_LIMIT;
+    const recoveredUnit =
+      candidate.definition.endLine <= candidate.definition.startLine
+        ? enclosingSourceUnitSnippet(db, candidate.definition.relativePath, candidate.definition.startLine, lineLimit)
+        : null;
+    const source = recoveredUnit?.unitType ? recoveredUnit.source : definitionSourceSnippet(db, candidate.definition);
     if (!source) continue;
     const lines = source.split('\n');
-    const lineLimit = candidate.role === 'target' ? SOURCE_PACKET_TARGET_LINE_LIMIT : SOURCE_PACKET_REUSE_LINE_LIMIT;
     const kept = Math.min(lines.length, lineLimit);
+    const startLine = recoveredUnit?.unitType ? recoveredUnit.startLine : candidate.definition.startLine;
     definitionSlices.set(candidate.definition.symbol, {
       role: candidate.role,
       symbol: candidate.definition.symbol,
       shortName: leafName(candidate.definition.symbol),
       file: candidate.definition.relativePath,
-      startLine: candidate.definition.startLine,
-      endLine: candidate.definition.startLine + kept - 1,
+      startLine,
+      endLine: startLine + kept - 1,
       source: lines.slice(0, kept).join('\n'),
-      omittedLines: Math.max(0, lines.length - kept),
+      omittedLines: (recoveredUnit?.unitType ? recoveredUnit.omittedLines : 0) + Math.max(0, lines.length - kept),
     });
   }
 

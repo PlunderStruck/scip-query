@@ -31,6 +31,7 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 | Command | Description | Options |
 |---|---|---|
 | `files <pattern>` | Find files matching a pattern | `--json`<br>`--result-only`<br>`--compact` |
+| `inspect` | Batch related searches, symbols, and source locations into one deduplicated source packet | `--search <text>`<br>`--symbol <symbol>`<br>`--at <file:line>`<br>`-s, --scope <path>`<br>`-C, --context <n>`<br>`-n, --limit <n>`<br>`--unit-lines <n>`<br>`--total-lines <n>`<br>`--include <part>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `search <text>` | Search literal or regular-expression text in indexed source with nearby code and symbol ownership | `-s, --scope <path>`<br>`-C, --context <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--regexp`<br>`-i, --ignore-case`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `methods <className>` | List methods of one exactly resolved class; ambiguity and missing targets fail explicitly | `--json`<br>`--result-only`<br>`--compact` |
 | `refs <symbol>` | Find all files referencing a symbol | `--full`<br>`-n, --limit <n>`<br>`--cursor <cursor>`<br>`--json`<br>`--result-only`<br>`--compact` |

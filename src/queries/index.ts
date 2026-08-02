@@ -1,6 +1,7 @@
 export { stats } from './navigation/stats.js';
 export { files } from './navigation/files.js';
 export { searchSource } from './navigation/source-search.js';
+export { inspectSource } from './navigation/source-inspection.js';
 export { symbols } from './navigation/symbols.js';
 export { methods, resolveMethods } from './navigation/methods.js';
 export { refs } from './navigation/refs.js';
@@ -79,6 +80,13 @@ export { similarSignatures } from './cleanup/similar-signatures.js';
 export type { StatsResult } from './navigation/stats.js';
 export type { FileResult } from './navigation/files.js';
 export type { SourceSearchMatch, SourceSearchOptions, SourceSearchResult } from './navigation/source-search.js';
+export type {
+  SourceInspectionLocation,
+  SourceInspectionOptions,
+  SourceInspectionResult,
+  SourceInspectionSearch,
+  SourceInspectionSlice,
+} from './navigation/source-inspection.js';
 export type { SymbolResult } from './navigation/symbols.js';
 export type { MethodResult, MethodsOwner, MethodsResolution, ResolveMethodsOptions } from './navigation/methods.js';
 export type { RefResult } from './navigation/refs.js';

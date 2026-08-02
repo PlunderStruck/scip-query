@@ -218,7 +218,8 @@ export function commandAnalysisBudget(
 
   if (!opts.quiet) {
     console.error(
-      `Large index detected; ${commandName} will scan the highest-priority ${DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT} candidates with semantic enrichment disabled. ` +
+      `Large index detected; ${commandName} is using its bounded default analysis with semantic enrichment disabled. ` +
+        `Candidate scans, when this command uses one, are capped at ${DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT}. ` +
         `Run "scip-query ${commandName} --full" for the unbounded semantic pass.`,
     );
   }

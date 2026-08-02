@@ -157,7 +157,9 @@ describe('commandAnalysisBudget', () => {
         reason: 'large index default budget; pass --full for unbounded semantic analysis',
       },
     });
-    expect(error).toHaveBeenCalledWith(expect.stringContaining('Large index detected'));
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('bounded default analysis'));
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('Candidate scans, when this command uses one'));
+    expect(error).not.toHaveBeenCalledWith(expect.stringContaining('will scan the highest-priority'));
   });
 });
 

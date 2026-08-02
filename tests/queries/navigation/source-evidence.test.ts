@@ -3,7 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
+import { code } from '../../../src/queries/navigation/code.js';
 import { evidence } from '../../../src/queries/navigation/evidence.js';
+import { inspectSource } from '../../../src/queries/navigation/source-inspection.js';
 import { searchSource } from '../../../src/queries/navigation/source-search.js';
 import { traceEvidence } from '../../../src/queries/navigation/trace.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
@@ -94,6 +96,58 @@ describe('related source evidence', () => {
     }
   });
 
+  it('recovers nested behavior when the compiler range only covers an object declaration line', () => {
+    const db = createSourceEvidenceDb();
+    try {
+      const source = code(db, 'commandSet');
+      expect(source?.source).toContain('async sessionStreamEvents');
+      expect(source?.source).toContain('return events.length');
+
+      const packet = inspectSource(db, {
+        searches: ['sessionStreamEvents', 'return events.length', 'appendThing'],
+        searchLimit: 2,
+      });
+      expect(packet.searches).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ pattern: 'sessionStreamEvents', matchingLines: 1 }),
+          expect.objectContaining({ pattern: 'return events.length', matchingLines: 1 }),
+          expect.objectContaining({ pattern: 'appendThing' }),
+        ]),
+      );
+      expect(packet.slices).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            relativePath: 'src/commands.ts',
+            unitType: 'method_definition',
+            reasons: ['search:sessionStreamEvents', 'search:return events.length'],
+            source: expect.stringContaining('return events.length'),
+          }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('keeps distant selected lines from the same large source unit visible', () => {
+    const db = createSourceEvidenceDb();
+    try {
+      const packet = inspectSource(db, {
+        searches: ['firstAnchor', 'lastAnchor'],
+        searchLimit: 2,
+        unitLines: 8,
+      });
+      const slices = packet.slices.filter((slice) => slice.relativePath === 'src/long-command.ts');
+
+      expect(slices).toHaveLength(2);
+      expect(slices.some((slice) => slice.source.includes('firstAnchor'))).toBe(true);
+      expect(slices.some((slice) => slice.source.includes('lastAnchor'))).toBe(true);
+      expect(slices.every((slice) => slice.omittedLines > 0)).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
+
   function createSourceEvidenceDb(ambiguous = false): ScipDatabase {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-source-evidence-'));
     writeFixtureFiles(tempDir, {
@@ -109,6 +163,24 @@ describe('related source evidence', () => {
         '  return values;',
         '}',
       ],
+      'src/commands.ts': [
+        'export const commandSet = {',
+        '  async sessionStreamEvents(input: string) {',
+        '    const events = JSON.parse(input);',
+        '    return events.length;',
+        '  },',
+        '};',
+      ],
+      'src/long-command.ts': [
+        'export const longCommand = {',
+        '  run() {',
+        "    console.log('firstAnchor');",
+        ...Array.from({ length: 20 }, (_, index) => `    const filler${index} = ${index};`),
+        "    console.log('lastAnchor');",
+        '    return true;',
+        '  },',
+        '};',
+      ],
       ...(ambiguous
         ? {
             'src/other-api.ts': ['export function appendThing(value: string) {', '  return value.toUpperCase();', '}'],
@@ -120,15 +192,25 @@ describe('related source evidence', () => {
     const builder = evidenceFixtureDb(join(tempDir, 'index.db'))
       .document(1, 'typescript', 'src/api.ts')
       .document(2, 'typescript', 'src/consumer.ts')
+      .document(4, 'typescript', 'src/commands.ts')
+      .document(5, 'typescript', 'src/long-command.ts')
       .symbol(1, target, 'appendThing', 12, 'function appendThing|function appendThing(value: string): string')
       .symbol(2, caller, 'run', 12, 'function run|function run(): string[]')
+      .symbol(4, 'scip-typescript npm pkg 1.0.0 src/`commands.ts`/commandSet.', 'commandSet', 13)
+      .symbol(5, 'scip-typescript npm pkg 1.0.0 src/`long-command.ts`/longCommand.', 'longCommand', 13)
       .definition(1, 1, 1, 0, 0, 2, 1)
       .definition(2, 2, 2, 2, 0, 8, 1)
+      .definition(4, 4, 4, 0, 0, 0, 32)
+      .definition(5, 5, 5, 0, 0, 0, 32)
       .chunk(1, 1, 0, 2)
       .chunk(2, 2, 2, 8)
+      .chunk(4, 4, 0, 5)
+      .chunk(5, 5, 0, 26)
       .mention(1, 1, 1)
       .mention(2, 2, 1)
-      .mention(2, 1, 0);
+      .mention(2, 1, 0)
+      .mention(4, 4, 1)
+      .mention(5, 5, 1);
     if (ambiguous) {
       builder
         .document(3, 'typescript', 'src/other-api.ts')

@@ -13,26 +13,46 @@ An exploration is a code-reading investigation that connects an entry, its owner
 
 Do not run a fixed sequence. Select the smallest command that can answer the question.
 
-| Question                                            | First command                         | Focused follow-up                                                    |
-| --------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------- |
-| Where does text, a route, an event, or a key occur? | `scip-query search <text>`            | Add `--scope`, `--regexp`, or more context.                          |
-| Where is a symbol defined and used?                 | `scip-query evidence <symbol>`        | Add callers, callees, dependencies, or consumers with `--include`.   |
-| How does one function work?                         | `scip-query code <symbol>`            | Use `call-graph`, `dataflow`, or `slice` for one named uncertainty.  |
-| How does a feature work end to end?                 | `scip-query context <entry-or-owner>` | Use `evidence` on one omitted owner or effect.                       |
-| What is in a file?                                  | `scip-query outline <file>`           | Use `code` for one symbol.                                           |
-| What is in a module?                                | `scip-query system <module>`          | Use `surface`, `deps`, or `rdeps`.                                   |
-| What can a change break?                            | `scip-query affected <symbol>`        | Use `change-surface <file>` for file risk.                           |
-| Can existing code own this behavior?                | `scip-query similar <symbol>`         | Use `evidence` on the best candidate.                                |
-| Does the design obey repository boundaries?         | `scip-query architecture`             | Read the exact forbidden edges.                                      |
-| Where is cleanup pressure?                          | `scip-query health --full`            | Use the named React, Vue, drift, duplication, or complexity command. |
+| Question                                            | First command                         | Focused follow-up                                                     |
+| --------------------------------------------------- | ------------------------------------- | --------------------------------------------------------------------- |
+| Where does text, a route, an event, or a key occur? | `scip-query search <text>`            | Add `--scope` or `--regexp`; use `inspect` once anchors are known.    |
+| How do several related snippets fit together?       | `scip-query inspect --search <text>`  | Repeat `--search`, `--symbol`, or `--at` in the same command.         |
+| Where is a symbol defined and used?                 | `scip-query evidence <symbol>`        | Add callers, callees, dependencies, or consumers with `--include`.    |
+| How does one function work?                         | `scip-query code <symbol>`            | Use `call-graph`, `dataflow`, or `slice` for one named uncertainty.   |
+| How does a feature work end to end?                 | `scip-query inspect` with its anchors | Use `context` if impact, reuse, or transitive flow remains uncertain. |
+| What is in a file?                                  | `scip-query outline <file>`           | Use `code` for one symbol.                                            |
+| What is in a module?                                | `scip-query system <module>`          | Use `surface`, `deps`, or `rdeps`.                                    |
+| What can a change break?                            | `scip-query affected <symbol>`        | Use `change-surface <file>` for file risk.                            |
+| Can existing code own this behavior?                | `scip-query similar <symbol>`         | Use `evidence` on the best candidate.                                 |
+| Does the design obey repository boundaries?         | `scip-query architecture`             | Read the exact forbidden edges.                                       |
+| Where is cleanup pressure?                          | `scip-query health --full`            | Use the named React, Vue, drift, duplication, or complexity command.  |
 
-Prefer `evidence` when several related snippets answer the question together. For example:
+Use `inspect` when the question needs source units from several files. It
+expands a matching line to the smallest readable function, method, object, or
+declaration. It also recovers behavior hidden by a one-line compiler range.
+For example:
+
+```bash
+scip-query inspect \
+  --search sessionStreamEvents \
+  --search work_session_stream_events \
+  --symbol publishEvent \
+  --at src/api.ts:42
+```
+
+Prefer `evidence` when one exact symbol and its relationships answer the
+question. For example:
 
 ```bash
 scip-query evidence appendEvent --include definition,references,callers,callees
 ```
 
 Batch independent observations in one tool turn when the host supports it. Do not repeat an unchanged observation after context compaction.
+
+Search once when the first anchor is unknown. Do not then search every symbol
+name and outline every matching file. Put the known gaps into one `inspect`
+packet. If that packet answers the question, stop exploring and use the
+evidence.
 
 ## Evidence rules
 

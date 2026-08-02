@@ -1,0 +1,97 @@
+{
+  "acceptedAt": "2026-08-02T17:06:46.601Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "c52c5d495e9fe6c4140d2468f282287b92254b8d1f42e25f34480fd7ca282de7",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionLocation.",
+      "target": "./queries:SourceInspectionLocation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionOptions.",
+      "target": "./queries:SourceInspectionOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionResult.",
+      "target": "./queries:SourceInspectionResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionSearch.",
+      "target": "./queries:SourceInspectionSearch"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionSlice.",
+      "target": "./queries:SourceInspectionSlice"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export inspectSource.",
+      "target": "./queries:inspectSource"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionLocation.",
+      "target": "./queries/index:SourceInspectionLocation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionOptions.",
+      "target": "./queries/index:SourceInspectionOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionResult.",
+      "target": "./queries/index:SourceInspectionResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionSearch.",
+      "target": "./queries/index:SourceInspectionSearch"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionSlice.",
+      "target": "./queries/index:SourceInspectionSlice"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export inspectSource.",
+      "target": "./queries/index:inspectSource"
+    },
+    {
+      "classification": "additive",
+      "kind": "entry-added",
+      "message": "Added public declaration path ./queries/source-inspection.",
+      "target": "./queries/source-inspection"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration a.",
+      "target": "source-snippet-<hash>.d.ts:a"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "e51d1334a1d21ebf2bcbfa84afa51073cfac01ba0eac38ce9d0ca1874e95d6c4",
+  "reason": "Adds the inspect query and source-inspection export while keeping every existing query signature valid; one-line source recovery only broadens returned source to the readable declaration unit.",
+  "schemaVersion": 1
+}

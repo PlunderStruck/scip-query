@@ -131,11 +131,74 @@ function sourceSearchSections(result: queries.SourceSearchResult): ReportSection
   return [{ title: 'SOURCE MATCHES', rows }];
 }
 
-function evidenceFailureMessage(result: queries.EvidenceResult): string | undefined {
+function sourceInspectionSections(result: queries.SourceInspectionResult): ReportSection[] {
+  const searchRows = result.searches.map(
+    (search) =>
+      `  ${search.pattern}: ${search.returnedMatches}/${search.matchingLines} matching line(s) selected` +
+      (search.omittedMatches > 0 ? `; ${search.omittedMatches} omitted` : ''),
+  );
+  const locationRows = result.locations.map(
+    (location) => `  ${location.matched ? 'matched' : 'missing'}  ${location.target}`,
+  );
+  const sourceRows = result.slices.map((slice) => {
+    const owner = slice.ownerShort ? `  in ${slice.ownerShort}` : '';
+    const omitted = slice.omittedLines > 0 ? `  (${slice.omittedLines} line(s) omitted)` : '';
+    return [
+      `  ${displayPathRange(slice.relativePath, slice.startLine, slice.endLine)}${owner}${omitted}`,
+      `    selected by ${slice.reasons.join(', ')}`,
+      renderSourceLines(slice.source, slice.startLine, new Set(slice.focusLines), '    '),
+    ].join('\n');
+  });
+  const evidence = result.evidence.flatMap((item, index) => {
+    const failure = evidenceFailureMessage(item, 'inspect');
+    if (failure) return [{ title: `EVIDENCE ${index + 1}`, rows: [`  ${failure}`] }];
+    return evidenceSections(item).map((section) => ({
+      ...section,
+      title: `EVIDENCE ${index + 1} · ${section.title}`,
+    }));
+  });
+  return [
+    { title: 'SEARCH COVERAGE', rows: searchRows, skipIfEmpty: true },
+    { title: 'LOCATION COVERAGE', rows: locationRows, skipIfEmpty: true },
+    { title: 'RELATED SOURCE', rows: sourceRows, skipIfEmpty: true },
+    ...evidence,
+    {
+      title: 'PACKET COVERAGE',
+      rows: [
+        `  Search/location source: ${result.slices.length}/${result.candidateSlices} candidate slice(s) returned; ${result.omittedSlices} omitted.`,
+        `  Symbol evidence: ${sourceInspectionEvidenceUnits(result)} returned unit(s) from ${result.evidence.length} selector(s).`,
+        `  Search/location limits: ${result.maxSlices} slices and ${result.maxTotalLines} source lines.`,
+      ],
+    },
+  ];
+}
+
+function sourceInspectionEvidenceUnits(result: queries.SourceInspectionResult): number {
+  return result.evidence.reduce((total, item) => {
+    if (item.kind !== 'matched') return total + 1;
+    return (
+      total +
+      (item.definition ? 1 : 0) +
+      item.referenceWindows.length +
+      item.callers.length +
+      item.callees.length +
+      item.dependencies.length +
+      item.consumers.length
+    );
+  }, 0);
+}
+
+function evidenceFailureMessage(
+  result: queries.EvidenceResult,
+  command: 'evidence' | 'inspect' = 'evidence',
+): string | undefined {
   if (result.kind === 'missing') return `No definition matched '${result.query}'.`;
   if (result.kind !== 'ambiguous') return undefined;
   const commands = result.candidates
-    .map((candidate) => `  scip-query evidence '${candidate.symbol.replaceAll("'", "'\\''")}'`)
+    .map((candidate) => {
+      const target = `'${candidate.symbol.replaceAll("'", "'\\''")}'`;
+      return command === 'inspect' ? `  scip-query inspect --symbol ${target}` : `  scip-query evidence ${target}`;
+    })
     .join('\n');
   const shown = result.candidates.length;
   const coverage = shown < result.total ? ` Showing the highest-ranked ${shown}; narrow by path or` : '';
@@ -311,14 +374,99 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     query: ({ db, args }) => queries.files(db, stringArg(args, 0)),
     format: (r) => r.relativePath,
   }),
+  budgetedSectionedQueryCommand({
+    id: 'inspect',
+    command: 'inspect',
+    description: 'Batch related searches, symbols, and source locations into one deduplicated source packet',
+    options: [
+      option('--search <text>', 'Find this literal text; repeat for related anchors', collectValues, []),
+      option(
+        '--symbol <symbol>',
+        'Add definition and use evidence for this symbol; repeat for related owners',
+        collectValues,
+        [],
+      ),
+      option(
+        '--at <file:line>',
+        'Add the smallest readable source unit around this location; repeat as needed',
+        collectValues,
+        [],
+      ),
+      option('-s, --scope <path>', 'Limit literal searches to indexed paths matching this text'),
+      option('-C, --context <n>', 'Fallback lines around a match with no syntax unit', parseNonNegativeInteger, 6),
+      option('-n, --limit <n>', 'Maximum matching lines selected per search', parsePositiveInteger, 6),
+      option('--unit-lines <n>', 'Maximum lines for each syntax-aware source unit', parsePositiveInteger, 80),
+      option('--total-lines <n>', 'Maximum source lines across the search/location packet', parsePositiveInteger, 300),
+      option(
+        '--include <part>',
+        'Add definition, references, callers, callees, dependencies, consumers, or all to every symbol; repeat or comma-separate',
+        collectValues,
+        [],
+      ),
+      option('--full', 'Run unbounded semantic analysis on large indexes'),
+    ],
+    budget: 'semantic',
+    agent: agentContract(
+      'Which related source units across several known text, symbol, or location anchors should be read together?',
+      'one bounded, deduplicated source packet plus selected symbol relationships and coverage',
+      [],
+      'bounded',
+      'repository',
+    ),
+    docs: doc('Navigation', [
+      "scip-query inspect --search sessionStreamEvents --search work_session_stream_events --search 'agent:work_session'",
+      'scip-query inspect --symbol appendEvent --symbol publishEvent --include definition,references,callers,callees',
+      'scip-query inspect --at src/api.ts:42 --at src/web.tsx:90',
+    ]),
+    query: ({ db, opts, budget }) =>
+      queries.inspectSource(db, {
+        searches: stringArrayOptionValue(opts, 'search'),
+        symbols: stringArrayOptionValue(opts, 'symbol'),
+        locations: stringArrayOptionValue(opts, 'at'),
+        scope: stringOptionValue(opts, 'scope'),
+        context: definedNumberOption(opts, 'context', 6),
+        searchLimit: definedLimitOption(opts, 'limit', 6),
+        unitLines: definedNumberOption(opts, 'unitLines', 80),
+        totalLines: definedNumberOption(opts, 'totalLines', 300),
+        evidence: {
+          parts: selectedEvidenceParts(stringArrayOptionValue(opts, 'include')),
+          referenceContext: 4,
+          relatedSourceLines: 60,
+          semantic: budget.semantic,
+        },
+      }),
+    coverage: (result, { budget }) => {
+      const omittedMatches = result.searches.reduce((total, search) => total + search.omittedMatches, 0);
+      const omitted = omittedMatches + result.omittedSlices;
+      const returned = result.slices.length + sourceInspectionEvidenceUnits(result);
+      return budget.analysisBudget || omitted > 0
+        ? { complete: false, totalKnown: false, returned }
+        : {
+            complete: true,
+            totalKnown: true,
+            returned,
+            total: returned,
+            omitted: 0,
+          };
+    },
+    agentResult: (result) => ({
+      searches: result.searches,
+      evidence: result.evidence.map((item) => ({ query: item.query, kind: item.kind })),
+      locations: result.locations,
+      returnedSlices: result.slices.length,
+      returnedEvidenceUnits: sourceInspectionEvidenceUnits(result),
+      omittedSlices: result.omittedSlices,
+    }),
+    sections: sourceInspectionSections,
+  }),
   sectionedQueryCommand({
     id: 'search',
     command: 'search <text>',
     description: 'Search literal or regular-expression text in indexed source with nearby code and symbol ownership',
     options: [
       option('-s, --scope <path>', 'Limit the search to indexed paths matching this text'),
-      option('-C, --context <n>', 'Source lines before and after each match', parseNonNegativeInteger, 2),
-      option('-n, --limit <n>', 'Maximum matching lines to return', parsePositiveInteger, 100),
+      option('-C, --context <n>', 'Source lines before and after each match', parseNonNegativeInteger, 6),
+      option('-n, --limit <n>', 'Maximum matching lines to return', parsePositiveInteger, 12),
       option('--full', 'Return every matching line'),
       option('--regexp', 'Treat the search text as a bounded regular expression'),
       option('-i, --ignore-case', 'Ignore case'),
@@ -333,8 +481,8 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     query: ({ db, args, opts }) =>
       queries.searchSource(db, stringArg(args, 0), {
         scope: stringOptionValue(opts, 'scope'),
-        context: definedNumberOption(opts, 'context', 2),
-        limit: definedLimitOption(opts, 'limit', 100),
+        context: definedNumberOption(opts, 'context', 6),
+        limit: definedLimitOption(opts, 'limit', 12),
         regexp: booleanOptionValue(opts, 'regexp'),
         ignoreCase: booleanOptionValue(opts, 'ignoreCase'),
       }),
@@ -468,7 +616,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
         relatedSourceLines: definedNumberOption(opts, 'relatedSourceLines', 80),
         semantic: budget.semantic,
       }),
-    emptyMessage: evidenceFailureMessage,
+    emptyMessage: (result) => evidenceFailureMessage(result),
     before: (result) => {
       if (result.kind !== 'matched') process.exitCode = 1;
     },

@@ -361,7 +361,7 @@ describe('CLI contract', () => {
     const skillMentionedCommands = readSkillMentionedCommands();
 
     expect(
-      ['search', 'evidence', 'context', 'diff-impact', 'architecture', 'health'].filter(
+      ['inspect', 'search', 'evidence', 'context', 'diff-impact', 'architecture', 'health'].filter(
         (command) => !skillMentionedCommands.has(command),
       ),
     ).toEqual([]);
@@ -371,12 +371,14 @@ describe('CLI contract', () => {
     const readSkill = (name: string) => readFileSync(join(process.cwd(), 'skills', name, 'SKILL.md'), 'utf8');
 
     expect(readSkill('scip-query')).toContain('scip-query search');
+    expect(readSkill('scip-query')).toContain('scip-query inspect');
     expect(readSkill('scip-query')).toContain('scip-query evidence');
     expect(readSkill('scip-query')).toContain('scip-query context');
     expect(readSkill('scip-query')).toMatch(/React, Vue/);
     expect(readSkill('scip-query')).not.toMatch(/diff-gate|Stop hook|Gherkin/i);
     expect(readSkill('scip-query')).toContain('must not become a second workflow');
     expect(readSkill('scip-explore')).toContain('Start with the question');
+    expect(readSkill('scip-explore')).toContain('scip-query inspect');
     expect(readSkill('scip-explore')).toContain('scip-query evidence');
     expect(readSkill('concrete-plan')).toContain('Direct evidence');
     expect(readSkill('concrete-plan')).toMatch(

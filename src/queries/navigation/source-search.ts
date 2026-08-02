@@ -31,8 +31,8 @@ export interface SourceSearchOptions {
 /** Search the source of indexed documents and retain line and symbol ownership. */
 export function searchSource(db: ScipDatabase, pattern: string, opts: SourceSearchOptions = {}): SourceSearchResult {
   if (pattern.length === 0) throw new Error('The source search pattern must not be empty.');
-  const context = opts.context ?? 2;
-  const limit = opts.limit ?? 100;
+  const context = opts.context ?? 6;
+  const limit = opts.limit ?? 12;
   if (!Number.isSafeInteger(limit) || limit <= 0) {
     throw new RangeError(`limit must be a positive safe integer; received ${limit}`);
   }

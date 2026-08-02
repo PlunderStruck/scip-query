@@ -107,4 +107,34 @@ Verification:
 - Configuration validation passed.
 - Lint, formatting, API compatibility, type declarations, and skill-link validation passed.
 - The full suite passed: 264 files and 2,078 tests.
-- The fresh matched benchmark remains the final release-calibration step; its results belong in the private trial repository.
+
+## First matched trial and correction
+
+The first protected matched explanation trial found a real product failure,
+not a broken sandbox or contaminated control. The control finished in about
+13.5 minutes. The scip-query treatment reached the 15-minute cap without a
+final answer.
+
+The treatment used many small observations: 59 initial `search` calls, 29
+`outline` calls, 8 `code` calls, and 7 `evidence` calls. Search returned broad
+sets of short windows. A compiler range for an exported object also covered
+only its declaration line, hiding a nested method. The agent then rebuilt the
+missing context through repeated queries and native reads.
+
+This evidence changed the composed-view design:
+
+- `inspect` accepts repeated text, symbol, and file-line anchors in one call.
+- It expands matching lines to readable syntax units and deduplicates units
+  selected by several anchors.
+- It bounds the whole packet by source units and total source lines.
+- `code` and `context` recover a readable syntax unit when the compiler gives
+  a one-line range.
+- Standalone search returns fewer, deeper windows by default.
+- Agent guidance tells the model to stop file-by-file inventory and batch its
+  named gaps with `inspect`.
+- Large-index notices no longer claim that every semantic-budgeted command
+  scans 2,500 candidates; they distinguish a bounded analysis from the
+  candidate cap that only some commands use.
+
+A new matched trial is required after this correction. The detailed trial
+artifacts remain in the private trial repository.

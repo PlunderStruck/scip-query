@@ -2,8 +2,10 @@
 name: scip-query
 description: Use FIRST for codebase work when compiler-resolved identity, references, callers, dependencies, consumers, architecture, change impact, or cleanup relationships can affect the answer. It gives the agent a repository map; it does not own the task, plan, implementation, or acceptance decision.
 commands:
+  - template: 'scip-query inspect --search <text> [--search <text>...]'
+    when: 'Read several related source units across files in one deduplicated packet.'
   - template: 'scip-query search <text>'
-    when: 'Find literal routes, events, keys, messages, or other text in indexed source.'
+    when: 'Find an unknown first anchor from literal routes, events, keys, messages, or other indexed text.'
   - template: 'scip-query evidence <symbol>'
     when: 'Read one definition together with source around its real uses.'
   - template: 'scip-query context <target>'
@@ -23,7 +25,8 @@ commands:
 
 | Command | Purpose | Returns | Coverage | When |
 | --- | --- | --- | --- | --- |
-| `scip-query search <text>` | Search literal or regular-expression text in indexed source with nearby code and symbol ownership | matching source windows, file and line identities, owning symbols, and coverage | `bounded` | Find literal routes, events, keys, messages, or other text in indexed source. |
+| `scip-query inspect --search <text> [--search <text>...]` | Batch related searches, symbols, and source locations into one deduplicated source packet | one bounded, deduplicated source packet plus selected symbol relationships and coverage | `bounded` | Read several related source units across files in one deduplicated packet. |
+| `scip-query search <text>` | Search literal or regular-expression text in indexed source with nearby code and symbol ownership | matching source windows, file and line identities, owning symbols, and coverage | `bounded` | Find an unknown first anchor from literal routes, events, keys, messages, or other indexed text. |
 | `scip-query evidence <symbol>` | Compose related source for one exact symbol in a single evidence view | definition source; deduplicated reference-centered source windows; selected related symbol source and file relationships; explicit ambiguity failure with exact rerun commands | `bounded` | Read one definition together with source around its real uses. |
 | `scip-query context <target>` | Compiler-backed context for a symbol, file, or module | definitions and references; callers and callees; dataflow producers and consumers; backward and forward slices; affected symbols; change-surface risk; dependencies and reverse dependencies; module files and exports; external surface use; complexity; churn; co-change partners; active suppressions; reuse candidates with evidence class and action tier; possible shared owners found from a bounded scan of affected consumers | `bounded` | Map a nonlocal target before planning or editing it. |
 | `scip-query diff-impact` | Map changed symbols and downstream consumers from the current git diff | changed symbols, downstream consumer identities, and impact paths | `bounded` | Map changed symbols and downstream consumers after a coherent edit. |
@@ -52,10 +55,13 @@ relationships that select the relevant source.
 
 For a nonlocal change:
 
-1. Use `scip-query search <text>` for literal wiring. Use
-   `scip-query evidence <symbol>` for a definition and its use sites. Use
-   `scip-query context <target>` when a nonlocal change needs a wider map.
-   For replacement or retirement, target the current owner or live entry.
+1. Use `scip-query search <text>` to find an unknown first anchor. Once you
+   know several related text, symbol, or file-line anchors, put them in one
+   `scip-query inspect` call. It returns deduplicated, syntax-aware source
+   units across files. Use `scip-query evidence <symbol>` for one exact
+   definition and its use sites. Use `scip-query context <target>` when a
+   nonlocal change needs a wider impact and reuse map. For replacement or
+   retirement, target the current owner or live entry.
 2. If the packet reports only test references or no production consumers, it
    is not a map of the live affected surface. Correct the anchor by mapping the
    current owner or one live entry point. This correction is not duplicate
@@ -74,6 +80,11 @@ For a nonlocal change:
 
 The map replaces redundant exploration. It must not become a second workflow.
 Batch independent observations into as few model turns as practical.
+
+Do not build an inventory by running one search, outline, or source read for
+every file or symbol. If exploration has become an inventory, stop and put the
+named gaps into one `inspect` packet. A focused follow-up is justified only by
+an uncertainty that remains after reading that packet.
 
 Compiler-graph results are facts within their stated coverage. Health and
 cleanup detectors are candidates: confirm their source before editing. A

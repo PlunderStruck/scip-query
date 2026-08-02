@@ -256,6 +256,10 @@
       "import": "./dist/queries/slice.js",
       "types": "./dist/queries/slice.d.ts"
     },
+    "./queries/source-inspection": {
+      "import": "./dist/queries/source-inspection.js",
+      "types": "./dist/queries/source-inspection.d.ts"
+    },
     "./queries/source-search": {
       "import": "./dist/queries/source-search.js",
       "types": "./dist/queries/source-search.d.ts"

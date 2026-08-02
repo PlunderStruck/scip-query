@@ -4,9 +4,11 @@
 This repository uses scip-query as its primary code exploration surface.
 
 - Start codebase exploration with scip-query. Use native search or direct source reads only for an exact edit or a named evidence gap that scip-query cannot answer.
-- Use `scip-query search <text>` for indexed literal source matches with owning symbols and bounded source windows.
+- Use `scip-query search <text>` to find an unknown first anchor in indexed source.
+- Use `scip-query inspect` with repeated `--search`, `--symbol`, or `--at` selectors to read several related syntax-aware source units across files in one deduplicated packet.
 - Use `scip-query evidence <symbol>` to compose a definition, references, callers, callees, dependencies, consumers, and related source in one response.
 - Use `scip-query context <target>` to map flow, consumers, reuse options, constraints, and relevant source before a nonlocal change.
+- Do not inventory one file or symbol at a time. Batch known gaps with `inspect`, then add a focused query only when a named uncertainty remains.
 - Use focused graph commands when a compiler-resolved relationship can change the plan. Do not rerun an unchanged read-only query.
 - Use `scip-query diff-impact` to map changed symbols and downstream consumers after a nontrivial edit.
 - Use `scip-query architecture` to inspect explicit structural rules.

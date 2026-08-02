@@ -4,6 +4,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { resolveIndexedFile } from '../internal/file-resolution.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
+import { enclosingSourceUnitSnippet } from './source-snippet.js';
 
 export interface CodeResult {
   symbol: string;
@@ -83,8 +84,14 @@ function readSymbolRange(
   }
 
   const lines = fileContent.split('\n');
-  const startLine = Math.max(0, match.startLine - context);
-  const endLine = Math.min(lines.length - 1, match.endLine + context);
+  const recoveredUnit =
+    match.endLine <= match.startLine
+      ? enclosingSourceUnitSnippet(db, match.relativePath, match.startLine, Number.MAX_SAFE_INTEGER)
+      : null;
+  const definitionStart = recoveredUnit?.unitType ? recoveredUnit.unitStartLine : match.startLine;
+  const definitionEnd = recoveredUnit?.unitType ? recoveredUnit.unitEndLine : match.endLine;
+  const startLine = Math.max(0, definitionStart - context);
+  const endLine = Math.min(lines.length - 1, definitionEnd + context);
   const source = lines.slice(startLine, endLine + 1).join('\n');
 
   return {

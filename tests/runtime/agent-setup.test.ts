@@ -37,6 +37,8 @@ describe('setupAgent', () => {
     const agentsMd = readFileSync(join(projectRoot, 'AGENTS.md'), 'utf8');
     expect(agentsMd).toContain('primary code exploration surface');
     expect(agentsMd).toContain('scip-query search <text>');
+    expect(agentsMd).toContain('scip-query inspect');
+    expect(agentsMd).toContain('Do not inventory one file or symbol at a time');
     expect(agentsMd).toContain('scip-query evidence <symbol>');
     expect(agentsMd).toContain('scip-query context <target>');
     expect(agentsMd).toContain('scip-query diff-impact');
