@@ -163,8 +163,9 @@ exact polling, retrieval, and rendering details.
 
 The new surface changed exploration behavior in the intended direction, but
 did not yet make it minimal. Fifty shell calls contained scip-query commands;
-because many calls batched commands with `&&`, those calls launched 127 actual
-queries: 73 `code`, 21 `outline`, 20 `search`, 9 `evidence`, and 4 `inspect`.
+because many calls batched commands with `&&`, those calls launched 176 actual
+queries: 86 `code`, 31 `search`, 29 `outline`, 15 `inspect`, 13 `evidence`,
+and 2 `files` queries.
 The agent also used native reads for final confirmation instead of relying on
 already returned source. The result is favorable evidence that the primary
 surface can reduce repository inventory and help an agent finish, not evidence
@@ -175,3 +176,39 @@ to close a named evidence gap, so the agent does not replace file-by-file native
 inventory with symbol-by-symbol `code` and `outline` inventory. That should be
 tested on a different fixture before another implementation change is credited
 as a general improvement.
+
+## Evidence-packet omission audit
+
+The current commands still create avoidable follow-up work.
+
+- `search` returns at most 12 matching lines with six context lines on each
+  side. It identifies the owning symbol, but it does not return the whole
+  readable source unit. The agent often follows it with `code`.
+- Each `inspect --search` selector selects at most six matches. Search and
+  location slices then share limits of 18 slices and 300 source lines. A source
+  unit is limited to 80 lines. The command reports omitted matches, slices, and
+  lines, but it does not give a result cursor for the omitted units.
+- `evidence` includes only the definition and reference sites by default.
+  Reference source has two context lines on each side. Callers, callees,
+  dependencies, and consumers require explicit options. Dependencies and
+  consumers contain file names, not source around the dependency edge.
+- `inspect --symbol` uses four context lines for references and 60 source lines
+  for each related symbol. Symbol evidence does not share the 300-line packet
+  budget with search and location slices. It is also not deduplicated across
+  selected symbols. Thus one packet can omit needed search units and still
+  print a very large repeated symbol section.
+- `context` limits its source packet to 24 slices and 600 lines. It limits the
+  target to 200 lines, each consumer to 12 context lines, and each reuse
+  candidate to 80 lines. It reports omissions but has no continuation for the
+  remaining semantic units.
+- `outline` returns structure without implementation source. `code` returns one
+  definition without its relationships. `inspect --symbol` can batch several
+  definitions, but the benchmark agent did not discover this as its normal
+  replacement for repeated `outline` and `code` calls.
+
+The fix is not to remove every limit. The tool must keep one bounded model
+packet. The packet must select complete, decision-relevant source units. It
+must deduplicate all sections under one budget. Every omitted semantic unit
+must have a stable continuation or an exact follow-up selector. The normal
+end-to-end packet must also include source around dependency and consumer edges,
+not only their file names.
