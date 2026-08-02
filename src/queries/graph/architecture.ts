@@ -7,6 +7,7 @@ import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { testBoundaryViolations, type TestBoundaryViolation } from './test-boundary-policy.js';
 import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
+import { architectureBoundaryForFile } from '../internal/architecture-policy.js';
 
 export type ArchitecturePolicyStatus = 'allowed' | 'forbidden' | 'undeclared';
 
@@ -323,18 +324,10 @@ export function architecture(db: ScipDatabase, opts: { scope?: string } = {}): A
     testBoundaryViolations: testBoundaryViolations(
       db,
       db.config.architecture,
-      (file) => boundaryForFile(db.config.architecture, file),
+      (file) => architectureBoundaryForFile(db.config.architecture, file),
       (file) => sourceFiles.has(file),
     ),
   });
-}
-
-/** Resolve a file to its single owning boundary, or null when ambiguous/unmapped. */
-function boundaryForFile(config: ArchitectureConfig | undefined, file: string): string | null {
-  const matches = (config?.boundaries ?? []).filter((boundary) =>
-    boundary.paths.some((pattern) => matchesGlob(pattern, file)),
-  );
-  return matches.length === 1 ? matches[0]!.name : null;
 }
 
 /**

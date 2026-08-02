@@ -74,6 +74,7 @@ import { planRetirementResidue } from './plan-retirement-residue.js';
 import { planReuseAuthority } from './plan-reuse-authority.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { callableCalleeEvidence } from '../internal/callee-evidence.js';
+import { architectureDependencyStatusForFiles } from '../internal/architecture-policy.js';
 
 /** Canonical check list — the CLI validates `--skip` values against this. */
 export const DIFF_GATE_CHECKS: readonly DiffGateCheck[] = [
@@ -203,6 +204,11 @@ interface RepeatedChangedOwnerGroup {
   owner: EchoMatch;
   consumers: Array<{ symbol: string; shortName: string; file: string }>;
 }
+
+// A repeated-owner finding combines independent evidence from at least two
+// changed consumers. Admit moderate direct candidates to that grouping step
+// without weakening the threshold for one-off echo findings.
+const REPEATED_CHANGED_OWNER_CANDIDATE_FLOOR = 0.5;
 
 export interface DiffGateResult {
   base: string;
@@ -712,7 +718,14 @@ function runEchoCheck(
     }
     if (symbolPreexistedAtBase(changedSymbol)) {
       changedOwnerCandidates.push(
-        ...changedOwnerCandidatesForSymbol(db, changedSymbol, changed, minSimilarity, scanLimit, semantic),
+        ...changedOwnerCandidatesForSymbol(
+          db,
+          changedSymbol,
+          changed,
+          Math.min(minSimilarity, REPEATED_CHANGED_OWNER_CANDIDATE_FLOOR),
+          scanLimit,
+          semantic,
+        ),
       );
       continue;
     }
@@ -850,6 +863,11 @@ function changedOwnerCandidatesForSymbol(
             otherSymbol: match.symbolA,
           };
     if (changedFiles.has(owner.otherFile) || owner.otherSymbol === changedSymbol.symbol) continue;
+    if (
+      architectureDependencyStatusForFiles(db.config.architecture, changedSymbol.file, owner.otherFile) === 'forbidden'
+    ) {
+      continue;
+    }
     if (consumerDirectlyDelegatesToOwner(db, changedSymbol.symbol, owner.otherSymbol)) continue;
     candidates.push({
       consumer: changedSymbol,
