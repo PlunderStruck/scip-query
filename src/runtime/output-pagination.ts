@@ -156,7 +156,7 @@ export interface CliOutputPageEnvelopeV1 {
   producer: { name: 'scip-query'; version: string };
   command: string;
   contentType: 'text/plain' | 'application/json';
-  /** Direct model-facing obligation; incomplete pages are not usable as complete evidence. */
+  /** Direct model-facing instruction; incomplete pages are not usable as complete evidence. */
   agentInstruction?: string;
   page: CliOutputPage;
   content: string;

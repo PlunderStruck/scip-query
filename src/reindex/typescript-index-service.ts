@@ -6,7 +6,6 @@ import { resolve } from 'node:path';
 import {
   completeBoundedMailboxClaim,
   initializeBoundedMailbox,
-  inspectBoundedMailbox,
   pollBoundedMailboxRequests,
   readBoundedMailboxClaim,
   rejectBoundedMailboxClaim,
@@ -232,10 +231,6 @@ export function processTypeScriptIndexMailbox(
     }
   }
   return processed;
-}
-
-export function typeScriptIndexMailboxStatus(paths: TypeScriptIndexMailboxPaths): BoundedMailboxStatus {
-  return inspectBoundedMailbox(paths);
 }
 
 const TYPESCRIPT_INDEX_MAILBOX_OWNER = `typescript-index-${process.pid}-${randomUUID()}`;

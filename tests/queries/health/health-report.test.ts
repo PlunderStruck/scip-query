@@ -46,13 +46,9 @@ function emptyAnalyses(overrides: Partial<HealthAnalyses> = {}): HealthAnalyses 
 }
 
 describe('health report scoring', () => {
-  it('keeps missing mission evidence explicit and outside the score', () => {
+  it('starts from a perfect score when no findings exist', () => {
     const report = buildHealthReport(emptyAnalyses());
 
-    expect(report.missionEffectiveness).toMatchObject({
-      availability: 'unavailable',
-      classification: null,
-    });
     expect(report.score).toBe(100);
   });
 

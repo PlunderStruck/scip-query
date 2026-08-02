@@ -5,8 +5,6 @@ import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
 import { classifyCoChangePartner, coChange, isCoChangeNoiseFile } from '../../../src/queries/cleanup/co-change.js';
-import { diffGate, symbolPreexistenceChecker, type DiffGateCheck } from '../../../src/queries/impact/diff-gate.js';
-import type { DiffImpactPlan } from '../../../src/queries/impact/diff-impact.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { evidenceFixtureDb } from '../../fixtures/evidence-fixture.js';
 
@@ -172,99 +170,5 @@ describe('co-change partner labels', () => {
     const bounded = coChange(db, undefined, { minTogether: 4, minConfidence: 0.75, limit: 10, scanLimit: 1 });
     expect(bounded.findings).toHaveLength(1);
     expect(bounded.findings[0]?.together).toBe(Math.max(...unbounded.findings.map((finding) => finding.together)));
-  });
-
-  it('carries partner class and declared-coupling suggestions into diff-gate findings', () => {
-    const { db, repoRoot } = createFixture();
-    writeFileSync(join(repoRoot, 'src/api.ts'), 'export const apiVersion = 99;\n');
-
-    const skippedChecks: DiffGateCheck[] = [
-      'echo',
-      'incomplete-migration',
-      'doc-reference',
-      'unused-params',
-      'new-dead',
-      'baseline',
-    ];
-    const result = diffGate(db, { base: 'HEAD', minTogether: 4, minConfidence: 0.75, skip: skippedChecks });
-
-    expect(result.findings).toHaveLength(1);
-    expect(result.findings[0]).toEqual(
-      expect.objectContaining({
-        check: 'co-change-partner',
-        actionTier: 'signal',
-        sourceAnalyzer: 'co-change',
-        file: 'src/api.ts',
-        relatedFiles: ['docs/api.md'],
-        partnerClass: 'doc-code',
-        partnerClassReasons: expect.arrayContaining(['one side is documentation and the other is executable source']),
-        recency: 'recent',
-        recentTogether: expect.any(Number),
-        commitScope: expect.any(String),
-        subjectContext: expect.objectContaining({
-          subjectLabels: ['docs'],
-          externalIssueLabelStatus: 'unavailable',
-        }),
-        why: expect.arrayContaining([
-          expect.stringContaining('History context:'),
-          expect.stringContaining('Subject context:'),
-        ]),
-        declaredCouplingSuggestion: expect.objectContaining({
-          files: ['docs/api.md', 'src/api.ts'],
-        }),
-        rootCauseKey: 'docs/api.md|src/api.ts',
-        groupKey: 'co-change-partner:docs/api.md|src/api.ts',
-      }),
-    );
-    expect(result.rootCauseGroups).toEqual([
-      expect.objectContaining({
-        groupKey: 'co-change-partner:docs/api.md|src/api.ts',
-        sourceAnalyzer: 'co-change',
-        rootCauseKey: 'docs/api.md|src/api.ts',
-      }),
-    ]);
-  });
-
-  it('does not report a co-change partner that is already changed in raw git diff paths', () => {
-    const { db, repoRoot } = createFixture();
-    writeFileSync(join(repoRoot, 'src/api.ts'), 'export const apiVersion = 99;\n');
-    writeFileSync(join(repoRoot, 'docs/api.md'), 'api docs v99\n');
-
-    const skippedChecks: DiffGateCheck[] = [
-      'echo',
-      'incomplete-migration',
-      'doc-reference',
-      'unused-params',
-      'new-dead',
-      'baseline',
-    ];
-    const result = diffGate(db, { base: 'HEAD', minTogether: 4, minConfidence: 0.75, skip: skippedChecks });
-
-    expect(result.findings).toHaveLength(0);
-  });
-
-  it('treats symbols already present at the base revision as preexisting echo candidates', () => {
-    const { repoRoot } = createFixture();
-    writeFileSync(join(repoRoot, 'src/api.ts'), 'export const apiVersion = 99;\n');
-    const plan: DiffImpactPlan = {
-      changedFileLines: ['src/api.ts'],
-      changedFiles: ['src/api.ts'],
-      changedRanges: [],
-      renamedFiles: [],
-    };
-    const checker = symbolPreexistenceChecker({ projectRoot: repoRoot, base: 'HEAD', diffPlan: plan });
-
-    expect(
-      checker({
-        symbol: 'scip-typescript npm pkg 1.0.0 src/`api.ts`/apiVersion.',
-        file: 'src/api.ts',
-      }),
-    ).toBe(true);
-    expect(
-      checker({
-        symbol: 'scip-typescript npm pkg 1.0.0 src/`api.ts`/brandNewThing().',
-        file: 'src/api.ts',
-      }),
-    ).toBe(false);
   });
 });

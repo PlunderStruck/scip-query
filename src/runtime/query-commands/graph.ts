@@ -168,11 +168,20 @@ const handleArchitecture = reportCommand({
       ? undefined
       : 'No architecture boundaries configured. Add architecture.boundaries to .scipquery.json.',
   render: (result) => {
+    const enforcedFindings = queries.architectureFindingIdentities(result);
     console.log(
       `Mapped ${result.coverage.mappedFiles}/${result.coverage.totalFiles} indexed file(s) across ` +
         `${result.boundaries.length} boundary(ies); ${result.policyCoverage.declaredRows}/` +
         `${result.policyCoverage.totalBoundaries} dependency row(s) declared.`,
     );
+    if (enforcedFindings.length === 0) {
+      console.log('Architecture policy passed.');
+    } else {
+      console.log(
+        `Architecture policy failed with ${enforcedFindings.length} enforced finding(s). ` +
+          'Update the code or narrow the declared policy before treating the structure as clean.',
+      );
+    }
     if (result.policyCoverage.missingRows.length > 0) {
       const policy = result.policyCoverage.requiresCompletePolicy ? ' [violates requireCompletePolicy]' : '';
       console.log(`Missing dependency rows: ${result.policyCoverage.missingRows.join(', ')}${policy}`);
@@ -199,13 +208,14 @@ const handleArchitecture = reportCommand({
         for (const example of edge.examples) console.log(`    ${example.fromFile} -> ${example.toFile}`);
       }
     } else {
-      console.log('\nNo declared boundary violations found.');
+      console.log('\nNo forbidden dependency edges found.');
     }
 
     if (result.staleAllowances.length > 0) {
+      const policy = result.policyCoverage.requiresMinimalPolicy ? ' [violates requireMinimalPolicy]' : '';
       console.log(
         `\nStale dependency allowances (${result.staleAllowances.length}): declared but unused, ` +
-          'so the policy is wider than the code requires.',
+          `so the policy is wider than the code requires.${policy}`,
       );
       for (const row of result.staleAllowances) console.log(`  ${row.from} -> ${row.to}`);
     }
@@ -290,6 +300,9 @@ const handleArchitecture = reportCommand({
         }
       }
     }
+  },
+  after: (result) => {
+    if (queries.architectureFindingIdentities(result).length > 0) process.exitCode = 1;
   },
 });
 

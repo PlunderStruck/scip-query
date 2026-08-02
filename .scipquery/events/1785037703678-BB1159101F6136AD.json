@@ -1,9 +1,0 @@
-{
-  "ts": 1785037703678,
-  "check": "echo",
-  "findingId": "SQ3D440C48DB74",
-  "event": "caught",
-  "commit": "c58c28df75699ab7651a69b936f71872054af638",
-  "comparisonBaseCommit": "c58c28df75699ab7651a69b936f71872054af638",
-  "symbol": "scip-typescript npm scip-query 0.19.5 src/storage/`watch-refresh-requests.ts`/validTimestamp()."
-}

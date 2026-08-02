@@ -8,6 +8,7 @@ import type { ProjectConfig, ScipQueryConfig, WatcherStatus } from '../domain/ty
 import { getIndexFreshness } from './index-freshness.js';
 import type { GitWorktreeContext } from '../platform/git-worktree.js';
 import { publishedGenerationIdentity } from '../semantic/typescript/session-protocol.js';
+import { readSuppressionDir } from '../storage/suppression-store.js';
 import {
   prepareSharedGenerationForProject,
   publishFreshLocalGenerationForProject,
@@ -97,25 +98,18 @@ export function sharedCachePreparationEligible(commandName: string): boolean {
 }
 
 const SHARED_CACHE_PREPARATION_EXCLUDED_COMMANDS = new Set([
-  'bench',
+  'capabilities',
+  'check-deps',
   'config-validate',
   'doctor',
-  'effectiveness',
-  'hook-context',
-  'hook-stop',
-  'hook-stop-prepare',
   'init',
   'install-skills',
   'reindex',
   'setup',
   'setup-agent',
-  'setup-ci',
-  'setup-hooks',
   'status',
   'uninstall',
   'watch',
-  'work-audit',
-  'work-authorization',
 ]);
 
 export function openDb(): ScipDatabase {
@@ -135,6 +129,7 @@ export function openProjectDb(projectRoot: string, opts: { warnOnRootFallback?: 
   if (opts.warnOnRootFallback && dbPathSource === 'root-fallback' && rootFallbackWarning)
     console.error(rootFallbackWarning);
 
+  const repositorySuppressions = readSuppressionDir(projectRoot).suppressions;
   const dbConfig: ScipQueryConfig = {
     dbPath,
     indexPath: process.env['SCIP_QUERY_INDEX_SCIP'] ?? paths.indexPath,
@@ -143,7 +138,7 @@ export function openProjectDb(projectRoot: string, opts: { warnOnRootFallback?: 
     sharedEvidenceDbPath: resolveSharedEvidenceDbPath(projectRoot, config, gitContext),
     entryRoots: config.entryRoots,
     semantic: config.semantic,
-    suppressions: config.suppressions,
+    suppressions: [...(config.suppressions ?? []), ...repositorySuppressions],
     declaredCouplings: config.declaredCouplings,
     locality: config.locality,
     architecture: config.architecture,

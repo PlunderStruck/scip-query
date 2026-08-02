@@ -75,14 +75,14 @@ describe('evidence command freshness', () => {
     vi.mocked(dependencies.reindex).mockRejectedValueOnce(new Error('indexer unavailable'));
 
     await expect(ensureEvidenceCommandFreshness(workspace(), dependencies)).rejects.toThrow(
-      'Could not prepare fresh evidence for scip-query plan-context: indexer unavailable',
+      'Could not prepare fresh evidence for scip-query context: indexer unavailable',
     );
   });
 });
 
 function workspace() {
   return {
-    commandName: 'plan-context',
+    commandName: 'context',
     projectRoot: '/repo',
     config: { languages: ['typescript'], watch: { enabled: true } } as const,
     paths: {

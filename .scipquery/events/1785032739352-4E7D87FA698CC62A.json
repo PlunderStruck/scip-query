@@ -1,8 +1,0 @@
-{
-  "ts": 1785032739352,
-  "check": "architecture",
-  "findingId": "SQ42D76A176158",
-  "event": "resolved",
-  "commit": "b9cb9aa378b5d664731f3aa839e5d3180a589f8c",
-  "comparisonBaseCommit": "b9cb9aa378b5d664731f3aa839e5d3180a589f8c"
-}

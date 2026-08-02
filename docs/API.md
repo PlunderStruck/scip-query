@@ -1,6 +1,6 @@
 # Programmatic API
 
-Public query commands are also available as TypeScript functions. The `queries` namespace exports cover the analysis commands, including the `top*` variants of `fan-in`, `fan-out`, and `coupling`, plus `similarAll` for the cross-codebase mode of `similar`. Operational CLI commands such as `setup`, `doctor`, and `setup-hooks` remain runtime commands rather than query-library exports.
+Public query commands are also available as TypeScript functions. The `queries` namespace exports cover the analysis commands, including the `top*` variants of `fan-in`, `fan-out`, and `coupling`, plus `similarAll` for the cross-codebase mode of `similar`. Operational CLI commands such as `setup`, `doctor`, and `watch` remain runtime commands rather than query-library exports.
 
 ```typescript
 import { ScipDatabase, createGitignoreFilter } from 'scip-query';

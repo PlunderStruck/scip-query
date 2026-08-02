@@ -48,8 +48,8 @@ describe('cli context', () => {
     expect(sharedCachePreparationEligible('watch')).toBe(false);
     expect(sharedCachePreparationEligible('reindex')).toBe(false);
     expect(sharedCachePreparationEligible('doctor')).toBe(false);
-    expect(sharedCachePreparationEligible('effectiveness')).toBe(false);
-    expect(sharedCachePreparationEligible('hook-stop-prepare')).toBe(false);
+    expect(sharedCachePreparationEligible('capabilities')).toBe(false);
+    expect(sharedCachePreparationEligible('check-deps')).toBe(false);
     expect(sharedCachePreparationEligible('install-skills')).toBe(false);
     expect(sharedCachePreparationEligible('init')).toBe(false);
     expect(sharedCachePreparationEligible('setup')).toBe(false);

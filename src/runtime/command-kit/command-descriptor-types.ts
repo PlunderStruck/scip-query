@@ -60,7 +60,7 @@ export type CommandInputKind = 'symbol' | 'file' | 'module' | 'pattern' | 'path'
 /**
  * What a command reads when it is given no target: the working-tree diff, or
  * the whole index. Kept separate from `CommandInputKind` because these are not
- * positional — `diff-gate` names no argument yet plainly operates on something,
+ * positional — `diff-impact` names no argument yet plainly operates on something,
  * and collapsing the two makes the arity of a signature unstateable.
  */
 export type CommandScope = 'diff' | 'repository';
@@ -124,7 +124,7 @@ export type CommandResultUnitPolicy = { kind: 'rows' } | { kind: 'report' } | { 
 
 /**
  * One positional slot. An array means the slot accepts any of those kinds —
- * `plan-context <target>` takes a symbol, a file, or a module.
+ * `context <target>` takes a symbol, a file, or a module.
  *
  * Arity is deliberately not encoded here: `command` already distinguishes
  * `<required>` from `[optional]`, and duplicating it would let the two drift.

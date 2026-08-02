@@ -1,4 +1,4 @@
-import type { ChangedLineRange } from '../internal/diff-gate-types.js';
+import type { ChangedLineRange } from '../internal/change-analysis-types.js';
 export type { ChangedLineRange };
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';

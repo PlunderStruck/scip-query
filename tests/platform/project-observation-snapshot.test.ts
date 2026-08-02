@@ -66,7 +66,6 @@ describe('fixed project observation snapshots', () => {
         }),
       );
       expect(first.paths).toContain('.scipquery/suppressions/review.json');
-      expect(first.paths).not.toContain('.scipquery/events/outcome.json');
       expect(first.paths).not.toContain('ignored.txt');
       expect(first.paths).toContain('ignored-tsconfig.json');
       expect(first.indexInputs.files.some((file) => file.path === 'ignored-tsconfig.json')).toBe(true);
@@ -205,7 +204,6 @@ function repositoryFixture(label: string): string {
   const root = mkdtempSync(join(tmpdir(), `scip-query-fixed-${label}-`));
   tempDirs.push(root);
   execFileSync('git', ['init', '--quiet', root]);
-  mkdirSync(join(root, '.scipquery', 'events'), { recursive: true });
   mkdirSync(join(root, '.scipquery', 'suppressions'), { recursive: true });
   mkdirSync(join(root, 'apps', 'web'), { recursive: true });
   mkdirSync(join(root, 'docs', 'benchmarks'), { recursive: true });
@@ -221,7 +219,6 @@ function repositoryFixture(label: string): string {
   writeFileSync(join(root, 'ignored.txt'), 'machine state\n');
   writeFileSync(join(root, 'ignored-tsconfig.json'), '{"compilerOptions":{}}\n');
   writeFileSync(join(root, 'apps', 'web', 'tsconfig.json'), '{"compilerOptions":{},"files":[]}\n');
-  writeFileSync(join(root, '.scipquery', 'events', 'outcome.json'), '{}\n');
   writeFileSync(join(root, '.scipquery', 'suppressions', 'review.json'), '{}\n');
   writeFileSync(join(root, 'docs', 'benchmarks', 'historical.json'), '{"large":"snapshot"}\n');
   execFileSync('git', ['-C', root, 'add', '.']);

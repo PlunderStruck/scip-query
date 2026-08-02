@@ -78,7 +78,7 @@ export function evaluateCoverageContracts(
   return contracts.map((contract) => evaluateCoverageContract(db, contract));
 }
 
-/** True when this diff touched either side of the contract — the diff-gate run condition. */
+/** True when this diff touched either side of the contract. */
 export function coverageContractTouchedByDiff(
   contract: CoverageContractConfig,
   changedFiles: ReadonlySet<string>,
@@ -95,16 +95,6 @@ export function coverageContractTouchedByDiff(
     case 'builtin-skills':
       return [...changedFiles].some((file) => file.startsWith('skills/'));
   }
-}
-
-export function coverageContractFindingMessage(result: CoverageContractResult): string {
-  if (result.status === 'unavailable') {
-    return `[coverage-contract] ${result.name}: DISCLOSED — could not evaluate (${result.unavailableReason})`;
-  }
-  const parts: string[] = [];
-  if (result.missing.length > 0) parts.push(`missing ${result.missing.join(', ')}`);
-  if (result.extra.length > 0) parts.push(`extra ${result.extra.join(', ')}`);
-  return `[coverage-contract] ${result.name}: ${parts.join('; ')}`;
 }
 
 // ── Key extractors (the declared side) ─────────────────────

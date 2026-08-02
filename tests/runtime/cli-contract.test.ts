@@ -5,8 +5,6 @@ import { program, renderHeuristicNotice } from '../../src/runtime/cli.js';
 import { commandDescriptors } from '../../src/runtime/commands/command-descriptors.js';
 import { commandResultUnitPolicy } from '../../src/runtime/commands/command-registry.js';
 import { commandDocEntries, renderCommandReferenceMarkdown } from '../../src/runtime/command-kit/command-docs.js';
-import { renderAgentContractCatalogMarkdown } from '../../scripts/render-command-reference.js';
-import { BUILTIN_SKILLS } from '../../src/runtime/setup.js';
 import {
   commandOptions,
   definedLimitOption,
@@ -17,8 +15,6 @@ import {
 import type { InvocationCoverage } from '../../src/runtime/command-kit/command-descriptor-types.js';
 import { PUBLIC_QUERY_ENTRIES, PUBLIC_QUERY_SOURCE_PATHS } from '../../src/queries/public-query-entries.js';
 import { watchServiceAutoStartEligible } from '../../src/runtime/watch-service.js';
-import { runPlanContractOperation } from '../../src/runtime/commands/plan-contract-handlers.js';
-import { extractPlanContractInput } from '../../src/change-control/plan-contract.js';
 import {
   COMMAND_OPERATION_ROLES,
   commandOperationRoles,
@@ -30,23 +26,17 @@ const PRIVATE_QUERY_MODULES = [
   'callable-contracts',
   'coverage-contracts',
   'dead-exclusions',
-  'diff-gate-baseline-policy',
-  'diff-gate-doc-policy',
+  'documentation-policy',
   'doc-citation-context',
   'doc-terms',
-  'effectiveness',
-  'finding-outcome-ledger',
   'health-baseline',
   'health-cache-control',
   'health-report',
   'health-types',
   'newly-unreferenced-residue',
-  'plan-retirement-residue',
-  'plan-reuse-authority',
   'public-query-entries',
   'query-utils',
   'architecture-baseline',
-  'architecture-finding-evidence',
   'test-boundary-policy',
 ] as const;
 
@@ -55,23 +45,17 @@ const PRIVATE_QUERY_SOURCE_PATHS = {
   'callable-contracts': 'src/queries/cleanup/callable-contracts.ts',
   'coverage-contracts': 'src/queries/cleanup/coverage-contracts.ts',
   'dead-exclusions': 'src/queries/cleanup/dead-exclusions.ts',
-  'diff-gate-baseline-policy': 'src/queries/impact/diff-gate-baseline-policy.ts',
-  'diff-gate-doc-policy': 'src/queries/cleanup/diff-gate-doc-policy.ts',
+  'documentation-policy': 'src/queries/cleanup/documentation-policy.ts',
   'doc-citation-context': 'src/queries/cleanup/doc-citation-context.ts',
   'doc-terms': 'src/queries/cleanup/doc-terms.ts',
-  effectiveness: 'src/queries/health/effectiveness.ts',
-  'finding-outcome-ledger': 'src/queries/health/finding-outcome-ledger.ts',
   'health-baseline': 'src/queries/health/health-baseline.ts',
   'health-cache-control': 'src/queries/health/health-cache-control.ts',
   'health-report': 'src/queries/health/health-report.ts',
   'health-types': 'src/queries/health/health-types.ts',
   'newly-unreferenced-residue': 'src/queries/impact/newly-unreferenced-residue.ts',
-  'plan-retirement-residue': 'src/queries/impact/plan-retirement-residue.ts',
-  'plan-reuse-authority': 'src/queries/impact/plan-reuse-authority.ts',
   'public-query-entries': 'src/queries/public-query-entries.ts',
   'query-utils': 'src/queries/query-utils.ts',
   'architecture-baseline': 'src/queries/graph/architecture-baseline.ts',
-  'architecture-finding-evidence': 'src/queries/graph/architecture-finding-evidence.ts',
   'test-boundary-policy': 'src/queries/graph/test-boundary-policy.ts',
 } as const satisfies Record<(typeof PRIVATE_QUERY_MODULES)[number], string>;
 
@@ -91,20 +75,6 @@ function optionFlags(name: string): string[] {
 }
 
 describe('CLI contract', () => {
-  it('shows a valid one-action plan starter without requiring schema reverse engineering', () => {
-    expect(commandDescriptors.find((descriptor) => descriptor.id === 'plan')?.helpAfter).toContain(
-      'scip-query plan example',
-    );
-    const result = runPlanContractOperation(process.cwd(), 'example', undefined);
-    expect(result).toMatchObject({
-      operation: 'example',
-      markdown: expect.stringContaining('"goal"'),
-    });
-    expect((result as { markdown: string }).markdown).toContain('## Optional shared-owner item');
-    expect((result as { markdown: string }).markdown).toContain('"consumers": ["entry", "second-entry"]');
-    expect(extractPlanContractInput((result as { markdown: string }).markdown)).toMatchObject({ ok: true });
-  });
-
   it('registers every descriptor-backed command in descriptor order', () => {
     const names = program.commands.map((entry) => entry.name());
 
@@ -114,21 +84,13 @@ describe('CLI contract', () => {
 
   it('keeps passive registered commands out of demand-started watcher policy', () => {
     const commandIds = new Set(commandDescriptors.map((descriptor) => descriptor.id));
-    const passiveCommands = [
-      'doctor',
-      'effectiveness',
-      'hook-context',
-      'hook-stop',
-      'hook-stop-prepare',
-      'install-skills',
-      'status',
-    ];
+    const passiveCommands = ['doctor', 'install-skills', 'status'];
 
     expect(passiveCommands.every((commandName) => commandIds.has(commandName))).toBe(true);
     for (const commandName of passiveCommands) {
       expect(watchServiceAutoStartEligible(commandName, {}), commandName).toBe(false);
     }
-    for (const commandName of ['refs', 'health', 'plan-context']) {
+    for (const commandName of ['refs', 'health', 'context']) {
       expect(commandIds.has(commandName), commandName).toBe(true);
       expect(watchServiceAutoStartEligible(commandName, {}), commandName).toBe(true);
     }
@@ -145,8 +107,8 @@ describe('CLI contract', () => {
     expect(optionFlags('affected')).toContain('--full');
   });
 
-  it('keeps detailed plan-context output opt-in', () => {
-    expect(optionFlags('plan-context')).toContain('--detail');
+  it('keeps detailed context output opt-in', () => {
+    expect(optionFlags('context')).toContain('--detail');
   });
 
   it('registers universal resumable output options at the program boundary', () => {
@@ -171,7 +133,7 @@ describe('CLI contract', () => {
   });
 
   it('marks private JSON workers so transport pagination cannot wrap their envelopes', () => {
-    for (const name of ['__diff-gate-run', '__diff-impact-batch', '__health-phase']) {
+    for (const name of ['__diff-impact-batch', '__health-phase']) {
       expect(optionFlags(name), name).toContain('--json');
     }
   });
@@ -261,30 +223,17 @@ describe('CLI contract', () => {
 
   it('selects operation roles from parsed invocation values before execution', () => {
     const health = commandDescriptors.find((descriptor) => descriptor.id === 'health')!.agent!.operation;
-    const bench = commandDescriptors.find((descriptor) => descriptor.id === 'bench')!.agent!.operation;
     const setup = commandDescriptors.find((descriptor) => descriptor.id === 'setup')!.agent!.operation;
     const suppress = commandDescriptors.find((descriptor) => descriptor.id === 'suppress')!.agent!.operation;
-    const setupHooks = commandDescriptors.find((descriptor) => descriptor.id === 'setup-hooks')!.agent!.operation;
     const tla = commandDescriptors.find((descriptor) => descriptor.id === 'tla')!.agent!.operation;
-    const missionTrial = commandDescriptors.find((descriptor) => descriptor.id === 'mission-trial')!.agent!.operation;
 
     expect(resolveCommandOperationRole(health, { args: [], options: {} })).toBe('repository-observation');
     expect(resolveCommandOperationRole(health, { args: [], options: { writeBaseline: true } })).toBe('composite');
-    expect(resolveCommandOperationRole(bench, { args: [], options: { profileOut: 'bench.cpuprofile' } })).toBe(
-      'composite',
-    );
     expect(resolveCommandOperationRole(setup, { args: [], options: {} })).toBe('composite');
     expect(resolveCommandOperationRole(suppress, { args: ['finding-id'], options: {} })).toBe('mutation');
-    expect(resolveCommandOperationRole(setupHooks, { args: [], options: { dryRun: true } })).toBe('repository-preview');
     expect(resolveCommandOperationRole(tla, { args: ['scaffold', 'src/a.ts'], options: {} })).toBe('mutation');
     expect(resolveCommandOperationRole(tla, { args: ['verify', 'specs/A.tla'], options: {} })).toBe(
       'repository-observation',
-    );
-    expect(resolveCommandOperationRole(missionTrial, { args: ['validate', 'program.json'], options: {} })).toBe(
-      'environment-observation',
-    );
-    expect(resolveCommandOperationRole(missionTrial, { args: ['record', 'program.json'], options: {} })).toBe(
-      'mutation',
     );
   });
 
@@ -328,8 +277,6 @@ describe('CLI contract', () => {
       '--full',
       '--baseline',
       '--write-baseline',
-      '--mission-trial-program <path>',
-      '--mission-trial-root <path>',
       '--json',
       '--result-only',
       '--compact',
@@ -337,22 +284,11 @@ describe('CLI contract', () => {
     expect(docs.find((entry) => entry.id === 'setup')?.options).toEqual([
       '--guided',
       '--yes',
-      '--git-hook',
-      '--no-hooks',
       '--no-skills',
       '--no-parsers',
       '--install-missing',
       '--no-health',
       '--dossier-dir <path>',
-      '--json',
-      '--result-only',
-      '--compact',
-    ]);
-    expect(docs.find((entry) => entry.id === 'setup-hooks')?.options).toEqual([
-      '--shared',
-      '--remove',
-      '--force',
-      '--dry-run',
       '--json',
       '--result-only',
       '--compact',
@@ -387,21 +323,17 @@ describe('CLI contract', () => {
       '--result-only',
       '--compact',
     ]);
-    expect(docs.find((entry) => entry.id === 'diff-gate')?.options).toContain('--json');
-    expect(docs.find((entry) => entry.id === 'plan-context')).toMatchObject({
-      command: 'plan-context <target>',
-      category: 'Planning',
+    expect(docs.find((entry) => entry.id === 'context')).toMatchObject({
+      command: 'context <target>',
+      category: 'Exploration',
     });
     const mixed = docs.filter((entry) => entry.claims.origin === 'mixed');
     expect(mixed.map((entry) => entry.id).sort()).toEqual([
       'architecture',
       'co-change',
-      'diff-gate',
+      'context',
       'diff-impact',
-      'effectiveness',
       'health',
-      'plan-context',
-      'work-audit',
     ]);
     expect(mixed.every((entry) => (entry.claims.families?.length ?? 0) > 0)).toBe(true);
   });
@@ -423,71 +355,35 @@ describe('CLI contract', () => {
     }
   });
 
-  it('keeps public commands covered by bundled skills', () => {
-    const publicCommandIds = commandDescriptors
-      .filter((descriptor) => !descriptor.hidden)
-      .map((descriptor) => descriptor.id);
+  it('keeps the primary mapping and cleanup surface covered by bundled skills', () => {
     const skillMentionedCommands = readSkillMentionedCommands();
 
-    expect(publicCommandIds.filter((command) => !skillMentionedCommands.has(command))).toEqual([]);
+    expect(
+      ['context', 'diff-impact', 'architecture', 'health'].filter((command) => !skillMentionedCommands.has(command)),
+    ).toEqual([]);
   });
 
-  it('keeps the descriptor-owned skill command contract catalog generated', () => {
-    const catalog = readFileSync(join(process.cwd(), 'skills/_shared/references/agent-contract-catalog.md'), 'utf8');
-
-    expect(extractGeneratedAgentContractCatalog(catalog)).toBe(renderAgentContractCatalogMarkdown(commandDescriptors));
-  });
-
-  it('keeps autonomous workflow guidance aligned across the routed skills', () => {
+  it('keeps the reduced workflow guidance in one primary skill', () => {
     const readSkill = (name: string) => readFileSync(join(process.cwd(), 'skills', name, 'SKILL.md'), 'utf8');
 
-    expect(readSkill('scip-query')).toContain('Finish the response to activate Stop');
-    const planSkill = readSkill('scip-plan');
-    expect(planSkill).toContain('Keep the goal shorter than the file plan');
-    expect(planSkill).toContain('Bounded relational work');
-    expect(planSkill).toContain('Only sustained work adds one `scip-query-plan` fence');
-    expect(planSkill).toContain('Do not poll `completion status`');
-    expect(planSkill).toContain('target the current owner or artifact being removed');
-    expect(planSkill).toContain('Treat the source packet as the read');
-    expect(planSkill).toContain('follow-up SCIP commands in parallel with it');
-    expect(planSkill).toContain('path is not evidence for separate ownership');
-    expect(readSkill('scip-audit')).toContain('Do not select when the user asks to edit');
-    expect(readSkill('scip-improve')).toContain('Continue through those slices autonomously');
-    const verifySkill = readSkill('scip-verify');
-    expect(verifySkill).toContain('A clean `diff-gate` is evidence, not permission');
-    expect(verifySkill).toContain('Give the final gate one owner');
-    expect(verifySkill).toContain('Add a specialist check only for a named risk the default gate does not own');
-    expect(verifySkill).toContain('Finishing activates the lifecycle Stop hook');
-    expect(verifySkill).toContain('tool or inspect CLI and controller help');
-    expect(verifySkill).not.toContain('Construct at least two refutation attempts');
-    expect(verifySkill).not.toContain('Run every row that matches');
-    expect(readSkill('scip-setup')).toContain('without hand-authored glue');
-  });
-
-  it('routes every consolidated workflow skill exactly once', () => {
-    const router = readFileSync(join(process.cwd(), 'skills/scip-query/SKILL.md'), 'utf8');
-    const routes = router.match(/## Routes\n([\s\S]*?)\n## Disambiguation/)?.[1] ?? '';
-    const routed = [...routes.matchAll(/^\|[^|\n]+\|\s*`(scip-[a-z0-9-]+)`\s*\|/gm)].map((match) => match[1]!).sort();
-    const expected = BUILTIN_SKILLS.filter((skill) => skill !== '_shared' && skill !== 'scip-query').sort();
-
-    expect(routed).toEqual(expected);
-    const preview = extractGeneratedRouterCommandPreview(router);
-    for (const skill of expected) {
-      expect(preview, `router preview missing ${skill}`).toContain(`| \`${skill}\` |`);
-    }
+    expect(readSkill('scip-query')).toContain('scip-query context');
+    expect(readSkill('scip-query')).toMatch(/React, Vue/);
+    expect(readSkill('scip-query')).not.toMatch(/diff-gate|Stop hook|Gherkin/i);
+    expect(readSkill('scip-query')).toContain('must not become a second workflow');
+    expect(readSkill('scip-query')).not.toMatch(/## Routes|scip-audit|scip-improve|scip-setup/);
   });
 
   it('keeps command reference syntax generated from descriptors', () => {
     const commandReference = readFileSync(join(process.cwd(), 'docs/COMMAND_REFERENCE.md'), 'utf8');
 
     expect(extractGeneratedCommandReference(commandReference)).toBe(renderCommandReferenceMarkdown(commandDescriptors));
-    expect(commandReference).toContain('### Planning');
-    expect(commandReference).toContain('`plan-context <target>`');
+    expect(commandReference).toContain('### Exploration');
+    expect(commandReference).toContain('`context <target>`');
   });
 
-  it('registers plan-context as a semantic custom query command', () => {
-    expect(commandDescriptors.find((descriptor) => descriptor.id === 'plan-context')).toMatchObject({
-      command: 'plan-context <target>',
+  it('registers context as a semantic custom query command', () => {
+    expect(commandDescriptors.find((descriptor) => descriptor.id === 'context')).toMatchObject({
+      command: 'context <target>',
       budget: 'semantic',
       renderShape: 'custom',
     });
@@ -580,10 +476,10 @@ describe('CLI contract', () => {
     });
 
     printJsonEnvelope('recent-duplicates', [], { json: true }, { rows: [] });
-    printJsonEnvelope('diff-gate', [], { json: true }, { rows: [] });
+    printJsonEnvelope('diff-impact', [], { json: true }, { rows: [] });
 
     expect(JSON.parse(writes[0]!)).toMatchObject({ evidence: 'heuristic' });
-    expect(JSON.parse(writes[1]!)).toMatchObject({ evidence: 'mixed' });
+    expect(JSON.parse(writes[1]!)).toMatchObject({ evidence: 'graph-fact' });
   });
 
   it('omits analysisBudget when uncapped, and stamps it at the envelope top level when supplied', () => {
@@ -918,21 +814,5 @@ function extractGeneratedCommandReference(content: string): string {
     /<!-- BEGIN GENERATED COMMAND REFERENCE -->[\s\S]*?<!-- END GENERATED COMMAND REFERENCE -->/,
   );
   expect(match, 'command reference is missing generated command reference block').not.toBeNull();
-  return match![0];
-}
-
-function extractGeneratedAgentContractCatalog(content: string): string {
-  const match = content.match(
-    /<!-- BEGIN GENERATED AGENT CONTRACT CATALOG -->[\s\S]*?<!-- END GENERATED AGENT CONTRACT CATALOG -->/,
-  );
-  expect(match, 'agent contract catalog is missing its generated block').not.toBeNull();
-  return match![0];
-}
-
-function extractGeneratedRouterCommandPreview(content: string): string {
-  const match = content.match(
-    /<!-- BEGIN GENERATED ROUTER COMMAND PREVIEW -->[\s\S]*?<!-- END GENERATED ROUTER COMMAND PREVIEW -->/,
-  );
-  expect(match, 'router skill is missing its generated command preview').not.toBeNull();
   return match![0];
 }

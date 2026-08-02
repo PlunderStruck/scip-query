@@ -178,20 +178,21 @@ For each mature boundary, state which other boundaries it is allowed to depend o
 
 Run the report again. A forbidden edge is now a testable disagreement between implementation and policy, not the tool's opinion about directory distance.
 
-### 6. Baseline and ratchet
+### 6. Review and ratchet
 
-Record reviewed existing violations with `scip-query health
---write-baseline`. Architecture identities name a forbidden boundary pair or
-an explicitly forbidden boundary cycle, so moving a representative file does
-not churn the ratchet. The default `scip-query diff-gate` architecture check
-then rejects new identities while preserving visibility into recorded debt.
-This turns architecture from a one-time diagram into a maintained contract.
+Run `scip-query architecture` after changing a declared boundary or one of its
+consumers. The report applies configured dependency rules exactly and cites the
+files that create each forbidden edge. Repositories that want a broader
+maintenance ratchet can record reviewed health findings with `scip-query health
+--write-baseline` and compare later scans with `scip-query health --baseline`.
+Neither command decides whether an arbitrary coding task is complete.
 
 ### 7. Migrate narrow seams
 
 Start with a narrow edge whose few file dependencies cross a mature rule. Determine whether the right repair is to move code, invert a dependency, extract a genuinely shared contract, combine falsely separated boundaries, or revise the policy.
 
-Verify each slice with tests, typechecking, incomplete-migration checks, architecture analysis, and diff-gate before taking the next one.
+Verify each slice with tests, typechecking, incomplete-migration checks,
+architecture analysis, and `diff-impact` before taking the next one.
 
 ## Example: Vega 2.0
 
@@ -204,7 +205,7 @@ For a codebase the size of Vega 2.0, the first pass should not invent a universa
 5. configure the mature boundaries descriptively;
 6. inspect reciprocal pairs and large connected components with their file-edge breadth;
 7. close dependency rows only where the intended direction is supported;
-8. baseline existing violations and prevent new ones;
+8. record reviewed violations and check each relevant change against the declared rules;
 9. migrate one narrow, high-confidence seam at a time.
 
 The initial result may be a mixture of layers and subsystems. That is preferable to forcing a neat diagram that contradicts the software. The model becomes stronger as verified migrations and maintenance history provide new facts.
@@ -217,7 +218,7 @@ The initial result may be a mixture of layers and subsystems. That is preferable
 - Extract the reusable strongly-connected-component algorithm already embedded in `deep-chains`.
 - Add a pure architecture graph analyzer and `scip-query architecture`.
 - Extend the directory-architecture skill with the discover, declare, measure, and ratchet workflow.
-- Keep architecture outside health scoring and diff-gate blocking.
+- Keep architecture findings distinct from ordinary code-smell scoring.
 
 ### Slice 2: replace implicit drift policy — implemented
 
@@ -230,7 +231,7 @@ The initial result may be a mixture of layers and subsystems. That is preferable
 
 - Give architecture findings stable identities.
 - Add report-only health visibility.
-- Add a narrow default diff-gate ratchet for newly introduced declared violations, backed by the shared health baseline.
+- Support an optional repository health baseline for teams that want a ratchet.
 - Calibrate on scip-query, Vega 2.0, Stable Management, and structurally different external repositories before any score deduction.
 
 ### Slice 4: discovery assistance

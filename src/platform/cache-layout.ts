@@ -230,22 +230,6 @@ export function assertOwnedCacheDir(projectRoot: string, cacheDir: string): Cach
   return readAndValidateOwnership(physicalCacheDir, canonicalProjectRoot, physicalCacheDir);
 }
 
-export function assertOwnedCacheBackup(
-  projectRoot: string,
-  backupDir: string,
-  expectedOriginalCacheDir: string,
-  expectedOwnerSha256?: string,
-): CacheOwnershipProof {
-  const canonicalProjectRoot = realpathSync(projectRoot);
-  const physicalBackupDir = realpathSync(backupDir);
-  const canonicalOriginal = canonicalizeAbsentPath(expectedOriginalCacheDir);
-  const proof = readAndValidateOwnership(physicalBackupDir, canonicalProjectRoot, canonicalOriginal);
-  if (expectedOwnerSha256 && proof.ownerSha256 !== expectedOwnerSha256) {
-    throw cacheOwnershipError(backupDir, 'ownership record changed after the cache was moved');
-  }
-  return proof;
-}
-
 export function hardenOwnedCacheTreeIfOwned(projectRoot: string, cacheDir: string): boolean {
   if (!existsSync(join(cacheDir, CACHE_OWNERSHIP_FILE))) return false;
   assertOwnedCacheDir(projectRoot, cacheDir);
@@ -468,11 +452,6 @@ function canonicalizeAbsentPath(path: string): string {
   if (existsSync(path)) return realpathSync(path);
   const parent = realpathSync(dirname(path));
   return join(parent, basename(path));
-}
-
-export function cacheIdentityHash(cacheDir: string): string {
-  const canonical = canonicalCacheIdentity(cacheDir);
-  return createHash('sha256').update(canonical).digest('hex');
 }
 
 export function canonicalCacheIdentity(cacheDir: string): string {

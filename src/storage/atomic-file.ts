@@ -58,10 +58,6 @@ export interface ReplaceFileAtomicOptions {
   runtime?: AtomicFileRuntime;
 }
 
-export function isExclusivePublicationConflict(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'EEXIST';
-}
-
 /**
  * Replaces one file through an exclusive random-token staging path. Visibility
  * mode guarantees old-or-new complete bytes to concurrent readers. Durable

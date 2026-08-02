@@ -1,9 +1,8 @@
 # Configuration and setup write safety
 
 scip-query updates files that people and other agents may edit at the same
-time: `.scipquery.json`, provider hook JSON, `.git/info/exclude`,
-`AGENTS.md`, `CLAUDE.md`, structured suppression records, and an owned
-pre-commit hook. A conflict-aware writer is a file updater that transforms one
+time: `.scipquery.json`, `.git/info/exclude`, `AGENTS.md`, `CLAUDE.md`, and
+structured suppression records. A conflict-aware writer is a file updater that transforms one
 identified revision and refuses to claim success if an independent revision
 wins before commit. Its defining behavior is preservation: it either applies
 its narrow change to the newest valid input or leaves the newest input
@@ -42,11 +41,6 @@ the caller's observed value, the latest value, and the requested value:
 - the requested value already present is idempotent;
 - a different latest value for the same field is an explicit stale-field
   conflict.
-
-Hook setup rereads the latest valid provider object on every bounded retry,
-removes only scip-query-owned hook entries, and merges the current owned hook
-groups. Unknown top-level fields and non-scip hook entries survive installation
-and removal.
 
 Malformed latest JSON is never repaired by replacement because doing so could
 erase information the writer cannot classify. The command reports the parse
@@ -103,9 +97,8 @@ New records use suppression schema version 1 and include the
 `scip-query` writer version. Unversioned legacy records and v1 records written
 before the discriminator was added remain readable. They remain byte-for-byte
 unchanged on an idempotent replay and are upgraded only by an explicit
-compare-and-replace policy change. Incompatible files are counted and reported
-by `diff-gate`; they never authorize a suppression. See
-[`COMMITTED_RECORD_COMPATIBILITY.md`](COMMITTED_RECORD_COMPATIBILITY.md).
+compare-and-replace policy change. Incompatible files are reported by
+`config-validate`; they never authorize a suppression.
 
 ## Managed text rules
 
@@ -115,8 +108,8 @@ Missing markers permit first installation, but incomplete, duplicated, or
 reordered markers are a conflict because the intended ownership boundary is
 ambiguous.
 
-Managed Markdown and owned pre-commit operations use a strict final revision
-check rather than silently recomputing across an intervening edit. The command
+Managed Markdown uses a strict final revision check rather than silently
+recomputing across an intervening edit. The command
 reports the expected and latest revision hashes and does not write.
 `.git/info/exclude` can safely retry because its exact owned marker block is
 recomputed from the newest text.

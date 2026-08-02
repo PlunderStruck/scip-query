@@ -1,11 +1,9 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { removeAgentSetup, type RemoveAgentSetupResult } from './agent-setup.js';
-import { installProjectAgentHooks, type InstallUserAgentHooksResult } from './agent-hooks.js';
 import { uninstallSkills, type UninstallSkillsResult } from './setup.js';
 
 export interface ProjectUninstallResult {
-  hooks: InstallUserAgentHooksResult;
   agentSetup: RemoveAgentSetupResult;
   left: string[];
 }
@@ -32,18 +30,13 @@ export function formatUninstallReport(report: UninstallReport, opts: { verbose?:
   }
 
   if (report.project) {
-    for (const target of report.project.hooks.removed) lines.push(`  ${prefix}remove: ${target}`);
     for (const target of report.project.agentSetup.removed) lines.push(`  ${prefix}remove: ${target}`);
     for (const target of report.project.agentSetup.unchanged) lines.push(`  ok: ${target} (no managed block)`);
-    for (const skip of report.project.hooks.skipped) lines.push(`  skip: ${skip.target} — ${skip.reason}`);
     for (const skip of report.project.agentSetup.skipped) lines.push(`  skip: ${skip.target} — ${skip.reason}`);
     for (const target of report.project.left) lines.push(`  left: ${target}`);
   }
 
-  const removed =
-    (report.global?.removed.length ?? 0) +
-    (report.project?.hooks.removed.length ?? 0) +
-    (report.project?.agentSetup.removed.length ?? 0);
+  const removed = (report.global?.removed.length ?? 0) + (report.project?.agentSetup.removed.length ?? 0);
   if (removed === 0) {
     lines.push(report.dryRun ? 'No scip-query-owned files would be removed.' : 'No scip-query-owned files removed.');
   }
@@ -97,7 +90,6 @@ export function runUninstall(opts: {
 
 export function uninstallProject(projectRoot: string, opts: { dryRun?: boolean } = {}): ProjectUninstallResult {
   return {
-    hooks: installProjectAgentHooks(projectRoot, { remove: true, dryRun: opts.dryRun }),
     agentSetup: removeAgentSetup(projectRoot, { dryRun: opts.dryRun }),
     left: projectFilesLeftInPlace(projectRoot),
   };
@@ -106,33 +98,7 @@ export function uninstallProject(projectRoot: string, opts: { dryRun?: boolean }
 function projectFilesLeftInPlace(projectRoot: string): string[] {
   return [
     ['.scipquery.json', join(projectRoot, '.scipquery.json')],
-    ['.scipquery/goals/ (repository records)', join(projectRoot, '.scipquery', 'goals')],
-    ['.scipquery/changes/ (repository records)', join(projectRoot, '.scipquery', 'changes')],
-    ['.scipquery/plans/ (repository records)', join(projectRoot, '.scipquery', 'plans')],
-    ['.scipquery/attempts/ (repository records)', join(projectRoot, '.scipquery', 'attempts')],
-    ['.scipquery/decisions/ (repository records)', join(projectRoot, '.scipquery', 'decisions')],
-    ['.scipquery/obligations/ (repository records)', join(projectRoot, '.scipquery', 'obligations')],
-    [
-      '.scipquery/obligation-transitions/ (repository records)',
-      join(projectRoot, '.scipquery', 'obligation-transitions'),
-    ],
-    [
-      '.scipquery/completeness-admissions/ (repository records)',
-      join(projectRoot, '.scipquery', 'completeness-admissions'),
-    ],
-    ['.scipquery/transition-rules/ (repository records)', join(projectRoot, '.scipquery', 'transition-rules')],
-    ['.scipquery/completion-contexts/ (repository records)', join(projectRoot, '.scipquery', 'completion-contexts')],
-    [
-      '.scipquery/completion-evaluations/ (repository records)',
-      join(projectRoot, '.scipquery', 'completion-evaluations'),
-    ],
-    [
-      '.scipquery/completion-transitions/ (repository records)',
-      join(projectRoot, '.scipquery', 'completion-transitions'),
-    ],
     ['.scipquery/suppressions/ (repository records)', join(projectRoot, '.scipquery', 'suppressions')],
-    ['.scipquery/events/ (repository records)', join(projectRoot, '.scipquery', 'events')],
-    ['.scipquery/ledger/ (repository records)', join(projectRoot, '.scipquery', 'ledger')],
     ['docs/scip-query/', join(projectRoot, 'docs', 'scip-query')],
   ]
     .filter(([, path]) => existsSync(path))

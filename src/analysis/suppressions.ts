@@ -65,11 +65,26 @@ function scanSuppressions(db: ScipDatabase): SuppressionInventory {
     }
   }
 
+  for (const suppression of db.config.suppressions ?? []) {
+    if (suppression.expiresAt && Date.parse(suppression.expiresAt) <= Date.now()) continue;
+    total += 1;
+    if (suppression.file) byFile.set(suppression.file, (byFile.get(suppression.file) ?? 0) + 1);
+    byCategory[normalizeCategory(suppression.check)] += 1;
+  }
+
   return { total, byCategory, byFile };
 }
 
 function normalizeCategory(raw: string | undefined | null): SuppressionCategory {
   if (!raw) return 'uncategorized';
   const lower = raw.toLowerCase();
-  return lower === 'dead-code' ? 'dead' : (lower as SuppressionCategory);
+  if (lower === 'dead-code' || lower === 'new-dead') return 'dead';
+  if (lower.includes('twin')) return 'twin';
+  if (lower.includes('similar') || lower.includes('duplicate')) return 'similar';
+  if (lower.includes('wrapper')) return 'wrapper';
+  if (lower.includes('passthrough')) return 'passthrough';
+  if (lower.includes('drift')) return 'drift';
+  if (lower.includes('extract')) return 'extract';
+  if (lower.includes('stale')) return 'stale';
+  return 'uncategorized';
 }

@@ -15,7 +15,7 @@ export { members } from './navigation/members.js';
 export { fanIn, fanOut, topFanIn, topFanOut } from './graph/fan.js';
 export { coupling, topCoupling } from './graph/coupling.js';
 export { cycles, cycleSummary } from './graph/cycles.js';
-export { analyzeArchitectureGraph, architecture } from './graph/architecture.js';
+export { analyzeArchitectureGraph, architecture, architectureFindingIdentities } from './graph/architecture.js';
 export { bottlenecks } from './graph/bottlenecks.js';
 export { isolated } from './cleanup/isolated.js';
 export { byKind, kindCounts } from './navigation/by-kind.js';
@@ -36,13 +36,6 @@ export { localityCandidates } from './cleanup/locality-candidates.js';
 export { affected } from './graph/affected.js';
 export { changeSurface } from './impact/change-surface.js';
 export { cleanupPlan } from './cleanup/cleanup-plan.js';
-export {
-  DIFF_GATE_CHECKS,
-  diffGate,
-  blockingFindings,
-  diffGateFailedClosed,
-  diffGateFailureReason,
-} from './impact/diff-gate.js';
 export { incompleteMigration } from './impact/incomplete-migration.js';
 export { coChange } from './cleanup/co-change.js';
 export { docDrift } from './cleanup/doc-drift.js';
@@ -53,7 +46,7 @@ export { notImplemented } from './cleanup/not-implemented.js';
 export { decorativeCheckers } from './cleanup/decorative-checkers.js';
 export { testQuality } from './cleanup/test-quality.js';
 export { recentDuplicates } from './cleanup/recent-duplicates.js';
-export { planContext } from './impact/plan-context.js';
+export { repositoryContext } from './impact/context.js';
 export { checkHealthBaseline, collectBaselineFindings, writeHealthBaseline } from './health/health-baseline.js';
 export { checkArchitectureBaseline } from './graph/architecture-baseline.js';
 export {
@@ -72,7 +65,6 @@ export { staleAbstractions } from './cleanup/stale-abstractions.js';
 export { unusedParams } from './cleanup/unused-params.js';
 export { complexityHotspots } from './quality/complexity-hotspots.js';
 export { HEALTH_PHASES, health, healthPhase, healthReportFromPhases } from './health/health.js';
-export { computeEffectiveness, parseSinceMs } from './health/effectiveness.js';
 export { convergence } from './cleanup/convergence.js';
 export { code } from './navigation/code.js';
 export { complexity } from './quality/complexity.js';
@@ -129,20 +121,6 @@ export type { StaleAbstraction, StaleAbstractionActionTier, StalenessKind } from
 export type { UnusedParamsFinding } from './cleanup/unused-params.js';
 export type { ComplexityHotspot } from './quality/complexity-hotspots.js';
 export type {
-  CheckEffectiveness,
-  EffectivenessAnomaly,
-  EffectivenessAnomalySample,
-  EffectivenessAuthority,
-  EffectivenessOptions,
-  EffectivenessProvenanceSummary,
-  EffectivenessReport,
-  OutcomeEvent,
-  OutcomeEventKind,
-  OutcomeObserverAuthority,
-  OutcomeObserverKind,
-  OutcomeObserverProvenance,
-} from './health/effectiveness.js';
-export type {
   SimilarActionTier,
   SimilarConsolidationPlan,
   SimilarEvidenceClass,
@@ -195,13 +173,6 @@ export type { SliceResult } from './navigation/slice.js';
 export type { AffectedResult } from './graph/affected.js';
 export type { ChangeSurfaceEntry, ChangeSurfaceResult } from './impact/change-surface.js';
 export type { CleanupBatch, CleanupPlanEntry, CleanupPlanResult } from './cleanup/cleanup-plan.js';
-export type {
-  DiffGateActionTier,
-  DiffGateCheck,
-  DiffGateFinding,
-  DiffGateResult,
-  DocCitationKind,
-} from './impact/diff-gate.js';
 export type { CoChangeFinding, CoChangeResult } from './cleanup/co-change.js';
 export type { DocDriftFinding, DocDriftResult, DocDriftSubject, DocFileCitation } from './cleanup/doc-drift.js';
 export type { DuplicateBodyEntry, DuplicateBodyGroup } from './cleanup/duplicate-bodies.js';
@@ -235,16 +206,16 @@ export type {
 } from './cleanup/recent-duplicates.js';
 export type { BaselineComparison, HealthBaselineFile } from './internal/baseline-file.js';
 export type {
-  PlanContextAffectedConsumer,
-  PlanContextConsumerReuse,
-  PlanContextConsumerReuseCandidate,
-  PlanContextConsumerReuseCoverage,
-  PlanContextOptions,
-  PlanContextPrimaryCallable,
-  PlanContextResult,
-  PlanContextSourcePacket,
-  PlanContextSourceSlice,
-} from './impact/plan-context.js';
+  RepositoryContextAffectedConsumer,
+  RepositoryContextConsumerReuse,
+  RepositoryContextConsumerReuseCandidate,
+  RepositoryContextConsumerReuseCoverage,
+  RepositoryContextOptions,
+  RepositoryContextPrimaryCallable,
+  RepositoryContextResult,
+  RepositoryContextSourcePacket,
+  RepositoryContextSourceSlice,
+} from './impact/context.js';
 export type {
   BaseContentGitRuntime,
   BaseContentLookupOptions,

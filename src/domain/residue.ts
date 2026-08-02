@@ -1,4 +1,5 @@
-import { hashIdentity } from './autonomous-work-state.js';
+import { createHash } from 'node:crypto';
+import { stableJson } from './stable-json.js';
 
 export const RESIDUE_EVIDENCE_CONTRACT_VERSION = 1 as const;
 
@@ -111,12 +112,15 @@ export function evaluateResidueObservation(input: ResidueObservation): ResidueEv
 }
 
 export function residueObservationId(referent: ResidueReferent): string {
-  return `SQR-${hashIdentity({
-    contractVersion: RESIDUE_EVIDENCE_CONTRACT_VERSION,
-    referent: canonicalReferent(referent),
-  })
-    .slice(0, 32)
-    .toUpperCase()}`;
+  const digest = createHash('sha256')
+    .update(
+      stableJson({
+        contractVersion: RESIDUE_EVIDENCE_CONTRACT_VERSION,
+        referent: canonicalReferent(referent),
+      }),
+    )
+    .digest('hex');
+  return `SQR-${digest.slice(0, 32).toUpperCase()}`;
 }
 
 function currentRoleProofMatches(proof: CurrentRoleProof, referent: ResidueReferent): boolean {

@@ -1,9 +1,4 @@
 import type { ChangeAmplificationSummary, HealthAnalyses } from './health-types.js';
-import type { DetectorPrecisionStats } from './finding-outcome-ledger.js';
-import {
-  unavailableMissionEffectiveness,
-  type MissionEffectivenessEvidence,
-} from '../../domain/mission-effectiveness.js';
 
 export type FindingEvidence = 'graph-fact' | 'heuristic' | 'change-graph';
 
@@ -125,18 +120,6 @@ export interface HealthReport {
   pressure: HealthPressure[];
   topComplexity: Array<{ symbol: string; score: number; file?: string }>;
   warnings?: string[];
-  /**
-   * Per-check finding-outcome stats from the finding_outcome_ledger
-   * (populated by `diff-gate --hook` runs) — resolution/suppression rate
-   * and open-finding age. Reports, never affects the score above. Empty
-   * until the ledger has data.
-   */
-  detectorPrecision: DetectorPrecisionStats[];
-  /**
-   * Protected end-to-end agent outcome evidence. This is deliberately
-   * separate from detector precision and never changes the health score.
-   */
-  missionEffectiveness?: MissionEffectivenessEvidence;
 }
 
 function healthScoreCount(summary: { count: number; scoreCount?: number }): number {
@@ -196,10 +179,6 @@ export function buildHealthReport(analyses: HealthAnalyses): HealthReport {
     pressure,
     topComplexity: analyses.complexity.top,
     warnings: analyses.warnings.length > 0 ? analyses.warnings : undefined,
-    detectorPrecision: [],
-    missionEffectiveness: unavailableMissionEffectiveness(
-      'No protected mission-trial program was attached to this health report.',
-    ),
   };
 }
 
@@ -558,7 +537,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Coverage contract drift',
       evidence: 'graph-fact',
-      description: `${analyses.coverageContracts.count} configured coverage contract(s) drifted from their ground-truth source (enumeration rot) — run \`scip-query diff-gate\` or \`scip-query health --json\` for the missing/extra keys`,
+      description: `${analyses.coverageContracts.count} configured coverage contract(s) drifted from their ground-truth source (enumeration rot) — run \`scip-query health --json\` for the missing/extra keys`,
       effort: 'low',
       impact: 'medium',
       count: analyses.coverageContracts.count,

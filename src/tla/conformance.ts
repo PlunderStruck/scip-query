@@ -65,7 +65,7 @@ export interface TlaConformanceFinding {
 
 /**
  * Root-cause rollup of `findings`, grouped by (category, modelElement) —
- * the shape mirrors DiffGateRootCauseGroup (src/queries/impact/diff-gate.ts)
+ * the shape groups multiple findings caused by the same modeled mismatch
  * so agents reading both surfaces see the same grouping contract. At Vega
  * scale a single model produced 10,724 raw findings from a handful of root
  * causes; this is the summary a human/agent should read first.

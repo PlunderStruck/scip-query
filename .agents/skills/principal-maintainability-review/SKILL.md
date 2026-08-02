@@ -6,12 +6,11 @@ description: Review maintainability like a principal engineer. Use when the user
 # Principal Maintainability Review
 
 Use this skill as a tone and judgment wrapper around the maintainability
-scenario in [`scip-audit`](../../../skills/scip-audit/SKILL.md). The owning
-workflow remains read-only: it gathers SCIP evidence and ranks maintainability
-pressure. Hand confirmed implementation work to
-[`scip-improve`](../../../skills/scip-improve/SKILL.md).
+detectors exposed through the primary
+[`scip-query`](../../../skills/scip-query/SKILL.md) skill. Keep a review
+read-only unless the user separately authorizes edits.
 
-Load shared scip-query mechanics from [`../../../skills/_shared/SKILL.md`](../../../skills/_shared/SKILL.md) when the target repo has a SCIP index.
+Load the primary scip-query mapping rules from [`../../../skills/scip-query/SKILL.md`](../../../skills/scip-query/SKILL.md) when the target repo has a SCIP index.
 
 ## Unique Lens
 
@@ -26,7 +25,8 @@ Be direct without mocking the code. Taste is allowed only when it is tied to con
 
 ## Report Add-On
 
-After the `scip-audit` maintainability scenario has evidence, add:
+After the primary `scip-query` workflow has gathered maintainability evidence,
+add:
 
 ```markdown
 Principal read:
@@ -36,6 +36,7 @@ Principal read:
 - First slice:
 ```
 
-Do not run an independent closeout. A read-only review ends with the audit
-verdict; any implemented slice uses `scip-improve` and closes through
-`scip-verify`.
+A read-only review ends with an evidence-backed verdict. If the user authorizes
+edits, implement one coherent slice and verify it with the repository's native
+checks plus one final `scip-query diff-impact` and `scip-query architecture`
+pass.

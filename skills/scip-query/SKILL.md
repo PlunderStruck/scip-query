@@ -1,84 +1,84 @@
 ---
 name: scip-query
-description: Router for compiler-resolved codebase work only when the right scip specialist is unclear. Do not load it alongside an already selected scip-plan, scip-verify, or other specialist.
+description: Use FIRST for codebase work when compiler-resolved identity, references, callers, dependencies, consumers, architecture, change impact, or cleanup relationships can affect the answer. It gives the agent a repository map; it does not own the task, plan, implementation, or acceptance decision.
+commands:
+  - template: "scip-query context <target>"
+    when: "Map a nonlocal target before planning or editing it."
+  - template: "scip-query diff-impact"
+    when: "Map changed symbols and downstream consumers after a coherent edit."
+  - template: "scip-query architecture"
+    when: "Inspect the repository's declared structural rules when boundaries matter."
+  - template: "scip-query health --full"
+    when: "Inspect React, Vue, duplication, complexity, drift, and cleanup pressure."
 ---
 
-# SCIP Query Router
+# scip-query
 
-Choose the one workflow whose completion condition matches the current phase.
-Load that skill only. This router does not perform the work itself.
+<!-- BEGIN GENERATED SKILL COMMANDS -->
+## Commands for this skill
 
-Evidence commands obtain a fresh usable index internally. Ask the useful
-question directly; do not make `status`, watcher polling, sleeps, or `reindex`
-part of an ordinary agent workflow. `scip-setup` owns actual installation or
-index repair when an evidence command returns a setup failure.
+| Command | Purpose | Returns | Coverage | When |
+| --- | --- | --- | --- | --- |
+| `scip-query context <target>` | Compiler-backed context for a symbol, file, or module | definitions and references; callers and callees; dataflow producers and consumers; backward and forward slices; affected symbols; change-surface risk; dependencies and reverse dependencies; module files and exports; external surface use; complexity; churn; co-change partners; active suppressions; reuse candidates with evidence class and action tier; possible shared owners found from a bounded scan of affected consumers | `bounded` | Map a nonlocal target before planning or editing it. |
+| `scip-query diff-impact` | Map changed symbols and downstream consumers from the current git diff | changed symbols, downstream consumer identities, and impact paths | `bounded` | Map changed symbols and downstream consumers after a coherent edit. |
+| `scip-query architecture` | Evaluate project-owned architectural boundaries and dependency rules | boundary coverage and dependency-rule violations | `complete` | Inspect the repository's declared structural rules when boundaries matter. |
+| `scip-query health --full` | Composite repository health report with React, Vue, and general cleanup findings | health score, findings, priorities, baselines, and coverage notes | `bounded` | Inspect React, Vue, duplication, complexity, drift, and cleanup pressure. |
+
+Use this shortlist first. Run a command's `--help` only when a named uncertainty needs another option.
+<!-- END GENERATED SKILL COMMANDS -->
+
+scip-query is a compiler-backed repository map: a code-reading tool whose
+essential service is resolving which named program elements are actually the
+same element and how those elements connect. Its referents are definitions,
+references, calls, imports, exports, dependencies, changed symbols, and
+detector findings in the indexed repository.
+
+The coding agent still owns the goal, ordinary plan, edits, tests, and final
+judgment. scip-query supplies evidence that normal text search cannot reliably
+supply. It does not create goals, acceptance tests, work records, or completion
+permission.
+
+## Working rule
+
+Use native search and file reads for literal text and source. Use scip-query
+only when a compiler-resolved relationship can change the plan or reveal
+cleanup work.
+
+For a nonlocal change:
+
+1. In the first exploration batch, combine ordinary literal search with one
+   `scip-query context <target>` call on the behavior that is wired today. For
+   a replacement, retirement, or migration, target the current owner or a
+   current production entry point, not the proposed replacement.
+2. If the packet reports only test references or no production consumers, it
+   is not a map of the live affected surface. Correct the anchor by mapping the
+   current owner or one live entry point. This correction is not duplicate
+   querying.
+3. Treat the source packet as source already read. Do not repeat its graph
+   queries, reopen every excerpt, inventory the whole repository, or load
+   another scip skill. Add one focused query only when a named uncertainty can
+   change the plan.
+4. Write the normal concise plan, edit, and run the repository's native checks.
+5. In one final verification batch, run `scip-query diff-impact` when
+   downstream consumers matter and `scip-query architecture` when declared
+   boundaries are in scope. A nonzero architecture result is an unfinished
+   repository policy failure, not an informational warning.
+6. Run `scip-query health --full` only for a repository-wide cleanup, drift,
+   complexity, React, or Vue review. Do not add it merely because a normal
+   feature task deletes obsolete code.
+
+The map replaces redundant exploration; it must not become a second workflow.
+Batch independent reads and checks into as few model turns as practical.
+
+Compiler-graph results are facts within their stated coverage. Health and
+cleanup detectors are candidates: confirm their source before editing. A
+bounded result cannot support a claim about every relationship; use `--full`
+only when completeness can change a decision.
 
 Prefer human output for model reading. Use `--json --result-only` only for a
-programmatic consumer. Do not preselect `--compact` or an output page size.
-Follow an emitted `Continue exactly:` command unchanged until transport is
-complete. Transport completion means all rendered text was retrieved; it does
-not turn bounded analysis into complete coverage.
+programmatic consumer. If output emits `Continue exactly:`, run that command
+unchanged until transport is complete. Do not choose an output page size in
+advance.
 
-Reuse an exact read-only result while repository state, command input, index
-generation, and required coverage remain unchanged. Context compaction is not
-new repository evidence.
-
-## Routes
-
-| Starting point | Skill | Done when |
-| --- | --- | --- |
-| Understand or trace existing behavior | `scip-explore` | Entry, effect, dependencies, consumers, and uncertainty are evidenced. |
-| Plan a feature, fix, refactor, migration, API change, or phased program | `scip-plan` | Flow, consumers, reuse, completeness, slices, and validation are explicit. |
-| Explain a failure or regression | `scip-diagnose` | Cause is evidenced, rivals are rejected, and the fix surface is known. |
-| Find problems without editing and without a requested fix | `scip-audit` | Scoped findings are classified and ranked with evidence. |
-| Fix confirmed cleanup, drift, duplication, or maintainability findings | `scip-improve` | One coherent finding slice is changed and checked. |
-| Install, adopt, repair, or remove scip-query | `scip-setup` | The workspace works or the exact external blocker is known. |
-| Challenge a coherent finished diff | `scip-verify` | Each requirement has evidence, impact is reconciled, and one final gate owner decides. |
-
-## Disambiguation
-
-Understanding without a symptom routes to `scip-explore`; a failure routes to
-`scip-diagnose`. Finding problems without edits routes to `scip-audit`; fixing
-confirmed findings routes to `scip-improve`. Missing installation or broken
-index machinery routes to `scip-setup`, not to an ordinary evidence workflow.
-A request that already asks for a feature, fix, refactor, or migration routes
-to `scip-plan`, not to a parallel audit.
-
-When a request crosses phases, keep one owner at a time. Plan before a
-non-trivial edit. Load `scip-verify` only after a coherent implementation
-exists; final-stage rules cannot improve pre-edit understanding.
-
-## Default change loop
-
-1. Route to `scip-plan`. It runs one compact `plan-context` anchor and decides
-   whether the work is direct, relational, or sustained.
-2. Direct work edits the known local target. Bounded relational work uses one
-   concise readable plan. Sustained work applies one durable plan contract.
-3. Implement the smallest coherent outcome. Useful commands update work
-   history automatically; do not add manual ledger writes.
-4. Route once to `scip-verify` for the coherent finished outcome. Reuse checks
-   that already ran and add only evidence that can expose an uncovered failure.
-5. Give the final diff gate one owner. A protected blocking Stop hook owns it
-   when active; otherwise `scip-verify` runs it once. Rerun only after a finding
-   causes a relevant state change. Finish the response to activate Stop. Do not
-   search for a Stop tool or inspect CLI help. Follow the exact Stop-controller
-   next action.
-
-Load `../_shared/SKILL.md` only when the routed skill's shortlist cannot answer
-a named question.
-
-<!-- BEGIN GENERATED ROUTER COMMAND PREVIEW -->
-## Command Preview
-
-Top commands per routed skill, generated from each skill's own `commands:` frontmatter.
-
-| Skill | Top commands |
-| --- | --- |
-| `scip-audit` | `scip-query health`, `scip-query decorative-checkers --full`, `scip-query doc-drift --full` |
-| `scip-diagnose` | `scip-query files <feature-or-error-term>`, `scip-query trace <candidate-symbol>`, `scip-query call-graph <entry-symbol>` |
-| `scip-explore` | `scip-query system <module-or-scope>`, `scip-query trace <entry-symbol>`, `scip-query affected <symbol>` |
-| `scip-improve` | `scip-query cleanup-plan --verify`, `scip-query cleanup-apply --verified --batch <n> --dry-run`, `scip-query diff-gate` |
-| `scip-plan` | `scip-query plan-context <target>`, `scip-query refs <symbol> --full`, `scip-query affected <symbol> --full` |
-| `scip-setup` | `scip-query setup --json`, `scip-query doctor`, `scip-query status --capabilities` |
-| `scip-verify` | `scip-query diff-impact`, `scip-query diff-gate`, `scip-query mission-trial report <program> --protected-root <path>` |
-<!-- END GENERATED ROUTER COMMAND PREVIEW -->
+Reuse an unchanged read-only result. Context compaction does not create new
+repository evidence.

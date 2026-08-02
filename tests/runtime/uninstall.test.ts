@@ -62,44 +62,14 @@ describe('uninstallProject', () => {
     ]);
   });
 
-  it('reports shared work-state, suppression, and outcome records that are intentionally left in place', () => {
+  it('reports suppression records that are intentionally left in place', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-uninstall-'));
     roots.push(root);
     execFileSync('git', ['-C', root, 'init'], { stdio: 'ignore' });
-    mkdirSync(join(root, '.scipquery', 'goals'), { recursive: true });
-    mkdirSync(join(root, '.scipquery', 'changes'), { recursive: true });
-    mkdirSync(join(root, '.scipquery', 'attempts'), { recursive: true });
-    mkdirSync(join(root, '.scipquery', 'decisions'), { recursive: true });
-    mkdirSync(join(root, '.scipquery', 'obligations'), { recursive: true });
-    mkdirSync(join(root, '.scipquery', 'obligation-transitions'), { recursive: true });
-    mkdirSync(join(root, '.scipquery', 'plans'), { recursive: true });
-    mkdirSync(join(root, '.scipquery', 'completeness-admissions'), { recursive: true });
-    mkdirSync(join(root, '.scipquery', 'transition-rules'), { recursive: true });
-    mkdirSync(join(root, '.scipquery', 'completion-contexts'), { recursive: true });
-    mkdirSync(join(root, '.scipquery', 'completion-evaluations'), { recursive: true });
-    mkdirSync(join(root, '.scipquery', 'completion-transitions'), { recursive: true });
     mkdirSync(join(root, '.scipquery', 'suppressions'), { recursive: true });
-    mkdirSync(join(root, '.scipquery', 'events'), { recursive: true });
-    mkdirSync(join(root, '.scipquery', 'ledger'), { recursive: true });
 
     const result = uninstallProject(root, { dryRun: true });
 
-    expect(result.left).toEqual([
-      '.scipquery/goals/ (repository records)',
-      '.scipquery/changes/ (repository records)',
-      '.scipquery/plans/ (repository records)',
-      '.scipquery/attempts/ (repository records)',
-      '.scipquery/decisions/ (repository records)',
-      '.scipquery/obligations/ (repository records)',
-      '.scipquery/obligation-transitions/ (repository records)',
-      '.scipquery/completeness-admissions/ (repository records)',
-      '.scipquery/transition-rules/ (repository records)',
-      '.scipquery/completion-contexts/ (repository records)',
-      '.scipquery/completion-evaluations/ (repository records)',
-      '.scipquery/completion-transitions/ (repository records)',
-      '.scipquery/suppressions/ (repository records)',
-      '.scipquery/events/ (repository records)',
-      '.scipquery/ledger/ (repository records)',
-    ]);
+    expect(result.left).toEqual(['.scipquery/suppressions/ (repository records)']);
   });
 });

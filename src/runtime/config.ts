@@ -64,7 +64,6 @@ const ROOT_CONFIG_KEYS = new Set([
   'languages',
   'indexerConcurrency',
   'watch',
-  'hooks',
   'indexer',
   'dbPath',
   'entryRoots',
@@ -88,7 +87,6 @@ const WATCH_CONFIG_KEYS = new Set([
   'resourceBudget',
 ]);
 const WATCH_RESOURCE_BUDGET_CONFIG_KEYS = new Set(['enabled', 'windowMs', 'maxRebuilds', 'maxEstimatedWriteBytes']);
-const HOOK_CONFIG_KEYS = new Set(['router']);
 const ENTRY_ROOTS_CONFIG_KEYS = new Set(['pathPrefixes', 'files', 'symbolPatterns', 'qualifiedVars']);
 const SEMANTIC_CONFIG_KEYS = new Set(['typescript', 'rust']);
 const TYPESCRIPT_SEMANTIC_CONFIG_KEYS = new Set(['tsconfigs']);
@@ -273,9 +271,6 @@ export function validateProjectConfig(
         message: 'Must be a positive safe integer.',
       });
     }
-  }
-  if (config.hooks?.router !== undefined && config.hooks.router !== 'off' && config.hooks.router !== 'single') {
-    diagnostics.push({ level: 'error', path: 'hooks.router', message: 'Must be "off" or "single".' });
   }
   const typescriptIndexer = config.indexer?.typescript;
   if (
@@ -976,7 +971,6 @@ function reportUnknownConfigKeys(config: ProjectConfig, diagnostics: ConfigDiagn
     'watch.resourceBudget',
     WATCH_RESOURCE_BUDGET_CONFIG_KEYS,
   );
-  reportUnknownObjectKeys(diagnostics, typedConfig.hooks, 'hooks', HOOK_CONFIG_KEYS);
   reportUnknownObjectKeys(diagnostics, typedConfig.entryRoots, 'entryRoots', ENTRY_ROOTS_CONFIG_KEYS);
   reportUnknownObjectKeys(diagnostics, typedConfig.semantic, 'semantic', SEMANTIC_CONFIG_KEYS);
   reportUnknownObjectKeys(

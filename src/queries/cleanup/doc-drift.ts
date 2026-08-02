@@ -9,8 +9,8 @@ import { createFileEvidenceProduct, evidenceProductInvalidation } from '../../st
 import { markdownCitationContext } from './doc-citation-context.js';
 import { matchingDocTerms } from './doc-terms.js';
 import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
-import { docReferencePolicy, isSnapshotDoc } from './diff-gate-doc-policy.js';
-import type { DocCitationKind } from '../internal/diff-gate-types.js';
+import { docReferencePolicy, isSnapshotDoc } from './documentation-policy.js';
+import type { DocCitationKind } from '../internal/change-analysis-types.js';
 
 export type DocDriftIntent = 'current-guidance' | 'historical-note' | 'unknown';
 export type DocDriftActionTier = 'direct' | 'signal' | 'support';
@@ -420,7 +420,7 @@ function buildDocDriftScanIndex(db: ScipDatabase, historyMode: GitHistoryMode): 
 }
 
 /**
- * Docs whose text cites any of the target files — diff-gate uses this to ask
+ * Docs whose text cites any of the target files — callers use this to ask
  * "you changed these files; which docs claim to describe them?"
  */
 // scip-query: ignore-similar — deliberately shares the doc-walking toolkit

@@ -1,8 +1,0 @@
-{
-  "ts": 1784049912193,
-  "check": "echo",
-  "findingId": "SQ13816DD5CF46",
-  "event": "caught",
-  "commit": "9fda7dd2457b82a0eaab6a6af928cb69c23c18b1",
-  "symbol": "scip-typescript npm scip-query 0.16.1 src/reindex/`shared-generation-store.ts`/delay()."
-}

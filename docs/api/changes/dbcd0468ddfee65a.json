@@ -1,0 +1,25 @@
+{
+  "acceptedAt": "2026-08-02T06:42:31.759Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "dbcd0468ddfee65a5368f7f5f01b2afe33e36f2d8bd4c5d8a6b0804c30e4881d",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export architectureFindingIdentities.",
+      "target": "./queries:architectureFindingIdentities"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export architectureFindingIdentities.",
+      "target": "./queries/index:architectureFindingIdentities"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "aa13451b5369479854043629e5514e135b52e40e573b012807968987443589e5",
+  "reason": "Expose the existing architecture finding identity function through the query facade so CLI and library consumers enforce the same configured policy.",
+  "schemaVersion": 1
+}

@@ -147,7 +147,7 @@ scip-locality-review
 The skill would tell agents to run:
 
 ```sh
-scip-query plan-context <target> --full
+scip-query context <target> --full
 scip-query imported-by <symbol>
 scip-query rdeps <file>
 scip-query co-change <file> --full

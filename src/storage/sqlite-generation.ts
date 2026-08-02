@@ -326,15 +326,6 @@ export function publishedSqliteGenerationIdentity(dbPath: string): string | null
   }
 }
 
-export function generationMetadata<T>(generation: SqliteGenerationHandle): T | null {
-  if (generation.metadataRaw === undefined) return null;
-  try {
-    return JSON.parse(generation.metadataRaw) as T;
-  } catch {
-    return null;
-  }
-}
-
 export function stableMetadataIdentity(raw: string): string {
   return canonicalReindexMetadataIdentity(decodeReindexMetadata(raw)) ?? raw;
 }

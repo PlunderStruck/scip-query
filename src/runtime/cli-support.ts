@@ -28,10 +28,8 @@ import {
 } from './isolated-analysis-runner.js';
 import { buildObservationReceipt } from './observation-receipt.js';
 import { render } from './render.js';
-import { detectorPrecision, readLedgerRecords } from '../queries/health/finding-outcome-ledger.js';
 import { healthReportCacheKey, readHealthReportCache, writeHealthReportCache } from './health-report-cache.js';
 import { cliVersion } from '../platform/cli-version.js';
-import { formatMissionEffectiveness } from './mission-effectiveness-render.js';
 
 export { cliVersion } from '../platform/cli-version.js';
 export const HEALTH_PHASE_COMMAND = '__health-phase';
@@ -233,11 +231,6 @@ export function commandAnalysisBudget(
       reason: 'large index default budget; pass --full for unbounded semantic analysis',
     },
   };
-}
-
-export function formatAnalysisBudgetDisclosure(disclosure: AnalysisBudgetDisclosure | undefined): string | null {
-  if (!disclosure) return null;
-  return `analysis budget: scanning up to ${disclosure.scanLimit} candidate(s); semantic enrichment=${disclosure.semanticEnrichment}; ${disclosure.reason}`;
 }
 
 const DEFAULT_HEALTH_SEMANTIC_PREWARM_RUNTIME: HealthSemanticPrewarmRuntime = {
@@ -473,7 +466,6 @@ export async function runIsolatedHealthReportWithEvidence(
     if (!key) return null;
     const report = readHealthReportCache(db, key);
     if (!report) return null;
-    report.detectorPrecision = detectorPrecision(readLedgerRecords(db), Date.now());
     return report;
   });
   if (cachedObservation.value) {
@@ -530,11 +522,6 @@ export async function runIsolatedHealthReportWithEvidence(
   }
 
   const report = queries.healthReportFromPhases(queries.HEALTH_PHASES.map((phase) => resultByPhase.get(phase)!));
-  // Phase results come back from worker processes with no live db handle —
-  // the finding-outcome ledger is read here, once, back on the main process.
-  const precisionObservation = withIndexObservation((db) => detectorPrecision(readLedgerRecords(db), Date.now()));
-  anchors.push(precisionObservation.anchor);
-  report.detectorPrecision = precisionObservation.value;
   withDb((db) => {
     const key = healthReportCacheKey(db, cacheOptions, cliVersion);
     if (key) writeHealthReportCache(db, key, report);
@@ -732,11 +719,6 @@ export function renderHealthReport(report: HealthReport): void {
   console.log(
     `  ${report.overview.documents} files | ${report.overview.symbols} symbols | ${formatBytes(report.overview.indexSizeBytes)}\n`,
   );
-  for (const line of formatMissionEffectiveness(report.missionEffectiveness)) {
-    console.log(`  ${line}`);
-  }
-  console.log('');
-
   if (report.warnings && report.warnings.length > 0) {
     console.log('  Warnings:');
     for (const warning of report.warnings) {

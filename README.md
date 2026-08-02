@@ -1,1134 +1,238 @@
-<h1 align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/scip-query-logo-dark.svg">
-    <img src="docs/assets/scip-query-logo.svg" alt="scip-query" width="360">
-  </picture>
-</h1>
+# scip-query
 
-<p align="center">
-  <strong>Evidence and verification for AI coding agents.</strong>
-</p>
+scip-query is a compiler-backed repository map for coding agents.
 
-<p align="center">
-  <em>Map the repo. Reuse what exists. Finish the refactor. Gate the diff.</em>
-</p>
+A repository map is a code-reading tool that identifies program elements and
+the relationships between them. scip-query differs from text search because it
+uses compiler-produced SCIP indexes: two matching words count as the same
+symbol only when the language tooling resolves them to the same definition.
 
-<p align="center">
-  <a href="https://www.npmjs.com/package/scip-query"><img alt="npm version" src="https://img.shields.io/npm/v/scip-query.svg"></a>
-  <a href="https://www.npmjs.com/package/scip-query"><img alt="npm downloads" src="https://img.shields.io/npm/dm/scip-query.svg"></a>
-  <a href="package.json"><img alt="Node version" src="https://img.shields.io/node/v/scip-query.svg"></a>
-  <a href="https://www.apache.org/licenses/LICENSE-2.0"><img alt="License" src="https://img.shields.io/npm/l/scip-query.svg"></a>
-</p>
+The tool helps an agent answer four practical questions:
 
-Coding agents operate at too concrete a level of abstraction. They work in files and grep, while every decision that actually matters — does a helper for this already exist, what depends on the thing I'm about to change, is this migration finished or just started — lives one level up, in symbols, references, and history. `scip-query` raises agents to that level: a TypeScript CLI and npm package built on SCIP indexes, git history, language-aware source analysis, and your repository's own checks.
+- What is this code connected to?
+- Who consumes it, and what could a change affect?
+- Does the repository declare a structural rule for this dependency?
+- Where do React, Vue, duplication, drift, complexity, or cleanup detectors
+  point to code worth inspecting?
 
-The failure mode it targets is specific. Agents are genuinely good at editing the code in front of them; what they lose is the whole-repository model across a long task. They re-implement helpers they never saw, plan from partial context, migrate three call sites and abandon the other two, miss the file that always changes with the one they touched, and declare a diff finished while it quietly adds duplication, dead code, and docs that now lie. None of that is a syntax error, so nothing stops it — it just accumulates until complexity nukes your development momentum.
-
-So the loop this tool enforces is evidence at every step: map the target and its blast radius, plan from repository facts, check for reuse before adding a concept, detect unfinished migrations and hidden coupling, and gate the finished diff. It does not replace the compiler, tests, or review. The point is to make structural evidence so cheap to ask for that agents actually ask — and to make "done" something the repository gets a vote on.
-
-## Capability Status
-
-scip-query has three related jobs: supply repository evidence, coordinate
-long-running autonomous work, and evaluate whether that coordination actually
-improves end-to-end outcomes. The first two are implemented product behavior.
-The third is an empirical claim and remains bounded by protected mission
-trials.
-
-A mission trial is a matched comparison of autonomous repository work from an
-authorized goal to a verified final state. Its distinguishing property is
-independent, protected judgment of the whole change: goal satisfaction,
-preserved invariants, reconciled affected surface, residue, revived behavior,
-architecture constraints, false blocking, and cost. A passing detector or
-health score is not a mission trial.
-
-Until a protected program classifies a specific provider, model, runtime, and
-fixture set as `established`, autonomous-completion effectiveness for that
-scope is experimental. `promising`, `neutral`, `regressed`, `insufficient`,
-and unavailable evidence stay visible as those states. Health can display a
-trial classification, but it cannot change the trial facts or use them to
-improve its score.
-
-The latest 2026-07-31 protected lifecycle probe for
-`openai/gpt-5.6-sol` is valid but statistically insufficient: both conditions
-completed the policy-routing fixture, and the workflow produced protected goal
-evidence plus a durable controller transition for the exact evaluated
-repository state. In its single matched pair the workflow/control elapsed and
-model-token ratios were `0.947` and `0.703`, with no false block or architecture
-regression. One pair on a task both conditions completed cannot establish a
-quality advantage or generalize beyond that fixture. Earlier programs exposed
-hook, residue, authority, and runner-state defects and remain immutable invalid
-or bounded evidence. The exact programs, results, mechanisms, and remaining
-large-repository comparison are recorded in
-[the protected-trial validation](docs/validation/2026-07-31-autonomous-completion-protected-trial.md);
-none generalizes to other models, runtimes, or repository tasks.
-
-## How Agents Use It
-
-Two layers, wired by `scip-query setup`:
-
-**Ambient** — no invocation required. Session-start hooks supply index state and routing context; the Stop-hook / pre-commit **diff gate** checks every finished diff for echoes of existing code, unfinished migrations, missing co-change partners, stale doc citations, and new dead code — and feeds findings back to the agent.
-
-**Invoked** — the agent routes work through skills, each carrying its own short command list so it never navigates the full CLI:
-
-| Phase    | Skill                                            | Commands underneath (also usable directly)      |
-| -------- | ------------------------------------------------ | ----------------------------------------------- |
-| Orient   | `scip-explore`                                   | `system`, `trace`, `affected`, `call-graph`     |
-| Plan     | `scip-plan`                                      | `plan-context`, `change-surface`, `co-change`   |
-| Diagnose | `scip-diagnose`                                  | `files`, `trace`, `call-graph`, `outline`       |
-| Audit    | `scip-audit`                                     | `cleanup-plan --verify`, `dead`, `twin-drift`   |
-| Improve  | `scip-improve`                                   | `incomplete-migration`, `recent-duplicates`     |
-| Verify   | `scip-verify` + one final gate owner              | `status` as needed, `diff-impact`, `diff-gate`  |
-| Set up   | `scip-setup`                                     | `doctor`, `setup`, `setup-hooks`, `setup-agent` |
-
-The consolidated skills retain the former specialist lenses as routed
-scenarios: API impact and formal/performance planning live in `scip-plan`;
-root cause and reachability probes live in `scip-diagnose`; integrity,
-maintainability, claim, framework, directory, and twin-drift review live in
-`scip-audit`; and cleanup or documentation repair lives in `scip-improve`.
-Every command remains directly invocable for humans and scripts.
-
-React and Vue repositories get additional framework-aware checks for repeated component/template structure, hook/composable behavior, and large-component or large-view pressure. These extend the same reuse and completion workflow; the core graph, history, planning, cleanup, and diff-gate commands are not frontend-specific.
+The agent still owns the task, plan, implementation, tests, and final judgment.
+scip-query does not create goals, act as an acceptance test, or decide that work
+is complete.
 
 ## Install
 
-`npm install` only installs the package — it does not touch your home directory, your shell config, or any agent's skill/hook setup. Every write happens explicitly, when you ask for it:
+scip-query requires Node.js 22 or newer. Node.js 24 LTS is recommended.
 
 ```bash
-npm install -g scip-query@latest
-scip-query setup           # interactive checklist in a terminal
+npm install -g scip-query
+cd your-repository
+scip-query setup
 ```
 
-The setup checklist detects the repository's languages and offers to install or
-repair the matching SCIP indexers, Tree-sitter AST parsers, agent skills, and
-checkout-local hooks. It enables demand-started automatic incremental indexing,
-builds the first index, verifies semantic and checker capabilities, and can run
-the optional full health audit. Use the arrow keys and Space to change the
-selection, then Enter to continue.
+Setup detects supported languages, installs or checks their indexers, builds
+the local index, installs the bundled skills, and writes concise agent guidance.
+It does not install Stop hooks, pre-commit gates, or CI enforcement.
 
-For automation, use `scip-query setup --yes` to accept recommended defaults or
-`scip-query setup --json` for a non-interactive machine-readable report. Use
-`--no-hooks`, `--no-skills`, `--no-parsers`, or `--no-health` only when that
-scope is intentionally managed elsewhere. Or run without a global install:
-`npx scip-query@latest setup`.
-
-Human output is the default for people and agents: reports retain their
-sections, while `code` preserves indentation and one-based source line
-numbers. Oversized human results paginate at complete line boundaries whenever
-possible, so continuation pages preserve that hierarchy. Every public
-JSON-capable command also supports the same structured forms: `--json` emits
-the stable envelope, `--json --result-only` emits only the command result, and
-`--json --compact` minifies output for a program. See the
-[CLI output contract](docs/CLI_JSON_OUTPUT.md) for mode selection,
-compatibility, pagination, the decoder API, and machine-readable schemas.
-
-Logical `refs --limit` pages use a generation-bound `(path, line)` cursor, so
-ordinary continuations resume after the prior row instead of rebuilding and
-discarding it. Follow every emitted `refs --cursor` continuation before
-claiming a complete reference set. JSON identifies semantic, Ruby, or SCIP
-fallback providers that still require complete analysis as
-`pagination.producer: "complete-only"`.
-
-Contributors changing exported TypeScript declarations should also follow the
-[public API evolution workflow](docs/API_EVOLUTION.md). Its committed manifest
-makes every package-subpath signature change explicit before release.
-
-### If npm warns about install scripts
-
-On npm setups with script approval enabled (`allow-scripts`), the install prints warnings like
-`15 packages have install scripts not yet covered by allowScripts` — and **skips those scripts**,
-which leaves the affected native modules unbuilt. Every remaining script on that list is expected:
-
-- `scip-query` — its own postinstall (non-fatal by construction: `... || true`)
-- `tree-sitter` + the per-language grammars — native parsers behind multi-language source facts
-
-`better-sqlite3` 13 does not need lifecycle-script approval: it ships stable
-N-API SQLite binaries for the supported platforms inside its npm package.
-Although npm infers a default `node-gyp rebuild` from the addon's source
-metadata, scip-query explicitly denies that unnecessary fallback in its own
-development install policy. A real database test verifies that the bundled
-binary works with scripts disabled.
-Seeing `prebuild-install` during a scip-query install therefore means an older
-scip-query dependency tree was selected.
-
-Approve them and re-run the builds (`--allow-scripts-pending` only _lists_ — the approving forms
-are `npm approve-scripts <pkg> ...` or `--all`):
+Check a setup with:
 
 ```bash
-npm approve-scripts --all        # approve every pending install script (review the list first
-                                 # with: npm approve-scripts --allow-scripts-pending)
-npm rebuild                      # run the now-approved build scripts
-scip-query status --capabilities # verify: languages should show as available
-```
-
-This approval is deliberately yours to make — a package cannot approve its own install scripts,
-and one that tried would be exactly the kind of supply-chain behavior to distrust.
-
-## Start with One Change
-
-```bash
-# Before editing: establish structure, consumers, history, and blast radius
-scip-query plan-context <symbol-or-file>
-
-# Before creating a helper or abstraction: look for the existing concept
-scip-query similar <closest-symbol>
-
-# After an extraction or migration: find sites that still contain old logic
-scip-query incomplete-migration
-
-# Before declaring the work complete: gate the diff. Reindex only when status
-# reports stale and no live watcher or hook refresh is already responsible.
-scip-query diff-gate
-```
-
-For a repository-wide cleanup pass:
-
-```bash
-scip-query health
-scip-query recent-duplicates
-scip-query cleanup-plan --verify
-scip-query health --write-baseline
-```
-
-## Evidence and Confidence
-
-A claim you can't trace to evidence is a vibe. `scip-query` labels every answer with where it came from and how much weight it deserves:
-
-```mermaid
-flowchart LR
-  A["SCIP graph facts"] --> F["evidence-ranked findings"]
-  B["semantic augmentation"] --> F
-  C["source-backed candidates"] --> F
-  D["git-history signals"] --> F
-  E["repository checks"] --> F
-```
-
-1. **SCIP graph facts** for definitions, references, imports, calls, and dependencies.
-2. **Semantic augmentation** for TypeScript where the SCIP index needs more detail.
-3. **Source-backed candidates** for similarity, maintainability, and cleanup checks.
-4. **Git-history signals** for churn, co-change, recency, and documentation drift.
-5. **Repository-toolchain verification** for supported cleanup plans.
-
-Heuristic findings are candidates for inspection, not verdicts — the finding always sounds right, because it was generated to; only the code knows. Run `scip-query capabilities` to see which evidence and verification layers are available for the current repository and language.
-
-## Language and Framework Coverage
-
-Graph navigation works through supported [SCIP](https://github.com/sourcegraph/scip) indexers. Higher-confidence augmentation and verification vary by language and project toolchain. TypeScript currently has the richest semantic augmentation. React and Vue add built-in framework-aware maintainability checks on top of the core workflow.
-
-Rust projects are indexed through rust-analyzer's SCIP output. Compiler-backed
-Rust reference, callee, signature, and module/use evidence runs through a
-demand-started durable rust-analyzer session with bounded worker fallback.
-Capability and status output distinguish indexer readiness, semantic readiness,
-the selected transport, and whether the idle helper is currently stopped or
-live.
-
-Clojure projects are indexed through `scip-clojure`. Source fallback adds namespace imports, callable/callsite evidence, and protocol/record member evidence for `.clj`, `.cljs`, and `.cljc` files. When the project has `clj-kondo` available, cleanup-plan verification can use `clj-kondo --lint .`. Clojure does not currently have a scip-query semantic provider equivalent to TypeScript's `ts-morph` layer; capability output reports that boundary explicitly.
-
-## Cleaning Up AI-Generated Code
-
-Every check here exists because I watched the failure mode happen — in AI-generated codebases I inherited and rebuilt, and in my own agent sessions. AI-assisted development doesn't rot a codebase in general; it rots it in specific, recurring shapes, and each shape gets its own detector. The full catalog, with prevention wiring for each one, is in [docs/AI_FAILURE_MODES.md](docs/AI_FAILURE_MODES.md):
-
-**1. Find the echoes.** Agents re-implement helpers, hooks, composables, and frontend components they didn't know existed. `recent-duplicates` makes similarity _directional_ using git file ages - which side is the established original, which is the recent echo.
-
-Illustrative output:
-
-```
-91%  ECHO  react-component  src/components/ProjectCardVisual.tsx  ProjectCardVisual  (added 62 commits ago)
-     duplicates established  src/pages/HomePage.tsx  RecentProjectRow()
-     basis: jsx-structure
-     shared: component:ProjectCard, prop:title, event:click
-100% TWIN  src/workflows/a.ts ensureAccessible() / src/workflows/b.ts ensureAccessible()
-     (both new - one agent session duplicated itself; consolidate before they diverge)
-```
-
-**2. Finish the half-done extraction.** Agents extract a helper, rewire one or two call sites, and abandon the rest — the extracted logic survives inline at every site they missed. `incomplete-migration` finds helpers that are new in the diff, confirms they were wired in somewhere, and lists the established sites that still contain the helper's logic but never call it (containment scoring, because a missed site holds the helper's logic _plus_ its own).
-
-Illustrative output:
-
-```
-src/utils/priceLabel.ts  priceLabel()
-  wired into: src/cards/price-summary-a.ts
-  un-migrated: 100%  buildReportB()  (src/cards/price-summary-b.ts)
-  un-migrated: 100%  buildReportC()  (src/cards/price-summary-c.ts)
-```
-
-**3. Catch your standards docs lying.** If you keep in-repo standards for agents to read before implementing, a stale standard is worse than none. `doc-drift` reads every doc's file citations _and_ its co-change history, then flags docs whose code moved on without them — including **broken references** to files that no longer exist:
-
-```
-staleness 94  product/domain-model.md
-  BROKEN REFERENCE: cites src/api/servicePlans.ts — that file no longer exists
-  22 change(s) since doc update  src/workflows/serviceTasks.ts  (referenced by doc)
-```
-
-**4. Delete with project checks.** `cleanup-plan` runs dead-code analysis to a _fixpoint_ — deleting batch 0 makes batch 1 dead, and the plan shows the cascade. `--verify` applies each batch in an isolated temporary clone of committed `HEAD` and runs the supported checker detected for your project (differentially, so pre-existing errors don't drown the signal). The clone keeps verification writes out of both the candidate files and their protected `.git` metadata:
-
-```
-── Batch 0: deletable now (graph-fact, 67 LOC) ──
-── Batch 1: dead once batch 0 lands (cascade, 21 LOC) ──
-Batch 0: COMPILER-VERIFIED
-```
-
-When verification _fails_, the errors name the exact references the static evidence missed — that failure has caught real detector mistakes and stopped build-breaking deletions.
-Before applying a verified batch, run
-`scip-query cleanup-apply --verified --batch <n> --dry-run`. The preview reruns
-the verifier and dirty-tree checks, names every file, symbol range, and LOC,
-and stops at the source-mutation boundary. Apply by repeating the command
-without `--dry-run`; use `--all` only when the entire printed target set is
-intended.
-
-**5. Trim speculative generality.** `unused-params` finds trailing parameters no body ever uses (the classic "options for later"), scoped to removals that are type-safe by construction.
-
-**6. Keep frontend reuse honest.** React and Vue have dedicated frontend hygiene checks: component-duplicate commands compare JSX/template structure, hook/composable commands compare state/effect/request behavior, and large-component/view commands flag files that concentrate too many reasons to change. `health` includes these as hygiene pressure, while `incomplete-migration` remains the direct check for a hook/composable/helper extraction that was wired into some sites but not all of them.
-
-**7. Surface hidden coupling.** `co-change` finds file pairs that repeatedly change in the same commits with _no_ dependency edge — schema ↔ generated inventory ↔ doc triangles, backend schemas ↔ frontend stores, `.env.example` ↔ its parser. The reference graph cannot see these; the change graph can.
-
-**8. Gate every diff.** `diff-gate` runs a defined set of checks scoped to what a change _introduces_ and exits nonzero with remediation text for each finding. Baseline regressions are included when you pass `--baseline`.
-
-<!-- BEGIN GENERATED DIFF-GATE CHECKS -->
-| Check | What it catches | When it runs |
-| --- | --- | --- |
-| `echo` | Changed symbols that newly echo established code elsewhere. | Default diff gate. |
-| `incomplete-migration` | New helpers or abstractions wired into some sites while older inline sites remain. | Default diff gate. |
-| `co-change-partner` | Historically coupled files that usually change together but are missing from this diff. | Default diff gate. |
-| `twin-partner` | A changed symbol has a same-(near-)name twin (identical or already-divergent) elsewhere that this diff left untouched. | Default diff gate. Advisory: findings print but never cause a nonzero exit by themselves. |
-| `coverage-contract` | A configured `coverageContracts` entry (.scipquery.json) drifted: its declared key set no longer matches its ground-truth source. | Default diff gate, only when either side of a configured contract changed. |
-| `architecture` | A declared architecture boundary rule has a violation absent from the committed health baseline. | Default diff gate when closed dependency rows, requireCompletePolicy, requireAcyclic, requireResolvedBoundaries, requireMinimalPolicy, maxBoundaryFanOut/maxBoundaryFiles, or testPaths are configured and a baseline exists. |
-| `doc-reference` | Docs that cite changed files and may need a matching update. Dated snapshot docs (docs.snapshotPaths) are excluded by policy. | Default diff gate. Advisory (21.2) for bare file-mention citations; blocking when the citation has a line anchor or the cited file was deleted/renamed. |
-| `unused-params` | Fresh trailing parameters or options that no changed body uses. | Default diff gate. |
-| `new-dead` | Changed production symbols with zero indexed consumers. | Default diff gate. |
-| `baseline` | New health finding identities compared with the committed health baseline. | Only with `diff-gate --baseline`. |
-<!-- END GENERATED DIFF-GATE CHECKS -->
-
-Illustrative output:
-
-```
-[co-change-partner] schema.prisma changed, but scripts/scope-inventory.mjs did not — they change together 12x (86% of the time)
-  -> Update scripts/scope-inventory.mjs alongside this change, or confirm the coupling no longer holds.
-```
-
-**9. Ratchet it in CI.** `health --write-baseline` snapshots finding identities into a committable file; `health --baseline` exits 1 on any _new_ finding. "Don't get worse" is an objective gate that no score arithmetic can game.
-
-**10. Catch byte-identical tiny helpers `similar`'s fingerprints miss.** `duplicate-bodies` normalizes and hashes small callable bodies (comments/whitespace stripped, default `--min-loc 3`) and reports exact matches spanning multiple files — the "escapeRegex copy-pasted into seven files" shape that shape-based similarity scoring is too coarse to flag.
-
-**11. Catch a same-name function that drifted apart.** `twin-drift` finds functions with the same (or near-same) name in different files whose bodies have diverged — a strong signal one side got a bug fix, edge case, or feature the other never received. Synthetic leaves and test-only groups are excluded by default.
-
-Baseline finding identities are keyed as `detector:file:shortName`. A rename can therefore appear as one fixed identity plus one new identity; refresh the baseline after intentional renames once the changed code has been reviewed.
-
-Accepted findings can be recorded without weakening the rest of the gate:
-
-```bash
-scip-query suppress SQABC123DEF456 \
-  --check echo \
-  --reason-code compatibility-shim \
-  --evidence source:src/compat.ts \
-  --reason "the v1 export remains an intentional compatibility surface"
-```
-
-This writes one file per suppression under `.scipquery/suppressions/` — commit
-it with your change. One-file-per-suppression means two branches suppressing
-different findings merge without conflict. The command requires an exact
-current finding ID, a controlled reason code, and at least one inspectable
-counterevidence referent. `source:`, `config:`, and `test:` referents are
-content-hashed when the record is written, so changing their bytes reopens the
-finding. A `graph:` referent is an exact `scip-query ...` command:
-
-```bash
-scip-query suppress SQABC123DEF456 \
-  --reason-code detector-counterexample \
-  --evidence 'graph:scip-query refs CompatExport --full' \
-  --reason "all compiler-resolved consumers still require this export"
-```
-
-The model may create these narrow records without human approval. Admission is
-still decided by scip-query's policy: broad, legacy, expired, invalidated,
-incompatible, or anomalously high-volume decisions remain findings and appear
-as policy escalations. A successful gate with accepted records reports
-`pass-with-suppressions`, not an ordinary clean pass. The legacy
-`suppressions[]` array in `.scipquery.json` and v1 record files remain readable,
-but do not automatically waive findings until explicitly replaced with
-structured counterevidence. `diff-gate` reports active findings,
-accepted suppressions, escalation reasons, and summary counts.
-
-The first suppression for an identity is created exclusively. Repeating the
-same decision is idempotent, but a different reason, expiry, check, or file is
-a policy change and never silently overwrites the existing file. The command
-reports the existing SHA-256 revision:
-
-```text
-error: A different suppression decision already exists at ...
-Current revision: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.
-```
-
-After reviewing the committed decision, replace exactly that revision:
-
-```bash
-scip-query suppress SQABC123DEF456 --check echo \
-  --reason-code compatibility-shim \
-  --evidence source:src/compat.ts \
-  --reason "superseded by a narrower compatibility exception" \
-  --replace 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-```
-
-If another writer changes the record first, the stale replacement is rejected
-and the newer bytes remain intact. New records declare their schema version,
-record kind, stable suppression identity, writer version, adjudication policy,
-counterevidence, and invalidation conditions. Older unversioned and v1 records
-remain readable and are upgraded only by an explicit replacement. If a
-malformed or future record cannot be used, `diff-gate` reports exact
-incomplete-coverage counts and keeps findings conservatively unsuppressed. The
-wire schemas and merge rules are documented in
-[`docs/COMMITTED_RECORD_COMPATIBILITY.md`](docs/COMMITTED_RECORD_COMPATIBILITY.md).
-
-**12. Observe how the gate is handled.** Every completed `diff-gate` run, including JSON and installed Stop-hook runs, writes each finding transition to its own committed `.scipquery/events/*.json` file. Independent branches add independent paths instead of editing one shared ledger file, so ordinary event writes do not create merge conflicts. Each event stores the logical gate-run identity, observer provenance, index/worktree receipt, and immutable Git commit used as its comparison base. A finding is a verified fix when it disappears under that same comparison—either directly or after scip-query cleanly replays the original base against a newer committed `HEAD`. Merely committing the finding cannot clear it: if replay still finds it, the outcome stays open; if the worktree is dirty or Git cannot reproduce the base, verification waits. Historical reconciliation is deliberately incremental: one run replays at most one stored comparison base, reports the exact deferred base and finding counts, and leaves every deferred finding open for a later gate. A suppressed finding was noise or an accepted trade-off:
-
-```bash
-scip-query effectiveness --since 30d
-```
-
-```
-check       caught  fixed  suppressed  open  moved  unverified  resolution-vs-suppression  evaluation-precision  authority                 median-days-to-fix
-echo        14      10     2           1     0      1           83%                        -                     local-writable-telemetry  0.8
-new-dead    6       5      0           1     0      0           100%                       -                     local-writable-telemetry  0.3
-```
-
-`resolution-vs-suppression` is verified fixed ÷ (verified fixed + suppressed). Repository-local event and suppression files are writable by the same agent doing the work, so this ratio is operational telemetry, not an independent correctness grade. `evaluation-precision` is populated only when a protected external evaluator supplies both protected-CI records and a separately controlled attestation for their gate-run IDs; a JSON field cannot attest itself. Ordinary local-agent and local-human runs leave it blank. `moved` separates rename churn, while `unverified` is reserved for legacy or otherwise non-comparable resolutions that lack replay proof. Run diff-gate once to record the finding and again after the repair; a pre-commit rerun uses the same base directly, while clean post-commit runs advance through stored bases incrementally. Filter with `--check <name>`, window with `--since 30d|12w|<ISO date>`, and get machine-readable provenance, anomaly samples, and record-compatibility counts with `--json`. Local runs default to `local-agent`; a person running the gate directly may set `SCIP_QUERY_OUTCOME_OBSERVER_KIND=local-human` and optionally `SCIP_QUERY_OUTCOME_OBSERVER_SOURCE=<label>`. Both remain `repository-writable`; neither environment variable can claim protected authority. Because the event files are committed, the numbers survive re-clones and aggregate across every machine and agent working the repo, but missing or deliberately deleted history cannot be inferred from the remaining directory. Current event files carry an additive v1 discriminator, stable semantic identity, writer version, gate-run identity, observer authority, and observation receipt; existing unversioned files remain readable. `effectiveness` reports accepted and omitted record counts when history is partial, and cross-HEAD verification defers fixes rather than trusting an incomplete lifecycle. Legacy `.scipquery/ledger/events.jsonl` records remain readable and are migrated to individual files on the next gate write only when every non-empty line is compatible; otherwise the source ledger is preserved. Historical cross-`HEAD` events without stored comparison evidence remain unverified rather than being reclassified speculatively. Standalone health/cleanup commands are not yet outcome-tracked because they do not all expose a complete-scan contract.
-
-Protected end-to-end mission evidence is attached separately:
-
-```bash
-scip-query mission-trial report \
-  ../protected-trials/programs/SQTP-....json \
-  --protected-root ../protected-trials
-
-scip-query effectiveness \
-  --mission-trial-program ../protected-trials/programs/SQTP-....json \
-  --mission-trial-root ../protected-trials
-
-scip-query health \
-  --mission-trial-program ../protected-trials/programs/SQTP-....json \
-  --mission-trial-root ../protected-trials
-```
-
-The program content-binds its fixtures, evaluator hashes, exact agent/runtime
-configuration, budgets, rerun policy, and decision thresholds before counted
-runs. Control and treatment differ only by the declared autonomous-completion
-workflow. Reports retain raw paired samples and unknown values, separate
-detector, controller, agent, and apparatus failures, and classify the exact
-scope as `established | promising | neutral | regressed | insufficient`.
-Changing a threshold or supported scope creates a different program identity.
-Mission trials are product calibration, not a per-change ritual; ordinary
-coding work should use the automatic controller and closeout path above.
-
-`diff-gate` is also single-flight per project: a second CLI or Stop-hook gate
-returns the live owner's PID and start time instead of duplicating the same
-CPU-heavy work. The gate runs in an owned child process with a 60-second
-deadline, or 180 seconds with `--full`; timeout terminates and reaps that child
-and fails the gate explicitly. Before and after every detector, the child
-publishes a private progress record; a timeout therefore names the active
-detector or phase and the last completed detector instead of reporting only
-the total elapsed time. Operators may set
-`SCIP_QUERY_DIFF_GATE_TIMEOUT_MS` to a positive millisecond value, capped at
-10 minutes.
-
-The health report also keeps a worktree-local repeat counter in `evidence.db`.
-A logical observation is one completed detector evaluation named by an
-observation ID; unlike a process attempt, a retry of that evaluation reuses the
-same ID. SQLite serializes these observations before deriving their
-transitions. Two different IDs that report the same finding therefore add two
-to `timesShown`, while an exact retry with the same ID and evidence adds
-nothing. Reusing an ID for different evidence is rejected and reported. A
-writer-lock timeout skips the local counter update rather than delaying or
-changing the gate decision, and the next distinct run may try again. The
-dedupe records live as long as that rebuildable `evidence.db`; deleting the
-database resets both the counters and their retry memory. These local counters
-feed detector-precision hints, not the committed `effectiveness` totals above.
-
-Before any edit, `plan-context <target>` bundles the structural picture — definitions, references, call graph, blast radius — plus a HISTORY section: churn, fix-commit density, and the files that usually change together with the target ("editing this usually means editing these").
-
-## A Health Score You Can Argue With
-
-`scip-query health` refuses to be a vanity number.
-
-Illustrative output:
-
-```
-Codebase Health Score: 95/100
-  Risk:    95/100  (history-correlated signals: graph facts + change graph)
-  Hygiene: 100/100 (tidiness candidates)
-
-Score Breakdown (100 minus the following):
-  - 5  hidden-coupling: 5 co-changing pair(s) without a dependency edge
-
-Axes:
-  Deletable:            1,027 LOC across 89 symbols
-  Change amplification: 5 files/commit median, 23 p90
-  Evidence quality:     5 graph-fact, 150 heuristic, 0 user-suppressed
-  Validation:           flagged fix-density 0.12 vs baseline 0.20 (0.6x)
-```
-
-- **Risk vs. Hygiene** are separate claims: risk components are tied to graph facts and repository-history signals; hygiene components are tidiness. Blending them is how scores become meaningless.
-- **Every deduction is itemized** — the scalar is auditable, not vibes.
-- **The validation axis is a falsifiability loop**: it measures whether flagged files actually attract more fix commits than the rest _in your repo_, per detector. On some codebases a detector tracks repeated fixes; on others it is mostly noise — the tool reports which, instead of assuming.
-- **Suppressions are data**: every `// scip-query: ignore-*` comment is a precision label, counted and reported.
-
-## Accuracy Model
-
-Evidence tiers are kept explicit, strongest first:
-
-1. **Compiler-backed facts** from the SCIP database (`trace`, `refs`, `deps`, `outline`, ...).
-2. **Semantic augmentation** via `ts-morph` for TypeScript — verified references, callers, callees when SCIP alone is incomplete.
-3. **Source-backed heuristics** (AST/text) for cleanup signals. Always labeled: _"these are candidates, not exact compiler facts."_
-4. **Compiler verification** for deletions — the only tier that earns the word "safe."
-
-And because accuracy you don't measure is a feeling, `self-audit` samples symbols and scores the cheap paths against the TypeScript compiler.
-
-Illustrative output:
-
-```
-references  precision 1.0  recall 0.9   (the cheap path doesn't fabricate; it occasionally misses)
-```
-
-Heuristic detectors carry guardrails learned from real codebases: published `package.json` surfaces are exempt from "unused" advice, `contracts/` and `types/` modules are exempt from "definer never uses it," test files and component-sibling files don't count as hidden coupling, and changelogs-by-policy aren't drift.
-
-## Agent Skills
-
-`scip-query install-skills` symlinks bundled skills into Claude Code, Codex, and shared agent roots (`~/.agents/skills/`) so they update automatically with the package. The `scip-query` router skill dispatches codebase work to the specialist below; when unsure which owns a task, start there.
-
-### Bundled skills
-
-One-line "essential difference" per skill — read this table before the Routes table in `skills/scip-query/SKILL.md` if two names sound alike.
-
-| Skill           | Essential difference                                                           |
-| --------------- | ------------------------------------------------------------------------------ |
-| `scip-query`    | Router: select the smallest workflow that answers the request.                 |
-| `scip-explore`  | Understand or diagram existing code without changing it.                       |
-| `scip-plan`     | Prove the blast radius and specify one change or a multi-phase program.        |
-| `scip-diagnose` | Trace a failure, recurring design flaw, issue, or unreachable branch to cause. |
-| `scip-audit`    | Classify integrity, maintainability, drift, framework, and cleanup evidence.   |
-| `scip-improve`  | Act on confirmed audit or documentation findings and ratchet the result.       |
-| `scip-verify`   | Test and challenge a finished change before declaring it complete.             |
-| `scip-setup`    | Adopt or repair scip-query in a repository.                                    |
-| `_shared`       | Manual-only command/evidence reference loaded by another workflow when needed. |
-
-The important boundary is read-only versus mutating work: `scip-audit`
-classifies current evidence, while `scip-improve` changes confirmed findings.
-`scip-plan` is prospective evidence before implementation; `scip-verify`
-challenges a concrete finished diff. `scip-explore` explains working behavior;
-`scip-diagnose` starts from a failure or contradiction.
-
-For relational work, a `scip-plan` Markdown plan can carry one
-`scip-query-plan` JSON contract. `scip-query plan apply <path>` validates it,
-creates an inline goal and intended change for new work, fixes the repository
-state it describes, and records its retirement and architecture conditions in
-one action. Run `scip-query plan example` for a valid starter. Existing work
-uses its `goalId` and `changeId`. Proven direct edits skip this contract;
-sustained work uses ordered, verifiable slices. See
-[Autonomous work state](docs/AUTONOMOUS_WORK_STATE.md#apply-a-change-contract-when-the-work-is-relational).
-
-Project setup writes reviewable checkout-local lifecycle hooks for Codex and Claude Code (`.codex/hooks.json` and `.claude/settings.local.json`). A checkout-local hook is an agent-tool preference whose defining trait is that it applies to one clone rather than expressing team policy. Setup adds both paths to that clone's `.git/info/exclude`, so they do not appear in commits, and refuses to rewrite either path if it is already tracked. `setup-hooks --shared` remains accepted only as a deprecated compatibility flag; it no longer writes `.claude/settings.json`. These hooks add scip-query context at session start, route prompts toward the right skill, and run an advisory Stop-hook wrapper around the diff gate only for that repository. The Stop hook sends feedback to the agent by default instead of blocking; set `SCIP_QUERY_STOP_HOOK_MODE=warn` for a warning-only hook response, or `SCIP_QUERY_STOP_HOOK_MODE=block` to enforce the gate. Set `SCIP_QUERY_SKIP_HOOK_INSTALL=1` or run `scip-query setup --no-hooks` to skip hook installation during setup, and run `scip-query setup-hooks --json` later to repair the current checkout's hooks. Preview hook removal with `scip-query setup-hooks --remove --dry-run`; `--force` is an installation-only mode and cannot be combined with removal. A scope-free `scip-query uninstall --dry-run` safely previews both global and project integrations, while real uninstall requires exactly one of `--global` or `--project`.
-
-Stop feedback renders each completion decision and its selected autonomous
-action once. It preserves blocked and unknown predicates, but emits a
-`completion status` drill-down only when unresolved predicate truth can still
-change that action. Session restoration similarly summarizes repeated strategy
-history and emits record-status commands only for unresolved detail, while its
-16 KiB budget fallback remains fail-closed.
-
-Automatic attempt publication preserves every interrupted operation, failed
-command, and mutating command as its own immutable record. Successful read-only
-commands that observed the same repository state are published as one
-observation-phase attempt instead: their command kinds and strongest receipt
-remain in shared history, while their exact invocations remain in the local
-operation journal and agent transcript. This keeps retry, reconciliation,
-failure, and completion evidence intact without making ordinary exploration
-produce one committed JSON file per query.
-
-Setup/configuration writers are conflict-aware. They reread the latest file
-under a short token-owned lock, preserve unknown JSON fields and prose outside
-owned Markdown markers, and publish complete bytes with flushed files and,
-where the host supports it, a synchronized complete directory path. An unrelated
-intervening JSON edit is merged; a stale decision about the same project-config
-field, malformed latest JSON, malformed managed markers, or an edit that wins
-the final revision check produces an explicit conflict and leaves the latest
-file untouched. Reload the file and rerun the command after resolving that
-conflict. See [Configuration and setup write safety](docs/CONFIGURATION_WRITE_SAFETY.md).
-
-For a project, run `scip-query setup`. It enables demand-started automatic
-indexing unless the project already has an explicit `watch.enabled: false`,
-starts or reuses the project service, verifies its clean-idle deadline, and
-reports Rust's final durable/worker semantic selection and lifecycle state.
-The status read is passive; the setup health audit may make a semantic request
-that wakes rust-analyzer, after which the helper exits on clean idle.
-It also installs/refreshes skills, configures project-local hooks unless
-skipped, checks indexer readiness, performs explicitly approved pinned indexer
-remediation,
-refreshes the index, smoke-tests representative command families, writes
-`docs/scip-query/health-dossier.md` and `.json` when the optional health pass is
-selected, reports the health score and items needing attention, and seeds
-AGENTS.md/CLAUDE.md guidance. Use
-the default terminal checklist to accept or decline the recommended automatic
-indexing action and other project-local changes (`--guided` requires an
-interactive terminal and reopens it explicitly; automation should use
-`--yes` or `--json`). After setup,
-`scip-audit` confirms raw signals and `scip-improve` keeps
-fixing the worst confirmed items until no safe confirmed cleanup remains. Use
-`scip-query setup --git-hook` when you also want a local pre-commit diff gate.
-Non-interactive setup and ordinary reindex report missing global tools without
-installing them; pass `--install-missing` only when that operation may install
-the reviewed immutable package versions. CI setup is intentionally separate.
-
-Setup classifies every change by where its facts belong:
-
-- **Repository records (commit):** shared project intent, policy, and history whose value comes from surviving clones and branches, including `.scipquery.json`, AGENTS/CLAUDE guidance, health dossiers, `.scipquery/goals/*.json`, `.scipquery/changes/*.json`, `.scipquery/plans/*.json`, `.scipquery/attempts/*.json`, `.scipquery/decisions/*.json`, `.scipquery/suppressions/*.json`, `.scipquery/events/*.json`, and the legacy `.scipquery/ledger/`.
-- **Checkout preferences (do not commit):** integration settings for one clone, including `.codex/hooks.json`, `.claude/settings.local.json`, `.git/info/exclude`, and an optional `.git/hooks/pre-commit` backstop.
-- **User environment:** installed skills and language indexers used across checkouts on that machine.
-
-Rebuildable indexes, caches, and service state are runtime state: generated working data whose defining trait is that source plus configuration can reproduce it. They remain outside the repository by default. `setup --guided` labels each question with its scope, and both human and JSON setup reports return the resulting scope buckets.
-
-## Formal Models (TLA+)
-
-For the parts of a system where the risk lives in interleaving — retries, concurrency, partial failure, money, a state machine with guards — `scip-query` scaffolds a TLA+ model tied to indexed code and keeps it honest against that code:
-
-```bash
-scip-query tla scaffold src/queue/store.ts          # draft spec + config + mapping from indexed code
-scip-query tla verify specs/queue/Queue.tla          # mechanical conformance: referents, reads/writes, calls, model checker
-scip-query tla instrument specs/queue/Queue.tla      # generate a trace recorder + wiring sites for each mapped action
-scip-query tla trace-check specs/queue/Queue.tla --trace traces/run1.json   # check a recorded execution against Next
-scip-query tla fetch-tools                           # download the pinned tla2tools.jar into the cache
-```
-
-`tla verify` checks the mapping contract against the model text and the indexed code: variable and action referents must resolve to value-like symbols (not types), declared reads/writes are checked against a static scan, and every waiver requires a reason and is counted in the output. At scale, findings are grouped by `(category, modelElement)` with up to 3 exemplars per group by default — pass `--full` to print every finding ungrouped. The `scip-plan` formal-model scenario (`scip-query install-skills`) walks the scaffold → verify → instrument → trace-check loop end to end.
-
-`tla fetch-tools` allows five minutes and 256 MiB for the pinned download by
-default. It streams bytes through the SHA-256 verifier instead of buffering the
-response, rejects malformed or oversized `Content-Length`, and enforces the
-same ceiling when the header is absent. Callers for one cache path serialize on
-a token-owned lock and recheck the winner's checksum before fetching. Failed,
-aborted, or competing operations remove only their random-token staging file;
-the previously accepted cache remains available. Successful promotion flushes
-the verified file and its containing directory before acknowledging the new
-cache where the platform supports directory sync.
-
-File-backed state uses an explicit visibility-versus-crash-durability
-classification. See [Filesystem Publication and Durability](docs/DURABILITY.md)
-for the guarantees, failure outcomes, Windows limitation, and call-site matrix.
-Process coordination uses one versioned, token-owned format with conservative
-malformed-file recovery; see
-[Process Lock Ownership and Recovery](docs/LOCK_PROTOCOL.md).
-
-## Quick Start
-
-```bash
-scip-query setup             # interactive: languages, indexers, parsers, hooks, indexing, capabilities
+scip-query doctor
 scip-query status --capabilities
+```
 
-scip-query stats
-scip-query system src/auth
-scip-query plan-context login
+## The normal workflow
+
+Use native search and file reads for literal source. Use scip-query where
+compiler identity or repository relationships can change the answer.
+
+Before a nonlocal change:
+
+```bash
+scip-query context RetryPolicy
+```
+
+`context` returns a bounded evidence packet for a symbol, file, or module. It
+combines definitions, references, calls, data flow, dependencies, consumers,
+change risk, history, suppressions, and possible reuse sites. A bounded packet
+is a deliberately limited result: it is useful for a decision but does not
+claim to contain every possible relationship.
+
+After a coherent edit:
+
+```bash
 scip-query diff-impact
-scip-query health
+```
+
+`diff-impact` maps changed symbols to downstream consumers. It is a change map,
+not a pass/fail gate. The agent uses it with native tests and source inspection.
+
+When structure matters:
+
+```bash
+scip-query architecture
+```
+
+An architecture rule is repository policy that permits or forbids dependency
+edges between named file groups. Its defining trait is that it states a team
+constraint, not a detector guess. Rules live in `.scipquery.json` and can cover
+closed dependency rows, cycles, unresolved boundaries, fan-out, boundary size,
+and test placement.
+
+When cleanup or drift matters:
+
+```bash
+scip-query health --full
+```
+
+Health is a collection of repository analyses, not a correctness grade. It
+reports graph facts and heuristic candidates separately. A heuristic candidate
+is a source location selected by a pattern that may indicate a problem; the
+agent must read the source before treating it as a defect.
+
+## React and Vue
+
+React and Vue analysis remains a first-class part of the product.
+
+```bash
+scip-query react-component-duplicates --full
+scip-query react-hook-candidates --full
+scip-query react-large-component-pressure --full
+
+scip-query vue-component-duplicates --full
+scip-query vue-composable-candidates --full
+scip-query vue-large-view-pressure --full
+```
+
+These commands find repeated component structure, hook or composable behavior
+that may deserve reuse, and files carrying unusually broad responsibility.
+They tell an agent where to inspect and clean up. They do not order an automatic
+refactor: intentional variation and real framework constraints must survive.
+
+Vue repositories can add source facts when their indexer needs them:
+
+```bash
+scip-query augment-vue
+```
+
+## Cleanup and drift commands
+
+The health report is an overview. Focused commands expose the evidence behind
+particular kinds of pressure:
+
+```bash
+scip-query duplicate-bodies --full
+scip-query twin-drift --full
+scip-query recent-duplicates --full
+scip-query incomplete-migration --full
+scip-query doc-drift --full
+scip-query unused-params --full
+scip-query dead --full
+scip-query isolated --full
+scip-query cycles --full
+scip-query co-change --full
+```
+
+`incomplete-migration` looks for a new helper used at some matching sites while
+older inline forms remain. `twin-drift` looks for same-concept implementations
+that have diverged. `co-change` uses Git history to find files that repeatedly
+change together without a visible dependency edge. Each is evidence for
+inspection, not proof that code must be rewritten.
+
+For compiler-checked dead-code removal:
+
+```bash
 scip-query cleanup-plan --verify
-scip-query health --write-baseline   # start the ratchet
 ```
 
-## Prerequisites
+Review its batches before applying them. Cleanup is complete only when the
+retired path, unused wiring, and misleading residue are gone and native checks
+still pass.
 
-- Node.js 24 LTS is recommended. Node.js 22 is the minimum supported runtime;
-  Node.js 22, 24, and 26 are tested.
-- `scip` CLI, from [Sourcegraph SCIP releases](https://github.com/sourcegraph/scip/releases)
-- A language-specific SCIP indexer for your project
+## Focused graph queries
 
-On Windows, the `scip` binary is installed automatically from npm:
-`scip-query-scip-windows` is an OS-gated optional dependency (universal
-package, x64 + ARM64) that only Windows installs fetch. Resolution order:
-`scip` on PATH, then `SCIP_QUERY_SCIP_BIN`, then the sidecar package. Run
-`scip-query check-deps` for platform-specific install instructions. The
-[Windows sidecar release guide](docs/WINDOWS_SIDECAR_RELEASE.md) defines its
-executable provenance, fail-closed build/pack checks, and registry identity
-gate. Release operators can run `npm run verify:scip-windows-registry` for a
-sidecar-only read, or `npm run release:npm:dry-run` for the complete
-main-plus-sidecar preflight and registry reconciliation without publication.
-The publishing command is `npm run release:npm`; direct `npm publish` refuses
-to run because it cannot own the recoverable two-package ordering.
+Use the aggregate `context` command first for ordinary planning. Reach for a
+focused query when one unresolved relationship can change the decision:
 
-| Language                      | Indexer          | Install                                                                                                                       |
-| ----------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| TypeScript / JavaScript / Vue | scip-typescript  | `npm install -g @sourcegraph/scip-typescript`                                                                                 |
-| Java / Scala / Kotlin         | scip-java        | [releases](https://github.com/sourcegraph/scip-java/releases)                                                                 |
-| Rust                          | rust-analyzer    | Ships with rust-analyzer: `rust-analyzer scip`                                                                                |
-| Python                        | scip-python-plus | `npm install -g scip-python-plus`                                                                                             |
-| Go                            | scip-go          | `go install github.com/sourcegraph/scip-go@latest`                                                                            |
-| Ruby                          | scip-ruby        | [releases](https://github.com/sourcegraph/scip-ruby/releases)                                                                 |
-| C / C++                       | scip-clang       | [releases](https://github.com/sourcegraph/scip-clang/releases)                                                                |
-| C# / VB                       | scip-dotnet      | [releases](https://github.com/sourcegraph/scip-dotnet/releases)                                                               |
-| Dart                          | scip-dart        | [releases](https://github.com/Workiva/scip-dart/releases) or `dart pub global activate scip_dart`                             |
-| PHP                           | scip-php         | [releases](https://github.com/davidrjenni/scip-php/releases) or Composer package `davidrjenni/scip-php`                       |
-| Clojure / ClojureScript       | scip-clojure     | Requires a `scip-clojure` binary on PATH; source: [PlunderStruck/scip-clojure](https://github.com/PlunderStruck/scip-clojure) |
-
-For Python, the executable may be `scip-python`, `scip-python-plus`, or both. `scip-query` accepts either name.
-
-Vue single-file components are handled through the JavaScript/TypeScript indexer. `scip-query` also extracts the `<script>` or `<script setup>` block so symbol, reference, and import queries cover Vue components alongside regular `.ts` and `.js` files.
-
-`augment-vue` uses one in-process Volar context by default. Calibrated projects
-can opt into parallel computation with `SCIP_QUERY_AUGMENT_VUE_WORKERS=<count>`.
-The CLI then owns every worker until exit: a timeout or peer failure terminates
-and awaits all unfinished workers before removing their private result
-directory. `SCIP_QUERY_AUGMENT_VUE_WORKER_TIMEOUT_MS` defaults to five minutes,
-and `SCIP_QUERY_AUGMENT_VUE_WORKER_RESULT_MAX_BYTES` defaults to 64 MiB per
-worker. Every result carries its run, worker, and task identities and is
-size-checked before parsing, so a stale, partial, or mismatched result cannot
-enter the deterministic worker-order merge.
-
-`scip-query capabilities` prints project-level readiness plus a per-language matrix for SCIP indexing, source fallback evidence, semantic provider support, cleanup detector support, and cleanup verification coverage. Use it when you need to know whether a finding is graph-backed, semantic, heuristic, or compiler-verified for the language in front of you.
-
-## How It Works
-
-1. A SCIP indexer analyzes source code with the actual compiler, type checker, or language server and produces `index.scip`.
-2. The `scip` CLI converts that protobuf file to a SQLite database: `index.db`.
-3. `scip-query` runs SQL queries, language-aware source augmentation, and git-history analysis against it.
-
-By default, indexes live in `~/.cache/scip-query/projects/<hash>/`, keeping project directories clean. Override paths with `.scipquery.json` or `SCIP_QUERY_*` environment variables. Reindexing writes per-language SCIP shards next to the SQLite index, so a mixed-language repo can reuse unchanged language outputs and rerun only the languages whose source/config inputs changed.
-
-Each accepted worktree-local index is also stored beneath an immutable
-`.scipquery-generations/<identity>/` directory. An atomic `state.json` pointer
-selects the database, SCIP companion, and metadata as one unit; every
-`ScipDatabase` retains that unit for its lifetime. The familiar top-level
-`index.db`, `index.scip`, and `meta.json` files remain compatibility mirrors,
-but internal queries do not reread them after opening a generation. This keeps
-cursor identities and semantic requests attached to the same rows even during
-a concurrent reindex. Each live reader publishes a process-identity lease.
-Automatic collection retains the current and recovery generations, every
-live-reader generation, and enough recent generations to stay within both an
-eight-generation and 2 GiB logical default bound. Malformed reader ownership
-fails closed; dead readers are reclaimed. `status` reports retained count,
-logical bytes, oldest age, protected/readers counts, limits, and the last
-collection result. The publication, crash, legacy-overlap, and retention rules
-are documented in [Local Index Generations](docs/INDEX_GENERATIONS.md).
-
-All `meta.json` consumers share one version decoder and an explicit capability
-matrix. Version 2 remains readable, version 3 is current, and version 4 is a
-reserved unsupported migration boundary. See
-[Reindex Metadata Compatibility](docs/REINDEX_METADATA_COMPATIBILITY.md).
-
-Git worktrees in the same repository also share immutable generations under
-`~/.cache/scip-query/repositories/<repository-id>/`. A shared generation is a
-complete index for one exact committed tree, indexing configuration, artifact
-schema, and scip-query producer version; its immutability lets several
-worktrees trust it without sharing later writes.
-Before an index-reading command opens SQLite, a clean worktree with an exact
-generation clones it into that worktree's normal writable cache. Filesystem
-copy-on-write cloning is used when available, with an ordinary copy fallback;
-hard links are never used. Dirty edits, watcher refreshes, locks, and local
-`evidence.db` state therefore remain private to the worktree.
-
-A new worktree can also reuse its committed baseline after it has already
-acquired uncommitted edits. On its first reindex, scip-query selects an
-immutable generation whose Git tree, language set, indexer configuration,
-artifact schema, and producer version exactly match the worktree's `HEAD`. It
-clones that generation into the private cache, then the normal incremental
-indexer rebuilds only the changed language or project shards. A usable local
-cache always wins, and a missing, incompatible, or corrupt baseline falls back
-to an isolated local build. Baseline attachment happens inside reindex, so a
-query never opens committed baseline evidence before the dirty refresh has
-completed.
-
-Each worktree lease names the shared generation protected from collection. An
-attached clean cache reports the generation as both `base` and `active`. Once a
-dirty reindex produces a private overlay, `status` reports the original shared
-`base`, no shared `active` generation, and the `overlay` action. That distinction
-preserves lineage without claiming private bytes are still identical to the
-shared generation. Lease publication, liveness touches, and repository cleanup
-share one repository-cache lock. A touch rereads the current lease only after
-acquiring that lock, validates its ownership checksum and current local
-generation, and changes only `lastSeenAt`. If a newer generation was attached,
-the lease was deleted or recreated, or its ownership changed while the touch
-waited, the touch preserves that current state instead of replaying its stale
-observation.
-
-Automatic refresh follows the same boundary. When `watch.enabled` is true,
-the first watcher-eligible command in each worktree starts or reuses a daemon
-identified by that checkout's Git worktree ID. A Git worktree ID is a checkout
-identifier derived from its filesystem path after symbolic-link redirects are
-resolved and its checkout-specific Git control directory; that combination
-distinguishes sibling worktrees even though they share repository objects. The
-passive `status`, `doctor`, `effectiveness`, and `install-skills` commands
-inspect or maintain existing state without starting a watcher; index-reading
-graph, semantic, health, and gate commands remain watcher-eligible. The
-daemon observes only that worktree's files and Git index, and every reindex
-child writes only to that worktree's writable `index.scip` and `index.db`. A
-cross-platform source watcher maintains the directory subscriptions needed to
-detect ordinary unstaged edits even when Node does not provide recursive
-filesystem events, while separate Git polling detects commit and staging-state
-changes. File events that arrive during a reindex still mark the watcher dirty,
-but the queued rerun is suppressed when the completed index's source
-fingerprint proves those events are already represented; a stale or unreadable
-fingerprint always preserves the rerun. If the host refuses an event-backed
-subscription because its open-file allowance is exhausted, that project
-retries with 500 ms file polling; ordinary event-backed watchers do not pay
-that polling cost. A
-shared generation is only a warm starting snapshot; it never implies a shared
-watcher or shared later writes. A daemon that exits after its configured idle
-timeout starts warm again when that worktree is next used.
-
-Command-triggered refresh intent is stored separately from disposable activity
-timestamps. Each accepted demand is an immutable request with a deadline and
-optional idempotency key; the daemon claims pending requests exclusively,
-coalesces them deliberately, and acknowledges them only after the corresponding
-reindex completes. A failed attempt returns its requests to pending, and a
-successor daemon recovers claims left by a crashed owner. `watch --status`
-reports pending, claimed, completed, and expired counts. The complete
-at-least-once and retention contract is documented in
-[Watch Refresh Requests](docs/WATCH_REFRESH_REQUESTS.md).
-
-The primary checkout is only a possible source of a generation, never an
-authority for a linked worktree. If its local cache already contains
-uncommitted changes that are absent from a new worktree's `HEAD`, the full
-source fingerprint differs and that cache is rejected. The new worktree uses
-an existing immutable generation for its own `HEAD` or performs the one clean
-build that creates it.
-
-The same behavior applies whether a worktree was created by Git, Conductor, or
-an agent. Concurrent cold worktrees at one snapshot coordinate one shared
-publication. A removed managed worktree cache is deleted by the next
-opportunistic sweep after its watcher, hydration, and index-build processes
-have exited; a shared generation stays while a live worktree or process
-references it, then remains for one unreferenced hour unless the 2 GiB
-repository budget requires earlier eviction. Ownership checksums and physical
-path containment prevent cleanup from following forged records or symlinks.
-Explicit `dbPath`, `SCIP_QUERY_CACHE_DIR`, and
-`SCIP_QUERY_INDEX_DB` locations are never shared or automatically deleted.
-Those explicit overrides also bypass default path isolation, so pointing two
-worktrees at the same mutable override is intentionally outside automatic
-per-worktree protection.
-Set `SCIP_QUERY_SHARED_CACHE=0` to restore worktree-local-only behavior.
-
-Each rebuilt generation also records an affected-set shadow beside the index:
-the files a future incremental writer would recompute, the normalized
-documents/facts that the authoritative full rebuild actually changed, recall,
-and any conservative fallback reason. `scip-query status` shows a compact
-summary and telemetry path; `status --json` exposes the structured
-`affectedSetShadow` object. Shadow results are observational in this phase and
-never decide which indexer runs or which generation publishes.
-Historical shadow rows are compact calibration summaries. They rotate at
-8 MiB and retain one previous segment, bounding history near 16 MiB per
-project; the complete latest record remains available for status diagnostics.
-After acquiring a project's exclusive reindex lock, each reindex also removes
-staging directories abandoned by interrupted earlier reindexes.
-Watch and watcher-triggered reindex ownership records include the operating
-system process start identity as well as the PID. `watch stop`, daemon
-replacement, and manual preemption verify both values before signaling. A
-legacy record or a platform lookup failure therefore fails closed with an
-explicit recovery error instead of treating a reused PID as the old
-tool-owned process.
-Watcher shutdown stops new work and gives subscriptions and active reindex
-ownership five seconds to drain. A dedicated watch service that cannot prove a
-clean stop reports a degraded shutdown and exits so the operating system can
-close stuck descriptors. `watch stop` allows six seconds for that graceful
-path, then revalidates the exact process-start identity before forced
-termination and waits up to one additional second to observe exit. A changed
-or unavailable identity is never signaled, and ownership files are not cleaned
-until the original process is known to have exited.
-
-Finite subprocesses use explicit wall-time and output budgets. Quick binary
-probes default to 10 seconds, Git operations to 30 seconds, isolated analysis
-workers to 180 seconds, installers and index conversion to 300 seconds, and
-language indexers to 600 seconds. Set `SCIP_QUERY_INDEXER_TIMEOUT_MS` to a
-positive integer to override the indexer deadline. Command-specific checker,
-TLA+, benchmark, and Rust semantic budgets continue to use their documented
-options or environment settings. When an asynchronous finite child exceeds
-its deadline or output budget, scip-query drains both streams, sends `TERM`,
-escalates to `KILL` after a one-second grace period only while the recorded
-process identity still matches, and reports completion only after the child
-has closed. Detached watch and semantic services are deliberate exceptions:
-their persisted identity, lease, request deadlines, and stop protocol own
-their lifetime.
-
-TypeScript monorepos can opt into project sharding with `indexer.typescript.projectMode: "workspace"`. In that mode, `scip-query` discovers repo-local TypeScript project roots, runs one `scip-typescript` process per project with bounded concurrency, merges the shard protobufs, and still publishes one TypeScript language index. Set `indexer.typescript.projects` to an explicit list of project directories or tsconfig paths when automatic discovery is too broad. When `projects` is set to a non-empty list, it is authoritative: only the listed projects are indexed, automatic discovery does not run, and the repo root is not re-added alongside them (even if the root tsconfig covers subdirectories) — files that are only covered by an excluded root tsconfig (e.g. shared ambient `.d.ts` files) drop out of the index, so pick the list deliberately. An empty or absent `projects` falls back to full discovery, unchanged. Workspace mode also caches each project shard: reindexing after an edit reruns only the changed projects and their dependents (workspace `package.json` dependencies and tsconfig `paths`/`references` targets count as dependencies), serves untouched projects from `language-indexes/typescript-projects/`, and reports every reuse decision in `reindex --json` shard diagnostics. Set `indexerConcurrency` when a repo needs a persistent worker cap; CLI `--indexer-concurrency` and `SCIP_QUERY_INDEXER_CONCURRENCY` still override ad hoc runs.
-Use `indexer.typescript.pnpmWorkspaces` only with the default single-project mode; workspace mode passes explicit projects instead.
-
-Do not enable workspace mode merely because a repository uses TypeScript. Use
-it when the repository has multiple real tsconfig/project boundaries and the
-setup/readiness evidence confirms them. Single-project repositories already
-reuse unchanged TypeScript documents and keep a persistent ts-morph Project in
-the demand-started service.
-
-Clojure projects can pass a project-local `scip-clojure` config file through `.scipquery.json`:
-
-```json
-{
-  "$schema": "./node_modules/scip-query/docs/schemas/project-config.schema.json",
-  "schemaVersion": 2,
-  "languages": ["clojure"],
-  "indexer": {
-    "clojure": {
-      "configPath": ".scip-clojure.json"
-    }
-  }
-}
+```bash
+scip-query refs SomeSymbol --full
+scip-query trace SomeSymbol
+scip-query call-graph SomeSymbol
+scip-query dataflow SomeSymbol
+scip-query affected SomeSymbol --full
+scip-query system src/payments
+scip-query surface src/payments
+scip-query deps src/payments/service.ts
+scip-query rdeps src/payments/service.ts
 ```
 
-Most read-only commands accept `--json` and use the same versioned envelope.
-Add `--result-only` when a program needs just the command payload:
+Do not repeat an unchanged query after context compaction. Re-run when source,
+the index generation, the command input, or the required coverage changed.
 
-```json
-{
-  "kind": "scip-query-result",
-  "schemaVersion": 1,
-  "producer": { "name": "scip-query", "version": "0.20.0" },
-  "command": "fan-in",
-  "resultSchemaVersion": 1,
-  "args": ["login"],
-  "options": { "json": true },
-  "result": []
-}
+## Suppressions
+
+A suppression is a versioned repository record that says one detector finding
+is accepted or is not actionable for a stated reason. Its defining trait is
+that it addresses one finding without weakening unrelated analysis.
+
+```bash
+scip-query suppress SQ123 \
+  --check twin-drift \
+  --file src/example.ts \
+  --reason-code intentional-variation \
+  --reason "The two implementations follow different external contracts."
 ```
+
+Commit relevant `.scipquery/suppressions/*.json` files with the code or policy
+that justifies them. Suppressions are merge-friendly because each finding uses
+its own file.
+
+## Output and coverage
+
+Human output is the default because it keeps hierarchy, whitespace, and source
+line numbers readable. Programmatic consumers can use:
+
+```bash
+scip-query context RetryPolicy --json --result-only
+```
+
+If output prints `Continue exactly:`, run the emitted command unchanged until
+transport is complete. Transport completion means every rendered character was
+retrieved; it does not make bounded analysis exhaustive.
+
+Use `--full` only when complete command coverage can change a decision. Always
+read a command's coverage note before claiming that every caller, consumer, or
+finding was considered.
 
 ## Configuration
 
-Run this in a project root:
+Project policy lives in `.scipquery.json`. Common sections configure source
+paths, generated or vendor exclusions, documentation snapshots, architecture
+boundaries, declared coupling, coverage contracts, and watcher behavior.
+
+Validate it with:
 
 ```bash
-scip-query init
+scip-query config-validate
 ```
 
-It creates a minimal `.scipquery.json`:
+Keep configuration small. Add a rule only when an observed repository fact or
+team policy requires it.
 
-```json
-{
-  "$schema": "./node_modules/scip-query/docs/schemas/project-config.schema.json",
-  "schemaVersion": 2,
-  "collaborationDomainId": "5ea57d1a-936c-4c91-b58f-5d61e45173a5",
-  "languages": ["typescript"],
-  "watch": {
-    "enabled": true,
-    "debounceMs": 2000,
-    "cooldownMs": 5000,
-    "gitPollMs": 2000,
-    "idleTimeoutMs": 180000,
-    "autoRefresh": true,
-    "resourceBudget": {
-      "enabled": true,
-      "windowMs": 900000,
-      "maxRebuilds": 2,
-      "maxEstimatedWriteBytes": 1073741824
-    }
-  }
-}
+## Command reference
+
+The generated syntax catalog is in
+[`docs/COMMAND_REFERENCE.md`](docs/COMMAND_REFERENCE.md). The one bundled
+`scip-query` skill teaches mapping, ordinary planning, architecture checks,
+and focused use of the React, Vue, and general cleanup detectors.
+
+## Development
+
+```bash
+npm install
+npm run typecheck
+npm test
+npm run build
 ```
 
-`schemaVersion` identifies the meaning of the persisted fields. Version 2 is
-the current format. The CLI reads both unversioned/explicit-v1 legacy files
-and version 2. A setup command migrates a legacy file on its next authorized
-config write, preserving fields it does not own. An unsupported future
-version or malformed discriminator fails before any option is used and is
-left byte-for-byte unchanged. `$schema` points editors at the JSON Schema
-bundled with the installed package.
-
-`collaborationDomainId` is an opaque UUID created once and committed with the
-project. Branches, clones, linked worktrees, and contributor forks that intend
-to merge inherit it, so results can establish that they belong to the same
-collaboration without treating an absolute path or mutable remote URL as
-identity. Copying code into an unrelated project does not imply collaboration;
-that project gets its own ID. If an existing config lacks the field, `init` or
-`setup` adds it with a revision-aware narrow write.
-
-Creation is exclusive: if another process creates `.scipquery.json` first,
-`init` adopts the complete winning file and adds only a missing collaboration
-identity instead of replacing independent fields.
-
-Add optional fields such as `indexerConcurrency`, `indexer`, `entryRoots`,
-`declaredCouplings`, and `suppressions` only when the project needs them.
-
-`scip-query init` and a first `scip-query setup` enable this lifecycle. An
-existing explicit `watch.enabled: false` remains an opt-out unless guided setup
-selects the recommended enable action. With `watch.enabled`, normal commands
-and agent hooks wake one per-project
-background service. Relevant file/Git activity keeps it alive; by default it
-exits after three minutes of clean inactivity and wakes on the next command.
-Set `idleTimeoutMs` to `0` to keep it running. `scip-query watch` still provides foreground
-mode, while `watch --daemon`, `watch --status`, and `watch --stop` expose the
-background lifecycle. Command-line timing flags are process-local and apply
-only when a foreground watcher or daemon starts; a live daemon refuses those
-flags and names the required stop/start sequence instead of pretending its
-timing changed. The 2-second default quiet period resets after every relevant
-input, so an edit burst settles before its first refresh. It remains explicitly
-configurable and has no hidden minimum. The 5-second minimum cooldown then
-limits a long or overlapping burst to one refresh plus, when necessary, one
-trailing refresh. Older configs and command-line overrides below 5,000
-ms—including `cooldownMs: 0`—are raised to that runtime safety floor. Both
-modes share one project lock, so only one can own an index cache.
-
-Relevant activity means a source file, ambient declaration, compiler/build
-manifest, dependency lock, or `.scipquery.json` change that can affect a
-configured indexer. Directory events, documentation, agent settings, and
-scip-query event records do not request indexing. Git polling compares the
-actual changed paths and skips a transition proven to contain only those
-non-input files; if Git cannot establish the changed path set, the watcher
-conservatively refreshes rather than assuming the index is current.
-The persisted project fingerprint uses the same input boundary, so a
-documentation-only edit does not make the index stale on the next command.
-Each cached language shard owns only its language's source, build manifests,
-and dependency locks: for example, `package-lock.json` invalidates the
-TypeScript/JavaScript shard but not Rust, while `Cargo.lock` invalidates Rust
-but not TypeScript.
-
-Automatic refresh also has a persisted rolling resource budget. By default,
-after two completed rebuilds or 1 GiB of estimated writes within 15 minutes,
-the watcher pauses new automatic work until the oldest contributing activity
-leaves the window. File and Git changes remain coalesced as one pending
-refresh, and `watch --status` reports the reason, consumption, and retry time.
-A missing activity ledger is an empty history; an existing unreadable or
-malformed ledger pauses automatic work because its recent cost cannot be
-proven. `resourceBudget.enabled: false` disables this guard. An explicit
-`scip-query reindex` remains available during a pause, but its result is
-recorded and counts against later automatic admission. The guard controls the
-next run; it cannot impose a portable device-write limit on a rebuild that was
-already admitted.
-
-Large staging artifacts use copy-on-write clones where the filesystem supports
-them and fall back to full byte copies only when clone capability is genuinely
-unavailable. Status separates logical output, reflinked staging bytes, and
-fallback-copied bytes so a large logical index is not mistaken for the same
-amount of physical disk traffic. It also reports each top-level language
-shard's rebuild/reuse count, bytes newly produced, and cumulative indexer time.
-Those language rows intentionally exclude TypeScript workspace-project detail
-so one top-level language artifact is counted once. Final merged SCIP/SQLite
-outputs, reflink staging, and fallback byte copies remain project aggregates:
-after languages are merged, assigning those shared bytes to one language would
-be a guess rather than measurement. Ledgers written before language
-attribution remain valid and status labels their completed runs as
-unattributed.
-
-Stopping is an asynchronous drain: the watcher first rejects new
-refreshes, continuously consumes a bounded tail of the active worker's output,
-closes every source subscription, and waits for the worker to exit after
-`TERM`/`KILL` escalation before it removes service state or releases the lock.
-Each detached reindex worker also monitors the exact process identity of its
-watcher owner and propagates owner loss through the active indexer process
-tree, preventing a worker from continuing indefinitely after an abrupt watcher
-death.
-`watch --status` reports `Stopping safely` while that work is in progress. If a
-subscription cannot close or worker exit cannot be established, the service
-keeps an explicit degraded draining record and its ownership files instead of
-advertising a clean stop; the reported reason is the recovery evidence.
-Elapsed waits and idle control use a process-local monotonic clock; shared
-heartbeats remain civil-time diagnostics and never authorize replacement or a
-process signal by age alone. See [Time Semantics](docs/TIME_SEMANTICS.md).
-
-The same demand-started service lazily owns TypeScript compiler Projects after
-the first command that needs ts-morph semantics. Separate CLI processes reuse
-that session through a repository-local bounded mailbox; source-only index
-generations refresh the existing Projects, while configuration or uncertain
-changes replace them. `watch --status` reports Project/session/request counts.
-Current TypeScript and durable Rust mailbox operations use stable
-content-derived identities, pending/inflight/response states, atomic
-owner-expiring claims, retained idempotent completions, FIFO enqueue ordering,
-typed item/byte backpressure, bounded cleanup, and pressure telemetry. Client
-timeout or exit no longer deletes shared work; a service crash before response
-is reclaimable, while a response published before a crash prevents
-re-execution. The service rereads the clock before each claimed operation and
-again after handler completion, so time spent on an earlier request cannot let
-a later expired request begin or publish success. Idle mailbox polling backs
-off from 50 ms to 250 ms and returns to 10 ms while draining work; mailbox
-directories are initialized once per service ownership rather than on every
-poll. The precise state machine, default limits, legacy overlap, and
-failure matrix are documented in
-[`docs/MAILBOX_LIFECYCLE.md`](docs/MAILBOX_LIFECYCLE.md).
-Rust v3 additionally binds every accepted response to its request ID,
-operation ID, mailbox-session identity, and authoritative absolute deadline;
-its old/current/future compatibility matrix is in
-[`docs/RUST_DURABLE_SESSION_PROTOCOL.md`](docs/RUST_DURABLE_SESSION_PROTOCOL.md).
-The Rust semantic worker retains at most four rust-analyzer sessions. Linked
-Cargo projects are resolved, deduplicated, and sorted before session reuse, so
-equivalent project sets share one session regardless of input order. When the
-capacity is full, the least-recently-used session completes its LSP shutdown
-and process-tree reap before a replacement starts; an unproven shutdown blocks
-replacement instead of allowing overlapping language servers.
-It also reports a rolling 24-hour reindex activity summary: rebuilt, reused,
-failed, and freshness-proven suppressed refreshes plus estimated logical output
-bytes. Per-language rows report the top-level cached shard bytes actually
-produced and the cumulative time spent in that language's indexer; reused
-shards contribute zero produced bytes and zero indexer time. The aggregate
-estimate counts all scip-query artifacts emitted by rebuilt refreshes; neither
-that estimate nor the language rows measure physical SSD writes. The underlying
-`reindex-activity.jsonl` history uses two bounded 1 MiB segments. Append,
-rotation, and retained-set reads share a process-instance lock; incomplete
-crash tails are trimmed or ignored without deleting earlier complete lines.
-Status labels the resulting summary `complete`, `partial`, or `unavailable`
-and reports read, invalid, skipped, read-error, and incomplete-tail counts.
-Telemetry append failure never changes the authoritative reindex result, but
-it is returned to the caller and surfaced as a warning or watch-state error
-instead of disappearing. These observations are process-visible rather than
-crash-durable. See
-[`docs/TELEMETRY_RETENTION.md`](docs/TELEMETRY_RETENTION.md).
-The refresh-request counters reported beside it describe durable demand
-admission and processing state, not reindex frequency.
-If the service is stopped, incompatible, busy beyond its bound, or returns an
-invalid response, the command falls back to the existing in-process ts-morph
-provider.
-
-Rust semantic requests use a separate demand-started durable rust-analyzer
-session by default. It remains stopped until a Rust semantic request needs it,
-exits after its clean idle period, and automatically falls back to the
-per-command worker on helper/readiness/timeout/request failure. Set
-`SCIP_RUST_SEMANTIC_DURABLE_SESSION=0` for an explicit worker-only opt-out.
-The LSP transport accepts at most a 16 KiB response header and a 64 MiB JSON
-message by default, with a 64 KiB header ceiling and a 256 MiB combined
-wire-buffer ceiling even for programmatic overrides. Missing, invalid,
-duplicate, unsafe, or oversized `Content-Length` framing kills that transport
-once, clears its retained bytes, and fails all outstanding semantic/readiness
-work so the normal worker or graph/source fallback can take over.
-
-Use `declaredCouplings` for files that intentionally form one maintenance unit.
-These pairs are treated as structurally linked by `co-change` and health, while
-still appearing in file-specific exploration. The cleanup detector example
-keeps dead-code, isolated-callable, and stale-abstraction detectors together
-because they share candidate and evidence policy changes:
-
-```json
-{
-  "declaredCouplings": [
-    {
-      "name": "cleanup detector family",
-      "reason": "These detectors share candidate, evidence, and health policy changes.",
-      "files": [
-        "src/queries/cleanup/dead.ts",
-        "src/queries/cleanup/isolated.ts",
-        "src/queries/cleanup/stale-abstractions.ts"
-      ]
-    }
-  ]
-}
-```
-
-The consumer evidence product migration kept this declared-coupling example
-current: `src/queries/cleanup/stale-abstractions.ts` still belongs to the
-cleanup detector family and still shares candidate/evidence policy with the
-dead and isolated cleanup detectors.
-
-Useful environment variables:
-
-| Variable                  | Purpose                                                                 |
-| ------------------------- | ----------------------------------------------------------------------- |
-| `SCIP_QUERY_PROJECT_ROOT` | Override the project root directory                                     |
-| `SCIP_QUERY_INDEX_DB`     | Override the SQLite database path and bypass automatic worktree sharing |
-| `SCIP_QUERY_INDEX_SCIP`   | Override the SCIP protobuf path                                         |
-| `SCIP_QUERY_CACHE_DIR`    | Override the cache directory and bypass automatic worktree sharing      |
-| `SCIP_QUERY_SHARED_CACHE` | Set to `0` to disable shared generations, evidence, leases, and cleanup |
-| `SCIP_QUERY_SCIP_BIN`     | Path to a local `scip` binary (overrides PATH and the Windows sidecar)  |
-
-Query results are filtered through the project's `.gitignore`. If none exists, common generated directories such as `dist/`, `target/`, `node_modules/`, and `.venv/` are excluded by default.
-
-## Documentation
-
-- [AI Failure Modes](docs/AI_FAILURE_MODES.md): every specific way AI coding rots a codebase, the detector built for it, and how to wire prevention in.
-- [Detector Guide](docs/DETECTOR_GUIDE.md): what each detector measures, the differences between the confusable ones, and which check to run after which kind of change.
-- [Agent Guide](docs/AGENT_GUIDE.md): goal-oriented workflows for tracing, planning, cleanup, quality checks, and change verification.
-- [Command Reference](docs/COMMAND_REFERENCE.md): generated command syntax, descriptions, and options.
-- [CLI JSON output contract](docs/CLI_JSON_OUTPUT.md): versioned envelopes, compatibility rules, and schema.
-- [Security model](docs/SECURITY_MODEL.md): untrusted-checkout boundaries, authority flags, input budgets, and complete-output pagination.
-- [Programmatic API](docs/API.md): using the query functions from TypeScript.
-- [Historical plans](https://github.com/PlunderStruck/scip-query/tree/main/docs/plans): implementation notes and completed cleanup plans.
-
-## License
-
-Apache-2.0
+The React and Vue detector suites are part of the normal test surface and must
+remain passing when the workflow or command surface changes.

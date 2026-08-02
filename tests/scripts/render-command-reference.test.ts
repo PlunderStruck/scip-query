@@ -130,7 +130,7 @@ describe('renderSkillCommandsMarkdown', () => {
     expect(markdown).toContain('referencing file paths; reference line numbers grouped by file');
     expect(markdown).toContain('`bounded`');
     expect(markdown).toContain('Find consumers before editing.');
-    expect(markdown).toContain('Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only when it is insufficient.');
+    expect(markdown).toContain("Run a command's `--help` only when a named uncertainty needs another option.");
   });
 });
 

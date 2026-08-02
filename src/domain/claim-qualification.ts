@@ -206,7 +206,7 @@ export interface ClaimQualificationEvaluation {
 }
 
 /**
- * Evaluate only predicates named by the consumer. This is the completion-side
+ * Evaluate only predicates named by the consumer. This is the consumer-side
  * contract: an omitted requirement grants nothing and a satisfied predicate
  * cannot compensate for an unsatisfied one.
  */

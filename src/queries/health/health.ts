@@ -24,7 +24,6 @@ import { gitEvidenceProduct } from '../../analysis/git-history.js';
 import type { GitHistoryMode } from '../../analysis/git-history.js';
 import { getSuppressionInventory } from '../../analysis/suppressions.js';
 import { evaluateCoverageContracts } from '../cleanup/coverage-contracts.js';
-import { detectorPrecision, readLedgerRecords } from './finding-outcome-ledger.js';
 import { buildHealthReport } from './health-report.js';
 import { HEALTH_DETECTOR_PROFILES } from '../internal/health-detector-profiles.js';
 import { clearWholeProjectEvidenceCaches } from '../internal/cache-invalidation.js';
@@ -220,9 +219,7 @@ const HEALTH_PHASE_RUNNERS: Record<HealthPhaseName, HealthPhaseRunner> = {
 export function health(db: ScipDatabase, opts: { scope?: string; full?: boolean } = {}): HealthReport {
   return withHealthRun(db, opts.full !== false, (statsResult, budget) => {
     const analyses = runHealthAnalyses(db, opts.scope, statsResult, budget);
-    const report = buildHealthReport(analyses);
-    report.detectorPrecision = detectorPrecision(readLedgerRecords(db), Date.now());
-    return report;
+    return buildHealthReport(analyses);
   });
 }
 

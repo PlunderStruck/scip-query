@@ -387,23 +387,13 @@ describe('watch service contract', () => {
   });
 
   it('auto-starts only eligible commands in enabled projects', () => {
-    const excludedCommands = [
-      'doctor',
-      'effectiveness',
-      'hook-context',
-      'hook-stop',
-      'hook-stop-prepare',
-      'install-skills',
-      'status',
-    ];
+    const excludedCommands = ['capabilities', 'check-deps', 'doctor', 'install-skills', 'status'];
     for (const commandName of excludedCommands) {
       expect(watchServiceAutoStartEligible(commandName, {}), commandName).toBe(false);
     }
     expect(watchServiceAutoStartEligible('refs', {})).toBe(true);
     expect(watchServiceAutoStartEligible('health', {})).toBe(true);
     expect(watchServiceAutoStartEligible('watch', {})).toBe(false);
-    expect(watchServiceAutoStartEligible('bench', {})).toBe(false);
-    expect(watchServiceAutoStartEligible('work-audit', {})).toBe(false);
     expect(watchServiceAutoStartEligible('__health-phase', {})).toBe(false);
     expect(watchServiceAutoStartEligible('refs', { SCIP_QUERY_SKIP_WATCH_SERVICE: '1' })).toBe(false);
 

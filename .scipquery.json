@@ -22,10 +22,6 @@
         "paths": ["src/analysis/**"]
       },
       {
-        "name": "change-control",
-        "paths": ["src/change-control/**"]
-      },
-      {
         "name": "domain",
         "paths": ["src/domain/**"]
       },
@@ -116,7 +112,6 @@
       {
         "name": "runtime-services",
         "paths": [
-          "src/runtime/agent-hooks.ts",
           "src/runtime/agent-setup.ts",
           "src/runtime/ast-parser-setup.ts",
           "src/runtime/cleanup-verify.ts",
@@ -125,25 +120,44 @@
           "src/runtime/command-operation.ts",
           "src/runtime/cli-support.ts",
           "src/runtime/config.ts",
-          "src/runtime/diff-gate-outcomes.ts",
+          "src/runtime/cli-json-envelope.ts",
+          "src/runtime/cursor-codec.ts",
+          "src/runtime/evidence-command-freshness.ts",
           "src/runtime/health-capability-disclosure.ts",
           "src/runtime/health-dossier.ts",
           "src/runtime/health-report-cache.ts",
           "src/runtime/index-freshness.ts",
           "src/runtime/isolated-analysis-runner.ts",
-          "src/runtime/profile-work-audit.ts",
+          "src/runtime/observation-receipt.ts",
+          "src/runtime/output-pagination.ts",
           "src/runtime/project-readiness.ts",
+          "src/runtime/project-reindex.ts",
           "src/runtime/project-setup.ts",
+          "src/runtime/refs-pagination.ts",
           "src/runtime/render.ts",
+          "src/runtime/result-pagination.ts",
           "src/runtime/repository-cache-lifecycle.ts",
-          "src/runtime/setup-ci.ts",
+          "src/runtime/revisioned-file.ts",
           "src/runtime/setup-wizard.ts",
           "src/runtime/setup.ts",
+          "src/runtime/suppression-writer.ts",
+          "src/runtime/typescript-mailbox-lanes.ts",
+          "src/runtime/typescript-mailbox-worker.ts",
           "src/runtime/uninstall.ts",
           "src/runtime/update-notice.ts",
+          "src/runtime/watch-refresh-coordinator.ts",
           "src/runtime/watch-server.ts",
           "src/runtime/watch-service.ts",
-          "src/runtime/watch.ts"
+          "src/runtime/watch.ts",
+          "src/runtime/worker-request-lane.ts"
+        ]
+      },
+      {
+        "name": "test-fixtures",
+        "paths": [
+          "tests/fixtures/invocation-coverage-contract/index.ts",
+          "tests/fixtures/protocol-state-contract/index.ts",
+          "tests/fixtures/public-api-consumer/index.ts"
         ]
       },
       {
@@ -201,7 +215,6 @@
     ],
     "allowedDependencies": {
       "analysis": ["domain", "source", "storage", "symbols-core", "symbols-graph"],
-      "change-control": ["domain"],
       "domain": [],
       "filesystem": [],
       "instrumentation": [],
@@ -246,7 +259,6 @@
       ],
       "queries-health": [
         "analysis",
-        "domain",
         "queries-cleanup",
         "queries-frontend",
         "queries-graph",
@@ -257,13 +269,11 @@
       ],
       "queries-impact": [
         "analysis",
-        "change-control",
         "domain",
         "instrumentation",
         "platform",
         "queries-cleanup",
         "queries-graph",
-        "queries-health",
         "queries-internal",
         "queries-navigation",
         "queries-quality",
@@ -321,9 +331,7 @@
       "reindex-vue": ["platform", "reindex-augmentation"],
       "runtime-command-kit": ["runtime-services", "storage"],
       "runtime-commands": [
-        "change-control",
         "domain",
-        "instrumentation",
         "platform",
         "queries-facade",
         "queries-health",
@@ -332,17 +340,12 @@
         "runtime-query-commands",
         "runtime-services",
         "semantic-rust",
-        "semantic-typescript",
-        "source",
-        "storage",
-        "symbols-core"
+        "storage"
       ],
       "runtime-entry": ["instrumentation", "platform", "runtime-commands", "runtime-services", "storage"],
       "runtime-query-commands": [
         "domain",
         "queries-facade",
-        "queries-health",
-        "queries-impact",
         "queries-navigation",
         "runtime-command-kit",
         "runtime-services",
@@ -357,15 +360,17 @@
         "queries-cleanup",
         "queries-facade",
         "queries-health",
-        "queries-impact",
         "queries-internal",
+        "queries-navigation",
         "reindex",
         "semantic-contracts",
         "semantic-core",
         "semantic-rust",
         "semantic-typescript",
         "source",
-        "storage"
+        "storage",
+        "symbols-core",
+        "symbols-references"
       ],
       "rust-kernels": [],
       "semantic-contracts": ["domain"],
@@ -400,13 +405,15 @@
         "symbols-graph"
       ],
       "source": ["domain", "platform", "storage"],
-      "storage": ["change-control", "domain", "filesystem", "instrumentation", "platform"],
+      "storage": ["domain", "filesystem", "instrumentation", "platform"],
       "symbols-core": ["domain", "source", "storage"],
       "symbols-graph": ["domain", "instrumentation", "source", "storage", "symbols-core", "symbols-references"],
       "symbols-references": ["domain", "instrumentation", "source", "storage", "symbols-core"],
+      "test-fixtures": ["platform", "runtime-command-kit", "runtime-services", "semantic-contracts"],
       "tla": ["domain", "platform", "queries-navigation", "source", "storage", "symbols-core"]
     },
     "requireCompletePolicy": true,
+    "requireCompleteCoverage": true,
     "requireAcyclic": true,
     "requireResolvedBoundaries": true,
     "requireMinimalPolicy": true,
@@ -414,118 +421,15 @@
     "maxBoundaryFanOut": 20,
     "maxBoundaryFiles": 40
   },
-  "suppressions": [
-    {
-      "id": "SQ85EFF217D55A",
-      "check": "co-change-partner",
-      "file": "src/runtime/watch-service.ts",
-      "reason": "Accepted broad-sweep-only change-graph signal for the watch activity permission fix. command-handlers.ts delegates watcher reuse to ensureWatchServiceForCommand and neither writes nor interprets the optional activity timestamp; the complete production change is contained in watch-service.ts. Historical evidence is 7 broad-sweep co-edits and 0 focused co-edits, so it does not establish a coordination contract."
-    },
-    {
-      "id": "SQ0DAFA56EA95B",
-      "check": "co-change-partner",
-      "file": "tests/runtime/watch-service.test.ts",
-      "reason": "Accepted broad-sweep-only test-code signal for the focused watch-service regression tests. command-handlers.ts does not own the activity timestamp write or its permission-error policy, and the tests exercise the existing controller seam directly. Historical evidence is 6 broad-sweep co-edits and 0 focused co-edits."
-    },
-    {
-      "id": "SQ562715D7254A",
-      "check": "co-change-partner",
-      "file": "tests/runtime/runtime-config.test.ts",
-      "reason": "Accepted change-graph signal for the architecture-config validator tests: src/runtime/commands/command-handlers.ts consumes config diagnostics through the existing generic validation path and needs no architecture-specific branch. The historical relationship is 7 broad-sweep co-edits with 0 focused co-edits, and the detector classifies the pair as test-code rather than a proved coordination contract."
-    },
-    {
-      "id": "SQ1B9176E44C22",
-      "check": "echo",
-      "file": "src/queries/health/finding-outcome-ledger.ts",
-      "reason": "Accepted trivial-helper echo: ledgerKey() is a 1-line \"join two strings with a NUL separator into a map key\" helper. The repo already has 5+ independent versions of this exact pattern per-domain (symbolNoiseFor, sourceFingerprintDefinitionKey, fileLeafKey, ...); extracting one shared helper across unrelated modules is a separate cross-cutting refactor out of scope for remediation plan 3."
-    },
-    {
-      "id": "SQ95FA9596A6D2",
-      "check": "co-change-partner",
-      "file": "src/storage/evidence-cache.ts",
-      "reason": "Accepted: evidence-cache.ts and docs/benchmarks/2026-06-28-vega-current-scoreboard.md are both members of the pre-existing \"2026-06-28 optimization evidence ledger\" declaredCoupling group. The scoreboard doc is a dated snapshot (matches docs.snapshotPaths); co-change-partner does not yet apply the snapshot-doc policy the way doc-reference/doc-drift do (18.2 scoped that exemption to those two checks only) — extending it to co-change-partner is a reasonable follow-up but out of scope here."
-    },
-    {
-      "id": "SQ15F514D7AF85",
-      "check": "new-dead",
-      "file": "src/queries/health/finding-outcome-ledger.ts",
-      "reason": "trailingResolutionRate() is exported pure API consumed by tests/queries/health/finding-outcome-ledger.test.ts; tests are not SCIP-indexed so exported test-only helpers always trip new-dead (same precedent as knownSrcLayers in cc71f38). Kept exported and separately testable per the Testability Design table in the remediation plan."
-    },
-    {
-      "id": "SQB3D28507126F",
-      "check": "echo",
-      "file": "src/analysis/glob-match.ts",
-      "reason": "False-positive echo: normalizeBody's stripCommentsAndStrings treats the escaped-slash-then-regex-close sequence in /^\\.\\// as a // line comment, so everything after it on the line (including this function's extra trailing-slash strip) is masked away before hashing. This function is not actually identical to normalizeRelativePath/normalizeProjectPath (already a pre-existing echo pair before this diff) — it additionally strips trailing slashes. Fixing the underlying comment-vs-regex-literal ambiguity in stripCommentsAndStrings is out of scope for this change (shared by many detectors, high blast radius)."
-    },
-    {
-      "id": "SQD2F5BC7ACF44",
-      "check": "echo",
-      "file": "src/source/primitives/import-path-resolver.ts",
-      "reason": "Accepted cache-declaration echo: both caches already share the per-DB cache factory; this one fingerprints indexed import-resolution paths."
-    },
-    {
-      "id": "SQ1213565D9A4E",
-      "reason": "Accepted cache-declaration echo: both caches use the per-DB cache factory; this one memoizes project fingerprint metadata for semantic-reference evidence."
-    },
-    {
-      "id": "SQD75FF817FACB",
-      "reason": "Accepted cache-declaration echo: Vue behavior profiles intentionally use the same source-aware cache factory as Vue template facts; the cache name and value type are the product variation."
-    },
-    {
-      "id": "SQ58DA50428777",
-      "check": "echo",
-      "file": "src/source/react-profile.ts",
-      "reason": "Accepted cache-declaration echo: React behavior profiles intentionally use the same source-aware cache factory as Vue profile/template facts; the cache name and value type are the product variation."
-    },
-    {
-      "id": "SQ21A3A1CABA2B",
-      "check": "echo",
-      "file": "src/language-parsers/import-index.ts",
-      "reason": "Accepted cache-declaration echo: the import local-name map intentionally uses the established per-DB source-file cache factory; the cache name, key, and value type are the product-specific variation."
-    },
-    {
-      "id": "SQ5075DD62A541",
-      "check": "new-dead",
-      "file": "src/semantic/typescript/ts-morph-provider.ts",
-      "reason": "Accepted interface-dispatch false positive: TsMorphSemanticProvider.calleesForDefinitions is called through the SemanticProvider bulk path in src/semantic/shared-primitives.ts; refs reports those interface call sites."
-    },
-    {
-      "id": "SQ485D60C5C638",
-      "check": "new-dead",
-      "file": "src/semantic/typescript/ts-morph-provider.ts",
-      "reason": "Accepted interface-dispatch false positive: TsMorphSemanticProvider.referencesForDefinitions is called through the SemanticProvider bulk path in src/semantic/shared-primitives.ts; refs reports those interface call sites."
-    },
-    {
-      "id": "SQ3505D2915291",
-      "reason": "Prose-only edit to _shared/SKILL.md's Detector Reliability/Diff Gate Checks sections; ran npm run docs:commands and confirmed docs/COMMAND_REFERENCE.md is unchanged (no generated command content touched)."
-    },
-    {
-      "id": "SQ5FA945C41F65",
-      "check": "co-change-partner",
-      "file": "src/queries/index.ts",
-      "reason": "Accepted config-code co-change signal for the architecture boundary refinement. src/queries/index.ts changed only because four modules moved directories (co-change.ts -> cleanup/, diff-gate-types.ts and diff-ranges.ts -> internal/, diff-gate-doc-policy.ts -> cleanup/); no export was added, removed, or renamed. package.json exports reference no moved path (verified by grep) and npm run docs:commands regenerates COMMAND_REFERENCE.md unchanged, so the historical index.ts/package.json coupling (public-surface changes) does not apply to a pure internal relocation."
-    },
-    {
-      "id": "SQCC8A1933134C",
-      "check": "co-change-partner",
-      "file": "src/queries/public-query-entries.ts",
-      "reason": "Accepted config-code co-change signal for the architecture boundary refinement. public-query-entries.ts changed one path string (src/queries/impact/co-change.ts -> src/queries/cleanup/co-change.ts) as part of moving the co-change detector out of the diff-gate layer. The published query surface is byte-identical: same entry names, same count. package.json exports map is unaffected."
-    },
-    {
-      "id": "SQ9C454C0840F4",
-      "check": "co-change-partner",
-      "file": "src/queries/index.ts",
-      "reason": "Accepted doc-code co-change signal for completing plan step B1.6. src/queries/index.ts changed only because baseline ratchet infrastructure moved to its correct layer: the shared file format, path resolution, and comparison went to queries/internal/baseline-file.ts, and checkArchitectureBaseline went to queries/graph/architecture-baseline.ts beside the report it reads. No CLI command was added, removed, or renamed; npm run docs:commands regenerates docs/COMMAND_REFERENCE.md unchanged, and neither checkHealthBaseline nor checkArchitectureBaseline appears in the command reference or in package.json exports. The historical index.ts/COMMAND_REFERENCE.md coupling tracks public command-surface changes, which this relocation is not."
-    }
-  ],
   "declaredCouplings": [
     {
       "name": "generated command surface",
-      "reason": "docs/COMMAND_REFERENCE.md and skills/_shared/SKILL.md are both regenerated by `npm run docs:commands` from the CLI descriptors registered in src/runtime/setup.ts; those descriptors call into the query barrel (src/queries/index.ts, src/queries/public-query-entries.ts), and package.json's `exports` map mirrors the same public surface. A new command or public query routinely touches several of these together as one generated/public-surface update, not an undeclared hidden coupling. (Extended beyond the plan's literal 4-file list to also cover src/queries/index.ts and package.json -- the co-change data showed those as the same concept, not partial credit.)",
+      "reason": "The CLI descriptors, generated command reference, primary skill, query export manifest, and package exports describe one public command and query surface.",
       "files": [
         "docs/COMMAND_REFERENCE.md",
-        "skills/_shared/SKILL.md",
-        "src/runtime/setup.ts",
+        "skills/scip-query/SKILL.md",
+        "scripts/render-command-reference.ts",
+        "src/runtime/commands/command-descriptors.ts",
         "src/queries/public-query-entries.ts",
         "src/queries/index.ts",
         "package.json"
@@ -533,18 +437,8 @@
     },
     {
       "name": "docs truth pass family",
-      "reason": "README.md's feature/example claims, docs/AI_FAILURE_MODES.md's failure-mode catalogue, and docs/DETECTOR_GUIDE.md's detector descriptions are cross-referencing prose kept in sync by the same doc-truth-pass commits (see the 'remediation NN.N' doc-truth commit series in git log); scripts/render-command-reference.ts is the generator whose output blocks those docs embed. Real, evidenced co-change (4x together, 100% confidence each) -- not gaming the hidden-coupling metric.",
-      "files": [
-        "README.md",
-        "docs/AI_FAILURE_MODES.md",
-        "docs/DETECTOR_GUIDE.md",
-        "scripts/render-command-reference.ts"
-      ]
-    },
-    {
-      "name": "diff-gate validation ledger",
-      "reason": "docs/analyzer-validation-ledger.md is explicitly anchored to src/queries/impact/diff-gate.ts (its own 'Source Anchors' table cites diffGate() and DIFF_GATE_CHECKS by file:line) -- it exists specifically to track diff-gate's check validation status, so the two changing together is the ledger doing its job, not a hidden coupling.",
-      "files": ["docs/analyzer-validation-ledger.md", "src/queries/impact/diff-gate.ts"]
+      "reason": "The README, failure-mode guide, and detector guide explain the same product boundary and detector semantics.",
+      "files": ["README.md", "docs/AI_FAILURE_MODES.md", "docs/DETECTOR_GUIDE.md"]
     },
     {
       "name": "cleanup detector family",
@@ -576,44 +470,6 @@
       "name": "package build surface",
       "reason": "Package metadata and bundle entrypoints intentionally move together when the published CLI surface changes.",
       "files": ["package.json", "tsup.config.ts"]
-    },
-    {
-      "name": "command reference documentation",
-      "reason": "The generated command reference and query implementations move together when public command behavior changes.",
-      "files": ["docs/COMMAND_REFERENCE.md", "src/queries/cleanup/doc-drift.ts"]
-    },
-    {
-      "name": "2026-06-28 optimization evidence ledger",
-      "reason": "These benchmark, validation, and implementation files intentionally moved together during the June 28 performance campaign; future edits should preserve the scoreboard trail or explicitly confirm the optimization evidence is unaffected.",
-      "files": [
-        "docs/analyzer-inventory.md",
-        "docs/analyzer-validation-ledger.md",
-        "docs/benchmarks/2026-06-28-health-ledger.md",
-        "docs/benchmarks/2026-06-28-diff-gate-echo-ledger.md",
-        "docs/benchmarks/2026-06-28-similar-full-ledger.md",
-        "docs/benchmarks/2026-06-28-dead-full-ledger.md",
-        "docs/benchmarks/2026-06-28-diff-gate-ledger.md",
-        "docs/benchmarks/2026-06-28-recent-duplicates-ledger.md",
-        "docs/benchmarks/2026-06-28-semantic-reference-ledger.md",
-        "docs/benchmarks/2026-06-28-vega-current-scoreboard.md",
-        "docs/validation/2026-06-21-analyzer-calibration-memo.md",
-        "docs/validation/2026-06-21-analyzer-validation-pilot.md",
-        "docs/validation/2026-06-21-cross-language-capability-boundaries-result.md",
-        "docs/validation/2026-06-21-suppression-lifecycle-result.md",
-        "docs/validation/2026-06-22-incomplete-migration-containment-result.md",
-        "docs/validation/2026-06-22-incomplete-migration-scope-hints-result.md",
-        "docs/validation/2026-06-22-co-change-recency-sweep-result.md",
-        "docs/validation/2026-06-22-co-change-subject-context-result.md",
-        "docs/validation/2026-06-22-doc-reference-citation-parser-result.md",
-        "src/storage/evidence-cache.ts",
-        "src/queries/cleanup/similar.ts",
-        "src/queries/internal/production-callables.ts"
-      ]
-    },
-    {
-      "name": "agent skill documentation family",
-      "reason": "The consolidated planning, read-only audit, and mutating improvement workflows share the handoff contract that separates evidence gathering, prospective design, and implementation.",
-      "files": ["skills/scip-plan/SKILL.md", "skills/scip-audit/SKILL.md", "skills/scip-improve/SKILL.md"]
     },
     {
       "name": "runtime command dispatch",

@@ -1,9 +1,0 @@
-{
-  "ts": 1784923288957,
-  "check": "doc-reference",
-  "findingId": "SQBDDEBBE3E1F4",
-  "event": "resolved",
-  "commit": "c4b52610cc36105154102f8759aeecefa28085e4",
-  "comparisonBaseCommit": "c4b52610cc36105154102f8759aeecefa28085e4",
-  "verifiedAgainstCommit": "d6263619cebd6f7880d3027fc14fc9d65b1ddce7"
-}

@@ -17,7 +17,6 @@ import type { ScipDatabase } from '../../storage/db.js';
 import {
   completeBoundedMailboxClaim,
   initializeBoundedMailbox,
-  inspectBoundedMailbox,
   pollBoundedMailboxRequests,
   readBoundedMailboxClaim,
   rejectBoundedMailboxClaim,
@@ -232,10 +231,6 @@ export function processTypeScriptSemanticMailbox(
     }
   }
   return processed;
-}
-
-export function typeScriptSemanticMailboxStatus(paths: TypeScriptSemanticMailboxPaths): BoundedMailboxStatus {
-  return inspectBoundedMailbox(paths);
 }
 
 function referenceMap(

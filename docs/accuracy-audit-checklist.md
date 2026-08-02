@@ -3,6 +3,10 @@
 Date: 2026-07-10
 Status: Complete; see the 2026-07-11 closure certificate
 
+> Historical certification snapshot. Command rows below record the surface
+> that existed on 2026-07-10. See [Analyzer inventory](analyzer-inventory.md)
+> for the current product.
+
 ## Purpose
 
 This checklist tracks whether each public command tells the truth about the

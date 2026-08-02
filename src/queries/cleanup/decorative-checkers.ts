@@ -14,7 +14,7 @@ import { isFrameworkContractCallable } from './callable-contracts.js';
 import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 
 /**
- * decorative-checkers (D2): mechanizes the scip-audit integrity scenario for a
+ * decorative-checkers (D2): mechanizes the cleanup integrity scenario for a
  * checker-naming family (`validate*`/`verify*`/`check*`/`assert*`,
  * `is*`/`has*`): a callable that LOOKS like a checker but has no reachable
  * failure exit anywhere in its body — no throw, no rejection, no

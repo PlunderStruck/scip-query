@@ -4,17 +4,7 @@ import { homedir, platform } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const IS_WINDOWS = platform() === 'win32';
-export const BUILTIN_SKILLS = [
-  '_shared',
-  'scip-query',
-  'scip-setup',
-  'scip-explore',
-  'scip-plan',
-  'scip-diagnose',
-  'scip-audit',
-  'scip-improve',
-  'scip-verify',
-] as const;
+export const BUILTIN_SKILLS = ['scip-query'] as const;
 // ── Skills Installation ────────────────────────────────────
 
 export interface InstallSkillsResult {
@@ -183,15 +173,8 @@ function toolNameForTarget(targetDir: string): string {
  */
 export function postinstall(): void {
   console.log(
-    "scip-query installed (Node.js 24 LTS recommended; minimum Node.js 22) -- run 'scip-query setup' in a repo to enable skills, hooks, and the index.",
+    "scip-query installed (Node.js 24 LTS recommended; minimum Node.js 22) -- run 'scip-query setup' in a repo to install skills and build the index.",
   );
 }
 
 export { isScipInstalled, getScipVersion, printScipInstallInstructions } from '../platform/scip-cli.js';
-export {
-  installProjectAgentHooks,
-  installUserAgentHooks,
-  mergeScipHookConfig,
-  removeUserAgentHooks,
-  shouldSkipUserHookInstall,
-} from './agent-hooks.js';

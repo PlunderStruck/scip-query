@@ -29,19 +29,19 @@ describe('derivePackageSurface', () => {
   it('maps dist export targets back to src source candidates', () => {
     const root = projectWithManifest({
       exports: {
-        './queries/plan-context': {
-          import: './dist/queries/plan-context.js',
-          types: './dist/queries/plan-context.d.ts',
+        './queries/context': {
+          import: './dist/queries/context.js',
+          types: './dist/queries/context.d.ts',
         },
       },
     });
     mkdirSync(join(root, 'src/queries/impact'), { recursive: true });
-    writeFileSync(join(root, 'src/queries/impact/plan-context.ts'), '');
+    writeFileSync(join(root, 'src/queries/impact/context.ts'), '');
 
     const surface = derivePackageSurface(root);
-    expect(surface.files.has('src/queries/impact/plan-context.ts')).toBe(true);
-    expect(surface.files.has('dist/queries/plan-context.js')).toBe(true);
-    expect(surface.files.has('queries/plan-context.ts')).toBe(true);
+    expect(surface.files.has('src/queries/impact/context.ts')).toBe(true);
+    expect(surface.files.has('dist/queries/context.js')).toBe(true);
+    expect(surface.files.has('queries/context.ts')).toBe(true);
   });
 
   it('collects main, module, types, browser, and bin targets', () => {

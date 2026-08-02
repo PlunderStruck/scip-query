@@ -28,7 +28,6 @@
     },
     "indexerConcurrency": { "type": "integer", "minimum": 1 },
     "watch": { "$ref": "#/$defs/watch" },
-    "hooks": { "$ref": "#/$defs/hooks" },
     "indexer": {
       "type": "object",
       "propertyNames": { "$ref": "#/$defs/supportedLanguage" },
@@ -103,13 +102,6 @@
             "maxEstimatedWriteBytes": { "type": "integer", "exclusiveMinimum": 0 }
           }
         }
-      }
-    },
-    "hooks": {
-      "type": "object",
-      "additionalProperties": true,
-      "properties": {
-        "router": { "enum": ["off", "single"] }
       }
     },
     "indexerOverride": {

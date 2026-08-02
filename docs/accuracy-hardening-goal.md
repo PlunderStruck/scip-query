@@ -3,6 +3,12 @@
 Date: 2026-07-10
 Status: Complete for private-shadow readiness; public leaderboard remains a separate program
 
+> Historical certification record. It preserves the evidence and command
+> names used during the 2026-07 program. See
+> [Analyzer inventory](analyzer-inventory.md) and
+> [Analyzer validation protocol](analyzer-validation-protocol.md) for the
+> current product and evaluation standard.
+
 Current execution plan:
 [`2026-07-11-remaining-accuracy-verification-program.md`](./plans/2026-07-11-remaining-accuracy-verification-program.md).
 Closure certificate:
@@ -489,5 +495,6 @@ exist only when an upstream indexer emits them.
   to comparable cohorts.
 - `npm test`, `npm run typecheck`, and `npm run build` pass after each
   implementation slice.
-- Completed code or documentation changes pass `scip-query reindex` and
-  `scip-query diff-gate` before being declared finished.
+- Current changes use native tests plus the relevant `context`, `diff-impact`,
+  `architecture`, or detector command. No scip-query command declares an
+  arbitrary coding task complete.

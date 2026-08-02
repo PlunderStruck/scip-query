@@ -108,10 +108,6 @@
       "import": "./dist/queries/deps.js",
       "types": "./dist/queries/deps.d.ts"
     },
-    "./queries/diff-gate": {
-      "import": "./dist/queries/diff-gate.js",
-      "types": "./dist/queries/diff-gate.d.ts"
-    },
     "./queries/diff-impact": {
       "import": "./dist/queries/diff-impact.js",
       "types": "./dist/queries/diff-impact.d.ts"
@@ -192,9 +188,9 @@
       "import": "./dist/queries/passthrough-candidates.js",
       "types": "./dist/queries/passthrough-candidates.d.ts"
     },
-    "./queries/plan-context": {
-      "import": "./dist/queries/plan-context.js",
-      "types": "./dist/queries/plan-context.d.ts"
+    "./queries/context": {
+      "import": "./dist/queries/context.js",
+      "types": "./dist/queries/context.d.ts"
     },
     "./queries/recent-duplicates": {
       "import": "./dist/queries/recent-duplicates.js",

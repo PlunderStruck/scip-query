@@ -197,62 +197,6 @@ export function buildObservationReceipt(input: ObservationReceiptInput): Observa
   };
 }
 
-export function buildLeasedObservationReceipt(input: {
-  projectRoot: string;
-  collaborationDomainId?: string;
-  generationIdentity: string;
-  generationSource: 'immutable' | 'legacy';
-  worktreeIdentity: string;
-  observedAt: string;
-}): ObservationReceiptV2 {
-  const gitContext = resolveGitWorktreeContext(input.projectRoot);
-  const collaborationDomainId =
-    input.collaborationDomainId ?? loadProjectConfig(input.projectRoot).collaborationDomainId;
-  const base = buildObservationReceipt({
-    projectRoot: input.projectRoot,
-    observedAt: new Date(input.observedAt),
-    ...(collaborationDomainId ? { collaborationDomainId } : {}),
-    ...(gitContext ? { gitContext } : {}),
-  });
-  const generation = createObservationIdentity(INDEX_GENERATION_IDENTITY_PROJECTION, 1, input.generationIdentity);
-  const leasedWorkspaceSource = createObservationIdentity(
-    'scip-query:bracketed-workspace-state',
-    1,
-    input.worktreeIdentity,
-  );
-  return {
-    ...base,
-    facts: {
-      ...base.facts,
-      relevantInputs: [
-        ...(base.facts.relevantInputs ?? []),
-        {
-          subject: 'stop-hook-repository-state',
-          identity: leasedWorkspaceSource,
-        },
-      ],
-      index: {
-        generation,
-        source: input.generationSource,
-      },
-    },
-    observedSources: [
-      { kind: 'index-generation', identity: generation },
-      {
-        kind: 'live-workspace',
-        ...(base.facts.workspaceInstance ? { identity: base.facts.workspaceInstance } : {}),
-      },
-    ],
-    stabilityProofs: [
-      {
-        source: 'index-generation',
-        kind: input.generationSource === 'immutable' ? 'immutable' : 'not-established',
-      },
-      { source: 'live-workspace', kind: 'bracketed' },
-    ],
-  };
-}
-
 /**
  * Capture one fixed whole-repository state and derive its receipt before
  * releasing the snapshot. Callers that require a stable target can bracket

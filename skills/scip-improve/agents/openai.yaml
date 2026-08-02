@@ -1,4 +1,0 @@
-interface:
-  display_name: "SCIP Improve"
-  short_description: "Apply verified fixes to the working tree"
-  default_prompt: "Use $scip-improve to apply confirmed findings as real edits, batch by batch, with verification between batches."

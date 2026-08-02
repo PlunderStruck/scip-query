@@ -1,4 +1,4 @@
 interface:
-  display_name: "SCIP Query Router"
-  short_description: "Route a codebase task to the right SCIP skill"
-  default_prompt: "Use $scip-query first to pick the right SCIP-backed skill for this task before doing anything else."
+  display_name: "SCIP Query"
+  short_description: "Map code relationships before nonlocal work"
+  default_prompt: "Use $scip-query to map compiler-resolved relationships that can affect this task, then keep ownership of the plan and implementation."

@@ -42,13 +42,12 @@ failing explicitly with the input kind, observed amount, and accepted limit.
 
 | Input class                                            |                    Limit | Representative users                                                     |
 | ------------------------------------------------------ | -----------------------: | ------------------------------------------------------------------------ |
-| Config, manifest, lock, lease, and other small records |                    8 MiB | `.scipquery.json`, package manifests, generation metadata, hook settings |
+| Config, manifest, lock, lease, and other small records |                    8 MiB | `.scipquery.json`, package manifests, generation metadata                |
 | One source or per-document fragment                    |                   64 MiB | indexed source reads, TypeScript/Vue snapshots, mailbox result payloads  |
 | One SCIP index artifact                                |                  512 MiB | merge, sanitize, Rust occurrence fallback, shared-generation hydration   |
-| Profile or retained JSONL artifact                     |                  256 MiB | profiling audits, legacy event ledgers, rotating diagnostic segments     |
+| Profile or retained JSONL artifact                     |                  256 MiB | profiling output and rotating diagnostic segments                         |
 | Generated TLA trace                                    | 16 MiB and 100,000 steps | `tla instrument` recorder                                                |
 | Repository-supplied regular-expression pattern         |         4,096 characters | entry-root patterns and TLA statement bindings                           |
-| Agent hook standard input                              |                    8 MiB | stop-hook request payload                                                |
 
 Regular files are opened first, checked through that descriptor, read, and
 checked again so replacement or growth cannot bypass the pre-read limit.
@@ -99,33 +98,13 @@ line-range `sed`; those programs discard data without creating a resumable
 position. See [CLI JSON output](CLI_JSON_OUTPUT.md) and the [output-page
 schema](schemas/cli-output-page.schema.json).
 
-## Diff-gate process containment
+## Analysis process containment
 
-A diff-gate lease is one live process identity permitted to evaluate a
-project's current diff, distinguished from an ordinary lock file by recording
-and validating the owner's PID, process start, and project identity. CLI and
-Stop-hook gates share this lease, so an overlapping request reports the live
-owner instead of multiplying detector work.
-
-The public gate owns an isolated child process. Its default deadline is 60
-seconds, or 180 seconds with `--full`. On timeout, failure, or interruption the
-parent terminates and reaps that child before releasing the lease. An operator
-may set `SCIP_QUERY_DIFF_GATE_TIMEOUT_MS` to a positive millisecond value; the
-runtime caps it at 10 minutes.
-
-The parent creates a unique, private progress path and one-run token while it
-owns the lease. The child visibility-atomically records the current gate phase
-and detector immediately before and after each detector. A timed-out parent
-accepts only the record carrying its token, reports the active detector or
-phase plus the last completed detector, and removes the record before releasing
-the lease. The progress record is diagnostic evidence, not authority: failure
-to write it cannot turn a passing gate into a failure, and a stale or malformed
-record cannot alter the gate result.
-
-Outcome reconciliation rechecks at most one historical comparison base per
-gate. Deferred bases remain open and the result reports their exact base and
-finding counts, so accumulated event history cannot silently multiply one
-foreground gate into an unbounded replay batch.
+The `health` and `diff-impact` commands split expensive analysis into isolated
+child processes. Each child has a finite deadline and bounded output. On a
+timeout, failure, or interruption, the parent terminates and reaps the child.
+The child must return the expected versioned protocol, command identity, and
+result before its output is accepted.
 
 ## Terminal and JSON output
 

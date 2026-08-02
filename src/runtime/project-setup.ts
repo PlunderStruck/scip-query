@@ -7,7 +7,6 @@ import { tryInstallIndexer } from '../reindex/install.js';
 import { reindex, type ReindexResult } from '../reindex/index.js';
 import { rustSemanticSessionStatus, type RustSemanticSessionStatus } from '../semantic/rust/lsp-session.js';
 import { setupAgent } from './agent-setup.js';
-import { installProjectAgentHooks } from './agent-hooks.js';
 import { cliVersion, runIsolatedHealthReport } from './cli-support.js';
 import {
   configureProjectAutomaticRefresh,
@@ -36,7 +35,6 @@ type ProjectCapabilityReport = ReturnType<typeof getProjectCapabilities>;
 type ProjectReadiness = ReturnType<typeof getProjectReadiness>;
 type LanguageReadiness = ProjectReadiness['indexers'][number];
 type SetupAgentResult = ReturnType<typeof setupAgent>;
-type SetupHooksResult = ReturnType<typeof installProjectAgentHooks>;
 
 export type ProjectSetupStepStatus = 'ok' | 'warn' | 'skipped' | 'failed';
 export type ProjectSetupVerdict = 'ready' | 'partial' | 'blocked';
@@ -129,7 +127,6 @@ export interface ProjectSetupReport {
   health: ProjectSetupHealthSummary;
   smokeTests: ProjectSetupSmokeTest[];
   healthDossier: ProjectSetupHealthDossier | null;
-  hooks: SetupHooksResult | null;
   setupAgent: SetupAgentResult | null;
   changeScopes: ProjectSetupChangeScopes;
   filesWritten: string[];
@@ -144,8 +141,6 @@ export interface ProjectSetupChangeScopes {
 
 // scip-query: ignore-stale — reviewed S1 owned contract; these options define the project-setup command boundary.
 export interface ProjectSetupOptions {
-  gitHook?: boolean;
-  noHooks?: boolean;
   noAgentGuidance?: boolean;
   automaticRefresh?: boolean;
   installIndexers?: boolean;
@@ -160,7 +155,6 @@ export interface ProjectSetupOptions {
 export type ProjectSetupGuidedActionId =
   | 'create-agent-guidance'
   | 'update-agent-guidance'
-  | 'install-project-hooks'
   | 'enable-automatic-refresh'
   | 'install-indexers'
   | 'install-agent-skills'
@@ -172,8 +166,6 @@ export type ProjectSetupActionScope = 'repository' | 'checkout' | 'user';
 export interface ProjectSetupGuidedFiles {
   agentsMd: boolean;
   claudeMd: boolean;
-  codexHooks: boolean;
-  claudeSettings: boolean;
 }
 
 // scip-query: ignore-stale — reviewed S1 owned contract; guided setup renders this discriminated action payload.
@@ -229,18 +221,6 @@ export function planGuidedProjectSetup(input: {
       requiresConsent: true,
       reason: 'No AGENTS.md or CLAUDE.md file exists, so setup should ask before creating one.',
       command: 'scip-query setup-agent',
-    });
-  }
-
-  if (!input.files.codexHooks || !input.files.claudeSettings) {
-    actions.push({
-      id: 'install-project-hooks',
-      scope: 'checkout',
-      label: 'Install project agent hooks',
-      recommended: true,
-      requiresConsent: true,
-      reason: 'Project hooks help agents check freshness and route through scip-query before editing.',
-      command: 'scip-query setup-hooks',
     });
   }
 
@@ -481,39 +461,6 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
         : `${rustSemanticSession.transport}/${rustSemanticSession.state} selected from ${rustSemanticSession.source}; ${rustSemanticSession.fallback} fallback; opt out with ${rustSemanticSession.optOut}.`,
   });
 
-  let hooksResult: SetupHooksResult | null = null;
-  try {
-    if (opts.noHooks) {
-      addStep(steps, {
-        id: 'project-hooks',
-        label: 'Project agent hooks',
-        status: 'skipped',
-        message: 'Skipped by --no-hooks.',
-      });
-    } else {
-      hooksResult = installProjectAgentHooks(projectRoot);
-      addStep(steps, {
-        id: 'project-hooks',
-        label: 'Project agent hooks',
-        status: hooksResult.skipped.length > 0 ? 'warn' : 'ok',
-        message: `${hooksResult.installed.length} installed, ${hooksResult.updated.length} updated, ${hooksResult.unchanged.length} already configured, ${hooksResult.removed.length} hook config(s) cleaned up, ${hooksResult.skipped.length} skipped.`,
-        details: [
-          ...hooksResult.gitExcluded.map((entry) => `Checkout-local Git exclude: ${entry}`),
-          ...hooksResult.removed.map((entry) => `Removed ${entry}`),
-          ...hooksResult.skipped.map((entry) => `Skipped ${entry.target}: ${entry.reason}`),
-          ...hooksResult.warnings,
-        ],
-      });
-    }
-  } catch (error) {
-    addStep(steps, {
-      id: 'project-hooks',
-      label: 'Project agent hooks',
-      status: 'failed',
-      message: errorMessage(error),
-    });
-  }
-
   let agentResult: SetupAgentResult | null = null;
   try {
     if (opts.noAgentGuidance) {
@@ -524,7 +471,7 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
         message: 'Skipped by guided setup choice.',
       });
     } else {
-      agentResult = setupAgent(projectRoot, { gitHook: opts.gitHook });
+      agentResult = setupAgent(projectRoot);
       addStep(steps, {
         id: 'agent-guidance',
         label: 'Project agent guidance',
@@ -548,7 +495,6 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     capabilities,
     freshness,
     health,
-    hooksResult,
     agentResult,
     watchConfig,
     watchService,
@@ -567,16 +513,9 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     repository: [
       ...(languageConfig?.changed ? [languageConfig.configPath] : []),
       ...(automaticRefreshConfig?.changed ? [automaticRefreshConfig.configPath] : []),
-      ...(agentResult?.written.filter((entry) => !entry.startsWith('.git/hooks/')) ?? []),
+      ...(agentResult?.written ?? []),
     ],
-    checkout: [
-      ...new Set([
-        ...(hooksResult?.installed ?? []),
-        ...(hooksResult?.updated ?? []),
-        ...(hooksResult?.gitExcluded ?? []),
-        ...(agentResult?.written.filter((entry) => entry.startsWith('.git/hooks/')) ?? []),
-      ]),
-    ],
+    checkout: [],
     user: [
       ...skills.installed,
       ...astParsers.installed,
@@ -604,7 +543,6 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     health,
     smokeTests,
     healthDossier: null,
-    hooks: hooksResult,
     setupAgent: agentResult,
     changeScopes,
     filesWritten: agentResult?.written ?? [],
@@ -870,7 +808,6 @@ function buildSetupSmokeTests(opts: {
   capabilities: ProjectCapabilityReport;
   freshness: IndexFreshness;
   health: ProjectSetupHealthSummary;
-  hooksResult: SetupHooksResult | null;
   agentResult: SetupAgentResult | null;
   watchConfig: ReturnType<typeof resolveWatchConfig>;
   watchService: WatchServiceEnsureResult | null;
@@ -878,7 +815,6 @@ function buildSetupSmokeTests(opts: {
   steps: readonly ProjectSetupStep[];
 }): ProjectSetupSmokeTest[] {
   const reindexStep = opts.steps.find((step) => step.id === 'reindex');
-  const hooksStep = opts.steps.find((step) => step.id === 'project-hooks');
   const agentStep = opts.steps.find((step) => step.id === 'agent-guidance');
   const watchStep = opts.steps.find((step) => step.id === 'watch-refresh');
   return [
@@ -936,24 +872,10 @@ function buildSetupSmokeTests(opts: {
       evidence: gitBackedSmokeEvidence(opts.readiness, opts.freshness),
     },
     {
-      id: 'diff-gate',
-      command: 'scip-query diff-gate --json',
-      status: gitBackedSmokeStatus(opts.readiness, opts.freshness),
-      evidence: gitBackedSmokeEvidence(opts.readiness, opts.freshness),
-    },
-    {
       id: 'cleanup-verification',
       command: 'scip-query cleanup-plan --verify',
       status: cleanupVerificationSmokeStatus(opts.capabilities),
       evidence: cleanupVerificationSmokeEvidence(opts.capabilities),
-    },
-    {
-      id: 'setup-hooks',
-      command: 'scip-query setup-hooks',
-      status: opts.hooksResult ? 'pass' : hooksStep?.status === 'failed' ? 'fail' : 'unavailable',
-      evidence: opts.hooksResult
-        ? `${opts.hooksResult.installed.length} installed, ${opts.hooksResult.updated.length} updated, ${opts.hooksResult.unchanged.length} already configured.`
-        : (hooksStep?.message ?? 'Project agent hooks were not configured.'),
     },
     {
       id: 'watch-refresh',
@@ -1192,7 +1114,7 @@ function projectSetupIssue(action: HealthAction): ProjectSetupIssue {
     confirmationStatus: 'unconfirmed',
     safeForAgentToStart: false,
     recommendedNextStep:
-      'Run scip-audit to confirm this signal; use scip-improve when the user wants confirmed issues fixed autonomously.',
+      'Confirm this signal against its named source evidence before editing; fix it only when it matches the requested goal.',
   };
 }
 

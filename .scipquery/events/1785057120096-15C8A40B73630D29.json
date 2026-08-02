@@ -1,9 +1,0 @@
-{
-  "ts": 1785057120096,
-  "check": "echo",
-  "findingId": "SQAD8EF1EC4523",
-  "event": "caught",
-  "commit": "777d09c91ead40ca8dd475bb3e8e8565b93772e5",
-  "comparisonBaseCommit": "777d09c91ead40ca8dd475bb3e8e8565b93772e5",
-  "symbol": "scip-typescript npm scip-query 0.19.5 src/domain/`outcome-event-record.ts`/isRecordObject()."
-}

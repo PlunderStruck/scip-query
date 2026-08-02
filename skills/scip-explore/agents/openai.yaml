@@ -1,4 +1,0 @@
-interface:
-  display_name: "SCIP Explore"
-  short_description: "Understand a system with SCIP evidence"
-  default_prompt: "Use $scip-explore to understand this system end to end with SCIP-backed code evidence before editing it."

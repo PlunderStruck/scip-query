@@ -36,7 +36,7 @@
     "agentInstruction": {
       "type": "string",
       "minLength": 1,
-      "description": "A direct evidence-completeness obligation for an AI agent consuming this page."
+      "description": "A direct instruction for an AI agent consuming this page."
     },
     "page": {
       "type": "object",

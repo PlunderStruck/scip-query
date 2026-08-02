@@ -40,7 +40,7 @@ export function descriptorEvidenceTier(descriptor: CommandDescriptor): CommandEv
   return descriptor.heuristic ? 'heuristic' : 'graph-fact';
 }
 
-const MIXED_EVIDENCE_COMMANDS = new Set(['diff-gate', 'health', 'plan-context', 'co-change']);
+const MIXED_EVIDENCE_COMMANDS = new Set(['health', 'context', 'co-change']);
 
 /**
  * Normalize descriptor declarations into the one registry contract consumed

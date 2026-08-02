@@ -434,7 +434,7 @@ describe('validateProjectConfig', () => {
     const diagnostics = validateProjectConfig({
       autoRefres: true,
       watch: { enabled: false, autoRefres: true },
-      hooks: { router: 'single', routers: true },
+      hooks: { router: 'single' },
       indexer: { typescript: { projectMode: 'single', packageManager: 'pnpm' } },
       entryRoots: { files: [], extra: [] },
       semantic: {
@@ -451,7 +451,7 @@ describe('validateProjectConfig', () => {
       expect.arrayContaining([
         expect.objectContaining({ level: 'warning', path: 'autoRefres', message: 'Unknown config key.' }),
         expect.objectContaining({ level: 'warning', path: 'watch.autoRefres', message: 'Unknown config key.' }),
-        expect.objectContaining({ level: 'warning', path: 'hooks.routers', message: 'Unknown config key.' }),
+        expect.objectContaining({ level: 'warning', path: 'hooks', message: 'Unknown config key.' }),
         expect.objectContaining({
           level: 'warning',
           path: 'indexer.typescript.packageManager',

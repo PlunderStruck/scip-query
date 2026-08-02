@@ -1,8 +1,0 @@
-{
-  "ts": 1783729101797,
-  "check": "twin-partner",
-  "findingId": "SQ863491781FE8",
-  "event": "caught",
-  "commit": "6626d6d67cb19dd71c098106e5bd1d07cdcdb610",
-  "symbol": "scip-typescript npm scip-query 0.15.0 src/analysis/`rust-package-surface.ts`/packagePath()."
-}

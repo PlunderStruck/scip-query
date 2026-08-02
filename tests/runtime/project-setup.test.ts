@@ -371,12 +371,6 @@ describe('runProjectSetup', () => {
           requiresConsent: true,
         }),
         expect.objectContaining({
-          id: 'install-project-hooks',
-          scope: 'checkout',
-          recommended: true,
-          requiresConsent: true,
-        }),
-        expect.objectContaining({
           id: 'install-indexers',
           scope: 'user',
           recommended: true,
@@ -426,7 +420,7 @@ describe('runProjectSetup', () => {
       ensureWatchService,
     } = await loadProjectSetup();
 
-    const report = await module.runProjectSetup({ gitHook: true });
+    const report = await module.runProjectSetup();
 
     expect(report.health.score).toBe(91);
     expect(report.health.issuesNeedAttention).toEqual([
@@ -441,7 +435,7 @@ describe('runProjectSetup', () => {
         confirmationStatus: 'unconfirmed',
         safeForAgentToStart: false,
         recommendedNextStep:
-          'Run scip-audit to confirm this signal; use scip-improve when the user wants confirmed issues fixed autonomously.',
+          'Confirm this signal against its named source evidence before editing; fix it only when it matches the requested goal.',
       },
     ]);
     expect(report.healthDossier).toMatchObject({
@@ -457,7 +451,7 @@ describe('runProjectSetup', () => {
         '/repo/docs/scip-query/health-dossier.md',
         '/repo/docs/scip-query/health-dossier.json',
       ],
-      checkout: ['.codex/hooks.json', '.claude/settings.local.json', '.git/hooks/pre-commit'],
+      checkout: [],
       user: ['Codex/scip-query'],
     });
     expect(report.smokeTests).toEqual(
@@ -469,8 +463,6 @@ describe('runProjectSetup', () => {
         expect.objectContaining({ command: 'scip-query capability-matrix --json', status: 'pass' }),
         expect.objectContaining({ command: 'scip-query health', status: 'pass' }),
         expect.objectContaining({ command: 'scip-query diff-impact --json', status: 'pass' }),
-        expect.objectContaining({ command: 'scip-query diff-gate --json', status: 'pass' }),
-        expect.objectContaining({ command: 'scip-query setup-hooks', status: 'pass' }),
         expect.objectContaining({
           id: 'watch-refresh',
           command: 'scip-query status --json',
@@ -488,8 +480,8 @@ describe('runProjectSetup', () => {
     expect(ensureWatchService).toHaveBeenCalledWith(
       expect.objectContaining({ projectRoot: '/repo', cacheDir: '/repo/.scip', cliVersion: '0.15.0' }),
     );
-    expect(installProjectAgentHooks).toHaveBeenCalledWith('/repo');
-    expect(setupAgent).toHaveBeenCalledWith('/repo', { gitHook: true });
+    expect(installProjectAgentHooks).not.toHaveBeenCalled();
+    expect(setupAgent).toHaveBeenCalledWith('/repo');
 
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     module.renderProjectSetupReport(report);
@@ -528,8 +520,6 @@ describe('runProjectSetup', () => {
         expect.objectContaining({ command: 'scip-query capability-matrix --json', status: 'unavailable' }),
         expect.objectContaining({ command: 'scip-query health', status: 'unavailable' }),
         expect.objectContaining({ command: 'scip-query diff-impact --json', status: 'fail' }),
-        expect.objectContaining({ command: 'scip-query diff-gate --json', status: 'fail' }),
-        expect.objectContaining({ command: 'scip-query setup-hooks', status: 'pass' }),
         expect.objectContaining({ command: 'scip-query setup-agent', status: 'pass' }),
       ]),
     );

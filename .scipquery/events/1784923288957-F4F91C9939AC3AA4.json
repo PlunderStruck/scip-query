@@ -1,9 +1,0 @@
-{
-  "ts": 1784923288957,
-  "check": "co-change-partner",
-  "findingId": "SQ562715D7254A",
-  "event": "resolved",
-  "commit": "c4b52610cc36105154102f8759aeecefa28085e4",
-  "comparisonBaseCommit": "c4b52610cc36105154102f8759aeecefa28085e4",
-  "verifiedAgainstCommit": "d82429b7e8826a61cdd5f33bdcdcea001d5ee927"
-}

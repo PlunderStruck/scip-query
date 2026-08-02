@@ -342,12 +342,10 @@ describe('CLI JSON envelope compatibility', () => {
   it('leaves only explicitly classified non-public JSON emitters outside the shared renderer', () => {
     const handlers = readFileSync(join(process.cwd(), 'src', 'runtime', 'commands', 'command-handlers.ts'), 'utf8');
     const cliSupport = readFileSync(join(process.cwd(), 'src', 'runtime', 'cli-support.ts'), 'utf8');
-    const hooks = readFileSync(join(process.cwd(), 'src', 'runtime', 'agent-hooks.ts'), 'utf8');
     const isolated = readFileSync(join(process.cwd(), 'src', 'runtime', 'isolated-analysis-runner.ts'), 'utf8');
 
     expect(handlers).not.toContain('console.log(JSON.stringify');
     expect(cliSupport).not.toContain('console.log(JSON.stringify');
-    expect(hooks.match(/writeSerializedJson\(JSON\.stringify/g)).toHaveLength(4);
     expect(isolated.match(/writeSerializedJson\(JSON\.stringify/g)).toHaveLength(1);
   });
 });

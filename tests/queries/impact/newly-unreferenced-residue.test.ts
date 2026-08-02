@@ -4,12 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
-import { diffGate } from '../../../src/queries/impact/diff-gate.js';
 import { newlyUnreferencedResidue } from '../../../src/queries/impact/newly-unreferenced-residue.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../../fixtures/evidence-fixture.js';
-import { createPlanContractRecord } from '../../../src/change-control/plan-contract.js';
-import { createObservationIdentity, type ObservationReceiptV2 } from '../../../src/domain/observation-receipt.js';
 
 const tempRoots: string[] = [];
 const openDbs: ScipDatabase[] = [];
@@ -100,70 +97,6 @@ describe('newly unreferenced residue', () => {
     );
     expect(byName.has('unrelatedOldSmell')).toBe(false);
     expect(byName.has('currentFlow')).toBe(false);
-
-    const plan = createPlanContractRecord({
-      collaborationDomainId: '70a26367-a22f-46a7-aa64-f4ea5f09cc51',
-      request: {
-        schemaVersion: 1,
-        goalId: 'SQG-0123456789ABCDEF0123456789ABCDEF',
-        changeId: 'SQC-0123456789ABCDEF0123456789ABCDEF',
-        workflowClass: 'relational',
-        affectedSeeds: [],
-        preserve: [],
-        retirements: [
-          {
-            id: 'legacy',
-            kind: 'identity',
-            referent: 'legacyFlow',
-            responsibility: 'legacy flow',
-            condition: 'The legacy flow identity is absent',
-            evidenceIds: ['closure'],
-          },
-        ],
-        allowedSurvivors: [],
-        reuseAuthorities: [],
-        architecture: [],
-        completionEvidence: [{ id: 'closure', description: 'Inspect retirement closure' }],
-        slices: [],
-      },
-      source: { path: 'plan.md', sha256: 'a'.repeat(64) },
-      compiledAgainst: fixedReceipt(),
-      createdAt: '2026-08-01T12:00:00.000Z',
-      toolVersion: '0.20.0',
-    });
-    const gate = diffGate(db, {
-      base: 'HEAD',
-      semantic: false,
-      planContracts: [plan],
-      skip: [
-        'echo',
-        'incomplete-migration',
-        'co-change-partner',
-        'twin-partner',
-        'coverage-contract',
-        'architecture',
-        'doc-reference',
-        'unused-params',
-        'baseline',
-      ],
-    });
-    expect(gate.findings).toContainEqual(
-      expect.objectContaining({
-        check: 'new-dead',
-        sourceAnalyzer: 'newly-unreferenced-residue',
-        symbol: symbol('legacy.ts', 'legacyFlow'),
-        evidence: 'change-graph',
-        actionTier: 'direct',
-      }),
-    );
-    expect(gate.findings).toContainEqual(
-      expect.objectContaining({
-        check: 'new-dead',
-        sourceAnalyzer: 'plan-retirement-residue',
-        rootCauseKey: `plan-retirement:${plan.planId}:legacy`,
-        actionTier: 'direct',
-      }),
-    );
   });
 
   it('does not attribute a removed local name to an unrelated unique global callable', () => {
@@ -228,19 +161,4 @@ function gitIn(root: string, ...args: string[]): void {
 function commit(root: string, message: string): void {
   gitIn(root, 'add', '-A');
   gitIn(root, 'commit', '-m', message, '--no-gpg-sign');
-}
-
-function fixedReceipt(): ObservationReceiptV2 {
-  const domain = '70a26367-a22f-46a7-aa64-f4ea5f09cc51';
-  const content = createObservationIdentity('repository-content', 1, 'pre-edit');
-  return {
-    schemaVersion: 2,
-    observedAt: '2026-08-01T12:00:00.000Z',
-    facts: {
-      collaborationDomain: createObservationIdentity('scip-query:collaboration-domain', 1, domain),
-      wholeContent: content,
-    },
-    observedSources: [{ kind: 'repository-snapshot', identity: content }],
-    stabilityProofs: [{ source: 'repository-snapshot', kind: 'fixed-snapshot' }],
-  };
 }

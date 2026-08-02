@@ -1,9 +1,0 @@
-{
-  "ts": 1785032051222,
-  "check": "twin-partner",
-  "findingId": "SQCF20BC701F7E",
-  "event": "caught",
-  "commit": "8587125e92eee0f0561a9a1f7a37ae5bdeec86d0",
-  "comparisonBaseCommit": "8587125e92eee0f0561a9a1f7a37ae5bdeec86d0",
-  "symbol": "scip-typescript npm scip-query 0.19.5 src/reindex/vue/`augment-vue-workers.ts`/isRecord()."
-}

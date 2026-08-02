@@ -76,7 +76,7 @@ const MAX_LEFTOVERS_PER_HELPER = 5;
  * 1. finds production callables in the diff whose name is absent at `base`
  *    (the new helpers),
  * 2. keeps those with at least one reference — the wired-in evidence
- *    (zero-reference helpers belong to diff-gate's new-dead check),
+ *    (zero-reference helpers belong to the dead-code detector family),
  * 3. reports established, untouched functions whose callees contain the
  *    helper's callees at >= minContainment and that do NOT call the helper,
  *    requiring at least one non-ubiquitous shared callee so project-wide

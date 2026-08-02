@@ -1,4 +1,0 @@
-interface:
-  display_name: "SCIP Diagnose"
-  short_description: "Find the cause of a failure with SCIP evidence"
-  default_prompt: "Use $scip-diagnose to trace this failure to its cause and produce the minimal verified fix."

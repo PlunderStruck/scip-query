@@ -27,10 +27,10 @@ interface LimitedRows {
   omitted: number;
 }
 
-const handlePlanContext = budgetedDbCommand('plan-context', ({ db, args, opts, budget }) => {
+const handleContext = budgetedDbCommand('context', ({ db, args, opts, budget }) => {
   const limit = definedLimitOption(opts, 'limit', 20);
   const gitHead = resolveCliProjectContext(db.config.projectRoot).gitContext?.headCommit;
-  const result = queries.planContext(db, stringArg(args, 0), {
+  const result = queries.repositoryContext(db, stringArg(args, 0), {
     semantic: budget.semantic,
     impactDepth: definedNumberOption(opts, 'impactDepth', 3),
     sliceDepth: definedNumberOption(opts, 'sliceDepth', 3),
@@ -41,14 +41,14 @@ const handlePlanContext = budgetedDbCommand('plan-context', ({ db, args, opts, b
   if (result.warnings.length === 1 && result.warnings[0] === 'No symbol, file, or module matched target.') {
     if (booleanOptionValue(opts, 'json')) {
       printJsonEnvelope(
-        'plan-context',
+        'context',
         args,
         opts,
         { ...symbolResolutionJson(db, stringArg(args, 0)), ...result },
         {
           analysisBudget: budget.analysisBudget,
-          coverage: planContextCoverage(result),
-          agentResult: planContextAgentResult(result),
+          coverage: repositoryContextCoverage(result),
+          agentResult: repositoryContextAgentResult(result),
         },
       );
       return;
@@ -59,14 +59,14 @@ const handlePlanContext = budgetedDbCommand('plan-context', ({ db, args, opts, b
   if (booleanOptionValue(opts, 'json')) {
     const resolutionTarget = result.primaryCallable?.symbol ?? stringArg(args, 0);
     printJsonEnvelope(
-      'plan-context',
+      'context',
       args,
       opts,
       result.matched.symbol ? { ...symbolResolutionJson(db, resolutionTarget), ...result } : result,
       {
         analysisBudget: budget.analysisBudget,
-        coverage: planContextCoverage(result),
-        agentResult: planContextAgentResult(result),
+        coverage: repositoryContextCoverage(result),
+        agentResult: repositoryContextAgentResult(result),
       },
     );
     return;
@@ -74,8 +74,8 @@ const handlePlanContext = budgetedDbCommand('plan-context', ({ db, args, opts, b
   if (result.matched.symbol) symbolResolutionBefore(db, result.primaryCallable?.symbol ?? stringArg(args, 0));
 
   const sections = booleanOptionValue(opts, 'detail')
-    ? detailedPlanContextSections(result, limit)
-    : planContextDecisionSections(
+    ? detailedRepositoryContextSections(result, limit)
+    : repositoryContextDecisionSections(
         result,
         stringArg(args, 0),
         limit,
@@ -88,9 +88,9 @@ const handlePlanContext = budgetedDbCommand('plan-context', ({ db, args, opts, b
 
 export const planningQueryCommandDescriptors: CommandDescriptor[] = [
   {
-    id: 'plan-context',
-    command: 'plan-context <target>',
-    description: 'Pre-edit planning context for a symbol, file, or module',
+    id: 'context',
+    command: 'context <target>',
+    description: 'Compiler-backed context for a symbol, file, or module',
     options: withCompactJsonOptions([
       option('--impact-depth <n>', 'Maximum affected traversal depth', parseInteger, 3),
       option('--slice-depth <n>', 'Maximum backward slice depth', parseInteger, 3),
@@ -112,7 +112,7 @@ export const planningQueryCommandDescriptors: CommandDescriptor[] = [
     agent: {
       operation: REPOSITORY_OBSERVATION_OPERATION,
       answers: [
-        'What must I know before editing this target?',
+        'How is this target connected to the rest of the repository?',
         'Who consumes it, and what breaks if I change it?',
         'Has this target historically changed together with anything else?',
       ],
@@ -141,18 +141,18 @@ export const planningQueryCommandDescriptors: CommandDescriptor[] = [
         {
           command: 'change-surface',
           distinction:
-            'change-surface is the exports/consumers/risk briefing alone; plan-context embeds it alongside flow, slices, history, and reuse signals.',
+            'change-surface is the exports/consumers/risk briefing alone; context includes flow, slices, history, and reuse signals.',
         },
       ],
     },
     renderShape: 'custom',
-    docs: doc('Planning', ['scip-query plan-context parseSymbol']),
-    handler: handlePlanContext,
+    docs: doc('Exploration', ['scip-query context parseSymbol']),
+    handler: handleContext,
   },
 ];
 
-export function planContextDecisionSections(
-  result: queries.PlanContextResult,
+export function repositoryContextDecisionSections(
+  result: queries.RepositoryContextResult,
   target: string,
   limit: number,
   impactDepth: number,
@@ -173,7 +173,7 @@ export function planContextDecisionSections(
   ];
 }
 
-function detailedPlanContextSections(result: queries.PlanContextResult, limit: number) {
+function detailedRepositoryContextSections(result: queries.RepositoryContextResult, limit: number) {
   return [
     { title: 'TARGET', rows: targetRows(result) },
     { title: 'DEFINITIONS', rows: definitionRows(result, limit), skipIfEmpty: true },
@@ -191,7 +191,7 @@ function detailedPlanContextSections(result: queries.PlanContextResult, limit: n
   ];
 }
 
-function currentFlowRows(result: queries.PlanContextResult, limit: number): string[] {
+function currentFlowRows(result: queries.RepositoryContextResult, limit: number): string[] {
   return withOmitted(
     cappedRows(
       [...definitionRows(result, Math.min(limit, 12)), ...callGraphRows(result, limit), ...dataflowRows(result, limit)],
@@ -200,7 +200,7 @@ function currentFlowRows(result: queries.PlanContextResult, limit: number): stri
   );
 }
 
-function decisionConsumerRows(result: queries.PlanContextResult, limit: number): string[] {
+function decisionConsumerRows(result: queries.RepositoryContextResult, limit: number): string[] {
   const direct = result.trace.referencedBy.map(
     (reference) => `  direct  ${reference.relativePath}:${displayLine(reference.line)}  ${reference.enclosingShort}`,
   );
@@ -210,7 +210,7 @@ function decisionConsumerRows(result: queries.PlanContextResult, limit: number):
   return withOmitted(cappedRows(uniqueRows([...direct, ...downstream]), limit));
 }
 
-function changeConstraintRows(result: queries.PlanContextResult, limit: number): string[] {
+function changeConstraintRows(result: queries.RepositoryContextResult, limit: number): string[] {
   const rows = [
     ...(result.changeSurface
       ? [
@@ -226,14 +226,14 @@ function changeConstraintRows(result: queries.PlanContextResult, limit: number):
   return withOmitted(cappedRows(rows, limit));
 }
 
-function nextReadRows(result: queries.PlanContextResult, limit: number): string[] {
+function nextReadRows(result: queries.RepositoryContextResult, limit: number): string[] {
   const candidates = [
     ...result.trace.definitions.map((definition) => definition.relativePath),
     ...result.trace.referencedBy.map((reference) => reference.relativePath),
     ...(result.callGraph?.callers.map((caller) => caller.file) ?? []),
     ...(result.callGraph?.callees.map((callee) => callee.file) ?? []),
     ...(result.reuseCandidates?.map((candidate) => candidate.fileB) ?? []),
-    ...planContextConsumerReuse(result).candidates.map(({ candidate }) => candidate.fileB),
+    ...repositoryContextConsumerReuse(result).candidates.map(({ candidate }) => candidate.fileB),
   ];
   return withOmitted(
     cappedRows(
@@ -244,12 +244,12 @@ function nextReadRows(result: queries.PlanContextResult, limit: number): string[
 }
 
 function decisionCoverageRows(
-  result: queries.PlanContextResult,
+  result: queries.RepositoryContextResult,
   target: string,
   impactDepth: number,
   sliceDepth: number,
 ): string[] {
-  const reuse = planContextConsumerReuse(result).coverage;
+  const reuse = repositoryContextConsumerReuse(result).coverage;
   const rows = [
     `  Direct compiler references observed: ${result.trace.referencedBy.length}.`,
     `  Downstream and slice evidence is bounded at impact depth ${impactDepth} and slice depth ${sliceDepth}.`,
@@ -263,7 +263,7 @@ function decisionCoverageRows(
   if (result.warnings.length > 0) rows.push(...result.warnings.map((warning) => `  Warning: ${warning}`));
   rows.push(
     `  Use scip-query refs ${target} --full only when a complete direct-consumer set can change the plan.`,
-    `  Use scip-query plan-context ${target} --detail only when this packet leaves a named planning uncertainty.`,
+    `  Use scip-query context ${target} --detail only when this packet leaves a named planning uncertainty.`,
   );
   return rows;
 }
@@ -272,16 +272,16 @@ function uniqueRows(rows: readonly string[]): string[] {
   return [...new Set(rows)];
 }
 
-function planContextCoverage(result: queries.PlanContextResult) {
+function repositoryContextCoverage(result: queries.RepositoryContextResult) {
   return {
     complete: false,
     totalKnown: false,
-    returned: planContextReturnedUnits(result),
+    returned: repositoryContextReturnedUnits(result),
   } as const;
 }
 
-function planContextReturnedUnits(result: queries.PlanContextResult): number {
-  const consumerReuse = planContextConsumerReuse(result);
+function repositoryContextReturnedUnits(result: queries.RepositoryContextResult): number {
+  const consumerReuse = repositoryContextConsumerReuse(result);
   return (
     result.trace.definitions.length +
     result.trace.referencedBy.length +
@@ -307,8 +307,8 @@ function planContextReturnedUnits(result: queries.PlanContextResult): number {
   );
 }
 
-function planContextAgentResult(result: queries.PlanContextResult) {
-  const consumerReuse = planContextConsumerReuse(result);
+function repositoryContextAgentResult(result: queries.RepositoryContextResult) {
+  const consumerReuse = repositoryContextConsumerReuse(result);
   return {
     target: result.target,
     matched: result.matched,
@@ -350,12 +350,12 @@ function planContextAgentResult(result: queries.PlanContextResult) {
   };
 }
 
-function reuseRows(result: queries.PlanContextResult, limit: number): string[] {
+function reuseRows(result: queries.RepositoryContextResult, limit: number): string[] {
   const targetRows = (result.reuseCandidates ?? []).flatMap((candidate) => [
     `  target    ${reuseDecisionLabel(candidate.actionTier)}  ${Math.round(candidate.similarity * 100)}%  ${candidate.shortNameB}  ${candidate.fileB}`,
     `                    ${candidate.recommendation}`,
   ]);
-  const consumerReuse = planContextConsumerReuse(result);
+  const consumerReuse = repositoryContextConsumerReuse(result);
   const consumerRows = consumerReuse.candidates.flatMap(({ candidate, consumers }) => [
     `  consumer  ${reuseDecisionLabel(candidate.actionTier)}  ${Math.round(candidate.similarity * 100)}%  ${candidate.shortNameB}  ${candidate.fileB}`,
     `                    found from ${consumers.map((consumer) => consumer.shortName).join(', ')}; ${candidate.recommendation}`,
@@ -375,7 +375,7 @@ function reuseDecisionLabel(tier: queries.SimilarActionTier): string {
   return tier === 'direct' ? 'decide' : 'review';
 }
 
-function targetRows(result: queries.PlanContextResult): string[] {
+function targetRows(result: queries.RepositoryContextResult): string[] {
   const rows = [
     `Target: ${result.target}`,
     `Matched: symbol=${yesNo(result.matched.symbol)} file=${yesNo(result.matched.file)} module=${yesNo(result.matched.module)}`,
@@ -386,7 +386,7 @@ function targetRows(result: queries.PlanContextResult): string[] {
   return rows;
 }
 
-function sourcePacketRows(result: queries.PlanContextResult): string[] {
+function sourcePacketRows(result: queries.RepositoryContextResult): string[] {
   if (!result.sourcePacket || result.sourcePacket.slices.length === 0) return [];
   const rows: string[] = [];
   for (const slice of result.sourcePacket.slices) {
@@ -406,7 +406,7 @@ function sourcePacketRows(result: queries.PlanContextResult): string[] {
   return rows;
 }
 
-function definitionRows(result: queries.PlanContextResult, limit: number): string[] {
+function definitionRows(result: queries.RepositoryContextResult, limit: number): string[] {
   const rows: string[] = [];
   for (const definition of result.trace.definitions) {
     const sig = definition.signature ? `  -- ${definition.signature}` : '';
@@ -429,21 +429,21 @@ function definitionRows(result: queries.PlanContextResult, limit: number): strin
   return cappedRows(rows, limit).rows;
 }
 
-function referenceRows(result: queries.PlanContextResult, limit: number): string[] {
+function referenceRows(result: queries.RepositoryContextResult, limit: number): string[] {
   const rows = result.trace.referencedBy.map(
     (ref) => `  ${ref.relativePath}:${displayLine(ref.line)}  in ${ref.enclosingShort}`,
   );
   return withOmitted(cappedRows(rows, limit));
 }
 
-function callGraphRows(result: queries.PlanContextResult, limit: number): string[] {
+function callGraphRows(result: queries.RepositoryContextResult, limit: number): string[] {
   if (!result.callGraph) return [];
   const callerRows = result.callGraph.callers.map((caller) => `  caller  ${caller.file}  ${caller.shortName}`);
   const calleeRows = result.callGraph.callees.map((callee) => `  callee  ${callee.file}  ${callee.shortName}`);
   return withOmitted(cappedRows([...callerRows, ...calleeRows], limit));
 }
 
-function dataflowRows(result: queries.PlanContextResult, limit: number): string[] {
+function dataflowRows(result: queries.RepositoryContextResult, limit: number): string[] {
   if (!result.dataflow) return [];
   const producerRows = result.dataflow.producers.map(
     (producer) => `  producer  ${producer.file}  ${producer.shortName}`,
@@ -457,7 +457,7 @@ function dataflowRows(result: queries.PlanContextResult, limit: number): string[
   return withOmitted(cappedRows([...producerRows, ...consumerRows, ...usageRows], limit));
 }
 
-function dependencyRows(result: queries.PlanContextResult, limit: number): string[] {
+function dependencyRows(result: queries.RepositoryContextResult, limit: number): string[] {
   const rows = [
     ...result.deps.map((dep) => `  file depends on      ${dep.relativePath}`),
     ...result.rdeps.map((dep) => `  file depended on by  ${dep.relativePath}`),
@@ -467,7 +467,7 @@ function dependencyRows(result: queries.PlanContextResult, limit: number): strin
   return withOmitted(cappedRows(rows, limit));
 }
 
-function surfaceRows(result: queries.PlanContextResult, limit: number): string[] {
+function surfaceRows(result: queries.RepositoryContextResult, limit: number): string[] {
   const rows = [
     ...result.system.files.map((file) => `  file    ${file}`),
     ...result.system.symbols.map(
@@ -478,7 +478,7 @@ function surfaceRows(result: queries.PlanContextResult, limit: number): string[]
   return withOmitted(cappedRows(rows, limit));
 }
 
-function affectedRows(result: queries.PlanContextResult, limit: number): string[] {
+function affectedRows(result: queries.RepositoryContextResult, limit: number): string[] {
   const rows: string[] = [];
   let prevDepth = -1;
   for (const affected of result.affected) {
@@ -491,7 +491,7 @@ function affectedRows(result: queries.PlanContextResult, limit: number): string[
   return withOmitted(cappedRows(rows, limit));
 }
 
-function riskRows(result: queries.PlanContextResult, limit: number): string[] {
+function riskRows(result: queries.RepositoryContextResult, limit: number): string[] {
   const rows: string[] = [];
   if (result.changeSurface) {
     rows.push(`  File: ${result.changeSurface.file}`);
@@ -530,7 +530,7 @@ function riskRows(result: queries.PlanContextResult, limit: number): string[] {
   return withOmitted(cappedRows(rows, limit));
 }
 
-function historyRows(result: queries.PlanContextResult): string[] {
+function historyRows(result: queries.RepositoryContextResult): string[] {
   const history = result.history;
   if (!history.available || !history.file) return [];
   const rows: string[] = [];
@@ -551,7 +551,7 @@ function historyRows(result: queries.PlanContextResult): string[] {
   return rows;
 }
 
-function planningNoteRows(result: queries.PlanContextResult): string[] {
+function planningNoteRows(result: queries.RepositoryContextResult): string[] {
   const rows = result.warnings.map((warning) => `  ${warning}`);
   if (result.history.coChangePartners.length > 0) {
     rows.push('  Check the HISTORY co-change partners — editing this file usually means editing them too.');
@@ -573,7 +573,7 @@ function planningNoteRows(result: queries.PlanContextResult): string[] {
       '  A direct reuse option requires a responsibility and behavior comparison. Reuse the existing owner when they match. Current wiring or reachability alone does not justify separate ownership; rejection needs a concrete behavioral or boundary difference.',
     );
   }
-  if (planContextConsumerReuse(result).candidates.length > 0) {
+  if (repositoryContextConsumerReuse(result).candidates.length > 0) {
     rows.push(
       '  An affected-consumer reuse option can own surrounding behavior that target-only comparison cannot see. Compare each direct option before editing, and keep duplicate ownership only for a concrete behavioral or boundary difference.',
     );
@@ -581,7 +581,9 @@ function planningNoteRows(result: queries.PlanContextResult): string[] {
   return rows;
 }
 
-function planContextConsumerReuse(result: queries.PlanContextResult): queries.PlanContextConsumerReuse {
+function repositoryContextConsumerReuse(
+  result: queries.RepositoryContextResult,
+): queries.RepositoryContextConsumerReuse {
   return (
     result.affectedConsumerReuse ?? {
       candidates: [],

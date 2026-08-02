@@ -76,12 +76,6 @@ interface EvidenceConnection {
   readLegacyReferencesForFile: Database.Statement;
   writeReferences: Database.Statement;
   dropStaleReferences: Database.Statement;
-  readFindingOutcomeLedger: Database.Statement;
-  claimFindingOutcomeObservation: Database.Statement;
-  readFindingOutcomeObservation: Database.Statement;
-  upsertFindingOutcomeLedgerRow: Database.Statement;
-  updateFindingOutcomeLedgerRow: Database.Statement;
-  trimFindingOutcomeLedgerCheck: Database.Statement;
 }
 
 interface SharedEvidenceConnection {
@@ -102,44 +96,6 @@ const SHARED_FILE_EVIDENCE_KIND_SET = new Set<FileEvidenceKind>(SHARED_FILE_EVID
 export const DEFAULT_SHARED_EVIDENCE_MAX_ROWS = 250_000;
 export const DEFAULT_SHARED_EVIDENCE_BUDGET_BYTES = 512 * 1024 * 1024;
 export const SHARED_EVIDENCE_ACCESS_TOUCH_INTERVAL_MS = 60_000;
-
-/** Ledger rows are ids + timestamps only — no finding content, no prompt text. */
-// scip-query: ignore-stale -- Storage row contract isolates persisted ledger shape from health-domain records.
-export interface FindingOutcomeRow {
-  check: string;
-  findingId: string;
-  firstSeen: number;
-  lastSeen: number;
-  timesShown: number;
-  outcome: string;
-}
-
-/**
- * One logical detector run. The caller owns the stable id and fingerprints
- * the evidence that id names; storage rejects an id reused for other evidence.
- */
-export interface FindingOutcomeObservation {
-  observationId: string;
-  fingerprint: string;
-  observedAt: number;
-}
-
-export type FindingOutcomeApplyStatus = 'applied' | 'duplicate' | 'conflict' | 'busy' | 'unavailable';
-
-export interface FindingOutcomeApplyResult {
-  status: FindingOutcomeApplyStatus;
-  previous: FindingOutcomeRow[];
-  current: FindingOutcomeRow[];
-}
-
-export interface FindingOutcomeApplyOptions {
-  /** Maximum SQLite writer-lock wait for this best-effort metric update. */
-  busyTimeoutMs?: number;
-}
-
-/** Per-check recency cap — the ledger stores ids/timestamps only, but a repo with
- * many checks and long history should not grow without bound. */
-export const FINDING_OUTCOME_LEDGER_CAP_PER_CHECK = 5_000;
 
 // scip-query: ignore-stale — reviewed S1 owned contract; this is the persisted semantic-callee cache row.
 export interface SemanticCalleeCacheEntry {
@@ -266,20 +222,6 @@ function connectionFor(db: ScipDatabase): EvidenceConnection | null {
         payload TEXT NOT NULL,
         PRIMARY KEY (relative_path, symbol)
       );
-      CREATE TABLE IF NOT EXISTS finding_outcome_ledger (
-        check_name TEXT NOT NULL,
-        finding_id TEXT NOT NULL,
-        first_seen INTEGER NOT NULL,
-        last_seen INTEGER NOT NULL,
-        times_shown INTEGER NOT NULL,
-        outcome TEXT NOT NULL,
-        PRIMARY KEY (check_name, finding_id)
-      );
-      CREATE TABLE IF NOT EXISTS finding_outcome_observations (
-        observation_id TEXT PRIMARY KEY,
-        fingerprint TEXT NOT NULL,
-        observed_at INTEGER NOT NULL
-      );
     `);
     connection = {
       evidence,
@@ -357,43 +299,6 @@ function connectionFor(db: ScipDatabase): EvidenceConnection | null {
       ),
       dropStaleReferences: evidence.prepare(
         'DELETE FROM semantic_references WHERE relative_path = ? AND project_fingerprint != ?',
-      ),
-      readFindingOutcomeLedger: evidence.prepare(
-        'SELECT check_name, finding_id, first_seen, last_seen, times_shown, outcome FROM finding_outcome_ledger',
-      ),
-      claimFindingOutcomeObservation: evidence.prepare(
-        `INSERT OR IGNORE INTO finding_outcome_observations
-           (observation_id, fingerprint, observed_at) VALUES (?, ?, ?)`,
-      ),
-      readFindingOutcomeObservation: evidence.prepare(
-        'SELECT fingerprint FROM finding_outcome_observations WHERE observation_id = ?',
-      ),
-      upsertFindingOutcomeLedgerRow: evidence.prepare(
-        `INSERT INTO finding_outcome_ledger
-           (check_name, finding_id, first_seen, last_seen, times_shown, outcome)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(check_name, finding_id) DO UPDATE SET
-           first_seen = MIN(finding_outcome_ledger.first_seen, excluded.first_seen),
-           last_seen = MAX(finding_outcome_ledger.last_seen, excluded.last_seen),
-           times_shown = finding_outcome_ledger.times_shown + excluded.times_shown,
-           outcome = excluded.outcome`,
-      ),
-      updateFindingOutcomeLedgerRow: evidence.prepare(
-        `UPDATE finding_outcome_ledger
-         SET first_seen = MIN(first_seen, ?),
-             last_seen = MAX(last_seen, ?),
-             outcome = ?
-         WHERE check_name = ? AND finding_id = ?`,
-      ),
-      trimFindingOutcomeLedgerCheck: evidence.prepare(
-        `DELETE FROM finding_outcome_ledger
-         WHERE rowid IN (
-           SELECT rowid
-           FROM finding_outcome_ledger
-           WHERE check_name = ?
-           ORDER BY last_seen DESC, first_seen DESC, finding_id DESC
-           LIMIT -1 OFFSET ?
-         )`,
       ),
     };
   } catch (error) {
@@ -822,185 +727,4 @@ export function writeCachedSemanticReferencesBatch(
   } catch (error) {
     disable(db, 'semantic_references write', error);
   }
-}
-
-// scip-query: ignore-wrapper — public storage boundary; callers get a
-// disable-on-error read, never a raw statement.
-export function readFindingOutcomeLedger(db: ScipDatabase): FindingOutcomeRow[] {
-  const connection = connectionFor(db);
-  if (!connection) return [];
-  try {
-    return readFindingOutcomeRows(connection);
-  } catch (error) {
-    disable(db, 'finding_outcome_ledger read', error);
-    return [];
-  }
-}
-
-/**
- * Serialize one logical ledger transition with every other process writing
- * evidence.db. The transition runs after BEGIN IMMEDIATE has acquired SQLite's
- * writer reservation, so it can only derive from the latest committed rows.
- *
- * New or repeated findings use an UPSERT whose conflict branch adds the
- * transition's count delta. Retrying the same observation id and fingerprint
- * is a no-op; reusing an id for different evidence is an explicit conflict.
- */
-export function applyFindingOutcomeLedgerTransition(
-  db: ScipDatabase,
-  observation: FindingOutcomeObservation,
-  transition: (previous: readonly FindingOutcomeRow[]) => readonly FindingOutcomeRow[],
-  options: FindingOutcomeApplyOptions = {},
-): FindingOutcomeApplyResult {
-  const connection = connectionFor(db);
-  if (!connection) return { status: 'unavailable', previous: [], current: [] };
-
-  const configuredTimeout = options.busyTimeoutMs;
-  let priorTimeout: number | undefined;
-
-  try {
-    if (configuredTimeout !== undefined) {
-      priorTimeout = Number(connection.evidence.pragma('busy_timeout', { simple: true }));
-      const busyTimeoutMs = Math.max(0, Math.min(60_000, Math.floor(configuredTimeout)));
-      connection.evidence.pragma(`busy_timeout = ${busyTimeoutMs}`);
-    }
-
-    const runTransition = connection.evidence.transaction((): FindingOutcomeApplyResult => {
-      const previous = readFindingOutcomeRows(connection);
-      const claimed = connection.claimFindingOutcomeObservation.run(
-        observation.observationId,
-        observation.fingerprint,
-        observation.observedAt,
-      );
-      if (claimed.changes === 0) {
-        const existing = connection.readFindingOutcomeObservation.get(observation.observationId) as
-          | { fingerprint: string }
-          | undefined;
-        return {
-          status: existing?.fingerprint === observation.fingerprint ? 'duplicate' : 'conflict',
-          previous,
-          current: previous,
-        };
-      }
-
-      const next = [...transition(previous)];
-      const previousByKey = new Map(previous.map((row) => [findingOutcomeRowKey(row), row]));
-      const nextByKey = new Map<string, FindingOutcomeRow>();
-      const touchedChecks = new Set<string>();
-
-      for (const row of next) {
-        const key = findingOutcomeRowKey(row);
-        if (nextByKey.has(key)) {
-          throw new Error(`duplicate finding-outcome row in transition: ${row.check}/${row.findingId}`);
-        }
-        nextByKey.set(key, row);
-        const before = previousByKey.get(key);
-        if (!before) {
-          if (row.timesShown < 1) {
-            throw new Error(`new finding-outcome row has a non-positive count: ${row.check}/${row.findingId}`);
-          }
-          touchedChecks.add(row.check);
-          connection.upsertFindingOutcomeLedgerRow.run(
-            row.check,
-            row.findingId,
-            row.firstSeen,
-            row.lastSeen,
-            row.timesShown,
-            row.outcome,
-          );
-          continue;
-        }
-
-        const countDelta = row.timesShown - before.timesShown;
-        if (countDelta < 0) {
-          throw new Error(`finding-outcome count regressed: ${row.check}/${row.findingId}`);
-        }
-        if (countDelta > 0) {
-          touchedChecks.add(row.check);
-          connection.upsertFindingOutcomeLedgerRow.run(
-            row.check,
-            row.findingId,
-            row.firstSeen,
-            row.lastSeen,
-            countDelta,
-            row.outcome,
-          );
-        } else if (
-          row.firstSeen !== before.firstSeen ||
-          row.lastSeen !== before.lastSeen ||
-          row.outcome !== before.outcome
-        ) {
-          touchedChecks.add(row.check);
-          connection.updateFindingOutcomeLedgerRow.run(
-            row.firstSeen,
-            row.lastSeen,
-            row.outcome,
-            row.check,
-            row.findingId,
-          );
-        }
-      }
-
-      for (const row of previous) {
-        if (!nextByKey.has(findingOutcomeRowKey(row))) {
-          throw new Error(`finding-outcome transition removed a row: ${row.check}/${row.findingId}`);
-        }
-      }
-      for (const check of touchedChecks) {
-        connection.trimFindingOutcomeLedgerCheck.run(check, FINDING_OUTCOME_LEDGER_CAP_PER_CHECK);
-      }
-
-      return { status: 'applied', previous, current: readFindingOutcomeRows(connection) };
-    });
-    return runTransition.immediate();
-  } catch (error) {
-    if (isSqliteBusy(error)) {
-      let current: FindingOutcomeRow[] = [];
-      try {
-        current = readFindingOutcomeRows(connection);
-      } catch {
-        // A transient writer-lock timeout must not disable the entire evidence cache.
-      }
-      return { status: 'busy', previous: current, current };
-    }
-    disable(db, 'finding_outcome_ledger transition', error);
-    return { status: 'unavailable', previous: [], current: [] };
-  } finally {
-    if (priorTimeout !== undefined) {
-      try {
-        connection.evidence.pragma(`busy_timeout = ${Math.max(0, Math.floor(priorTimeout))}`);
-      } catch {
-        // The connection was disabled by the failure path above.
-      }
-    }
-  }
-}
-
-function readFindingOutcomeRows(connection: EvidenceConnection): FindingOutcomeRow[] {
-  const rows = connection.readFindingOutcomeLedger.all() as Array<{
-    check_name: string;
-    finding_id: string;
-    first_seen: number;
-    last_seen: number;
-    times_shown: number;
-    outcome: string;
-  }>;
-  return rows.map((row) => ({
-    check: row.check_name,
-    findingId: row.finding_id,
-    firstSeen: row.first_seen,
-    lastSeen: row.last_seen,
-    timesShown: row.times_shown,
-    outcome: row.outcome,
-  }));
-}
-
-function findingOutcomeRowKey(row: Pick<FindingOutcomeRow, 'check' | 'findingId'>): string {
-  return `${row.check}\0${row.findingId}`;
-}
-
-function isSqliteBusy(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const code = (error as { code?: unknown }).code;
-  return code === 'SQLITE_BUSY' || code === 'SQLITE_BUSY_TIMEOUT' || code === 'SQLITE_LOCKED';
 }

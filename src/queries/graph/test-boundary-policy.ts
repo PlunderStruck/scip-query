@@ -35,7 +35,7 @@ export interface TestBoundaryViolation {
 const TEST_SUFFIX = /\.(test|spec)\.(ts|tsx|js|jsx|mts|cts)$/;
 
 // Discovering test roots walks the filesystem, and architecture() is called by
-// health and every diff-gate run, so the walk is memoized per project root.
+// health and focused architecture checks, so the walk is memoized per project root.
 const TEST_FILE_CACHE = new Map<string, string[]>();
 
 /**

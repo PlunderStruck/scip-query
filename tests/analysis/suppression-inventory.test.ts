@@ -56,18 +56,35 @@ describe('suppression inventory', () => {
         dbPath,
         indexPath: join(tempDir, 'index.scip'),
         projectRoot: tempDir,
+        suppressions: [
+          {
+            id: 'SQ-ACTIVE',
+            check: 'recent-duplicates',
+            file: 'src/suppressions.ts',
+            reason: 'Reviewed intentional overlap.',
+            expiresAt: '2999-01-01T00:00:00.000Z',
+          },
+          {
+            id: 'SQ-EXPIRED',
+            check: 'twin-drift',
+            file: 'src/suppressions.ts',
+            reason: 'Expired review.',
+            expiresAt: '2000-01-01T00:00:00.000Z',
+          },
+        ],
       };
       db = new ScipDatabase(config);
 
       const inventory = getSuppressionInventory(db);
 
-      expect(inventory.total).toBe(4);
-      expect(inventory.byFile.get('src/suppressions.ts')).toBe(4);
+      expect(inventory.total).toBe(5);
+      expect(inventory.byFile.get('src/suppressions.ts')).toBe(5);
       expect(inventory.byCategory.wrapper).toBe(1);
       expect(inventory.byCategory.dead).toBe(1);
       expect(inventory.byCategory.passthrough).toBe(1);
       expect(inventory.byCategory.stale).toBe(0);
       expect(inventory.byCategory.twin).toBe(1);
+      expect(inventory.byCategory.similar).toBe(1);
     } finally {
       db?.close();
       rmSync(tempDir, { recursive: true, force: true });

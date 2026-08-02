@@ -8,9 +8,8 @@
  * possible collision is two branches suppressing the same finding with
  * different reasons — rare, and a one-line human resolution.
  *
- * The gate consumes these via readSuppressionDir() unioned with the
- * legacy config array (see diff-gate.ts); the legacy array keeps working
- * but is no longer written to by the `suppress` command.
+ * Database-backed analysis loads these together with the legacy config array.
+ * The legacy array remains readable but is no longer written by `suppress`.
  */
 
 import { existsSync, readdirSync } from 'node:fs';

@@ -1,26 +1,10 @@
-import { spawnSync } from 'node:child_process';
-import { performance } from 'node:perf_hooks';
-import { chmodSync, existsSync, mkdirSync, realpathSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname, extname, join, resolve } from 'node:path';
-import type { IndexedDefinition, SupportedLanguage } from '../../domain/types.js';
-import {
-  assertOwnedCacheBackup,
-  assertOwnedCacheDir,
-  cacheIdentityHash,
-  canonicalCacheIdentity,
-  ensureOwnedCacheDir,
-  resolveIndexStoragePaths,
-  resolveScipQueryCacheRoot,
-} from '../../platform/cache-layout.js';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import type { SupportedLanguage } from '../../domain/types.js';
+import { resolveIndexStoragePaths } from '../../platform/cache-layout.js';
 import { WATCH_LOCK_FILE } from '../../platform/watch-service-state.js';
-import { readSmallArtifactText } from '../../platform/bounded-file.js';
 import * as queries from '../../queries/index.js';
-import {
-  augmentAuxiliaryDocuments,
-  augmentVueResolvedReferencesAsync,
-  detectLanguages,
-  reindex,
-} from '../../reindex/index.js';
+import { augmentAuxiliaryDocuments, augmentVueResolvedReferencesAsync, detectLanguages } from '../../reindex/index.js';
 import {
   formatAffectedSetShadowStatus,
   readAffectedSetShadowStatus,
@@ -40,9 +24,6 @@ import {
   validateProjectConfig,
   SUPPORTED_LANGUAGES,
 } from '../config.js';
-import { OUTCOME_EVENTS_DIR, readOutcomeEvents } from '../../storage/outcome-events.js';
-import { computeEffectiveness, parseSinceMs } from '../../queries/health/effectiveness.js';
-import { formatRecordCompatibilityWarning } from '../../domain/record-compatibility.js';
 import { getIndexFreshness, type IndexFreshness } from '../index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from '../project-readiness.js';
 import { Watcher } from '../watch.js';
@@ -54,7 +35,6 @@ import {
   type WatchServiceInspection,
 } from '../watch-service.js';
 import { evaluateSetupAgentResult, setupAgent } from '../agent-setup.js';
-import { installProjectAgentHooks, selectSetupHooksMode } from '../agent-hooks.js';
 import {
   planGuidedProjectSetup,
   renderProjectSetupReport,
@@ -66,25 +46,12 @@ import {
 } from '../project-setup.js';
 import { promptSetupChecklist, type SetupWizardChoice } from '../setup-wizard.js';
 import { astParserLanguages } from '../ast-parser-setup.js';
-import { setupCiWorkflow } from '../setup-ci.js';
 import { installSkills, isScipInstalled, printScipInstallInstructions } from '../setup.js';
 import { formatUninstallReport, runUninstall, selectUninstallScope } from '../uninstall.js';
 import { inspectSharedCacheStatus, type SharedCacheStatus } from '../repository-cache-lifecycle.js';
-import { ALL_SOURCE_EXTENSIONS } from '../../source/primitives/source-fileset.js';
-import { getAllDefinitions } from '../../symbols/definition-catalog.js';
-import { createTsMorphProvider } from '../../semantic/typescript/ts-morph-provider.js';
-import {
-  compareTypeScriptReferenceProviders,
-  createTsServerProvider,
-} from '../../semantic/typescript/tsserver-provider.js';
-import { isTypeScriptLike } from '../../semantic/typescript/source-kinds.js';
 import { rustSemanticSessionStatus } from '../../semantic/rust/lsp-session.js';
 import { healthPhases } from '../../queries/health/health.js';
-import { writeProfileEvent } from '../../instrumentation/profile.js';
-import { auditProfileWork, readProfileEvents, renderProfileWorkAudit } from '../profile-work-audit.js';
 import { discloseHealthCapabilities } from '../health-capability-disclosure.js';
-import { loadMissionEffectiveness } from '../mission-effectiveness.js';
-import { formatMissionEffectiveness } from '../mission-effectiveness-render.js';
 import {
   buildAutomatedSuppressionDecision,
   formatSuppressionWriteReceipt,
@@ -92,6 +59,7 @@ import {
 } from '../suppression-writer.js';
 import { currentCliObservationReceipt } from '../observation-receipt.js';
 import { inspectWatchRefreshRequests } from '../../storage/watch-refresh-requests.js';
+import { readSuppressionDir } from '../../storage/suppression-store.js';
 import {
   collect,
   formatBytes,
@@ -119,48 +87,13 @@ import {
   stringOptionValue,
 } from '../command-kit/command-execution.js';
 import { printIsolatedAnalysisResult } from '../isolated-analysis-runner.js';
-import {
-  DIFF_GATE_REQUEST_ENV,
-  DIFF_GATE_RUN_COMMAND,
-  executeDiffGate,
-  parseDiffGateExecutionRequest,
-} from '../diff-gate-execution.js';
-import { sanitizeTerminalLine, sanitizeTerminalText } from '../../platform/terminal-output.js';
+import { sanitizeTerminalLine } from '../../platform/terminal-output.js';
 import { reindexConfiguredProject } from '../project-reindex.js';
 
 // Descriptor-backed query commands live under runtime/query-commands/*.
 // This file owns side-effect lifecycles such as reindex, setup, watch, and
 // install commands.
 const SUPPORTED_LANGUAGE_SET = new Set<SupportedLanguage>(SUPPORTED_LANGUAGES);
-const BENCH_TIMEOUT_MS = 180_000;
-const BENCH_MAX_BUFFER = 100 * 1024 * 1024;
-const SOURCE_EXTENSION_SET = new Set(ALL_SOURCE_EXTENSIONS);
-const DEFAULT_BENCH_COMMANDS: readonly (readonly string[])[] = [
-  ['status', '--json'],
-  ['status', '--capabilities'],
-  ['capabilities', '--json'],
-  ['capability-matrix', '--json'],
-  ['stats'],
-  ['kind-counts'],
-  ['diff-impact', '--json'],
-  ['diff-gate', '--json'],
-];
-const HEAVY_BENCH_COMMANDS: readonly (readonly string[])[] = [
-  ['health', '--json'],
-  ['dead', '--json', '--full'],
-  ['isolated', '--json', '--full'],
-  ['similar', '--json', '--full'],
-  ['similar-files', '--json', '--full'],
-  ['recent-duplicates', '--json', '--full'],
-  ['doc-drift', '--json', '--full'],
-  ['unused-params', '--json', '--full'],
-  ['wrapper-candidates', '--json', '--full'],
-  ['passthrough-candidates', '--json', '--full'],
-  ['stale-abstractions', '--json', '--full'],
-  ['incomplete-migration', '--json', '--full'],
-  ['cleanup-plan', '--verify', '--json'],
-  ['complexity-hotspots', '--json', '--full'],
-];
 
 function supportedLanguages(values: readonly string[]): SupportedLanguage[] {
   return values.filter((value): value is SupportedLanguage => SUPPORTED_LANGUAGE_SET.has(value as SupportedLanguage));
@@ -186,11 +119,7 @@ export async function handleReindex(rawOpts: unknown): Promise<void> {
       trustProjectTools: booleanOptionValue(opts, 'trustProjectTools'),
       indexerConcurrency: numberOptionValue(opts, 'indexerConcurrency') ?? config.indexerConcurrency,
       trigger: { kind: 'manual-cli', detail: 'scip-query reindex' },
-      // --json output must be pure JSON on stdout, matching every other
-      // --json command; the same "onStatus: () => {}" silencing is already
-      // used for reindex() calls from `bench` (see measureColdIndex /
-      // measureWarmIndex below), which has the same "reindex has progress
-      // logging but this caller needs machine-readable stdout" shape.
+      // JSON output must remain pure machine-readable data on stdout.
       ...(json ? { onStatus: () => {} } : { onStatus: console.log }),
     });
     if (json) {
@@ -263,13 +192,6 @@ export function handleDiffImpactBatch(rawOpts: unknown): void {
   });
 }
 
-export function handleDiffGateRun(): void {
-  const request = parseDiffGateExecutionRequest(process.env[DIFF_GATE_REQUEST_ENV]);
-  withDb((db) => {
-    printIsolatedAnalysisResult(DIFF_GATE_RUN_COMMAND, executeDiffGate(db, request));
-  });
-}
-
 export async function handleDiffImpact(rawOpts: unknown): Promise<void> {
   const opts = commandOptions(rawOpts);
   try {
@@ -330,11 +252,6 @@ export async function handleHealth(rawOpts: unknown): Promise<void> {
       hasIndexedGraph: existsSync(dbPath),
     });
     const disclosedReport = discloseHealthCapabilities(analysis.result, capabilities);
-    disclosedReport.missionEffectiveness = loadMissionEffectiveness({
-      programPath: stringOptionValue(opts, 'missionTrialProgram'),
-      protectedRoot: stringOptionValue(opts, 'missionTrialRoot'),
-      candidateRoot: projectRoot,
-    });
     if (booleanOptionValue(opts, 'json')) {
       printJsonEnvelope('health', [], opts, disclosedReport, {
         observationReceipt: analysis.observationReceipt,
@@ -346,582 +263,6 @@ export async function handleHealth(rawOpts: unknown): Promise<void> {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exit(1);
   }
-}
-
-interface BenchIndexRun {
-  durationMs: number;
-  result: 'rebuilt' | 'reused';
-  languages: SupportedLanguage[];
-  files?: number;
-  symbols?: number;
-}
-
-interface BenchCommandRun {
-  command: string;
-  durationMs: number;
-  exitCode: number | null;
-  signal: NodeJS.Signals | null;
-  timedOut: boolean;
-  stdoutBytes: number;
-  stderrBytes: number;
-  profilePath?: string;
-}
-
-interface BenchReport {
-  projectRoot: string;
-  repoFiles: number | null;
-  sourceFiles: number | null;
-  index: ReturnType<typeof statusStats>;
-  coldIndex?: BenchIndexRun;
-  warmIndex?: BenchIndexRun;
-  commands: BenchCommandRun[];
-}
-
-interface TypeScriptSemanticCompareReport {
-  projectRoot: string;
-  selection: {
-    scope: string | null;
-    full: boolean;
-    limit: number | null;
-    maxMismatchDetails: number;
-    totalTypeScriptDefinitions: number;
-    scopedDefinitions: number;
-    comparedDefinitions: number;
-  };
-  baseline: {
-    provider: 'ts-morph';
-    createMs: number;
-    availability: unknown;
-  };
-  candidate: {
-    provider: 'tsserver';
-    createMs: number;
-    availability: unknown;
-  };
-  comparison: ReturnType<typeof compareTypeScriptReferenceProviders>;
-}
-
-// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
-export async function handleBench(rawOpts: unknown): Promise<void> {
-  const opts = commandOptions(rawOpts);
-  const projectRoot = resolveProjectRoot();
-  const timeoutMs = numberOptionValue(opts, 'timeoutMs') ?? BENCH_TIMEOUT_MS;
-  const progress = booleanOptionValue(opts, 'progress');
-  const profile = booleanOptionValue(opts, 'profile');
-  const profileOut = stringOptionValue(opts, 'profileOut');
-  const report: BenchReport = {
-    projectRoot,
-    ...repoFileCounts(projectRoot),
-    index: statusStats(existsSync(resolveActiveDbPath(projectRoot))),
-    commands: [],
-  };
-
-  if (booleanOptionValue(opts, 'coldIndex')) {
-    reportBenchProgress(progress, 'cold index started');
-    report.coldIndex = await measureColdIndex(projectRoot);
-    reportBenchProgress(progress, `cold index finished ${report.coldIndex.durationMs}ms`);
-    writeProfileEvent(
-      {
-        type: 'bench-index',
-        phase: 'cold-index',
-        projectRoot,
-        durationMs: report.coldIndex.durationMs,
-        result: report.coldIndex.result,
-        files: report.coldIndex.files,
-        symbols: report.coldIndex.symbols,
-      },
-      profileOut,
-    );
-    reportBenchProgress(progress, 'warm index started');
-    report.warmIndex = await measureWarmIndex(projectRoot);
-    reportBenchProgress(progress, `warm index finished ${report.warmIndex.durationMs}ms`);
-    writeProfileEvent(
-      {
-        type: 'bench-index',
-        phase: 'warm-index',
-        projectRoot,
-        durationMs: report.warmIndex.durationMs,
-        result: report.warmIndex.result,
-        files: report.warmIndex.files,
-        symbols: report.warmIndex.symbols,
-      },
-      profileOut,
-    );
-    report.index = statusStats(existsSync(resolveActiveDbPath(projectRoot)));
-  }
-
-  for (const command of benchCommandMatrix(opts)) {
-    report.commands.push(runBenchCommand(projectRoot, command, timeoutMs, { progress, profile, profileOut }));
-  }
-
-  if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('bench', [], opts, report);
-    return;
-  }
-  renderBenchReport(report);
-}
-
-export function handleWorkAudit(profile: unknown, rawOpts: unknown): void {
-  const opts = commandOptions(rawOpts);
-  const profilePath = resolve(String(profile));
-  const report = auditProfileWork(readProfileEvents(profilePath), {
-    top: numberOptionValue(opts, 'top') ?? 20,
-  });
-  if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('work-audit', [profilePath], opts, { profilePath, ...report });
-    return;
-  }
-  process.stdout.write(sanitizeTerminalText(renderProfileWorkAudit(report, profilePath)));
-}
-
-export function handleTypeScriptSemanticCompare(rawOpts: unknown): void {
-  const opts = commandOptions(rawOpts);
-  withDb((db) => {
-    const projectRoot = db.config.projectRoot;
-    const scope = stringOptionValue(opts, 'scope') ?? null;
-    const full = booleanOptionValue(opts, 'full');
-    const limit = numberOptionValue(opts, 'limit') ?? 200;
-    const maxMismatchDetails = Math.max(0, numberOptionValue(opts, 'maxMismatches') ?? 10);
-    const definitions = getAllDefinitions(db)
-      .filter((definition) => isTypeScriptLike(definition.relativePath))
-      .filter((definition) => !db.isIgnored(definition.relativePath))
-      .sort(compareDefinitionsForCalibration);
-    const scopedDefinitions = scope
-      ? definitions.filter((definition) => definition.relativePath.includes(scope))
-      : definitions;
-    const selectedDefinitions = full ? scopedDefinitions : scopedDefinitions.slice(0, limit);
-
-    const baselineStart = performance.now();
-    const baseline = createTsMorphProvider(db);
-    const baselineCreateMs = Number((performance.now() - baselineStart).toFixed(3));
-    const candidateStart = performance.now();
-    const candidate = createTsServerProvider(db);
-    const candidateCreateMs = Number((performance.now() - candidateStart).toFixed(3));
-    const comparison = compareTypeScriptReferenceProviders(selectedDefinitions, baseline, candidate);
-    const report: TypeScriptSemanticCompareReport = {
-      projectRoot,
-      selection: {
-        scope,
-        full,
-        limit: full ? null : limit,
-        maxMismatchDetails,
-        totalTypeScriptDefinitions: definitions.length,
-        scopedDefinitions: scopedDefinitions.length,
-        comparedDefinitions: selectedDefinitions.length,
-      },
-      baseline: {
-        provider: 'ts-morph',
-        createMs: baselineCreateMs,
-        availability: baseline.availability(),
-      },
-      candidate: {
-        provider: 'tsserver',
-        createMs: candidateCreateMs,
-        availability: candidate.availability(),
-      },
-      comparison: {
-        ...comparison,
-        mismatches: comparison.mismatches.slice(0, maxMismatchDetails),
-      },
-    };
-
-    if (booleanOptionValue(opts, 'json')) {
-      printJsonEnvelope('typescript-semantic-compare', [], opts, report);
-      return;
-    }
-    renderTypeScriptSemanticCompareReport(report);
-  });
-}
-
-// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
-async function measureColdIndex(projectRoot: string): Promise<BenchIndexRun> {
-  const config = loadProjectConfig(projectRoot);
-  const paths = resolveIndexStoragePaths(projectRoot, config);
-  const cacheDir = dirname(paths.dbPath);
-  const backupDir = `${cacheDir}.bench-backup-${Date.now()}`;
-  restoreBenchIndexCache(projectRoot, cacheDir);
-  const moved = moveBenchIndexCacheAside(projectRoot, cacheDir, backupDir);
-  ensureOwnedCacheDir(projectRoot, cacheDir);
-
-  try {
-    const result = await measureAsync(() =>
-      reindex({
-        projectRoot,
-        languages: config.languages,
-        outputScip: paths.indexPath,
-        outputDb: paths.dbPath,
-        pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces,
-        typescriptProjectMode: config.indexer?.typescript?.projectMode,
-        typescriptProjects: config.indexer?.typescript?.projects,
-        clojureConfigPath: config.indexer?.clojure?.configPath,
-        skipIfUnchanged: true,
-        allowPartial: true,
-        indexerConcurrency: config.indexerConcurrency,
-        trigger: { kind: 'manual-cli', detail: 'scip-query bench --cold-index' },
-        onStatus: () => {},
-      }),
-    );
-    finishBenchIndexCacheRestore(projectRoot, cacheDir, backupDir, moved, 'discard-backup');
-    return {
-      durationMs: result.durationMs,
-      result: result.value.reused ? 'reused' : 'rebuilt',
-      languages: result.value.languages,
-      ...currentIndexCounts(projectRoot),
-    };
-  } catch (error) {
-    finishBenchIndexCacheRestore(projectRoot, cacheDir, backupDir, moved, 'restore-backup');
-    throw error;
-  }
-}
-
-interface BenchRestoreMarker {
-  schemaVersion: 1;
-  canonicalProjectRoot: string;
-  originalCachePath: string;
-  backupPath: string;
-  ownerSha256: string;
-}
-
-export function benchRestoreMarkerPath(cacheDir: string): string {
-  return join(resolveScipQueryCacheRoot(), 'bench-restores', `${cacheIdentityHash(cacheDir)}.json`);
-}
-
-export function restoreBenchIndexCache(projectRoot: string, cacheDir: string): boolean {
-  const markerPath = benchRestoreMarkerPath(cacheDir);
-  if (!existsSync(markerPath)) return false;
-  const marker = parseBenchRestoreMarker(readSmallArtifactText(markerPath, 'benchmark restore marker'));
-  const canonicalProjectRoot = realpathSync(projectRoot);
-  const expectedOriginal = canonicalCacheIdentity(cacheDir);
-  if (
-    !marker ||
-    marker.canonicalProjectRoot !== canonicalProjectRoot ||
-    marker.originalCachePath !== expectedOriginal ||
-    benchRestoreMarkerPath(marker.originalCachePath) !== markerPath
-  ) {
-    throw new Error(`refusing invalid cold-index restore marker ${markerPath}`);
-  }
-
-  if (existsSync(marker.backupPath)) {
-    assertOwnedCacheBackup(projectRoot, marker.backupPath, marker.originalCachePath, marker.ownerSha256);
-    if (existsSync(marker.originalCachePath)) {
-      assertOwnedCacheDir(projectRoot, marker.originalCachePath);
-      rmSync(marker.originalCachePath, { recursive: true, force: true });
-    }
-    renameSync(marker.backupPath, marker.originalCachePath);
-    assertOwnedCacheDir(projectRoot, marker.originalCachePath);
-  } else if (existsSync(marker.originalCachePath)) {
-    assertOwnedCacheDir(projectRoot, marker.originalCachePath);
-  }
-  unlinkSync(markerPath);
-  return true;
-}
-
-export function moveBenchIndexCacheAside(projectRoot: string, cacheDir: string, backupDir: string): boolean {
-  if (!existsSync(cacheDir)) return false;
-  const proof = assertOwnedCacheDir(projectRoot, cacheDir);
-  const expectedBackup = expectedBenchBackupPath(proof.record.canonicalCacheDir, backupDir);
-  if (existsSync(expectedBackup)) throw new Error(`refusing existing cold-index backup ${expectedBackup}`);
-  const markerPath = benchRestoreMarkerPath(proof.record.canonicalCacheDir);
-  const marker: BenchRestoreMarker = {
-    schemaVersion: 1,
-    canonicalProjectRoot: proof.record.canonicalProjectRoot,
-    originalCachePath: proof.record.canonicalCacheDir,
-    backupPath: expectedBackup,
-    ownerSha256: proof.ownerSha256,
-  };
-  ensurePrivateBenchMarkerDirectory(markerPath);
-  writeFileSync(markerPath, `${JSON.stringify(marker, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
-  try {
-    renameSync(proof.physicalCacheDir, expectedBackup);
-  } catch (error) {
-    unlinkSync(markerPath);
-    throw error;
-  }
-  return true;
-}
-
-export function finishBenchIndexCacheRestore(
-  projectRoot: string,
-  cacheDir: string,
-  backupDir: string,
-  moved: boolean,
-  mode: 'discard-backup' | 'restore-backup',
-): void {
-  if (!moved) return;
-  const markerPath = benchRestoreMarkerPath(cacheDir);
-  const marker = parseBenchRestoreMarker(readSmallArtifactText(markerPath, 'benchmark restore marker'));
-  if (!marker || marker.backupPath !== backupDir || marker.originalCachePath !== canonicalCacheIdentity(cacheDir)) {
-    throw new Error(`refusing invalid cold-index restore marker ${markerPath}`);
-  }
-  assertOwnedCacheBackup(projectRoot, backupDir, marker.originalCachePath, marker.ownerSha256);
-
-  if (mode === 'restore-backup') {
-    if (existsSync(cacheDir)) {
-      assertOwnedCacheDir(projectRoot, cacheDir);
-      rmSync(cacheDir, { recursive: true, force: true });
-    }
-    renameSync(backupDir, marker.originalCachePath);
-    assertOwnedCacheDir(projectRoot, marker.originalCachePath);
-  } else {
-    rmSync(backupDir, { recursive: true, force: true });
-  }
-  unlinkSync(markerPath);
-}
-
-function parseBenchRestoreMarker(payload: string): BenchRestoreMarker | null {
-  try {
-    const raw = JSON.parse(payload) as Partial<BenchRestoreMarker>;
-    return raw.schemaVersion === 1 &&
-      typeof raw.canonicalProjectRoot === 'string' &&
-      typeof raw.originalCachePath === 'string' &&
-      typeof raw.backupPath === 'string' &&
-      typeof raw.ownerSha256 === 'string' &&
-      /^[a-f0-9]{64}$/.test(raw.ownerSha256)
-      ? (raw as BenchRestoreMarker)
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function expectedBenchBackupPath(canonicalCacheDir: string, candidate: string): string {
-  const expectedPrefix = `${canonicalCacheDir}.bench-backup-`;
-  const canonicalCandidate = canonicalCacheIdentity(candidate);
-  if (
-    !canonicalCandidate.startsWith(expectedPrefix) ||
-    !/^\d+$/.test(canonicalCandidate.slice(expectedPrefix.length))
-  ) {
-    throw new Error(`refusing cold-index backup outside the owned cache namespace: ${candidate}`);
-  }
-  return canonicalCandidate;
-}
-
-function ensurePrivateBenchMarkerDirectory(markerPath: string): void {
-  const directory = dirname(markerPath);
-  mkdirSync(directory, { recursive: true, mode: 0o700 });
-  if (process.platform !== 'win32') chmodSync(directory, 0o700);
-}
-
-// scip-query: ignore-similar - warm and cold benchmark paths stay parallel so timing comparisons stay honest.
-async function measureWarmIndex(projectRoot: string): Promise<BenchIndexRun> {
-  const config = loadProjectConfig(projectRoot);
-  const paths = resolveIndexStoragePaths(projectRoot, config);
-  const result = await measureAsync(() =>
-    reindex({
-      projectRoot,
-      languages: config.languages,
-      outputScip: paths.indexPath,
-      outputDb: paths.dbPath,
-      pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces,
-      typescriptProjectMode: config.indexer?.typescript?.projectMode,
-      typescriptProjects: config.indexer?.typescript?.projects,
-      clojureConfigPath: config.indexer?.clojure?.configPath,
-      skipIfUnchanged: true,
-      allowPartial: true,
-      indexerConcurrency: config.indexerConcurrency,
-      trigger: { kind: 'manual-cli', detail: 'scip-query bench warm index' },
-      onStatus: () => {},
-    }),
-  );
-  return {
-    durationMs: result.durationMs,
-    result: result.value.reused ? 'reused' : 'rebuilt',
-    languages: result.value.languages,
-    ...currentIndexCounts(projectRoot),
-  };
-}
-
-async function measureAsync<T>(run: () => Promise<T>): Promise<{ durationMs: number; value: T }> {
-  const started = performance.now();
-  const value = await run();
-  return { durationMs: Math.round(performance.now() - started), value };
-}
-
-function currentIndexCounts(projectRoot: string): { files?: number; symbols?: number } {
-  if (!existsSync(resolveActiveDbPath(projectRoot))) return {};
-  return withDb((db) => {
-    const s = queries.stats(db);
-    return { files: s.documents, symbols: s.symbols };
-  });
-}
-
-function benchCommandMatrix(opts: Record<string, unknown>): string[][] {
-  const explicit = stringArrayOptionValue(opts, 'command');
-  if (explicit.length > 0) return explicit.map(splitBenchCommand).filter((command) => command.length > 0);
-  return [
-    ...DEFAULT_BENCH_COMMANDS.map((command) => [...command]),
-    ...(booleanOptionValue(opts, 'includeHeavy') ? HEAVY_BENCH_COMMANDS.map((command) => [...command]) : []),
-  ];
-}
-
-function splitBenchCommand(command: string): string[] {
-  return command
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .filter((part, index) => !(index === 0 && part === 'scip-query'));
-}
-
-interface BenchCommandOptions {
-  progress?: boolean;
-  profile?: boolean;
-  profileOut?: string;
-}
-
-function runBenchCommand(
-  projectRoot: string,
-  command: readonly string[],
-  timeoutMs: number,
-  opts: BenchCommandOptions = {},
-): BenchCommandRun {
-  const label = `scip-query ${command.join(' ')}`;
-  reportBenchProgress(opts.progress, `${label} started`);
-  writeProfileEvent(
-    {
-      type: 'bench-command-start',
-      command: label,
-      projectRoot,
-    },
-    opts.profileOut,
-  );
-  const started = performance.now();
-  const env = {
-    ...(opts.profile ? benchProfileEnv(label, opts.profileOut) : process.env),
-    SCIP_QUERY_SKIP_WATCH_SERVICE: '1',
-  };
-  const result = spawnSync(process.execPath, [...process.execArgv, process.argv[1] ?? '', ...command], {
-    cwd: projectRoot,
-    env,
-    encoding: 'buffer',
-    maxBuffer: BENCH_MAX_BUFFER,
-    timeout: timeoutMs,
-  });
-  const durationMs = Math.round(performance.now() - started);
-  const run = {
-    command: label,
-    durationMs,
-    exitCode: result.status,
-    signal: result.signal,
-    timedOut:
-      (result.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT' || result.error?.name === 'ETIMEDOUT',
-    stdoutBytes: result.stdout?.length ?? 0,
-    stderrBytes: result.stderr?.length ?? 0,
-    ...(opts.profileOut ? { profilePath: opts.profileOut } : {}),
-  };
-  reportBenchProgress(
-    opts.progress,
-    `${label} finished ${durationMs}ms exit=${run.exitCode ?? run.signal ?? 'unknown'}${run.timedOut ? ' timed-out' : ''}`,
-  );
-  writeProfileEvent(
-    {
-      type: 'bench-command-finish',
-      command: label,
-      projectRoot,
-      durationMs,
-      exitCode: run.exitCode,
-      signal: run.signal,
-      timedOut: run.timedOut,
-      stdoutBytes: run.stdoutBytes,
-      stderrBytes: run.stderrBytes,
-    },
-    opts.profileOut,
-  );
-  return run;
-}
-
-function reportBenchProgress(enabled: boolean | undefined, message: string): void {
-  if (enabled) process.stderr.write(`[bench] ${sanitizeTerminalLine(message)}\n`);
-}
-
-function benchProfileEnv(command: string, profileOut: string | undefined): NodeJS.ProcessEnv {
-  return {
-    ...process.env,
-    SCIP_QUERY_PROFILE: '1',
-    SCIP_QUERY_PROFILE_COMMAND: command,
-    ...(profileOut ? { SCIP_QUERY_PROFILE_OUT: profileOut } : {}),
-  };
-}
-
-function repoFileCounts(projectRoot: string): { repoFiles: number | null; sourceFiles: number | null } {
-  const result = spawnSync('git', ['-C', projectRoot, 'ls-files', '-co', '--exclude-standard'], {
-    encoding: 'utf8',
-    maxBuffer: BENCH_MAX_BUFFER,
-    timeout: 30_000,
-    killSignal: 'SIGKILL',
-  });
-  if (result.status !== 0) return { repoFiles: null, sourceFiles: null };
-  const files = result.stdout.split('\n').filter(Boolean);
-  return {
-    repoFiles: files.length,
-    sourceFiles: files.filter((file) => SOURCE_EXTENSION_SET.has(extname(file).toLowerCase())).length,
-  };
-}
-
-function renderBenchReport(report: BenchReport): void {
-  console.log('scip-query bench');
-  console.log(`Project: ${report.projectRoot}`);
-  console.log(`Repo files: ${report.repoFiles ?? 'unknown'}; source-like files: ${report.sourceFiles ?? 'unknown'}`);
-  if (report.index) {
-    console.log(
-      `Index: ${report.index.files} files, ${report.index.symbols} symbols, ${formatBytes(report.index.indexSizeBytes)}`,
-    );
-  }
-  if (report.coldIndex) {
-    renderBenchIndexRun('Cold index', report.coldIndex);
-  }
-  if (report.warmIndex) {
-    renderBenchIndexRun('Warm index', report.warmIndex);
-  }
-  console.log('\nCommands:');
-  for (const row of [...report.commands].sort((a, b) => b.durationMs - a.durationMs)) {
-    const status = row.timedOut
-      ? 'timeout'
-      : row.exitCode === 0
-        ? 'ok'
-        : `exit ${row.exitCode ?? row.signal ?? 'unknown'}`;
-    console.log(
-      `  ${String(row.durationMs).padStart(7)}ms  ${status.padEnd(10)}  ${String(row.stdoutBytes).padStart(8)}B out  ${row.command}`,
-    );
-  }
-}
-
-function renderBenchIndexRun(label: string, run: BenchIndexRun): void {
-  console.log(
-    `${label}: ${run.durationMs}ms, ${run.result}, ${run.languages.join(', ')}${run.files ? `, ${run.files} files` : ''}${run.symbols ? `, ${run.symbols} symbols` : ''}`,
-  );
-}
-
-function renderTypeScriptSemanticCompareReport(report: TypeScriptSemanticCompareReport): void {
-  console.log('TypeScript semantic provider comparison');
-  console.log(`Project: ${report.projectRoot}`);
-  console.log(
-    `Definitions: ${report.selection.comparedDefinitions}/${report.selection.scopedDefinitions} compared` +
-      (report.selection.scope ? `, scope ${report.selection.scope}` : ''),
-  );
-  console.log(
-    `ts-morph: create ${report.baseline.createMs}ms, refs ${report.comparison.baselineMs}ms, refs ${report.comparison.baselineReferenceCount}`,
-  );
-  console.log(
-    `tsserver: create ${report.candidate.createMs}ms, refs ${report.comparison.candidateMs}ms, refs ${report.comparison.candidateReferenceCount}`,
-  );
-  console.log(
-    `Matches: ${report.comparison.matches}; mismatches: ${report.comparison.mismatchCount}; missing refs: ${report.comparison.missingReferenceCount}; extra refs: ${report.comparison.extraReferenceCount}`,
-  );
-  if (report.comparison.mismatches.length === 0) return;
-  console.log('\nMismatch samples:');
-  for (const mismatch of report.comparison.mismatches) {
-    console.log(`  ${mismatch.symbol}`);
-    console.log(`    missing=${mismatch.missing.length} extra=${mismatch.extra.length}`);
-  }
-}
-
-function compareDefinitionsForCalibration(left: IndexedDefinition, right: IndexedDefinition): number {
-  return (
-    left.relativePath.localeCompare(right.relativePath) ||
-    left.startLine - right.startLine ||
-    (left.startChar ?? 0) - (right.startChar ?? 0) ||
-    left.symbolId - right.symbolId
-  );
 }
 
 // The ratchet: `--write-baseline` snapshots finding identities;
@@ -963,66 +304,6 @@ export function handleInstallSkills(): void {
   );
   if (total > 0) {
     console.log('Skills will be available in your next Claude Code / Codex session.');
-  }
-}
-
-export function handleSetupHooks(rawOpts: unknown): void {
-  const opts = commandOptions(rawOpts);
-  const mode = selectSetupHooksMode({
-    remove: booleanOptionValue(opts, 'remove'),
-    force: booleanOptionValue(opts, 'force'),
-    dryRun: booleanOptionValue(opts, 'dryRun'),
-  });
-  if (!mode.ok) {
-    console.error(`error: ${mode.message}`);
-    process.exitCode = 1;
-    return;
-  }
-  const projectRoot = resolveProjectRoot();
-  const result = installProjectAgentHooks(projectRoot, {
-    shared: booleanOptionValue(opts, 'shared'),
-    remove: booleanOptionValue(opts, 'remove'),
-    force: booleanOptionValue(opts, 'force'),
-    dryRun: booleanOptionValue(opts, 'dryRun'),
-  });
-  if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('setup-hooks', [], opts, result);
-    return;
-  }
-
-  for (const target of result.installed) console.log(`  done: ${target}`);
-  for (const target of result.updated) console.log(`  update: ${target}`);
-  for (const target of result.unchanged) console.log(`  ok:   ${target} (already configured)`);
-  for (const target of result.removed) {
-    console.log(`  ${mode.mode === 'preview-remove' ? 'would remove' : 'remove'}: ${target}`);
-  }
-  for (const target of result.gitExcluded) console.log(`  local: ${target} (excluded through .git/info/exclude)`);
-  for (const warning of result.warnings) console.log(`  warning: ${warning}`);
-  for (const skip of result.skipped) console.log(`  skip: ${skip.target} — ${skip.reason}`);
-
-  if (mode.mode !== 'install') {
-    if (result.removed.length === 0) {
-      console.log(
-        mode.mode === 'preview-remove'
-          ? '\nNo managed project hooks would be removed.'
-          : '\nNo managed project hooks were removed.',
-      );
-    } else {
-      console.log(
-        mode.mode === 'preview-remove'
-          ? '\nPreview only: no project hook files were changed.'
-          : '\nManaged project hooks were removed; the Claude opt-out marker prevents automatic reinstallation.',
-      );
-    }
-    return;
-  }
-
-  const total = result.installed.length + result.updated.length + result.unchanged.length;
-  if (total > 0) {
-    console.log('\nCheckout-local scip-query hooks are configured for this clone and must not be committed.');
-    console.log('Review new or changed hooks in Codex/Claude Code with /hooks before they run.');
-  } else {
-    console.log('\nNo project-local hook config was written.');
   }
 }
 
@@ -1070,17 +351,10 @@ export function handleCheckDeps(): void {
 }
 
 export function handleCapabilities(rawOpts: unknown): void {
-  renderCapabilities(rawOpts, 'capabilities');
+  renderCapabilities(rawOpts);
 }
 
-export function handleCapabilityMatrix(rawOpts: unknown): void {
-  if (!booleanOptionValue(commandOptions(rawOpts), 'json')) {
-    console.error('note: capability-matrix is deprecated; use "scip-query capabilities --matrix".');
-  }
-  renderCapabilities(rawOpts, 'capability-matrix');
-}
-
-function renderCapabilities(rawOpts: unknown, command: 'capabilities' | 'capability-matrix'): void {
+function renderCapabilities(rawOpts: unknown): void {
   const opts = commandOptions(rawOpts);
   const { projectRoot, config, paths, dbPath } = resolveCliProjectContext();
   const readiness = getProjectReadiness(projectRoot, config);
@@ -1089,7 +363,7 @@ function renderCapabilities(rawOpts: unknown, command: 'capabilities' | 'capabil
     hasIndexedGraph: existsSync(dbPath) && freshness.state !== 'missing',
   });
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope(command, [], opts, report);
+    printJsonEnvelope('capabilities', [], opts, report);
     return;
   }
   renderCapabilityReport(report);
@@ -1114,7 +388,15 @@ export function handleConfigValidate(rawOpts: unknown): void {
   const opts = commandOptions(rawOpts);
   const projectRoot = resolveProjectRoot();
   const config = loadProjectConfig(projectRoot);
-  const diagnostics = validateProjectConfig(config, { projectRoot });
+  const suppressionRecords = readSuppressionDir(projectRoot);
+  const diagnostics = [
+    ...validateProjectConfig(config, { projectRoot }),
+    ...suppressionRecords.compatibility.issues.map((issue) => ({
+      level: 'error' as const,
+      path: issue.path,
+      message: issue.reason,
+    })),
+  ];
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('config-validate', [], opts, { diagnostics });
   } else if (diagnostics.length === 0) {
@@ -1172,103 +454,6 @@ export function handleSuppress(id: unknown, rawOpts: unknown): void {
   } catch (err) {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exitCode = 1;
-  }
-}
-
-export function handleEffectiveness(rawOpts: unknown): void {
-  const opts = commandOptions(rawOpts);
-  const now = Date.now();
-  const sinceRaw = stringOptionValue(opts, 'since');
-  let sinceMs: number | undefined;
-  if (sinceRaw) {
-    const parsed = parseSinceMs(sinceRaw, now);
-    if (parsed === null) {
-      console.error(`error: could not parse --since "${sinceRaw}" (use 30d, 12w, or an ISO date).`);
-      process.exitCode = 1;
-      return;
-    }
-    sinceMs = parsed;
-  }
-
-  const projectRoot = resolveProjectRoot();
-  const eventStore = readOutcomeEvents(projectRoot);
-  const report = computeEffectiveness(eventStore.events, { sinceMs, check: stringOptionValue(opts, 'check') });
-  report.missionEffectiveness = loadMissionEffectiveness({
-    programPath: stringOptionValue(opts, 'missionTrialProgram'),
-    protectedRoot: stringOptionValue(opts, 'missionTrialRoot'),
-    candidateRoot: projectRoot,
-  });
-  const compatibilityWarning = formatRecordCompatibilityWarning('Committed outcome history', eventStore.compatibility);
-
-  if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('effectiveness', [], opts, {
-      ...report,
-      recordCompatibility: { outcomeEvents: eventStore.compatibility },
-    });
-    return;
-  }
-
-  if (compatibilityWarning) console.log(`WARN: ${compatibilityWarning}`);
-  for (const line of formatMissionEffectiveness(report.missionEffectiveness)) console.log(line);
-  if (report.checks.length === 0) {
-    console.log(
-      eventStore.events.length === 0
-        ? `No outcome events recorded yet (${join(OUTCOME_EVENTS_DIR, '*.json')} is missing or empty). Events accrue as diff-gate runs; commit the event files so history is shared.`
-        : 'No findings match the requested window/check.',
-    );
-    return;
-  }
-
-  const header = [
-    'check',
-    'caught',
-    'fixed',
-    'suppressed',
-    'open',
-    'moved',
-    'unverified',
-    'resolution-vs-suppression',
-    'evaluation-precision',
-    'authority',
-    'median-days-to-fix',
-  ];
-  const rows = report.checks.map((entry) => [
-    entry.check,
-    String(entry.caught),
-    String(entry.fixed),
-    String(entry.suppressed),
-    String(entry.open),
-    String(entry.moved),
-    String(entry.unverified),
-    entry.resolutionVsSuppressionRate === null ? '-' : `${Math.round(entry.resolutionVsSuppressionRate * 100)}%`,
-    entry.precision === null ? '-' : `${Math.round(entry.precision * 100)}%`,
-    entry.authority,
-    entry.medianDaysToFix === null ? '-' : entry.medianDaysToFix.toFixed(1),
-  ]);
-  const widths = header.map((label, column) => Math.max(label.length, ...rows.map((row) => row[column].length)));
-  const formatRow = (row: string[]) => row.map((cell, column) => cell.padEnd(widths[column])).join('  ');
-  console.log(formatRow(header));
-  for (const row of rows) console.log(formatRow(row));
-
-  const totalFixed = report.checks.reduce((sum, entry) => sum + entry.fixed, 0);
-  const totalSuppressed = report.checks.reduce((sum, entry) => sum + entry.suppressed, 0);
-  const totalUnverified = report.checks.reduce((sum, entry) => sum + entry.unverified, 0);
-  const concluded = totalFixed + totalSuppressed;
-  if (concluded > 0) {
-    const ratio = Math.round((totalFixed / concluded) * 100);
-    console.log(
-      report.authority === 'protected-external-evaluation'
-        ? `\nProtected external evaluation: ${totalFixed} finding(s) verified fixed, ${totalSuppressed} suppressed, ${totalUnverified} unverified — precision ${ratio}%.`
-        : `\nRepository-writable telemetry: ${totalFixed} finding(s) verified fixed, ${totalSuppressed} suppressed, ${totalUnverified} unverified — resolution-vs-suppression ${ratio}%. This is operational handling data, not an independent correctness grade.`,
-    );
-  } else if (totalUnverified > 0) {
-    console.log(
-      `\n${totalUnverified} finding(s) disappeared without comparable comparison-base evidence; no correctness metric is available.`,
-    );
-  }
-  for (const anomaly of report.anomalies) {
-    const samples = anomaly.samples.map((sample) => `${sample.check}:${sample.findingId}`).join(', ');
-    console.log(`WARN: ${anomaly.message}${samples ? ` Samples: ${samples}.` : ''}`);
   }
 }
 
@@ -1340,9 +525,9 @@ function buildProjectDiagnosticReport(command: 'doctor' | 'status'): {
 }
 
 export function handleSetupAgent(rawOpts: unknown): void {
-  const opts = commandOptions(rawOpts);
+  commandOptions(rawOpts);
   const projectRoot = resolveProjectRoot();
-  const result = setupAgent(projectRoot, { gitHook: booleanOptionValue(opts, 'gitHook') });
+  const result = setupAgent(projectRoot);
   for (const target of result.written) console.log(`  done: ${target}`);
   for (const target of result.unchanged) console.log(`  ok:   ${target} (already wired)`);
   for (const skip of result.skipped) console.log(`  skip: ${skip.target} — ${skip.reason}`);
@@ -1360,7 +545,7 @@ export function handleSetupAgent(rawOpts: unknown): void {
   }
   if (evaluation.ready > 0) {
     console.log(
-      'Configured agents are instructed to check freshness once per work session, reuse a fresh generation, wait for an active watcher after edits, and reindex only when stale and no watcher can refresh it.',
+      'Configured agents can use compiler-backed context, impact, architecture, and health evidence without lifecycle hooks.',
     );
   }
   process.exitCode = evaluation.verdict === 'ready' ? 0 : 1;
@@ -1381,8 +566,6 @@ export async function handleSetup(rawOpts: unknown): Promise<void> {
     });
     const installMissing = booleanOptionValue(opts, 'installMissing');
     let setupOptions: ProjectSetupOptions = {
-      gitHook: booleanOptionValue(opts, 'gitHook'),
-      noHooks: booleanOptionValue(opts, 'noHooks') || opts['hooks'] === false,
       dossierDir: stringOptionValue(opts, 'dossierDir'),
       runHealth: yes ? false : opts['health'] !== false,
       installSkills: opts['skills'] !== false,
@@ -1477,9 +660,6 @@ async function guidedProjectSetupOptions(
   return {
     ...base,
     ...(automaticRefreshAction ? { automaticRefresh: selected.has('enable-automatic-refresh') } : {}),
-    noHooks:
-      base.noHooks ||
-      (plan.actions.some((action) => action.id === 'install-project-hooks') && !selected.has('install-project-hooks')),
     noAgentGuidance: !agentActionSelected,
     ...(indexerAction
       ? { installIndexers: interactive ? selected.has('install-indexers') : base.installIndexers === true }
@@ -1495,8 +675,6 @@ function guidedProjectSetupFiles(projectRoot: string): ProjectSetupGuidedFiles {
   return {
     agentsMd: existsSync(join(projectRoot, 'AGENTS.md')),
     claudeMd: existsSync(join(projectRoot, 'CLAUDE.md')),
-    codexHooks: existsSync(join(projectRoot, '.codex', 'hooks.json')),
-    claudeSettings: existsSync(join(projectRoot, '.claude', 'settings.local.json')),
   };
 }
 
@@ -1522,24 +700,6 @@ function renderGuidedSelection(actions: readonly ProjectSetupGuidedAction[], sel
           : 'changes this machine or user environment';
     console.log(`  ${scope} (${guidance}): ${labels.length > 0 ? labels.join(', ') : 'none'}`);
   }
-}
-
-export function handleSetupCi(rawOpts: unknown): void {
-  const opts = commandOptions(rawOpts);
-  const projectRoot = resolveProjectRoot();
-  const result = setupCiWorkflow(projectRoot, {
-    force: booleanOptionValue(opts, 'force'),
-    dryRun: booleanOptionValue(opts, 'dryRun'),
-  });
-  if (booleanOptionValue(opts, 'dryRun')) {
-    console.log(result.content);
-    return;
-  }
-  if (result.skipped) {
-    console.log(`skip: ${result.path} — ${result.reason}`);
-    return;
-  }
-  console.log(`done: ${result.path}`);
 }
 
 export function handleUninstall(rawOpts: unknown): void {
@@ -2179,5 +1339,3 @@ function renderCapabilityReport(report: ReturnType<typeof getProjectCapabilities
 }
 
 export { collect };
-export { handleProtectedWorkAuthorization } from './protected-work-authorization-handlers.js';
-export { handleProtectedGoalEvidence } from './protected-goal-evidence-handlers.js';

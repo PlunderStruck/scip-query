@@ -1,8 +1,0 @@
-{
-  "ts": 1783814100247,
-  "check": "twin-partner",
-  "findingId": "SQ8A83ABE34282",
-  "event": "caught",
-  "commit": "9a564e46e5995bbb4723ce3b2ce0bd2b8d2ab79c",
-  "symbol": "scip-typescript npm scip-query 0.15.0 src/reindex/`typescript-index-service.ts`/TypeScriptIndexServiceHost#handle()."
-}

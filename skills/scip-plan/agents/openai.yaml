@@ -1,4 +1,0 @@
-interface:
-  display_name: "SCIP Plan & Conduct"
-  short_description: "Plan and conduct work with SCIP evidence"
-  default_prompt: "Use $scip-plan to plan this change, assess what it breaks, and conduct it through to verified completion."

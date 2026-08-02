@@ -1,8 +1,6 @@
 import { ProjectIndex, parseSymbol, type ScipDatabase, type ScipQueryConfig } from 'scip-query';
-import { computeEffectiveness, type EffectivenessReport, type OutcomeEvent } from 'scip-query/queries';
 import { twinAb, type TwinAbOutcome } from 'scip-query/queries/twin-ab';
 import { pathMatchesGlob } from 'scip-query/queries/files';
-import { symbolPreexistenceChecker } from 'scip-query/queries/diff-gate';
 import { refs, type RefResult } from 'scip-query/queries/refs';
 import { resolveMethods, type MethodsResolution } from 'scip-query/queries/methods';
 import {
@@ -13,7 +11,6 @@ import {
   readBaseContent,
   readBaseContents,
   type BaseContentResult,
-  type DiffImpactPlan,
 } from 'scip-query/queries/diff-impact';
 import { reindex, type ReindexOptions, type ReindexResult } from 'scip-query/reindex';
 import {
@@ -51,10 +48,6 @@ declare const firstObservation: ObservationReceipt;
 declare const secondObservation: ObservationReceipt;
 const _sameObservationContent: string = compareObservationReceipts(firstObservation, secondObservation).wholeContent
   .state;
-declare const protectedOutcomeEvents: OutcomeEvent[];
-const _protectedEvaluation: EffectivenessReport = computeEffectiveness(protectedOutcomeEvents, {
-  protectedGateRunIds: new Set(['externally-attested-gate']),
-});
 const historical: BaseContentResult = readBaseContent({
   projectRoot: '.',
   base: 'HEAD',
@@ -96,22 +89,12 @@ const twins: TwinAbOutcome = twinAb(database, {
 const legacyTwins: TwinAbOutcome = twinAb(database, 'escapeRegex', 'escapeRegExp', '/tmp/twin.test.ts');
 const globMatches: boolean = pathMatchesGlob({ pattern: 'src/*.ts', relativePath: 'src/index.ts' });
 const legacyGlobMatches: boolean = pathMatchesGlob('src/*.ts', 'src/index.ts');
-const diffPlan: DiffImpactPlan = {
-  changedFileLines: [],
-  changedFiles: [],
-  changedRanges: [],
-  renamedFiles: [],
-};
-const preexisted = symbolPreexistenceChecker({ projectRoot: '.', base: 'HEAD', diffPlan });
-const legacyPreexisted = symbolPreexistenceChecker('.', 'HEAD', diffPlan);
 // @ts-expect-error The named twin contract requires the outFile role.
 twinAb(database, { refA: 'escapeRegex', refB: 'escapeRegExp', outputPath: '/tmp/twin.test.ts' });
 // @ts-expect-error The named glob contract calls the candidate relativePath.
 pathMatchesGlob({ pattern: 'src/*.ts', path: 'src/index.ts' });
 // @ts-expect-error The named historical-content contract calls the file relativePath.
 fileContentAtBase({ projectRoot: '.', base: 'HEAD', path: 'src/index.ts' });
-// @ts-expect-error The named preexistence contract requires the diffPlan role.
-symbolPreexistenceChecker({ projectRoot: '.', base: 'HEAD', plan: diffPlan });
 
 void [
   index,
@@ -134,7 +117,5 @@ void [
   legacyTwins,
   globMatches,
   legacyGlobMatches,
-  preexisted,
-  legacyPreexisted,
   parseSymbol('local 1'),
 ];

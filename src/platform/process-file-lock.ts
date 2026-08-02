@@ -13,8 +13,6 @@ import { readSmallArtifactText } from './bounded-file.js';
 
 export const PROCESS_FILE_LOCK_PROTOCOL = 'scip-query-process-lock';
 export const PROCESS_FILE_LOCK_VERSION = 1;
-/** @deprecated Complete candidate publication made malformed-record age recovery unsafe and unnecessary. */
-export const PROCESS_FILE_LOCK_CREATION_GRACE_MS = 5_000;
 
 export interface ProcessFileLockRecord {
   protocol: typeof PROCESS_FILE_LOCK_PROTOCOL;

@@ -87,28 +87,6 @@ describe('update notice', () => {
     expect(existsSync(join(cacheDir, 'update-check.json'))).toBe(false);
   });
 
-  it.each(['hook-context', 'hook-stop', 'hook-stop-prepare'])(
-    'skips registry checks for hidden hook command %s',
-    async (commandName) => {
-      const cacheDir = tempCacheDir();
-      const fetchLatestVersion = vi.fn(async () => '0.7.1');
-      const writeNotice = vi.fn();
-
-      await maybePrintUpdateNotice({
-        cacheDir,
-        commandName,
-        currentVersion: '0.7.0',
-        fetchLatestVersion,
-        now: 100,
-        writeNotice,
-      });
-
-      expect(fetchLatestVersion).not.toHaveBeenCalled();
-      expect(writeNotice).not.toHaveBeenCalled();
-      expect(existsSync(join(cacheDir, 'update-check.json'))).toBe(false);
-    },
-  );
-
   it('caches failed checks without failing the command', async () => {
     const cacheDir = tempCacheDir();
 

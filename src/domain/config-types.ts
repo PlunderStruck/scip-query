@@ -149,8 +149,6 @@ export interface ProjectConfig {
   indexerConcurrency?: number;
   /** Watch mode settings */
   watch?: WatchConfig;
-  /** Agent hook behavior. */
-  hooks?: HookRuntimeConfig;
   /** Per-language indexer overrides */
   indexer?: Partial<Record<SupportedLanguage, IndexerOverrides>>;
   /** Override the database storage path (default: ~/.cache/scip-query/<hash>/) */
@@ -178,7 +176,7 @@ export interface ProjectConfig {
 // array, a markdown list) that is supposed to enumerate the same things as
 // some ground-truth source (a directory listing, the registered-command
 // list, ...) but drifts because nothing enforces it. A coverage contract
-// declares that relationship so diff-gate/health can catch the drift the
+// declares that relationship so health and focused detectors can catch the drift the
 // day it happens instead of via a human audit months later.
 
 export type CoverageContractKeySpec =
@@ -312,7 +310,7 @@ export interface DocsConfig {
   /**
    * Glob patterns (see src/analysis/glob-match.ts for supported syntax) for
    * dated snapshot docs that intentionally cite code "as of" a moment in
-   * time — excluded from diff-gate's doc-reference check and doc-drift's
+   * time — excluded from doc-drift's
    * default findings. A `<!-- scip-query: snapshot -->` marker inside a doc
    * has the same effect regardless of its path.
    */
@@ -372,7 +370,7 @@ export interface SuppressionDecision {
 export interface FindingSuppression {
   /** Stable finding id, for example SQABC123DEF456. */
   id?: string;
-  /** Detector/check name, for example diff-gate's "echo". */
+  /** Detector name, for example "twin-drift". */
   check?: string;
   /** Optional file path to narrow check-level suppressions. */
   file?: string;
@@ -439,11 +437,6 @@ export interface WatchResourceBudgetConfig {
   maxRebuilds?: number;
   /** Estimated bytes written inside the window before automatic work pauses (default: 1 GiB). */
   maxEstimatedWriteBytes?: number;
-}
-
-export interface HookRuntimeConfig {
-  /** Prompt router mode for project-local hooks (default: single). */
-  router?: 'off' | 'single';
 }
 
 export interface IndexerOverrides {

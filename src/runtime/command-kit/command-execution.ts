@@ -257,15 +257,6 @@ export function stringOptionValue(opts: CommandOptions, key: string): string | u
   return typeof value === 'string' ? value : undefined;
 }
 
-export function parseEnumArgument<const Value extends string>(
-  value: unknown,
-  allowed: readonly Value[],
-  label: string,
-): Value {
-  if (typeof value === 'string' && allowed.includes(value as Value)) return value as Value;
-  throw new Error(`${label} must be one of: ${allowed.join(', ')}`);
-}
-
 export function numberOptionValue(opts: CommandOptions, key: string): number | undefined {
   const value = opts[key];
   return typeof value === 'number' ? value : undefined;

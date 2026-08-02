@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { HealthReport } from '../../src/queries/health/health-report.js';
-import { unavailableMissionEffectiveness } from '../../src/domain/mission-effectiveness.js';
 import {
   healthReportCacheKey,
   healthReportCacheKeyHash,
@@ -90,8 +89,6 @@ function minimalReport(overrides: Partial<HealthReport> = {}): HealthReport {
     actions: [],
     pressure: [],
     topComplexity: [],
-    detectorPrecision: [],
-    missionEffectiveness: unavailableMissionEffectiveness('not supplied in cache fixture'),
     ...overrides,
   };
 }

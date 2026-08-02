@@ -1,4 +1,0 @@
-interface:
-  display_name: "SCIP Setup"
-  short_description: "Bootstrap or repair scip-query in a repo"
-  default_prompt: "Use $scip-setup to adopt, repair or diagnose scip-query itself in this repository."

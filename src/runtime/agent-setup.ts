@@ -1,29 +1,6 @@
-/**
- * Agent-integration lifecycle: makes scip-query's checks reach coding agents
- * through the two artifacts every agent understands, with no per-tool config:
- *
- * - an AGENTS.md/CLAUDE.md instructions block (every agent reads one of
- *   these), seeded by `setupAgent()`, and
- * - an opt-in git pre-commit hook running `scip-query diff-gate` — the
- *   agent-agnostic backstop that fires whoever (or whatever) wrote the diff.
- *
- * Skills remain the primary routing layer (see skills/scip-query). For users
- * who want in-session enforcement, `diff-gate --hook` speaks the turn-end
- * hook contract shared by Claude Code, Codex, and Gemini CLI (JSON on stdin;
- * exit 2 + stderr blocks the turn) — this module owns
- * its stdin/formatting helpers, but deliberately does NOT write any tool's
- * hook config: those schemas are three independent implementations, and
- * silently-drifting config is worse than asking users to wire one line.
- */
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import {
-  readSmallArtifactText,
-  readTextFileDescriptorWithinLimit,
-  SMALL_ARTIFACT_MAX_BYTES,
-} from '../platform/bounded-file.js';
-import { blockingFindings } from '../queries/impact/diff-gate.js';
-import type { DiffGateResult } from '../queries/impact/diff-gate.js';
+import { readSmallArtifactText } from '../platform/bounded-file.js';
 import {
   mutateTextFileRevisionAware,
   type RevisionedTextMutation,
@@ -32,46 +9,7 @@ import {
 
 const MD_BLOCK_BEGIN = '<!-- scip-query:agent-setup:begin -->';
 const MD_BLOCK_END = '<!-- scip-query:agent-setup:end -->';
-const PRE_COMMIT_MARKER = '# scip-query:agent-setup';
-
-// ── Hook-side helpers (used by `diff-gate --hook`) ─────────────
-
-/** Read piped stdin synchronously; '' when run interactively (TTY) or empty. */
-export function readHookInput(): string {
-  if (process.stdin.isTTY) return '';
-  try {
-    return readTextFileDescriptorWithinLimit(0, {
-      maxBytes: SMALL_ARTIFACT_MAX_BYTES,
-      inputKind: 'agent hook input',
-    });
-  } catch {
-    return '';
-  }
-}
-
-/** Compact, agent-facing reason for blocking the stop. */
-export function formatGateBlockReason(result: DiffGateResult): string {
-  const blocking = blockingFindings(result.findings);
-  const advisoryCount = result.findings.length - blocking.length;
-  const groupCount = result.rootCauseGroups?.length ?? result.findings.length;
-  const lines = [
-    `scip-query diff-gate found ${blocking.length} issue(s) in ${groupCount} root-cause group(s) in this diff` +
-      (advisoryCount > 0 ? ` (+${advisoryCount} advisory, non-blocking)` : '') +
-      ` — fix or knowingly accept them before finishing:`,
-  ];
-  const multiFindingGroups = result.rootCauseGroups?.filter((group) => group.count > 1) ?? [];
-  for (const group of multiFindingGroups) {
-    lines.push(`- group [${group.check}] ${group.count} finding(s): ${group.message}`);
-    lines.push(`  -> ${group.remediation}`);
-  }
-  for (const finding of result.findings) {
-    lines.push(`- [${finding.check}]${finding.advisory ? ' (advisory)' : ''} ${finding.message}`);
-    lines.push(`  -> ${finding.remediation}`);
-  }
-  return lines.join('\n');
-}
-
-// ── Project setup (`scip-query setup-agent`) ───────────────────
+const LEGACY_PRE_COMMIT_MARKER = '# scip-query:agent-setup';
 
 export interface SetupAgentResult {
   written: string[];
@@ -95,22 +33,15 @@ export function evaluateSetupAgentResult(result: SetupAgentResult): {
   };
 }
 
-// scip-query: ignore-stale — reviewed S1 owned contract; agent setup removal returns this named result.
 export interface RemoveAgentSetupResult {
   removed: string[];
   unchanged: string[];
   skipped: Array<{ target: string; reason: string }>;
 }
 
-export function setupAgent(projectRoot: string, opts: { gitHook?: boolean } = {}): SetupAgentResult {
+export function setupAgent(projectRoot: string): SetupAgentResult {
   const result: SetupAgentResult = { written: [], unchanged: [], skipped: [] };
-
   writeInstructionsBlock(projectRoot, result);
-
-  if (opts.gitHook) {
-    writeGitPreCommitHook(projectRoot, result);
-  }
-
   return result;
 }
 
@@ -118,41 +49,28 @@ export function removeAgentSetup(projectRoot: string, opts: { dryRun?: boolean }
   const result: RemoveAgentSetupResult = { removed: [], unchanged: [], skipped: [] };
   removeManagedBlock(projectRoot, 'AGENTS.md', opts, result);
   removeManagedBlock(projectRoot, 'CLAUDE.md', opts, result);
-  removeGitPreCommitHook(projectRoot, opts, result);
+  removeLegacyPreCommitHook(projectRoot, opts, result);
   return result;
 }
 
-/**
- * Seed the agent instructions. AGENTS.md gets the canonical managed block
- * (the cross-tool standard file: Codex, Cursor, Gemini, opencode, ...).
- * Claude Code does NOT read AGENTS.md natively (anthropics/claude-code#6235),
- * so CLAUDE.md gets a managed `@AGENTS.md` import shim — the ecosystem-
- * standard bridge that Claude Code expands at load time. Only the content
- * between our markers is ever touched; user content is preserved.
- */
 function writeInstructionsBlock(projectRoot: string, result: SetupAgentResult): void {
   const block = [
     MD_BLOCK_BEGIN,
     '## scip-query',
     '',
-    'This repo is indexed by scip-query (compiler-resolved code intelligence).',
+    'This repository uses scip-query for compiler-backed code intelligence.',
     '',
-    '- Use native search and file reads for literal text and source. Use scip-query when a claim depends on compiler-resolved identity, references, callers, dependencies, consumers, public surface, transitive impact, architecture, historical co-change, or a scip detector/gate.',
-    '- Unsure how to explore, plan, verify, or clean up here: invoke the `scip-query` skill — it routes to the right specialist skill.',
-    '- Each specialist skill carries its own command shortlist — prefer it over the full `_shared` catalog.',
-    '- Evidence commands obtain a fresh usable index internally. Run the useful query directly; do not add `status`, watcher polling, sleeps, or `reindex` as ordinary agent steps. If the command cannot establish freshness, follow its one exact blocker or route genuine setup repair to `scip-setup`.',
-    '- Do not rerun an exact read-only scip-query command against unchanged repository content and index state. Reuse its result. Rerun only when the command input, working diff, index generation, or required coverage scope changed.',
-    '- For a non-trivial change, use `scip-plan` as the one pre-edit scip specialist. For a migration or retirement, anchor `scip-query plan-context` on the current owner being removed. Treat source packet lines as already read, and inspect the anchor before choosing a follow-up query. Resolve each direct reuse option by comparing responsibility and behavior; current wiring alone does not justify duplicate ownership.',
-    '- Recover the canonical goal and intended change from injected restoration state. A bounded one-slice change uses a concise readable plan without durable records. Only sustained work that must survive phases or context resets derives one concise Gherkin goal and applies the compact contract from `scip-query plan example`.',
-    '- Useful scip-query commands and Stop evaluation capture attempts, evidence, reconciliations, and next-action decisions automatically. Do not run manual ledger or completion-status commands for ordinary work. Take the exact Stop action, then stop again so Stop can reevaluate it.',
-    '- Before claiming a complete relationship set, inspect the command coverage. If it is bounded or unknown, use `--full`, a narrower scope, or follow pagination emitted by the command before making the claim.',
-    '- After the change, use `scip-verify` once: reuse checks that already ran, map every material requirement to direct evidence, and add only a probe that can expose an uncovered failure. The default diff gate already owns its built-in detector family; do not run those detectors as a fixed pre-gate battery.',
-    '- Give the final diff gate one owner. When protected work activation says Stop is blocking, finish the response to activate Stop; do not search for a Stop tool or inspect CLI and controller help. Otherwise run `scip-query diff-gate` once. Rerun only after a finding causes a relevant state change.',
-    '- A clean gate and complete change establish repository predicates, not that scip-query improves autonomous work. Only a protected matched mission-trial report can support that product-effectiveness claim for its exact provider, model, runtime, and fixture scope. Mission trials calibrate releases and material workflow changes; they are not a per-change ritual.',
-    '- Prefer ordinary human output for agent reading: it preserves hierarchy, whitespace, and source line numbers without the JSON transport envelope. Use `--json` only for a programmatic consumer; add `--result-only` when that consumer needs only the command result. Do not use `--compact` for model-readable evidence.',
-    '- Run scip-query commands normally, without choosing `--output-page-size` in advance. If and only if scip-query emits `Continue exactly:`, run each emitted command unchanged until the human footer reports transport completion or a JSON page reports `complete: true`; incomplete output is not evidence. Transport completion means every rendered character was retrieved, not that bounded command coverage became exhaustive. Never pipe scip-query through `head`, `tail`, or line-range `sed`. The emitted transport cursor is separate from a command result cursor such as `refs --cursor`.',
-    '- Repository records: commit `.scipquery/goals/*.json`, `.scipquery/changes/*.json`, `.scipquery/plans/*.json`, `.scipquery/attempts/*.json`, `.scipquery/decisions/*.json`, `.scipquery/obligations/*.json`, `.scipquery/obligation-transitions/*.json`, `.scipquery/completeness-admissions/*.json`, `.scipquery/transition-rules/*.json`, `.scipquery/completion-contexts/*.json`, `.scipquery/completion-evaluations/*.json`, `.scipquery/completion-transitions/*.json`, `.scipquery/suppressions/*.json`, and `.scipquery/events/*.json` with the work that produced them; do not ignore or drop these shared records.',
-    '- Checkout preferences: `.codex/hooks.json` and `.claude/settings.local.json` are local agent-tool settings and must not be committed.',
+    '- Use native search and file reads for literal text and source.',
+    '- Use `scip-query context <target>` to map flow, consumers, reuse options, constraints, and relevant source before a nonlocal change.',
+    '- Use focused graph commands when a compiler-resolved relationship can change the plan. Do not rerun an unchanged read-only query.',
+    '- Use `scip-query diff-impact` to map changed symbols and downstream consumers after a nontrivial edit.',
+    '- Use `scip-query architecture` to inspect explicit structural rules.',
+    '- Use `scip-query health` to find React, Vue, duplication, complexity, drift, and cleanup candidates.',
+    '- Treat compiler-graph findings as facts within stated coverage. Treat heuristic findings as candidates that need source confirmation.',
+    '- Before claiming a complete relationship set, inspect coverage and use `--full` only when complete coverage can change the decision.',
+    '- Prefer human output for agent reading. Use `--json --result-only` only for a programmatic consumer.',
+    '- If output emits `Continue exactly:`, run that command unchanged until transport is complete.',
+    '- Commit relevant `.scipquery/suppressions/*.json` records with the change. Do not commit local agent-tool settings.',
     MD_BLOCK_END,
   ].join('\n');
 
@@ -160,12 +78,10 @@ function writeInstructionsBlock(projectRoot: string, result: SetupAgentResult): 
 
   const shim = [MD_BLOCK_BEGIN, '@AGENTS.md', MD_BLOCK_END].join('\n');
   upsertManagedBlock(projectRoot, 'CLAUDE.md', shim, result, (current) => {
-    // The user already bridges AGENTS.md into Claude Code themselves.
     return current.includes('@AGENTS.md') && !current.includes(MD_BLOCK_BEGIN);
   });
 }
 
-/** Create the file with the block, or replace/append only our marked block. */
 function upsertManagedBlock(
   projectRoot: string,
   name: string,
@@ -183,18 +99,11 @@ function upsertManagedBlock(
     const next = upsertManagedBlockText(snapshot.text, block);
     return next === snapshot.text
       ? { kind: 'unchanged' }
-      : {
-          kind: 'write',
-          text: next,
-          ...(!snapshot.revision.exists ? { mode: 0o644 } : {}),
-        };
+      : { kind: 'write', text: next, ...(!snapshot.revision.exists ? { mode: 0o644 } : {}) };
   });
   if (!mutation) return;
-  if (!mutation.changed || preserved) {
-    result.unchanged.push(name);
-  } else {
-    result.written.push(name);
-  }
+  if (!mutation.changed || preserved) result.unchanged.push(name);
+  else result.written.push(name);
 }
 
 function removeManagedBlock(
@@ -217,10 +126,7 @@ function removeManagedBlock(
         result.removed.push(name);
       }
     } catch (error) {
-      result.skipped.push({
-        target: name,
-        reason: error instanceof Error ? error.message : String(error),
-      });
+      result.skipped.push({ target: name, reason: error instanceof Error ? error.message : String(error) });
     }
     return;
   }
@@ -272,83 +178,31 @@ function mutateManagedFile(
   try {
     return mutateTextFileRevisionAware(path, transform, { maxRetries: 0 });
   } catch (error) {
-    result.skipped.push({
-      target: label,
-      reason: error instanceof Error ? error.message : String(error),
-    });
+    result.skipped.push({ target: label, reason: error instanceof Error ? error.message : String(error) });
     return undefined;
   }
 }
 
-/** Agent-agnostic backstop: gate the diff at commit time, whoever wrote it. */
-function writeGitPreCommitHook(projectRoot: string, result: SetupAgentResult): void {
-  const hooksDir = join(projectRoot, '.git', 'hooks');
-  if (!existsSync(hooksDir)) {
-    result.skipped.push({ target: '.git/hooks/pre-commit', reason: 'no .git/hooks directory (not a git repository?)' });
+function removeLegacyPreCommitHook(
+  projectRoot: string,
+  opts: { dryRun?: boolean },
+  result: RemoveAgentSetupResult,
+): void {
+  const label = '.git/hooks/pre-commit';
+  const path = join(projectRoot, label);
+  if (!existsSync(path)) {
+    result.unchanged.push(label);
     return;
   }
-  const path = join(hooksDir, 'pre-commit');
-  const script = [
-    '#!/bin/sh',
-    PRE_COMMIT_MARKER,
-    'scip-query diff-gate || {',
-    '  echo "scip-query diff-gate failed — fix findings or commit with --no-verify to knowingly accept." >&2',
-    '  exit 1',
-    '}',
-    '',
-  ].join('\n');
-
-  let foreign = false;
-  const mutation = mutateManagedFile(path, '.git/hooks/pre-commit', result, (snapshot) => {
-    if (snapshot.revision.exists && !snapshot.text.includes(PRE_COMMIT_MARKER)) {
-      foreign = true;
-      return { kind: 'unchanged' };
-    }
-    return snapshot.text === script ? { kind: 'unchanged' } : { kind: 'write', text: script, mode: 0o755 };
-  });
-  if (!mutation) return;
-  if (foreign) {
-    result.skipped.push({
-      target: '.git/hooks/pre-commit',
-      reason: 'a pre-commit hook already exists — add `scip-query diff-gate` to it manually',
-    });
-  } else if (mutation.changed) {
-    result.written.push('.git/hooks/pre-commit');
-  } else {
-    result.unchanged.push('.git/hooks/pre-commit');
+  const current = readSmallArtifactText(path, 'pre-commit hook');
+  if (!current.includes(LEGACY_PRE_COMMIT_MARKER)) {
+    result.skipped.push({ target: label, reason: 'pre-commit hook is not managed by scip-query' });
+    return;
   }
-}
-
-function removeGitPreCommitHook(projectRoot: string, opts: { dryRun?: boolean }, result: RemoveAgentSetupResult): void {
-  const path = join(projectRoot, '.git', 'hooks', 'pre-commit');
   if (opts.dryRun) {
-    if (!existsSync(path)) result.unchanged.push('.git/hooks/pre-commit');
-    else if (!readSmallArtifactText(path, 'pre-commit hook').includes(PRE_COMMIT_MARKER)) {
-      result.skipped.push({
-        target: '.git/hooks/pre-commit',
-        reason: 'pre-commit hook is not managed by scip-query',
-      });
-    } else result.removed.push('.git/hooks/pre-commit');
+    result.removed.push(label);
     return;
   }
-  let foreign = false;
-  const mutation = mutateManagedFile(path, '.git/hooks/pre-commit', result, (snapshot) => {
-    if (!snapshot.revision.exists) return { kind: 'unchanged' };
-    if (!snapshot.text.includes(PRE_COMMIT_MARKER)) {
-      foreign = true;
-      return { kind: 'unchanged' };
-    }
-    return { kind: 'delete' };
-  });
-  if (!mutation) return;
-  if (foreign) {
-    result.skipped.push({
-      target: '.git/hooks/pre-commit',
-      reason: 'pre-commit hook is not managed by scip-query',
-    });
-  } else if (mutation.changed) {
-    result.removed.push('.git/hooks/pre-commit');
-  } else {
-    result.unchanged.push('.git/hooks/pre-commit');
-  }
+  const mutation = mutateManagedFile(path, label, result, () => ({ kind: 'delete' }));
+  if (mutation?.changed) result.removed.push(label);
 }

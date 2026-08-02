@@ -27,7 +27,6 @@ export interface UpdateNoticeOptions {
 export async function maybePrintUpdateNotice(opts: UpdateNoticeOptions = {}): Promise<void> {
   const env = opts.env ?? process.env;
   if (env['SCIP_QUERY_UPDATE_CHECK'] === '0' || env['NO_UPDATE_NOTIFIER']) return;
-  if (opts.commandName && isUpdateNoticeExemptCommand(opts.commandName)) return;
 
   const cacheDir = opts.cacheDir ?? resolveUpdateNoticeCacheDir(env);
   const now = opts.now ?? Date.now();
@@ -42,10 +41,6 @@ export async function maybePrintUpdateNotice(opts: UpdateNoticeOptions = {}): Pr
 
   const writeNotice = opts.writeNotice ?? ((message) => console.error(message));
   writeNotice(renderUpdateNotice(currentVersion, latestVersion));
-}
-
-function isUpdateNoticeExemptCommand(commandName: string): boolean {
-  return commandName === 'hook-context' || commandName === 'hook-stop' || commandName === 'hook-stop-prepare';
 }
 
 export function renderUpdateNotice(currentVersion: string, latestVersion: string): string {

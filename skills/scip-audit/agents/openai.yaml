@@ -1,4 +1,0 @@
-interface:
-  display_name: "SCIP Audit"
-  short_description: "Find and confirm real problems without editing"
-  default_prompt: "Use $scip-audit to proactively find and confirm real problems in this codebase without changing any code."

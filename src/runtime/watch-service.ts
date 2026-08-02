@@ -55,24 +55,18 @@ const WATCH_SERVICE_STOP_TIMEOUT_MS = 6_000;
 const WATCH_SERVICE_FORCE_STOP_TIMEOUT_MS = 1_000;
 const WATCH_SERVICE_POLL_INTERVAL_MS = 10;
 const AUTO_START_EXCLUDED_COMMANDS = new Set([
-  'bench',
+  'capabilities',
+  'check-deps',
   'config-validate',
   'doctor',
-  'effectiveness',
-  'hook-context',
-  'hook-stop',
-  'hook-stop-prepare',
   'init',
   'install-skills',
   'reindex',
   'setup',
   'setup-agent',
-  'setup-ci',
-  'setup-hooks',
   'status',
   'uninstall',
   'watch',
-  'work-audit',
 ]);
 
 export type WatchServiceIdentity =

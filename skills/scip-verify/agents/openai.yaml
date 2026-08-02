@@ -1,4 +1,0 @@
-interface:
-  display_name: "SCIP Verify"
-  short_description: "Verify a finished change before it ships"
-  default_prompt: "Use $scip-verify to confirm this change is wired, safe and regression-free before committing it."

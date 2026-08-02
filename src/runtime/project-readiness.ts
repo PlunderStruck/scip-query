@@ -215,12 +215,12 @@ export function getProjectCapabilities(
             : 'No project checker was detected for cleanup-plan --verify.',
       },
       {
-        id: 'diff-gate',
-        label: 'Git diff gate',
+        id: 'diff-impact',
+        label: 'Git change mapping',
         status: readiness.gitAvailable && graphDataAvailable ? 'available' : 'unavailable',
         evidence: 'git',
         reason: readiness.gitAvailable
-          ? 'Git diff data is available for changed-file gates.'
+          ? 'Git diff data is available for changed-symbol and downstream-consumer mapping.'
           : 'Git is unavailable or the project root is not a git worktree.',
       },
     ],

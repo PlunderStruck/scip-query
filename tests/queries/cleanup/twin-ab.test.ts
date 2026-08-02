@@ -111,7 +111,7 @@ describe('twin-ab', () => {
     expect(outcome.testSource).toContain("import { describe, expect, it } from 'vitest';");
     expect(outcome.testSource).toContain('escapeRegex as twinA');
     expect(outcome.testSource).toContain('escapeRegExp as twinB');
-    expect(outcome.testSource).toContain('scip-audit integrity scenario');
+    expect(outcome.testSource).toContain('Cleanup integrity scenario');
     expect(outcome.testSource).toContain('TODO');
   });
 

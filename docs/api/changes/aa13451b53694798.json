@@ -1,0 +1,631 @@
+{
+  "acceptedAt": "2026-08-02T05:42:59.339Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "aa13451b5369479854043629e5514e135b52e40e573b012807968987443589e5",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export CheckEffectiveness.",
+      "target": "./queries:CheckEffectiveness"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export DIFF_GATE_CHECKS.",
+      "target": "./queries:DIFF_GATE_CHECKS"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export DiffGateActionTier.",
+      "target": "./queries:DiffGateActionTier"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export DiffGateCheck.",
+      "target": "./queries:DiffGateCheck"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export DiffGateFinding.",
+      "target": "./queries:DiffGateFinding"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export DiffGateResult.",
+      "target": "./queries:DiffGateResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export DocCitationKind.",
+      "target": "./queries:DocCitationKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export EffectivenessAnomaly.",
+      "target": "./queries:EffectivenessAnomaly"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export EffectivenessAnomalySample.",
+      "target": "./queries:EffectivenessAnomalySample"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export EffectivenessAuthority.",
+      "target": "./queries:EffectivenessAuthority"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export EffectivenessOptions.",
+      "target": "./queries:EffectivenessOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export EffectivenessProvenanceSummary.",
+      "target": "./queries:EffectivenessProvenanceSummary"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export EffectivenessReport.",
+      "target": "./queries:EffectivenessReport"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HealthReport changed from interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes... to interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes....",
+      "target": "./queries:HealthReport"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export OutcomeEvent.",
+      "target": "./queries:OutcomeEvent"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export OutcomeEventKind.",
+      "target": "./queries:OutcomeEventKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export OutcomeObserverAuthority.",
+      "target": "./queries:OutcomeObserverAuthority"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export OutcomeObserverKind.",
+      "target": "./queries:OutcomeObserverKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export OutcomeObserverProvenance.",
+      "target": "./queries:OutcomeObserverProvenance"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextAffectedConsumer.",
+      "target": "./queries:PlanContextAffectedConsumer"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextConsumerReuse.",
+      "target": "./queries:PlanContextConsumerReuse"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextConsumerReuseCandidate.",
+      "target": "./queries:PlanContextConsumerReuseCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextConsumerReuseCoverage.",
+      "target": "./queries:PlanContextConsumerReuseCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextOptions.",
+      "target": "./queries:PlanContextOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextPrimaryCallable.",
+      "target": "./queries:PlanContextPrimaryCallable"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextResult.",
+      "target": "./queries:PlanContextResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextSourcePacket.",
+      "target": "./queries:PlanContextSourcePacket"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextSourceSlice.",
+      "target": "./queries:PlanContextSourceSlice"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RepositoryContextAffectedConsumer.",
+      "target": "./queries:RepositoryContextAffectedConsumer"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RepositoryContextConsumerReuse.",
+      "target": "./queries:RepositoryContextConsumerReuse"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RepositoryContextConsumerReuseCandidate.",
+      "target": "./queries:RepositoryContextConsumerReuseCandidate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RepositoryContextConsumerReuseCoverage.",
+      "target": "./queries:RepositoryContextConsumerReuseCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RepositoryContextOptions.",
+      "target": "./queries:RepositoryContextOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RepositoryContextPrimaryCallable.",
+      "target": "./queries:RepositoryContextPrimaryCallable"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RepositoryContextResult.",
+      "target": "./queries:RepositoryContextResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RepositoryContextSourcePacket.",
+      "target": "./queries:RepositoryContextSourcePacket"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RepositoryContextSourceSlice.",
+      "target": "./queries:RepositoryContextSourceSlice"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export blockingFindings.",
+      "target": "./queries:blockingFindings"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export computeEffectiveness.",
+      "target": "./queries:computeEffectiveness"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export diffGate.",
+      "target": "./queries:diffGate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export diffGateFailedClosed.",
+      "target": "./queries:diffGateFailedClosed"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export diffGateFailureReason.",
+      "target": "./queries:diffGateFailureReason"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export parseSinceMs.",
+      "target": "./queries:parseSinceMs"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export planContext.",
+      "target": "./queries:planContext"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export repositoryContext.",
+      "target": "./queries:repositoryContext"
+    },
+    {
+      "classification": "additive",
+      "kind": "entry-added",
+      "message": "Added public declaration path ./queries/context.",
+      "target": "./queries/context"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/diff-gate.",
+      "target": "./queries/diff-gate"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/diff-impact; review their variance and runtime meaning.",
+      "target": "./queries/diff-impact"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/doc-drift; review their variance and runtime meaning.",
+      "target": "./queries/doc-drift"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/incomplete-migration; review their variance and runtime meaning.",
+      "target": "./queries/incomplete-migration"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export CheckEffectiveness.",
+      "target": "./queries/index:CheckEffectiveness"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export DIFF_GATE_CHECKS.",
+      "target": "./queries/index:DIFF_GATE_CHECKS"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export DiffGateActionTier.",
+      "target": "./queries/index:DiffGateActionTier"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export DiffGateCheck.",
+      "target": "./queries/index:DiffGateCheck"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export DiffGateFinding.",
+      "target": "./queries/index:DiffGateFinding"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export DiffGateResult.",
+      "target": "./queries/index:DiffGateResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export DocCitationKind.",
+      "target": "./queries/index:DocCitationKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export EffectivenessAnomaly.",
+      "target": "./queries/index:EffectivenessAnomaly"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export EffectivenessAnomalySample.",
+      "target": "./queries/index:EffectivenessAnomalySample"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export EffectivenessAuthority.",
+      "target": "./queries/index:EffectivenessAuthority"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export EffectivenessOptions.",
+      "target": "./queries/index:EffectivenessOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export EffectivenessProvenanceSummary.",
+      "target": "./queries/index:EffectivenessProvenanceSummary"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export EffectivenessReport.",
+      "target": "./queries/index:EffectivenessReport"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HealthReport changed from interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes... to interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes....",
+      "target": "./queries/index:HealthReport"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export OutcomeEvent.",
+      "target": "./queries/index:OutcomeEvent"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export OutcomeEventKind.",
+      "target": "./queries/index:OutcomeEventKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export OutcomeObserverAuthority.",
+      "target": "./queries/index:OutcomeObserverAuthority"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export OutcomeObserverKind.",
+      "target": "./queries/index:OutcomeObserverKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export OutcomeObserverProvenance.",
+      "target": "./queries/index:OutcomeObserverProvenance"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextAffectedConsumer.",
+      "target": "./queries/index:PlanContextAffectedConsumer"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextConsumerReuse.",
+      "target": "./queries/index:PlanContextConsumerReuse"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextConsumerReuseCandidate.",
+      "target": "./queries/index:PlanContextConsumerReuseCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextConsumerReuseCoverage.",
+      "target": "./queries/index:PlanContextConsumerReuseCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextOptions.",
+      "target": "./queries/index:PlanContextOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextPrimaryCallable.",
+      "target": "./queries/index:PlanContextPrimaryCallable"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextResult.",
+      "target": "./queries/index:PlanContextResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextSourcePacket.",
+      "target": "./queries/index:PlanContextSourcePacket"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextSourceSlice.",
+      "target": "./queries/index:PlanContextSourceSlice"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RepositoryContextAffectedConsumer.",
+      "target": "./queries/index:RepositoryContextAffectedConsumer"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RepositoryContextConsumerReuse.",
+      "target": "./queries/index:RepositoryContextConsumerReuse"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RepositoryContextConsumerReuseCandidate.",
+      "target": "./queries/index:RepositoryContextConsumerReuseCandidate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RepositoryContextConsumerReuseCoverage.",
+      "target": "./queries/index:RepositoryContextConsumerReuseCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RepositoryContextOptions.",
+      "target": "./queries/index:RepositoryContextOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RepositoryContextPrimaryCallable.",
+      "target": "./queries/index:RepositoryContextPrimaryCallable"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RepositoryContextResult.",
+      "target": "./queries/index:RepositoryContextResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RepositoryContextSourcePacket.",
+      "target": "./queries/index:RepositoryContextSourcePacket"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export RepositoryContextSourceSlice.",
+      "target": "./queries/index:RepositoryContextSourceSlice"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export blockingFindings.",
+      "target": "./queries/index:blockingFindings"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export computeEffectiveness.",
+      "target": "./queries/index:computeEffectiveness"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export diffGate.",
+      "target": "./queries/index:diffGate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export diffGateFailedClosed.",
+      "target": "./queries/index:diffGateFailedClosed"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export diffGateFailureReason.",
+      "target": "./queries/index:diffGateFailureReason"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export parseSinceMs.",
+      "target": "./queries/index:parseSinceMs"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export planContext.",
+      "target": "./queries/index:planContext"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export repositoryContext.",
+      "target": "./queries/index:repositoryContext"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/plan-context.",
+      "target": "./queries/plan-context"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./runtime; review their variance and runtime meaning.",
+      "target": "./runtime"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module change-analysis-types-<hash>.d.ts was added or renamed.",
+      "target": "change-analysis-types-<hash>.d.ts"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration H.",
+      "target": "config-types-<hash>.d.ts:H"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "P changed from interface ProjectConfig { $schema?: string; schemaVersion?: 2; collaborationDomainId?: string; languages?: SupportedLanguage[]; indexerConcurrency?: number; watch?: WatchConfig;... to interface ProjectConfig { $schema?: string; schemaVersion?: 2; collaborationDomainId?: string; languages?: SupportedLanguage[]; indexerConcurrency?: number; watch?: WatchConfig;....",
+      "target": "config-types-<hash>.d.ts:P"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module diff-gate-types-<hash>.d.ts was removed or renamed.",
+      "target": "diff-gate-types-<hash>.d.ts"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration M.",
+      "target": "health-<hash>.d.ts:M"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "b changed from interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes... to interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes....",
+      "target": "health-<hash>.d.ts:b"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "9746e2851702d8c6332a48fdf430c8695ae5b00af3a3920c628f45e2853fa138",
+  "reason": "Remove workflow-state exports and replace plan-context with the smaller repository context surface.",
+  "schemaVersion": 1
+}

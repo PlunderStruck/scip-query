@@ -1,4 +1,0 @@
-interface:
-  display_name: "SCIP Shared Reference"
-  short_description: "Reference only - not a workflow"
-  default_prompt: "Load $_shared only from inside another SCIP skill when its own command shortlist is insufficient."

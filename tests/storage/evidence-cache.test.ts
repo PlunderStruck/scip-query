@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ScipDatabase } from '../../src/storage/db.js';
 import {
-  applyFindingOutcomeLedgerTransition,
   EVIDENCE_DB_FILENAME,
   fileContentHash,
   projectEvidenceFingerprint,
@@ -15,13 +14,11 @@ import {
   readCachedSemanticReferences,
   readCachedSemanticReferencesForFile,
   readCachedFileEvidence,
-  readFindingOutcomeLedger,
   sha256Hex,
   writeCachedProjectEvidence,
   writeCachedSemanticCalleesBatch,
   writeCachedSemanticReferencesBatch,
   writeCachedFileEvidence,
-  FINDING_OUTCOME_LEDGER_CAP_PER_CHECK,
   SHARED_FILE_EVIDENCE_KINDS,
   maintainSharedEvidenceCache,
 } from '../../src/storage/evidence-cache.js';
@@ -863,117 +860,6 @@ describe('evidence cache', () => {
       );
       expect(readCachedSemanticReferences(db, 'src/lib.rs', 'rust#run', 'rust-cache-fingerprint')).toBe(rustPayload);
     } finally {
-      db.close();
-    }
-  });
-
-  it('round-trips the finding-outcome ledger and caps rows per check by recency', () => {
-    const db = openDb();
-    try {
-      expect(readFindingOutcomeLedger(db)).toEqual([]);
-
-      expect(
-        applyFindingOutcomeLedgerTransition(
-          db,
-          { observationId: 'round-trip-1', fingerprint: 'fingerprint-1', observedAt: 2 },
-          () => [
-            { check: 'echo', findingId: 'A', firstSeen: 1, lastSeen: 1, timesShown: 1, outcome: 'still-open' },
-            { check: 'echo', findingId: 'B', firstSeen: 2, lastSeen: 2, timesShown: 1, outcome: 'resolved' },
-          ],
-        ).status,
-      ).toBe('applied');
-      const rows = readFindingOutcomeLedger(db).sort((left, right) => left.findingId.localeCompare(right.findingId));
-      expect(rows).toEqual([
-        { check: 'echo', findingId: 'A', firstSeen: 1, lastSeen: 1, timesShown: 1, outcome: 'still-open' },
-        { check: 'echo', findingId: 'B', firstSeen: 2, lastSeen: 2, timesShown: 1, outcome: 'resolved' },
-      ]);
-
-      applyFindingOutcomeLedgerTransition(
-        db,
-        { observationId: 'round-trip-2', fingerprint: 'fingerprint-2', observedAt: 3 },
-        (previous) =>
-          previous.map((row) =>
-            row.findingId === 'A'
-              ? { ...row, lastSeen: 3, timesShown: row.timesShown + 1, outcome: 'suppressed' }
-              : row,
-          ),
-      );
-      expect(readFindingOutcomeLedger(db).find((row) => row.findingId === 'A')).toMatchObject({
-        lastSeen: 3,
-        timesShown: 2,
-        outcome: 'suppressed',
-      });
-
-      // Recency cap: only the most-recently-seen N rows survive per check.
-      const overflow = Array.from({ length: FINDING_OUTCOME_LEDGER_CAP_PER_CHECK + 10 }, (_, index) => ({
-        check: 'doc-reference',
-        findingId: `SQ${index}`,
-        firstSeen: index,
-        lastSeen: index,
-        timesShown: 1,
-        outcome: 'still-open',
-      }));
-      applyFindingOutcomeLedgerTransition(
-        db,
-        { observationId: 'round-trip-overflow', fingerprint: 'fingerprint-overflow', observedAt: 10_000 },
-        (previous) => [...previous, ...overflow],
-      );
-      const capped = readFindingOutcomeLedger(db).filter((row) => row.check === 'doc-reference');
-      expect(capped).toHaveLength(FINDING_OUTCOME_LEDGER_CAP_PER_CHECK);
-      expect(capped.map((row) => row.findingId)).not.toContain('SQ0'); // oldest evicted
-      expect(capped.map((row) => row.findingId)).toContain(`SQ${FINDING_OUTCOME_LEDGER_CAP_PER_CHECK + 9}`);
-    } finally {
-      db.close();
-    }
-  });
-
-  it('does not consume an observation id when the immediate transaction times out on a writer lock', () => {
-    const db = openDb();
-    const blocker = new Database(join(tempDir, EVIDENCE_DB_FILENAME));
-    try {
-      readFindingOutcomeLedger(db); // Open this ScipDatabase's independent evidence connection first.
-      blocker.pragma('journal_mode = WAL');
-      blocker.exec('BEGIN IMMEDIATE');
-
-      const blocked = applyFindingOutcomeLedgerTransition(
-        db,
-        { observationId: 'busy-retry', fingerprint: 'busy-fingerprint', observedAt: 11_000 },
-        (previous) => [
-          ...previous,
-          {
-            check: 'busy-check',
-            findingId: 'A',
-            firstSeen: 11_000,
-            lastSeen: 11_000,
-            timesShown: 1,
-            outcome: 'still-open',
-          },
-        ],
-        { busyTimeoutMs: 5 },
-      );
-      expect(blocked.status).toBe('busy');
-      expect(blocked.current.some((row) => row.check === 'busy-check')).toBe(false);
-
-      blocker.exec('ROLLBACK');
-      const retried = applyFindingOutcomeLedgerTransition(
-        db,
-        { observationId: 'busy-retry', fingerprint: 'busy-fingerprint', observedAt: 11_000 },
-        (previous) => [
-          ...previous,
-          {
-            check: 'busy-check',
-            findingId: 'A',
-            firstSeen: 11_000,
-            lastSeen: 11_000,
-            timesShown: 1,
-            outcome: 'still-open',
-          },
-        ],
-      );
-      expect(retried.status).toBe('applied');
-    } finally {
-      if (blocker.inTransaction) blocker.exec('ROLLBACK');
-      blocker.close();
       db.close();
     }
   });

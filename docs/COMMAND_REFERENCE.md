@@ -1,4 +1,8 @@
-# Command Reference
+# Command reference
+
+This syntax catalog is generated from the CLI command descriptors. Use
+`scip-query context <target>` as the normal starting point. Focused graph and
+detector commands are an advanced surface for a named unresolved question.
 
 <!-- BEGIN GENERATED COMMAND REFERENCE -->
 
@@ -77,7 +81,7 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 | `redundant-reexports` | Find barrel re-exports that nobody imports through | `-s, --scope <path>`<br>`-n, --limit <n>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `duplicate-bodies` | Find exact duplicate small-body candidates across files | `-s, --scope <path>`<br>`--max-loc <n>`<br>`--min-loc <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `twin-drift` | Twin drift candidates: same-name (or near-name) functions across files with diverged bodies | `-s, --scope <path>`<br>`--min-similarity <n>`<br>`--include-homonyms`<br>`-n, --limit <n>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `twin-ab <symbolA> <symbolB>` | Generate a behavioral A/B scaffold comparing two same-concept twins (scip-audit integrity scenario) — a ready-to-fill vitest file, not an auto-executor | `--out <path>`<br>`--force`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `twin-ab <symbolA> <symbolB>` | Generate a behavioral A/B scaffold comparing two same-concept twins (cleanup integrity scenario) — a ready-to-fill vitest file, not an auto-executor | `--out <path>`<br>`--force`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `not-implemented` | Reachable placeholder stub candidates (throw-stub, TODO+return-default, empty body) — production callers can actually reach these; an unreachable stub is dead's job, not this one's | `-s, --scope <path>`<br>`-n, --limit <n>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `decorative-checkers` | Decorative checker candidates: validate*/verify*/check*/assert*/is*/has* callables with no reachable failure exit anywhere in their body | `-s, --scope <path>`<br>`-n, --limit <n>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `test-quality` | Test-quality candidates: assertion-free it/test bodies, a skipped-test ledger with git-blame age, and mock-echo tests that assert the same literal they stubbed into a mock | `-s, --scope <path>`<br>`-n, --limit <n>`<br>`--rot-days <n>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
@@ -104,9 +108,8 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 | `affected <symbol>` | Transitive closure of symbols that could break if this symbol changes | `--full`<br>`--max-depth <n>`<br>`-s, --scope <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `change-surface <file>` | Pre-change briefing: consumers, published API, operational roots, and explained change risk | `--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `co-change [file]` | Files that change together in git history without a dependency edge — hidden coupling candidates | `--min-together <n>`<br>`-n, --limit <n>`<br>`--all`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `diff-gate` | Runtime-bounded, single-flight gate for the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | `--base <ref>`<br>`--min-together <n>`<br>`--max-echo-checks <n>`<br>`--max-helpers <n>`<br>`--baseline`<br>`--full`<br>`--skip <check>`<br>`--hook`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `incomplete-migration` | Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain | `--base <ref>`<br>`--min-containment <n>`<br>`--max-helpers <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `diff-impact` | Compute changed symbols and downstream consumers from current git diff | `--base <ref>`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `diff-impact` | Map changed symbols and downstream consumers from the current git diff | `--base <ref>`<br>`--json`<br>`--result-only`<br>`--compact` |
 
 ### Formal Models
 
@@ -114,119 +117,35 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 |---|---|---|
 | `tla <operation> [spec]` | TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation | `--map <file>`<br>`--config <file>`<br>`--checker <mode>`<br>`--tla-tools <jar>`<br>`--apalache <binary>`<br>`--length <n>`<br>`--timeout-ms <n>`<br>`--trace <file>`<br>`--next <operator>`<br>`--coverage`<br>`--allow-unknown`<br>`--out <path>`<br>`--module-name <name>`<br>`--force`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 
-### Planning
+### Exploration
 
 | Command | Description | Options |
 |---|---|---|
-| `plan-context <target>` | Pre-edit planning context for a symbol, file, or module | `--impact-depth <n>`<br>`--slice-depth <n>`<br>`-s, --scope <path>`<br>`-n, --limit <n>`<br>`--detail`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `context <target>` | Compiler-backed context for a symbol, file, or module | `--impact-depth <n>`<br>`--slice-depth <n>`<br>`-s, --scope <path>`<br>`-n, --limit <n>`<br>`--detail`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 
 ### Health
 
 | Command | Description | Options |
 |---|---|---|
 | `self-audit` | Score cheap evidence paths against the best available semantic/source oracle on sampled symbols | `--samples <n>`<br>`-s, --scope <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `health` | Composite codebase health report with prioritized action list | `-s, --scope <path>`<br>`--full`<br>`--baseline`<br>`--write-baseline`<br>`--mission-trial-program <path>`<br>`--mission-trial-root <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `complexity <symbol>` | Per-symbol complexity: branches, cyclomatic estimate, fan-in/out, callees | `--full`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `health` | Composite repository health report with React, Vue, and general cleanup findings | `-s, --scope <path>`<br>`--full`<br>`--baseline`<br>`--write-baseline`<br>`--json`<br>`--result-only`<br>`--compact` |
 
 ### Maintenance
 
 | Command | Description | Options |
 |---|---|---|
-| `bench` | Benchmark indexing and command runtimes for this repository | `--cold-index`<br>`--include-heavy`<br>`--command <cmd>`<br>`--timeout-ms <n>`<br>`--progress`<br>`--profile`<br>`--profile-out <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `work-audit <profile>` | Rank exact repeated computations in a profiling JSONL file by measured avoidable time | `--top <n>`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `install-skills` | Install skills (_shared, scip-query, scip-setup, scip-explore, scip-plan, scip-diagnose, scip-audit, scip-improve, scip-verify) into Claude Code, Codex, and shared agent roots | - |
-| `setup-hooks` | Install or refresh project-local Codex and Claude Code lifecycle hooks | `--shared`<br>`--remove`<br>`--force`<br>`--dry-run`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `check-deps` | Check whether scip-query and the detected language indexers are actually runnable | - |
-| `capabilities` | Report which evidence and verification capabilities are available in this project | `--matrix`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `capability-matrix` | Deprecated alias for capabilities --matrix | `--json`<br>`--result-only`<br>`--compact` |
-| `init` | Create a .scipquery.json config file for this project | - |
-| `config-validate` | Validate .scipquery.json, including structured suppressions and declared coupling groups | `--json`<br>`--result-only`<br>`--compact` |
-| `suppress <id>` | Record an accepted finding as a file under .scipquery/suppressions/ with a required reason | `--reason <text>`<br>`--reason-code <code>`<br>`--evidence <kind:referent>`<br>`--check <check>`<br>`--file <path>`<br>`--expires-at <iso>`<br>`--replace <revision>`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `effectiveness` | Per-check detector telemetry plus separately classified protected autonomous-completion mission trials | `--since <window>`<br>`--check <check>`<br>`--mission-trial-program <path>`<br>`--mission-trial-root <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `mission-trial <operation> <program>` | Register, validate, record, list, or report protected autonomous-completion mission trials outside the candidate worktree | `--protected-root <path>`<br>`--candidate-root <path>`<br>`--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `doctor` | Diagnose config, index freshness, dependency readiness, and project capabilities | `--json`<br>`--result-only`<br>`--compact` |
-| `setup` | Bootstrap this project: enable automatic indexing, install agent skills, refresh the index, verify capabilities, and report health | `--guided`<br>`--yes`<br>`--git-hook`<br>`--no-hooks`<br>`--no-skills`<br>`--no-parsers`<br>`--install-missing`<br>`--no-health`<br>`--dossier-dir <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `setup-agent` | Seed agent guidance for this project: AGENTS.md/CLAUDE.md block pointing agents at the scip-query skills and diff gate, plus an optional git pre-commit backstop | `--git-hook` |
-| `setup-ci` | Write a GitHub Actions workflow that runs scip-query reindex and diff-gate on pull requests | `--force`<br>`--dry-run` |
-| `uninstall` | Remove selected scip-query-owned integrations; real removal requires exactly one of --global or --project | `--global`<br>`--project`<br>`--dry-run`<br>`--verbose`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `watch` | Watch in the foreground or manage the per-project background refresh service | `--daemon`<br>`--status`<br>`--stop`<br>`--debounce <ms>`<br>`--cooldown <ms>`<br>`--git-poll <ms>`<br>`--idle-timeout <ms>`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `install-skills` | Install skills (scip-query) into Claude Code, Codex, and shared agent roots | - |
+| `check-deps` | Check whether scip-query and the detected language indexers are runnable | - |
+| `capabilities` | Report which mapping and analysis capabilities are available in this project | `--matrix`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `init` | Create a .scipquery.json configuration file for this project | - |
+| `config-validate` | Validate .scipquery.json, structured suppressions, architecture, and coupling groups | `--json`<br>`--result-only`<br>`--compact` |
+| `suppress <id>` | Record an accepted finding under .scipquery/suppressions with a required reason | `--reason <text>`<br>`--reason-code <code>`<br>`--evidence <kind:referent>`<br>`--check <check>`<br>`--file <path>`<br>`--expires-at <iso>`<br>`--replace <revision>`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `doctor` | Diagnose configuration, index freshness, dependencies, and project capabilities | `--json`<br>`--result-only`<br>`--compact` |
+| `setup` | Install skills, write agent guidance, refresh the index, and report repository health | `--guided`<br>`--yes`<br>`--no-skills`<br>`--no-parsers`<br>`--install-missing`<br>`--no-health`<br>`--dossier-dir <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `setup-agent` | Write concise scip-query mapping and cleanup guidance to AGENTS.md and CLAUDE.md | - |
+| `uninstall` | Remove selected scip-query-owned skills or project guidance | `--global`<br>`--project`<br>`--dry-run`<br>`--verbose`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `watch` | Watch in the foreground or manage the project refresh service | `--daemon`<br>`--status`<br>`--stop`<br>`--debounce <ms>`<br>`--cooldown <ms>`<br>`--git-poll <ms>`<br>`--idle-timeout <ms>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `status` | Show index status for this project | `--capabilities`<br>`--json`<br>`--result-only`<br>`--compact` |
 
-### Autonomous work state
-
-| Command | Description | Options |
-|---|---|---|
-| `goal <operation> [target]` | Create, read, validate, or list committed autonomous goal records | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `change <operation> [target]` | Create, read, validate, or list committed intended-change records | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `plan <operation> [target]` | Apply or inspect one structured Markdown change contract and its derived obligations | `--json`<br>`--result-only`<br>`--compact` |
-| `attempt <operation> [target]` | Create, read, validate, or summarize committed autonomous attempt records | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `decision <operation> [target]` | Create, read, validate, or summarize committed autonomous decision records | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `obligation <operation> [target]` | Admit, transition, inspect, or summarize committed completion obligations | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `completion <operation> [target]` | Create successor rules or read, validate, and summarize protected completion state | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `work-authorization <operation> [target]` | Issue, inspect, or activate exact work authority stored outside the candidate worktree | `--protected-root <path>`<br>`--candidate-root <path>`<br>`--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `protected-evidence <operation> [target]` | Run a pre-authorized evaluator and issue or inspect goal evidence outside the candidate worktree | `--protected-root <path>`<br>`--candidate-root <path>`<br>`--evaluator <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
-
 <!-- END GENERATED COMMAND REFERENCE -->
-
-`cleanup-plan --verify` applies candidate batches in an isolated temporary
-clone of committed `HEAD`, then runs the detected project checker. The clone
-keeps checkout and Git-administration writes out of both the candidate files
-and their protected `.git` metadata. If the snapshot cannot be prepared, the
-command reports one explicit unavailable reason rather than silently treating
-the batch as verified.
-
-## Agent closeout
-
-This command catalog is not a verification battery. At closeout, reuse current
-freshness and direct test evidence, run `diff-impact` when compiler-resolved
-impact can change the verdict, and give `diff-gate` one owner. A protected
-blocking Stop hook owns that final gate; otherwise run it once manually. The
-gate already invokes its built-in detector family, so run a standalone
-detector only for an uncovered requirement or to investigate a finding. See
-the bundled `scip-verify` skill for the complete usefulness rule. When Stop
-names local work, take that action and stop again. Do not poll completion status
-or architecture before the next Stop reevaluates the changed repository.
-Finishing the response activates Stop. Do not search for a Stop tool or inspect
-general CLI and controller help.
-
-## `analysisBudget` disclosure contract
-
-On a large index (`stats.symbols >= 25,000` or `stats.documents >= 2,500`), commands built on the
-shared `budgetedDbCommand`/`budgetedListCommand`/`budgetedTableCommand`/`budgetedReportCommand`/
-`budgetedGroupedByFileCommand`/`budgetedSectionedReportCommand` helpers (`src/runtime/commands/
-command-execution.ts`) automatically cap their candidate scan and disable semantic (ts-morph)
-enrichment, and — unless `--full` is passed — disclose the cap two ways: a stderr notice in human
-mode, and an `analysisBudget: { scanLimit, semanticEnrichment, reason }` key at the top level of
-the `--json` envelope (`printJsonEnvelope`, same file). This is a general-purpose seam, not
-diff-gate-specific: as of this writing it already covers `dead`, `unused-imports`, `isolated`,
-`extract-candidates`, `locality-candidates`, `similar`, `similar-signatures`, `drift`,
-`convergence`, `duplicate-bodies`, `twin-drift`, `cleanup-plan`, `cleanup-apply`,
-`recent-duplicates`, `unused-params`, `complexity-hotspots`, `complexity`, `bottlenecks`,
-`imports`, `refs`, `dataflow`, `slice`, `plan-context`, `change-surface`, `incomplete-migration`,
-`co-change`, `diff-gate`, and the React/Vue battery commands.
-
-Commands stay on the plain (unbudgeted) `dbCommand`/`listCommand`/`tableCommand`/`reportCommand`
-family — and so never emit `analysisBudget` — when their cost model has no candidate-count or
-semantic-enrichment knob for the budget to honestly describe: single-symbol/single-file lookups
-(`code`, `outline`, `fan-in`, `fan-out`, `coupling`, `twin-ab`), or whole-graph structural queries
-with their own independent bound (`cycles`, `deep-chains`). Adding the `analysisBudget` key to one of those
-without also making the underlying query respect `scanLimit`/`semantic` would disclose a cap that
-isn't real — forbidden by the same "no silent/false disclosure" rule this contract exists to
-enforce (see `docs/plans/2026-07-02-followups.md` items 6 and 9).
-
-Followup #6 closed the one confirmed gap in an otherwise-wired battery command: `co-change`
-(`src/runtime/query-commands/impact.ts`) used the plain `dbCommand` and never disclosed a budget,
-even though its per-pair classification loop in `queries.coChange`
-(`src/queries/cleanup/co-change.ts`) does real filesystem/graph work whose cost scales with
-candidate-pair count on a large repository. It now flows through `budgetedDbCommand` and
-`coChange` accepts a `scanLimit` option that truncates the (already priority-sorted) candidate
-pairs before classification, so the disclosed budget is truthful rather than cosmetic.
-Composite planning also passes its already-resolved invocation HEAD through `coChange`'s
-internal options, keeping history reads on one Git snapshot without another `rev-parse`
-subprocess; standalone command behavior is unchanged.
-The setup-scope follow-up rechecked this implementation citation; extracting
-shared hook outcome recording changed imports in the same runtime module but
-did not change the `co-change` budget boundary described here.
-The 2026-07-30 claim-qualification change adds descriptor-owned provenance to
-the same `co-change` command without changing `budgetedDbCommand`, its
-`scanLimit`, or the history snapshot passed to the query.
