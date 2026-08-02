@@ -36,6 +36,7 @@ const PRIVATE_QUERY_MODULES = [
   'newly-unreferenced-residue',
   'public-query-entries',
   'query-utils',
+  'source-snippet',
   'architecture-baseline',
   'test-boundary-policy',
 ] as const;
@@ -55,6 +56,7 @@ const PRIVATE_QUERY_SOURCE_PATHS = {
   'newly-unreferenced-residue': 'src/queries/impact/newly-unreferenced-residue.ts',
   'public-query-entries': 'src/queries/public-query-entries.ts',
   'query-utils': 'src/queries/query-utils.ts',
+  'source-snippet': 'src/queries/navigation/source-snippet.ts',
   'architecture-baseline': 'src/queries/graph/architecture-baseline.ts',
   'test-boundary-policy': 'src/queries/graph/test-boundary-policy.ts',
 } as const satisfies Record<(typeof PRIVATE_QUERY_MODULES)[number], string>;
@@ -359,18 +361,30 @@ describe('CLI contract', () => {
     const skillMentionedCommands = readSkillMentionedCommands();
 
     expect(
-      ['context', 'diff-impact', 'architecture', 'health'].filter((command) => !skillMentionedCommands.has(command)),
+      ['search', 'evidence', 'context', 'diff-impact', 'architecture', 'health'].filter(
+        (command) => !skillMentionedCommands.has(command),
+      ),
     ).toEqual([]);
   });
 
-  it('keeps the reduced workflow guidance in one primary skill', () => {
+  it('keeps one router and two concise specialist skills without work-state ceremony', () => {
     const readSkill = (name: string) => readFileSync(join(process.cwd(), 'skills', name, 'SKILL.md'), 'utf8');
 
+    expect(readSkill('scip-query')).toContain('scip-query search');
+    expect(readSkill('scip-query')).toContain('scip-query evidence');
     expect(readSkill('scip-query')).toContain('scip-query context');
     expect(readSkill('scip-query')).toMatch(/React, Vue/);
     expect(readSkill('scip-query')).not.toMatch(/diff-gate|Stop hook|Gherkin/i);
     expect(readSkill('scip-query')).toContain('must not become a second workflow');
-    expect(readSkill('scip-query')).not.toMatch(/## Routes|scip-audit|scip-improve|scip-setup/);
+    expect(readSkill('scip-explore')).toContain('Start with the question');
+    expect(readSkill('scip-explore')).toContain('scip-query evidence');
+    expect(readSkill('concrete-plan')).toContain('Direct evidence');
+    expect(readSkill('concrete-plan')).toMatch(
+      /\| Change\s+\| Direct evidence\s+\| Preserve\s+\| Retire\s+\| Prove\s+\|/,
+    );
+    expect(`${readSkill('scip-query')}\n${readSkill('scip-explore')}\n${readSkill('concrete-plan')}`).not.toMatch(
+      /diff-gate|Gherkin/i,
+    );
   });
 
   it('keeps command reference syntax generated from descriptors', () => {

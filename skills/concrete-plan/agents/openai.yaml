@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Concrete Plan'
+  short_description: 'Write concise repository-grounded code plans'
+  default_prompt: 'Use $concrete-plan to write a concise evidence-backed implementation plan.'

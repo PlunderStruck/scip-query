@@ -1,5 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { platform } from 'node:os';
+import { resolve } from 'node:path';
 
 const IS_WINDOWS = platform() === 'win32';
 
@@ -84,6 +85,9 @@ export function resolveSpawnableExecutable(name: string, options: ResolveSpawnab
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-  if (!isWindows) return matches[0] ?? null;
+  if (!isWindows) {
+    const match = matches[0];
+    return match ? resolve(match) : null;
+  }
   return matches.find((match) => WINDOWS_NATIVE_EXECUTABLE.test(match)) ?? null;
 }

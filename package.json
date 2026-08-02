@@ -124,6 +124,10 @@
       "import": "./dist/queries/drift.js",
       "types": "./dist/queries/drift.d.ts"
     },
+    "./queries/evidence": {
+      "import": "./dist/queries/evidence.js",
+      "types": "./dist/queries/evidence.d.ts"
+    },
     "./queries/extract-candidates": {
       "import": "./dist/queries/extract-candidates.js",
       "types": "./dist/queries/extract-candidates.d.ts"
@@ -251,6 +255,10 @@
     "./queries/slice": {
       "import": "./dist/queries/slice.js",
       "types": "./dist/queries/slice.d.ts"
+    },
+    "./queries/source-search": {
+      "import": "./dist/queries/source-search.js",
+      "types": "./dist/queries/source-search.d.ts"
     },
     "./queries/stale-abstractions": {
       "import": "./dist/queries/stale-abstractions.js",

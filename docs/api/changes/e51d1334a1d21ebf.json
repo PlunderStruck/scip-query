@@ -1,0 +1,223 @@
+{
+  "acceptedAt": "2026-08-02T16:07:02.686Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "e51d1334a1d21ebf2bcbfa84afa51073cfac01ba0eac38ce9d0ca1874e95d6c4",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EvidenceOptions.",
+      "target": "./queries:EvidenceOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EvidencePart.",
+      "target": "./queries:EvidencePart"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EvidenceReferenceWindow.",
+      "target": "./queries:EvidenceReferenceWindow"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EvidenceRelatedSymbol.",
+      "target": "./queries:EvidenceRelatedSymbol"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EvidenceResult.",
+      "target": "./queries:EvidenceResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "RepositoryContextSourcePacket changed from interface RepositoryContextSourcePacket { slices: RepositoryContextSourceSlice[]; candidateSlices: number; omittedSlices: number; maxSlices: number; maxLinesPerSlice: number; ma... to interface RepositoryContextSourcePacket { slices: RepositoryContextSourceSlice[]; candidateSlices: number; omittedSlices: number; maxSlices: number; maxLinesPerSlice: number; ma....",
+      "target": "./queries:RepositoryContextSourcePacket"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "RepositoryContextSourceSlice changed from interface RepositoryContextSourceSlice extends RepositoryContextPrimaryCallable { role: 'target' | 'consumer' | 'reuse-candidate'; startLine: number; endLine: number; source: st... to interface RepositoryContextSourceSlice extends RepositoryContextPrimaryCallable { role: 'target' | 'consumer' | 'reuse-candidate'; startLine: number; endLine: number; source: st....",
+      "target": "./queries:RepositoryContextSourceSlice"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchMatch.",
+      "target": "./queries:SourceSearchMatch"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchOptions.",
+      "target": "./queries:SourceSearchOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchResult.",
+      "target": "./queries:SourceSearchResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TraceEvidenceResult.",
+      "target": "./queries:TraceEvidenceResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export evidence.",
+      "target": "./queries:evidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export searchSource.",
+      "target": "./queries:searchSource"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export traceEvidence.",
+      "target": "./queries:traceEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "RepositoryContextSourcePacket changed from interface RepositoryContextSourcePacket { slices: RepositoryContextSourceSlice[]; candidateSlices: number; omittedSlices: number; maxSlices: number; maxLinesPerSlice: number; ma... to interface RepositoryContextSourcePacket { slices: RepositoryContextSourceSlice[]; candidateSlices: number; omittedSlices: number; maxSlices: number; maxLinesPerSlice: number; ma....",
+      "target": "./queries/context:RepositoryContextSourcePacket"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "RepositoryContextSourceSlice changed from interface RepositoryContextSourceSlice extends RepositoryContextPrimaryCallable { role: 'target' | 'consumer' | 'reuse-candidate'; startLine: number; endLine: number; source: st... to interface RepositoryContextSourceSlice extends RepositoryContextPrimaryCallable { role: 'target' | 'consumer' | 'reuse-candidate'; startLine: number; endLine: number; source: st....",
+      "target": "./queries/context:RepositoryContextSourceSlice"
+    },
+    {
+      "classification": "additive",
+      "kind": "entry-added",
+      "message": "Added public declaration path ./queries/evidence.",
+      "target": "./queries/evidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EvidenceOptions.",
+      "target": "./queries/index:EvidenceOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EvidencePart.",
+      "target": "./queries/index:EvidencePart"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EvidenceReferenceWindow.",
+      "target": "./queries/index:EvidenceReferenceWindow"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EvidenceRelatedSymbol.",
+      "target": "./queries/index:EvidenceRelatedSymbol"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EvidenceResult.",
+      "target": "./queries/index:EvidenceResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "RepositoryContextSourcePacket changed from interface RepositoryContextSourcePacket { slices: RepositoryContextSourceSlice[]; candidateSlices: number; omittedSlices: number; maxSlices: number; maxLinesPerSlice: number; ma... to interface RepositoryContextSourcePacket { slices: RepositoryContextSourceSlice[]; candidateSlices: number; omittedSlices: number; maxSlices: number; maxLinesPerSlice: number; ma....",
+      "target": "./queries/index:RepositoryContextSourcePacket"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "RepositoryContextSourceSlice changed from interface RepositoryContextSourceSlice extends RepositoryContextPrimaryCallable { role: 'target' | 'consumer' | 'reuse-candidate'; startLine: number; endLine: number; source: st... to interface RepositoryContextSourceSlice extends RepositoryContextPrimaryCallable { role: 'target' | 'consumer' | 'reuse-candidate'; startLine: number; endLine: number; source: st....",
+      "target": "./queries/index:RepositoryContextSourceSlice"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchMatch.",
+      "target": "./queries/index:SourceSearchMatch"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchOptions.",
+      "target": "./queries/index:SourceSearchOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchResult.",
+      "target": "./queries/index:SourceSearchResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TraceEvidenceResult.",
+      "target": "./queries/index:TraceEvidenceResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export evidence.",
+      "target": "./queries/index:evidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export searchSource.",
+      "target": "./queries/index:searchSource"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export traceEvidence.",
+      "target": "./queries/index:traceEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "entry-added",
+      "message": "Added public declaration path ./queries/source-search.",
+      "target": "./queries/source-search"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TraceEvidenceResult.",
+      "target": "./queries/trace:TraceEvidenceResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export traceEvidence.",
+      "target": "./queries/trace:traceEvidence"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module source-snippet-<hash>.d.ts was added or renamed.",
+      "target": "source-snippet-<hash>.d.ts"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "dbcd0468ddfee65a5368f7f5f01b2afe33e36f2d8bd4c5d8a6b0804c30e4881d",
+  "reason": "The contract checker cannot prove optional interface additions are additive; the change only adds exports and optional fields, while existing trace and context call shapes remain valid.",
+  "schemaVersion": 1
+}

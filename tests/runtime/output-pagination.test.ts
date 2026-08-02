@@ -252,7 +252,7 @@ describe('universal CLI output pagination', () => {
     expect(result.stdout).not.toContain('"content":');
     expect(result.stdout).not.toContain('"kind":');
     expect(result.stdout).toContain(
-      "/usr/local/bin/node '/repo with spaces/dist/cli.js' demo 'target with spaces' --output-page-size 12000 --output-cursor",
+      `/usr/local/bin/node '/repo with spaces/dist/cli.js' demo 'target with spaces' --output-page-size ${DEFAULT_OUTPUT_PAGE_SIZE} --output-cursor`,
     );
   });
 
@@ -294,10 +294,10 @@ describe('universal CLI output pagination', () => {
     });
 
     expect(result.stdout).toBe(payload);
-    expect(result.stderr).toContain('JSON output exceeds 12000 characters');
+    expect(result.stderr).toContain(`JSON output exceeds ${DEFAULT_OUTPUT_PAGE_SIZE} characters`);
     expect(result.stderr).toContain('Do not use possibly partial client output as evidence');
     expect(result.stderr).toContain(
-      'Read every page with: pnpm exec scip-query demo --json --compact --output-page-size 12000',
+      `Read every page with: pnpm exec scip-query demo --json --compact --output-page-size ${DEFAULT_OUTPUT_PAGE_SIZE}`,
     );
     expect(result.stderr.match(/Read every page with:/gu)).toHaveLength(2);
   });

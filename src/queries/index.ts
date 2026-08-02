@@ -1,9 +1,11 @@
 export { stats } from './navigation/stats.js';
 export { files } from './navigation/files.js';
+export { searchSource } from './navigation/source-search.js';
 export { symbols } from './navigation/symbols.js';
 export { methods, resolveMethods } from './navigation/methods.js';
 export { refs } from './navigation/refs.js';
-export { trace } from './navigation/trace.js';
+export { trace, traceEvidence } from './navigation/trace.js';
+export { evidence } from './navigation/evidence.js';
 export { deps, rdeps } from './navigation/deps.js';
 export { system } from './navigation/system.js';
 export { surface } from './navigation/surface.js';
@@ -76,11 +78,19 @@ export { similarSignatures } from './cleanup/similar-signatures.js';
 
 export type { StatsResult } from './navigation/stats.js';
 export type { FileResult } from './navigation/files.js';
+export type { SourceSearchMatch, SourceSearchOptions, SourceSearchResult } from './navigation/source-search.js';
 export type { SymbolResult } from './navigation/symbols.js';
 export type { MethodResult, MethodsOwner, MethodsResolution, ResolveMethodsOptions } from './navigation/methods.js';
 export type { RefResult } from './navigation/refs.js';
 export type { DepResult } from './navigation/deps.js';
-export type { TraceResult } from './navigation/trace.js';
+export type { TraceEvidenceResult, TraceResult } from './navigation/trace.js';
+export type {
+  EvidenceOptions,
+  EvidencePart,
+  EvidenceReferenceWindow,
+  EvidenceRelatedSymbol,
+  EvidenceResult,
+} from './navigation/evidence.js';
 export type { SystemResult } from './navigation/system.js';
 export type { SurfaceResult } from './navigation/surface.js';
 export type { DeadSymbolResult, DeadSummary } from './cleanup/dead.js';

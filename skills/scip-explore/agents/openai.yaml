@@ -1,0 +1,4 @@
+interface:
+  display_name: 'SCIP Explore'
+  short_description: 'Explore indexed code through related evidence'
+  default_prompt: 'Use $scip-explore to map this code path before you change it.'

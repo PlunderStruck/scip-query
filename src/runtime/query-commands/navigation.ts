@@ -3,10 +3,13 @@ import { REPOSITORY_OBSERVATION_OPERATION } from '../command-operation.js';
 import type { CommandDescriptor, InvocationCoverage } from '../command-kit/command-descriptor-types.js';
 import {
   agentContract,
+  collectValues,
   compactOption,
   doc,
   option,
   parseInteger,
+  parseNonNegativeInteger,
+  parsePositiveInteger,
   withJsonOption,
 } from '../command-kit/command-spec-builders.js';
 import {
@@ -18,6 +21,7 @@ import {
   definedNumberOption,
   printJsonEnvelope,
   stringArg,
+  stringArrayOptionValue,
   stringOptionValue,
 } from '../command-kit/command-execution.js';
 import {
@@ -36,7 +40,7 @@ import {
 } from './symbol-resolution.js';
 import { directNavigationQueryCommandDescriptors } from './direct-navigation.js';
 
-function traceSections(result: ReturnType<typeof queries.trace>): ReportSection[] {
+function traceSections(result: ReturnType<typeof queries.traceEvidence>): ReportSection[] {
   const definitionRows: string[] = [];
   for (const d of result.definitions) {
     const sig = d.signature ? `  — ${d.signature}` : '';
@@ -60,11 +64,123 @@ function traceSections(result: ReturnType<typeof queries.trace>): ReportSection[
       prevFile = ref.relativePath;
     }
     refRows.push(`    line ${displayLine(ref.line)}  in ${ref.enclosingShort}`);
+    if (
+      ref.source !== undefined &&
+      ref.source !== null &&
+      ref.sourceStartLine !== undefined &&
+      ref.sourceStartLine !== null
+    ) {
+      refRows.push(renderSourceLines(ref.source, ref.sourceStartLine, new Set([ref.line]), '      '));
+    }
   }
 
   return [
     { title: 'DEFINITION', rows: definitionRows },
     { title: 'REFERENCED BY', rows: refRows },
+  ];
+}
+
+const EVIDENCE_PARTS = [
+  'definition',
+  'references',
+  'callers',
+  'callees',
+  'dependencies',
+  'consumers',
+] as const satisfies readonly queries.EvidencePart[];
+
+function selectedEvidenceParts(values: readonly string[]): queries.EvidencePart[] | undefined {
+  if (values.length === 0) return undefined;
+  const expanded = values
+    .flatMap((value) => value.split(','))
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (expanded.includes('all')) return [...EVIDENCE_PARTS];
+  const invalid = expanded.filter((value) => !EVIDENCE_PARTS.includes(value as queries.EvidencePart));
+  if (invalid.length > 0) {
+    throw new Error(`Unknown evidence part: ${invalid.join(', ')}. Use ${EVIDENCE_PARTS.join(', ')}, or all.`);
+  }
+  return [...new Set(expanded as queries.EvidencePart[])];
+}
+
+function renderSourceLines(
+  source: string,
+  startLine: number,
+  focusLines: ReadonlySet<number>,
+  indent = '    ',
+): string {
+  return source
+    .split('\n')
+    .map((line, index) => {
+      const sourceLine = startLine + index;
+      const marker = focusLines.has(sourceLine) ? '>' : ' ';
+      return `${indent}${marker}${String(displayLine(sourceLine)).padStart(5)}  ${line}`;
+    })
+    .join('\n');
+}
+
+function sourceSearchSections(result: queries.SourceSearchResult): ReportSection[] {
+  const rows = result.matches.map((match) => {
+    const owner = match.ownerShort ? `  in ${match.ownerShort}` : '';
+    return [
+      `  ${displayPathRange(match.relativePath, match.startLine, match.endLine)}${owner}`,
+      renderSourceLines(match.source, match.startLine, new Set([match.focusLine]), '    '),
+    ].join('\n');
+  });
+  if (result.omittedMatches > 0) rows.push(`  ... ${result.omittedMatches} more matching line(s); increase --limit.`);
+  return [{ title: 'SOURCE MATCHES', rows }];
+}
+
+function evidenceFailureMessage(result: queries.EvidenceResult): string | undefined {
+  if (result.kind === 'missing') return `No definition matched '${result.query}'.`;
+  if (result.kind !== 'ambiguous') return undefined;
+  const commands = result.candidates
+    .map((candidate) => `  scip-query evidence '${candidate.symbol.replaceAll("'", "'\\''")}'`)
+    .join('\n');
+  const shown = result.candidates.length;
+  const coverage = shown < result.total ? ` Showing the highest-ranked ${shown}; narrow by path or` : '';
+  return (
+    `Target '${result.query}' is ambiguous across ${result.total} definitions.${coverage} ` +
+    `run one listed exact command:\n${commands}`
+  );
+}
+
+function evidenceSections(result: queries.EvidenceResult): ReportSection[] {
+  if (result.kind !== 'matched') return [];
+  const definitionRows = result.definition
+    ? [
+        `  ${displayPathRange(result.definition.relativePath, result.definition.startLine, result.definition.endLine)}  ${result.definition.shortName}`,
+        renderSourceLines(result.definition.source, result.definition.startLine, new Set(), '    '),
+      ]
+    : [];
+  const referenceRows = result.referenceWindows.map((window) => {
+    const identities = window.references
+      .map((reference) => `${displayLine(reference.line)} in ${reference.enclosingShort}`)
+      .join(', ');
+    return [
+      `  ${displayPathRange(window.relativePath, window.startLine, window.endLine)}  references: ${identities}`,
+      renderSourceLines(
+        window.source,
+        window.startLine,
+        new Set(window.references.map((reference) => reference.line)),
+        '    ',
+      ),
+    ].join('\n');
+  });
+  const relatedRows = (rows: readonly queries.EvidenceRelatedSymbol[]) =>
+    rows.map((row) =>
+      [
+        `  ${displayPathRange(row.relativePath, row.startLine, row.endLine)}  ${row.shortName}${row.omittedLines > 0 ? `  (${row.omittedLines} line(s) omitted)` : ''}`,
+        renderSourceLines(row.source, row.startLine, new Set(), '    '),
+      ].join('\n'),
+    );
+  return [
+    { title: 'DEFINITION', rows: definitionRows, skipIfEmpty: true },
+    { title: 'REFERENCE SITES', rows: referenceRows, skipIfEmpty: true },
+    { title: 'CALLERS', rows: relatedRows(result.callers), skipIfEmpty: true },
+    { title: 'CALLEES', rows: relatedRows(result.callees), skipIfEmpty: true },
+    { title: 'DEPENDENCIES', rows: result.dependencies.map((row) => `  ${row.relativePath}`), skipIfEmpty: true },
+    { title: 'CONSUMERS', rows: result.consumers.map((row) => `  ${row.relativePath}`), skipIfEmpty: true },
   ];
 }
 
@@ -195,6 +311,61 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     query: ({ db, args }) => queries.files(db, stringArg(args, 0)),
     format: (r) => r.relativePath,
   }),
+  sectionedQueryCommand({
+    id: 'search',
+    command: 'search <text>',
+    description: 'Search literal or regular-expression text in indexed source with nearby code and symbol ownership',
+    options: [
+      option('-s, --scope <path>', 'Limit the search to indexed paths matching this text'),
+      option('-C, --context <n>', 'Source lines before and after each match', parseNonNegativeInteger, 2),
+      option('-n, --limit <n>', 'Maximum matching lines to return', parsePositiveInteger, 100),
+      option('--full', 'Return every matching line'),
+      option('--regexp', 'Treat the search text as a bounded regular expression'),
+      option('-i, --ignore-case', 'Ignore case'),
+    ],
+    agent: agentContract(
+      'Where does this exact text occur in indexed source, and which symbol owns each line?',
+      'matching source windows, file and line identities, owning symbols, and coverage',
+      ['pattern'],
+      'bounded',
+    ),
+    docs: doc('Navigation', ["scip-query search 'eventName'", "scip-query search 'send.*event' --regexp --scope src"]),
+    query: ({ db, args, opts }) =>
+      queries.searchSource(db, stringArg(args, 0), {
+        scope: stringOptionValue(opts, 'scope'),
+        context: definedNumberOption(opts, 'context', 2),
+        limit: definedLimitOption(opts, 'limit', 100),
+        regexp: booleanOptionValue(opts, 'regexp'),
+        ignoreCase: booleanOptionValue(opts, 'ignoreCase'),
+      }),
+    emptyMessage: (result) =>
+      result.matchingLines === 0 ? `No indexed source line matched '${result.pattern}'.` : undefined,
+    coverage: (result) =>
+      result.omittedMatches === 0
+        ? {
+            complete: true,
+            totalKnown: true,
+            returned: result.matches.length,
+            total: result.matchingLines,
+            omitted: 0,
+          }
+        : {
+            complete: false,
+            totalKnown: true,
+            returned: result.matches.length,
+            total: result.matchingLines,
+            omitted: result.omittedMatches,
+          },
+    agentResult: (result) => ({
+      mode: result.mode,
+      scannedFiles: result.scannedFiles,
+      returnedMatches: result.matches.length,
+      totalMatches: result.matchingLines,
+      omittedMatches: result.omittedMatches,
+      matchIdentities: result.matches.map((match) => `${match.relativePath}:${displayLine(match.focusLine)}`),
+    }),
+    sections: sourceSearchSections,
+  }),
   {
     id: 'methods',
     command: 'methods <className>',
@@ -232,7 +403,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       ],
     },
     docs: doc('Navigation', ['scip-query trace parseSymbol']),
-    query: ({ db, args, budget }) => queries.trace(db, stringArg(args, 0), { semantic: budget.semantic }),
+    query: ({ db, args, budget }) => queries.traceEvidence(db, stringArg(args, 0), { semantic: budget.semantic }),
     emptyMessage: (result, { db, args }) =>
       result.definitions.length === 0 && result.referencedBy.length === 0
         ? symbolResolutionEmptyMessage(db, stringArg(args, 0), 'No trace rows found.')
@@ -254,6 +425,81 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       referenceIdentities: result.referencedBy.map((reference) => `${reference.relativePath}:${reference.line}`),
     }),
     sections: traceSections,
+  }),
+  budgetedSectionedQueryCommand({
+    id: 'evidence',
+    command: 'evidence <symbol>',
+    description: 'Compose related source for one exact symbol in a single evidence view',
+    options: [
+      option(
+        '--include <part>',
+        'Add definition, references, callers, callees, dependencies, consumers, or all; repeat or comma-separate',
+        collectValues,
+        [],
+      ),
+      option('-C, --context <n>', 'Source lines before and after each reference', parseNonNegativeInteger, 2),
+      option('--related-source-lines <n>', 'Maximum source lines for each caller or callee', parsePositiveInteger, 80),
+      option('--full', 'Run unbounded semantic analysis on large indexes'),
+    ],
+    budget: 'semantic',
+    agent: {
+      operation: REPOSITORY_OBSERVATION_OPERATION,
+      answers: [
+        'Where is this exact symbol defined, and what source uses it?',
+        'Which related callers, callees, dependencies, or consumers must be read together?',
+      ],
+      returns: [
+        'definition source',
+        'deduplicated reference-centered source windows',
+        'selected related symbol source and file relationships',
+        'explicit ambiguity failure with exact rerun commands',
+      ],
+      inputs: ['symbol'],
+      coverage: 'bounded',
+    },
+    docs: doc('Navigation', [
+      'scip-query evidence appendEvent',
+      'scip-query evidence appendEvent --include definition,references,callers,callees',
+    ]),
+    query: ({ db, args, opts, budget }) =>
+      queries.evidence(db, stringArg(args, 0), {
+        parts: selectedEvidenceParts(stringArrayOptionValue(opts, 'include')),
+        referenceContext: definedNumberOption(opts, 'context', 2),
+        relatedSourceLines: definedNumberOption(opts, 'relatedSourceLines', 80),
+        semantic: budget.semantic,
+      }),
+    emptyMessage: evidenceFailureMessage,
+    before: (result) => {
+      if (result.kind !== 'matched') process.exitCode = 1;
+    },
+    coverage: (result, { budget }) => {
+      if (result.kind !== 'matched') return { complete: true, totalKnown: true, returned: 0, total: 0, omitted: 0 };
+      const returned =
+        (result.definition ? 1 : 0) +
+        result.referenceWindows.reduce((total, window) => total + window.references.length, 0) +
+        result.callers.length +
+        result.callees.length +
+        result.dependencies.length +
+        result.consumers.length;
+      return budget.analysisBudget
+        ? { complete: false, totalKnown: false, returned }
+        : { complete: true, totalKnown: true, returned, total: returned, omitted: 0 };
+    },
+    agentResult: (result) =>
+      result.kind === 'matched'
+        ? {
+            symbol: result.symbol,
+            file: result.file,
+            parts: result.parts,
+            referenceSites: result.referenceWindows.reduce((total, window) => total + window.references.length, 0),
+            sourceWindows: result.referenceWindows.length,
+            callers: result.callers.length,
+            callees: result.callees.length,
+            dependencies: result.dependencies.length,
+            consumers: result.consumers.length,
+          }
+        : result,
+    sections: evidenceSections,
   }),
   listQueryCommand({
     id: 'deps',

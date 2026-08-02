@@ -20,6 +20,22 @@ import { orderedQueryCommandDescriptors } from './query-command-specs.js';
 
 export const commandDescriptors: CommandDescriptor[] = [
   {
+    id: 'hook-architecture-stop',
+    command: 'hook-architecture-stop',
+    hidden: true,
+    agent: agentContract(
+      'Did indexed source changes preserve the repository architecture policy?',
+      'architecture policy decision and enforced finding identities',
+      [],
+      'complete',
+      'diff',
+      commandOperation('repository-observation'),
+    ),
+    description: 'Internal architecture-only Stop hook',
+    renderShape: 'custom',
+    handler: handlers.handleArchitectureStopHook,
+  },
+  {
     id: 'reindex',
     command: 'reindex',
     agent: agentContract(

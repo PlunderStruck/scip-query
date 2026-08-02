@@ -4,6 +4,7 @@ import { referenceSitesForSymbol } from '../../symbols/references/reference-site
 import { getSourceText } from '../../source/primitives/source-text.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
+import { sourceSnippet } from './source-snippet.js';
 
 export interface TraceResult {
   definitions: Array<{
@@ -21,9 +22,38 @@ export interface TraceResult {
   }>;
 }
 
+export interface TraceEvidenceResult {
+  definitions: TraceResult['definitions'];
+  referencedBy: Array<
+    TraceResult['referencedBy'][number] & {
+      sourceStartLine: number | null;
+      sourceEndLine: number | null;
+      source: string | null;
+    }
+  >;
+}
+
 // scip-query: ignore-extract — trace is the user-facing evidence assembly:
 // definition metadata plus source-scan references with mention fallback.
 export function trace(db: ScipDatabase, symbolPattern: string, opts: { semantic?: boolean } = {}): TraceResult {
+  const result = traceEvidence(db, symbolPattern, opts);
+  return {
+    definitions: result.definitions,
+    referencedBy: result.referencedBy.map((reference) => ({
+      relativePath: reference.relativePath,
+      line: reference.line,
+      enclosingSymbol: reference.enclosingSymbol,
+      enclosingShort: reference.enclosingShort,
+    })),
+  };
+}
+
+/** Trace a symbol and include bounded source around each reference. */
+export function traceEvidence(
+  db: ScipDatabase,
+  symbolPattern: string,
+  opts: { semantic?: boolean; referenceContext?: number } = {},
+): TraceEvidenceResult {
   const match = findFirstSymbolMatch(db, symbolPattern);
   if (!match) {
     return { definitions: [], referencedBy: [] };
@@ -47,15 +77,22 @@ export function trace(db: ScipDatabase, symbolPattern: string, opts: { semantic?
         },
       ];
 
+  const referenceContext = opts.referenceContext ?? 2;
   const referencedBy = referenceSitesForSymbol(db, match, {
     semantic: opts.semantic,
     semanticEvidence: symbolSemanticEvidence,
-  }).map((site) => ({
-    relativePath: site.file,
-    line: site.line,
-    enclosingSymbol: site.enclosingSymbol,
-    enclosingShort: site.enclosingSymbol ? shortenSymbol(site.enclosingSymbol) : '(top-level)',
-  }));
+  }).map((site) => {
+    const snippet = sourceSnippet(db, site.file, site.line, referenceContext);
+    return {
+      relativePath: site.file,
+      line: site.line,
+      enclosingSymbol: site.enclosingSymbol,
+      enclosingShort: site.enclosingSymbol ? shortenSymbol(site.enclosingSymbol) : '(top-level)',
+      sourceStartLine: snippet?.startLine ?? null,
+      sourceEndLine: snippet?.endLine ?? null,
+      source: snippet?.source ?? null,
+    };
+  });
 
   return { definitions, referencedBy };
 }

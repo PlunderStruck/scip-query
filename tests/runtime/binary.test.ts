@@ -36,6 +36,14 @@ describe('resolveSpawnableExecutable', () => {
     expect(resolved).toBe('/usr/local/bin/scip-typescript');
   });
 
+  it('makes a relative POSIX lookup stable across later working-directory changes', () => {
+    const resolved = resolveSpawnableExecutable('scip-typescript', {
+      isWindows: false,
+      lookup: () => './node_modules/.bin/scip-typescript\n',
+    });
+    expect(resolved).toBe(`${process.cwd()}/node_modules/.bin/scip-typescript`);
+  });
+
   it('rejects Windows shim scripts and picks only real executables', () => {
     const shimOnly = resolveSpawnableExecutable('scip-typescript', {
       isWindows: true,

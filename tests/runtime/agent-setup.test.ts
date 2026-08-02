@@ -35,12 +35,15 @@ describe('setupAgent', () => {
 
     expect(result.written).toEqual(['AGENTS.md', 'CLAUDE.md']);
     const agentsMd = readFileSync(join(projectRoot, 'AGENTS.md'), 'utf8');
+    expect(agentsMd).toContain('primary code exploration surface');
+    expect(agentsMd).toContain('scip-query search <text>');
+    expect(agentsMd).toContain('scip-query evidence <symbol>');
     expect(agentsMd).toContain('scip-query context <target>');
     expect(agentsMd).toContain('scip-query diff-impact');
     expect(agentsMd).toContain('scip-query architecture');
     expect(agentsMd).toContain('React, Vue, duplication, complexity, drift, and cleanup candidates');
     expect(agentsMd).toContain('.scipquery/suppressions/*.json');
-    expect(agentsMd).not.toMatch(/diff-gate|Stop hook|Gherkin|goal record|obligation/i);
+    expect(agentsMd).not.toMatch(/diff-gate|Gherkin|goal record|obligation/i);
     expect(readFileSync(join(projectRoot, 'CLAUDE.md'), 'utf8')).toContain('@AGENTS.md');
   });
 

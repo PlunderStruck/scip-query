@@ -15,7 +15,7 @@ import { deps, rdeps, type DepResult } from '../navigation/deps.js';
 import { slice, type SliceResult } from '../navigation/slice.js';
 import { surface, type SurfaceResult } from '../navigation/surface.js';
 import { system, type SystemResult } from '../navigation/system.js';
-import { trace, type TraceResult } from '../navigation/trace.js';
+import { traceEvidence, type TraceEvidenceResult, type TraceResult } from '../navigation/trace.js';
 import { definitionSourceSnippet } from '../cleanup/duplicate-bodies.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { resolveIndexedPaths } from '../internal/file-resolution.js';
@@ -91,6 +91,8 @@ export interface RepositoryContextSourceSlice extends RepositoryContextPrimaryCa
   endLine: number;
   source: string;
   omittedLines: number;
+  /** Exact reference lines inside a consumer-centered source window. */
+  focusLines?: number[];
 }
 
 export interface RepositoryContextSourcePacket {
@@ -100,6 +102,9 @@ export interface RepositoryContextSourcePacket {
   maxSlices: number;
   maxLinesPerSlice: number;
   maxTotalLines: number;
+  targetLineLimit?: number;
+  consumerContextLines?: number;
+  reuseLineLimit?: number;
 }
 
 export interface RepositoryContextResult {
@@ -142,9 +147,11 @@ const PER_CONSUMER_SEARCH_LIMIT = 10;
 const PER_CONSUMER_REUSE_LIMIT = 3;
 const AFFECTED_CONSUMER_REUSE_LIMIT = 8;
 const MIN_SINGLE_CONSUMER_SIGNAL_SIMILARITY = 0.7;
-const SOURCE_PACKET_SLICE_LIMIT = 8;
-const SOURCE_PACKET_LINES_PER_SLICE = 40;
-const SOURCE_PACKET_TOTAL_LINE_LIMIT = 200;
+const SOURCE_PACKET_SLICE_LIMIT = 24;
+const SOURCE_PACKET_TARGET_LINE_LIMIT = 200;
+const SOURCE_PACKET_CONSUMER_CONTEXT_LINES = 12;
+const SOURCE_PACKET_REUSE_LINE_LIMIT = 80;
+const SOURCE_PACKET_TOTAL_LINE_LIMIT = 600;
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; target resolution, evidence gathering, and plan rendering stay together.
 export function repositoryContext(
@@ -163,7 +170,7 @@ export function repositoryContext(
     ? profileRepositoryContextComponent(
         'trace',
         graphTarget,
-        () => trace(db, graphTarget, { semantic }),
+        () => traceEvidence(db, graphTarget, { semantic, referenceContext: SOURCE_PACKET_CONSUMER_CONTEXT_LINES }),
         (result) => ({
           definitions: result.definitions.length,
           references: result.referencedBy.length,
@@ -379,7 +386,7 @@ export function repositoryContext(
     history: profileRepositoryContextComponent('history', historyFile ?? target, () =>
       buildRepositoryContextHistory(db, historyFile, opts.gitHead),
     ),
-    trace: traceResult,
+    trace: stripTraceSourceEvidence(traceResult),
     callGraph: callGraphResult,
     complexity: complexityResult,
     dataflow: dataflowResult,
@@ -404,6 +411,18 @@ export function repositoryContext(
   };
 }
 
+function stripTraceSourceEvidence(result: TraceEvidenceResult): TraceResult {
+  return {
+    definitions: result.definitions,
+    referencedBy: result.referencedBy.map((reference) => ({
+      relativePath: reference.relativePath,
+      line: reference.line,
+      enclosingSymbol: reference.enclosingSymbol,
+      enclosingShort: reference.enclosingShort,
+    })),
+  };
+}
+
 interface PrimaryCallableResolution {
   primary: ReturnType<typeof getDefinitionsForFile>[number] | null;
   callableCount: number;
@@ -424,39 +443,29 @@ function resolveRepositoryContextPrimaryCallable(db: ScipDatabase, target: strin
 function buildRepositoryContextSourcePacket(
   db: ScipDatabase,
   targetSymbol: string | null,
-  traceResult: TraceResult,
+  traceResult: TraceEvidenceResult,
   consumerReuse: RepositoryContextConsumerReuse,
   targetReuse: readonly SimilarSymbolResult[],
 ): RepositoryContextSourcePacket {
-  const candidates: Array<{
+  const definitionCandidates: Array<{
     definition: IndexedDefinition | null;
-    role: RepositoryContextSourceSlice['role'];
+    role: 'target' | 'reuse-candidate';
   }> = [
     ...(targetSymbol ? [{ definition: resolveIndexedDefinition(db, targetSymbol), role: 'target' as const }] : []),
-    ...affectedConsumers(traceResult).map((consumer) => ({
-      definition: resolveIndexedDefinition(db, consumer.symbol),
-      role: 'consumer' as const,
-    })),
     ...[...consumerReuse.candidates.map((item) => item.candidate), ...targetReuse].map((candidate) => ({
       definition: resolveIndexedDefinition(db, candidate.symbolB),
       role: 'reuse-candidate' as const,
     })),
   ];
-  const unique = new Map<string, { definition: IndexedDefinition; role: RepositoryContextSourceSlice['role'] }>();
-  for (const candidate of preferCallablePlanSourceCandidates(candidates)) {
-    if (unique.has(candidate.definition.symbol)) continue;
-    unique.set(candidate.definition.symbol, { definition: candidate.definition, role: candidate.role });
-  }
-
-  const slices: RepositoryContextSourceSlice[] = [];
-  let remainingLines = SOURCE_PACKET_TOTAL_LINE_LIMIT;
-  for (const candidate of unique.values()) {
-    if (slices.length >= SOURCE_PACKET_SLICE_LIMIT || remainingLines <= 0) break;
+  const definitionSlices = new Map<string, RepositoryContextSourceSlice>();
+  for (const candidate of preferCallablePlanSourceCandidates(definitionCandidates)) {
+    if (definitionSlices.has(candidate.definition.symbol)) continue;
     const source = definitionSourceSnippet(db, candidate.definition);
     if (!source) continue;
     const lines = source.split('\n');
-    const kept = Math.min(lines.length, SOURCE_PACKET_LINES_PER_SLICE, remainingLines);
-    slices.push({
+    const lineLimit = candidate.role === 'target' ? SOURCE_PACKET_TARGET_LINE_LIMIT : SOURCE_PACKET_REUSE_LINE_LIMIT;
+    const kept = Math.min(lines.length, lineLimit);
+    definitionSlices.set(candidate.definition.symbol, {
       role: candidate.role,
       symbol: candidate.definition.symbol,
       shortName: leafName(candidate.definition.symbol),
@@ -466,15 +475,64 @@ function buildRepositoryContextSourcePacket(
       source: lines.slice(0, kept).join('\n'),
       omittedLines: Math.max(0, lines.length - kept),
     });
+  }
+
+  const consumerSlices = new Map<string, RepositoryContextSourceSlice>();
+  for (const reference of traceResult.referencedBy) {
+    if (reference.source === undefined || reference.source === null) continue;
+    if (reference.sourceStartLine === undefined || reference.sourceStartLine === null) continue;
+    if (reference.sourceEndLine === undefined || reference.sourceEndLine === null) continue;
+    const key = `${reference.relativePath}:${reference.sourceStartLine}-${reference.sourceEndLine}`;
+    const existing = consumerSlices.get(key);
+    if (existing) {
+      existing.focusLines = [...new Set([...(existing.focusLines ?? []), reference.line])].sort((a, b) => a - b);
+      continue;
+    }
+    consumerSlices.set(key, {
+      role: 'consumer',
+      symbol: reference.enclosingSymbol ?? `${reference.relativePath}:${reference.line}`,
+      shortName: reference.enclosingShort,
+      file: reference.relativePath,
+      startLine: reference.sourceStartLine,
+      endLine: reference.sourceEndLine,
+      source: reference.source,
+      omittedLines: 0,
+      focusLines: [reference.line],
+    });
+  }
+
+  const candidates = [
+    ...[...definitionSlices.values()].filter((slice) => slice.role === 'target'),
+    ...consumerSlices.values(),
+    ...[...definitionSlices.values()].filter((slice) => slice.role === 'reuse-candidate'),
+  ];
+  const slices: RepositoryContextSourceSlice[] = [];
+  let remainingLines = SOURCE_PACKET_TOTAL_LINE_LIMIT;
+  for (const candidate of candidates) {
+    if (slices.length >= SOURCE_PACKET_SLICE_LIMIT || remainingLines <= 0) break;
+    const lines = candidate.source.split('\n');
+    const kept = Math.min(lines.length, remainingLines);
+    slices.push({
+      ...candidate,
+      endLine: candidate.startLine + kept - 1,
+      source: lines.slice(0, kept).join('\n'),
+      omittedLines: candidate.omittedLines + Math.max(0, lines.length - kept),
+      ...(candidate.focusLines
+        ? { focusLines: candidate.focusLines.filter((line) => line <= candidate.startLine + kept - 1) }
+        : {}),
+    });
     remainingLines -= kept;
   }
   return {
     slices,
-    candidateSlices: unique.size,
-    omittedSlices: Math.max(0, unique.size - slices.length),
+    candidateSlices: candidates.length,
+    omittedSlices: Math.max(0, candidates.length - slices.length),
     maxSlices: SOURCE_PACKET_SLICE_LIMIT,
-    maxLinesPerSlice: SOURCE_PACKET_LINES_PER_SLICE,
+    maxLinesPerSlice: SOURCE_PACKET_TARGET_LINE_LIMIT,
     maxTotalLines: SOURCE_PACKET_TOTAL_LINE_LIMIT,
+    targetLineLimit: SOURCE_PACKET_TARGET_LINE_LIMIT,
+    consumerContextLines: SOURCE_PACKET_CONSUMER_CONTEXT_LINES,
+    reuseLineLimit: SOURCE_PACKET_REUSE_LINE_LIMIT,
   };
 }
 

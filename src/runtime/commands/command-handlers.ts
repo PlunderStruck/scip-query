@@ -81,6 +81,7 @@ import {
 import {
   booleanOptionValue,
   commandOptions,
+  dbCommand,
   numberOptionValue,
   printJsonEnvelope,
   stringArrayOptionValue,
@@ -89,11 +90,25 @@ import {
 import { printIsolatedAnalysisResult } from '../isolated-analysis-runner.js';
 import { sanitizeTerminalLine } from '../../platform/terminal-output.js';
 import { reindexConfiguredProject } from '../project-reindex.js';
+import { evaluateArchitectureStop, renderArchitectureStopOutput } from './architecture-stop-hook.js';
 
 // Descriptor-backed query commands live under runtime/query-commands/*.
 // This file owns side-effect lifecycles such as reindex, setup, watch, and
 // install commands.
 const SUPPORTED_LANGUAGE_SET = new Set<SupportedLanguage>(SUPPORTED_LANGUAGES);
+
+export const handleArchitectureStopHook = dbCommand(({ db }) => {
+  try {
+    const evaluation = evaluateArchitectureStop(resolveProjectRoot(), db);
+    process.stdout.write(`${JSON.stringify(renderArchitectureStopOutput(evaluation))}\n`);
+  } catch (error) {
+    const reason =
+      'scip-query could not verify architecture at Stop: ' +
+      `${error instanceof Error ? error.message : String(error)}. ` +
+      'The Stop was blocked because the architecture result is unknown.';
+    process.stdout.write(`${JSON.stringify({ decision: 'block', reason })}\n`);
+  }
+});
 
 function supportedLanguages(values: readonly string[]): SupportedLanguage[] {
   return values.filter((value): value is SupportedLanguage => SUPPORTED_LANGUAGE_SET.has(value as SupportedLanguage));
@@ -545,7 +560,7 @@ export function handleSetupAgent(rawOpts: unknown): void {
   }
   if (evaluation.ready > 0) {
     console.log(
-      'Configured agents can use compiler-backed context, impact, architecture, and health evidence without lifecycle hooks.',
+      'Configured agents can use compiler-backed exploration, impact, architecture, and health evidence. When declared architecture rules are ready, setup also installs the local architecture-only Stop hook.',
     );
   }
   process.exitCode = evaluation.verdict === 'ready' ? 0 : 1;

@@ -31,9 +31,11 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 | Command | Description | Options |
 |---|---|---|
 | `files <pattern>` | Find files matching a pattern | `--json`<br>`--result-only`<br>`--compact` |
+| `search <text>` | Search literal or regular-expression text in indexed source with nearby code and symbol ownership | `-s, --scope <path>`<br>`-C, --context <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--regexp`<br>`-i, --ignore-case`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `methods <className>` | List methods of one exactly resolved class; ambiguity and missing targets fail explicitly | `--json`<br>`--result-only`<br>`--compact` |
 | `refs <symbol>` | Find all files referencing a symbol | `--full`<br>`-n, --limit <n>`<br>`--cursor <cursor>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `trace <symbol>` | Trace a symbol: definition + all references | `--full`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `evidence <symbol>` | Compose related source for one exact symbol in a single evidence view | `--include <part>`<br>`-C, --context <n>`<br>`--related-source-lines <n>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `deps <file>` | Files this file depends on (internal) | `--json`<br>`--result-only`<br>`--compact` |
 | `rdeps <file>` | Files that depend on this file/module | `--json`<br>`--result-only`<br>`--compact` |
 | `system <module>` | Full module map: files, symbols, deps in/out | `--json`<br>`--result-only`<br>`--compact` |
@@ -134,7 +136,7 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 
 | Command | Description | Options |
 |---|---|---|
-| `install-skills` | Install skills (scip-query) into Claude Code, Codex, and shared agent roots | - |
+| `install-skills` | Install skills (scip-query, scip-explore, concrete-plan) into Claude Code, Codex, and shared agent roots | - |
 | `check-deps` | Check whether scip-query and the detected language indexers are runnable | - |
 | `capabilities` | Report which mapping and analysis capabilities are available in this project | `--matrix`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `init` | Create a .scipquery.json configuration file for this project | - |

@@ -43,9 +43,9 @@ describe('skill installation', () => {
     expect([...module.BUILTIN_SKILLS].sort()).toEqual(readdirSync(join(process.cwd(), 'skills')).sort());
   });
 
-  it('ships one primary workflow skill', async () => {
+  it('ships one primary router and two focused workflow skills', async () => {
     const { module } = await loadSetup();
-    expect(module.BUILTIN_SKILLS).toEqual(['scip-query']);
+    expect(module.BUILTIN_SKILLS).toEqual(['scip-query', 'scip-explore', 'concrete-plan']);
   });
 
   it('installs every bundled skill into Claude, Codex, and shared agent roots', async () => {

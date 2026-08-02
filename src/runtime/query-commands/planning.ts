@@ -259,6 +259,15 @@ function decisionCoverageRows(
     rows.push(
       `  Source packet: ${result.sourcePacket.slices.length}/${result.sourcePacket.candidateSlices} slice(s); ${result.sourcePacket.omittedSlices} omitted; at most ${result.sourcePacket.maxSlices} slices, ${result.sourcePacket.maxLinesPerSlice} lines per slice, and ${result.sourcePacket.maxTotalLines} lines total.`,
     );
+    if (
+      result.sourcePacket.targetLineLimit !== undefined &&
+      result.sourcePacket.consumerContextLines !== undefined &&
+      result.sourcePacket.reuseLineLimit !== undefined
+    ) {
+      rows.push(
+        `  Source roles: target up to ${result.sourcePacket.targetLineLimit} lines; consumer windows center on each use with ${result.sourcePacket.consumerContextLines} context lines; reuse candidates use up to ${result.sourcePacket.reuseLineLimit} lines.`,
+      );
+    }
   }
   if (result.warnings.length > 0) rows.push(...result.warnings.map((warning) => `  Warning: ${warning}`));
   rows.push(
@@ -394,9 +403,11 @@ function sourcePacketRows(result: queries.RepositoryContextResult): string[] {
       `  ${slice.role.padEnd(15)} ${displayPathRange(slice.file, slice.startLine, slice.endLine)}  ${slice.shortName}`,
     );
     rows.push(
-      ...slice.source
-        .split('\n')
-        .map((line, index) => `    ${String(displayLine(slice.startLine + index)).padStart(4)}  ${line}`),
+      ...slice.source.split('\n').map((line, index) => {
+        const sourceLine = slice.startLine + index;
+        const marker = slice.focusLines?.includes(sourceLine) ? '>' : ' ';
+        return `   ${marker}${String(displayLine(sourceLine)).padStart(4)}  ${line}`;
+      }),
     );
     if (slice.omittedLines > 0) rows.push(`    ... ${slice.omittedLines} more line(s) in this callable`);
   }

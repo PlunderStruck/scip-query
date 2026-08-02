@@ -11,9 +11,11 @@ import { tlaQueryCommandDescriptors } from '../query-commands/tla.js';
 const queryCommandOrder = [
   'stats',
   'files',
+  'search',
   'methods',
   'refs',
   'trace',
+  'evidence',
   'deps',
   'rdeps',
   'system',

@@ -34,7 +34,7 @@ import { encodeCursorPayload } from './cursor-codec.js';
 
 export const CLI_OUTPUT_PAGE_KIND = 'scip-query-output-page' as const;
 export const CLI_OUTPUT_PAGE_SCHEMA_VERSION = 1 as const;
-export const DEFAULT_OUTPUT_PAGE_SIZE = 12_000;
+export const DEFAULT_OUTPUT_PAGE_SIZE = 32_000;
 export const MIN_OUTPUT_PAGE_SIZE = 256;
 export const MAX_OUTPUT_PAGE_SIZE = 100_000;
 export const MAX_OUTPUT_CURSOR_LENGTH = 4_096;
