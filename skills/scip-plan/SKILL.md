@@ -58,7 +58,11 @@ watcher polling, or `reindex` to an ordinary planning loop.
 4. Write one plan without repeating the same fact in prose and structured
    data. State a short observable goal, the current owner and flow, each file's
    role and reason, reuse decisions, behavior to preserve, artifacts to retire,
-   architecture constraints, and checks. Omit empty headings.
+   architecture constraints, and checks. For every direct reuse option in the
+   packet, compare its responsibility and observable behavior with the changed
+   path. Reuse the existing owner when they match. Its absence from the current
+   path is not evidence for separate ownership; reject it only for a concrete
+   behavioral or boundary difference. Omit empty headings.
 5. Only sustained work adds one `scip-query-plan` fence and runs
    `scip-query plan apply <path>`. Use `scip-query plan example` only then.
 6. Implement the smallest coherent slice. Load `scip-verify` only after that

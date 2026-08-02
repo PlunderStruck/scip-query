@@ -450,6 +450,7 @@ describe('CLI contract', () => {
     expect(planSkill).toContain('target the current owner or artifact being removed');
     expect(planSkill).toContain('Treat the source packet as the read');
     expect(planSkill).toContain('follow-up SCIP commands in parallel with it');
+    expect(planSkill).toContain('path is not evidence for separate ownership');
     expect(readSkill('scip-audit')).toContain('Do not select when the user asks to edit');
     expect(readSkill('scip-improve')).toContain('Continue through those slices autonomously');
     const verifySkill = readSkill('scip-verify');

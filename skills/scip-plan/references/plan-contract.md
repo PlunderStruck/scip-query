@@ -87,6 +87,10 @@ objects.
 - `reuse` is for one existing symbol that must remain the single owner of a
   responsibility used by at least two named affected seeds. Use `consumers` to
   name those seed IDs. Leave it empty when no concrete shared owner exists.
+  Resolve every direct reuse option from `plan-context` by comparing its
+  responsibility and observable behavior with the changed path. Existing
+  wiring or reachability is not a semantic difference. Separate ownership
+  needs a concrete behavior, lifecycle, or architecture-boundary difference.
 - `architecture` uses the repository's configured policy. A clean generic gate
   cannot prove an ownership rule that is not encoded in that policy.
 - `evidence` maps short IDs to checks that could expose a false condition. A

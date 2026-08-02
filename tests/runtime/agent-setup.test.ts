@@ -60,6 +60,7 @@ describe('setupAgent', () => {
     expect(agentsMd).toContain('When protected work activation says Stop is blocking, finish the response');
     expect(agentsMd).toContain('use `scip-plan` as the one pre-edit scip specialist');
     expect(agentsMd).toContain('Treat source packet lines as already read');
+    expect(agentsMd).toContain('current wiring alone does not justify duplicate ownership');
     expect(agentsMd).toContain('finish the response to activate Stop');
     expect(agentsMd).toContain('do not search for a Stop tool or inspect CLI and controller help');
     expect(agentsMd).toContain('Evidence commands obtain a fresh usable index internally');

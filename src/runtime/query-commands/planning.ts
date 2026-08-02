@@ -570,12 +570,12 @@ function planningNoteRows(result: queries.PlanContextResult): string[] {
   }
   if (result.reuseCandidates?.some((candidate) => candidate.actionTier === 'direct')) {
     rows.push(
-      '  A direct reuse option requires a plan decision. Select its current owner, or record concrete semantic evidence for separate ownership.',
+      '  A direct reuse option requires a responsibility and behavior comparison. Reuse the existing owner when they match. Current wiring or reachability alone does not justify separate ownership; rejection needs a concrete behavioral or boundary difference.',
     );
   }
   if (planContextConsumerReuse(result).candidates.length > 0) {
     rows.push(
-      '  An affected-consumer reuse option can own surrounding behavior that target-only comparison cannot see. Resolve each direct option before editing.',
+      '  An affected-consumer reuse option can own surrounding behavior that target-only comparison cannot see. Compare each direct option before editing, and keep duplicate ownership only for a concrete behavioral or boundary difference.',
     );
   }
   return rows;

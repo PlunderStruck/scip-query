@@ -22,6 +22,7 @@ describe('plan-context decision packet', () => {
     expect(output).toContain('src/run-task.ts:11-14');
     expect(output).toContain('direct  src/consumer.ts:8');
     expect(output).toContain('src/existing-owner.ts');
+    expect(output).toContain('Current wiring or reachability alone does not justify separate ownership');
     expect(output).toContain('scip-query refs runTask --full');
     expect(output).toContain('scip-query plan-context runTask --detail');
     expect(output).toContain('Source packet: 1/1 slice(s)');
