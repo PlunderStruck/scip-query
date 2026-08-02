@@ -22,6 +22,10 @@
         "paths": ["src/analysis/**"]
       },
       {
+        "name": "change-control",
+        "paths": ["src/change-control/**"]
+      },
+      {
         "name": "domain",
         "paths": ["src/domain/**"]
       },
@@ -197,6 +201,7 @@
     ],
     "allowedDependencies": {
       "analysis": ["domain", "source", "storage", "symbols-core", "symbols-graph"],
+      "change-control": ["domain"],
       "domain": [],
       "filesystem": [],
       "instrumentation": [],
@@ -252,6 +257,7 @@
       ],
       "queries-impact": [
         "analysis",
+        "change-control",
         "domain",
         "instrumentation",
         "platform",
@@ -315,6 +321,7 @@
       "reindex-vue": ["platform", "reindex-augmentation"],
       "runtime-command-kit": ["runtime-services", "storage"],
       "runtime-commands": [
+        "change-control",
         "domain",
         "instrumentation",
         "platform",
@@ -393,7 +400,7 @@
         "symbols-graph"
       ],
       "source": ["domain", "platform", "storage"],
-      "storage": ["domain", "filesystem", "instrumentation", "platform"],
+      "storage": ["change-control", "domain", "filesystem", "instrumentation", "platform"],
       "symbols-core": ["domain", "source", "storage"],
       "symbols-graph": ["domain", "instrumentation", "source", "storage", "symbols-core", "symbols-references"],
       "symbols-references": ["domain", "instrumentation", "source", "storage", "symbols-core"],

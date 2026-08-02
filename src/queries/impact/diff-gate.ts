@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import type { ScipDatabase } from '../../storage/db.js';
+import type { PlanContractRecordV1 } from '../../change-control/plan-contract.js';
 import { isEntrySurface, isRootedSymbol } from '../../analysis/file-classifier.js';
 import { gitEvidenceProduct } from '../../analysis/git-history.js';
 import type { CoChangeCommitScope, CoChangeRecency, CoChangeSubjectContext } from '../../analysis/git-history.js';
@@ -57,7 +58,9 @@ import { readSuppressionDir } from '../../storage/suppression-store.js';
 import type { RecordCompatibilitySummary } from '../../domain/record-compatibility.js';
 import { isCallableSymbol, leafName, leafSuffix } from '../../symbols/symbol-parser.js';
 import { getGlobalLeafIndex } from '../../symbols/leaf-symbol-index.js';
+import { findExactSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { discoverWorkspacePackages } from '../../platform/workspace-packages.js';
+import { quoteShellArgument } from '../../platform/shell-arguments.js';
 import { profileSpan } from '../../instrumentation/profile.js';
 import { notifyDiffGateCheckComplete, notifyDiffGateCheckStart } from '../internal/diff-gate-progress.js';
 import {
@@ -65,7 +68,10 @@ import {
   evaluateSuppressionAdjudication,
 } from '../../domain/suppression-adjudication.js';
 import { readProjectFileText } from '../../platform/project-files.js';
+import { hasSuppressionCommentCategory } from '../../source/primitives/source-text.js';
 import { newlyUnreferencedResidue } from './newly-unreferenced-residue.js';
+import { planRetirementResidue } from './plan-retirement-residue.js';
+import { planReuseAuthority } from './plan-reuse-authority.js';
 
 /** Canonical check list — the CLI validates `--skip` values against this. */
 export const DIFF_GATE_CHECKS: readonly DiffGateCheck[] = [
@@ -219,6 +225,7 @@ export interface DiffGateResult {
   /** Coverage of committed policy records consulted by this result. */
   recordCompatibility?: {
     suppressions: RecordCompatibilitySummary;
+    plans?: RecordCompatibilitySummary;
   };
   note?: string;
 }
@@ -272,6 +279,9 @@ export function diffGate(
     historyMode?: GitHistoryMode;
     skip?: readonly DiffGateCheck[];
     baseContentRuntime?: BaseContentGitRuntime;
+    planContracts?: readonly PlanContractRecordV1[];
+    planContractIssues?: readonly string[];
+    planContractCompatibility?: RecordCompatibilitySummary;
   } = {},
 ): DiffGateResult {
   const base = opts.base ?? 'HEAD';
@@ -330,7 +340,10 @@ export function diffGate(
     attributionNotes: impact.attributionNotes,
     evidenceTiers: impact.evidenceTiers,
     rootCauseGroups: [],
-    recordCompatibility: { suppressions: suppressionStore.compatibility },
+    recordCompatibility: {
+      suppressions: suppressionStore.compatibility,
+      ...(opts.planContractCompatibility ? { plans: opts.planContractCompatibility } : {}),
+    },
     note: impact.summary.note,
   };
   if (changedFiles.length === 0) return result;
@@ -403,6 +416,15 @@ export function diffGate(
       },
       result,
     );
+    runPlanRetirementResidueCheck(
+      db.config.projectRoot,
+      opts.planContracts ?? [],
+      opts.planContractIssues ?? [],
+      result,
+    );
+    if ((opts.planContractIssues ?? []).length === 0) {
+      runPlanReuseAuthorityCheck(db, opts.planContracts ?? [], result);
+    }
   });
   if (includeBaseline) runUnlessSkipped('baseline', () => runBaselineCheck(db, result));
   // Suppressions come from two stores: the legacy .scipquery.json array
@@ -672,6 +694,10 @@ function runEchoCheck(
   for (const changedSymbol of changedSymbols.slice(0, maxEchoChecks)) {
     if (!isCallableSymbol(changedSymbol.symbol)) continue;
     if (symbolPreexistedAtBase(changedSymbol)) continue;
+    const definition = findExactSymbolMatch(db, changedSymbol.symbol);
+    if (definition && hasSuppressionCommentCategory(db, definition.relativePath, definition.startLine, 'similar')) {
+      continue;
+    }
     const exactMatches = exactDuplicateBodyMatches(db, changedSymbol.symbol, {
       maxLoc: 15,
       scanLimit,
@@ -1506,6 +1532,133 @@ function runNewlyUnreferencedResidueCheck(
       remediation: `Remove ${observation.referent.displayName}, wire it to a current production role, or establish a concrete current-role proof.`,
     });
   }
+}
+
+/**
+ * Enforce the concrete retirement seeds fixed before editing. This producer
+ * proves current literal and path contradictions only; responsibility-level
+ * behavior stays incomplete and is disclosed as skipped coverage.
+ */
+function runPlanRetirementResidueCheck(
+  projectRoot: string,
+  plans: readonly PlanContractRecordV1[],
+  planIssues: readonly string[],
+  result: DiffGateResult,
+): void {
+  if (planIssues.length > 0) {
+    result.skipped.push({
+      check: 'new-dead',
+      reason: `plan retirement subtype unavailable: ${planIssues.join('; ')}`,
+    });
+    return;
+  }
+  if (plans.length === 0) return;
+  const residue = planRetirementResidue(projectRoot, plans);
+  if (residue.coverage.state !== 'complete') {
+    result.skipped.push({
+      check: 'new-dead',
+      reason: `plan retirement subtype coverage incomplete: ${residue.coverage.omitted
+        .map((entry) => `${entry.planId}#${entry.itemId}: ${entry.reason}`)
+        .join('; ')}`,
+    });
+  }
+  for (const evaluation of residue.evaluations) {
+    if (evaluation.disposition !== 'contradiction') continue;
+    const occurrence = evaluation.occurrences[0];
+    if (!occurrence) continue;
+    const relatedFiles = [...new Set(evaluation.occurrences.map((item) => item.file))].sort();
+    recordFinding(result, {
+      id: findingId('new-dead', evaluation.planId, evaluation.itemId, evaluation.target.referent),
+      check: 'new-dead',
+      severity: 'error',
+      evidence: 'baseline',
+      actionTier: 'direct',
+      confidence: 1,
+      file: occurrence.file,
+      startLine: occurrence.line,
+      endLine: occurrence.line,
+      relatedFiles,
+      sourceAnalyzer: 'plan-retirement-residue',
+      rootCauseKey: `plan-retirement:${evaluation.planId}:${evaluation.itemId}`,
+      groupKey: `plan-retirement:${evaluation.planId}:${evaluation.itemId}`,
+      message: `${evaluation.target.referent} remains despite the applied retirement condition`,
+      why: [
+        `Plan ${evaluation.planId} requires retirement of ${evaluation.target.responsibility}.`,
+        ...evaluation.reasons,
+        ...evaluation.occurrences.slice(0, 5).map((item) => `${item.file}:${item.line}: ${item.excerpt}`),
+      ],
+      remediation: evaluation.survivor
+        ? `Remove ${evaluation.target.referent}, or revise the plan with repository evidence that actually authorizes its current role.`
+        : `Remove ${evaluation.target.referent} and its aliases or re-exports, or add a repository-authorized current survivor role in an append-only plan revision.`,
+    });
+  }
+}
+
+/** Enforce shared-responsibility owners that the applied plan selected before editing. */
+function runPlanReuseAuthorityCheck(
+  db: ScipDatabase,
+  plans: readonly PlanContractRecordV1[],
+  result: DiffGateResult,
+): void {
+  if (plans.every((plan) => plan.reuseAuthorities.length === 0)) return;
+  const reuse = planReuseAuthority(db, plans);
+  if (reuse.coverage.state !== 'complete') {
+    result.skipped.push({
+      check: 'new-dead',
+      reason: `plan reuse-authority coverage incomplete: ${reuse.coverage.omitted
+        .map((entry) => `${entry.planId}#${entry.itemId}: ${entry.reason}`)
+        .join('; ')}`,
+    });
+  }
+  for (const evaluation of reuse.evaluations) {
+    if (evaluation.disposition !== 'contradiction') continue;
+    recordFinding(result, {
+      id: findingId('new-dead', evaluation.planId, evaluation.itemId, evaluation.authority.referent),
+      check: 'new-dead',
+      severity: 'error',
+      evidence: 'graph-fact',
+      actionTier: 'direct',
+      confidence: 1,
+      symbol: evaluation.authority.referent,
+      sourceAnalyzer: 'plan-reuse-authority',
+      rootCauseKey: `plan-reuse:${evaluation.planId}:${evaluation.itemId}`,
+      groupKey: `plan-reuse:${evaluation.planId}:${evaluation.itemId}`,
+      message: `${evaluation.authority.referent} is not the shared owner selected by the applied plan`,
+      why: [
+        `Plan ${evaluation.planId} selects ${evaluation.authority.referent} to own ${evaluation.authority.responsibility}.`,
+        ...evaluation.reasons,
+        ...evaluation.missingConsumers.flatMap((consumer) => [
+          `Failed consumer ${consumer.seedId} (${consumer.referent}): ${consumer.reason}`,
+          `Shallowest compiler frontier: ${formatPlanReuseFrontier(consumer.frontier)}`,
+        ]),
+      ],
+      remediation:
+        `Inspect ${evaluation.missingConsumers.map(planReuseEvidenceCommand).join('; ')}. ` +
+        `Then delegate ${evaluation.missingConsumers.map((consumer) => consumer.referent).join(', ')} to ${evaluation.authority.referent}, or apply a successor plan grounded in concrete repository evidence.`,
+    });
+  }
+}
+
+function formatPlanReuseFrontier(
+  frontier: readonly {
+    symbol: string;
+    file: string;
+    depth: number;
+    reason: string;
+    detail?: string;
+  }[],
+): string {
+  if (frontier.length === 0) return 'none recorded';
+  return frontier
+    .map(
+      (entry) =>
+        `${entry.symbol} in ${entry.file} at depth ${entry.depth} (${entry.reason}${entry.detail ? `: ${entry.detail}` : ''})`,
+    )
+    .join('; ');
+}
+
+function planReuseEvidenceCommand(consumer: { referent: string }): string {
+  return `scip-query slice ${quoteShellArgument(consumer.referent)} --depth 4 --full`;
 }
 
 function isInWorkspacePackage(workspacePackages: ReadonlyArray<{ relativeDir: string }>, file: string): boolean {

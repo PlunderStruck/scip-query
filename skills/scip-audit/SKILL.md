@@ -32,9 +32,9 @@ Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only
 <!-- END GENERATED SKILL COMMANDS -->
 catalogue) from `../_shared/SKILL.md` — each reference file below carries its
 own shortlist first and only defers to `_shared` when that shortlist runs
-out. Apply `_shared`'s freshness gate once before the first graph fact; let
-an active watcher refresh after source changes, and use manual reindex only
-as its documented fallback.
+out. Evidence commands obtain a fresh usable index internally. Run the useful
+query directly; route an exact setup failure to `scip-setup` instead of adding
+status, polling, or reindex ceremony.
 
 ## Triage
 

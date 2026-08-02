@@ -126,6 +126,7 @@ import {
   parseDiffGateExecutionRequest,
 } from '../diff-gate-execution.js';
 import { sanitizeTerminalLine, sanitizeTerminalText } from '../../platform/terminal-output.js';
+import { reindexConfiguredProject } from '../project-reindex.js';
 
 // Descriptor-backed query commands live under runtime/query-commands/*.
 // This file owns side-effect lifecycles such as reindex, setup, watch, and
@@ -176,16 +177,9 @@ export async function handleReindex(rawOpts: unknown): Promise<void> {
   const json = booleanOptionValue(opts, 'json');
   try {
     const languages = supportedLanguages(stringArrayOptionValue(opts, 'language'));
-    const result = await reindex({
-      projectRoot,
+    const result = await reindexConfiguredProject(projectRoot, config, paths, {
       languages: languages.length > 0 ? languages : config.languages,
-      outputScip: paths.indexPath,
-      outputDb: paths.dbPath,
-      pnpmWorkspaces: booleanOptionValue(opts, 'pnpmWorkspaces') || config.indexer?.typescript?.pnpmWorkspaces,
-      typescriptProjectMode: config.indexer?.typescript?.projectMode,
-      typescriptProjects: config.indexer?.typescript?.projects,
-      clojureConfigPath: config.indexer?.clojure?.configPath,
-      skipIfUnchanged: !booleanOptionValue(opts, 'force'),
+      force: booleanOptionValue(opts, 'force'),
       allowPartial: booleanOptionValue(opts, 'allowPartial'),
       skipAutoInstall: process.env['SCIP_QUERY_SKIP_AUTO_INSTALL'] === '1',
       installMissing: booleanOptionValue(opts, 'installMissing'),
@@ -197,7 +191,7 @@ export async function handleReindex(rawOpts: unknown): Promise<void> {
       // used for reindex() calls from `bench` (see measureColdIndex /
       // measureWarmIndex below), which has the same "reindex has progress
       // logging but this caller needs machine-readable stdout" shape.
-      ...(json ? { onStatus: () => {} } : {}),
+      ...(json ? { onStatus: () => {} } : { onStatus: console.log }),
     });
     if (json) {
       printJsonEnvelope('reindex', [], opts, result);

@@ -27,6 +27,7 @@ import { isProcessAlive } from '../platform/process-liveness.js';
 import { tryAcquireProcessFileLock } from '../platform/process-file-lock.js';
 import { sanitizeTerminalLine } from '../platform/terminal-output.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
+import { quoteShellArgument } from '../platform/shell-arguments.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import { isNonNegativeInteger, isRecordObject } from '../domain/record-validation.js';
 import { encodeCursorPayload } from './cursor-codec.js';
@@ -1358,12 +1359,7 @@ function isInvocationArgv(value: unknown): value is string[] {
 }
 
 function shellJoin(args: readonly string[]): string {
-  return args.map(shellQuote).join(' ');
-}
-
-function shellQuote(value: string): string {
-  if (/^[A-Za-z0-9_@%+=:,./-]+$/u.test(value)) return value;
-  return `'${value.replaceAll("'", `'"'"'`)}'`;
+  return args.map((argument) => quoteShellArgument(argument, { omitSafeQuotes: true })).join(' ');
 }
 
 function renderHumanOutputPage(envelope: CliOutputPageEnvelopeV1): string {

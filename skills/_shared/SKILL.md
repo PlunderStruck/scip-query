@@ -6,9 +6,13 @@ disable-model-invocation: true
 
 ## Purpose
 
-`_shared` is the catalog every other scip-* skill draws its command vocabulary and correctness rules from: freshness/lookup mechanics, the full command-family list, detector precision tiers, postcheck rules, the event ledger, and the subagent evidence-boundary contract. It is not a workflow — no task should end with "I invoked `_shared`". Come here mid-task from another skill when that skill's own shortlist runs out.
+`_shared` is the catalog every other scip-* skill draws its command vocabulary and correctness rules from: lookup mechanics, the full command-family list, detector precision tiers, postcheck rules, the event ledger, and the subagent evidence-boundary contract. It is not a workflow — no task should end with "I invoked `_shared`". Come here mid-task from another skill when that skill's own shortlist runs out.
 
 A SCIP index is the compiler-derived map of a repository: source files, symbols, references, imports, calls, dependencies. It differs from text search because it records what the language toolchain actually resolved, so a claim backed by it can name definitions and consumers rather than matching strings. A **graph fact** is anything produced from that index — a definition line, a reference site, a caller, a dependency, a reverse dependency, an affected consumer.
+
+Within one working context, reuse an exact read-only command result while the
+repository, diff, index generation, command input, and coverage scope stay
+unchanged. Memory pressure or a desire for reassurance is not new evidence.
 
 **Match evidence to the claim.** Native search and file reads are valid for literal text, exact local source, and unambiguous local logic (e.g. a helper defined two lines down in the same file is not a resolution claim). Use scip-query whenever the claim depends on compiler-resolved identity or on a relationship set being complete — definitions, references, callers, dependencies, consumers, affected units, public surface. Many scip-query commands return a bounded/capped sample rather than an exhaustive set; say so explicitly rather than treating a bounded result as proof of completeness.
 
@@ -22,11 +26,14 @@ A SCIP index is the compiler-derived map of a repository: source files, symbols,
 | Subagent evidence-boundary contract, dead-code reference-counting status and residual gap | `references/evidence-and-dead-code.md` |
 | Finished-diff requirement evidence, specialist-check usefulness, and final gate ownership | `scip-verify` skill — authoritative, do not duplicate it here |
 
-## Freshness gate
+## Freshness ownership
 
-Before the first SCIP graph fact in a work session, run `scip-query status --capabilities` once. If the reported generation is fresh, reuse it until source changes; do not repeat capability checks between commands against that same generation.
-
-After source changes, let an active watcher refresh the index. If status says the watcher is indexing, debouncing, cooling down, or already has a pending/claimed refresh request, wait for that work to finish and check once more instead of starting a competing refresh. Run `scip-query reindex` only when freshness is `stale`, `missing`, or `unknown` and the watcher is disabled, unavailable, or has failed to refresh. Re-check status once after that fallback completes.
+Evidence commands obtain a fresh usable index internally. Run the useful query
+directly; do not put `status`, watcher polling, sleeps, or `reindex` before it.
+The command first reuses a fresh generation, then waits briefly for an active
+watcher, and finally performs one synchronous refresh when needed. If none of
+those routes succeeds, the command returns one exact blocker. Route genuine
+installation, configuration, or index repair to `scip-setup`.
 
 ## Symbol lookup fallback ladder
 
@@ -89,10 +96,9 @@ Standalone detector commands (outside diff-gate) are not outcome-tracked in this
 
 ## Postcheck
 
-At final verification for a coherent diff, reuse current-generation freshness
-evidence or run `scip-query status --capabilities` once when none exists. Map
-material requirements to direct evidence before adding commands. A protected
-blocking Stop hook owns the final diff gate; without one, run
+At final verification for a coherent diff, map material requirements to direct
+evidence before adding commands. A protected blocking Stop hook owns the final
+diff gate; without one, run
 `scip-query diff-gate` once. The gate already owns its built-in detector
 family, so standalone detectors are not a pre-gate battery. Use one only for
 an uncovered risk or to investigate a reported finding, and repeat a check only

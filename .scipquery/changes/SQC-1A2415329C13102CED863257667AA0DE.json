@@ -1,0 +1,20 @@
+{
+  "kind": "scip-query-intended-change",
+  "schemaVersion": 1,
+  "changeId": "SQC-1A2415329C13102CED863257667AA0DE",
+  "collaborationDomainId": "5ea57d1a-936c-4c91-b58f-5d61e45173a5",
+  "goalId": "SQG-12532F1CFF0F0B84E98440E9BC3D352D",
+  "title": "Make the scip-query agent workflow token-efficient",
+  "intendedOutcome": "Freshness, planning, and verification work happen in the tool with compact model-facing evidence",
+  "idempotency": {
+    "version": 1,
+    "algorithm": "sha256",
+    "keyDigest": "1a2415329c13102ced863257667aa0de077e23132253c1c08c9009dcbad43ed7",
+    "requestDigest": "98c0dfd0b7a2d0c80a7c379f7cbafda4d54ae8ae3e244a3a30943113880d9ef7"
+  },
+  "createdAt": "2026-08-02T00:16:32.384Z",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  }
+}

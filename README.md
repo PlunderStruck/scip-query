@@ -515,6 +515,15 @@ classifies current evidence, while `scip-improve` changes confirmed findings.
 challenges a concrete finished diff. `scip-explore` explains working behavior;
 `scip-diagnose` starts from a failure or contradiction.
 
+For relational work, a `scip-plan` Markdown plan can carry one
+`scip-query-plan` JSON contract. `scip-query plan apply <path>` validates it,
+creates an inline goal and intended change for new work, fixes the repository
+state it describes, and records its retirement and architecture conditions in
+one action. Run `scip-query plan example` for a valid starter. Existing work
+uses its `goalId` and `changeId`. Proven direct edits skip this contract;
+sustained work uses ordered, verifiable slices. See
+[Autonomous work state](docs/AUTONOMOUS_WORK_STATE.md#apply-a-change-contract-when-the-work-is-relational).
+
 Project setup writes reviewable checkout-local lifecycle hooks for Codex and Claude Code (`.codex/hooks.json` and `.claude/settings.local.json`). A checkout-local hook is an agent-tool preference whose defining trait is that it applies to one clone rather than expressing team policy. Setup adds both paths to that clone's `.git/info/exclude`, so they do not appear in commits, and refuses to rewrite either path if it is already tracked. `setup-hooks --shared` remains accepted only as a deprecated compatibility flag; it no longer writes `.claude/settings.json`. These hooks add scip-query context at session start, route prompts toward the right skill, and run an advisory Stop-hook wrapper around the diff gate only for that repository. The Stop hook sends feedback to the agent by default instead of blocking; set `SCIP_QUERY_STOP_HOOK_MODE=warn` for a warning-only hook response, or `SCIP_QUERY_STOP_HOOK_MODE=block` to enforce the gate. Set `SCIP_QUERY_SKIP_HOOK_INSTALL=1` or run `scip-query setup --no-hooks` to skip hook installation during setup, and run `scip-query setup-hooks --json` later to repair the current checkout's hooks. Preview hook removal with `scip-query setup-hooks --remove --dry-run`; `--force` is an installation-only mode and cannot be combined with removal. A scope-free `scip-query uninstall --dry-run` safely previews both global and project integrations, while real uninstall requires exactly one of `--global` or `--project`.
 
 Stop feedback renders each completion decision and its selected autonomous
@@ -569,7 +578,7 @@ the reviewed immutable package versions. CI setup is intentionally separate.
 
 Setup classifies every change by where its facts belong:
 
-- **Repository records (commit):** shared project intent, policy, and history whose value comes from surviving clones and branches, including `.scipquery.json`, AGENTS/CLAUDE guidance, health dossiers, `.scipquery/goals/*.json`, `.scipquery/changes/*.json`, `.scipquery/attempts/*.json`, `.scipquery/decisions/*.json`, `.scipquery/suppressions/*.json`, `.scipquery/events/*.json`, and the legacy `.scipquery/ledger/`.
+- **Repository records (commit):** shared project intent, policy, and history whose value comes from surviving clones and branches, including `.scipquery.json`, AGENTS/CLAUDE guidance, health dossiers, `.scipquery/goals/*.json`, `.scipquery/changes/*.json`, `.scipquery/plans/*.json`, `.scipquery/attempts/*.json`, `.scipquery/decisions/*.json`, `.scipquery/suppressions/*.json`, `.scipquery/events/*.json`, and the legacy `.scipquery/ledger/`.
 - **Checkout preferences (do not commit):** integration settings for one clone, including `.codex/hooks.json`, `.claude/settings.local.json`, `.git/info/exclude`, and an optional `.git/hooks/pre-commit` backstop.
 - **User environment:** installed skills and language indexers used across checkouts on that machine.
 

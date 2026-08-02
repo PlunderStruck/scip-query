@@ -450,53 +450,109 @@ function printCompletionResult(
     printJsonEnvelope('completion', args, opts, result);
     return;
   }
+  for (const line of renderCompletionHumanResult(result)) console.log(line);
+}
+
+/** Concise agent-readable completion state without the JSON record envelope. */
+export function renderCompletionHumanResult(result: unknown): string[] {
   if (!isObject(result)) {
-    console.log(sanitizeTerminalLine(String(result)));
-    return;
+    return [sanitizeTerminalLine(String(result))];
   }
   if (result['operation'] === 'status' && Array.isArray(result['records'])) {
-    console.log(`Completion: ${result['records'].length} intended change state(s).`);
+    const lines = [`Completion: ${result['records'].length} intended change state(s).`];
+    const summary = isObject(result['summary']) ? result['summary'] : undefined;
+    const evaluations = summary && Array.isArray(summary['evaluations']) ? summary['evaluations'] : [];
     for (const candidate of result['records']) {
       if (!isObject(candidate)) continue;
-      console.log(
+      lines.push(
         `  ${sanitizeTerminalLine(String(candidate['changeId']))}  ${sanitizeTerminalLine(
           String(candidate['state']),
         )}  goal ${sanitizeTerminalLine(String(candidate['goalId']))}`,
       );
+      if (candidate['state'] === 'blocked') {
+        const blocked = stringArray(candidate['blockedPredicates']);
+        const unknown = stringArray(candidate['unknownPredicates']);
+        lines.push(`    blocked: ${blocked.join(', ') || 'none'}`);
+        lines.push(`    unknown: ${unknown.join(', ') || 'none'}`);
+        const evaluationId = typeof candidate['evaluationId'] === 'string' ? candidate['evaluationId'] : undefined;
+        const evaluation = evaluations.find(
+          (entry) => isObject(entry) && evaluationId !== undefined && entry['evaluationId'] === evaluationId,
+        );
+        if (evaluationId) lines.push(`    evaluation: ${sanitizeTerminalLine(evaluationId)}`);
+        if (isObject(evaluation)) {
+          lines.push(...completionPredicateLines(evaluation, new Set(blocked), '    '));
+        }
+      } else if (candidate['state'] === 'conflicted') {
+        for (const reason of stringArray(candidate['reasons'])) lines.push(`    conflict: ${terminalSnippet(reason)}`);
+      }
     }
     const warnings = Array.isArray(result['warnings']) ? result['warnings'] : [];
-    for (const warning of warnings) console.log(`warning: ${sanitizeTerminalLine(String(warning))}`);
+    for (const warning of warnings) lines.push(`warning: ${terminalSnippet(warning)}`);
     const issues = Array.isArray(result['integrityIssues']) ? result['integrityIssues'] : [];
-    for (const issue of issues) console.log(`error: ${sanitizeTerminalLine(String(issue))}`);
-    return;
+    for (const issue of issues) lines.push(`error: ${terminalSnippet(issue)}`);
+    return lines;
   }
   if (result['state'] === 'current' && isObject(result['record'])) {
     const record = result['record'];
     if (typeof record['evaluationId'] === 'string' && typeof record['transitionId'] !== 'string') {
       const decision = isObject(record['decision']) ? record['decision']['state'] : 'unknown';
-      console.log(
+      const lines = [
         `${sanitizeTerminalLine(record['evaluationId'])}  ${sanitizeTerminalLine(
           String(decision),
         )}\nChange: ${sanitizeTerminalLine(String(record['changeId']))}\nGoal: ${sanitizeTerminalLine(
           String(record['goalId']),
         )}\nContext: ${sanitizeTerminalLine(String(isObject(record['context']) ? record['context']['contextId'] : 'unknown'))}`,
-      );
-      return;
+      ];
+      if (Array.isArray(record['predicates'])) {
+        lines.push('Predicates:');
+        lines.push(...completionPredicateLines(record, undefined, '  '));
+      }
+      return lines;
     }
     if (typeof record['transitionId'] === 'string') {
-      console.log(
+      return [
         `${sanitizeTerminalLine(record['transitionId'])}  complete\nChange: ${sanitizeTerminalLine(
           String(record['changeId']),
         )}\nEvaluation: ${sanitizeTerminalLine(String(record['evaluationId']))}`,
-      );
-      return;
+      ];
     }
   }
-  console.log(
+  return [
     `${sanitizeTerminalLine(String(result['state'] ?? 'unknown'))}: ${sanitizeTerminalLine(
       String(result['error'] ?? result['path'] ?? 'no detail'),
     )}`,
-  );
+  ];
+}
+
+function completionPredicateLines(
+  evaluation: Readonly<Record<string, unknown>>,
+  selected: ReadonlySet<string> | undefined,
+  indent: string,
+): string[] {
+  const predicates = Array.isArray(evaluation['predicates']) ? evaluation['predicates'] : [];
+  return predicates.flatMap((candidate) => {
+    if (!isObject(candidate) || typeof candidate['predicate'] !== 'string') return [];
+    if (selected && !selected.has(candidate['predicate'])) return [];
+    const reasons = stringArray(candidate['reasons']);
+    const shownReasons = reasons.slice(0, 2).map((reason) => terminalSnippet(reason));
+    const omitted = reasons.length - shownReasons.length;
+    const detail = shownReasons.length > 0 ? ` — ${shownReasons.join(' | ')}` : '';
+    const suffix = omitted > 0 ? ` | ... ${omitted} more reason(s)` : '';
+    return [
+      `${indent}${sanitizeTerminalLine(candidate['predicate'])}: ${sanitizeTerminalLine(
+        String(candidate['state'] ?? 'unknown'),
+      )}${detail}${suffix}`,
+    ];
+  });
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function terminalSnippet(value: unknown, maxCharacters = 240): string {
+  const cleaned = sanitizeTerminalLine(String(value));
+  return cleaned.length <= maxCharacters ? cleaned : `${cleaned.slice(0, maxCharacters - 1)}…`;
 }
 
 function printObligationResult(
@@ -766,6 +822,6 @@ function recordLabel(value: unknown): string {
   return sanitizeTerminalLine(String(value));
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
+export function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

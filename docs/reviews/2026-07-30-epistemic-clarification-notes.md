@@ -1,7 +1,7 @@
 # scip-query epistemic redesign — session notes
 
 Date opened: 2026-07-30
-Updated: 2026-07-31
+Updated: 2026-08-01
 Status: live
 Parent review: [Epistemic review](./2026-07-30-epistemic-review.md)
 
@@ -14,13 +14,68 @@ that was intentionally replaced.
 
 ## Where we are
 
-All six implementation phases now exist in the product, but mission
-effectiveness remains unproven. A first large-repository Vega comparison did
-not establish a benefit: its raw workflow condition cost more, both conditions
-missed the same real cleanup, and treatment execution was invalidated by a
-Stop-hook snapshot failure. The immediate work is to repair those product and
-apparatus failures, reduce repeated verification work, and rerun one
-already-configured behavior-judged pair before making an effectiveness claim.
+Phase 4 — establish that each benchmark condition can cause the claim assigned
+to it. All six implementation phases exist, but mission effectiveness remains
+unproven. No further counted Vega run is authorized until planning evidence,
+implementation quality, verification lift, and silent outcome measurement are
+separate observations under a maximum fifteen-minute candidate budget.
+
+## Benchmark protocol reset — 2026-08-01
+
+The current Vega apparatus is retained as diagnostic evidence, not as the next
+efficacy protocol. Its frozen archives, candidate isolation, preflight checks,
+transcripts, and immutable run records remain useful. Its experimental unit
+does not: it compares a native condition with an entire autonomous workflow,
+feeds protected outcome evaluation into treatment Stop, has no immutable
+planning boundary or pre-gate implementation snapshot, gives control no
+equal-time review condition, runs the pair sequentially, and permits forty-five
+minutes per candidate.
+
+The replacement protocol keeps four observations distinct:
+
+1. **Repository understanding evidence:** the correct, supported repository
+   relationships recorded before the first edit.
+2. **Plan usefulness:** whether the frozen plan permits implementation without
+   substantial rediscovery.
+3. **Implementation completeness:** the repository state before any SCIP gate
+   or gate-directed repair.
+4. **Verification lift:** the consequential improvement produced by SCIP
+   findings relative to an equal-time native self-review.
+
+The silent measurement evaluator and the in-run SCIP verifier are also
+separate. The measurement evaluator may use implementation-neutral hidden
+behavior checks and independently established repository facts, but it cannot
+advise either candidate. The in-run verifier may expose only evidence the
+released product can derive from the authorized goal, repository graph,
+configured architecture, detectors, and ordinary project checks. It cannot
+consume a solution-aware evaluator as a source of repair instructions.
+
+The benchmark contract is recorded in
+[the mission-trial benchmark charter](../plans/2026-08-01-mission-trial-benchmark-charter.md).
+
+The first private generated fixture and silent evaluator now pass preflight.
+The unchanged repository passes its old checks but fails the requested change.
+Two different complete solutions pass. Narrow, duplicated-policy,
+forbidden-dependency, retained-residue, and unrelated-edit mutations fail the
+intended checks. Released scip-query architecture analysis agrees with the
+protected scorer. These are apparatus facts, not product-effectiveness
+evidence.
+
+The later retry-policy calibration run did not establish a treatment win. The
+old scorer gave the treatment 11 of 11 and the control 9 of 11, but it required
+a treatment-only scip-query configuration file from the control and missed
+three copied outcome-effect implementations in the treatment. The control
+used the existing shared outcome helper and left the more coherent design. The
+corrected private evaluator is condition-neutral, checks for one outcome-effect
+authority, and passes 18 apparatus tests. The old run remains invalid
+calibration evidence and must not be rescored into a product result.
+
+The same treatment transcript contained no context compaction and showed exact
+command repeats inside one turn. Six status calls, four plan-apply calls, three
+diff gates, two reindexes, and two diff-impact calls were observed. Some
+retries followed changed inputs; at least one status call did not. The product
+now gives new planned work one inline goal/change/plan action and tells agents
+to reuse exact read-only SCIP results until a named input changes.
 
 ## Latest large-repository evidence
 
@@ -53,6 +108,64 @@ already-configured behavior-judged pair before making an effectiveness claim.
   completion from durable controller records rather than final prose.
 
 ## Settled
+
+- Benchmark agents use OpenAI `gpt-5.6-luna` with `max` reasoning effort —
+  because this is the selected agent for future matched trials.
+- The runner enforces the fifteen-minute limit without disclosing the limit or
+  remaining time to either candidate — because the time boundary belongs to
+  the apparatus, not the task description.
+- The first pilot uses a compact generated TypeScript repository before a
+  private Vega trial — because the generated task can verify apparatus and
+  causal measurements quickly without publishing proprietary material.
+- The first generated task combines nonlocal affected-surface discovery,
+  retirement of an old retry responsibility, and architecture preservation —
+  because these are three central scip-query product claims.
+- The first comparison uses a control repository without scip-query and a
+  treatment repository with the complete released setup — because this
+  measures the product that an adopted repository gives an agent.
+- The Vega-specific runner and all proprietary trial assets remain outside the
+  `scip-query` repository — because the public tool can publish a generic
+  protocol without publishing Vega source knowledge, hidden evaluation logic,
+  candidate patches, transcripts, or protected result artifacts.
+- Planning, implementation, and verification are distinct causal claims and
+  receive separate snapshots and metrics — because one end-to-end result
+  cannot identify which capability helped or harmed the outcome.
+- A plan is frozen before the first code edit — because later prose can
+  rationalize the implementation rather than evidence prior understanding.
+- Same-agent continuation and fresh-agent plan handoff are different tests —
+  because the former includes unrecorded exploration context while the latter
+  measures whether the plan itself is sufficient.
+- Plan adherence means carrying obligations through or recording an
+  evidence-backed revision, not literal obedience to stale steps — because
+  new repository evidence can properly defeat an earlier route.
+- Model tokens measure exploration cost, not understanding — because
+  understanding is evidenced by correct relationships that predict necessary
+  work and survive implementation.
+- The discovery-to-implementation comparison runs without a diff gate —
+  because gate feedback would prevent attribution to planning and repository
+  intelligence.
+- Verification lift compares SCIP-directed repair with equal-time native
+  self-review and counts consequential true findings rather than raw finding
+  volume — because extra time and noisy findings are alternative explanations
+  for apparent improvement.
+- Hidden outcome scoring is silent and symmetric; in-run feedback is limited
+  to released product evidence — because measurement authority and product
+  capability answer different questions.
+- A Gherkin scenario constrains observable behavior but does not itself
+  discover or prove every invariant — because invariants arise from the goal,
+  repository behavior, and policy while scenarios state required examples.
+- Routine component trials give each candidate no more than fifteen measured
+  minutes and may run matched conditions in isolated sandboxes concurrently —
+  because trial turnaround is an operating requirement, while shared-machine
+  elapsed time remains secondary unless resource contention is controlled.
+- Fifteen-minute component trials cannot establish long-sustained autonomous
+  work by themselves — because persistence across hours is a different
+  phenomenon that requires chained resumable slices or a separate release
+  calibration.
+- The first pilot gives planning and implementation at most twelve measured
+  minutes, followed by at most three measured minutes for equal review and
+  repair — because the pre-review repository must be frozen before either
+  condition receives review feedback.
 
 - Phase 1, the problem, is closed — because the failure is stated in two
   solution-free sentences and matches the repository-residue cases that
@@ -325,6 +438,29 @@ already-configured behavior-judged pair before making an effectiveness claim.
 
 ## Vocabulary
 
+- **Repository understanding evidence** — correct, repository-supported claims
+  recorded before editing that identify relationships capable of changing the
+  implementation or verification route. Covers entry-to-effect flow,
+  consumers, ownership, reuse, preservation, retirement, and architecture.
+  Does not cover token volume, confident prose, or a file list with no causal
+  role.
+- **Plan usefulness** — the property of a frozen pre-edit plan that lets a
+  capable implementer reach the goal without substantial rediscovery. Covers
+  necessary obligations, sequencing, evidence, and verification targets. Does
+  not mean maximal detail or literal adherence after contrary evidence.
+- **Measurement evaluator** — a silent scoring system applied symmetrically to
+  finished candidate states using behavior and independently fixed repository
+  facts. It measures outcomes; it does not provide repair feedback or require
+  one exact patch.
+- **In-run verifier** — the released SCIP evidence and policy path available to
+  a working candidate during review and repair. It may alter the candidate's
+  next action; it does not receive hidden solution knowledge unavailable to
+  the product.
+- **Verification lift** — the change in consequential completion quality
+  produced during an equal-budget review-and-repair phase. It covers true
+  defects removed without new regression. It does not cover raw finding count,
+  ceremony, or improvement attributable only to extra time.
+
 - **Repository residue** — an artifact left after its original role was
   superseded that still looks intentional enough to guide future work. Covers
   obsolete but live code, configuration, tests, documentation, exports, and
@@ -488,6 +624,28 @@ already-configured behavior-judged pair before making an effectiveness claim.
 
 ## Open
 
+- [x] Choose whether the first planning comparison measures the shipped
+      SCIP planning bundle or CLI access under one shared neutral planning
+      protocol. — settled as the shipped setup versus no scip-query setup.
+- [x] Choose the first fixture strategy: procedurally generated compact
+      repository, shortened Vega mission, or both in sequence. — settled as a
+      generated TypeScript pilot followed by private real-repository trials.
+- [x] Fix the first-pilot phase budgets inside the fifteen-minute ceiling. —
+      settled as twelve minutes for planning and implementation plus three
+      minutes for review and repair. Concurrent local elapsed time remains
+      secondary unless resource isolation or counterbalancing rules out
+      contention.
+- [x] Construct implementation-neutral ground truth for the first generated
+      task from behavior and independently fixed repository relationships
+      rather than a historical patch. — private generator and evaluator
+      preflight passes; transfer tasks remain open.
+- [ ] Select task families that separately exercise affected-surface
+      discovery, supersession/residue, and configured architecture. — blocks
+      transfer beyond one fixture.
+- [ ] Pre-register success, harm, and inconclusive thresholds for plan quality,
+      implementation completeness, verification lift, tokens, and false
+      findings. — blocks counted trials.
+
 - [x] Define the autonomy envelope that lets an agent resolve ordinary design,
       remediation, suppression, and sequencing choices without runtime human
       approval while preventing it from changing its own goal or grading
@@ -524,12 +682,22 @@ already-configured behavior-judged pair before making an effectiveness claim.
 
 ## Next step
 
-Implement honest operation roles and receipt version 2. Settle the exact
-schema, comparison, migration, and role-registry choices at that slice boundary
-from the already agreed facts; do not resume program-wide question-by-question
-design unless implementation evidence contradicts a settled premise.
+Finish public verification, build and install the corrected local release,
+then run a fresh matched pair against evaluator version 2. It must prepare one
+no-SCIP control and one fully adopted treatment from identical source, freeze
+`plan.md` at the first source edit, freeze the repository before review, run
+both candidates concurrently with OpenAI `gpt-5.6-luna` at `max` reasoning,
+enforce the hidden twelve-plus-three minute budgets, and keep the silent
+evaluator unavailable until both candidate sessions end. The old candidate
+states are not eligible for rescoring.
 
 ## Set aside
+
+- The stopped V21 Vega program remains an incomplete apparatus preflight and
+  will not be resumed under the old protocol.
+- Deleting product mission-trial code is deferred. Apparatus failures do not
+  establish that the reusable record, isolation, and reporting contracts lack
+  a product role.
 
 - Final public mission wording remains deferred until outcome trials establish
   which product claims are warranted.
@@ -3236,6 +3404,90 @@ evidence for the boundary decision.
 Settle I-01 through I-10 after the kernel and outcome claims are known. Obvious
 stale identity text can be marked earlier, but final wording should not
 prejudge the trial.
+
+### 6.15 Benchmark standard and adaptive workflow clarification — 2026-08-01
+
+The benchmark serves a repository team that delegates coding work to an
+autonomous agent. Its first standard is repository-change completeness without
+regression. Autonomous progress comes next. Cost is compared only after the
+conditions reach the same completion level. Repository adoption cost is a
+separate product measure.
+
+The comparison set is the same agent with ordinary repository tools and with
+the complete released scip-query workflow. The target is not a strict win on
+every stochastic run. The target is no material quality regression in each
+supported workflow class, low overhead for direct work, and repeatable gain
+when repository relationships or persistent state matter.
+
+A workflow class groups changes by the evidence and work-state coordination
+that completion requires. It does not group them by line count alone.
+
+- A direct change has one proven local target and no discovered relational
+  consequence. It needs no durable plan.
+- A relational change depends on consumers, exports, ownership, retirement,
+  compatibility, or architecture. It needs one concise change contract.
+- A sustained change needs independently verifiable slices or work state that
+  survives agent sessions. It needs one stable goal and persistent slice state.
+
+Retirement, public compatibility, architecture, data migration, security, and
+durability activate stronger checks in any class. New evidence can raise the
+class. A class can decrease only when evidence defeats the earlier consequence.
+
+The concise Gherkin `Feature` line remains the goal. Gherkin scenarios state
+required behavior examples. The plan identifies repository consequences that
+Gherkin cannot discover.
+
+For relational and sustained work, a fixed plan file contains one structured
+change contract. It names affected seeds, preserved behavior, retirement
+targets, allowed survivors, architecture obligations, and completion evidence.
+scip-query resolves these references and creates the change and obligation
+records. The agent does not type duplicate records.
+
+The plan's artifact list is a prediction, not the source of truth. An omitted
+artifact remains consequential when the authorized goal and repository
+evidence connect it to the change. This rule prevents an incomplete plan from
+weakening Stop.
+
+Retirement verification needs authorized intent, repository evidence, and an
+authorized current role for each survivor. The plan can seed discovery. It
+cannot authorize compatibility that conflicts with full retirement. Stop
+expands the seeds through references, callers, aliases, re-exports, public
+surface, configuration, tests, documentation, and architecture declarations.
+
+The test runner must prepare the treatment as an already adopted repository.
+It runs the released setup, shared health baseline, indexing, skill
+installation, hook installation, hook trust, and lifecycle preflight before
+measured work. The architecture ratchet must report an active check. The runner
+rejects the pair when a required check is skipped. It records setup cost
+outside the candidate task clock.
+
+Implementation result: complete. Private preflight
+`run-2026-08-01T18-11-47-589Z-319863` passed the full health path, committed
+baseline, fresh-index check, architecture coverage check, and active-gate
+probe. The gate ran both `architecture` and `baseline` with no skip. The
+apparatus suite passed 14 tests.
+
+A claim audit also found that the first fixture said `Preserve public exports`
+while its evaluator required one legacy public export to disappear. That
+authority conflict makes the first pair diagnostic rather than countable. The
+fixture now states that explicit task retirement controls the general export
+preservation rule, and a test fixes that ordering.
+
+The benchmark program now needs separate direct, discovery, retirement,
+architecture, seeded-verification, and sustained-slice task families. The
+seeded-verification family must include true residue and benign look-alikes so
+that detection and false blocking are both observable. The product receives no
+hidden defect list.
+
+Open implementation decisions:
+
+1. choose the structured plan-contract schema and its one-action compiler;
+2. define the router's observable escalation rules;
+3. define blocking evidence for definite retirement contradictions;
+4. define the supported-disposition path for uncertain residue;
+5. correct the runner's complete setup and active-baseline preflight — done;
+6. correct plan scoring for missing and contradictory obligations; and
+7. fix task-family thresholds before counted results.
 
 ---
 

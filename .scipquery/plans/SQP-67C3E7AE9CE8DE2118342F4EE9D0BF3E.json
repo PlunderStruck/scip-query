@@ -1,0 +1,239 @@
+{
+  "kind": "scip-query-plan-contract",
+  "schemaVersion": 1,
+  "planId": "SQP-67C3E7AE9CE8DE2118342F4EE9D0BF3E",
+  "collaborationDomainId": "5ea57d1a-936c-4c91-b58f-5d61e45173a5",
+  "goalId": "SQG-4061E7D5D360464ED8E8B05D53BBF49D",
+  "changeId": "SQC-DED67E74D3898BDCA85766BE8D3C93AF",
+  "workflowClass": "sustained",
+  "affectedSeeds": [
+    {
+      "id": "plan-decoder",
+      "kind": "symbol",
+      "referent": "decodePlanContractRequest",
+      "role": "plan contract validation boundary"
+    },
+    {
+      "id": "planning-context",
+      "kind": "symbol",
+      "referent": "planContext",
+      "role": "pre-edit repository evidence composer"
+    },
+    {
+      "id": "reuse-gate",
+      "kind": "symbol",
+      "referent": "planReuseAuthority",
+      "role": "planned shared-owner verifier"
+    },
+    {
+      "id": "stop-output",
+      "kind": "symbol",
+      "referent": "renderStopHookOutput",
+      "role": "autonomous repair feedback boundary"
+    }
+  ],
+  "preserve": [
+    {
+      "id": "bounded-work",
+      "condition": "New discovery and verification traversals disclose and obey fixed coverage bounds",
+      "evidenceIds": [
+        "docs",
+        "general-tests"
+      ]
+    },
+    {
+      "id": "fail-closed",
+      "condition": "Unknown or incomplete compiler evidence cannot establish a plan or delegation claim",
+      "evidenceIds": [
+        "gate",
+        "general-tests"
+      ]
+    },
+    {
+      "id": "fixture-independence",
+      "condition": "Product logic does not name or encode the benchmark fixture, expected patch, or evaluator facts",
+      "evidenceIds": [
+        "general-tests"
+      ]
+    },
+    {
+      "id": "public-compatibility",
+      "condition": "Existing valid plan records and public query consumers remain compatible",
+      "evidenceIds": [
+        "api",
+        "full-tests"
+      ]
+    }
+  ],
+  "retirements": [],
+  "allowedSurvivors": [],
+  "reuseAuthorities": [],
+  "architecture": [
+    {
+      "id": "architecture-clean",
+      "condition": "The configured architecture policy remains clean and minimal",
+      "evidenceIds": [
+        "gate"
+      ],
+      "predicate": "configured-policy-clean"
+    }
+  ],
+  "completionEvidence": [
+    {
+      "id": "api",
+      "description": "Check public TypeScript API compatibility"
+    },
+    {
+      "id": "docs",
+      "description": "Regenerate and check command and skill documentation"
+    },
+    {
+      "id": "full-tests",
+      "description": "Run the complete repository test suite"
+    },
+    {
+      "id": "gate",
+      "description": "Run the configured final diff gate once"
+    },
+    {
+      "id": "general-tests",
+      "description": "Run fixture-neutral contract, discovery, path, and output tests"
+    }
+  ],
+  "slices": [
+    {
+      "id": "plan-diagnostics",
+      "outcome": "One plan validation response reports all actionable contract defects",
+      "evidenceIds": [
+        "general-tests"
+      ],
+      "dependsOn": []
+    },
+    {
+      "id": "consumer-reuse",
+      "outcome": "Planning reports existing owners of responsibilities repeated across affected consumers",
+      "evidenceIds": [
+        "api",
+        "general-tests"
+      ],
+      "dependsOn": [
+        "plan-diagnostics"
+      ]
+    },
+    {
+      "id": "delegation-paths",
+      "outcome": "Reuse verification proves bounded direct and indirect compiler-resolved delegation paths",
+      "evidenceIds": [
+        "api",
+        "general-tests"
+      ],
+      "dependsOn": [
+        "consumer-reuse"
+      ]
+    },
+    {
+      "id": "repair-feedback",
+      "outcome": "Completion feedback gives bounded repository evidence that directly supports the next repair",
+      "evidenceIds": [
+        "docs",
+        "full-tests",
+        "gate",
+        "general-tests"
+      ],
+      "dependsOn": [
+        "delegation-paths"
+      ]
+    }
+  ],
+  "source": {
+    "path": "docs/plans/2026-08-01-adaptive-completion-implementation.md",
+    "sha256": "c85f8bee21ec9abc2c74d620ba4b37f8994b8ec5bb170ee596ab0eef7efd3476"
+  },
+  "compiledAgainst": {
+    "schemaVersion": 2,
+    "observedAt": "2026-08-01T21:57:00.552Z",
+    "facts": {
+      "collaborationDomain": {
+        "schemaVersion": 1,
+        "canonicalizationVersion": 1,
+        "hashAlgorithm": "sha256",
+        "projection": {
+          "name": "scip-query:collaboration-domain",
+          "version": 1
+        },
+        "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+      },
+      "workspaceInstance": {
+        "schemaVersion": 1,
+        "canonicalizationVersion": 1,
+        "hashAlgorithm": "sha256",
+        "projection": {
+          "name": "scip-query:workspace-instance",
+          "version": 1
+        },
+        "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+      },
+      "wholeContent": {
+        "schemaVersion": 1,
+        "canonicalizationVersion": 1,
+        "hashAlgorithm": "sha256",
+        "projection": {
+          "name": "scip-query:repository-content",
+          "version": 1
+        },
+        "digest": "0622c521d2030edd5f7bf8977388402dbb19ddee52555134659ddc3f795c7c64"
+      },
+      "relevantInputs": [
+        {
+          "subject": "scip-query:index-inputs",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-inputs",
+              "version": 2
+            },
+            "digest": "f932262d8b45764356dfdcccbff01e90b38495a7885e35a63af6c070d3c1b7cf"
+          }
+        }
+      ]
+    },
+    "observedSources": [
+      {
+        "kind": "repository-snapshot",
+        "identity": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:repository-content",
+            "version": 1
+          },
+          "digest": "0622c521d2030edd5f7bf8977388402dbb19ddee52555134659ddc3f795c7c64"
+        }
+      }
+    ],
+    "stabilityProofs": [
+      {
+        "source": "repository-snapshot",
+        "kind": "fixed-snapshot"
+      }
+    ],
+    "diagnostics": {
+      "clean": false,
+      "headCommit": "075e6d93bd8690a7433bceadc6582b1ad09daf8a",
+      "treeOid": "dafd1a959b789e44b6caa38bea85f157ae4b0491"
+    }
+  },
+  "semanticIdentity": {
+    "algorithm": "sha256",
+    "canonicalizationVersion": 1,
+    "digest": "67c3e7ae9ce8de2118342f4ee9d0bf3ebf1d15995409344d9378e84738ef565c"
+  },
+  "createdAt": "2026-08-01T21:57:00.553Z",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  }
+}

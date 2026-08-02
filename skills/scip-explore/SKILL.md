@@ -28,7 +28,7 @@ Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only
 
 ## Evidence rules (apply to every step below)
 
-- Use a current index before trusting graph facts: apply `_shared`'s freshness gate once before the first graph claim. After source changes, let an active watcher refresh and use manual reindex only as the documented fallback.
+- Evidence commands obtain a fresh usable index internally. Run the useful query directly; route an exact setup failure to `scip-setup` instead of adding status, polling, or reindex ceremony.
 - Relationship, consumer, and completeness claims must cite a `scip-query` command. Literal local-source claims may cite a native file read instead.
 - Resolve ambiguous symbols before describing behavior — `scip-query code` is the usual tool, but it isn't mandatory when you already have an exact native range.
 - Follow the graph before trusting folder structure. Start wide, then narrow.

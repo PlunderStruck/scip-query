@@ -105,6 +105,30 @@ describe('agent hook context', () => {
     expect(startOneShot).toHaveBeenCalledWith('/repo');
   });
 
+  it('lets Stop own refresh and synchronous fallback without returning model instructions', async () => {
+    const ensureFresh = vi.fn(async () => ({
+      source: 'synchronous-reindex' as const,
+      service: { kind: 'skipped' as const, reason: 'disabled' as const },
+    }));
+
+    const note = await refreshIndexForHookIfNeeded(
+      hookWorkspace({ watch: { enabled: false, autoRefresh: false } }),
+      'Stop',
+      {
+        ensureFresh,
+        ensureService: vi.fn(),
+        freshness: vi.fn(),
+        requestRefresh: vi.fn(),
+        startOneShot: vi.fn(),
+      },
+    );
+
+    expect(note).toBeUndefined();
+    expect(ensureFresh).toHaveBeenCalledWith(
+      expect.objectContaining({ commandName: 'agent-Stop', projectRoot: '/repo' }),
+    );
+  });
+
   it('exits quietly outside a git-backed scip-query workspace', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'scip-query-hook-'));
 

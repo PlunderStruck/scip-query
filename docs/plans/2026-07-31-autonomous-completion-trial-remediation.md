@@ -1,9 +1,33 @@
 # Autonomous completion protected-trial remediation
 
 Date: 2026-07-31
-Status: in progress — protected feedback now reaches the agent, but the v12 efficacy result is invalid because frozen-dependency readiness did not cover the repository gate; operational verification alignment remains
+Status: paused for benchmark-protocol redesign — retained as apparatus and product-remediation evidence, not authorized for another counted efficacy run
 Governing goal: `SQG-4061E7D5D360464ED8E8B05D53BBF49D`
 Governing change: `SQC-DED67E74D3898BDCA85766BE8D3C93AF`
+
+## 2026-08-01 benchmark boundary
+
+This plan repaired genuine product and apparatus defects, but its current Vega
+runner does not isolate the product claims now being tested. It combines SCIP
+planning, persistent work state, lifecycle hooks, protected outcome feedback,
+completion control, and verification into one treatment; has no immutable plan
+phase or pre-gate implementation snapshot; and lets the treatment consume the
+protected evaluator used for outcome scoring. Its conditions also run
+sequentially for as long as forty-five minutes.
+
+Do not resume or register another counted efficacy program from this runner.
+Preserve its frozen-fixture, isolation, readiness, transcript, immutable-record,
+and silent-scoring mechanisms as reusable apparatus. Replace the experimental
+flow according to
+[the mission-trial benchmark charter](./2026-08-01-mission-trial-benchmark-charter.md),
+which separates repository-understanding evidence, plan usefulness,
+pre-verification implementation completeness, and verification lift under
+parallel isolated conditions with a maximum fifteen-minute candidate budget.
+
+Protected outcome scoring may remain outside the candidate worktree, but it
+must be silent and symmetric. In-run feedback may contain only evidence the
+released product can derive; a protected measurement evaluator may not act as
+a solution-aware repair channel.
 
 ## Goal
 

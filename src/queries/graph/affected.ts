@@ -25,6 +25,7 @@ export function affected(
   opts: { maxDepth?: number; scope?: string } = {},
 ): AffectedResult[] {
   const { maxDepth = 5, scope } = opts;
+  const full = maxDepth === Number.MAX_SAFE_INTEGER;
 
   const target = findFirstSymbolMatch(db, symbolPattern);
   if (!target) return [];
@@ -39,7 +40,7 @@ export function affected(
 
     const nextFrontier: typeof frontier = [];
     const callerRows = getCallerRowsMapForSymbols(db, frontier, {
-      limit: 500,
+      ...(full ? {} : { limit: 500 }),
       semanticEvidence: symbolSemanticEvidence,
     });
 

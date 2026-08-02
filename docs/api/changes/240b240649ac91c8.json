@@ -1,0 +1,109 @@
+{
+  "acceptedAt": "2026-08-01T22:45:24.492Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "240b240649ac91c80ee788e753ac5c897c976f408a89e5796c6e08f48d4db9a6",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextAffectedConsumer.",
+      "target": "./queries:PlanContextAffectedConsumer"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextConsumerReuse.",
+      "target": "./queries:PlanContextConsumerReuse"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextConsumerReuseCandidate.",
+      "target": "./queries:PlanContextConsumerReuseCandidate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextConsumerReuseCoverage.",
+      "target": "./queries:PlanContextConsumerReuseCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "PlanContextResult changed from interface PlanContextResult { target: string; matched: { symbol: boolean; file: boolean; module: boolean; }; history: PlanContextHistory; trace: TraceResult; callGraph: CallGrap... to interface PlanContextResult { target: string; matched: { symbol: boolean; file: boolean; module: boolean; }; history: PlanContextHistory; trace: TraceResult; callGraph: CallGrap....",
+      "target": "./queries:PlanContextResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextAffectedConsumer.",
+      "target": "./queries/index:PlanContextAffectedConsumer"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextConsumerReuse.",
+      "target": "./queries/index:PlanContextConsumerReuse"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextConsumerReuseCandidate.",
+      "target": "./queries/index:PlanContextConsumerReuseCandidate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextConsumerReuseCoverage.",
+      "target": "./queries/index:PlanContextConsumerReuseCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "PlanContextResult changed from interface PlanContextResult { target: string; matched: { symbol: boolean; file: boolean; module: boolean; }; history: PlanContextHistory; trace: TraceResult; callGraph: CallGrap... to interface PlanContextResult { target: string; matched: { symbol: boolean; file: boolean; module: boolean; }; history: PlanContextHistory; trace: TraceResult; callGraph: CallGrap....",
+      "target": "./queries/index:PlanContextResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextAffectedConsumer.",
+      "target": "./queries/plan-context:PlanContextAffectedConsumer"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextConsumerReuse.",
+      "target": "./queries/plan-context:PlanContextConsumerReuse"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextConsumerReuseCandidate.",
+      "target": "./queries/plan-context:PlanContextConsumerReuseCandidate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextConsumerReuseCoverage.",
+      "target": "./queries/plan-context:PlanContextConsumerReuseCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "PlanContextResult changed from interface PlanContextResult { target: string; matched: { symbol: boolean; file: boolean; module: boolean; }; history: PlanContextHistory; trace: TraceResult; callGraph: CallGrap... to interface PlanContextResult { target: string; matched: { symbol: boolean; file: boolean; module: boolean; }; history: PlanContextHistory; trace: TraceResult; callGraph: CallGrap....",
+      "target": "./queries/plan-context:PlanContextResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export discoverAffectedConsumerReuse.",
+      "target": "./queries/plan-context:discoverAffectedConsumerReuse"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "391e2f45d068eee7d43d0fbbb958f0399b2975cc6672ba287845a72d19aa73d0",
+  "reason": "Expose bounded affected-consumer reuse evidence without changing existing plan-context fields.",
+  "schemaVersion": 1
+}

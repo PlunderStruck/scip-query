@@ -4,7 +4,11 @@ import { baselineFindingMetadata } from '../../../src/queries/impact/diff-gate-b
 
 describe('architecture baseline finding policy', () => {
   it.each([
-    ['architecture:stale-allowance:runtime:domain', 'stale architecture allowance', 'Remove domain from runtime'],
+    [
+      'architecture:stale-allowance:runtime:domain',
+      'stale architecture allowance',
+      'In .scipquery.json, remove domain from runtime',
+    ],
     ['architecture:boundary-limit:files:runtime', 'architecture boundary limit violation', "Reduce runtime's files"],
     [
       'architecture:test-boundary:tests%2Fruntime.test.ts:storage',

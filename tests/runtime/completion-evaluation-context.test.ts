@@ -14,6 +14,7 @@ import {
   captureFixedCompletionContext,
   publishStopCompletionEvaluations,
   protectedWorkAuthorizationReferents,
+  repositoryPolicyAuthorizedReferents,
   stopCompletionEvaluationRequest,
 } from '../../src/runtime/completion-evaluation-context.js';
 import {
@@ -502,6 +503,57 @@ describe('fixed completion evaluation context', () => {
     expect(request.predicates.find((predicate) => predicate.predicate === 'policy-permitted')).toMatchObject({
       state: 'unknown',
     });
+  });
+
+  it('authorizes a configuration edit whose only effect is to remove architecture permissions', () => {
+    const fixture = contextFixture();
+    const predecessorArchitecture = {
+      boundaries: [
+        { name: 'feature', paths: ['src/feature.ts'] },
+        { name: 'runtime', paths: ['src/runtime/**'] },
+      ],
+      allowedDependencies: { feature: ['runtime'], runtime: ['feature'] },
+      requireCompletePolicy: true,
+    };
+    writeFileSync(
+      join(fixture.root, '.scipquery.json'),
+      `${JSON.stringify({ collaborationDomainId: COLLABORATION_DOMAIN, architecture: predecessorArchitecture })}\n`,
+    );
+    execFileSync('git', ['init', '--quiet'], { cwd: fixture.root });
+    execFileSync('git', ['add', '.'], { cwd: fixture.root });
+    execFileSync(
+      'git',
+      ['-c', 'user.name=scip-query', '-c', 'user.email=scip-query@example.com', 'commit', '--quiet', '-m', 'base'],
+      { cwd: fixture.root },
+    );
+    const successorArchitecture = structuredClone(predecessorArchitecture);
+    successorArchitecture.allowedDependencies.feature = [];
+    fixture.config.architecture = successorArchitecture;
+    writeFileSync(
+      join(fixture.root, '.scipquery.json'),
+      `${JSON.stringify({ collaborationDomainId: COLLABORATION_DOMAIN, architecture: successorArchitecture })}\n`,
+    );
+
+    const lease = captureFixedCompletionContext(fixture.root, fixture.config, 'block', {
+      evaluatorEntrypoint: fixture.evaluator,
+    });
+    expect(lease.authority.changedPaths).toContain('.scipquery.json');
+    expect(repositoryPolicyAuthorizedReferents(fixture.root, lease.authority)).toEqual({
+      configuration: expect.stringContaining('repository-policy:monotonic-architecture-tightening:'),
+    });
+    const request = stopCompletionEvaluationRequest(fixture.root, lease.records[0]!, passingGate(), lease.authority);
+
+    expect(request.authority?.fixedOrAuthorized).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          class: 'configuration',
+          referent: expect.stringContaining('repository-policy:monotonic-architecture-tightening:'),
+        }),
+      ]),
+    );
+    expect(request.authority?.violations).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ class: 'configuration' })]),
+    );
   });
 
   it('withholds class-wide goal authority when the candidate also changes an ungranted goal', () => {

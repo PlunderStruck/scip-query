@@ -12,6 +12,7 @@ import { tryAcquireProcessFileLock, type ProcessFileLockObservation } from '../p
 import { IsolatedProcessTimeoutError, runIsolatedJsonProcess } from './isolated-analysis-runner.js';
 import { commandAnalysisBudget, type AnalysisBudgetDisclosure } from './cli-support.js';
 import { recordDiffGateOutcomes, type DiffGateOutcomeResult } from './diff-gate-outcomes.js';
+import { readPlanContractRecords } from '../storage/plan-contract.js';
 
 export const DIFF_GATE_RUN_COMMAND = '__diff-gate-run';
 export const DIFF_GATE_REQUEST_ENV = 'SCIP_QUERY_DIFF_GATE_REQUEST';
@@ -133,6 +134,7 @@ export class DiffGateDetectorTimeoutError extends IsolatedProcessTimeoutError {
  */
 export function executeDiffGate(db: ScipDatabase, request: DiffGateExecutionRequest): DiffGateExecutionResult {
   const budget = commandAnalysisBudget(db, 'diff-gate', request.full, { quiet: true });
+  const plans = readPlanContractRecords(db.config.projectRoot);
   const progress = createDiffGateProgressReporter(process.env);
   progress.stage('current-gate');
   const gateOptions = {
@@ -145,6 +147,12 @@ export function executeDiffGate(db: ScipDatabase, request: DiffGateExecutionRequ
     semantic: budget.semantic,
     historyMode: request.full ? ('full' as const) : ('bounded' as const),
     skip: request.skip,
+    planContracts: plans.currentRecords,
+    planContractIssues: [
+      ...plans.integrityIssues,
+      ...plans.compatibility.issues.map((issue) => `${issue.path}: ${issue.reason}`),
+    ],
+    planContractCompatibility: plans.compatibility,
   };
   const result = withDiffGateProgressObserver(progress.observer('current-gate'), () => diffGate(db, gateOptions));
   progress.stage('outcome-ledger');

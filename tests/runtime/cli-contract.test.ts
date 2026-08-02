@@ -17,6 +17,8 @@ import {
 import type { InvocationCoverage } from '../../src/runtime/command-kit/command-descriptor-types.js';
 import { PUBLIC_QUERY_ENTRIES, PUBLIC_QUERY_SOURCE_PATHS } from '../../src/queries/public-query-entries.js';
 import { watchServiceAutoStartEligible } from '../../src/runtime/watch-service.js';
+import { runPlanContractOperation } from '../../src/runtime/commands/plan-contract-handlers.js';
+import { extractPlanContractInput } from '../../src/change-control/plan-contract.js';
 import {
   COMMAND_OPERATION_ROLES,
   commandOperationRoles,
@@ -39,6 +41,8 @@ const PRIVATE_QUERY_MODULES = [
   'health-report',
   'health-types',
   'newly-unreferenced-residue',
+  'plan-retirement-residue',
+  'plan-reuse-authority',
   'public-query-entries',
   'query-utils',
   'architecture-baseline',
@@ -62,6 +66,8 @@ const PRIVATE_QUERY_SOURCE_PATHS = {
   'health-report': 'src/queries/health/health-report.ts',
   'health-types': 'src/queries/health/health-types.ts',
   'newly-unreferenced-residue': 'src/queries/impact/newly-unreferenced-residue.ts',
+  'plan-retirement-residue': 'src/queries/impact/plan-retirement-residue.ts',
+  'plan-reuse-authority': 'src/queries/impact/plan-reuse-authority.ts',
   'public-query-entries': 'src/queries/public-query-entries.ts',
   'query-utils': 'src/queries/query-utils.ts',
   'architecture-baseline': 'src/queries/graph/architecture-baseline.ts',
@@ -85,6 +91,20 @@ function optionFlags(name: string): string[] {
 }
 
 describe('CLI contract', () => {
+  it('shows a valid one-action plan starter without requiring schema reverse engineering', () => {
+    expect(commandDescriptors.find((descriptor) => descriptor.id === 'plan')?.helpAfter).toContain(
+      'scip-query plan example',
+    );
+    const result = runPlanContractOperation(process.cwd(), 'example', undefined);
+    expect(result).toMatchObject({
+      operation: 'example',
+      markdown: expect.stringContaining('"goal"'),
+    });
+    expect((result as { markdown: string }).markdown).toContain('## Optional shared-owner item');
+    expect((result as { markdown: string }).markdown).toContain('"consumers": ["entry", "second-entry"]');
+    expect(extractPlanContractInput((result as { markdown: string }).markdown)).toMatchObject({ ok: true });
+  });
+
   it('registers every descriptor-backed command in descriptor order', () => {
     const names = program.commands.map((entry) => entry.name());
 
@@ -119,6 +139,14 @@ describe('CLI contract', () => {
       expect(command(descriptor.id).description()).toBe(descriptor.description);
       expect(optionFlags(descriptor.id)).toEqual((descriptor.options ?? []).map((option) => option.flags));
     }
+  });
+
+  it('lets affected lift its default traversal bounds when completeness is required', () => {
+    expect(optionFlags('affected')).toContain('--full');
+  });
+
+  it('keeps detailed plan-context output opt-in', () => {
+    expect(optionFlags('plan-context')).toContain('--detail');
   });
 
   it('registers universal resumable output options at the program boundary', () => {
@@ -420,9 +448,9 @@ describe('CLI contract', () => {
     );
     expect(readSkill('scip-improve')).toContain('Continue through those slices autonomously');
     const verifySkill = readSkill('scip-verify');
-    expect(verifySkill).toContain('A clean\n`diff-gate` is evidence, not permission');
-    expect(verifySkill).toContain('Give the diff gate one owner');
-    expect(verifySkill).toContain('Do not run their standalone\nforms as a fixed pre-gate battery');
+    expect(verifySkill).toContain('A clean `diff-gate` is evidence, not permission');
+    expect(verifySkill).toContain('Give the final gate one owner');
+    expect(verifySkill).toMatch(/Do not run their standalone forms as\s+a fixed pre-gate battery/u);
     expect(verifySkill).not.toContain('Construct at least two refutation attempts');
     expect(verifySkill).not.toContain('Run every row that matches');
     expect(readSkill('scip-setup')).toContain('without hand-authored glue');

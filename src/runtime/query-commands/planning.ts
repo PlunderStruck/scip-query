@@ -72,19 +72,15 @@ const handlePlanContext = budgetedDbCommand('plan-context', ({ db, args, opts, b
   }
   if (result.matched.symbol) symbolResolutionBefore(db, stringArg(args, 0));
 
-  const sections = [
-    { title: 'TARGET', rows: targetRows(result) },
-    { title: 'DEFINITIONS', rows: definitionRows(result, limit), skipIfEmpty: true },
-    { title: 'REFERENCES', rows: referenceRows(result, limit), skipIfEmpty: true },
-    { title: 'CALL GRAPH', rows: callGraphRows(result, limit), skipIfEmpty: true },
-    { title: 'DATAFLOW', rows: dataflowRows(result, limit), skipIfEmpty: true },
-    { title: 'DEPENDENCIES', rows: dependencyRows(result, limit), skipIfEmpty: true },
-    { title: 'SURFACE', rows: surfaceRows(result, limit), skipIfEmpty: true },
-    { title: 'DOWNSTREAM IMPACT', rows: affectedRows(result, limit), skipIfEmpty: true },
-    { title: 'CHANGE RISK', rows: riskRows(result, limit), skipIfEmpty: true },
-    { title: 'HISTORY', rows: historyRows(result), skipIfEmpty: true },
-    { title: 'PLANNING NOTES', rows: planningNoteRows(result), skipIfEmpty: true },
-  ];
+  const sections = booleanOptionValue(opts, 'detail')
+    ? detailedPlanContextSections(result, limit)
+    : planContextDecisionSections(
+        result,
+        stringArg(args, 0),
+        limit,
+        definedNumberOption(opts, 'impactDepth', 3),
+        definedNumberOption(opts, 'sliceDepth', 3),
+      );
 
   render.sectionedReport(sections);
 });
@@ -99,6 +95,7 @@ export const planningQueryCommandDescriptors: CommandDescriptor[] = [
       option('--slice-depth <n>', 'Maximum backward slice depth', parseInteger, 3),
       option('-s, --scope <path>', 'Limit downstream impact to files matching path'),
       option('-n, --limit <n>', 'Rows per section', parseInteger, 20),
+      option('--detail', 'Render every planning component instead of the compact decision packet'),
       option('--full', 'Run unbounded semantic analysis on large indexes'),
     ]),
     budget: 'semantic',
@@ -132,6 +129,8 @@ export const planningQueryCommandDescriptors: CommandDescriptor[] = [
         'churn',
         'co-change partners',
         'active suppressions',
+        'reuse candidates with evidence class and action tier',
+        'possible shared owners found from a bounded scan of affected consumers',
       ],
       inputs: [['symbol', 'file', 'module']],
       // Every section is capped by --limit (default 20), and traversal by
@@ -151,6 +150,120 @@ export const planningQueryCommandDescriptors: CommandDescriptor[] = [
   },
 ];
 
+export function planContextDecisionSections(
+  result: queries.PlanContextResult,
+  target: string,
+  limit: number,
+  impactDepth: number,
+  sliceDepth: number,
+) {
+  return [
+    { title: 'TARGET', rows: targetRows(result) },
+    { title: 'CURRENT FLOW', rows: currentFlowRows(result, limit), skipIfEmpty: true },
+    { title: 'AFFECTED CONSUMERS', rows: decisionConsumerRows(result, limit), skipIfEmpty: true },
+    { title: 'REUSE DECISIONS', rows: reuseRows(result, Math.min(limit, 12)), skipIfEmpty: true },
+    { title: 'CHANGE CONSTRAINTS', rows: changeConstraintRows(result, limit), skipIfEmpty: true },
+    { title: 'READ NEXT', rows: nextReadRows(result, limit), skipIfEmpty: true },
+    {
+      title: 'COVERAGE AND NEXT ACTION',
+      rows: decisionCoverageRows(result, target, impactDepth, sliceDepth),
+    },
+  ];
+}
+
+function detailedPlanContextSections(result: queries.PlanContextResult, limit: number) {
+  return [
+    { title: 'TARGET', rows: targetRows(result) },
+    { title: 'DEFINITIONS', rows: definitionRows(result, limit), skipIfEmpty: true },
+    { title: 'REFERENCES', rows: referenceRows(result, limit), skipIfEmpty: true },
+    { title: 'CALL GRAPH', rows: callGraphRows(result, limit), skipIfEmpty: true },
+    { title: 'DATAFLOW', rows: dataflowRows(result, limit), skipIfEmpty: true },
+    { title: 'REUSE OPTIONS', rows: reuseRows(result, limit), skipIfEmpty: true },
+    { title: 'DEPENDENCIES', rows: dependencyRows(result, limit), skipIfEmpty: true },
+    { title: 'SURFACE', rows: surfaceRows(result, limit), skipIfEmpty: true },
+    { title: 'DOWNSTREAM IMPACT', rows: affectedRows(result, limit), skipIfEmpty: true },
+    { title: 'CHANGE RISK', rows: riskRows(result, limit), skipIfEmpty: true },
+    { title: 'HISTORY', rows: historyRows(result), skipIfEmpty: true },
+    { title: 'PLANNING NOTES', rows: planningNoteRows(result), skipIfEmpty: true },
+  ];
+}
+
+function currentFlowRows(result: queries.PlanContextResult, limit: number): string[] {
+  return withOmitted(
+    cappedRows(
+      [...definitionRows(result, Math.min(limit, 12)), ...callGraphRows(result, limit), ...dataflowRows(result, limit)],
+      limit,
+    ),
+  );
+}
+
+function decisionConsumerRows(result: queries.PlanContextResult, limit: number): string[] {
+  const direct = result.trace.referencedBy.map(
+    (reference) => `  direct  ${reference.relativePath}:${displayLine(reference.line)}  ${reference.enclosingShort}`,
+  );
+  const downstream = result.affected.map(
+    (affected) => `  depth ${affected.depth}  ${affected.file}  ${affected.shortName}`,
+  );
+  return withOmitted(cappedRows(uniqueRows([...direct, ...downstream]), limit));
+}
+
+function changeConstraintRows(result: queries.PlanContextResult, limit: number): string[] {
+  const rows = [
+    ...(result.changeSurface
+      ? [
+          `  External consumers: ${result.changeSurface.totalExternalConsumers}`,
+          `  Changed-file risk factors: ${result.changeSurface.fileRisk?.reasons.length ?? 0}`,
+        ]
+      : []),
+    `  Dependencies: ${result.deps.length}; reverse dependencies: ${result.rdeps.length}`,
+    `  Module files: ${result.system.files.length}; exported symbols: ${result.system.symbols.length}; external surface uses: ${result.surface.length}`,
+    ...historyRows(result),
+    ...planningNoteRows(result),
+  ];
+  return withOmitted(cappedRows(rows, limit));
+}
+
+function nextReadRows(result: queries.PlanContextResult, limit: number): string[] {
+  const candidates = [
+    ...result.trace.definitions.map((definition) => definition.relativePath),
+    ...result.trace.referencedBy.map((reference) => reference.relativePath),
+    ...(result.callGraph?.callers.map((caller) => caller.file) ?? []),
+    ...(result.callGraph?.callees.map((callee) => callee.file) ?? []),
+    ...(result.reuseCandidates?.map((candidate) => candidate.fileB) ?? []),
+    ...planContextConsumerReuse(result).candidates.map(({ candidate }) => candidate.fileB),
+  ];
+  return withOmitted(
+    cappedRows(
+      [...new Set(candidates.filter((file) => file.trim().length > 0))].map((file) => `  ${file}`),
+      Math.min(limit, 12),
+    ),
+  );
+}
+
+function decisionCoverageRows(
+  result: queries.PlanContextResult,
+  target: string,
+  impactDepth: number,
+  sliceDepth: number,
+): string[] {
+  const reuse = planContextConsumerReuse(result).coverage;
+  const rows = [
+    `  Direct compiler references observed: ${result.trace.referencedBy.length}.`,
+    `  Downstream and slice evidence is bounded at impact depth ${impactDepth} and slice depth ${sliceDepth}.`,
+    `  Affected-consumer reuse scan: ${reuse.analyzedConsumers}/${reuse.totalConsumers} analyzed; ${reuse.omittedConsumers} omitted.`,
+  ];
+  if (result.warnings.length > 0) rows.push(...result.warnings.map((warning) => `  Warning: ${warning}`));
+  rows.push(
+    `  Use scip-query refs ${target} --full only when a complete direct-consumer set can change the plan.`,
+    `  Use scip-query plan-context ${target} --detail only when this packet leaves a named planning uncertainty.`,
+  );
+  return rows;
+}
+
+function uniqueRows(rows: readonly string[]): string[] {
+  return [...new Set(rows)];
+}
+
 function planContextCoverage(result: queries.PlanContextResult) {
   return {
     complete: false,
@@ -160,6 +273,7 @@ function planContextCoverage(result: queries.PlanContextResult) {
 }
 
 function planContextReturnedUnits(result: queries.PlanContextResult): number {
+  const consumerReuse = planContextConsumerReuse(result);
   return (
     result.trace.definitions.length +
     result.trace.referencedBy.length +
@@ -177,11 +291,15 @@ function planContextReturnedUnits(result: queries.PlanContextResult): number {
     result.system.symbols.length +
     result.system.dependsOn.length +
     result.system.dependedOnBy.length +
-    result.surface.length
+    result.surface.length +
+    (result.reuseCandidates?.length ?? 0) +
+    consumerReuse.coverage.analyzedConsumers +
+    consumerReuse.candidates.length
   );
 }
 
 function planContextAgentResult(result: queries.PlanContextResult) {
+  const consumerReuse = planContextConsumerReuse(result);
   return {
     target: result.target,
     matched: result.matched,
@@ -198,6 +316,9 @@ function planContextAgentResult(result: queries.PlanContextResult) {
       dependencies: result.deps.length,
       reverseDependencies: result.rdeps.length,
       moduleFiles: result.system.files.length,
+      reuseCandidates: result.reuseCandidates?.length ?? 0,
+      affectedConsumersAnalyzed: consumerReuse.coverage.analyzedConsumers,
+      consumerReuseCandidates: consumerReuse.candidates.length,
       externalSurfaceUses: result.surface.length,
       coChangePartners: result.history.coChangePartners.length,
     },
@@ -215,7 +336,29 @@ function planContextAgentResult(result: queries.PlanContextResult) {
         }
       : null,
     history: result.history,
+    affectedConsumerReuse: consumerReuse,
   };
+}
+
+function reuseRows(result: queries.PlanContextResult, limit: number): string[] {
+  const targetRows = (result.reuseCandidates ?? []).flatMap((candidate) => [
+    `  target    ${candidate.actionTier.padEnd(6)}  ${Math.round(candidate.similarity * 100)}%  ${candidate.shortNameB}  ${candidate.fileB}`,
+    `                    ${candidate.recommendation}`,
+  ]);
+  const consumerReuse = planContextConsumerReuse(result);
+  const consumerRows = consumerReuse.candidates.flatMap(({ candidate, consumers }) => [
+    `  consumer  ${candidate.actionTier.padEnd(6)}  ${Math.round(candidate.similarity * 100)}%  ${candidate.shortNameB}  ${candidate.fileB}`,
+    `                    found from ${consumers.map((consumer) => consumer.shortName).join(', ')}; ${candidate.recommendation}`,
+  ]);
+  const coverage = consumerReuse.coverage;
+  const coverageRows =
+    coverage.totalConsumers > 0
+      ? [
+          `  Affected-consumer scan: ${coverage.analyzedConsumers}/${coverage.totalConsumers} compiler-resolved consumer(s) analyzed; ${coverage.omittedConsumers} omitted; first ${coverage.perConsumerSearchLimit} similarity result(s) checked and up to ${coverage.perConsumerCandidateLimit} usable option(s) kept per consumer.`,
+        ]
+      : [];
+  const rows = [...targetRows, ...coverageRows, ...consumerRows];
+  return withOmitted(cappedRows(rows, limit));
 }
 
 function targetRows(result: queries.PlanContextResult): string[] {
@@ -387,7 +530,34 @@ function planningNoteRows(result: queries.PlanContextResult): string[] {
   if (result.affected.length > 0) {
     rows.push('  Validate downstream consumers at the shallowest affected depths first.');
   }
+  if (result.reuseCandidates?.some((candidate) => candidate.actionTier === 'direct')) {
+    rows.push(
+      '  A direct reuse option names shared domain behavior. Reuse its current owner, or record concrete repository evidence that its semantics do not fit.',
+    );
+  }
+  if (planContextConsumerReuse(result).candidates.length > 0) {
+    rows.push(
+      '  An affected-consumer reuse option may own surrounding behavior that target-only comparison cannot see. Inspect it before creating or retaining separate consumer implementations.',
+    );
+  }
   return rows;
+}
+
+function planContextConsumerReuse(result: queries.PlanContextResult): queries.PlanContextConsumerReuse {
+  return (
+    result.affectedConsumerReuse ?? {
+      candidates: [],
+      coverage: {
+        totalConsumers: 0,
+        analyzedConsumers: 0,
+        omittedConsumers: 0,
+        perConsumerSearchLimit: 0,
+        perConsumerCandidateLimit: 0,
+        candidateLimit: 0,
+        returnedCandidates: 0,
+      },
+    }
+  );
 }
 
 function cappedRows(rows: readonly string[], limit: number): LimitedRows {

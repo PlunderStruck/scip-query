@@ -29,7 +29,7 @@ with its evidence and disposition.
   changes a future decision. Do not narrate a duplicate checklist merely to
   satisfy the control system.
 - Re-derive evidence from current `scip-query` output, not from memory or the stale text you're replacing.
-- After every applied change, run the routed postchecks in the `scip-verify` skill, in addition to whatever narrow rerun this scenario names.
+- After one coherent finished finding slice, invoke `scip-verify` once and reuse the narrow checks that already ran.
 - Let useful commands and Stop evaluation capture attempts, evidence, and
   next-action decisions automatically. Follow the exact restored next action;
   use manual ledger commands only when the adapter explicitly reports that

@@ -1,0 +1,37 @@
+{
+  "acceptedAt": "2026-08-01T20:58:31.939Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "391e2f45d068eee7d43d0fbbb958f0399b2975cc6672ba287845a72d19aa73d0",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "PlanContextResult changed from interface PlanContextResult { target: string; matched: { symbol: boolean; file: boolean; module: boolean; }; history: PlanContextHistory; trace: TraceResult; callGraph: CallGrap... to interface PlanContextResult { target: string; matched: { symbol: boolean; file: boolean; module: boolean; }; history: PlanContextHistory; trace: TraceResult; callGraph: CallGrap....",
+      "target": "./queries:PlanContextResult"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/diff-gate; review their variance and runtime meaning.",
+      "target": "./queries/diff-gate"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "PlanContextResult changed from interface PlanContextResult { target: string; matched: { symbol: boolean; file: boolean; module: boolean; }; history: PlanContextHistory; trace: TraceResult; callGraph: CallGrap... to interface PlanContextResult { target: string; matched: { symbol: boolean; file: boolean; module: boolean; }; history: PlanContextHistory; trace: TraceResult; callGraph: CallGrap....",
+      "target": "./queries/index:PlanContextResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "PlanContextResult changed from interface PlanContextResult { target: string; matched: { symbol: boolean; file: boolean; module: boolean; }; history: PlanContextHistory; trace: TraceResult; callGraph: CallGrap... to interface PlanContextResult { target: string; matched: { symbol: boolean; file: boolean; module: boolean; }; history: PlanContextHistory; trace: TraceResult; callGraph: CallGrap....",
+      "target": "./queries/plan-context:PlanContextResult"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "1713bc0ff11ec304e0691e0a69f40bf79c150c5374d1089069bfdca1b033ec58",
+  "reason": "The public surface only gains optional plan-context results and optional plan-aware diff-gate inputs. Existing calls and existing result consumers remain valid; the declaration analyzer cannot classify the newly referenced plan record automatically.",
+  "schemaVersion": 1
+}

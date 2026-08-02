@@ -6,19 +6,14 @@ import { loadInvocationCommandDescriptors } from './commands/invocation-command-
 import { registerCommandDescriptors } from './commands/command-registry.js';
 import {
   activateCliProjectContext,
-  prepareWorktreeIndex,
   resolveCliProjectContext,
   resolveProjectRoot,
   sharedCachePreparationEligible,
   withDb,
 } from './cli-context.js';
 import { maybePrintUpdateNotice } from './update-notice.js';
-import {
-  ensureWatchServiceForCommand,
-  inspectWatchService,
-  trustedWatchServiceIndexGeneration,
-  watchServiceAutoStartEligible,
-} from './watch-service.js';
+import { ensureWatchServiceForCommand, watchServiceAutoStartEligible } from './watch-service.js';
+import { ensureEvidenceCommandFreshness } from './evidence-command-freshness.js';
 import {
   initializeProfileWorkloadIdentity,
   profileCommand,
@@ -70,21 +65,25 @@ program.hook('preAction', async (_thisCommand, actionCommand) => {
   initializeProfileContext();
   await maybePrintUpdateNotice({ commandName });
   const { config, paths } = projectContext;
-  let watcherGeneration: string | undefined;
-  if (startWatchService && config.watch?.enabled === true) {
-    try {
-      watcherGeneration = trustedWatchServiceIndexGeneration(
-        inspectWatchService({ projectRoot, cacheDir: paths.cacheDir, cliVersion, gitContext }),
-      );
-    } catch {
-      // Watch service reuse is opportunistic; normal freshness validation remains the fallback.
-    }
-  }
   if (prepareSharedCache) {
-    const action = prepareWorktreeIndex(projectRoot, config, paths, { gitContext, watcherGeneration });
-    if (action.kind === 'failed' && process.env['SCIP_QUERY_DEBUG']) {
-      console.error(`shared-cache: ${action.reason}`);
+    const freshness = await ensureEvidenceCommandFreshness({
+      commandName,
+      projectRoot,
+      config,
+      paths,
+      dbPathSource: projectContext.dbPathSource,
+      gitContext,
+    });
+    if (process.env['SCIP_QUERY_DEBUG']) {
+      console.error(`evidence-freshness: ${freshness.source}`);
     }
+    if (freshness.service.kind === 'failed') {
+      console.error(`warning: scip-query watch service did not start: ${freshness.service.message}`);
+    }
+    if (freshness.service.kind === 'failed' || freshness.service.kind === 'skipped') {
+      maybeSweepRepositoryCache(projectRoot, cliVersion);
+    }
+    return;
   }
   if (!startWatchService) {
     maybeSweepRepositoryCache(projectRoot, cliVersion);

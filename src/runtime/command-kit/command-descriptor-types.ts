@@ -172,6 +172,8 @@ export interface CommandDescriptor {
   id: string;
   command: string;
   description: string;
+  /** Additional plain-text examples or mode guidance shown after --help. */
+  helpAfter?: string;
   hidden?: boolean;
   arguments?: readonly CommandArgumentDescriptor[];
   options?: readonly CommandOptionDescriptor[];

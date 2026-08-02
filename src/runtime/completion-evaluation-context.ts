@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
@@ -11,6 +12,7 @@ import {
   type CompletionEvaluationRequest,
   type CompletionPredicateJudgment,
 } from '../domain/autonomous-completion.js';
+import { isMonotonicArchitecturePolicyTightening } from '../change-control/architecture-policy-authority.js';
 import {
   completionCommandRegistry,
   completionProtectedArtifactSet,
@@ -33,7 +35,9 @@ import { protectedWorkAuthorizationMatchesRecords } from '../domain/protected-wo
 import { hashIdentity } from '../domain/autonomous-work-state.js';
 import { stableJson } from '../domain/stable-json.js';
 import type { ProjectConfig } from '../domain/types.js';
+import type { PlanContractRecordV1 } from '../change-control/plan-contract.js';
 import { sha256FileWithinLimit, SOURCE_ARTIFACT_MAX_BYTES } from '../filesystem/bounded-file.js';
+import { readProjectFileText } from '../platform/project-files.js';
 import { DIFF_GATE_CHECKS, blockingFindings, type DiffGateResult } from '../queries/impact/diff-gate.js';
 import { readObligationLifecycle } from '../storage/autonomous-work-obligations.js';
 import { createCompletionContextSnapshotFile } from '../storage/autonomous-completion-context.js';
@@ -54,6 +58,7 @@ import {
   type WorkStateCreateOptions,
 } from '../storage/autonomous-work-state.js';
 import { readWorkHistory } from '../storage/autonomous-work-ledger.js';
+import { readPlanContractRecords } from '../storage/plan-contract.js';
 import { captureFixedRepositoryObservation, captureFixedRepositoryObservationReceipt } from './observation-receipt.js';
 import { cliVersion } from './cli-support.js';
 import { evaluateArchitectureCompleteness } from './architecture-completeness.js';
@@ -121,6 +126,7 @@ export interface FixedCompletionContextLease {
   authority: CompletionAuthorityInputs;
   requests: readonly CompletionContextSnapshotRequest[];
   records: readonly CompletionContextSnapshotRecordV1[];
+  planContracts: readonly PlanContractRecordV1[];
   protectedWorkAuthorization?: FixedProtectedWorkAuthorizationLease;
   protectedGoalEvidence?: FixedProtectedGoalEvidenceLease;
 }
@@ -192,6 +198,7 @@ export function captureFixedCompletionContext(
   }
   const goals = readGoalRecords(projectRoot);
   const allChanges = readIntendedChangeRecords(projectRoot, goals);
+  const plans = readPlanContractRecords(projectRoot);
   const completionHistory = readCompletionHistory(projectRoot);
   const terminalChangeIds = new Set(
     completionHistory.summary.states
@@ -207,6 +214,8 @@ export function captureFixedCompletionContext(
     ...allChanges.compatibility.issues.map((issue) => `intended change ${issue.path}: ${issue.reason}`),
     ...allChanges.integrityIssues,
     ...completionHistory.integrityIssues.map((issue) => `completion ${issue}`),
+    ...plans.compatibility.issues.map((issue) => `plan ${issue.path}: ${issue.reason}`),
+    ...plans.integrityIssues.map((issue) => `plan ${issue}`),
   ];
   if (recordIssues.length > 0) {
     throw new Error(`completion context could not fix current goal/change state: ${recordIssues.join('; ')}`);
@@ -276,6 +285,9 @@ export function captureFixedCompletionContext(
     },
     requests,
     records,
+    planContracts: plans.currentRecords.filter((plan) =>
+      changes.records.some((change) => change.changeId === plan.changeId),
+    ),
     ...(options.protectedWorkAuthorization ? { protectedWorkAuthorization: options.protectedWorkAuthorization } : {}),
     ...(options.protectedGoalEvidence ? { protectedGoalEvidence: options.protectedGoalEvidence } : {}),
   };
@@ -367,6 +379,7 @@ export function publishStopCompletionEvaluations(
       changeId: request.change.changeId,
       diffGate: result,
       receipt: context.record.targetObservation,
+      planContracts: lease.planContracts.filter((plan) => plan.changeId === request.change.changeId),
       options,
     });
     const evaluationRequest = stopCompletionEvaluationRequest(
@@ -498,6 +511,7 @@ export function stopCompletionEvaluationRequest(
     },
     authorizedReferents: {
       ...(transitionRule.state === 'selected' ? transitionRuleAuthorizedReferents(transitionRule.rule) : {}),
+      ...repositoryPolicyAuthorizedReferents(projectRoot, authorityInputs),
       ...protectedWorkAuthorizationReferents(projectRoot, context, authorityInputs),
     },
   });
@@ -524,6 +538,48 @@ export function stopCompletionEvaluationRequest(
         }
       : {}),
   };
+}
+
+/**
+ * Repository-policy authority is permission derived from a fixed predecessor
+ * and a hard-coded rule whose accepted successor edits can only strengthen a
+ * protected policy. It does not accept a candidate's claim about its own edit.
+ */
+export function repositoryPolicyAuthorizedReferents(
+  projectRoot: string,
+  authorityInputs: CompletionAuthorityInputs,
+): Partial<Record<ProtectedArtifactClass, string>> {
+  if (authorityInputs.predecessor.kind !== 'git-tree') return {};
+  const configurationPath = '.scipquery.json';
+  if (!authorityInputs.changedPaths.includes(configurationPath)) return {};
+  const predecessor = readGitTreeConfiguration(projectRoot, authorityInputs.predecessor.treeOid);
+  if (predecessor === undefined) return {};
+  let successor: string;
+  try {
+    successor = readProjectFileText(projectRoot, configurationPath, {
+      inputKind: 'scip-query project configuration',
+    });
+  } catch {
+    return {};
+  }
+  if (!isMonotonicArchitecturePolicyTightening(predecessor, successor)) return {};
+  const successorDigest = createHash('sha256').update(successor).digest('hex');
+  return {
+    configuration: `repository-policy:monotonic-architecture-tightening:${authorityInputs.predecessor.treeOid}@${successorDigest}`,
+  };
+}
+
+function readGitTreeConfiguration(projectRoot: string, treeOid: string): string | undefined {
+  if (!/^[0-9a-f]{40,64}$/u.test(treeOid)) return undefined;
+  try {
+    return execFileSync('git', ['-C', projectRoot, 'cat-file', 'blob', `${treeOid}:.scipquery.json`], {
+      encoding: 'utf8',
+      timeout: 30_000,
+      maxBuffer: SOURCE_ARTIFACT_MAX_BYTES,
+    });
+  } catch {
+    return undefined;
+  }
 }
 
 export function protectedWorkAuthorizationReferents(

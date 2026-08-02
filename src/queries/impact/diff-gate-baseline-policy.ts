@@ -115,7 +115,7 @@ export function baselineFindingMetadata(finding: string): BaselineFindingMetadat
         rootCauseKey: payload,
         label: 'stale architecture allowance',
         why: [`requireMinimalPolicy rejects the unused ${from} -> ${to} allowance.`],
-        remediation: `Remove ${to} from ${from}'s allowed dependencies, or restore and justify a current edge before updating the baseline.`,
+        remediation: `In .scipquery.json, remove ${to} from ${from}'s allowedDependencies; remove the ${to} boundary too if it owns no remaining files. Otherwise restore and justify a current edge. Do not update the baseline to hide a stale permission; verify with scip-query architecture.`,
       });
     }
     if (architectureKind === 'boundary-limit') {

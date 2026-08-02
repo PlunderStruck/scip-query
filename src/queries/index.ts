@@ -234,7 +234,14 @@ export type {
   RecentDuplicatesResult,
 } from './cleanup/recent-duplicates.js';
 export type { BaselineComparison, HealthBaselineFile } from './internal/baseline-file.js';
-export type { PlanContextOptions, PlanContextResult } from './impact/plan-context.js';
+export type {
+  PlanContextAffectedConsumer,
+  PlanContextConsumerReuse,
+  PlanContextConsumerReuseCandidate,
+  PlanContextConsumerReuseCoverage,
+  PlanContextOptions,
+  PlanContextResult,
+} from './impact/plan-context.js';
 export type {
   BaseContentGitRuntime,
   BaseContentLookupOptions,

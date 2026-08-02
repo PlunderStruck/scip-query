@@ -32,6 +32,7 @@ import {
   handleObligation,
 } from './work-state-handlers.js';
 import { handleMissionTrial } from './mission-trial-handlers.js';
+import { handlePlanContract } from './plan-contract-handlers.js';
 import { orderedQueryCommandDescriptors } from './query-command-specs.js';
 
 const queryCommandsBeforeDiffImpact = orderedQueryCommandDescriptors.slice(0, queryIndexAfter('plan-context'));
@@ -484,6 +485,38 @@ export const commandDescriptors: CommandDescriptor[] = [
     handler: handleIntendedChange,
   },
   {
+    id: 'plan',
+    command: 'plan <operation> [target]',
+    agent: agentContract(
+      'Can one concise relational or sustained change contract be applied, read, validated, or summarized?',
+      'immutable plan identity, workflow class, repository consequences, source observation, derived obligations, compatibility, and revision integrity',
+      ['action', 'record'],
+      'complete',
+      'repository',
+      commandOperation('repository-observation', [
+        { when: { kind: 'argument', index: 0, equals: 'apply' }, role: 'mutation' },
+      ]),
+    ),
+    description: 'Apply or inspect one structured Markdown change contract and its derived obligations',
+    helpAfter: `Examples:
+  scip-query plan example
+  scip-query plan apply plan.md
+
+The Markdown fence can contain inline goal/change objects for new work, or goalId/changeId values for existing work.
+Run "scip-query plan example" for a valid one-action starter contract.`,
+    options: withJsonOption(),
+    claims: fixedClaimContract('repository-source', ['live-workspace']),
+    renderShape: 'custom',
+    docs: doc('Autonomous work state', [
+      'scip-query plan example',
+      'scip-query plan apply plan.md',
+      'scip-query plan status --json',
+      'scip-query plan read SQP-0123456789ABCDEF0123456789ABCDEF',
+      'scip-query plan validate .scipquery/plans/SQP-....json',
+    ]),
+    handler: handlePlanContract,
+  },
+  {
     id: 'attempt',
     command: 'attempt <operation> [target]',
     agent: agentContract(
@@ -576,7 +609,8 @@ export const commandDescriptors: CommandDescriptor[] = [
     claims: fixedClaimContract('repository-source', ['live-workspace']),
     renderShape: 'custom',
     docs: doc('Autonomous work state', [
-      'scip-query completion status SQC-0123456789ABCDEF0123456789ABCDEF --json',
+      'scip-query completion status SQC-0123456789ABCDEF0123456789ABCDEF',
+      'scip-query completion status SQC-0123456789ABCDEF0123456789ABCDEF --json --result-only',
       'scip-query completion read SQCX-0123456789ABCDEF0123456789ABCDEF',
       'scip-query completion read SQE-0123456789ABCDEF0123456789ABCDEF',
       'scip-query completion rule-create --input transition-rule-request.json --json',

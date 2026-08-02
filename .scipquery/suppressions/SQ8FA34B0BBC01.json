@@ -8,9 +8,9 @@
   "id": "SQ8FA34B0BBC01",
   "check": "co-change-partner",
   "file": "src/runtime/commands/command-descriptors.ts",
-  "reason": "The new hidden hook-stop-prepare descriptor directly binds the lifecycle handler in agent-hooks, following the existing custom hook descriptor path. Generic command-handlers neither dispatches nor renders custom lifecycle commands, so changing it would add unrelated code rather than complete this command.",
+  "reason": "The plan descriptor directly imports the dedicated plan-contract handler. Generic command-handlers owns side-effect lifecycles and neither dispatches nor renders plan operations, so editing it would create an unused parallel path.",
   "createdAt": "2026-07-29T19:50:55.191Z",
-  "updatedAt": "2026-08-01T02:56:41.740Z",
+  "updatedAt": "2026-08-01T23:45:12.119Z",
   "schemaVersion": 2,
   "decision": {
     "kind": "automated-adjudication",
@@ -19,7 +19,7 @@
     "policyVersion": 1,
     "observation": {
       "schemaVersion": 2,
-      "observedAt": "2026-08-01T02:56:41.737Z",
+      "observedAt": "2026-08-01T23:45:12.117Z",
       "facts": {
         "collaborationDomain": {
           "schemaVersion": 1,
@@ -49,7 +49,7 @@
             "name": "scip-query:repository-content",
             "version": 1
           },
-          "digest": "87027822b18fb239b36a9c18c7e7023a0b84e55b6b10d54de0c8029c0a192bba"
+          "digest": "45e1e7b4dac877bdbee4da6f3239e4c470960ffa2ff74ece2065437109293d99"
         },
         "relevantInputs": [
           {
@@ -62,7 +62,7 @@
                 "name": "scip-query:index-inputs",
                 "version": 2
               },
-              "digest": "33ea279154b09864c5a49ef79f62358c6e8d07540a9e173953b53ba741444350"
+              "digest": "008a80b60492ab5f778ec217459fd4928e04cafb9f7f1e7a9359247ea74605b3"
             }
           }
         ],
@@ -75,7 +75,7 @@
               "name": "scip-query:index-generation",
               "version": 1
             },
-            "digest": "765436ead3ce71a882c83236c46b59ee7f111e71dbb3be07d05008b0e9f5cebc"
+            "digest": "577862d628aafa5b8ff3b5deb6d2589a0be188325be087286fecb5d3a2ddf6f0"
           },
           "inputs": {
             "schemaVersion": 1,
@@ -85,7 +85,7 @@
               "name": "scip-query:index-inputs",
               "version": 2
             },
-            "digest": "62ed588fbee2eb5426168198127952048a5103dee3232c9443fe4a000305b097"
+            "digest": "eda19c0c566715a071274b9959df413f053beb731daa10c22f4feec46f69ea82"
           },
           "source": "immutable"
         }
@@ -101,7 +101,7 @@
               "name": "scip-query:index-generation",
               "version": 1
             },
-            "digest": "765436ead3ce71a882c83236c46b59ee7f111e71dbb3be07d05008b0e9f5cebc"
+            "digest": "577862d628aafa5b8ff3b5deb6d2589a0be188325be087286fecb5d3a2ddf6f0"
           }
         },
         {
@@ -114,7 +114,7 @@
               "name": "scip-query:repository-content",
               "version": 1
             },
-            "digest": "87027822b18fb239b36a9c18c7e7023a0b84e55b6b10d54de0c8029c0a192bba"
+            "digest": "45e1e7b4dac877bdbee4da6f3239e4c470960ffa2ff74ece2065437109293d99"
           }
         }
       ],
@@ -130,39 +130,34 @@
       ],
       "diagnostics": {
         "clean": false,
-        "headCommit": "b4b91ebdd1c48c54019a1917bca5640d224e9feb",
-        "treeOid": "51b3a1b15cb480bc43b6f5c5a775bc3ce3bc362b"
+        "headCommit": "075e6d93bd8690a7433bceadc6582b1ad09daf8a",
+        "treeOid": "dafd1a959b789e44b6caa38bea85f157ae4b0491"
       }
     },
     "evidence": [
       {
         "kind": "source",
         "referent": "src/runtime/commands/command-descriptors.ts",
-        "claim": "The new hidden hook-stop-prepare descriptor directly binds the lifecycle handler in agent-hooks, following the existing custom hook descriptor path. Generic command-handlers neither dispatches nor renders custom lifecycle commands, so changing it would add unrelated code rather than complete this command.",
-        "contentHash": "2f6d5e398e3a59e1e69ff7523c40caa545c2263a48b45cbf84d2114923f4fb19"
+        "claim": "The plan descriptor directly imports the dedicated plan-contract handler. Generic command-handlers owns side-effect lifecycles and neither dispatches nor renders plan operations, so editing it would create an unused parallel path.",
+        "contentHash": "fe7edb961120d5198b2b7940de2a611e5cb7978c32a1000cc0a2463ea461836c"
       },
       {
         "kind": "source",
-        "referent": "src/runtime/agent-hooks.ts",
-        "claim": "The new hidden hook-stop-prepare descriptor directly binds the lifecycle handler in agent-hooks, following the existing custom hook descriptor path. Generic command-handlers neither dispatches nor renders custom lifecycle commands, so changing it would add unrelated code rather than complete this command.",
-        "contentHash": "cf0b537018b1a3cd212ad2fec24d222b0e878fa25edd2b2c4fac7a90f7e77a2f"
+        "referent": "src/runtime/commands/plan-contract-handlers.ts",
+        "claim": "The plan descriptor directly imports the dedicated plan-contract handler. Generic command-handlers owns side-effect lifecycles and neither dispatches nor renders plan operations, so editing it would create an unused parallel path.",
+        "contentHash": "007565f53fb55e057ef24d2ec6326077bec3a5e2160389fee965c6ab6b24a8d5"
       },
       {
         "kind": "source",
         "referent": "src/runtime/commands/command-handlers.ts",
-        "claim": "The new hidden hook-stop-prepare descriptor directly binds the lifecycle handler in agent-hooks, following the existing custom hook descriptor path. Generic command-handlers neither dispatches nor renders custom lifecycle commands, so changing it would add unrelated code rather than complete this command.",
+        "claim": "The plan descriptor directly imports the dedicated plan-contract handler. Generic command-handlers owns side-effect lifecycles and neither dispatches nor renders plan operations, so editing it would create an unused parallel path.",
         "contentHash": "ff1953ee7954a9ffc015bd17f53eb111053c410b3255d18d06f636fe2c19fe79"
       },
       {
         "kind": "test",
         "referent": "tests/runtime/cli-contract.test.ts",
-        "claim": "The new hidden hook-stop-prepare descriptor directly binds the lifecycle handler in agent-hooks, following the existing custom hook descriptor path. Generic command-handlers neither dispatches nor renders custom lifecycle commands, so changing it would add unrelated code rather than complete this command.",
-        "contentHash": "fcb4bf0c4f0e86f3a458000712996287e967914cc6d01b212f84d4251a411f47"
-      },
-      {
-        "kind": "graph",
-        "referent": "scip-query refs handleAgentHookStopPrepare --full",
-        "claim": "The new hidden hook-stop-prepare descriptor directly binds the lifecycle handler in agent-hooks, following the existing custom hook descriptor path. Generic command-handlers neither dispatches nor renders custom lifecycle commands, so changing it would add unrelated code rather than complete this command."
+        "claim": "The plan descriptor directly imports the dedicated plan-contract handler. Generic command-handlers owns side-effect lifecycles and neither dispatches nor renders plan operations, so editing it would create an unused parallel path.",
+        "contentHash": "a2b797118b520f6fdc47db523e9d75a745874e51df0a15550574f09514ed7e9e"
       }
     ],
     "invalidateOn": {

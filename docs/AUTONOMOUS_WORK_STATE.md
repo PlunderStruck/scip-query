@@ -95,7 +95,12 @@ and completion gate from running both before and after protected evaluation;
 the final `hook-stop` remains the sole enforcement owner. Candidates do not
 run preparation themselves and receive no extra metadata ceremony.
 
-## Create a goal
+## Create a goal without a plan
+
+Ordinary relational or sustained work creates its goal and intended change in
+the plan action described below. Use the separate commands in this section for
+an unsupported agent adapter, explicit record repair, or work that needs a goal
+record before a plan exists.
 
 Write a temporary request such as:
 
@@ -137,7 +142,7 @@ implementation, and use scenarios for externally observable acceptance. If
 the goal's meaning changes, create a new request with `predecessorGoalId`; do
 not edit the earlier record.
 
-## Create an intended change
+## Create an intended change without a plan
 
 Write a temporary request such as:
 
@@ -163,6 +168,126 @@ The request schema is
 The caller chooses an idempotency key stable across retries. The key is scoped
 to the repository collaboration domain: retrying the same request reuses the
 record, while using the same key for different work fails.
+
+## Apply a change contract when the work is relational
+
+A change contract is a fixed link between an authorized goal and the concrete
+repository consequences needed to fulfill it. Its real referents are the
+symbols and files the change reaches, behavior that must remain true, old
+identities or responsibilities that must disappear, allowed survivors,
+selected shared-responsibility owners, architecture conditions, and the
+evidence that can test those facts. What
+distinguishes it from an implementation recipe is that it states the required
+end state without dictating how to write the code.
+
+Direct work has one already-proven local effect, so it does not need a durable
+contract. Relational work crosses symbols, files, or behavior boundaries and
+uses one coherent contract. Sustained work is relational work whose ordered,
+independently verifiable slices must survive a later session.
+
+Write readable reasoning in Markdown and include exactly one machine-readable
+contract:
+
+````markdown
+# Retire the legacy retry path
+
+The shared retry policy already owns the replacement behavior.
+
+```scip-query-plan
+{
+  "schemaVersion": 1,
+  "goal": {
+    "feature": "The legacy retry responsibility is fully replaced",
+    "invariants": ["Unrelated delivery outcomes remain true"],
+    "acceptanceScenarios": [
+      {
+        "name": "The replacement is complete",
+        "given": ["The repository still contains the legacy retry responsibility"],
+        "when": ["The authorized migration is complete"],
+        "then": ["The shared retry policy owns retry decisions and the legacy responsibility is absent"]
+      }
+    ],
+    "authorization": {
+      "kind": "repository-delegation",
+      "principal": "repository-owner",
+      "source": "authorized user request"
+    }
+  },
+  "change": {
+    "idempotencyKey": "retry-migration",
+    "title": "Retire the legacy retry path",
+    "intendedOutcome": "One shared retry policy replaces the legacy retry responsibility"
+  },
+  "workflowClass": "relational",
+  "affectedSeeds": [
+    { "id": "entry", "kind": "symbol", "referent": "queueDelivery", "role": "public entry" }
+  ],
+  "preserve": [
+    { "id": "outcomes", "condition": "Success and permanent failures keep their current outcomes", "evidenceIds": ["tests"] }
+  ],
+  "retirements": [
+    { "id": "legacy", "kind": "identity", "referent": "legacyRetry", "responsibility": "fixed retry delay", "condition": "The legacy retry identity no longer remains in the current repository", "evidenceIds": ["retirement"] }
+  ],
+  "allowedSurvivors": [],
+  "reuseAuthorities": [],
+  "architecture": [
+    { "id": "owner", "predicate": "configured-policy-clean", "condition": "The configured architecture policy has no violation or stale allowance", "evidenceIds": ["gate"] }
+  ],
+  "completionEvidence": [
+    { "id": "tests", "description": "Run focused outcome tests", "command": "npm test" },
+    { "id": "retirement", "description": "Search every declared retirement seed" },
+    { "id": "gate", "description": "Run the configured final gate", "command": "scip-query diff-gate" }
+  ],
+  "slices": []
+}
+```
+````
+
+Apply it once before source edits:
+
+```bash
+scip-query plan example
+scip-query plan apply docs/plans/retry-migration.md
+scip-query plan status
+scip-query plan read SQP-...
+```
+
+The command validates the whole contract before writing, creates the inline
+goal and intended change, captures the fixed repository state it describes,
+publishes an immutable record under `.scipquery/plans/`, and admits its
+retirement, reuse, and architecture obligations in the same useful action. Use
+`goalId` and `changeId` instead of inline objects only when those records
+already exist. A retry against the same plan and repository state reuses the
+records. A revision names `predecessorPlanId`; two successors from one
+predecessor are reported as a conflict instead of being chosen by time.
+
+An allowed survivor is not permission written by the plan itself. It must cite
+a goal, repository policy, or delegated decision that independently gives the
+old referent a current role. Current literal retirement checks can establish a
+repository-policy citation written as `path#policy text`. A broader behavior
+claim remains incomplete until another registered producer can test it.
+
+A reuse authority is an existing repository symbol selected to remain the one
+owner of a responsibility shared by two or more affected consumers. The plan
+names the owner and consumers before editing; the final gate establishes the
+condition only when the compiler-resolved call graph shows every named
+consumer delegating to that owner. This turns a reuse decision into a testable
+repository fact without blocking work that has no concrete reuse candidate.
+
+A monotonic architecture-policy tightening is a configuration edit whose only
+semantic effect is to remove previously allowed boundary dependencies. Every
+boundary, dependency-row owner, enforcement switch, and unrelated setting
+stays fixed. Because this edit can only strengthen enforcement, the completion
+controller can authorize it from the fixed Git predecessor without knowing its
+exact final bytes in advance.
+
+An architecture item uses the fixed predicate `configured-policy-clean`. This
+means a clean configured architecture gate can fulfill it. Free-form ownership
+prose is not silently treated as proven by a generic gate.
+
+The Markdown contract and immutable record schemas are
+[`schemas/plan-contract.schema.json`](schemas/plan-contract.schema.json) and
+[`schemas/plan-contract-record.schema.json`](schemas/plan-contract-record.schema.json).
 
 ## Record attempts and decisions
 
@@ -433,6 +558,7 @@ action.
 ## Collaboration and validation
 
 Commit `.scipquery/goals/*.json`, `.scipquery/changes/*.json`,
+`.scipquery/plans/*.json`,
 `.scipquery/attempts/*.json`, `.scipquery/decisions/*.json`,
 `.scipquery/obligations/*.json`, and
 `.scipquery/obligation-transitions/*.json`,

@@ -59,6 +59,7 @@ export function registerCommandDescriptors(
       ? program.command(descriptor.command, { hidden: true })
       : program.command(descriptor.command);
     command.description(descriptor.description);
+    if (descriptor.helpAfter) command.addHelpText('after', `\n${descriptor.helpAfter.trim()}\n`);
 
     for (const argument of descriptor.arguments ?? []) {
       command.argument(argument.name);

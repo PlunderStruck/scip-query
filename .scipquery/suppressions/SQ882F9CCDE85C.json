@@ -1,0 +1,161 @@
+{
+  "kind": "scip-query-suppression",
+  "suppressionIdentity": "SQ882F9CCDE85C",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  },
+  "id": "SQ882F9CCDE85C",
+  "check": "echo",
+  "file": "src/storage/plan-contract.ts",
+  "reason": "Both readers reuse readRecordFile. Each wrapper selects a different directory, identity predicate, decoder, and record type, so the remaining parallel shape is the required typed boundary.",
+  "createdAt": "2026-08-01T21:11:28.919Z",
+  "schemaVersion": 2,
+  "decision": {
+    "kind": "automated-adjudication",
+    "reasonCode": "detector-counterexample",
+    "decidedBy": "agent",
+    "policyVersion": 1,
+    "observation": {
+      "schemaVersion": 2,
+      "observedAt": "2026-08-01T21:11:28.917Z",
+      "facts": {
+        "collaborationDomain": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:collaboration-domain",
+            "version": 1
+          },
+          "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+        },
+        "workspaceInstance": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:workspace-instance",
+            "version": 1
+          },
+          "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+        },
+        "wholeContent": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:repository-content",
+            "version": 1
+          },
+          "digest": "60340d6255d3dbff6757704763c258a8c67ee09ea335e092f4e951f888519163"
+        },
+        "relevantInputs": [
+          {
+            "subject": "scip-query:index-inputs",
+            "identity": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:index-inputs",
+                "version": 2
+              },
+              "digest": "f932262d8b45764356dfdcccbff01e90b38495a7885e35a63af6c070d3c1b7cf"
+            }
+          }
+        ],
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "3acbec99f455eb8d6753a198eb9edeebc4685e0ee2f02c5c70fea1ecdddb3094"
+          },
+          "inputs": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-inputs",
+              "version": 2
+            },
+            "digest": "f932262d8b45764356dfdcccbff01e90b38495a7885e35a63af6c070d3c1b7cf"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "3acbec99f455eb8d6753a198eb9edeebc4685e0ee2f02c5c70fea1ecdddb3094"
+          }
+        },
+        {
+          "kind": "repository-snapshot",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:repository-content",
+              "version": 1
+            },
+            "digest": "60340d6255d3dbff6757704763c258a8c67ee09ea335e092f4e951f888519163"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        },
+        {
+          "source": "repository-snapshot",
+          "kind": "fixed-snapshot"
+        }
+      ],
+      "diagnostics": {
+        "clean": false,
+        "headCommit": "075e6d93bd8690a7433bceadc6582b1ad09daf8a",
+        "treeOid": "dafd1a959b789e44b6caa38bea85f157ae4b0491"
+      }
+    },
+    "evidence": [
+      {
+        "kind": "source",
+        "referent": "src/storage/plan-contract.ts",
+        "claim": "Both readers reuse readRecordFile. Each wrapper selects a different directory, identity predicate, decoder, and record type, so the remaining parallel shape is the required typed boundary.",
+        "contentHash": "4788184d2f0a9b77f1456e70dc89d546519519e192f1b3ab9658f6dadbba847a"
+      },
+      {
+        "kind": "source",
+        "referent": "src/storage/autonomous-completion.ts",
+        "claim": "Both readers reuse readRecordFile. Each wrapper selects a different directory, identity predicate, decoder, and record type, so the remaining parallel shape is the required typed boundary.",
+        "contentHash": "2f26dbbf42a3d86a8ab63435e6901d56a32142855ef4406deee390c464cddd10"
+      },
+      {
+        "kind": "test",
+        "referent": "tests/storage/plan-contract.test.ts",
+        "claim": "Both readers reuse readRecordFile. Each wrapper selects a different directory, identity predicate, decoder, and record type, so the remaining parallel shape is the required typed boundary.",
+        "contentHash": "a1d3663bd470473832d9029b16058a9ee32aa8ce518b5c7f912416342e1f793a"
+      }
+    ],
+    "invalidateOn": {
+      "targetContentChange": true,
+      "detectorMajorChange": true
+    }
+  }
+}

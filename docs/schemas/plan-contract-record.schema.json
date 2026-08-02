@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/scip-query/docs/schemas/plan-contract-record.schema.json",
+  "title": "scip-query plan contract record v1",
+  "description": "One immutable applied change contract stored under .scipquery/plans/.",
+  "type": "object",
+  "required": [
+    "kind",
+    "schemaVersion",
+    "planId",
+    "collaborationDomainId",
+    "goalId",
+    "changeId",
+    "workflowClass",
+    "affectedSeeds",
+    "preserve",
+    "retirements",
+    "allowedSurvivors",
+    "reuseAuthorities",
+    "architecture",
+    "completionEvidence",
+    "slices",
+    "source",
+    "compiledAgainst",
+    "semanticIdentity",
+    "createdAt",
+    "writer"
+  ],
+  "properties": {
+    "kind": { "const": "scip-query-plan-contract" },
+    "schemaVersion": { "const": 1 },
+    "planId": { "$ref": "./plan-contract.schema.json#/$defs/planId" },
+    "collaborationDomainId": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[89abAB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}$"
+    },
+    "goalId": { "$ref": "./plan-contract.schema.json#/$defs/goalId" },
+    "changeId": { "$ref": "./plan-contract.schema.json#/$defs/changeId" },
+    "workflowClass": { "$ref": "./plan-contract.schema.json#/properties/workflowClass" },
+    "predecessorPlanId": { "$ref": "./plan-contract.schema.json#/$defs/planId" },
+    "affectedSeeds": { "$ref": "./plan-contract.schema.json#/properties/affectedSeeds" },
+    "preserve": { "$ref": "./plan-contract.schema.json#/properties/preserve" },
+    "retirements": { "$ref": "./plan-contract.schema.json#/properties/retirements" },
+    "allowedSurvivors": { "$ref": "./plan-contract.schema.json#/properties/allowedSurvivors" },
+    "reuseAuthorities": { "$ref": "./plan-contract.schema.json#/properties/reuseAuthorities" },
+    "architecture": { "$ref": "./plan-contract.schema.json#/properties/architecture" },
+    "completionEvidence": { "$ref": "./plan-contract.schema.json#/properties/completionEvidence" },
+    "slices": { "$ref": "./plan-contract.schema.json#/properties/slices" },
+    "source": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "compiledAgainst": { "$ref": "./observation-receipt.schema.json" },
+    "semanticIdentity": {
+      "type": "object",
+      "required": ["algorithm", "canonicalizationVersion", "digest"],
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "canonicalizationVersion": { "const": 1 },
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "writer": { "$ref": "./goal-record.schema.json#/$defs/writer" }
+  },
+  "additionalProperties": false
+}

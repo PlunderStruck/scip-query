@@ -7,6 +7,7 @@ import { affected, type AffectedResult } from '../graph/affected.js';
 import { callGraph, type CallGraphResult } from '../navigation/call-graph.js';
 import { changeSurface, type ChangeSurfaceResult } from './change-surface.js';
 import { coChange } from '../cleanup/co-change.js';
+import { similar, type SimilarSymbolResult } from '../cleanup/similar.js';
 import { complexity, type ComplexityResult } from '../quality/complexity.js';
 import { dataflow, type DataflowResult } from '../navigation/dataflow.js';
 import { deps, rdeps, type DepResult } from '../navigation/deps.js';
@@ -14,6 +15,8 @@ import { slice, type SliceResult } from '../navigation/slice.js';
 import { surface, type SurfaceResult } from '../navigation/surface.js';
 import { system, type SystemResult } from '../navigation/system.js';
 import { trace, type TraceResult } from '../navigation/trace.js';
+import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
+import { leafName } from '../../symbols/symbol-parser.js';
 
 export interface PlanContextOptions {
   semantic?: boolean;
@@ -41,6 +44,35 @@ export interface PlanContextHistory {
   suppressionsInFile: number;
 }
 
+export interface PlanContextAffectedConsumer {
+  symbol: string;
+  shortName: string;
+  file: string;
+  referenceCount: number;
+}
+
+export interface PlanContextConsumerReuseCandidate {
+  /** Similarity evidence between one affected consumer and this possible existing owner. */
+  candidate: SimilarSymbolResult;
+  /** Affected consumers whose bounded similarity scan produced this same possible owner. */
+  consumers: PlanContextAffectedConsumer[];
+}
+
+export interface PlanContextConsumerReuseCoverage {
+  totalConsumers: number;
+  analyzedConsumers: number;
+  omittedConsumers: number;
+  perConsumerSearchLimit: number;
+  perConsumerCandidateLimit: number;
+  candidateLimit: number;
+  returnedCandidates: number;
+}
+
+export interface PlanContextConsumerReuse {
+  candidates: PlanContextConsumerReuseCandidate[];
+  coverage: PlanContextConsumerReuseCoverage;
+}
+
 export interface PlanContextResult {
   target: string;
   matched: {
@@ -61,8 +93,22 @@ export interface PlanContextResult {
   rdeps: DepResult[];
   system: SystemResult;
   surface: SurfaceResult[];
+  /** Bounded existing symbols whose implementation evidence may support reuse. */
+  reuseCandidates?: SimilarSymbolResult[];
+  /**
+   * Bounded possible owners found by comparing functions that directly use
+   * the target. Kept separate because this is surrounding-behavior evidence,
+   * not evidence that the owner can replace the target itself.
+   */
+  affectedConsumerReuse?: PlanContextConsumerReuse;
   warnings: string[];
 }
+
+const AFFECTED_CONSUMER_LIMIT = 6;
+const PER_CONSUMER_SEARCH_LIMIT = 10;
+const PER_CONSUMER_REUSE_LIMIT = 3;
+const AFFECTED_CONSUMER_REUSE_LIMIT = 8;
+const MIN_SINGLE_CONSUMER_SIGNAL_SIMILARITY = 0.7;
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; target resolution, evidence gathering, and plan rendering stay together.
 export function planContext(db: ScipDatabase, target: string, opts: PlanContextOptions = {}): PlanContextResult {
@@ -153,6 +199,53 @@ export function planContext(db: ScipDatabase, target: string, opts: PlanContextO
         (result) => ({ maxDepth: impactDepth, affectedSymbols: result.length }),
       )
     : [];
+  const reuseCandidates = symbolTarget
+    ? profilePlanContextComponent(
+        'reuse-candidates',
+        target,
+        () =>
+          similar(db, target, {
+            minSimilarity: 0.4,
+            limit: 5,
+            semantic,
+            sourceCandidateMode: 'target-pruned',
+          }),
+        (result) => ({
+          candidates: result.length,
+          direct: result.filter((item) => item.actionTier === 'direct').length,
+        }),
+      )
+    : [];
+  const targetSymbol = symbolTarget ? (findFirstSymbolMatch(db, target)?.symbol ?? null) : null;
+  const affectedConsumerReuse = symbolTarget
+    ? profilePlanContextComponent(
+        'affected-consumer-reuse',
+        target,
+        () =>
+          discoverAffectedConsumerReuse(
+            traceResult,
+            targetSymbol,
+            (consumerSymbol) =>
+              similar(db, consumerSymbol, {
+                minSimilarity: 0.4,
+                limit: PER_CONSUMER_SEARCH_LIMIT,
+                semantic,
+                sourceCandidateMode: 'target-pruned',
+              }),
+            {
+              consumerLimit: AFFECTED_CONSUMER_LIMIT,
+              perConsumerSearchLimit: PER_CONSUMER_SEARCH_LIMIT,
+              perConsumerCandidateLimit: PER_CONSUMER_REUSE_LIMIT,
+              candidateLimit: AFFECTED_CONSUMER_REUSE_LIMIT,
+            },
+          ),
+        (result) => ({
+          totalConsumers: result.coverage.totalConsumers,
+          analyzedConsumers: result.coverage.analyzedConsumers,
+          candidates: result.candidates.length,
+        }),
+      )
+    : emptyAffectedConsumerReuse();
 
   const changeSurfaceResult = profilePlanContextComponent(
     'change-surface',
@@ -236,7 +329,158 @@ export function planContext(db: ScipDatabase, target: string, opts: PlanContextO
     rdeps: rdepsResults,
     system: systemResult,
     surface: surfaceResults,
+    reuseCandidates,
+    affectedConsumerReuse,
     warnings,
+  };
+}
+
+interface AffectedConsumerReuseLimits {
+  consumerLimit?: number;
+  perConsumerSearchLimit?: number;
+  perConsumerCandidateLimit?: number;
+  candidateLimit?: number;
+}
+
+/**
+ * Turn compiler-resolved target references into a bounded search for existing
+ * owners of the surrounding consumer behavior. Exported for a pure contract
+ * test; production supplies `similar` as the evidence source.
+ */
+export function discoverAffectedConsumerReuse(
+  traceResult: Pick<TraceResult, 'referencedBy'>,
+  targetSymbol: string | null,
+  findSimilar: (consumerSymbol: string) => SimilarSymbolResult[],
+  limits: AffectedConsumerReuseLimits = {},
+): PlanContextConsumerReuse {
+  const consumerLimit = normalizedPositiveLimit(limits.consumerLimit, AFFECTED_CONSUMER_LIMIT);
+  const perConsumerSearchLimit = normalizedPositiveLimit(limits.perConsumerSearchLimit, PER_CONSUMER_SEARCH_LIMIT);
+  const perConsumerCandidateLimit = normalizedPositiveLimit(limits.perConsumerCandidateLimit, PER_CONSUMER_REUSE_LIMIT);
+  const candidateLimit = normalizedPositiveLimit(limits.candidateLimit, AFFECTED_CONSUMER_REUSE_LIMIT);
+  const consumers = affectedConsumers(traceResult);
+  const analyzedConsumers = consumers.slice(0, consumerLimit);
+  const excludedSymbols = new Set(consumers.map((consumer) => consumer.symbol));
+  if (targetSymbol) excludedSymbols.add(targetSymbol);
+
+  const byCandidateSymbol = new Map<string, PlanContextConsumerReuseCandidate>();
+  for (const consumer of analyzedConsumers) {
+    const rows = findSimilar(consumer.symbol).slice(0, perConsumerSearchLimit);
+    let acceptedForConsumer = 0;
+    for (const rawCandidate of rows) {
+      const candidate = normalizeConsumerSimilarity(rawCandidate, consumer.symbol);
+      if (!candidate || excludedSymbols.has(candidate.symbolB)) continue;
+
+      const current = byCandidateSymbol.get(candidate.symbolB);
+      if (!current) {
+        byCandidateSymbol.set(candidate.symbolB, { candidate, consumers: [consumer] });
+      } else {
+        if (!current.consumers.some((item) => item.symbol === consumer.symbol)) {
+          current.consumers.push(consumer);
+        }
+        if (candidate.similarity > current.candidate.similarity) current.candidate = candidate;
+      }
+      acceptedForConsumer += 1;
+      if (acceptedForConsumer >= perConsumerCandidateLimit) break;
+    }
+  }
+
+  const candidates = [...byCandidateSymbol.values()]
+    .filter(
+      (candidate) =>
+        candidate.candidate.actionTier === 'direct' ||
+        candidate.candidate.similarity >= MIN_SINGLE_CONSUMER_SIGNAL_SIMILARITY ||
+        candidate.consumers.length > 1,
+    )
+    .sort(compareConsumerReuseCandidates)
+    .slice(0, candidateLimit);
+  return {
+    candidates,
+    coverage: {
+      totalConsumers: consumers.length,
+      analyzedConsumers: analyzedConsumers.length,
+      omittedConsumers: Math.max(0, consumers.length - analyzedConsumers.length),
+      perConsumerSearchLimit,
+      perConsumerCandidateLimit,
+      candidateLimit,
+      returnedCandidates: candidates.length,
+    },
+  };
+}
+
+function affectedConsumers(traceResult: Pick<TraceResult, 'referencedBy'>): PlanContextAffectedConsumer[] {
+  const bySymbol = new Map<string, PlanContextAffectedConsumer>();
+  for (const reference of traceResult.referencedBy) {
+    if (!reference.enclosingSymbol) continue;
+    const current = bySymbol.get(reference.enclosingSymbol);
+    if (current) {
+      current.referenceCount += 1;
+      continue;
+    }
+    bySymbol.set(reference.enclosingSymbol, {
+      symbol: reference.enclosingSymbol,
+      shortName: leafName(reference.enclosingSymbol) || reference.enclosingShort,
+      file: reference.relativePath,
+      referenceCount: 1,
+    });
+  }
+  return [...bySymbol.values()].sort(
+    (left, right) => right.referenceCount - left.referenceCount || left.symbol.localeCompare(right.symbol),
+  );
+}
+
+function normalizeConsumerSimilarity(
+  candidate: SimilarSymbolResult,
+  consumerSymbol: string,
+): SimilarSymbolResult | null {
+  if (candidate.symbolA === consumerSymbol) return candidate;
+  if (candidate.symbolB !== consumerSymbol) return null;
+  return {
+    ...candidate,
+    symbolA: candidate.symbolB,
+    shortNameA: candidate.shortNameB,
+    fileA: candidate.fileB,
+    symbolB: candidate.symbolA,
+    shortNameB: candidate.shortNameA,
+    fileB: candidate.fileA,
+    uniqueToA: candidate.uniqueToB,
+    uniqueToB: candidate.uniqueToA,
+  };
+}
+
+function compareConsumerReuseCandidates(
+  left: PlanContextConsumerReuseCandidate,
+  right: PlanContextConsumerReuseCandidate,
+): number {
+  const tierDifference = actionTierRank(right.candidate.actionTier) - actionTierRank(left.candidate.actionTier);
+  if (tierDifference !== 0) return tierDifference;
+  const supportDifference = right.consumers.length - left.consumers.length;
+  if (supportDifference !== 0) return supportDifference;
+  const similarityDifference = right.candidate.similarity - left.candidate.similarity;
+  return similarityDifference !== 0
+    ? similarityDifference
+    : left.candidate.symbolB.localeCompare(right.candidate.symbolB);
+}
+
+function actionTierRank(tier: SimilarSymbolResult['actionTier']): number {
+  return tier === 'direct' ? 1 : 0;
+}
+
+function normalizedPositiveLimit(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(1, Math.floor(value)) : fallback;
+}
+
+function emptyAffectedConsumerReuse(): PlanContextConsumerReuse {
+  return {
+    candidates: [],
+    coverage: {
+      totalConsumers: 0,
+      analyzedConsumers: 0,
+      omittedConsumers: 0,
+      perConsumerSearchLimit: PER_CONSUMER_SEARCH_LIMIT,
+      perConsumerCandidateLimit: PER_CONSUMER_REUSE_LIMIT,
+      candidateLimit: AFFECTED_CONSUMER_REUSE_LIMIT,
+      returnedCandidates: 0,
+    },
   };
 }
 

@@ -25,6 +25,7 @@ import { cliVersion } from './cli-support.js';
 import { recordDiffGateOutcomes } from './diff-gate-outcomes.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
 import { prepareWorktreeIndex } from './cli-context.js';
+import { ensureEvidenceCommandFreshness } from './evidence-command-freshness.js';
 import {
   ensureWatchServiceForCommand,
   requestWatchServiceRefresh,
@@ -36,7 +37,9 @@ import { inspectSqliteGeneration } from '../reindex/sqlite-generation-store.js';
 import { formatRecordCompatibilityWarning } from '../domain/record-compatibility.js';
 import { renderAutonomousRestorationProjection } from '../domain/autonomous-work-restoration.js';
 import { resolveSpawnableExecutable, toPortableCommand } from '../platform/binary.js';
+import { quoteShellArgument } from '../platform/shell-arguments.js';
 import { readAutonomousRestorationProjection } from '../storage/autonomous-work-restoration.js';
+import { readPlanContractRecords } from '../storage/plan-contract.js';
 import { writeSerializedJson } from '../platform/terminal-output.js';
 import {
   DEFAULT_DIFF_GATE_TIMEOUT_MS,
@@ -764,19 +767,12 @@ function projectHookCommandPrefix(projectRoot: string): string {
     const canonicalEntry = realpathSync(entry);
     if (isPathInsideProject(canonicalProjectRoot, canonicalEntry)) continue;
     const portable = toPortableCommand(canonicalEntry, []);
-    return [portable.binary, ...portable.args].map(quoteHookCommandArgument).join(' ');
+    return [portable.binary, ...portable.args].map((argument) => quoteShellArgument(argument)).join(' ');
   }
   throw new Error(
     'Cannot install persistent hooks without a scip-query CLI identity outside the target checkout. ' +
       'Install scip-query globally and rerun setup-hooks.',
   );
-}
-
-function quoteHookCommandArgument(value: string): string {
-  if (process.platform === 'win32') {
-    return `"${value.replaceAll('%', '%%').replaceAll('"', '\\"')}"`;
-  }
-  return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
 export async function handleAgentHookContext(): Promise<void> {
@@ -894,9 +890,16 @@ export async function runStopHookDiffGate(
   const lease = await prepareStopHookEvidenceLease(workspace, evidenceDependencies);
 
   const result = withWorkspaceDb(workspace, (db) => {
+    const plans = readPlanContractRecords(workspace.projectRoot);
     const gateOptions = {
       minTogether: 6,
       skip: [],
+      planContracts: plans.currentRecords,
+      planContractIssues: [
+        ...plans.integrityIssues,
+        ...plans.compatibility.issues.map((issue) => `${issue.path}: ${issue.reason}`),
+      ],
+      planContractCompatibility: plans.compatibility,
     } as const;
     const result = diffGate(db, gateOptions);
     const outcomes = recordDiffGateOutcomes(db, result, {
@@ -1542,6 +1545,7 @@ function restoreAgentWorkContext(
 
 interface HookRefreshDependencies {
   prepare?: typeof prepareWorktreeIndex;
+  ensureFresh?: typeof ensureEvidenceCommandFreshness;
   ensureService: typeof ensureWatchServiceForCommand;
   freshness: typeof getIndexFreshness;
   requestRefresh: typeof requestWatchServiceRefresh;
@@ -1550,6 +1554,7 @@ interface HookRefreshDependencies {
 
 const DEFAULT_HOOK_REFRESH_DEPENDENCIES: HookRefreshDependencies = {
   prepare: prepareWorktreeIndex,
+  ensureFresh: ensureEvidenceCommandFreshness,
   ensureService: ensureWatchServiceForCommand,
   freshness: getIndexFreshness,
   requestRefresh: requestWatchServiceRefresh,
@@ -1576,6 +1581,20 @@ export async function refreshIndexForHookIfNeeded(
   dependencies: HookRefreshDependencies = DEFAULT_HOOK_REFRESH_DEPENDENCIES,
 ): Promise<string | undefined> {
   const watch = resolveWatchConfig(workspace.config);
+  if (event === 'Stop' && dependencies.ensureFresh) {
+    try {
+      await dependencies.ensureFresh({
+        commandName: 'agent-Stop',
+        projectRoot: workspace.projectRoot,
+        config: workspace.config,
+        paths: workspace.paths,
+        dbPathSource: process.env['SCIP_QUERY_INDEX_DB'] ? 'env' : 'configured',
+      });
+      return undefined;
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  }
   if (watch.autoRefresh === false) return undefined;
 
   dependencies.prepare?.(workspace.projectRoot, workspace.config, workspace.paths);

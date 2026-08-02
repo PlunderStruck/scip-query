@@ -101,7 +101,7 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 
 | Command | Description | Options |
 |---|---|---|
-| `affected <symbol>` | Transitive closure of symbols that could break if this symbol changes | `--max-depth <n>`<br>`-s, --scope <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `affected <symbol>` | Transitive closure of symbols that could break if this symbol changes | `--full`<br>`--max-depth <n>`<br>`-s, --scope <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `change-surface <file>` | Pre-change briefing: consumers, published API, operational roots, and explained change risk | `--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `co-change [file]` | Files that change together in git history without a dependency edge — hidden coupling candidates | `--min-together <n>`<br>`-n, --limit <n>`<br>`--all`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `diff-gate` | Runtime-bounded, single-flight gate for the current diff: architecture regressions plus echo, migration, coordination, doc-drift, unused-param, and new-dead candidates; exit 1 on blocking findings | `--base <ref>`<br>`--min-together <n>`<br>`--max-echo-checks <n>`<br>`--max-helpers <n>`<br>`--baseline`<br>`--full`<br>`--skip <check>`<br>`--hook`<br>`--json`<br>`--result-only`<br>`--compact` |
@@ -118,7 +118,7 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 
 | Command | Description | Options |
 |---|---|---|
-| `plan-context <target>` | Pre-edit planning context for a symbol, file, or module | `--impact-depth <n>`<br>`--slice-depth <n>`<br>`-s, --scope <path>`<br>`-n, --limit <n>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `plan-context <target>` | Pre-edit planning context for a symbol, file, or module | `--impact-depth <n>`<br>`--slice-depth <n>`<br>`-s, --scope <path>`<br>`-n, --limit <n>`<br>`--detail`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 
 ### Health
 
@@ -158,6 +158,7 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 |---|---|---|
 | `goal <operation> [target]` | Create, read, validate, or list committed autonomous goal records | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `change <operation> [target]` | Create, read, validate, or list committed intended-change records | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `plan <operation> [target]` | Apply or inspect one structured Markdown change contract and its derived obligations | `--json`<br>`--result-only`<br>`--compact` |
 | `attempt <operation> [target]` | Create, read, validate, or summarize committed autonomous attempt records | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `decision <operation> [target]` | Create, read, validate, or summarize committed autonomous decision records | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `obligation <operation> [target]` | Admit, transition, inspect, or summarize committed completion obligations | `--input <path>`<br>`--json`<br>`--result-only`<br>`--compact` |

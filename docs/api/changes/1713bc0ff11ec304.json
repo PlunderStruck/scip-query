@@ -1,0 +1,49 @@
+{
+  "acceptedAt": "2026-08-01T19:48:32.029Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "1713bc0ff11ec304e0691e0a69f40bf79c150c5374d1089069bfdca1b033ec58",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DiffGateResult changed from interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s... to interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s....",
+      "target": "./queries:DiffGateResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "diffGate changed from declare function diffGate(db: ScipDatabase, opts?: { base?: string; minTogether?: number; minConfidence?: number; maxEchoChecks?: number; maxHelpers?: number; minSimilarity?: nu... to declare function diffGate(db: ScipDatabase, opts?: { base?: string; minTogether?: number; minConfidence?: number; maxEchoChecks?: number; maxHelpers?: number; minSimilarity?: nu....",
+      "target": "./queries:diffGate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DiffGateResult changed from interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s... to interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s....",
+      "target": "./queries/diff-gate:DiffGateResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "diffGate changed from declare function diffGate(db: ScipDatabase, opts?: { base?: string; minTogether?: number; minConfidence?: number; maxEchoChecks?: number; maxHelpers?: number; minSimilarity?: nu... to declare function diffGate(db: ScipDatabase, opts?: { base?: string; minTogether?: number; minConfidence?: number; maxEchoChecks?: number; maxHelpers?: number; minSimilarity?: nu....",
+      "target": "./queries/diff-gate:diffGate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DiffGateResult changed from interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s... to interface DiffGateResult { base: string; changedFiles: string[]; changedSymbols: number; checksRun: DiffGateCheck[]; skipped: Array<{ check: DiffGateCheck; reason: string; }>; s....",
+      "target": "./queries/index:DiffGateResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "diffGate changed from declare function diffGate(db: ScipDatabase, opts?: { base?: string; minTogether?: number; minConfidence?: number; maxEchoChecks?: number; maxHelpers?: number; minSimilarity?: nu... to declare function diffGate(db: ScipDatabase, opts?: { base?: string; minTogether?: number; minConfidence?: number; maxEchoChecks?: number; maxHelpers?: number; minSimilarity?: nu....",
+      "target": "./queries/index:diffGate"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "c597494841241aaf3bf84991c32d68418c164fe247adaca1c1d7294ec1d00661",
+  "reason": "The public shape only gains optional plan-retirement inputs and an optional plan compatibility field; existing calls and existing result consumers remain valid.",
+  "schemaVersion": 1
+}

@@ -36,8 +36,15 @@ import { formatRecordCompatibilityWarning } from '../../domain/record-compatibil
 
 const handleAffected = dbCommand(({ db, args, opts }) => {
   const query = stringArg(args, 0);
+  const full = booleanOptionValue(opts, 'full');
+  const maxDepth = numberOptionValue(opts, 'maxDepth');
+  if (full && maxDepth !== undefined) {
+    throw new Error(
+      '--full cannot be combined with --max-depth. Use --full for complete traversal or --max-depth N for a bounded traversal.',
+    );
+  }
   const results = queries.affected(db, query, {
-    maxDepth: definedNumberOption(opts, 'maxDepth', 5),
+    maxDepth: full ? Number.MAX_SAFE_INTEGER : maxDepth,
     scope: stringOptionValue(opts, 'scope'),
   });
   if (booleanOptionValue(opts, 'json')) {
@@ -481,7 +488,8 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
       'bounded',
     ),
     options: withJsonOption([
-      option('--max-depth <n>', 'Maximum traversal depth', parseInteger, 5),
+      option('--full', 'Traverse without the default depth and per-frontier caller caps'),
+      option('--max-depth <n>', 'Maximum traversal depth (default: 5)', parseInteger),
       option('-s, --scope <path>', 'Limit to files matching path'),
     ]),
     renderShape: 'custom',
