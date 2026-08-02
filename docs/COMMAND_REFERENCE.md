@@ -186,6 +186,8 @@ detector only for an uncovered requirement or to investigate a finding. See
 the bundled `scip-verify` skill for the complete usefulness rule. When Stop
 names local work, take that action and stop again. Do not poll completion status
 or architecture before the next Stop reevaluates the changed repository.
+Finishing the response activates Stop. Do not search for a Stop tool or inspect
+general CLI and controller help.
 
 ## `analysisBudget` disclosure contract
 

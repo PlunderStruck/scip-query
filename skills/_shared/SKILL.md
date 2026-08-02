@@ -109,6 +109,8 @@ evidence-backed disposition; treat advisory findings as context. The
 authoritative usefulness and ownership rules live in `scip-verify`. When Stop
 names local work, take that action and stop again. Do not poll completion status
 or architecture before the next Stop reevaluates the changed repository.
+Finishing the response activates Stop. Do not search for a Stop tool or inspect
+general CLI and controller help.
 
 ## Subagent evidence boundary
 

@@ -1,6 +1,6 @@
 ---
 name: scip-audit
-description: Use to find and confirm problems WITHOUT editing: is this implementation real (decorative checkers, not-implemented, lying metrics), is a status word derived or merely asserted, are cleanup findings worth acting on, has a same-name twin silently drifted, have the living docs (AGENTS.md, standards, command docs) drifted from the code, and are there hidden policies, scattered concepts, accidental variation or weak boundaries — including React/Vue component and directory-locality pressure. Proactive: needs no reported symptom. Hand confirmed findings to scip-improve. Distinct from `complexity-cleanup` and `principal-maintainability-review`: those reason about a specific symbol's complexity or a reviewer's judgement; this one runs detectors across the repo and ranks confirmed findings by evidence.
+description: Read-only problem finding and confirmation. Do not select when the user asks to edit, fix, change, refactor, or implement code; route a planned source change to scip-plan and an already confirmed cleanup finding to scip-improve.
 commands:
   - template: "scip-query health"
     when: "Orient to the repository-wide finding inventory before confirming candidates."
@@ -16,6 +16,8 @@ Read-only evidence audits. Every audit here classifies something —
 real-vs-decorative, derived-vs-asserted, confirmed-vs-noise, drifted-vs-stable
 — and ends in a ranked, evidenced verdict. None of them edit code or docs.
 When a finding needs a fix, hand it to `scip-improve`; do not apply it here.
+If the request already asks for a source change, do not load this skill beside
+`scip-plan`.
 
 Load shared mechanics (evidence freshness, lookup, the full command
 

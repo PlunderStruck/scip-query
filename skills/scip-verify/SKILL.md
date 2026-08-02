@@ -42,7 +42,9 @@ a fresh usable index themselves; do not add status polling or reindex steps.
 4. Add a specialist check only for a named risk the default gate does not own.
 5. Give the final gate one owner:
    - If protected work activated a blocking Stop hook, finish direct evidence
-     and let Stop run the gate and completion judgment.
+     and finish the response. Finishing activates the lifecycle Stop hook,
+     which runs the gate and completion judgment. Do not search for a Stop
+     tool or inspect CLI and controller help.
    - Otherwise run `scip-query diff-gate` once.
    - If it reports a finding, inspect that finding, change or disposition the
      relevant state, then rerun. Do not rerun after an unchanged result.

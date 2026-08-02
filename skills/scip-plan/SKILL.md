@@ -1,6 +1,6 @@
 ---
 name: scip-plan
-description: Planning-phase specialist for a non-trivial source change. Use before editing to recover flow, consumers, reuse, and completeness. Do not load the scip-query router or scip-verify alongside it.
+description: The pre-edit scip specialist for a planned feature, fix, refactor, or migration. Recover flow, consumers, reuse, and completeness. Do not load scip-audit, scip-query, or scip-verify alongside it.
 commands:
   - template: 'scip-query plan-context <target>'
     when: 'Get the compact pre-edit decision packet for the main changed symbol, file, or module.'
@@ -45,13 +45,16 @@ watcher polling, or `reindex` to an ordinary planning loop.
    - **Sustained work** is change work whose complete result requires several
      independent slices that must survive a context or agent reset. Keep the
      readable plan under `docs/plans/` and apply one durable contract.
-2. Run one `scip-query plan-context <target>` anchor. Treat its default output
-   as a decision packet: current flow, affected consumers, reuse candidates,
-   constraints, next source files, and stated coverage. Read those named files.
-3. Run another SCIP command only for a named uncertainty that can change the
-   plan. Use the exact `--full` or `--detail` route printed by the packet when
-   complete coverage is material. Do not rerun the same observation against
-   unchanged repository state, even after context compaction.
+2. Run one `scip-query plan-context <target>` anchor. For a migration or
+   retirement, target the current owner or artifact being removed so its
+   consumers, forwarding surfaces, and reuse candidates appear together.
+   Treat the source packet as the read for every line it shows. Read a named
+   file only for omitted context that can change the plan.
+3. Inspect the anchor before choosing another SCIP command. Do not launch
+   follow-up SCIP commands in parallel with it. Add one only for a named
+   uncertainty that can change the plan. Use the exact `--full` or `--detail`
+   route printed by the packet when complete coverage is material. Do not
+   rerun the same observation against unchanged repository state.
 4. Write one plan without repeating the same fact in prose and structured
    data. State a short observable goal, the current owner and flow, each file's
    role and reason, reuse decisions, behavior to preserve, artifacts to retire,

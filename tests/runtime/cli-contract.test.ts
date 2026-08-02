@@ -441,17 +441,23 @@ describe('CLI contract', () => {
   it('keeps autonomous workflow guidance aligned across the routed skills', () => {
     const readSkill = (name: string) => readFileSync(join(process.cwd(), 'skills', name, 'SKILL.md'), 'utf8');
 
-    expect(readSkill('scip-query')).toContain('Follow the exact Stop-controller next action');
+    expect(readSkill('scip-query')).toContain('Finish the response to activate Stop');
     const planSkill = readSkill('scip-plan');
     expect(planSkill).toContain('Keep the goal shorter than the file plan');
     expect(planSkill).toContain('Bounded relational work');
     expect(planSkill).toContain('Only sustained work adds one `scip-query-plan` fence');
     expect(planSkill).toContain('Do not poll `completion status`');
+    expect(planSkill).toContain('target the current owner or artifact being removed');
+    expect(planSkill).toContain('Treat the source packet as the read');
+    expect(planSkill).toContain('follow-up SCIP commands in parallel with it');
+    expect(readSkill('scip-audit')).toContain('Do not select when the user asks to edit');
     expect(readSkill('scip-improve')).toContain('Continue through those slices autonomously');
     const verifySkill = readSkill('scip-verify');
     expect(verifySkill).toContain('A clean `diff-gate` is evidence, not permission');
     expect(verifySkill).toContain('Give the final gate one owner');
     expect(verifySkill).toContain('Add a specialist check only for a named risk the default gate does not own');
+    expect(verifySkill).toContain('Finishing activates the lifecycle Stop hook');
+    expect(verifySkill).toContain('tool or inspect CLI and controller help');
     expect(verifySkill).not.toContain('Construct at least two refutation attempts');
     expect(verifySkill).not.toContain('Run every row that matches');
     expect(readSkill('scip-setup')).toContain('without hand-authored glue');

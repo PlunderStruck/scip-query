@@ -30,7 +30,7 @@ new repository evidence.
 | Understand or trace existing behavior | `scip-explore` | Entry, effect, dependencies, consumers, and uncertainty are evidenced. |
 | Plan a feature, fix, refactor, migration, API change, or phased program | `scip-plan` | Flow, consumers, reuse, completeness, slices, and validation are explicit. |
 | Explain a failure or regression | `scip-diagnose` | Cause is evidenced, rivals are rejected, and the fix surface is known. |
-| Find problems without editing | `scip-audit` | Scoped findings are classified and ranked with evidence. |
+| Find problems without editing and without a requested fix | `scip-audit` | Scoped findings are classified and ranked with evidence. |
 | Fix confirmed cleanup, drift, duplication, or maintainability findings | `scip-improve` | One coherent finding slice is changed and checked. |
 | Install, adopt, repair, or remove scip-query | `scip-setup` | The workspace works or the exact external blocker is known. |
 | Challenge a coherent finished diff | `scip-verify` | Each requirement has evidence, impact is reconciled, and one final gate owner decides. |
@@ -41,6 +41,8 @@ Understanding without a symptom routes to `scip-explore`; a failure routes to
 `scip-diagnose`. Finding problems without edits routes to `scip-audit`; fixing
 confirmed findings routes to `scip-improve`. Missing installation or broken
 index machinery routes to `scip-setup`, not to an ordinary evidence workflow.
+A request that already asks for a feature, fix, refactor, or migration routes
+to `scip-plan`, not to a parallel audit.
 
 When a request crosses phases, keep one owner at a time. Plan before a
 non-trivial edit. Load `scip-verify` only after a coherent implementation
@@ -58,7 +60,9 @@ exists; final-stage rules cannot improve pre-edit understanding.
    that already ran and add only evidence that can expose an uncovered failure.
 5. Give the final diff gate one owner. A protected blocking Stop hook owns it
    when active; otherwise `scip-verify` runs it once. Rerun only after a finding
-   causes a relevant state change. Follow the exact Stop-controller next action.
+   causes a relevant state change. Finish the response to activate Stop. Do not
+   search for a Stop tool or inspect CLI help. Follow the exact Stop-controller
+   next action.
 
 Load `../_shared/SKILL.md` only when the routed skill's shortlist cannot answer
 a named question.
