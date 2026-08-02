@@ -51,7 +51,6 @@ const queryCommandOrder = [
   'affected',
   'change-surface',
   'cleanup-plan',
-  'cleanup-apply',
   'co-change',
   'recent-duplicates',
   'doc-drift',

@@ -15,7 +15,6 @@ import { groupedQueryCommand } from '../../command-kit/query-command-builders.js
 import {
   handleUnusedParams,
   handleCleanupPlan,
-  handleCleanupApply,
   handleRecentDuplicates,
   handleDocDrift,
   handleDead,
@@ -121,42 +120,6 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     renderShape: 'custom',
     docs: doc('Cleanup', ['scip-query cleanup-plan --min-loc 3', 'scip-query cleanup-plan --verify']),
     handler: handleCleanupPlan,
-  }),
-  cleanupCommand({
-    id: 'cleanup-apply',
-    command: 'cleanup-apply',
-    agent: agentContract(
-      'Can a compiler-verified cleanup batch be applied to this working tree?',
-      'applied files, deletions, verification, and refusal reasons',
-      [],
-      'bounded',
-      'repository',
-      commandOperation('mutation', [
-        { when: { kind: 'option', name: 'dryRun', equals: true }, role: 'repository-preview' },
-      ]),
-    ),
-    description: 'Apply a compiler-verified cleanup-plan batch to the working tree',
-    options: [
-      option('-s, --scope <path>', 'Limit to files matching path'),
-      option('--min-loc <n>', 'Only include symbols >= N lines', parseInteger, 1),
-      option('--max-depth <n>', 'Maximum cascade depth', parseInteger, 5),
-      option('--verified', 'Required: verify the selected cleanup batch before applying it'),
-      option('--batch <n>', 'Apply one batch depth', parseInteger),
-      option('--all', 'Apply every compiler-verified batch in the plan'),
-      option('--dry-run', 'Verify and print exact deletion targets without changing working-tree files'),
-      option(
-        '--force-dirty',
-        'Allow deleting ranges from files with uncommitted edits; those edits can be lost, so preview first',
-      ),
-      option('--full', 'Run unbounded analysis on large indexes'),
-    ],
-    budget: 'candidate-scan',
-    renderShape: 'custom',
-    docs: doc('Cleanup', [
-      'scip-query cleanup-apply --verified --batch 0 --dry-run',
-      'scip-query cleanup-apply --verified --batch 0',
-    ]),
-    handler: handleCleanupApply,
   }),
   cleanupCommand({
     id: 'recent-duplicates',

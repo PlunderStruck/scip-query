@@ -186,7 +186,6 @@ const MUTATING_OR_UNBOUNDED_COMMANDS = [
   'reindex',
   'augment-sources',
   'augment-vue',
-  'cleanup-apply',
   'install-skills',
   'init',
   'suppress',

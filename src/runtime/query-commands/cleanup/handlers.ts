@@ -5,10 +5,8 @@ import * as queries from '../../../queries/index.js';
 import { resolveProjectPath } from '../../../tla/model-contract.js';
 import { resolveProjectRoot } from '../../cli-context.js';
 import {
-  applyCleanupBatches,
   cleanupVerificationFailures,
   createCleanupPatch,
-  describeCleanupBatches,
   selectCleanupBatches,
   verifyCleanupPlan,
 } from '../../cleanup-verify.js';
@@ -902,70 +900,6 @@ export const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, args, 
       }
     }
   }
-});
-
-export const handleCleanupApply = budgetedDbCommand('cleanup-apply', ({ db, opts, budget }) => {
-  if (!booleanOptionValue(opts, 'verified')) {
-    console.error('error: cleanup-apply requires --verified so deletions are checked before mutating files.');
-    process.exitCode = 1;
-    return;
-  }
-  const all = booleanOptionValue(opts, 'all');
-  const batch = numberOptionValue(opts, 'batch');
-  if (all === (batch !== undefined)) {
-    console.error('error: choose exactly one of --all or --batch <n>.');
-    process.exitCode = 1;
-    return;
-  }
-  const result = queries.cleanupPlan(db, {
-    scope: stringOptionValue(opts, 'scope'),
-    minLoc: definedNumberOption(opts, 'minLoc', 1),
-    maxDepth: definedNumberOption(opts, 'maxDepth', 5),
-    scanLimit: budget.scanLimit,
-  });
-  if (result.batches.length === 0) {
-    render.empty('Nothing deletable found — no graph-fact dead code to seed a cascade.');
-    return;
-  }
-  const selectedBatches = selectCleanupBatches(result, { all, batch });
-  if (selectedBatches.length === 0) {
-    console.error(`error: No cleanup batch ${batch} exists.`);
-    process.exitCode = 1;
-    return;
-  }
-
-  const projectRoot = resolveProjectRoot();
-  const verification = verifyCleanupPlan(projectRoot, result);
-  const failures = cleanupVerificationFailures(verification, selectedBatches, {
-    allowDirty: booleanOptionValue(opts, 'forceDirty'),
-  });
-  if (failures.length > 0) {
-    for (const failure of failures) console.error(`error: ${failure}`);
-    process.exitCode = 1;
-    return;
-  }
-
-  const dryRun = booleanOptionValue(opts, 'dryRun');
-  const preview = describeCleanupBatches(selectedBatches, { dryRun });
-  console.log(
-    `${dryRun ? 'Cleanup preview' : 'Applying cleanup'}: ${preview.batches} verified batch(es), ${preview.symbols} symbol(s), ${preview.loc} LOC across ${preview.files.length} file(s).`,
-  );
-  console.log(`  verifier: ${verification.checkers.join(', ')}`);
-  for (const target of preview.targets) {
-    console.log(
-      `  batch ${target.batch}  ${target.file}:${target.startLine + 1}-${target.endLine + 1}  ${target.symbol}  (${target.loc} LOC)`,
-    );
-  }
-  if (preview.filesEmptied.length > 0) console.log(`  files emptied: ${preview.filesEmptied.join(', ')}`);
-
-  const application = applyCleanupBatches(projectRoot, selectedBatches, { dryRun });
-  if (application.dryRun) {
-    console.log('Preview complete: verification passed and no working-tree files were changed.');
-    return;
-  }
-  console.log(
-    `Applied ${application.batches} verified cleanup batch(es): ${application.symbols} symbol(s), ${application.loc} LOC.`,
-  );
 });
 
 function verificationOracleSummary(checkers: readonly string[]): string {

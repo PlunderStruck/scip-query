@@ -83,6 +83,7 @@ Old autonomous records will be deleted from the current tree. Git history retain
 ## Implemented result
 
 - Removed the goal, Gherkin, work-state, completion, protected-work, mission-trial, operation-journal, Stop-hook, diff-gate, and CI/pre-commit gate systems.
+- Removed `cleanup-apply`; scip-query no longer applies a generated cleanup plan to the user's working tree.
 - Deleted their schemas, runtime code, tests, documentation, workflow skills, and 1,023 tracked lifecycle records. Kept structured suppressions.
 - Renamed `plan-context` to `context` and kept the compiler graph, impact, architecture, health, React, Vue, and focused cleanup commands.
 - Reduced automatic skill installation from the old workflow family to one `scip-query` skill. The skill tells the agent to use one live-owner context map, reuse the returned source packet, and avoid a second exploration workflow.
