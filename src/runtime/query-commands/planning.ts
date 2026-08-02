@@ -57,11 +57,12 @@ const handlePlanContext = budgetedDbCommand('plan-context', ({ db, args, opts, b
   }
 
   if (booleanOptionValue(opts, 'json')) {
+    const resolutionTarget = result.primaryCallable?.symbol ?? stringArg(args, 0);
     printJsonEnvelope(
       'plan-context',
       args,
       opts,
-      result.matched.symbol ? { ...symbolResolutionJson(db, stringArg(args, 0)), ...result } : result,
+      result.matched.symbol ? { ...symbolResolutionJson(db, resolutionTarget), ...result } : result,
       {
         analysisBudget: budget.analysisBudget,
         coverage: planContextCoverage(result),
@@ -70,7 +71,7 @@ const handlePlanContext = budgetedDbCommand('plan-context', ({ db, args, opts, b
     );
     return;
   }
-  if (result.matched.symbol) symbolResolutionBefore(db, stringArg(args, 0));
+  if (result.matched.symbol) symbolResolutionBefore(db, result.primaryCallable?.symbol ?? stringArg(args, 0));
 
   const sections = booleanOptionValue(opts, 'detail')
     ? detailedPlanContextSections(result, limit)
@@ -164,6 +165,7 @@ export function planContextDecisionSections(
     { title: 'REUSE DECISIONS', rows: reuseRows(result, Math.min(limit, 12)), skipIfEmpty: true },
     { title: 'CHANGE CONSTRAINTS', rows: changeConstraintRows(result, limit), skipIfEmpty: true },
     { title: 'READ NEXT', rows: nextReadRows(result, limit), skipIfEmpty: true },
+    { title: 'SOURCE PACKET', rows: sourcePacketRows(result), skipIfEmpty: true },
     {
       title: 'COVERAGE AND NEXT ACTION',
       rows: decisionCoverageRows(result, target, impactDepth, sliceDepth),
@@ -179,6 +181,7 @@ function detailedPlanContextSections(result: queries.PlanContextResult, limit: n
     { title: 'CALL GRAPH', rows: callGraphRows(result, limit), skipIfEmpty: true },
     { title: 'DATAFLOW', rows: dataflowRows(result, limit), skipIfEmpty: true },
     { title: 'REUSE OPTIONS', rows: reuseRows(result, limit), skipIfEmpty: true },
+    { title: 'SOURCE PACKET', rows: sourcePacketRows(result), skipIfEmpty: true },
     { title: 'DEPENDENCIES', rows: dependencyRows(result, limit), skipIfEmpty: true },
     { title: 'SURFACE', rows: surfaceRows(result, limit), skipIfEmpty: true },
     { title: 'DOWNSTREAM IMPACT', rows: affectedRows(result, limit), skipIfEmpty: true },
@@ -252,6 +255,11 @@ function decisionCoverageRows(
     `  Downstream and slice evidence is bounded at impact depth ${impactDepth} and slice depth ${sliceDepth}.`,
     `  Affected-consumer reuse scan: ${reuse.analyzedConsumers}/${reuse.totalConsumers} analyzed; ${reuse.omittedConsumers} omitted.`,
   ];
+  if (result.sourcePacket) {
+    rows.push(
+      `  Source packet: ${result.sourcePacket.slices.length}/${result.sourcePacket.candidateSlices} slice(s); ${result.sourcePacket.omittedSlices} omitted; at most ${result.sourcePacket.maxSlices} slices, ${result.sourcePacket.maxLinesPerSlice} lines per slice, and ${result.sourcePacket.maxTotalLines} lines total.`,
+    );
+  }
   if (result.warnings.length > 0) rows.push(...result.warnings.map((warning) => `  Warning: ${warning}`));
   rows.push(
     `  Use scip-query refs ${target} --full only when a complete direct-consumer set can change the plan.`,
@@ -294,7 +302,8 @@ function planContextReturnedUnits(result: queries.PlanContextResult): number {
     result.surface.length +
     (result.reuseCandidates?.length ?? 0) +
     consumerReuse.coverage.analyzedConsumers +
-    consumerReuse.candidates.length
+    consumerReuse.candidates.length +
+    (result.sourcePacket?.slices.length ?? 0)
   );
 }
 
@@ -321,6 +330,7 @@ function planContextAgentResult(result: queries.PlanContextResult) {
       consumerReuseCandidates: consumerReuse.candidates.length,
       externalSurfaceUses: result.surface.length,
       coChangePartners: result.history.coChangePartners.length,
+      sourceSlices: result.sourcePacket?.slices.length ?? 0,
     },
     warnings: result.warnings,
     changeSurface: result.changeSurface
@@ -342,12 +352,12 @@ function planContextAgentResult(result: queries.PlanContextResult) {
 
 function reuseRows(result: queries.PlanContextResult, limit: number): string[] {
   const targetRows = (result.reuseCandidates ?? []).flatMap((candidate) => [
-    `  target    ${candidate.actionTier.padEnd(6)}  ${Math.round(candidate.similarity * 100)}%  ${candidate.shortNameB}  ${candidate.fileB}`,
+    `  target    ${reuseDecisionLabel(candidate.actionTier)}  ${Math.round(candidate.similarity * 100)}%  ${candidate.shortNameB}  ${candidate.fileB}`,
     `                    ${candidate.recommendation}`,
   ]);
   const consumerReuse = planContextConsumerReuse(result);
   const consumerRows = consumerReuse.candidates.flatMap(({ candidate, consumers }) => [
-    `  consumer  ${candidate.actionTier.padEnd(6)}  ${Math.round(candidate.similarity * 100)}%  ${candidate.shortNameB}  ${candidate.fileB}`,
+    `  consumer  ${reuseDecisionLabel(candidate.actionTier)}  ${Math.round(candidate.similarity * 100)}%  ${candidate.shortNameB}  ${candidate.fileB}`,
     `                    found from ${consumers.map((consumer) => consumer.shortName).join(', ')}; ${candidate.recommendation}`,
   ]);
   const coverage = consumerReuse.coverage;
@@ -361,11 +371,39 @@ function reuseRows(result: queries.PlanContextResult, limit: number): string[] {
   return withOmitted(cappedRows(rows, limit));
 }
 
+function reuseDecisionLabel(tier: queries.SimilarActionTier): string {
+  return tier === 'direct' ? 'decide' : 'review';
+}
+
 function targetRows(result: queries.PlanContextResult): string[] {
-  return [
+  const rows = [
     `Target: ${result.target}`,
     `Matched: symbol=${yesNo(result.matched.symbol)} file=${yesNo(result.matched.file)} module=${yesNo(result.matched.module)}`,
   ];
+  if (result.primaryCallable) {
+    rows.push(`Primary callable: ${result.primaryCallable.shortName}  ${result.primaryCallable.file}`);
+  }
+  return rows;
+}
+
+function sourcePacketRows(result: queries.PlanContextResult): string[] {
+  if (!result.sourcePacket || result.sourcePacket.slices.length === 0) return [];
+  const rows: string[] = [];
+  for (const slice of result.sourcePacket.slices) {
+    rows.push(
+      `  ${slice.role.padEnd(15)} ${displayPathRange(slice.file, slice.startLine, slice.endLine)}  ${slice.shortName}`,
+    );
+    rows.push(
+      ...slice.source
+        .split('\n')
+        .map((line, index) => `    ${String(displayLine(slice.startLine + index)).padStart(4)}  ${line}`),
+    );
+    if (slice.omittedLines > 0) rows.push(`    ... ${slice.omittedLines} more line(s) in this callable`);
+  }
+  if (result.sourcePacket.omittedSlices > 0) {
+    rows.push(`  ... ${result.sourcePacket.omittedSlices} more candidate slice(s)`);
+  }
+  return rows;
 }
 
 function definitionRows(result: queries.PlanContextResult, limit: number): string[] {
@@ -532,12 +570,12 @@ function planningNoteRows(result: queries.PlanContextResult): string[] {
   }
   if (result.reuseCandidates?.some((candidate) => candidate.actionTier === 'direct')) {
     rows.push(
-      '  A direct reuse option names shared domain behavior. Reuse its current owner, or record concrete repository evidence that its semantics do not fit.',
+      '  A direct reuse option requires a plan decision. Select its current owner, or record concrete semantic evidence for separate ownership.',
     );
   }
   if (planContextConsumerReuse(result).candidates.length > 0) {
     rows.push(
-      '  An affected-consumer reuse option may own surrounding behavior that target-only comparison cannot see. Inspect it before creating or retaining separate consumer implementations.',
+      '  An affected-consumer reuse option can own surrounding behavior that target-only comparison cannot see. Resolve each direct option before editing.',
     );
   }
   return rows;

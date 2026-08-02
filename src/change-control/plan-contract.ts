@@ -343,16 +343,20 @@ export function decodePlanContractInput(value: unknown): PlanContractDecodeResul
  * writer already owns.
  */
 function decodeCompactPlanContractInput(value: Record<string, unknown>): PlanContractDecodeResult<PlanContractInput> {
-  if (value['goalId'] !== undefined || value['changeId'] !== undefined) {
-    return failure('compact plan contracts create inline goal/change records; omit goalId and changeId');
+  const existingReferences = value['goalId'] !== undefined || value['changeId'] !== undefined;
+  const inlineReferences = value['goal'] !== undefined || value['change'] !== undefined;
+  if (existingReferences && inlineReferences) {
+    return failure('compact plan contract cannot mix goalId/changeId with inline goal/change objects');
   }
 
-  const goal = compactGoal(value['goal']);
-  const change = compactChange(value['change'], goal);
+  const goal = existingReferences ? undefined : compactGoal(value['goal']);
+  const change = existingReferences ? undefined : compactChange(value['change'], goal);
+  const workReferences = existingReferences
+    ? { goalId: value['goalId'], changeId: value['changeId'] }
+    : { goal, change };
   const expanded = {
     schemaVersion: value['schemaVersion'],
-    goal,
-    change,
+    ...workReferences,
     workflowClass: value['class'] ?? value['workflowClass'],
     ...(value['predecessorPlanId'] !== undefined ? { predecessorPlanId: value['predecessorPlanId'] } : {}),
     affectedSeeds: compactItems(value['seeds'] ?? value['affectedSeeds'] ?? [], (item, index) => ({

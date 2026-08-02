@@ -143,6 +143,32 @@ describe('autonomous next-action policy', () => {
     expect(gather.instruction).toContain('do not edit the goal or evaluator');
   });
 
+  it('hands protected evaluation to the host after local repairs are clear', () => {
+    const external = selectAutonomousNextAction(
+      policyInput({
+        decision: blocked(['goal-fulfilled', 'coverage-complete']),
+        predicates: [predicate('goal-fulfilled', 'unknown'), predicate('coverage-complete', 'unknown')],
+        externalGoalEvidenceRequired: true,
+      }),
+    );
+    expect(external).toMatchObject({
+      kind: 'halt-authority',
+      blocker: 'missing-authorization',
+      namedPredicates: ['goal-fulfilled', 'coverage-complete'],
+    });
+    expect(external.instruction).toContain('The host must run the fixed protected evaluator');
+    expect(external.instruction).toContain('Do not probe completion records or help commands');
+
+    const localRepair = selectAutonomousNextAction(
+      policyInput({
+        decision: blocked(['invariants-preserved', 'goal-fulfilled']),
+        predicates: [predicate('invariants-preserved', 'disproven'), predicate('goal-fulfilled', 'unknown')],
+        externalGoalEvidenceRequired: true,
+      }),
+    );
+    expect(localRepair).toMatchObject({ kind: 'repair', blocker: 'work' });
+  });
+
   it('repairs every bounded protected finding instead of collapsing them into one predicate', () => {
     const action = selectAutonomousNextAction(
       policyInput({

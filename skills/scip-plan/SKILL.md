@@ -71,8 +71,9 @@ Use the ordinary path below unless one risk needs a specialist reference:
    - **Current flow:** entry to observable effect, grounded in source.
    - **Affected consumers:** what changes for each, and whether coverage is
      complete or bounded.
-   - **Reuse decision:** reuse each existing owner that already owns the same
-     responsibility; reject it only with concrete semantic evidence.
+   - **Reuse decision:** resolve every direct option from the packet. Reuse an
+     existing owner that owns the same responsibility. Reject it only with
+     concrete semantic evidence in the readable plan.
    - **Completeness:** behavior to preserve, identities or responsibilities to
      retire, justified survivors, architecture rules, and direct evidence.
    - **Slices:** the smallest ordered outcomes that can each be verified.

@@ -28,6 +28,7 @@ export function publishAutonomousNextAction(input: {
     changeId: string;
     result: ProtectedGoalEvaluatorResult;
   };
+  externalGoalEvidenceRequired?: boolean;
   options: WorkStateCreateOptions;
 }): PublishedAutonomousNextAction {
   const history = readWorkHistory(input.projectRoot, input.evaluation.changeId);
@@ -52,6 +53,7 @@ export function publishAutonomousNextAction(input: {
     decision: input.evaluation.decision,
     predicates: input.evaluation.predicates,
     ...(input.evaluation.authority ? { authority: input.evaluation.authority } : {}),
+    ...(input.externalGoalEvidenceRequired ? { externalGoalEvidenceRequired: true } : {}),
     findings,
     history: history.summary,
     evaluatedAtMs: Date.parse(input.evaluation.createdAt),

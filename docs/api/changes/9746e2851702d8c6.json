@@ -1,0 +1,85 @@
+{
+  "acceptedAt": "2026-08-02T02:36:20.217Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "9746e2851702d8c6332a48fdf430c8695ae5b00af3a3920c628f45e2853fa138",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextPrimaryCallable.",
+      "target": "./queries:PlanContextPrimaryCallable"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "PlanContextResult changed from interface PlanContextResult { target: string; matched: { symbol: boolean; file: boolean; module: boolean; }; history: PlanContextHistory; trace: TraceResult; callGraph: CallGrap... to interface PlanContextResult { target: string; primaryCallable?: PlanContextPrimaryCallable; matched: { symbol: boolean; file: boolean; module: boolean; }; history: PlanContextHi....",
+      "target": "./queries:PlanContextResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextSourcePacket.",
+      "target": "./queries:PlanContextSourcePacket"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextSourceSlice.",
+      "target": "./queries:PlanContextSourceSlice"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextPrimaryCallable.",
+      "target": "./queries/index:PlanContextPrimaryCallable"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "PlanContextResult changed from interface PlanContextResult { target: string; matched: { symbol: boolean; file: boolean; module: boolean; }; history: PlanContextHistory; trace: TraceResult; callGraph: CallGrap... to interface PlanContextResult { target: string; primaryCallable?: PlanContextPrimaryCallable; matched: { symbol: boolean; file: boolean; module: boolean; }; history: PlanContextHi....",
+      "target": "./queries/index:PlanContextResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextSourcePacket.",
+      "target": "./queries/index:PlanContextSourcePacket"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextSourceSlice.",
+      "target": "./queries/index:PlanContextSourceSlice"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextPrimaryCallable.",
+      "target": "./queries/plan-context:PlanContextPrimaryCallable"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "PlanContextResult changed from interface PlanContextResult { target: string; matched: { symbol: boolean; file: boolean; module: boolean; }; history: PlanContextHistory; trace: TraceResult; callGraph: CallGrap... to interface PlanContextResult { target: string; primaryCallable?: PlanContextPrimaryCallable; matched: { symbol: boolean; file: boolean; module: boolean; }; history: PlanContextHi....",
+      "target": "./queries/plan-context:PlanContextResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextSourcePacket.",
+      "target": "./queries/plan-context:PlanContextSourcePacket"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextSourceSlice.",
+      "target": "./queries/plan-context:PlanContextSourceSlice"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "240b240649ac91c80ee788e753ac5c897c976f408a89e5796c6e08f48d4db9a6",
+  "reason": "Expose bounded plan-context source evidence and unambiguous file-target resolution in the existing result contract.",
+  "schemaVersion": 1
+}

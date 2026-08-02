@@ -152,6 +152,53 @@ describe('plan contract', () => {
     });
   });
 
+  it('expands compact continuation input without creating another inline goal or change', () => {
+    const decoded = decodePlanContractInput({
+      schemaVersion: 1,
+      form: 'compact',
+      goalId: GOAL_ID,
+      changeId: CHANGE_ID,
+      class: 'relational',
+      seeds: [{ id: 'entry', kind: 'symbol', referent: 'queueDelivery', role: 'entry point' }],
+      preserve: [{ condition: 'Current outcomes remain true', evidence: ['tests'] }],
+      evidence: { tests: 'Run focused tests' },
+    });
+
+    expect(decoded).toMatchObject({
+      ok: true,
+      request: {
+        goalId: GOAL_ID,
+        changeId: CHANGE_ID,
+        workflowClass: 'relational',
+      },
+    });
+    if (decoded.ok) {
+      expect('goal' in decoded.request).toBe(false);
+      expect('change' in decoded.request).toBe(false);
+    }
+  });
+
+  it('rejects mixed or incomplete compact work references', () => {
+    const base = {
+      schemaVersion: 1,
+      form: 'compact',
+      class: 'relational',
+      seeds: [{ id: 'entry', kind: 'symbol', referent: 'queueDelivery', role: 'entry point' }],
+      preserve: [{ condition: 'Current outcomes remain true', evidence: ['tests'] }],
+      evidence: { tests: 'Run focused tests' },
+    };
+    expect(
+      decodePlanContractInput({
+        ...base,
+        goalId: GOAL_ID,
+        changeId: CHANGE_ID,
+        goal: { feature: 'Mixed input' },
+        change: { key: 'mixed', outcome: 'Mixed input' },
+      }),
+    ).toMatchObject({ ok: false });
+    expect(decodePlanContractInput({ ...base, goalId: GOAL_ID })).toMatchObject({ ok: false });
+  });
+
   it('still applies strict relationship validation after compact expansion', () => {
     const decoded = decodePlanContractInput({
       schemaVersion: 1,

@@ -82,6 +82,18 @@ describe('autonomous policy publication', () => {
     expect(readDecisionRecords(root).records).toHaveLength(1);
     expect(formatAutonomousNextActions([first])).toContain(`Autonomous next action (gather-evidence, work):`);
     expect(formatAutonomousNextActions([first])).toContain('retry limit 3; strategy deadline 30m');
+
+    const external = publishAutonomousNextAction({
+      projectRoot: root,
+      collaborationDomainId: COLLABORATION_DOMAIN,
+      evaluation,
+      result: passingGate(),
+      externalGoalEvidenceRequired: true,
+      options: { toolVersion: '0.20.0', now: () => '2026-07-30T13:00:02.000Z' },
+    });
+    expect(external.action).toMatchObject({ kind: 'halt-authority', blocker: 'missing-authorization' });
+    expect(external.decision.record.nextAction).toContain('host must run the fixed protected evaluator');
+    expect(readDecisionRecords(root).records).toHaveLength(2);
   });
 
   it('publishes protected evaluator findings as the decision-equivalent repair action', () => {

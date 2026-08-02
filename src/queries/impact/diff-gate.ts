@@ -72,6 +72,8 @@ import { hasSuppressionCommentCategory } from '../../source/primitives/source-te
 import { newlyUnreferencedResidue } from './newly-unreferenced-residue.js';
 import { planRetirementResidue } from './plan-retirement-residue.js';
 import { planReuseAuthority } from './plan-reuse-authority.js';
+import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
+import { callableCalleeEvidence } from '../internal/callee-evidence.js';
 
 /** Canonical check list — the CLI validates `--skip` values against this. */
 export const DIFF_GATE_CHECKS: readonly DiffGateCheck[] = [
@@ -190,6 +192,16 @@ interface EchoMatch {
   similarity: number;
   similarityBasis: 'callees' | 'source-tokens' | 'exact-body';
   sharedEvidence: string[];
+}
+
+interface ChangedOwnerCandidate {
+  consumer: { symbol: string; shortName: string; file: string };
+  owner: EchoMatch;
+}
+
+interface RepeatedChangedOwnerGroup {
+  owner: EchoMatch;
+  consumers: Array<{ symbol: string; shortName: string; file: string }>;
 }
 
 export interface DiffGateResult {
@@ -691,11 +703,17 @@ function runEchoCheck(
   result: DiffGateResult,
 ): void {
   result.checksRun.push('echo');
+  const changedOwnerCandidates: ChangedOwnerCandidate[] = [];
   for (const changedSymbol of changedSymbols.slice(0, maxEchoChecks)) {
     if (!isCallableSymbol(changedSymbol.symbol)) continue;
-    if (symbolPreexistedAtBase(changedSymbol)) continue;
     const definition = findExactSymbolMatch(db, changedSymbol.symbol);
     if (definition && hasSuppressionCommentCategory(db, definition.relativePath, definition.startLine, 'similar')) {
+      continue;
+    }
+    if (symbolPreexistedAtBase(changedSymbol)) {
+      changedOwnerCandidates.push(
+        ...changedOwnerCandidatesForSymbol(db, changedSymbol, changed, minSimilarity, scanLimit, semantic),
+      );
       continue;
     }
     const exactMatches = exactDuplicateBodyMatches(db, changedSymbol.symbol, {
@@ -792,10 +810,124 @@ function runEchoCheck(
       remediation: echoRemediation(actionTier, changedSymbol.shortName, topMatch.otherShort),
     });
   }
+  recordRepeatedChangedOwnerFindings(result, repeatedChangedOwnerGroups(changedOwnerCandidates));
   if (changedSymbols.length > maxEchoChecks) {
     result.skipped.push({
       check: 'echo',
       reason: `echo check capped at ${maxEchoChecks} of ${changedSymbols.length} changed symbols`,
+    });
+  }
+}
+
+function changedOwnerCandidatesForSymbol(
+  db: ScipDatabase,
+  changedSymbol: { symbol: string; shortName: string; file: string },
+  changedFiles: ReadonlySet<string>,
+  minSimilarity: number,
+  scanLimit: number | undefined,
+  semantic: boolean,
+): ChangedOwnerCandidate[] {
+  const matches = similar(db, changedSymbol.symbol, {
+    minSimilarity,
+    limit: 8,
+    scanLimit,
+    semantic,
+    sourceCandidateMode: 'target-pruned',
+  });
+  const candidates: ChangedOwnerCandidate[] = [];
+  for (const match of matches) {
+    if (match.actionTier !== 'direct' && match.similarity < 0.7) continue;
+    const owner =
+      match.symbolA === changedSymbol.symbol
+        ? {
+            otherFile: match.fileB,
+            otherShort: match.shortNameB,
+            otherSymbol: match.symbolB,
+          }
+        : {
+            otherFile: match.fileA,
+            otherShort: match.shortNameA,
+            otherSymbol: match.symbolA,
+          };
+    if (changedFiles.has(owner.otherFile) || owner.otherSymbol === changedSymbol.symbol) continue;
+    if (consumerDirectlyDelegatesToOwner(db, changedSymbol.symbol, owner.otherSymbol)) continue;
+    candidates.push({
+      consumer: changedSymbol,
+      owner: {
+        ...owner,
+        similarity: match.similarity,
+        similarityBasis: match.similarityBasis ?? 'callees',
+        sharedEvidence: match.sharedCallees,
+      },
+    });
+  }
+  return candidates;
+}
+
+function consumerDirectlyDelegatesToOwner(db: ScipDatabase, consumerSymbol: string, ownerSymbol: string): boolean {
+  const match = findExactSymbolMatch(db, consumerSymbol);
+  if (!match) return false;
+  const definition = getDefinitionsForFile(db, match.relativePath).find((item) => item.symbol === consumerSymbol);
+  if (!definition) return false;
+  return callableCalleeEvidence(db, definition).some((callee) => callee.symbol === ownerSymbol);
+}
+
+function repeatedChangedOwnerGroups(
+  candidates: readonly ChangedOwnerCandidate[],
+  minimumConsumers = 2,
+): RepeatedChangedOwnerGroup[] {
+  const groups = new Map<string, RepeatedChangedOwnerGroup>();
+  for (const candidate of candidates) {
+    const current = groups.get(candidate.owner.otherSymbol) ?? {
+      owner: candidate.owner,
+      consumers: [],
+    };
+    if (!current.consumers.some((consumer) => consumer.symbol === candidate.consumer.symbol)) {
+      current.consumers.push(candidate.consumer);
+    }
+    if (candidate.owner.similarity > current.owner.similarity) current.owner = candidate.owner;
+    groups.set(candidate.owner.otherSymbol, current);
+  }
+  return [...groups.values()]
+    .filter((group) => group.consumers.length >= minimumConsumers)
+    .sort(
+      (left, right) =>
+        right.consumers.length - left.consumers.length || left.owner.otherSymbol.localeCompare(right.owner.otherSymbol),
+    );
+}
+
+function recordRepeatedChangedOwnerFindings(
+  result: DiffGateResult,
+  groups: readonly RepeatedChangedOwnerGroup[],
+): void {
+  for (const group of groups) {
+    const consumers = [...group.consumers].sort((left, right) => left.symbol.localeCompare(right.symbol));
+    const id = findingId(
+      'echo',
+      'changed-shared-owner',
+      group.owner.otherSymbol,
+      ...consumers.map((consumer) => consumer.symbol),
+    );
+    recordFinding(result, {
+      id,
+      groupKey: id,
+      actionTier: 'direct',
+      check: 'echo',
+      severity: 'warning',
+      evidence: 'heuristic',
+      confidence: group.owner.similarity,
+      file: consumers[0]?.file,
+      symbol: group.owner.otherSymbol,
+      relatedFiles: [...new Set([group.owner.otherFile, ...consumers.map((consumer) => consumer.file)])].sort(),
+      sourceAnalyzer: 'changed-consumer-owner',
+      rootCauseKey: `changed-shared-owner:${group.owner.otherSymbol}`,
+      message: `${consumers.length} changed callable(s) retain behavior similar to established ${group.owner.otherShort} (${group.owner.otherFile})`,
+      why: [
+        `${group.owner.otherShort} is outside this diff and has strong reuse evidence from at least two changed consumers.`,
+        `Changed consumers: ${consumers.map((consumer) => `${consumer.shortName} (${consumer.file})`).join(', ')}.`,
+        `Shared evidence: ${group.owner.sharedEvidence.slice(0, 8).join(', ') || '(none listed)'}.`,
+      ],
+      remediation: `Delegate the shared responsibility to ${group.owner.otherShort}, or suppress this finding with concrete semantic evidence for separate ownership.`,
     });
   }
 }

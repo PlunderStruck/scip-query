@@ -16,6 +16,7 @@ describe('plan-context decision packet', () => {
       'REUSE DECISIONS',
       'CHANGE CONSTRAINTS',
       'READ NEXT',
+      'SOURCE PACKET',
       'COVERAGE AND NEXT ACTION',
     ]);
     expect(output).toContain('src/run-task.ts:11-14');
@@ -23,6 +24,8 @@ describe('plan-context decision packet', () => {
     expect(output).toContain('src/existing-owner.ts');
     expect(output).toContain('scip-query refs runTask --full');
     expect(output).toContain('scip-query plan-context runTask --detail');
+    expect(output).toContain('Source packet: 1/1 slice(s)');
+    expect(output).toContain('src/run-task.ts:11');
     expect(output).not.toContain('sharedCallees');
     expect(sections.find((section) => section.title === 'READ NEXT')?.rows).not.toContain('  ');
   });
@@ -121,6 +124,25 @@ function result(): PlanContextResult {
         candidateLimit: 8,
         returnedCandidates: 0,
       },
+    },
+    sourcePacket: {
+      slices: [
+        {
+          role: 'target',
+          symbol: 'runTask',
+          shortName: 'runTask()',
+          file: 'src/run-task.ts',
+          startLine: 10,
+          endLine: 10,
+          source: 'export function runTask() {}',
+          omittedLines: 0,
+        },
+      ],
+      candidateSlices: 1,
+      omittedSlices: 0,
+      maxSlices: 8,
+      maxLinesPerSlice: 40,
+      maxTotalLines: 200,
     },
     warnings: [],
   };

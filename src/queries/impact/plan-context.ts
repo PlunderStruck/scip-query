@@ -15,8 +15,12 @@ import { slice, type SliceResult } from '../navigation/slice.js';
 import { surface, type SurfaceResult } from '../navigation/surface.js';
 import { system, type SystemResult } from '../navigation/system.js';
 import { trace, type TraceResult } from '../navigation/trace.js';
-import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
+import { definitionSourceSnippet } from '../cleanup/duplicate-bodies.js';
+import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
+import { resolveIndexedPaths } from '../internal/file-resolution.js';
+import { findExactSymbolMatch, findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { leafName } from '../../symbols/symbol-parser.js';
+import type { IndexedDefinition } from '../../domain/types.js';
 
 export interface PlanContextOptions {
   semantic?: boolean;
@@ -73,8 +77,33 @@ export interface PlanContextConsumerReuse {
   coverage: PlanContextConsumerReuseCoverage;
 }
 
+export interface PlanContextPrimaryCallable {
+  symbol: string;
+  shortName: string;
+  file: string;
+}
+
+export interface PlanContextSourceSlice extends PlanContextPrimaryCallable {
+  role: 'target' | 'consumer' | 'reuse-candidate';
+  startLine: number;
+  endLine: number;
+  source: string;
+  omittedLines: number;
+}
+
+export interface PlanContextSourcePacket {
+  slices: PlanContextSourceSlice[];
+  candidateSlices: number;
+  omittedSlices: number;
+  maxSlices: number;
+  maxLinesPerSlice: number;
+  maxTotalLines: number;
+}
+
 export interface PlanContextResult {
   target: string;
+  /** One callable selected from a file target only when the choice is unambiguous. */
+  primaryCallable?: PlanContextPrimaryCallable;
   matched: {
     symbol: boolean;
     file: boolean;
@@ -101,6 +130,8 @@ export interface PlanContextResult {
    * not evidence that the owner can replace the target itself.
    */
   affectedConsumerReuse?: PlanContextConsumerReuse;
+  /** Bounded source slices for the target, its direct consumers, and possible owners. */
+  sourcePacket?: PlanContextSourcePacket;
   warnings: string[];
 }
 
@@ -109,19 +140,24 @@ const PER_CONSUMER_SEARCH_LIMIT = 10;
 const PER_CONSUMER_REUSE_LIMIT = 3;
 const AFFECTED_CONSUMER_REUSE_LIMIT = 8;
 const MIN_SINGLE_CONSUMER_SIGNAL_SIMILARITY = 0.7;
+const SOURCE_PACKET_SLICE_LIMIT = 8;
+const SOURCE_PACKET_LINES_PER_SLICE = 40;
+const SOURCE_PACKET_TOTAL_LINE_LIMIT = 200;
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; target resolution, evidence gathering, and plan rendering stay together.
 export function planContext(db: ScipDatabase, target: string, opts: PlanContextOptions = {}): PlanContextResult {
   const impactDepth = opts.impactDepth ?? 3;
   const sliceDepth = opts.sliceDepth ?? 3;
   const semantic = opts.semantic;
-  const symbolTarget = !looksLikePathTarget(target);
+  const pathResolution = looksLikePathTarget(target) ? resolvePlanContextPrimaryCallable(db, target) : null;
+  const graphTarget = pathResolution ? (pathResolution.primary?.symbol ?? null) : target;
+  const symbolTarget = graphTarget !== null;
 
   const traceResult = symbolTarget
     ? profilePlanContextComponent(
         'trace',
-        target,
-        () => trace(db, target, { semantic }),
+        graphTarget,
+        () => trace(db, graphTarget, { semantic }),
         (result) => ({
           definitions: result.definitions.length,
           references: result.referencedBy.length,
@@ -131,8 +167,8 @@ export function planContext(db: ScipDatabase, target: string, opts: PlanContextO
   const callGraphResult = symbolTarget
     ? profilePlanContextComponent(
         'call-graph',
-        target,
-        () => callGraph(db, target, { semantic }),
+        graphTarget,
+        () => callGraph(db, graphTarget, { semantic }),
         (result) => ({
           callers: result?.callers.length ?? 0,
           callees: result?.callees.length ?? 0,
@@ -142,8 +178,8 @@ export function planContext(db: ScipDatabase, target: string, opts: PlanContextO
   const complexityResult = symbolTarget
     ? profilePlanContextComponent(
         'complexity',
-        target,
-        () => complexity(db, target, { semantic }),
+        graphTarget,
+        () => complexity(db, graphTarget, { semantic }),
         (result) => ({
           callees: result?.calleeCount ?? 0,
         }),
@@ -152,8 +188,8 @@ export function planContext(db: ScipDatabase, target: string, opts: PlanContextO
   const dataflowResult = symbolTarget
     ? profilePlanContextComponent(
         'dataflow',
-        target,
-        () => dataflow(db, target, { semantic }),
+        graphTarget,
+        () => dataflow(db, graphTarget, { semantic }),
         (result) => ({
           references: result?.usageSites.length ?? 0,
           producers: result?.producers.length ?? 0,
@@ -164,9 +200,9 @@ export function planContext(db: ScipDatabase, target: string, opts: PlanContextO
   const backwardSliceResult = symbolTarget
     ? profilePlanContextComponent(
         'backward-slice',
-        target,
+        graphTarget,
         () =>
-          slice(db, target, {
+          slice(db, graphTarget, {
             direction: 'backward',
             maxDepth: sliceDepth,
             semantic,
@@ -177,9 +213,9 @@ export function planContext(db: ScipDatabase, target: string, opts: PlanContextO
   const forwardSliceResult = symbolTarget
     ? profilePlanContextComponent(
         'forward-slice',
-        target,
+        graphTarget,
         () =>
-          slice(db, target, {
+          slice(db, graphTarget, {
             direction: 'forward',
             maxDepth: sliceDepth,
             semantic,
@@ -190,9 +226,9 @@ export function planContext(db: ScipDatabase, target: string, opts: PlanContextO
   const affectedResults = symbolTarget
     ? profilePlanContextComponent(
         'affected',
-        target,
+        graphTarget,
         () =>
-          affected(db, target, {
+          affected(db, graphTarget, {
             maxDepth: impactDepth,
             scope: opts.scope,
           }),
@@ -202,9 +238,9 @@ export function planContext(db: ScipDatabase, target: string, opts: PlanContextO
   const reuseCandidates = symbolTarget
     ? profilePlanContextComponent(
         'reuse-candidates',
-        target,
+        graphTarget,
         () =>
-          similar(db, target, {
+          similar(db, graphTarget, {
             minSimilarity: 0.4,
             limit: 5,
             semantic,
@@ -216,11 +252,11 @@ export function planContext(db: ScipDatabase, target: string, opts: PlanContextO
         }),
       )
     : [];
-  const targetSymbol = symbolTarget ? (findFirstSymbolMatch(db, target)?.symbol ?? null) : null;
+  const targetSymbol = symbolTarget ? (findFirstSymbolMatch(db, graphTarget)?.symbol ?? null) : null;
   const affectedConsumerReuse = symbolTarget
     ? profilePlanContextComponent(
         'affected-consumer-reuse',
-        target,
+        graphTarget,
         () =>
           discoverAffectedConsumerReuse(
             traceResult,
@@ -305,6 +341,11 @@ export function planContext(db: ScipDatabase, target: string, opts: PlanContextO
   };
 
   const warnings: string[] = [];
+  if (pathResolution && !pathResolution.primary && pathResolution.callableCount > 1) {
+    warnings.push(
+      `File target has ${pathResolution.callableCount} callable symbols; use one callable name for compiler-resolved flow.`,
+    );
+  }
   if (!matched.symbol && !matched.file && !matched.module) {
     warnings.push('No symbol, file, or module matched target.');
   }
@@ -313,6 +354,15 @@ export function planContext(db: ScipDatabase, target: string, opts: PlanContextO
 
   return {
     target,
+    ...(pathResolution?.primary
+      ? {
+          primaryCallable: {
+            symbol: pathResolution.primary.symbol,
+            shortName: leafName(pathResolution.primary.symbol),
+            file: pathResolution.primary.relativePath,
+          },
+        }
+      : {}),
     matched,
     history: profilePlanContextComponent('history', historyFile ?? target, () =>
       buildPlanContextHistory(db, historyFile, opts.gitHead),
@@ -331,8 +381,89 @@ export function planContext(db: ScipDatabase, target: string, opts: PlanContextO
     surface: surfaceResults,
     reuseCandidates,
     affectedConsumerReuse,
+    sourcePacket: buildPlanContextSourcePacket(db, targetSymbol, traceResult, affectedConsumerReuse, reuseCandidates),
     warnings,
   };
+}
+
+interface PrimaryCallableResolution {
+  primary: ReturnType<typeof getDefinitionsForFile>[number] | null;
+  callableCount: number;
+}
+
+function resolvePlanContextPrimaryCallable(db: ScipDatabase, target: string): PrimaryCallableResolution {
+  const files = resolveIndexedPaths(db, target);
+  if (files.length !== 1) return { primary: null, callableCount: 0 };
+  const callables = getDefinitionsForFile(db, files[0]!).filter((definition) => definition.isFunctionLike);
+  const topLevel = callables.filter((definition) => definition.enclosingSymbol === null);
+  const candidates = topLevel.length > 0 ? topLevel : callables;
+  return {
+    primary: candidates.length === 1 ? candidates[0]! : null,
+    callableCount: candidates.length,
+  };
+}
+
+function buildPlanContextSourcePacket(
+  db: ScipDatabase,
+  targetSymbol: string | null,
+  traceResult: TraceResult,
+  consumerReuse: PlanContextConsumerReuse,
+  targetReuse: readonly SimilarSymbolResult[],
+): PlanContextSourcePacket {
+  const candidates: Array<{
+    definition: IndexedDefinition | null;
+    role: PlanContextSourceSlice['role'];
+  }> = [
+    ...(targetSymbol ? [{ definition: resolveIndexedDefinition(db, targetSymbol), role: 'target' as const }] : []),
+    ...affectedConsumers(traceResult).map((consumer) => ({
+      definition: resolveIndexedDefinition(db, consumer.symbol),
+      role: 'consumer' as const,
+    })),
+    ...[...consumerReuse.candidates.map((item) => item.candidate), ...targetReuse].map((candidate) => ({
+      definition: resolveIndexedDefinition(db, candidate.symbolB),
+      role: 'reuse-candidate' as const,
+    })),
+  ];
+  const unique = new Map<string, { definition: IndexedDefinition; role: PlanContextSourceSlice['role'] }>();
+  for (const candidate of candidates) {
+    if (!candidate.definition || unique.has(candidate.definition.symbol)) continue;
+    unique.set(candidate.definition.symbol, { definition: candidate.definition, role: candidate.role });
+  }
+
+  const slices: PlanContextSourceSlice[] = [];
+  let remainingLines = SOURCE_PACKET_TOTAL_LINE_LIMIT;
+  for (const candidate of unique.values()) {
+    if (slices.length >= SOURCE_PACKET_SLICE_LIMIT || remainingLines <= 0) break;
+    const source = definitionSourceSnippet(db, candidate.definition);
+    if (!source) continue;
+    const lines = source.split('\n');
+    const kept = Math.min(lines.length, SOURCE_PACKET_LINES_PER_SLICE, remainingLines);
+    slices.push({
+      role: candidate.role,
+      symbol: candidate.definition.symbol,
+      shortName: leafName(candidate.definition.symbol),
+      file: candidate.definition.relativePath,
+      startLine: candidate.definition.startLine,
+      endLine: candidate.definition.startLine + kept - 1,
+      source: lines.slice(0, kept).join('\n'),
+      omittedLines: Math.max(0, lines.length - kept),
+    });
+    remainingLines -= kept;
+  }
+  return {
+    slices,
+    candidateSlices: unique.size,
+    omittedSlices: Math.max(0, unique.size - slices.length),
+    maxSlices: SOURCE_PACKET_SLICE_LIMIT,
+    maxLinesPerSlice: SOURCE_PACKET_LINES_PER_SLICE,
+    maxTotalLines: SOURCE_PACKET_TOTAL_LINE_LIMIT,
+  };
+}
+
+function resolveIndexedDefinition(db: ScipDatabase, symbol: string): IndexedDefinition | null {
+  const match = findExactSymbolMatch(db, symbol);
+  if (!match) return null;
+  return getDefinitionsForFile(db, match.relativePath).find((definition) => definition.symbol === symbol) ?? null;
 }
 
 interface AffectedConsumerReuseLimits {

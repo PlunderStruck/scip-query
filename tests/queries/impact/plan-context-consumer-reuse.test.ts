@@ -1,9 +1,15 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   discoverAffectedConsumerReuse,
+  planContext,
   type PlanContextAffectedConsumer,
 } from '../../../src/queries/impact/plan-context.js';
 import type { SimilarSymbolResult } from '../../../src/queries/cleanup/similar.js';
+import { ScipDatabase } from '../../../src/storage/db.js';
+import { evidenceFixtureDb, writeFixtureFiles } from '../../fixtures/evidence-fixture.js';
 
 describe('plan-context affected-consumer reuse', () => {
   it('finds shared owners from bounded consumer evidence without treating consumers or the target as owners', () => {
@@ -86,6 +92,52 @@ describe('plan-context affected-consumer reuse', () => {
     expect(result.coverage.totalConsumers).toBe(0);
     expect(result.coverage.analyzedConsumers).toBe(0);
   });
+
+  it('selects one unambiguous callable for a file target and leaves an ambiguous file unresolved', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-plan-file-target-'));
+    const projectRoot = join(tempDir, 'project');
+    const dbPath = join(tempDir, 'index.db');
+    const primary = fixtureSymbol('single.ts', 'applyPolicy');
+    const first = fixtureSymbol('many.ts', 'firstPolicy');
+    const second = fixtureSymbol('many.ts', 'secondPolicy');
+    writeFixtureFiles(projectRoot, {
+      'src/single.ts': ['export function applyPolicy(input: string) {', '  return input.trim();', '}'],
+      'src/many.ts': [
+        'export function firstPolicy(input: string) { return input; }',
+        'export function secondPolicy(input: string) { return input.trim(); }',
+      ],
+    });
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/single.ts')
+      .document(2, 'typescript', 'src/many.ts')
+      .symbol(1, primary, 'applyPolicy', 12)
+      .symbol(2, first, 'firstPolicy', 12)
+      .symbol(3, second, 'secondPolicy', 12)
+      .definition(1, 1, 1, 0, 0, 2, 1)
+      .definition(2, 2, 2, 0, 0, 0, 64)
+      .definition(3, 2, 3, 1, 0, 1, 72)
+      .chunk(1, 1, 0, 2)
+      .chunk(2, 2, 0, 1)
+      .mention(1, 1, 1)
+      .mention(2, 2, 1)
+      .mention(2, 3, 1)
+      .write();
+
+    const db = new ScipDatabase({ dbPath, projectRoot });
+    try {
+      expect(planContext(db, 'src/single.ts')).toMatchObject({
+        primaryCallable: { symbol: primary, file: 'src/single.ts' },
+      });
+      const ambiguous = planContext(db, 'src/many.ts');
+      expect(ambiguous).toMatchObject({
+        warnings: ['File target has 2 callable symbols; use one callable name for compiler-resolved flow.'],
+      });
+      expect(ambiguous).not.toHaveProperty('primaryCallable');
+    } finally {
+      db.close();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
 });
 
 function consumer(shortName: string, file: string, referenceCount: number): PlanContextAffectedConsumer {
@@ -103,6 +155,10 @@ function references(consumerValue: PlanContextAffectedConsumer) {
 
 function symbol(shortName: string): string {
   return `scip-typescript npm neutral 1.0.0 src/\`${shortName}.ts\`/${shortName}().`;
+}
+
+function fixtureSymbol(file: string, name: string): string {
+  return `scip-typescript npm neutral 1.0.0 src/\`${file}\`/${name}().`;
 }
 
 function similarity(

@@ -793,6 +793,53 @@ describe('agent hook context', () => {
     expect(superseded).not.toContain('scip-query completion status');
     expect(disproven).not.toContain('scip-query completion status');
   });
+
+  it('lets the host own protected evaluation without another candidate command loop', () => {
+    const changeId = 'SQC-44444444444444444444444444444444';
+    const execution = {
+      outcomes: { observed: [], now: 0 },
+      completion: [
+        {
+          evaluation: {
+            evaluation: {
+              record: {
+                changeId,
+                decision: {
+                  state: 'blocked',
+                  blockedPredicates: ['goal-fulfilled'],
+                  unknownPredicates: ['goal-fulfilled'],
+                },
+              },
+            },
+          },
+        },
+      ],
+      nextActions: [
+        {
+          action: {
+            changeId,
+            kind: 'halt-authority',
+            blocker: 'missing-authorization',
+            instruction: 'The host must run the fixed protected evaluator.',
+            limits: { maxEquivalentAttempts: 3, strategyDeadlineMs: 30 * 60_000 },
+          },
+          decision: {
+            record: {
+              decisionId: 'SQD-44444444444444444444444444444444',
+              nextAction: 'The host must run the fixed protected evaluator.',
+            },
+          },
+        },
+      ],
+    } as unknown as NonNullable<Parameters<typeof renderStopHookOutput>[2]>;
+
+    const output = renderStopHookOutput({ ...diffGateResult(), findings: [] }, 'block', execution);
+    expect(output).not.toHaveProperty('decision');
+    expect(output).toMatchObject({
+      systemMessage: expect.stringContaining('The host owns the protected evaluation'),
+    });
+    expect(JSON.stringify(output)).not.toContain('scip-query completion status');
+  });
 });
 
 function diffGateResult(): DiffGateResult {

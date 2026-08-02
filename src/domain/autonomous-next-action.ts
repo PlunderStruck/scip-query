@@ -53,6 +53,8 @@ export interface AutonomousNextActionInput {
   decision: CompletionTerminalDecision;
   predicates: readonly CompletionPredicateJudgment[];
   authority?: CompletionAuthorityAssessment;
+  /** The host fixed a protected evaluator, but its result is not available to the candidate. */
+  externalGoalEvidenceRequired?: boolean;
   findings: readonly AutonomousPolicyFinding[];
   history: WorkHistorySummary;
   evaluatedAtMs: number;
@@ -116,22 +118,6 @@ export function selectAutonomousNextAction(input: AutonomousNextActionInput): Au
         `Carry unfinished work into authorized successor goal ${input.decision.successorGoalId}; ` +
         `do not continue changing superseded goal ${input.goalId}.`,
       basisAttemptIds: [],
-    };
-  }
-
-  const authorityBoundary = missingAuthorizationBoundary(input.authority, input.decision.blockedPredicates);
-  if (authorityBoundary.length > 0) {
-    return {
-      ...base,
-      kind: 'halt-authority',
-      blocker: 'missing-authorization',
-      disposition: 'continue',
-      rationale: authorityBoundary.join('; '),
-      instruction:
-        `Halt work on ${input.changeId}: no fixed predecessor or authorized source establishes ` +
-        `${authorityBoundary.join('; ')}. Obtain new authority without weakening goal ${input.goalId}.`,
-      basisAttemptIds: [],
-      namedPredicates: input.decision.blockedPredicates,
     };
   }
 
@@ -204,6 +190,37 @@ export function selectAutonomousNextAction(input: AutonomousNextActionInput): Au
         'unless it closes a named failed condition.',
       basisAttemptIds: latestAttemptIds(input.history.attempts),
       namedPredicates: disproven.map((predicate) => predicate.predicate),
+    };
+  }
+
+  if (input.externalGoalEvidenceRequired) {
+    return {
+      ...base,
+      kind: 'halt-authority',
+      blocker: 'missing-authorization',
+      disposition: 'continue',
+      rationale: 'The protected evaluator is principal-controlled and no matching result is available to the candidate',
+      instruction:
+        `Stop local work on ${input.changeId}. The host must run the fixed protected evaluator. ` +
+        'Do not probe completion records or help commands for this external result.',
+      basisAttemptIds: latestAttemptIds(input.history.attempts),
+      namedPredicates: input.decision.blockedPredicates,
+    };
+  }
+
+  const authorityBoundary = missingAuthorizationBoundary(input.authority, input.decision.blockedPredicates);
+  if (authorityBoundary.length > 0) {
+    return {
+      ...base,
+      kind: 'halt-authority',
+      blocker: 'missing-authorization',
+      disposition: 'continue',
+      rationale: authorityBoundary.join('; '),
+      instruction:
+        `Halt work on ${input.changeId}: no fixed predecessor or authorized source establishes ` +
+        `${authorityBoundary.join('; ')}. Obtain new authority without weakening goal ${input.goalId}.`,
+      basisAttemptIds: [],
+      namedPredicates: input.decision.blockedPredicates,
     };
   }
 

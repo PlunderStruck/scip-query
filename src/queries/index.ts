@@ -240,7 +240,10 @@ export type {
   PlanContextConsumerReuseCandidate,
   PlanContextConsumerReuseCoverage,
   PlanContextOptions,
+  PlanContextPrimaryCallable,
   PlanContextResult,
+  PlanContextSourcePacket,
+  PlanContextSourceSlice,
 } from './impact/plan-context.js';
 export type {
   BaseContentGitRuntime,

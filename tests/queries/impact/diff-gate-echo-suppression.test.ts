@@ -24,6 +24,16 @@ describe('diff-gate echo source decisions', () => {
   it('honors ignore-similar on the same newly added near-duplicate target', () => {
     expect(echoFindings(true)).toEqual([]);
   });
+
+  it('finds repeated shared-owner behavior in callable bodies that existed before the diff', () => {
+    expect(changedOwnerFindings()).toMatchObject([
+      {
+        actionTier: 'direct',
+        sourceAnalyzer: 'changed-consumer-owner',
+        relatedFiles: ['src/apply.ts', 'src/relay.ts', 'src/sweeper.ts'],
+      },
+    ]);
+  });
 });
 
 function echoFindings(suppressed: boolean) {
@@ -83,6 +93,7 @@ function echoFindings(suppressed: boolean) {
 
   const result = diffGate(db, {
     base: 'HEAD',
+    semantic: false,
     skip: [
       'incomplete-migration',
       'co-change-partner',
@@ -96,4 +107,71 @@ function echoFindings(suppressed: boolean) {
   });
 
   return result.findings.filter((finding) => finding.check === 'echo');
+}
+
+function changedOwnerFindings() {
+  const root = mkdtempSync(join(tmpdir(), 'scip-diff-gate-changed-owner-'));
+  roots.push(root);
+  execFileSync('git', ['init'], { cwd: root, stdio: 'ignore' });
+  mkdirSync(join(root, 'src'), { recursive: true });
+  const owner = outcomeFunction('applyInvoiceOutcome', 'owner');
+  writeFileSync(join(root, 'src/apply.ts'), owner);
+  writeFileSync(join(root, 'src/relay.ts'), outcomeFunction('relayInvoice', 'relay'));
+  writeFileSync(join(root, 'src/sweeper.ts'), outcomeFunction('sweepInvoice', 'sweeper'));
+  execFileSync('git', ['add', '-A'], { cwd: root, stdio: 'ignore' });
+  execFileSync('git', ['-c', 'user.name=test', '-c', 'user.email=t@example.test', 'commit', '-m', 'base'], {
+    cwd: root,
+    stdio: 'ignore',
+  });
+
+  writeFileSync(join(root, 'src/relay.ts'), outcomeFunction('relayInvoice', 'owner'));
+  writeFileSync(join(root, 'src/sweeper.ts'), outcomeFunction('sweepInvoice', 'owner'));
+  execFileSync('git', ['add', 'src/relay.ts', 'src/sweeper.ts'], { cwd: root, stdio: 'ignore' });
+
+  const dbPath = join(root, 'index.db');
+  const ownerSymbol = 'scip-typescript npm fixture 1.0.0 src/`apply.ts`/applyInvoiceOutcome().';
+  const relaySymbol = 'scip-typescript npm fixture 1.0.0 src/`relay.ts`/relayInvoice().';
+  const sweeperSymbol = 'scip-typescript npm fixture 1.0.0 src/`sweeper.ts`/sweepInvoice().';
+  evidenceFixtureDb(dbPath)
+    .document(1, 'typescript', 'src/apply.ts')
+    .document(2, 'typescript', 'src/relay.ts')
+    .document(3, 'typescript', 'src/sweeper.ts')
+    .symbol(1, ownerSymbol, 'applyInvoiceOutcome', 12)
+    .symbol(2, relaySymbol, 'relayInvoice', 12)
+    .symbol(3, sweeperSymbol, 'sweepInvoice', 12)
+    .definition(1, 1, 1, 0, 0, 5, 1)
+    .definition(2, 2, 2, 0, 0, 5, 1)
+    .definition(3, 3, 3, 0, 0, 5, 1)
+    .write();
+  const config: ScipQueryConfig = { dbPath, indexPath: join(root, 'index.scip'), projectRoot: root };
+  const db = new ScipDatabase(config);
+  databases.push(db);
+
+  const result = diffGate(db, {
+    base: 'HEAD',
+    semantic: false,
+    skip: [
+      'incomplete-migration',
+      'co-change-partner',
+      'twin-partner',
+      'coverage-contract',
+      'architecture',
+      'doc-reference',
+      'unused-params',
+      'new-dead',
+    ],
+  });
+  return result.findings.filter((finding) => finding.sourceAnalyzer === 'changed-consumer-owner');
+}
+
+function outcomeFunction(name: string, label: string): string {
+  return [
+    `export function ${name}(invoice: string) {`,
+    '  const normalizedInvoice = normalizeInvoice(invoice);',
+    `  auditInvoice('${label}', normalizedInvoice);`,
+    "  emitInvoiceMetric('invoice.completed');",
+    '  return normalizedInvoice;',
+    '}',
+    '',
+  ].join('\n');
 }

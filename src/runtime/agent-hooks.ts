@@ -1068,6 +1068,7 @@ async function runIsolatedStopHookDiffGate(hookInput: string): Promise<StopHookE
             },
           }
         : {}),
+      ...(protectedWorkAuthorization && !protectedGoalEvidence ? { externalGoalEvidenceRequired: true } : {}),
       options: { toolVersion: cliVersion },
     }),
   );
@@ -1282,23 +1283,31 @@ export function renderStopHookOutput(
   const completionBlocked = execution?.completion?.some(
     ({ evaluation }) => evaluation.evaluation.record.decision.state !== 'complete',
   );
-  if (mode === 'block' && (result.findings.length > 0 || completionBlocked)) {
+  const externalHandoff = hasOnlyExternalCompletionHandoffs(execution);
+  if (mode === 'block' && (result.findings.length > 0 || (completionBlocked && !externalHandoff))) {
     return {
       decision: 'block',
       reason: blockMessage,
     };
   }
   if (mode === 'feedback') {
-    const instruction = completionBlocked
-      ? 'Continue with the named unsatisfied completion predicates; do not declare the intended change complete yet.'
-      : result.findings.length > 0
-        ? 'Fix true findings, or provide policy-admissible counterevidence before finishing.'
-        : 'Automatic adjudication completed without a human approval prompt; no finding action is required for this Stop.';
+    const instruction = externalHandoff
+      ? 'Stop local work. The host owns the protected evaluation and will decide the next candidate action.'
+      : completionBlocked
+        ? 'Continue with the named unsatisfied completion predicates; do not declare the intended change complete yet.'
+        : result.findings.length > 0
+          ? 'Fix true findings, or provide policy-admissible counterevidence before finishing.'
+          : 'Automatic adjudication completed without a human approval prompt; no finding action is required for this Stop.';
     return {
       hookSpecificOutput: {
         hookEventName: 'Stop',
         additionalContext: `${advisoryMessage}\n\nThis is non-error Stop hook feedback. ${instruction}`,
       },
+    };
+  }
+  if (externalHandoff) {
+    return {
+      systemMessage: `${advisoryMessage}\n\nLocal work reached an external authority boundary. The host owns the protected evaluation. Do not run more local status or help commands.`,
     };
   }
   return {
@@ -1370,7 +1379,9 @@ function formatStopExecutionEvidence(
         `Completion ${changeId}: blocked; ` +
           `blocked=${decision.blockedPredicates.join(',')}; unknown=${decision.unknownPredicates.join(',') || 'none'}.` +
           (action ? ` ${action}` : '') +
-          (decision.unknownPredicates.length > 0 ? ` Inspect: scip-query completion status ${changeId}.` : ''),
+          (decision.unknownPredicates.length > 0 && nextAction?.action.kind !== 'halt-authority'
+            ? ` Inspect: scip-query completion status ${changeId}.`
+            : ''),
       );
     } else {
       lines.push(
@@ -1386,6 +1397,26 @@ function formatStopExecutionEvidence(
   const unmatchedActionOutput = formatAutonomousNextActions(unmatchedActions);
   if (unmatchedActionOutput) lines.push(unmatchedActionOutput);
   return lines;
+}
+
+function hasOnlyExternalCompletionHandoffs(
+  execution:
+    | {
+        completion?: ReturnType<typeof publishStopCompletionEvaluations>;
+        nextActions?: readonly PublishedAutonomousNextAction[];
+      }
+    | undefined,
+): boolean {
+  const blockedChanges = (execution?.completion ?? [])
+    .filter(({ evaluation }) => evaluation.evaluation.record.decision.state !== 'complete')
+    .map(({ evaluation }) => evaluation.evaluation.record.changeId);
+  if (blockedChanges.length === 0) return false;
+  return blockedChanges.every((changeId) =>
+    execution?.nextActions?.some(
+      ({ action }) =>
+        action.changeId === changeId && action.kind === 'halt-authority' && action.blocker === 'missing-authorization',
+    ),
+  );
 }
 
 function formatCompactAutonomousNextAction({ action, decision }: PublishedAutonomousNextAction): string {

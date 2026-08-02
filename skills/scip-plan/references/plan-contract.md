@@ -58,6 +58,22 @@ Omitted `retire`, `survivors`, `reuse`, `architecture`, and `slices` arrays are
 empty. Item IDs are generated in stable list order when omitted. Give a seed an
 explicit ID when another item must refer to it.
 
+If a hook restores active work, replace the inline `goal` and `change` objects
+with the restored identities:
+
+```json
+{
+  "schemaVersion": 1,
+  "form": "compact",
+  "goalId": "SQG-...",
+  "changeId": "SQC-..."
+}
+```
+
+Keep the other compact fields. This form continues the current records and
+does not create another goal or change. Do not mix identities with inline
+objects.
+
 ## Fields that need judgment
 
 - `preserve` names behavior that must remain true and the evidence that can
@@ -82,11 +98,9 @@ explicit ID when another item must refer to it.
 ## Applying and resuming
 
 Run `scip-query plan apply <path>` once before source edits. It fixes the
-pre-edit observation and creates the inline goal, intended change, plan, and
-derived obligations in one idempotent action. Repeating the same interrupted
-apply is safe because identities are content-derived. Use existing `goalId`
-and `changeId` only when continuing already-created records through the full v1
-form.
+pre-edit observation and creates or continues the work, plan, and derived
+obligations in one idempotent action. Repeating the same interrupted apply is
+safe because identities are content-derived.
 
 Supported hooks restore bounded active state after session start and
 compaction. Use `attempt status`, `decision status`, `obligation status`, or

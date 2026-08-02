@@ -111,6 +111,34 @@ describe('plan contract compiler', () => {
     expect(readGoalRecords(root).records).toHaveLength(1);
     expect(readIntendedChangeRecords(root).records).toHaveLength(1);
   });
+
+  it('continues existing work from compact input without creating duplicate work records', () => {
+    const state = repository();
+    const plan = {
+      schemaVersion: 1,
+      form: 'compact',
+      goalId: state.goalId,
+      changeId: state.changeId,
+      class: 'relational',
+      seeds: [{ id: 'entry', kind: 'symbol', referent: 'queueDelivery', role: 'entry' }],
+      preserve: [{ condition: 'Preserve other outcomes', evidence: ['tests'] }],
+      evidence: { tests: 'Run focused tests' },
+    };
+    writeFileSync(state.planPath, `# Plan\n\n\`\`\`scip-query-plan\n${JSON.stringify(plan, null, 2)}\n\`\`\`\n`);
+
+    const result = applyPlanContract(state.root, 'plan.md', {
+      collaborationDomainId: DOMAIN,
+      toolVersion: '0.20.0',
+      now: () => '2026-08-01T12:00:00.000Z',
+      captureObservation: () => receipt(),
+    });
+
+    expect(result.goal).toBeUndefined();
+    expect(result.change).toBeUndefined();
+    expect(result.plan.record).toMatchObject({ goalId: state.goalId, changeId: state.changeId });
+    expect(readGoalRecords(state.root).records).toHaveLength(1);
+    expect(readIntendedChangeRecords(state.root).records).toHaveLength(1);
+  });
 });
 
 function repository() {
