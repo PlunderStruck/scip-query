@@ -13,6 +13,8 @@ A SCIP index is the compiler-derived map of a repository: source files, symbols,
 Within one working context, reuse an exact read-only command result while the
 repository, diff, index generation, command input, and coverage scope stay
 unchanged. Memory pressure or a desire for reassurance is not new evidence.
+Bounded relational work uses one concise readable plan. Durable plan records
+are for sustained work that must survive several phases or a context reset.
 
 **Match evidence to the claim.** Native search and file reads are valid for literal text, exact local source, and unambiguous local logic (e.g. a helper defined two lines down in the same file is not a resolution claim). Use scip-query whenever the claim depends on compiler-resolved identity or on a relationship set being complete — definitions, references, callers, dependencies, consumers, affected units, public surface. Many scip-query commands return a bounded/capped sample rather than an exhaustive set; say so explicitly rather than treating a bounded result as proof of completeness.
 
@@ -104,7 +106,9 @@ family, so standalone detectors are not a pre-gate battery. Use one only for
 an uncovered risk or to investigate a reported finding, and repeat a check only
 after relevant evidence changes. Fix each blocking finding or record a specific
 evidence-backed disposition; treat advisory findings as context. The
-authoritative usefulness and ownership rules live in `scip-verify`.
+authoritative usefulness and ownership rules live in `scip-verify`. When Stop
+names local work, take that action and stop again. Do not poll completion status
+or architecture before the next Stop reevaluates the changed repository.
 
 ## Subagent evidence boundary
 

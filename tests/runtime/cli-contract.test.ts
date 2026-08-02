@@ -442,15 +442,16 @@ describe('CLI contract', () => {
     const readSkill = (name: string) => readFileSync(join(process.cwd(), 'skills', name, 'SKILL.md'), 'utf8');
 
     expect(readSkill('scip-query')).toContain('Follow the exact Stop-controller next action');
-    expect(readSkill('scip-plan')).toContain('Keep the goal shorter than the implementation plan');
-    expect(readSkill('scip-plan')).toMatch(
-      /Do not issue manual `attempt create` or `decision create`\s+operations for ordinary/u,
-    );
+    const planSkill = readSkill('scip-plan');
+    expect(planSkill).toContain('Keep the goal shorter than the file plan');
+    expect(planSkill).toContain('Bounded relational work');
+    expect(planSkill).toContain('Only sustained work adds one `scip-query-plan` fence');
+    expect(planSkill).toContain('Do not poll `completion status`');
     expect(readSkill('scip-improve')).toContain('Continue through those slices autonomously');
     const verifySkill = readSkill('scip-verify');
     expect(verifySkill).toContain('A clean `diff-gate` is evidence, not permission');
     expect(verifySkill).toContain('Give the final gate one owner');
-    expect(verifySkill).toMatch(/Do not run their standalone forms as\s+a fixed pre-gate battery/u);
+    expect(verifySkill).toContain('Add a specialist check only for a named risk the default gate does not own');
     expect(verifySkill).not.toContain('Construct at least two refutation attempts');
     expect(verifySkill).not.toContain('Run every row that matches');
     expect(readSkill('scip-setup')).toContain('without hand-authored glue');

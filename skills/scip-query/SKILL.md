@@ -1,6 +1,6 @@
 ---
 name: scip-query
-description: Use FIRST for codebase work that needs compiler-resolved evidence. Route understanding to scip-explore, prospective changes to scip-plan, failures to scip-diagnose, read-only problem finding to scip-audit, confirmed fixes to scip-improve, setup to scip-setup, and finished diffs to scip-verify.
+description: Router for compiler-resolved codebase work only when the right scip specialist is unclear. Do not load it alongside an already selected scip-plan, scip-verify, or other specialist.
 ---
 
 # SCIP Query Router
@@ -50,9 +50,8 @@ exists; final-stage rules cannot improve pre-edit understanding.
 
 1. Route to `scip-plan`. It runs one compact `plan-context` anchor and decides
    whether the work is direct, relational, or sustained.
-2. Direct work edits the known local target without durable ceremony.
-   Relational or sustained work applies one concise plan contract before edits;
-   the same action creates any needed goal, change, and obligations.
+2. Direct work edits the known local target. Bounded relational work uses one
+   concise readable plan. Sustained work applies one durable plan contract.
 3. Implement the smallest coherent outcome. Useful commands update work
    history automatically; do not add manual ledger writes.
 4. Route once to `scip-verify` for the coherent finished outcome. Reuse checks

@@ -21,6 +21,7 @@ import { resolveIndexedPaths } from '../internal/file-resolution.js';
 import { findExactSymbolMatch, findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { leafName } from '../../symbols/symbol-parser.js';
 import type { IndexedDefinition } from '../../domain/types.js';
+import { preferCallablePlanSourceCandidates } from '../internal/plan-source-candidates.js';
 
 export interface PlanContextOptions {
   semantic?: boolean;
@@ -425,8 +426,8 @@ function buildPlanContextSourcePacket(
     })),
   ];
   const unique = new Map<string, { definition: IndexedDefinition; role: PlanContextSourceSlice['role'] }>();
-  for (const candidate of candidates) {
-    if (!candidate.definition || unique.has(candidate.definition.symbol)) continue;
+  for (const candidate of preferCallablePlanSourceCandidates(candidates)) {
+    if (unique.has(candidate.definition.symbol)) continue;
     unique.set(candidate.definition.symbol, { definition: candidate.definition, role: candidate.role });
   }
 

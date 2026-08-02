@@ -1,6 +1,6 @@
 ---
 name: scip-verify
-description: Use once after a coherent finished change. Reuse checks that already ran, map each material requirement to direct evidence, inspect impact only when it can change the verdict, and give the final diff gate exactly one owner.
+description: Finished-diff specialist used only after source edits form one coherent change. Do not select or read it during initial planning. Reuse existing checks and give the final gate one owner.
 commands:
   - template: 'scip-query diff-impact'
     when: 'Compare a non-trivial changed surface with the plan when unexpected impact could change the verdict.'
@@ -26,47 +26,28 @@ Use this shortlist first. Open [`../_shared/SKILL.md`](../_shared/SKILL.md) only
 
 ## Purpose
 
-Verification is the evidence pass that tries to prove a finished change wrong
-before declaring it complete. A useful action can fail when a material
-requirement is false. Repeating equivalent checks against unchanged state is
-ceremony.
-
-Evidence commands obtain a fresh usable index internally. Run the useful
-command directly; do not manage `status`, watcher waits, or `reindex` as
-verification steps. If a command cannot establish freshness, its exact error
-is the blocker.
+Verification tries to prove a coherent finished change wrong. Repeating an
+equivalent check against unchanged state is ceremony. Evidence commands obtain
+a fresh usable index themselves; do not add status polling or reindex steps.
 
 ## Verify once
 
-1. Build one requirement map from the active goal and plan. Include observable
-   outcomes, invariants, affected consumers, architecture conditions,
-   retirements, justified survivors, and generated or documented artifacts.
-2. Put existing evidence beside each requirement. Reuse focused tests,
-   checkers, source inspection, and command results that ran against the final
-   relevant state. Evidence is useful only if it could have failed when that
-   requirement was false.
-3. Run the repository's focused native checks only for uncovered rows. Expand
-   to a broad suite when repository policy or the affected surface requires
-   it. Do not run baseline tests after implementation merely to recreate a
-   before-state observation.
-4. Run `scip-query diff-impact` only when compiler-resolved impact can change
-   the verdict: a non-trivial source change, public contract, migration, or new
-   abstraction. Compare the result with the planned surface. Follow bounded
-   evidence with `refs --full` or `affected --full` only when completeness of
-   that set is material.
-5. Add a specialist check only when it covers a named risk that direct tests
-   and the default gate do not cover. The final gate already owns its configured
-   architecture, duplication, migration, coordination, documentation,
-   unused-parameter, and new-dead checks. Do not run their standalone forms as
-   a fixed pre-gate battery.
-6. Give the final gate one owner:
+1. Map each material outcome, consumer, preservation rule, retirement, and
+   architecture condition to evidence that ran against the final state.
+2. Run only the cheapest native check that covers a remaining gap. Use the
+   broad suite when repository policy or the changed surface requires it.
+3. Run `scip-query diff-impact` only when unexpected compiler-resolved impact
+   can change the verdict. Do not repeat `refs` already established by the
+   planning packet unless complete coverage is material.
+4. Add a specialist check only for a named risk the default gate does not own.
+5. Give the final gate one owner:
    - If protected work activated a blocking Stop hook, finish direct evidence
      and let Stop run the gate and completion judgment.
    - Otherwise run `scip-query diff-gate` once.
    - If it reports a finding, inspect that finding, change or disposition the
      relevant state, then rerun. Do not rerun after an unchanged result.
-7. Recheck the requirement map once. Run the cheapest discriminating probe for
-   each remaining gap. Zero extra probes is valid when every row is covered.
+6. Recheck the requirement map once. Zero extra probes is valid when every row
+   is covered.
 
 A clean `diff-gate` is evidence, not permission to declare the goal complete.
 It proves only its repository predicates. It does not replace the requirement
@@ -75,15 +56,10 @@ improves autonomous work. Supported Stop hooks convert the same fixed evidence
 into a completion action; follow that action instead of inferring completion
 from prose.
 
-For an applied contract, use its restored consequences or `plan status`
-rather than rebuilding a second checklist. The plan is not a completeness
-ceiling: new repository evidence may expose an omitted consumer or residue.
-
 ## Report
 
-State the verdict, the direct evidence for each material requirement, the
-impact or final-gate result, and any remaining risk. Do not reproduce command
-transcripts or fill a fixed checklist that changes no decision.
+State the verdict, direct evidence, gate result, and remaining risk. Do not
+reproduce command transcripts or create a second checklist.
 
 Use
 [`references/calibrate-detectors.md`](references/calibrate-detectors.md) only

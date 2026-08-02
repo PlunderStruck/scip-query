@@ -1,0 +1,203 @@
+{
+  "kind": "scip-query-plan-contract",
+  "schemaVersion": 1,
+  "planId": "SQP-B275F31F5FE0FEDB4BACCA7956347382",
+  "collaborationDomainId": "5ea57d1a-936c-4c91-b58f-5d61e45173a5",
+  "goalId": "SQG-12532F1CFF0F0B84E98440E9BC3D352D",
+  "changeId": "SQC-1A2415329C13102CED863257667AA0DE",
+  "workflowClass": "relational",
+  "predecessorPlanId": "SQP-18275FF548722BB69976F14F154171F8",
+  "affectedSeeds": [
+    {
+      "id": "skill-route",
+      "kind": "file",
+      "referent": "skills/scip-plan/SKILL.md",
+      "role": "planning effort and durable-state route"
+    },
+    {
+      "id": "source-packet",
+      "kind": "symbol",
+      "referent": "buildPlanContextSourcePacket",
+      "role": "bounded source evidence selection"
+    },
+    {
+      "id": "stop-output",
+      "kind": "symbol",
+      "referent": "formatStopExecutionEvidence",
+      "role": "local repair and completion handoff instruction"
+    }
+  ],
+  "preserve": [
+    {
+      "id": "preserve-1",
+      "condition": "Sustained work can still create durable goals, changes, plans, slices, and obligations",
+      "evidenceIds": [
+        "skills"
+      ]
+    },
+    {
+      "id": "preserve-2",
+      "condition": "A consumer file with no callable definition can still appear in the source packet",
+      "evidenceIds": [
+        "planning-tests"
+      ]
+    },
+    {
+      "id": "preserve-3",
+      "condition": "External protected evaluation remains a terminal local authority boundary",
+      "evidenceIds": [
+        "stop-tests"
+      ]
+    }
+  ],
+  "retirements": [
+    {
+      "id": "retire-1",
+      "condition": "Bounded relational work uses a concise readable plan without a durable contract",
+      "evidenceIds": [
+        "skills"
+      ],
+      "kind": "documentation",
+      "referent": "Relational or sustained work applies",
+      "responsibility": "adding sustained-work ceremony to one-slice tasks"
+    },
+    {
+      "id": "retire-2",
+      "condition": "The packet keeps the most specific useful slice per role and file",
+      "evidenceIds": [
+        "planning-tests"
+      ],
+      "kind": "symbol",
+      "referent": "if (!candidate.definition || unique.has(candidate.definition.symbol)) continue",
+      "responsibility": "expanding planning context with overlapping source"
+    },
+    {
+      "id": "retire-3",
+      "condition": "Named local repairs lead directly to another Stop",
+      "evidenceIds": [
+        "stop-tests"
+      ],
+      "kind": "symbol",
+      "referent": "Inspect: scip-query completion status",
+      "responsibility": "causing repeated status probes before Stop reevaluation"
+    }
+  ],
+  "allowedSurvivors": [],
+  "reuseAuthorities": [],
+  "architecture": [],
+  "completionEvidence": [
+    {
+      "id": "full",
+      "description": "Run the full test, lint, build, and API checks"
+    },
+    {
+      "id": "gate",
+      "description": "Run the configured final diff gate",
+      "command": "scip-query diff-gate"
+    },
+    {
+      "id": "planning-tests",
+      "description": "Run plan-context decision packet and source packet tests"
+    },
+    {
+      "id": "skills",
+      "description": "Run skill link and generated guidance checks"
+    },
+    {
+      "id": "stop-tests",
+      "description": "Run Stop output and autonomous action tests"
+    }
+  ],
+  "slices": [],
+  "source": {
+    "path": "docs/plans/2026-08-02-bounded-workflow-followup.md",
+    "sha256": "c0f70237d394f53345997afb85da865e3821ab7855a20114727a36a0827f07e1"
+  },
+  "compiledAgainst": {
+    "schemaVersion": 2,
+    "observedAt": "2026-08-02T03:16:38.071Z",
+    "facts": {
+      "collaborationDomain": {
+        "schemaVersion": 1,
+        "canonicalizationVersion": 1,
+        "hashAlgorithm": "sha256",
+        "projection": {
+          "name": "scip-query:collaboration-domain",
+          "version": 1
+        },
+        "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+      },
+      "workspaceInstance": {
+        "schemaVersion": 1,
+        "canonicalizationVersion": 1,
+        "hashAlgorithm": "sha256",
+        "projection": {
+          "name": "scip-query:workspace-instance",
+          "version": 1
+        },
+        "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+      },
+      "wholeContent": {
+        "schemaVersion": 1,
+        "canonicalizationVersion": 1,
+        "hashAlgorithm": "sha256",
+        "projection": {
+          "name": "scip-query:repository-content",
+          "version": 1
+        },
+        "digest": "1c76e0b4ec1c5a4a11cbf485bd06489baa4c0866ecf3bcc714b46109a451ff68"
+      },
+      "relevantInputs": [
+        {
+          "subject": "scip-query:index-inputs",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-inputs",
+              "version": 2
+            },
+            "digest": "83c996dc72ef78281f9555340aa7d21b2b5353ee9626206596894a038535d9d9"
+          }
+        }
+      ]
+    },
+    "observedSources": [
+      {
+        "kind": "repository-snapshot",
+        "identity": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:repository-content",
+            "version": 1
+          },
+          "digest": "1c76e0b4ec1c5a4a11cbf485bd06489baa4c0866ecf3bcc714b46109a451ff68"
+        }
+      }
+    ],
+    "stabilityProofs": [
+      {
+        "source": "repository-snapshot",
+        "kind": "fixed-snapshot"
+      }
+    ],
+    "diagnostics": {
+      "clean": false,
+      "headCommit": "6680a89da80155190f108de2446e303b33961015",
+      "treeOid": "95fdab7525a427b5ebe9301ce6af3a60fd0eb97e"
+    }
+  },
+  "semanticIdentity": {
+    "algorithm": "sha256",
+    "canonicalizationVersion": 1,
+    "digest": "b275f31f5fe0fedb4bacca7956347382ea0abb5b96d419b0d289cd836419ead3"
+  },
+  "createdAt": "2026-08-02T03:16:38.072Z",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  }
+}

@@ -183,7 +183,9 @@ impact can change the verdict, and give `diff-gate` one owner. A protected
 blocking Stop hook owns that final gate; otherwise run it once manually. The
 gate already invokes its built-in detector family, so run a standalone
 detector only for an uncovered requirement or to investigate a finding. See
-the bundled `scip-verify` skill for the complete usefulness rule.
+the bundled `scip-verify` skill for the complete usefulness rule. When Stop
+names local work, take that action and stop again. Do not poll completion status
+or architecture before the next Stop reevaluates the changed repository.
 
 ## `analysisBudget` disclosure contract
 

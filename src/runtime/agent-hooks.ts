@@ -1276,14 +1276,19 @@ export function renderStopHookOutput(
   const coverageWarning = suppressionCoverageWarning(result);
   const findingMessage = result.findings.length > 0 ? formatGateBlockReason(result) : undefined;
   const executionEvidence = formatStopExecutionEvidence(result, execution);
-  const blockMessage = [coverageWarning, ...executionEvidence, findingMessage]
-    .filter((value): value is string => Boolean(value))
-    .join('\n\n');
   const advisoryMessage = formatGateAdvisoryReason(result, executionEvidence);
   const completionBlocked = execution?.completion?.some(
     ({ evaluation }) => evaluation.evaluation.record.decision.state !== 'complete',
   );
   const externalHandoff = hasOnlyExternalCompletionHandoffs(execution);
+  const nextStopInstruction = externalHandoff
+    ? 'Stop local work. The host owns the protected evaluation and will decide the next candidate action.'
+    : completionBlocked || result.findings.length > 0
+      ? 'Take the named next action, then stop again. The next Stop reevaluates it; do not poll completion status or architecture first.'
+      : undefined;
+  const blockMessage = [coverageWarning, ...executionEvidence, findingMessage, nextStopInstruction]
+    .filter((value): value is string => Boolean(value))
+    .join('\n\n');
   if (mode === 'block' && (result.findings.length > 0 || (completionBlocked && !externalHandoff))) {
     return {
       decision: 'block',
@@ -1291,13 +1296,9 @@ export function renderStopHookOutput(
     };
   }
   if (mode === 'feedback') {
-    const instruction = externalHandoff
-      ? 'Stop local work. The host owns the protected evaluation and will decide the next candidate action.'
-      : completionBlocked
-        ? 'Continue with the named unsatisfied completion predicates; do not declare the intended change complete yet.'
-        : result.findings.length > 0
-          ? 'Fix true findings, or provide policy-admissible counterevidence before finishing.'
-          : 'Automatic adjudication completed without a human approval prompt; no finding action is required for this Stop.';
+    const instruction =
+      nextStopInstruction ??
+      'Automatic adjudication completed without a human approval prompt; no finding action is required for this Stop.';
     return {
       hookSpecificOutput: {
         hookEventName: 'Stop',
@@ -1378,10 +1379,7 @@ function formatStopExecutionEvidence(
       lines.push(
         `Completion ${changeId}: blocked; ` +
           `blocked=${decision.blockedPredicates.join(',')}; unknown=${decision.unknownPredicates.join(',') || 'none'}.` +
-          (action ? ` ${action}` : '') +
-          (decision.unknownPredicates.length > 0 && nextAction?.action.kind !== 'halt-authority'
-            ? ` Inspect: scip-query completion status ${changeId}.`
-            : ''),
+          (action ? ` ${action}` : ''),
       );
     } else {
       lines.push(

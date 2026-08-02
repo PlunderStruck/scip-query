@@ -1,0 +1,105 @@
+{
+  "kind": "scip-query-obligation-admission",
+  "schemaVersion": 1,
+  "obligationId": "SQO-A4A7D1C1602EFE13BF25F6C2FA670D72",
+  "collaborationDomainId": "5ea57d1a-936c-4c91-b58f-5d61e45173a5",
+  "changeId": "SQC-1A2415329C13102CED863257667AA0DE",
+  "category": "residue",
+  "title": "Retire if (!candidate.definition || unique.has(candidate.definition.symbol)) continue",
+  "requiredCondition": "The packet keeps the most specific useful slice per role and file",
+  "source": {
+    "kind": "agent-discovery",
+    "referent": "SQP-B275F31F5FE0FEDB4BACCA7956347382#retire:retire-2"
+  },
+  "basisAttemptIds": [],
+  "evidenceReceipts": [
+    {
+      "schemaVersion": 2,
+      "observedAt": "2026-08-02T03:16:38.071Z",
+      "facts": {
+        "collaborationDomain": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:collaboration-domain",
+            "version": 1
+          },
+          "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+        },
+        "workspaceInstance": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:workspace-instance",
+            "version": 1
+          },
+          "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+        },
+        "wholeContent": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:repository-content",
+            "version": 1
+          },
+          "digest": "1c76e0b4ec1c5a4a11cbf485bd06489baa4c0866ecf3bcc714b46109a451ff68"
+        },
+        "relevantInputs": [
+          {
+            "subject": "scip-query:index-inputs",
+            "identity": {
+              "schemaVersion": 1,
+              "canonicalizationVersion": 1,
+              "hashAlgorithm": "sha256",
+              "projection": {
+                "name": "scip-query:index-inputs",
+                "version": 2
+              },
+              "digest": "83c996dc72ef78281f9555340aa7d21b2b5353ee9626206596894a038535d9d9"
+            }
+          }
+        ]
+      },
+      "observedSources": [
+        {
+          "kind": "repository-snapshot",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:repository-content",
+              "version": 1
+            },
+            "digest": "1c76e0b4ec1c5a4a11cbf485bd06489baa4c0866ecf3bcc714b46109a451ff68"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "repository-snapshot",
+          "kind": "fixed-snapshot"
+        }
+      ],
+      "diagnostics": {
+        "clean": false,
+        "headCommit": "6680a89da80155190f108de2446e303b33961015",
+        "treeOid": "95fdab7525a427b5ebe9301ce6af3a60fd0eb97e"
+      }
+    }
+  ],
+  "idempotency": {
+    "version": 1,
+    "algorithm": "sha256",
+    "keyDigest": "a4a7d1c1602efe13bf25f6c2fa670d725584d9f5d68bf94a8b368511c9297bdb",
+    "requestDigest": "fbf3ed8e787ad5290b4cee00e2440133952c8d3c2f12093f002e32f8f75ea821"
+  },
+  "createdAt": "2026-08-02T03:16:38.072Z",
+  "writer": {
+    "tool": "scip-query",
+    "version": "0.20.0"
+  }
+}

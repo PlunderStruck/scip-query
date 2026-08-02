@@ -97,10 +97,12 @@ objects.
 
 ## Applying and resuming
 
-Run `scip-query plan apply <path>` once before source edits. It fixes the
-pre-edit observation and creates or continues the work, plan, and derived
-obligations in one idempotent action. Repeating the same interrupted apply is
-safe because identities are content-derived.
+Run `scip-query plan apply <path>` once before source edits only when work must
+survive several phases or a context reset. Bounded relational work uses its
+readable plan without durable records. Existing relational contracts remain
+valid for compatibility. An applied contract fixes the pre-edit observation
+and creates or continues the work, plan, and derived obligations in one
+idempotent action.
 
 Supported hooks restore bounded active state after session start and
 compaction. Use `attempt status`, `decision status`, `obligation status`, or

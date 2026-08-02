@@ -724,8 +724,7 @@ describe('agent hook context', () => {
 
     expect(controllerBlock).toBe(
       `Completion ${changeId}: blocked; blocked=goal-fulfilled,invariants-preserved; unknown=goal-fulfilled. ` +
-        'Next gather-evidence/work: Gather independent evidence for goal-fulfilled against the fixed goal. ' +
-        `Inspect: scip-query completion status ${changeId}.`,
+        'Next gather-evidence/work: Gather independent evidence for goal-fulfilled against the fixed goal.',
     );
     expect(Buffer.byteLength(controllerBlock, 'utf8')).toBeLessThanOrEqual(
       Buffer.byteLength(legacyControllerBlock, 'utf8') * 0.7,
@@ -735,9 +734,13 @@ describe('agent hook context', () => {
     expect(blocking).toEqual(
       expect.objectContaining({
         decision: 'block',
-        reason: expect.stringContaining('blocked=goal-fulfilled,invariants-preserved; unknown=goal-fulfilled'),
+        reason: expect.stringContaining(
+          'The next Stop reevaluates it; do not poll completion status or architecture first.',
+        ),
       }),
     );
+    expect(context).toContain('The next Stop reevaluates it; do not poll completion status or architecture first.');
+    expect(context).not.toContain('scip-query completion status');
   });
 
   it('preserves terminal decisions and emits drill-down only for unresolved predicate truth', () => {
