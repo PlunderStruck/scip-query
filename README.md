@@ -31,7 +31,9 @@ scip-query setup
 
 Setup detects supported languages, installs or checks their indexers, builds
 the local index, installs the bundled skills, and writes concise agent guidance.
-It does not install Stop hooks, pre-commit gates, or CI enforcement.
+When the repository declares valid architecture rules, setup also installs one
+checkout-local Stop hook that checks those rules after indexed source changes.
+It does not install a completion gate, pre-commit gate, or CI enforcement.
 
 Check a setup with:
 
@@ -42,8 +44,17 @@ scip-query status --capabilities
 
 ## The normal workflow
 
-Use native search and file reads for literal source. Use scip-query where
-compiler identity or repository relationships can change the answer.
+Use scip-query as the primary reading surface for indexed source. Start an
+unknown path with `search`; batch related text, symbol, and file-line anchors
+with `inspect`; use `evidence` when one symbol and its real uses are the center
+of the question. Use a native source read only for exact edit lines, non-indexed
+files, or a named evidence gap.
+
+```bash
+scip-query search work_session_stream_events
+scip-query inspect --search sessionStreamEvents --search work_session_stream_events
+scip-query evidence appendWorkSessionStreamEvents --include definition,references,callers,callees
+```
 
 Before a nonlocal change:
 

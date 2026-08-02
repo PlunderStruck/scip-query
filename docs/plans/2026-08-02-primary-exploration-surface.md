@@ -106,7 +106,7 @@ Verification:
 - The architecture Stop hook returned `{}` for the clean current diff.
 - Configuration validation passed.
 - Lint, formatting, API compatibility, type declarations, and skill-link validation passed.
-- The full suite passed: 264 files and 2,078 tests.
+- The full suite passed: 264 files and 2,080 tests.
 
 ## First matched trial and correction
 
@@ -138,3 +138,40 @@ This evidence changed the composed-view design:
 
 A new matched trial is required after this correction. The detailed trial
 artifacts remain in the private trial repository.
+
+## Second matched trial
+
+The corrected treatment completed the same hidden, read-only explanation task
+in about 14.3 minutes. The control reached the hidden 15-minute limit without
+a valid final answer. Both candidates started from identical source, ran in
+parallel, and did not see the condition label, time limit, comparison, or score
+facts. Treatment setup and indexing remained outside measured time.
+
+The treatment used 70 shell-tool turns, compared with 291 for the unfinished
+control. Its command output contained about 1.02 million characters, compared
+with 1.64 million for the control. The completed treatment reported 340,096
+uncached input tokens, 7,719,936 cached input tokens, and 26,960 output tokens.
+The control did not emit final token usage before timeout, so this pair cannot
+support a direct token-savings claim.
+
+The treatment fully stated 11 of 15 hidden facts and partially stated the four
+browser-tail facts. It also made one false extra claim by grouping invalid JSON
+with missing or empty input. Under the strict trial rubric, partial facts earn
+no point and that false material claim costs two points, producing 9/15. The
+answer was strong through persistence and realtime publication, but it omitted
+exact polling, retrieval, and rendering details.
+
+The new surface changed exploration behavior in the intended direction, but
+did not yet make it minimal. Fifty shell calls contained scip-query commands;
+because many calls batched commands with `&&`, those calls launched 127 actual
+queries: 73 `code`, 21 `outline`, 20 `search`, 9 `evidence`, and 4 `inspect`.
+The agent also used native reads for final confirmation instead of relying on
+already returned source. The result is favorable evidence that the primary
+surface can reduce repository inventory and help an agent finish, not evidence
+that its present command selection or token cost is optimal.
+
+The next product question is narrower: make a composed packet the natural way
+to close a named evidence gap, so the agent does not replace file-by-file native
+inventory with symbol-by-symbol `code` and `outline` inventory. That should be
+tested on a different fixture before another implementation change is credited
+as a general improvement.

@@ -43,7 +43,10 @@ scip-query adds relationship and cleanup evidence.
 
 ## Efficient use
 
-- Use native search for literal text.
+- Use `search` for an unknown literal anchor in indexed source.
+- Put known text, symbol, and file-line anchors into one `inspect` packet.
+- Treat returned source as already read. Use a native read only for exact edit
+  lines, a non-indexed file, or a named evidence gap.
 - Do not repeat an unchanged query after context compaction.
 - Use `--full` only when complete coverage can change a decision.
 - Follow an emitted `Continue exactly:` command until transport is complete.
