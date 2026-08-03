@@ -140,6 +140,7 @@
           "src/runtime/revisioned-file.ts",
           "src/runtime/setup-wizard.ts",
           "src/runtime/setup.ts",
+          "src/runtime/source-emission-session.ts",
           "src/runtime/suppression-writer.ts",
           "src/runtime/typescript-mailbox-lanes.ts",
           "src/runtime/typescript-mailbox-worker.ts",
