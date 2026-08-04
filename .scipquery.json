@@ -215,7 +215,7 @@
       }
     ],
     "allowedDependencies": {
-      "analysis": ["domain", "source", "storage", "symbols-core", "symbols-graph"],
+      "analysis": ["domain", "source", "storage", "symbols-core", "symbols-graph", "symbols-references"],
       "domain": [],
       "filesystem": [],
       "instrumentation": [],
@@ -318,6 +318,7 @@
       ],
       "queries-utils": ["domain", "symbols-core"],
       "reindex": [
+        "analysis",
         "domain",
         "instrumentation",
         "platform",
