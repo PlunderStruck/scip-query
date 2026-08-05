@@ -80,7 +80,7 @@ export class TypeScriptIndexRequester {
     const enqueuedAtMs = this.runtime.now();
     const deadlineAtMs = enqueuedAtMs + this.timeoutMs;
     const monotonicDeadlineAtMs = (this.runtime.monotonicNow ?? monotonicNowMs)() + this.timeoutMs;
-    const operationKey = boundedMailboxOperationKey('typescript-index-v3', {
+    const operationKey = boundedMailboxOperationKey('typescript-index-v4', {
       baseGeneration: this.baseGeneration,
       request,
     });

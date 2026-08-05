@@ -1,0 +1,67 @@
+{
+  "acceptedAt": "2026-08-05T23:04:52.791Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "e536c921f26fef0b48b398670d802564700297f57e0f88890cba31e16ea211d9",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchIdentityCoverage.",
+      "target": "./queries:SourceSearchIdentityCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchResult changed from interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; identities?: SourceSearchIdentity[]; matches: SourceSearchMatch[]; matchingLines: number; omittedMatc... to interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; identities?: SourceSearchIdentity[]; identityManifest?: SourceSearchIdentity[]; identityCoverage?: So....",
+      "target": "./queries:SourceSearchResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchScopeHint.",
+      "target": "./queries:SourceSearchScopeHint"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchIdentityCoverage.",
+      "target": "./queries/index:SourceSearchIdentityCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchResult changed from interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; identities?: SourceSearchIdentity[]; matches: SourceSearchMatch[]; matchingLines: number; omittedMatc... to interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; identities?: SourceSearchIdentity[]; identityManifest?: SourceSearchIdentity[]; identityCoverage?: So....",
+      "target": "./queries/index:SourceSearchResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchScopeHint.",
+      "target": "./queries/index:SourceSearchScopeHint"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchIdentityCoverage.",
+      "target": "./queries/source-search:SourceSearchIdentityCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchResult changed from interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; identities?: SourceSearchIdentity[]; matches: SourceSearchMatch[]; matchingLines: number; omittedMatc... to interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; identities?: SourceSearchIdentity[]; identityManifest?: SourceSearchIdentity[]; identityCoverage?: So....",
+      "target": "./queries/source-search:SourceSearchResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchScopeHint.",
+      "target": "./queries/source-search:SourceSearchScopeHint"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "a30aa0cc7adb29f75741fec26cfc676c457426ef0659fb4dfaa10da8590ab2d2",
+  "reason": "Add bounded human search manifests and exact scope recovery metadata while preserving complete programmatic identities.",
+  "schemaVersion": 1
+}

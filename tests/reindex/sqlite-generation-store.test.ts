@@ -154,7 +154,7 @@ describe('SQLite generation handoff', () => {
 
     const currentReader = openFixtureDatabase(fixture);
     try {
-      expect(generationDirectories(fixture.paths.outputDb)).toHaveLength(3);
+      expect(generationDirectories(fixture.paths.outputDb)).toHaveLength(2);
       expect(readValue(join(dirname(fixture.paths.outputDb), result.previousGeneration!.databasePath))).toBe('new');
       expect(readValueFromDatabase(retainedReader.db)).toBe('new');
       expect(retainedReader.generation.metadataRaw).toBe('new-meta');

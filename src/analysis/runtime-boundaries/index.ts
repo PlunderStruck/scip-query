@@ -24,5 +24,8 @@ export type {
   BoundaryTerm,
   BoundaryValuePrecision,
   RuntimeBoundaryCoverage,
+  RuntimeBoundaryPhaseCoverage,
+  RuntimeBoundaryPhaseId,
+  RuntimeBoundaryFileCoverage,
   RuntimeBoundaryGraph,
 } from './types.js';

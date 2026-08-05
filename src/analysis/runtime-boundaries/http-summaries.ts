@@ -1,12 +1,18 @@
+import { createHash } from 'node:crypto';
 import type { IndexedDefinition } from '../../domain/types.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
-import { referenceEvidenceForSymbol } from '../../symbols/references/reference-sites.js';
-import { leafName } from '../../symbols/symbol-parser.js';
+import {
+  resolvedCallSitesForDefinition,
+  type ResolvedCallSite,
+  type UnresolvedCallSite,
+} from '../../symbols/graph/resolved-call-sites.js';
+import { forwardedCallerParameterPositions, parameterValueFlowAtCall } from '../../symbols/graph/value-flow.js';
 import { boundaryFileContext, createBoundaryObservation, type BoundaryFileContext } from './extractors.js';
-import { evaluateBoundaryValue } from './value-evaluator.js';
-import type { BoundaryKeyPart, BoundaryObservation, BoundarySourceLocation } from './types.js';
+import { evaluateStaticValue as evaluateBoundaryValue } from '../../symbols/graph/static-value-flow.js';
+import { runtimeBoundarySourceScope } from './source-scope.js';
+import type { BoundaryFrontier, BoundaryKeyPart, BoundaryObservation, BoundarySourceLocation } from './types.js';
 
 const HTTP_METHODS = new Set(['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT']);
 const MAX_HTTP_SUMMARY_DEPTH = 8;
@@ -23,6 +29,7 @@ interface HttpCallableSummary {
 
 export interface HttpSummaryPropagationResult {
   observations: BoundaryObservation[];
+  frontiers: BoundaryFrontier[];
   summaries: number;
   filesInspected: number;
   errors: string[];
@@ -41,6 +48,7 @@ export function propagateCompilerResolvedHttpSummaries(
   const derived: BoundaryObservation[] = [];
   const filesInspected = new Set<string>();
   const errors: string[] = [];
+  const frontiers: BoundaryFrontier[] = [];
 
   for (const observation of observations) {
     if (observation.action !== 'http.request' || !observation.owner.symbol) continue;
@@ -71,24 +79,20 @@ export function propagateCompilerResolvedHttpSummaries(
     const summary = queue.shift()!;
     if (summary.depth >= MAX_HTTP_SUMMARY_DEPTH) continue;
     try {
-      for (const site of referenceEvidenceForSymbol(db, summary.definition, { semantic: false })) {
+      const resolvedCalls = resolvedCallSitesForDefinition(db, summary.definition);
+      frontiers.push(...resolvedCalls.unresolved.map((site) => httpCallResolutionFrontier(summary, site)));
+      for (const site of resolvedCalls.sites) {
         const context = boundaryFileContext(db, site.file);
         if (!context) continue;
         filesInspected.add(site.file);
-        const calls = matchingCallsAtLine(context.root, site.line, leafName(summary.definition.symbol));
-        if (calls.length !== 1) continue;
-        const call = calls[0]!;
+        const call = site.callNode;
         const instantiated = instantiateSummaryAtCall(summary, call, context);
         if (instantiated) derived.push(instantiated);
 
-        const callerOwner = context.ownerAt(call.startPosition.row);
-        if (!callerOwner.symbol) continue;
-        const callerDefinition = getDefinitionsForFile(db, site.file).find(
-          (candidate) => candidate.symbol === callerOwner.symbol,
-        );
+        const callerDefinition = site.caller;
         if (!callerDefinition) continue;
         const localRoles = deriveParameterRoles(context, callerDefinition);
-        const forwardedRoles = forwardedParameterRoles(summary, call, context, callerDefinition);
+        const forwardedRoles = forwardedParameterRoles(db, summary, site);
         const callerSummary: HttpCallableSummary = {
           definition: callerDefinition,
           pathParameterIndexes: uniqueSortedNumbers([
@@ -105,7 +109,7 @@ export function propagateCompilerResolvedHttpSummaries(
             ...summary.proofObservationIds,
             ...(instantiated ? [instantiated.id] : []),
           ]),
-          proofSpans: [...summary.proofSpans, { file: site.file, startLine: site.line, endLine: site.line }],
+          proofSpans: [...summary.proofSpans, { file: site.file, startLine: site.startLine, endLine: site.endLine }],
         };
         if (mergeSummary(summaries, callerSummary)) queue.push(summaries.get(callerDefinition.symbol)!);
       }
@@ -118,10 +122,40 @@ export function propagateCompilerResolvedHttpSummaries(
 
   return {
     observations: derived,
+    frontiers: deduplicateFrontiers(frontiers),
     summaries: summaries.size,
     filesInspected: filesInspected.size,
     errors,
   };
+}
+
+function httpCallResolutionFrontier(summary: HttpCallableSummary, site: UnresolvedCallSite): BoundaryFrontier {
+  const missingKeyParts = uniqueSortedStrings([
+    ...(summary.pathParameterIndexes.length > 0 ? ['path'] : []),
+    ...(summary.methodParameterIndexes.length > 0 && summary.constantMethods.length !== 1 ? ['method'] : []),
+  ]);
+  const method = summary.constantMethods.length === 1 ? summary.constantMethods[0] : '?';
+  const identity = `${summary.definition.symbol}\0${site.file}\0${site.line}\0${site.reason}`;
+  return {
+    observationId: `frontier:${createHash('sha256').update(identity).digest('hex').slice(0, 16)}`,
+    kind: 'call-resolution',
+    action: 'http.request',
+    strength: 'candidate',
+    source: { file: site.file, startLine: site.line, endLine: site.line },
+    ownerShortName: null,
+    address: `method=${method ?? '?'} path=?`,
+    reason:
+      `Compiler identity found a reference to ${summary.definition.leaf}, but exact call recovery stopped ` +
+      `with ${site.reason} (${site.candidates} syntax candidate(s)); HTTP value propagation did not cross this site.`,
+    missingKeyParts: missingKeyParts.length > 0 ? missingKeyParts : ['call'],
+    sourceScope: runtimeBoundarySourceScope(site.file),
+  };
+}
+
+function deduplicateFrontiers(frontiers: readonly BoundaryFrontier[]): BoundaryFrontier[] {
+  return [...new Map(frontiers.map((frontier) => [frontier.observationId, frontier])).values()].sort((left, right) =>
+    left.observationId.localeCompare(right.observationId),
+  );
 }
 
 function instantiateSummaryAtCall(
@@ -231,24 +265,14 @@ function deriveParameterRoles(
 }
 
 function forwardedParameterRoles(
+  db: ScipDatabase,
   callee: HttpCallableSummary,
-  call: SyntaxNode,
-  callerContext: BoundaryFileContext,
-  caller: IndexedDefinition,
+  site: ResolvedCallSite,
 ): Pick<HttpCallableSummary, 'pathParameterIndexes' | 'methodParameterIndexes'> {
-  const callable = smallestCoveringCallable(callerContext.root, caller.startLine, caller.endLine);
-  if (!callable) return { pathParameterIndexes: [], methodParameterIndexes: [] };
-  const callerParameters = callableParameterNames(callable);
-  const args = callArguments(call);
-  const mapRole = (calleeIndexes: readonly number[]): number[] =>
-    calleeIndexes.flatMap((calleeIndex) => {
-      const argument = args[calleeIndex]?.text.trim();
-      const callerIndex = argument ? callerParameters.indexOf(argument) : -1;
-      return callerIndex >= 0 ? [callerIndex] : [];
-    });
+  const flow = parameterValueFlowAtCall(db, site);
   return {
-    pathParameterIndexes: mapRole(callee.pathParameterIndexes),
-    methodParameterIndexes: mapRole(callee.methodParameterIndexes),
+    pathParameterIndexes: forwardedCallerParameterPositions(flow, callee.pathParameterIndexes),
+    methodParameterIndexes: forwardedCallerParameterPositions(flow, callee.methodParameterIndexes),
   };
 }
 
@@ -329,18 +353,6 @@ function smallestCoveringCallable(root: SyntaxNode, startLine: number, endLine: 
     if (!match || node.endIndex - node.startIndex < match.endIndex - match.startIndex) match = node;
   });
   return match;
-}
-
-function matchingCallsAtLine(root: SyntaxNode, line: number, expectedLeaf: string): SyntaxNode[] {
-  const calls: SyntaxNode[] = [];
-  walk(root, (node) => {
-    if (node.type !== 'call_expression' && node.type !== 'call') return;
-    if (node.startPosition.row > line || node.endPosition.row < line) return;
-    const target = node.childForFieldName('function') ?? node.namedChild(0);
-    const leaf = target?.text.replace(/\s+/gu, '').split('.').at(-1) ?? '';
-    if (leaf === expectedLeaf) calls.push(node);
-  });
-  return calls;
 }
 
 function callArguments(node: SyntaxNode): SyntaxNode[] {

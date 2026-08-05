@@ -99,7 +99,7 @@ export interface LocalSqliteGenerationRetentionLimits {
 }
 
 export const DEFAULT_LOCAL_SQLITE_GENERATION_RETENTION: Readonly<LocalSqliteGenerationRetentionLimits> = Object.freeze({
-  maxGenerations: 8,
+  maxGenerations: 2,
   maxLogicalBytes: 2 * 1024 * 1024 * 1024,
 });
 

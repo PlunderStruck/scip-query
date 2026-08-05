@@ -8,6 +8,7 @@ import type { SupportedLanguage } from '../../src/domain/types.js';
 import type * as ProcessIdentityModule from '../../src/platform/process-identity.js';
 import type * as BoundedProcessModule from '../../src/platform/bounded-process.js';
 import type * as AffectedShadow from '../../src/reindex/affected-shadow.js';
+import type * as TypeScriptFragmentStore from '../../src/reindex/typescript-fragment-store.js';
 import { resolveIndexerConcurrency } from '../../src/reindex/indexer-runner.js';
 import { projectShardSlug } from '../../src/reindex/project-shards.js';
 
@@ -344,7 +345,7 @@ describe('reindex reliability', () => {
     const outputScip = join(cacheDir, 'index.scip');
     const outputDb = join(cacheDir, 'index.db');
     const statuses: string[] = [];
-    const { reindex, attempts } = await loadReindexFixture({
+    const { reindex, attempts, fragmentPruneCalls } = await loadReindexFixture({
       languages: ['typescript'],
       incrementalTypeScript: true,
     });
@@ -371,6 +372,7 @@ describe('reindex reliability', () => {
     );
     expect(statuses.join('\n')).toContain('Converting 1 affected TypeScript document(s) to SQLite');
     expect(statuses.join('\n')).toContain('Patched 1 SQLite document(s)');
+    expect(fragmentPruneCalls.at(-1)).toEqual(['next-generation']);
   });
 
   it('publishes repeated changed-document SQLite generations while preserving a deferred whole SCIP companion', async () => {
@@ -380,7 +382,7 @@ describe('reindex reliability', () => {
     const outputScip = join(cacheDir, 'index.scip');
     const outputDb = join(cacheDir, 'index.db');
     const metaPath = join(cacheDir, 'meta.json');
-    const { reindex, attempts } = await loadReindexFixture({
+    const { reindex, attempts, fragmentPruneCalls } = await loadReindexFixture({
       languages: ['typescript'],
       deferredIncrementalTypeScript: true,
     });
@@ -404,6 +406,7 @@ describe('reindex reliability', () => {
         typescriptOverlayGeneration: 'next-generation',
       }),
     );
+    expect(fragmentPruneCalls.at(-1)).toEqual([]);
   });
 
   it('falls back to complete conversion when incremental SQLite publication rejects', async () => {
@@ -1416,6 +1419,19 @@ async function loadReindexFixture(opts: {
   vi.doUnmock('../../src/platform/process-identity.js');
   const attempts = new Map<SupportedLanguage, number>();
   const commands: { binary: string; args: readonly string[] }[] = [];
+  const fragmentPruneCalls: string[][] = [];
+
+  vi.doMock('../../src/reindex/typescript-fragment-store.js', async () => {
+    const actual = await vi.importActual<typeof TypeScriptFragmentStore>(
+      '../../src/reindex/typescript-fragment-store.js',
+    );
+    return {
+      ...actual,
+      pruneTypeScriptFragmentGenerations: (_cacheDir: string, keepGenerationIdentities: readonly string[]) => {
+        fragmentPruneCalls.push([...keepGenerationIdentities]);
+      },
+    };
+  });
 
   if (opts.processIdentities) {
     vi.doMock('../../src/platform/process-identity.js', async () => {
@@ -1689,7 +1705,7 @@ async function loadReindexFixture(opts: {
     };
   });
 
-  return { ...(await import('../../src/reindex/index.js')), attempts, commands, mergeCalls };
+  return { ...(await import('../../src/reindex/index.js')), attempts, commands, mergeCalls, fragmentPruneCalls };
 }
 
 function configFor(language: SupportedLanguage) {

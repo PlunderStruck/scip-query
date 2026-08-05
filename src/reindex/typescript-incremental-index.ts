@@ -45,6 +45,13 @@ export interface TypeScriptIncrementalEligibilityInput {
   rootTsconfigExists: boolean;
 }
 
+export interface TypeScriptIncrementalProjectPlan {
+  tsconfigPath: string;
+  projectArgument: string;
+  modifiedFiles: string[];
+  affectedFiles: string[];
+}
+
 export type TypeScriptIncrementalEligibility =
   | {
       eligible: true;
@@ -55,8 +62,11 @@ export type TypeScriptIncrementalEligibility =
       nextFragmentGeneration: string;
       previousDocumentIdentities: Map<string, string>;
       nextDocumentIdentities: Map<string, string>;
-      tsconfigPath: string;
-      projectArgument: string;
+      projects: TypeScriptIncrementalProjectPlan[];
+      /** Compatibility projection for single-project callers. */
+      tsconfigPath?: string;
+      /** Compatibility projection for single-project callers. */
+      projectArgument?: string;
     }
   | { eligible: false; reason: string };
 
@@ -133,8 +143,8 @@ export function planTypeScriptIncrementalUpdate(
       reason: plan.reasons.length > 0 ? `affected set widened: ${plan.reasons.join(', ')}` : 'empty affected set',
     };
   }
-  const projectArgument = ownedWorkspaceProject([...plan.changedFiles, ...plan.affectedFiles], workspaceProjects);
-  if (!projectArgument) {
+  const projects = partitionWorkspacePlan(plan, workspaceProjects, input.graph);
+  if (!projects) {
     return { eligible: false, reason: 'affected files cross or ambiguously match TypeScript projects' };
   }
 
@@ -168,6 +178,7 @@ export function planTypeScriptIncrementalUpdate(
   );
   if (!nextDocumentIdentities) return { eligible: false, reason: 'next document identity unavailable' };
 
+  const singleProject = projects.length === 1 ? projects[0] : undefined;
   return {
     eligible: true,
     manifest,
@@ -177,20 +188,77 @@ export function planTypeScriptIncrementalUpdate(
     nextFragmentGeneration: typeScriptFragmentGenerationIdentity(input.currentSnapshot, input.producerIdentity),
     previousDocumentIdentities,
     nextDocumentIdentities,
-    tsconfigPath: projectArgument === '.' ? 'tsconfig.json' : `${projectArgument}/tsconfig.json`,
-    projectArgument,
+    projects,
+    ...(singleProject
+      ? { tsconfigPath: singleProject.tsconfigPath, projectArgument: singleProject.projectArgument }
+      : {}),
   };
 }
 
-function ownedWorkspaceProject(files: readonly string[], projects: readonly string[]): string | null {
-  let owner: string | null = null;
-  for (const file of files) {
-    const matches = projects.filter((project) => project === '.' || file === project || file.startsWith(`${project}/`));
-    if (matches.length !== 1) return null;
-    if (owner !== null && owner !== matches[0]) return null;
-    owner = matches[0]!;
+function partitionWorkspacePlan(
+  plan: AffectedFilePlan,
+  workspaceProjects: readonly string[],
+  graph: FileDependencyGraph,
+): TypeScriptIncrementalProjectPlan[] | null {
+  const affectedByProject = new Map<string, string[]>();
+  for (const file of plan.affectedFiles) {
+    const owner = ownedWorkspaceProject(file, workspaceProjects);
+    if (!owner) return null;
+    const files = affectedByProject.get(owner) ?? [];
+    files.push(file);
+    affectedByProject.set(owner, files);
   }
-  return owner;
+
+  const projects: TypeScriptIncrementalProjectPlan[] = [];
+  for (const [projectArgument, affectedFiles] of [...affectedByProject].sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    const affectedSet = new Set(affectedFiles);
+    const modifiedFiles = plan.changedFiles.filter(
+      (changedFile) =>
+        affectedSet.has(changedFile) || affectedFiles.some((file) => dependsOn(file, changedFile, graph)),
+    );
+    if (modifiedFiles.length === 0) return null;
+    projects.push({
+      projectArgument,
+      tsconfigPath: projectArgument === '.' ? 'tsconfig.json' : `${projectArgument}/tsconfig.json`,
+      modifiedFiles,
+      affectedFiles: [...affectedFiles].sort(),
+    });
+  }
+  return projects;
+}
+
+function ownedWorkspaceProject(file: string, projects: readonly string[]): string | null {
+  const matches = projects.filter((project) => project === '.' || file === project || file.startsWith(`${project}/`));
+  if (matches.length === 0) return null;
+  // Workspace discovery may include a root tsconfig plus nested project
+  // tsconfigs. The compiler project that most specifically contains the file
+  // owns it; `.` is the fallback, not an ambiguity with every nested project.
+  const ordered = [...new Set(matches)].sort(
+    (left, right) => projectSpecificity(right) - projectSpecificity(left) || left.localeCompare(right),
+  );
+  const owner = ordered[0]!;
+  return ordered[1] && projectSpecificity(ordered[1]) === projectSpecificity(owner) ? null : owner;
+}
+
+function projectSpecificity(project: string): number {
+  return project === '.' ? 0 : project.split('/').filter(Boolean).length;
+}
+
+function dependsOn(file: string, dependency: string, graph: FileDependencyGraph): boolean {
+  const visited = new Set<string>();
+  const pending = [file];
+  for (let index = 0; index < pending.length; index += 1) {
+    const current = pending[index];
+    if (!current || visited.has(current)) continue;
+    visited.add(current);
+    for (const direct of graph.get(current) ?? []) {
+      if (direct === dependency) return true;
+      if (!visited.has(direct)) pending.push(direct);
+    }
+  }
+  return false;
 }
 
 export function tryMaterializeTypeScriptIncrementalIndex(
@@ -243,15 +311,18 @@ export function tryMaterializeTypeScriptIncrementalIndex(
       cacheDir: input.cacheDir,
       baseGeneration,
     });
-    const response = requester.request({
-      kind: 'emit-documents',
-      tsconfigPath: eligibility.tsconfigPath,
-      projectArgument: eligibility.projectArgument,
-      projectIdentity: eligibility.projectIdentity,
-      producerIdentity: availability.producerIdentity,
-      modifiedFiles: eligibility.plan.changedFiles,
-      affectedFiles: eligibility.plan.affectedFiles,
-    });
+    const responses = eligibility.projects.map((project) =>
+      requester.request({
+        kind: 'emit-documents',
+        tsconfigPath: project.tsconfigPath,
+        projectArgument: project.projectArgument,
+        projectIdentity: eligibility.projectIdentity,
+        producerIdentity: availability.producerIdentity,
+        modifiedFiles: project.modifiedFiles,
+        affectedFiles: project.affectedFiles,
+      }),
+    );
+    const fragments = responses.flatMap((response) => response.fragments);
     const requestMs = performance.now() - phaseStartedAt;
     const deferCompleteScip = statSync(input.previousShardPath).size >= TYPESCRIPT_DEFERRED_SCIP_THRESHOLD_BYTES;
     phaseStartedAt = performance.now();
@@ -264,12 +335,12 @@ export function tryMaterializeTypeScriptIncrementalIndex(
     const assembled = deferCompleteScip
       ? {
           completeIndexBytes: null,
-          affectedIndexBytes: assembleAffectedTypeScriptFragments(response.fragments),
+          affectedIndexBytes: assembleAffectedTypeScriptFragments(fragments),
         }
       : assembleTypeScriptIndexes({
           packageVersion: availability.packageVersion,
           baseIndexBytes: baseIndexBytes!,
-          fragments: response.fragments,
+          fragments,
         });
     const assemblyMs = performance.now() - phaseStartedAt;
     phaseStartedAt = performance.now();
@@ -281,7 +352,7 @@ export function tryMaterializeTypeScriptIncrementalIndex(
         producerIdentity: availability.producerIdentity,
         projectIdentity: eligibility.projectIdentity,
         baseShardCurrent: input.baseShardCurrent,
-        fragments: response.fragments,
+        fragments,
       });
     } else {
       ensureTypeScriptFragmentGeneration({
@@ -300,7 +371,7 @@ export function tryMaterializeTypeScriptIncrementalIndex(
         producerIdentity: availability.producerIdentity,
         projectIdentity: eligibility.projectIdentity,
         generationIdentity: eligibility.nextFragmentGeneration,
-        fragments: response.fragments,
+        fragments,
         documentIdentities: eligibility.nextDocumentIdentities,
       });
     }
@@ -315,7 +386,7 @@ export function tryMaterializeTypeScriptIncrementalIndex(
       affectedScipPath: input.candidateAffectedScipPath,
       completeScipUpdated: !deferCompleteScip,
       durationMs: monotonicNowMs() - startedAt,
-      cold: response.cold,
+      cold: responses.some((response) => response.cold),
       changedFiles: eligibility.plan.changedFiles,
       affectedFiles: eligibility.plan.affectedFiles,
       producerIdentity: availability.producerIdentity,
@@ -325,20 +396,20 @@ export function tryMaterializeTypeScriptIncrementalIndex(
       plan: eligibility.plan,
       projectFileCount: projectFiles.length,
       referenceFragmentsByFile: new Map(
-        response.fragments.map((fragment) => [fragment.relativePath, fragment.referenceFragments]),
+        fragments.map((fragment) => [fragment.relativePath, fragment.referenceFragments]),
       ),
       timings: {
         runtimeMs,
         graphMs,
         requestMs,
-        serviceMs: response.durationMs,
+        serviceMs: responses.reduce((total, response) => total + response.durationMs, 0),
         assemblyMs,
         fragmentStoreMs,
         writeMs,
       },
     };
     input.onStatus(
-      `Incremental TypeScript index emitted ${result.affectedFiles.length} affected document(s) in ${(result.durationMs / 1000).toFixed(3)}s (${result.cold ? 'cold' : 'warm'} service; ${deferCompleteScip ? 'whole SCIP deferred' : 'whole SCIP current'}; runtime ${runtimeMs.toFixed(0)}ms, graph ${graphMs.toFixed(0)}ms, request ${requestMs.toFixed(0)}ms, assembly ${assemblyMs.toFixed(0)}ms, fragments ${fragmentStoreMs.toFixed(0)}ms, write ${writeMs.toFixed(0)}ms).`,
+      `Incremental TypeScript index emitted ${result.affectedFiles.length} affected document(s) across ${eligibility.projects.length} project(s) in ${(result.durationMs / 1000).toFixed(3)}s (${result.cold ? 'cold' : 'warm'} service; ${deferCompleteScip ? 'whole SCIP deferred' : 'whole SCIP current'}; runtime ${runtimeMs.toFixed(0)}ms, graph ${graphMs.toFixed(0)}ms, request ${requestMs.toFixed(0)}ms, assembly ${assemblyMs.toFixed(0)}ms, fragments ${fragmentStoreMs.toFixed(0)}ms, write ${writeMs.toFixed(0)}ms).`,
     );
     return result;
   } catch (error) {

@@ -13,7 +13,8 @@ import {
 } from '../storage/bounded-mailbox.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
 
-export const TYPESCRIPT_INDEX_PROTOCOL_VERSION = 3;
+export const TYPESCRIPT_INDEX_PROTOCOL_VERSION = 4;
+export const TYPESCRIPT_INDEX_PREVIOUS_PROTOCOL_VERSION = 3;
 export const TYPESCRIPT_INDEX_LEGACY_PROTOCOL_VERSION = 2;
 export const TYPESCRIPT_INDEX_MAILBOX_DIRECTORY = 'typescript-index';
 
@@ -85,8 +86,9 @@ export function parseTypeScriptIndexEnvelope(raw: string): TypeScriptIndexEnvelo
   const parsed = JSON.parse(raw) as Partial<TypeScriptIndexEnvelope>;
   const protocolVersion = (parsed as { protocolVersion?: unknown }).protocolVersion;
   const legacy = protocolVersion === TYPESCRIPT_INDEX_LEGACY_PROTOCOL_VERSION;
+  const previous = protocolVersion === TYPESCRIPT_INDEX_PREVIOUS_PROTOCOL_VERSION;
   if (
-    (!legacy && protocolVersion !== TYPESCRIPT_INDEX_PROTOCOL_VERSION) ||
+    (!legacy && !previous && protocolVersion !== TYPESCRIPT_INDEX_PROTOCOL_VERSION) ||
     typeof parsed.id !== 'string' ||
     !parsed.id ||
     typeof parsed.baseGeneration !== 'string' ||
@@ -109,14 +111,14 @@ export function parseTypeScriptIndexEnvelope(raw: string): TypeScriptIndexEnvelo
   }
   if (!legacy) {
     const current = parsed as TypeScriptIndexEnvelope;
-    const expectedOperationKey = boundedMailboxOperationKey('typescript-index-v3', {
+    const expectedOperationKey = boundedMailboxOperationKey(previous ? 'typescript-index-v3' : 'typescript-index-v4', {
       baseGeneration: current.baseGeneration,
       request: current.request,
     });
     if (current.operationKey !== expectedOperationKey) {
       throw new Error('TypeScript index service received a mismatched mailbox operation identity.');
     }
-    return current;
+    return { ...current, protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION };
   }
   const operationKey = boundedMailboxOperationKey('typescript-index-v2', {
     id: parsed.id,
@@ -167,8 +169,7 @@ function isTypeScriptIndexRequest(value: unknown): value is TypeScriptIndexDocum
     new Set(modifiedFiles).size === modifiedFiles.length &&
     affectedFiles !== null &&
     affectedFiles.length > 0 &&
-    new Set(affectedFiles).size === affectedFiles.length &&
-    modifiedFiles.every((file) => affectedFiles.includes(file))
+    new Set(affectedFiles).size === affectedFiles.length
   );
 }
 

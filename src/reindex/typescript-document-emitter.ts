@@ -356,8 +356,8 @@ export class TypeScriptDocumentEmitter {
     if (affectedFiles.length === 0) throw new Error('incremental TypeScript document update requires an affected file');
     for (const relativePath of modifiedFiles) {
       const absolutePath = resolveWithin(this.workspaceRoot, relativePath);
-      if (!this.includedFiles.has(normalizedAbsolutePath(absolutePath))) {
-        throw new Error(`modified TypeScript file is outside the configured project: ${relativePath}`);
+      if (!this.program?.getSourceFile(absolutePath)) {
+        throw new Error(`modified TypeScript dependency is unavailable to the configured project: ${relativePath}`);
       }
     }
     for (const relativePath of affectedFiles) {

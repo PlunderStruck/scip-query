@@ -106,16 +106,21 @@ scip-query adds relationship and cleanup evidence.
   claim-support section marks callsite-argument claims eligible. A complete
   call expression contains the callee and every argument through the closing
   delimiter; a bounded context window does not.
-- Search always lists every exact matching path-line identity and owner while
-  expanding only representative source by default. Use its batched recovery
-  commands for selected owners; `search --full` is only for expanding every
-  source window, not for establishing complete identity coverage.
+- Search always reports exact match cardinality. Small results list every
+  matching path-line identity and owner; broad results stop lower-ranked
+  identities before output transport and return a representative manifest plus
+  ranked scope commands. There is no transport cursor to drain. Narrow to a
+  distinctive literal or one relevant scope; use `search --full` only after
+  deliberately narrowing when every remaining source window matters.
 - Exact code and definition packets always render whole. An explicit
   `SCIP_QUERY_SESSION` may cite only wholly prior-emitted locating previews;
   partially covered previews render whole.
 - Follow an emitted `Continue exactly:` command until transport is complete.
   Coverage expansion commands are optional drilldowns, not transport pages.
 - Use human output for model reading and `--json --result-only` for programs.
+- Never rerun a successful human command as JSON. Before each drilldown, name
+  the still-unanswered fact and stop when none remains; every additional
+  reasoning step pays again for the accumulated context.
 - Commit relevant suppression files, but do not create work-state records.
 
 ## Setup failures

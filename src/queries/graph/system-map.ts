@@ -771,6 +771,27 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
   const boundaryFrontiers: SystemMapBoundaryFrontier[] = (runtimeBoundaries?.frontiers ?? [])
     .flatMap((frontier) => {
       const observation = boundaryObservations.get(frontier.observationId);
+      if (!observation && frontier.source && frontier.action && frontier.strength) {
+        if (
+          !relationPolicy.has('runtime-boundary') ||
+          !sourceAllowed(frontier.source.file) ||
+          evidenceFloor === 'exact' ||
+          !files.has(frontier.source.file)
+        )
+          return [];
+        return [
+          {
+            observationId: frontier.observationId,
+            action: frontier.action,
+            strength: frontier.strength,
+            file: frontier.source.file,
+            line: frontier.source.startLine,
+            ownerShortName: frontier.ownerShortName ?? null,
+            address: frontier.address ?? frontier.missingKeyParts.join(', '),
+            reason: frontier.reason,
+          },
+        ];
+      }
       if (
         !relationPolicy.has('runtime-boundary') ||
         !observation ||

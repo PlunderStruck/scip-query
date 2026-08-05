@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -78,6 +79,32 @@ describe('platform project file fingerprints', () => {
     expect(buildProjectInputFingerprint(projectRoot, ['typescript'], { pnpmWorkspaces: true })).not.toEqual(first);
   });
 
+  it('fingerprints configured TypeScript project directories through files rather than unreadable directory entries', () => {
+    const projectRoot = temporaryDirectory('scip-query-typescript-project-fingerprint-');
+    mkdirSync(join(projectRoot, 'apps/web/src'), { recursive: true });
+    writeFileSync(join(projectRoot, 'apps/web/tsconfig.json'), '{"include":["src/**/*.ts"]}\n');
+    writeFileSync(join(projectRoot, 'apps/web/src/main.ts'), 'export const value = 1;\n');
+
+    const fingerprint = buildProjectInputFingerprint(projectRoot, ['typescript'], {
+      typescriptProjectMode: 'workspace',
+      typescriptProjects: ['apps/web'],
+    });
+
+    expect(fingerprint.typescriptProjects).toEqual(['apps/web']);
+    expect(fingerprint.files.map((file) => file.path)).toEqual(['apps/web/src/main.ts', 'apps/web/tsconfig.json']);
+    expect(fingerprint.files.every((file) => file.hash !== 'unreadable' && file.size >= 0)).toBe(true);
+  });
+
+  it('omits a tracked file deleted from the worktree instead of marking it unreadable', () => {
+    const projectRoot = temporaryDirectory('scip-query-deleted-project-file-');
+    writeFileSync(join(projectRoot, 'value.ts'), 'export const value = 1;\n');
+    execFileSync('git', ['init', '--quiet'], { cwd: projectRoot });
+    execFileSync('git', ['add', 'value.ts'], { cwd: projectRoot });
+    rmSync(join(projectRoot, 'value.ts'));
+
+    expect(fingerprintProjectFiles(projectRoot)).toEqual([]);
+  });
+
   it('fingerprints repository inputs without letting scip-query record writes invalidate the index', () => {
     const projectRoot = temporaryDirectory('scip-query-project-input-boundary-');
     mkdirSync(join(projectRoot, 'docs'), { recursive: true });
@@ -100,6 +127,21 @@ describe('platform project file fingerprints', () => {
     writeFileSync(join(projectRoot, 'docs', 'guide.md'), '# Guide\n');
     writeFileSync(join(projectRoot, 'src.ts'), 'export const value = 2;\n');
     expect(buildProjectInputFingerprint(projectRoot, ['typescript'], {})).not.toEqual(first);
+  });
+
+  it('fingerprints only source files selected by the TypeScript project', () => {
+    const projectRoot = temporaryDirectory('scip-query-typescript-input-boundary-');
+    mkdirSync(join(projectRoot, 'src'));
+    mkdirSync(join(projectRoot, 'tests'));
+    writeFileSync(join(projectRoot, 'tsconfig.json'), '{"include":["src/**/*.ts"],"exclude":["tests"]}\n');
+    writeFileSync(join(projectRoot, 'src/main.ts'), 'export const value = 1;\n');
+    writeFileSync(join(projectRoot, 'tests/main.test.ts'), 'export const testValue = 1;\n');
+
+    const before = buildProjectInputFingerprint(projectRoot, ['typescript'], {});
+    expect(before.files.map((file) => file.path)).toEqual(['src/main.ts', 'tsconfig.json']);
+
+    writeFileSync(join(projectRoot, 'tests/main.test.ts'), 'export const testValue = 2;\n');
+    expect(buildProjectInputFingerprint(projectRoot, ['typescript'], {})).toEqual(before);
   });
 
   it('isolates language fingerprints from unrelated dependency manifests', () => {

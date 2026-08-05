@@ -113,6 +113,7 @@ import {
   tryMaterializeTypeScriptIncrementalIndex,
   type MaterializedTypeScriptIncrementalIndex,
 } from './typescript-incremental-index.js';
+import { pruneTypeScriptFragmentGenerations } from './typescript-fragment-store.js';
 import { runPreparedIndexers } from './indexer-runner.js';
 import type { PreparedIndexerRun, IndexerRunResult } from './indexer-runner.js';
 import { tryInstallIndexer } from './install.js';
@@ -610,9 +611,10 @@ function runRuntimeBoundaryAugmentation(
   indexPath: string,
   onStatus: (message: string) => void,
   reuseExisting: boolean,
+  affectedFiles?: readonly string[],
 ): void {
   try {
-    runPostIndexAugmentation(runtimeBoundaryAugmentationStage({ indexPath, reuseExisting }), {
+    runPostIndexAugmentation(runtimeBoundaryAugmentationStage({ indexPath, reuseExisting, affectedFiles }), {
       projectRoot,
       dbPath,
       onStatus,
@@ -1415,6 +1417,7 @@ async function publishFreshReindexArtifacts(
     opts.tempPaths.tempOutputScip,
     opts.onStatus,
     false,
+    incrementalTypeScript?.affectedFiles,
   );
   const indexMaintenance = optimizeSqliteQueryLayout(opts.tempPaths.tempOutputDb);
   if (indexMaintenance.added.length > 0) {
@@ -1538,6 +1541,10 @@ async function publishFreshReindexArtifacts(
     sqliteMaterialization.mode === 'incremental' && sqliteMaterialization.scipCompanion === 'deferred'
       ? [incrementalTypeScript!.nextFragmentGeneration]
       : [],
+  );
+  pruneTypeScriptFragmentGenerations(
+    dirname(opts.paths.outputDb),
+    incrementalTypeScript?.completeScipUpdated ? [incrementalTypeScript.nextFragmentGeneration] : [],
   );
   persistAffectedSetShadowRecord(opts.paths.outputDb, shadowRecord, opts.onStatus);
   return lastRefresh;

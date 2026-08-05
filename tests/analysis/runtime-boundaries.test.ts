@@ -14,6 +14,9 @@ import type { BoundaryObservation } from '../../src/analysis/runtime-boundaries/
 import { runtimeBoundaryAugmentationStage } from '../../src/reindex/runtime-boundaries.js';
 import { runPostIndexAugmentation } from '../../src/reindex/augmentation/post-index-augmentation.js';
 import { ScipDatabase } from '../../src/storage/db.js';
+import { getDefinitionsForFile } from '../../src/symbols/definition-catalog.js';
+import { resolvedCallSitesForDefinition } from '../../src/symbols/graph/resolved-call-sites.js';
+import { parameterValueFlowAtCall } from '../../src/symbols/graph/value-flow.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
 describe('runtime-boundary evidence', () => {
@@ -37,6 +40,11 @@ describe('runtime-boundary evidence', () => {
             source: expect.objectContaining({ file: 'src/client.ts' }),
           }),
           expect.objectContaining({
+            action: 'http.request',
+            source: expect.objectContaining({ file: 'src/client.ts' }),
+            keyParts: expect.arrayContaining([expect.objectContaining({ name: 'path', value: '/api/returned' })]),
+          }),
+          expect.objectContaining({
             action: 'http.handle',
             strength: expect.stringMatching(/^(?:exact|derived)$/u),
             source: expect.objectContaining({ file: 'src/server.ts' }),
@@ -45,8 +53,27 @@ describe('runtime-boundary evidence', () => {
           expect.objectContaining({ action: 'registry.handle', strength: 'exact' }),
           expect.objectContaining({ action: 'database.write', strength: 'exact' }),
           expect.objectContaining({ action: 'database.read', strength: 'exact' }),
+          expect.objectContaining({
+            action: 'database.read',
+            source: expect.objectContaining({ file: 'src/persistence.ts' }),
+            keyParts: expect.arrayContaining([expect.objectContaining({ name: 'resource', value: 'session_events' })]),
+          }),
           expect.objectContaining({ action: 'queue.send', strength: 'exact' }),
           expect.objectContaining({ action: 'queue.consume', strength: 'exact' }),
+          expect.objectContaining({
+            action: 'queue.send',
+            extractor: 'builtin.database-queue',
+            keyParts: expect.arrayContaining([
+              expect.objectContaining({ name: 'address', value: 'database:deliveryQueue' }),
+            ]),
+          }),
+          expect.objectContaining({
+            action: 'queue.consume',
+            extractor: 'builtin.database-queue',
+            keyParts: expect.arrayContaining([
+              expect.objectContaining({ name: 'address', value: 'database:deliveryQueue' }),
+            ]),
+          }),
           expect.objectContaining({
             action: 'http.handle',
             strength: 'exact',
@@ -101,9 +128,26 @@ describe('runtime-boundary evidence', () => {
           }),
           expect.objectContaining({ joinRule: 'registry.identity-key', strength: 'exact' }),
           expect.objectContaining({ joinRule: 'queue.address', strength: 'exact' }),
+          expect.objectContaining({ joinRule: 'queue.address', strength: 'derived' }),
           expect.objectContaining({ joinRule: 'carrier.discriminator', strength: 'derived' }),
         ]),
       );
+      const databaseQueueObservations = graph.observations.filter(
+        (observation) => observation.extractor === 'builtin.database-queue',
+      );
+      expect(databaseQueueObservations).toHaveLength(2);
+      expect(databaseQueueObservations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ source: expect.objectContaining({ file: 'src/persistence.ts' }) }),
+          expect.objectContaining({ source: expect.objectContaining({ file: 'src/queue-consumer.ts' }) }),
+        ]),
+      );
+      expect(
+        databaseQueueObservations.every(
+          (observation) =>
+            observation.derivation?.inputFactIds.length === 2 && observation.derivation.sourceSpans.length === 2,
+        ),
+      ).toBe(true);
       expect(graph.links.some((link) => link.joinRule === 'database.resource' || link.strength === 'candidate')).toBe(
         false,
       );
@@ -123,6 +167,26 @@ describe('runtime-boundary evidence', () => {
           expect.objectContaining({ id: 'builtin.carrier', observations: 2, errors: 0 }),
         ]),
       );
+      expect(graph.coverage.phases?.map((phase) => phase.id)).toEqual([
+        'direct-extraction',
+        'http-summary',
+        'http-mount',
+        'carrier',
+        'relations',
+        'links',
+        'frontiers',
+      ]);
+      expect(graph.coverage.phases).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'direct-extraction',
+            durationMs: expect.any(Number),
+            filesVisited: 26,
+          }),
+          expect.objectContaining({ id: 'http-mount', filesVisited: 26 }),
+          expect.objectContaining({ id: 'carrier', filesVisited: 26 }),
+        ]),
+      );
       expect(graph.observations.some((observation) => observation.source.file === 'src/non-boundaries.ts')).toBe(false);
       expect(graph.observations.some((observation) => observation.source.file === 'src/custom.ts')).toBe(false);
       expect(graph.observations.some((observation) => observation.source.file.includes('__tests__'))).toBe(false);
@@ -139,8 +203,196 @@ describe('runtime-boundary evidence', () => {
             (observation.extractor === 'builtin.http-summary' || observation.extractor === 'builtin.carrier'),
         ),
       ).toBe(false);
+      expect(graph.frontiers).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'call-resolution',
+            action: 'http.request',
+            strength: 'candidate',
+            source: expect.objectContaining({ file: 'src/ambiguous-client.ts' }),
+            reason: expect.stringContaining('ambiguous-call'),
+          }),
+        ]),
+      );
 
       writeRuntimeBoundaryGraph(db.config.dbPath, graph);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('recovers call syntax from compiler identity and preserves same-line ambiguity', () => {
+    const db = createBoundaryDb();
+    try {
+      const postJson = getDefinitionsForFile(db, 'src/http-wrapper.ts').find(
+        (definition) => definition.leaf === 'postJson',
+      );
+      const postEnvelope = getDefinitionsForFile(db, 'src/carrier-runtime.ts').find(
+        (definition) => definition.leaf === 'postEnvelope',
+      );
+      expect(postJson).toBeDefined();
+      expect(postEnvelope).toBeDefined();
+
+      const wrappedCalls = resolvedCallSitesForDefinition(db, postJson!);
+      expect(wrappedCalls.sites).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            file: 'src/wrapper-client.ts',
+            targetText: 'postJson',
+            caller: expect.objectContaining({ leaf: 'invokeWrapped' }),
+            arguments: [expect.objectContaining({ text: "'/api/wrapped'" }), expect.objectContaining({ text: '{}' })],
+          }),
+        ]),
+      );
+      const forwardedCall = wrappedCalls.sites.find((site) => site.caller?.leaf === 'forwardWrapped');
+      expect(forwardedCall).toBeDefined();
+      expect(parameterValueFlowAtCall(db, forwardedCall!)).toEqual(
+        expect.objectContaining({
+          transfers: [expect.objectContaining({ calleePosition: 0, callerPosition: 0, argumentText: 'path' })],
+          unknown: expect.arrayContaining([
+            expect.objectContaining({ calleePosition: 1, reason: 'argument-not-direct-parameter' }),
+          ]),
+        }),
+      );
+
+      const carrierCalls = resolvedCallSitesForDefinition(db, postEnvelope!);
+      expect(carrierCalls.sites.some((site) => site.file === 'src/ambiguous-client.ts')).toBe(false);
+      expect(carrierCalls.unresolved).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            file: 'src/ambiguous-client.ts',
+            reason: 'ambiguous-call',
+            candidates: 2,
+          }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('replaces affected-file facts while retaining exact coverage for unchanged files', () => {
+    const baselineDb = createBoundaryDb();
+    const projectRoot = baselineDb.config.projectRoot;
+    const dbPath = baselineDb.config.dbPath;
+    const baseline = collectRuntimeBoundaryGraph(baselineDb);
+    baselineDb.close();
+    writeFixtureFiles(projectRoot, {
+      'src/client.ts': [
+        "const EVENTS_PATH = '/api/renamed-events';",
+        'export async function sendEvents(events: unknown[]) {',
+        "  return fetch(EVENTS_PATH, { method: 'POST', body: JSON.stringify({ events }) });",
+        '}',
+      ],
+    });
+    const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(projectRoot, 'index.scip') });
+    try {
+      const refreshed = collectRuntimeBoundaryGraph(db, {
+        previousGraph: baseline,
+        affectedFiles: ['src/client.ts'],
+      });
+      const clean = collectRuntimeBoundaryGraph(db);
+
+      expect(refreshed.observations).toEqual(clean.observations);
+      expect(refreshed.relationGroups).toEqual(clean.relationGroups);
+      expect(refreshed.links).toEqual(clean.links);
+      expect(refreshed.frontiers).toEqual(clean.frontiers);
+      expect(refreshed.coverage.extractors).toEqual(clean.coverage.extractors);
+      expect(refreshed.coverage.extractionErrors).toEqual(clean.coverage.extractionErrors);
+      expect(refreshed.fileCoverage).toEqual(clean.fileCoverage);
+      expect(refreshed.coverage).toMatchObject({
+        filesScanned: 26,
+        filesWithAst: 26,
+        filesReused: 25,
+        extractionErrors: [],
+      });
+      expect(refreshed.fileCoverage).toHaveLength(26);
+      expect(
+        refreshed.observations.some((observation) =>
+          observation.keyParts.some((part) => part.value === '/api/renamed-events'),
+        ),
+      ).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
+
+  it.each([
+    {
+      label: 'wrapper call',
+      file: 'src/wrapper-client.ts',
+      source: [
+        "import { postJson } from './http-wrapper.js';",
+        'export function invokeWrapped() {',
+        "  return postJson('/api/wrapped-v2', {});",
+        '}',
+        'export function forwardWrapped(path: string) {',
+        '  return postJson(path, {});',
+        '}',
+      ],
+    },
+    {
+      label: 'HTTP mount',
+      file: 'src/app.ts',
+      source: [
+        "import express from 'express';",
+        "import { router as mountedRouter } from './mounted-routes.js';",
+        'const app = express();',
+        "app.use('/v2', mountedRouter);",
+      ],
+    },
+    {
+      label: 'carrier literal',
+      file: 'src/carrier-client.ts',
+      source: [
+        "import { postEnvelope } from './carrier-runtime.js';",
+        'export function publishCarrier(command: string) {',
+        "  return postEnvelope('/carrier', { command });",
+        '}',
+        'export function invokeCarrier() {',
+        "  return publishCarrier('async');",
+        '}',
+      ],
+    },
+    {
+      label: 'registry key',
+      file: 'src/registry.ts',
+      source: [
+        'const commandHandlers = {',
+        '  async: async (input: unknown) => input,',
+        '};',
+        "commandHandlers['async'](payload);",
+      ],
+    },
+    {
+      label: 'same-line ambiguity removal',
+      file: 'src/ambiguous-client.ts',
+      source: [
+        "import { postEnvelope } from './carrier-runtime.js';",
+        "postEnvelope('/carrier', { command: 'first' });",
+        "postEnvelope('/carrier', { command: 'second' });",
+      ],
+    },
+    { label: 'terminal deletion', file: 'src/client.ts', source: [] },
+  ])('matches a clean graph after incremental $label change', ({ file, source }) => {
+    const baselineDb = createBoundaryDb();
+    const projectRoot = baselineDb.config.projectRoot;
+    const dbPath = baselineDb.config.dbPath;
+    const baseline = collectRuntimeBoundaryGraph(baselineDb);
+    baselineDb.close();
+    writeFixtureFiles(projectRoot, { [file]: source });
+    const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(projectRoot, 'index.scip') });
+    try {
+      const refreshed = collectRuntimeBoundaryGraph(db, { previousGraph: baseline, affectedFiles: [file] });
+      const clean = collectRuntimeBoundaryGraph(db);
+
+      expect(refreshed.observations).toEqual(clean.observations);
+      expect(refreshed.relationGroups).toEqual(clean.relationGroups);
+      expect(refreshed.links).toEqual(clean.links);
+      expect(refreshed.frontiers).toEqual(clean.frontiers);
+      expect(refreshed.coverage.extractors).toEqual(clean.coverage.extractors);
+      expect(refreshed.coverage.extractionErrors).toEqual(clean.coverage.extractionErrors);
+      expect(refreshed.fileCoverage).toEqual(clean.fileCoverage);
     } finally {
       db.close();
     }
@@ -159,6 +411,21 @@ describe('runtime-boundary evidence', () => {
       links: expect.any(Number),
       errors: 0,
     });
+
+    const incrementalStatuses: string[] = [];
+    const incremental = runPostIndexAugmentation(
+      runtimeBoundaryAugmentationStage({ affectedFiles: ['src/client.ts'] }),
+      {
+        projectRoot,
+        dbPath,
+        onStatus: (message) => incrementalStatuses.push(message),
+      },
+    );
+    expect(incremental.result).toMatchObject({ incrementallyUpdated: true, filesScanned: 26 });
+    expect(incrementalStatuses).toEqual([
+      expect.stringContaining('Incrementally refreshed runtime-boundary'),
+      expect.stringContaining('Runtime-boundary phases:'),
+    ]);
 
     const statuses: string[] = [];
     const reused = runPostIndexAugmentation(runtimeBoundaryAugmentationStage({ reuseExisting: true }), {
@@ -221,6 +488,8 @@ describe('runtime-boundary evidence', () => {
         'export async function sendEvents(events: unknown[]) {',
         "  return fetch(EVENTS_PATH, { method: 'POST', body: JSON.stringify({ events }) });",
         '}',
+        "function returnedPath() { return '/api/returned'; }",
+        "fetch(returnedPath(), { method: 'GET' });",
       ],
       'src/server.ts': [
         "import express from 'express';",
@@ -239,13 +508,21 @@ describe('runtime-boundary evidence', () => {
       'src/persistence.ts': [
         'await prisma.sessionEvent.create({ data: event });',
         'await prisma.sessionEvent.findMany({ where: { sessionId } });',
+        "db.get<{ id: string }>('select * from session_events');",
+        "await db.insert(deliveryQueue).values({ status: 'pending' });",
       ],
       'src/custom.ts': ['internalApiRequest(resolveDispatchPath(input), payload);'],
       'src/queue-producer.ts': [
         "import amqp from 'amqplib';",
         "channel.sendToQueue('jobs.ready', Buffer.from(payload));",
       ],
-      'src/queue-consumer.ts': ["import amqp from 'amqplib';", "channel.consume('jobs.ready', handleJob);"],
+      'src/queue-consumer.ts': [
+        "import amqp from 'amqplib';",
+        "channel.consume('jobs.ready', handleJob);",
+        'await db.transaction(async (tx) => {',
+        "  await tx.execute(sql`SELECT ${deliveryQueue.id} FROM ${deliveryQueue} WHERE ${deliveryQueue.status} = 'pending' FOR UPDATE SKIP LOCKED`);",
+        '});',
+      ],
       'src/http-wrapper.ts': [
         'export function postJson(path: string, body: unknown) {',
         "  return fetch(path, { method: 'POST', body: JSON.stringify(body) });",
@@ -255,6 +532,9 @@ describe('runtime-boundary evidence', () => {
         "import { postJson } from './http-wrapper.js';",
         'export function invokeWrapped() {',
         "  return postJson('/api/wrapped', {});",
+        '}',
+        'export function forwardWrapped(path: string) {',
+        '  return postJson(path, {});',
         '}',
       ],
       'src/non-boundaries.ts': [
@@ -369,7 +649,11 @@ describe('runtime-boundary evidence', () => {
       .symbol(10, 'scip-typescript npm fixture 1.0.0 src/`carrier-server.ts`/handlers.', 'handlers', 13)
       .definition(10, 24, 10, 9, 0, 9, 57)
       .symbol(11, 'scip-typescript npm fixture 1.0.0 src/`carrier-server.ts`/controller.', 'controller', 13)
-      .definition(11, 24, 11, 10, 0, 15, 2);
+      .definition(11, 24, 11, 10, 0, 15, 2)
+      .symbol(12, 'scip-typescript npm fixture 1.0.0 src/`wrapper-client.ts`/forwardWrapped().', 'forwardWrapped', 12)
+      .definition(12, 10, 12, 4, 0, 6, 1)
+      .symbol(13, 'scip-typescript npm fixture 1.0.0 src/`client.ts`/returnedPath().', 'returnedPath', 12)
+      .definition(13, 1, 13, 4, 0, 4, 51);
     builder.write();
     return new ScipDatabase({
       projectRoot: tempDir,

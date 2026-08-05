@@ -84,7 +84,7 @@ describe('TypeScript incremental index eligibility', () => {
     expect(result).toEqual({ eligible: false, reason });
   });
 
-  test('accepts a single-owned workspace edit and rejects a cross-project closure', () => {
+  test('partitions a cross-project closure and carries changed dependencies into each compiler request', () => {
     const previous = workspaceSnapshot('a1');
     const current = workspaceSnapshot('a2');
     const base = {
@@ -109,10 +109,50 @@ describe('TypeScript incremental index eligibility', () => {
       ...base,
       graph: new Map([['apps/web/src/b.ts', new Set(['apps/api/src/a.ts'])]]),
     });
-    expect(crossing).toEqual({
-      eligible: false,
-      reason: 'affected files cross or ambiguously match TypeScript projects',
+    expect(crossing).toEqual(
+      expect.objectContaining({
+        eligible: true,
+        projects: [
+          {
+            tsconfigPath: 'apps/api/tsconfig.json',
+            projectArgument: 'apps/api',
+            modifiedFiles: ['apps/api/src/a.ts'],
+            affectedFiles: ['apps/api/src/a.ts'],
+          },
+          {
+            tsconfigPath: 'apps/web/tsconfig.json',
+            projectArgument: 'apps/web',
+            modifiedFiles: ['apps/api/src/a.ts'],
+            affectedFiles: ['apps/web/src/b.ts'],
+          },
+        ],
+      }),
+    );
+  });
+
+  test('uses the most specific nested project when a root workspace project also matches', () => {
+    const previous = workspaceSnapshot('a1');
+    const current = workspaceSnapshot('a2');
+    const result = planTypeScriptIncrementalUpdate({
+      projectMode: 'workspace',
+      workspaceProjects: ['.', 'apps/api', 'apps/web'],
+      previousSnapshot: previous,
+      currentSnapshot: current,
+      projectFiles: ['apps/api/src/a.ts', 'apps/web/src/b.ts'],
+      graph: new Map([['apps/web/src/b.ts', new Set(['apps/api/src/a.ts'])]]),
+      producerIdentity: 'scip-typescript:0.4.0:test',
+      rootTsconfigExists: true,
     });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        eligible: true,
+        projects: [
+          expect.objectContaining({ projectArgument: 'apps/api', affectedFiles: ['apps/api/src/a.ts'] }),
+          expect.objectContaining({ projectArgument: 'apps/web', affectedFiles: ['apps/web/src/b.ts'] }),
+        ],
+      }),
+    );
   });
 });
 

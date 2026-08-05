@@ -241,6 +241,42 @@ export function captureFixedRepositoryObservationReceipt(
 }
 
 /**
+ * Identify the immutable index generation used by an operation without
+ * claiming that the operation observed every live repository file.
+ */
+export function buildIndexGenerationObservationReceipt(input: {
+  projectRoot: string;
+  db: Pick<ScipDatabase, 'generation' | 'config'>;
+  gitContext?: GitWorktreeContext;
+  observedAt?: Date;
+}): ObservationReceiptV2 {
+  return buildObservationReceipt({
+    projectRoot: input.projectRoot,
+    db: input.db,
+    ...(input.gitContext ? { gitContext: input.gitContext } : {}),
+    ...(input.observedAt ? { observedAt: input.observedAt } : {}),
+    observedSourceKinds: ['index-generation'],
+  });
+}
+
+export function currentCliIndexGenerationObservationReceipt(): ObservationReceipt {
+  const db = currentCliDatabase();
+  if (!db) {
+    return buildObservationReceipt({
+      projectRoot: resolveProjectRoot(),
+      observedSourceKinds: ['process'],
+    });
+  }
+  const projectRoot = db.config.projectRoot;
+  const gitContext = resolveGitWorktreeContext(projectRoot);
+  return buildIndexGenerationObservationReceipt({
+    projectRoot,
+    db,
+    ...(gitContext ? { gitContext } : {}),
+  });
+}
+
+/**
  * Build the strongest receipt available at JSON-render time. Database-backed
  * commands expose the immutable generation held by their open connection.
  * Non-database commands retain process provenance without claiming repository

@@ -6,7 +6,7 @@ import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
 import { getSourceText } from '../../source/primitives/source-text.js';
 import { runtimeBoundarySourceScope } from './source-scope.js';
-import { evaluateBoundaryValue } from './value-evaluator.js';
+import { evaluateStaticValue as evaluateBoundaryValue } from '../../symbols/graph/static-value-flow.js';
 import type { BoundaryEvidenceStrength, BoundaryKeyPart, BoundaryObservation, BoundaryOwner } from './types.js';
 
 export interface BoundaryFileContext {
@@ -20,7 +20,7 @@ export interface BoundaryFileContext {
 
 export interface BoundaryExtractor {
   id: string;
-  supports(context: BoundaryFileContext): boolean;
+  supports(source: string): boolean;
   extract(context: BoundaryFileContext): BoundaryObservation[];
 }
 
@@ -28,6 +28,7 @@ const HTTP_METHODS = new Set(['delete', 'get', 'head', 'options', 'patch', 'post
 const HTTP_RECEIVER_PATTERN = /(?:^|\.)(?:app|router|server)$/u;
 const READ_METHODS = new Set(['findFirst', 'findMany', 'findUnique', 'from', 'get', 'select']);
 const WRITE_METHODS = new Set(['create', 'delete', 'insert', 'remove', 'update', 'upsert']);
+const SQL_EXECUTE_METHODS = new Set(['execute', 'query', 'raw']);
 
 export const BOUNDARY_EXTRACTORS: readonly BoundaryExtractor[] = [
   httpExtractor(),
@@ -84,7 +85,7 @@ export function boundaryFileContext(db: ScipDatabase, file: string): BoundaryFil
 function httpExtractor(): BoundaryExtractor {
   return {
     id: 'builtin.http',
-    supports: ({ source }) =>
+    supports: (source) =>
       /\bfetch\s*\(|\baxios\b|\b(?:app|router|server)\s*\.\s*(?:get|post|put|patch|delete|options|head)\s*\(/u.test(
         source,
       ) ||
@@ -216,7 +217,7 @@ function httpExtractor(): BoundaryExtractor {
 function registryExtractor(): BoundaryExtractor {
   return {
     id: 'builtin.registry',
-    supports: ({ source }) => /(?:Handlers?|Registry|Routes?)\b/iu.test(source),
+    supports: (source) => /(?:Handlers?|Registry|Routes?)\b/iu.test(source),
     extract: (context) => {
       const observations: BoundaryObservation[] = [];
       walk(context.root, (node) => {
@@ -272,23 +273,34 @@ function registryExtractor(): BoundaryExtractor {
 function persistenceExtractor(): BoundaryExtractor {
   return {
     id: 'builtin.persistence',
-    supports: ({ source }) => /\b(?:db|database|prisma|drizzle|repository|repo)\b/iu.test(source),
+    supports: (source) =>
+      /\b(?:db|database|prisma|drizzle|[A-Za-z_$][\w$]*(?:Repository|Repo))\b[^;]{0,1024}?\.\s*(?:findFirst|findMany|findUnique|from|get|select|create|delete|insert|remove|update|upsert|execute|query|raw|transaction)(?:\s*<[^()]{1,512}>)?\s*\(/iu.test(
+        source,
+      ),
     extract: (context) => {
       const observations: BoundaryObservation[] = [];
+      const transactionReceivers = persistenceTransactionReceivers(context.root);
       walk(context.root, (node) => {
         if (node.type !== 'call_expression') return;
         const callee = callTarget(node);
         if (!callee) return;
         const parts = callee.split('.');
         const leaf = parts.at(-1) ?? '';
-        const action = READ_METHODS.has(leaf) ? 'database.read' : WRITE_METHODS.has(leaf) ? 'database.write' : null;
-        if (!action) return;
-        const adapter = persistenceAdapter(parts);
-        if (!adapter) return;
         const args = callArguments(node);
-        const argumentResource = persistenceArgument(args[0], context);
+        const sql = args[0]?.text ?? '';
+        const action = persistenceAction(leaf, sql);
+        if (!action) return;
+        const adapter = persistenceAdapter(parts, transactionReceivers);
+        if (!adapter) return;
+        const argumentResource = persistenceArgument(args[0], context) ?? sqlPersistenceResource(sql);
         const resource = persistenceResource(adapter, parts, leaf, argumentResource);
         if (!resource) return;
+        const evidence =
+          leaf === 'insert'
+            ? 'persistence-insert'
+            : action === 'database.read' && /\bFOR\s+UPDATE\s+SKIP\s+LOCKED\b/iu.test(sql)
+              ? 'persistence-skip-locked-claim'
+              : 'persistence-adapter';
         observations.push(
           observation(
             context,
@@ -297,7 +309,7 @@ function persistenceExtractor(): BoundaryExtractor {
             action,
             [{ name: 'resource', ...resource }],
             resolvedStrength([{ name: 'resource', ...resource }]),
-            'persistence-adapter',
+            evidence,
           ),
         );
       });
@@ -325,7 +337,7 @@ function persistenceArgument(
 function queueExtractor(): BoundaryExtractor {
   return {
     id: 'builtin.queue',
-    supports: ({ source }) =>
+    supports: (source) =>
       hasPackageImport(source, ['amqplib', 'bullmq', 'kafkajs', '@aws-sdk/client-sqs', 'rabbitmq']) &&
       /\.(?:sendToQueue|consume|send|subscribe)\s*\(/u.test(source),
     extract: (context) => {
@@ -586,12 +598,64 @@ function registryValueLike(node: SyntaxNode): boolean {
 
 type PersistenceAdapter = 'database' | 'orm' | 'repository';
 
-function persistenceAdapter(parts: readonly string[]): PersistenceAdapter | null {
+function persistenceAdapter(
+  parts: readonly string[],
+  transactionReceivers: ReadonlySet<string> = new Set(),
+): PersistenceAdapter | null {
   const receiverParts = parts.slice(0, -1).map((part) => part.replace(/\([^)]*\)/gu, ''));
   if (receiverParts.some((part) => /^(?:prisma|drizzle)$/iu.test(part))) return 'orm';
   if (receiverParts.some((part) => /(?:Repository|Repo)$/u.test(part))) return 'repository';
-  if (receiverParts.some((part) => /^(?:db|database)$/iu.test(part))) return 'database';
+  if (receiverParts.some((part) => /^(?:db|database)$/iu.test(part) || transactionReceivers.has(part))) {
+    return 'database';
+  }
   return null;
+}
+
+function persistenceAction(leaf: string, sql: string): 'database.read' | 'database.write' | null {
+  if (READ_METHODS.has(leaf)) return 'database.read';
+  if (WRITE_METHODS.has(leaf)) return 'database.write';
+  if (!SQL_EXECUTE_METHODS.has(leaf)) return null;
+  const operation = /\b(SELECT|INSERT|UPDATE|DELETE)\b/iu.exec(sql)?.[1]?.toUpperCase();
+  return operation === 'SELECT' ? 'database.read' : operation ? 'database.write' : null;
+}
+
+function persistenceTransactionReceivers(root: SyntaxNode): Set<string> {
+  const receivers = new Set<string>();
+  walk(root, (node) => {
+    if (node.type !== 'call_expression') return;
+    const target = callTarget(node);
+    if (!target) return;
+    const parts = target.split('.');
+    if (parts.at(-1) !== 'transaction' || !persistenceAdapter(parts)) return;
+    for (const callback of callArguments(node)) {
+      if (!directlyCallable(callback)) continue;
+      const parameters =
+        callback.childForFieldName('parameters') ??
+        callback.namedChildren.find((child) => /parameters/u.test(child.type));
+      const first = parameters?.namedChildren[0];
+      const name = first ? parameterName(first) : null;
+      if (name) receivers.add(name);
+    }
+  });
+  return receivers;
+}
+
+function parameterName(node: SyntaxNode): string | null {
+  if (node.type === 'identifier') return node.text;
+  const named = node.childForFieldName('name') ?? node.childForFieldName('pattern');
+  if (named) return parameterName(named);
+  return node.namedChildren.find((child) => child.type === 'identifier')?.text ?? null;
+}
+
+function sqlPersistenceResource(sql: string): Omit<BoundaryKeyPart, 'name'> | null {
+  const resource = sqlResource(sql);
+  return resource
+    ? {
+        value: resource,
+        evidence: 'identifier',
+        term: { kind: 'symbol', symbol: resource },
+      }
+    : null;
 }
 
 function persistenceResource(
@@ -614,7 +678,7 @@ function persistenceResource(
 }
 
 function sqlResource(sql: string): string | null {
-  return /\b(?:from|into|update|table)\s+['"`]?([A-Za-z_][\w.-]*)/iu.exec(sql)?.[1] ?? null;
+  return /\b(?:from|into|update|table)\s+(?:\$\{\s*)?['"`]?([A-Za-z_$][\w$.-]*)/iu.exec(sql)?.[1] ?? null;
 }
 
 function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {

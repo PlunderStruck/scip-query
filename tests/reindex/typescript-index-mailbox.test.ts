@@ -25,6 +25,7 @@ import {
 import {
   TYPESCRIPT_INDEX_PROTOCOL_VERSION,
   TYPESCRIPT_INDEX_LEGACY_PROTOCOL_VERSION,
+  TYPESCRIPT_INDEX_PREVIOUS_PROTOCOL_VERSION,
   parseTypeScriptIndexEnvelope,
   typeScriptIndexMailboxPaths,
   type TypeScriptIndexDocumentRequest,
@@ -137,13 +138,50 @@ describe('TypeScript index service mailbox', () => {
       expect.objectContaining({ requests: 2, sessionsCreated: 1, initializations: 1, programUpdates: 1 }),
     );
 
+    mkdirSync(join(fixture.projectRoot, 'apps/web/src'), { recursive: true });
+    mkdirSync(join(fixture.projectRoot, 'packages/shared'), { recursive: true });
+    writeFileSync(join(fixture.projectRoot, 'packages/shared/value.ts'), 'export const shared = 1;\n');
+    writeFileSync(
+      join(fixture.projectRoot, 'apps/web/src/b.ts'),
+      "import { shared } from '../../../packages/shared/value.js';\nexport const result = shared;\n",
+    );
+    writeFileSync(
+      join(fixture.projectRoot, 'apps/web/tsconfig.json'),
+      JSON.stringify({
+        compilerOptions: { target: 'ES2022', module: 'ESNext', moduleResolution: 'Bundler' },
+        include: ['src/**/*.ts'],
+      }),
+    );
+    const crossProject = host.handle(generation, {
+      kind: 'emit-documents',
+      tsconfigPath: 'apps/web/tsconfig.json',
+      projectArgument: 'apps/web',
+      projectIdentity: 'fixture-project-v1',
+      producerIdentity: availability.producerIdentity,
+      modifiedFiles: ['packages/shared/value.ts'],
+      affectedFiles: ['apps/web/src/b.ts'],
+    });
+    expect(crossProject).toEqual(
+      expect.objectContaining({
+        cold: true,
+        fragments: [expect.objectContaining({ relativePath: 'apps/web/src/b.ts' })],
+      }),
+    );
+
+    writeFileSync(join(fixture.projectRoot, 'src/a.ts'), 'export const value = 3;\n');
+    const rootAgain = host.handle(generation, indexRequest(availability.producerIdentity));
+    expect(rootAgain.cold).toBe(false);
+    expect(host.status()).toEqual(
+      expect.objectContaining({ requests: 4, sessionsCreated: 2, initializations: 2, programUpdates: 2 }),
+    );
+
     generation = 'base-generation-2';
     writeRequest(paths.requestDir, 'stale', 'base-generation-1', indexRequest(availability.producerIdentity));
     expect(processTypeScriptIndexMailbox(paths, host, { nowMs: NOW })).toBe(1);
     expect(readResponse(paths.responseDir, 'stale')).toEqual(
       expect.objectContaining({ ok: false, error: expect.stringContaining('currently published generation') }),
     );
-    expect(host.status().requests).toBe(2);
+    expect(host.status().requests).toBe(4);
   });
 
   test('rejects malformed/expired work and bounds requester crash and timeout paths', () => {
@@ -292,7 +330,7 @@ describe('TypeScript index service mailbox', () => {
 
   test('parses only complete versioned requests', () => {
     const request = indexRequest('producer');
-    const operationKey = boundedMailboxOperationKey('typescript-index-v3', {
+    const operationKey = boundedMailboxOperationKey('typescript-index-v4', {
       baseGeneration: 'generation',
       request,
     });
@@ -308,14 +346,47 @@ describe('TypeScript index service mailbox', () => {
       request,
     };
     expect(parseTypeScriptIndexEnvelope(JSON.stringify(valid))).toEqual(valid);
+    const previousOperationKey = boundedMailboxOperationKey('typescript-index-v3', {
+      baseGeneration: 'generation',
+      request,
+    });
+    expect(
+      parseTypeScriptIndexEnvelope(
+        JSON.stringify({
+          ...valid,
+          protocolVersion: TYPESCRIPT_INDEX_PREVIOUS_PROTOCOL_VERSION,
+          id: boundedMailboxRequestId(previousOperationKey),
+          operationKey: previousOperationKey,
+        }),
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
+        id: boundedMailboxRequestId(previousOperationKey),
+      }),
+    );
     expect(() =>
       parseTypeScriptIndexEnvelope(JSON.stringify({ ...valid, request: { ...valid.request, affectedFiles: [] } })),
     ).toThrow('invalid mailbox request');
-    expect(() =>
+    const dependencyRequest = { ...valid.request, affectedFiles: ['src/other.ts'] };
+    const dependencyOperationKey = boundedMailboxOperationKey('typescript-index-v4', {
+      baseGeneration: 'generation',
+      request: dependencyRequest,
+    });
+    expect(
       parseTypeScriptIndexEnvelope(
-        JSON.stringify({ ...valid, request: { ...valid.request, affectedFiles: ['src/other.ts'] } }),
+        JSON.stringify({
+          ...valid,
+          id: boundedMailboxRequestId(dependencyOperationKey),
+          operationKey: dependencyOperationKey,
+          request: dependencyRequest,
+        }),
       ),
-    ).toThrow('invalid mailbox request');
+    ).toEqual(
+      expect.objectContaining({
+        request: expect.objectContaining({ modifiedFiles: ['src/a.ts'], affectedFiles: ['src/other.ts'] }),
+      }),
+    );
   });
 
   test('lets the parent claim and commit an isolated Worker result exactly once', async () => {

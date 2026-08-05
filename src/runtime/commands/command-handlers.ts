@@ -57,7 +57,7 @@ import {
   formatSuppressionWriteReceipt,
   writeSuppressionFile,
 } from '../suppression-writer.js';
-import { currentCliObservationReceipt } from '../observation-receipt.js';
+import { currentCliIndexGenerationObservationReceipt } from '../observation-receipt.js';
 import { inspectWatchRefreshRequests } from '../../storage/watch-refresh-requests.js';
 import { readSuppressionDir } from '../../storage/suppression-store.js';
 import {
@@ -445,7 +445,7 @@ export function handleSuppress(id: unknown, rawOpts: unknown): void {
     const projectRoot = resolveProjectRoot();
     const observation = (() => {
       try {
-        return withDb(() => currentCliObservationReceipt());
+        return withDb(() => currentCliIndexGenerationObservationReceipt());
       } catch {
         return undefined;
       }

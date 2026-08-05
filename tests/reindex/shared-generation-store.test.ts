@@ -62,7 +62,7 @@ describe('shared generation store', () => {
         clojureConfigPath: ' ',
       }),
     ).toEqual({
-      version: 2,
+      version: 3,
       languages: ['typescript'],
       pnpmWorkspaces: false,
       typescriptProjectMode: 'workspace',
@@ -717,7 +717,7 @@ function createSnapshot(root: string, projectRoot: string): SharedGenerationSnap
 
 function fingerprint(): ProjectInputFingerprint {
   return {
-    version: 2,
+    version: 3,
     languages: ['typescript'],
     pnpmWorkspaces: false,
     typescriptProjectMode: 'single',

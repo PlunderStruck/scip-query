@@ -108,6 +108,7 @@ const SHARED_CACHE_PREPARATION_EXCLUDED_COMMANDS = new Set([
   'setup',
   'setup-agent',
   'status',
+  'suppress',
   'uninstall',
   'watch',
 ]);

@@ -9,7 +9,7 @@ scip-query is an indexed repository map: a code-reading view that connects compi
 
 ## Choose the smallest sufficient surface
 
-- Unknown literal, route, event, key, or first anchor: `scip-query search <text>`.
+- Unknown literal, route, event, key, or first anchor: `scip-query search <text>`. Start with the most distinctive literal you have. A broad selector returns exact total cardinality, a bounded representative identity manifest, and ranked scope commands; narrow by one relevant scope instead of enumerating every match.
 - Several known text, symbol, or `file:line` anchors: one `scip-query inspect ... --view behavior` with repeated selectors. This is the default multi-unit triage surface: compact units use raw source, larger units use a complete normalized outline only when it is cheaper, and unsupported statements remain verbatim.
 - One exact symbol and its uses: `scip-query evidence <symbol> --include definition,references,callers,callees`.
 - One exact unit already named whose complete implementation can change the decision: `scip-query code <selector>`. Batch only independently necessary exact units; symbol selectors return complete definition source, while line ranges return the requested lines plus statically attributed same-file callable definitions and explicit coverage. `code` is the most expensive exploration surface per selector.
@@ -30,7 +30,7 @@ Use `entry-map` only when one detected callable genuinely defines the boundary. 
 
 - Compiler-graph and exact runtime-boundary relationships are facts only within their reported coverage. Candidate links and heuristic findings require source confirmation and do not drive default traversal.
 - Read selector cardinality, omissions, packet coverage, and the stopping check. `stop-ready` means stop unless a named semantic blind spot can change the decision.
-- `search` always lists every exact match identity; `--full` expands source around every match and is unnecessary merely to learn where the text occurs.
+- `search` always counts every exact match. A small result lists every identity; a broad result withholds lower-ranked identities before output transport and reports exact coverage plus ranked scope commands. There is no transport cursor to drain. Select a distinctive literal or one relevant scope; use `--full` only after deliberately narrowing when source around every remaining match can change the decision.
 - `inspect` omits whole lower-ranked units. Drill into several relevant omission groups together. Use `--full` only when every omitted unit can change the decision; never combine `--full` with `--limit`.
 - `code` accepts up to 24 exact selectors. File selectors return the exported or top-level surface plus a complete omitted-local ledger. Use `--members all` only when the whole file matters. A refusal means the requested source packet is too broad for one page and emitted no partial source; narrow to the exact units still needed before deciding whether every split remains necessary.
 - Ambiguity requires the exact candidate commands; never silently choose the first match.
@@ -41,6 +41,8 @@ Use `entry-map` only when one detected callable genuinely defines the boundary. 
 ## Spend tokens once
 
 Treat returned source as already read. Its line numbers are absolute and citation-ready. Do not reopen the same range with `sed`, `nl`, `rg`, or another scip-query command. Do not repeat successful repository-instruction or standards reads. Batch independent gaps into one command and reuse unchanged evidence after context compaction. If output says `Continue exactly:`, run that command unchanged; it transports already selected bytes and does not expand semantic coverage. Do not choose a page size pre-emptively.
+
+Do not rerun a successful human command as JSON. Human search output already carries exact cardinality, owner identities, coverage, and recovery commands; JSON is only for code that will parse the result. Before each drilldown, name the still-unanswered fact and stop when no such fact remains. Tool-call count matters because every additional reasoning step pays again for the context already accumulated.
 
 Use native search or source reads only for exact edit lines, unindexed files, unsupported file types, or an explicit gap scip-query reports. Name the gap first. The map replaces redundant exploration; it must not become a second workflow.
 

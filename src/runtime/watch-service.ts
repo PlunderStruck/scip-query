@@ -65,6 +65,7 @@ const AUTO_START_EXCLUDED_COMMANDS = new Set([
   'setup',
   'setup-agent',
   'status',
+  'suppress',
   'uninstall',
   'watch',
 ]);

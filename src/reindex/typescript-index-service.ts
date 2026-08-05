@@ -38,7 +38,6 @@ export interface TypeScriptIndexServiceHostOptions {
 }
 
 interface ActiveEmitter {
-  sessionKey: string;
   projectIdentity: string;
   emitter: TypeScriptDocumentEmitter;
 }
@@ -49,7 +48,7 @@ export class TypeScriptIndexServiceHost {
   private readonly createEmitter: (opts: TypeScriptDocumentEmitterOptions) => TypeScriptDocumentEmitterCreation;
   private readonly wallNow: () => number;
   private readonly monotonicNow: () => number;
-  private active: ActiveEmitter | null = null;
+  private readonly active = new Map<string, ActiveEmitter>();
   private requests = 0;
   private sessionsCreated = 0;
   private sessionsReplaced = 0;
@@ -108,17 +107,18 @@ export class TypeScriptIndexServiceHost {
 
   // scip-query: ignore-twin — each service reports its own protocol-specific status envelope.
   status(mailbox?: BoundedMailboxStatus): TypeScriptIndexServiceStatus {
-    const stats = this.active?.emitter.snapshotStats();
+    const stats = [...this.active.values()].map((active) => active.emitter.snapshotStats());
+    const total = (field: keyof (typeof stats)[number]): number => stats.reduce((sum, entry) => sum + entry[field], 0);
     return {
       protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
-      state: this.unavailable ? 'unavailable' : this.lastError ? 'error' : this.active ? 'ready' : 'idle',
+      state: this.unavailable ? 'unavailable' : this.lastError ? 'error' : this.active.size > 0 ? 'ready' : 'idle',
       requests: this.requests,
       sessionsCreated: this.sessionsCreated,
       sessionsReplaced: this.sessionsReplaced,
-      initializations: stats?.initializations ?? 0,
-      programUpdates: stats?.programUpdates ?? 0,
-      documentsEmitted: stats?.documentsEmitted ?? 0,
-      documentsRemoved: stats?.documentsRemoved ?? 0,
+      initializations: total('initializations'),
+      programUpdates: total('programUpdates'),
+      documentsEmitted: total('documentsEmitted'),
+      documentsRemoved: total('documentsRemoved'),
       ...(this.lastRequestAtMs === null ? {} : { lastRequestAt: new Date(this.lastRequestAtMs).toISOString() }),
       ...(this.lastDurationMs === null ? {} : { lastDurationMs: this.lastDurationMs }),
       ...(this.lastError ? { lastError: this.lastError } : {}),
@@ -128,18 +128,13 @@ export class TypeScriptIndexServiceHost {
 
   // scip-query: ignore-twin — lifecycle name is conventional; owned resources differ by service.
   close(): void {
-    this.active = null;
+    this.active.clear();
   }
 
   private emitterFor(request: TypeScriptIndexDocumentRequest): ActiveEmitter {
     const sessionKey = `${request.tsconfigPath}\0${request.projectArgument}`;
-    if (
-      this.active &&
-      this.active.sessionKey === sessionKey &&
-      this.active.projectIdentity === request.projectIdentity
-    ) {
-      return this.active;
-    }
+    const current = this.active.get(sessionKey);
+    if (current?.projectIdentity === request.projectIdentity) return current;
     const created = this.createEmitter({
       workspaceRoot: this.projectRoot,
       tsconfigPath: request.tsconfigPath,
@@ -149,10 +144,11 @@ export class TypeScriptIndexServiceHost {
       this.unavailable = true;
       throw new Error(created.reason);
     }
-    if (this.active) this.sessionsReplaced += 1;
-    this.active = { sessionKey, projectIdentity: request.projectIdentity, emitter: created.emitter };
+    if (current) this.sessionsReplaced += 1;
+    const active = { projectIdentity: request.projectIdentity, emitter: created.emitter };
+    this.active.set(sessionKey, active);
     this.sessionsCreated += 1;
-    return this.active;
+    return active;
   }
 }
 

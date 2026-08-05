@@ -3,7 +3,12 @@ import { getAst } from '../../source/ast/ast-core.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
-import type { BoundaryDerivation, BoundaryKeyPart, BoundaryTerm, BoundaryValuePrecision } from './types.js';
+import type {
+  EvaluatedStaticValue,
+  StaticValueDerivation,
+  StaticValueTerm,
+  StaticValuePrecision,
+} from './value-flow.js';
 
 const MAX_EVALUATION_DEPTH = 8;
 const MAX_REEXPORT_DEPTH = 4;
@@ -14,19 +19,11 @@ export interface BoundaryValueContext {
   root: SyntaxNode;
 }
 
-export interface EvaluatedBoundaryValue {
-  value: string;
-  evidence: BoundaryKeyPart['evidence'];
-  term: BoundaryTerm;
-  precision: BoundaryValuePrecision;
-  derivation: BoundaryDerivation;
-}
-
 /** Resolve finite address-bearing values without assigning protocol meaning. */
-export function evaluateBoundaryValue(
+export function evaluateStaticValue(
   context: BoundaryValueContext,
   node: SyntaxNode | null | undefined,
-): EvaluatedBoundaryValue | null {
+): EvaluatedStaticValue | null {
   if (!node) return null;
   return evaluateNode(context, node, 0, new Set());
 }
@@ -36,7 +33,7 @@ function evaluateNode(
   input: SyntaxNode,
   depth: number,
   seen: Set<string>,
-): EvaluatedBoundaryValue | null {
+): EvaluatedStaticValue | null {
   if (depth > MAX_EVALUATION_DEPTH) return unknownValue(input, 'value-evaluation-depth');
   const node = unwrapExpression(input);
   const literal = stringTerm(node);
@@ -44,8 +41,8 @@ function evaluateNode(
 
   if (node.type === 'binary_expression' && /\+/u.test(node.text)) {
     const parts = node.namedChildren.map((child) => evaluateNode(context, child, depth + 1, new Set(seen)));
-    if (parts.length >= 2 && parts.every((part): part is EvaluatedBoundaryValue => part !== null)) {
-      const term: BoundaryTerm = { kind: 'concat', parts: parts.map((part) => part.term) };
+    if (parts.length >= 2 && parts.every((part): part is EvaluatedStaticValue => part !== null)) {
+      const term: StaticValueTerm = { kind: 'concat', parts: parts.map((part) => part.term) };
       const value = parts.map((part) => part.value).join('');
       return derivedValue(
         context.file,
@@ -68,7 +65,90 @@ function evaluateNode(
     return resolveMember(context, member.base, member.properties, node, depth, seen);
   }
 
+  if (node.type === 'call_expression' || node.type === 'call') {
+    return resolveBoundedCallReturn(context, node, depth, seen);
+  }
+
   return unknownValue(node, `unsupported-expression:${node.type}`);
+}
+
+function resolveBoundedCallReturn(
+  context: BoundaryValueContext,
+  call: SyntaxNode,
+  depth: number,
+  seen: Set<string>,
+): EvaluatedStaticValue | null {
+  const targetNode = call.childForFieldName('function') ?? call.namedChild(0);
+  const targetText = targetNode?.text.replace(/\s+/gu, '').replace(/<.*>$/u, '') ?? '';
+  const targets = resolveCallableTargets(context, targetText);
+  if (targets.length !== 1) {
+    return unknownValue(call, targets.length === 0 ? 'call-target-unresolved' : 'call-target-ambiguous');
+  }
+  const target = targets[0]!;
+  const identity = `${target.relativePath}\0${target.symbol}`;
+  if (seen.has(identity)) return unknownValue(call, 'call-return-cycle');
+  const root = getAst(context.db, target.relativePath)?.rootNode;
+  if (!root) return unknownValue(call, 'call-target-unparsed');
+  const callable = smallestCoveringCallable(root, target.startLine, target.endLine);
+  if (!callable) return unknownValue(call, 'call-target-syntax-unavailable');
+  const returned = singleReturnedExpression(callable);
+  if (!returned) return unknownValue(call, 'call-return-not-single-expression');
+  const nextSeen = new Set(seen);
+  nextSeen.add(identity);
+  const value = evaluateNode({ db: context.db, file: target.relativePath, root }, returned, depth + 1, nextSeen);
+  return value
+    ? derivedFrom(call, 'bounded-call-return', value, target.symbol)
+    : unknownValue(call, 'call-return-unresolved');
+}
+
+function resolveCallableTargets(
+  context: BoundaryValueContext,
+  targetText: string,
+): ReturnType<typeof getDefinitionsForFile> {
+  if (/^[A-Za-z_$][\w$]*$/u.test(targetText)) {
+    const local = getDefinitionsForFile(context.db, context.file).filter(
+      (definition) => definition.isFunctionLike && definition.leaf === targetText,
+    );
+    if (local.length > 0) return local;
+    const imported = getSourceImports(context.db, context.file).find(
+      (item) => item.localName === targetText && item.sourcePath && item.kind !== 'namespace',
+    );
+    if (!imported?.sourcePath) return [];
+    return resolveImportedDefinitions(
+      context.db,
+      imported.sourcePath,
+      imported.importedName === 'default' ? targetText : imported.importedName,
+    ).filter((definition) => definition.isFunctionLike);
+  }
+
+  const member = /^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/u.exec(targetText);
+  if (!member) return [];
+  const imported = getSourceImports(context.db, context.file).find(
+    (item) => item.kind === 'namespace' && item.localName === member[1] && item.sourcePath,
+  );
+  return imported?.sourcePath
+    ? resolveImportedDefinitions(context.db, imported.sourcePath, member[2]!).filter(
+        (definition) => definition.isFunctionLike,
+      )
+    : [];
+}
+
+function singleReturnedExpression(callable: SyntaxNode): SyntaxNode | null {
+  const body = callable.childForFieldName('body');
+  if (callable.type === 'arrow_function' && body && body.type !== 'statement_block') return body;
+  const returns: SyntaxNode[] = [];
+  collectReturns(body ?? callable, body ?? callable, returns);
+  if (returns.length !== 1) return null;
+  return returns[0]!.childForFieldName('argument') ?? returns[0]!.namedChild(0);
+}
+
+function collectReturns(root: SyntaxNode, node: SyntaxNode, returns: SyntaxNode[]): void {
+  if (node !== root && (/(?:function|method|lambda)/u.test(node.type) || node.type === 'arrow_function')) return;
+  if (node.type === 'return_statement') {
+    returns.push(node);
+    return;
+  }
+  for (const child of node.namedChildren) collectReturns(root, child, returns);
 }
 
 function resolveIdentifier(
@@ -77,7 +157,7 @@ function resolveIdentifier(
   site: SyntaxNode,
   depth: number,
   seen: Set<string>,
-): EvaluatedBoundaryValue | null {
+): EvaluatedStaticValue | null {
   const identity = `${context.file}\0${name}`;
   if (seen.has(identity)) return unknownValue(site, 'value-cycle');
   seen.add(identity);
@@ -126,7 +206,7 @@ function resolveMember(
   site: SyntaxNode,
   depth: number,
   seen: Set<string>,
-): EvaluatedBoundaryValue | null {
+): EvaluatedStaticValue | null {
   const imported = getSourceImports(context.db, context.file).find(
     (item) => item.localName === base && item.sourcePath,
   );
@@ -174,7 +254,9 @@ function resolveMember(
     : symbolicValue(site, proofSymbol ?? base, 'member-value-unresolved');
 }
 
-function stringTerm(node: SyntaxNode): { term: BoundaryTerm; value: string; precision: BoundaryValuePrecision } | null {
+function stringTerm(
+  node: SyntaxNode,
+): { term: StaticValueTerm; value: string; precision: StaticValuePrecision } | null {
   const text = node.text.trim();
   const quote = text[0];
   if ((quote !== "'" && quote !== '"' && quote !== '`') || text.at(-1) !== quote) return null;
@@ -182,7 +264,7 @@ function stringTerm(node: SyntaxNode): { term: BoundaryTerm; value: string; prec
   if (quote !== '`' || !raw.includes('${')) {
     return { term: { kind: 'literal', value: raw }, value: raw, precision: 'literal' };
   }
-  const parts: BoundaryTerm[] = [];
+  const parts: StaticValueTerm[] = [];
   let cursor = 0;
   const interpolation = /\$\{([^}]*)\}/gu;
   for (const match of raw.matchAll(interpolation)) {
@@ -202,10 +284,10 @@ function stringTerm(node: SyntaxNode): { term: BoundaryTerm; value: string; prec
 function directValue(
   file: string,
   node: SyntaxNode,
-  term: BoundaryTerm,
+  term: StaticValueTerm,
   value: string,
-  precision: BoundaryValuePrecision,
-): EvaluatedBoundaryValue {
+  precision: StaticValuePrecision,
+): EvaluatedStaticValue {
   return {
     value,
     evidence: 'literal',
@@ -218,11 +300,11 @@ function directValue(
 function derivedValue(
   file: string,
   node: SyntaxNode,
-  term: BoundaryTerm,
+  term: StaticValueTerm,
   value: string,
-  precision: BoundaryValuePrecision,
-  inputs: readonly EvaluatedBoundaryValue[],
-): EvaluatedBoundaryValue {
+  precision: StaticValuePrecision,
+  inputs: readonly EvaluatedStaticValue[],
+): EvaluatedStaticValue {
   return {
     value,
     evidence: 'constant',
@@ -239,9 +321,9 @@ function derivedValue(
 function derivedFrom(
   site: SyntaxNode,
   rule: string,
-  value: EvaluatedBoundaryValue,
+  value: EvaluatedStaticValue,
   symbol?: string,
-): EvaluatedBoundaryValue {
+): EvaluatedStaticValue {
   if (value.evidence === 'expression') {
     return {
       ...value,
@@ -267,7 +349,7 @@ function derivedFrom(
   };
 }
 
-function symbolicValue(node: SyntaxNode, symbol: string, reason: string): EvaluatedBoundaryValue {
+function symbolicValue(node: SyntaxNode, symbol: string, reason: string): EvaluatedStaticValue {
   return {
     value: node.text.trim(),
     evidence: 'expression',
@@ -277,7 +359,7 @@ function symbolicValue(node: SyntaxNode, symbol: string, reason: string): Evalua
   };
 }
 
-function unknownValue(node: SyntaxNode, reason: string): EvaluatedBoundaryValue {
+function unknownValue(node: SyntaxNode, reason: string): EvaluatedStaticValue {
   return {
     value: node.text.trim(),
     evidence: 'expression',
@@ -289,10 +371,10 @@ function unknownValue(node: SyntaxNode, reason: string): EvaluatedBoundaryValue 
 
 function derivation(
   rule: string,
-  kind: BoundaryDerivation['kind'],
+  kind: StaticValueDerivation['kind'],
   file: string,
   node: SyntaxNode,
-): BoundaryDerivation {
+): StaticValueDerivation {
   return {
     kind,
     rule,
@@ -366,6 +448,16 @@ function resolveImportedDefinitions(
     if (reexport.kind === 'named' && !reexport.names.includes(importedName)) return [];
     return resolveImportedDefinitions(db, reexport.sourcePath, importedName, depth + 1, new Set(seen));
   });
+}
+
+function smallestCoveringCallable(root: SyntaxNode, startLine: number, endLine: number): SyntaxNode | null {
+  let match: SyntaxNode | null = null;
+  walk(root, (node) => {
+    if (!/(?:function|method|lambda)/u.test(node.type) && node.type !== 'arrow_function') return;
+    if (node.startPosition.row > startLine || node.endPosition.row < endLine) return;
+    if (!match || node.endIndex - node.startIndex < match.endIndex - match.startIndex) match = node;
+  });
+  return match;
 }
 
 function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {

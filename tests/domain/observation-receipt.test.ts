@@ -14,9 +14,41 @@ import {
   type ObservationReceiptV2,
 } from '../../src/domain/observation-receipt.js';
 import { stableJson } from '../../src/domain/stable-json.js';
-import { buildObservationReceipt } from '../../src/runtime/observation-receipt.js';
+import {
+  buildIndexGenerationObservationReceipt,
+  buildObservationReceipt,
+} from '../../src/runtime/observation-receipt.js';
 
 describe('observation receipts', () => {
+  it('records a suppression generation without pretending to snapshot repository contents', () => {
+    const receipt = buildIndexGenerationObservationReceipt({
+      projectRoot: '/repo',
+      observedAt: new Date('2026-08-05T00:00:00.000Z'),
+      db: {
+        config: {
+          projectRoot: '/repo',
+          dbPath: '/cache/index.db',
+          indexPath: '/cache/index.scip',
+        },
+        generation: {
+          identity: 'generation-a',
+          databasePath: '/cache/generation-a/index.db',
+          source: 'immutable',
+        },
+      },
+    });
+
+    expect(receipt.observedSources).toEqual([
+      {
+        kind: 'index-generation',
+        identity: expect.objectContaining({ projection: { name: 'scip-query:index-generation', version: 1 } }),
+      },
+    ]);
+    expect(receipt.stabilityProofs).toEqual([{ source: 'index-generation', kind: 'immutable' }]);
+    expect(receipt.facts).not.toHaveProperty('wholeContent');
+    expect(receipt.facts).not.toHaveProperty('relevantInputs');
+  });
+
   it('preserves the version-1 identity preimage while using the bounded fast path', () => {
     const identity = createObservationIdentity('projection', 3, 'canonical value');
     expect(identity.digest).toBe(

@@ -84,9 +84,11 @@ export type { FileResult } from './navigation/files.js';
 export type {
   SourceSearchFileCoverage,
   SourceSearchIdentity,
+  SourceSearchIdentityCoverage,
   SourceSearchMatch,
   SourceSearchOptions,
   SourceSearchResult,
+  SourceSearchScopeHint,
 } from './navigation/source-search.js';
 export type {
   SourceInspectionContinuation,

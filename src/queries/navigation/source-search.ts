@@ -32,14 +32,32 @@ export interface SourceSearchFileCoverage {
   returnedMatches: number;
 }
 
+export interface SourceSearchScopeHint {
+  scope: string;
+  matchingLines: number;
+  matchingFiles: number;
+}
+
+export interface SourceSearchIdentityCoverage {
+  mode: 'complete' | 'bounded';
+  returned: number;
+  total: number;
+  omitted: number;
+}
+
 export interface SourceSearchResult {
   pattern: string;
   mode: 'literal' | 'regexp';
   identities?: SourceSearchIdentity[];
+  identityManifest?: SourceSearchIdentity[];
+  identityCoverage?: SourceSearchIdentityCoverage;
   matches: SourceSearchMatch[];
   matchingLines: number;
+  matchingFiles?: number;
   omittedMatches: number;
   fileCoverage?: SourceSearchFileCoverage[];
+  scopeHints?: SourceSearchScopeHint[];
+  omittedScopeHints?: number;
   scannedFiles: number;
 }
 
@@ -51,6 +69,9 @@ export interface SourceSearchOptions {
   ignoreCase?: boolean;
   ranking?: 'structural';
 }
+
+const SOURCE_SEARCH_IDENTITY_RENDER_LIMIT = 64;
+const SOURCE_SEARCH_SCOPE_HINT_LIMIT = 12;
 
 /** Search the source of indexed documents and retain line and symbol ownership. */
 export function searchSource(db: ScipDatabase, pattern: string, opts: SourceSearchOptions = {}): SourceSearchResult {
@@ -97,6 +118,10 @@ export function searchSource(db: ScipDatabase, pattern: string, opts: SourceSear
   }
 
   identities.sort(compareSearchIdentities);
+  const reportedIdentities =
+    identities.length > SOURCE_SEARCH_IDENTITY_RENDER_LIMIT
+      ? selectRepresentativeIdentities(identities, SOURCE_SEARCH_IDENTITY_RENDER_LIMIT)
+      : identities;
   const materializedIdentities =
     limit === Number.MAX_SAFE_INTEGER
       ? identities
@@ -113,16 +138,52 @@ export function searchSource(db: ScipDatabase, pattern: string, opts: SourceSear
     returnedByFile.set(match.relativePath, (returnedByFile.get(match.relativePath) ?? 0) + 1);
   for (const file of fileCoverage) file.returnedMatches = returnedByFile.get(file.relativePath) ?? 0;
 
+  const allScopeHints = sourceSearchScopeHints(fileCoverage);
+
   return {
     pattern,
     mode: opts.regexp ? 'regexp' : 'literal',
     identities,
+    ...(reportedIdentities.length < identities.length ? { identityManifest: reportedIdentities } : {}),
+    identityCoverage: {
+      mode: reportedIdentities.length === identities.length ? 'complete' : 'bounded',
+      returned: reportedIdentities.length,
+      total: identities.length,
+      omitted: identities.length - reportedIdentities.length,
+    },
     matches,
     matchingLines: identities.length,
+    matchingFiles: fileCoverage.length,
     omittedMatches: Math.max(0, identities.length - matches.length),
     fileCoverage,
+    scopeHints: allScopeHints.slice(0, SOURCE_SEARCH_SCOPE_HINT_LIMIT),
+    omittedScopeHints: Math.max(0, allScopeHints.length - SOURCE_SEARCH_SCOPE_HINT_LIMIT),
     scannedFiles: paths.length,
   };
+}
+
+function sourceSearchScopeHints(files: readonly SourceSearchFileCoverage[]): SourceSearchScopeHint[] {
+  const scopes = new Map<string, { matchingLines: number; matchingFiles: number }>();
+  for (const file of files) {
+    const scope = parentPath(file.relativePath);
+    const coverage = scopes.get(scope) ?? { matchingLines: 0, matchingFiles: 0 };
+    coverage.matchingLines += file.matchingLines;
+    coverage.matchingFiles += 1;
+    scopes.set(scope, coverage);
+  }
+  return [...scopes.entries()]
+    .map(([scope, coverage]) => ({ scope, ...coverage }))
+    .sort(
+      (left, right) =>
+        right.matchingLines - left.matchingLines ||
+        right.matchingFiles - left.matchingFiles ||
+        left.scope.localeCompare(right.scope),
+    );
+}
+
+function parentPath(relativePath: string): string {
+  const separator = relativePath.lastIndexOf('/');
+  return separator < 0 ? relativePath : relativePath.slice(0, separator);
 }
 
 function selectRepresentativeIdentities(

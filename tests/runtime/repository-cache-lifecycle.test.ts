@@ -286,7 +286,59 @@ describe('repository cache lifecycle policy', () => {
     expect(result).toEqual(expect.objectContaining({ kind: 'swept', deletedWorktrees: 0 }));
     expect(existsSync(fixture.cacheDir)).toBe(true);
   });
+
+  it('revisits repository namespaces left behind by deleted independent clones', () => {
+    const root = temporaryDirectory('scip-query-global-cache-sweep-');
+    process.env['XDG_CACHE_HOME'] = join(root, 'xdg-cache');
+    const active = managedRepositoryFixture(root, 'active');
+    const orphan = managedRepositoryFixture(root, 'orphan');
+    const orphanLeasePath = join(orphan.snapshot.repositoryCacheDir, 'worktrees', `${orphan.snapshot.worktreeId}.json`);
+    const orphanGenerationDir = join(orphan.snapshot.repositoryCacheDir, 'generations', orphan.snapshot.generationId);
+
+    rmSync(orphan.projectRoot, { recursive: true, force: true });
+
+    maybeSweepRepositoryCache(active.projectRoot, 'test', { force: true, now: () => 0 });
+
+    expect(existsSync(orphan.cacheDir)).toBe(false);
+    expect(existsSync(orphanLeasePath)).toBe(false);
+    expect(existsSync(orphanGenerationDir)).toBe(true);
+
+    maybeSweepRepositoryCache(active.projectRoot, 'test', {
+      force: true,
+      now: () => DEFAULT_SHARED_GENERATION_TTL_MS,
+    });
+
+    expect(existsSync(orphanGenerationDir)).toBe(false);
+  });
 });
+
+function managedRepositoryFixture(
+  root: string,
+  name: string,
+): {
+  projectRoot: string;
+  cacheDir: string;
+  snapshot: SharedGenerationSnapshot;
+} {
+  const projectRoot = join(root, name);
+  mkdirSync(projectRoot);
+  git(projectRoot, ['init', '-q', '-b', 'main']);
+  git(projectRoot, ['config', 'user.email', 'test@example.com']);
+  git(projectRoot, ['config', 'user.name', 'Test User']);
+  writeFileSync(join(projectRoot, 'value.ts'), 'export const value = 1;\n');
+  git(projectRoot, ['add', '.']);
+  git(projectRoot, ['commit', '-qm', 'initial']);
+  const context = resolveGitWorktreeContext(projectRoot)!;
+  const cacheDir = resolveDefaultCacheDir(projectRoot);
+  mkdirSync(cacheDir, { recursive: true });
+  writeFileSync(join(cacheDir, 'owned'), 'cache');
+  const snapshot = sweepSnapshot(context, cacheDir);
+  const generationDir = join(snapshot.repositoryCacheDir, 'generations', snapshot.generationId);
+  mkdirSync(generationDir, { recursive: true });
+  writeFileSync(join(generationDir, 'artifact'), 'generation');
+  writeWorktreeLease(snapshot, cacheDir, 'attached', () => new Date(0));
+  return { projectRoot, cacheDir, snapshot };
+}
 
 function removedWorktreeFixture(prefix: string): {
   root: string;
@@ -376,7 +428,7 @@ function cacheLease(lease: Omit<WorktreeCacheLease, 'ownershipChecksum'>): Workt
 
 function fingerprint(): ProjectInputFingerprint {
   return {
-    version: 2,
+    version: 3,
     languages: ['typescript'],
     pnpmWorkspaces: false,
     typescriptProjectMode: 'single',

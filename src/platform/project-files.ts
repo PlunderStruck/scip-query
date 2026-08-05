@@ -29,6 +29,7 @@ import {
   projectSnapshotPaths,
   projectSnapshotPathState,
 } from './project-snapshot-context.js';
+import { typeScriptProjectInputPaths } from './typescript-projects.js';
 
 export {
   normalizeSafeProjectRelativePath,
@@ -79,7 +80,7 @@ export interface ProjectFileReadOptions {
 }
 
 export interface ProjectInputFingerprint {
-  version: 2;
+  version: 3;
   languages: SupportedLanguage[];
   pnpmWorkspaces: boolean;
   typescriptProjectMode: TypeScriptProjectMode;
@@ -265,23 +266,27 @@ export function fingerprintProjectFiles(
     .filter((path) => !opts.includePath || opts.includePath(path))
     .sort();
   const canonicalProjectRoot = realpathSync(projectRoot);
-  return files.map((relativePath) => {
+  return files.flatMap((relativePath): ProjectFileFingerprint[] => {
     const snapshotFingerprint = projectSnapshotFingerprint(projectRoot, relativePath);
     if (snapshotFingerprint) {
-      return {
-        path: relativePath,
-        size: snapshotFingerprint.fingerprintSize ?? snapshotFingerprint.size,
-        hash: snapshotFingerprint.sha256,
-      };
+      return [
+        {
+          path: relativePath,
+          size: snapshotFingerprint.fingerprintSize ?? snapshotFingerprint.size,
+          hash: snapshotFingerprint.sha256,
+        },
+      ];
     }
     if (projectSnapshotPathState(projectRoot, relativePath) === 'present') {
       const snapshotFile = projectSnapshotFile(projectRoot, relativePath);
       if (snapshotFile) {
-        return {
-          path: relativePath,
-          size: snapshotFile.fingerprintSize ?? snapshotFile.size,
-          hash: snapshotFile.sha256,
-        };
+        return [
+          {
+            path: relativePath,
+            size: snapshotFile.fingerprintSize ?? snapshotFile.size,
+            hash: snapshotFile.sha256,
+          },
+        ];
       }
     }
     const absPath = join(projectRoot, relativePath);
@@ -293,11 +298,13 @@ export function fingerprintProjectFiles(
           throw new Error('external symlink');
         }
         const target = readlinkSync(absPath);
-        return {
-          path: relativePath,
-          size: Buffer.byteLength(target),
-          hash: createHash('sha256').update('symlink\0').update(target).digest('hex'),
-        };
+        return [
+          {
+            path: relativePath,
+            size: Buffer.byteLength(target),
+            hash: createHash('sha256').update('symlink\0').update(target).digest('hex'),
+          },
+        ];
       }
       const hash = createHash('sha256');
       const size = hashFileWithinLimit(
@@ -305,17 +312,26 @@ export function fingerprintProjectFiles(
         { inputKind: 'project fingerprint input', maxBytes: DEFAULT_PROJECT_SOURCE_LIMIT_BYTES },
         (chunk) => hash.update(chunk),
       );
-      return {
-        path: relativePath,
-        size,
-        hash: hash.digest('hex'),
-      };
-    } catch {
-      return {
-        path: relativePath,
-        size: -1,
-        hash: 'unreadable',
-      };
+      return [
+        {
+          path: relativePath,
+          size,
+          hash: hash.digest('hex'),
+        },
+      ];
+    } catch (error) {
+      // `git ls-files` includes tracked paths deleted in the working tree.
+      // Their absence is a proved deletion, not unreadable input. Omitting the
+      // current fingerprint lets buildProjectChangeManifest report `deleted`
+      // while real I/O failures continue to widen the affected set safely.
+      if (isMissingProjectFileError(error)) return [];
+      return [
+        {
+          path: relativePath,
+          size: -1,
+          hash: 'unreadable',
+        },
+      ];
     }
   });
 }
@@ -327,16 +343,45 @@ export function buildProjectInputFingerprint(
 ): ProjectInputFingerprint {
   const configuration = normalizeProjectInputFingerprintConfiguration(languages, opts);
   const configuredMarkerFiles = [
-    ...configuration.typescriptProjects,
+    ...configuration.typescriptProjects.filter((candidate) => isConfiguredProjectFile(projectRoot, candidate)),
     ...(configuration.clojureConfigPath ? [configuration.clojureConfigPath] : []),
   ];
+  const typeScriptInputs = configuration.languages.includes('typescript')
+    ? typeScriptProjectInputPaths(projectRoot, configuration.typescriptProjectMode, configuration.typescriptProjects)
+    : null;
   return {
     ...configuration,
     files: fingerprintProjectFiles(projectRoot, {
-      includePath: (path) => classifyProjectInputPath(path, languages, configuredMarkerFiles) !== 'other',
+      includePath: (path) => {
+        const kind = classifyProjectInputPath(path, languages, configuredMarkerFiles);
+        if (kind === 'other') return false;
+        if (kind !== 'source' || !isTypeScriptSourcePath(path) || !typeScriptInputs) return true;
+        return typeScriptInputs.has(path);
+      },
       includePaths: configuredMarkerFiles,
     }),
   };
+}
+
+function isTypeScriptSourcePath(path: string): boolean {
+  return /\.(?:[cm]?[jt]sx?|vue)$/iu.test(path);
+}
+
+function isConfiguredProjectFile(projectRoot: string, candidatePath: string): boolean {
+  let relativePath: string;
+  try {
+    relativePath = normalizeSafeProjectRelativePath(candidatePath);
+  } catch {
+    return false;
+  }
+  const snapshotState = projectSnapshotPathState(projectRoot, relativePath);
+  if (snapshotState) return snapshotState === 'present';
+  try {
+    return lstatSync(join(projectRoot, relativePath)).isFile();
+  } catch (error) {
+    if (isMissingProjectFileError(error)) return false;
+    throw error;
+  }
 }
 
 /**
@@ -350,7 +395,7 @@ export function normalizeProjectInputFingerprintConfiguration(
   opts: ProjectInputFingerprintOptions,
 ): ProjectInputFingerprintConfiguration {
   return {
-    version: 2,
+    version: 3,
     languages: [...languages].sort(),
     pnpmWorkspaces: opts.typescriptProjectMode !== 'workspace' && opts.pnpmWorkspaces === true,
     typescriptProjectMode: opts.typescriptProjectMode ?? 'single',

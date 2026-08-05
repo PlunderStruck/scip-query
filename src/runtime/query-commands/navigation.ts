@@ -179,7 +179,8 @@ function selectedEvidenceParts(values: readonly string[]): queries.EvidencePart[
 }
 
 function sourceSearchSections(result: queries.SourceSearchResult): ReportSection[] {
-  const identities = sourceSearchIdentities(result);
+  const identities = sourceSearchRenderedIdentities(result);
+  const identityCoverage = sourceSearchIdentityCoverage(result, identities);
   const sourceRows = result.matches.map((match) => {
     const owner = match.ownerShort ? `  in ${match.ownerShort}` : '';
     return renderSourceEvidence({
@@ -193,9 +194,12 @@ function sourceSearchSections(result: queries.SourceSearchResult): ReportSection
     });
   });
   const identityRows = sourceSearchIdentityRows(identities);
-  const recoveryCommands = sourceSearchRecoveryCommands(result, identities);
+  const recoveryCommands = identityCoverage.mode === 'complete' ? sourceSearchRecoveryCommands(result, identities) : [];
   return [
-    { title: `MATCH IDENTITIES (${identities.length}/${result.matchingLines}, COMPLETE)`, rows: identityRows },
+    {
+      title: `MATCH IDENTITIES (${identities.length}/${result.matchingLines}, ${identityCoverage.mode.toUpperCase()})`,
+      rows: identityRows,
+    },
     {
       title: `REPRESENTATIVE SOURCE (${result.matches.length}/${result.matchingLines} WINDOWS)`,
       rows: sourceRows,
@@ -203,17 +207,56 @@ function sourceSearchSections(result: queries.SourceSearchResult): ReportSection
     {
       title: 'SEARCH COVERAGE',
       rows: [
-        `  Identity coverage: ${identities.length}/${result.matchingLines} matching line(s) across ${result.fileCoverage?.length ?? 0} file(s); complete.`,
+        `  Exact cardinality: ${result.matchingLines} matching line(s) across ${result.matchingFiles ?? result.fileCoverage?.length ?? 0} file(s).`,
+        `  Identity manifest: ${identities.length}/${result.matchingLines} matching line(s); ${identityCoverage.mode === 'complete' ? 'complete' : `${identityCoverage.omitted} lower-ranked identities withheld before rendering`}.`,
         `  Source materialization: ${result.matches.length}/${result.matchingLines} window(s); ${result.omittedMatches} exact match location(s) were not expanded into source.`,
-        ...(recoveryCommands.length > 0
-          ? [
-              `  Recover every unmaterialized owning unit in ${recoveryCommands.length} bounded batch command(s):`,
-              ...recoveryCommands.map((command) => `  ${command}`),
-              `  Or inspect any chosen locations together at behavior level: scip-query inspect --at 'path:line' --at 'path:line' --view behavior`,
-            ]
-          : ['  Every matching source window was materialized; no drilldown remains.']),
+        ...(identityCoverage.mode === 'bounded'
+          ? sourceSearchScopeRows(result)
+          : recoveryCommands.length > 0
+            ? [
+                `  Recover every unmaterialized owning unit in ${recoveryCommands.length} bounded batch command(s):`,
+                ...recoveryCommands.map((command) => `  ${command}`),
+                `  Or inspect any chosen locations together at behavior level: scip-query inspect --at 'path:line' --at 'path:line' --view behavior`,
+              ]
+            : ['  Every matching source window was materialized; no drilldown remains.']),
       ],
     },
+  ];
+}
+
+function sourceSearchIdentityCoverage(
+  result: queries.SourceSearchResult,
+  identities: readonly queries.SourceSearchIdentity[],
+): queries.SourceSearchIdentityCoverage {
+  return (
+    result.identityCoverage ?? {
+      mode: identities.length === result.matchingLines ? 'complete' : 'bounded',
+      returned: identities.length,
+      total: result.matchingLines,
+      omitted: Math.max(0, result.matchingLines - identities.length),
+    }
+  );
+}
+
+function sourceSearchScopeRows(result: queries.SourceSearchResult): string[] {
+  const hints = result.scopeHints ?? [];
+  return [
+    '  Broad selector: identity enumeration stopped before output transport; there is no cursor to drain.',
+    ...(hints.length > 0
+      ? [
+          '  Highest-coverage scopes available for focused re-query:',
+          ...hints.map(
+            (hint) =>
+              `    ${hint.scope}: ${hint.matchingLines} matching line(s) across ${hint.matchingFiles} file(s); scip-query search ${shellArgument(result.pattern)} --scope ${shellArgument(hint.scope)}`,
+          ),
+        ]
+      : []),
+    ...((result.omittedScopeHints ?? 0) > 0
+      ? [
+          `    ... ${result.omittedScopeHints} additional matching scope(s) remain recoverable by narrowing the selector.`,
+        ]
+      : []),
+    '  Prefer a more distinctive literal or one relevant scope; use inspect to batch the chosen anchors.',
   ];
 }
 
@@ -230,6 +273,10 @@ function sourceSearchIdentities(result: queries.SourceSearchResult): queries.Sou
       fileKind: match.fileKind ?? 'source',
     }))
   );
+}
+
+function sourceSearchRenderedIdentities(result: queries.SourceSearchResult): queries.SourceSearchIdentity[] {
+  return result.identityManifest ?? sourceSearchIdentities(result);
 }
 
 function sourceSearchIdentityRows(identities: readonly queries.SourceSearchIdentity[]): string[] {
@@ -790,25 +837,25 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   sectionedQueryCommand({
     id: 'search',
     command: 'search <text>',
-    description: 'List every indexed text-match identity and preview a representative subset of nearby source',
+    description: 'Count indexed text matches and preview a bounded, recoverable identity and source manifest',
     options: [
       option('-s, --scope <path>', 'Limit the search to indexed paths matching this text'),
       option('-C, --context <n>', 'Source lines before and after each match', parseNonNegativeInteger, 6),
       option(
         '-n, --limit <n>',
-        'Source windows to materialize; match identities remain complete',
+        'Source windows to materialize; broad identity manifests remain bounded',
         parsePositiveInteger,
         12,
       ),
-      option('--full', 'Materialize source for every match; identity coverage is already complete without it'),
+      option('--full', 'Materialize source for every match after deliberately narrowing broad selectors'),
       option('--regexp', 'Treat the search text as a bounded regular expression'),
       option('-i, --ignore-case', 'Ignore case'),
     ],
     agent: agentContract(
       'Where does this exact text occur in indexed source, and which symbol owns each line?',
-      'all file and line identities with owners, plus bounded representative source and exact batch recovery commands',
+      'exact cardinality, bounded identities and source, and scope commands that recover withheld matches',
       ['pattern'],
-      'complete',
+      'bounded',
     ),
     docs: doc('Navigation', ["scip-query search 'eventName'", "scip-query search 'send.*event' --regexp --scope src"]),
     query: ({ db, args, opts }) =>
@@ -830,16 +877,19 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       omitted: 0,
     }),
     agentResult: (result) => ({
+      identityCoverage: result.identityCoverage,
       mode: result.mode,
       scannedFiles: result.scannedFiles,
-      returnedMatches: sourceSearchIdentities(result).length,
+      returnedMatches: sourceSearchRenderedIdentities(result).length,
       totalMatches: result.matchingLines,
-      omittedMatches: 0,
+      omittedMatches: sourceSearchIdentityCoverage(result, sourceSearchRenderedIdentities(result)).omitted,
       materializedSourceWindows: result.matches.length,
       unmaterializedSourceWindows: result.omittedMatches,
-      matchIdentities: sourceSearchIdentities(result).map(
+      matchIdentities: sourceSearchRenderedIdentities(result).map(
         (match) => `${match.relativePath}:${displayLine(match.focusLine)}`,
       ),
+      scopeHints: result.scopeHints,
+      omittedScopeHints: result.omittedScopeHints,
     }),
     sections: sourceSearchSections,
   }),

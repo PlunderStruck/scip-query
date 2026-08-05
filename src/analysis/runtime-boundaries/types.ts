@@ -1,35 +1,23 @@
+import type {
+  StaticValueDerivation,
+  StaticValueDerivationKind,
+  StaticValuePrecision,
+  StaticValueTerm,
+  ValueFlowSourceSpan,
+} from '../../symbols/graph/value-flow.js';
+
 /** Compatibility projection used by current renderers while evidence axes remain independent. */
 export type BoundaryEvidenceStrength = 'exact' | 'derived' | 'candidate';
 
-export type BoundaryDerivationKind = 'direct' | 'mechanically-derived' | 'heuristic';
-export type BoundaryValuePrecision = 'literal' | 'finite-set' | 'constrained-pattern' | 'symbolic' | 'unknown';
+export type BoundaryDerivationKind = StaticValueDerivationKind;
+export type BoundaryValuePrecision = StaticValuePrecision;
 export type BoundaryRuntimeModality = 'must' | 'may' | 'unknown';
 export type BoundaryResolutionState = 'locally-linked' | 'external' | 'unresolved' | 'ambiguous';
 export type BoundarySourceScope = 'production' | 'test' | 'fixture' | 'example' | 'generated' | 'script' | 'unknown';
 
-export type BoundaryTerm =
-  | { kind: 'literal'; value: string }
-  | { kind: 'finite-set'; values: string[] }
-  | { kind: 'parameter'; callable: string; position: number; name: string | null }
-  | { kind: 'concat'; parts: BoundaryTerm[] }
-  | { kind: 'property'; base: BoundaryTerm; key: string }
-  | { kind: 'pattern'; language: string; value: string }
-  | { kind: 'symbol'; symbol: string }
-  | { kind: 'unknown'; reason: string };
-
-export interface BoundaryDerivation {
-  kind: BoundaryDerivationKind;
-  rule: string;
-  ruleVersion: string;
-  inputFactIds: string[];
-  sourceSpans: BoundarySourceLocation[];
-}
-
-export interface BoundarySourceLocation {
-  file: string;
-  startLine: number;
-  endLine: number;
-}
+export type BoundaryTerm = StaticValueTerm;
+export type BoundaryDerivation = StaticValueDerivation;
+export type BoundarySourceLocation = ValueFlowSourceSpan;
 
 export interface BoundaryOwner {
   file: string;
@@ -83,6 +71,14 @@ export interface BoundaryFrontier {
   reason: string;
   missingKeyParts: string[];
   sourceScope: BoundarySourceScope;
+  /** Optional on persisted graphs written before standalone analysis frontiers. */
+  kind?: 'observation' | 'call-resolution' | 'value-flow';
+  /** Standalone fields describe a stopped proof that has no observation yet. */
+  action?: string;
+  strength?: BoundaryEvidenceStrength;
+  source?: BoundarySourceLocation;
+  ownerShortName?: string | null;
+  address?: string;
 }
 
 /** A factorized rendezvous: participants attach once instead of forming a pairwise product. */
@@ -105,12 +101,43 @@ export interface BoundaryExtractorCoverage {
   errors: number;
 }
 
+export interface RuntimeBoundaryFileCoverage {
+  file: string;
+  hasAst: boolean;
+  observationIds: string[];
+  extractors: BoundaryExtractorCoverage[];
+  extractionErrors: string[];
+}
+
+export type RuntimeBoundaryPhaseId =
+  | 'direct-extraction'
+  | 'http-summary'
+  | 'http-mount'
+  | 'carrier'
+  | 'relations'
+  | 'links'
+  | 'frontiers';
+
+export interface RuntimeBoundaryPhaseCoverage {
+  id: RuntimeBoundaryPhaseId;
+  durationMs: number;
+  inputFacts: number;
+  outputFacts: number;
+  filesVisited?: number;
+  filesReused?: number;
+  factsReused?: number;
+  factsInvalidated?: number;
+}
+
 export interface RuntimeBoundaryCoverage {
   filesScanned: number;
   filesWithAst: number;
   filesWithoutAst: number;
+  filesReused?: number;
   extractors: BoundaryExtractorCoverage[];
   extractionErrors: string[];
+  /** Optional so readers remain compatible with graphs written before phase instrumentation. */
+  phases?: RuntimeBoundaryPhaseCoverage[];
 }
 
 export interface RuntimeBoundaryGraph {
@@ -121,4 +148,6 @@ export interface RuntimeBoundaryGraph {
   links: BoundaryLink[];
   frontiers: BoundaryFrontier[];
   coverage: RuntimeBoundaryCoverage;
+  /** Optional for backward compatibility with runtime-boundaries-v5 graphs. */
+  fileCoverage?: RuntimeBoundaryFileCoverage[];
 }

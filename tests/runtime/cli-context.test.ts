@@ -53,6 +53,7 @@ describe('cli context', () => {
     expect(sharedCachePreparationEligible('install-skills')).toBe(false);
     expect(sharedCachePreparationEligible('init')).toBe(false);
     expect(sharedCachePreparationEligible('setup')).toBe(false);
+    expect(sharedCachePreparationEligible('suppress')).toBe(false);
   });
 
   it('reuses an activated project and Git context only for the matching root', () => {
@@ -139,7 +140,7 @@ describe('cli context', () => {
           status: 'complete',
           updatedAt: '2026-07-29T00:00:00.000Z',
           fingerprint: {
-            version: 2,
+            version: 3,
             languages: ['typescript'],
             pnpmWorkspaces: false,
             typescriptProjectMode: 'single',

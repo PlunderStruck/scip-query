@@ -5,8 +5,8 @@ import { getSourceFiles } from '../../source/primitives/source-fileset.js';
 import { getSourceText } from '../../source/primitives/source-text.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
+import { evaluateStaticValue as evaluateBoundaryValue } from '../../symbols/graph/static-value-flow.js';
 import { boundaryFileContext } from './extractors.js';
-import { evaluateBoundaryValue } from './value-evaluator.js';
 import type { BoundaryKeyPart, BoundaryObservation } from './types.js';
 
 const MAX_REEXPORT_DEPTH = 4;
@@ -18,11 +18,24 @@ interface HttpMount {
   targetFiles: string[];
 }
 
+export interface HttpMountCompositionResult {
+  observations: BoundaryObservation[];
+  filesInspected: number;
+  mounts: number;
+}
+
 /** Compose proved framework mount prefixes onto route registrations. */
 export function composeHttpMounts(
   db: ScipDatabase,
   observations: readonly BoundaryObservation[],
 ): BoundaryObservation[] {
+  return composeHttpMountsWithCoverage(db, observations).observations;
+}
+
+export function composeHttpMountsWithCoverage(
+  db: ScipDatabase,
+  observations: readonly BoundaryObservation[],
+): HttpMountCompositionResult {
   const handlersByFile = new Map<string, BoundaryObservation[]>();
   for (const observation of observations) {
     if (observation.action !== 'http.handle' || observation.sourceScope !== 'production') continue;
@@ -32,7 +45,8 @@ export function composeHttpMounts(
   }
 
   const derived: BoundaryObservation[] = [];
-  for (const mount of collectHttpMounts(db)) {
+  const collected = collectHttpMounts(db);
+  for (const mount of collected.mounts) {
     for (const targetFile of mount.targetFiles) {
       for (const handler of handlersByFile.get(targetFile) ?? []) {
         const path = handler.keyParts.find((part) => part.name === 'path');
@@ -89,12 +103,17 @@ export function composeHttpMounts(
       }
     }
   }
-  return derived;
+  return {
+    observations: derived,
+    filesInspected: collected.filesInspected,
+    mounts: collected.mounts.length,
+  };
 }
 
-function collectHttpMounts(db: ScipDatabase): HttpMount[] {
+function collectHttpMounts(db: ScipDatabase): { mounts: HttpMount[]; filesInspected: number } {
   const mounts: HttpMount[] = [];
-  for (const file of getSourceFiles(db)) {
+  const files = getSourceFiles(db);
+  for (const file of files) {
     const source = getSourceText(db, file);
     if (!hasExpressLikeImport(source)) continue;
     const context = boundaryFileContext(db, file);
@@ -122,7 +141,7 @@ function collectHttpMounts(db: ScipDatabase): HttpMount[] {
       });
     });
   }
-  return mounts;
+  return { mounts, filesInspected: files.length };
 }
 
 function resolveMountedTargetFiles(db: ScipDatabase, importerFile: string, expression: SyntaxNode): string[] {

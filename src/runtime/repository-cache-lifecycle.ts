@@ -26,6 +26,8 @@ import { readSmallArtifactText } from '../platform/bounded-file.js';
 export const DEFAULT_SHARED_GENERATION_TTL_MS = 60 * 60 * 1_000;
 export const DEFAULT_REPOSITORY_CACHE_BUDGET_BYTES = 2 * 1024 * 1024 * 1024;
 export const DEFAULT_REPOSITORY_SWEEP_INTERVAL_MS = 5 * 60 * 1_000;
+const GLOBAL_REPOSITORY_SWEEP_STATE = 'gc-state.json';
+const GLOBAL_REPOSITORY_SWEEP_LOCK = 'gc.lock';
 
 export interface RepositoryCacheSweepPolicy {
   generationTtlMs: number;
@@ -190,8 +192,25 @@ export function maybeSweepRepositoryCache(
   const context = resolveGitWorktreeContext(projectRoot);
   if (!context) return { kind: 'unavailable' };
   const repositoryDir = join(resolveScipQueryCacheRoot(), 'repositories', context.repositoryId);
-  if (!existsSync(repositoryDir)) return { kind: 'unavailable' };
   const nowMs = (opts.now ?? Date.now)();
+  const result = existsSync(repositoryDir)
+    ? sweepRepositoryCacheDirectory(projectRoot, repositoryDir, context.repositoryId, cliVersion, nowMs, opts)
+    : ({ kind: 'unavailable' } satisfies RepositoryCacheSweepResult);
+  maybeSweepInactiveRepositoryCaches(projectRoot, context.repositoryId, cliVersion, nowMs, opts);
+  return result;
+}
+
+function sweepRepositoryCacheDirectory(
+  projectRoot: string,
+  repositoryDir: string,
+  repositoryId: string,
+  cliVersion: string,
+  nowMs: number,
+  opts: {
+    force?: boolean;
+    policy?: Partial<RepositoryCacheSweepPolicy>;
+  },
+): RepositoryCacheSweepResult {
   const statePath = join(repositoryDir, 'gc-state.json');
   const previous = readGcState(statePath);
   if (!opts.force && previous && nowMs - Date.parse(previous.lastSweepAt) < DEFAULT_REPOSITORY_SWEEP_INTERVAL_MS) {
@@ -201,12 +220,7 @@ export function maybeSweepRepositoryCache(
   const repositoryLock = acquireRepositoryCacheLock(repositoryDir, { now: () => nowMs });
   if (!repositoryLock) return { kind: 'busy' };
   try {
-    const inventory = buildSweepInventory(
-      projectRoot,
-      repositoryDir,
-      context.repositoryId,
-      previous?.unreferencedSince ?? {},
-    );
+    const inventory = buildSweepInventory(projectRoot, repositoryDir, repositoryId, previous?.unreferencedSince ?? {});
     const plan = planRepositoryCacheSweep({
       nowMs,
       ...inventory,
@@ -218,6 +232,12 @@ export function maybeSweepRepositoryCache(
     let deletedBytes = 0;
     let deletedWorktrees = 0;
     for (const entry of plan.deleteWorktrees) {
+      if (!validManagedWorktreeLease(entry.lease)) continue;
+      if (!existsSync(entry.lease.localCacheDir)) {
+        rmSync(entry.leasePath, { force: true });
+        deletedWorktrees += 1;
+        continue;
+      }
       if (!safeManagedWorktreeCache(entry.lease)) continue;
       const localLock = acquireProcessFileLock(join(entry.lease.localCacheDir, 'cache-lifecycle.lock'));
       if (!localLock) continue;
@@ -267,6 +287,54 @@ export function maybeSweepRepositoryCache(
     return { kind: 'failed', error: error instanceof Error ? error.message : String(error) };
   } finally {
     repositoryLock.release();
+  }
+}
+
+/**
+ * Revisit repository namespaces that no live command can name anymore. A
+ * repository namespace is one shared-cache directory keyed by Git common-dir
+ * identity; global discovery is what lets deleted benchmark clones age out.
+ */
+function maybeSweepInactiveRepositoryCaches(
+  fallbackProjectRoot: string,
+  activeRepositoryId: string,
+  cliVersion: string,
+  nowMs: number,
+  opts: {
+    force?: boolean;
+    policy?: Partial<RepositoryCacheSweepPolicy>;
+  },
+): void {
+  const repositoriesRoot = join(resolveScipQueryCacheRoot(), 'repositories');
+  if (!existsSync(repositoriesRoot)) return;
+  const statePath = join(repositoriesRoot, GLOBAL_REPOSITORY_SWEEP_STATE);
+  const previousSweepAt = readGlobalRepositorySweepAt(statePath);
+  if (!opts.force && previousSweepAt !== undefined && nowMs - previousSweepAt < DEFAULT_REPOSITORY_SWEEP_INTERVAL_MS) {
+    return;
+  }
+  const globalLock = acquireProcessFileLock(join(repositoriesRoot, GLOBAL_REPOSITORY_SWEEP_LOCK));
+  if (!globalLock) return;
+  try {
+    for (const repositoryId of safeReadDirectory(repositoriesRoot)) {
+      if (repositoryId === activeRepositoryId || !/^[a-f0-9]{24}$/.test(repositoryId)) continue;
+      const repositoryDir = join(repositoriesRoot, repositoryId);
+      let stat;
+      try {
+        stat = lstatSync(repositoryDir);
+      } catch {
+        continue;
+      }
+      if (!stat.isDirectory() || stat.isSymbolicLink()) continue;
+      const projectRoot = repositoryProjectRootHint(repositoryDir) ?? fallbackProjectRoot;
+      sweepRepositoryCacheDirectory(projectRoot, repositoryDir, repositoryId, cliVersion, nowMs, opts);
+    }
+    writeJsonAtomic(
+      statePath,
+      { version: 1, lastSweepAt: new Date(nowMs).toISOString() },
+      { spacing: 2, trailingNewline: true },
+    );
+  } finally {
+    globalLock.release();
   }
 }
 
@@ -377,7 +445,7 @@ function buildSweepInventory(
     leases.push({
       leasePath,
       lease,
-      managed: lease.repositoryId === repositoryId && safeManagedWorktreeCache(lease),
+      managed: lease.repositoryId === repositoryId && validManagedWorktreeLease(lease),
       live: livePaths.has(projectPath) || existsSync(projectPath),
       busy: hasLiveLocalCacheProcess(lease),
     });
@@ -427,10 +495,17 @@ function buildSweepInventory(
   return { leases, generations, locks, temporaries };
 }
 
-function safeManagedWorktreeCache(lease: WorktreeCacheLease): boolean {
+function validManagedWorktreeLease(lease: WorktreeCacheLease): boolean {
   if (lease.ownershipChecksum !== worktreeLeaseOwnershipChecksum(lease)) return false;
   if (canonicalCacheIdentity(lease.localCacheDir) !== canonicalCacheIdentity(resolveDefaultCacheDir(lease.projectRoot)))
     return false;
+  const projectsRoot = canonicalCacheIdentity(join(resolveScipQueryCacheRoot(), 'projects'));
+  const cachePath = canonicalCacheIdentity(lease.localCacheDir);
+  return cachePath.startsWith(`${projectsRoot}${sep}`);
+}
+
+function safeManagedWorktreeCache(lease: WorktreeCacheLease): boolean {
+  if (!validManagedWorktreeLease(lease)) return false;
   const managedRoot = resolve(resolveScipQueryCacheRoot());
   const projectsRoot = resolve(join(managedRoot, 'projects'));
   const cachePath = resolve(lease.localCacheDir);
@@ -454,6 +529,15 @@ function safeManagedWorktreeCache(lease: WorktreeCacheLease): boolean {
   } catch {
     return false;
   }
+}
+
+function repositoryProjectRootHint(repositoryDir: string): string | undefined {
+  for (const entry of safeReadDirectory(join(repositoryDir, 'worktrees'))) {
+    if (!entry.endsWith('.json')) continue;
+    const lease = readLease(join(repositoryDir, 'worktrees', entry));
+    if (lease) return lease.projectRoot;
+  }
+  return undefined;
 }
 
 function hasLiveLocalCacheProcess(lease: WorktreeCacheLease, ignoreLifecycleLock = false): boolean {
@@ -518,6 +602,20 @@ function readGcState(path: string): RepositoryGcState | null {
     return parsed as RepositoryGcState;
   } catch {
     return null;
+  }
+}
+
+function readGlobalRepositorySweepAt(path: string): number | undefined {
+  try {
+    const parsed = JSON.parse(readSmallArtifactText(path, 'global repository cache GC state')) as {
+      version?: unknown;
+      lastSweepAt?: unknown;
+    };
+    if (parsed.version !== 1 || typeof parsed.lastSweepAt !== 'string') return undefined;
+    const value = Date.parse(parsed.lastSweepAt);
+    return Number.isFinite(value) ? value : undefined;
+  } catch {
+    return undefined;
   }
 }
 

@@ -22,7 +22,7 @@ function writeMeta(
         status: 'complete',
         updatedAt: new Date().toISOString(),
         fingerprint: {
-          version: 2,
+          version: 3,
           languages: [...languages].sort(),
           pnpmWorkspaces: false,
           typescriptProjectMode: 'single',

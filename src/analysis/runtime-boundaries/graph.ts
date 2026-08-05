@@ -1,10 +1,13 @@
 import { createHash } from 'node:crypto';
+import { detectAstLanguage, isVueSfcPath } from '../../source/ast/ast-language.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getSourceFiles } from '../../source/primitives/source-fileset.js';
+import { getSourceText } from '../../source/primitives/source-text.js';
 import { BOUNDARY_EXTRACTORS, boundaryFileContext } from './extractors.js';
 import { deriveCarrierDiscriminators } from './carrier-discriminators.js';
-import { composeHttpMounts } from './http-mounts.js';
+import { composeHttpMountsWithCoverage } from './http-mounts.js';
 import { propagateCompilerResolvedHttpSummaries } from './http-summaries.js';
+import { deriveDatabaseWorkQueueObservations } from './database-work-queues.js';
 import type {
   BoundaryEvidenceStrength,
   BoundaryFrontier,
@@ -12,10 +15,15 @@ import type {
   BoundaryLink,
   BoundaryObservation,
   BoundaryRelationGroup,
+  RuntimeBoundaryFileCoverage,
   RuntimeBoundaryGraph,
+  RuntimeBoundaryPhaseCoverage,
+  RuntimeBoundaryPhaseId,
 } from './types.js';
 
-export const RUNTIME_BOUNDARY_EXTRACTOR_VERSION = 'runtime-boundaries-v5';
+// Increment whenever direct facts or any derived propagation rule changes so an
+// older persisted graph can never be incrementally mixed with newer semantics.
+export const RUNTIME_BOUNDARY_EXTRACTOR_VERSION = 'runtime-boundaries-v9';
 
 interface GroupRule {
   id: string;
@@ -71,42 +79,58 @@ const GROUP_RULES: readonly GroupRule[] = [
 
 const MAX_MATERIALIZED_PAIRS_PER_GROUP = 64;
 
-/** Extract and factor runtime evidence from all indexed source files. */
-export function collectRuntimeBoundaryGraph(db: ScipDatabase): RuntimeBoundaryGraph {
+export interface RuntimeBoundaryCollectionOptions {
+  previousGraph?: RuntimeBoundaryGraph;
+  affectedFiles?: readonly string[];
+}
+
+/** Extract changed-file facts, retain covered unchanged-file facts, and globally refactor their relationships. */
+export function collectRuntimeBoundaryGraph(
+  db: ScipDatabase,
+  opts: RuntimeBoundaryCollectionOptions = {},
+): RuntimeBoundaryGraph {
   const files = getSourceFiles(db);
-  const observations: BoundaryObservation[] = [];
-  const extractionErrors: string[] = [];
-  const coverage = new Map(
-    BOUNDARY_EXTRACTORS.map((extractor) => [
-      extractor.id,
-      { id: extractor.id, applicableFiles: 0, observations: 0, errors: 0 },
-    ]),
+  const fileSet = new Set(files);
+  const affectedFiles = new Set((opts.affectedFiles ?? []).map(normalizeBoundaryFile));
+  const previousFileCoverage = opts.previousGraph?.fileCoverage;
+  const incrementallyReusable =
+    affectedFiles.size > 0 &&
+    opts.previousGraph?.extractorVersion === RUNTIME_BOUNDARY_EXTRACTOR_VERSION &&
+    previousFileCoverage !== undefined &&
+    previousFileCoverage.length === opts.previousGraph.coverage.filesScanned;
+  const retainedFileCoverage = incrementallyReusable
+    ? previousFileCoverage.filter((entry) => fileSet.has(entry.file) && !affectedFiles.has(entry.file))
+    : [];
+  const retainedObservationIds = new Set(retainedFileCoverage.flatMap((entry) => entry.observationIds));
+  const retainedObservations = incrementallyReusable
+    ? opts.previousGraph!.observations.filter(
+        (observation) => retainedObservationIds.has(observation.id) && fileSet.has(observation.source.file),
+      )
+    : [];
+  const filesToExtract = incrementallyReusable ? files.filter((file) => affectedFiles.has(file)) : files;
+  const phases: RuntimeBoundaryPhaseCoverage[] = [];
+  const previousDirectObservationCount =
+    previousFileCoverage?.reduce((total, entry) => total + entry.observationIds.length, 0) ?? 0;
+  let phaseStartedAt = performance.now();
+  const extracted = extractBoundaryFiles(db, filesToExtract);
+  recordPhase(phases, 'direct-extraction', phaseStartedAt, filesToExtract.length, extracted.observations.length, {
+    filesVisited: filesToExtract.length,
+    filesReused: retainedFileCoverage.length,
+    factsReused: retainedObservations.length,
+    factsInvalidated: Math.max(0, previousDirectObservationCount - retainedObservations.length),
+  });
+  const fileCoverage = [...retainedFileCoverage, ...extracted.fileCoverage].sort((left, right) =>
+    left.file.localeCompare(right.file),
   );
-  let filesWithAst = 0;
-
-  for (const file of files) {
-    const context = boundaryFileContext(db, file);
-    if (!context) continue;
-    filesWithAst += 1;
-    for (const extractor of BOUNDARY_EXTRACTORS) {
-      if (!extractor.supports(context)) continue;
-      const extractorCoverage = coverage.get(extractor.id)!;
-      extractorCoverage.applicableFiles += 1;
-      try {
-        const extracted = extractor.extract(context);
-        extractorCoverage.observations += extracted.length;
-        observations.push(...extracted);
-      } catch (error) {
-        extractorCoverage.errors += 1;
-        extractionErrors.push(
-          `${extractor.id} failed for ${file}: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
-    }
-  }
-
-  const primary = deduplicateObservations(observations);
-  const propagated = propagateCompilerResolvedHttpSummaries(db, primary);
+  const coverage = aggregateFileCoverage(fileCoverage);
+  const extractionErrors = fileCoverage.flatMap((entry) => entry.extractionErrors);
+  const primary = deduplicateObservations([...retainedObservations, ...extracted.observations]);
+  const withDatabaseQueues = deduplicateObservations([...primary, ...deriveDatabaseWorkQueueObservations(primary)]);
+  phaseStartedAt = performance.now();
+  const propagated = propagateCompilerResolvedHttpSummaries(db, withDatabaseQueues);
+  recordPhase(phases, 'http-summary', phaseStartedAt, withDatabaseQueues.length, propagated.observations.length, {
+    filesVisited: propagated.filesInspected,
+  });
   coverage.set('builtin.wrapper', {
     id: 'builtin.wrapper',
     applicableFiles: propagated.filesInspected,
@@ -114,9 +138,18 @@ export function collectRuntimeBoundaryGraph(db: ScipDatabase): RuntimeBoundaryGr
     errors: propagated.errors.length,
   });
   extractionErrors.push(...propagated.errors);
-  const withHttpDerivations = deduplicateObservations([...primary, ...propagated.observations]);
-  const withMounts = deduplicateObservations([...withHttpDerivations, ...composeHttpMounts(db, withHttpDerivations)]);
+  const withHttpDerivations = deduplicateObservations([...withDatabaseQueues, ...propagated.observations]);
+  phaseStartedAt = performance.now();
+  const mountComposition = composeHttpMountsWithCoverage(db, withHttpDerivations);
+  recordPhase(phases, 'http-mount', phaseStartedAt, withHttpDerivations.length, mountComposition.observations.length, {
+    filesVisited: mountComposition.filesInspected,
+  });
+  const withMounts = deduplicateObservations([...withHttpDerivations, ...mountComposition.observations]);
+  phaseStartedAt = performance.now();
   const carriers = deriveCarrierDiscriminators(db, withMounts);
+  recordPhase(phases, 'carrier', phaseStartedAt, withMounts.length, carriers.observations.length, {
+    filesVisited: carriers.filesInspected,
+  });
   coverage.set('builtin.carrier', {
     id: 'builtin.carrier',
     applicableFiles: carriers.bodySummaries,
@@ -125,24 +158,122 @@ export function collectRuntimeBoundaryGraph(db: ScipDatabase): RuntimeBoundaryGr
   });
   extractionErrors.push(...carriers.errors);
   const deduplicated = deduplicateObservations([...withMounts, ...carriers.observations]);
+  phaseStartedAt = performance.now();
   const relationGroups = buildRelationGroups(deduplicated);
+  recordPhase(phases, 'relations', phaseStartedAt, deduplicated.length, relationGroups.length);
+  phaseStartedAt = performance.now();
   const links = materializeBoundedLinks(deduplicated, relationGroups);
+  recordPhase(phases, 'links', phaseStartedAt, relationGroups.length, links.length);
   applyResolutionState(deduplicated, relationGroups);
+  phaseStartedAt = performance.now();
+  const frontiers = deduplicateFrontiers([
+    ...unresolvedFrontiers(deduplicated, relationGroups),
+    ...propagated.frontiers,
+  ]);
+  recordPhase(phases, 'frontiers', phaseStartedAt, deduplicated.length, frontiers.length);
   return {
     schemaVersion: 2,
     extractorVersion: RUNTIME_BOUNDARY_EXTRACTOR_VERSION,
     observations: deduplicated,
     relationGroups,
     links,
-    frontiers: unresolvedFrontiers(deduplicated, relationGroups),
+    frontiers,
     coverage: {
       filesScanned: files.length,
-      filesWithAst,
-      filesWithoutAst: files.length - filesWithAst,
+      filesWithAst: fileCoverage.filter((entry) => entry.hasAst).length,
+      filesWithoutAst: fileCoverage.filter((entry) => !entry.hasAst).length,
+      ...(incrementallyReusable ? { filesReused: retainedFileCoverage.length } : {}),
       extractors: [...coverage.values()],
       extractionErrors,
+      phases,
     },
+    fileCoverage,
   };
+}
+
+function recordPhase(
+  phases: RuntimeBoundaryPhaseCoverage[],
+  id: RuntimeBoundaryPhaseId,
+  startedAt: number,
+  inputFacts: number,
+  outputFacts: number,
+  details: Pick<RuntimeBoundaryPhaseCoverage, 'filesVisited' | 'filesReused' | 'factsReused' | 'factsInvalidated'> = {},
+): void {
+  phases.push({
+    id,
+    durationMs: Math.max(0, performance.now() - startedAt),
+    inputFacts,
+    outputFacts,
+    ...details,
+  });
+}
+
+function extractBoundaryFiles(
+  db: ScipDatabase,
+  files: readonly string[],
+): { observations: BoundaryObservation[]; fileCoverage: RuntimeBoundaryFileCoverage[] } {
+  const observations: BoundaryObservation[] = [];
+  const fileCoverage: RuntimeBoundaryFileCoverage[] = [];
+  for (const file of files) {
+    const source = getSourceText(db, file);
+    const applicableExtractors = BOUNDARY_EXTRACTORS.filter((extractor) => extractor.supports(source));
+    const context = applicableExtractors.length > 0 ? boundaryFileContext(db, file) : null;
+    const coverage: RuntimeBoundaryFileCoverage = {
+      file,
+      hasAst: context !== null || boundaryAstEligible(file, source),
+      observationIds: [],
+      extractors: [],
+      extractionErrors: [],
+    };
+    if (context) {
+      for (const extractor of applicableExtractors) {
+        const extractorCoverage = { id: extractor.id, applicableFiles: 1, observations: 0, errors: 0 };
+        try {
+          const extracted = extractor.extract(context);
+          extractorCoverage.observations = extracted.length;
+          observations.push(...extracted);
+          coverage.observationIds.push(...extracted.map((observation) => observation.id));
+        } catch (error) {
+          extractorCoverage.errors = 1;
+          coverage.extractionErrors.push(
+            `${extractor.id} failed for ${file}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+        coverage.extractors.push(extractorCoverage);
+      }
+    }
+    fileCoverage.push(coverage);
+  }
+  return { observations, fileCoverage };
+}
+
+function boundaryAstEligible(file: string, source: string): boolean {
+  if (!source) return false;
+  if (isVueSfcPath(file)) return /<script\b/iu.test(source);
+  return detectAstLanguage(file) !== null;
+}
+
+function aggregateFileCoverage(fileCoverage: readonly RuntimeBoundaryFileCoverage[]) {
+  const coverage = new Map(
+    BOUNDARY_EXTRACTORS.map((extractor) => [
+      extractor.id,
+      { id: extractor.id, applicableFiles: 0, observations: 0, errors: 0 },
+    ]),
+  );
+  for (const file of fileCoverage) {
+    for (const extractor of file.extractors) {
+      const total = coverage.get(extractor.id);
+      if (!total) continue;
+      total.applicableFiles += extractor.applicableFiles;
+      total.observations += extractor.observations;
+      total.errors += extractor.errors;
+    }
+  }
+  return coverage;
+}
+
+function normalizeBoundaryFile(file: string): string {
+  return file.replaceAll('\\', '/').replace(/^\.\//u, '');
 }
 
 export function buildRelationGroups(observations: readonly BoundaryObservation[]): BoundaryRelationGroup[] {
@@ -305,6 +436,12 @@ function unresolvedFrontiers(
       };
     })
     .sort((left, right) => left.observationId.localeCompare(right.observationId));
+}
+
+function deduplicateFrontiers(frontiers: readonly BoundaryFrontier[]): BoundaryFrontier[] {
+  return [...new Map(frontiers.map((frontier) => [frontier.observationId, frontier])).values()].sort((left, right) =>
+    left.observationId.localeCompare(right.observationId),
+  );
 }
 
 function resolvedKeys(observation: BoundaryObservation, keyNames: readonly string[]): BoundaryKeyPart[] | null {

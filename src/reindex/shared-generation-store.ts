@@ -1304,7 +1304,7 @@ function isProjectInputFingerprint(value: unknown): value is ProjectInputFingerp
   if (!value || typeof value !== 'object') return false;
   const fingerprint = value as Partial<ProjectInputFingerprint>;
   return (
-    fingerprint.version === 2 &&
+    fingerprint.version === 3 &&
     Array.isArray(fingerprint.languages) &&
     typeof fingerprint.pnpmWorkspaces === 'boolean' &&
     (fingerprint.typescriptProjectMode === 'single' || fingerprint.typescriptProjectMode === 'workspace') &&
