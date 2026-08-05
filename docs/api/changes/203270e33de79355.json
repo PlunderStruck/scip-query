@@ -1,0 +1,283 @@
+{
+  "acceptedAt": "2026-08-03T04:11:46.063Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "203270e33de793556f8afc1bbecdc3d4a281715eee60bd291f421f1109eafc9e",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export QualifiedEvidenceResult.",
+      "target": "./queries:QualifiedEvidenceResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export QualifiedTraceEvidenceResult.",
+      "target": "./queries:QualifiedTraceEvidenceResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionResult changed from interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid... to interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid....",
+      "target": "./queries:SourceInspectionResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionStoppingStatus.",
+      "target": "./queries:SourceInspectionStoppingStatus"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionStoppingSummary.",
+      "target": "./queries:SourceInspectionStoppingSummary"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapDrilldown.",
+      "target": "./queries:SystemMapDrilldown"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapDrilldownAnchor.",
+      "target": "./queries:SystemMapDrilldownAnchor"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries:SystemMapResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TraceClaimEligibility.",
+      "target": "./queries:TraceClaimEligibility"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TraceClaimSupport.",
+      "target": "./queries:TraceClaimSupport"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TraceReferenceEvidence.",
+      "target": "./queries:TraceReferenceEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TraceReferenceProvenance.",
+      "target": "./queries:TraceReferenceProvenance"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TraceReferenceSourceKind.",
+      "target": "./queries:TraceReferenceSourceKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export qualifiedEvidence.",
+      "target": "./queries:qualifiedEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export qualifiedTraceEvidence.",
+      "target": "./queries:qualifiedTraceEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export QualifiedEvidenceResult.",
+      "target": "./queries/evidence:QualifiedEvidenceResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export qualifiedEvidence.",
+      "target": "./queries/evidence:qualifiedEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export QualifiedEvidenceResult.",
+      "target": "./queries/index:QualifiedEvidenceResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export QualifiedTraceEvidenceResult.",
+      "target": "./queries/index:QualifiedTraceEvidenceResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionResult changed from interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid... to interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid....",
+      "target": "./queries/index:SourceInspectionResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionStoppingStatus.",
+      "target": "./queries/index:SourceInspectionStoppingStatus"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionStoppingSummary.",
+      "target": "./queries/index:SourceInspectionStoppingSummary"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapDrilldown.",
+      "target": "./queries/index:SystemMapDrilldown"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapDrilldownAnchor.",
+      "target": "./queries/index:SystemMapDrilldownAnchor"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries/index:SystemMapResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TraceClaimEligibility.",
+      "target": "./queries/index:TraceClaimEligibility"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TraceClaimSupport.",
+      "target": "./queries/index:TraceClaimSupport"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TraceReferenceEvidence.",
+      "target": "./queries/index:TraceReferenceEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TraceReferenceProvenance.",
+      "target": "./queries/index:TraceReferenceProvenance"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TraceReferenceSourceKind.",
+      "target": "./queries/index:TraceReferenceSourceKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export qualifiedEvidence.",
+      "target": "./queries/index:qualifiedEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export qualifiedTraceEvidence.",
+      "target": "./queries/index:qualifiedTraceEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionResult changed from interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid... to interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid....",
+      "target": "./queries/source-inspection:SourceInspectionResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionStoppingStatus.",
+      "target": "./queries/source-inspection:SourceInspectionStoppingStatus"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionStoppingSummary.",
+      "target": "./queries/source-inspection:SourceInspectionStoppingSummary"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapDrilldown.",
+      "target": "./queries/system-map:SystemMapDrilldown"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapDrilldownAnchor.",
+      "target": "./queries/system-map:SystemMapDrilldownAnchor"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries/system-map:SystemMapResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export QualifiedTraceEvidenceResult.",
+      "target": "./queries/trace:QualifiedTraceEvidenceResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TraceClaimEligibility.",
+      "target": "./queries/trace:TraceClaimEligibility"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TraceClaimSupport.",
+      "target": "./queries/trace:TraceClaimSupport"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TraceReferenceEvidence.",
+      "target": "./queries/trace:TraceReferenceEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TraceReferenceProvenance.",
+      "target": "./queries/trace:TraceReferenceProvenance"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export TraceReferenceSourceKind.",
+      "target": "./queries/trace:TraceReferenceSourceKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export qualifiedTraceEvidence.",
+      "target": "./queries/trace:qualifiedTraceEvidence"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "2b9b72540432eb9b0a75088f91fb8bc96c95764eb572acc6d7f96f0aeb9f50d7",
+  "reason": "Adds qualified evidence APIs plus optional stopping and batched-drilldown metadata without changing existing query result contracts.",
+  "schemaVersion": 1
+}

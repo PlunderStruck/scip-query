@@ -1,0 +1,115 @@
+{
+  "acceptedAt": "2026-08-04T18:03:24.520Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "12105797947bf1c7e96be3d4a89f6b9b9484a8a8729d9f5fdb708d0b2457aa6d",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "BehaviorSkeleton changed from interface BehaviorSkeleton { callable?: { name: string; startLine: number; endLine: number; }; lines: BehaviorSkeletonLine[]; signals: BehaviorSignal[]; testCases: string[]; can... to interface BehaviorSkeleton { callable?: { name: string; startLine: number; endLine: number; }; representation: 'outline'; constructKind: string; signature: string; lines: Behavi....",
+      "target": "./queries:BehaviorSkeleton"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapCoverage changed from interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat... to interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat....",
+      "target": "./queries:SystemMapCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import-candidate' | 'indexed-or-source-reference' | 'indexed-or-source-import'; to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import-candidate' | 'indexed-or-source-reference' | 'indexed-or-source-import' | `runtime-boundary:${string}`;.",
+      "target": "./queries:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationKind changed from type SystemMapRelationKind = 'call' | 'import' | 'reference'; to type SystemMapRelationKind = 'call' | 'import' | 'reference' | 'runtime-boundary';.",
+      "target": "./queries:SystemMapRelationKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries:SystemMapResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "BehaviorSkeleton changed from interface BehaviorSkeleton { callable?: { name: string; startLine: number; endLine: number; }; lines: BehaviorSkeletonLine[]; signals: BehaviorSignal[]; testCases: string[]; can... to interface BehaviorSkeleton { callable?: { name: string; startLine: number; endLine: number; }; representation: 'outline'; constructKind: string; signature: string; lines: Behavi....",
+      "target": "./queries/index:BehaviorSkeleton"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapCoverage changed from interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat... to interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat....",
+      "target": "./queries/index:SystemMapCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import-candidate' | 'indexed-or-source-reference' | 'indexed-or-source-import'; to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import-candidate' | 'indexed-or-source-reference' | 'indexed-or-source-import' | `runtime-boundary:${string}`;.",
+      "target": "./queries/index:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationKind changed from type SystemMapRelationKind = 'call' | 'import' | 'reference'; to type SystemMapRelationKind = 'call' | 'import' | 'reference' | 'runtime-boundary';.",
+      "target": "./queries/index:SystemMapRelationKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries/index:SystemMapResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "BehaviorSkeleton changed from interface BehaviorSkeleton { callable?: { name: string; startLine: number; endLine: number; }; lines: BehaviorSkeletonLine[]; signals: BehaviorSignal[]; testCases: string[]; can... to interface BehaviorSkeleton { callable?: { name: string; startLine: number; endLine: number; }; representation: 'outline'; constructKind: string; signature: string; lines: Behavi....",
+      "target": "./queries/source-inspection:BehaviorSkeleton"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapBoundaryFrontier.",
+      "target": "./queries/system-map:SystemMapBoundaryFrontier"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapCoverage changed from interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat... to interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat....",
+      "target": "./queries/system-map:SystemMapCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import-candidate' | 'indexed-or-source-reference' | 'indexed-or-source-import'; to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import-candidate' | 'indexed-or-source-reference' | 'indexed-or-source-import' | `runtime-boundary:${string}`;.",
+      "target": "./queries/system-map:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationKind changed from type SystemMapRelationKind = 'call' | 'import' | 'reference'; to type SystemMapRelationKind = 'call' | 'import' | 'reference' | 'runtime-boundary';.",
+      "target": "./queries/system-map:SystemMapRelationKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries/system-map:SystemMapResult"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./reindex; review their variance and runtime meaning.",
+      "target": "./reindex"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "f23cc4b12300b4f1a2bf203f20ddb1b484070c5780988595a940086d9c822a18",
+  "reason": "Replace the lossy behavioral skeleton contract with complete cost-selected outlines and extend system maps with source-backed runtime-boundary evidence.",
+  "schemaVersion": 1
+}

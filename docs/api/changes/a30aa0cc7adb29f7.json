@@ -1,0 +1,67 @@
+{
+  "acceptedAt": "2026-08-04T21:09:51.166Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "a30aa0cc7adb29f75741fec26cfc676c457426ef0659fb4dfaa10da8590ab2d2",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapEvidenceFloor.",
+      "target": "./queries:SystemMapEvidenceFloor"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapOptions changed from interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind... to interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind....",
+      "target": "./queries:SystemMapOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapSourceScope.",
+      "target": "./queries:SystemMapSourceScope"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapEvidenceFloor.",
+      "target": "./queries/index:SystemMapEvidenceFloor"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapOptions changed from interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind... to interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind....",
+      "target": "./queries/index:SystemMapOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapSourceScope.",
+      "target": "./queries/index:SystemMapSourceScope"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/source-inspection; review their variance and runtime meaning.",
+      "target": "./queries/source-inspection"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapOptions changed from interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind... to interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind....",
+      "target": "./queries/system-map:SystemMapOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapSourceScope.",
+      "target": "./queries/system-map:SystemMapSourceScope"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "13600aeef47e54a1b03bc25e8f25398b7fcbfe7c0e182b29ee07ee5bacdec864",
+  "reason": "Expose system-map evidence policy and source-scope types through the supported query facade without crossing architecture boundaries.",
+  "schemaVersion": 1
+}

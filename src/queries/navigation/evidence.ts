@@ -8,7 +8,12 @@ import { callGraph } from './call-graph.js';
 import { code, type CodeResult } from './code.js';
 import { deps, rdeps, type DepResult } from './deps.js';
 import { boundedDefinitionSnippet, type SourceSnippet } from './source-snippet.js';
-import { traceEvidence, type TraceEvidenceResult } from './trace.js';
+import {
+  qualifiedTraceEvidence,
+  type TraceClaimSupport,
+  type TraceEvidenceResult,
+  type TraceReferenceEvidence,
+} from './trace.js';
 
 export type EvidencePart = 'definition' | 'references' | 'callers' | 'callees' | 'dependencies' | 'consumers';
 
@@ -53,6 +58,13 @@ export type EvidenceResult =
       consumers: DepResult[];
     };
 
+export type QualifiedEvidenceResult =
+  | Exclude<EvidenceResult, { kind: 'matched' }>
+  | (Extract<EvidenceResult, { kind: 'matched' }> & {
+      referenceEvidence: TraceReferenceEvidence[];
+      claimSupport: TraceClaimSupport | null;
+    });
+
 export interface EvidenceOptions {
   parts?: readonly EvidencePart[];
   referenceContext?: number;
@@ -62,6 +74,18 @@ export interface EvidenceOptions {
 
 /** Build one read-only view from a symbol and selected compiler relationships. */
 export function evidence(db: ScipDatabase, query: string, opts: EvidenceOptions = {}): EvidenceResult {
+  const qualified = qualifiedEvidence(db, query, opts);
+  if (qualified.kind !== 'matched') return qualified;
+  const { referenceEvidence: _referenceEvidence, claimSupport: _claimSupport, ...result } = qualified;
+  return result;
+}
+
+/** Build symbol evidence with explicit metadata governing source-derived claims. */
+export function qualifiedEvidence(
+  db: ScipDatabase,
+  query: string,
+  opts: EvidenceOptions = {},
+): QualifiedEvidenceResult {
   const resolution = resolveSymbol(db, query);
   if (!resolution.match) return { kind: 'missing', query };
   if (resolution.total > 1) {
@@ -85,8 +109,11 @@ export function evidence(db: ScipDatabase, query: string, opts: EvidenceOptions 
   const parts = normalizeEvidenceParts(opts.parts);
   const traced =
     parts.includes('definition') || parts.includes('references')
-      ? traceEvidence(db, match.symbol, { semantic: opts.semantic, referenceContext: opts.referenceContext })
-      : { definitions: [], referencedBy: [] };
+      ? qualifiedTraceEvidence(db, match.symbol, {
+          semantic: opts.semantic,
+          referenceContext: opts.referenceContext,
+        })
+      : { definitions: [], referencedBy: [], referenceEvidence: [], claimSupport: null };
   const graph =
     parts.includes('callers') || parts.includes('callees')
       ? callGraph(db, match.symbol, { semantic: opts.semantic })
@@ -106,6 +133,8 @@ export function evidence(db: ScipDatabase, query: string, opts: EvidenceOptions 
     callees: parts.includes('callees') ? relatedSymbols(db, graph?.callees ?? [], relatedSourceLines) : [],
     dependencies: parts.includes('dependencies') ? deps(db, match.relativePath) : [],
     consumers: parts.includes('consumers') ? rdeps(db, match.relativePath) : [],
+    referenceEvidence: traced.referenceEvidence,
+    claimSupport: traced.claimSupport,
   };
 }
 

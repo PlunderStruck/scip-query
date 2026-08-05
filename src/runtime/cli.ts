@@ -45,7 +45,9 @@ program
     'Return bounded output pages with an exact continuation command',
     parseOutputPageSize,
   )
-  .option('--output-cursor <cursor>', 'Continue a bounded output page');
+  .option('--output-cursor <cursor>', 'Continue a bounded output page')
+  .option('--no-session', 'Disable the explicit preview-source citation ledger')
+  .option('--reemit', 'Recovery only: render cited previews again; exact source units always render fully');
 
 const commandDescriptors = await loadInvocationCommandDescriptors(cliEntrypoint ? process.argv[2] : undefined);
 registerCommandDescriptors(program, commandDescriptors);

@@ -88,6 +88,7 @@ export function renderCommandReferenceMarkdown(descriptors: readonly CommandDesc
     'Commands with `--json` share three structured modes: plain `--json` emits the stable public envelope, `--json --result-only` emits only the command payload, and `--json --compact` minifies either form for a program. Agents should prefer ordinary human output. See [CLI output modes](CLI_JSON_OUTPUT.md).',
     '',
     'Every command accepts `--output-page-size <characters>` and `--output-cursor <cursor>`. Run normally without choosing a page size: oversized human output stays readable text and prints one exact continuation command; oversized JSON prints the exact command that opts into versioned JSON page envelopes.',
+    'Exact code, definition, and source-inspection units always render whole. Cross-command source citations are off by default; an explicit `SCIP_QUERY_SESSION` may replace only wholly prior-emitted locating previews. Partially covered previews render whole. Use global `--reemit` only to recover a cited preview that is no longer in context.',
     '',
   ];
 

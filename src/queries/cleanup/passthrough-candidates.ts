@@ -1,12 +1,11 @@
 import { basename, extname } from 'node:path';
+import { isExportedDefinition } from '../internal/exported-definition.js';
 import { isRootedSymbol } from '../../analysis/file-classifier.js';
 import { isPackageSurfaceFile } from '../../analysis/package-surface.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { isClojureMacroDefinition, isLiteralPassthrough } from '../../source/ast.js';
-import { getSourceLines } from '../../source/primitives/source-text.js';
-import { escapeRegex as escapeRegExp } from '../../source/primitives/regex-utils.js';
-import type { IndexedDefinition, SymbolMatch } from '../../domain/types.js';
-import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
+import type { IndexedDefinition } from '../../domain/types.js';
+import { isFunctionLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../internal/project-index.js';
 import { compareDefinitionsBySmallestLoc, definitionLoc } from '../query-utils.js';
 import { runCandidateAnalysis } from '../internal/candidate-scan.js';
@@ -149,26 +148,7 @@ function publicFacadeEvidence(db: ScipDatabase, sym: IndexedDefinition): string[
  * Reused by `twin-ab` to refuse scaffolding a test against a symbol that
  * cannot actually be imported.
  */
-export function isExportedDefinition(db: ScipDatabase, sym: SymbolMatch): boolean {
-  const lines = getSourceLines(db, sym.relativePath);
-  if (lines.length === 0) return false;
-  const name = leafName(sym.symbol);
-  if (!name) return false;
-  const declarationWindow = lines.slice(Math.max(0, sym.startLine - 2), sym.startLine + 1).join('\n');
-  const escapedName = escapeRegExp(name);
-  const declarationPattern = new RegExp(
-    `^\\s*export\\s+(?:default\\s+)?(?:(?:async\\s+)?function\\s+${escapedName}\\b|(?:const|let|var)\\s+${escapedName}\\b)`,
-    'm',
-  );
-  if (declarationPattern.test(declarationWindow)) return true;
-  return hasNamedExport(lines, name);
-}
-
-function hasNamedExport(lines: readonly string[], name: string): boolean {
-  if (!name) return false;
-  const pattern = new RegExp(`^\\s*export\\s*\\{[^}\\n]*\\b${escapeRegExp(name)}\\b`);
-  return lines.some((line) => pattern.test(line));
-}
+export { isExportedDefinition } from '../internal/exported-definition.js';
 
 function isPublicSurfaceEvidence(evidence: string): boolean {
   return evidence.includes('public surface');

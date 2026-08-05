@@ -1,0 +1,163 @@
+{
+  "acceptedAt": "2026-08-03T06:10:58.082Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "a6139b505b1030efe894038e5e1a3768360a1c1c2d50a54bebcb1db227c64df4",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "BehaviorSignal changed from type BehaviorSignal = 'signature' | 'branch' | 'loop' | 'call' | 'await' | 'return' | 'throw' | 'mutation' | 'shape' | 'spread' | 'catch' | 'finally'; to type BehaviorSignal = 'anchor' | 'signature' | 'binding' | 'branch' | 'loop' | 'call' | 'await' | 'return' | 'throw' | 'mutation' | 'shape' | 'spread' | 'catch' | 'finally';.",
+      "target": "./queries:BehaviorSignal"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BindingClosure.",
+      "target": "./queries:BindingClosure"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BindingDefinitionEvidence.",
+      "target": "./queries:BindingDefinitionEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CodeResult changed from interface CodeResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; language: string | null; source: string; } to interface CodeResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; language: string | null; source: string; bindingClosure?: Bin....",
+      "target": "./queries:CodeResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CoveredSourceRange.",
+      "target": "./queries:CoveredSourceRange"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionResult changed from interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid... to interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid....",
+      "target": "./queries:SourceInspectionResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SourceInspectionStoppingStatus changed from type SourceInspectionStoppingStatus = 'stop-ready' | 'relevance-check-required' | 'exact-evidence-withheld'; to type SourceInspectionStoppingStatus = 'stop-ready' | 'bindings-open' | 'relevance-check-required' | 'exact-evidence-withheld';.",
+      "target": "./queries:SourceInspectionStoppingStatus"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export UnresolvedBindingEvidence.",
+      "target": "./queries:UnresolvedBindingEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CodeResult changed from interface CodeResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; language: string | null; source: string; } to interface CodeResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; language: string | null; source: string; bindingClosure?: Bin....",
+      "target": "./queries/code:CodeResult"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/evidence; review their variance and runtime meaning.",
+      "target": "./queries/evidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "BehaviorSignal changed from type BehaviorSignal = 'signature' | 'branch' | 'loop' | 'call' | 'await' | 'return' | 'throw' | 'mutation' | 'shape' | 'spread' | 'catch' | 'finally'; to type BehaviorSignal = 'anchor' | 'signature' | 'binding' | 'branch' | 'loop' | 'call' | 'await' | 'return' | 'throw' | 'mutation' | 'shape' | 'spread' | 'catch' | 'finally';.",
+      "target": "./queries/index:BehaviorSignal"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BindingClosure.",
+      "target": "./queries/index:BindingClosure"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BindingDefinitionEvidence.",
+      "target": "./queries/index:BindingDefinitionEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CodeResult changed from interface CodeResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; language: string | null; source: string; } to interface CodeResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; language: string | null; source: string; bindingClosure?: Bin....",
+      "target": "./queries/index:CodeResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CoveredSourceRange.",
+      "target": "./queries/index:CoveredSourceRange"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionResult changed from interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid... to interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid....",
+      "target": "./queries/index:SourceInspectionResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SourceInspectionStoppingStatus changed from type SourceInspectionStoppingStatus = 'stop-ready' | 'relevance-check-required' | 'exact-evidence-withheld'; to type SourceInspectionStoppingStatus = 'stop-ready' | 'bindings-open' | 'relevance-check-required' | 'exact-evidence-withheld';.",
+      "target": "./queries/index:SourceInspectionStoppingStatus"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export UnresolvedBindingEvidence.",
+      "target": "./queries/index:UnresolvedBindingEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "BehaviorSignal changed from type BehaviorSignal = 'signature' | 'branch' | 'loop' | 'call' | 'await' | 'return' | 'throw' | 'mutation' | 'shape' | 'spread' | 'catch' | 'finally'; to type BehaviorSignal = 'anchor' | 'signature' | 'binding' | 'branch' | 'loop' | 'call' | 'await' | 'return' | 'throw' | 'mutation' | 'shape' | 'spread' | 'catch' | 'finally';.",
+      "target": "./queries/source-inspection:BehaviorSignal"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BindingClosure.",
+      "target": "./queries/source-inspection:BindingClosure"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export BindingDefinitionEvidence.",
+      "target": "./queries/source-inspection:BindingDefinitionEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionResult changed from interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid... to interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid....",
+      "target": "./queries/source-inspection:SourceInspectionResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SourceInspectionStoppingStatus changed from type SourceInspectionStoppingStatus = 'stop-ready' | 'relevance-check-required' | 'exact-evidence-withheld'; to type SourceInspectionStoppingStatus = 'stop-ready' | 'bindings-open' | 'relevance-check-required' | 'exact-evidence-withheld';.",
+      "target": "./queries/source-inspection:SourceInspectionStoppingStatus"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export UnresolvedBindingEvidence.",
+      "target": "./queries/source-inspection:UnresolvedBindingEvidence"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module code-<hash>.d.ts was added or renamed.",
+      "target": "code-<hash>.d.ts"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "ccb6cf2ac2224e50d54422e64f1883e6bef0cc37f2c672c5a3bff3c730d1ce05",
+  "reason": "Add binding-closure evidence and honest bindings-open/anchor states to the public exploration result contract.",
+  "schemaVersion": 1
+}

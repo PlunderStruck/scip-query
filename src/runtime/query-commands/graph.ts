@@ -1,7 +1,9 @@
 import * as queries from '../../queries/index.js';
+import type { SystemMapEvidenceFloor, SystemMapRelationKind, SystemMapSourceScope } from '../../queries/index.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
 import {
   agentContract,
+  collectValues,
   doc,
   fixedClaimFamily,
   mixedClaimContract,
@@ -18,10 +20,12 @@ import {
   optionalStringArg,
   printJsonEnvelope,
   reportCommand,
+  stringArg,
+  stringArrayOptionValue,
   stringOptionValue,
 } from '../command-kit/command-execution.js';
 import { budgetedSectionedQueryCommand, tableQueryCommand } from '../command-kit/query-command-builders.js';
-import { render } from '../render.js';
+import { displayLine, render } from '../render.js';
 import { symbolResolutionBefore, symbolResolutionEmptyMessage, withSymbolResolutionJson } from './symbol-resolution.js';
 
 const handleBottlenecks = budgetedTableCommand('bottlenecks', {
@@ -329,6 +333,508 @@ const handleDeepChains = reportCommand({
   },
 });
 
+const handleEntryPoints = dbCommand(({ db, args, opts }) => {
+  const search = optionalStringArg(args, 0);
+  const results = queries.entryPoints(db, {
+    search,
+    scope: stringOptionValue(opts, 'scope'),
+  });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('entrypoints', args, opts, results, {
+      coverage: {
+        complete: true,
+        totalKnown: true,
+        returned: results.length,
+        total: results.length,
+        omitted: 0,
+      },
+    });
+    return;
+  }
+  if (results.length === 0) {
+    return render.empty(search ? `No detected entry point matched '${search}'.` : 'No entry points were detected.');
+  }
+  render.list(
+    results,
+    (entry) =>
+      `  [${entry.confidence}] ${entry.file}:${displayLine(entry.startLine)}  ${entry.shortName}\n` +
+      `    evidence: ${entry.evidence.join(', ')}; indexed callers: ${entry.indexedCallerCount}\n` +
+      `    symbol: ${entry.symbol}`,
+  );
+  console.log(`\n${results.length} detected entry point(s).`);
+});
+
+const handleEntryMap = dbCommand(({ db, args, opts }) => {
+  const query = stringArg(args, 0);
+  const result = queries.entryCallMap(db, query, {
+    expand: stringArrayOptionValue(opts, 'expand'),
+  });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('entry-map', args, opts, result, {
+      coverage:
+        result.kind === 'matched'
+          ? {
+              complete: true,
+              totalKnown: true,
+              returned: result.regions.length,
+              total: result.regions.length,
+              omitted: 0,
+            }
+          : { complete: true, totalKnown: true, returned: 0, total: 0, omitted: 0 },
+    });
+    return;
+  }
+  if (result.kind === 'missing') {
+    process.exitCode = 1;
+    return render.empty(`No symbol matched '${query}'.`);
+  }
+  if (result.kind === 'ambiguous') {
+    process.exitCode = 1;
+    console.error(`'${query}' is ambiguous across ${result.total} definitions:`);
+    for (const candidate of result.candidates) {
+      console.error(`  ${candidate.relativePath}:${displayLine(candidate.startLine)}  ${candidate.shortName}`);
+      console.error(`    symbol: ${candidate.symbol}`);
+    }
+    return;
+  }
+  if (result.kind === 'not-entry') {
+    process.exitCode = 1;
+    return render.empty(`${result.shortName} (${result.file}) is not a detected entry point. ${result.reason}`);
+  }
+
+  console.log(`Entry: ${result.entry.shortName}  (${result.entry.file})`);
+  console.log(`Evidence: ${result.entry.evidence.join(', ')}\n`);
+  console.log('═══ COLLAPSED FILE REGIONS ═══');
+  for (const region of result.regions) {
+    const expansion = region.expanded ? 'expanded' : `expand with --expand '${region.id}'`;
+    console.log(
+      `  depth ${region.minDepth}  ${region.id}\n` +
+        `    ${region.symbolCount} symbol(s); ${region.internalEdgeCount} internal edge(s); ` +
+        `${region.externalCallCount} unresolved/external call(s); ` +
+        `${region.incomingRegionIds.length} incoming region(s); ${region.outgoingRegionIds.length} outgoing region(s)\n` +
+        `    ${expansion}`,
+    );
+  }
+
+  if (result.regionEdges.length > 0) {
+    console.log('\n═══ CROSS-REGION CALLS ═══');
+    for (const edge of result.regionEdges) {
+      console.log(
+        `  ${edge.fromRegionId} → ${edge.toRegionId}  (${edge.callCount} edge(s); ${edge.evidence.join(', ')})\n` +
+          `    ${edge.fromSymbols.join(', ')} → ${edge.toSymbols.join(', ')}`,
+      );
+    }
+  }
+
+  const expanded = result.regions.filter((region) => region.expanded);
+  if (expanded.length > 0) {
+    console.log('\n═══ EXPANDED REGIONS ═══');
+    for (const region of expanded) {
+      console.log(`  ${region.id}`);
+      for (const symbol of region.symbols) {
+        console.log(`    depth ${symbol.depth}  ${symbol.shortName}\n      ${symbol.symbol}`);
+      }
+      for (const edge of region.internalEdges) {
+        console.log(`    call  ${edge.fromShortName} → ${edge.toShortName}  (${edge.source})`);
+      }
+      for (const call of region.externalCalls) {
+        console.log(
+          `    unresolved/external  ${call.fromShortName} → ${call.toShortName}  ` +
+            `(${call.reportedFile}; ${call.source})`,
+        );
+      }
+    }
+  }
+
+  if (result.unmatchedExpansions.length > 0) {
+    console.error(`\nUnmatched expansion id(s): ${result.unmatchedExpansions.join(', ')}`);
+  }
+  console.log(
+    `\nCoverage: ${result.coverage.symbolCount} symbol(s), ${result.coverage.symbolEdgeCount} call edge(s), ` +
+      `${result.coverage.regionCount} region(s), ${result.coverage.externalCallCount} unresolved/external call(s).`,
+  );
+  console.log('Complete within indexed static call edges; dynamic dispatch is not represented.');
+});
+
+const handleSystemMap = dbCommand(({ db, args, opts }) => {
+  const result = queries.systemMap(db, {
+    searches: stringArrayOptionValue(opts, 'search'),
+    symbols: stringArrayOptionValue(opts, 'symbol'),
+    maxDepth: definedNumberOption(opts, 'depth', 3),
+    expand: stringArrayOptionValue(opts, 'expand'),
+    relations: stringArrayOptionValue(opts, 'relation') as SystemMapRelationKind[],
+    evidenceFloor: stringOptionValue(opts, 'evidenceFloor') as SystemMapEvidenceFloor | undefined,
+    sourceScopes: stringArrayOptionValue(opts, 'sourceScope') as SystemMapSourceScope[],
+    maxTopologyCharacters: definedNumberOption(opts, 'topologyCharacters', 20_000),
+  });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('system-map', args, opts, result, {
+      coverage: {
+        complete: false,
+        totalKnown: false,
+        returned: result.regions.length,
+      },
+    });
+    return;
+  }
+  const presentedRegionIds = new Set(result.presentation.regionIds);
+  const presentedRelationKeys = new Set(result.presentation.relationKeys);
+  const presentedRegions = result.regions.filter((region) => presentedRegionIds.has(region.id));
+  const presentedRelations = result.regionRelations.filter((relation) =>
+    presentedRelationKeys.has(`${relation.fromRegionId}\u0000${relation.toRegionId}`),
+  );
+  const hasExpandedRegions = presentedRegions.some((region) => region.expanded);
+
+  console.log('═══ EXPLICIT ANCHORS ═══');
+  for (const anchor of result.anchors) {
+    const count =
+      anchor.kind === 'literal'
+        ? `${anchor.matchingLines ?? 0} matching line(s); ${anchor.seedMatchingLines ?? 0} whole-token source seed(s), ${anchor.matchOnlyLines ?? 0} match-only`
+        : `${anchor.totalSymbolCandidates ?? 0} candidate definition(s)`;
+    console.log(`  [${anchor.status}] ${anchor.kind} ${anchor.query} — ${count}`);
+    if ((anchor.seedRegionIds ?? []).length > 0) {
+      console.log(`    traversal seed regions: ${anchor.seedRegionIds!.join(', ')}`);
+    }
+    if ((anchor.matchOnlyRegionIds ?? []).length > 0) {
+      console.log(`    retained match-only regions: ${anchor.matchOnlyRegionIds!.join(', ')}`);
+    }
+    if (anchor.kind === 'symbol' && anchor.matchedRegionIds.length > 0) {
+      console.log(`    regions: ${anchor.matchedRegionIds.join(', ')}`);
+    }
+    if (!hasExpandedRegions) {
+      for (const candidate of anchor.symbolCandidates ?? []) {
+        console.log(
+          `    ${candidate.relativePath}:${displayLine(candidate.startLine)}  ${compactSystemMapIdentity(candidate.shortName)}`,
+        );
+      }
+    }
+    if ((anchor.omittedSymbolCandidates ?? 0) > 0) {
+      console.log(`    ${anchor.omittedSymbolCandidates} additional candidate(s) omitted by symbol resolution.`);
+    }
+  }
+
+  if (result.regions.length === 0) {
+    console.log('\nNo structural regions matched the supplied anchors.');
+  } else {
+    console.log('\n═══ COLLAPSED SYSTEM REGIONS ═══');
+    for (const region of presentedRegions) {
+      const expansion = region.expanded ? 'expanded' : 'collapsed';
+      const shownNotableSymbols = region.notableSymbols.slice(0, 2);
+      if (hasExpandedRegions) {
+        console.log(
+          `  d${region.minDepth} [${expansion}] ${region.id} — ${region.fileCount} file; ` +
+            `${region.symbolCount} sym; ${region.literalHitCount} hit; ` +
+            `${region.relationKinds.join(',') || 'anchor-only'}; ` +
+            `${region.incomingRegionIds.length} in/${region.outgoingRegionIds.length} out` +
+            `${region.memberCallCandidateRelationCount > 0 ? `; ${region.memberCallCandidateRelationCount} M-candidate` : ''}`,
+        );
+        continue;
+      }
+      console.log(
+        `  depth ${region.minDepth} [${expansion}] ${region.id} — ` +
+          `${region.fileCount} file (${region.sourceFileCount} src/${region.testFileCount} test); ` +
+          `${region.symbolCount} sym; ${region.literalHitCount} hit; ` +
+          `${region.relationKinds.join(',') || 'anchor-only'}; ` +
+          `${region.incomingRegionIds.length} in/${region.outgoingRegionIds.length} out` +
+          `${region.memberCallCandidateRelationCount > 0 ? `; ${region.memberCallCandidateRelationCount} M-candidate` : ''}\n` +
+          `    anchors: ${region.anchorQueries.join(', ') || 'none'}; drill: ` +
+          `${
+            shownNotableSymbols
+              .map((symbol) => `${compactSystemMapIdentity(symbol.shortName)} (${symbol.file})`)
+              .join(', ') || 'none'
+          }${
+            region.symbolCount > shownNotableSymbols.length
+              ? `; +${region.symbolCount - shownNotableSymbols.length}`
+              : ''
+          }`,
+      );
+    }
+  }
+
+  if (!result.presentation.complete) {
+    console.log('\n═══ TOPOLOGY WITHHELD MANIFEST ═══');
+    console.log(
+      `  The ${result.presentation.maxCharacters}-character topology budget selected ` +
+        `${result.presentation.regionIds.length}/${result.regions.length} region(s) and ` +
+        `${result.presentation.relationKeys.length}/${result.regionRelations.length} cross-region relation(s).`,
+    );
+    if (result.presentation.omittedRegionIds.length > 0) {
+      console.log(`  Withheld region ids: ${summarizeMapValues(result.presentation.omittedRegionIds, 12)}.`);
+    }
+    console.log(
+      `  Structured JSON retains all facts. Expand the human topology without paging: ${result.presentation.expansionCommand}`,
+    );
+  }
+
+  if (!hasExpandedRegions && result.expansion?.command) {
+    console.log('\n═══ NEXT ABSTRACTION LEVEL ═══');
+    if (result.expansion.command) {
+      const matchOnlyRegions = result.regions.length - result.expansion.regionCount;
+      const candidateRegions = result.expansion.candidateRegionCount ?? result.expansion.regionCount;
+      const omittedRegions = result.expansion.omittedRegionIds ?? [];
+      console.log(
+        `  Expand ${result.expansion.regionCount}/${candidateRegions} ranked traversal-relevant region(s) in one complete child-file summary; ` +
+          `${matchOnlyRegions} other observed region(s) remain visible above.`,
+      );
+      console.log(`  Expand together: ${result.expansion.command}`);
+      if (omittedRegions.length > 0) {
+        console.log(
+          `  Withheld traversal-relevant regions: ${omittedRegions.join(', ')}. Add several --expand selectors to the command when they can change the decision.`,
+        );
+      }
+    }
+  }
+
+  if (presentedRelations.length > 0) {
+    console.log('\n═══ CROSS-REGION RELATIONSHIPS ═══');
+    console.log(
+      '  Evidence A=AST callsite; M=source candidate (receiver type unproved); S=semantic callee; C=SCIP chunk; K=cross-workspace contract symbol; I=index/source import; R=index/source reference; B=proven runtime-boundary join.',
+    );
+    for (const relation of presentedRelations) {
+      console.log(
+        `  ${compactSystemMapRegionId(relation.fromRegionId)} → ${compactSystemMapRegionId(relation.toRegionId)} — ` +
+          `${relation.relationCount} rel [${relation.kinds.join(',')}; ` +
+          `${relation.evidence.map(compactSystemMapRelationEvidence).join(',')}]`,
+      );
+    }
+  }
+
+  if (result.boundaryFrontiers.length > 0) {
+    console.log('\n═══ UNRESOLVED RUNTIME BOUNDARIES ═══');
+    const buckets = groupSystemMapBoundaryFrontiers(result.boundaryFrontiers);
+    const shown = buckets.slice(0, 8);
+    for (const bucket of shown) {
+      const examples = bucket.frontiers
+        .slice(0, 2)
+        .map(
+          (frontier) => `${compactBoundaryAddress(frontier.address)} @ ${frontier.file}:${displayLine(frontier.line)}`,
+        );
+      console.log(`  [${bucket.strength}] ${bucket.action} ×${bucket.frontiers.length} — ${examples.join('; ')}`);
+      console.log(`    ${bucket.reason}`);
+    }
+    if (buckets.length > shown.length) {
+      console.log(
+        `  ${buckets.length - shown.length} additional frontier bucket(s); use --json for every observation and proof.`,
+      );
+    }
+  }
+
+  if (result.externalBoundaries.length > 0) {
+    console.log('\n═══ EXTERNAL IMPORT BOUNDARIES ═══');
+    console.log(
+      `  ${result.externalBoundaries.length} imported external symbol(s): ` +
+        `${summarizeMapValues(
+          result.externalBoundaries.map((boundary) => boundary.name),
+          12,
+        )}. ` +
+        'Use --json when the complete external-import list can change the decision.',
+    );
+  }
+
+  const expanded = presentedRegions.filter((region) => region.expanded);
+  if (expanded.length > 0) {
+    console.log('\n═══ EXPANDED REGIONS ═══');
+    console.log(
+      '  Every child file is listed. d=depth; S/T/E/B/W=source/test/entry/barrel/worker; ' +
+        'sym/hit/rel counts are complete; C/I/R/B=call/import/reference/runtime-boundary; x=connected-region count; ' +
+        'final names are ranked symbol@line drill candidates.',
+    );
+    for (const region of expanded) {
+      console.log(`  ${region.label}  (${region.id})`);
+      printSystemMapChildFiles(region);
+    }
+    if (result.drilldown?.command) {
+      console.log('\n═══ BATCHED DRILL-DOWN ═══');
+      console.log(
+        `  ${result.drilldown.selectedAnchors}/${result.drilldown.candidateAnchors} coverage-diverse child-file anchor(s) selected` +
+          `${result.drilldown.omittedAnchors > 0 ? `; ${result.drilldown.omittedAnchors} withheld by the ranked drill-down budget and still listed above` : ''}.`,
+      );
+      console.log(`  Inspect the selected behavior together: ${result.drilldown.command}`);
+      if (result.drilldown.definitionCommand) {
+        console.log(`  Full-source escalation for the selected exact units: ${result.drilldown.definitionCommand}`);
+      }
+    }
+  }
+
+  if (result.unmatchedExpansions.length > 0) {
+    console.error(`\nUnmatched expansion id(s): ${result.unmatchedExpansions.join(', ')}`);
+  }
+  console.log(
+    `\nQuery plan: relations=${result.coverage.requestedRelationKinds.join(',')}; ` +
+      `evidence>=${result.coverage.evidenceFloor}; scopes=${result.coverage.includedSourceScopes.join(',')}.`,
+  );
+  console.log(
+    `Query closure: ${result.closure.status}; emitted ${result.closure.emitted.regions} region(s), ` +
+      `${result.closure.emitted.relations} relation(s), and ${result.closure.emitted.runtimeLinks} runtime link(s); ` +
+      `withheld ${result.closure.withheld.symbols} symbol(s), ${result.closure.withheld.files} file(s), ` +
+      `${result.closure.withheld.regions} region(s), and ${result.closure.withheld.drillAnchors} drill anchor(s); ` +
+      `${result.closure.ambiguous.anchors} ambiguous anchor(s), ${result.closure.external} external boundary(ies), ` +
+      `${result.closure.unresolved} unresolved runtime frontier(s).`,
+  );
+  console.log(`  ${result.closure.explanation}`);
+  console.log(
+    `\nCoverage: ${result.coverage.matchedAnchorCount}/${result.coverage.explicitAnchorCount} anchor(s) matched; ` +
+      `${result.regions.length} region(s); depth ${result.coverage.maxTraversalDepth}; ` +
+      `${result.coverage.frontierSymbols} untraversed symbol(s); ${result.coverage.frontierFiles} untraversed file(s); ` +
+      `${result.coverage.supportFilesNotTraversed} visible support file(s) not traversed; ` +
+      `${result.coverage.filteredUnverifiedCallEdges} unverified call edge(s) filtered; ` +
+      `${result.coverage.memberCallCandidateEdges} source-attributed member-call candidate edge(s); ` +
+      `${result.coverage.unresolvedMemberCallsites} unresolved member callsite(s); ` +
+      `${result.coverage.runtimeBoundaryTraversedLinks}/${result.coverage.runtimeBoundaryExactLinks + result.coverage.runtimeBoundaryDerivedLinks} map-relevant proven runtime-boundary link(s) traversed ` +
+      `(${result.coverage.repositoryRuntimeBoundaryExactLinks + result.coverage.repositoryRuntimeBoundaryDerivedLinks} repository-wide); ` +
+      `${result.coverage.runtimeBoundaryCandidateLinks} candidate boundary link(s); ` +
+      `${result.coverage.runtimeBoundaryFrontiers} relevant unresolved boundary frontier(s); ` +
+      `${result.coverage.referenceExpansionEligibleSymbols} symbol(s) reverse-expanded and ` +
+      `${result.coverage.referenceExpansionSkippedSymbols} discovered symbol(s) not reverse-expanded.`,
+  );
+  if (!result.coverage.symbolCandidateSetsComplete) {
+    console.log(`Symbol resolution omitted ${result.coverage.omittedSymbolCandidates} ambiguous candidate(s).`);
+  }
+  console.log('Blind spots:');
+  for (const blindSpot of result.coverage.blindSpots) console.log(`  - ${blindSpot}`);
+});
+
+function printSystemMapChildFiles(region: ReturnType<typeof queries.systemMap>['regions'][number]): void {
+  const symbolsByFile = groupMapValues(region.symbols, (symbol) => symbol.file);
+  const hitsByFile = groupMapValues(region.literalHits, (hit) => hit.file);
+  const relationsByFile = new Map<string, typeof region.relations>();
+  for (const relation of region.relations) {
+    for (const file of new Set([relation.fromFile, relation.toFile])) {
+      if (!region.files.some((candidate) => candidate.file === file)) continue;
+      const bucket = relationsByFile.get(file) ?? [];
+      bucket.push(relation);
+      relationsByFile.set(file, bucket);
+    }
+  }
+
+  for (const file of region.files) {
+    const symbols = (symbolsByFile.get(file.file) ?? []).sort(compareSystemMapDrilldownSymbols);
+    const hits = hitsByFile.get(file.file) ?? [];
+    const relations = relationsByFile.get(file.file) ?? [];
+    const shownSymbols = symbols.slice(0, 4);
+    const relationKinds = [...new Set(relations.map((relation) => relation.kind))].sort();
+    const connectedRegions = [
+      ...new Set(
+        relations.flatMap((relation) =>
+          [relation.fromRegionId, relation.toRegionId].filter((regionId) => regionId !== region.id),
+        ),
+      ),
+    ].sort();
+    const drilldown =
+      shownSymbols.length > 0
+        ? shownSymbols
+            .map((symbol) => `${compactSystemMapIdentity(symbol.shortName)}@${displayLine(symbol.startLine)}`)
+            .join(', ') + (symbols.length > shownSymbols.length ? `; +${symbols.length - shownSymbols.length}` : '')
+        : 'none';
+    console.log(
+      `    d${file.depth} ${compactSystemMapFileKind(file.kind)} ${file.file} | ` +
+        `sym${symbols.length} hit${hits.length} rel${relations.length}` +
+        `${relationKinds.length > 0 ? `:${relationKinds.map(compactSystemMapRelationKind).join('/')}` : ''} ` +
+        `x${connectedRegions.length} | ${drilldown}`,
+    );
+    for (const hit of hits) {
+      console.log(`      literal ${hit.query}@${displayLine(hit.line)}  ${hit.sourceLine}`);
+    }
+  }
+}
+
+function compactSystemMapIdentity(value: string): string {
+  const segments = value.split(':');
+  return segments.at(-1) || value;
+}
+
+function groupSystemMapBoundaryFrontiers<
+  T extends {
+    action: string;
+    strength: string;
+    reason: string;
+  },
+>(frontiers: readonly T[]): Array<{ action: string; strength: string; reason: string; frontiers: T[] }> {
+  const grouped = new Map<string, { action: string; strength: string; reason: string; frontiers: T[] }>();
+  for (const frontier of frontiers) {
+    const key = `${frontier.strength}\0${frontier.action}\0${frontier.reason}`;
+    const bucket = grouped.get(key) ?? {
+      action: frontier.action,
+      strength: frontier.strength,
+      reason: frontier.reason,
+      frontiers: [],
+    };
+    bucket.frontiers.push(frontier);
+    grouped.set(key, bucket);
+  }
+  return [...grouped.values()].sort(
+    (left, right) => right.frontiers.length - left.frontiers.length || left.action.localeCompare(right.action),
+  );
+}
+
+function compactBoundaryAddress(value: string): string {
+  const oneLine = value.replace(/\s+/gu, ' ').trim();
+  return oneLine.length <= 120 ? oneLine : `${oneLine.slice(0, 117)}...`;
+}
+
+function compactSystemMapRegionId(value: string): string {
+  return value.replace(/^region:(?:apps|packages)\//, '');
+}
+
+function compactSystemMapFileKind(value: string): string {
+  return { source: 'S', test: 'T', entry: 'E', barrel: 'B', worker: 'W' }[value] ?? value;
+}
+
+function compactSystemMapRelationKind(value: string): string {
+  return { call: 'C', 'contract-symbol': 'K', import: 'I', reference: 'R', 'runtime-boundary': 'B' }[value] ?? value;
+}
+
+function compactSystemMapRelationEvidence(value: string): string {
+  if (value.startsWith('runtime-boundary:')) return `B:${value.slice('runtime-boundary:'.length)}`;
+  return (
+    {
+      'ast-callsite': 'A',
+      'ast-member-import-candidate': 'M',
+      'compiler-cross-workspace-symbol': 'K',
+      'semantic-callee': 'S',
+      'scip-chunk': 'C',
+      'indexed-or-source-import': 'I',
+      'indexed-or-source-reference': 'R',
+    }[value] ?? value
+  );
+}
+
+function groupMapValues<T>(values: readonly T[], keyFor: (value: T) => string): Map<string, T[]> {
+  const grouped = new Map<string, T[]>();
+  for (const value of values) {
+    const key = keyFor(value);
+    const bucket = grouped.get(key) ?? [];
+    bucket.push(value);
+    grouped.set(key, bucket);
+  }
+  return grouped;
+}
+
+function compareSystemMapDrilldownSymbols(
+  left: ReturnType<typeof queries.systemMap>['regions'][number]['symbols'][number],
+  right: ReturnType<typeof queries.systemMap>['regions'][number]['symbols'][number],
+): number {
+  return (
+    systemMapOriginRank(left.origins) - systemMapOriginRank(right.origins) ||
+    left.depth - right.depth ||
+    left.startLine - right.startLine ||
+    left.shortName.localeCompare(right.shortName)
+  );
+}
+
+function systemMapOriginRank(origins: readonly string[]): number {
+  if (origins.includes('symbol-anchor')) return 0;
+  if (origins.includes('literal-owner')) return 1;
+  if (origins.some((origin) => origin.startsWith('boundary-import:'))) return 2;
+  if (origins.includes('reference-owner')) return 3;
+  return 4;
+}
+
+function summarizeMapValues(values: readonly string[], limit: number): string {
+  const shown = values.slice(0, limit);
+  return `${shown.join(', ')}${values.length > shown.length ? `; ${values.length - shown.length} more` : ''}`;
+}
+
 export const graphQueryCommandDescriptors: CommandDescriptor[] = [
   tableQueryCommand({
     id: 'hotspots',
@@ -505,6 +1011,100 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     renderShape: 'custom',
     docs: doc('Graph'),
     handler: handleDeepChains,
+  },
+  {
+    id: 'entrypoints',
+    command: 'entrypoints [text]',
+    description: 'Find callables where control may enter from outside the indexed call graph',
+    agent: agentContract(
+      'Which detected external roots or entry-surface candidates match this text?',
+      'entry symbols with files, confidence, evidence, and indexed caller counts',
+      ['pattern'],
+      'complete',
+      'repository',
+    ),
+    options: withJsonOption([option('-s, --scope <path>', 'Limit to files matching path')]),
+    renderShape: 'custom',
+    docs: doc('Graph', ['scip-query entrypoints', 'scip-query entrypoints work-session']),
+    handler: handleEntryPoints,
+  },
+  {
+    id: 'entry-map',
+    command: 'entry-map <entry>',
+    description: 'Map the complete indexed call graph from one detected entry point, collapsed by file',
+    agent: agentContract(
+      'What statically reachable call structure begins at this detected entry point?',
+      'all reachable file regions, cross-region call edges, coverage, and selected expanded symbol details',
+      ['symbol'],
+      'complete',
+    ),
+    options: withJsonOption([
+      option('--expand <region-id>', 'Expand one file region; repeat to expand several together', collectValues, []),
+    ]),
+    renderShape: 'custom',
+    docs: doc('Graph', [
+      'scip-query entry-map start',
+      "scip-query entry-map start --expand 'file:src/routes.ts' --expand 'file:src/store.ts'",
+    ]),
+    handler: handleEntryMap,
+  },
+  {
+    id: 'system-map',
+    command: 'system-map',
+    description: 'Map structural regions, compiler relationships, and exact runtime boundaries from explicit anchors',
+    agent: agentContract(
+      'Which components and proven compiler or runtime relationships connect these explicit literals or symbols?',
+      'all matched anchors, collapsed structural regions, compiler and exact runtime relationships, unresolved boundary frontiers, simultaneous drilldown summaries, and explicit coverage gaps',
+      [],
+      'bounded',
+      'repository',
+    ),
+    options: withJsonOption([
+      option('--search <literal>', 'Add an exact indexed-source anchor; repeat to include several', collectValues, []),
+      option('--symbol <symbol>', 'Add a symbol anchor; repeat to include several', collectValues, []),
+      option('--depth <n>', 'Traverse this many relationship levels', parseInteger, 3),
+      option(
+        '--relation <kind>',
+        'Traverse one relation family; repeat for call, contract-symbol, import, reference, or runtime-boundary',
+        collectValues,
+        [],
+      ),
+      option('--evidence-floor <floor>', 'Runtime evidence floor: exact or derived'),
+      option(
+        '--topology-characters <n>',
+        'Soft character budget for the first human topology view; complete JSON facts remain available',
+        parseInteger,
+        20_000,
+      ),
+      option(
+        '--source-scope <scope>',
+        'Include one source scope; repeat for production, test, fixture, example, generated, script, or unknown',
+        collectValues,
+        [],
+      ),
+      option(
+        '--expand <region-id>',
+        'Expand one structural region; repeat to expand several together',
+        collectValues,
+        [],
+      ),
+    ]),
+    evidence: 'mixed',
+    claims: mixedClaimContract(
+      ['index-generation', 'live-workspace'],
+      [
+        fixedClaimFamily('matched-anchors', 'anchors', 'compiler-graph'),
+        fixedClaimFamily('typed-relations', 'regionRelations', 'repository-source'),
+        fixedClaimFamily('structural-grouping', 'regions', 'heuristic'),
+        fixedClaimFamily('coverage', 'coverage', 'repository-source'),
+      ],
+    ),
+    renderShape: 'custom',
+    docs: doc('Graph', [
+      "scip-query system-map --search 'work_session_stream_events' --symbol appendWorkSessionStreamEvents",
+      "scip-query system-map --search 'work_session_stream_events' --expand 'region:apps/api:modules/sessions' --expand 'region:apps/web:components/sessions'",
+    ]),
+    handler: handleSystemMap,
   },
   budgetedSectionedQueryCommand({
     id: 'call-graph',

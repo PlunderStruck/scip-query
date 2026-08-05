@@ -1,0 +1,199 @@
+{
+  "acceptedAt": "2026-08-03T08:49:16.857Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "87e930d12c2b670631c74e9e633748bee04eafc4a9d88ec7466c82b287ed1968",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CodeBatchEntry changed from interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand... to interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand....",
+      "target": "./queries:CodeBatchEntry"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeFileCoverage.",
+      "target": "./queries:CodeFileCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeFileDefinitionLedgerEntry.",
+      "target": "./queries:CodeFileDefinitionLedgerEntry"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeFileMemberMode.",
+      "target": "./queries:CodeFileMemberMode"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "CodeSelectorKind changed from type CodeSelectorKind = 'source' | 'file-inventory'; to type CodeSelectorKind = 'source' | 'file-source';.",
+      "target": "./queries:CodeSelectorKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapDrilldownAnchor changed from interface SystemMapDrilldownAnchor { kind: 'symbol' | 'literal'; regionId: string; file: string; line: number; label: string; } to interface SystemMapDrilldownAnchor { kind: 'symbol' | 'literal'; regionId: string; file: string; line: number; endLine: number | null; label: string; }.",
+      "target": "./queries:SystemMapDrilldownAnchor"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "codeBatch changed from declare function codeBatch(db: ScipDatabase, selectors: readonly string[], opts?: { context?: number; }): CodeBatchResult; to declare function codeBatch(db: ScipDatabase, selectors: readonly string[], opts?: { context?: number; members?: CodeFileMemberMode; }): CodeBatchResult;.",
+      "target": "./queries:codeBatch"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CodeBatchEntry changed from interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand... to interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand....",
+      "target": "./queries/code:CodeBatchEntry"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeFileCoverage.",
+      "target": "./queries/code:CodeFileCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeFileDefinitionLedgerEntry.",
+      "target": "./queries/code:CodeFileDefinitionLedgerEntry"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeFileMemberMode.",
+      "target": "./queries/code:CodeFileMemberMode"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "CodeSelectorKind changed from type CodeSelectorKind = 'source' | 'file-inventory'; to type CodeSelectorKind = 'source' | 'file-source';.",
+      "target": "./queries/code:CodeSelectorKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "codeBatch changed from declare function codeBatch(db: ScipDatabase, selectors: readonly string[], opts?: { context?: number; }): CodeBatchResult; to declare function codeBatch(db: ScipDatabase, selectors: readonly string[], opts?: { context?: number; members?: CodeFileMemberMode; }): CodeBatchResult;.",
+      "target": "./queries/code:codeBatch"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CodeBatchEntry changed from interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand... to interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand....",
+      "target": "./queries/index:CodeBatchEntry"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeFileCoverage.",
+      "target": "./queries/index:CodeFileCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeFileDefinitionLedgerEntry.",
+      "target": "./queries/index:CodeFileDefinitionLedgerEntry"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeFileMemberMode.",
+      "target": "./queries/index:CodeFileMemberMode"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "CodeSelectorKind changed from type CodeSelectorKind = 'source' | 'file-inventory'; to type CodeSelectorKind = 'source' | 'file-source';.",
+      "target": "./queries/index:CodeSelectorKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapDrilldownAnchor changed from interface SystemMapDrilldownAnchor { kind: 'symbol' | 'literal'; regionId: string; file: string; line: number; label: string; } to interface SystemMapDrilldownAnchor { kind: 'symbol' | 'literal'; regionId: string; file: string; line: number; endLine: number | null; label: string; }.",
+      "target": "./queries/index:SystemMapDrilldownAnchor"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "codeBatch changed from declare function codeBatch(db: ScipDatabase, selectors: readonly string[], opts?: { context?: number; }): CodeBatchResult; to declare function codeBatch(db: ScipDatabase, selectors: readonly string[], opts?: { context?: number; members?: CodeFileMemberMode; }): CodeBatchResult;.",
+      "target": "./queries/index:codeBatch"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapDrilldownAnchor changed from interface SystemMapDrilldownAnchor { kind: 'symbol' | 'literal'; regionId: string; file: string; line: number; label: string; } to interface SystemMapDrilldownAnchor { kind: 'symbol' | 'literal'; regionId: string; file: string; line: number; endLine: number | null; label: string; }.",
+      "target": "./queries/system-map:SystemMapDrilldownAnchor"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "b changed from interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand... to interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand....",
+      "target": "code-<hash>.d.ts:b"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "d changed from interface CodeResolutionCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; } to interface CodeFileCoverage { members: CodeFileMemberMode; basis: 'explicit-exports-and-same-file-reference-closure' | 'complete-file-source'; totalDefinitions: number; returnedD....",
+      "target": "code-<hash>.d.ts:d"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "e changed from type CodeSelectorKind = 'source' | 'file-inventory'; to interface CodeFileDefinitionLedgerEntry extends CodeResolutionCandidate { signature: string | null; nestedDefinitions: number; }.",
+      "target": "code-<hash>.d.ts:e"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "f changed from type CodeSelectorStatus = 'matched' | 'ambiguous' | 'missing'; to type CodeFileMemberMode = 'exported' | 'all';.",
+      "target": "code-<hash>.d.ts:f"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "g changed from interface CoveredSourceRange { relativePath: string; startLine: number; endLine: number; } to interface CodeResolutionCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; }.",
+      "target": "code-<hash>.d.ts:g"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "h changed from declare function code(db: ScipDatabase, symbolPattern: string, opts?: { context?: number; }): CodeResult | null; to type CodeSelectorKind = 'source' | 'file-source';.",
+      "target": "code-<hash>.d.ts:h"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "i changed from declare function codeBatch(db: ScipDatabase, selectors: readonly string[], opts?: { context?: number; }): CodeBatchResult; to type CodeSelectorStatus = 'matched' | 'ambiguous' | 'missing';.",
+      "target": "code-<hash>.d.ts:i"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration j.",
+      "target": "code-<hash>.d.ts:j"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration k.",
+      "target": "code-<hash>.d.ts:k"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration l.",
+      "target": "code-<hash>.d.ts:l"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "75cc23cc9f99bf708c569717c382fbd856f8dabe37f930a34e8a4a6ee00d30f0",
+  "reason": "Replace nonterminal code file inventories with citation-ready file source, explicit omission coverage, and exact system-map ranges.",
+  "schemaVersion": 1
+}

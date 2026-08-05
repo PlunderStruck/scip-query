@@ -1,0 +1,31 @@
+{
+  "acceptedAt": "2026-08-02T18:47:19.652Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "1e7a9e1b4623a465cd85ab12004d8570096065d29473acf67de7b66dba3a2d58",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionSourceUnit changed from interface SourceInspectionSourceUnit extends SourceInspectionSlice { kind: 'source'; id: string; roles: SourceInspectionUnitRole[]; symbols: string[]; omittedCharacters: number; } to interface SourceInspectionSourceUnit extends SourceInspectionSlice { kind: 'source'; id: string; roles: SourceInspectionUnitRole[]; symbols: string[]; omittedCharacters: number;....",
+      "target": "./queries:SourceInspectionSourceUnit"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionSourceUnit changed from interface SourceInspectionSourceUnit extends SourceInspectionSlice { kind: 'source'; id: string; roles: SourceInspectionUnitRole[]; symbols: string[]; omittedCharacters: number; } to interface SourceInspectionSourceUnit extends SourceInspectionSlice { kind: 'source'; id: string; roles: SourceInspectionUnitRole[]; symbols: string[]; omittedCharacters: number;....",
+      "target": "./queries/index:SourceInspectionSourceUnit"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionSourceUnit changed from interface SourceInspectionSourceUnit extends SourceInspectionSlice { kind: 'source'; id: string; roles: SourceInspectionUnitRole[]; symbols: string[]; omittedCharacters: number; } to interface SourceInspectionSourceUnit extends SourceInspectionSlice { kind: 'source'; id: string; roles: SourceInspectionUnitRole[]; symbols: string[]; omittedCharacters: number;....",
+      "target": "./queries/source-inspection:SourceInspectionSourceUnit"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "a61fdd1371c04cb741dc8e3acee6ff4dfbc1f792ad4c29f6b02c1dd8af16948b",
+  "reason": "source packet unit shape reserves optional exact-follow-up metadata for compatibility; complete inspect packets do not populate it",
+  "schemaVersion": 1
+}

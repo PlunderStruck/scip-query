@@ -11,6 +11,7 @@ import { tlaQueryCommandDescriptors } from '../query-commands/tla.js';
 const queryCommandOrder = [
   'stats',
   'files',
+  'session',
   'inspect',
   'search',
   'methods',
@@ -39,6 +40,9 @@ const queryCommandOrder = [
   'kind-counts',
   'deep-chains',
   'hierarchy',
+  'entrypoints',
+  'entry-map',
+  'system-map',
   'call-graph',
   'similar',
   'similar-files',

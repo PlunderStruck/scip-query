@@ -1,4 +1,10 @@
-import { code, type CodeResult } from '../../queries/navigation/code.js';
+import {
+  codeBatch,
+  type CodeBatchEntry,
+  type CodeBatchResult,
+  type CodeFileMemberMode,
+  type CodeResult,
+} from '../../queries/navigation/code.js';
 import { outline } from '../../queries/navigation/outline.js';
 import { refs } from '../../queries/navigation/refs.js';
 import { REPOSITORY_OBSERVATION_OPERATION } from '../command-operation.js';
@@ -21,11 +27,20 @@ import {
   numberOptionValue,
   printJsonEnvelope,
   stringArg,
+  stringArrayArg,
   stringOptionValue,
 } from '../command-kit/command-execution.js';
 import { decodeCompatibleResultCursor, encodeResultCursor, indexGenerationIdentity } from '../result-pagination.js';
+import { DEFAULT_OUTPUT_PAGE_SIZE } from '../output-pagination.js';
 import { displayLine, displayPathRange, displayRange, render } from '../render.js';
 import {
+  renderSourceEvidence,
+  rollbackSourceEmission,
+  sourceEmissionCheckpoint,
+  sourceEmissionSessionSummary,
+} from '../source-emission-session.js';
+import {
+  noMatchMessage,
   symbolResolutionBefore,
   symbolResolutionEmptyMessage,
   symbolResolutionJson,
@@ -236,26 +251,427 @@ function keysetReferencePage(
 }
 
 const handleCode = dbCommand(({ db, args, opts }) => {
-  const query = stringArg(args, 0);
-  const result = code(db, query, { context: definedNumberOption(opts, 'context', 0) });
+  const selectors = stringArrayArg(args, 0);
+  const context = definedNumberOption(opts, 'context', 0);
+  const members = codeFileMemberMode(opts);
+  const result = codeBatch(db, selectors, { context, members });
+  const single = singleExactCodeResult(result);
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('code', args, opts, withSymbolResolutionJson(db, query, result, 'code'), {
-      resultOnly: codeResultOnlyJson(db, query, result),
+    if (single) {
+      const query = selectors[0]!;
+      printJsonEnvelope('code', selectors, opts, withSymbolResolutionJson(db, query, single, 'code'), {
+        resultOnly: codeResultOnlyJson(db, query, single),
+      });
+      return;
+    }
+    printJsonEnvelope('code', selectors, opts, result, {
+      coverage: {
+        complete: true,
+        totalKnown: true,
+        returned: result.entries.length,
+        total: result.requested,
+        omitted: 0,
+      },
+      resultOnly: codeBatchResultOnlyJson(result),
     });
     return;
   }
-  if (!result) return render.empty(symbolResolutionEmptyMessage(db, query, 'Symbol found, but source was unreadable.'));
-  symbolResolutionBefore(db, query);
-  console.log(
-    `${displayPathRange(result.relativePath, result.startLine, result.endLine)}  ${result.shortName}  [${result.language ?? 'unknown'}]\n`,
-  );
-  const lines = result.source.split('\n');
-  for (let index = 0; index < lines.length; index++) {
-    console.log(`  ${String(displayLine(result.startLine + index)).padStart(4)}  ${lines[index]}`);
+  const emissionCheckpoint = sourceEmissionCheckpoint();
+  const packet = single ? codeResultText(single, result.bindingClosure, true) : codeBatchText(result, true);
+  const pageSize = definedNumberOption(opts, 'outputPageSize', DEFAULT_OUTPUT_PAGE_SIZE);
+  if (packet.length > pageSize) {
+    rollbackSourceEmission(emissionCheckpoint);
+    console.error(
+      codePacketRefusal(result, selectors, { context, members, pageSize, packetCharacters: packet.length }),
+    );
+    process.exitCode = 1;
+    return;
   }
+  if (single) {
+    process.stdout.write(packet);
+    return;
+  }
+  const onlyEntry = result.entries[0];
+  if (result.requested === 1 && onlyEntry?.status === 'missing') {
+    return render.empty(noMatchMessage(onlyEntry.selector, onlyEntry.suggestions));
+  }
+  process.stdout.write(packet);
 });
 
-function codeResultOnlyJson(db: Parameters<typeof code>[0], query: string, result: CodeResult | null): unknown {
+const handleSourceSession = dbCommand(({ opts }) => {
+  const reset = booleanOptionValue(opts, 'reset');
+  const summary = sourceEmissionSessionSummary(reset);
+  if (!summary.enabled) {
+    render.empty(summary.reason ?? 'Source-session deduplication is unavailable.');
+    return;
+  }
+  console.log(
+    reset
+      ? 'Source-session ledger reset; subsequent exploration will emit source again.'
+      : `Source session: ${summary.uniqueLines.toLocaleString()} unique source line(s) delivered across ${summary.emissions.toLocaleString()} emission(s).`,
+  );
+  if (!reset && summary.rows.length > 0) console.log(summary.rows.join('\n'));
+});
+
+function codeFileMemberMode(opts: Readonly<Record<string, unknown>>): CodeFileMemberMode {
+  const value = stringOptionValue(opts, 'members') ?? 'exported';
+  if (value === 'exported' || value === 'all') return value;
+  throw new RangeError(`--members must be "exported" or "all", got "${value}".`);
+}
+
+function singleExactCodeResult(result: CodeBatchResult): CodeResult | null {
+  const entry = result.entries[0];
+  return result.requested === 1 &&
+    entry?.status === 'matched' &&
+    entry.kind === 'source' &&
+    (!entry.rangeCoverage || entry.rangeCoverage.referencedDefinitions === 0) &&
+    entry.results.length === 1
+    ? entry.results[0]!
+    : null;
+}
+
+function codeBatchText(result: CodeBatchResult, sessionAware = false): string {
+  const lines: string[] = [
+    `═══ DEFINITIONS (${result.requested} requested: ${result.matched} matched, ${result.ambiguous} ambiguous, ${result.missing} missing) ═══`,
+  ];
+  const rendered = new Set<string>();
+  for (const entry of result.entries) {
+    for (const source of entry.results) {
+      const key = `${source.relativePath}:${source.startLine}:${source.endLine}`;
+      if (rendered.has(key)) {
+        lines.push(
+          '',
+          `  ${entry.selector}: source already included at ${displayPathRange(source.relativePath, source.startLine, source.endLine)}.`,
+        );
+        continue;
+      }
+      rendered.add(key);
+      if (result.requested > 1 || entry.status === 'ambiguous') lines.push('', `  selector ${entry.selector}`);
+      appendCodeResult(lines, source, sessionAware);
+    }
+  }
+
+  const fileSources = result.entries.filter((entry) => entry.kind === 'file-source');
+  if (fileSources.length > 0) {
+    lines.push('', '═══ FILE SOURCE COVERAGE ═══');
+    for (const entry of fileSources) appendCodeFileCoverage(lines, entry);
+  }
+
+  const rangeSources = result.entries.filter((entry) => entry.rangeCoverage);
+  if (rangeSources.length > 0) {
+    lines.push('', '═══ RANGE SOURCE COVERAGE ═══');
+    for (const entry of rangeSources) appendCodeRangeCoverage(lines, entry);
+  }
+
+  const ambiguous = result.entries.filter((entry) => entry.status === 'ambiguous');
+  if (ambiguous.length > 0) {
+    lines.push('', '═══ AMBIGUOUS SELECTORS ═══');
+    for (const entry of ambiguous) appendCodeAmbiguity(lines, entry);
+  }
+
+  const missing = result.entries.filter((entry) => entry.status === 'missing');
+  if (missing.length > 0) {
+    lines.push('', '═══ MISSING SELECTORS ═══');
+    for (const entry of missing) {
+      const suggestions = entry.suggestions.length > 0 ? ` Suggestions: ${entry.suggestions.join(', ')}` : '';
+      lines.push(
+        `  ${entry.selector}: ${entry.reason === 'definition-source-unreadable' ? 'definition source unreadable.' : 'no definition matched.'}${suggestions}`,
+      );
+    }
+  }
+  appendCodeBindingClosure(lines, result.bindingClosure);
+  appendCodeCoverage(lines, result);
+  return `${lines.join('\n')}\n`;
+}
+
+function appendCodeRangeCoverage(lines: string[], entry: CodeBatchEntry): void {
+  const coverage = entry.rangeCoverage;
+  if (!coverage) return;
+  lines.push(
+    `  ${entry.selector} — requested lines returned plus ${coverage.returnedBodies} same-file callable body(ies), covering ${coverage.returnedDefinitions}/${coverage.referencedDefinitions} statically attributed same-file definition(s).`,
+    `    basis: ${coverage.basis}; dynamic calls and references outside the requested lines are not claimed`,
+  );
+  if (coverage.omittedLedger.length === 0) return;
+  lines.push('    OMITTED REFERENCED DEFINITIONS');
+  for (const definition of coverage.omittedLedger) {
+    lines.push(
+      `      ${displayPathRange(definition.relativePath, definition.startLine, definition.endLine)}  ${definition.shortName}`,
+    );
+  }
+}
+
+function codeResultText(result: CodeResult, closure?: CodeResult['bindingClosure'], sessionAware = false): string {
+  const lines: string[] = [];
+  appendCodeResult(lines, result, sessionAware);
+  appendCodeBindingClosure(lines, closure);
+  return `${lines.join('\n')}\n`;
+}
+
+function appendCodeResult(lines: string[], result: CodeResult, sessionAware: boolean): void {
+  if (sessionAware) {
+    lines.push(
+      renderSourceEvidence({
+        relativePath: result.relativePath,
+        startLine: result.startLine,
+        source: result.source,
+        sessionPolicy: 'exact-unit',
+        ownerSymbol: result.shortName,
+        headerSuffix: `  ${result.shortName}  [${result.language ?? 'unknown'}]`,
+        indent: '',
+        sourceIndent: '  ',
+        showFocusMarker: false,
+        lineNumberWidth: 4,
+        blankAfterHeader: true,
+      }),
+    );
+    return;
+  }
+  lines.push(
+    `${displayPathRange(result.relativePath, result.startLine, result.endLine)}  ${result.shortName}  [${result.language ?? 'unknown'}]`,
+    '',
+  );
+  const sourceLines = result.source.split('\n');
+  for (let index = 0; index < sourceLines.length; index++) {
+    lines.push(`  ${String(displayLine(result.startLine + index)).padStart(4)}  ${sourceLines[index]}`);
+  }
+}
+
+function appendCodeFileCoverage(lines: string[], entry: CodeBatchEntry): void {
+  const coverage = entry.fileCoverage;
+  if (!coverage) return;
+  lines.push(
+    `  ${entry.selector} — ${coverage.returnedBodies} source body(ies) cover ${coverage.returnedDefinitions}/${coverage.totalDefinitions} indexed definition(s); ${coverage.omittedDefinitions} omitted definition(s) disclosed below.`,
+    `    basis: ${coverage.basis}; members=${coverage.members}`,
+  );
+  if (coverage.omittedLedger.length === 0) return;
+  lines.push('    OMITTED FILE-LOCAL DEFINITIONS');
+  for (const definition of coverage.omittedLedger) {
+    const signature = definition.signature ? ` — ${trimSignature(definition.signature)}` : '';
+    const nested = definition.nestedDefinitions > 0 ? ` (+${definition.nestedDefinitions} nested definition(s))` : '';
+    lines.push(
+      `      ${'  '.repeat(definition.depth)}${displayPathRange(definition.relativePath, definition.startLine, definition.endLine)}  ${definition.shortName}${signature}${nested}`,
+    );
+  }
+  const omittedRoots = coverage.omittedLedger.filter((definition) => definition.depth === 0);
+  for (let index = 0; index < omittedRoots.length; index += 24) {
+    const group = omittedRoots.slice(index, index + 24);
+    lines.push(
+      `    Read omitted units together: scip-query code ${group
+        .map((definition) =>
+          shellArgument(
+            `${definition.relativePath}:${displayLine(definition.startLine)}-${displayLine(definition.endLine)}`,
+          ),
+        )
+        .join(' ')}`,
+    );
+  }
+}
+
+function appendCodeAmbiguity(lines: string[], entry: CodeBatchEntry): void {
+  lines.push(
+    `  ${entry.selector} — ${entry.totalCandidates} candidate(s); ${entry.results.length > 0 ? 'all candidate bodies returned above' : 'no body selected'}.`,
+  );
+  for (const candidate of entry.candidates) {
+    lines.push(
+      `    ${displayPathRange(candidate.relativePath, candidate.startLine, candidate.endLine)}  ${candidate.shortName}`,
+    );
+  }
+  if (entry.omittedCandidates > 0) lines.push(`    ... ${entry.omittedCandidates} additional candidate identity(ies).`);
+  if (entry.candidates.length > 0) {
+    lines.push(
+      `    Read shown candidates together: scip-query code ${entry.candidates
+        .map((candidate) =>
+          shellArgument(
+            `${candidate.relativePath}:${displayLine(candidate.startLine)}-${displayLine(candidate.endLine)}`,
+          ),
+        )
+        .join(' ')}`,
+    );
+  }
+}
+
+function appendCodeBindingClosure(lines: string[], closure: CodeResult['bindingClosure']): void {
+  if (!closure || closure.inline.length === 0) return;
+  lines.push('', 'LITERAL VALUES');
+  for (const binding of closure.inline) {
+    lines.push(
+      `  inline  ${binding.name} @ ${displayPathRange(binding.relativePath, binding.startLine, binding.endLine)}`,
+    );
+    lines.push(`    ${binding.source ?? ''}`);
+  }
+}
+
+function appendCodeCoverage(lines: string[], result: CodeBatchResult): void {
+  const fileCoverage = result.entries.flatMap((entry) => (entry.fileCoverage ? [entry.fileCoverage] : []));
+  const rangeCoverage = result.entries.flatMap((entry) => (entry.rangeCoverage ? [entry.rangeCoverage] : []));
+  if (fileCoverage.length === 0 && rangeCoverage.length === 0) {
+    lines.push(
+      '',
+      `Coverage: ${result.requested}/${result.requested} selector(s) resolved to the source bodies shown. Selector accounting does not claim that referenced definitions or runtime relationships are complete. Source lines use absolute file line numbers and are citation-ready.`,
+    );
+    return;
+  }
+  const returnedBodies = fileCoverage.reduce((total, coverage) => total + coverage.returnedBodies, 0);
+  const returnedDefinitions = fileCoverage.reduce((total, coverage) => total + coverage.returnedDefinitions, 0);
+  const totalDefinitions = fileCoverage.reduce((total, coverage) => total + coverage.totalDefinitions, 0);
+  const omittedDefinitions = fileCoverage.reduce((total, coverage) => total + coverage.omittedDefinitions, 0);
+  const rangeReferencedDefinitions = rangeCoverage.reduce(
+    (total, coverage) => total + coverage.referencedDefinitions,
+    0,
+  );
+  const rangeReturnedDefinitions = rangeCoverage.reduce((total, coverage) => total + coverage.returnedDefinitions, 0);
+  const rangeOmittedDefinitions = rangeCoverage.reduce((total, coverage) => total + coverage.omittedDefinitions, 0);
+  const details = [
+    ...(fileCoverage.length > 0
+      ? [
+          `${fileCoverage.length} file selector(s) returned ${returnedBodies} source body(ies) covering ${returnedDefinitions}/${totalDefinitions} indexed definition(s); ${omittedDefinitions} file-local definition(s) omitted and disclosed`,
+        ]
+      : []),
+    ...(rangeCoverage.length > 0
+      ? [
+          `${rangeCoverage.length} range selector(s) covered ${rangeReturnedDefinitions}/${rangeReferencedDefinitions} statically attributed same-file definition(s); ${rangeOmittedDefinitions} referenced definition(s) omitted and disclosed`,
+        ]
+      : []),
+  ];
+  lines.push(
+    '',
+    `Coverage: ${result.requested}/${result.requested} selectors resolved; ${details.join('; ')}. Source lines use absolute file line numbers and are citation-ready.`,
+  );
+}
+
+interface CodePacketRefusalOptions {
+  context: number;
+  members: CodeFileMemberMode;
+  pageSize: number;
+  packetCharacters: number;
+}
+
+function codePacketRefusal(
+  result: CodeBatchResult,
+  selectors: readonly string[],
+  options: CodePacketRefusalOptions,
+): string {
+  const lines = [
+    `CODE PACKET REFUSED: the complete packet needs ${options.packetCharacters.toLocaleString()} characters; the active output page is ${options.pageSize.toLocaleString()}.`,
+    'No partial source was emitted.',
+  ];
+  const split = completeCodePacketSplits(result, selectors, options);
+  lines.push(
+    `Run these ${split.commands.length} complete packet(s):`,
+    ...split.commands.map((command) => `  ${command}`),
+  );
+  if (split.ledgerCommands.length > 0) {
+    lines.push(
+      'Then inspect each complete omitted-definition ledger before making file-absence claims:',
+      ...split.ledgerCommands.map((command) => `  ${command}`),
+    );
+  }
+  return lines.join('\n');
+}
+
+function completeCodePacketSplits(
+  result: CodeBatchResult,
+  selectors: readonly string[],
+  options: CodePacketRefusalOptions,
+): { commands: string[]; ledgerCommands: string[] } {
+  const commands: string[] = [];
+  const ledgerCommands: string[] = [];
+  let pendingEntries: CodeBatchEntry[] = [];
+  let pendingSelectors: string[] = [];
+  const flush = (): void => {
+    if (pendingSelectors.length === 0) return;
+    commands.push(codeInvocation(pendingSelectors, options));
+    pendingEntries = [];
+    pendingSelectors = [];
+  };
+
+  for (let index = 0; index < result.entries.length; index++) {
+    const entry = result.entries[index]!;
+    const selector = selectors[index]!;
+    const singleEntryCharacters = codeBatchText(codeBatchSubset(result, [entry])).length;
+    if (singleEntryCharacters > DEFAULT_OUTPUT_PAGE_SIZE) {
+      flush();
+      const sourceSelectors = entry.results.flatMap((source) => completeRangeSelectors(source));
+      for (const sourceSelector of sourceSelectors) {
+        commands.push(
+          codeInvocation([sourceSelector], {
+            ...options,
+            members: 'exported',
+          }),
+        );
+      }
+      if (entry.fileCoverage?.omittedDefinitions) {
+        ledgerCommands.push(`scip-query outline ${shellArgument(entry.selector)} --signatures`);
+      }
+      continue;
+    }
+
+    const trialEntries = [...pendingEntries, entry];
+    if (
+      pendingEntries.length > 0 &&
+      codeBatchText(codeBatchSubset(result, trialEntries)).length > DEFAULT_OUTPUT_PAGE_SIZE
+    ) {
+      flush();
+    }
+    pendingEntries.push(entry);
+    pendingSelectors.push(selector);
+  }
+  flush();
+  return { commands, ledgerCommands };
+}
+
+const SOURCE_PACKET_CHARACTER_TARGET = DEFAULT_OUTPUT_PAGE_SIZE - 8_000;
+
+function completeRangeSelectors(source: CodeResult): string[] {
+  if (codeResultText(source).length <= SOURCE_PACKET_CHARACTER_TARGET) {
+    return [`${source.relativePath}:${displayLine(source.startLine)}-${displayLine(source.endLine)}`];
+  }
+  const selectors: string[] = [];
+  const sourceLines = source.source.split('\n');
+  let chunkStart = 0;
+  let chunkCharacters = 0;
+  for (let index = 0; index < sourceLines.length; index++) {
+    const lineCharacters = sourceLines[index]!.length + 12;
+    if (index > chunkStart && chunkCharacters + lineCharacters > SOURCE_PACKET_CHARACTER_TARGET) {
+      selectors.push(
+        `${source.relativePath}:${displayLine(source.startLine + chunkStart)}-${displayLine(source.startLine + index - 1)}`,
+      );
+      chunkStart = index;
+      chunkCharacters = 0;
+    }
+    chunkCharacters += lineCharacters;
+  }
+  selectors.push(`${source.relativePath}:${displayLine(source.startLine + chunkStart)}-${displayLine(source.endLine)}`);
+  return selectors;
+}
+
+function codeBatchSubset(result: CodeBatchResult, entries: readonly CodeBatchEntry[]): CodeBatchResult {
+  return {
+    requested: entries.length,
+    matched: entries.filter((entry) => entry.status === 'matched').length,
+    ambiguous: entries.filter((entry) => entry.status === 'ambiguous').length,
+    missing: entries.filter((entry) => entry.status === 'missing').length,
+    entries: [...entries],
+    // Keeping the full closure deliberately overestimates every split. The
+    // command that is actually run can only render the same or fewer literals.
+    bindingClosure: result.bindingClosure,
+  };
+}
+
+function codeInvocation(
+  selectors: readonly string[],
+  options: Pick<CodePacketRefusalOptions, 'context' | 'members'>,
+): string {
+  return [
+    'scip-query',
+    'code',
+    ...selectors.map(shellArgument),
+    ...(options.members === 'all' ? ['--members', 'all'] : []),
+    ...(options.context > 0 ? ['--context', String(options.context)] : []),
+  ].join(' ');
+}
+
+function codeResultOnlyJson(db: Parameters<typeof codeBatch>[0], query: string, result: CodeResult | null): unknown {
   if (!result) return symbolResolutionJson(db, query);
   const projected = {
     file: result.relativePath,
@@ -283,12 +699,65 @@ function codeResultOnlyJson(db: Parameters<typeof code>[0], query: string, resul
   };
 }
 
+function codeBatchResultOnlyJson(result: CodeBatchResult): unknown {
+  return {
+    requested: result.requested,
+    matched: result.matched,
+    ambiguous: result.ambiguous,
+    missing: result.missing,
+    entries: result.entries.map((entry) => ({
+      selector: entry.selector,
+      status: entry.status,
+      kind: entry.kind,
+      totalCandidates: entry.totalCandidates,
+      sources: entry.results.map((source) => ({
+        file: source.relativePath,
+        symbol: source.shortName,
+        language: source.language ?? 'unknown',
+        range: { startLine: displayLine(source.startLine), endLine: displayLine(source.endLine) },
+        lines: source.source.split('\n').map((text, index) => ({
+          line: displayLine(source.startLine + index),
+          text,
+        })),
+      })),
+      definitions: entry.definitions,
+      ...(entry.fileCoverage ? { fileCoverage: entry.fileCoverage } : {}),
+      ...(entry.rangeCoverage ? { rangeCoverage: entry.rangeCoverage } : {}),
+      candidates: entry.candidates,
+      omittedCandidates: entry.omittedCandidates,
+      suggestions: entry.suggestions,
+      ...(entry.reason ? { reason: entry.reason } : {}),
+    })),
+    literalValues: result.bindingClosure.inline,
+  };
+}
+
+function shellArgument(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
 /**
- * The three direct-navigation descriptors are command definitions whose
+ * These direct-navigation descriptors are command definitions whose
  * handlers depend only on their own query modules, allowing these common
  * invocations to load without initializing the complete command catalog.
  */
 export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
+  {
+    id: 'session',
+    command: 'session',
+    description: 'Show source ranges already delivered in this agent exploration session',
+    options: [option('--reset', 'Clear this agent source-session ledger')],
+    agent: agentContract(
+      'Which indexed source ranges have already been delivered in this exploration session?',
+      'prior command ordinals and exact source ranges',
+      [],
+      'complete',
+      'repository',
+    ),
+    renderShape: 'custom',
+    docs: doc('Navigation'),
+    handler: handleSourceSession,
+  },
   {
     id: 'refs',
     command: 'refs <symbol>',
@@ -339,22 +808,28 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
   },
   {
     id: 'code',
-    command: 'code <symbol>',
-    description: 'Read the source code for a symbol (bounded to its definition range)',
+    command: 'code <selectors...>',
+    description: 'Read exact definitions, ranges with local call closure, or file export surfaces',
     agent: {
       ...agentContract(
-        'What is the compiler-resolved definition source for this symbol?',
-        'definition identity, source, and line range',
-        ['symbol'],
+        'What exact source defines these symbols, ranges, or file surfaces?',
+        'per-selector resolution, complete definition source, exact ranges with statically attributed same-file call closure, file export surfaces, omitted-local ledgers, and line ranges',
+        [['symbol', 'file']],
         'complete',
       ),
       resultUnits: { kind: 'field', field: 'code' },
     },
     options: withJsonOption([
       option('-C, --context <n>', 'Extra lines of context above/below', parseNonNegativeInteger, 0),
+      option(
+        '--members <exported|all>',
+        'For file selectors, return the exported surface or the complete file',
+        undefined,
+        'exported',
+      ),
     ]),
     renderShape: 'custom',
-    docs: doc('Navigation'),
+    docs: doc('Navigation', ['scip-query code parseRequest handleRequest', 'scip-query code src/api.ts src/web.ts']),
     handler: handleCode,
   },
 ];

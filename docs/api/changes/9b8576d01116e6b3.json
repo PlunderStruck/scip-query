@@ -1,0 +1,49 @@
+{
+  "acceptedAt": "2026-08-04T03:22:57.292Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "9b8576d01116e6b3a595382ac6395660ce1c326f5caac2e5ce6d8bf68a791b1d",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapCoverage changed from interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat... to interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat....",
+      "target": "./queries:SystemMapCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRegion changed from interface SystemMapRegion { id: string; label: string; workspace: string; structuralPath: string; minDepth: number; fileCount: number; sourceFileCount: number; testFileCount: nu... to interface SystemMapRegion { id: string; label: string; workspace: string; structuralPath: string; minDepth: number; fileCount: number; sourceFileCount: number; testFileCount: nu....",
+      "target": "./queries:SystemMapRegion"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapCoverage changed from interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat... to interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat....",
+      "target": "./queries/index:SystemMapCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRegion changed from interface SystemMapRegion { id: string; label: string; workspace: string; structuralPath: string; minDepth: number; fileCount: number; sourceFileCount: number; testFileCount: nu... to interface SystemMapRegion { id: string; label: string; workspace: string; structuralPath: string; minDepth: number; fileCount: number; sourceFileCount: number; testFileCount: nu....",
+      "target": "./queries/index:SystemMapRegion"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapCoverage changed from interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat... to interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat....",
+      "target": "./queries/system-map:SystemMapCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRegion changed from interface SystemMapRegion { id: string; label: string; workspace: string; structuralPath: string; minDepth: number; fileCount: number; sourceFileCount: number; testFileCount: nu... to interface SystemMapRegion { id: string; label: string; workspace: string; structuralPath: string; minDepth: number; fileCount: number; sourceFileCount: number; testFileCount: nu....",
+      "target": "./queries/system-map:SystemMapRegion"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "52aabf875d36259476d54c2c628f473c48e7dbde7e76c719a4be4b9cded70f66",
+  "reason": "Expose source-attributed member-call candidate and unresolved coverage so consumers cannot mistake heuristic graph reachability for compiler-proved coverage.",
+  "schemaVersion": 1
+}

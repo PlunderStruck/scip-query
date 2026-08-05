@@ -65,6 +65,7 @@ import { writeJsonDurable } from '../storage/atomic-json.js';
 import { ScipDatabase } from '../storage/db.js';
 import { seedTypeScriptReferenceFragments } from '../semantic/typescript/reference-fragment-shadow.js';
 import { auxiliaryDocumentsAugmentationStage } from './augmentation/augment.js';
+import { runtimeBoundaryAugmentationStage } from './runtime-boundaries.js';
 import {
   collectAffectedSetShadowRecord,
   createUnavailableAffectedSetShadowRecord,
@@ -602,6 +603,24 @@ export {
   augmentVueResolvedReferencesAsync,
   vueResolvedReferencesAugmentationStage,
 } from './vue/augment-vue.js';
+
+function runRuntimeBoundaryAugmentation(
+  projectRoot: string,
+  dbPath: string,
+  indexPath: string,
+  onStatus: (message: string) => void,
+  reuseExisting: boolean,
+): void {
+  try {
+    runPostIndexAugmentation(runtimeBoundaryAugmentationStage({ indexPath, reuseExisting }), {
+      projectRoot,
+      dbPath,
+      onStatus,
+    });
+  } catch (error) {
+    onStatus(`Runtime-boundary extraction unavailable: ${error instanceof Error ? error.message : String(error)}.`);
+  }
+}
 export { getIndexerConfig, INDEXER_CONFIGS } from './indexers.js';
 export { mergeScipFiles, mergeScipIndexes } from './merge.js';
 export {
@@ -652,6 +671,13 @@ function reuseExistingIndexIfPossible(opts: {
     dbPath: opts.paths.outputDb,
     onStatus: opts.onStatus,
   });
+  runRuntimeBoundaryAugmentation(
+    opts.opts.projectRoot,
+    opts.paths.outputDb,
+    opts.paths.outputScip,
+    opts.onStatus,
+    true,
+  );
   const durationMs = monotonicNowMs() - opts.monotonicStart;
   const lastRefresh = buildLastRefresh({
     trigger: opts.opts.trigger,
@@ -1383,6 +1409,13 @@ async function publishFreshReindexArtifacts(
     dbPath: opts.tempPaths.tempOutputDb,
     onStatus: opts.onStatus,
   });
+  runRuntimeBoundaryAugmentation(
+    opts.projectRoot,
+    opts.tempPaths.tempOutputDb,
+    opts.tempPaths.tempOutputScip,
+    opts.onStatus,
+    false,
+  );
   const indexMaintenance = optimizeSqliteQueryLayout(opts.tempPaths.tempOutputDb);
   if (indexMaintenance.added.length > 0) {
     opts.onStatus(`Added SQLite query indexes: ${indexMaintenance.added.join(', ')}`);
@@ -1536,6 +1569,7 @@ function publishFullyReusedLanguageShardArtifacts(
     dbPath: opts.paths.outputDb,
     onStatus: opts.onStatus,
   });
+  runRuntimeBoundaryAugmentation(opts.projectRoot, opts.paths.outputDb, opts.paths.outputScip, opts.onStatus, true);
   const indexMaintenance = optimizeSqliteQueryLayout(opts.paths.outputDb);
   if (indexMaintenance.added.length > 0) {
     opts.onStatus(`Added SQLite query indexes: ${indexMaintenance.added.join(', ')}`);

@@ -22,26 +22,9 @@ import { leafName } from '../symbols/symbol-parser.js';
 import { getReExports } from '../language-parsers/index.js';
 import { isPackageSurfaceFile } from './package-surface.js';
 import { isRustPublicLibrarySymbol } from './rust-package-surface.js';
+import { classifyFile } from '../source/primitives/file-kind.js';
 
-export type FileKind =
-  | 'entry' // CLI/server bootstraps, main.rs, top-level index.ts, src/bin/*, scripts
-  | 'barrel' // re-export-only modules: index.ts/js, mod.rs, __init__.py
-  | 'worker' // background workers, child-process entry points (foo.worker.ts, etc.)
-  | 'test' // matches a test file pattern
-  | 'source'; // everything else — regular code
-
-/**
- * Classify a file by role. Pure pattern matching — doesn't need a DB.
- * For "is this barrel reachable?" use `isLiveBarrel(db, file)` instead.
- */
-export function classifyFile(file: string): FileKind {
-  const normalized = normalizePath(file);
-  if (matchesTestPattern(normalized)) return 'test';
-  if (isWorkerPath(normalized)) return 'worker';
-  if (isStructuralEntryPath(normalized)) return 'entry';
-  if (isBarrelPath(normalized)) return 'barrel';
-  return 'source';
-}
+export { classifyFile, type FileKind } from '../source/primitives/file-kind.js';
 
 // ── Convenience predicates ───────────────────────────────────────
 
@@ -147,18 +130,33 @@ export function isEntrySurface(db: ScipDatabase, file: string): boolean {
  * cannot see. Two sources, merged: the package surface derived from
  * package.json (exports/main/bin), and explicit `entryRoots` config.
  */
+export type RootedSymbolEvidence =
+  | 'package-surface-file'
+  | 'transitive-package-surface'
+  | 'rust-public-library'
+  | 'framework-entrypoint'
+  | 'configured-file'
+  | 'configured-path-prefix'
+  | 'configured-qualified-var'
+  | 'configured-symbol-pattern';
+
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
-export function isRootedSymbol(db: ScipDatabase, symbol: string, file: string): boolean {
+export function rootedSymbolEvidence(db: ScipDatabase, symbol: string, file: string): RootedSymbolEvidence[] {
   const normalized = normalizePath(file);
-  if (isPackageSurfaceFile(db, normalized)) return true;
-  if (isTransitivelyPackageSurfaceSymbol(db, symbol, normalized)) return true;
-  if (isRustPublicLibrarySymbol(db, symbol, normalized)) return true;
-  if (isFrameworkDiscoveredEntrypointSymbol(symbol, normalized)) return true;
+  const evidence: RootedSymbolEvidence[] = [];
+  if (isPackageSurfaceFile(db, normalized)) evidence.push('package-surface-file');
+  if (isTransitivelyPackageSurfaceSymbol(db, symbol, normalized)) evidence.push('transitive-package-surface');
+  if (isRustPublicLibrarySymbol(db, symbol, normalized)) evidence.push('rust-public-library');
+  if (isFrameworkDiscoveredEntrypointSymbol(symbol, normalized)) evidence.push('framework-entrypoint');
   const roots = db.config.entryRoots;
-  if (!roots) return false;
-  if (roots.files?.some((candidate) => normalizePath(candidate) === normalized)) return true;
-  if (roots.pathPrefixes?.some((prefix) => normalized.startsWith(normalizePath(prefix)))) return true;
-  if (roots.qualifiedVars?.some((qualified) => symbolMatchesQualifiedVar(symbol, qualified))) return true;
+  if (!roots) return evidence;
+  if (roots.files?.some((candidate) => normalizePath(candidate) === normalized)) evidence.push('configured-file');
+  if (roots.pathPrefixes?.some((prefix) => normalized.startsWith(normalizePath(prefix)))) {
+    evidence.push('configured-path-prefix');
+  }
+  if (roots.qualifiedVars?.some((qualified) => symbolMatchesQualifiedVar(symbol, qualified))) {
+    evidence.push('configured-qualified-var');
+  }
   if (
     roots.symbolPatterns?.some((pattern) => {
       try {
@@ -168,8 +166,12 @@ export function isRootedSymbol(db: ScipDatabase, symbol: string, file: string): 
       }
     })
   )
-    return true;
-  return false;
+    evidence.push('configured-symbol-pattern');
+  return evidence;
+}
+
+export function isRootedSymbol(db: ScipDatabase, symbol: string, file: string): boolean {
+  return rootedSymbolEvidence(db, symbol, file).length > 0;
 }
 
 type PackageSurfaceVisibility = Set<string> | null;
@@ -342,79 +344,6 @@ function isSvelteKitRoutePath(normalized: string): boolean {
 
 function isViteRoutePath(normalized: string): boolean {
   return /(?:^|\/)src\/(?:pages|views|routes)\/.+\.(?:ts|tsx|js|jsx|vue)$/.test(normalized);
-}
-
-function matchesTestPattern(normalized: string): boolean {
-  // Direct test files
-  if (/\.(?:test|spec)\.[a-z0-9]+$/i.test(normalized)) return true;
-  if (/(?:^|\/)(?:_)?test_[^/]+$/i.test(normalized)) return true;
-  if (/(?:^|\/)spec_[^/]+$/i.test(normalized)) return true;
-  if (/(?:^|\/)[^/]+_test\.[a-z0-9]+$/i.test(normalized)) return true;
-  if (/(?:^|\/)[^/]+_tests\.rs$/i.test(normalized)) return true; // Rust convention for inline-tests modules
-  if (/(?:^|\/)tests\.rs$/i.test(normalized)) return true; // Rust `mod tests;` body file
-  if (/(?:^|\/)[^/]+_spec\.[a-z0-9]+$/i.test(normalized)) return true;
-  // Test directories (only when path actually traverses them; not bare basenames)
-  if (/(?:^|\/)__tests__\//i.test(normalized)) return true;
-  if (/(?:^|\/)test\//i.test(normalized)) return true;
-  if (/(?:^|\/)tests\//i.test(normalized)) return true;
-  if (/(?:^|\/)__fixtures__\//i.test(normalized)) return true;
-  if (/(?:^|\/)__mocks__\//i.test(normalized)) return true;
-  if (/(?:^|\/)test-support\//i.test(normalized)) return true;
-  if (/(?:^|\/)test-utils\//i.test(normalized)) return true;
-  if (/(?:^|\/)testing\//i.test(normalized)) return true;
-  return false;
-}
-
-function isWorkerPath(normalized: string): boolean {
-  return /(?:^|\/)[^/]*worker\.(?:ts|tsx|js|mjs|cjs|rs|py|go)$/.test(normalized);
-}
-
-function isStructuralEntryPath(normalized: string): boolean {
-  const segments = normalized.split('/');
-  const basename = segments[segments.length - 1] ?? normalized;
-
-  if (
-    basename === 'cli.ts' ||
-    basename === 'cli.js' ||
-    basename === 'postinstall.ts' ||
-    basename === 'postinstall.js' ||
-    basename === 'main.ts' ||
-    basename === 'main.js' ||
-    basename === 'main.rs' ||
-    basename === 'main.go' ||
-    basename === 'main.py' ||
-    basename === 'build.rs' ||
-    basename === 'lib.rs'
-  ) {
-    return true;
-  }
-
-  // Cargo binary targets: every .rs in src/bin/ or examples/ is an entry
-  // point with its own main(). Same for tests/ and benches/.
-  if (/\bsrc\/bin\/[^/]+\.rs$/.test(normalized)) return true;
-  if (/(?:^|\/)examples\/[^/]+\.rs$/.test(normalized)) return true;
-  if (/(?:^|\/)tests\/[^/]+\.rs$/.test(normalized)) return true;
-  if (/(?:^|\/)benches\/[^/]+\.rs$/.test(normalized)) return true;
-
-  // Top-level index files only — nested barrels need a live dependency
-  // path through these roots before counting as entry surfaces.
-  if (basename === 'index.ts' || basename === 'index.js') {
-    if (/(?:^|\/)(?:apps|services)\/[^/]+\/src\/index\.(?:ts|js)$/.test(normalized)) return true;
-    return segments.length <= 2;
-  }
-
-  return false;
-}
-
-function isBarrelPath(normalized: string): boolean {
-  return (
-    normalized === 'index.ts' ||
-    normalized === 'index.js' ||
-    normalized.endsWith('/index.ts') ||
-    normalized.endsWith('/index.js') ||
-    normalized.endsWith('/mod.rs') ||
-    normalized.endsWith('/__init__.py')
-  );
 }
 
 function symbolMatchesQualifiedVar(symbol: string, qualified: string): boolean {

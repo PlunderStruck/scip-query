@@ -19,10 +19,17 @@ coverage, evidence, arguments, or invocation options. Use `--json
 ordinary command instead; pretty JSON remains structurally noisier than the
 human renderer. Both modifiers are rejected without `--json`.
 
-For example, `scip-query code <symbol>` prints source directly. Its result-only
-form contains only `file`, resolved `symbol`, `language`, a one-based `range`,
-and ordered `{ line, text }` rows. Resolution alternatives are added only when
-the requested symbol is ambiguous.
+For example, one exact `scip-query code <selector>` prints source directly. Its
+single-result result-only form contains only `file`, resolved `symbol`,
+`language`, a one-based `range`, and ordered `{ line, text }` rows. With several
+selectors, an exact-file export surface, or ambiguity, result-only reports each
+selector's status, sources, range or file coverage, omitted-definition ledger,
+candidates, and literal values. A line-range selector includes the exact
+requested lines plus statically attributed same-file callable definitions and
+states the dynamic-call limit. An exact-file export surface contains exported
+definitions—or top-level definitions when no explicit export surface
+exists—and their same-file referenced definitions; `--members all` is the
+explicit whole-file form. Ambiguity never silently selects one candidate.
 
 ## Stable JSON envelope
 

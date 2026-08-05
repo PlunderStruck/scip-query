@@ -17,6 +17,12 @@ export interface SourceUnitSnippet extends SourceSnippet {
   omittedLines: number;
 }
 
+export type ReferenceSourceKind = 'complete-call-expression' | 'non-call-reference' | 'bounded-context';
+
+export interface ReferenceSourceSnippet extends SourceSnippet {
+  kind: ReferenceSourceKind;
+}
+
 const READABLE_SOURCE_UNIT_TYPES = new Set([
   'arrow_function',
   'class_declaration',
@@ -34,6 +40,20 @@ const READABLE_SOURCE_UNIT_TYPES = new Set([
   'method_definition',
   'object_method',
   'variable_declaration',
+]);
+
+const CALL_EXPRESSION_TYPES = new Set([
+  'call',
+  'call_expression',
+  'command',
+  'command_call',
+  'function_call_expression',
+  'invocation_expression',
+  'macro_invocation',
+  'method_call',
+  'method_invocation',
+  'new_expression',
+  'object_creation_expression',
 ]);
 
 /**
@@ -60,6 +80,46 @@ export function sourceSnippet(
     endLine,
     focusLine,
     source: lines.slice(startLine, endLine + 1).join('\n'),
+  };
+}
+
+/**
+ * Read source for a resolved reference without clipping a call's arguments.
+ *
+ * A complete call expression supports predicates about the invocation itself.
+ * When the parser cannot identify one unambiguous call to the referenced leaf,
+ * the result stays explicitly bounded so consumers cannot mistake context for
+ * proof about every argument.
+ */
+export function referenceSourceSnippet(
+  db: ScipDatabase,
+  relativePath: string,
+  focusLine: number,
+  contextLines: number,
+  referencedLeaf: string,
+): ReferenceSourceSnippet | null {
+  const fallback = sourceSnippet(db, relativePath, focusLine, contextLines);
+  if (!fallback) return null;
+  const root = getAst(db, relativePath)?.rootNode ?? null;
+  if (!root) return { ...fallback, kind: 'bounded-context' };
+
+  const calls = minimalMatchingCalls(root, focusLine, referencedLeaf);
+  if (calls.length !== 1) {
+    return { ...fallback, kind: calls.length === 0 ? 'non-call-reference' : 'bounded-context' };
+  }
+
+  const call = calls[0]!;
+  const lines = getSourceLines(db, relativePath);
+  const startLine = Math.max(0, call.startPosition.row);
+  const rawEndLine = call.endPosition.column === 0 ? call.endPosition.row - 1 : call.endPosition.row;
+  const endLine = Math.min(lines.length - 1, Math.max(startLine, rawEndLine));
+  return {
+    relativePath,
+    startLine,
+    endLine,
+    focusLine,
+    source: lines.slice(startLine, endLine + 1).join('\n'),
+    kind: 'complete-call-expression',
   };
 }
 
@@ -148,6 +208,36 @@ function smallestReadableUnit(root: SyntaxNode | null, line: number): SyntaxNode
     current = current.parent;
   }
   return null;
+}
+
+function minimalMatchingCalls(root: SyntaxNode, line: number, referencedLeaf: string): SyntaxNode[] {
+  const candidates: SyntaxNode[] = [];
+  collectMatchingCalls(root, line, referencedLeaf, candidates);
+  return candidates.filter(
+    (candidate) =>
+      !candidates.some(
+        (other) =>
+          other !== candidate && other.startIndex >= candidate.startIndex && other.endIndex <= candidate.endIndex,
+      ),
+  );
+}
+
+function collectMatchingCalls(node: SyntaxNode, line: number, referencedLeaf: string, matches: SyntaxNode[]): void {
+  if (!containsLine(node, line)) return;
+  if (CALL_EXPRESSION_TYPES.has(node.type) && callTargetLeaf(node) === referencedLeaf) matches.push(node);
+  for (const child of node.namedChildren) collectMatchingCalls(child, line, referencedLeaf, matches);
+}
+
+function callTargetLeaf(node: SyntaxNode): string | null {
+  const target =
+    node.childForFieldName('function') ??
+    node.childForFieldName('constructor') ??
+    node.childForFieldName('method') ??
+    node.childForFieldName('name') ??
+    node.namedChild(0);
+  if (!target) return null;
+  const identifiers = target.text.match(/[\p{L}_$][\p{L}\p{N}_$!?-]*/gu);
+  return identifiers?.at(-1) ?? null;
 }
 
 function deepestNodeContainingLine(node: SyntaxNode, line: number): SyntaxNode {

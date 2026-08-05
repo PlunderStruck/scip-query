@@ -1,0 +1,67 @@
+{
+  "acceptedAt": "2026-08-03T23:34:54.253Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "da67cd4b29247ddd6eac36f636124cf96b22325ccbf3e09c26d2897a8e7cd976",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapCoverage changed from interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat... to interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat....",
+      "target": "./queries:SystemMapCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'indexed-or-source-reference' | 'indexed-or-source-import'; to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import' | 'indexed-or-source-reference' | 'indexed-or-source-import';.",
+      "target": "./queries:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationFamilyCoverage changed from interface SystemMapRelationFamilyCoverage { evidence: 'compiler-graph' | 'exact-source'; scope: string; completeWithinScope: true; } to interface SystemMapRelationFamilyCoverage { evidence: 'compiler-graph' | 'exact-source' | 'mixed'; scope: string; completeWithinScope: true; }.",
+      "target": "./queries:SystemMapRelationFamilyCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapCoverage changed from interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat... to interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat....",
+      "target": "./queries/index:SystemMapCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'indexed-or-source-reference' | 'indexed-or-source-import'; to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import' | 'indexed-or-source-reference' | 'indexed-or-source-import';.",
+      "target": "./queries/index:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationFamilyCoverage changed from interface SystemMapRelationFamilyCoverage { evidence: 'compiler-graph' | 'exact-source'; scope: string; completeWithinScope: true; } to interface SystemMapRelationFamilyCoverage { evidence: 'compiler-graph' | 'exact-source' | 'mixed'; scope: string; completeWithinScope: true; }.",
+      "target": "./queries/index:SystemMapRelationFamilyCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapCoverage changed from interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat... to interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat....",
+      "target": "./queries/system-map:SystemMapCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'indexed-or-source-reference' | 'indexed-or-source-import'; to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import' | 'indexed-or-source-reference' | 'indexed-or-source-import';.",
+      "target": "./queries/system-map:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationFamilyCoverage changed from interface SystemMapRelationFamilyCoverage { evidence: 'compiler-graph' | 'exact-source'; scope: string; completeWithinScope: true; } to interface SystemMapRelationFamilyCoverage { evidence: 'compiler-graph' | 'exact-source' | 'mixed'; scope: string; completeWithinScope: true; }.",
+      "target": "./queries/system-map:SystemMapRelationFamilyCoverage"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "4a3a1cafc844f8de8e4a17a45801fdcb65c74e91fac3d6eae984f42156ba0196",
+  "reason": "Extend the unreleased system-map relation evidence union with source-attributed member calls and add explicit unresolved-callsite coverage.",
+  "schemaVersion": 1
+}

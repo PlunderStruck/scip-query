@@ -19,6 +19,7 @@ import {
   dbCommand,
   definedLimitOption,
   definedNumberOption,
+  numberOptionValue,
   printJsonEnvelope,
   stringArg,
   stringArrayOptionValue,
@@ -32,6 +33,7 @@ import {
 } from '../command-kit/query-command-builders.js';
 import { displayLine, displayPathRange, displayRange, render } from '../render.js';
 import type { ReportSection } from '../render.js';
+import { renderSourceEvidence } from '../source-emission-session.js';
 import {
   symbolResolutionJson,
   symbolResolutionBefore,
@@ -40,18 +42,37 @@ import {
 } from './symbol-resolution.js';
 import { directNavigationQueryCommandDescriptors } from './direct-navigation.js';
 
-function traceSections(result: ReturnType<typeof queries.traceEvidence>): ReportSection[] {
+export function inspectSearchLimitOption(opts: Readonly<Record<string, unknown>>): number | undefined {
+  const full = booleanOptionValue(opts, 'full');
+  const searchLimit = definedLimitOption(opts, 'limit', 12);
+  return full ? undefined : searchLimit;
+}
+
+export function inspectViewOption(opts: Readonly<Record<string, unknown>>): queries.SourceInspectionView {
+  const view = stringOptionValue(opts, 'view') ?? 'source';
+  if (view !== 'source' && view !== 'behavior') {
+    throw new Error(`Unknown inspect view: ${view}. Use source or behavior.`);
+  }
+  return view;
+}
+
+function traceSections(result: queries.QualifiedTraceEvidenceResult): ReportSection[] {
   const definitionRows: string[] = [];
   for (const d of result.definitions) {
     const sig = d.signature ? `  — ${d.signature}` : '';
-    definitionRows.push(`  ${displayPathRange(d.relativePath, d.startLine, d.endLine)}${sig}`);
     if (d.source) {
       definitionRows.push(
-        d.source
-          .split('\n')
-          .map((line, index) => `    ${displayLine(d.startLine + index)}  ${line}`)
-          .join('\n'),
+        renderSourceEvidence({
+          relativePath: d.relativePath,
+          startLine: d.startLine,
+          source: d.source,
+          sessionPolicy: 'exact-unit',
+          headerSuffix: sig,
+          ownerSymbol: d.signature ?? undefined,
+        }),
       );
+    } else {
+      definitionRows.push(`  ${displayPathRange(d.relativePath, d.startLine, d.endLine)}${sig}`);
     }
   }
 
@@ -63,21 +84,75 @@ function traceSections(result: ReturnType<typeof queries.traceEvidence>): Report
       refRows.push(`  ${ref.relativePath}`);
       prevFile = ref.relativePath;
     }
-    refRows.push(`    line ${displayLine(ref.line)}  in ${ref.enclosingShort}`);
+    const sourceKind = referenceSourceKind(result.referenceEvidence, ref.relativePath, ref.line);
+    refRows.push(`    line ${displayLine(ref.line)}  in ${ref.enclosingShort}  [${referenceSourceLabel(sourceKind)}]`);
     if (
       ref.source !== undefined &&
       ref.source !== null &&
       ref.sourceStartLine !== undefined &&
       ref.sourceStartLine !== null
     ) {
-      refRows.push(renderSourceLines(ref.source, ref.sourceStartLine, new Set([ref.line]), '      '));
+      refRows.push(
+        renderSourceEvidence({
+          relativePath: ref.relativePath,
+          startLine: ref.sourceStartLine,
+          source: ref.source,
+          sessionPolicy: 'preview',
+          focusLines: new Set([ref.line]),
+          ownerSymbol: ref.enclosingShort ?? undefined,
+          indent: '      ',
+          sourceIndent: '      ',
+        }),
+      );
     }
   }
 
   return [
     { title: 'DEFINITION', rows: definitionRows },
     { title: 'REFERENCED BY', rows: refRows },
+    { title: 'CLAIM SUPPORT', rows: claimSupportRows(result.claimSupport), skipIfEmpty: true },
   ];
+}
+
+function referenceSourceKind(
+  evidence: readonly queries.TraceReferenceEvidence[],
+  relativePath: string,
+  line: number,
+): queries.TraceReferenceSourceKind | undefined {
+  return evidence.find((item) => item.relativePath === relativePath && item.line === line)?.sourceKind;
+}
+
+function referenceSourceLabel(kind: queries.TraceReferenceSourceKind | undefined): string {
+  switch (kind) {
+    case 'complete-call-expression':
+      return 'complete call';
+    case 'non-call-reference':
+      return 'non-call reference';
+    case 'bounded-context':
+      return 'bounded context';
+    case 'unavailable':
+      return 'source unavailable';
+    default:
+      return 'coverage unknown';
+  }
+}
+
+function claimSupportRows(support: queries.TraceClaimSupport | null | undefined): string[] {
+  if (!support) return [];
+  return [
+    claimEligibilityRow('Reference-absence claims', support.referenceAbsence),
+    claimEligibilityRow('Callsite-argument claims', support.callsitePredicates),
+  ];
+}
+
+function claimEligibilityRow(label: string, eligibility: queries.TraceClaimEligibility): string {
+  if (eligibility.status === 'eligible') {
+    return `  ${label}: eligible within ${eligibility.scope}. ${eligibility.limitations.join(' ')}`;
+  }
+  return [
+    `  ${label}: INELIGIBLE within ${eligibility.scope}; ${eligibility.reason}`,
+    ...(eligibility.followup ? [`    Inspect uncertain sites together: ${eligibility.followup}`] : []),
+  ].join('\n');
 }
 
 const EVIDENCE_PARTS = [
@@ -103,89 +178,285 @@ function selectedEvidenceParts(values: readonly string[]): queries.EvidencePart[
   return [...new Set(expanded as queries.EvidencePart[])];
 }
 
-function renderSourceLines(
-  source: string,
-  startLine: number,
-  focusLines: ReadonlySet<number>,
-  indent = '    ',
-): string {
-  return source
-    .split('\n')
-    .map((line, index) => {
-      const sourceLine = startLine + index;
-      const marker = focusLines.has(sourceLine) ? '>' : ' ';
-      return `${indent}${marker}${String(displayLine(sourceLine)).padStart(5)}  ${line}`;
-    })
-    .join('\n');
-}
-
 function sourceSearchSections(result: queries.SourceSearchResult): ReportSection[] {
-  const rows = result.matches.map((match) => {
+  const identities = sourceSearchIdentities(result);
+  const sourceRows = result.matches.map((match) => {
     const owner = match.ownerShort ? `  in ${match.ownerShort}` : '';
-    return [
-      `  ${displayPathRange(match.relativePath, match.startLine, match.endLine)}${owner}`,
-      renderSourceLines(match.source, match.startLine, new Set([match.focusLine]), '    '),
-    ].join('\n');
+    return renderSourceEvidence({
+      relativePath: match.relativePath,
+      startLine: match.startLine,
+      source: match.source,
+      sessionPolicy: 'preview',
+      focusLines: new Set([match.focusLine]),
+      ownerSymbol: match.ownerShort ?? undefined,
+      headerSuffix: owner,
+    });
   });
-  if (result.omittedMatches > 0) rows.push(`  ... ${result.omittedMatches} more matching line(s); increase --limit.`);
-  return [{ title: 'SOURCE MATCHES', rows }];
-}
-
-function sourceInspectionSections(result: queries.SourceInspectionResult): ReportSection[] {
-  const searchRows = result.searches.map(
-    (search) =>
-      `  ${search.pattern}: ${search.returnedMatches}/${search.matchingLines} matching line(s) selected` +
-      (search.omittedMatches > 0 ? `; ${search.omittedMatches} omitted` : ''),
-  );
-  const locationRows = result.locations.map(
-    (location) => `  ${location.matched ? 'matched' : 'missing'}  ${location.target}`,
-  );
-  const sourceRows = result.slices.map((slice) => {
-    const owner = slice.ownerShort ? `  in ${slice.ownerShort}` : '';
-    const omitted = slice.omittedLines > 0 ? `  (${slice.omittedLines} line(s) omitted)` : '';
-    return [
-      `  ${displayPathRange(slice.relativePath, slice.startLine, slice.endLine)}${owner}${omitted}`,
-      `    selected by ${slice.reasons.join(', ')}`,
-      renderSourceLines(slice.source, slice.startLine, new Set(slice.focusLines), '    '),
-    ].join('\n');
-  });
-  const evidence = result.evidence.flatMap((item, index) => {
-    const failure = evidenceFailureMessage(item, 'inspect');
-    if (failure) return [{ title: `EVIDENCE ${index + 1}`, rows: [`  ${failure}`] }];
-    return evidenceSections(item).map((section) => ({
-      ...section,
-      title: `EVIDENCE ${index + 1} · ${section.title}`,
-    }));
-  });
+  const identityRows = sourceSearchIdentityRows(identities);
+  const recoveryCommands = sourceSearchRecoveryCommands(result, identities);
   return [
-    { title: 'SEARCH COVERAGE', rows: searchRows, skipIfEmpty: true },
-    { title: 'LOCATION COVERAGE', rows: locationRows, skipIfEmpty: true },
-    { title: 'RELATED SOURCE', rows: sourceRows, skipIfEmpty: true },
-    ...evidence,
+    { title: `MATCH IDENTITIES (${identities.length}/${result.matchingLines}, COMPLETE)`, rows: identityRows },
     {
-      title: 'PACKET COVERAGE',
+      title: `REPRESENTATIVE SOURCE (${result.matches.length}/${result.matchingLines} WINDOWS)`,
+      rows: sourceRows,
+    },
+    {
+      title: 'SEARCH COVERAGE',
       rows: [
-        `  Search/location source: ${result.slices.length}/${result.candidateSlices} candidate slice(s) returned; ${result.omittedSlices} omitted.`,
-        `  Symbol evidence: ${sourceInspectionEvidenceUnits(result)} returned unit(s) from ${result.evidence.length} selector(s).`,
-        `  Search/location limits: ${result.maxSlices} slices and ${result.maxTotalLines} source lines.`,
+        `  Identity coverage: ${identities.length}/${result.matchingLines} matching line(s) across ${result.fileCoverage?.length ?? 0} file(s); complete.`,
+        `  Source materialization: ${result.matches.length}/${result.matchingLines} window(s); ${result.omittedMatches} exact match location(s) were not expanded into source.`,
+        ...(recoveryCommands.length > 0
+          ? [
+              `  Recover every unmaterialized owning unit in ${recoveryCommands.length} bounded batch command(s):`,
+              ...recoveryCommands.map((command) => `  ${command}`),
+              `  Or inspect any chosen locations together at behavior level: scip-query inspect --at 'path:line' --at 'path:line' --view behavior`,
+            ]
+          : ['  Every matching source window was materialized; no drilldown remains.']),
       ],
     },
   ];
 }
 
-function sourceInspectionEvidenceUnits(result: queries.SourceInspectionResult): number {
-  return result.evidence.reduce((total, item) => {
-    if (item.kind !== 'matched') return total + 1;
+function sourceSearchIdentities(result: queries.SourceSearchResult): queries.SourceSearchIdentity[] {
+  return (
+    result.identities ??
+    result.matches.map((match) => ({
+      relativePath: match.relativePath,
+      focusLine: match.focusLine,
+      ownerSymbol: match.ownerSymbol,
+      ownerShort: match.ownerShort,
+      ownerStartLine: match.ownerStartLine ?? null,
+      ownerEndLine: match.ownerEndLine ?? null,
+      fileKind: match.fileKind ?? 'source',
+    }))
+  );
+}
+
+function sourceSearchIdentityRows(identities: readonly queries.SourceSearchIdentity[]): string[] {
+  const byFile = new Map<string, queries.SourceSearchIdentity[]>();
+  for (const identity of identities) {
+    const rows = byFile.get(identity.relativePath) ?? [];
+    rows.push(identity);
+    byFile.set(identity.relativePath, rows);
+  }
+  return [...byFile.entries()].flatMap(([relativePath, fileIdentities]) => {
+    const byOwner = new Map<string, { label: string; lines: number[] }>();
+    for (const identity of fileIdentities) {
+      const ownerKey = identity.ownerSymbol ?? '<file>';
+      const ownerRange =
+        identity.ownerStartLine === null || identity.ownerEndLine === null
+          ? ''
+          : ` ${displayLine(identity.ownerStartLine)}-${displayLine(identity.ownerEndLine)}`;
+      const owner = byOwner.get(ownerKey) ?? {
+        label: identity.ownerShort ? `${identity.ownerShort}${ownerRange}` : '<file scope>',
+        lines: [],
+      };
+      owner.lines.push(displayLine(identity.focusLine));
+      byOwner.set(ownerKey, owner);
+    }
+    return [
+      `  ${relativePath}  [${fileIdentities[0]!.fileKind}; ${fileIdentities.length} match(es)]`,
+      ...[...byOwner.values()].flatMap((owner) =>
+        chunk(owner.lines, 24).map((lines, index) => `    ${index === 0 ? owner.label : '↳'} @ ${lines.join(',')}`),
+      ),
+    ];
+  });
+}
+
+function sourceSearchRecoveryCommands(
+  result: queries.SourceSearchResult,
+  identities: readonly queries.SourceSearchIdentity[],
+): string[] {
+  const materialized = new Set(result.matches.map((match) => sourceSearchIdentityKey(match)));
+  const selectors = new Set<string>();
+  for (const identity of identities) {
+    if (materialized.has(sourceSearchIdentityKey(identity))) continue;
+    const startLine = displayLine(identity.ownerStartLine ?? identity.focusLine);
+    const endLine = displayLine(identity.ownerEndLine ?? identity.focusLine);
+    selectors.add(`${identity.relativePath}:${startLine}-${endLine}`);
+  }
+  return chunk([...selectors], 24).map(
+    (batch) => `scip-query code ${batch.map((selector) => shellArgument(selector)).join(' ')}`,
+  );
+}
+
+function sourceSearchIdentityKey(identity: Pick<queries.SourceSearchIdentity, 'relativePath' | 'focusLine'>): string {
+  return `${identity.relativePath}\0${identity.focusLine}`;
+}
+
+function chunk<T>(values: readonly T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let index = 0; index < values.length; index += size) result.push(values.slice(index, index + size));
+  return result;
+}
+
+function shellArgument(value: string): string {
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+
+function sourceInspectionSections(result: queries.SourceInspectionResult): ReportSection[] {
+  const units = result.units ?? [];
+  const searchRows = result.searches.map((search) => {
+    const rows = [
+      `  ${search.pattern}: ${search.returnedMatches}/${search.matchingLines} matching line(s) materialized across ${search.returnedFiles ?? 0}/${search.matchingFiles ?? 0} file(s); ${search.selectedUnits ?? 0}/${search.candidateUnits ?? 0} deduplicated unit(s) selected`,
+    ];
+    if (search.omittedMatches > 0 || (search.omittedUnits ?? 0) > 0) {
+      rows.push(
+        `    Withheld: ${search.omittedMatches} matching line(s), ${search.omittedFiles ?? 0} file(s) with no materialized match, and ${search.omittedUnits ?? 0} materialized unit(s) outside the packet ceiling.`,
+      );
+      if ((search.scopeHints?.length ?? 0) > 0) {
+        rows.push('    Highest-coverage scopes available for focused expansion:');
+        rows.push(
+          ...(search.scopeHints ?? []).map(
+            (scope) =>
+              `      ${scope.scope}: ${scope.returnedMatches}/${scope.matchingLines} matching line(s) materialized; ${scope.exactFollowup}`,
+          ),
+        );
+        if ((search.omittedScopeHints ?? 0) > 0)
+          rows.push(`      ... ${search.omittedScopeHints} additional matching scope(s).`);
+      }
+      if (search.exactFollowup) {
+        rows.push(
+          `    Expand this selector completely only if omitted matches can change the decision: ${search.exactFollowup}`,
+        );
+      }
+    }
+    return rows.join('\n');
+  });
+  const locationRows = result.locations.map(
+    (location) => `  ${location.matched ? 'matched' : 'missing'}  ${location.target}`,
+  );
+  const sourceRows = units.map(sourceInspectionUnitRow);
+  const bindingRows = bindingClosureRows(result.bindingClosure);
+  const omissionRows = (result.omissionGroups ?? []).map(sourceInspectionOmissionGroupRow);
+  const resolutionRows = result.evidence.flatMap((item) => {
+    const failure = evidenceFailureMessage(item, 'inspect');
+    return failure ? [`  ${failure}`] : [];
+  });
+  const packet = result.packetCoverage;
+  const packetRows = packet
+    ? [
+        `  ${packet.mode === 'complete' ? 'Complete' : 'Ranked bounded'} semantic packet: ${packet.returnedUnits}/${packet.candidateUnits} materialized unit(s), ${result.returnedLines ?? 0} underlying source line(s), and ${result.returnedViewCharacters ?? result.returnedCharacters ?? 0} displayed evidence character(s).`,
+        `  Selection ceiling: ${packet.maxUnits} unit(s) or ${packet.maxCharacters} displayed evidence character(s); syntax units are never clipped.`,
+        `  Exact symbol/location evidence: ${packet.exactSelectorsComplete ? 'complete within materialized compiler evidence' : 'some lower-ranked units withheld'}.`,
+        ...(packet.omittedUnits > 0
+          ? [`  Withheld materialized units by role: ${renderInspectionRoleCounts(packet.omittedByRole)}.`]
+          : []),
+        ...(packet.expansionCommand
+          ? [
+              `  Expand the complete selector set only if omitted evidence can change the decision: ${packet.expansionCommand}`,
+            ]
+          : []),
+        '  Universal output transport may still page the rendered bytes; transport pages do not change this selection coverage.',
+      ]
+    : [
+        `  Complete semantic packet: ${units.length} deduplicated unit(s), ${result.returnedLines ?? 0} source line(s), and ${result.returnedCharacters ?? 0} source character(s).`,
+      ];
+  const stoppingRows = result.stoppingSummary
+    ? [
+        `  ${result.stoppingSummary.status}: ${result.stoppingSummary.guidance}`,
+        ...(result.stoppingSummary.openEvidence > 0
+          ? [
+              `  ${result.stoppingSummary.openEvidence} open evidence item(s); ${(result.omissionGroups ?? []).length} recoverable omission group(s).`,
+            ]
+          : []),
+      ]
+    : [];
+  return [
+    { title: 'SEARCH COVERAGE', rows: searchRows, skipIfEmpty: true },
+    { title: 'LOCATION COVERAGE', rows: locationRows, skipIfEmpty: true },
+    { title: 'SYMBOL RESOLUTION', rows: resolutionRows, skipIfEmpty: true },
+    { title: 'EVIDENCE PACKET', rows: sourceRows, skipIfEmpty: true },
+    { title: 'LITERAL VALUES', rows: bindingRows, skipIfEmpty: true },
+    { title: 'OMISSION LEDGER', rows: omissionRows, skipIfEmpty: true },
+    {
+      title: 'PACKET COVERAGE',
+      rows: packetRows,
+    },
+    { title: 'STOPPING CHECK', rows: stoppingRows, skipIfEmpty: true },
+  ];
+}
+
+function renderInspectionRoleCounts(counts: Partial<Record<queries.SourceInspectionUnitRole, number>>): string {
+  return Object.entries(counts)
+    .map(([role, count]) => `${role}=${count}`)
+    .join(', ');
+}
+
+function sourceInspectionUnitRow(unit: queries.SourceInspectionUnit): string {
+  switch (unit.kind) {
+    case 'source': {
+      const owner = unit.ownerShort ? `  in ${unit.ownerShort}` : '';
+      if (unit.behavior) {
+        const coverage = unit.behavior.coverage;
+        const rows = [
+          `  ${displayPathRange(unit.relativePath, unit.startLine, unit.endLine)}${owner}`,
+          `    roles: ${unit.roles.join(', ')}; selected by ${unit.reasons.join(', ')}`,
+          `    ${unit.behavior.constructKind}: ${unit.behavior.signature}`,
+          ...unit.behavior.lines.map(
+            (line) =>
+              `    L${displayLine(line.line)}${line.endLine > line.line ? `-${displayLine(line.endLine)}` : ''} ${'  '.repeat(line.depth)}${line.text}${line.copied ? '  [verbatim]' : ''}`,
+          ),
+          ...(unit.behavior.testCases.length > 0
+            ? [`    related test cases: ${unit.behavior.testCases.join('; ')}`]
+            : []),
+          ...sourceInspectionRuntimeFactRows(unit.runtimeFacts ?? []),
+          `    coverage: ${coverage.representedStatements}/${coverage.sourceStatements} source statement(s) represented; ${coverage.copiedStatements} verbatim; ${coverage.omittedStatements} omitted; ${unit.behavior.outlineCharacters}/${unit.behavior.rawCharacters} estimated characters`,
+        ];
+        return rows.join('\n');
+      }
+      const source = renderSourceEvidence({
+        relativePath: unit.relativePath,
+        startLine: unit.startLine,
+        source: unit.source,
+        sessionPolicy: 'exact-unit',
+        focusLines: new Set(unit.focusLines),
+        ownerSymbol: unit.ownerShort ?? undefined,
+        headerSuffix: owner,
+        afterHeader: [`    roles: ${unit.roles.join(', ')}; selected by ${unit.reasons.join(', ')}`],
+      });
+      const runtimeRows = sourceInspectionRuntimeFactRows(unit.runtimeFacts ?? []);
+      return runtimeRows.length > 0 ? `${source}\n${runtimeRows.join('\n')}` : source;
+    }
+    case 'path':
+      return [
+        `  ${unit.relationship}`,
+        `    ${unit.roles.join(', ')} edge source was not located. Follow up exactly: ${unit.exactFollowup}`,
+      ].join('\n');
+    default:
+      return assertNever(unit);
+  }
+}
+
+function sourceInspectionRuntimeFactRows(facts: readonly queries.SourceInspectionRuntimeFact[]): string[] {
+  return facts.map((fact) => {
+    const key = fact.keyParts.map((part) => `${part.name}=${part.value}`).join(', ') || 'no resolved key';
     return (
-      total +
-      (item.definition ? 1 : 0) +
-      item.referenceWindows.length +
-      item.callers.length +
-      item.callees.length +
-      item.dependencies.length +
-      item.consumers.length
+      `    runtime L${displayLine(fact.line)} [${fact.strength}] ${fact.action} (${fact.role}; ${fact.resolution}) ` +
+      `${key}; proof=${fact.derivation.rule}`
     );
-  }, 0);
+  });
+}
+
+function sourceInspectionOmissionGroupRow(group: queries.SourceInspectionOmissionGroup): string {
+  const anchors = group.anchors.slice(0, 4).map((anchor) => {
+    const owner = anchor.ownerShort ? ` in ${anchor.ownerShort}` : '';
+    const signals = anchor.behaviorSignals.length > 0 ? ` [${anchor.behaviorSignals.join(',')}]` : '';
+    return `      ${anchor.relativePath}:${displayLine(anchor.line)}${owner}${signals}`;
+  });
+  if (group.anchors.length > anchors.length) {
+    anchors.push(`      ... ${group.anchors.length - anchors.length} additional anchor(s) represented by this group.`);
+  }
+  return [
+    `  ${group.id}  ${group.scope} — ${group.candidateUnits} unit(s), ${group.sourceCharacters} source character(s)`,
+    `    roles: ${group.roles.join(', ')}; behavior: ${group.behaviorSignals.join(', ') || 'not summarized'}`,
+    ...anchors,
+    `    Drill into this group together: ${group.drillCommand}`,
+  ].join('\n');
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled source inspection unit: ${JSON.stringify(value)}`);
 }
 
 function evidenceFailureMessage(
@@ -208,34 +479,48 @@ function evidenceFailureMessage(
   );
 }
 
-function evidenceSections(result: queries.EvidenceResult): ReportSection[] {
+function evidenceSections(result: queries.QualifiedEvidenceResult): ReportSection[] {
   if (result.kind !== 'matched') return [];
   const definitionRows = result.definition
     ? [
-        `  ${displayPathRange(result.definition.relativePath, result.definition.startLine, result.definition.endLine)}  ${result.definition.shortName}`,
-        renderSourceLines(result.definition.source, result.definition.startLine, new Set(), '    '),
+        renderSourceEvidence({
+          relativePath: result.definition.relativePath,
+          startLine: result.definition.startLine,
+          source: result.definition.source,
+          sessionPolicy: 'exact-unit',
+          ownerSymbol: result.definition.shortName,
+          headerSuffix: `  ${result.definition.shortName}`,
+        }),
+        ...bindingClosureRows(result.definition.bindingClosure),
       ]
     : [];
   const referenceRows = result.referenceWindows.map((window) => {
     const identities = window.references
-      .map((reference) => `${displayLine(reference.line)} in ${reference.enclosingShort}`)
+      .map(
+        (reference) =>
+          `${displayLine(reference.line)} in ${reference.enclosingShort} [` +
+          `${referenceSourceLabel(referenceSourceKind(result.referenceEvidence, window.relativePath, reference.line))}]`,
+      )
       .join(', ');
-    return [
-      `  ${displayPathRange(window.relativePath, window.startLine, window.endLine)}  references: ${identities}`,
-      renderSourceLines(
-        window.source,
-        window.startLine,
-        new Set(window.references.map((reference) => reference.line)),
-        '    ',
-      ),
-    ].join('\n');
+    return renderSourceEvidence({
+      relativePath: window.relativePath,
+      startLine: window.startLine,
+      source: window.source,
+      sessionPolicy: 'preview',
+      focusLines: new Set(window.references.map((reference) => reference.line)),
+      headerSuffix: `  references: ${identities}`,
+    });
   });
   const relatedRows = (rows: readonly queries.EvidenceRelatedSymbol[]) =>
     rows.map((row) =>
-      [
-        `  ${displayPathRange(row.relativePath, row.startLine, row.endLine)}  ${row.shortName}${row.omittedLines > 0 ? `  (${row.omittedLines} line(s) omitted)` : ''}`,
-        renderSourceLines(row.source, row.startLine, new Set(), '    '),
-      ].join('\n'),
+      renderSourceEvidence({
+        relativePath: row.relativePath,
+        startLine: row.startLine,
+        source: row.source,
+        sessionPolicy: 'preview',
+        ownerSymbol: row.shortName,
+        headerSuffix: `  ${row.shortName}${row.omittedLines > 0 ? `  (${row.omittedLines} line(s) omitted)` : ''}`,
+      }),
     );
   return [
     { title: 'DEFINITION', rows: definitionRows, skipIfEmpty: true },
@@ -244,7 +529,20 @@ function evidenceSections(result: queries.EvidenceResult): ReportSection[] {
     { title: 'CALLEES', rows: relatedRows(result.callees), skipIfEmpty: true },
     { title: 'DEPENDENCIES', rows: result.dependencies.map((row) => `  ${row.relativePath}`), skipIfEmpty: true },
     { title: 'CONSUMERS', rows: result.consumers.map((row) => `  ${row.relativePath}`), skipIfEmpty: true },
+    { title: 'CLAIM SUPPORT', rows: claimSupportRows(result.claimSupport), skipIfEmpty: true },
   ];
+}
+
+function bindingClosureRows(closure: queries.BindingClosure | undefined): string[] {
+  if (!closure) return [];
+  const rows: string[] = [];
+  for (const binding of closure.inline) {
+    rows.push(
+      `  inline  ${binding.name} @ ${displayPathRange(binding.relativePath, binding.startLine, binding.endLine)}`,
+      `    ${binding.source ?? ''}`,
+    );
+  }
+  return rows;
 }
 
 const handleImports = budgetedListCommand('imports', {
@@ -394,88 +692,123 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       ),
       option('-s, --scope <path>', 'Limit literal searches to indexed paths matching this text'),
       option('-C, --context <n>', 'Fallback lines around a match with no syntax unit', parseNonNegativeInteger, 6),
-      option('-n, --limit <n>', 'Maximum matching lines selected per search', parsePositiveInteger, 6),
-      option('--unit-lines <n>', 'Maximum lines for each syntax-aware source unit', parsePositiveInteger, 80),
-      option('--total-lines <n>', 'Maximum source lines across the search/location packet', parsePositiveInteger, 300),
+      option('-n, --limit <n>', 'Set matching lines materialized per search (default 12)', parsePositiveInteger),
+      option('--max-units <n>', 'Set the ranked packet unit ceiling (default 48)', parsePositiveInteger),
+      option(
+        '--max-characters <n>',
+        'Set the soft displayed-evidence character ceiling (default 60000)',
+        parsePositiveInteger,
+      ),
+      option(
+        '--view <view>',
+        'Render exact source, or raw/normalized behavior chosen by token cost with complete statement accounting (source or behavior; default source)',
+      ),
+      option(
+        '--unit-lines <n>',
+        'Deprecated compatibility option; inspect now returns complete syntax units',
+        parsePositiveInteger,
+      ),
+      option(
+        '--total-lines <n>',
+        'Deprecated compatibility option; inspect no longer has a packet line budget',
+        parsePositiveInteger,
+      ),
       option(
         '--include <part>',
         'Add definition, references, callers, callees, dependencies, consumers, or all to every symbol; repeat or comma-separate',
         collectValues,
         [],
       ),
-      option('--full', 'Run unbounded semantic analysis on large indexes'),
+      option('--full', 'Return all selector matches and materialized units, and run unbounded semantic analysis'),
     ],
     budget: 'semantic',
     agent: agentContract(
       'Which related source units across several known text, symbol, or location anchors should be read together?',
-      'one bounded, deduplicated source packet plus selected symbol relationships and coverage',
+      'one ranked, deduplicated semantic packet plus exact selector cardinality and explicit expansion coverage',
       [],
       'bounded',
       'repository',
     ),
     docs: doc('Navigation', [
-      "scip-query inspect --search sessionStreamEvents --search work_session_stream_events --search 'agent:work_session'",
+      "scip-query inspect --search sessionStreamEvents --search work_session_stream_events --search 'agent:work_session' --view behavior",
       'scip-query inspect --symbol appendEvent --symbol publishEvent --include definition,references,callers,callees',
       'scip-query inspect --at src/api.ts:42 --at src/web.tsx:90',
     ]),
-    query: ({ db, opts, budget }) =>
-      queries.inspectSource(db, {
+    query: ({ db, opts, budget }) => {
+      const full = booleanOptionValue(opts, 'full');
+      return queries.inspectSource(db, {
         searches: stringArrayOptionValue(opts, 'search'),
         symbols: stringArrayOptionValue(opts, 'symbol'),
         locations: stringArrayOptionValue(opts, 'at'),
         scope: stringOptionValue(opts, 'scope'),
         context: definedNumberOption(opts, 'context', 6),
-        searchLimit: definedLimitOption(opts, 'limit', 6),
-        unitLines: definedNumberOption(opts, 'unitLines', 80),
-        totalLines: definedNumberOption(opts, 'totalLines', 300),
+        searchLimit: inspectSearchLimitOption(opts),
+        maxUnits: numberOptionValue(opts, 'maxUnits'),
+        maxCharacters: numberOptionValue(opts, 'maxCharacters'),
+        view: inspectViewOption(opts),
+        full,
+        unitLines: numberOptionValue(opts, 'unitLines'),
+        totalLines: numberOptionValue(opts, 'totalLines'),
         evidence: {
-          parts: selectedEvidenceParts(stringArrayOptionValue(opts, 'include')),
+          parts: selectedEvidenceParts(stringArrayOptionValue(opts, 'include')) ?? [...EVIDENCE_PARTS],
           referenceContext: 4,
           relatedSourceLines: 60,
           semantic: budget.semantic,
         },
-      }),
+      });
+    },
     coverage: (result, { budget }) => {
       const omittedMatches = result.searches.reduce((total, search) => total + search.omittedMatches, 0);
-      const omitted = omittedMatches + result.omittedSlices;
-      const returned = result.slices.length + sourceInspectionEvidenceUnits(result);
-      return budget.analysisBudget || omitted > 0
-        ? { complete: false, totalKnown: false, returned }
-        : {
-            complete: true,
-            totalKnown: true,
-            returned,
-            total: returned,
-            omitted: 0,
-          };
+      const returned = result.units?.length ?? result.slices.length;
+      if (budget.analysisBudget || omittedMatches > 0 || (result.omittedUnits ?? 0) > 0) {
+        return {
+          complete: false,
+          totalKnown: false,
+          returned,
+        };
+      }
+      return {
+        complete: true,
+        totalKnown: true,
+        returned,
+        total: returned,
+        omitted: 0,
+      };
     },
     agentResult: (result) => ({
       searches: result.searches,
       evidence: result.evidence.map((item) => ({ query: item.query, kind: item.kind })),
       locations: result.locations,
-      returnedSlices: result.slices.length,
-      returnedEvidenceUnits: sourceInspectionEvidenceUnits(result),
-      omittedSlices: result.omittedSlices,
+      returnedUnits: result.units?.length ?? result.slices.length,
+      candidateUnits: result.candidateUnits ?? result.candidateSlices,
+      omittedUnits: result.omittedUnits ?? result.omittedSlices,
+      view: result.view,
+      omissionGroups: result.omissionGroups,
     }),
     sections: sourceInspectionSections,
   }),
   sectionedQueryCommand({
     id: 'search',
     command: 'search <text>',
-    description: 'Search literal or regular-expression text in indexed source with nearby code and symbol ownership',
+    description: 'List every indexed text-match identity and preview a representative subset of nearby source',
     options: [
       option('-s, --scope <path>', 'Limit the search to indexed paths matching this text'),
       option('-C, --context <n>', 'Source lines before and after each match', parseNonNegativeInteger, 6),
-      option('-n, --limit <n>', 'Maximum matching lines to return', parsePositiveInteger, 12),
-      option('--full', 'Return every matching line'),
+      option(
+        '-n, --limit <n>',
+        'Source windows to materialize; match identities remain complete',
+        parsePositiveInteger,
+        12,
+      ),
+      option('--full', 'Materialize source for every match; identity coverage is already complete without it'),
       option('--regexp', 'Treat the search text as a bounded regular expression'),
       option('-i, --ignore-case', 'Ignore case'),
     ],
     agent: agentContract(
       'Where does this exact text occur in indexed source, and which symbol owns each line?',
-      'matching source windows, file and line identities, owning symbols, and coverage',
+      'all file and line identities with owners, plus bounded representative source and exact batch recovery commands',
       ['pattern'],
-      'bounded',
+      'complete',
     ),
     docs: doc('Navigation', ["scip-query search 'eventName'", "scip-query search 'send.*event' --regexp --scope src"]),
     query: ({ db, args, opts }) =>
@@ -485,32 +818,28 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
         limit: definedLimitOption(opts, 'limit', 12),
         regexp: booleanOptionValue(opts, 'regexp'),
         ignoreCase: booleanOptionValue(opts, 'ignoreCase'),
+        ranking: 'structural',
       }),
     emptyMessage: (result) =>
       result.matchingLines === 0 ? `No indexed source line matched '${result.pattern}'.` : undefined,
-    coverage: (result) =>
-      result.omittedMatches === 0
-        ? {
-            complete: true,
-            totalKnown: true,
-            returned: result.matches.length,
-            total: result.matchingLines,
-            omitted: 0,
-          }
-        : {
-            complete: false,
-            totalKnown: true,
-            returned: result.matches.length,
-            total: result.matchingLines,
-            omitted: result.omittedMatches,
-          },
+    coverage: (result) => ({
+      complete: true,
+      totalKnown: true,
+      returned: sourceSearchIdentities(result).length,
+      total: result.matchingLines,
+      omitted: 0,
+    }),
     agentResult: (result) => ({
       mode: result.mode,
       scannedFiles: result.scannedFiles,
-      returnedMatches: result.matches.length,
+      returnedMatches: sourceSearchIdentities(result).length,
       totalMatches: result.matchingLines,
-      omittedMatches: result.omittedMatches,
-      matchIdentities: result.matches.map((match) => `${match.relativePath}:${displayLine(match.focusLine)}`),
+      omittedMatches: 0,
+      materializedSourceWindows: result.matches.length,
+      unmaterializedSourceWindows: result.omittedMatches,
+      matchIdentities: sourceSearchIdentities(result).map(
+        (match) => `${match.relativePath}:${displayLine(match.focusLine)}`,
+      ),
     }),
     sections: sourceSearchSections,
   }),
@@ -551,7 +880,8 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       ],
     },
     docs: doc('Navigation', ['scip-query trace parseSymbol']),
-    query: ({ db, args, budget }) => queries.traceEvidence(db, stringArg(args, 0), { semantic: budget.semantic }),
+    query: ({ db, args, budget }) =>
+      queries.qualifiedTraceEvidence(db, stringArg(args, 0), { semantic: budget.semantic }),
     emptyMessage: (result, { db, args }) =>
       result.definitions.length === 0 && result.referencedBy.length === 0
         ? symbolResolutionEmptyMessage(db, stringArg(args, 0), 'No trace rows found.')
@@ -610,7 +940,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       'scip-query evidence appendEvent --include definition,references,callers,callees',
     ]),
     query: ({ db, args, opts, budget }) =>
-      queries.evidence(db, stringArg(args, 0), {
+      queries.qualifiedEvidence(db, stringArg(args, 0), {
         parts: selectedEvidenceParts(stringArrayOptionValue(opts, 'include')),
         referenceContext: definedNumberOption(opts, 'context', 2),
         relatedSourceLines: definedNumberOption(opts, 'relatedSourceLines', 80),

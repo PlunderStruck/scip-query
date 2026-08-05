@@ -1,0 +1,37 @@
+{
+  "acceptedAt": "2026-08-03T04:54:13.432Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "ccb6cf2ac2224e50d54422e64f1883e6bef0cc37f2c672c5a3bff3c730d1ce05",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries:SystemMapResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries/index:SystemMapResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapExpansion.",
+      "target": "./queries/system-map:SystemMapExpansion"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries/system-map:SystemMapResult"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "203270e33de793556f8afc1bbecdc3d4a281715eee60bd291f421f1109eafc9e",
+  "reason": "Adds an exact all-region system-map expansion command while preserving existing query result contracts.",
+  "schemaVersion": 1
+}

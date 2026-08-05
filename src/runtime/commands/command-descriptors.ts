@@ -16,9 +16,11 @@ import {
 import { DIFF_IMPACT_BATCH_COMMAND, HEALTH_PHASE_COMMAND } from '../cli-support.js';
 import { BUILTIN_SKILLS } from '../setup.js';
 import * as handlers from './command-handlers.js';
+import { outputContinuationCommandDescriptor } from './output-continuation-command.js';
 import { orderedQueryCommandDescriptors } from './query-command-specs.js';
 
 export const commandDescriptors: CommandDescriptor[] = [
+  outputContinuationCommandDescriptor,
   {
     id: 'hook-architecture-stop',
     command: 'hook-architecture-stop',

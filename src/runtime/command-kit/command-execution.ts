@@ -29,6 +29,7 @@ import {
 import { buildObservationReceipt, type ObservationReceiptV2 } from '../observation-receipt.js';
 import { render, writeSerializedJson } from '../render.js';
 import type { ReportSection } from '../render.js';
+import { bindSourceEmissionGeneration } from '../source-emission-session.js';
 
 export type CommandOptions = Record<string, unknown>;
 const OPTION_VALUE_SOURCE = Symbol('option-value-source');
@@ -131,7 +132,10 @@ interface CommandOutputSpec<Output, Ctx extends DbCommandContext> {
 export function dbCommand(run: (ctx: DbCommandContext) => void): CommandHandler {
   return (...rawArgs: unknown[]) => {
     const { args, opts } = splitCommanderActionArgs(rawArgs);
-    withDb((db) => run({ db, args, opts }));
+    withDb((db) => {
+      bindSourceEmissionGeneration(db.generation.identity);
+      run({ db, args, opts });
+    });
   };
 }
 
@@ -245,6 +249,13 @@ export function budgetedGroupedByFileCommand<Row>(
 
 export function stringArg(args: readonly unknown[], index: number): string {
   return String(args[index]);
+}
+
+export function stringArrayArg(args: readonly unknown[], index: number): string[] {
+  const value = args[index];
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value) && value.every((item) => typeof item === 'string')) return value;
+  return [];
 }
 
 export function optionalStringArg(args: readonly unknown[], index: number): string | undefined {
@@ -606,10 +617,17 @@ export function commandOptions(value: unknown): CommandOptions {
   if (!value || typeof value !== 'object') return {};
   const maybeCommand = value as {
     opts?: () => unknown;
+    optsWithGlobals?: () => unknown;
     getOptionValueSource?: (key: string) => string | undefined;
   };
-  if (typeof maybeCommand.opts === 'function') {
-    const opts = maybeCommand.opts();
+  const readOptions =
+    typeof maybeCommand.optsWithGlobals === 'function'
+      ? maybeCommand.optsWithGlobals.bind(maybeCommand)
+      : typeof maybeCommand.opts === 'function'
+        ? maybeCommand.opts.bind(maybeCommand)
+        : null;
+  if (readOptions) {
+    const opts = readOptions();
     if (!opts || typeof opts !== 'object') return {};
     if (typeof maybeCommand.getOptionValueSource === 'function') {
       Object.defineProperty(opts, OPTION_VALUE_SOURCE, {

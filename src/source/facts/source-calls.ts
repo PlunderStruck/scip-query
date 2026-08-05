@@ -8,11 +8,20 @@ export function callSiteForNode(node: SyntaxNode, language: AstLanguage) {
   if (!target) return null;
   const leaf = extractCallLeaf(target);
   if (!leaf) return null;
+  const memberAccess = isMemberAccessTarget(target);
   return {
     calleeLeaf: leaf,
-    memberAccess: isMemberAccessTarget(target),
+    calleeQualifier: memberAccess ? memberAccessQualifier(target) : undefined,
+    calleeText: target.text,
+    memberAccess,
     line: node.startPosition.row,
   };
+}
+
+function memberAccessQualifier(node: SyntaxNode): string | undefined {
+  const receiver =
+    node.childForFieldName('object') ?? node.childForFieldName('value') ?? node.namedChild(0) ?? undefined;
+  return receiver?.text || undefined;
 }
 
 function callTargetForNode(node: SyntaxNode, language: AstLanguage): SyntaxNode | null {

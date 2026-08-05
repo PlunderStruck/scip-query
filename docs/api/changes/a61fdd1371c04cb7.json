@@ -1,0 +1,157 @@
+{
+  "acceptedAt": "2026-08-02T18:42:40.102Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "a61fdd1371c04cb741dc8e3acee6ff4dfbc1f792ad4c29f6b02c1dd8af16948b",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionContinuation.",
+      "target": "./queries:SourceInspectionContinuation"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionOptions changed from interface SourceInspectionOptions { searches?: readonly string[]; symbols?: readonly string[]; locations?: readonly string[]; scope?: string; context?: number; searchLimit?: num... to interface SourceInspectionOptions { searches?: readonly string[]; symbols?: readonly string[]; locations?: readonly string[]; scope?: string; context?: number; searchLimit?: num....",
+      "target": "./queries:SourceInspectionOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionPathUnit.",
+      "target": "./queries:SourceInspectionPathUnit"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionResult changed from interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid... to interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid....",
+      "target": "./queries:SourceInspectionResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionSearch changed from interface SourceInspectionSearch { pattern: string; matchingLines: number; returnedMatches: number; omittedMatches: number; } to interface SourceInspectionSearch { pattern: string; matchingLines: number; returnedMatches: number; omittedMatches: number; exactFollowup?: string; }.",
+      "target": "./queries:SourceInspectionSearch"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionSourceUnit.",
+      "target": "./queries:SourceInspectionSourceUnit"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionUnit.",
+      "target": "./queries:SourceInspectionUnit"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionUnitRole.",
+      "target": "./queries:SourceInspectionUnitRole"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionContinuation.",
+      "target": "./queries/index:SourceInspectionContinuation"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionOptions changed from interface SourceInspectionOptions { searches?: readonly string[]; symbols?: readonly string[]; locations?: readonly string[]; scope?: string; context?: number; searchLimit?: num... to interface SourceInspectionOptions { searches?: readonly string[]; symbols?: readonly string[]; locations?: readonly string[]; scope?: string; context?: number; searchLimit?: num....",
+      "target": "./queries/index:SourceInspectionOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionPathUnit.",
+      "target": "./queries/index:SourceInspectionPathUnit"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionResult changed from interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid... to interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid....",
+      "target": "./queries/index:SourceInspectionResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionSearch changed from interface SourceInspectionSearch { pattern: string; matchingLines: number; returnedMatches: number; omittedMatches: number; } to interface SourceInspectionSearch { pattern: string; matchingLines: number; returnedMatches: number; omittedMatches: number; exactFollowup?: string; }.",
+      "target": "./queries/index:SourceInspectionSearch"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionSourceUnit.",
+      "target": "./queries/index:SourceInspectionSourceUnit"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionUnit.",
+      "target": "./queries/index:SourceInspectionUnit"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionUnitRole.",
+      "target": "./queries/index:SourceInspectionUnitRole"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionContinuation.",
+      "target": "./queries/source-inspection:SourceInspectionContinuation"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionOptions changed from interface SourceInspectionOptions { searches?: readonly string[]; symbols?: readonly string[]; locations?: readonly string[]; scope?: string; context?: number; searchLimit?: num... to interface SourceInspectionOptions { searches?: readonly string[]; symbols?: readonly string[]; locations?: readonly string[]; scope?: string; context?: number; searchLimit?: num....",
+      "target": "./queries/source-inspection:SourceInspectionOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionPathUnit.",
+      "target": "./queries/source-inspection:SourceInspectionPathUnit"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionResult changed from interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid... to interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid....",
+      "target": "./queries/source-inspection:SourceInspectionResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionSearch changed from interface SourceInspectionSearch { pattern: string; matchingLines: number; returnedMatches: number; omittedMatches: number; } to interface SourceInspectionSearch { pattern: string; matchingLines: number; returnedMatches: number; omittedMatches: number; exactFollowup?: string; }.",
+      "target": "./queries/source-inspection:SourceInspectionSearch"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionSourceUnit.",
+      "target": "./queries/source-inspection:SourceInspectionSourceUnit"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionUnit.",
+      "target": "./queries/source-inspection:SourceInspectionUnit"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionUnitRole.",
+      "target": "./queries/source-inspection:SourceInspectionUnitRole"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "c52c5d495e9fe6c4140d2468f282287b92254b8d1f42e25f34480fd7ca282de7",
+  "reason": "inspect adds optional unified evidence-packet fields and exported packet unit types; reserved cursor shapes remain compatible but complete packets do not emit them",
+  "schemaVersion": 1
+}

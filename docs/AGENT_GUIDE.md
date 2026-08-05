@@ -5,7 +5,38 @@ tests, and final decision.
 
 ## Before a nonlocal edit
 
-Run one aggregate mapping query:
+For a cross-layer or end-to-end question, run one system map from the smallest
+set of independent indexed anchors. Usually that is one distinctive protocol,
+route, event, table, or message literal plus one callable or contract symbol.
+Do not repeat the same identifier through both selector families merely to
+widen output:
+
+```bash
+scip-query system-map --search <literal> --symbol <symbol>
+```
+
+Read the traversal-seed, retained match-only, and withheld traversal-relevant
+region ledgers plus the coverage report. Run `Expand together:` for the ranked system.
+Add several withheld regions when their
+relationships can change the decision. A whole-token match in ordinary source seeds
+traversal; embedded substrings and test, fixture, mock, preview, demo,
+or example hits remain visible without pulling their dependencies into the
+default map. Add a match-only region explicitly only when it can change the decision. Expansion
+reports every child file with complete mapped counts and a small set of ranked
+definition locations, then emits one bounded `code` command that reads ranked
+definitions plus context around ownerless literal sites, and one bounded behavior command. Cite the absolute
+line numbers in the `code` result. Use the behavior command when the expanded
+regions remain material, or remove only irrelevant anchors. A behavior
+view is the cheapest faithful syntax-derived representation of a complete
+source unit: compact units stay raw, while larger units use a normalized
+hierarchical outline only when it is materially smaller. Every statement is
+represented; unsupported or compression-sensitive statements remain
+verbatim. Exact built-in runtime-boundary links participate in traversal.
+Candidate and unresolved runtime frontiers are reasons to add focused anchors,
+not reasons to assume the missing relationship does not exist.
+
+When one known target is already the center of the change, run the aggregate
+context query:
 
 ```bash
 scip-query context <target>
@@ -44,12 +75,46 @@ scip-query adds relationship and cleanup evidence.
 ## Efficient use
 
 - Use `search` for an unknown literal anchor in indexed source.
-- Put known text, symbol, and file-line anchors into one `inspect` packet.
-- Treat returned source as already read. Use a native read only for exact edit
+- Use `system-map` before source drilldown when several layers or subsystems may
+  participate. Follow compiler and exact built-in runtime-boundary links,
+  inspect unresolved frontiers, expand several regions together, then inspect
+  only locations tied to a named behavioral uncertainty.
+- Use a behavior-view `inspect` packet for several related locations. Escalate
+  to `code` only for known exact definitions or ranges whose complete source
+  can change the decision. An exact
+  file path returns exported definitions (or top-level definitions when no
+  explicit export surface exists) plus same-file definitions they reference
+  and a complete ledger of omitted local definitions. Use
+  `--members all` only when the whole file matters. If the command refuses an
+  oversized packet, it emitted no partial source; narrow to the exact units
+  still needed before deciding whether every split remains necessary.
+- Put known text, symbol, and file-line anchors into one behavior-view `inspect`
+  packet. Read its exact selector cardinality, omission ledger, and
+  packet coverage. Read its stopping check: stop on `stop-ready` unless a named
+  semantic blind spot matters. Otherwise drill into several relevant omission groups together; omit
+  the behavior view only for exact units whose full implementation can change
+  the decision, and use `--full` only when all omitted evidence can change it.
+  `--full` and `--limit` are mutually exclusive; never combine them.
+- Treat returned, line-numbered source as citation-ready and already read. Use
+  a native read only for exact edit
   lines, a non-indexed file, or a named evidence gap.
 - Do not repeat an unchanged query after context compaction.
-- Use `--full` only when complete coverage can change a decision.
+- Do not claim that a caller, route, branch, poller, or consumer is absent from
+  a bounded result. Use `--full` only when complete coverage can change a
+  decision.
+- Do not claim what every callsite passes unless the `trace` or `evidence`
+  claim-support section marks callsite-argument claims eligible. A complete
+  call expression contains the callee and every argument through the closing
+  delimiter; a bounded context window does not.
+- Search always lists every exact matching path-line identity and owner while
+  expanding only representative source by default. Use its batched recovery
+  commands for selected owners; `search --full` is only for expanding every
+  source window, not for establishing complete identity coverage.
+- Exact code and definition packets always render whole. An explicit
+  `SCIP_QUERY_SESSION` may cite only wholly prior-emitted locating previews;
+  partially covered previews render whole.
 - Follow an emitted `Continue exactly:` command until transport is complete.
+  Coverage expansion commands are optional drilldowns, not transport pages.
 - Use human output for model reading and `--json --result-only` for programs.
 - Commit relevant suppression files, but do not create work-state records.
 

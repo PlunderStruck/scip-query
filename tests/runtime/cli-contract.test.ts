@@ -20,8 +20,10 @@ import {
   commandOperationRoles,
   resolveCommandOperationRole,
 } from '../../src/runtime/command-operation.js';
+import { inspectSearchLimitOption, inspectViewOption } from '../../src/runtime/query-commands/navigation.js';
 
 const PRIVATE_QUERY_MODULES = [
+  'binding-closure',
   'boundary-evidence',
   'callable-contracts',
   'coverage-contracts',
@@ -36,12 +38,14 @@ const PRIVATE_QUERY_MODULES = [
   'newly-unreferenced-residue',
   'public-query-entries',
   'query-utils',
+  'source-inspection-selection',
   'source-snippet',
   'architecture-baseline',
   'test-boundary-policy',
 ] as const;
 
 const PRIVATE_QUERY_SOURCE_PATHS = {
+  'binding-closure': 'src/queries/navigation/binding-closure.ts',
   'boundary-evidence': 'src/queries/cleanup/boundary-evidence.ts',
   'callable-contracts': 'src/queries/cleanup/callable-contracts.ts',
   'coverage-contracts': 'src/queries/cleanup/coverage-contracts.ts',
@@ -56,6 +60,7 @@ const PRIVATE_QUERY_SOURCE_PATHS = {
   'newly-unreferenced-residue': 'src/queries/impact/newly-unreferenced-residue.ts',
   'public-query-entries': 'src/queries/public-query-entries.ts',
   'query-utils': 'src/queries/query-utils.ts',
+  'source-inspection-selection': 'src/queries/navigation/source-inspection-selection.ts',
   'source-snippet': 'src/queries/navigation/source-snippet.ts',
   'architecture-baseline': 'src/queries/graph/architecture-baseline.ts',
   'test-boundary-policy': 'src/queries/graph/test-boundary-policy.ts',
@@ -336,6 +341,7 @@ describe('CLI contract', () => {
       'context',
       'diff-impact',
       'health',
+      'system-map',
     ]);
     expect(mixed.every((entry) => (entry.claims.families?.length ?? 0) > 0)).toBe(true);
   });
@@ -662,6 +668,9 @@ describe('CLI contract', () => {
 
     expect(definedLimitOption(defaultedOpts, 'limit', 30)).toBe(Number.MAX_SAFE_INTEGER);
     expect(() => definedLimitOption(explicitOpts, 'limit', 30)).toThrow('--full cannot be combined with --limit');
+    expect(inspectSearchLimitOption({})).toBe(12);
+    expect(inspectSearchLimitOption({ full: true })).toBeUndefined();
+    expect(() => inspectSearchLimitOption({ full: true, limit: 7 })).toThrow('--full cannot be combined with --limit');
   });
 
   it('keeps default result limits full-aware', () => {
@@ -682,6 +691,13 @@ describe('CLI contract', () => {
       .map((entry) => readFileSync(join(process.cwd(), 'src/runtime/query-commands', entry), 'utf8'))
       .join('\n');
     expect(commandSources).not.toContain("definedNumberOption(opts, 'limit'");
+  });
+
+  it('accepts only the explicit inspect views', () => {
+    expect(inspectViewOption({})).toBe('source');
+    expect(inspectViewOption({ view: 'source' })).toBe('source');
+    expect(inspectViewOption({ view: 'behavior' })).toBe('behavior');
+    expect(() => inspectViewOption({ view: 'summary' })).toThrow('Use source or behavior');
   });
 
   it('runs the visible health command in full mode only when --full is supplied', () => {

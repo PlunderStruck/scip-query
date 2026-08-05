@@ -1,0 +1,193 @@
+{
+  "acceptedAt": "2026-08-02T21:14:02.890Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "66df69ac55b2710f623416c44b7410c4280f53960fe904c4a63af8a4b5f24ff2",
+  "changes": [
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for .; review their variance and runtime meaning.",
+      "target": "."
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryCallMapResult.",
+      "target": "./queries:EntryCallMapResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryMapCoverage.",
+      "target": "./queries:EntryMapCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryMapExternalCall.",
+      "target": "./queries:EntryMapExternalCall"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryMapRegion.",
+      "target": "./queries:EntryMapRegion"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryMapRegionEdge.",
+      "target": "./queries:EntryMapRegionEdge"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryMapSymbol.",
+      "target": "./queries:EntryMapSymbol"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryMapSymbolEdge.",
+      "target": "./queries:EntryMapSymbolEdge"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryPointConfidence.",
+      "target": "./queries:EntryPointConfidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryPointEvidence.",
+      "target": "./queries:EntryPointEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryPointResult.",
+      "target": "./queries:EntryPointResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryPointsOptions.",
+      "target": "./queries:EntryPointsOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export entryCallMap.",
+      "target": "./queries:entryCallMap"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export entryPoints.",
+      "target": "./queries:entryPoints"
+    },
+    {
+      "classification": "additive",
+      "kind": "entry-added",
+      "message": "Added public declaration path ./queries/entry-map.",
+      "target": "./queries/entry-map"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryCallMapResult.",
+      "target": "./queries/index:EntryCallMapResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryMapCoverage.",
+      "target": "./queries/index:EntryMapCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryMapExternalCall.",
+      "target": "./queries/index:EntryMapExternalCall"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryMapRegion.",
+      "target": "./queries/index:EntryMapRegion"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryMapRegionEdge.",
+      "target": "./queries/index:EntryMapRegionEdge"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryMapSymbol.",
+      "target": "./queries/index:EntryMapSymbol"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryMapSymbolEdge.",
+      "target": "./queries/index:EntryMapSymbolEdge"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryPointConfidence.",
+      "target": "./queries/index:EntryPointConfidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryPointEvidence.",
+      "target": "./queries/index:EntryPointEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryPointResult.",
+      "target": "./queries/index:EntryPointResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export EntryPointsOptions.",
+      "target": "./queries/index:EntryPointsOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export entryCallMap.",
+      "target": "./queries/index:entryCallMap"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export entryPoints.",
+      "target": "./queries/index:entryPoints"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/passthrough-candidates; review their variance and runtime meaning.",
+      "target": "./queries/passthrough-candidates"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module call-graph-evidence-<hash>.d.ts was added or renamed.",
+      "target": "call-graph-evidence-<hash>.d.ts"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "1e7a9e1b4623a465cd85ab12004d8570096065d29473acf67de7b66dba3a2d58",
+  "reason": "Adds entry-mapping exports and preserves the existing exported-definition helper contract.",
+  "schemaVersion": 1
+}

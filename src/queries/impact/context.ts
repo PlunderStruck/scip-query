@@ -177,7 +177,7 @@ export function repositoryContext(
           references: result.referencedBy.length,
         }),
       )
-    : { definitions: [], referencedBy: [] };
+    : { definitions: [], referencedBy: [], claimSupport: null };
   const callGraphResult = symbolTarget
     ? profileRepositoryContextComponent(
         'call-graph',

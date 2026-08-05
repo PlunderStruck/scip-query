@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   existsSync,
   mkdtempSync,
@@ -18,6 +19,7 @@ import {
   MAX_OUTPUT_CURSOR_LENGTH,
   MAX_OUTPUT_PAGE_SIZE,
   MIN_OUTPUT_PAGE_SIZE,
+  continueCliOutput,
   decodeCliOutputPageEnvelope,
   inspectPendingCliOutputCursor,
   parseOutputPageSize,
@@ -26,6 +28,7 @@ import {
   type CliOutputPageEnvelopeV1,
   type CliOutputPaginationOptions,
 } from '../../src/runtime/output-pagination.js';
+import { bindSourceEmissionGeneration, renderSourceEvidence } from '../../src/runtime/source-emission-session.js';
 
 const tempDirs: string[] = [];
 
@@ -84,11 +87,21 @@ function parseHumanPage(output: string): { content: string; cursor?: string } {
   const completeStart = output.lastIndexOf('\n[scip-query transport complete; evaluate command coverage separately]');
   const contentEnd = Math.max(incompleteStart, completeStart);
   if (contentStart <= 0 || contentEnd < contentStart) throw new Error('Expected a rendered human output page.');
-  const cursor = output.match(/--output-cursor ([A-Za-z0-9_-]+)/u)?.[1];
+  const cursor = output.match(/\bcontinue ([A-Za-z0-9_.-]+)/u)?.[1];
   return {
     content: output.slice(contentStart, contentEnd),
     ...(cursor ? { cursor } : {}),
   };
+}
+
+async function continueOutput(cursor: string, snapshotRoot: string): Promise<{ stdout: string; stderr: string }> {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  await continueCliOutput(cursor, 'test', snapshotRoot, {
+    writeStdout: (value) => stdout.push(value),
+    writeStderr: (value) => stderr.push(value),
+  });
+  return { stdout: stdout.join(''), stderr: stderr.join('') };
 }
 
 function freshSnapshotRoot(): string {
@@ -142,17 +155,20 @@ describe('universal CLI output pagination', () => {
     const content = Array.from({ length: 730 }, (_, index) => String(index % 10)).join('');
     const argv = ['demo', "O'Reilly", '--json'];
     const invocationPrefix = ['npx', 'scip-query'];
+    const root = freshSnapshotRoot();
     const pages: CliOutputPageEnvelopeV1[] = [];
     let cursor: string | undefined;
 
     do {
-      const result = await invoke(content, {
-        argv: [...argv, '--output-page-size', '256', ...(cursor ? ['--output-cursor', cursor] : [])],
-        invocationPrefix,
-        json: true,
-        pageSize: 256,
-        ...(cursor ? { cursor } : {}),
-      });
+      const result = cursor
+        ? await continueOutput(cursor, root)
+        : await invoke(content, {
+            argv: [...argv, '--output-page-size', '256'],
+            invocationPrefix,
+            json: true,
+            pageSize: 256,
+            snapshotRoot: root,
+          });
       const page = parsePage(result.stdout);
       pages.push(page);
       cursor = page.page.continuation?.cursor;
@@ -174,9 +190,7 @@ describe('universal CLI output pagination', () => {
         complete: false,
       },
     });
-    expect(pages[0]!.page.continuation?.command).toContain(`'O'"'"'Reilly'`);
-    expect(pages[0]!.page.continuation?.command).toMatch(/^npx scip-query demo/u);
-    expect(pages[0]!.page.continuation?.command).toContain('--output-cursor');
+    expect(pages[0]!.page.continuation?.command).toBe(`npx scip-query continue ${pages[0]!.page.continuation!.cursor}`);
     expect(pages[2]!.page).toMatchObject({
       offset: 512,
       returnedCharacters: 218,
@@ -251,9 +265,7 @@ describe('universal CLI output pagination', () => {
     expect(result.stdout.match(/Continue exactly:/gu)).toHaveLength(1);
     expect(result.stdout).not.toContain('"content":');
     expect(result.stdout).not.toContain('"kind":');
-    expect(result.stdout).toContain(
-      `/usr/local/bin/node '/repo with spaces/dist/cli.js' demo 'target with spaces' --output-page-size ${DEFAULT_OUTPUT_PAGE_SIZE} --output-cursor`,
-    );
+    expect(result.stdout).toContain(`/usr/local/bin/node '/repo with spaces/dist/cli.js' continue `);
   });
 
   it('keeps human page boundaries aligned to complete lines when a newline fits the page', async () => {
@@ -348,6 +360,100 @@ describe('universal CLI output pagination', () => {
     expect(result.stdout).not.toContain('"page":');
   });
 
+  it('commits session source only after complete output reaches the transport runtime', async () => {
+    const sessionRoot = freshSnapshotRoot();
+    const priorSession = process.env['SCIP_QUERY_SESSION'];
+    const priorSessionRoot = process.env['SCIP_QUERY_SESSION_DIR'];
+    process.env['SCIP_QUERY_SESSION'] = `pagination-${randomUUID()}`;
+    process.env['SCIP_QUERY_SESSION_DIR'] = sessionRoot;
+    const renderSource = () => {
+      bindSourceEmissionGeneration('pagination-generation');
+      process.stdout.write(
+        renderSourceEvidence({
+          relativePath: 'src/demo.ts',
+          startLine: 4,
+          source: 'const delivered = true;',
+          sessionPolicy: 'preview',
+        }),
+      );
+    };
+    try {
+      const first = await invoke(renderSource);
+      const second = await invoke(renderSource);
+      expect(first.stdout).toContain('5  const delivered = true;');
+      expect(second.stdout).toContain(
+        'src/demo.ts:5-5  [source previously emitted: session #1 via demo; not repeated]',
+      );
+      expect(second.stdout).not.toContain('const delivered = true;');
+    } finally {
+      restoreEnvironment('SCIP_QUERY_SESSION', priorSession);
+      restoreEnvironment('SCIP_QUERY_SESSION_DIR', priorSessionRoot);
+    }
+  });
+
+  it('emits short snapshot locators and accepts legacy version-3 cursors', async () => {
+    const root = freshSnapshotRoot();
+    const first = parsePage(
+      (
+        await invoke('x'.repeat(600), {
+          argv: ['demo', '--json', '--output-page-size', '256'],
+          json: true,
+          pageSize: 256,
+          snapshotRoot: root,
+        })
+      ).stdout,
+    );
+    const cursor = first.page.continuation!.cursor;
+    expect(cursor).toMatch(/^[A-Za-z0-9_][A-Za-z0-9_-]{11}$/u);
+    expect(cursor).toHaveLength(12);
+
+    const pending = inspectPendingCliOutputCursor(cursor, root);
+    expect(pending).toBeDefined();
+    const metadata = JSON.parse(readFileSync(join(root, `${pending!.snapshotId}.json`), 'utf8')) as {
+      snapshotId: string;
+      invocationHash: string;
+      outputHash: string;
+      pageSize: number;
+    };
+    const reservation = JSON.parse(readFileSync(join(root, `${pending!.snapshotId}.reserve`), 'utf8')) as {
+      snapshotId: string;
+    };
+    const legacySnapshotId = randomUUID();
+    for (const extension of ['json', 'output', 'reserve']) {
+      renameSync(join(root, `${pending!.snapshotId}.${extension}`), join(root, `${legacySnapshotId}.${extension}`));
+    }
+    metadata.snapshotId = legacySnapshotId;
+    reservation.snapshotId = legacySnapshotId;
+    writeFileSync(join(root, `${legacySnapshotId}.json`), JSON.stringify(metadata));
+    writeFileSync(join(root, `${legacySnapshotId}.reserve`), JSON.stringify(reservation));
+    const legacyCursor = Buffer.from(
+      JSON.stringify({
+        version: 3,
+        invocationHash: metadata.invocationHash,
+        pageIndex: 1,
+        pageSize: metadata.pageSize,
+        outputHash: metadata.outputHash,
+        snapshotId: legacySnapshotId,
+      }),
+      'utf8',
+    ).toString('base64url');
+
+    const second = parsePage(
+      (
+        await invoke('must not execute', {
+          argv: ['demo', '--json', '--output-page-size', '256', '--output-cursor', legacyCursor],
+          json: true,
+          pageSize: 256,
+          cursor: legacyCursor,
+          snapshotRoot: root,
+        })
+      ).stdout,
+    );
+    expect(second.page.offset).toBe(256);
+    expect(second.content).toBe('x'.repeat(256));
+    expect(second.page.continuation!.cursor).toMatch(/^4\.[A-Za-z0-9_-]{22}\.2$/u);
+  });
+
   it('preserves Unicode exactly across page boundaries and rejects page-size drift', async () => {
     const content = `${'a'.repeat(255)}😀${'β'.repeat(300)}`;
     const root = freshSnapshotRoot();
@@ -437,10 +543,10 @@ describe('universal CLI output pagination', () => {
         })
       ).stdout,
     );
-    const payload = JSON.parse(Buffer.from(corrupt.page.continuation!.cursor, 'base64url').toString('utf8')) as {
-      snapshotId: string;
-    };
-    const outputPath = join(root, `${payload.snapshotId}.output`);
+    const corruptCursor = corrupt.page.continuation!.cursor;
+    const corruptSnapshot = inspectPendingCliOutputCursor(corruptCursor, root);
+    expect(corruptSnapshot).toBeDefined();
+    const outputPath = join(root, `${corruptSnapshot!.snapshotId}.output`);
     const bytes = readFileSync(outputPath);
     bytes[256] = bytes[256] === 113 ? 114 : 113;
     writeFileSync(outputPath, bytes);
@@ -490,17 +596,16 @@ describe('universal CLI output pagination', () => {
       ).stdout,
     );
     const secondCursor = second.page.continuation!.cursor;
-    const cursorPayload = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as {
-      snapshotId: string;
-    };
+    const pendingSnapshot = inspectPendingCliOutputCursor(cursor);
+    expect(pendingSnapshot).toBeDefined();
     const snapshotRoot = join(
       tmpdir(),
       `scip-query-output-pages-${typeof process.getuid === 'function' ? process.getuid() : 'user'}`,
     );
     if (process.platform !== 'win32') {
       expect(statSync(snapshotRoot).mode & 0o777).toBe(0o700);
-      expect(statSync(join(snapshotRoot, `${cursorPayload.snapshotId}.output`)).mode & 0o777).toBe(0o600);
-      expect(statSync(join(snapshotRoot, `${cursorPayload.snapshotId}.json`)).mode & 0o777).toBe(0o600);
+      expect(statSync(join(snapshotRoot, `${pendingSnapshot!.snapshotId}.output`)).mode & 0o777).toBe(0o600);
+      expect(statSync(join(snapshotRoot, `${pendingSnapshot!.snapshotId}.json`)).mode & 0o777).toBe(0o600);
     }
     const third = parsePage(
       (
@@ -517,8 +622,8 @@ describe('universal CLI output pagination', () => {
     expect(`${first.content}${second.content}${third.content}`).toBe(`run:1:${'a'.repeat(600)}`);
     expect(third.page.complete).toBe(true);
     expect(inspectPendingCliOutputCursor(cursor)).toBeUndefined();
-    expect(existsSync(join(snapshotRoot, `${cursorPayload.snapshotId}.output`))).toBe(false);
-    expect(existsSync(join(snapshotRoot, `${cursorPayload.snapshotId}.json`))).toBe(false);
+    expect(existsSync(join(snapshotRoot, `${pendingSnapshot!.snapshotId}.output`))).toBe(false);
+    expect(existsSync(join(snapshotRoot, `${pendingSnapshot!.snapshotId}.json`))).toBe(false);
   });
 
   it('rejects invocation drift, missing snapshots, oversized cursors, and accumulated output overflow', async () => {
@@ -555,15 +660,14 @@ describe('universal CLI output pagination', () => {
       }),
     ).rejects.toThrow(/different command, working directory, or argument set/u);
 
-    const cursorPayload = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as {
-      snapshotId: string;
-    };
+    const pendingSnapshot = inspectPendingCliOutputCursor(cursor);
+    expect(pendingSnapshot).toBeDefined();
     const snapshotRoot = join(
       tmpdir(),
       `scip-query-output-pages-${typeof process.getuid === 'function' ? process.getuid() : 'user'}`,
     );
-    rmSync(join(snapshotRoot, `${cursorPayload.snapshotId}.json`), { force: true });
-    rmSync(join(snapshotRoot, `${cursorPayload.snapshotId}.output`), { force: true });
+    rmSync(join(snapshotRoot, `${pendingSnapshot!.snapshotId}.json`), { force: true });
+    rmSync(join(snapshotRoot, `${pendingSnapshot!.snapshotId}.output`), { force: true });
     await expect(
       invoke('a'.repeat(600), {
         argv: ['demo', '--json', '--output-page-size', '256', '--output-cursor', cursor],
@@ -644,10 +748,9 @@ describe('universal CLI output pagination', () => {
         snapshotLimits: { maxSnapshotBytes: 700, maxAggregateBytes: 900, maxSnapshotCount: 4 },
       }),
     ).rejects.toThrow(/snapshot capacity is full/u);
-    const firstPayload = JSON.parse(Buffer.from(first.page.continuation!.cursor, 'base64url').toString('utf8')) as {
-      snapshotId: string;
-    };
-    expect(existsSync(join(aggregateRoot, `${firstPayload.snapshotId}.reserve`))).toBe(true);
+    const firstSnapshot = inspectPendingCliOutputCursor(first.page.continuation!.cursor, aggregateRoot);
+    expect(firstSnapshot).toBeDefined();
+    expect(existsSync(join(aggregateRoot, `${firstSnapshot!.snapshotId}.reserve`))).toBe(true);
     expect(readdirSync(aggregateRoot).filter((entry) => entry.endsWith('.reserve'))).toHaveLength(1);
   });
 
@@ -665,11 +768,9 @@ describe('universal CLI output pagination', () => {
         })
       ).stdout,
     );
-    const abandonedId = (
-      JSON.parse(Buffer.from(abandoned.page.continuation!.cursor, 'base64url').toString('utf8')) as {
-        snapshotId: string;
-      }
-    ).snapshotId;
+    const abandonedSnapshot = inspectPendingCliOutputCursor(abandoned.page.continuation!.cursor, root);
+    expect(abandonedSnapshot).toBeDefined();
+    const abandonedId = abandonedSnapshot!.snapshotId;
     const abandonedReservationPath = join(root, `${abandonedId}.reserve`);
     const abandonedReservation = JSON.parse(readFileSync(abandonedReservationPath, 'utf8')) as Record<string, unknown>;
     writeFileSync(
@@ -699,11 +800,9 @@ describe('universal CLI output pagination', () => {
     expect(existsSync(join(root, `${abandonedId}.tmp`))).toBe(false);
     expect(existsSync(abandonedReservationPath)).toBe(false);
 
-    const liveId = (
-      JSON.parse(Buffer.from(live.page.continuation!.cursor, 'base64url').toString('utf8')) as {
-        snapshotId: string;
-      }
-    ).snapshotId;
+    const liveSnapshot = inspectPendingCliOutputCursor(live.page.continuation!.cursor, root);
+    expect(liveSnapshot).toBeDefined();
+    const liveId = liveSnapshot!.snapshotId;
     const liveReservationPath = join(root, `${liveId}.reserve`);
     const liveReservation = JSON.parse(readFileSync(liveReservationPath, 'utf8')) as Record<string, unknown>;
     writeFileSync(
@@ -756,3 +855,8 @@ describe('universal CLI output pagination', () => {
     expect(schema.additionalProperties).toBe(false);
   });
 });
+
+function restoreEnvironment(key: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+}

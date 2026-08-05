@@ -1,0 +1,67 @@
+{
+  "acceptedAt": "2026-08-03T11:01:11.750Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "0eec5a2a9b62e965c6eb024225d4e4311b1d7d1ed3739dac447c1e852cbd4905",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchIdentity.",
+      "target": "./queries:SourceSearchIdentity"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchMatch changed from interface SourceSearchMatch extends SourceSnippet { ownerSymbol: string | null; ownerShort: string | null; } to interface SourceSearchMatch extends SourceSnippet { ownerSymbol: string | null; ownerShort: string | null; ownerStartLine?: number | null; ownerEndLine?: number | null; fileKind....",
+      "target": "./queries:SourceSearchMatch"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchResult changed from interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; matches: SourceSearchMatch[]; matchingLines: number; omittedMatches: number; fileCoverage?: SourceSea... to interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; identities?: SourceSearchIdentity[]; matches: SourceSearchMatch[]; matchingLines: number; omittedMatc....",
+      "target": "./queries:SourceSearchResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchIdentity.",
+      "target": "./queries/index:SourceSearchIdentity"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchMatch changed from interface SourceSearchMatch extends SourceSnippet { ownerSymbol: string | null; ownerShort: string | null; } to interface SourceSearchMatch extends SourceSnippet { ownerSymbol: string | null; ownerShort: string | null; ownerStartLine?: number | null; ownerEndLine?: number | null; fileKind....",
+      "target": "./queries/index:SourceSearchMatch"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchResult changed from interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; matches: SourceSearchMatch[]; matchingLines: number; omittedMatches: number; fileCoverage?: SourceSea... to interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; identities?: SourceSearchIdentity[]; matches: SourceSearchMatch[]; matchingLines: number; omittedMatc....",
+      "target": "./queries/index:SourceSearchResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchIdentity.",
+      "target": "./queries/source-search:SourceSearchIdentity"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchMatch changed from interface SourceSearchMatch extends SourceSnippet { ownerSymbol: string | null; ownerShort: string | null; } to interface SourceSearchMatch extends SourceSnippet { ownerSymbol: string | null; ownerShort: string | null; ownerStartLine?: number | null; ownerEndLine?: number | null; fileKind....",
+      "target": "./queries/source-search:SourceSearchMatch"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchResult changed from interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; matches: SourceSearchMatch[]; matchingLines: number; omittedMatches: number; fileCoverage?: SourceSea... to interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; identities?: SourceSearchIdentity[]; matches: SourceSearchMatch[]; matchingLines: number; omittedMatc....",
+      "target": "./queries/source-search:SourceSearchResult"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "f06d16eb678f0be9856818081d73d03b58951d42d981247b1cc3fecf87c78bd7",
+  "reason": "Search results now expose optional complete match identities and optional owner range metadata without removing or retyping existing fields.",
+  "schemaVersion": 1
+}

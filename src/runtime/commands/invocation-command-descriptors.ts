@@ -9,6 +9,10 @@ export function directNavigationCommandEligible(commandName: string | undefined)
 export async function loadInvocationCommandDescriptors(
   commandName: string | undefined,
 ): Promise<readonly CommandDescriptor[]> {
+  if (commandName === 'continue') {
+    const { outputContinuationCommandDescriptor } = await import('./output-continuation-command.js');
+    return [outputContinuationCommandDescriptor];
+  }
   if (directNavigationCommandEligible(commandName)) {
     const { directNavigationQueryCommandDescriptors } = await import('../query-commands/direct-navigation.js');
     const descriptor = directNavigationQueryCommandDescriptors.find((candidate) => candidate.id === commandName);

@@ -1,0 +1,103 @@
+{
+  "acceptedAt": "2026-08-03T06:54:09.605Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "6e4b2ed60c3366dae6878d2ed853f42835dde3a46c71dff134836d8b5741c9b6",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "BindingClosure changed from interface BindingClosure { coverage: 'indexed-project-bindings'; inline: BindingDefinitionEvidence[]; deferred: BindingDefinitionEvidence[]; unresolved: UnresolvedBindingEvidenc... to interface BindingClosure { coverage: 'indexed-project-literal-values'; inline: BindingDefinitionEvidence[]; }.",
+      "target": "./queries:BindingClosure"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "BindingDefinitionEvidence changed from interface BindingDefinitionEvidence { name: string; relativePath: string; startLine: number; endLine: number; occurrences: number; source?: string; } to interface BindingDefinitionEvidence { name: string; relativePath: string; startLine: number; endLine: number; source: string; }.",
+      "target": "./queries:BindingDefinitionEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SourceInspectionStoppingStatus changed from type SourceInspectionStoppingStatus = 'stop-ready' | 'bindings-open' | 'relevance-check-required' | 'exact-evidence-withheld'; to type SourceInspectionStoppingStatus = 'stop-ready' | 'relevance-check-required' | 'exact-evidence-withheld';.",
+      "target": "./queries:SourceInspectionStoppingStatus"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export UnresolvedBindingEvidence.",
+      "target": "./queries:UnresolvedBindingEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "BindingClosure changed from interface BindingClosure { coverage: 'indexed-project-bindings'; inline: BindingDefinitionEvidence[]; deferred: BindingDefinitionEvidence[]; unresolved: UnresolvedBindingEvidenc... to interface BindingClosure { coverage: 'indexed-project-literal-values'; inline: BindingDefinitionEvidence[]; }.",
+      "target": "./queries/index:BindingClosure"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "BindingDefinitionEvidence changed from interface BindingDefinitionEvidence { name: string; relativePath: string; startLine: number; endLine: number; occurrences: number; source?: string; } to interface BindingDefinitionEvidence { name: string; relativePath: string; startLine: number; endLine: number; source: string; }.",
+      "target": "./queries/index:BindingDefinitionEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SourceInspectionStoppingStatus changed from type SourceInspectionStoppingStatus = 'stop-ready' | 'bindings-open' | 'relevance-check-required' | 'exact-evidence-withheld'; to type SourceInspectionStoppingStatus = 'stop-ready' | 'relevance-check-required' | 'exact-evidence-withheld';.",
+      "target": "./queries/index:SourceInspectionStoppingStatus"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export UnresolvedBindingEvidence.",
+      "target": "./queries/index:UnresolvedBindingEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "BindingClosure changed from interface BindingClosure { coverage: 'indexed-project-bindings'; inline: BindingDefinitionEvidence[]; deferred: BindingDefinitionEvidence[]; unresolved: UnresolvedBindingEvidenc... to interface BindingClosure { coverage: 'indexed-project-literal-values'; inline: BindingDefinitionEvidence[]; }.",
+      "target": "./queries/source-inspection:BindingClosure"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "BindingDefinitionEvidence changed from interface BindingDefinitionEvidence { name: string; relativePath: string; startLine: number; endLine: number; occurrences: number; source?: string; } to interface BindingDefinitionEvidence { name: string; relativePath: string; startLine: number; endLine: number; source: string; }.",
+      "target": "./queries/source-inspection:BindingDefinitionEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SourceInspectionStoppingStatus changed from type SourceInspectionStoppingStatus = 'stop-ready' | 'bindings-open' | 'relevance-check-required' | 'exact-evidence-withheld'; to type SourceInspectionStoppingStatus = 'stop-ready' | 'relevance-check-required' | 'exact-evidence-withheld';.",
+      "target": "./queries/source-inspection:SourceInspectionStoppingStatus"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export UnresolvedBindingEvidence.",
+      "target": "./queries/source-inspection:UnresolvedBindingEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "B changed from interface BindingClosure { coverage: 'indexed-project-bindings'; inline: BindingDefinitionEvidence[]; deferred: BindingDefinitionEvidence[]; unresolved: UnresolvedBindingEvidenc... to interface BindingClosure { coverage: 'indexed-project-literal-values'; inline: BindingDefinitionEvidence[]; }.",
+      "target": "code-<hash>.d.ts:B"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration U.",
+      "target": "code-<hash>.d.ts:U"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "a changed from interface BindingDefinitionEvidence { name: string; relativePath: string; startLine: number; endLine: number; occurrences: number; source?: string; } to interface BindingDefinitionEvidence { name: string; relativePath: string; startLine: number; endLine: number; source: string; }.",
+      "target": "code-<hash>.d.ts:a"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "a6139b505b1030efe894038e5e1a3768360a1c1c2d50a54bebcb1db227c64df4",
+  "reason": "Narrow binding evidence to literal values without inducing traversal obligations.",
+  "schemaVersion": 1
+}

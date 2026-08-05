@@ -1,0 +1,61 @@
+{
+  "acceptedAt": "2026-08-03T08:53:20.855Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "f06d16eb678f0be9856818081d73d03b58951d42d981247b1cc3fecf87c78bd7",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "CodeFileCoverage changed from interface CodeFileCoverage { members: CodeFileMemberMode; basis: 'explicit-exports-and-same-file-reference-closure' | 'complete-file-source'; totalDefinitions: number; returnedD... to interface CodeFileCoverage { members: CodeFileMemberMode; basis: 'explicit-exports-and-same-file-reference-closure' | 'top-level-and-same-file-reference-closure' | 'complete-fil....",
+      "target": "./queries:CodeFileCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "CodeFileDefinitionLedgerEntry changed from interface CodeFileDefinitionLedgerEntry extends CodeResolutionCandidate { signature: string | null; nestedDefinitions: number; } to interface CodeFileDefinitionLedgerEntry extends CodeResolutionCandidate { signature: string | null; depth: number; nestedDefinitions: number; }.",
+      "target": "./queries:CodeFileDefinitionLedgerEntry"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "CodeFileCoverage changed from interface CodeFileCoverage { members: CodeFileMemberMode; basis: 'explicit-exports-and-same-file-reference-closure' | 'complete-file-source'; totalDefinitions: number; returnedD... to interface CodeFileCoverage { members: CodeFileMemberMode; basis: 'explicit-exports-and-same-file-reference-closure' | 'top-level-and-same-file-reference-closure' | 'complete-fil....",
+      "target": "./queries/code:CodeFileCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "CodeFileDefinitionLedgerEntry changed from interface CodeFileDefinitionLedgerEntry extends CodeResolutionCandidate { signature: string | null; nestedDefinitions: number; } to interface CodeFileDefinitionLedgerEntry extends CodeResolutionCandidate { signature: string | null; depth: number; nestedDefinitions: number; }.",
+      "target": "./queries/code:CodeFileDefinitionLedgerEntry"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "CodeFileCoverage changed from interface CodeFileCoverage { members: CodeFileMemberMode; basis: 'explicit-exports-and-same-file-reference-closure' | 'complete-file-source'; totalDefinitions: number; returnedD... to interface CodeFileCoverage { members: CodeFileMemberMode; basis: 'explicit-exports-and-same-file-reference-closure' | 'top-level-and-same-file-reference-closure' | 'complete-fil....",
+      "target": "./queries/index:CodeFileCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "CodeFileDefinitionLedgerEntry changed from interface CodeFileDefinitionLedgerEntry extends CodeResolutionCandidate { signature: string | null; nestedDefinitions: number; } to interface CodeFileDefinitionLedgerEntry extends CodeResolutionCandidate { signature: string | null; depth: number; nestedDefinitions: number; }.",
+      "target": "./queries/index:CodeFileDefinitionLedgerEntry"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "d changed from interface CodeFileCoverage { members: CodeFileMemberMode; basis: 'explicit-exports-and-same-file-reference-closure' | 'complete-file-source'; totalDefinitions: number; returnedD... to interface CodeFileCoverage { members: CodeFileMemberMode; basis: 'explicit-exports-and-same-file-reference-closure' | 'top-level-and-same-file-reference-closure' | 'complete-fil....",
+      "target": "code-<hash>.d.ts:d"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "e changed from interface CodeFileDefinitionLedgerEntry extends CodeResolutionCandidate { signature: string | null; nestedDefinitions: number; } to interface CodeFileDefinitionLedgerEntry extends CodeResolutionCandidate { signature: string | null; depth: number; nestedDefinitions: number; }.",
+      "target": "code-<hash>.d.ts:e"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "87e930d12c2b670631c74e9e633748bee04eafc4a9d88ec7466c82b287ed1968",
+  "reason": "Make file-source coverage language-general and disclose every nested omitted definition.",
+  "schemaVersion": 1
+}

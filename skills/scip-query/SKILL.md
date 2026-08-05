@@ -1,104 +1,47 @@
 ---
 name: scip-query
-description: Use FIRST for codebase work when compiler-resolved identity, references, callers, dependencies, consumers, architecture, change impact, or cleanup relationships can affect the answer. It gives the agent a repository map; it does not own the task, plan, implementation, or acceptance decision.
-commands:
-  - template: 'scip-query inspect --search <text> [--search <text>...]'
-    when: 'Read several related source units across files in one deduplicated packet.'
-  - template: 'scip-query search <text>'
-    when: 'Find an unknown first anchor from literal routes, events, keys, messages, or other indexed text.'
-  - template: 'scip-query evidence <symbol>'
-    when: 'Read one definition together with source around its real uses.'
-  - template: 'scip-query context <target>'
-    when: 'Map a nonlocal target before planning or editing it.'
-  - template: 'scip-query diff-impact'
-    when: 'Map changed symbols and downstream consumers after a coherent edit.'
-  - template: 'scip-query architecture'
-    when: "Inspect the repository's declared structural rules when boundaries matter."
-  - template: 'scip-query health --full'
-    when: 'Inspect React, Vue, duplication, complexity, drift, and cleanup pressure.'
+description: Use FIRST for codebase work when compiler-resolved identity, runtime boundaries, callers, dependencies, consumers, architecture, change impact, or cleanup relationships can affect the answer. It gives the agent a repository map; it does not own the task, plan, implementation, or acceptance decision.
 ---
 
 # scip-query
 
-<!-- BEGIN GENERATED SKILL COMMANDS -->
-## Commands for this skill
+scip-query is an indexed repository map: a code-reading view that connects compiler-resolved definitions, references, calls, imports, and exports with source-grounded runtime-boundary observations while preserving exact source identities and provenance. Use the map to see all observed parts of a relevant system, compare several components through the cheapest faithful behavioral view, then read exact implementations only where a decision depends on them. Missing output is not proof that a relationship does not exist; coverage says what was observed, bounded, filtered, unresolved, or unsupported.
 
-| Command | Purpose | Returns | Coverage | When |
-| --- | --- | --- | --- | --- |
-| `scip-query inspect --search <text> [--search <text>...]` | Batch related searches, symbols, and source locations into one deduplicated source packet | one bounded, deduplicated source packet plus selected symbol relationships and coverage | `bounded` | Read several related source units across files in one deduplicated packet. |
-| `scip-query search <text>` | Search literal or regular-expression text in indexed source with nearby code and symbol ownership | matching source windows, file and line identities, owning symbols, and coverage | `bounded` | Find an unknown first anchor from literal routes, events, keys, messages, or other indexed text. |
-| `scip-query evidence <symbol>` | Compose related source for one exact symbol in a single evidence view | definition source; deduplicated reference-centered source windows; selected related symbol source and file relationships; explicit ambiguity failure with exact rerun commands | `bounded` | Read one definition together with source around its real uses. |
-| `scip-query context <target>` | Compiler-backed context for a symbol, file, or module | definitions and references; callers and callees; dataflow producers and consumers; backward and forward slices; affected symbols; change-surface risk; dependencies and reverse dependencies; module files and exports; external surface use; complexity; churn; co-change partners; active suppressions; reuse candidates with evidence class and action tier; possible shared owners found from a bounded scan of affected consumers | `bounded` | Map a nonlocal target before planning or editing it. |
-| `scip-query diff-impact` | Map changed symbols and downstream consumers from the current git diff | changed symbols, downstream consumer identities, and impact paths | `bounded` | Map changed symbols and downstream consumers after a coherent edit. |
-| `scip-query architecture` | Evaluate project-owned architectural boundaries and dependency rules | boundary coverage and dependency-rule violations | `complete` | Inspect the repository's declared structural rules when boundaries matter. |
-| `scip-query health --full` | Composite repository health report with React, Vue, and general cleanup findings | health score, findings, priorities, baselines, and coverage notes | `bounded` | Inspect React, Vue, duplication, complexity, drift, and cleanup pressure. |
+## Choose the smallest sufficient surface
 
-Use this shortlist first. Run a command's `--help` only when a named uncertainty needs another option.
-<!-- END GENERATED SKILL COMMANDS -->
+- Unknown literal, route, event, key, or first anchor: `scip-query search <text>`.
+- Several known text, symbol, or `file:line` anchors: one `scip-query inspect ... --view behavior` with repeated selectors. This is the default multi-unit triage surface: compact units use raw source, larger units use a complete normalized outline only when it is cheaper, and unsupported statements remain verbatim.
+- One exact symbol and its uses: `scip-query evidence <symbol> --include definition,references,callers,callees`.
+- One exact unit already named whose complete implementation can change the decision: `scip-query code <selector>`. Batch only independently necessary exact units; symbol selectors return complete definition source, while line ranges return the requested lines plus statically attributed same-file callable definitions and explicit coverage. `code` is the most expensive exploration surface per selector.
+- Cross-layer behavior without one trustworthy root: `scip-query system-map --search <literal> --symbol <symbol>`.
+- Behavior with one real external root: `scip-query entrypoints [text]`, then `scip-query entry-map <entry>`.
+- Nonlocal change impact and reuse: `scip-query context <target>` before editing; `scip-query diff-impact` afterward.
+- Declared boundaries or repository-wide React, Vue, duplication, complexity, or drift cleanup: `scip-query architecture` or `scip-query health --full` only when that concern is in scope.
 
-scip-query is a compiler-backed repository map: a code-reading tool whose
-essential service is resolving which named program elements are actually the
-same element and how those elements connect. Its referents are definitions,
-references, calls, imports, exports, dependencies, changed symbols, and
-detector findings in the indexed repository.
+Run `scip-query <command> --help` only when a named uncertainty requires an option not shown here.
 
-The coding agent still owns the goal, ordinary plan, edits, tests, and final
-judgment. scip-query supplies evidence that normal text search cannot reliably
-supply. It does not create goals, acceptance tests, work records, or completion
-permission.
+## Explore by abstraction level
 
-## Working rule
+For an end-to-end question, give `system-map` the smallest independent anchors—normally one distinctive protocol literal and one callable or contract symbol. Do not submit the same identifier as both merely to widen output. The collapsed map is the high-level view: it shows observed regions, compiler and exact built-in runtime-boundary relationships, anchor status, unresolved boundary frontiers, and traversal coverage. Run its exact `Expand together:` command to see child files and ranked drill locations for several regions at once; add withheld or match-only regions only when they can change the answer. Then run its emitted batched behavior command for the remaining named uncertainty. Escalate afterward with `code` only for an exact unit whose complete implementation can change the decision. Do not search every symbol printed by the map.
 
-Use scip-query as the primary code-reading surface for indexed source. Source
-code records behavior. The SCIP index supplies compiler-resolved identity and
-relationships that select the relevant source.
+Use `entry-map` only when one detected callable genuinely defines the boundary. A `candidate` entry is a structural hypothesis, not established runtime dispatch. Unsupported adapters and candidate protocol, persistence, queue, or realtime observations may require several explicit anchors instead of one call root.
 
-For a nonlocal change:
+## Preserve evidence and coverage
 
-1. Use `scip-query search <text>` to find an unknown first anchor. Once you
-   know several related text, symbol, or file-line anchors, put them in one
-   `scip-query inspect` call. It returns deduplicated, syntax-aware source
-   units across files. Use `scip-query evidence <symbol>` for one exact
-   definition and its use sites. Use `scip-query context <target>` when a
-   nonlocal change needs a wider impact and reuse map. For replacement or
-   retirement, target the current owner or live entry.
-2. If the packet reports only test references or no production consumers, it
-   is not a map of the live affected surface. Correct the anchor by mapping the
-   current owner or one live entry point. This correction is not duplicate
-   querying.
-3. Treat every returned source packet as source already read. Do not repeat
-   its graph queries, reopen every excerpt, or inventory the repository. Add
-   one focused query only when a named uncertainty can change the plan.
-4. Write the normal concise plan, edit, and run the repository's native checks.
-5. In one final verification batch, run `scip-query diff-impact` when
-   downstream consumers matter and `scip-query architecture` when declared
-   boundaries are in scope. A nonzero architecture result is an unfinished
-   repository policy failure, not an informational warning.
-6. Run `scip-query health --full` only for a repository-wide cleanup, drift,
-   complexity, React, or Vue review. Do not add it merely because a normal
-   feature task deletes obsolete code.
+- Compiler-graph and exact runtime-boundary relationships are facts only within their reported coverage. Candidate links and heuristic findings require source confirmation and do not drive default traversal.
+- Read selector cardinality, omissions, packet coverage, and the stopping check. `stop-ready` means stop unless a named semantic blind spot can change the decision.
+- `search` always lists every exact match identity; `--full` expands source around every match and is unnecessary merely to learn where the text occurs.
+- `inspect` omits whole lower-ranked units. Drill into several relevant omission groups together. Use `--full` only when every omitted unit can change the decision; never combine `--full` with `--limit`.
+- `code` accepts up to 24 exact selectors. File selectors return the exported or top-level surface plus a complete omitted-local ledger. Use `--members all` only when the whole file matters. A refusal means the requested source packet is too broad for one page and emitted no partial source; narrow to the exact units still needed before deciding whether every split remains necessary.
+- Ambiguity requires the exact candidate commands; never silently choose the first match.
+- An absence claim such as “no caller” or “only tests” requires complete coverage for that relationship. Otherwise state the limit or add one focused query.
+- A claim about every callsite's arguments requires eligible callsite-argument support from `trace` or `evidence`; a nearby bounded window is not enough.
+- Dynamic dispatch, reflection, dependency injection, generated names, and data-mediated producer/consumer links may remain outside the static graph. Use an explicit anchor or a named native-source fallback when one matters.
 
-The map replaces redundant exploration. It must not become a second workflow.
-Batch independent observations into as few model turns as practical.
+## Spend tokens once
 
-Do not build an inventory by running one search, outline, or source read for
-every file or symbol. If exploration has become an inventory, stop and put the
-named gaps into one `inspect` packet. A focused follow-up is justified only by
-an uncertainty that remains after reading that packet.
+Treat returned source as already read. Its line numbers are absolute and citation-ready. Do not reopen the same range with `sed`, `nl`, `rg`, or another scip-query command. Do not repeat successful repository-instruction or standards reads. Batch independent gaps into one command and reuse unchanged evidence after context compaction. If output says `Continue exactly:`, run that command unchanged; it transports already selected bytes and does not expand semantic coverage. Do not choose a page size pre-emptively.
 
-Compiler-graph results are facts within their stated coverage. Health and
-cleanup detectors are candidates: confirm their source before editing. A
-bounded result cannot support a claim about every relationship; use `--full`
-only when completeness can change a decision.
+Use native search or source reads only for exact edit lines, unindexed files, unsupported file types, or an explicit gap scip-query reports. Name the gap first. The map replaces redundant exploration; it must not become a second workflow.
 
-Prefer human output for model reading. Use `--json --result-only` only for a
-programmatic consumer. If output emits `Continue exactly:`, run that command
-unchanged until transport is complete. Do not choose an output page size in
-advance.
-
-Use a native source read only to edit exact lines or to fill an explicit
-coverage gap. Name that gap before the fallback. Do not silently duplicate the
-same exploration with text search and full-file reads.
-
-Use `$scip-explore` for an end-to-end explanation. Use `$concrete-plan` for a
-non-trivial implementation plan. Reuse an unchanged result after compaction.
+For a change, write the normal concise plan, edit, run native checks, then use `diff-impact` when downstream consumers matter and `architecture` when declared boundaries are in scope. A nonzero architecture result is unfinished policy failure. The agent—not scip-query—owns the goal, implementation, tests, and completion judgment.

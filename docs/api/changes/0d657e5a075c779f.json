@@ -1,0 +1,157 @@
+{
+  "acceptedAt": "2026-08-03T00:17:24.575Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "0d657e5a075c779fb6c6e490ae4bb0a5708f4117255349d9c50e606c1d483edb",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionOptions changed from interface SourceInspectionOptions { searches?: readonly string[]; symbols?: readonly string[]; locations?: readonly string[]; scope?: string; context?: number; searchLimit?: num... to interface SourceInspectionOptions { searches?: readonly string[]; symbols?: readonly string[]; locations?: readonly string[]; scope?: string; context?: number; searchLimit?: num....",
+      "target": "./queries:SourceInspectionOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionPacketCoverage.",
+      "target": "./queries:SourceInspectionPacketCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionResult changed from interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid... to interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid....",
+      "target": "./queries:SourceInspectionResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionSearch changed from interface SourceInspectionSearch { pattern: string; matchingLines: number; returnedMatches: number; omittedMatches: number; exactFollowup?: string; } to interface SourceInspectionSearch { pattern: string; matchingLines: number; returnedMatches: number; omittedMatches: number; matchingFiles?: number; returnedFiles?: number; omitt....",
+      "target": "./queries:SourceInspectionSearch"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionSearchScope.",
+      "target": "./queries:SourceInspectionSearchScope"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchFileCoverage.",
+      "target": "./queries:SourceSearchFileCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchOptions changed from interface SourceSearchOptions { scope?: string; context?: number; limit?: number; regexp?: boolean; ignoreCase?: boolean; } to interface SourceSearchOptions { scope?: string; context?: number; limit?: number; regexp?: boolean; ignoreCase?: boolean; ranking?: 'structural'; }.",
+      "target": "./queries:SourceSearchOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchResult changed from interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; matches: SourceSearchMatch[]; matchingLines: number; omittedMatches: number; scannedFiles: number; } to interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; matches: SourceSearchMatch[]; matchingLines: number; omittedMatches: number; fileCoverage?: SourceSea....",
+      "target": "./queries:SourceSearchResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionOptions changed from interface SourceInspectionOptions { searches?: readonly string[]; symbols?: readonly string[]; locations?: readonly string[]; scope?: string; context?: number; searchLimit?: num... to interface SourceInspectionOptions { searches?: readonly string[]; symbols?: readonly string[]; locations?: readonly string[]; scope?: string; context?: number; searchLimit?: num....",
+      "target": "./queries/index:SourceInspectionOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionPacketCoverage.",
+      "target": "./queries/index:SourceInspectionPacketCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionResult changed from interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid... to interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid....",
+      "target": "./queries/index:SourceInspectionResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionSearch changed from interface SourceInspectionSearch { pattern: string; matchingLines: number; returnedMatches: number; omittedMatches: number; exactFollowup?: string; } to interface SourceInspectionSearch { pattern: string; matchingLines: number; returnedMatches: number; omittedMatches: number; matchingFiles?: number; returnedFiles?: number; omitt....",
+      "target": "./queries/index:SourceInspectionSearch"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionSearchScope.",
+      "target": "./queries/index:SourceInspectionSearchScope"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchFileCoverage.",
+      "target": "./queries/index:SourceSearchFileCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchOptions changed from interface SourceSearchOptions { scope?: string; context?: number; limit?: number; regexp?: boolean; ignoreCase?: boolean; } to interface SourceSearchOptions { scope?: string; context?: number; limit?: number; regexp?: boolean; ignoreCase?: boolean; ranking?: 'structural'; }.",
+      "target": "./queries/index:SourceSearchOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchResult changed from interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; matches: SourceSearchMatch[]; matchingLines: number; omittedMatches: number; scannedFiles: number; } to interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; matches: SourceSearchMatch[]; matchingLines: number; omittedMatches: number; fileCoverage?: SourceSea....",
+      "target": "./queries/index:SourceSearchResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionOptions changed from interface SourceInspectionOptions { searches?: readonly string[]; symbols?: readonly string[]; locations?: readonly string[]; scope?: string; context?: number; searchLimit?: num... to interface SourceInspectionOptions { searches?: readonly string[]; symbols?: readonly string[]; locations?: readonly string[]; scope?: string; context?: number; searchLimit?: num....",
+      "target": "./queries/source-inspection:SourceInspectionOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionPacketCoverage.",
+      "target": "./queries/source-inspection:SourceInspectionPacketCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionResult changed from interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid... to interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid....",
+      "target": "./queries/source-inspection:SourceInspectionResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionSearch changed from interface SourceInspectionSearch { pattern: string; matchingLines: number; returnedMatches: number; omittedMatches: number; exactFollowup?: string; } to interface SourceInspectionSearch { pattern: string; matchingLines: number; returnedMatches: number; omittedMatches: number; matchingFiles?: number; returnedFiles?: number; omitt....",
+      "target": "./queries/source-inspection:SourceInspectionSearch"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionSearchScope.",
+      "target": "./queries/source-inspection:SourceInspectionSearchScope"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchFileCoverage.",
+      "target": "./queries/source-search:SourceSearchFileCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchOptions changed from interface SourceSearchOptions { scope?: string; context?: number; limit?: number; regexp?: boolean; ignoreCase?: boolean; } to interface SourceSearchOptions { scope?: string; context?: number; limit?: number; regexp?: boolean; ignoreCase?: boolean; ranking?: 'structural'; }.",
+      "target": "./queries/source-search:SourceSearchOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchResult changed from interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; matches: SourceSearchMatch[]; matchingLines: number; omittedMatches: number; scannedFiles: number; } to interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; matches: SourceSearchMatch[]; matchingLines: number; omittedMatches: number; fileCoverage?: SourceSea....",
+      "target": "./queries/source-search:SourceSearchResult"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "63022eb1495b80378d802fe379b4f22ff425b0f7941f54d0e2f581ad8e0f7c80",
+  "reason": "Add optional selector cardinality, ranking controls, packet coverage, and explicit expansion metadata for bounded source inspection.",
+  "schemaVersion": 1
+}

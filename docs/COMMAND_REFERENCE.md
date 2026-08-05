@@ -11,6 +11,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 Commands with `--json` share three structured modes: plain `--json` emits the stable public envelope, `--json --result-only` emits only the command payload, and `--json --compact` minifies either form for a program. Agents should prefer ordinary human output. See [CLI output modes](CLI_JSON_OUTPUT.md).
 
 Every command accepts `--output-page-size <characters>` and `--output-cursor <cursor>`. Run normally without choosing a page size: oversized human output stays readable text and prints one exact continuation command; oversized JSON prints the exact command that opts into versioned JSON page envelopes.
+Exact code, definition, and source-inspection units always render whole. Cross-command source citations are off by default; an explicit `SCIP_QUERY_SESSION` may replace only wholly prior-emitted locating previews. Partially covered previews render whole. Use global `--reemit` only to recover a cited preview that is no longer in context.
 
 ### Indexing
 
@@ -31,8 +32,9 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 | Command | Description | Options |
 |---|---|---|
 | `files <pattern>` | Find files matching a pattern | `--json`<br>`--result-only`<br>`--compact` |
-| `inspect` | Batch related searches, symbols, and source locations into one deduplicated source packet | `--search <text>`<br>`--symbol <symbol>`<br>`--at <file:line>`<br>`-s, --scope <path>`<br>`-C, --context <n>`<br>`-n, --limit <n>`<br>`--unit-lines <n>`<br>`--total-lines <n>`<br>`--include <part>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `search <text>` | Search literal or regular-expression text in indexed source with nearby code and symbol ownership | `-s, --scope <path>`<br>`-C, --context <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--regexp`<br>`-i, --ignore-case`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `session` | Show source ranges already delivered in this agent exploration session | `--reset` |
+| `inspect` | Batch related searches, symbols, and source locations into one deduplicated source packet | `--search <text>`<br>`--symbol <symbol>`<br>`--at <file:line>`<br>`-s, --scope <path>`<br>`-C, --context <n>`<br>`-n, --limit <n>`<br>`--max-units <n>`<br>`--max-characters <n>`<br>`--view <view>`<br>`--unit-lines <n>`<br>`--total-lines <n>`<br>`--include <part>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `search <text>` | List every indexed text-match identity and preview a representative subset of nearby source | `-s, --scope <path>`<br>`-C, --context <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--regexp`<br>`-i, --ignore-case`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `methods <className>` | List methods of one exactly resolved class; ambiguity and missing targets fail explicitly | `--json`<br>`--result-only`<br>`--compact` |
 | `refs <symbol>` | Find all files referencing a symbol | `--full`<br>`-n, --limit <n>`<br>`--cursor <cursor>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `trace <symbol>` | Trace a symbol: definition + all references | `--full`<br>`--json`<br>`--result-only`<br>`--compact` |
@@ -48,7 +50,7 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 | `by-kind <kind>` | Find symbols by SCIP kind (class, interface, enum, function, etc.) | `-s, --scope <path>`<br>`-n, --limit <n>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `kind-counts` | Histogram of symbol kinds in the codebase | `-s, --scope <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `hierarchy <symbol>` | Show a symbol's ancestry chain (method → class → module) | `--json`<br>`--result-only`<br>`--compact` |
-| `code <symbol>` | Read the source code for a symbol (bounded to its definition range) | `-C, --context <n>`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `code <selectors...>` | Read exact definitions, ranges with local call closure, or file export surfaces | `-C, --context <n>`<br>`--members <exported|all>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `dataflow <symbol>` | Reference-level dataflow: definition sites, usage sites, producers, consumers | `--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `slice <symbol>` | Reference-level program slice: what affects this (backward) or what this affects (forward) | `--forward`<br>`--depth <n>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 
@@ -101,6 +103,9 @@ Every command accepts `--output-page-size <characters>` and `--output-cursor <cu
 | `architecture` | Evaluate project-owned architectural boundaries and dependency rules | `-s, --scope <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `bottlenecks` | Find coupling hubs: high fan-in AND high fan-out | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-fan-in <n>`<br>`--min-fan-out <n>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `deep-chains` | Find the longest condensed dependency-component chains | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-depth <n>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `entrypoints [text]` | Find callables where control may enter from outside the indexed call graph | `-s, --scope <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `entry-map <entry>` | Map the complete indexed call graph from one detected entry point, collapsed by file | `--expand <region-id>`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `system-map` | Map structural regions, compiler relationships, and exact runtime boundaries from explicit anchors | `--search <literal>`<br>`--symbol <symbol>`<br>`--depth <n>`<br>`--relation <kind>`<br>`--evidence-floor <floor>`<br>`--topology-characters <n>`<br>`--source-scope <scope>`<br>`--expand <region-id>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `call-graph <symbol>` | Show incoming callers and outgoing callees for a symbol | `--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 
 ### Impact

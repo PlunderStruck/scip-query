@@ -1,0 +1,31 @@
+{
+  "acceptedAt": "2026-08-03T23:38:02.645Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "52aabf875d36259476d54c2c628f473c48e7dbde7e76c719a4be4b9cded70f66",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import' | 'indexed-or-source-reference' | 'indexed-or-source-import'; to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import-candidate' | 'indexed-or-source-reference' | 'indexed-or-source-import';.",
+      "target": "./queries:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import' | 'indexed-or-source-reference' | 'indexed-or-source-import'; to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import-candidate' | 'indexed-or-source-reference' | 'indexed-or-source-import';.",
+      "target": "./queries/index:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import' | 'indexed-or-source-reference' | 'indexed-or-source-import'; to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import-candidate' | 'indexed-or-source-reference' | 'indexed-or-source-import';.",
+      "target": "./queries/system-map:SystemMapRelationEvidence"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "da67cd4b29247ddd6eac36f636124cf96b22325ccbf3e09c26d2897a8e7cd976",
+  "reason": "Rename the unreleased member-call evidence variant to mark its receiver attribution as a source-derived candidate rather than a compiler-proven call.",
+  "schemaVersion": 1
+}

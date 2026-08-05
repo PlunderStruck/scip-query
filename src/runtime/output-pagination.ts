@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import {
   chmodSync,
   closeSync,
@@ -30,10 +30,11 @@ import { readSmallArtifactText } from '../platform/bounded-file.js';
 import { quoteShellArgument } from '../platform/shell-arguments.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import { isNonNegativeInteger, isRecordObject } from '../domain/record-validation.js';
-import { encodeCursorPayload } from './cursor-codec.js';
+import { finalizeSourceEmission, runWithSourceEmissionInvocation } from './source-emission-session.js';
 
 export const CLI_OUTPUT_PAGE_KIND = 'scip-query-output-page' as const;
 export const CLI_OUTPUT_PAGE_SCHEMA_VERSION = 1 as const;
+export const CLI_OUTPUT_CONTINUATION_COMMAND = 'continue' as const;
 export const DEFAULT_OUTPUT_PAGE_SIZE = 32_000;
 export const MIN_OUTPUT_PAGE_SIZE = 256;
 export const MAX_OUTPUT_PAGE_SIZE = 100_000;
@@ -49,7 +50,10 @@ const OUTPUT_SNAPSHOT_VERSION = 3;
 function outputSnapshotRoot(): string {
   return join(tmpdir(), `scip-query-output-pages-${typeof process.getuid === 'function' ? process.getuid() : 'user'}`);
 }
-const OUTPUT_SNAPSHOT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+const LEGACY_OUTPUT_SNAPSHOT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+const SHORT_OUTPUT_SNAPSHOT_ID = /^[A-Za-z0-9_][A-Za-z0-9_-]{11}$/u;
+const UUID_OUTPUT_CURSOR = /^4\.([A-Za-z0-9_-]{22})\.([0-9a-z]{1,10})$/u;
+const SHORT_OUTPUT_CURSOR = /^([A-Za-z0-9_][A-Za-z0-9_-]{11})(?:\.([0-9a-z]{1,10}))?$/u;
 const OUTPUT_RESERVATION_VERSION = 1;
 const OUTPUT_QUOTA_LOCK_NAME = 'quota.lock';
 const OUTPUT_QUOTA_LOCK_WAIT_MS = 2_000;
@@ -58,7 +62,7 @@ const OUTPUT_RESERVATION_CHUNK_BYTES = 1024 * 1024;
 const OUTPUT_QUOTA_WAIT_BUFFER = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
 let outputProcessIdentity: ProcessIdentity | null | undefined;
 
-interface OutputCursorPayload {
+interface LegacyOutputCursorPayload {
   version: 3;
   invocationHash: string;
   pageIndex: number;
@@ -66,6 +70,14 @@ interface OutputCursorPayload {
   outputHash: string;
   snapshotId: string;
 }
+
+interface ShortOutputCursorPayload {
+  version: 4;
+  pageIndex: number;
+  snapshotId: string;
+}
+
+type OutputCursorPayload = LegacyOutputCursorPayload | ShortOutputCursorPayload;
 
 interface OutputSnapshotPage {
   characterOffset: number;
@@ -246,6 +258,10 @@ export interface CliOutputPaginationOptions {
   argv: readonly string[];
   cwd: string;
   json: boolean;
+  /** Reuse an agent-scoped ledger to replace repeated source with citations. */
+  sourceSession?: boolean;
+  /** Render full source even when the current agent session saw it already. */
+  reemitSource?: boolean;
   pageSize?: number;
   cursor?: string;
   maxOutputCharacters?: number;
@@ -284,6 +300,30 @@ export async function runWithCliOutputPagination(
   action: () => void | Promise<void>,
   runtime: CliOutputPaginationRuntime = defaultRuntime,
 ): Promise<void> {
+  return runWithSourceEmissionInvocation(
+    {
+      command: options.command,
+      cwd: options.cwd,
+      argv: options.argv,
+      json: options.json,
+      sessionEnabled: options.sourceSession,
+      reemit: options.reemitSource,
+    },
+    async () => {
+      try {
+        await runWithCliOutputPaginationInSession(options, action, runtime);
+      } finally {
+        finalizeSourceEmission(false);
+      }
+    },
+  );
+}
+
+async function runWithCliOutputPaginationInSession(
+  options: CliOutputPaginationOptions,
+  action: () => void | Promise<void>,
+  runtime: CliOutputPaginationRuntime,
+): Promise<void> {
   const pageSize = options.pageSize ?? DEFAULT_OUTPUT_PAGE_SIZE;
   const snapshotRoot = options.snapshotRoot ?? outputSnapshotRoot();
   const snapshotLimits = resolveOutputSnapshotLimits(options.snapshotLimits);
@@ -321,6 +361,7 @@ export async function runWithCliOutputPagination(
     try {
       completed = captureOutputSnapshotPage(
         decodedCursor,
+        invocationHash,
         pageSize,
         maxOutputCharacters,
         snapshotRoot,
@@ -377,17 +418,14 @@ export async function runWithCliOutputPagination(
   const continuation = complete
     ? undefined
     : createContinuation({
-        filteredArgv,
         invocationPrefix,
-        invocationHash,
         nextPageIndex: completed.pageIndex + 1,
-        outputHash: completed.outputHash,
-        pageSize,
         snapshotId: requireSnapshotId(snapshotId),
       });
 
   if (completed.offset === 0 && complete && options.cursor === undefined) {
     runtime.writeStdout(completed.content);
+    finalizeSourceEmission(true);
     if (snapshotId) removeOutputSnapshot(snapshotId, snapshotRoot);
     return;
   }
@@ -431,6 +469,38 @@ export async function runWithCliOutputPagination(
   }
   runtime.writeStdout(renderHumanOutputPage(envelope));
   if (complete && snapshotId) removeOutputSnapshot(snapshotId, snapshotRoot);
+}
+
+/** Resume one immutable output snapshot without repeating its original command. */
+export async function continueCliOutput(
+  cursor: string,
+  producerVersion: string,
+  snapshotRoot = outputSnapshotRoot(),
+  runtime: CliOutputPaginationRuntime = defaultRuntime,
+): Promise<void> {
+  if (cursor.length > MAX_OUTPUT_CURSOR_LENGTH) {
+    throw new Error(`Output cursor exceeds the ${MAX_OUTPUT_CURSOR_LENGTH}-character limit.`);
+  }
+  const parsed = parseOutputCursor(cursor);
+  if (!parsed) throw new Error('Invalid output cursor. Run the original command again.');
+  const metadata = readOutputSnapshotMetadata(parsed.snapshotId, snapshotRoot);
+  await runWithCliOutputPagination(
+    {
+      command: metadata.command,
+      producerVersion,
+      invocationPrefix: metadata.invocationPrefix,
+      argv: [...metadata.argv, '--output-page-size', String(metadata.pageSize), '--output-cursor', cursor],
+      cwd: metadata.cwd,
+      json: metadata.argv.some((argument) => argument === '--json' || argument.startsWith('--json=')),
+      pageSize: metadata.pageSize,
+      cursor,
+      snapshotRoot,
+    },
+    () => {
+      throw new Error('Output continuation attempted to rerun the original command.');
+    },
+    runtime,
+  );
 }
 
 export function parseOutputPageSize(value: string): number {
@@ -599,7 +669,9 @@ class OutputSnapshotWriter {
     private readonly preferLineBoundaries: boolean,
   ) {
     ensureOutputSnapshotRoot(snapshotRoot);
-    this.snapshotId = randomUUID();
+    do {
+      this.snapshotId = randomBytes(9).toString('base64url');
+    } while (this.snapshotId.startsWith('-'));
     this.temporaryPath = outputSnapshotPath(snapshotRoot, this.snapshotId, 'tmp');
   }
 
@@ -764,6 +836,7 @@ class OutputSnapshotWriter {
 
 function captureOutputSnapshotPage(
   cursor: OutputCursorPayload,
+  expectedInvocationHash: string,
   pageSize: number,
   maxOutputCharacters: number,
   snapshotRoot: string,
@@ -778,14 +851,19 @@ function captureOutputSnapshotPage(
 } {
   ensureOutputSnapshotRoot(snapshotRoot);
   const metadata = readOutputSnapshotMetadata(cursor.snapshotId, snapshotRoot);
+  if (metadata.invocationHash !== expectedInvocationHash) {
+    throw new Error(
+      'This output cursor belongs to a different command, working directory, or argument set. Run again without --output-cursor.',
+    );
+  }
   if (
-    metadata.invocationHash !== cursor.invocationHash ||
-    metadata.outputHash !== cursor.outputHash ||
-    metadata.snapshotId !== cursor.snapshotId
+    metadata.snapshotId !== cursor.snapshotId ||
+    (cursor.version === 3 &&
+      (metadata.invocationHash !== cursor.invocationHash || metadata.outputHash !== cursor.outputHash))
   ) {
     throw new Error('Output snapshot identity does not match this cursor.');
   }
-  if (cursor.pageSize !== pageSize || metadata.pageSize !== pageSize) {
+  if (metadata.pageSize !== pageSize || (cursor.version === 3 && cursor.pageSize !== pageSize)) {
     throw new Error(`Output page size changed after this cursor was issued; use ${metadata.pageSize}.`);
   }
   const page = metadata.pages[cursor.pageIndex];
@@ -844,7 +922,7 @@ function captureOutputSnapshotPage(
 }
 
 function readOutputSnapshotMetadata(snapshotId: string, snapshotRoot: string): OutputSnapshotMetadata {
-  if (!OUTPUT_SNAPSHOT_ID.test(snapshotId)) throw new Error('Output snapshot identifier is invalid.');
+  if (!isOutputSnapshotId(snapshotId)) throw new Error('Output snapshot identifier is invalid.');
   let parsed: unknown;
   try {
     parsed = JSON.parse(
@@ -863,7 +941,7 @@ function isOutputSnapshotMetadata(value: unknown): value is OutputSnapshotMetada
   return (
     metadata.version === OUTPUT_SNAPSHOT_VERSION &&
     typeof metadata.snapshotId === 'string' &&
-    OUTPUT_SNAPSHOT_ID.test(metadata.snapshotId) &&
+    isOutputSnapshotId(metadata.snapshotId) &&
     isSha256(metadata.invocationHash) &&
     isInvocationPrefix(metadata.invocationPrefix) &&
     typeof metadata.command === 'string' &&
@@ -1020,7 +1098,7 @@ function readOutputReservations(snapshotRoot: string): OutputSnapshotReservation
   for (const entry of readdirSync(snapshotRoot, { withFileTypes: true })) {
     if (!entry.isFile() || !entry.name.endsWith('.reserve')) continue;
     const snapshotId = entry.name.slice(0, -'.reserve'.length);
-    if (!OUTPUT_SNAPSHOT_ID.test(snapshotId)) continue;
+    if (!isOutputSnapshotId(snapshotId)) continue;
     try {
       const parsed = JSON.parse(
         readSmallArtifactText(join(snapshotRoot, entry.name), 'output snapshot reservation'),
@@ -1045,7 +1123,7 @@ function isOutputSnapshotReservation(value: unknown): value is OutputSnapshotRes
   return (
     reservation.version === OUTPUT_RESERVATION_VERSION &&
     typeof reservation.snapshotId === 'string' &&
-    OUTPUT_SNAPSHOT_ID.test(reservation.snapshotId) &&
+    isOutputSnapshotId(reservation.snapshotId) &&
     Number.isSafeInteger(reservation.pid) &&
     (reservation.pid ?? 0) > 0 &&
     (reservation.processIdentity === undefined ||
@@ -1064,7 +1142,7 @@ function pruneAbandonedOutputSnapshots(snapshotRoot: string): void {
   for (const entry of readdirSync(snapshotRoot, { withFileTypes: true })) {
     if (!entry.isFile() || !entry.name.endsWith('.reserve')) continue;
     const snapshotId = entry.name.slice(0, -'.reserve'.length);
-    if (!OUTPUT_SNAPSHOT_ID.test(snapshotId)) continue;
+    if (!isOutputSnapshotId(snapshotId)) continue;
     let reservation: OutputSnapshotReservation | null = null;
     try {
       const parsed = JSON.parse(
@@ -1128,7 +1206,7 @@ function currentOutputProcessIdentity(): ProcessIdentity | null {
 }
 
 function removeOutputSnapshot(snapshotId: string, snapshotRoot: string): void {
-  if (!OUTPUT_SNAPSHOT_ID.test(snapshotId)) return;
+  if (!isOutputSnapshotId(snapshotId)) return;
   withOutputQuotaLock(snapshotRoot, () => removeOutputSnapshotFiles(snapshotId, snapshotRoot));
 }
 
@@ -1143,7 +1221,7 @@ function outputSnapshotPath(
   snapshotId: string,
   extension: 'json' | 'output' | 'tmp' | 'reserve',
 ): string {
-  if (!OUTPUT_SNAPSHOT_ID.test(snapshotId)) throw new Error('Output snapshot identifier is invalid.');
+  if (!isOutputSnapshotId(snapshotId)) throw new Error('Output snapshot identifier is invalid.');
   return join(snapshotRoot, `${snapshotId}.${extension}`);
 }
 
@@ -1165,29 +1243,25 @@ function outputPageEnd(content: string, pageSize: number, preferLineBoundaries: 
 }
 
 function createContinuation(input: {
-  filteredArgv: readonly string[];
   invocationPrefix: readonly string[];
-  invocationHash: string;
   nextPageIndex: number;
-  outputHash: string;
-  pageSize: number;
   snapshotId: string;
 }): { cursor: string; command: string } {
   const cursor = encodeOutputCursor({
-    invocationHash: input.invocationHash,
     pageIndex: input.nextPageIndex,
-    pageSize: input.pageSize,
-    outputHash: input.outputHash,
     snapshotId: input.snapshotId,
   });
   return {
     cursor,
-    command: renderContinuationCommand(input.invocationPrefix, input.filteredArgv, input.pageSize, cursor),
+    command: renderContinuationCommand(input.invocationPrefix, cursor),
   };
 }
 
-function encodeOutputCursor(payload: Omit<OutputCursorPayload, 'version'>): string {
-  return encodeCursorPayload({ version: 3, ...payload } satisfies OutputCursorPayload);
+function encodeOutputCursor(payload: Omit<ShortOutputCursorPayload, 'version'>): string {
+  if (SHORT_OUTPUT_SNAPSHOT_ID.test(payload.snapshotId)) {
+    return payload.pageIndex === 1 ? payload.snapshotId : `${payload.snapshotId}.${payload.pageIndex.toString(36)}`;
+  }
+  return `4.${snapshotIdToCursorToken(payload.snapshotId)}.${payload.pageIndex.toString(36)}`;
 }
 
 function decodeOutputCursor(cursor: string, expectedInvocationHash: string): OutputCursorPayload {
@@ -1195,7 +1269,7 @@ function decodeOutputCursor(cursor: string, expectedInvocationHash: string): Out
   if (!parsed) {
     throw new Error('Invalid output cursor. Run the command again without --output-cursor.');
   }
-  if (parsed.invocationHash !== expectedInvocationHash) {
+  if (parsed.version === 3 && parsed.invocationHash !== expectedInvocationHash) {
     throw new Error(
       'This output cursor belongs to a different command, working directory, or argument set. Run again without --output-cursor.',
     );
@@ -1204,9 +1278,30 @@ function decodeOutputCursor(cursor: string, expectedInvocationHash: string): Out
 }
 
 function parseOutputCursor(cursor: string): OutputCursorPayload | null {
+  const short = SHORT_OUTPUT_CURSOR.exec(cursor);
+  if (short) {
+    const encodedPageIndex = short[2] ?? '1';
+    const pageIndex = Number.parseInt(encodedPageIndex, 36);
+    if (Number.isSafeInteger(pageIndex) && pageIndex >= 1 && pageIndex.toString(36) === encodedPageIndex) {
+      return { version: 4, pageIndex, snapshotId: short[1]! };
+    }
+    return null;
+  }
+  const uuid = UUID_OUTPUT_CURSOR.exec(cursor);
+  if (uuid) {
+    const snapshotId = cursorTokenToSnapshotId(uuid[1]!);
+    const pageIndex = Number.parseInt(uuid[2]!, 36);
+    if (snapshotId && Number.isSafeInteger(pageIndex) && pageIndex >= 1 && pageIndex.toString(36) === uuid[2]) {
+      return { version: 4, pageIndex, snapshotId };
+    }
+    return null;
+  }
+  // Version 3 embedded snapshot validation data in a large base64url JSON
+  // token. Keep reading it until every cursor issued by an older binary has
+  // exceeded the one-hour snapshot TTL.
   try {
     const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as unknown;
-    return isOutputCursorPayload(parsed) ? parsed : null;
+    return isLegacyOutputCursorPayload(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -1226,9 +1321,11 @@ export function inspectPendingCliOutputCursor(
   try {
     const metadata = readOutputSnapshotMetadata(parsed.snapshotId, snapshotRoot);
     if (
-      metadata.invocationHash !== parsed.invocationHash ||
-      metadata.outputHash !== parsed.outputHash ||
-      metadata.pageSize !== parsed.pageSize ||
+      metadata.snapshotId !== parsed.snapshotId ||
+      (parsed.version === 3 &&
+        (metadata.invocationHash !== parsed.invocationHash ||
+          metadata.outputHash !== parsed.outputHash ||
+          metadata.pageSize !== parsed.pageSize)) ||
       Date.now() - metadata.createdAtMs > OUTPUT_SNAPSHOT_TTL_MS ||
       !metadata.pages[parsed.pageIndex]
     ) {
@@ -1240,12 +1337,7 @@ export function inspectPendingCliOutputCursor(
       pageIndex: parsed.pageIndex,
       command: metadata.command,
       cwd: metadata.cwd,
-      continuationCommand: renderContinuationCommand(
-        metadata.invocationPrefix,
-        metadata.argv,
-        metadata.pageSize,
-        cursor,
-      ),
+      continuationCommand: renderContinuationCommand(metadata.invocationPrefix, cursor),
       remainingCharacters: metadata.totalCharacters - page.characterOffset,
       totalCharacters: metadata.totalCharacters,
       outputHash: metadata.outputHash,
@@ -1256,9 +1348,9 @@ export function inspectPendingCliOutputCursor(
   }
 }
 
-function isOutputCursorPayload(value: unknown): value is OutputCursorPayload {
+function isLegacyOutputCursorPayload(value: unknown): value is LegacyOutputCursorPayload {
   if (!value || typeof value !== 'object') return false;
-  const cursor = value as Partial<OutputCursorPayload>;
+  const cursor = value as Partial<LegacyOutputCursorPayload>;
   return (
     cursor.version === 3 &&
     isSha256(cursor.invocationHash) &&
@@ -1269,8 +1361,25 @@ function isOutputCursorPayload(value: unknown): value is OutputCursorPayload {
     (cursor.pageSize ?? 0) <= MAX_OUTPUT_PAGE_SIZE &&
     isSha256(cursor.outputHash) &&
     typeof cursor.snapshotId === 'string' &&
-    OUTPUT_SNAPSHOT_ID.test(cursor.snapshotId)
+    isOutputSnapshotId(cursor.snapshotId)
   );
+}
+
+function snapshotIdToCursorToken(snapshotId: string): string {
+  if (!LEGACY_OUTPUT_SNAPSHOT_ID.test(snapshotId)) throw new Error('Output snapshot identifier is invalid.');
+  return Buffer.from(snapshotId.replaceAll('-', ''), 'hex').toString('base64url');
+}
+
+function cursorTokenToSnapshotId(token: string): string | null {
+  const bytes = Buffer.from(token, 'base64url');
+  if (bytes.length !== 16) return null;
+  const hex = bytes.toString('hex');
+  const snapshotId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  return LEGACY_OUTPUT_SNAPSHOT_ID.test(snapshotId) ? snapshotId : null;
+}
+
+function isOutputSnapshotId(value: unknown): value is string {
+  return typeof value === 'string' && (SHORT_OUTPUT_SNAPSHOT_ID.test(value) || LEGACY_OUTPUT_SNAPSHOT_ID.test(value));
 }
 
 function isSha256(value: unknown): value is string {
@@ -1308,13 +1417,8 @@ function renderInitialPageCommand(
   return shellJoin([...invocationPrefix, ...argv, '--output-page-size', String(pageSize)]);
 }
 
-function renderContinuationCommand(
-  invocationPrefix: readonly string[],
-  argv: readonly string[],
-  pageSize: number,
-  cursor: string,
-): string {
-  return shellJoin([...invocationPrefix, ...argv, '--output-page-size', String(pageSize), '--output-cursor', cursor]);
+function renderContinuationCommand(invocationPrefix: readonly string[], cursor: string): string {
+  return shellJoin([...invocationPrefix, CLI_OUTPUT_CONTINUATION_COMMAND, cursor]);
 }
 
 function normalizeInvocationPrefix(value: readonly string[] | undefined): string[] {

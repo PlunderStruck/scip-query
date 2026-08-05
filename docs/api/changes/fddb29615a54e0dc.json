@@ -1,0 +1,271 @@
+{
+  "acceptedAt": "2026-08-02T22:34:36.925Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "fddb29615a54e0dc89077919cf5b9d2475af4bd0519a49a3b5bdf500e337f30d",
+  "changes": [
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for .; review their variance and runtime meaning.",
+      "target": "."
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapAnchor.",
+      "target": "./queries:SystemMapAnchor"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapAnchorCandidate.",
+      "target": "./queries:SystemMapAnchorCandidate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapAnchorKind.",
+      "target": "./queries:SystemMapAnchorKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapAnchorStatus.",
+      "target": "./queries:SystemMapAnchorStatus"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapCoverage.",
+      "target": "./queries:SystemMapCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapExternalBoundary.",
+      "target": "./queries:SystemMapExternalBoundary"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapFile.",
+      "target": "./queries:SystemMapFile"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapLiteralHit.",
+      "target": "./queries:SystemMapLiteralHit"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapNotableSymbol.",
+      "target": "./queries:SystemMapNotableSymbol"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapOptions.",
+      "target": "./queries:SystemMapOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapReferenceScope.",
+      "target": "./queries:SystemMapReferenceScope"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapRegion.",
+      "target": "./queries:SystemMapRegion"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapRegionRelation.",
+      "target": "./queries:SystemMapRegionRelation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapRelation.",
+      "target": "./queries:SystemMapRelation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapRelationEvidence.",
+      "target": "./queries:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapRelationFamilyCoverage.",
+      "target": "./queries:SystemMapRelationFamilyCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapRelationKind.",
+      "target": "./queries:SystemMapRelationKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapResult.",
+      "target": "./queries:SystemMapResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapSymbol.",
+      "target": "./queries:SystemMapSymbol"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export systemMap.",
+      "target": "./queries:systemMap"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapAnchor.",
+      "target": "./queries/index:SystemMapAnchor"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapAnchorCandidate.",
+      "target": "./queries/index:SystemMapAnchorCandidate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapAnchorKind.",
+      "target": "./queries/index:SystemMapAnchorKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapAnchorStatus.",
+      "target": "./queries/index:SystemMapAnchorStatus"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapCoverage.",
+      "target": "./queries/index:SystemMapCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapExternalBoundary.",
+      "target": "./queries/index:SystemMapExternalBoundary"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapFile.",
+      "target": "./queries/index:SystemMapFile"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapLiteralHit.",
+      "target": "./queries/index:SystemMapLiteralHit"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapNotableSymbol.",
+      "target": "./queries/index:SystemMapNotableSymbol"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapOptions.",
+      "target": "./queries/index:SystemMapOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapReferenceScope.",
+      "target": "./queries/index:SystemMapReferenceScope"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapRegion.",
+      "target": "./queries/index:SystemMapRegion"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapRegionRelation.",
+      "target": "./queries/index:SystemMapRegionRelation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapRelation.",
+      "target": "./queries/index:SystemMapRelation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapRelationEvidence.",
+      "target": "./queries/index:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapRelationFamilyCoverage.",
+      "target": "./queries/index:SystemMapRelationFamilyCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapRelationKind.",
+      "target": "./queries/index:SystemMapRelationKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapResult.",
+      "target": "./queries/index:SystemMapResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapSymbol.",
+      "target": "./queries/index:SystemMapSymbol"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export systemMap.",
+      "target": "./queries/index:systemMap"
+    },
+    {
+      "classification": "additive",
+      "kind": "entry-added",
+      "message": "Added public declaration path ./queries/system-map.",
+      "target": "./queries/system-map"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module file-classifier-<hash>.d.ts was added or renamed.",
+      "target": "file-classifier-<hash>.d.ts"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "66df69ac55b2710f623416c44b7410c4280f53960fe904c4a63af8a4b5f24ff2",
+  "reason": "Adds the system-map API; the root declaration only gains a referenced FileKind chunk, with no changed root export signature or runtime behavior.",
+  "schemaVersion": 1
+}

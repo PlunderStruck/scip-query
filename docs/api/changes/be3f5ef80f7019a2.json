@@ -1,0 +1,49 @@
+{
+  "acceptedAt": "2026-08-03T00:21:58.542Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "be3f5ef80f7019a24be1a5ed6433ca15ff2d7ac2e0c7e5f90c05d34ac73e801a",
+  "changes": [
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for .; review their variance and runtime meaning.",
+      "target": "."
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries; review their variance and runtime meaning.",
+      "target": "./queries"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/index; review their variance and runtime meaning.",
+      "target": "./queries/index"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/system-map; review their variance and runtime meaning.",
+      "target": "./queries/system-map"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module file-classifier-<hash>.d.ts was removed or renamed.",
+      "target": "file-classifier-<hash>.d.ts"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module file-kind-<hash>.d.ts was added or renamed.",
+      "target": "file-kind-<hash>.d.ts"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "0d657e5a075c779fb6c6e490ae4bb0a5708f4117255349d9c50e606c1d483edb",
+  "reason": "Move the unchanged path-only FileKind classifier into the lower source boundary while preserving the existing exports, signatures, and runtime classification behavior.",
+  "schemaVersion": 1
+}

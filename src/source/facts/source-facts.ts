@@ -36,7 +36,7 @@ export interface SourceFactsResult {
   unavailable?: SourceFactsUnavailable;
 }
 
-export const SOURCE_FACTS_PAYLOAD_VERSION = 3;
+export const SOURCE_FACTS_PAYLOAD_VERSION = 4;
 
 // In-process layer keyed by (db, path, source) — previously a WeakMap on the
 // parsed Tree, but a persistent-cache hit never parses a Tree at all.

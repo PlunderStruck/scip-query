@@ -1,0 +1,199 @@
+{
+  "acceptedAt": "2026-08-03T07:44:24.271Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "75cc23cc9f99bf708c569717c382fbd856f8dabe37f930a34e8a4a6ee00d30f0",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeBatchEntry.",
+      "target": "./queries:CodeBatchEntry"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeBatchResult.",
+      "target": "./queries:CodeBatchResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeResolutionCandidate.",
+      "target": "./queries:CodeResolutionCandidate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeSelectorKind.",
+      "target": "./queries:CodeSelectorKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeSelectorStatus.",
+      "target": "./queries:CodeSelectorStatus"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapDrilldown changed from interface SystemMapDrilldown { command: string | null; candidateAnchors: number; selectedAnchors: number; omittedAnchors: number; anchors: SystemMapDrilldownAnchor[]; } to interface SystemMapDrilldown { command: string | null; definitionCommand: string | null; candidateAnchors: number; selectedAnchors: number; omittedAnchors: number; anchors: Syst....",
+      "target": "./queries:SystemMapDrilldown"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export codeBatch.",
+      "target": "./queries:codeBatch"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeBatchEntry.",
+      "target": "./queries/code:CodeBatchEntry"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeBatchResult.",
+      "target": "./queries/code:CodeBatchResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeResolutionCandidate.",
+      "target": "./queries/code:CodeResolutionCandidate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeSelectorKind.",
+      "target": "./queries/code:CodeSelectorKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeSelectorStatus.",
+      "target": "./queries/code:CodeSelectorStatus"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export codeBatch.",
+      "target": "./queries/code:codeBatch"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/evidence; review their variance and runtime meaning.",
+      "target": "./queries/evidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeBatchEntry.",
+      "target": "./queries/index:CodeBatchEntry"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeBatchResult.",
+      "target": "./queries/index:CodeBatchResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeResolutionCandidate.",
+      "target": "./queries/index:CodeResolutionCandidate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeSelectorKind.",
+      "target": "./queries/index:CodeSelectorKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeSelectorStatus.",
+      "target": "./queries/index:CodeSelectorStatus"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapDrilldown changed from interface SystemMapDrilldown { command: string | null; candidateAnchors: number; selectedAnchors: number; omittedAnchors: number; anchors: SystemMapDrilldownAnchor[]; } to interface SystemMapDrilldown { command: string | null; definitionCommand: string | null; candidateAnchors: number; selectedAnchors: number; omittedAnchors: number; anchors: Syst....",
+      "target": "./queries/index:SystemMapDrilldown"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export codeBatch.",
+      "target": "./queries/index:codeBatch"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/source-inspection; review their variance and runtime meaning.",
+      "target": "./queries/source-inspection"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapDrilldown changed from interface SystemMapDrilldown { command: string | null; candidateAnchors: number; selectedAnchors: number; omittedAnchors: number; anchors: SystemMapDrilldownAnchor[]; } to interface SystemMapDrilldown { command: string | null; definitionCommand: string | null; candidateAnchors: number; selectedAnchors: number; omittedAnchors: number; anchors: Syst....",
+      "target": "./queries/system-map:SystemMapDrilldown"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "b changed from interface CoveredSourceRange { relativePath: string; startLine: number; endLine: number; } to interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand....",
+      "target": "code-<hash>.d.ts:b"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "c changed from declare function code(db: ScipDatabase, symbolPattern: string, opts?: { context?: number; }): CodeResult | null; to interface CodeBatchResult { requested: number; matched: number; ambiguous: number; missing: number; entries: CodeBatchEntry[]; bindingClosure: BindingClosure; }.",
+      "target": "code-<hash>.d.ts:c"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration d.",
+      "target": "code-<hash>.d.ts:d"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration e.",
+      "target": "code-<hash>.d.ts:e"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration f.",
+      "target": "code-<hash>.d.ts:f"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration g.",
+      "target": "code-<hash>.d.ts:g"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration h.",
+      "target": "code-<hash>.d.ts:h"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration i.",
+      "target": "code-<hash>.d.ts:i"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "6e4b2ed60c3366dae6878d2ed853f42835dde3a46c71dff134836d8b5741c9b6",
+  "reason": "Add complete variadic code packets and exact file definition inventories; expose file-based system-map drilldown.",
+  "schemaVersion": 1
+}

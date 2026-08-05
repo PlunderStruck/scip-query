@@ -1,0 +1,31 @@
+{
+  "acceptedAt": "2026-08-02T23:27:07.474Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "63022eb1495b80378d802fe379b4f22ff425b0f7941f54d0e2f581ad8e0f7c80",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | ReferenceEvidenceProvenance | 'indexed-or-source-import'; to type SystemMapRelationEvidence = CalleeEvidenceSource | 'indexed-or-source-reference' | 'indexed-or-source-import';.",
+      "target": "./queries:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | ReferenceEvidenceProvenance | 'indexed-or-source-import'; to type SystemMapRelationEvidence = CalleeEvidenceSource | 'indexed-or-source-reference' | 'indexed-or-source-import';.",
+      "target": "./queries/index:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | ReferenceEvidenceProvenance | 'indexed-or-source-import'; to type SystemMapRelationEvidence = CalleeEvidenceSource | 'indexed-or-source-reference' | 'indexed-or-source-import';.",
+      "target": "./queries/system-map:SystemMapRelationEvidence"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "fddb29615a54e0dc89077919cf5b9d2475af4bd0519a49a3b5bdf500e337f30d",
+  "reason": "Correct the uncommitted system-map evidence provenance after removing a forbidden graph-to-navigation dependency; no released API used the intermediate alias.",
+  "schemaVersion": 1
+}

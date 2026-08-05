@@ -1,15 +1,23 @@
 # scip-query
 
-scip-query is a compiler-backed repository map for coding agents.
+scip-query is a compiler-backed repository-understanding system for coding
+agents.
 
-A repository map is a code-reading tool that identifies program elements and
-the relationships between them. scip-query differs from text search because it
-uses compiler-produced SCIP indexes: two matching words count as the same
-symbol only when the language tooling resolves them to the same definition.
+A repository-understanding system turns indexed code facts into accurate,
+navigable abstractions of the systems in a codebase. Its essential service is
+structure-preserving compression: an agent can see the relevant regions and
+relationships before an edit, drill into several material regions together,
+and keep exact source identities for its plan without reading every
+implementation. scip-query differs from text search because it uses
+compiler-produced SCIP indexes: two matching words count as the same symbol
+only when the language tooling resolves them to the same definition. It also
+reports coverage gaps, so omitted evidence is not mistaken for evidence that a
+relationship does not exist.
 
 The tool helps an agent answer four practical questions:
 
 - What is this code connected to?
+- Which systems participate in this behavior from entry to final effect?
 - Who consumes it, and what could a change affect?
 - Does the repository declare a structural rule for this dependency?
 - Where do React, Vue, duplication, drift, complexity, or cleanup detectors
@@ -44,17 +52,74 @@ scip-query status --capabilities
 
 ## The normal workflow
 
-Use scip-query as the primary reading surface for indexed source. Start an
-unknown path with `search`; batch related text, symbol, and file-line anchors
-with `inspect`; use `evidence` when one symbol and its real uses are the center
-of the question. Use a native source read only for exact edit lines, non-indexed
-files, or a named evidence gap.
+Use scip-query as the primary reading surface for indexed source. For a
+cross-layer or end-to-end question, start with `system-map` and the smallest
+independent literal and symbol anchors. Do not repeat one identifier through
+both selectors merely to widen output. It shows every observed structural
+region at once, compiler-resolved and exact runtime-boundary relationships
+between regions, unresolved candidate frontiers, and the limits of the
+observation. Run `Expand together:` to preserve every
+observed region in one follow-up; remove only regions already established as
+irrelevant. The result lists every child file with complete mapped counts and
+ranked source anchors rather than printing every relationship. Its emitted
+behavior command reads those anchors together using raw source for compact
+units and complete normalized outlines for larger units when normalization is
+materially cheaper. Use `code` afterward only when one exact
+unit's complete implementation can change the decision.
+
+```bash
+scip-query system-map \
+  --search work_session_stream_events \
+  --symbol appendWorkSessionStreamEvents
+
+scip-query system-map \
+  --search work_session_stream_events \
+  --symbol appendWorkSessionStreamEvents \
+  --expand 'region:apps/api:modules/sessions' \
+  --expand 'region:apps/web:components/sessions'
+```
+
+`code` accepts up to 24 exact symbols, ranges, or indexed file paths. A file
+path returns its exported definitions—or its top-level definitions when the
+language has no explicit export surface—plus the file-local definitions they
+reference, then lists every omitted local definition as an exact range. This
+keeps the default source surface small without hiding what remains available.
+Use `--members all` only when the complete file matters. If a proposed packet
+would exceed the active output budget, `code` emits no partial source and
+prints exact complete-packet splits; narrow to the exact units still needed
+before deciding whether every split remains necessary.
+
+Start an unknown path with `search`; batch related text, symbol, and file-line
+anchors with `inspect`; use `evidence` when one symbol and its real uses are the
+center of the question. Use a native source read only for exact edit lines,
+non-indexed files, or a named evidence gap.
 
 ```bash
 scip-query search work_session_stream_events
-scip-query inspect --search sessionStreamEvents --search work_session_stream_events
+scip-query inspect --search sessionStreamEvents --search work_session_stream_events --view behavior
 scip-query evidence appendWorkSessionStreamEvents --include definition,references,callers,callees
 ```
+
+`inspect --view behavior` returns the cheapest faithful syntax-derived view of
+each complete source unit. Compact units stay raw. Larger units become
+hierarchical outlines only when that representation is materially smaller;
+every source statement is represented, and unsupported or
+compression-sensitive statements are copied verbatim. Coverage reports the
+represented, copied, and omitted counts. Exact source can be requested for any
+unit whose complete implementation matters. `inspect --symbol` includes definitions,
+references, callers, callees, dependencies, and consumers by default.
+
+Search, location, and relationship evidence is deduplicated into one ranked
+packet. Exact locations and definitions rank first; later units must add new
+file, role, scope, symbol, or behavior coverage. A default packet materializes
+at most 12 matching lines per text selector, then applies a soft ceiling of 48
+units or 60,000 displayed-evidence characters without clipping a returned
+syntax unit. Its omission ledger groups everything withheld by scope and role,
+reports what each group contains, and gives an exact command for drilling into
+that group. Drill into several relevant groups together; use `--full` only when
+all omitted evidence can change the decision. Large rendered output from other
+commands can still use the universal byte-transport continuation printed by
+every command.
 
 Before a nonlocal change:
 
@@ -205,6 +270,18 @@ line numbers readable. Programmatic consumers can use:
 ```bash
 scip-query context RetryPolicy --json --result-only
 ```
+
+Search output separates a complete occurrence ledger from source
+materialization. Every exact matching path and line is listed with its owner;
+the default expands only a representative source subset. Use the emitted
+batched drilldowns for selected owners. `search --full` expands every source
+window and is not needed to establish complete text-match coverage.
+
+Exact code, definition, and source-inspection units always render whole.
+Cross-command source citations are off by default. With an explicit
+`SCIP_QUERY_SESSION`, only a locating preview that was wholly emitted earlier
+may become a citation; partially covered previews render whole. `--reemit` is
+the recovery control when a cited preview is no longer in context.
 
 If output prints `Continue exactly:`, run the emitted command unchanged until
 transport is complete. Transport completion means every rendered character was

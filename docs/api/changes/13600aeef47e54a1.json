@@ -1,0 +1,175 @@
+{
+  "acceptedAt": "2026-08-04T20:59:27.213Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "13600aeef47e54a1b03bc25e8f25398b7fcbfe7c0e182b29ee07ee5bacdec864",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionRuntimeFact.",
+      "target": "./queries:SourceInspectionRuntimeFact"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionSourceUnit changed from interface SourceInspectionSourceUnit extends SourceInspectionSlice { kind: 'source'; id: string; roles: SourceInspectionUnitRole[]; symbols: string[]; omittedCharacters: number;... to interface SourceInspectionSourceUnit extends SourceInspectionSlice { kind: 'source'; id: string; roles: SourceInspectionUnitRole[]; symbols: string[]; omittedCharacters: number;....",
+      "target": "./queries:SourceInspectionSourceUnit"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapCoverage changed from interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat... to interface SystemMapCoverage { explicitAnchorCount: number; requestedRelationKinds: SystemMapRelationKind[]; evidenceFloor: SystemMapEvidenceFloor; includedSourceScopes: Boundary....",
+      "target": "./queries:SystemMapCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapOptions changed from interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; } to interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind....",
+      "target": "./queries:SystemMapOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import-candidate' | 'indexed-or-source-reference' | 'indexed-or-source-import' | `runtime-boundary:${string}`; to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import-candidate' | 'compiler-cross-workspace-symbol' | 'indexed-or-source-reference' | 'indexed-or-source-im....",
+      "target": "./queries:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationKind changed from type SystemMapRelationKind = 'call' | 'import' | 'reference' | 'runtime-boundary'; to type SystemMapRelationKind = 'call' | 'contract-symbol' | 'import' | 'reference' | 'runtime-boundary';.",
+      "target": "./queries:SystemMapRelationKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries:SystemMapResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionRuntimeFact.",
+      "target": "./queries/index:SourceInspectionRuntimeFact"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionSourceUnit changed from interface SourceInspectionSourceUnit extends SourceInspectionSlice { kind: 'source'; id: string; roles: SourceInspectionUnitRole[]; symbols: string[]; omittedCharacters: number;... to interface SourceInspectionSourceUnit extends SourceInspectionSlice { kind: 'source'; id: string; roles: SourceInspectionUnitRole[]; symbols: string[]; omittedCharacters: number;....",
+      "target": "./queries/index:SourceInspectionSourceUnit"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapCoverage changed from interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat... to interface SystemMapCoverage { explicitAnchorCount: number; requestedRelationKinds: SystemMapRelationKind[]; evidenceFloor: SystemMapEvidenceFloor; includedSourceScopes: Boundary....",
+      "target": "./queries/index:SystemMapCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapOptions changed from interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; } to interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind....",
+      "target": "./queries/index:SystemMapOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import-candidate' | 'indexed-or-source-reference' | 'indexed-or-source-import' | `runtime-boundary:${string}`; to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import-candidate' | 'compiler-cross-workspace-symbol' | 'indexed-or-source-reference' | 'indexed-or-source-im....",
+      "target": "./queries/index:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationKind changed from type SystemMapRelationKind = 'call' | 'import' | 'reference' | 'runtime-boundary'; to type SystemMapRelationKind = 'call' | 'contract-symbol' | 'import' | 'reference' | 'runtime-boundary';.",
+      "target": "./queries/index:SystemMapRelationKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries/index:SystemMapResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionRuntimeFact.",
+      "target": "./queries/source-inspection:SourceInspectionRuntimeFact"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionSourceUnit changed from interface SourceInspectionSourceUnit extends SourceInspectionSlice { kind: 'source'; id: string; roles: SourceInspectionUnitRole[]; symbols: string[]; omittedCharacters: number;... to interface SourceInspectionSourceUnit extends SourceInspectionSlice { kind: 'source'; id: string; roles: SourceInspectionUnitRole[]; symbols: string[]; omittedCharacters: number;....",
+      "target": "./queries/source-inspection:SourceInspectionSourceUnit"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapBoundaryFrontier changed from interface SystemMapBoundaryFrontier { observationId: string; action: string; strength: 'exact' | 'candidate'; file: string; line: number; ownerShortName: string | null; address:... to interface SystemMapBoundaryFrontier { observationId: string; action: string; strength: 'exact' | 'derived' | 'candidate'; file: string; line: number; ownerShortName: string | nu....",
+      "target": "./queries/system-map:SystemMapBoundaryFrontier"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapCoverage changed from interface SystemMapCoverage { explicitAnchorCount: number; matchedAnchorCount: number; literalSearchesComplete: true; symbolCandidateSetsComplete: boolean; omittedSymbolCandidat... to interface SystemMapCoverage { explicitAnchorCount: number; requestedRelationKinds: SystemMapRelationKind[]; evidenceFloor: SystemMapEvidenceFloor; includedSourceScopes: Boundary....",
+      "target": "./queries/system-map:SystemMapCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapEvidenceFloor.",
+      "target": "./queries/system-map:SystemMapEvidenceFloor"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapOptions changed from interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; } to interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind....",
+      "target": "./queries/system-map:SystemMapOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapPresentation.",
+      "target": "./queries/system-map:SystemMapPresentation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapQueryClosure.",
+      "target": "./queries/system-map:SystemMapQueryClosure"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import-candidate' | 'indexed-or-source-reference' | 'indexed-or-source-import' | `runtime-boundary:${string}`; to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import-candidate' | 'compiler-cross-workspace-symbol' | 'indexed-or-source-reference' | 'indexed-or-source-im....",
+      "target": "./queries/system-map:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationKind changed from type SystemMapRelationKind = 'call' | 'import' | 'reference' | 'runtime-boundary'; to type SystemMapRelationKind = 'call' | 'contract-symbol' | 'import' | 'reference' | 'runtime-boundary';.",
+      "target": "./queries/system-map:SystemMapRelationKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries/system-map:SystemMapResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export systemMapRegionRelationKey.",
+      "target": "./queries/system-map:systemMapRegionRelationKey"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module types-<hash>.d.ts was added or renamed.",
+      "target": "types-<hash>.d.ts"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "12105797947bf1c7e96be3d4a89f6b9b9484a8a8729d9f5fdb708d0b2457aa6d",
+  "reason": "Expose declared map policy, query closure, bounded topology presentation, contract-symbol relations, and construct runtime facts for demand-driven evidence navigation.",
+  "schemaVersion": 1
+}

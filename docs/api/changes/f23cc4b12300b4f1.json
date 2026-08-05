@@ -1,0 +1,97 @@
+{
+  "acceptedAt": "2026-08-04T04:12:51.167Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "f23cc4b12300b4f1a2bf203f20ddb1b484070c5780988595a940086d9c822a18",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CodeBatchEntry changed from interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand... to interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand....",
+      "target": "./queries:CodeBatchEntry"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeRangeCoverage.",
+      "target": "./queries:CodeRangeCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CodeBatchEntry changed from interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand... to interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand....",
+      "target": "./queries/code:CodeBatchEntry"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeRangeCoverage.",
+      "target": "./queries/code:CodeRangeCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CodeBatchEntry changed from interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand... to interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand....",
+      "target": "./queries/index:CodeBatchEntry"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CodeRangeCoverage.",
+      "target": "./queries/index:CodeRangeCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "b changed from interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand... to interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand....",
+      "target": "code-<hash>.d.ts:b"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "g changed from interface CodeResolutionCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; } to interface CodeRangeCoverage { basis: 'requested-range-and-same-file-call-closure'; referencedDefinitions: number; returnedDefinitions: number; returnedBodies: number; omittedDef....",
+      "target": "code-<hash>.d.ts:g"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "h changed from type CodeSelectorKind = 'source' | 'file-source'; to interface CodeResolutionCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; }.",
+      "target": "code-<hash>.d.ts:h"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "i changed from type CodeSelectorStatus = 'matched' | 'ambiguous' | 'missing'; to type CodeSelectorKind = 'source' | 'file-source';.",
+      "target": "code-<hash>.d.ts:i"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "j changed from interface CoveredSourceRange { relativePath: string; startLine: number; endLine: number; } to type CodeSelectorStatus = 'matched' | 'ambiguous' | 'missing';.",
+      "target": "code-<hash>.d.ts:j"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "k changed from declare function code(db: ScipDatabase, symbolPattern: string, opts?: { context?: number; }): CodeResult | null; to interface CoveredSourceRange { relativePath: string; startLine: number; endLine: number; }.",
+      "target": "code-<hash>.d.ts:k"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "l changed from declare function codeBatch(db: ScipDatabase, selectors: readonly string[], opts?: { context?: number; members?: CodeFileMemberMode; }): CodeBatchResult; to declare function code(db: ScipDatabase, symbolPattern: string, opts?: { context?: number; }): CodeResult | null;.",
+      "target": "code-<hash>.d.ts:l"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration m.",
+      "target": "code-<hash>.d.ts:m"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "9b8576d01116e6b3a595382ac6395660ce1c326f5caac2e5ce6d8bf68a791b1d",
+  "reason": "Expose range call-closure coverage and correct false completeness claims for exact source ranges.",
+  "schemaVersion": 1
+}

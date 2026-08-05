@@ -1,78 +1,24 @@
 ---
 name: scip-explore
-description: Explore an indexed codebase before explaining or changing it. Use for end-to-end behavior, callers, data flow, dependencies, consumers, impact, reuse, architecture, or related source across files. Use scip-query as the primary code-reading surface and use native reads only for an edit range or an explicit evidence gap.
+description: Explore an indexed codebase before explaining or changing it. Use for end-to-end behavior, callers, data flow, dependencies, consumers, impact, reuse, architecture, or related source across files. Use scip-query as the primary code-reading surface and native reads only for an edit range or an explicit evidence gap.
 ---
 
 # SCIP Explore
 
-Build a verified map of the code that answers the current question.
+An exploration is a code-reading investigation that connects the externally meaningful input, the code that owns it, the state and effects it produces, and the consumers that observe those effects. Its essential value is a complete-enough structural map with exact source evidence, not an inventory of files.
 
-An exploration is a code-reading investigation that connects an entry, its owners, and its effects. Its essential value is compiler-resolved relationships with focused source in one view.
+Apply the command and coverage rules in `$scip-query`; do not duplicate that manual here or re-read it if already loaded.
 
-## Start with the question
+## End-to-end workflow
 
-Do not run a fixed sequence. Select the smallest command that can answer the question.
+1. Start with the question and the behaviors that must be accounted for: entry, validation, authorization, transformation, persistence, publication, retrieval or recovery, and presentation when relevant.
+2. Start with one `system-map` using the smallest independent literal and symbol anchors. If one verified external callable is the true boundary, use `entrypoints` once and then `entry-map` instead.
+3. Read all observed regions, cross-region relations, frontier counts, and blind spots before drilling down. Run `Expand together:` once for the ranked regions; add several withheld regions only when they can change the explanation.
+4. Name the remaining behavioral questions and resolve them with one batched behavior `scip-query inspect` over the ranked locations. Use `scip-query evidence` for a single exact symbol whose callers, callees, or consumers remain decisive. Escalate to `scip-query code` only for an exact unit whose complete implementation can change the decision.
+5. Stop when every material behavior has source support or an explicit coverage limitation. Do not search each displayed name, reread returned ranges, inventory folders, or repeat successful repository standards reads.
 
-| Question                                            | First command                         | Focused follow-up                                                     |
-| --------------------------------------------------- | ------------------------------------- | --------------------------------------------------------------------- |
-| Where does text, a route, an event, or a key occur? | `scip-query search <text>`            | Add `--scope` or `--regexp`; use `inspect` once anchors are known.    |
-| How do several related snippets fit together?       | `scip-query inspect --search <text>`  | Repeat `--search`, `--symbol`, or `--at` in the same command.         |
-| Where is a symbol defined and used?                 | `scip-query evidence <symbol>`        | Add callers, callees, dependencies, or consumers with `--include`.    |
-| How does one function work?                         | `scip-query code <symbol>`            | Use `call-graph`, `dataflow`, or `slice` for one named uncertainty.   |
-| How does a feature work end to end?                 | `scip-query inspect` with its anchors | Use `context` if impact, reuse, or transitive flow remains uncertain. |
-| What is in a file?                                  | `scip-query outline <file>`           | Use `code` for one symbol.                                            |
-| What is in a module?                                | `scip-query system <module>`          | Use `surface`, `deps`, or `rdeps`.                                    |
-| What can a change break?                            | `scip-query affected <symbol>`        | Use `change-surface <file>` for file risk.                            |
-| Can existing code own this behavior?                | `scip-query similar <symbol>`         | Use `evidence` on the best candidate.                                 |
-| Does the design obey repository boundaries?         | `scip-query architecture`             | Read the exact forbidden edges.                                       |
-| Where is cleanup pressure?                          | `scip-query health --full`            | Use the named React, Vue, drift, duplication, or complexity command.  |
+Follow compiler-resolved relationships before folder names or text similarity. Treat compiler edges and exact built-in runtime-boundary links as facts within their stated coverage; candidate links are leads and never drive default traversal. Whole-token production matches can seed traversal; embedded, test, fixture, mock, preview, demo, and example matches may remain visible without expanding their graphs. Unsupported adapters, unresolved expressions, dynamic dispatch, reflection, generated names, and dependency injection remain explicit frontiers and can require a second anchor.
 
-Use `inspect` when the question needs source units from several files. It
-expands a matching line to the smallest readable function, method, object, or
-declaration. It also recovers behavior hidden by a one-line compiler range.
-For example:
+Use native reads only for exact edit lines, unindexed source, or a named gap the map cannot answer. Never infer absence from a bounded packet. If transport says `Continue exactly:`, complete it unchanged; if a semantic omission matters, expand only the relevant groups together.
 
-```bash
-scip-query inspect \
-  --search sessionStreamEvents \
-  --search work_session_stream_events \
-  --symbol publishEvent \
-  --at src/api.ts:42
-```
-
-Prefer `evidence` when one exact symbol and its relationships answer the
-question. For example:
-
-```bash
-scip-query evidence appendEvent --include definition,references,callers,callees
-```
-
-Batch independent observations in one tool turn when the host supports it. Do not repeat an unchanged observation after context compaction.
-
-Search once when the first anchor is unknown. Do not then search every symbol
-name and outline every matching file. Put the known gaps into one `inspect`
-packet. If that packet answers the question, stop exploring and use the
-evidence.
-
-## Evidence rules
-
-- Treat scip-query source excerpts as source already read.
-- Follow compiler relationships before folder names or text similarity.
-- Use the exact target commands from an ambiguity error. Do not accept the first candidate.
-- Read the coverage footer before a claim about every caller, reference, or consumer.
-- Use `--full` only when omitted relationships can change the answer.
-- Treat architecture edges as repository policy facts.
-- Treat detector findings as cleanup candidates until source supports the change.
-
-Use a native source read only for one of these reasons:
-
-- You must edit the exact lines.
-- The command states that source is missing or omitted.
-- The required file is not indexed code.
-- A literal search needs a file type that `scip-query search` did not scan.
-
-Name the gap before the fallback. Do not silently repeat the same exploration with `rg` and full-file reads.
-
-## Finish
-
-State the entry-to-effect path, the material consumers, and the main uncertainty. Cite the scip-query command and source identity for each material claim.
+Finish with the entry-to-effect path, material state transitions and consumers, security or trust boundaries, recovery behavior, and the main unresolved limitation. Cite exact files, symbols, and line numbers already returned by scip-query.

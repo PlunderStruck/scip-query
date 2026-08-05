@@ -7,7 +7,9 @@ export type PostIndexAugmentationFact =
   | 'source-mapped-occurrence'
   | 'definition-mention'
   | 'replacement-chunk'
-  | 'fingerprint-cache';
+  | 'fingerprint-cache'
+  | 'runtime-boundary-observation'
+  | 'runtime-boundary-link';
 
 export interface PostIndexAugmentationContext {
   projectRoot: string;

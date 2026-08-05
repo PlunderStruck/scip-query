@@ -5,8 +5,8 @@ export { inspectSource } from './navigation/source-inspection.js';
 export { symbols } from './navigation/symbols.js';
 export { methods, resolveMethods } from './navigation/methods.js';
 export { refs } from './navigation/refs.js';
-export { trace, traceEvidence } from './navigation/trace.js';
-export { evidence } from './navigation/evidence.js';
+export { qualifiedTraceEvidence, trace, traceEvidence } from './navigation/trace.js';
+export { evidence, qualifiedEvidence } from './navigation/evidence.js';
 export { deps, rdeps } from './navigation/deps.js';
 export { system } from './navigation/system.js';
 export { surface } from './navigation/surface.js';
@@ -25,6 +25,8 @@ export { byKind, kindCounts } from './navigation/by-kind.js';
 export { deepChains } from './graph/deep-chains.js';
 export { hierarchy } from './navigation/hierarchy.js';
 export { callGraph } from './navigation/call-graph.js';
+export { entryCallMap, entryPoints } from './graph/entry-map.js';
+export { systemMap } from './graph/system-map.js';
 export { similar, similarAll, similarAllCount, similarConsolidationPlan } from './cleanup/similar.js';
 export { similarFiles } from './cleanup/similar-files.js';
 export { reactComponentDuplicates } from './frontend/react-component-duplicates.js';
@@ -69,7 +71,7 @@ export { unusedParams } from './cleanup/unused-params.js';
 export { complexityHotspots } from './quality/complexity-hotspots.js';
 export { HEALTH_PHASES, health, healthPhase, healthReportFromPhases } from './health/health.js';
 export { convergence } from './cleanup/convergence.js';
-export { code } from './navigation/code.js';
+export { code, codeBatch } from './navigation/code.js';
 export { complexity } from './quality/complexity.js';
 export { dataflow } from './navigation/dataflow.js';
 export { slice } from './navigation/slice.js';
@@ -79,25 +81,56 @@ export { similarSignatures } from './cleanup/similar-signatures.js';
 
 export type { StatsResult } from './navigation/stats.js';
 export type { FileResult } from './navigation/files.js';
-export type { SourceSearchMatch, SourceSearchOptions, SourceSearchResult } from './navigation/source-search.js';
 export type {
+  SourceSearchFileCoverage,
+  SourceSearchIdentity,
+  SourceSearchMatch,
+  SourceSearchOptions,
+  SourceSearchResult,
+} from './navigation/source-search.js';
+export type {
+  SourceInspectionContinuation,
   SourceInspectionLocation,
+  SourceInspectionOmissionAnchor,
+  SourceInspectionOmissionGroup,
   SourceInspectionOptions,
+  SourceInspectionPacketCoverage,
+  SourceInspectionPathUnit,
   SourceInspectionResult,
+  SourceInspectionRuntimeFact,
   SourceInspectionSearch,
+  SourceInspectionSearchScope,
   SourceInspectionSlice,
+  SourceInspectionSourceUnit,
+  SourceInspectionStoppingStatus,
+  SourceInspectionStoppingSummary,
+  SourceInspectionUnit,
+  SourceInspectionUnitRole,
+  SourceInspectionView,
+  BehaviorSignal,
+  BehaviorSkeleton,
 } from './navigation/source-inspection.js';
 export type { SymbolResult } from './navigation/symbols.js';
 export type { MethodResult, MethodsOwner, MethodsResolution, ResolveMethodsOptions } from './navigation/methods.js';
 export type { RefResult } from './navigation/refs.js';
 export type { DepResult } from './navigation/deps.js';
-export type { TraceEvidenceResult, TraceResult } from './navigation/trace.js';
+export type {
+  QualifiedTraceEvidenceResult,
+  TraceClaimEligibility,
+  TraceClaimSupport,
+  TraceEvidenceResult,
+  TraceReferenceEvidence,
+  TraceReferenceProvenance,
+  TraceReferenceSourceKind,
+  TraceResult,
+} from './navigation/trace.js';
 export type {
   EvidenceOptions,
   EvidencePart,
   EvidenceReferenceWindow,
   EvidenceRelatedSymbol,
   EvidenceResult,
+  QualifiedEvidenceResult,
 } from './navigation/evidence.js';
 export type { SystemResult } from './navigation/system.js';
 export type { SurfaceResult } from './navigation/surface.js';
@@ -126,6 +159,44 @@ export type { ByKindResult } from './navigation/by-kind.js';
 export type { DeepChainResult } from './graph/deep-chains.js';
 export type { HierarchyNode } from './navigation/hierarchy.js';
 export type { CallGraphResult } from './navigation/call-graph.js';
+export type {
+  EntryCallMapResult,
+  EntryMapCoverage,
+  EntryMapExternalCall,
+  EntryMapRegion,
+  EntryMapRegionEdge,
+  EntryMapSymbol,
+  EntryMapSymbolEdge,
+  EntryPointConfidence,
+  EntryPointEvidence,
+  EntryPointResult,
+  EntryPointsOptions,
+} from './graph/entry-map.js';
+export type {
+  SystemMapAnchor,
+  SystemMapAnchorCandidate,
+  SystemMapAnchorKind,
+  SystemMapAnchorStatus,
+  SystemMapCoverage,
+  SystemMapDrilldown,
+  SystemMapDrilldownAnchor,
+  SystemMapEvidenceFloor,
+  SystemMapExternalBoundary,
+  SystemMapFile,
+  SystemMapLiteralHit,
+  SystemMapNotableSymbol,
+  SystemMapOptions,
+  SystemMapRegion,
+  SystemMapRegionRelation,
+  SystemMapReferenceScope,
+  SystemMapRelation,
+  SystemMapRelationEvidence,
+  SystemMapRelationFamilyCoverage,
+  SystemMapRelationKind,
+  SystemMapResult,
+  SystemMapSourceScope,
+  SystemMapSymbol,
+} from './graph/system-map.js';
 export type {
   DriftActionTier,
   DriftArchitectureEvidence,
@@ -184,7 +255,19 @@ export type {
 } from './cleanup/locality-candidates.js';
 export type { HealthAction, HealthReport } from './health/health-report.js';
 export type { ConvergenceResult } from './cleanup/convergence.js';
-export type { CodeResult } from './navigation/code.js';
+export type {
+  CodeBatchEntry,
+  CodeBatchResult,
+  CodeFileCoverage,
+  CodeFileDefinitionLedgerEntry,
+  CodeFileMemberMode,
+  CodeRangeCoverage,
+  CodeResolutionCandidate,
+  CodeResult,
+  CodeSelectorKind,
+  CodeSelectorStatus,
+} from './navigation/code.js';
+export type { BindingClosure, BindingDefinitionEvidence, CoveredSourceRange } from './navigation/binding-closure.js';
 export type { ComplexityResult } from './quality/complexity.js';
 export type { DataflowResult } from './navigation/dataflow.js';
 export type { SliceResult } from './navigation/slice.js';
