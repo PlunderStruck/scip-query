@@ -189,6 +189,11 @@ describe('related source evidence', () => {
           expect.objectContaining({ relativePath: 'src/other-api.ts' }),
         ]),
       });
+
+      const packet = inspectSource(db, { symbols: ['appendThing'] });
+      expect(packet.evidence[0]?.kind).toBe('ambiguous');
+      expect(packet.packetCoverage?.exactSelectorsComplete).toBe(false);
+      expect(packet.stoppingSummary?.queryStatus).toBe('coverage-incomplete');
     } finally {
       db.close();
     }
@@ -266,8 +271,65 @@ describe('related source evidence', () => {
       expect(packet.returnedCharacters).toBeLessThanOrEqual(packet.maxCharacters!);
       expect(packet.omittedUnits).toBe(0);
       expect(packet.packetCoverage).toMatchObject({ mode: 'complete', exactSelectorsComplete: true });
-      expect(packet.stoppingSummary).toMatchObject({ status: 'stop-ready', openEvidence: 0 });
+      expect(packet.stoppingSummary).toMatchObject({
+        queryStatus: 'selection-complete',
+        status: 'stop-ready',
+        openEvidence: 0,
+      });
       expect(packet.continuation).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  it('budgets causal and test evidence independently without hiding the omitted channel', () => {
+    const db = createSourceEvidenceDb();
+    try {
+      const defaultPacket = inspectSource(db, { symbols: ['appendThing'] });
+
+      expect(defaultPacket.units).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ kind: 'source', roles: expect.arrayContaining(['definition']) }),
+          expect.objectContaining({ kind: 'source', roles: expect.arrayContaining(['caller']) }),
+        ]),
+      );
+      expect(defaultPacket.units?.some((unit) => unit.roles.includes('reference'))).toBe(false);
+      expect(defaultPacket.packetCoverage?.channels?.['test-reference']).toMatchObject({
+        candidateUnits: 0,
+        returnedUnits: 0,
+      });
+
+      const references = inspectSource(db, {
+        symbols: ['appendThing'],
+        evidence: { parts: ['definition', 'references'] },
+        evidenceBudgets: {
+          'production-reference': 1,
+          'test-reference': 0,
+        },
+      });
+
+      expect(references.units?.some((unit) => unit.relativePath === 'src/consumer.ts')).toBe(true);
+      expect(references.units?.some((unit) => unit.relativePath === 'src/api.test.ts')).toBe(false);
+      expect(references.packetCoverage?.channels?.['production-reference']).toMatchObject({
+        candidateUnits: 2,
+        returnedUnits: 1,
+        omittedUnits: 1,
+        maxUnits: 1,
+      });
+      expect(references.packetCoverage?.channels?.['test-reference']).toMatchObject({
+        candidateUnits: 1,
+        returnedUnits: 0,
+        omittedUnits: 1,
+        maxUnits: 0,
+      });
+      expect(references.packetCoverage?.exactSelectorsComplete).toBe(true);
+      expect(references.stoppingSummary?.queryStatus).toBe('frontier-accounted');
+      expect(references.omissionGroups).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ channel: 'production-reference', roles: ['reference'], candidateUnits: 1 }),
+          expect.objectContaining({ channel: 'test-reference', roles: ['reference'], candidateUnits: 1 }),
+        ]),
+      );
     } finally {
       db.close();
     }
@@ -347,6 +409,7 @@ describe('related source evidence', () => {
         expansionCommand: "scip-query inspect --search 'filler' --full",
       });
       expect(packet.stoppingSummary).toMatchObject({
+        queryStatus: 'frontier-accounted',
         status: 'relevance-check-required',
         openEvidence: expect.any(Number),
       });
@@ -407,7 +470,10 @@ describe('related source evidence', () => {
         omittedUnits: 1,
         exactSelectorsComplete: false,
       });
-      expect(packet.stoppingSummary?.status).toBe('exact-evidence-withheld');
+      expect(packet.stoppingSummary).toMatchObject({
+        queryStatus: 'coverage-incomplete',
+        status: 'exact-evidence-withheld',
+      });
     } finally {
       db.close();
     }
@@ -529,7 +595,11 @@ describe('related source evidence', () => {
           'REALTIME_FALLBACK_POLL_MS',
         ]),
       );
-      expect(packet.stoppingSummary).toMatchObject({ status: 'stop-ready', openEvidence: 0 });
+      expect(packet.stoppingSummary).toMatchObject({
+        queryStatus: 'selection-complete',
+        status: 'stop-ready',
+        openEvidence: 0,
+      });
       expect(packet.stoppingSummary?.drillCommands).toEqual([]);
     } finally {
       db.close();
@@ -870,6 +940,10 @@ describe('related source evidence', () => {
         '  return values;',
         '}',
       ],
+      'src/api.test.ts': [
+        "import { appendThing } from './api.js';",
+        "export function testAppendThing() { return appendThing('test'); }",
+      ],
       'src/python-consumer.py': [
         'def run(transaction):',
         '    return deliver(',
@@ -1104,6 +1178,7 @@ describe('related source evidence', () => {
     });
     const target = 'scip-typescript npm pkg 1.0.0 src/`api.ts`/appendThing().';
     const caller = 'scip-typescript npm pkg 1.0.0 src/`consumer.ts`/run().';
+    const testCaller = 'scip-typescript npm pkg 1.0.0 src/`api.test.ts`/testAppendThing().';
     const deliver = 'scip-typescript npm pkg 1.0.0 src/`behavior.ts`/deliver().';
     const builder = evidenceFixtureDb(join(tempDir, 'index.db'))
       .document(1, 'typescript', 'src/api.ts')
@@ -1132,6 +1207,7 @@ describe('related source evidence', () => {
       .document(25, 'typescript', 'src/lifecycle.ts')
       .document(26, 'typescript', 'src/outline-fidelity.ts')
       .document(27, 'typescript', 'src/registry-table.ts')
+      .document(28, 'typescript', 'src/api.test.ts')
       .symbol(1, target, 'appendThing', 12, 'function appendThing|function appendThing(value: string): string')
       .symbol(2, caller, 'run', 12, 'function run|function run(): string[]')
       .symbol(4, 'scip-typescript npm pkg 1.0.0 src/`commands.ts`/commandSet.', 'commandSet', 13)
@@ -1160,6 +1236,7 @@ describe('related source evidence', () => {
         'readTerminalLimit',
         12,
       )
+      .symbol(23, testCaller, 'testAppendThing', 12)
       .definition(1, 1, 1, 0, 0, 2, 1)
       .definition(2, 2, 2, 2, 0, 13, 1)
       .definition(4, 4, 4, 0, 0, 0, 32)
@@ -1173,15 +1250,19 @@ describe('related source evidence', () => {
       .definition(20, 15, 20, 3, 0, 3, 42)
       .definition(21, 17, 21, 0, 0, 0, 33)
       .definition(22, 19, 22, 1, 0, 3, 1)
+      .definition(23, 28, 23, 1, 0, 1, 66)
       .chunk(1, 1, 0, 2)
       .chunk(2, 2, 2, 13)
       .chunk(4, 4, 0, 5)
       .chunk(5, 5, 0, 26)
+      .chunk(23, 28, 1, 1)
       .mention(1, 1, 1)
       .mention(2, 2, 1)
       .mention(2, 1, 0)
       .mention(4, 4, 1)
-      .mention(5, 5, 1);
+      .mention(5, 5, 1)
+      .mention(23, 23, 1)
+      .mention(23, 1, 0);
     if (ambiguous) {
       builder
         .document(3, 'typescript', 'src/other-api.ts')

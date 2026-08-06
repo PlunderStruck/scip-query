@@ -164,6 +164,18 @@ const EVIDENCE_PARTS = [
   'consumers',
 ] as const satisfies readonly queries.EvidencePart[];
 
+const INSPECTION_EVIDENCE_CHANNELS = [
+  'search',
+  'exact-source',
+  'definition',
+  'caller',
+  'callee',
+  'production-reference',
+  'test-reference',
+  'dependency',
+  'consumer',
+] as const satisfies readonly queries.SourceInspectionEvidenceChannel[];
+
 function selectedEvidenceParts(values: readonly string[]): queries.EvidencePart[] | undefined {
   if (values.length === 0) return undefined;
   const expanded = values
@@ -176,6 +188,34 @@ function selectedEvidenceParts(values: readonly string[]): queries.EvidencePart[
     throw new Error(`Unknown evidence part: ${invalid.join(', ')}. Use ${EVIDENCE_PARTS.join(', ')}, or all.`);
   }
   return [...new Set(expanded as queries.EvidencePart[])];
+}
+
+function inspectionEvidenceBudgets(values: readonly string[]): queries.SourceInspectionEvidenceBudgets | undefined {
+  if (values.length === 0) return undefined;
+  const budgets: queries.SourceInspectionEvidenceBudgets = {};
+  for (const entry of values
+    .flatMap((value) => value.split(','))
+    .map((value) => value.trim())
+    .filter(Boolean)) {
+    const separator = entry.lastIndexOf('=');
+    const channel = entry.slice(0, separator) as queries.SourceInspectionEvidenceChannel;
+    const rawLimit = entry.slice(separator + 1);
+    if (separator <= 0 || !INSPECTION_EVIDENCE_CHANNELS.includes(channel)) {
+      throw new Error(
+        `Unknown inspect evidence budget '${entry}'. Use channel=n with ${INSPECTION_EVIDENCE_CHANNELS.join(', ')}.`,
+      );
+    }
+    if (Object.hasOwn(budgets, channel)) throw new Error(`Duplicate inspect evidence budget: ${channel}.`);
+    if (!/^\d+$/u.test(rawLimit)) {
+      throw new Error(`Inspect evidence budget ${channel} must be a non-negative safe integer; received ${rawLimit}.`);
+    }
+    const limit = Number(rawLimit);
+    if (!Number.isSafeInteger(limit)) {
+      throw new Error(`Inspect evidence budget ${channel} must be a non-negative safe integer; received ${rawLimit}.`);
+    }
+    budgets[channel] = limit;
+  }
+  return budgets;
 }
 
 function sourceSearchSections(result: queries.SourceSearchResult): ReportSection[] {
@@ -406,6 +446,7 @@ function sourceInspectionSections(result: queries.SourceInspectionResult): Repor
         `  ${packet.mode === 'complete' ? 'Complete' : 'Ranked bounded'} semantic packet: ${packet.returnedUnits}/${packet.candidateUnits} materialized unit(s), ${result.returnedLines ?? 0} underlying source line(s), and ${result.returnedViewCharacters ?? result.returnedCharacters ?? 0} displayed evidence character(s).`,
         `  Selection ceiling: ${packet.maxUnits} unit(s) or ${packet.maxCharacters} displayed evidence character(s); syntax units are never clipped.`,
         `  Exact symbol/location evidence: ${packet.exactSelectorsComplete ? 'complete within materialized compiler evidence' : 'some lower-ranked units withheld'}.`,
+        ...(packet.channels ? [`  Evidence channels: ${renderInspectionChannelCoverage(packet.channels)}.`] : []),
         ...(packet.omittedUnits > 0
           ? [`  Withheld materialized units by role: ${renderInspectionRoleCounts(packet.omittedByRole)}.`]
           : []),
@@ -421,7 +462,7 @@ function sourceInspectionSections(result: queries.SourceInspectionResult): Repor
       ];
   const stoppingRows = result.stoppingSummary
     ? [
-        `  ${result.stoppingSummary.status}: ${result.stoppingSummary.guidance}`,
+        `  ${result.stoppingSummary.queryStatus ?? result.stoppingSummary.status}: ${result.stoppingSummary.guidance}`,
         ...(result.stoppingSummary.openEvidence > 0
           ? [
               `  ${result.stoppingSummary.openEvidence} open evidence item(s); ${(result.omissionGroups ?? []).length} recoverable omission group(s).`,
@@ -440,7 +481,7 @@ function sourceInspectionSections(result: queries.SourceInspectionResult): Repor
       title: 'PACKET COVERAGE',
       rows: packetRows,
     },
-    { title: 'STOPPING CHECK', rows: stoppingRows, skipIfEmpty: true },
+    { title: 'QUERY COMPLETION', rows: stoppingRows, skipIfEmpty: true },
   ];
 }
 
@@ -448,6 +489,20 @@ function renderInspectionRoleCounts(counts: Partial<Record<queries.SourceInspect
   return Object.entries(counts)
     .map(([role, count]) => `${role}=${count}`)
     .join(', ');
+}
+
+function renderInspectionChannelCoverage(
+  channels: Readonly<Record<queries.SourceInspectionEvidenceChannel, queries.SourceInspectionChannelCoverage>>,
+): string {
+  return INSPECTION_EVIDENCE_CHANNELS.filter(
+    (channel) => channels[channel].candidateUnits > 0 || channels[channel].omittedUnits > 0,
+  )
+    .map((channel) => {
+      const coverage = channels[channel];
+      const limit = coverage.maxUnits === Number.MAX_SAFE_INTEGER ? 'unbounded' : String(coverage.maxUnits);
+      return `${channel} ${coverage.returnedUnits}/${coverage.candidateUnits} (limit ${limit})`;
+    })
+    .join('; ');
 }
 
 function sourceInspectionUnitRow(unit: queries.SourceInspectionUnit): string {
@@ -516,7 +571,7 @@ function sourceInspectionOmissionGroupRow(group: queries.SourceInspectionOmissio
   }
   return [
     `  ${group.id}  ${group.scope} — ${group.candidateUnits} unit(s), ${group.sourceCharacters} source character(s)`,
-    `    roles: ${group.roles.join(', ')}; behavior: ${group.behaviorSignals.join(', ') || 'not summarized'}`,
+    `    channel: ${group.channel ?? 'unclassified'}; roles: ${group.roles.join(', ')}; behavior: ${group.behaviorSignals.join(', ') || 'not summarized'}`,
     ...anchors,
     `    Drill into this group together: ${group.drillCommand}`,
   ].join('\n');
@@ -782,7 +837,13 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       ),
       option(
         '--include <part>',
-        'Add definition, references, callers, callees, dependencies, consumers, or all to every symbol; repeat or comma-separate',
+        'Choose symbol evidence; defaults to definition, callers, and callees; repeat or comma-separate',
+        collectValues,
+        [],
+      ),
+      option(
+        '--evidence-budget <channel=n>',
+        'Set an independent unit ceiling for one evidence channel; repeat or comma-separate',
         collectValues,
         [],
       ),
@@ -817,11 +878,12 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
         unitLines: numberOptionValue(opts, 'unitLines'),
         totalLines: numberOptionValue(opts, 'totalLines'),
         evidence: {
-          parts: selectedEvidenceParts(stringArrayOptionValue(opts, 'include')) ?? [...EVIDENCE_PARTS],
+          parts: selectedEvidenceParts(stringArrayOptionValue(opts, 'include')),
           referenceContext: 4,
           relatedSourceLines: 60,
           semantic: budget.semantic,
         },
+        evidenceBudgets: inspectionEvidenceBudgets(stringArrayOptionValue(opts, 'evidenceBudget')),
       });
     },
     coverage: (result, { budget }) => {
@@ -851,6 +913,8 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       omittedUnits: result.omittedUnits ?? result.omittedSlices,
       view: result.view,
       omissionGroups: result.omissionGroups,
+      packetCoverage: result.packetCoverage,
+      stoppingSummary: result.stoppingSummary,
     }),
     sections: sourceInspectionSections,
   }),

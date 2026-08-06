@@ -95,6 +95,9 @@ export type {
 } from './navigation/source-search.js';
 export type {
   SourceInspectionContinuation,
+  SourceInspectionChannelCoverage,
+  SourceInspectionEvidenceBudgets,
+  SourceInspectionEvidenceChannel,
   SourceInspectionLocation,
   SourceInspectionOmissionAnchor,
   SourceInspectionOmissionGroup,
@@ -215,6 +218,8 @@ export type {
   ExplorationAnchorStatus,
   ExplorationDisposition,
   ExplorationDispositionCounts,
+  ExplorationCompletion,
+  ExplorationCompletionStatus,
   ExplorationEvidenceSource,
   ExplorationEvidenceStrength,
   ExplorationFrontierGroup,

@@ -16,6 +16,25 @@ export type ExplorationEvidenceStrength = 'exact' | 'derived' | 'candidate' | 'm
 export type ExplorationDisposition = 'emitted' | 'folded' | 'excluded' | 'unsupported';
 export type ExplorationAnchorStatus = 'matched' | 'ambiguous' | 'missing';
 
+/**
+ * A completion status names what one repository query established, never
+ * whether the agent has finished the user's task. Selection completion covers
+ * requested units, connector completion covers proved paths between anchors,
+ * frontier accounting covers reversible withheld directions, and incomplete
+ * coverage means at least one required identity or direction remains unknown.
+ */
+export type ExplorationCompletionStatus =
+  | 'selection-complete'
+  | 'connector-complete'
+  | 'frontier-accounted'
+  | 'coverage-incomplete';
+
+export interface ExplorationCompletion {
+  status: ExplorationCompletionStatus;
+  scope: string;
+  explanation: string;
+}
+
 /** One independently inspectable basis for a graph relationship. */
 export interface ExplorationEvidenceSource {
   method: string;
@@ -124,6 +143,7 @@ export interface ExplorationTopology {
   paths: ExplorationTopologyPath[];
   frontiers: ExplorationFrontierGroup[];
   coverage: ExplorationTopologyCoverage;
+  completion?: ExplorationCompletion;
 }
 
 export interface ExplorationTopologyInput {
@@ -207,6 +227,35 @@ export function createExplorationTopology(input: ExplorationTopologyInput): Expl
           ? 'Every node and edge discovered within the declared query scope is emitted, folded with recoverable identity, explicitly excluded, or reported unsupported.'
           : `The declared query scope is not fully accounted for: ${incompleteReasons.join('; ')}`,
     },
+    completion: topologyCompletion(status, paths, input.scope),
+  };
+}
+
+function topologyCompletion(
+  coverageStatus: ExplorationTopologyCoverage['status'],
+  paths: readonly ExplorationTopologyPath[],
+  scope: string,
+): ExplorationCompletion {
+  if (coverageStatus === 'incomplete' || paths.some((path) => path.status !== 'connected')) {
+    return {
+      status: 'coverage-incomplete',
+      scope,
+      explanation:
+        'The declared graph query has an ambiguous, missing, candidate-only, or disconnected anchor relationship.',
+    };
+  }
+  if (paths.length > 0) {
+    return {
+      status: 'connector-complete',
+      scope,
+      explanation: 'Every requested anchor pair has a selected path supported by proved repository relationships.',
+    };
+  }
+  return {
+    status: 'frontier-accounted',
+    scope,
+    explanation:
+      'Every discovered direction in the declared graph query is emitted or represented by an exact frontier.',
   };
 }
 

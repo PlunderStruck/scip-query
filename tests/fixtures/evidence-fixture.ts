@@ -75,7 +75,7 @@ class EvidenceFixtureDb {
   private readonly symbols: Array<{
     id: number;
     symbol: string;
-    displayName: string;
+    displayName: string | null;
     kind: number | null;
     documentation: string | null;
   }> = [];
@@ -111,7 +111,7 @@ class EvidenceFixtureDb {
   symbol(
     id: number,
     symbol: string,
-    displayName: string,
+    displayName: string | null,
     kind: number | null = null,
     documentation: string | null = null,
   ): this {

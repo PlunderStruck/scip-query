@@ -531,6 +531,9 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
       `  ${emittedNodes.length}/${result.topology.nodes.length} node(s) selected; ` +
         `${emittedEdges.length} typed connector edge(s); ${foldedFrontiers.length} reversible frontier group(s).`,
     );
+    if (result.topology.completion) {
+      console.log(`  [${result.topology.completion.status}] ${result.topology.completion.explanation}`);
+    }
     for (const path of result.topology.paths) {
       const labels = path.nodeIds.map((id) => topologyNodeById.get(id)?.label ?? id);
       console.log(`  [${path.status}] ${labels.length > 0 ? labels.join(' ↔ ') : 'no proved connector'}`);

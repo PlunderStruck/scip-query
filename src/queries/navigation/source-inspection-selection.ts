@@ -11,11 +11,39 @@ export interface InspectionSelectionCandidate {
   reasons: readonly string[];
   symbols: readonly string[];
   behaviorSignals: readonly BehaviorSignal[];
+  channel?: string;
 }
 
 export interface InspectionSelection<T> {
   selected: T[];
   omitted: T[];
+}
+
+/**
+ * Apply one independent unit ceiling per evidence channel before the global
+ * packet selector. A noisy channel can therefore disclose and fold its own
+ * overflow without consuming every slot needed by other evidence kinds.
+ */
+export function selectInspectionCandidatesByChannel<T extends InspectionSelectionCandidate>(
+  candidates: readonly T[],
+  maxUnitsByChannel: Readonly<Record<string, number>>,
+  compareStable: (left: T, right: T) => number,
+): InspectionSelection<T> {
+  const selected: T[] = [];
+  const omitted: T[] = [];
+  const selectedByChannel = new Map<string, number>();
+  for (const candidate of [...candidates].sort(compareStable)) {
+    const channel = candidate.channel ?? 'default';
+    const limit = maxUnitsByChannel[channel] ?? Number.MAX_SAFE_INTEGER;
+    const used = selectedByChannel.get(channel) ?? 0;
+    if (used >= limit) {
+      omitted.push(candidate);
+      continue;
+    }
+    selected.push(candidate);
+    selectedByChannel.set(channel, used + 1);
+  }
+  return { selected, omitted };
 }
 
 interface WeightedFeature {

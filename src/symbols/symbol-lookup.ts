@@ -409,11 +409,15 @@ function findDirectSymbolCandidates(
   const trimmed = symbolPattern.trim();
   const directMatches = candidates.filter((row) => {
     const short = shortenSymbol(row.symbol);
+    const leaf = leafName(row.symbol);
     const display = (row.display_name ?? '').trim();
     return (
       row.symbol === trimmed ||
       short === trimmed ||
       short === cleanedPattern ||
+      leaf === trimmed ||
+      leaf === cleanedPattern ||
+      `${leaf}()` === trimmed ||
       display === trimmed ||
       display === cleanedPattern ||
       `${display}()` === trimmed ||
@@ -426,14 +430,30 @@ function findDirectSymbolCandidates(
     return [];
   }
 
-  directMatches.sort(
-    (left, right) =>
-      pathQualifiedDirectScore(right, cleanedPattern) - pathQualifiedDirectScore(left, cleanedPattern) ||
-      left.end_line - left.start_line - (right.end_line - right.start_line) ||
-      left.relative_path.localeCompare(right.relative_path) ||
-      left.symbol.localeCompare(right.symbol),
-  );
+  // A plain leaf such as `systemMap` must not remain ambiguous merely because
+  // same-prefix declarations such as `SystemMapOptions` also matched the
+  // lookup prefilter. Preserve real ambiguity between exact leaves, and when
+  // a language permits a type/value name collision prefer the callable value
+  // for an unadorned callable query.
+  const requestedLeaf = cleanedPattern.replace(/\(\)$/u, '');
+  const exactLeafMatches = directMatches.filter((row) => leafName(row.symbol) === requestedLeaf);
+  if (exactLeafMatches.length > 0) {
+    exactLeafMatches.sort((left, right) => compareDirectCandidates(left, right, cleanedPattern));
+    const exactCallableLeaves = exactLeafMatches.filter((row) => isFunctionLikeSymbol(row.symbol));
+    return exactCallableLeaves.length > 0 ? exactCallableLeaves : exactLeafMatches;
+  }
+
+  directMatches.sort((left, right) => compareDirectCandidates(left, right, cleanedPattern));
   return directMatches;
+}
+
+function compareDirectCandidates(left: SymbolQueryRow, right: SymbolQueryRow, cleanedPattern: string): number {
+  return (
+    pathQualifiedDirectScore(right, cleanedPattern) - pathQualifiedDirectScore(left, cleanedPattern) ||
+    left.end_line - left.start_line - (right.end_line - right.start_line) ||
+    left.relative_path.localeCompare(right.relative_path) ||
+    left.symbol.localeCompare(right.symbol)
+  );
 }
 
 function pathQualifiedDirectScore(row: SymbolQueryRow, cleanedPattern: string): number {

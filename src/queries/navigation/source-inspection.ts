@@ -13,6 +13,7 @@ import { getSourceLines } from '../../source/primitives/source-text.js';
 import { resolveIndexedFile } from '../internal/file-resolution.js';
 import { evidence, type EvidenceOptions, type EvidenceResult } from './evidence.js';
 import { SOURCE_INSPECTION_MAX_SELECTORS } from '../internal/inspection-limits.js';
+import type { ExplorationCompletionStatus } from '../internal/exploration-topology.js';
 import {
   readRuntimeBoundaryObservations,
   type BoundaryEvidenceStrength,
@@ -24,8 +25,8 @@ import {
   mergeBindingClosures,
   type BindingClosure,
 } from './binding-closure.js';
-import { selectInspectionCandidates } from './source-inspection-selection.js';
-import { searchSource } from './source-search.js';
+import { selectInspectionCandidates, selectInspectionCandidatesByChannel } from './source-inspection-selection.js';
+import { searchSource, type SourceSearchTextCoverage } from './source-search.js';
 import { enclosingSourceUnitSnippet, sourceSnippet, type SourceUnitSnippet } from './source-snippet.js';
 
 const DEFAULT_CONTEXT = 6;
@@ -34,6 +35,39 @@ const DEFAULT_MAX_UNITS = 48;
 const DEFAULT_MAX_CHARACTERS = 60_000;
 const MAX_SCOPE_HINTS = 12;
 const UNBOUNDED_LIMIT = Number.MAX_SAFE_INTEGER;
+const DEFAULT_SYMBOL_EVIDENCE_PARTS = ['definition', 'callers', 'callees'] as const satisfies readonly EvidencePart[];
+
+export type SourceInspectionEvidenceChannel =
+  | 'search'
+  | 'exact-source'
+  | 'definition'
+  | 'caller'
+  | 'callee'
+  | 'production-reference'
+  | 'test-reference'
+  | 'dependency'
+  | 'consumer';
+
+export type SourceInspectionEvidenceBudgets = Partial<Record<SourceInspectionEvidenceChannel, number>>;
+
+export interface SourceInspectionChannelCoverage {
+  candidateUnits: number;
+  returnedUnits: number;
+  omittedUnits: number;
+  maxUnits: number;
+}
+
+const DEFAULT_EVIDENCE_UNIT_BUDGETS: Record<SourceInspectionEvidenceChannel, number> = {
+  search: 12,
+  'exact-source': SOURCE_INSPECTION_MAX_SELECTORS,
+  definition: SOURCE_INSPECTION_MAX_SELECTORS,
+  caller: 8,
+  callee: 8,
+  'production-reference': 6,
+  'test-reference': 2,
+  dependency: 6,
+  consumer: 6,
+};
 
 export type SourceInspectionUnitRole =
   | 'search'
@@ -117,6 +151,7 @@ export interface SourceInspectionSearch {
   omittedUnits?: number;
   scopeHints?: SourceInspectionSearchScope[];
   omittedScopeHints?: number;
+  textCoverage?: SourceSearchTextCoverage;
   exactFollowup?: string;
 }
 
@@ -141,6 +176,7 @@ export interface SourceInspectionPacketCoverage {
   exactSelectorsComplete: boolean;
   maxUnits: number;
   maxCharacters: number;
+  channels?: Record<SourceInspectionEvidenceChannel, SourceInspectionChannelCoverage>;
   expansionCommand?: string;
 }
 
@@ -155,6 +191,7 @@ export interface SourceInspectionOmissionAnchor {
 export interface SourceInspectionOmissionGroup {
   id: string;
   scope: string;
+  channel?: SourceInspectionEvidenceChannel;
   roles: SourceInspectionUnitRole[];
   behaviorSignals: BehaviorSignal[];
   candidateUnits: number;
@@ -166,6 +203,9 @@ export interface SourceInspectionOmissionGroup {
 export type SourceInspectionStoppingStatus = 'stop-ready' | 'relevance-check-required' | 'exact-evidence-withheld';
 
 export interface SourceInspectionStoppingSummary {
+  /** Query-scoped completion; it never claims that the user's task is finished. */
+  queryStatus?: ExplorationCompletionStatus;
+  /** @deprecated Use queryStatus. Retained for one compatibility window. */
   status: SourceInspectionStoppingStatus;
   openEvidence: number;
   guidance: string;
@@ -221,6 +261,8 @@ export interface SourceInspectionOptions {
   /** Soft displayed-evidence character ceiling; a returned syntax unit is never clipped. */
   maxCharacters?: number;
   evidence?: EvidenceOptions;
+  /** Independent unit ceilings; omitted channel evidence remains recoverable in coverage and omission groups. */
+  evidenceBudgets?: SourceInspectionEvidenceBudgets;
   /** @deprecated Inspect no longer accepts semantic packet cursors. */
   cursor?: string;
 }
@@ -234,6 +276,7 @@ interface InspectionRequest {
   searchLimit: number;
   maxUnits: number;
   maxCharacters: number;
+  evidenceBudgets: Record<SourceInspectionEvidenceChannel, number>;
   view: SourceInspectionView;
   evidence: {
     parts?: EvidencePart[];
@@ -275,14 +318,19 @@ export function inspectSource(db: ScipDatabase, opts: SourceInspectionOptions): 
   if (request.view === 'behavior') narrowBehaviorConstructs(db, candidates);
   attachBindingClosures(db, candidates);
   if (request.view === 'behavior') attachBehaviorSkeletons(db, candidates);
-  const { selected, omitted } = selectInspectionCandidates(
+  const channelSelection = selectInspectionCandidatesByChannel(
     candidates.map((candidate) => selectionCandidate(candidate, request.view)),
+    request.evidenceBudgets,
+    (left, right) => compareCandidates(left.candidate, right.candidate),
+  );
+  const { selected, omitted } = selectInspectionCandidates(
+    channelSelection.selected,
     request.maxUnits,
     request.maxCharacters,
     (left, right) => compareCandidates(left.candidate, right.candidate),
   );
   const selectedCandidates = selected.map((item) => item.candidate);
-  const omittedCandidates = omitted.map((item) => item.candidate);
+  const omittedCandidates = [...channelSelection.omitted, ...omitted].map((item) => item.candidate);
   const units = selectedCandidates.map(publicUnit);
   const bindingClosure = mergeBindingClosures(
     selectedCandidates.map((candidate) => (candidate.kind === 'source' ? candidate.bindingClosure : undefined)),
@@ -317,9 +365,13 @@ export function inspectSource(db: ScipDatabase, opts: SourceInspectionOptions): 
   ).length;
   const searches = built.searches.map((search) => searchSelectionCoverage(search, candidates, selectedCandidates));
   const omittedByRole = countRoles(omittedCandidates);
-  const exactSelectorsComplete = omittedCandidates.every((candidate) =>
-    candidate.roles.every((role) => role === 'search'),
-  );
+  const exactSelectorsComplete =
+    built.locations.every((location) => location.matched) &&
+    built.evidence.every((item) => item.kind === 'matched') &&
+    built.searches.every((search) => searchTextCoverageComplete(search.textCoverage)) &&
+    omittedCandidates.every(
+      (candidate) => !candidate.roles.some((role) => role === 'location' || role === 'definition'),
+    );
   const omittedSearchMatches = searches.reduce((total, search) => total + search.omittedMatches, 0);
   const complete = omittedCandidates.length === 0 && omittedSearchMatches === 0;
   const expansionCommand = complete ? undefined : inspectionCommand(request, true);
@@ -361,6 +413,7 @@ export function inspectSource(db: ScipDatabase, opts: SourceInspectionOptions): 
       exactSelectorsComplete,
       maxUnits: request.maxUnits,
       maxCharacters: request.maxCharacters,
+      channels: channelCoverage(candidates, selectedCandidates, request.evidenceBudgets, request.view),
       ...(expansionCommand ? { expansionCommand } : {}),
     },
     stoppingSummary,
@@ -382,28 +435,31 @@ function stoppingSummaryFor(
     ...searches.flatMap((search) => (search.exactFollowup ? [search.exactFollowup] : [])),
     ...(expansionCommand ? [expansionCommand] : []),
   ]);
-  if (complete) {
+  if (complete && exactSelectorsComplete) {
     return {
+      queryStatus: 'selection-complete',
       status: 'stop-ready',
       openEvidence: 0,
-      guidance:
-        'All requested selectors were materialized; stop unless a named semantic blind spot can change the decision.',
+      guidance: 'All evidence requested by this inspect query was materialized.',
       drillCommands: [],
     };
   }
   if (!exactSelectorsComplete) {
     return {
+      queryStatus: 'coverage-incomplete',
       status: 'exact-evidence-withheld',
       openEvidence,
       guidance:
-        'Exact symbol or location evidence is withheld; do not make absence claims until the relevant gap is drilled.',
+        'A requested identity, exact source unit, or current-text coverage requirement is unresolved; drill before relying on it.',
       drillCommands,
     };
   }
   return {
+    queryStatus: 'frontier-accounted',
     status: 'relevance-check-required',
     openEvidence,
-    guidance: 'Evidence remains withheld; drill only groups that can change the current decision, otherwise stop.',
+    guidance:
+      'Withheld evidence is accounted for by recoverable groups; drill the groups relevant to the current decision.',
     drillCommands,
   };
 }
@@ -430,9 +486,12 @@ function normalizeRequest(opts: SourceInspectionOptions): InspectionRequest {
   }
   if (
     opts.full &&
-    (opts.searchLimit !== undefined || opts.maxUnits !== undefined || opts.maxCharacters !== undefined)
+    (opts.searchLimit !== undefined ||
+      opts.maxUnits !== undefined ||
+      opts.maxCharacters !== undefined ||
+      opts.evidenceBudgets !== undefined)
   ) {
-    throw new Error('full inspect cannot be combined with searchLimit, maxUnits, or maxCharacters.');
+    throw new Error('full inspect cannot be combined with searchLimit, maxUnits, maxCharacters, or evidenceBudgets.');
   }
   const full = opts.full ?? false;
   return {
@@ -444,9 +503,16 @@ function normalizeRequest(opts: SourceInspectionOptions): InspectionRequest {
     searchLimit: positive(opts.searchLimit ?? (full ? UNBOUNDED_LIMIT : DEFAULT_SEARCH_LIMIT), 'searchLimit'),
     maxUnits: positive(full ? UNBOUNDED_LIMIT : (opts.maxUnits ?? DEFAULT_MAX_UNITS), 'maxUnits'),
     maxCharacters: positive(full ? UNBOUNDED_LIMIT : (opts.maxCharacters ?? DEFAULT_MAX_CHARACTERS), 'maxCharacters'),
+    evidenceBudgets: full
+      ? unboundedEvidenceBudgets()
+      : normalizeEvidenceBudgets(opts.evidenceBudgets ?? DEFAULT_EVIDENCE_UNIT_BUDGETS),
     view: opts.view ?? 'source',
     evidence: {
-      ...(evidenceOptions.parts ? { parts: [...evidenceOptions.parts] } : {}),
+      ...(evidenceOptions.parts
+        ? { parts: [...evidenceOptions.parts] }
+        : symbols.length > 0
+          ? { parts: [...DEFAULT_SYMBOL_EVIDENCE_PARTS] }
+          : {}),
       ...(evidenceOptions.referenceContext !== undefined
         ? { referenceContext: positiveOrZero(evidenceOptions.referenceContext, 'referenceContext') }
         : {}),
@@ -454,6 +520,26 @@ function normalizeRequest(opts: SourceInspectionOptions): InspectionRequest {
       ...(evidenceOptions.semantic !== undefined ? { semantic: evidenceOptions.semantic } : {}),
     },
   };
+}
+
+function normalizeEvidenceBudgets(
+  overrides: SourceInspectionEvidenceBudgets,
+): Record<SourceInspectionEvidenceChannel, number> {
+  const budgets = { ...DEFAULT_EVIDENCE_UNIT_BUDGETS };
+  for (const [channel, value] of Object.entries(overrides)) {
+    if (!(channel in budgets)) throw new Error(`Unknown inspect evidence channel: ${channel}.`);
+    if (!Number.isSafeInteger(value) || (value ?? -1) < 0) {
+      throw new RangeError(`Evidence budget ${channel} must be a non-negative safe integer; received ${value}.`);
+    }
+    budgets[channel as SourceInspectionEvidenceChannel] = value!;
+  }
+  return budgets;
+}
+
+function unboundedEvidenceBudgets(): Record<SourceInspectionEvidenceChannel, number> {
+  return Object.fromEntries(
+    Object.keys(DEFAULT_EVIDENCE_UNIT_BUDGETS).map((channel) => [channel, UNBOUNDED_LIMIT]),
+  ) as Record<SourceInspectionEvidenceChannel, number>;
 }
 
 function buildInspection(db: ScipDatabase, request: InspectionRequest): BuiltInspection {
@@ -511,6 +597,7 @@ function buildInspection(db: ScipDatabase, request: InspectionRequest): BuiltIns
       omittedUnits: 0,
       scopeHints: scopeHints.slice(0, MAX_SCOPE_HINTS),
       omittedScopeHints: Math.max(0, scopeHints.length - MAX_SCOPE_HINTS),
+      textCoverage: result.textCoverage,
       ...(exactFollowup ? { exactFollowup } : {}),
     };
   });
@@ -567,17 +654,17 @@ function buildInspection(db: ScipDatabase, request: InspectionRequest): BuiltIns
         `reference:${item.shortName}`,
         owner?.enclosingSymbol ?? null,
         owner?.enclosingShort ?? null,
-        2,
+        classifyFile(window.relativePath) === 'test' ? 5 : 4,
         sequence++,
         window.references.map((reference) => reference.line),
         item.symbol,
       );
     }
     for (const related of item.callers) {
-      addRelatedSymbolCandidate(db, candidates, related, 'caller', item, 3, sequence++);
+      addRelatedSymbolCandidate(db, candidates, related, 'caller', item, 2, sequence++);
     }
     for (const related of item.callees) {
-      addRelatedSymbolCandidate(db, candidates, related, 'callee', item, 4, sequence++);
+      addRelatedSymbolCandidate(db, candidates, related, 'callee', item, 3, sequence++);
     }
     for (const dependency of item.dependencies) {
       addEdgeCandidate(
@@ -588,7 +675,7 @@ function buildInspection(db: ScipDatabase, request: InspectionRequest): BuiltIns
         dependency.relativePath,
         item.symbol,
         request.context,
-        5,
+        6,
         sequence++,
       );
     }
@@ -601,7 +688,7 @@ function buildInspection(db: ScipDatabase, request: InspectionRequest): BuiltIns
         item.file,
         item.symbol,
         request.context,
-        6,
+        7,
         sequence++,
       );
     }
@@ -644,6 +731,7 @@ interface SelectionCandidate {
   reasons: readonly string[];
   symbols: readonly string[];
   behaviorSignals: readonly BehaviorSignal[];
+  channel: SourceInspectionEvidenceChannel;
 }
 
 function selectionCandidate(candidate: CandidateUnit, view: SourceInspectionView): SelectionCandidate {
@@ -658,7 +746,22 @@ function selectionCandidate(candidate: CandidateUnit, view: SourceInspectionView
     reasons: candidate.reasons,
     symbols: candidate.symbols,
     behaviorSignals: candidate.kind === 'source' ? (candidate.behavior?.signals ?? []) : [],
+    channel: evidenceChannel(candidate),
   };
+}
+
+function evidenceChannel(candidate: CandidateUnit): SourceInspectionEvidenceChannel {
+  const roles: readonly SourceInspectionUnitRole[] = candidate.roles;
+  if (roles.includes('location')) return 'exact-source';
+  if (roles.includes('definition')) return 'definition';
+  if (roles.includes('caller')) return 'caller';
+  if (roles.includes('callee')) return 'callee';
+  if (roles.includes('reference')) {
+    return classifyFile(candidate.relativePath) === 'test' ? 'test-reference' : 'production-reference';
+  }
+  if (roles.includes('dependency')) return 'dependency';
+  if (roles.includes('consumer')) return 'consumer';
+  return 'search';
 }
 
 function attachBehaviorSkeletons(db: ScipDatabase, candidates: readonly CandidateUnit[]): void {
@@ -770,9 +873,10 @@ function omissionGroupsFor(
   const grouped = new Map<string, CandidateUnit[]>();
   for (const candidate of omitted) {
     const scope = parentPath(candidate.relativePath);
+    const channel = evidenceChannel(candidate);
     const roles = [...candidate.roles].sort().join(',');
     const discriminator = candidate.kind === 'path' ? candidate.relationship : '';
-    const key = `${scope}|${roles}|${discriminator}`;
+    const key = `${scope}|${channel}|${roles}|${discriminator}`;
     const candidates = grouped.get(key) ?? [];
     candidates.push(candidate);
     grouped.set(key, candidates);
@@ -788,6 +892,7 @@ function omissionGroupsFor(
       return {
         id: `g-${createHash('sha256').update(key).digest('hex').slice(0, 8)}`,
         scope: parentPath(first.relativePath),
+        channel: evidenceChannel(first),
         roles,
         behaviorSignals,
         candidateUnits: candidates.length,
@@ -875,6 +980,37 @@ function countRoles(candidates: readonly CandidateUnit[]): Partial<Record<Source
     for (const role of candidate.roles) counts[role] = (counts[role] ?? 0) + 1;
   }
   return counts;
+}
+
+function channelCoverage(
+  candidates: readonly CandidateUnit[],
+  selected: readonly CandidateUnit[],
+  budgets: Readonly<Record<SourceInspectionEvidenceChannel, number>>,
+  view: SourceInspectionView,
+): Record<SourceInspectionEvidenceChannel, SourceInspectionChannelCoverage> {
+  const candidateChannels = candidates.map((candidate) => selectionCandidate(candidate, view).channel);
+  const selectedChannels = selected.map((candidate) => selectionCandidate(candidate, view).channel);
+  return Object.fromEntries(
+    (Object.keys(budgets) as SourceInspectionEvidenceChannel[]).map((channel) => {
+      const candidateUnits = candidateChannels.filter((candidate) => candidate === channel).length;
+      const returnedUnits = selectedChannels.filter((candidate) => candidate === channel).length;
+      return [
+        channel,
+        {
+          candidateUnits,
+          returnedUnits,
+          omittedUnits: candidateUnits - returnedUnits,
+          maxUnits: budgets[channel],
+        },
+      ];
+    }),
+  ) as Record<SourceInspectionEvidenceChannel, SourceInspectionChannelCoverage>;
+}
+
+function searchTextCoverageComplete(coverage: SourceSearchTextCoverage | undefined): boolean {
+  return Boolean(
+    coverage && coverage.skippedUnreadablePaths.length === 0 && coverage.skippedOversizedPaths.length === 0,
+  );
 }
 
 function searchScopeHints(

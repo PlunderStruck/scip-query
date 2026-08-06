@@ -1,0 +1,217 @@
+{
+  "acceptedAt": "2026-08-06T02:44:12.099Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "b74d889f2c238c50abdefa2a097038a35d3c1fa4d8f9753dd6906e34462febc3",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationCompletion.",
+      "target": "./queries:ExplorationCompletion"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationCompletionStatus.",
+      "target": "./queries:ExplorationCompletionStatus"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ExplorationTopology changed from interface ExplorationTopology { schemaVersion: 1; anchors: ExplorationTopologyAnchor[]; nodes: ExplorationTopologyNode[]; edges: ExplorationTopologyEdge[]; paths: ExplorationTop... to interface ExplorationTopology { schemaVersion: 1; anchors: ExplorationTopologyAnchor[]; nodes: ExplorationTopologyNode[]; edges: ExplorationTopologyEdge[]; paths: ExplorationTop....",
+      "target": "./queries:ExplorationTopology"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionChannelCoverage.",
+      "target": "./queries:SourceInspectionChannelCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionEvidenceBudgets.",
+      "target": "./queries:SourceInspectionEvidenceBudgets"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionEvidenceChannel.",
+      "target": "./queries:SourceInspectionEvidenceChannel"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionOmissionGroup changed from interface SourceInspectionOmissionGroup { id: string; scope: string; roles: SourceInspectionUnitRole[]; behaviorSignals: BehaviorSignal[]; candidateUnits: number; sourceCharacte... to interface SourceInspectionOmissionGroup { id: string; scope: string; channel?: SourceInspectionEvidenceChannel; roles: SourceInspectionUnitRole[]; behaviorSignals: BehaviorSigna....",
+      "target": "./queries:SourceInspectionOmissionGroup"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionOptions changed from interface SourceInspectionOptions { searches?: readonly string[]; symbols?: readonly string[]; locations?: readonly string[]; scope?: string; context?: number; searchLimit?: num... to interface SourceInspectionOptions { searches?: readonly string[]; symbols?: readonly string[]; locations?: readonly string[]; scope?: string; context?: number; searchLimit?: num....",
+      "target": "./queries:SourceInspectionOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionPacketCoverage changed from interface SourceInspectionPacketCoverage { mode: 'bounded' | 'complete'; candidateUnits: number; returnedUnits: number; omittedUnits: number; omittedByRole: Partial<Record<Sourc... to interface SourceInspectionPacketCoverage { mode: 'bounded' | 'complete'; candidateUnits: number; returnedUnits: number; omittedUnits: number; omittedByRole: Partial<Record<Sourc....",
+      "target": "./queries:SourceInspectionPacketCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionSearch changed from interface SourceInspectionSearch { pattern: string; matchingLines: number; returnedMatches: number; omittedMatches: number; matchingFiles?: number; returnedFiles?: number; omitt... to interface SourceInspectionSearch { pattern: string; matchingLines: number; returnedMatches: number; omittedMatches: number; matchingFiles?: number; returnedFiles?: number; omitt....",
+      "target": "./queries:SourceInspectionSearch"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionStoppingSummary changed from interface SourceInspectionStoppingSummary { status: SourceInspectionStoppingStatus; openEvidence: number; guidance: string; drillCommands: string[]; } to interface SourceInspectionStoppingSummary { queryStatus?: ExplorationCompletionStatus; status: SourceInspectionStoppingStatus; openEvidence: number; guidance: string; drillComma....",
+      "target": "./queries:SourceInspectionStoppingSummary"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationCompletion.",
+      "target": "./queries/index:ExplorationCompletion"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationCompletionStatus.",
+      "target": "./queries/index:ExplorationCompletionStatus"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ExplorationTopology changed from interface ExplorationTopology { schemaVersion: 1; anchors: ExplorationTopologyAnchor[]; nodes: ExplorationTopologyNode[]; edges: ExplorationTopologyEdge[]; paths: ExplorationTop... to interface ExplorationTopology { schemaVersion: 1; anchors: ExplorationTopologyAnchor[]; nodes: ExplorationTopologyNode[]; edges: ExplorationTopologyEdge[]; paths: ExplorationTop....",
+      "target": "./queries/index:ExplorationTopology"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionChannelCoverage.",
+      "target": "./queries/index:SourceInspectionChannelCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionEvidenceBudgets.",
+      "target": "./queries/index:SourceInspectionEvidenceBudgets"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionEvidenceChannel.",
+      "target": "./queries/index:SourceInspectionEvidenceChannel"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionOmissionGroup changed from interface SourceInspectionOmissionGroup { id: string; scope: string; roles: SourceInspectionUnitRole[]; behaviorSignals: BehaviorSignal[]; candidateUnits: number; sourceCharacte... to interface SourceInspectionOmissionGroup { id: string; scope: string; channel?: SourceInspectionEvidenceChannel; roles: SourceInspectionUnitRole[]; behaviorSignals: BehaviorSigna....",
+      "target": "./queries/index:SourceInspectionOmissionGroup"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionOptions changed from interface SourceInspectionOptions { searches?: readonly string[]; symbols?: readonly string[]; locations?: readonly string[]; scope?: string; context?: number; searchLimit?: num... to interface SourceInspectionOptions { searches?: readonly string[]; symbols?: readonly string[]; locations?: readonly string[]; scope?: string; context?: number; searchLimit?: num....",
+      "target": "./queries/index:SourceInspectionOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionPacketCoverage changed from interface SourceInspectionPacketCoverage { mode: 'bounded' | 'complete'; candidateUnits: number; returnedUnits: number; omittedUnits: number; omittedByRole: Partial<Record<Sourc... to interface SourceInspectionPacketCoverage { mode: 'bounded' | 'complete'; candidateUnits: number; returnedUnits: number; omittedUnits: number; omittedByRole: Partial<Record<Sourc....",
+      "target": "./queries/index:SourceInspectionPacketCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionSearch changed from interface SourceInspectionSearch { pattern: string; matchingLines: number; returnedMatches: number; omittedMatches: number; matchingFiles?: number; returnedFiles?: number; omitt... to interface SourceInspectionSearch { pattern: string; matchingLines: number; returnedMatches: number; omittedMatches: number; matchingFiles?: number; returnedFiles?: number; omitt....",
+      "target": "./queries/index:SourceInspectionSearch"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionStoppingSummary changed from interface SourceInspectionStoppingSummary { status: SourceInspectionStoppingStatus; openEvidence: number; guidance: string; drillCommands: string[]; } to interface SourceInspectionStoppingSummary { queryStatus?: ExplorationCompletionStatus; status: SourceInspectionStoppingStatus; openEvidence: number; guidance: string; drillComma....",
+      "target": "./queries/index:SourceInspectionStoppingSummary"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionChannelCoverage.",
+      "target": "./queries/source-inspection:SourceInspectionChannelCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionEvidenceBudgets.",
+      "target": "./queries/source-inspection:SourceInspectionEvidenceBudgets"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceInspectionEvidenceChannel.",
+      "target": "./queries/source-inspection:SourceInspectionEvidenceChannel"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionOmissionGroup changed from interface SourceInspectionOmissionGroup { id: string; scope: string; roles: SourceInspectionUnitRole[]; behaviorSignals: BehaviorSignal[]; candidateUnits: number; sourceCharacte... to interface SourceInspectionOmissionGroup { id: string; scope: string; channel?: SourceInspectionEvidenceChannel; roles: SourceInspectionUnitRole[]; behaviorSignals: BehaviorSigna....",
+      "target": "./queries/source-inspection:SourceInspectionOmissionGroup"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionOptions changed from interface SourceInspectionOptions { searches?: readonly string[]; symbols?: readonly string[]; locations?: readonly string[]; scope?: string; context?: number; searchLimit?: num... to interface SourceInspectionOptions { searches?: readonly string[]; symbols?: readonly string[]; locations?: readonly string[]; scope?: string; context?: number; searchLimit?: num....",
+      "target": "./queries/source-inspection:SourceInspectionOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionPacketCoverage changed from interface SourceInspectionPacketCoverage { mode: 'bounded' | 'complete'; candidateUnits: number; returnedUnits: number; omittedUnits: number; omittedByRole: Partial<Record<Sourc... to interface SourceInspectionPacketCoverage { mode: 'bounded' | 'complete'; candidateUnits: number; returnedUnits: number; omittedUnits: number; omittedByRole: Partial<Record<Sourc....",
+      "target": "./queries/source-inspection:SourceInspectionPacketCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionSearch changed from interface SourceInspectionSearch { pattern: string; matchingLines: number; returnedMatches: number; omittedMatches: number; matchingFiles?: number; returnedFiles?: number; omitt... to interface SourceInspectionSearch { pattern: string; matchingLines: number; returnedMatches: number; omittedMatches: number; matchingFiles?: number; returnedFiles?: number; omitt....",
+      "target": "./queries/source-inspection:SourceInspectionSearch"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionStoppingSummary changed from interface SourceInspectionStoppingSummary { status: SourceInspectionStoppingStatus; openEvidence: number; guidance: string; drillCommands: string[]; } to interface SourceInspectionStoppingSummary { queryStatus?: ExplorationCompletionStatus; status: SourceInspectionStoppingStatus; openEvidence: number; guidance: string; drillComma....",
+      "target": "./queries/source-inspection:SourceInspectionStoppingSummary"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/system-map; review their variance and runtime meaning.",
+      "target": "./queries/system-map"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module behavior-skeleton-<hash>.d.ts was removed or renamed.",
+      "target": "behavior-skeleton-<hash>.d.ts"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module exploration-topology-<hash>.d.ts was added or renamed.",
+      "target": "exploration-topology-<hash>.d.ts"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module system-map-<hash>.d.ts was removed or renamed.",
+      "target": "system-map-<hash>.d.ts"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "fc51084e2ed352bd4b317a68a5d7a4d0bcf7306997c44257dde2a45ba08c106f",
+  "reason": "Add optional query-scoped completion and per-channel evidence coverage while correcting completion semantics without removing existing fields.",
+  "schemaVersion": 1
+}

@@ -51,11 +51,31 @@ describe('symbol resolution metadata', () => {
     }
   });
 
+  it('prefers an exact callable leaf over same-prefix type declarations', () => {
+    const db = createResolutionDb();
+    try {
+      const resolution = resolveSymbol(db, 'systemMap');
+
+      expect(resolution.total).toBe(1);
+      expect(resolution.match).toMatchObject({
+        symbol: 'scip-typescript npm pkg 1.0.0 src/`a.ts`/systemMap().',
+        relativePath: 'src/a.ts',
+      });
+      expect(resolveSymbol(db, 'SystemMapAnchorKind').match?.symbol).toContain('SystemMapAnchorKind#');
+    } finally {
+      db.close();
+    }
+  });
+
   function createResolutionDb(): ScipDatabase {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-symbol-resolution-'));
     mkdirSync(tempDir, { recursive: true });
     writeFixtureFiles(tempDir, {
-      'src/a.ts': 'export function duplicateHelper() { return 1; }\n',
+      'src/a.ts': [
+        'export function duplicateHelper() { return 1; }',
+        'export function systemMap() { return true; }',
+        "export type SystemMapAnchorKind = 'symbol';",
+      ],
       'src/nested/b.ts': 'export function duplicateHelper() { return 2; }\n',
     });
     const dbPath = join(tempDir, 'index.db');
@@ -64,12 +84,20 @@ describe('symbol resolution metadata', () => {
       .document(2, 'typescript', 'src/nested/b.ts')
       .symbol(1, 'scip-typescript npm pkg 1.0.0 src/`a.ts`/duplicateHelper().', 'duplicateHelper', 3)
       .symbol(2, 'scip-typescript npm pkg 1.0.0 src/nested/`b.ts`/duplicateHelper().', 'duplicateHelper', 3)
+      .symbol(3, 'scip-typescript npm pkg 1.0.0 src/`a.ts`/systemMap().', null, 3)
+      .symbol(4, 'scip-typescript npm pkg 1.0.0 src/`a.ts`/SystemMapAnchorKind#', 'SystemMapAnchorKind', 5)
       .definition(1, 1, 1, 0, 0, 0, 45)
       .definition(2, 2, 2, 0, 0, 0, 45)
+      .definition(3, 1, 3, 1, 0, 1, 44)
+      .definition(4, 1, 4, 2, 0, 2, 44)
       .chunk(1, 1, 0, 0)
       .chunk(2, 2, 0, 0)
+      .chunk(3, 1, 1, 1)
+      .chunk(4, 1, 2, 2)
       .mention(1, 1, 1)
       .mention(2, 2, 1)
+      .mention(3, 3, 1)
+      .mention(4, 4, 1)
       .write();
     const config: ScipQueryConfig = {
       dbPath,

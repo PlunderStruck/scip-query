@@ -26,6 +26,7 @@ describe('universal exploration topology', () => {
       memberCount: 1,
       edgeIds: ['runtime-edge'],
     });
+    expect(topology.completion).toMatchObject({ status: 'frontier-accounted' });
   });
 
   it('rejects an edge whose endpoint cannot be recovered', () => {
@@ -54,6 +55,7 @@ describe('universal exploration topology', () => {
 
     expect(topology.coverage.status).toBe('incomplete');
     expect(topology.coverage.explanation).toContain('one ambiguous compiler candidate was omitted');
+    expect(topology.completion?.status).toBe('coverage-incomplete');
   });
 
   it('selects anchor connectors and folds the remaining component with exact membership', () => {
@@ -82,6 +84,7 @@ describe('universal exploration topology', () => {
       nodes: { total: 3, emitted: 2, folded: 1 },
       edges: { total: 2, emitted: 1, folded: 1 },
     });
+    expect(selected.completion?.status).toBe('connector-complete');
   });
 
   it('expands a frontier losslessly and reconstructs the oracle graph', () => {
