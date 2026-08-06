@@ -312,17 +312,23 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       );
       expect(collapsed.expansion).toMatchObject({
         command: expect.stringContaining("--search 'work_session_stream_events'"),
-        candidateRegionCount: collapsed.regions.length,
-        regionCount: 12,
+        candidateRegionCount: expect.any(Number),
+        regionCount: expect.any(Number),
       });
-      const evidenceBearingRegions = collapsed.regions.filter(
-        (region) => region.symbolCount + region.literalHitCount > 0,
-      );
-      for (const region of evidenceBearingRegions) {
-        expect(collapsed.expansion?.regionIds).toContain(region.id);
-        expect(collapsed.expansion?.command).toContain(`--expand '${region.id}'`);
+      expect(collapsed.expansion!.candidateRegionCount).toBeLessThan(collapsed.regions.length);
+      expect(collapsed.expansion!.regionCount).toBe(collapsed.expansion!.candidateRegionCount);
+      for (const anchor of collapsed.anchors) {
+        for (const regionId of anchor.seedRegionIds ?? anchor.matchedRegionIds) {
+          expect(collapsed.expansion?.regionIds).toContain(regionId);
+        }
       }
-      expect(collapsed.expansion?.omittedRegionIds).toHaveLength(collapsed.regions.length - 12);
+      expect(collapsed.expansion?.omittedRegionIds).toEqual([]);
+      expect(collapsed.topology?.frontiers.some((frontier) => frontier.disposition === 'folded')).toBe(true);
+      expect(
+        collapsed.topology?.nodes.every((node) =>
+          ['emitted', 'folded', 'excluded', 'unsupported'].includes(node.disposition),
+        ),
+      ).toBe(true);
       expect(collapsed.drilldown).toMatchObject({
         command: null,
         definitionCommand: null,
@@ -359,6 +365,18 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       expect(expanded.drilldown.command).toContain("--at 'apps/api/src/modules/sessions/events.ts:5'");
       expect(expanded.drilldown.command).toContain("--at 'apps/web/src/components/sessions/realtime.ts:4'");
       expect(expanded.drilldown.definitionCommand).toBeNull();
+
+      const foldedFrontierIds = collapsed
+        .topology!.frontiers.filter((frontier) => frontier.disposition === 'folded')
+        .map((frontier) => frontier.id);
+      const reconstructed = systemMap(db, {
+        searches: ['work_session_stream_events'],
+        symbols: ['appendStreamEvents'],
+        maxDepth: 3,
+        topologyFrontiers: foldedFrontierIds,
+      });
+      expect(reconstructed.topology?.nodes.filter((node) => node.disposition === 'folded')).toEqual([]);
+      expect(reconstructed.topology?.edges.filter((edge) => edge.disposition === 'folded')).toEqual([]);
     } finally {
       db.close();
     }

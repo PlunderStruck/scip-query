@@ -1,0 +1,37 @@
+{
+  "acceptedAt": "2026-08-06T00:49:57.119Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "f28b16969939b37ff1e4380ec0935775216540a621219342f904f8c40eda6830",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapOptions changed from interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind... to interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind....",
+      "target": "./queries:SystemMapOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapOptions changed from interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind... to interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind....",
+      "target": "./queries/index:SystemMapOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapOptions changed from interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind... to interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind....",
+      "target": "./queries/system-map:SystemMapOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "y changed from interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind... to interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind....",
+      "target": "system-map-<hash>.d.ts:y"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "de343eb7e279ae76945786945963b2f78c6f425d8fdaf65a4426028f063abf5e",
+  "reason": "Add optional frontier expansion to system-map while preserving existing options and result fields.",
+  "schemaVersion": 1
+}

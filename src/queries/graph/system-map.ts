@@ -18,6 +18,7 @@ import { ProjectIndex } from '../internal/project-index.js';
 import { SOURCE_INSPECTION_MAX_SELECTORS } from '../internal/inspection-limits.js';
 import {
   createExplorationTopology,
+  selectExplorationTopology,
   type ExplorationEvidenceSource,
   type ExplorationEvidenceStrength,
   type ExplorationFrontierGroup,
@@ -64,6 +65,7 @@ export interface SystemMapOptions {
   evidenceFloor?: SystemMapEvidenceFloor;
   sourceScopes?: readonly SystemMapSourceScope[];
   maxTopologyCharacters?: number;
+  topologyFrontiers?: readonly string[];
 }
 
 export interface SystemMapAnchorCandidate extends SymbolResolutionCandidate {
@@ -733,11 +735,6 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
   const regionRelations = collapseRegionRelations(relations);
   const expandedIds = new Set(opts.expand ?? []);
   const regions = buildRegions(files, symbols, literalHits, relations, regionRelations, regionForFile, expandedIds);
-  const defaultExpansionRegionIds = new Set(
-    [...files.values()]
-      .filter((state) => [...state.origins].some((origin) => !origin.startsWith('literal-match:')))
-      .map((state) => regionForFile.get(state.file)!.id),
-  );
   const directSeedRegionIds = new Set(
     [...files.values()]
       .filter((state) =>
@@ -747,31 +744,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
       )
       .map((state) => regionForFile.get(state.file)!.id),
   );
-  const expansion = buildSystemMapExpansion(
-    searches,
-    symbolQueries,
-    maxDepth,
-    regions.filter((region) => defaultExpansionRegionIds.has(region.id)),
-    directSeedRegionIds,
-    requestedRelationKinds,
-    evidenceFloor,
-    includedSourceScopes,
-    maxTopologyCharacters,
-  );
   const drilldown = buildSystemMapDrilldown(regions);
-  const presentation = buildSystemMapPresentation(
-    searches,
-    symbolQueries,
-    maxDepth,
-    requestedRelationKinds,
-    evidenceFloor,
-    includedSourceScopes,
-    maxTopologyCharacters,
-    regions,
-    regionRelations,
-    directSeedRegionIds,
-    expandedIds,
-  );
   const knownRegionIds = new Set(regions.map((region) => region.id));
   const unmatchedExpansions = [...expandedIds].filter((id) => !knownRegionIds.has(id)).sort();
 
@@ -882,7 +855,6 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
     externalBoundaries,
     boundaryFrontiers,
     regionForFile,
-    presentation,
     closureStatus,
     omittedSymbolCandidates,
     maxDepth,
@@ -890,7 +862,36 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
     evidenceFloor,
     includedSourceScopes,
     blindSpots,
+    topologyFrontiers: opts.topologyFrontiers ?? [],
+    expandedRegionIds: [...expandedIds],
+    maxTopologyCharacters,
   });
+  const connectorRegionIds = topologyRegionIds(topology);
+  const presentation = buildSystemMapPresentation(
+    searches,
+    symbolQueries,
+    maxDepth,
+    requestedRelationKinds,
+    evidenceFloor,
+    includedSourceScopes,
+    maxTopologyCharacters,
+    regions,
+    regionRelations,
+    directSeedRegionIds,
+    expandedIds,
+    connectorRegionIds,
+  );
+  const expansion = buildSystemMapExpansion(
+    searches,
+    symbolQueries,
+    maxDepth,
+    regions.filter((region) => connectorRegionIds.has(region.id)),
+    directSeedRegionIds,
+    requestedRelationKinds,
+    evidenceFloor,
+    includedSourceScopes,
+    maxTopologyCharacters,
+  );
   return {
     anchors,
     regions,
@@ -912,7 +913,8 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
       withheld: {
         symbols: frontierSymbols,
         files: frontierFiles + supportFilesNotTraversed,
-        regions: expansion?.omittedRegionIds?.length ?? 0,
+        regions: topology.nodes.filter((node) => node.kind === 'structural-region' && node.disposition === 'folded')
+          .length,
         drillAnchors: drilldown?.omittedAnchors ?? 0,
       },
       ambiguous: {
@@ -1009,7 +1011,6 @@ interface SystemMapTopologyInput {
   externalBoundaries: readonly SystemMapExternalBoundary[];
   boundaryFrontiers: readonly SystemMapBoundaryFrontier[];
   regionForFile: ReadonlyMap<string, RegionIdentity>;
-  presentation: SystemMapPresentation;
   closureStatus: SystemMapQueryClosure['status'];
   omittedSymbolCandidates: number;
   maxDepth: number;
@@ -1017,25 +1018,32 @@ interface SystemMapTopologyInput {
   evidenceFloor: SystemMapEvidenceFloor;
   includedSourceScopes: readonly BoundarySourceScope[];
   blindSpots: readonly string[];
+  topologyFrontiers: readonly string[];
+  expandedRegionIds: readonly string[];
+  maxTopologyCharacters: number;
 }
 
 function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopology {
-  const presentedNodeIds = new Set(input.presentation.regionIds);
-  const presentedRelationKeys = new Set(input.presentation.relationKeys);
   const anchors: ExplorationTopologyAnchor[] = input.anchors.map((anchor, index) => {
     const id = topologyId('anchor', String(index), anchor.kind, anchor.query);
     const symbolNodeIds = [...input.symbolStates.values()]
       .filter((state) => state.anchorQueries.has(anchor.query))
       .map((state) => symbolTopologyNodeId(state.definition.symbol));
     const literalOwnerNodeIds = input.literalHits
-      .filter((hit) => hit.query === anchor.query && hit.ownerSymbol && input.symbolStates.has(hit.ownerSymbol))
+      .filter(
+        (hit) =>
+          hit.query === anchor.query &&
+          hit.traversalSeed === true &&
+          hit.ownerSymbol &&
+          input.symbolStates.has(hit.ownerSymbol),
+      )
       .map((hit) => symbolTopologyNodeId(hit.ownerSymbol!));
     const matchedNodeIds = uniqueSorted(
       anchor.kind === 'symbol'
         ? symbolNodeIds
         : literalOwnerNodeIds.length > 0
           ? literalOwnerNodeIds
-          : anchor.matchedRegionIds,
+          : (anchor.seedRegionIds ?? []),
     );
     return {
       id,
@@ -1060,7 +1068,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     id: region.id,
     kind: 'structural-region',
     label: region.label,
-    disposition: presentedNodeIds.has(region.id) ? 'emitted' : 'folded',
+    disposition: 'folded',
     location: null,
     anchorIds: uniqueSorted(anchorIdsByNode.get(region.id) ?? []),
     attributes: {
@@ -1076,13 +1084,11 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     const regionId = input.regionForFile.get(state.definition.relativePath)?.id;
     if (!regionId) throw new Error(`System-map symbol ${state.definition.symbol} has no structural region.`);
     const id = symbolTopologyNodeId(state.definition.symbol);
-    const explicitlyAnchored = (anchorIdsByNode.get(id)?.length ?? 0) > 0;
     nodes.push({
       id,
       kind: 'symbol',
       label: shortenSymbol(state.definition.symbol),
-      disposition:
-        explicitlyAnchored || input.regions.find((region) => region.id === regionId)?.expanded ? 'emitted' : 'folded',
+      disposition: (anchorIdsByNode.get(id)?.length ?? 0) > 0 ? 'emitted' : 'folded',
       location: {
         file: state.definition.relativePath,
         line: state.definition.startLine,
@@ -1102,6 +1108,31 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     return symbolNodeId && knownNodeIds.has(symbolNodeId) ? symbolNodeId : regionId;
   };
   const edges: ExplorationTopologyEdge[] = [];
+  for (const state of input.symbolStates.values()) {
+    const regionId = input.regionForFile.get(state.definition.relativePath)?.id;
+    if (!regionId) continue;
+    const symbolNodeId = symbolTopologyNodeId(state.definition.symbol);
+    edges.push({
+      id: topologyId('edge', 'structural-membership', regionId, symbolNodeId),
+      kind: 'structural-membership',
+      fromNodeId: regionId,
+      toNodeId: symbolNodeId,
+      directed: true,
+      disposition: 'folded',
+      evidence: [
+        {
+          method: 'indexed-definition-file',
+          strength: 'exact',
+          identity: state.definition.symbol,
+          location: {
+            file: state.definition.relativePath,
+            line: state.definition.startLine,
+            endLine: state.definition.endLine,
+          },
+        },
+      ],
+    });
+  }
   const groupedRelations = groupBy(
     input.relations,
     (relation) =>
@@ -1111,17 +1142,13 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     const first = bucket[0]!;
     const fromNodeId = relationEndpoint(first.fromSymbol, first.fromRegionId);
     const toNodeId = relationEndpoint(first.toSymbol, first.toRegionId);
-    const endpointsEmitted = [fromNodeId, toNodeId].every(
-      (nodeId) => nodes.find((node) => node.id === nodeId)?.disposition === 'emitted',
-    );
     edges.push({
       id: topologyId('edge', first.kind, fromNodeId, toNodeId),
       kind: first.kind,
       fromNodeId,
       toNodeId,
       directed: true,
-      disposition:
-        endpointsEmitted || presentedRelationKeys.has(systemMapRegionRelationKey(first)) ? 'emitted' : 'folded',
+      disposition: 'folded',
       evidence: uniqueExplorationEvidence(
         bucket.map((relation) => ({
           method: relation.evidence,
@@ -1136,12 +1163,11 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
   for (const boundary of input.externalBoundaries) {
     const nodeId = topologyId('external', boundary.kind, boundary.name);
     const fromNodeIds = uniqueSorted(boundary.fromRegionIds);
-    const emitted = fromNodeIds.some((id) => presentedNodeIds.has(id));
     nodes.push({
       id: nodeId,
       kind: boundary.kind,
       label: boundary.name,
-      disposition: emitted ? 'emitted' : 'folded',
+      disposition: 'folded',
       location: null,
       anchorIds: [],
       attributes: {},
@@ -1153,7 +1179,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
         fromNodeId,
         toNodeId: nodeId,
         directed: true,
-        disposition: presentedNodeIds.has(fromNodeId) ? 'emitted' : 'folded',
+        disposition: 'folded',
         evidence: [
           {
             method: 'indexed-or-source-import',
@@ -1217,7 +1243,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     });
   });
 
-  return createExplorationTopology({
+  const completeTopology = createExplorationTopology({
     anchors,
     nodes,
     edges,
@@ -1230,6 +1256,44 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
         ? [`${input.omittedSymbolCandidates} ambiguous symbol candidate(s) were omitted`]
         : [],
   });
+  const selectedTopology = selectExplorationTopology(completeTopology, {
+    expandedFrontierIds: input.topologyFrontiers,
+  });
+  for (const frontier of selectedTopology.frontiers) {
+    if (frontier.disposition !== 'folded') continue;
+    frontier.expansion = systemMapFrontierExpansionCommand(input, frontier.id);
+  }
+  return selectedTopology;
+}
+
+function systemMapFrontierExpansionCommand(input: SystemMapTopologyInput, frontierId: string): string {
+  const selectors = [
+    ...input.anchors.flatMap((anchor) =>
+      anchor.kind === 'literal'
+        ? [`--search ${shellArgument(anchor.query)}`]
+        : [`--symbol ${shellArgument(anchor.query)}`],
+    ),
+    `--depth ${input.maxDepth}`,
+    ...input.requestedRelationKinds.map((relation) => `--relation ${shellArgument(relation)}`),
+    `--evidence-floor ${shellArgument(input.evidenceFloor)}`,
+    ...input.includedSourceScopes.map((scope) => `--source-scope ${shellArgument(scope)}`),
+    `--topology-characters ${input.maxTopologyCharacters}`,
+    ...input.expandedRegionIds.map((regionId) => `--expand ${shellArgument(regionId)}`),
+    ...input.topologyFrontiers.map((id) => `--frontier ${shellArgument(id)}`),
+    `--frontier ${shellArgument(frontierId)}`,
+  ];
+  return `scip-query system-map ${selectors.join(' ')}`;
+}
+
+function topologyRegionIds(topology: ExplorationTopology): Set<string> {
+  const regionIds = new Set<string>();
+  for (const node of topology.nodes) {
+    if (node.disposition !== 'emitted') continue;
+    if (node.kind === 'structural-region') regionIds.add(node.id);
+    const regionId = node.attributes['regionId'];
+    if (typeof regionId === 'string') regionIds.add(regionId);
+  }
+  return regionIds;
 }
 
 function uniqueExplorationEvidence(evidence: readonly ExplorationEvidenceSource[]): ExplorationEvidenceSource[] {
@@ -1305,8 +1369,11 @@ function buildSystemMapPresentation(
   regionRelations: readonly SystemMapRegionRelation[],
   directSeedRegionIds: ReadonlySet<string>,
   expandedIds: ReadonlySet<string>,
+  preferredRegionIds?: ReadonlySet<string>,
 ): SystemMapPresentation {
-  const rankedRegions = [...regions].sort((left, right) => compareExpansionRegions(left, right, directSeedRegionIds));
+  const rankedRegions = [...regions]
+    .sort((left, right) => compareExpansionRegions(left, right, directSeedRegionIds))
+    .filter((region) => !preferredRegionIds || preferredRegionIds.has(region.id) || expandedIds.has(region.id));
   const relationReserve = regionRelations.length > 0 ? Math.floor(maxCharacters * 0.4) : 0;
   const regionBudget = maxCharacters - relationReserve;
   const selectedRegionIds = new Set<string>();
@@ -1341,7 +1408,9 @@ function buildSystemMapPresentation(
   const totalEstimatedCharacters =
     regions.reduce((total, region) => total + estimateRegionCharacters(region), 0) +
     regionRelations.reduce((total, relation) => total + estimateRelationCharacters(relation), 0);
-  const complete = omittedRegionIds.length === 0 && omittedRelations === 0;
+  const complete =
+    rankedRegions.every((region) => selectedRegionIds.has(region.id)) &&
+    relationKeys.length === eligibleRelations.length;
   const selectors = [
     ...searches.map((search) => `--search ${shellArgument(search)}`),
     ...symbols.map((symbol) => `--symbol ${shellArgument(symbol)}`),

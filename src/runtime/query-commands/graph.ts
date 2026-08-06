@@ -466,6 +466,7 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
     evidenceFloor: stringOptionValue(opts, 'evidenceFloor') as SystemMapEvidenceFloor | undefined,
     sourceScopes: stringArrayOptionValue(opts, 'sourceScope') as SystemMapSourceScope[],
     maxTopologyCharacters: definedNumberOption(opts, 'topologyCharacters', 20_000),
+    topologyFrontiers: stringArrayOptionValue(opts, 'frontier'),
   });
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('system-map', args, opts, result, {
@@ -510,6 +511,55 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
     }
     if ((anchor.omittedSymbolCandidates ?? 0) > 0) {
       console.log(`    ${anchor.omittedSymbolCandidates} additional candidate(s) omitted by symbol resolution.`);
+    }
+  }
+
+  if (result.topology) {
+    const topologyNodeById = new Map(result.topology.nodes.map((node) => [node.id, node]));
+    const emittedNodes = result.topology.nodes.filter((node) => node.disposition === 'emitted');
+    const emittedEdges = result.topology.edges.filter(
+      (edge) =>
+        edge.disposition === 'emitted' && edge.kind !== 'structural-membership' && edge.fromNodeId !== edge.toNodeId,
+    );
+    const foldedFrontiers = result.topology.frontiers.filter((frontier) => frontier.disposition === 'folded');
+    console.log('\n═══ QUERY CONNECTOR GRAPH ═══');
+    console.log(
+      `  ${emittedNodes.length}/${result.topology.nodes.length} node(s) selected; ` +
+        `${emittedEdges.length} typed connector edge(s); ${foldedFrontiers.length} reversible frontier group(s).`,
+    );
+    for (const path of result.topology.paths) {
+      const labels = path.nodeIds.map((id) => topologyNodeById.get(id)?.label ?? id);
+      console.log(`  [${path.status}] ${labels.length > 0 ? labels.join(' ↔ ') : 'no proved connector'}`);
+    }
+    for (const edge of emittedEdges.slice(0, 24)) {
+      const from = topologyNodeById.get(edge.fromNodeId)?.label ?? edge.fromNodeId;
+      const to = topologyNodeById.get(edge.toNodeId)?.label ?? edge.toNodeId;
+      const strengths = [...new Set(edge.evidence.map((source) => source.strength))].join('/');
+      console.log(`  ${from} → ${to} — ${edge.kind} [${strengths}]`);
+    }
+    if (emittedEdges.length > 24) console.log(`  +${emittedEdges.length - 24} selected connector edge(s).`);
+    const shownFrontiers = foldedFrontiers.slice(0, 8);
+    for (const frontier of shownFrontiers) {
+      const examples = frontier.memberNodeIds
+        .slice(0, 2)
+        .map((id) => topologyNodeById.get(id)?.label ?? id)
+        .join(', ');
+      console.log(
+        `  [folded ${frontier.id}] ${frontier.memberCount} node(s), ${frontier.edgeIds.length} edge(s)` +
+          `${examples ? ` — ${examples}` : ''}`,
+      );
+    }
+    const firstExpansion = shownFrontiers.find((frontier) => frontier.expansion)?.expansion;
+    if (firstExpansion) {
+      const expansionBase = firstExpansion.replace(/ --frontier '[^']+'$/u, '');
+      console.log(
+        `  Expand shown frontiers together: ${expansionBase} ${shownFrontiers
+          .map((frontier) => `--frontier '${frontier.id}'`)
+          .join(' ')}`,
+      );
+    }
+    if (foldedFrontiers.length > 8) {
+      console.log(`  +${foldedFrontiers.length - 8} frontier group(s); use --json for every exact member id.`);
     }
   }
 
@@ -1085,6 +1135,12 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
       option(
         '--expand <region-id>',
         'Expand one structural region; repeat to expand several together',
+        collectValues,
+        [],
+      ),
+      option(
+        '--frontier <frontier-id>',
+        'Expand one accounted topology frontier; repeat to expand several together',
         collectValues,
         [],
       ),

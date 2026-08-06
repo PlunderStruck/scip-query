@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createExplorationTopology,
+  selectExplorationTopology,
   type ExplorationTopologyInput,
 } from '../../../src/queries/internal/exploration-topology.js';
 
@@ -53,6 +54,95 @@ describe('universal exploration topology', () => {
 
     expect(topology.coverage.status).toBe('incomplete');
     expect(topology.coverage.explanation).toContain('one ambiguous compiler candidate was omitted');
+  });
+
+  it('selects anchor connectors and folds the remaining component with exact membership', () => {
+    const selected = selectExplorationTopology(createExplorationTopology(fixtureInput()), { maxSelectedNodes: 2 });
+
+    expect(selected.nodes.filter((node) => node.disposition === 'emitted').map((node) => node.id)).toEqual([
+      'collector',
+      'consumer',
+    ]);
+    expect(selected.paths).toEqual([
+      expect.objectContaining({
+        status: 'connected',
+        nodeIds: ['collector', 'consumer'],
+        edgeIds: ['runtime-edge'],
+      }),
+    ]);
+    expect(selected.frontiers).toEqual([
+      expect.objectContaining({
+        fromNodeIds: ['collector'],
+        memberNodeIds: ['stage'],
+        memberCount: 1,
+        edgeIds: ['compiler-edge'],
+      }),
+    ]);
+    expect(selected.coverage).toMatchObject({
+      nodes: { total: 3, emitted: 2, folded: 1 },
+      edges: { total: 2, emitted: 1, folded: 1 },
+    });
+  });
+
+  it('expands a frontier losslessly and reconstructs the oracle graph', () => {
+    const topology = createExplorationTopology(fixtureInput());
+    const selected = selectExplorationTopology(topology, { maxSelectedNodes: 2 });
+    const expanded = selectExplorationTopology(topology, {
+      maxSelectedNodes: 2,
+      expandedFrontierIds: selected.frontiers.map((frontier) => frontier.id),
+    });
+
+    expect(expanded.nodes.filter((node) => node.disposition === 'emitted').map((node) => node.id)).toEqual(
+      topology.nodes.map((node) => node.id),
+    );
+    expect(expanded.edges.filter((edge) => edge.disposition === 'emitted').map((edge) => edge.id)).toEqual(
+      topology.edges.map((edge) => edge.id),
+    );
+    expect(expanded.frontiers).toEqual([]);
+  });
+
+  it('accounts for edges deeper than the first folded frontier edge', () => {
+    const input = fixtureInput();
+    input.nodes = [
+      ...input.nodes,
+      {
+        id: 'bootstrap',
+        kind: 'symbol',
+        label: 'bootstrapRuntimeBoundaries',
+        disposition: 'folded',
+        location: { file: 'src/reindex/bootstrap.ts', line: 5 },
+        anchorIds: [],
+        attributes: {},
+      },
+    ];
+    input.edges = [
+      ...input.edges,
+      {
+        id: 'bootstrap-edge',
+        kind: 'compiler:call',
+        fromNodeId: 'bootstrap',
+        toNodeId: 'stage',
+        directed: true,
+        disposition: 'folded',
+        evidence: [
+          {
+            method: 'semantic-callee',
+            strength: 'exact',
+            identity: 'bootstrap -> stage',
+            location: { file: 'src/reindex/bootstrap.ts', line: 8 },
+          },
+        ],
+      },
+    ];
+
+    const selected = selectExplorationTopology(createExplorationTopology(input), { maxSelectedNodes: 2 });
+
+    expect(selected.frontiers).toEqual([
+      expect.objectContaining({
+        memberNodeIds: ['bootstrap', 'stage'],
+        edgeIds: ['bootstrap-edge', 'compiler-edge'],
+      }),
+    ]);
   });
 });
 
