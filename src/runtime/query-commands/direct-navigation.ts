@@ -302,13 +302,14 @@ const handleSourceSession = dbCommand(({ opts }) => {
   const reset = booleanOptionValue(opts, 'reset');
   const summary = sourceEmissionSessionSummary(reset);
   if (!summary.enabled) {
-    render.empty(summary.reason ?? 'Source-session deduplication is unavailable.');
+    render.empty(summary.reason ?? 'Exploration-session deduplication is unavailable.');
     return;
   }
   console.log(
     reset
-      ? 'Source-session ledger reset; subsequent exploration will emit source again.'
-      : `Source session: ${summary.uniqueLines.toLocaleString()} unique source line(s) delivered across ${summary.emissions.toLocaleString()} emission(s).`,
+      ? 'Exploration-session ledger reset; subsequent exploration will emit evidence again.'
+      : `Exploration session: ${summary.uniqueLines.toLocaleString()} unique source line(s) and ` +
+          `${summary.evidenceItems.toLocaleString()} graph evidence item(s) delivered across ${summary.emissions.toLocaleString()} emission(s).`,
   );
   if (!reset && summary.rows.length > 0) console.log(summary.rows.join('\n'));
 });
@@ -767,11 +768,11 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'session',
     command: 'session',
-    description: 'Show source ranges already delivered in this agent exploration session',
-    options: [option('--reset', 'Clear this agent source-session ledger')],
+    description: 'Show evidence already delivered in this agent exploration session',
+    options: [option('--reset', 'Clear this agent exploration-session ledger')],
     agent: agentContract(
-      'Which indexed source ranges have already been delivered in this exploration session?',
-      'prior command ordinals and exact source ranges',
+      'Which indexed source ranges and graph facts have already been delivered in this exploration session?',
+      'prior command ordinals, exact source ranges, and content-bound graph receipts',
       [],
       'complete',
       'repository',

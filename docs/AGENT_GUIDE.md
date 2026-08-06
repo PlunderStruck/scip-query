@@ -112,9 +112,11 @@ scip-query adds relationship and cleanup evidence.
   ranked scope commands. There is no transport cursor to drain. Narrow to a
   distinctive literal or one relevant scope; use `search --full` only after
   deliberately narrowing when every remaining source window matters.
-- Exact code and definition packets always render whole. An explicit
-  `SCIP_QUERY_SESSION` may cite only wholly prior-emitted locating previews;
-  partially covered previews render whole.
+- With an explicit `SCIP_QUERY_SESSION`, a complete source unit or graph
+  unit/edge may be replaced only by a visible receipt for content-identical
+  evidence from the same index generation. Partial source coverage never
+  suppresses an exact unit; changed bytes, changed graph content, a new
+  generation, or `--reemit` force full evidence.
 - Follow an emitted `Continue exactly:` command until transport is complete.
   Coverage expansion commands are optional drilldowns, not transport pages.
 - Use human output for model reading and `--json --result-only` for programs.

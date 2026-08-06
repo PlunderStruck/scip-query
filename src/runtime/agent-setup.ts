@@ -95,7 +95,7 @@ function writeInstructionsBlock(projectRoot: string, result: SetupAgentResult): 
     '- Before claiming what every callsite passes, read the `trace` or `evidence` claim-support section. Only an eligible callsite-argument claim is backed by complete syntactic invocations; bounded context is not proof.',
     '- Prefer human output for agent reading. Use `--json --result-only` only for a programmatic consumer.',
     '- Never rerun a successful human command as JSON. Before each drilldown, name the still-unanswered fact and stop when no such fact remains; every additional reasoning step pays again for the accumulated context.',
-    '- Exact code and definition packets always render whole. An explicit SCIP_QUERY_SESSION may cite only wholly prior-emitted locating previews.',
+    '- With an explicit SCIP_QUERY_SESSION, a complete source unit or graph unit/edge may be replaced only by a visible receipt for content-identical evidence from the same index generation. Partial source coverage never suppresses an exact unit; changed bytes, changed graph content, a new generation, or --reemit force full evidence.',
     '- If output emits `Continue exactly:`, run that command unchanged until transport is complete.',
     '- When architecture rules are configured and clean, setup installs one checkout-local Stop hook. It checks architecture only after indexed source changes.',
     '- Commit relevant `.scipquery/suppressions/*.json` records with the change. Do not commit local agent-tool settings.',

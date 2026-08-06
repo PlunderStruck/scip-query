@@ -26,6 +26,7 @@ import {
 } from '../command-kit/command-execution.js';
 import { budgetedSectionedQueryCommand, tableQueryCommand } from '../command-kit/query-command-builders.js';
 import { displayLine, render } from '../render.js';
+import { renderSessionEvidence } from '../source-emission-session.js';
 import { symbolResolutionBefore, symbolResolutionEmptyMessage, withSymbolResolutionJson } from './symbol-resolution.js';
 
 const handleBottlenecks = budgetedTableCommand('bottlenecks', {
@@ -590,24 +591,39 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
         `  ${step.order + 1}. [${step.role}; ${step.kind}] ${compactSystemMapIdentity(step.label)}${location}`,
       );
       if (!step.behavior) continue;
-      console.log(
+      const behaviorLines = [
         `     [${step.behavior.kind}; ${step.behavior.constructKind}] ${step.behavior.signature} ` +
           `(${step.behavior.renderedCharacters}/${step.behavior.rawCharacters} chars; ` +
           `${step.behavior.coverage.representedStatements}/${step.behavior.coverage.sourceStatements} detected behavior statements selected)`,
-      );
+      ];
       for (const line of step.behavior.lines) {
         const signals = line.signals.length > 0 ? ` [${line.signals.join(',')}]` : '';
-        console.log(`       ${displayLine(line.line)}${signals} ${'  '.repeat(line.depth)}${line.text}`);
+        behaviorLines.push(`       ${displayLine(line.line)}${signals} ${'  '.repeat(line.depth)}${line.text}`);
       }
+      console.log(
+        renderSessionEvidence({
+          kind: 'unit',
+          identity: step.nodeId,
+          content: behaviorLines.join('\n'),
+          label: compactSystemMapIdentity(step.label),
+          indent: '     ',
+        }),
+      );
     }
     if (result.behavior.transitions.length > 0) {
       console.log('  Transitions (arrows preserve repository-edge direction):');
       for (const transition of result.behavior.transitions) {
         const evidence = transition.evidence.map((source) => `${source.method}/${source.strength}`).join(', ');
+        const from = stepNumberById.get(transition.fromStepId) ?? '?';
+        const to = stepNumberById.get(transition.toStepId) ?? '?';
         console.log(
-          `    ${stepNumberById.get(transition.fromStepId) ?? '?'} → ` +
-            `${stepNumberById.get(transition.toStepId) ?? '?'} — ${transition.kind}; ` +
-            `path=${transition.pathTraversal}; ${evidence}`,
+          renderSessionEvidence({
+            kind: 'edge',
+            identity: transition.edgeId,
+            content: `    ${from} → ${to} — ${transition.kind}; path=${transition.pathTraversal}; ${evidence}`,
+            label: `${from} → ${to} ${transition.kind}`,
+            indent: '    ',
+          }),
         );
       }
     }

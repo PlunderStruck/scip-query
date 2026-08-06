@@ -11,7 +11,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 Commands with `--json` share three structured modes: plain `--json` emits the stable public envelope, `--json --result-only` emits only the command payload, and `--json --compact` minifies either form for a program. Agents should prefer ordinary human output. See [CLI output modes](CLI_JSON_OUTPUT.md).
 
 Every command accepts `--output-page-size <characters>` and `--output-cursor <cursor>`. Run normally without choosing a page size: oversized human output stays readable text and prints one exact continuation command; oversized JSON prints the exact command that opts into versioned JSON page envelopes.
-Exact code, definition, and source-inspection units always render whole. Cross-command source citations are off by default; an explicit `SCIP_QUERY_SESSION` may replace only wholly prior-emitted locating previews. Partially covered previews render whole. Use global `--reemit` only to recover a cited preview that is no longer in context.
+Cross-command evidence citations are off by default. With an explicit `SCIP_QUERY_SESSION`, a complete source unit or graph unit/edge may be replaced only by a visible receipt for content-identical evidence from the same index generation. Partial source coverage never suppresses an exact unit; changed bytes, changed graph content, a new generation, or global `--reemit` force full evidence.
 
 ### Indexing
 
@@ -32,7 +32,7 @@ Exact code, definition, and source-inspection units always render whole. Cross-c
 | Command | Description | Options |
 |---|---|---|
 | `files <pattern>` | Find current project files matching a path pattern | `--json`<br>`--result-only`<br>`--compact` |
-| `session` | Show source ranges already delivered in this agent exploration session | `--reset` |
+| `session` | Show evidence already delivered in this agent exploration session | `--reset` |
 | `inspect` | Batch related searches, symbols, and source locations into one deduplicated source packet | `--search <text>`<br>`--symbol <symbol>`<br>`--at <file:line>`<br>`-s, --scope <path>`<br>`-C, --context <n>`<br>`-n, --limit <n>`<br>`--max-units <n>`<br>`--max-characters <n>`<br>`--view <view>`<br>`--unit-lines <n>`<br>`--total-lines <n>`<br>`--include <part>`<br>`--evidence-budget <channel=n>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `search <text>` | Count current project text matches and preview a bounded, recoverable identity and source manifest | `-s, --scope <path>`<br>`-C, --context <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--regexp`<br>`-i, --ignore-case`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `methods <className>` | List methods of one exactly resolved class; ambiguity and missing targets fail explicitly | `--json`<br>`--result-only`<br>`--compact` |

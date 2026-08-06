@@ -46,8 +46,8 @@ program
     parseOutputPageSize,
   )
   .option('--output-cursor <cursor>', 'Continue a bounded output page')
-  .option('--no-session', 'Disable the explicit preview-source citation ledger')
-  .option('--reemit', 'Recovery only: render cited previews again; exact source units always render fully');
+  .option('--no-session', 'Disable the explicit exploration evidence ledger')
+  .option('--reemit', 'Recovery only: render source and graph evidence again instead of citing session receipts');
 
 const commandDescriptors = await loadInvocationCommandDescriptors(cliEntrypoint ? process.argv[2] : undefined);
 registerCommandDescriptors(program, commandDescriptors);

@@ -258,9 +258,9 @@ export interface CliOutputPaginationOptions {
   argv: readonly string[];
   cwd: string;
   json: boolean;
-  /** Reuse an agent-scoped ledger to replace repeated source with citations. */
+  /** Reuse an agent-scoped ledger to replace repeated source and graph evidence with citations. */
   sourceSession?: boolean;
-  /** Render full source even when the current agent session saw it already. */
+  /** Render complete evidence even when the current agent session saw it already. */
   reemitSource?: boolean;
   pageSize?: number;
   cursor?: string;

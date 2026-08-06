@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   bindSourceEmissionGeneration,
   finalizeSourceEmission,
+  renderSessionEvidence,
   renderSourceEvidence,
   rollbackSourceEmission,
   runWithSourceEmissionInvocation,
@@ -66,8 +67,7 @@ describe.sequential('source emission sessions', () => {
     expect(second).toContain('13  thirteen');
     expect(second).toContain('14  fourteen');
     expect(second).not.toContain('previously emitted');
-    expect(third).toContain('src/example.ts:11-12  [source previously emitted: session #1 via code; not repeated]');
-    expect(third).toContain('src/example.ts:13-14  [source previously emitted: session #2 via search; not repeated]');
+    expect(third).toContain('src/example.ts:11-14  [source previously emitted: session #2 via search; not repeated]');
     expect(third).not.toContain('ten');
     expect(fourth).toContain('10  ten');
     expect(fourth).toContain('14  fourteen');
@@ -82,7 +82,7 @@ describe.sequential('source emission sessions', () => {
     ]);
   });
 
-  it('renders an exact unit identically after the session has already recorded it', () => {
+  it('replaces only the same complete exact unit with a visible receipt', () => {
     const render = () =>
       renderSourceEvidence({
         relativePath: 'src/exact.ts',
@@ -92,8 +92,78 @@ describe.sequential('source emission sessions', () => {
       });
     const first = invocation('code', render);
     const second = invocation('code', render);
-    expect(second).toBe(first);
-    expect(second).not.toContain('previously emitted');
+    expect(first).toContain('export function exact()');
+    expect(second).toContain('src/exact.ts:5-7  [source previously emitted: session #1 via code; not repeated]');
+    expect(second).not.toContain('export function exact()');
+  });
+
+  it('re-emits an exact unit when current bytes change without a generation change', () => {
+    invocation('code', () =>
+      renderSourceEvidence({
+        relativePath: 'src/live.ts',
+        startLine: 4,
+        source: 'export const state = "before";',
+        sessionPolicy: 'exact-unit',
+        ownerSymbol: 'state',
+      }),
+    );
+    const changed = invocation('code', () =>
+      renderSourceEvidence({
+        relativePath: 'src/live.ts',
+        startLine: 4,
+        source: 'export const state = "after";',
+        sessionPolicy: 'exact-unit',
+        ownerSymbol: 'state',
+      }),
+    );
+    expect(changed).toContain('state = "after"');
+    expect(changed).not.toContain('previously emitted');
+  });
+
+  it('cites content-bound graph units and edges but re-emits changed or reversioned evidence', () => {
+    const unit = () =>
+      renderSessionEvidence({
+        kind: 'unit',
+        identity: 'symbol:demo',
+        label: 'demo()',
+        content: '  demo behavior',
+        indent: '  ',
+      });
+    const edge = () =>
+      renderSessionEvidence({
+        kind: 'edge',
+        identity: 'edge:demo-to-store',
+        label: 'demo → store call',
+        content: '  demo → store — call; compiler/graph-fact',
+        indent: '  ',
+      });
+    const first = invocation('system-map', () => `${unit()}\n${edge()}`);
+    const second = invocation('inspect', () => `${unit()}\n${edge()}`);
+    const changed = invocation('inspect', () =>
+      renderSessionEvidence({
+        kind: 'unit',
+        identity: 'symbol:demo',
+        label: 'demo()',
+        content: '  changed demo behavior',
+      }),
+    );
+    const reemitted = invocation('inspect', unit, true, true);
+    const nextGeneration = invocation('inspect', unit, true, false, 'generation-b');
+
+    expect(first).toContain('demo behavior');
+    expect(first).toContain('demo → store — call');
+    expect(second).toMatch(/unit evidence previously emitted: receipt ev-[0-9a-f]{12}/u);
+    expect(second).toMatch(/edge evidence previously emitted: receipt ev-[0-9a-f]{12}/u);
+    expect(second).toContain('session #1 via system-map');
+    expect(second).not.toContain('demo → store — call; compiler');
+    expect(changed).toContain('changed demo behavior');
+    expect(changed).not.toContain('previously emitted');
+    expect(reemitted).toBe('  demo behavior');
+    expect(nextGeneration).toBe('  demo behavior');
+
+    const summary = invocation('session', () => sourceEmissionSessionSummary(), false);
+    expect(summary).toMatchObject({ enabled: true, evidenceItems: 4, emissions: 3 });
+    expect(summary.rows.join('\n')).toMatch(/ev-[0-9a-f]{12} unit demo\(\)/u);
   });
 
   it('does not remember speculative or incompletely delivered source', () => {

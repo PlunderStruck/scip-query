@@ -277,11 +277,12 @@ the default expands only a representative source subset. Use the emitted
 batched drilldowns for selected owners. `search --full` expands every source
 window and is not needed to establish complete text-match coverage.
 
-Exact code, definition, and source-inspection units always render whole.
-Cross-command source citations are off by default. With an explicit
-`SCIP_QUERY_SESSION`, only a locating preview that was wholly emitted earlier
-may become a citation; partially covered previews render whole. `--reemit` is
-the recovery control when a cited preview is no longer in context.
+Cross-command evidence citations are off by default. With an explicit
+`SCIP_QUERY_SESSION`, a complete source unit or graph unit/edge may be replaced
+only by a visible receipt for content-identical evidence from the same index
+generation. Partial source coverage never suppresses an exact unit. Changed
+bytes, changed graph content, a new generation, or `--reemit` force full
+evidence.
 
 If output prints `Continue exactly:`, run the emitted command unchanged until
 transport is complete. Transport completion means every rendered character was

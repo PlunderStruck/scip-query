@@ -8,7 +8,7 @@ import { tryAcquireProcessFileLock, type ProcessFileLock } from '../platform/pro
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import { displayLine, displayPathRange } from './render.js';
 
-const SOURCE_EMISSION_LEDGER_VERSION = 1;
+const SOURCE_EMISSION_LEDGER_VERSION = 2;
 const SOURCE_EMISSION_SESSION_ENV = 'SCIP_QUERY_SESSION';
 const SOURCE_EMISSION_ROOT_ENV = 'SCIP_QUERY_SESSION_DIR';
 const MAX_SESSION_NAME_CHARACTERS = 128;
@@ -19,7 +19,19 @@ interface PersistedSourceRange {
   endLine: number;
   ordinal: number;
   command: string;
+  policy: 'exact-unit' | 'preview';
+  lineHashes: string[];
   ownerSymbol?: string;
+}
+
+interface PersistedEvidenceItem {
+  kind: 'unit' | 'edge';
+  identity: string;
+  contentHash: string;
+  receiptId: string;
+  ordinal: number;
+  command: string;
+  label?: string;
 }
 
 interface SourceEmissionLedger {
@@ -30,13 +42,24 @@ interface SourceEmissionLedger {
   nextOrdinal: number;
   updatedAt: string;
   ranges: PersistedSourceRange[];
+  evidence: PersistedEvidenceItem[];
 }
 
 interface StagedSourceRange {
   relativePath: string;
   startLine: number;
   endLine: number;
+  policy: 'exact-unit' | 'preview';
+  lineHashes: string[];
   ownerSymbol?: string;
+}
+
+interface StagedEvidenceItem {
+  kind: PersistedEvidenceItem['kind'];
+  identity: string;
+  contentHash: string;
+  receiptId: string;
+  label?: string;
 }
 
 interface SourceEmissionInvocation {
@@ -48,6 +71,7 @@ interface SourceEmissionInvocation {
   generationIdentity?: string;
   state?: ActiveSourceEmissionSession | null;
   staged: StagedSourceRange[];
+  stagedEvidence: StagedEvidenceItem[];
   finalized: boolean;
 }
 
@@ -100,10 +124,22 @@ export interface SourceEvidenceRenderOptions {
   blankAfterHeader?: boolean;
 }
 
+export interface SessionEvidenceRenderOptions {
+  kind: PersistedEvidenceItem['kind'];
+  /** Stable compiler/topology identity for the returned fact. */
+  identity: string;
+  /** Complete rendered evidence that may be replaced only by an exact receipt. */
+  content: string;
+  /** Short human identity retained in the visible receipt reference. */
+  label?: string;
+  indent?: string;
+}
+
 export interface SourceEmissionSessionSummary {
   enabled: boolean;
   reason?: string;
   uniqueLines: number;
+  evidenceItems: number;
   emissions: number;
   rows: string[];
 }
@@ -112,8 +148,8 @@ const invocationStorage = new AsyncLocalStorage<SourceEmissionInvocation>();
 
 /**
  * Binds one CLI invocation to source rendering state. Cross-command preview
- * suppression is opt-in via an explicit SCIP_QUERY_SESSION. Exact source units
- * are recorded for later preview citations but are never suppressed themselves.
+ * suppression is opt-in via an explicit SCIP_QUERY_SESSION. Source and graph
+ * evidence are suppressed only by a content-identical, generation-bound receipt.
  */
 export function runWithSourceEmissionInvocation<T>(options: SourceEmissionInvocationOptions, run: () => T): T {
   const sessionIdentity =
@@ -125,6 +161,7 @@ export function runWithSourceEmissionInvocation<T>(options: SourceEmissionInvoca
     projectRoot: resolve(options.cwd),
     sessionIdentity,
     staged: [],
+    stagedEvidence: [],
     finalized: false,
   };
   return invocationStorage.run(invocation, run);
@@ -161,10 +198,11 @@ export function finalizeSourceEmission(deliveredCompleteOutput: boolean): void {
   const active = invocation.state;
   if (!active) {
     invocation.staged.length = 0;
+    invocation.stagedEvidence.length = 0;
     return;
   }
   try {
-    if (deliveredCompleteOutput && invocation.staged.length > 0) {
+    if (deliveredCompleteOutput && (invocation.staged.length > 0 || invocation.stagedEvidence.length > 0)) {
       const ordinal = active.ledger.nextOrdinal;
       const ranges = coalesceStagedRanges(invocation.staged).map(
         (range): PersistedSourceRange => ({
@@ -173,7 +211,15 @@ export function finalizeSourceEmission(deliveredCompleteOutput: boolean): void {
           command: invocation.command,
         }),
       );
+      const evidence = uniqueStagedEvidence(invocation.stagedEvidence).map(
+        (item): PersistedEvidenceItem => ({
+          ...item,
+          ordinal,
+          command: invocation.command,
+        }),
+      );
       active.ledger.ranges.push(...ranges);
+      active.ledger.evidence.push(...evidence);
       active.ledger.nextOrdinal += 1;
       active.ledger.updatedAt = new Date().toISOString();
       writeJsonAtomic(active.ledgerPath, active.ledger, { spacing: 2, trailingNewline: true });
@@ -185,6 +231,7 @@ export function finalizeSourceEmission(deliveredCompleteOutput: boolean): void {
     active.lock.release();
     invocation.state = null;
     invocation.staged.length = 0;
+    invocation.stagedEvidence.length = 0;
   }
 }
 
@@ -233,6 +280,37 @@ export function renderSourceEvidence(options: SourceEvidenceRenderOptions): stri
     .join('\n');
 }
 
+/**
+ * Render one complete graph unit or edge, or a visible reference to the exact
+ * same generation-bound evidence delivered by an earlier command.
+ */
+export function renderSessionEvidence(options: SessionEvidenceRenderOptions): string {
+  const invocation = invocationStorage.getStore();
+  if (!invocation || !invocation.enabled) return options.content;
+  const active = activateSession(invocation);
+  if (!active) return options.content;
+  const contentHash = digest(options.content);
+  const prior = findLastMatching(
+    active.ledger.evidence,
+    (item) => item.kind === options.kind && item.identity === options.identity && item.contentHash === contentHash,
+  );
+  if (prior && !invocation.reemit) {
+    const label = options.label ? `; ${boundedEvidenceLabel(options.label)}` : '';
+    return (
+      `${options.indent ?? ''}[${options.kind} evidence previously emitted: receipt ${prior.receiptId}; ` +
+      `session #${prior.ordinal} via ${prior.command}${label}; not repeated]`
+    );
+  }
+  invocation.stagedEvidence.push({
+    kind: options.kind,
+    identity: options.identity,
+    contentHash,
+    receiptId: evidenceReceiptId(options.kind, options.identity, contentHash),
+    ...(options.label ? { label: boundedEvidenceLabel(options.label) } : {}),
+  });
+  return options.content;
+}
+
 export function sourceEmissionSessionSummary(reset = false): SourceEmissionSessionSummary {
   const invocation = invocationStorage.getStore();
   if (!invocation?.enabled) {
@@ -240,6 +318,7 @@ export function sourceEmissionSessionSummary(reset = false): SourceEmissionSessi
       enabled: false,
       reason: 'No explicit SCIP_QUERY_SESSION is active; source packets render independently.',
       uniqueLines: 0,
+      evidenceItems: 0,
       emissions: 0,
       rows: [],
     };
@@ -248,14 +327,17 @@ export function sourceEmissionSessionSummary(reset = false): SourceEmissionSessi
   if (!active) {
     return {
       enabled: false,
-      reason: 'The source-session ledger was unavailable or contended; source output is fail-open for this command.',
+      reason:
+        'The exploration-session ledger was unavailable or contended; evidence output is fail-open for this command.',
       uniqueLines: 0,
+      evidenceItems: 0,
       emissions: 0,
       rows: [],
     };
   }
   if (reset) {
     active.ledger.ranges = [];
+    active.ledger.evidence = [];
     active.ledger.nextOrdinal = 1;
     active.ledger.updatedAt = new Date().toISOString();
     try {
@@ -263,8 +345,9 @@ export function sourceEmissionSessionSummary(reset = false): SourceEmissionSessi
     } catch {
       return {
         enabled: false,
-        reason: 'The source-session ledger could not be reset; source output remains fail-open.',
+        reason: 'The exploration-session ledger could not be reset; evidence output remains fail-open.',
         uniqueLines: 0,
+        evidenceItems: 0,
         emissions: 0,
         rows: [],
       };
@@ -276,21 +359,43 @@ export function sourceEmissionSessionSummary(reset = false): SourceEmissionSessi
     ranges.push(range);
     byOrdinal.set(range.ordinal, ranges);
   }
-  const rows = [...byOrdinal.entries()]
-    .sort(([left], [right]) => left - right)
-    .map(([ordinal, ranges]) => {
-      const command = ranges[0]?.command ?? 'unknown';
-      const citations = ranges
-        .slice(0, 8)
-        .map((range) => displayPathRange(range.relativePath, range.startLine, range.endLine))
-        .join(', ');
-      const omitted = ranges.length > 8 ? `, ... ${ranges.length - 8} more range(s)` : '';
-      return `  #${ordinal} ${command}: ${citations}${omitted}`;
-    });
+  const evidenceByOrdinal = new Map<number, PersistedEvidenceItem[]>();
+  for (const item of active.ledger.evidence) {
+    const items = evidenceByOrdinal.get(item.ordinal) ?? [];
+    items.push(item);
+    evidenceByOrdinal.set(item.ordinal, items);
+  }
+  const ordinals = [...new Set([...byOrdinal.keys(), ...evidenceByOrdinal.keys()])].sort((left, right) => left - right);
+  const rows = ordinals.map((ordinal) => {
+    const ranges = byOrdinal.get(ordinal) ?? [];
+    const items = evidenceByOrdinal.get(ordinal) ?? [];
+    const command = ranges[0]?.command ?? items[0]?.command ?? 'unknown';
+    const sourceRow =
+      ranges.length === 0
+        ? null
+        : (() => {
+            const citations = ranges
+              .slice(0, 8)
+              .map((range) => displayPathRange(range.relativePath, range.startLine, range.endLine))
+              .join(', ');
+            const omitted = ranges.length > 8 ? `, ... ${ranges.length - 8} more range(s)` : '';
+            return `  #${ordinal} ${command}: ${citations}${omitted}`;
+          })();
+    if (items.length === 0) return sourceRow!;
+    const receipts = items
+      .slice(0, 8)
+      .map((item) => `${item.receiptId} ${item.kind}${item.label ? ` ${item.label}` : ''}`)
+      .join(', ');
+    const omitted = items.length > 8 ? `, ... ${items.length - 8} more item(s)` : '';
+    return sourceRow
+      ? `${sourceRow}\n     evidence: ${receipts}${omitted}`
+      : `  #${ordinal} ${command}: ${receipts}${omitted}`;
+  });
   return {
     enabled: true,
     uniqueLines: uniqueCoveredLineCount(active.ledger.ranges),
-    emissions: byOrdinal.size,
+    evidenceItems: active.ledger.evidence.length,
+    emissions: new Set([...byOrdinal.keys(), ...evidenceByOrdinal.keys()]).size,
     rows,
   };
 }
@@ -309,11 +414,38 @@ function sourceChunks(
   }
   const active = invocation.enabled ? activateSession(invocation) : null;
   const persisted = active?.ledger.ranges ?? [];
-  const coverage = sourceLines.map((_, index) => coveringEmission(persisted, relativePath, startLine + index));
+  const lineHashes = sourceLines.map(digest);
+  const exactReceipt =
+    sessionPolicy === 'exact-unit' && !invocation.reemit
+      ? findLastMatching(
+          persisted,
+          (range) =>
+            range.policy === 'exact-unit' &&
+            range.relativePath === relativePath &&
+            range.startLine === startLine &&
+            range.endLine === endLine &&
+            range.ownerSymbol === ownerSymbol &&
+            equalStrings(range.lineHashes, lineHashes),
+        )
+      : undefined;
+  if (exactReceipt) {
+    return [
+      {
+        kind: 'covered',
+        startLine,
+        endLine,
+        ordinal: exactReceipt.ordinal,
+        command: exactReceipt.command,
+      },
+    ];
+  }
+  const coverage = sourceLines.map((_, index) =>
+    coveringEmission(persisted, relativePath, startLine + index, lineHashes[index]!),
+  );
   const mayCitePriorPreview =
     sessionPolicy === 'preview' && !invocation.reemit && coverage.every((reference) => reference !== undefined);
   if (!mayCitePriorPreview) {
-    invocation.staged.push({ relativePath, startLine, endLine, ownerSymbol });
+    invocation.staged.push({ relativePath, startLine, endLine, ownerSymbol, policy: sessionPolicy, lineHashes });
     return [{ kind: 'source', startLine, endLine, lines: [...sourceLines] }];
   }
   const chunks: SourceChunk[] = [];
@@ -340,9 +472,15 @@ function coveringEmission(
   persisted: readonly PersistedSourceRange[],
   relativePath: string,
   line: number,
+  lineHash: string,
 ): { ordinal: number | null; command: string } | undefined {
-  const prior = persisted.find(
-    (range) => range.relativePath === relativePath && range.startLine <= line && line <= range.endLine,
+  const prior = findLastMatching(
+    persisted,
+    (range) =>
+      range.relativePath === relativePath &&
+      range.startLine <= line &&
+      line <= range.endLine &&
+      range.lineHashes[line - range.startLine] === lineHash,
   );
   if (prior) return { ordinal: prior.ordinal, command: prior.command };
   return undefined;
@@ -412,6 +550,7 @@ function emptyLedger(invocation: SourceEmissionInvocation): SourceEmissionLedger
     nextOrdinal: 1,
     updatedAt: new Date().toISOString(),
     ranges: [],
+    evidence: [],
   };
 }
 
@@ -421,6 +560,26 @@ function parseLedger(
 ): SourceEmissionLedger {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid source emission ledger.');
   const parsed = value as Partial<SourceEmissionLedger>;
+  const legacyVersion = (value as { version?: unknown }).version;
+  if (
+    legacyVersion === 1 &&
+    parsed.projectRoot === expected.projectRoot &&
+    parsed.generationIdentity === expected.generationIdentity &&
+    parsed.sessionIdentity === expected.sessionIdentity &&
+    Number.isSafeInteger(parsed.nextOrdinal) &&
+    (parsed.nextOrdinal ?? 0) > 0
+  ) {
+    return {
+      version: SOURCE_EMISSION_LEDGER_VERSION,
+      projectRoot: expected.projectRoot,
+      generationIdentity: expected.generationIdentity,
+      sessionIdentity: expected.sessionIdentity,
+      nextOrdinal: parsed.nextOrdinal!,
+      updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : new Date().toISOString(),
+      ranges: [],
+      evidence: [],
+    };
+  }
   if (
     parsed.version !== SOURCE_EMISSION_LEDGER_VERSION ||
     parsed.projectRoot !== expected.projectRoot ||
@@ -429,7 +588,9 @@ function parseLedger(
     !Number.isSafeInteger(parsed.nextOrdinal) ||
     (parsed.nextOrdinal ?? 0) <= 0 ||
     !Array.isArray(parsed.ranges) ||
-    !parsed.ranges.every(validPersistedRange)
+    !parsed.ranges.every(validPersistedRange) ||
+    !Array.isArray(parsed.evidence) ||
+    !parsed.evidence.every(validPersistedEvidenceItem)
   ) {
     throw new Error('Invalid source emission ledger.');
   }
@@ -450,7 +611,30 @@ function validPersistedRange(value: unknown): value is PersistedSourceRange {
     (range.ordinal ?? 0) > 0 &&
     typeof range.command === 'string' &&
     range.command !== '' &&
+    (range.policy === 'exact-unit' || range.policy === 'preview') &&
+    Array.isArray(range.lineHashes) &&
+    range.lineHashes.length === (range.endLine ?? 0) - (range.startLine ?? 0) + 1 &&
+    range.lineHashes.every(isSha256) &&
     (range.ownerSymbol === undefined || typeof range.ownerSymbol === 'string')
+  );
+}
+
+function validPersistedEvidenceItem(value: unknown): value is PersistedEvidenceItem {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const item = value as Partial<PersistedEvidenceItem>;
+  return (
+    (item.kind === 'unit' || item.kind === 'edge') &&
+    typeof item.identity === 'string' &&
+    item.identity !== '' &&
+    typeof item.contentHash === 'string' &&
+    isSha256(item.contentHash) &&
+    typeof item.receiptId === 'string' &&
+    /^ev-[0-9a-f]{12}$/u.test(item.receiptId) &&
+    Number.isSafeInteger(item.ordinal) &&
+    (item.ordinal ?? 0) > 0 &&
+    typeof item.command === 'string' &&
+    item.command !== '' &&
+    (item.label === undefined || typeof item.label === 'string')
   );
 }
 
@@ -468,12 +652,39 @@ function coalesceStagedRanges(ranges: readonly StagedSourceRange[]): StagedSourc
       prior &&
       prior.relativePath === range.relativePath &&
       prior.ownerSymbol === range.ownerSymbol &&
-      range.startLine <= prior.endLine + 1
+      prior.policy === range.policy &&
+      range.startLine <= prior.endLine + 1 &&
+      overlappingHashesAgree(prior, range)
     ) {
+      const offset = range.startLine - prior.startLine;
+      for (let index = 0; index < range.lineHashes.length; index += 1) {
+        prior.lineHashes[offset + index] ??= range.lineHashes[index]!;
+      }
       prior.endLine = Math.max(prior.endLine, range.endLine);
     } else {
-      result.push({ ...range });
+      result.push({ ...range, lineHashes: [...range.lineHashes] });
     }
+  }
+  return result;
+}
+
+function overlappingHashesAgree(left: StagedSourceRange, right: StagedSourceRange): boolean {
+  const overlapStart = Math.max(left.startLine, right.startLine);
+  const overlapEnd = Math.min(left.endLine, right.endLine);
+  for (let line = overlapStart; line <= overlapEnd; line += 1) {
+    if (left.lineHashes[line - left.startLine] !== right.lineHashes[line - right.startLine]) return false;
+  }
+  return true;
+}
+
+function uniqueStagedEvidence(items: readonly StagedEvidenceItem[]): StagedEvidenceItem[] {
+  const seen = new Set<string>();
+  const result: StagedEvidenceItem[] = [];
+  for (const item of items) {
+    const key = `${item.kind}\0${item.identity}\0${item.contentHash}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
   }
   return result;
 }
@@ -519,4 +730,36 @@ function resolveSourceEmissionSessionIdentity(): string | undefined {
   if (!explicit) return undefined;
   if (explicit.length > MAX_SESSION_NAME_CHARACTERS || !/^[A-Za-z0-9._:-]+$/.test(explicit)) return undefined;
   return `explicit:${explicit}`;
+}
+
+function evidenceReceiptId(kind: PersistedEvidenceItem['kind'], identity: string, contentHash: string): string {
+  return `ev-${createHash('sha256').update(kind).update('\0').update(identity).update('\0').update(contentHash).digest('hex').slice(0, 12)}`;
+}
+
+function boundedEvidenceLabel(label: string): string {
+  const normalized = label
+    .replace(/[\r\n\t]+/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  return normalized.length <= 160 ? normalized : `${normalized.slice(0, 157)}...`;
+}
+
+function digest(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+function equalStrings(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function findLastMatching<T>(values: readonly T[], predicate: (value: T) => boolean): T | undefined {
+  for (let index = values.length - 1; index >= 0; index -= 1) {
+    const value = values[index]!;
+    if (predicate(value)) return value;
+  }
+  return undefined;
+}
+
+function isSha256(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{64}$/u.test(value);
 }
