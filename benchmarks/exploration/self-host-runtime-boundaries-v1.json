@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "id": "self-host-runtime-boundaries-v1",
+  "question": "How does scip-query collect runtime-boundary evidence during indexing and then use it to connect otherwise disconnected regions in system-map?",
+  "requiredFacts": [
+    {
+      "id": "augmentation-collects",
+      "description": "Post-index augmentation invokes runtime-boundary graph collection.",
+      "answerEvidenceAlternatives": [["runtimeBoundaryAugmentationStage", "collectRuntimeBoundaryGraph"]]
+    },
+    {
+      "id": "collection-derives-links",
+      "description": "Collection extracts or retains observations and derives relation groups and links.",
+      "answerEvidenceAlternatives": [["collectRuntimeBoundaryGraph", "observations", "relation groups", "links"]]
+    },
+    {
+      "id": "graph-persists",
+      "description": "The runtime graph and participant tables are persisted.",
+      "answerEvidenceAlternatives": [
+        ["writeRuntimeBoundaryGraph", "persists", "participants"],
+        ["writeRuntimeBoundaryGraph", "participant tables"]
+      ]
+    },
+    {
+      "id": "system-map-loads",
+      "description": "systemMap loads the persisted graph through readRuntimeBoundaryGraph.",
+      "answerEvidenceAlternatives": [["systemMap", "readRuntimeBoundaryGraph"]]
+    },
+    {
+      "id": "frontier-crosses-link",
+      "description": "Traversal adds both endpoints when either proved runtime-link endpoint reaches the current frontier.",
+      "answerEvidenceAlternatives": [
+        ["both endpoints", "runtime link", "frontier"],
+        ["fromReached", "toReached", "addBoundaryObservation"]
+      ]
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "runtime-boundary-container",
+      "answerIncludesAny": ["symbols live inside a runtime boundary", "runtime boundary contains the subsystem"]
+    }
+  ],
+  "budgets": {
+    "maxToolCalls": 3,
+    "maxSemanticQueries": 3,
+    "maxRenderedCharacters": 15000,
+    "maxNativeExplorationReads": 0
+  },
+  "recordedBaseline": {
+    "commit": "8fcf2c5f",
+    "factsRecovered": 5,
+    "factsRequired": 5,
+    "toolCallsAfterStatus": 9,
+    "renderedCharacters": 129673,
+    "nativeExplorationReads": 0,
+    "measurement": "manual self-host audit recorded in docs/plans/2026-08-05-complete-exploration-surface.md"
+  }
+}

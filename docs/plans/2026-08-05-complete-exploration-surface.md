@@ -113,10 +113,13 @@ Acceptance target:
 
 ## Program self-report
 
-Complete this section as slices land:
+### Slice 1 — deterministic exploration benchmark
 
-- **Benchmarks:** baseline and after values for accuracy, native reads, decisions, characters, and model tokens.
-- **Discriminating probes:** the planted failure and observed failing output for each new verifier.
-- **Deviations:** every changed target, skipped check, or compatibility compromise with reason.
-- **Deferred:** items above that remain deferred, plus newly discovered work.
-- **Folded learnings:** the docs, skills, tests, and product output that now carry what the program learned.
+- **Benchmarks:** the self-host runtime-boundary case now fixes five required facts and gates accuracy, forbidden claims, total calls, semantic queries, rendered characters, and native exploration reads independently. The current manual baseline remains 5/5 facts, 9 exploration calls after status, 129,673 rendered characters, and no native source reads.
+- **Discriminating probe:** removing the `system-map-loads` fact from the trial produced exit code 1, 4/5 facts, `accuracy: false`, and named the missing fact. The complete fixture produced exit code 0 and 5/5 facts.
+- **Verification:** focused harness tests passed 4/4; `npm run lint` passed including the public API check; the full suite passed 272 files and 2,174 tests.
+- **Deviations:** scip-query could not enumerate the exact `.mjs` script paths or retrieve `package.json` by exact file path, so this slice used one native file-inventory query and exact native reads for four harness files after the indexed surface reported them missing. Exact `context` resolution of the `systemMap` symbol also resolved as a module target rather than the callable. These are recorded product gaps for the lossless-sensor slice, not accepted exploration behavior.
+- **Deferred:** external model-token comparison waits until a complete connected packet exists, so the benchmark measures a meaningful treatment rather than another partial interface.
+- **Folded learnings:** `scripts/exploration-benchmark-core.mjs`, the CLI wrapper, fixtures, tests, and this plan now carry the accuracy and efficiency contract outside the conversation.
+
+Future slices append their evidence here rather than replacing this record.

@@ -1,0 +1,18 @@
+{
+  "benchmarkId": "self-host-runtime-boundaries-v1",
+  "answer": "runtimeBoundaryAugmentationStage invokes collectRuntimeBoundaryGraph. collectRuntimeBoundaryGraph retains or extracts observations, then derives relation groups and links. writeRuntimeBoundaryGraph persists the graph and participant tables. systemMap loads it through readRuntimeBoundaryGraph. When either endpoint of a proved runtime link reaches the frontier, traversal adds both endpoints.",
+  "calls": [
+    {
+      "surface": "scip-query",
+      "kind": "query",
+      "command": "scip-query explore --symbol runtimeBoundaryAugmentationStage --symbol systemMap",
+      "output": "connected runtime-boundary path"
+    },
+    {
+      "surface": "scip-query",
+      "kind": "query",
+      "command": "scip-query inspect --packet connector:runtime-boundaries",
+      "output": "exact transition evidence"
+    }
+  ]
+}
