@@ -1,12 +1,16 @@
 import { basename, extname } from 'node:path';
 import type { IndexedDefinition, SymbolMatch, SymbolResolution } from '../../domain/types.js';
 import { isExportedDefinition } from '../internal/exported-definition.js';
-import { isMissingProjectFileError, readProjectFileText } from '../../source/primitives/project-file-boundary.js';
+import {
+  readRepositoryTextFile,
+  type RepositoryTextFile,
+  type SourceObservationFreshness,
+} from '../../source/primitives/repository-text.js';
+import { UnsafeProjectPathError } from '../../source/primitives/project-file-boundary.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { buildCalleeMap } from '../../symbols/graph/call-graph-evidence.js';
 import { findFirstSymbolMatch, nearestSymbolNames, resolveSymbol } from '../../symbols/symbol-lookup.js';
-import { resolveIndexedFile } from '../internal/file-resolution.js';
 import { leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { SOURCE_INSPECTION_MAX_SELECTORS } from '../internal/inspection-limits.js';
 import {
@@ -26,8 +30,14 @@ export interface CodeResult {
   endLine: number;
   language: string | null;
   source: string;
+  freshness?: SourceObservationFreshness;
   bindingClosure?: BindingClosure;
 }
+
+export type {
+  SourceObservationFreshness,
+  SourceSemanticFreshnessState,
+} from '../../source/primitives/repository-text.js';
 
 export type CodeSelectorStatus = 'matched' | 'ambiguous' | 'missing';
 export type CodeSelectorKind = 'source' | 'file-source';
@@ -117,6 +127,9 @@ export function code(db: ScipDatabase, symbolPattern: string, opts: { context?: 
   const directRange = parseFileLineRange(symbolPattern);
   if (directRange) return readFileRange(db, directRange.filePath, directRange.startLine, directRange.endLine, context);
 
+  const exactFile = exactRepositoryTextFile(db, symbolPattern);
+  if (exactFile) return readWholeFile(db, exactFile);
+
   const match = findFirstSymbolMatch(db, symbolPattern);
   if (!match) return null;
   return readSymbolRange(db, match, context);
@@ -170,7 +183,7 @@ function codeBatchEntry(
       : missingSourceEntry(db, selector, 'definition-source-unreadable');
   }
 
-  const exactFile = exactIndexedFile(db, selector);
+  const exactFile = exactRepositoryTextFile(db, selector);
   if (exactFile) return fileSourceEntry(db, selector, exactFile, context, members);
 
   const resolution = resolveSymbol(db, selector);
@@ -253,6 +266,7 @@ function sameFileCallClosureForRange(
   requestedRange: CodeResult,
   allDefinitions: readonly IndexedDefinition[],
 ): IndexedDefinition[] {
+  if (!semanticFactsUsable(requestedRange.freshness)) return [];
   if (allDefinitions.length === 0) return [];
   const callees = buildCalleeMap(db, allDefinitions, { additive: false, semantic: false });
   const definitionsBySymbol = new Map<string, IndexedDefinition[]>();
@@ -283,22 +297,23 @@ function sameFileCallClosureForRange(
 function fileSourceEntry(
   db: ScipDatabase,
   selector: string,
-  relativePath: string,
+  file: RepositoryTextFile,
   context: number,
   members: CodeFileMemberMode,
 ): CodeBatchEntry {
+  const relativePath = file.relativePath;
   const definitionTree = fileDefinitionTree(db, relativePath);
-  const allDefinitions = getDefinitionsForFile(db, relativePath).filter(
-    (definition) => !isFileModuleDefinition(definition, relativePath),
-  );
+  const allDefinitions = semanticFactsUsable(file.freshness)
+    ? getDefinitionsForFile(db, relativePath).filter((definition) => !isFileModuleDefinition(definition, relativePath))
+    : [];
   const explicitExports = allDefinitions.filter((definition) => isExportedDefinition(db, definition));
   const surfaceDefinitions =
     explicitExports.length > 0 ? explicitExports : topLevelDefinitions(definitionTree, allDefinitions);
   const selectedDefinitions =
     members === 'all' ? [] : sameFileDefinitionClosure(db, surfaceDefinitions, allDefinitions);
   const results =
-    members === 'all'
-      ? [readWholeFile(db, relativePath)].filter((result): result is CodeResult => result !== null)
+    members === 'all' || allDefinitions.length === 0
+      ? [readWholeFile(db, file)]
       : removeCoveredResults(
           selectedDefinitions
             .map((definition) => readSymbolRange(db, definition, context))
@@ -323,9 +338,11 @@ function fileSourceEntry(
       basis:
         members === 'all'
           ? 'complete-file-source'
-          : explicitExports.length > 0
-            ? 'explicit-exports-and-same-file-reference-closure'
-            : 'top-level-and-same-file-reference-closure',
+          : allDefinitions.length === 0
+            ? 'complete-file-source'
+            : explicitExports.length > 0
+              ? 'explicit-exports-and-same-file-reference-closure'
+              : 'top-level-and-same-file-reference-closure',
       totalDefinitions,
       returnedDefinitions,
       returnedBodies: results.length,
@@ -405,9 +422,23 @@ function removeCoveredResults(results: readonly CodeResult[]): CodeResult[] {
   return selected;
 }
 
-function readWholeFile(db: ScipDatabase, relativePath: string): CodeResult | null {
-  const result = readFileRange(db, relativePath, 1, Number.MAX_SAFE_INTEGER, 0);
-  return result ? { ...result, symbol: relativePath, shortName: relativePath } : null;
+function readWholeFile(db: ScipDatabase, file: RepositoryTextFile): CodeResult {
+  const lines = file.text.split('\n');
+  return {
+    symbol: file.relativePath,
+    shortName: file.relativePath,
+    relativePath: file.relativePath,
+    startLine: 0,
+    endLine: Math.max(0, lines.length - 1),
+    language:
+      db.get<{ language: string | null }>('SELECT language FROM documents WHERE relative_path = ?', file.relativePath)
+        ?.language ?? supportedLanguageFromPath(file.relativePath),
+    source: file.text,
+    freshness: file.freshness,
+    ...(semanticFactsUsable(file.freshness)
+      ? { bindingClosure: bindingClosureForRange(db, file.relativePath, 0, Math.max(0, lines.length - 1)) }
+      : {}),
+  };
 }
 
 function countCoveredOutlineDefinitions(nodes: readonly OutlineNode[], results: readonly CodeResult[]): number {
@@ -506,12 +537,13 @@ function missingSourceEntry(
   };
 }
 
-function exactIndexedFile(db: ScipDatabase, selector: string): string | null {
-  const normalized = selector.replace(/\\/gu, '/').replace(/^\.\//u, '');
-  return (
-    db.get<{ relative_path: string }>('SELECT relative_path FROM documents WHERE relative_path = ? LIMIT 1', normalized)
-      ?.relative_path ?? null
-  );
+function exactRepositoryTextFile(db: ScipDatabase, selector: string): RepositoryTextFile | null {
+  try {
+    return readRepositoryTextFile(db, selector);
+  } catch (error) {
+    if (error instanceof UnsafeProjectPathError) return null;
+    throw error;
+  }
 }
 
 function resolvedCandidateMatches(db: ScipDatabase, resolution: SymbolResolution): SymbolMatch[] {
@@ -547,7 +579,7 @@ function parseFileLineRange(symbolPattern: string): {
   startLine: number;
   endLine: number;
 } | null {
-  const fileLineMatch = symbolPattern.match(/^(.+\.\w+):(\d+)-(\d+)$/);
+  const fileLineMatch = symbolPattern.match(/^(.+):(\d+)-(\d+)$/);
   if (!fileLineMatch) return null;
   const startLine = Number(fileLineMatch[2]);
   const endLine = Number(fileLineMatch[3]);
@@ -578,15 +610,9 @@ function readSymbolRange(
   );
 
   // Read the file
-  let fileContent: string;
-  try {
-    fileContent = readProjectFileText(db.config.projectRoot, match.relativePath, {
-      inputKind: 'indexed source file',
-    });
-  } catch (error) {
-    if (!isMissingProjectFileError(error)) throw error;
-    return null;
-  }
+  const file = readRepositoryTextFile(db, match.relativePath);
+  if (!file) return null;
+  const fileContent = file.text;
 
   const lines = fileContent.split('\n');
   const recoveredUnit =
@@ -609,7 +635,10 @@ function readSymbolRange(
     endLine,
     language: doc?.language ?? supportedLanguageFromPath(match.relativePath),
     source,
-    bindingClosure: bindingClosureForRange(db, match.relativePath, startLine, endLine),
+    freshness: file.freshness,
+    ...(semanticFactsUsable(file.freshness)
+      ? { bindingClosure: bindingClosureForRange(db, match.relativePath, startLine, endLine) }
+      : {}),
   };
 }
 
@@ -621,40 +650,38 @@ function readFileRange(
   endLine: number,
   context: number,
 ): CodeResult | null {
-  // Find the file in the index
-  const resolvedPath = resolveIndexedFile(db, filePath);
-  if (!resolvedPath) return null;
-
-  const doc = db.get<{ relative_path: string; language: string | null }>(
-    `SELECT relative_path, language FROM documents WHERE relative_path = ?`,
-    resolvedPath,
+  const file = readRepositoryTextFile(db, filePath);
+  if (!file) return null;
+  const doc = db.get<{ language: string | null }>(
+    `SELECT language FROM documents WHERE relative_path = ?`,
+    file.relativePath,
   );
-  if (!doc) return null;
-
-  let fileContent: string;
-  try {
-    fileContent = readProjectFileText(db.config.projectRoot, doc.relative_path, {
-      inputKind: 'indexed source file',
-    });
-  } catch (error) {
-    if (!isMissingProjectFileError(error)) throw error;
-    return null;
-  }
+  const fileContent = file.text;
 
   const lines = fileContent.split('\n');
+  if (startLine > lines.length) return null;
   const start = Math.max(0, startLine - 1 - context); // convert to 0-indexed
   const end = Math.min(lines.length - 1, endLine - 1 + context);
   const source = lines.slice(start, end + 1).join('\n');
   return {
-    symbol: `${doc.relative_path}:${startLine}-${endLine}`,
-    shortName: `${doc.relative_path}:${startLine}-${endLine}`,
-    relativePath: doc.relative_path,
+    symbol: `${file.relativePath}:${startLine}-${endLine}`,
+    shortName: `${file.relativePath}:${startLine}-${endLine}`,
+    relativePath: file.relativePath,
     startLine: start,
     endLine: end,
-    language: doc.language ?? supportedLanguageFromPath(doc.relative_path),
+    language: doc?.language ?? supportedLanguageFromPath(file.relativePath),
     source,
-    bindingClosure: bindingClosureForRange(db, doc.relative_path, start, end),
+    freshness: file.freshness,
+    ...(semanticFactsUsable(file.freshness)
+      ? { bindingClosure: bindingClosureForRange(db, file.relativePath, start, end) }
+      : {}),
   };
+}
+
+function semanticFactsUsable(freshness: SourceObservationFreshness | undefined): boolean {
+  return Boolean(
+    freshness && freshness.semantic.state !== 'stale' && freshness.semantic.basis !== 'no-compiler-document',
+  );
 }
 
 // Maps a file extension to the project's canonical SupportedLanguage name

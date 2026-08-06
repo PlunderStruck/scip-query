@@ -31,10 +31,10 @@ Exact code, definition, and source-inspection units always render whole. Cross-c
 
 | Command | Description | Options |
 |---|---|---|
-| `files <pattern>` | Find files matching a pattern | `--json`<br>`--result-only`<br>`--compact` |
+| `files <pattern>` | Find current project files matching a path pattern | `--json`<br>`--result-only`<br>`--compact` |
 | `session` | Show source ranges already delivered in this agent exploration session | `--reset` |
 | `inspect` | Batch related searches, symbols, and source locations into one deduplicated source packet | `--search <text>`<br>`--symbol <symbol>`<br>`--at <file:line>`<br>`-s, --scope <path>`<br>`-C, --context <n>`<br>`-n, --limit <n>`<br>`--max-units <n>`<br>`--max-characters <n>`<br>`--view <view>`<br>`--unit-lines <n>`<br>`--total-lines <n>`<br>`--include <part>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `search <text>` | Count indexed text matches and preview a bounded, recoverable identity and source manifest | `-s, --scope <path>`<br>`-C, --context <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--regexp`<br>`-i, --ignore-case`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `search <text>` | Count current project text matches and preview a bounded, recoverable identity and source manifest | `-s, --scope <path>`<br>`-C, --context <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--regexp`<br>`-i, --ignore-case`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `methods <className>` | List methods of one exactly resolved class; ambiguity and missing targets fail explicitly | `--json`<br>`--result-only`<br>`--compact` |
 | `refs <symbol>` | Find all files referencing a symbol | `--full`<br>`-n, --limit <n>`<br>`--cursor <cursor>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `trace <symbol>` | Trace a symbol: definition + all references | `--full`<br>`--json`<br>`--result-only`<br>`--compact` |

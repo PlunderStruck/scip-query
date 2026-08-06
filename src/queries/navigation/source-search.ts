@@ -3,10 +3,14 @@ import { compileBoundedRegExp } from '../../domain/bounded-regexp.js';
 import { classifyFile, type FileKind } from '../../source/primitives/file-kind.js';
 import { getDefinitionsForFile, findEnclosingDefinition } from '../../symbols/definition-catalog.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
-import { getSourceLines } from '../../source/primitives/source-text.js';
-import { indexedDocumentPaths } from '../../storage/scip-documents.js';
+import { repositoryTextInventory, type SourceObservationFreshness } from '../../source/primitives/repository-text.js';
 import { selectInspectionCandidates } from './source-inspection-selection.js';
-import { sourceSnippet, type SourceSnippet } from './source-snippet.js';
+import type { SourceSnippet } from './source-snippet.js';
+
+export type {
+  SourceObservationFreshness,
+  SourceSemanticFreshnessState,
+} from '../../source/primitives/repository-text.js';
 
 export interface SourceSearchIdentity {
   relativePath: string;
@@ -16,6 +20,7 @@ export interface SourceSearchIdentity {
   ownerStartLine: number | null;
   ownerEndLine: number | null;
   fileKind: FileKind;
+  freshness?: SourceObservationFreshness;
 }
 
 export interface SourceSearchMatch extends SourceSnippet {
@@ -24,12 +29,14 @@ export interface SourceSearchMatch extends SourceSnippet {
   ownerStartLine?: number | null;
   ownerEndLine?: number | null;
   fileKind?: FileKind;
+  freshness?: SourceObservationFreshness;
 }
 
 export interface SourceSearchFileCoverage {
   relativePath: string;
   matchingLines: number;
   returnedMatches: number;
+  freshness?: SourceObservationFreshness;
 }
 
 export interface SourceSearchScopeHint {
@@ -43,6 +50,21 @@ export interface SourceSearchIdentityCoverage {
   returned: number;
   total: number;
   omitted: number;
+}
+
+export interface SourceSearchTextCoverage {
+  basis: 'current-project-text-files';
+  candidateFiles: number;
+  scannedTextFiles: number;
+  scannedBytes: number;
+  skippedBinaryPaths: string[];
+  skippedUnreadablePaths: string[];
+  skippedOversizedPaths: string[];
+  semanticFiles: {
+    aligned: number;
+    stale: number;
+    unavailable: number;
+  };
 }
 
 export interface SourceSearchResult {
@@ -59,6 +81,7 @@ export interface SourceSearchResult {
   scopeHints?: SourceSearchScopeHint[];
   omittedScopeHints?: number;
   scannedFiles: number;
+  textCoverage?: SourceSearchTextCoverage;
 }
 
 export interface SourceSearchOptions {
@@ -77,6 +100,9 @@ const SOURCE_SEARCH_SCOPE_HINT_LIMIT = 12;
 export function searchSource(db: ScipDatabase, pattern: string, opts: SourceSearchOptions = {}): SourceSearchResult {
   if (pattern.length === 0) throw new Error('The source search pattern must not be empty.');
   const context = opts.context ?? 6;
+  if (!Number.isSafeInteger(context) || context < 0) {
+    throw new RangeError(`context must be a non-negative safe integer; received ${context}`);
+  }
   const limit = opts.limit ?? 12;
   if (!Number.isSafeInteger(limit) || limit <= 0) {
     throw new RangeError(`limit must be a positive safe integer; received ${limit}`);
@@ -85,17 +111,22 @@ export function searchSource(db: ScipDatabase, pattern: string, opts: SourceSear
     ? compileBoundedRegExp(pattern, 'source search pattern', opts.ignoreCase ? 'iu' : 'u')
     : null;
   const literal = opts.ignoreCase ? pattern.toLocaleLowerCase() : pattern;
-  const paths = indexedDocumentPaths(db, { scope: opts.scope, includeIgnored: false });
+  const inventory = repositoryTextInventory(db, { scope: opts.scope });
   const identities: SourceSearchIdentity[] = [];
   const fileCoverage: SourceSearchFileCoverage[] = [];
 
-  for (const relativePath of paths) {
-    const lines = getSourceLines(db, relativePath);
+  for (const file of inventory.files) {
+    const relativePath = file.relativePath;
+    const lines = searchableSourceLines(file.text);
     if (lines.length === 0) continue;
-    const definitions = getDefinitionsForFile(db, relativePath);
+    const definitions =
+      file.freshness.semantic.state !== 'stale' && file.freshness.semantic.basis !== 'no-compiler-document'
+        ? getDefinitionsForFile(db, relativePath)
+        : [];
     let fileMatchingLines = 0;
     for (let line = 0; line < lines.length; line += 1) {
-      const text = lines[line] ?? '';
+      const rawText = lines[line] ?? '';
+      const text = rawText.endsWith('\r') ? rawText.slice(0, -1) : rawText;
       const matched = regexp
         ? regexp.test(text)
         : (opts.ignoreCase ? text.toLocaleLowerCase() : text).includes(literal);
@@ -110,10 +141,16 @@ export function searchSource(db: ScipDatabase, pattern: string, opts: SourceSear
         ownerStartLine: owner?.startLine ?? null,
         ownerEndLine: owner?.endLine ?? null,
         fileKind: classifyFile(relativePath),
+        freshness: file.freshness,
       });
     }
     if (fileMatchingLines > 0) {
-      fileCoverage.push({ relativePath, matchingLines: fileMatchingLines, returnedMatches: 0 });
+      fileCoverage.push({
+        relativePath,
+        matchingLines: fileMatchingLines,
+        returnedMatches: 0,
+        freshness: file.freshness,
+      });
     }
   }
 
@@ -128,8 +165,11 @@ export function searchSource(db: ScipDatabase, pattern: string, opts: SourceSear
       : opts.ranking
         ? selectRepresentativeIdentities(identities, limit)
         : identities.slice(0, limit);
+  const textByPath = new Map(inventory.files.map((file) => [file.relativePath, file.text] as const));
   const matches = materializedIdentities.flatMap((identity) => {
-    const snippet = sourceSnippet(db, identity.relativePath, identity.focusLine, context);
+    const source = textByPath.get(identity.relativePath);
+    const snippet =
+      source === undefined ? null : sourceSnippetFromText(identity.relativePath, source, identity.focusLine, context);
     return snippet ? [{ ...snippet, ...identity }] : [];
   });
 
@@ -158,8 +198,49 @@ export function searchSource(db: ScipDatabase, pattern: string, opts: SourceSear
     fileCoverage,
     scopeHints: allScopeHints.slice(0, SOURCE_SEARCH_SCOPE_HINT_LIMIT),
     omittedScopeHints: Math.max(0, allScopeHints.length - SOURCE_SEARCH_SCOPE_HINT_LIMIT),
-    scannedFiles: paths.length,
+    scannedFiles: inventory.files.length,
+    textCoverage: {
+      basis: 'current-project-text-files',
+      candidateFiles: inventory.candidateFiles,
+      scannedTextFiles: inventory.files.length,
+      scannedBytes: inventory.scannedBytes,
+      skippedBinaryPaths: inventory.skippedBinaryPaths,
+      skippedUnreadablePaths: inventory.skippedUnreadablePaths,
+      skippedOversizedPaths: inventory.skippedOversizedPaths,
+      semanticFiles: {
+        aligned: inventory.files.filter((file) => file.freshness.semantic.state === 'aligned').length,
+        stale: inventory.files.filter((file) => file.freshness.semantic.state === 'stale').length,
+        unavailable: inventory.files.filter((file) => file.freshness.semantic.state === 'unavailable').length,
+      },
+    },
   };
+}
+
+function sourceSnippetFromText(
+  relativePath: string,
+  text: string,
+  focusLine: number,
+  contextLines: number,
+): SourceSnippet | null {
+  const lines = text.split('\n');
+  const searchableLineCount = text.endsWith('\n') ? lines.length - 1 : lines.length;
+  if (focusLine < 0 || focusLine >= searchableLineCount) return null;
+  const startLine = Math.max(0, focusLine - contextLines);
+  const endLine = Math.min(searchableLineCount - 1, focusLine + contextLines);
+  return {
+    relativePath,
+    startLine,
+    endLine,
+    focusLine,
+    source: lines.slice(startLine, endLine + 1).join('\n'),
+  };
+}
+
+function searchableSourceLines(text: string): string[] {
+  if (text.length === 0) return [];
+  const lines = text.split('\n');
+  if (text.endsWith('\n')) lines.pop();
+  return lines;
 }
 
 function sourceSearchScopeHints(files: readonly SourceSearchFileCoverage[]): SourceSearchScopeHint[] {

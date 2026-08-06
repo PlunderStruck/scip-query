@@ -89,6 +89,9 @@ export type {
   SourceSearchOptions,
   SourceSearchResult,
   SourceSearchScopeHint,
+  SourceSearchTextCoverage,
+  SourceObservationFreshness,
+  SourceSemanticFreshnessState,
 } from './navigation/source-search.js';
 export type {
   SourceInspectionContinuation,

@@ -35,6 +35,8 @@ describe('code CLI output contract', () => {
         '     4  }',
         '     5  ',
         '',
+        'Text freshness: 1/1 returned source body(ies) read from current working-tree bytes; semantic overlay 0 aligned, 0 stale, 1 unavailable.',
+        '',
       ].join('\n'),
     );
   });
@@ -102,12 +104,20 @@ describe('code CLI output contract', () => {
     const output = JSON.parse(invocation.stdout) as Record<string, unknown>;
 
     expect(invocation.status).toBe(0);
-    expect(Object.keys(output)).toEqual(['file', 'symbol', 'language', 'range', 'lines']);
+    expect(Object.keys(output)).toEqual(['file', 'symbol', 'language', 'range', 'freshness', 'lines']);
     expect(output).toEqual({
       file: 'src/watch.ts',
       symbol: 'src:watch:Watcher',
       language: 'typescript',
       range: { startLine: 1, endLine: 5 },
+      freshness: {
+        exactText: {
+          state: 'current',
+          basis: 'working-tree-read',
+          sha256: expect.any(String),
+        },
+        semantic: { state: 'unavailable', basis: 'fingerprint-unavailable' },
+      },
       lines: [
         { line: 1, text: 'export class Watcher {' },
         { line: 2, text: '  start() { return true; }' },
@@ -128,6 +138,8 @@ describe('code CLI output contract', () => {
         '',
         '     2    start() { return true; }',
         '     3    stop() { return false; }',
+        '',
+        'Text freshness: 1/1 returned source body(ies) read from current working-tree bytes; semantic overlay 0 aligned, 0 stale, 1 unavailable.',
         '',
       ].join('\n'),
     );

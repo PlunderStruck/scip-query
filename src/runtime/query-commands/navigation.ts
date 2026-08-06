@@ -195,6 +195,8 @@ function sourceSearchSections(result: queries.SourceSearchResult): ReportSection
   });
   const identityRows = sourceSearchIdentityRows(identities);
   const recoveryCommands = identityCoverage.mode === 'complete' ? sourceSearchRecoveryCommands(result, identities) : [];
+  const textCoverage = result.textCoverage;
+  const exactTextComplete = sourceSearchTextCoverageComplete(result);
   return [
     {
       title: `MATCH IDENTITIES (${identities.length}/${result.matchingLines}, ${identityCoverage.mode.toUpperCase()})`,
@@ -207,9 +209,19 @@ function sourceSearchSections(result: queries.SourceSearchResult): ReportSection
     {
       title: 'SEARCH COVERAGE',
       rows: [
-        `  Exact cardinality: ${result.matchingLines} matching line(s) across ${result.matchingFiles ?? result.fileCoverage?.length ?? 0} file(s).`,
+        `  ${exactTextComplete ? 'Exact' : 'Observed'} cardinality: ${result.matchingLines} matching line(s) across ${result.matchingFiles ?? result.fileCoverage?.length ?? 0} file(s).`,
         `  Identity manifest: ${identities.length}/${result.matchingLines} matching line(s); ${identityCoverage.mode === 'complete' ? 'complete' : `${identityCoverage.omitted} lower-ranked identities withheld before rendering`}.`,
         `  Source materialization: ${result.matches.length}/${result.matchingLines} window(s); ${result.omittedMatches} exact match location(s) were not expanded into source.`,
+        ...(textCoverage
+          ? [
+              `  Exact text: ${textCoverage.scannedTextFiles}/${textCoverage.candidateFiles} current project text file(s), ${textCoverage.scannedBytes.toLocaleString()} byte(s) scanned at query time.`,
+              `  Semantic ownership overlay: ${textCoverage.semanticFiles.aligned} aligned, ${textCoverage.semanticFiles.stale} stale, ${textCoverage.semanticFiles.unavailable} unavailable file(s).`,
+              `  Non-text/unreadable exclusions: ${textCoverage.skippedBinaryPaths.length} binary, ${textCoverage.skippedUnreadablePaths.length} unreadable, ${textCoverage.skippedOversizedPaths.length} oversized path(s); exact identities remain in textCoverage.`,
+              ...(exactTextComplete
+                ? []
+                : ['  Text coverage is incomplete: unreadable or oversized text may contain additional matches.']),
+            ]
+          : []),
         ...(identityCoverage.mode === 'bounded'
           ? sourceSearchScopeRows(result)
           : recoveryCommands.length > 0
@@ -222,6 +234,13 @@ function sourceSearchSections(result: queries.SourceSearchResult): ReportSection
       ],
     },
   ];
+}
+
+function sourceSearchTextCoverageComplete(result: queries.SourceSearchResult): boolean {
+  const coverage = result.textCoverage;
+  return Boolean(
+    coverage && coverage.skippedUnreadablePaths.length === 0 && coverage.skippedOversizedPaths.length === 0,
+  );
 }
 
 function sourceSearchIdentityCoverage(
@@ -271,6 +290,7 @@ function sourceSearchIdentities(result: queries.SourceSearchResult): queries.Sou
       ownerStartLine: match.ownerStartLine ?? null,
       ownerEndLine: match.ownerEndLine ?? null,
       fileKind: match.fileKind ?? 'source',
+      freshness: match.freshness,
     }))
   );
 }
@@ -708,9 +728,9 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   listQueryCommand({
     id: 'files',
     command: 'files <pattern>',
-    description: 'Find files matching a pattern',
+    description: 'Find current project files matching a path pattern',
     agent: agentContract(
-      'Which indexed files match this text pattern?',
+      'Which current project files match this path pattern?',
       'matching file paths',
       ['pattern'],
       'complete',
@@ -837,9 +857,9 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   sectionedQueryCommand({
     id: 'search',
     command: 'search <text>',
-    description: 'Count indexed text matches and preview a bounded, recoverable identity and source manifest',
+    description: 'Count current project text matches and preview a bounded, recoverable identity and source manifest',
     options: [
-      option('-s, --scope <path>', 'Limit the search to indexed paths matching this text'),
+      option('-s, --scope <path>', 'Limit the search to current project paths matching this text'),
       option('-C, --context <n>', 'Source lines before and after each match', parseNonNegativeInteger, 6),
       option(
         '-n, --limit <n>',
@@ -852,7 +872,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       option('-i, --ignore-case', 'Ignore case'),
     ],
     agent: agentContract(
-      'Where does this exact text occur in indexed source, and which symbol owns each line?',
+      'Where does this exact text occur in current project text, and which aligned compiler symbol owns each line?',
       'exact cardinality, bounded identities and source, and scope commands that recover withheld matches',
       ['pattern'],
       'bounded',
@@ -868,14 +888,15 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
         ranking: 'structural',
       }),
     emptyMessage: (result) =>
-      result.matchingLines === 0 ? `No indexed source line matched '${result.pattern}'.` : undefined,
-    coverage: (result) => ({
-      complete: true,
-      totalKnown: true,
-      returned: sourceSearchIdentities(result).length,
-      total: result.matchingLines,
-      omitted: 0,
-    }),
+      result.matchingLines === 0
+        ? `${sourceSearchTextCoverageComplete(result) ? 'No current project text line' : 'No scanned project text line'} matched '${result.pattern}'.`
+        : undefined,
+    coverage: (result) => {
+      const returned = sourceSearchIdentities(result).length;
+      return sourceSearchTextCoverageComplete(result)
+        ? { complete: true, totalKnown: true, returned, total: result.matchingLines, omitted: 0 }
+        : { complete: false, totalKnown: false, returned };
+    },
     agentResult: (result) => ({
       identityCoverage: result.identityCoverage,
       mode: result.mode,
@@ -890,6 +911,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       ),
       scopeHints: result.scopeHints,
       omittedScopeHints: result.omittedScopeHints,
+      textCoverage: result.textCoverage,
     }),
     sections: sourceSearchSections,
   }),

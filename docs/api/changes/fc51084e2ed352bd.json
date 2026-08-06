@@ -1,0 +1,193 @@
+{
+  "acceptedAt": "2026-08-06T02:16:10.581Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "fc51084e2ed352bd4b317a68a5d7a4d0bcf7306997c44257dde2a45ba08c106f",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CodeResult changed from interface CodeResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; language: string | null; source: string; bindingClosure?: Bin... to interface CodeResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; language: string | null; source: string; freshness?: SourceOb....",
+      "target": "./queries:CodeResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceObservationFreshness.",
+      "target": "./queries:SourceObservationFreshness"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchFileCoverage changed from interface SourceSearchFileCoverage { relativePath: string; matchingLines: number; returnedMatches: number; } to interface SourceSearchFileCoverage { relativePath: string; matchingLines: number; returnedMatches: number; freshness?: SourceObservationFreshness; }.",
+      "target": "./queries:SourceSearchFileCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchIdentity changed from interface SourceSearchIdentity { relativePath: string; focusLine: number; ownerSymbol: string | null; ownerShort: string | null; ownerStartLine: number | null; ownerEndLine: num... to interface SourceSearchIdentity { relativePath: string; focusLine: number; ownerSymbol: string | null; ownerShort: string | null; ownerStartLine: number | null; ownerEndLine: num....",
+      "target": "./queries:SourceSearchIdentity"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchMatch changed from interface SourceSearchMatch extends SourceSnippet { ownerSymbol: string | null; ownerShort: string | null; ownerStartLine?: number | null; ownerEndLine?: number | null; fileKind... to interface SourceSearchMatch extends SourceSnippet { ownerSymbol: string | null; ownerShort: string | null; ownerStartLine?: number | null; ownerEndLine?: number | null; fileKind....",
+      "target": "./queries:SourceSearchMatch"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchResult changed from interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; identities?: SourceSearchIdentity[]; identityManifest?: SourceSearchIdentity[]; identityCoverage?: So... to interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; identities?: SourceSearchIdentity[]; identityManifest?: SourceSearchIdentity[]; identityCoverage?: So....",
+      "target": "./queries:SourceSearchResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchTextCoverage.",
+      "target": "./queries:SourceSearchTextCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSemanticFreshnessState.",
+      "target": "./queries:SourceSemanticFreshnessState"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CodeResult changed from interface CodeResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; language: string | null; source: string; bindingClosure?: Bin... to interface CodeResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; language: string | null; source: string; freshness?: SourceOb....",
+      "target": "./queries/code:CodeResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceObservationFreshness.",
+      "target": "./queries/code:SourceObservationFreshness"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSemanticFreshnessState.",
+      "target": "./queries/code:SourceSemanticFreshnessState"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/evidence; review their variance and runtime meaning.",
+      "target": "./queries/evidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CodeResult changed from interface CodeResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; language: string | null; source: string; bindingClosure?: Bin... to interface CodeResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; language: string | null; source: string; freshness?: SourceOb....",
+      "target": "./queries/index:CodeResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceObservationFreshness.",
+      "target": "./queries/index:SourceObservationFreshness"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchFileCoverage changed from interface SourceSearchFileCoverage { relativePath: string; matchingLines: number; returnedMatches: number; } to interface SourceSearchFileCoverage { relativePath: string; matchingLines: number; returnedMatches: number; freshness?: SourceObservationFreshness; }.",
+      "target": "./queries/index:SourceSearchFileCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchIdentity changed from interface SourceSearchIdentity { relativePath: string; focusLine: number; ownerSymbol: string | null; ownerShort: string | null; ownerStartLine: number | null; ownerEndLine: num... to interface SourceSearchIdentity { relativePath: string; focusLine: number; ownerSymbol: string | null; ownerShort: string | null; ownerStartLine: number | null; ownerEndLine: num....",
+      "target": "./queries/index:SourceSearchIdentity"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchMatch changed from interface SourceSearchMatch extends SourceSnippet { ownerSymbol: string | null; ownerShort: string | null; ownerStartLine?: number | null; ownerEndLine?: number | null; fileKind... to interface SourceSearchMatch extends SourceSnippet { ownerSymbol: string | null; ownerShort: string | null; ownerStartLine?: number | null; ownerEndLine?: number | null; fileKind....",
+      "target": "./queries/index:SourceSearchMatch"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchResult changed from interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; identities?: SourceSearchIdentity[]; identityManifest?: SourceSearchIdentity[]; identityCoverage?: So... to interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; identities?: SourceSearchIdentity[]; identityManifest?: SourceSearchIdentity[]; identityCoverage?: So....",
+      "target": "./queries/index:SourceSearchResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchTextCoverage.",
+      "target": "./queries/index:SourceSearchTextCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSemanticFreshnessState.",
+      "target": "./queries/index:SourceSemanticFreshnessState"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/source-inspection; review their variance and runtime meaning.",
+      "target": "./queries/source-inspection"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceObservationFreshness.",
+      "target": "./queries/source-search:SourceObservationFreshness"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchFileCoverage changed from interface SourceSearchFileCoverage { relativePath: string; matchingLines: number; returnedMatches: number; } to interface SourceSearchFileCoverage { relativePath: string; matchingLines: number; returnedMatches: number; freshness?: SourceObservationFreshness; }.",
+      "target": "./queries/source-search:SourceSearchFileCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchIdentity changed from interface SourceSearchIdentity { relativePath: string; focusLine: number; ownerSymbol: string | null; ownerShort: string | null; ownerStartLine: number | null; ownerEndLine: num... to interface SourceSearchIdentity { relativePath: string; focusLine: number; ownerSymbol: string | null; ownerShort: string | null; ownerStartLine: number | null; ownerEndLine: num....",
+      "target": "./queries/source-search:SourceSearchIdentity"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchMatch changed from interface SourceSearchMatch extends SourceSnippet { ownerSymbol: string | null; ownerShort: string | null; ownerStartLine?: number | null; ownerEndLine?: number | null; fileKind... to interface SourceSearchMatch extends SourceSnippet { ownerSymbol: string | null; ownerShort: string | null; ownerStartLine?: number | null; ownerEndLine?: number | null; fileKind....",
+      "target": "./queries/source-search:SourceSearchMatch"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceSearchResult changed from interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; identities?: SourceSearchIdentity[]; identityManifest?: SourceSearchIdentity[]; identityCoverage?: So... to interface SourceSearchResult { pattern: string; mode: 'literal' | 'regexp'; identities?: SourceSearchIdentity[]; identityManifest?: SourceSearchIdentity[]; identityCoverage?: So....",
+      "target": "./queries/source-search:SourceSearchResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSearchTextCoverage.",
+      "target": "./queries/source-search:SourceSearchTextCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceSemanticFreshnessState.",
+      "target": "./queries/source-search:SourceSemanticFreshnessState"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "C changed from interface CodeResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; language: string | null; source: string; bindingClosure?: Bin... to interface CodeResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; language: string | null; source: string; freshness?: SourceOb....",
+      "target": "code-<hash>.d.ts:C"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module repository-text-<hash>.d.ts was added or renamed.",
+      "target": "repository-text-<hash>.d.ts"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "cd60db88fa76ce49e07b515dd998de2503947f6988fc0c6c41ad649a4519fa94",
+  "reason": "Additive freshness and scan-coverage fields correct the source-observation contract by separating current text from potentially stale compiler semantics; no required field or callable signature is removed.",
+  "schemaVersion": 1
+}

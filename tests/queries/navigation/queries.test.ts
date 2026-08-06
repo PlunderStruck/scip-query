@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Database from 'better-sqlite3';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import * as queries from '../../../src/queries/index.js';
@@ -195,6 +195,19 @@ describe('query engine', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-query-test-'));
     dbPath = join(tempDir, 'index.db');
     createFixtureDb(dbPath);
+    for (const relativePath of [
+      'src/services/auth.service.ts',
+      'src/services/user.service.ts',
+      'src/controllers/auth.controller.ts',
+      'src/__tests__/auth.test.ts',
+      'lib/utils.py',
+      'lib/models.py',
+      'src/main.rs',
+    ]) {
+      const absolutePath = join(tempDir, relativePath);
+      mkdirSync(dirname(absolutePath), { recursive: true });
+      writeFileSync(absolutePath, '');
+    }
 
     const config: ScipQueryConfig = {
       dbPath,

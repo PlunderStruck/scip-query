@@ -380,6 +380,10 @@ function codeBatchText(result: CodeBatchResult, sessionAware = false): string {
     }
   }
   appendCodeBindingClosure(lines, result.bindingClosure);
+  appendCodeFreshness(
+    lines,
+    result.entries.flatMap((entry) => entry.results),
+  );
   appendCodeCoverage(lines, result);
   return `${lines.join('\n')}\n`;
 }
@@ -404,7 +408,23 @@ function codeResultText(result: CodeResult, closure?: CodeResult['bindingClosure
   const lines: string[] = [];
   appendCodeResult(lines, result, sessionAware);
   appendCodeBindingClosure(lines, closure);
+  appendCodeFreshness(lines, [result]);
   return `${lines.join('\n')}\n`;
+}
+
+function appendCodeFreshness(lines: string[], results: readonly CodeResult[]): void {
+  const observations = results.flatMap((result) => (result.freshness ? [result.freshness] : []));
+  if (observations.length === 0) return;
+  const semantic = {
+    aligned: observations.filter((item) => item.semantic.state === 'aligned').length,
+    stale: observations.filter((item) => item.semantic.state === 'stale').length,
+    unavailable: observations.filter((item) => item.semantic.state === 'unavailable').length,
+  };
+  lines.push(
+    '',
+    `Text freshness: ${observations.length}/${results.length} returned source body(ies) read from current working-tree bytes; ` +
+      `semantic overlay ${semantic.aligned} aligned, ${semantic.stale} stale, ${semantic.unavailable} unavailable.`,
+  );
 }
 
 function appendCodeResult(lines: string[], result: CodeResult, sessionAware: boolean): void {
@@ -681,6 +701,7 @@ function codeResultOnlyJson(db: Parameters<typeof codeBatch>[0], query: string, 
       startLine: displayLine(result.startLine),
       endLine: displayLine(result.endLine),
     },
+    ...(result.freshness ? { freshness: result.freshness } : {}),
     lines: result.source.split('\n').map((text, index) => ({
       line: displayLine(result.startLine + index),
       text,
@@ -715,6 +736,7 @@ function codeBatchResultOnlyJson(result: CodeBatchResult): unknown {
         symbol: source.shortName,
         language: source.language ?? 'unknown',
         range: { startLine: displayLine(source.startLine), endLine: displayLine(source.endLine) },
+        ...(source.freshness ? { freshness: source.freshness } : {}),
         lines: source.source.split('\n').map((text, index) => ({
           line: displayLine(source.startLine + index),
           text,
