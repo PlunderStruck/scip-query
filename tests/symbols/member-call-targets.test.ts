@@ -24,13 +24,17 @@ describe('imported member call targets', () => {
       'src/controller.ts': ['export const controller = {', '  async handle() { return 1; },', '};'],
     });
     try {
-      expect(importedMemberCallTargets(db, 'src/registry.ts')).toEqual({
+      expect(importedMemberCallTargets(db, 'src/registry.ts', { ranges: [{ startLine: 1, endLine: 2 }] })).toEqual({
         targets: [
           {
             calleeLeaf: 'handle',
             line: 2,
             sourceFile: 'src/registry.ts',
             targetFile: 'src/controller.ts',
+            targetStartLine: 1,
+            targetEndLine: 1,
+            resolution: 'direct-import-receiver',
+            strength: 'candidate',
           },
         ],
         unresolvedCallsites: 0,
@@ -100,7 +104,49 @@ describe('imported member call targets', () => {
     }
   });
 
-  function createDb(files: Record<string, readonly string[]>, indexed?: { file: string; leaf: string }): ScipDatabase {
+  it('resolves a this-field constructed from one imported class to that class method', () => {
+    const db = createDb(
+      {
+        'src/service.ts': [
+          "import { EventService } from './event-service.js';",
+          'export class Service {',
+          '  private readonly events: EventService;',
+          '  constructor() { this.events = new EventService(); }',
+          '  run() { return this.events.append(); }',
+          '}',
+        ],
+        'src/event-service.ts': ['export class EventService {', '  append() { return 1; }', '}'],
+      },
+      { file: 'src/event-service.ts', leaf: 'append', parentType: 'EventService' },
+    );
+    try {
+      const result = importedMemberCallTargets(db, 'src/service.ts', {
+        ranges: [{ startLine: 4, endLine: 4 }],
+        excludeIndexedTargets: false,
+      });
+      expect(result.unresolvedCallsites).toBe(0);
+      expect(result.targets).toEqual([
+        expect.objectContaining({
+          calleeLeaf: 'append',
+          line: 4,
+          sourceFile: 'src/service.ts',
+          targetFile: 'src/event-service.ts',
+          targetStartLine: 1,
+          targetEndLine: 1,
+          resolution: 'constructed-member-receiver',
+          strength: 'exact',
+        }),
+      ]);
+      expect(result.targets[0]?.targetSymbol).toContain('EventService#append().');
+    } finally {
+      db.close();
+    }
+  });
+
+  function createDb(
+    files: Record<string, readonly string[]>,
+    indexed?: { file: string; leaf: string; parentType?: string },
+  ): ScipDatabase {
     root = mkdtempSync(join(tmpdir(), 'scip-member-calls-'));
     writeFixtureFiles(root, {
       'package.json': JSON.stringify({ private: true, type: 'module' }),
@@ -111,7 +157,8 @@ describe('imported member call targets', () => {
     Object.keys(files).forEach((file, index) => builder.document(index + 1, 'typescript', file));
     if (indexed) {
       const documentId = Object.keys(files).indexOf(indexed.file) + 1;
-      const symbol = `scip-typescript npm fixture 1.0.0 ${indexed.file}/${indexed.leaf}().`;
+      const owner = indexed.parentType ? `${indexed.parentType}#` : '';
+      const symbol = `scip-typescript npm fixture 1.0.0 ${indexed.file}/${owner}${indexed.leaf}().`;
       builder
         .symbol(1, symbol, indexed.leaf, 12)
         .definition(1, documentId, 1, 0, 0, 0, 1)

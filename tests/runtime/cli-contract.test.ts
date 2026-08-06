@@ -382,7 +382,7 @@ describe('CLI contract', () => {
     expect(readSkill('scip-query')).toContain('scip-query context');
     expect(readSkill('scip-query')).toMatch(/React, Vue/);
     expect(readSkill('scip-query')).not.toMatch(/diff-gate|Stop hook|Gherkin/i);
-    expect(readSkill('scip-query')).toContain('must not become a second workflow');
+    expect(readSkill('scip-query')).toContain('not a second workflow layered on top of grep');
     expect(readSkill('scip-explore')).toContain('Start with the question');
     expect(readSkill('scip-explore')).toContain('scip-query inspect');
     expect(readSkill('scip-explore')).toContain('scip-query evidence');

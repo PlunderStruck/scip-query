@@ -147,7 +147,78 @@ describe('universal exploration topology', () => {
       }),
     ]);
   });
+
+  it('selects a query-aligned causal spine before unrelated junctions', () => {
+    const input: ExplorationTopologyInput = {
+      scope: 'one literal query with multiple exact owners',
+      anchors: [
+        {
+          id: 'anchor:stream-events',
+          kind: 'literal',
+          query: 'work_session_stream_events',
+          status: 'matched',
+          nodeIds: ['producer', 'config'],
+          candidateNodeIds: [],
+          omittedCandidates: 0,
+        },
+      ],
+      nodes: [
+        node('producer', 'appendWorkSessionStreamEvents', ['anchor:stream-events']),
+        node('config', 'workSessionScopes', ['anchor:stream-events']),
+        node('registry', 'workSessionStreamEvents'),
+        node('controller', 'workSessionStreamEventsController'),
+        node('service', 'appendWorkSessionStreamEventsService'),
+        node('unrelated', 'buildRequest'),
+        node('schema', 'agentWorkSessionEvents'),
+      ],
+      edges: [
+        edge('runtime', 'runtime-boundary', 'producer', 'registry', 'derived'),
+        edge('controller-call', 'call', 'registry', 'controller', 'candidate'),
+        edge('service-call', 'call', 'controller', 'service', 'exact'),
+        edge('unrelated-call', 'call', 'config', 'unrelated', 'exact'),
+        edge('schema-reference', 'reference', 'service', 'schema', 'exact'),
+      ],
+    };
+
+    const selected = selectExplorationTopology(createExplorationTopology(input), { maxSelectedNodes: 5 });
+
+    expect(selected.nodes.filter((entry) => entry.disposition === 'emitted').map((entry) => entry.id)).toEqual(
+      expect.arrayContaining(['producer', 'config', 'registry', 'controller', 'service']),
+    );
+    expect(selected.nodes.find((entry) => entry.id === 'unrelated')?.disposition).toBe('folded');
+    expect(selected.nodes.find((entry) => entry.id === 'schema')?.disposition).toBe('folded');
+  });
 });
+
+function node(id: string, label: string, anchorIds: string[] = []) {
+  return {
+    id,
+    kind: 'symbol',
+    label,
+    disposition: 'folded' as const,
+    location: { file: `src/${id}.ts`, line: 0 },
+    anchorIds,
+    attributes: {},
+  };
+}
+
+function edge(
+  id: string,
+  kind: string,
+  fromNodeId: string,
+  toNodeId: string,
+  strength: 'exact' | 'derived' | 'candidate',
+) {
+  return {
+    id,
+    kind,
+    fromNodeId,
+    toNodeId,
+    directed: true as const,
+    disposition: 'folded' as const,
+    evidence: [{ method: id, strength, identity: id, location: null }],
+  };
+}
 
 function fixtureInput(): ExplorationTopologyInput {
   return {

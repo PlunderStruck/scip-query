@@ -11,6 +11,7 @@ import type {
   ExplorationTopologyEdge,
   ExplorationTopologyNode,
 } from './exploration-topology.js';
+import { queryAlignedCausalSpineNodeIds } from './exploration-topology.js';
 
 const DEFAULT_MAX_STEPS = 12;
 
@@ -119,6 +120,14 @@ export function connectedBehaviorPacket(
   const matchedAnchorNodeIds = orderedUnique(
     topology.anchors.filter((anchor) => anchor.status === 'matched').flatMap((anchor) => anchor.nodeIds),
   );
+  const causalSpineNodeIds = queryAlignedCausalSpineNodeIds(
+    topology,
+    matchedAnchorNodeIds,
+    Math.max(0, maxSteps - matchedAnchorNodeIds.length),
+    { emittedOnly: true },
+  );
+  const causalSpineNodeIdSet = new Set(causalSpineNodeIds);
+  const completeOutlineNodeIds = new Set(causalSpineNodeIds);
   const requiredNodeIds = new Set([...pathNodeIds, ...matchedAnchorNodeIds]);
   const emittedCausalEdges = topology.edges.filter(
     (edge) => edge.disposition === 'emitted' && edge.kind !== 'structural-membership',
@@ -128,7 +137,13 @@ export function connectedBehaviorPacket(
       edge.disposition !== 'excluded' && edge.disposition !== 'unsupported' && edge.kind !== 'structural-membership',
   );
   const pathEdgeIds = new Set(topology.paths.flatMap((path) => path.edgeIds));
-  const expansiveNodeIds = new Set<string>();
+  const hasConnectorPath = topology.paths.some((path) => path.edgeIds.length > 0);
+  // An explicit anchor owns behavior the caller deliberately selected. Connector
+  // direction must not reduce an anchor to only the callsite that happened to
+  // place it on the shortest path; otherwise a reverse-traversed anchor loses
+  // its own direct effects and control decisions.
+  const expansiveNodeIds = new Set<string>(matchedAnchorNodeIds);
+  for (const nodeId of causalSpineNodeIds) expansiveNodeIds.add(nodeId);
   for (const path of topology.paths) {
     const firstNodeId = path.nodeIds[0];
     const firstEdge = edgeById.get(path.edgeIds[0] ?? '');
@@ -142,10 +157,29 @@ export function connectedBehaviorPacket(
       for (const nodeId of anchor.nodeIds) expansiveNodeIds.add(nodeId);
     }
   }
-  const supplementalNodeIds = new Set(
-    emittedCausalEdges
-      .filter((edge) => edge.kind === 'call' && expansiveNodeIds.has(edge.fromNodeId))
+  const activationContextNodeIds = mostSpecificCallers(matchedAnchorNodeIds, knownCausalEdges, nodeById);
+  const activationContextSet = new Set(activationContextNodeIds);
+  const lifecycleSiblingNodeIds = orderedUnique(
+    knownCausalEdges
+      .filter((edge) => edge.kind === 'call' && activationContextSet.has(edge.fromNodeId))
       .map((edge) => edge.toNodeId),
+  ).filter((nodeId) => !requiredNodeIds.has(nodeId));
+  const directEffectNodeIds = orderedUnique(
+    emittedCausalEdges
+      .filter((edge) => edge.kind === 'call' && matchedAnchorNodeIds.includes(edge.fromNodeId))
+      .map((edge) => edge.toNodeId),
+  );
+  // A connector packet already names an anchor's direct effects in its causal
+  // slice. Spend the remaining construct budget on the most specific caller
+  // and that caller's sibling effects, which exposes activation and lifecycle
+  // context without expanding every callee body. A lone anchor still receives
+  // direct-effect bodies because there is no connector path to orient it.
+  const supplementalNodeIds = new Set(
+    orderedUnique([
+      ...activationContextNodeIds,
+      ...lifecycleSiblingNodeIds,
+      ...(hasConnectorPath ? [] : directEffectNodeIds),
+    ]),
   );
   for (const nodeId of supplementalNodeIds) expansiveNodeIds.add(nodeId);
   const adjacentNodeIds = orderedUnique(
@@ -166,14 +200,21 @@ export function connectedBehaviorPacket(
   const candidateNodeIds = orderedUnique([
     ...pathNodeIds,
     ...matchedAnchorNodeIds,
+    ...causalSpineNodeIds,
     ...supplementalNodeIds,
     ...adjacentNodeIds,
     ...remainingEmittedNodeIds,
   ]).filter((id) => nodeById.has(id));
-  const hasConnectorPath = topology.paths.some((path) => path.nodeIds.length > 0);
   const selectedNodeIds: string[] = [];
   for (const nodeId of candidateNodeIds) {
-    if (hasConnectorPath && !requiredNodeIds.has(nodeId) && !supplementalNodeIds.has(nodeId)) continue;
+    if (
+      hasConnectorPath &&
+      !requiredNodeIds.has(nodeId) &&
+      !causalSpineNodeIdSet.has(nodeId) &&
+      !supplementalNodeIds.has(nodeId)
+    ) {
+      continue;
+    }
     if (selectedNodeIds.length >= maxSteps && !requiredNodeIds.has(nodeId)) continue;
     selectedNodeIds.push(nodeId);
   }
@@ -197,6 +238,7 @@ export function connectedBehaviorPacket(
         focusLinesForNode(db, node, knownCausalEdges, nodeById, pathEdgeIds, expansiveNodeIds),
         expansiveNodeIds.has(node.id),
         supplementalNodeIds.has(node.id),
+        completeOutlineNodeIds.has(node.id),
       ),
     };
   });
@@ -214,7 +256,7 @@ export function connectedBehaviorPacket(
       );
     }
   }
-  const transitionEdges = emittedCausalEdges
+  const transitionEdges = knownCausalEdges
     .filter((edge) => selectedNodeIdSet.has(edge.fromNodeId) && selectedNodeIdSet.has(edge.toNodeId))
     .sort((left, right) => compareTransitionEdges(left, right, topology));
   const transitions = transitionEdges.map(
@@ -282,10 +324,21 @@ function behaviorForNode(
   focusLines: readonly number[],
   includeEffectReceipt: boolean,
   preferCompleteSmallConstruct: boolean,
+  preferCompleteOutline: boolean,
 ): ConnectedBehaviorRepresentation | null {
-  if (!node.location || node.kind !== 'symbol') return null;
+  if (!node.location || !['symbol', 'source-construct', 'runtime-boundary-participant'].includes(node.kind))
+    return null;
   const endLine = node.location.endLine ?? node.location.line;
-  const range = behaviorConstructRange(db, node.location.file, node.location.line, endLine, [node.location.line]);
+  const sourceLines = getSourceLines(db, node.location.file);
+  const rangeFocusLines = focusLines.length > 0 ? focusLines : [node.location.line];
+  // A boundary observation often identifies one discriminator line inside an
+  // object-property handler that has no SCIP symbol. Search the enclosing file
+  // for the smallest callable around that exact line, while ordinary symbol
+  // nodes stay bounded by their compiler-owned range.
+  const range =
+    node.kind === 'runtime-boundary-participant'
+      ? behaviorConstructRange(db, node.location.file, 0, Math.max(0, sourceLines.length - 1), [node.location.line])
+      : behaviorConstructRange(db, node.location.file, node.location.line, endLine, rangeFocusLines);
   const inRangeFocusLines = focusLines.filter((line) => line >= range.startLine && line <= range.endLine);
   const outline = behaviorSkeleton(db, node.location.file, range.startLine, range.endLine, inRangeFocusLines);
   const connectorSlice =
@@ -300,35 +353,27 @@ function behaviorForNode(
           includeEffectReceipt,
         )
       : null;
-  const exactSourceCharacters = getSourceLines(db, node.location.file)
-    .slice(range.startLine, range.endLine + 1)
-    .join('\n').length;
-  const retainCompleteConstruct = preferCompleteSmallConstruct && exactSourceCharacters <= 3_000;
+  const exactSourceCharacters = sourceLines.slice(range.startLine, range.endLine + 1).join('\n').length;
+  const retainCompleteConstruct =
+    (preferCompleteSmallConstruct || node.kind === 'runtime-boundary-participant' || node.anchorIds.length > 0) &&
+    exactSourceCharacters <= 3_000;
+  if (outline && preferCompleteOutline) return outlineRepresentation(outline);
   if (
+    !preferCompleteOutline &&
     connectorSlice &&
     !retainCompleteConstruct &&
     (!outline || connectorSlice.renderedCharacters < outline.outlineCharacters)
   ) {
     return connectorSlice;
   }
-  if (outline) {
-    return {
-      kind: 'outline',
-      constructKind: outline.constructKind,
-      signature: outline.signature,
-      lines: outline.lines,
-      coverage: outline.coverage,
-      rawCharacters: outline.rawCharacters,
-      renderedCharacters: outline.outlineCharacters,
-    };
-  }
-  const sourceLines = getSourceLines(db, node.location.file).slice(range.startLine, range.endLine + 1);
-  const source = sourceLines.join('\n');
+  if (outline) return outlineRepresentation(outline);
+  const selectedSourceLines = sourceLines.slice(range.startLine, range.endLine + 1);
+  const source = selectedSourceLines.join('\n');
   return {
     kind: 'source',
     constructKind: 'source construct',
-    signature: sourceLines.find((line) => line.trim().length > 0)?.trim() ?? node.label,
-    lines: sourceLines.map((text, offset) => ({
+    signature: selectedSourceLines.find((line) => line.trim().length > 0)?.trim() ?? node.label,
+    lines: selectedSourceLines.map((text, offset) => ({
       line: range.startLine + offset,
       endLine: range.startLine + offset,
       depth: 0,
@@ -337,13 +382,27 @@ function behaviorForNode(
       copied: true,
     })),
     coverage: {
-      sourceStatements: sourceLines.length,
-      representedStatements: sourceLines.length,
-      copiedStatements: sourceLines.length,
+      sourceStatements: selectedSourceLines.length,
+      representedStatements: selectedSourceLines.length,
+      copiedStatements: selectedSourceLines.length,
       omittedStatements: 0,
     },
     rawCharacters: source.length,
     renderedCharacters: source.length,
+  };
+}
+
+function outlineRepresentation(
+  outline: NonNullable<ReturnType<typeof behaviorSkeleton>>,
+): ConnectedBehaviorRepresentation {
+  return {
+    kind: 'outline',
+    constructKind: outline.constructKind,
+    signature: outline.signature,
+    lines: outline.lines,
+    coverage: outline.coverage,
+    rawCharacters: outline.rawCharacters,
+    renderedCharacters: outline.outlineCharacters,
   };
 }
 
@@ -355,8 +414,10 @@ function focusLinesForNode(
   pathEdgeIds: ReadonlySet<string>,
   expansiveNodeIds: ReadonlySet<string>,
 ): number[] {
-  if (!node.location || node.kind !== 'symbol') return [];
+  if (!node.location || !['symbol', 'source-construct', 'runtime-boundary-participant'].includes(node.kind)) return [];
   const lines = new Set<number>();
+  const callLines = new Set(getSourceFacts(db, node.location.file)?.callSites.map((site) => site.line) ?? []);
+  if (node.kind === 'runtime-boundary-participant') lines.add(node.location.line);
   if (expansiveNodeIds.has(node.id)) {
     for (const observation of readRuntimeBoundaryObservations(db, { files: [node.location.file] })) {
       if (
@@ -369,18 +430,24 @@ function focusLinesForNode(
   }
   for (const edge of edges) {
     if (edge.fromNodeId !== node.id && edge.toNodeId !== node.id) continue;
+    const otherNode = nodeById.get(edge.fromNodeId === node.id ? edge.toNodeId : edge.fromNodeId);
     const isExpansiveOutgoingCall =
       expansiveNodeIds.has(node.id) && edge.kind === 'call' && edge.fromNodeId === node.id;
-    if (!pathEdgeIds.has(edge.id) && !isExpansiveOutgoingCall) continue;
-    for (const source of edge.evidence) {
-      if (source.location?.file === node.location.file) lines.add(source.location.line);
+    const touchesExplicitAnchor = (otherNode?.anchorIds.length ?? 0) > 0;
+    if (!pathEdgeIds.has(edge.id) && !isExpansiveOutgoingCall && !touchesExplicitAnchor) continue;
+    const evidenceLines = edge.evidence.flatMap((source) =>
+      source.location?.file === node.location!.file ? [source.location.line] : [],
+    );
+    const callsiteEvidenceLines = evidenceLines.filter((line) => callLines.has(line));
+    for (const line of callsiteEvidenceLines.length > 0 ? callsiteEvidenceLines : evidenceLines) {
+      lines.add(line);
     }
-    const otherNode = nodeById.get(edge.fromNodeId === node.id ? edge.toNodeId : edge.fromNodeId);
     const leaf = otherNode?.attributes['leaf'];
     if (typeof leaf !== 'string' || leaf.length === 0) continue;
-    const firstLine = findIdentifierLines(db, node.location.file, leaf).find(
+    const identifierLines = findIdentifierLines(db, node.location.file, leaf).filter(
       (line) => line >= node.location!.line && line <= (node.location!.endLine ?? node.location!.line),
     );
+    const firstLine = identifierLines.find((line) => callLines.has(line)) ?? identifierLines[0];
     if (firstLine !== undefined) lines.add(firstLine);
   }
   return [...lines].sort((left, right) => left - right);
@@ -409,6 +476,11 @@ function focusedConnectorSlice(
       focusLines.some((focusLine) => focusLine >= line.line && focusLine <= line.endLine);
     if (governsFocus) selectedLines.add(line.line);
   }
+  const governedFocusBlocks: Array<{
+    focusLine: number;
+    governingUse: number;
+    lines: NonNullable<typeof outline>['lines'];
+  }> = [];
   for (const focusLine of focusLines) {
     const binding = bindingName(sourceLines[focusLine] ?? '');
     if (!binding) continue;
@@ -427,12 +499,29 @@ function focusedConnectorSlice(
     selectedLines.add(governingUse);
     const governingLine = (outline?.lines ?? []).find((line) => line.line === governingUse);
     if (!governingLine) continue;
-    for (const line of outline?.lines ?? []) {
-      if (line.line < governingLine.line || line.line > governingLine.endLine || line.text.length > 500) continue;
-      if (!line.signals.some((signal) => ['binding', 'branch', 'call', 'mutation'].includes(signal))) continue;
-      selectedLines.add(line.line);
-      if (selectedLines.size >= focusLines.length + 14) break;
-    }
+    governedFocusBlocks.push({
+      focusLine,
+      governingUse,
+      lines: (outline?.lines ?? []).filter(
+        (line) =>
+          line.line >= governingLine.line &&
+          line.line <= governingLine.endLine &&
+          line.text.length <= 500 &&
+          line.signals.some((signal) => ['binding', 'branch', 'call', 'mutation'].includes(signal)),
+      ),
+    });
+  }
+  // A call result that survives into a distant control block carries causal
+  // state across phases of the construct. Preserve the decisive statements in
+  // the longest-lived blocks first; otherwise a large number of nearby call
+  // sites can consume the slice budget before the later effect is shown.
+  for (const block of governedFocusBlocks
+    .sort(
+      (left, right) =>
+        right.governingUse - right.focusLine - (left.governingUse - left.focusLine) || left.focusLine - right.focusLine,
+    )
+    .slice(0, 2)) {
+    for (const line of block.lines.slice(0, 14)) selectedLines.add(line.line);
   }
   const facts = getSourceFacts(db, node.location.file);
   const callLines = new Set(facts?.callSites.map((site) => site.line) ?? []);
@@ -510,6 +599,27 @@ function orderedSignals(signals: readonly BehaviorSignal[]): BehaviorSignal[] {
 
 function bindingName(sourceLine: string): string | null {
   return /\b(?:const|let|var)\s+([\p{L}_$][\p{L}\p{N}_$]*)\s*=/u.exec(sourceLine)?.[1] ?? null;
+}
+
+function mostSpecificCallers(
+  anchorNodeIds: readonly string[],
+  edges: readonly ExplorationTopologyEdge[],
+  nodeById: ReadonlyMap<string, ExplorationTopologyNode>,
+): string[] {
+  return orderedUnique(
+    anchorNodeIds.flatMap((anchorNodeId) => {
+      const callers = edges
+        .filter((edge) => edge.kind === 'call' && edge.toNodeId === anchorNodeId)
+        .map((edge) => nodeById.get(edge.fromNodeId))
+        .filter((node): node is ExplorationTopologyNode => node?.kind === 'symbol' && node.location !== null)
+        .sort((left, right) => {
+          const leftSpan = (left.location?.endLine ?? left.location?.line ?? 0) - (left.location?.line ?? 0);
+          const rightSpan = (right.location?.endLine ?? right.location?.line ?? 0) - (right.location?.line ?? 0);
+          return leftSpan - rightSpan || left.label.localeCompare(right.label);
+        });
+      return callers[0] ? [callers[0].id] : [];
+    }),
+  );
 }
 
 function compareTransitionEdges(

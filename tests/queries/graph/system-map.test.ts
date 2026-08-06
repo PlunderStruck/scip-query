@@ -148,6 +148,24 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       expect(result.coverage.runtimeBoundaryEvidenceAvailable).toBe(true);
       expect(result.coverage.runtimeBoundaryExactLinks).toBeGreaterThan(0);
       expect(result.coverage.runtimeBoundaryTraversedLinks).toBeGreaterThan(0);
+      expect(result.behavior?.steps).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            location: expect.objectContaining({ file: 'packages/companion/src/dispatch.ts' }),
+          }),
+          expect.objectContaining({
+            location: expect.objectContaining({ file: 'apps/api/src/modules/sessions/routes.ts' }),
+          }),
+          expect.objectContaining({
+            location: expect.objectContaining({ file: 'apps/api/src/modules/sessions/events.ts' }),
+          }),
+        ]),
+      );
+      const serviceBehavior = result.behavior?.steps.find(
+        (step) => step.location?.file === 'apps/api/src/modules/sessions/events.ts',
+      )?.behavior;
+      expect(serviceBehavior?.coverage.omittedStatements).toBe(0);
+      expect(serviceBehavior?.coverage.representedStatements).toBe(serviceBehavior?.coverage.sourceStatements);
       expect(result.coverage.regionBoundariesAreStructural).toBe(true);
       expect(result.closure).toMatchObject({
         status: 'accounted',
@@ -189,6 +207,203 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
+  it('materializes a source-backed runtime participant when the consumer has no compiler symbol', () => {
+    const db = createSystemMapDb({ unindexedRuntimeParticipant: true });
+    try {
+      const result = systemMap(db, {
+        symbols: [symbols.dispatch],
+        maxDepth: 1,
+        expand: ['region:packages/companion:root', 'region:apps/api:modules/sessions'],
+      });
+      const relation = result.regions
+        .flatMap((region) => region.relations)
+        .find((candidate) => candidate.toBoundaryParticipant?.observationId === 'fixture-unindexed-consumer');
+      expect(relation?.toSymbol).toBeNull();
+      expect(relation?.toBoundaryParticipant).toMatchObject({
+        ownerName: 'work_session_stream_events',
+        file: 'apps/api/src/modules/sessions/registry.ts',
+        line: 1,
+      });
+      expect(result.topology?.nodes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'runtime-boundary-participant',
+            label: 'work_session_stream_events',
+            disposition: 'emitted',
+            location: expect.objectContaining({ file: 'apps/api/src/modules/sessions/registry.ts', line: 1 }),
+          }),
+        ]),
+      );
+      expect(result.behavior?.steps).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'runtime-boundary-participant',
+            behavior: expect.objectContaining({
+              lines: expect.arrayContaining([
+                expect.objectContaining({ text: expect.stringContaining('work_session_stream_events') }),
+              ]),
+            }),
+          }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('does not traverse an unrelated runtime observation merely because its file was reached', () => {
+    const seeded = createSystemMapDb();
+    const config = seeded.config;
+    const graph = readRuntimeBoundaryGraph(seeded)!;
+    const templateLink = graph.links[0]!;
+    const templateProducer = graph.observations.find((observation) => observation.id === templateLink.from)!;
+    seeded.close();
+    graph.observations.push(
+      {
+        ...templateProducer,
+        id: 'fixture-reached-observation',
+        owner: {
+          file: 'packages/companion/src/command.ts',
+          symbol: symbols.companionCommand,
+          name: 'sessionStreamEvents',
+          startLine: 2,
+          endLine: 4,
+        },
+        source: { file: 'packages/companion/src/command.ts', startLine: 3, endLine: 3 },
+      },
+      {
+        ...templateProducer,
+        id: 'fixture-file-sibling-observation',
+        owner: {
+          file: 'packages/companion/src/command.ts',
+          symbol: null,
+          name: null,
+          startLine: 0,
+          endLine: 0,
+        },
+        source: { file: 'packages/companion/src/command.ts', startLine: 0, endLine: 0 },
+      },
+    );
+    graph.links.push(
+      { ...templateLink, id: 'fixture-reached-link', from: 'fixture-reached-observation' },
+      { ...templateLink, id: 'fixture-file-sibling-link', from: 'fixture-file-sibling-observation' },
+    );
+    writeRuntimeBoundaryGraph(config.dbPath, graph);
+
+    const db = new ScipDatabase(config);
+    try {
+      const result = systemMap(db, {
+        symbols: [symbols.companionCommand],
+        maxDepth: 1,
+        relations: ['runtime-boundary'],
+      });
+      expect(result.coverage.runtimeBoundaryTraversedLinks).toBe(1);
+      expect(
+        result.topology?.edges.some((candidate) =>
+          candidate.evidence.some((evidence) => evidence.identity === 'fixture-file-sibling-link'),
+        ),
+      ).toBe(false);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('anchors a registry literal to its anonymous handler instead of the containing module', () => {
+    const db = createSystemMapDb({ unindexedRuntimeParticipant: true });
+    try {
+      const result = systemMap(db, {
+        searches: ['work_session_stream_events'],
+        maxDepth: 1,
+        relations: ['call', 'runtime-boundary'],
+      });
+      const registryAnchor = result.topology?.nodes.find(
+        (node) => node.anchorIds.length > 0 && node.location?.file === 'apps/api/src/modules/sessions/registry.ts',
+      );
+      expect(registryAnchor).toMatchObject({
+        kind: 'source-construct',
+        location: { line: 1, endLine: 4 },
+      });
+      expect(result.behavior?.steps.find((step) => step.nodeId === registryAnchor?.id)?.behavior?.lines).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ text: expect.stringContaining('appendStreamEvents(input.events)') }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('uses an unindexed source callable as a literal anchor and follows its exact imported call', () => {
+    const db = createSystemMapDb({ unindexedSourceAnchor: true });
+    try {
+      const result = systemMap(db, {
+        searches: ['sourceOnlySessionStream'],
+        maxDepth: 2,
+        relations: ['call'],
+      });
+      expect(result.topology?.anchors[0]?.nodeIds).toHaveLength(1);
+      expect(result.behavior?.steps).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            role: 'anchor',
+            kind: 'source-construct',
+            label: 'sourceOnlySessionStream',
+            behavior: expect.objectContaining({
+              lines: expect.arrayContaining([
+                expect.objectContaining({ text: expect.stringContaining('deliverStreamEvents(events)') }),
+              ]),
+            }),
+          }),
+          expect.objectContaining({ label: expect.stringContaining('appendStreamEvents') }),
+        ]),
+      );
+      expect(result.behavior?.transitions).toEqual(
+        expect.arrayContaining([expect.objectContaining({ kind: 'call', evidence: expect.any(Array) })]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('attributes a reverse reference to its source callable when SCIP only identifies the module', () => {
+    const db = createSystemMapDb({ moduleOwnedReference: true });
+    try {
+      const result = systemMap(db, {
+        symbols: [symbols.companionAppend],
+        maxDepth: 2,
+        relations: ['call', 'reference'],
+      });
+      const caller = result.topology?.nodes.find(
+        (node) =>
+          node.kind === 'source-construct' &&
+          node.location?.file === 'packages/companion/src/object-commands.ts' &&
+          node.label === 'sessionStreamEvents',
+      );
+
+      expect(caller).toMatchObject({
+        location: { line: 3, endLine: 5 },
+      });
+      expect(result.topology?.edges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            fromNodeId: caller?.id,
+            toNodeId: expect.stringContaining('appendStreamEvents'),
+            kind: 'call',
+          }),
+        ]),
+      );
+      const behavior = result.behavior?.steps.find((step) => step.nodeId === caller?.id)?.behavior;
+      expect(behavior?.lines).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ text: expect.stringContaining('appendStreamEvents(events)') }),
+        ]),
+      );
+      expect(behavior?.lines.some((line) => line.text.includes('unrelatedCommand'))).toBe(false);
+    } finally {
+      db.close();
+    }
+  });
+
   it('populates the universal topology with typed compiler and runtime evidence', () => {
     const db = createSystemMapDb();
     try {
@@ -212,7 +427,11 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
           expect.objectContaining({
             kind: 'runtime-boundary',
             evidence: expect.arrayContaining([
-              expect.objectContaining({ method: 'runtime-boundary:http.method-path', strength: 'exact' }),
+              expect.objectContaining({
+                method: 'runtime-boundary:http.method-path',
+                strength: 'exact',
+                identity: expect.stringContaining('path=/api/agent-dispatch'),
+              }),
             ]),
           }),
         ]),
@@ -221,6 +440,14 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       expect(topology.nodes.every((node) => ['emitted', 'folded', 'unsupported'].includes(node.disposition))).toBe(
         true,
       );
+      const structuralRegionNodeIds = new Set(
+        topology.nodes.filter((node) => node.kind === 'structural-region').map((node) => node.id),
+      );
+      expect(
+        topology.edges.some(
+          (edge) => edge.fromNodeId === edge.toNodeId && structuralRegionNodeIds.has(edge.fromNodeId),
+        ),
+      ).toBe(false);
     } finally {
       db.close();
     }
@@ -231,17 +458,41 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     try {
       const result = systemMap(db, {
         symbols: [symbols.dispatch, symbols.apiRoute],
-        maxDepth: 1,
+        maxDepth: 2,
       });
 
       expect(result.behavior).toBeDefined();
+      expect(
+        result.behavior?.status,
+        JSON.stringify(
+          {
+            paths: result.topology?.paths,
+            runtimeEdges: result.topology?.edges.filter((edge) => edge.kind === 'runtime-boundary'),
+          },
+          null,
+          2,
+        ),
+      ).toBe('connected');
       expect(result.behavior).toMatchObject({
-        status: 'connected',
         coverage: { withheldStatements: expect.any(Number) },
         exactSourceCommand: expect.stringContaining('--view source'),
       });
       expect(result.behavior!.steps.some((step) => step.label.includes('dispatchCommand'))).toBe(true);
       expect(result.behavior!.steps.some((step) => step.label.includes('dispatchStreamEvents'))).toBe(true);
+      expect(
+        result.behavior!.steps.some(
+          (step) =>
+            step.location?.file === 'packages/companion/src/client.ts' && step.label.includes('appendStreamEvents'),
+        ),
+      ).toBe(true);
+      const apiAnchor = result.behavior!.steps.find((step) => step.label.includes('dispatchStreamEvents'));
+      expect(apiAnchor?.behavior?.lines).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            text: expect.stringContaining('appendStreamEvents(events)'),
+          }),
+        ]),
+      );
       expect(result.behavior!.transitions).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -324,6 +575,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       ...graph,
       links: graph.links.map((link) => ({ ...link, strength: 'derived' })),
     });
+
     const db = new ScipDatabase(config);
     try {
       const derived = systemMap(db, {
@@ -473,7 +725,11 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
   it('never emits more drill anchors than one inspect command accepts', () => {
     const db = createSystemMapDb();
     try {
-      const collapsed = systemMap(db, { searches: ['bulk_drill_anchor'], maxDepth: 0 });
+      const collapsed = systemMap(db, {
+        searches: ['bulk_drill_anchor'],
+        maxDepth: 0,
+        fullLiteralTraversal: true,
+      });
       expect(collapsed.expansion).toMatchObject({
         candidateRegionCount: 30,
         regionCount: 12,
@@ -482,6 +738,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       const expanded = systemMap(db, {
         searches: ['bulk_drill_anchor'],
         maxDepth: 0,
+        fullLiteralTraversal: true,
         expand: collapsed.regions.map((region) => region.id),
       });
 
@@ -503,6 +760,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       const result = systemMap(db, {
         searches: ['bulk_drill_anchor'],
         maxDepth: 0,
+        fullLiteralTraversal: true,
         maxTopologyCharacters: 500,
       });
 
@@ -527,10 +785,15 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
   it('gives each expanded region a drill anchor before spending a second selector in one region', () => {
     const db = createSystemMapDb();
     try {
-      const collapsed = systemMap(db, { searches: ['diverse_drill_anchor'], maxDepth: 0 });
+      const collapsed = systemMap(db, {
+        searches: ['diverse_drill_anchor'],
+        maxDepth: 0,
+        fullLiteralTraversal: true,
+      });
       const expanded = systemMap(db, {
         searches: ['diverse_drill_anchor'],
         maxDepth: 0,
+        fullLiteralTraversal: true,
         expand: collapsed.regions.map((region) => region.id),
       });
 
@@ -555,11 +818,13 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
         searches: ['bulk_drill_anchor'],
         symbols: [symbols.render],
         maxDepth: 0,
+        fullLiteralTraversal: true,
       });
       const expanded = systemMap(db, {
         searches: ['bulk_drill_anchor'],
         symbols: [symbols.render],
         maxDepth: 0,
+        fullLiteralTraversal: true,
         expand: collapsed.regions.map((region) => region.id),
       });
 
@@ -628,9 +893,139 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  function createSystemMapDb(): ScipDatabase {
+  it('withholds a broad literal before graph traversal while preserving exact recovery', () => {
+    const db = createSystemMapDb({ broadLiteral: 'common-runtime-term' });
+    try {
+      const result = systemMap(db, {
+        searches: ['common-runtime-term'],
+        symbols: ['appendStreamEvents'],
+        maxDepth: 0,
+      });
+      const anchor = result.anchors.find((candidate) => candidate.kind === 'literal');
+
+      expect(anchor).toMatchObject({
+        status: 'matched',
+        matchingLines: 12,
+        eligibleSeedMatchingLines: 12,
+        seedMatchingLines: 0,
+        materializedMatchingLines: 0,
+        withheldMatchingLines: 12,
+        literalTraversal: 'withheld-broad',
+      });
+      expect(anchor?.representativeMatches).toHaveLength(8);
+      expect(anchor?.narrowingCommands?.length).toBeGreaterThan(0);
+      expect(anchor?.exhaustiveTraversalCommand).toBe(
+        "scip-query system-map --search 'common-runtime-term' --full-literal-traversal",
+      );
+      expect(anchor?.narrowingCommands?.every((command) => command.includes("--scope 'apps/api/src/modules"))).toBe(
+        true,
+      );
+      expect(result.regions.flatMap((region) => region.literalHits)).toEqual([]);
+      expect(result.anchors.find((candidate) => candidate.kind === 'symbol')?.symbolCandidates).toHaveLength(2);
+      expect(result.coverage).toMatchObject({ broadLiteralAnchors: 1, withheldLiteralMatches: 12 });
+      expect(result.closure.withheld.literalMatches).toBe(12);
+
+      const exhaustive = systemMap(db, {
+        searches: ['common-runtime-term'],
+        maxDepth: 0,
+        fullLiteralTraversal: true,
+      });
+      expect(exhaustive.anchors[0]).toMatchObject({
+        literalTraversal: 'materialized',
+        seedMatchingLines: 12,
+        withheldMatchingLines: 0,
+      });
+      expect(exhaustive.expansion?.command).toContain('--full-literal-traversal');
+    } finally {
+      db.close();
+    }
+  });
+
+  it('limits active literal graph seeds while retaining every exact match and exhaustive recovery', () => {
+    const db = createSystemMapDb({ boundedLiteral: 'bounded-runtime-term' });
+    try {
+      const result = systemMap(db, { searches: ['bounded-runtime-term'], maxDepth: 0 });
+      const anchor = result.anchors[0];
+
+      expect(anchor).toMatchObject({
+        matchingLines: 6,
+        eligibleSeedMatchingLines: 6,
+        seedMatchingLines: 3,
+        matchOnlyLines: 3,
+        materializedMatchingLines: 6,
+        withheldMatchingLines: 0,
+        exhaustiveTraversalCommand: "scip-query system-map --search 'bounded-runtime-term' --full-literal-traversal",
+      });
+      expect(result.regions.reduce((total, region) => total + region.literalHitCount, 0)).toBe(6);
+
+      const exhaustive = systemMap(db, {
+        searches: ['bounded-runtime-term'],
+        maxDepth: 0,
+        fullLiteralTraversal: true,
+      });
+      expect(exhaustive.anchors[0]).toMatchObject({ seedMatchingLines: 6, matchOnlyLines: 0 });
+    } finally {
+      db.close();
+    }
+  });
+
+  function createSystemMapDb(
+    options: {
+      broadLiteral?: string;
+      boundedLiteral?: string;
+      moduleOwnedReference?: boolean;
+      unindexedRuntimeParticipant?: boolean;
+      unindexedSourceAnchor?: boolean;
+    } = {},
+  ): ScipDatabase {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-'));
     const source = fixtureSource();
+    if (options.broadLiteral) {
+      for (const [file, lines] of Object.entries(source)) {
+        if (!file.includes('/empty-')) continue;
+        source[file] = [`${lines[0]} // ${options.broadLiteral}`];
+      }
+    }
+    if (options.boundedLiteral) {
+      let remaining = 6;
+      for (const [file, lines] of Object.entries(source)) {
+        if (!file.includes('/empty-') || remaining === 0) continue;
+        source[file] = [`${lines[0]} // '${options.boundedLiteral}'`];
+        remaining -= 1;
+      }
+    }
+    if (options.moduleOwnedReference) {
+      source['packages/companion/src/object-commands.ts'] = [
+        "import { appendStreamEvents } from './client.js';",
+        '',
+        'export const commands = {',
+        '  sessionStreamEvents(events: unknown[]) {',
+        '    return appendStreamEvents(events);',
+        '  },',
+        "  unrelatedCommand() { return 'unrelated'; },",
+        '};',
+      ];
+    }
+    if (options.unindexedRuntimeParticipant) {
+      source['apps/api/src/modules/sessions/registry.ts'] = [
+        "import { appendStreamEvents } from './events.js';",
+        'export const dispatchHandlers = {',
+        '  work_session_stream_events: (_request: unknown, input: { events: unknown[] }) =>',
+        '    appendStreamEvents(input.events),',
+        '};',
+      ];
+    }
+    if (options.unindexedSourceAnchor) {
+      source['packages/companion/src/source-owned-command.ts'] = [
+        "import { appendStreamEvents as deliverStreamEvents } from './public-client.js';",
+        'export const sourceOwnedCommands = {',
+        '  async sourceOnlySessionStream(events: unknown[]) {',
+        '    return deliverStreamEvents(events);',
+        '  },',
+        '};',
+      ];
+      source['packages/companion/src/public-client.ts'] = ["export * from './client.js';"];
+    }
     writeFixtureFiles(root, {
       'package.json': JSON.stringify({ private: true, workspaces: ['apps/*', 'packages/*'] }),
       'apps/api/package.json': JSON.stringify({ name: 'api' }),
@@ -698,6 +1093,11 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       mention(documentId, symbolId, 2);
       mention(documentId, symbolId, 0);
     }
+    if (options.moduleOwnedReference) {
+      const objectCommandsDocumentId = paths.indexOf('packages/companion/src/object-commands.ts') + 1;
+      mention(objectCommandsDocumentId, 1, 2);
+      mention(objectCommandsDocumentId, 1, 0);
+    }
     builder.write();
 
     const config: ScipQueryConfig = {
@@ -708,6 +1108,34 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     const extractionDb = new ScipDatabase(config);
     const runtimeBoundaries = collectRuntimeBoundaryGraph(extractionDb);
     extractionDb.close();
+    if (options.unindexedRuntimeParticipant) {
+      const linked = runtimeBoundaries.links[0];
+      const originalConsumer = linked
+        ? runtimeBoundaries.observations.find((observation) => observation.id === linked.to)
+        : undefined;
+      if (!linked || !originalConsumer) throw new Error('fixture runtime boundary was not extracted');
+      runtimeBoundaries.observations.push({
+        ...originalConsumer,
+        id: 'fixture-unindexed-consumer',
+        owner: {
+          file: 'apps/api/src/modules/sessions/registry.ts',
+          symbol: null,
+          name: 'work_session_stream_events',
+          startLine: 1,
+          endLine: 4,
+        },
+        source: {
+          file: 'apps/api/src/modules/sessions/registry.ts',
+          startLine: 1,
+          endLine: 4,
+        },
+      });
+      runtimeBoundaries.links.push({
+        ...linked,
+        id: 'fixture-unindexed-link',
+        to: 'fixture-unindexed-consumer',
+      });
+    }
     writeRuntimeBoundaryGraph(config.dbPath, runtimeBoundaries);
     return new ScipDatabase(config);
   }

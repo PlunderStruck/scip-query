@@ -310,6 +310,14 @@ export function selectExplorationTopology(
     }
   }
 
+  for (const nodeId of queryAlignedCausalSpineNodeIds(
+    topology,
+    [...selectedNodeIds],
+    Math.max(0, maxSelectedNodes - selectedNodeIds.size),
+  )) {
+    selectedNodeIds.add(nodeId);
+  }
+
   addAdjacentJunctionsToFixedPoint(topology, selectedNodeIds, maxSelectedNodes);
   const baselineFrontiers = foldedComponentFrontiers(topology, selectedNodeIds);
   const requestedFrontiers = new Set(options.expandedFrontierIds ?? []);
@@ -375,6 +383,111 @@ export function selectExplorationTopology(
 interface TraversedPath {
   nodeIds: string[];
   edgeIds: string[];
+}
+
+/**
+ * Follow the strongest directed causal path whose identifiers retain the
+ * explicit query vocabulary. This is graph selection, not task-intent
+ * inference: every unselected alternative remains frontier-accounted.
+ */
+export function queryAlignedCausalSpineNodeIds(
+  topology: ExplorationTopology,
+  anchorNodeIds: readonly string[],
+  maxAdditionalNodes: number,
+  options: { emittedOnly?: boolean } = {},
+): string[] {
+  if (anchorNodeIds.length === 0 || maxAdditionalNodes === 0) return [];
+  const queryTerms = new Set(
+    topology.anchors
+      .filter((anchor) => anchor.status === 'matched')
+      .flatMap((anchor) => topologyIdentifierTerms(anchor.query)),
+  );
+  if (queryTerms.size === 0) return [];
+  const nodeById = new Map(topology.nodes.map((node) => [node.id, node]));
+  const outgoing = new Map<string, ExplorationTopologyEdge[]>();
+  for (const edge of topology.edges) {
+    if (
+      (options.emittedOnly && edge.disposition !== 'emitted') ||
+      edge.disposition === 'excluded' ||
+      edge.disposition === 'unsupported' ||
+      edge.kind === 'structural-membership' ||
+      edge.kind.endsWith('frontier') ||
+      !isCausalSpineEdge(edge)
+    ) {
+      continue;
+    }
+    const edges = outgoing.get(edge.fromNodeId) ?? [];
+    edges.push(edge);
+    outgoing.set(edge.fromNodeId, edges);
+  }
+
+  interface SpineCandidate {
+    nodeIds: string[];
+    score: number;
+    crossesRuntimeBoundary: boolean;
+  }
+  const candidates: SpineCandidate[] = [];
+  const maxEdges = Math.min(6, Math.max(2, maxAdditionalNodes + 1));
+  const visit = (nodeId: string, nodeIds: string[], score: number, crossesRuntimeBoundary: boolean): void => {
+    if (nodeIds.length > 1) candidates.push({ nodeIds, score, crossesRuntimeBoundary });
+    if (nodeIds.length - 1 >= maxEdges) return;
+    for (const edge of outgoing.get(nodeId) ?? []) {
+      if (nodeIds.includes(edge.toNodeId)) continue;
+      const target = nodeById.get(edge.toNodeId);
+      if (!target) continue;
+      const runtimeBoundary = isRuntimeCausalEdge(edge);
+      const nextScore =
+        score +
+        (runtimeBoundary ? 100 : 8) +
+        topologyIdentifierOverlap(target.label, queryTerms) * 24 +
+        topologyEdgeEvidenceRank(edge);
+      visit(edge.toNodeId, [...nodeIds, edge.toNodeId], nextScore, crossesRuntimeBoundary || runtimeBoundary);
+    }
+  };
+  for (const anchorNodeId of anchorNodeIds) visit(anchorNodeId, [anchorNodeId], 0, false);
+
+  const best = candidates.sort(
+    (left, right) =>
+      Number(right.crossesRuntimeBoundary) - Number(left.crossesRuntimeBoundary) ||
+      right.score - left.score ||
+      right.nodeIds.length - left.nodeIds.length ||
+      left.nodeIds.join('\u0000').localeCompare(right.nodeIds.join('\u0000')),
+  )[0];
+  if (!best) return [];
+  return best.nodeIds.filter((nodeId) => !anchorNodeIds.includes(nodeId)).slice(0, maxAdditionalNodes);
+}
+
+function isCausalSpineEdge(edge: ExplorationTopologyEdge): boolean {
+  return isRuntimeCausalEdge(edge) || edge.kind === 'call' || edge.kind === 'compiler:call';
+}
+
+function isRuntimeCausalEdge(edge: ExplorationTopologyEdge): boolean {
+  return edge.kind === 'runtime-boundary' || edge.kind.startsWith('runtime:');
+}
+
+function topologyIdentifierTerms(value: string): string[] {
+  return value
+    .replace(/([\p{Ll}\p{N}])([\p{Lu}])/gu, '$1 $2')
+    .toLocaleLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((term) => term.length > 1);
+}
+
+function topologyIdentifierOverlap(label: string, queryTerms: ReadonlySet<string>): number {
+  return topologyIdentifierTerms(label).filter(
+    (term, index, terms) => terms.indexOf(term) === index && queryTerms.has(term),
+  ).length;
+}
+
+function topologyEdgeEvidenceRank(edge: ExplorationTopologyEdge): number {
+  const ranks: Readonly<Record<ExplorationEvidenceStrength, number>> = {
+    exact: 5,
+    derived: 4,
+    mixed: 3,
+    candidate: 1,
+    unknown: 0,
+  };
+  return Math.max(0, ...edge.evidence.map((evidence) => ranks[evidence.strength]));
 }
 
 function shortestAnchorPath(

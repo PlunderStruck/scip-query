@@ -5,35 +5,52 @@ tests, and final decision.
 
 ## Before a nonlocal edit
 
-For a cross-layer or end-to-end question, run one system map from the smallest
-set of independent indexed anchors. Usually that is one distinctive protocol,
-route, event, table, or message literal plus one callable or contract symbol.
-Do not repeat the same identifier through both selector families merely to
-widen output:
+Use one evidence ladder: locate exact text; orient it by compiler identity and
+construct ownership; navigate typed compiler and runtime relationships; account
+for every omitted direction; read connected behavior for the selected path;
+then retrieve exact current source only where full implementation detail can
+change the decision.
+
+For a cross-layer or end-to-end question, first reduce the question to the few
+material claims the answer must establish. Use at most one locating search to
+identify the smallest independent exact owners, then make one system map the
+first graph or detail operation. Do not run `inspect`, `evidence`, `code`, or
+command help before the map. A source-owned search identity remains a
+`--search` selector; use `--symbol` only for a printed compiler identity, and
+never pass the same loose term to both selectors. A distinctive route, event,
+table, or message literal plus one exact callable can be useful when each names
+a different referent; a generic term should be omitted:
 
 ```bash
 scip-query system-map --search <literal> --symbol <symbol>
 ```
 
-Read the traversal-seed, retained match-only, and withheld traversal-relevant
-region ledgers plus the coverage report. Run `Expand together:` for the ranked system.
-Add several withheld regions when their
-relationships can change the decision. A whole-token match in ordinary source seeds
-traversal; embedded substrings and test, fixture, mock, preview, demo,
-or example hits remain visible without pulling their dependencies into the
-default map. Add a match-only region explicitly only when it can change the decision. Expansion
-reports every child file with complete mapped counts and a small set of ranked
-definition locations, then emits one bounded `code` command that reads ranked
-definitions plus context around ownerless literal sites, and one bounded behavior command. Cite the absolute
-line numbers in the `code` result. Use the behavior command when the expanded
-regions remain material, or remove only irrelevant anchors. A behavior
-view is the cheapest faithful syntax-derived representation of a complete
-source unit: compact units stay raw, while larger units use a normalized
-hierarchical outline only when it is materially smaller. Every statement is
-represented; unsupported or compression-sensitive statements remain
-verbatim. Exact built-in runtime-boundary links participate in traversal.
-Candidate and unresolved runtime frontiers are reasons to add focused anchors,
-not reasons to assume the missing relationship does not exist.
+Read its anchor status, connector graph, connected behavior, accounted
+frontiers, and query completion together. Connected behavior is already source
+evidence. If its lines and transitions establish every material claim, answer
+immediately even when unrelated recovery commands remain. Otherwise name the
+exact missing claim and resolve it with one batched behavioral `inspect` or
+exact-source query. Repeat `--symbol` or `--at` for multiple inspect selectors;
+positional selectors are not accepted. Do not enumerate helpers, examples,
+tests, or implementation families the question did not ask about. The normal
+allowance is one locator, one map, and at most one batched gap query; exceed it
+only when the latest evidence explicitly leaves another material claim
+unresolved.
+
+Before sending the answer, audit the draft itself against the material claims.
+Evidence seen but left implicit in the draft is not recovered. Copy returned
+file and line identities exactly instead of reconstructing citation paths.
+
+A broad literal is counted exactly but withheld before graph traversal. Use
+its representative identities and ranked scoped searches to narrow it. Use
+`--full-literal-traversal` only when every exact match can change the decision.
+
+`selection-complete`, `connector-complete`, and `frontier-accounted` describe
+the current query's evidence obligation; none says the user's task is finished.
+`coverage-incomplete` names unresolved evidence. Exact built-in edges are facts
+within reported coverage. Candidates and unsupported dynamic frontiers require
+another distinctive literal, exact range, or known participant—not an absence
+claim.
 
 When one known target is already the center of the change, run the aggregate
 context query:
@@ -44,6 +61,11 @@ scip-query context <target>
 
 Treat its source packet as already read. Write a normal concise plan. Add a
 focused query only when a named uncertainty can change that plan.
+
+For tracked nonbinary repository content, use `search`, `inspect`, and `code`
+instead of native search or source reads. Native tools are for applying edits,
+running checks, binary content, or a specific unsupported gap that scip-query
+has explicitly reported.
 
 ## After a coherent edit
 
@@ -76,9 +98,8 @@ scip-query adds relationship and cleanup evidence.
 
 - Use `search` for an unknown literal anchor in indexed source.
 - Use `system-map` before source drilldown when several layers or subsystems may
-  participate. Follow compiler and exact built-in runtime-boundary links,
-  inspect unresolved frontiers, expand several regions together, then inspect
-  only locations tied to a named behavioral uncertainty.
+  participate. Treat its connected behavior as source already read. Follow an
+  unresolved frontier only when it can answer a named material uncertainty.
 - Use a behavior-view `inspect` packet for several related locations. Escalate
   to `code` only for known exact definitions or ranges whose complete source
   can change the decision. An exact
@@ -88,16 +109,17 @@ scip-query adds relationship and cleanup evidence.
   `--members all` only when the whole file matters. If the command refuses an
   oversized packet, it emitted no partial source; narrow to the exact units
   still needed before deciding whether every split remains necessary.
-- Put known text, symbol, and file-line anchors into one behavior-view `inspect`
-  packet. Read its exact selector cardinality, omission ledger, and
-  packet coverage. Read its stopping check: stop on `stop-ready` unless a named
-  semantic blind spot matters. Otherwise drill into several relevant omission groups together; omit
-  the behavior view only for exact units whose full implementation can change
-  the decision, and use `--full` only when all omitted evidence can change it.
+- After the map, put known text, symbol, and file-line gaps into one
+  `scip-query inspect --symbol <symbol> --at <file:line> --view behavior`
+  packet. Read its exact selector cardinality, per-channel evidence coverage,
+  omission ledger, and query completion. Stop when no named fact remains
+  unanswered. Otherwise drill into several relevant omission groups together;
+  omit the behavior view only for exact units whose full implementation can
+  change the decision, and use `--full` only when all omitted evidence can change it.
   `--full` and `--limit` are mutually exclusive; never combine them.
-- Treat returned, line-numbered source as citation-ready and already read. Use
-  a native read only for exact edit
-  lines, a non-indexed file, or a named evidence gap.
+- Treat returned, line-numbered source as citation-ready and already read.
+  Native tools are for applying edits, running checks, binary content, or a
+  specific unsupported gap that scip-query has explicitly reported.
 - Do not repeat an unchanged query after context compaction.
 - Do not claim that a caller, route, branch, poller, or consumer is absent from
   a bounded result. Use `--full` only when complete coverage can change a

@@ -193,6 +193,7 @@ export type {
   SystemMapAnchorCandidate,
   SystemMapAnchorKind,
   SystemMapAnchorStatus,
+  SystemMapBoundaryParticipant,
   SystemMapCoverage,
   SystemMapDrilldown,
   SystemMapDrilldownAnchor,
@@ -212,6 +213,7 @@ export type {
   SystemMapRelationStrength,
   SystemMapResult,
   SystemMapSourceScope,
+  SystemMapSourceConstruct,
   SystemMapSymbol,
 } from './graph/system-map.js';
 export type {

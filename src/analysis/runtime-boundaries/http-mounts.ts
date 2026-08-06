@@ -1,15 +1,13 @@
 import { createHash } from 'node:crypto';
-import { getReExports, getSourceImports } from '../../language-parsers/index.js';
+import { getSourceImports } from '../../language-parsers/index.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import { getSourceFiles } from '../../source/primitives/source-fileset.js';
 import { getSourceText } from '../../source/primitives/source-text.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
+import { resolveImportedDefinitions } from '../../symbols/imported-definitions.js';
 import { evaluateStaticValue as evaluateBoundaryValue } from '../../symbols/graph/static-value-flow.js';
 import { boundaryFileContext } from './extractors.js';
 import type { BoundaryKeyPart, BoundaryObservation } from './types.js';
-
-const MAX_REEXPORT_DEPTH = 4;
 
 interface HttpMount {
   file: string;
@@ -154,25 +152,6 @@ function resolveMountedTargetFiles(db: ScipDatabase, importerFile: string, expre
   const importedName = imported.importedName === 'default' ? localName : imported.importedName;
   const definitions = resolveImportedDefinitions(db, imported.sourcePath, importedName);
   return [...new Set(definitions.map((definition) => definition.relativePath))];
-}
-
-function resolveImportedDefinitions(
-  db: ScipDatabase,
-  relativePath: string,
-  importedName: string,
-  depth = 0,
-  seen = new Set<string>(),
-): ReturnType<typeof getDefinitionsForFile> {
-  const identity = `${relativePath}\0${importedName}`;
-  if (seen.has(identity) || depth > MAX_REEXPORT_DEPTH) return [];
-  seen.add(identity);
-  const direct = getDefinitionsForFile(db, relativePath).filter((definition) => definition.leaf === importedName);
-  if (direct.length > 0) return direct;
-  return getReExports(db, relativePath).flatMap((reexport) => {
-    if (!reexport.sourcePath) return [];
-    if (reexport.kind === 'named' && !reexport.names.includes(importedName)) return [];
-    return resolveImportedDefinitions(db, reexport.sourcePath, importedName, depth + 1, new Set(seen));
-  });
 }
 
 function composePath(prefix: string, path: string): string {

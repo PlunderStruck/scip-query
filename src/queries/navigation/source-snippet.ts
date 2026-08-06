@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { getAst, type SyntaxNode } from '../../source/ast.js';
+import { readableSourceUnitRange } from '../../source/facts/source-construct.js';
 import { getSourceLines } from '../../source/primitives/source-text.js';
 
 export interface SourceSnippet {
@@ -22,25 +23,6 @@ export type ReferenceSourceKind = 'complete-call-expression' | 'non-call-referen
 export interface ReferenceSourceSnippet extends SourceSnippet {
   kind: ReferenceSourceKind;
 }
-
-const READABLE_SOURCE_UNIT_TYPES = new Set([
-  'arrow_function',
-  'class_declaration',
-  'constructor_declaration',
-  'field_definition',
-  'function_declaration',
-  'function_definition',
-  'function_expression',
-  'function_item',
-  'generator_function_declaration',
-  'generator_function',
-  'lexical_declaration',
-  'method',
-  'method_declaration',
-  'method_definition',
-  'object_method',
-  'variable_declaration',
-]);
 
 const CALL_EXPRESSION_TYPES = new Set([
   'call',
@@ -164,7 +146,7 @@ export function enclosingSourceUnitSnippet(
   }
   const lines = getSourceLines(db, relativePath);
   if (lines.length === 0 || focusLine < 0 || focusLine >= lines.length) return null;
-  const unit = smallestReadableUnit(getAst(db, relativePath)?.rootNode ?? null, focusLine);
+  const unit = readableSourceUnitRange(db, relativePath, focusLine);
   if (!unit) {
     const fallback = sourceSnippet(db, relativePath, focusLine, fallbackContext);
     return fallback
@@ -178,9 +160,8 @@ export function enclosingSourceUnitSnippet(
       : null;
   }
 
-  const unitStartLine = Math.max(0, unit.startPosition.row);
-  const rawEndLine = unit.endPosition.column === 0 ? unit.endPosition.row - 1 : unit.endPosition.row;
-  const unitEndLine = Math.min(lines.length - 1, Math.max(unitStartLine, rawEndLine));
+  const unitStartLine = unit.startLine;
+  const unitEndLine = unit.endLine;
   const unitLineCount = unitEndLine - unitStartLine + 1;
   const kept = Math.min(unitLineCount, maxLines);
   const desiredOffset = focusLine - unitStartLine - Math.floor(kept / 2);
@@ -198,16 +179,6 @@ export function enclosingSourceUnitSnippet(
     unitEndLine,
     omittedLines: unitLineCount - kept,
   };
-}
-
-function smallestReadableUnit(root: SyntaxNode | null, line: number): SyntaxNode | null {
-  if (!root || !containsLine(root, line)) return null;
-  let current: SyntaxNode | null = deepestNodeContainingLine(root, line);
-  while (current) {
-    if (READABLE_SOURCE_UNIT_TYPES.has(current.type)) return current;
-    current = current.parent;
-  }
-  return null;
 }
 
 function minimalMatchingCalls(root: SyntaxNode, line: number, referencedLeaf: string): SyntaxNode[] {
@@ -240,17 +211,6 @@ function callTargetLeaf(node: SyntaxNode): string | null {
   return identifiers?.at(-1) ?? null;
 }
 
-function deepestNodeContainingLine(node: SyntaxNode, line: number): SyntaxNode {
-  const children = node.namedChildren
-    .filter((child) => containsLine(child, line))
-    .sort((left, right) => nodeSpan(left) - nodeSpan(right));
-  return children.length > 0 ? deepestNodeContainingLine(children[0]!, line) : node;
-}
-
 function containsLine(node: SyntaxNode, line: number): boolean {
   return node.startPosition.row <= line && node.endPosition.row >= line;
-}
-
-function nodeSpan(node: SyntaxNode): number {
-  return node.endIndex - node.startIndex;
 }

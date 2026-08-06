@@ -764,6 +764,15 @@ describe('related source evidence', () => {
     }
   });
 
+  it('retains readable raw source when one compressed statement would be too dense', () => {
+    const db = createSourceEvidenceDb();
+    try {
+      expect(behaviorSkeleton(db, 'src/outline-dense.ts', 0, 18)).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
   it('prefers marginal file coverage and exposes recoverable omission groups', () => {
     const db = createSourceEvidenceDb();
     try {
@@ -1158,6 +1167,25 @@ describe('related source evidence', () => {
         '  return state.count;',
         '}',
       ],
+      'src/outline-dense.ts': [
+        'export function normalizeEvents(events: Array<{ content?: string; payload?: object }>) {',
+        `  // ${'Operational explanation retained only to make compression economically useful. '.repeat(20)}`,
+        '  const normalized = events',
+        "    .filter((event) => event && typeof event === 'object')",
+        '    .map((event) => {',
+        "      const content = typeof event.content === 'string'",
+        '        ? event.content.trim().slice(0, 12_000)',
+        '        : null;',
+        "      const payload = event.payload && typeof event.payload === 'object'",
+        '        ? event.payload',
+        '        : {};',
+        '      return { content, payload };',
+        '    })',
+        '    .filter((event) => event.content || Object.keys(event.payload).length > 0)',
+        '    .slice(0, 200);',
+        '  return normalized;',
+        '}',
+      ],
       'src/registry-table.ts': [
         'export const handlers = {',
         "  alpha: () => 'alpha',",
@@ -1208,6 +1236,7 @@ describe('related source evidence', () => {
       .document(26, 'typescript', 'src/outline-fidelity.ts')
       .document(27, 'typescript', 'src/registry-table.ts')
       .document(28, 'typescript', 'src/api.test.ts')
+      .document(29, 'typescript', 'src/outline-dense.ts')
       .symbol(1, target, 'appendThing', 12, 'function appendThing|function appendThing(value: string): string')
       .symbol(2, caller, 'run', 12, 'function run|function run(): string[]')
       .symbol(4, 'scip-typescript npm pkg 1.0.0 src/`commands.ts`/commandSet.', 'commandSet', 13)

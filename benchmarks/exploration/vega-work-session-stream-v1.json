@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "id": "vega-work-session-stream-v1",
+  "question": "How does the companion's sessionStreamEvents command deliver work-session stream events to the API, validate and persist them, and notify realtime consumers?",
+  "requiredFacts": [
+    {
+      "id": "companion-validates-and-authorizes",
+      "description": "The companion command parses an events JSON array, resolves project context, and obtains a work-sessions:write dispatch token.",
+      "answerEvidenceAlternatives": [
+        ["parseJsonOption", "Array.isArray", "work-sessions:write"],
+        ["parses", "events", "array", "work-sessions:write"]
+      ]
+    },
+    {
+      "id": "companion-crosses-dispatch-boundary",
+      "description": "The companion sends the work_session_stream_events command through the agent-dispatch HTTP endpoint.",
+      "answerEvidenceAlternatives": [
+        ["work_session_stream_events", "/api/v1/agent-dispatch"],
+        ["appendWorkSessionStreamEvents", "dispatchAgentCommand", "work_session_stream_events"]
+      ]
+    },
+    {
+      "id": "api-handler-reconstructs-request",
+      "description": "The API dispatch registry handler puts sessionId in request params and events in the request body before calling the controller.",
+      "answerEvidenceAlternatives": [
+        ["sessionId", "params", "events", "body", "workSessionStreamEvents"],
+        ["registry handler", "sessionId", "events", "controller"]
+      ]
+    },
+    {
+      "id": "controller-validates-and-delegates",
+      "description": "The controller validates the session and actor/event request shape, rejects dispatch sessions, and delegates to the work-session events service.",
+      "answerEvidenceAlternatives": [
+        ["controller", "dispatch session", "events", "appendWorkSessionStreamEvents"],
+        ["workSessionStreamEvents", "sessionId", "actor", "events", "service"]
+      ]
+    },
+    {
+      "id": "service-bounds-and-normalizes",
+      "description": "The service requires an owned live session and normalizes a bounded batch of nonempty events, with at most 200 events and 12,000 content characters.",
+      "answerEvidenceAlternatives": [
+        ["owned live session", "200", "12,000", "nonempty"],
+        ["assertOwnedSession", "200", "12_000", "filter"]
+      ]
+    },
+    {
+      "id": "transaction-assigns-sequences",
+      "description": "A transaction locks the session, reads the current maximum sequence, inserts consecutively sequenced event rows, and updates the session heartbeat.",
+      "answerEvidenceAlternatives": [
+        ["transaction", "lock", "maximum sequence", "inserts", "heartbeat"],
+        ["forUpdate", "max", "sequence", "insert", "lastHeartbeatAt"],
+        ["locks", "computes the next sequence", "inserts", "heartbeat"]
+      ]
+    },
+    {
+      "id": "service-notifies-and-returns",
+      "description": "After persistence, the service broadcasts stream_events and returns the hydrated inserted events/count.",
+      "answerEvidenceAlternatives": [
+        ["stream_events", "broadcast", "hydrated", "inserted"],
+        ["broadcastSessionUpdate", "stream_events", "insertedCount"],
+        ["stream_events", "broadcast", "hydrated session", "insertion count"]
+      ]
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "client-writes-events-directly",
+      "answerIncludesAny": [
+        "companion writes directly to the database",
+        "companion inserts the event rows"
+      ]
+    }
+  ],
+  "budgets": {
+    "maxToolCalls": 6,
+    "maxSemanticQueries": 4,
+    "maxRenderedCharacters": 60000,
+    "maxNativeExplorationReads": 0
+  }
+}

@@ -67,13 +67,21 @@ export function validateExplorationTrial(value) {
       kind,
       command: requiredString(parsed.command, `trial calls[${index}].command`),
       output: typeof parsed.output === 'string' ? parsed.output : '',
+      outputCharacters:
+        parsed.outputCharacters === undefined
+          ? typeof parsed.output === 'string'
+            ? parsed.output.length
+            : 0
+          : nonNegativeInteger(parsed.outputCharacters, `trial calls[${index}].outputCharacters`),
     };
   });
+  const usage = trial.usage === undefined ? undefined : modelUsage(trial.usage, 'trial usage');
   return {
     ...trial,
     benchmarkId: trial.benchmarkId,
     answer: requiredString(trial.answer, 'trial answer'),
     calls,
+    ...(usage ? { usage } : {}),
   };
 }
 
@@ -101,14 +109,26 @@ export function evaluateExplorationTrial(definitionValue, trialValue) {
     found: claim.answerIncludesAny.some((evidence) => normalizedAnswer.includes(normalizeText(evidence))),
   }));
   const metrics = {
-    toolCalls: trial.calls.filter((call) => call.kind !== 'status').length,
+    toolCalls: trial.calls.filter((call) => call.kind !== 'status' && call.surface !== 'other').length,
     semanticQueries: trial.calls.filter((call) => call.surface === 'scip-query' && call.kind === 'query').length,
     transportContinuations: trial.calls.filter((call) => call.surface === 'scip-query' && call.kind === 'continuation')
       .length,
-    renderedCharacters: trial.calls.reduce((total, call) => total + call.output.length, 0),
+    renderedCharacters: trial.calls
+      .filter((call) => call.kind !== 'status' && call.surface !== 'other')
+      .reduce((total, call) => total + call.outputCharacters, 0),
     nativeExplorationReads: trial.calls.filter(
       (call) => call.surface === 'native-search' || call.surface === 'native-read',
     ).length,
+    ...(trial.usage
+      ? {
+          modelInputTokens: trial.usage.inputTokens,
+          cachedModelInputTokens: trial.usage.cachedInputTokens,
+          uncachedModelInputTokens: trial.usage.inputTokens - trial.usage.cachedInputTokens,
+          modelOutputTokens: trial.usage.outputTokens,
+          reasoningOutputTokens: trial.usage.reasoningOutputTokens,
+          totalModelTokens: trial.usage.inputTokens + trial.usage.outputTokens,
+        }
+      : {}),
   };
   const gates = {
     accuracy: factResults.every((fact) => fact.recovered),
@@ -172,6 +192,20 @@ function requiredString(value, label) {
 function nonNegativeInteger(value, label) {
   if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${label} must be a non-negative safe integer`);
   return value;
+}
+
+function modelUsage(value, label) {
+  const parsed = record(value, label);
+  const usage = {
+    inputTokens: nonNegativeInteger(parsed.inputTokens, `${label}.inputTokens`),
+    cachedInputTokens: nonNegativeInteger(parsed.cachedInputTokens, `${label}.cachedInputTokens`),
+    outputTokens: nonNegativeInteger(parsed.outputTokens, `${label}.outputTokens`),
+    reasoningOutputTokens: nonNegativeInteger(parsed.reasoningOutputTokens, `${label}.reasoningOutputTokens`),
+  };
+  if (usage.cachedInputTokens > usage.inputTokens) {
+    throw new Error(`${label}.cachedInputTokens must not exceed inputTokens`);
+  }
+  return usage;
 }
 
 function uniqueIds(values, label) {

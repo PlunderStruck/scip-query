@@ -924,12 +924,17 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     description: 'Count current project text matches and preview a bounded, recoverable identity and source manifest',
     options: [
       option('-s, --scope <path>', 'Limit the search to current project paths matching this text'),
-      option('-C, --context <n>', 'Source lines before and after each match', parseNonNegativeInteger, 6),
+      option(
+        '-C, --context <n>',
+        'Source lines before and after each representative match',
+        parseNonNegativeInteger,
+        2,
+      ),
       option(
         '-n, --limit <n>',
-        'Source windows to materialize; broad identity manifests remain bounded',
+        'Representative source windows to materialize; exact identity manifests remain separately accounted',
         parsePositiveInteger,
-        12,
+        6,
       ),
       option('--full', 'Materialize source for every match after deliberately narrowing broad selectors'),
       option('--regexp', 'Treat the search text as a bounded regular expression'),
@@ -945,8 +950,8 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     query: ({ db, args, opts }) =>
       queries.searchSource(db, stringArg(args, 0), {
         scope: stringOptionValue(opts, 'scope'),
-        context: definedNumberOption(opts, 'context', 6),
-        limit: definedLimitOption(opts, 'limit', 12),
+        context: definedNumberOption(opts, 'context', 2),
+        limit: definedLimitOption(opts, 'limit', 6),
         regexp: booleanOptionValue(opts, 'regexp'),
         ignoreCase: booleanOptionValue(opts, 'ignoreCase'),
         ranking: 'structural',

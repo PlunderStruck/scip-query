@@ -53,19 +53,34 @@ scip-query status --capabilities
 ## The normal workflow
 
 Use scip-query as the primary reading surface for indexed source. For a
-cross-layer or end-to-end question, start with `system-map` and the smallest
-independent literal and symbol anchors. Do not repeat one identifier through
-both selectors merely to widen output. It shows every observed structural
+cross-layer or end-to-end question, reduce the question to its material claims,
+use at most one search to locate the smallest independent exact owners, and
+make `system-map` the first graph or detail operation. Do not run `inspect`,
+`evidence`, or `code` before that map. Keep a source-owned search identity as
+`--search`; use `--symbol` only for a printed compiler identity, and never pass
+the same loose term to both selectors merely to widen output. It shows every observed structural
 region at once, compiler-resolved and exact runtime-boundary relationships
 between regions, unresolved candidate frontiers, and the limits of the
-observation. Run `Expand together:` to preserve every
-observed region in one follow-up; remove only regions already established as
-irrelevant. The result lists every child file with complete mapped counts and
-ranked source anchors rather than printing every relationship. Its emitted
-behavior command reads those anchors together using raw source for compact
-units and complete normalized outlines for larger units when normalization is
-materially cheaper. Use `code` afterward only when one exact
-unit's complete implementation can change the decision.
+observation. Read the anchor status, connector graph, connected behavior,
+accounted frontiers, and query completion together. Connected behavior is
+already source evidence. If it establishes every material claim, answer
+immediately. Otherwise name the exact missing claim and use one batched
+`inspect` or exact-source query that can resolve it. Do not enumerate unrelated
+helpers, tests, examples, or frontiers. The result lists child files with complete mapped counts and ranked
+source anchors rather than printing every relationship. Its behavioral view
+reads selected anchors together using raw source for compact units and complete
+normalized outlines for larger units when normalization is materially cheaper.
+Use `code` afterward only when one exact unit's complete implementation can
+change the decision.
+
+Before answering, audit the draft itself against the material claims. A fact
+seen in evidence but left implicit in the answer is not recovered. Copy returned
+file and line identities exactly rather than reconstructing citation paths.
+
+A broad literal is counted exactly but withheld before graph traversal. The
+anchor reports representative identities and ranked scoped searches so the
+agent can narrow it without losing recovery. Use `--full-literal-traversal`
+only when every exact match can change the decision.
 
 ```bash
 scip-query system-map \
@@ -91,8 +106,10 @@ before deciding whether every split remains necessary.
 
 Start an unknown path with `search`; batch related text, symbol, and file-line
 anchors with `inspect`; use `evidence` when one symbol and its real uses are the
-center of the question. Use a native source read only for exact edit lines,
-non-indexed files, or a named evidence gap.
+center of the question. For tracked nonbinary repository content, keep
+exploration on scip-query. Native tools are for applying edits, running checks,
+binary content, or a specific unsupported gap that scip-query has explicitly
+reported.
 
 ```bash
 scip-query search work_session_stream_events

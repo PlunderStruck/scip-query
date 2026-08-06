@@ -1,0 +1,163 @@
+{
+  "acceptedAt": "2026-08-06T05:57:30.182Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "478963da6452cc4e136691cbd24df172cf3feeb748187f4fedbac94942778b6f",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapAnchor changed from interface SystemMapAnchor { kind: SystemMapAnchorKind; query: string; status: SystemMapAnchorStatus; matchedRegionIds: string[]; matchingLines?: number; seedMatchingLines?: numb... to interface SystemMapAnchor { kind: SystemMapAnchorKind; query: string; status: SystemMapAnchorStatus; matchedRegionIds: string[]; matchingLines?: number; seedMatchingLines?: numb....",
+      "target": "./queries:SystemMapAnchor"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapBoundaryParticipant.",
+      "target": "./queries:SystemMapBoundaryParticipant"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapCoverage changed from interface SystemMapCoverage { explicitAnchorCount: number; requestedRelationKinds: SystemMapRelationKind[]; evidenceFloor: SystemMapEvidenceFloor; includedSourceScopes: Boundary... to interface SystemMapCoverage { explicitAnchorCount: number; requestedRelationKinds: SystemMapRelationKind[]; evidenceFloor: SystemMapEvidenceFloor; includedSourceScopes: Boundary....",
+      "target": "./queries:SystemMapCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapLiteralHit changed from interface SystemMapLiteralHit { query: string; file: string; line: number; ownerSymbol: string | null; ownerShortName: string | null; sourceLine: string; matchKind?: 'exact-valu... to interface SystemMapLiteralHit { query: string; file: string; line: number; ownerSymbol: string | null; ownerShortName: string | null; ownerStartLine?: number | null; ownerEndLin....",
+      "target": "./queries:SystemMapLiteralHit"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapOptions changed from interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind... to interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind....",
+      "target": "./queries:SystemMapOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapRelation changed from interface SystemMapRelation { kind: SystemMapRelationKind; evidence: SystemMapRelationEvidence; fromRegionId: string; fromFile: string; fromSymbol: string | null; toRegionId: st... to interface SystemMapRelation { kind: SystemMapRelationKind; evidence: SystemMapRelationEvidence; fromRegionId: string; fromFile: string; fromSymbol: string | null; toRegionId: st....",
+      "target": "./queries:SystemMapRelation"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import-candidate' | 'compiler-cross-workspace-symbol' | 'indexed-or-source-reference' | 'indexed-or-source-im... to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-constructed-member-callsite' | 'ast-member-import-candidate' | 'scip-occurrence-callsite' | 'compiler-cross-workspac....",
+      "target": "./queries:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapSourceConstruct.",
+      "target": "./queries:SystemMapSourceConstruct"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapAnchor changed from interface SystemMapAnchor { kind: SystemMapAnchorKind; query: string; status: SystemMapAnchorStatus; matchedRegionIds: string[]; matchingLines?: number; seedMatchingLines?: numb... to interface SystemMapAnchor { kind: SystemMapAnchorKind; query: string; status: SystemMapAnchorStatus; matchedRegionIds: string[]; matchingLines?: number; seedMatchingLines?: numb....",
+      "target": "./queries/index:SystemMapAnchor"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapBoundaryParticipant.",
+      "target": "./queries/index:SystemMapBoundaryParticipant"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapCoverage changed from interface SystemMapCoverage { explicitAnchorCount: number; requestedRelationKinds: SystemMapRelationKind[]; evidenceFloor: SystemMapEvidenceFloor; includedSourceScopes: Boundary... to interface SystemMapCoverage { explicitAnchorCount: number; requestedRelationKinds: SystemMapRelationKind[]; evidenceFloor: SystemMapEvidenceFloor; includedSourceScopes: Boundary....",
+      "target": "./queries/index:SystemMapCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapLiteralHit changed from interface SystemMapLiteralHit { query: string; file: string; line: number; ownerSymbol: string | null; ownerShortName: string | null; sourceLine: string; matchKind?: 'exact-valu... to interface SystemMapLiteralHit { query: string; file: string; line: number; ownerSymbol: string | null; ownerShortName: string | null; ownerStartLine?: number | null; ownerEndLin....",
+      "target": "./queries/index:SystemMapLiteralHit"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapOptions changed from interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind... to interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind....",
+      "target": "./queries/index:SystemMapOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapRelation changed from interface SystemMapRelation { kind: SystemMapRelationKind; evidence: SystemMapRelationEvidence; fromRegionId: string; fromFile: string; fromSymbol: string | null; toRegionId: st... to interface SystemMapRelation { kind: SystemMapRelationKind; evidence: SystemMapRelationEvidence; fromRegionId: string; fromFile: string; fromSymbol: string | null; toRegionId: st....",
+      "target": "./queries/index:SystemMapRelation"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import-candidate' | 'compiler-cross-workspace-symbol' | 'indexed-or-source-reference' | 'indexed-or-source-im... to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-constructed-member-callsite' | 'ast-member-import-candidate' | 'scip-occurrence-callsite' | 'compiler-cross-workspac....",
+      "target": "./queries/index:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapSourceConstruct.",
+      "target": "./queries/index:SystemMapSourceConstruct"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapAnchor changed from interface SystemMapAnchor { kind: SystemMapAnchorKind; query: string; status: SystemMapAnchorStatus; matchedRegionIds: string[]; matchingLines?: number; seedMatchingLines?: numb... to interface SystemMapAnchor { kind: SystemMapAnchorKind; query: string; status: SystemMapAnchorStatus; matchedRegionIds: string[]; matchingLines?: number; seedMatchingLines?: numb....",
+      "target": "./queries/system-map:SystemMapAnchor"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapBoundaryParticipant.",
+      "target": "./queries/system-map:SystemMapBoundaryParticipant"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapCoverage changed from interface SystemMapCoverage { explicitAnchorCount: number; requestedRelationKinds: SystemMapRelationKind[]; evidenceFloor: SystemMapEvidenceFloor; includedSourceScopes: Boundary... to interface SystemMapCoverage { explicitAnchorCount: number; requestedRelationKinds: SystemMapRelationKind[]; evidenceFloor: SystemMapEvidenceFloor; includedSourceScopes: Boundary....",
+      "target": "./queries/system-map:SystemMapCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapLiteralHit changed from interface SystemMapLiteralHit { query: string; file: string; line: number; ownerSymbol: string | null; ownerShortName: string | null; sourceLine: string; matchKind?: 'exact-valu... to interface SystemMapLiteralHit { query: string; file: string; line: number; ownerSymbol: string | null; ownerShortName: string | null; ownerStartLine?: number | null; ownerEndLin....",
+      "target": "./queries/system-map:SystemMapLiteralHit"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapOptions changed from interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind... to interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind....",
+      "target": "./queries/system-map:SystemMapOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapQueryClosure changed from interface SystemMapQueryClosure { status: 'accounted' | 'incomplete'; emitted: { regions: number; relations: number; runtimeLinks: number; }; withheld: { symbols: number; files:... to interface SystemMapQueryClosure { status: 'accounted' | 'incomplete'; emitted: { regions: number; relations: number; runtimeLinks: number; }; withheld: { symbols: number; files:....",
+      "target": "./queries/system-map:SystemMapQueryClosure"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapRelation changed from interface SystemMapRelation { kind: SystemMapRelationKind; evidence: SystemMapRelationEvidence; fromRegionId: string; fromFile: string; fromSymbol: string | null; toRegionId: st... to interface SystemMapRelation { kind: SystemMapRelationKind; evidence: SystemMapRelationEvidence; fromRegionId: string; fromFile: string; fromSymbol: string | null; toRegionId: st....",
+      "target": "./queries/system-map:SystemMapRelation"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import-candidate' | 'compiler-cross-workspace-symbol' | 'indexed-or-source-reference' | 'indexed-or-source-im... to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-constructed-member-callsite' | 'ast-member-import-candidate' | 'scip-occurrence-callsite' | 'compiler-cross-workspac....",
+      "target": "./queries/system-map:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapSourceConstruct.",
+      "target": "./queries/system-map:SystemMapSourceConstruct"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "b74d889f2c238c50abdefa2a097038a35d3c1fa4d8f9753dd6906e34462febc3",
+  "reason": "Additive source-construct and runtime-participant metadata plus compiler-occurrence and constructor-member evidence methods; existing result fields and command inputs remain compatible.",
+  "schemaVersion": 1
+}

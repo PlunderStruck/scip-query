@@ -59,6 +59,11 @@ export function resolveSymbol(db: ScipDatabase, symbolPattern: string): SymbolRe
       return resolutionFromRows(db, [fileLineRow]);
     }
 
+    const compactQualifiedRows = compactQualifiedSymbolRows(db, symbolPattern);
+    if (compactQualifiedRows.length > 0) {
+      return resolutionFromRows(db, compactQualifiedRows);
+    }
+
     const pathQualifiedRows = pathQualifiedSymbolRows(db, symbolPattern);
     if (pathQualifiedRows.length > 0) {
       return resolutionFromRows(db, pathQualifiedRows);
@@ -66,6 +71,37 @@ export function resolveSymbol(db: ScipDatabase, symbolPattern: string): SymbolRe
 
     return fuzzySymbolResolution(db, symbolPattern);
   });
+}
+
+function compactQualifiedSymbolRows(db: ScipDatabase, symbolPattern: string): SymbolQueryRow[] {
+  const compact = symbolPattern.trim().replace(/\(\)$/u, '');
+  const separator = compact.lastIndexOf(':');
+  if (separator <= 0 || separator === compact.length - 1 || compact.startsWith('local:')) return [];
+  const leaf = compact.slice(separator + 1);
+  if (!/^[\p{L}_$][\p{L}\p{N}_$]*$/u.test(leaf)) return [];
+  const descriptorNeedles = [`/${leaf}().`, `/${leaf}.`, `/${leaf}#`, `#${leaf}().`, `#${leaf}.`, `/${leaf}/`];
+  const where = `gs.display_name = ? OR ${descriptorNeedles.map(() => 'instr(gs.symbol, ?) > 0').join(' OR ')}`;
+  const params = [leaf, ...descriptorNeedles];
+
+  const primary = definitionRangeRows(db, {
+    where,
+    params,
+    orderBy: 'd.relative_path, der.start_line',
+    limit: 200,
+  });
+  const fallback =
+    primary.length > 0
+      ? []
+      : definitionMentionRows(db, {
+          where,
+          params,
+          orderBy: 'd.relative_path, start_line',
+          limit: 200,
+        });
+  const exactRows = mergeMixedSymbolQueryRows(primary, fallback)
+    .filter((row) => !db.isIgnored(row.relative_path))
+    .filter((row) => shortenSymbol(row.symbol).replace(/\(\)$/u, '') === compact);
+  return [...new Map(exactRows.map((row) => [`${row.symbol}\0${row.relative_path}`, row] as const)).values()];
 }
 
 function pathQualifiedSymbolRows(db: ScipDatabase, symbolPattern: string): SymbolQueryRow[] {

@@ -39,6 +39,30 @@ describe('exploration benchmark core', () => {
     });
   });
 
+  it('records model tokens and precomputed output sizes without changing accuracy gates', () => {
+    const trial = structuredClone(COMPLETE_TRIAL);
+    trial.calls[0].outputCharacters = 100;
+    trial.usage = {
+      inputTokens: 1000,
+      cachedInputTokens: 400,
+      outputTokens: 100,
+      reasoningOutputTokens: 25,
+    };
+
+    expect(evaluateExplorationTrial(DEFINITION, trial)).toMatchObject({
+      pass: true,
+      metrics: {
+        renderedCharacters: 125,
+        modelInputTokens: 1000,
+        cachedModelInputTokens: 400,
+        uncachedModelInputTokens: 600,
+        modelOutputTokens: 100,
+        reasoningOutputTokens: 25,
+        totalModelTokens: 1100,
+      },
+    });
+  });
+
   it('fails when the persisted-graph reader fact is removed from an otherwise accurate answer', () => {
     expect(evaluateExplorationTrial(DEFINITION, MISSING_FACT_TRIAL)).toMatchObject({
       pass: false,

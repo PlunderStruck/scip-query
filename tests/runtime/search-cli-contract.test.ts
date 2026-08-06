@@ -24,6 +24,15 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
       files[relativePath] = `export const broadValue${index} = 'broad_selector_token';\n`;
       fixture.document(index, 'typescript', relativePath);
     }
+    files['src/object-commands.ts'] = [
+      'export const commands = {',
+      '  async sourceOwnedCommand(input: unknown) {',
+      '    return input;',
+      '  },',
+      '};',
+      '',
+    ].join('\n');
+    fixture.document(181, 'typescript', 'src/object-commands.ts');
     writeFixtureFiles(fixtureRoot, files);
     fixture.write();
   });
@@ -44,6 +53,15 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
     expect(invocation.stdout).toContain('Recover every unmaterialized owning unit in 2 bounded batch command(s)');
     expect(invocation.stdout).toContain('src/group-30/match.ts');
     expect(invocation.stdout).not.toContain('[scip-query output page:');
+  });
+
+  it('keeps the default locator view small while preserving the complete identity manifest', () => {
+    const invocation = runSearch(['needle']);
+
+    expect(invocation.status).toBe(0);
+    expect(invocation.stdout).toContain('MATCH IDENTITIES (30/30, COMPLETE)');
+    expect(invocation.stdout).toContain('REPRESENTATIVE SOURCE (6/30 WINDOWS)');
+    expect(invocation.stdout).toContain('Identity manifest: 30/30 matching line(s); complete.');
   });
 
   it('keeps machine-readable identity coverage separate from source materialization', () => {
@@ -89,6 +107,14 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
     expect(envelope.result.identityCoverage).toEqual({ mode: 'bounded', returned: 64, total: 150, omitted: 86 });
     expect(envelope.coverage).toMatchObject({ complete: true, returned: 150, total: 150, omitted: 0 });
     expect(envelope.result.scopeHints.length).toBeGreaterThan(0);
+  });
+
+  it('attributes an unindexed object method to its exact source callable instead of the module', () => {
+    const invocation = runSearch(['sourceOwnedCommand']);
+
+    expect(invocation.status).toBe(0);
+    expect(invocation.stdout).toContain('sourceOwnedCommand 2-4 @ 2');
+    expect(invocation.stdout).not.toContain('<file scope> @ 2');
   });
 
   function runSearch(args: readonly string[]): ReturnType<typeof spawnSync> {

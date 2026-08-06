@@ -11,7 +11,11 @@
     {
       "id": "collection-derives-links",
       "description": "Collection extracts or retains observations and derives relation groups and links.",
-      "answerEvidenceAlternatives": [["collectRuntimeBoundaryGraph", "observations", "relation groups", "links"]]
+      "answerEvidenceAlternatives": [
+        ["collectRuntimeBoundaryGraph", "observations", "relation groups", "links"],
+        ["collectRuntimeBoundaryGraph", "retains", "groups", "links"],
+        ["collectRuntimeBoundaryGraph", "buildRelationGroups", "materializeBoundedLinks"]
+      ]
     },
     {
       "id": "graph-persists",
@@ -31,7 +35,8 @@
       "description": "Traversal adds both endpoints when either proved runtime-link endpoint reaches the current frontier.",
       "answerEvidenceAlternatives": [
         ["both endpoints", "runtime link", "frontier"],
-        ["fromReached", "toReached", "addBoundaryObservation"]
+        ["fromReached", "toReached", "addBoundaryObservation"],
+        ["eligible runtime link", "one endpoint", "both endpoint files"]
       ]
     }
   ],

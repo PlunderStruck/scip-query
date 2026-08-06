@@ -62,6 +62,15 @@ describe('symbol resolution metadata', () => {
         relativePath: 'src/a.ts',
       });
       expect(resolveSymbol(db, 'SystemMapAnchorKind').match?.symbol).toContain('SystemMapAnchorKind#');
+      const compactResolution = resolveSymbol(db, 'src:a:systemMap');
+      expect(compactResolution.candidates).toEqual([]);
+      expect(compactResolution).toMatchObject({
+        total: 1,
+        match: {
+          symbol: 'scip-typescript npm pkg 1.0.0 src/`a.ts`/systemMap().',
+          relativePath: 'src/a.ts',
+        },
+      });
     } finally {
       db.close();
     }

@@ -8,6 +8,7 @@ import { getSourceFacts } from './source-facts.js';
 const MAX_TEST_CASES = 12;
 const MIN_RECEIPT_BODY_LINES = 20;
 const MAX_RECEIPT_LINE_CHARACTERS = 200;
+const MAX_OUTLINE_LINE_CHARACTERS = 800;
 const OUTLINE_SAVINGS_RATIO = 0.9;
 
 export type BehaviorSignal =
@@ -231,6 +232,7 @@ export function behaviorSkeleton(
   if (!root) return null;
   const outline = buildBehaviorOutline(root, sourceLines, rangeStart, rangeEnd, focusLines);
   if (!outline || outline.lines.length === 0) return null;
+  if (outline.lines.some((line) => line.text.length > MAX_OUTLINE_LINE_CHARACTERS)) return null;
 
   const rawCharacters = renderedRawCharacterEstimate(sourceLines, rangeStart, rangeEnd);
   const outlineCharacters = renderedOutlineCharacterEstimate(outline);
@@ -294,10 +296,10 @@ export function behaviorConstructRange(
       (left, right) =>
         left.endLine - left.startLine - (right.endLine - right.startLine) || left.startLine - right.startLine,
     )[0];
-  if (focused) return { startLine: focused.startLine, endLine: focused.endLine };
-
   const tree = getAst(db, relativePath);
-  if (!tree) return { startLine, endLine };
+  if (!tree) {
+    return focused ? { startLine: focused.startLine, endLine: focused.endLine } : { startLine, endLine };
+  }
   const astCallables: SyntaxNode[] = [];
   walk(tree.rootNode, (node) => {
     if (
@@ -314,9 +316,10 @@ export function behaviorConstructRange(
       left.endPosition.row - left.startPosition.row - (right.endPosition.row - right.startPosition.row) ||
       left.startPosition.row - right.startPosition.row,
   )[0];
-  return astFocused
-    ? { startLine: astFocused.startPosition.row, endLine: astFocused.endPosition.row }
-    : { startLine, endLine };
+  if (astFocused) {
+    return { startLine: astFocused.startPosition.row, endLine: astFocused.endPosition.row };
+  }
+  return focused ? { startLine: focused.startLine, endLine: focused.endLine } : { startLine, endLine };
 }
 
 /**

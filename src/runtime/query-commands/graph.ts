@@ -461,13 +461,14 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
   const result = queries.systemMap(db, {
     searches: stringArrayOptionValue(opts, 'search'),
     symbols: stringArrayOptionValue(opts, 'symbol'),
-    maxDepth: definedNumberOption(opts, 'depth', 3),
+    maxDepth: definedNumberOption(opts, 'depth', 5),
     expand: stringArrayOptionValue(opts, 'expand'),
     relations: stringArrayOptionValue(opts, 'relation') as SystemMapRelationKind[],
     evidenceFloor: stringOptionValue(opts, 'evidenceFloor') as SystemMapEvidenceFloor | undefined,
     sourceScopes: stringArrayOptionValue(opts, 'sourceScope') as SystemMapSourceScope[],
     maxTopologyCharacters: definedNumberOption(opts, 'topologyCharacters', 20_000),
     topologyFrontiers: stringArrayOptionValue(opts, 'frontier'),
+    fullLiteralTraversal: booleanOptionValue(opts, 'fullLiteralTraversal'),
   });
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('system-map', args, opts, result, {
@@ -492,7 +493,7 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
   for (const anchor of result.anchors) {
     const count =
       anchor.kind === 'literal'
-        ? `${anchor.matchingLines ?? 0} matching line(s); ${anchor.seedMatchingLines ?? 0} whole-token source seed(s), ${anchor.matchOnlyLines ?? 0} match-only`
+        ? `${anchor.matchingLines ?? 0} matching line(s); ${anchor.seedMatchingLines ?? 0} materialized source seed(s), ${anchor.matchOnlyLines ?? 0} match-only, ${anchor.withheldMatchingLines ?? 0} withheld before traversal`
         : `${anchor.totalSymbolCandidates ?? 0} candidate definition(s)`;
     console.log(`  [${anchor.status}] ${anchor.kind} ${anchor.query} — ${count}`);
     if ((anchor.seedRegionIds ?? []).length > 0) {
@@ -500,6 +501,16 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
     }
     if ((anchor.matchOnlyRegionIds ?? []).length > 0) {
       console.log(`    retained match-only regions: ${anchor.matchOnlyRegionIds!.join(', ')}`);
+    }
+    for (const match of anchor.representativeMatches ?? []) {
+      const owner = match.ownerShortName ? `  ${compactSystemMapIdentity(match.ownerShortName)}` : '';
+      console.log(
+        `    representative: ${match.file}:${displayLine(match.line)}${owner} — ${match.sourceLine.slice(0, 160)}`,
+      );
+    }
+    for (const command of anchor.narrowingCommands ?? []) console.log(`    narrow exactly: ${command}`);
+    if (anchor.exhaustiveTraversalCommand) {
+      console.log(`    exhaustive recovery: ${anchor.exhaustiveTraversalCommand}`);
     }
     if (anchor.kind === 'symbol' && anchor.matchedRegionIds.length > 0) {
       console.log(`    regions: ${anchor.matchedRegionIds.join(', ')}`);
@@ -614,13 +625,25 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
       console.log('  Transitions (arrows preserve repository-edge direction):');
       for (const transition of result.behavior.transitions) {
         const evidence = transition.evidence.map((source) => `${source.method}/${source.strength}`).join(', ');
+        const runtimeKeys =
+          transition.kind === 'runtime-boundary'
+            ? [
+                ...new Set(
+                  transition.evidence.flatMap((source) =>
+                    typeof source.identity === 'string' && source.identity.length > 0 ? [source.identity] : [],
+                  ),
+                ),
+              ]
+            : [];
         const from = stepNumberById.get(transition.fromStepId) ?? '?';
         const to = stepNumberById.get(transition.toStepId) ?? '?';
         console.log(
           renderSessionEvidence({
             kind: 'edge',
             identity: transition.edgeId,
-            content: `    ${from} → ${to} — ${transition.kind}; path=${transition.pathTraversal}; ${evidence}`,
+            content:
+              `    ${from} → ${to} — ${transition.kind}; path=${transition.pathTraversal}; ${evidence}` +
+              (runtimeKeys.length > 0 ? `; key=${runtimeKeys.join(' | ')}` : ''),
             label: `${from} → ${to} ${transition.kind}`,
             indent: '    ',
           }),
@@ -1205,7 +1228,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     options: withJsonOption([
       option('--search <literal>', 'Add an exact indexed-source anchor; repeat to include several', collectValues, []),
       option('--symbol <symbol>', 'Add a symbol anchor; repeat to include several', collectValues, []),
-      option('--depth <n>', 'Traverse this many relationship levels', parseInteger, 3),
+      option('--depth <n>', 'Traverse this many relationship levels', parseInteger, 5),
       option(
         '--relation <kind>',
         'Traverse one relation family; repeat for call, contract-symbol, import, reference, or runtime-boundary',
@@ -1224,6 +1247,10 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
         'Include one source scope; repeat for production, test, fixture, example, generated, script, or unknown',
         collectValues,
         [],
+      ),
+      option(
+        '--full-literal-traversal',
+        'Traverse every literal match after deliberately accepting broad-selector expansion',
       ),
       option(
         '--expand <region-id>',

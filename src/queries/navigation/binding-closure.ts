@@ -1,12 +1,12 @@
-import { getReExports, getSourceImports } from '../../language-parsers/index.js';
+import { getSourceImports } from '../../language-parsers/index.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
 import { getSourceLines } from '../../source/primitives/source-text.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
+import { resolveImportedDefinitions } from '../../symbols/imported-definitions.js';
 
 const MAX_INLINE_BINDINGS = 12;
 const MAX_INLINE_CHARACTERS = 280;
-const MAX_REEXPORT_DEPTH = 3;
 
 export interface BindingDefinitionEvidence {
   name: string;
@@ -75,7 +75,9 @@ export function bindingClosureForRange(
     const localName = imported.localName;
     if (!localName || !referenced.has(localName) || !imported.sourcePath || imported.kind === 'namespace') continue;
     const importedName = imported.importedName === 'default' ? localName : imported.importedName;
-    for (const definition of resolveImportedDefinitions(db, imported.sourcePath, importedName)) {
+    for (const definition of resolveImportedDefinitions(db, imported.sourcePath, importedName, {
+      maxReexportDepth: 3,
+    })) {
       recordDefinition(localName, definition.relativePath, definition.startLine, definition.endLine);
     }
   }
@@ -150,27 +152,6 @@ function inlineBindingSource(db: ScipDatabase, definition: LiteralDefinitionCand
   const remainingWords = withoutNumbers.match(/[A-Za-z_][A-Za-z0-9_]*/gu) ?? [];
   if (remainingWords.some((word) => !allowedLiteralWords.has(word))) return null;
   return source;
-}
-
-function resolveImportedDefinitions(
-  db: ScipDatabase,
-  relativePath: string,
-  importedName: string,
-  depth = 0,
-  seen = new Set<string>(),
-): ReturnType<typeof getDefinitionsForFile> {
-  const key = `${relativePath}:${importedName}`;
-  if (seen.has(key) || depth > MAX_REEXPORT_DEPTH) return [];
-  seen.add(key);
-
-  const direct = getDefinitionsForFile(db, relativePath).filter((definition) => definition.leaf === importedName);
-  if (direct.length > 0) return direct;
-
-  return getReExports(db, relativePath).flatMap((reexport) => {
-    if (!reexport.sourcePath) return [];
-    if (reexport.kind === 'named' && !reexport.names.includes(importedName)) return [];
-    return resolveImportedDefinitions(db, reexport.sourcePath, importedName, depth + 1, new Set(seen));
-  });
 }
 
 function mergeDefinitions(

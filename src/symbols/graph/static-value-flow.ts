@@ -1,8 +1,9 @@
-import { getReExports, getSourceImports } from '../../language-parsers/index.js';
+import { getSourceImports } from '../../language-parsers/index.js';
 import { getAst } from '../../source/ast/ast-core.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
+import { resolveImportedDefinitions } from '../../symbols/imported-definitions.js';
 import type {
   EvaluatedStaticValue,
   StaticValueDerivation,
@@ -11,7 +12,6 @@ import type {
 } from './value-flow.js';
 
 const MAX_EVALUATION_DEPTH = 8;
-const MAX_REEXPORT_DEPTH = 4;
 
 export interface BoundaryValueContext {
   db: ScipDatabase;
@@ -429,25 +429,6 @@ function unwrapExpression(input: SyntaxNode): SyntaxNode {
     node = node.namedChildren[0]!;
   }
   return node;
-}
-
-function resolveImportedDefinitions(
-  db: ScipDatabase,
-  relativePath: string,
-  importedName: string,
-  depth = 0,
-  seen = new Set<string>(),
-): ReturnType<typeof getDefinitionsForFile> {
-  const identity = `${relativePath}\0${importedName}`;
-  if (seen.has(identity) || depth > MAX_REEXPORT_DEPTH) return [];
-  seen.add(identity);
-  const direct = getDefinitionsForFile(db, relativePath).filter((definition) => definition.leaf === importedName);
-  if (direct.length > 0) return direct;
-  return getReExports(db, relativePath).flatMap((reexport) => {
-    if (!reexport.sourcePath) return [];
-    if (reexport.kind === 'named' && !reexport.names.includes(importedName)) return [];
-    return resolveImportedDefinitions(db, reexport.sourcePath, importedName, depth + 1, new Set(seen));
-  });
 }
 
 function smallestCoveringCallable(root: SyntaxNode, startLine: number, endLine: number): SyntaxNode | null {
