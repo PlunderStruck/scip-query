@@ -1,0 +1,259 @@
+{
+  "acceptedAt": "2026-08-06T00:32:04.901Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "de343eb7e279ae76945786945963b2f78c6f425d8fdaf65a4426028f063abf5e",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationAnchorStatus.",
+      "target": "./queries:ExplorationAnchorStatus"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationDisposition.",
+      "target": "./queries:ExplorationDisposition"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationDispositionCounts.",
+      "target": "./queries:ExplorationDispositionCounts"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationEvidenceSource.",
+      "target": "./queries:ExplorationEvidenceSource"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationEvidenceStrength.",
+      "target": "./queries:ExplorationEvidenceStrength"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationFrontierGroup.",
+      "target": "./queries:ExplorationFrontierGroup"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationSourceLocation.",
+      "target": "./queries:ExplorationSourceLocation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationTopology.",
+      "target": "./queries:ExplorationTopology"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationTopologyAnchor.",
+      "target": "./queries:ExplorationTopologyAnchor"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationTopologyCoverage.",
+      "target": "./queries:ExplorationTopologyCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationTopologyEdge.",
+      "target": "./queries:ExplorationTopologyEdge"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationTopologyInput.",
+      "target": "./queries:ExplorationTopologyInput"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationTopologyNode.",
+      "target": "./queries:ExplorationTopologyNode"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationTopologyPath.",
+      "target": "./queries:ExplorationTopologyPath"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapRegionRelation changed from interface SystemMapRegionRelation { fromRegionId: string; toRegionId: string; kinds: SystemMapRelationKind[]; relationCount: number; fromFiles: string[]; toFiles: string[]; from... to interface SystemMapRegionRelation { fromRegionId: string; toRegionId: string; kinds: SystemMapRelationKind[]; relationCount: number; fromFiles: string[]; toFiles: string[]; from....",
+      "target": "./queries:SystemMapRegionRelation"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapRelation changed from interface SystemMapRelation { kind: SystemMapRelationKind; evidence: SystemMapRelationEvidence; fromRegionId: string; fromFile: string; fromSymbol: string | null; toRegionId: st... to interface SystemMapRelation { kind: SystemMapRelationKind; evidence: SystemMapRelationEvidence; fromRegionId: string; fromFile: string; fromSymbol: string | null; toRegionId: st....",
+      "target": "./queries:SystemMapRelation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapRelationStrength.",
+      "target": "./queries:SystemMapRelationStrength"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries:SystemMapResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationAnchorStatus.",
+      "target": "./queries/index:ExplorationAnchorStatus"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationDisposition.",
+      "target": "./queries/index:ExplorationDisposition"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationDispositionCounts.",
+      "target": "./queries/index:ExplorationDispositionCounts"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationEvidenceSource.",
+      "target": "./queries/index:ExplorationEvidenceSource"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationEvidenceStrength.",
+      "target": "./queries/index:ExplorationEvidenceStrength"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationFrontierGroup.",
+      "target": "./queries/index:ExplorationFrontierGroup"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationSourceLocation.",
+      "target": "./queries/index:ExplorationSourceLocation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationTopology.",
+      "target": "./queries/index:ExplorationTopology"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationTopologyAnchor.",
+      "target": "./queries/index:ExplorationTopologyAnchor"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationTopologyCoverage.",
+      "target": "./queries/index:ExplorationTopologyCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationTopologyEdge.",
+      "target": "./queries/index:ExplorationTopologyEdge"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationTopologyInput.",
+      "target": "./queries/index:ExplorationTopologyInput"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationTopologyNode.",
+      "target": "./queries/index:ExplorationTopologyNode"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExplorationTopologyPath.",
+      "target": "./queries/index:ExplorationTopologyPath"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapRegionRelation changed from interface SystemMapRegionRelation { fromRegionId: string; toRegionId: string; kinds: SystemMapRelationKind[]; relationCount: number; fromFiles: string[]; toFiles: string[]; from... to interface SystemMapRegionRelation { fromRegionId: string; toRegionId: string; kinds: SystemMapRelationKind[]; relationCount: number; fromFiles: string[]; toFiles: string[]; from....",
+      "target": "./queries/index:SystemMapRegionRelation"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapRelation changed from interface SystemMapRelation { kind: SystemMapRelationKind; evidence: SystemMapRelationEvidence; fromRegionId: string; fromFile: string; fromSymbol: string | null; toRegionId: st... to interface SystemMapRelation { kind: SystemMapRelationKind; evidence: SystemMapRelationEvidence; fromRegionId: string; fromFile: string; fromSymbol: string | null; toRegionId: st....",
+      "target": "./queries/index:SystemMapRelation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapRelationStrength.",
+      "target": "./queries/index:SystemMapRelationStrength"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries/index:SystemMapResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapRegionRelation changed from interface SystemMapRegionRelation { fromRegionId: string; toRegionId: string; kinds: SystemMapRelationKind[]; relationCount: number; fromFiles: string[]; toFiles: string[]; from... to interface SystemMapRegionRelation { fromRegionId: string; toRegionId: string; kinds: SystemMapRelationKind[]; relationCount: number; fromFiles: string[]; toFiles: string[]; from....",
+      "target": "./queries/system-map:SystemMapRegionRelation"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapRelation changed from interface SystemMapRelation { kind: SystemMapRelationKind; evidence: SystemMapRelationEvidence; fromRegionId: string; fromFile: string; fromSymbol: string | null; toRegionId: st... to interface SystemMapRelation { kind: SystemMapRelationKind; evidence: SystemMapRelationEvidence; fromRegionId: string; fromFile: string; fromSymbol: string | null; toRegionId: st....",
+      "target": "./queries/system-map:SystemMapRelation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapRelationStrength.",
+      "target": "./queries/system-map:SystemMapRelationStrength"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries/system-map:SystemMapResult"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module system-map-<hash>.d.ts was added or renamed.",
+      "target": "system-map-<hash>.d.ts"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "e536c921f26fef0b48b398670d802564700297f57e0f88890cba31e16ea211d9",
+  "reason": "The topology and provenance fields are optional additions; existing exports and result fields remain source-compatible.",
+  "schemaVersion": 1
+}

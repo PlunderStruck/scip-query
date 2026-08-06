@@ -123,3 +123,12 @@ Acceptance target:
 - **Folded learnings:** `scripts/exploration-benchmark-core.mjs`, the CLI wrapper, fixtures, tests, and this plan now carry the accuracy and efficiency contract outside the conversation.
 
 Future slices append their evidence here rather than replacing this record.
+
+### Slice 2 — universal typed graph result
+
+- **Benchmarks:** `systemMap` now populates one schema-versioned topology containing structural regions, exact symbol nodes, directed typed edges, evidence strength and source identity, anchors, reversible frontier records, and query-scoped coverage. Existing CLI fields remain unchanged; the new result and per-relation provenance fields are additive and optional for older serialized consumers.
+- **Discriminating probe:** temporarily removing every runtime-boundary relation from topology construction made the compiler/runtime integration test fail while compiler call edges remained present. Restoring only that filter produced a passing targeted test. Independent contract tests also reject missing edge endpoints and a frontier count that exceeds its identified members.
+- **Verification:** focused topology/system-map tests passed 20/20; the full suite passed 273 files and 2,179 tests. Lint and the public API compatibility check passed against accepted compatible-correction record `de343eb7e279ae76`. `architecture` mapped 445/445 indexed files across 36/36 declared boundaries with no forbidden edge; `diff-impact` reported 32 changed symbols and zero affected consumer files.
+- **Deviations:** the first implementation placed the contract under `queries-navigation`; the architecture gate correctly rejected `queries-graph -> queries-navigation`, so the contract moved to the shared `queries-internal` boundary and the unchanged policy then passed. The watcher exhausted its automatic rebuild budget after two source refreshes; one manual incremental reindex was therefore required and refreshed 32 TypeScript documents in 13.9 seconds. That breadth and latency remain evidence for the separate indexing/cache work, not a reason to weaken this program's freshness gate.
+- **Deferred:** connector paths and first-edge folded frontier groups remain slice 3; this slice supplies the validated representation they need.
+- **Folded learnings:** the universal model and its referential-integrity tests live in `src/queries/internal/exploration-topology.ts`; the system-map adapter proves both compiler and runtime evidence survive conversion without reducing symbols to directory regions.

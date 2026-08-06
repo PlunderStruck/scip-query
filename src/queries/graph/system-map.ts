@@ -16,6 +16,16 @@ import { resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { isModuleLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../internal/project-index.js';
 import { SOURCE_INSPECTION_MAX_SELECTORS } from '../internal/inspection-limits.js';
+import {
+  createExplorationTopology,
+  type ExplorationEvidenceSource,
+  type ExplorationEvidenceStrength,
+  type ExplorationFrontierGroup,
+  type ExplorationTopology,
+  type ExplorationTopologyAnchor,
+  type ExplorationTopologyEdge,
+  type ExplorationTopologyNode,
+} from '../internal/exploration-topology.js';
 
 const DEFAULT_MAX_DEPTH = 3;
 const NOTABLE_SYMBOL_LIMIT = 12;
@@ -43,6 +53,7 @@ export type SystemMapRelationEvidence =
   | 'indexed-or-source-reference'
   | 'indexed-or-source-import'
   | `runtime-boundary:${string}`;
+export type SystemMapRelationStrength = ExplorationEvidenceStrength;
 
 export interface SystemMapOptions {
   searches?: readonly string[];
@@ -117,6 +128,8 @@ export interface SystemMapRelation {
   toFile: string;
   toSymbol: string | null;
   line: number | null;
+  /** Present in results produced by schema version 1 topology-aware builds. */
+  strength?: SystemMapRelationStrength;
 }
 
 export interface SystemMapRegionRelation {
@@ -129,6 +142,8 @@ export interface SystemMapRegionRelation {
   fromSymbols: string[];
   toSymbols: string[];
   evidence: SystemMapRelationEvidence[];
+  /** Present in results produced by schema version 1 topology-aware builds. */
+  strengths?: SystemMapRelationStrength[];
 }
 
 export interface SystemMapExternalBoundary {
@@ -281,6 +296,8 @@ export interface SystemMapResult {
   expansion?: SystemMapExpansion;
   drilldown?: SystemMapDrilldown;
   presentation: SystemMapPresentation;
+  /** Additive universal graph contract; absent only in results serialized by older builds. */
+  topology?: ExplorationTopology;
   closure: SystemMapQueryClosure;
   coverage: SystemMapCoverage;
 }
@@ -311,6 +328,7 @@ interface PendingRelation {
   toFile: string;
   toSymbol: string | null;
   line: number | null;
+  strength: SystemMapRelationStrength;
 }
 
 interface RegionIdentity {
@@ -546,6 +564,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
               toFile: definition.relativePath,
               toSymbol: definition.symbol,
               line: site.line,
+              strength: 'mixed',
             });
           }
           if (
@@ -561,6 +580,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
               toFile: definition.relativePath,
               toSymbol: definition.symbol,
               line: site.line,
+              strength: 'exact',
             });
           }
         }
@@ -590,6 +610,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
           toFile: target.relativePath,
           toSymbol: target.symbol,
           line: null,
+          strength: calleeEvidenceStrength(callee.source),
         });
       }
     }
@@ -616,6 +637,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
           toFile: target.targetFile,
           toSymbol: null,
           line: target.line,
+          strength: 'candidate',
         });
       }
       for (const imported of relationPolicy.has('import') ? systemMapImports(db, state.file) : []) {
@@ -638,6 +660,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
           toFile: imported.fromFile,
           toSymbol: imported.symbol,
           line: null,
+          strength: 'mixed',
         });
         if (!state.promoteBoundaryImports || !isBoundaryImport(state.file, imported.fromFile, workspaces)) continue;
         const boundaryResolution = resolveIndexedDefinitions(db, index, imported.symbol);
@@ -689,6 +712,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
         toFile: to.source.file,
         toSymbol: to.owner.symbol,
         line: from.source.startLine,
+        strength: link.strength,
       });
       representedBoundaryLinkIds.add(link.id);
     }
@@ -837,6 +861,36 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
     runtimeBoundaries?.links.filter((link) => link.strength === 'candidate').length ?? 0;
   const externalBoundaries = buildExternalBoundaries(externalImports, regionForFile);
   const closureStatus = omittedSymbolCandidates === 0 ? 'accounted' : 'incomplete';
+  const blindSpots = [
+    `Literal matches outside the included source scopes (${includedSourceScopes.join(', ')}) remain visible as match-only evidence and do not seed traversal.`,
+    runtimeBoundaries
+      ? 'Built-in runtime-boundary extractors traverse direct and replayably derived links; heuristic candidates, unsupported frameworks, reflection, generated names, and dependency-injection wiring remain disclosed frontiers.'
+      : 'Runtime-boundary evidence is unavailable for this index; run scip-query reindex with this build to extract supported HTTP, event, registry, and persistence observations.',
+    'Reverse references do not recursively expand from discovered callers or callees.',
+    'Member-call candidates require a direct imported receiver (or one simple identifier alias) and exactly one imported source file declaring the callable leaf; receiver type is unproved, while re-exports, nested dependency-injection receivers, and ambiguous declarations remain unrepresented.',
+    'Literal hits without a precise non-module owner and imported support files remain visible but are not recursively traversed; add a symbol anchor when their internals matter.',
+    'Schema consumers stay within forward-flow regions; cross-workspace contracts may discover consumers in other workspaces. Add an explicit symbol anchor to widen either scope.',
+    `Traversal stops after depth ${maxDepth}; nonzero frontier counts identify evidence that was discovered but not traversed.`,
+    'Region labels are structural path groupings, not inferred runtime or architectural boundaries.',
+  ];
+  const topology = buildSystemMapTopology({
+    anchors,
+    regions,
+    symbolStates: symbols,
+    literalHits,
+    relations,
+    externalBoundaries,
+    boundaryFrontiers,
+    regionForFile,
+    presentation,
+    closureStatus,
+    omittedSymbolCandidates,
+    maxDepth,
+    requestedRelationKinds,
+    evidenceFloor,
+    includedSourceScopes,
+    blindSpots,
+  });
   return {
     anchors,
     regions,
@@ -847,6 +901,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
     expansion,
     drilldown,
     presentation,
+    topology,
     closure: {
       status: closureStatus,
       emitted: {
@@ -940,20 +995,268 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
           completeWithinScope: true,
         },
       },
-      blindSpots: [
-        `Literal matches outside the included source scopes (${includedSourceScopes.join(', ')}) remain visible as match-only evidence and do not seed traversal.`,
-        runtimeBoundaries
-          ? 'Built-in runtime-boundary extractors traverse direct and replayably derived links; heuristic candidates, unsupported frameworks, reflection, generated names, and dependency-injection wiring remain disclosed frontiers.'
-          : 'Runtime-boundary evidence is unavailable for this index; run scip-query reindex with this build to extract supported HTTP, event, registry, and persistence observations.',
-        'Reverse references do not recursively expand from discovered callers or callees.',
-        'Member-call candidates require a direct imported receiver (or one simple identifier alias) and exactly one imported source file declaring the callable leaf; receiver type is unproved, while re-exports, nested dependency-injection receivers, and ambiguous declarations remain unrepresented.',
-        'Literal hits without a precise non-module owner and imported support files remain visible but are not recursively traversed; add a symbol anchor when their internals matter.',
-        'Schema consumers stay within forward-flow regions; cross-workspace contracts may discover consumers in other workspaces. Add an explicit symbol anchor to widen either scope.',
-        `Traversal stops after depth ${maxDepth}; nonzero frontier counts identify evidence that was discovered but not traversed.`,
-        'Region labels are structural path groupings, not inferred runtime or architectural boundaries.',
-      ],
+      blindSpots,
     },
   };
+}
+
+interface SystemMapTopologyInput {
+  anchors: readonly SystemMapAnchor[];
+  regions: readonly SystemMapRegion[];
+  symbolStates: ReadonlyMap<string, SymbolState>;
+  literalHits: readonly SystemMapLiteralHit[];
+  relations: readonly SystemMapRelation[];
+  externalBoundaries: readonly SystemMapExternalBoundary[];
+  boundaryFrontiers: readonly SystemMapBoundaryFrontier[];
+  regionForFile: ReadonlyMap<string, RegionIdentity>;
+  presentation: SystemMapPresentation;
+  closureStatus: SystemMapQueryClosure['status'];
+  omittedSymbolCandidates: number;
+  maxDepth: number;
+  requestedRelationKinds: readonly SystemMapRelationKind[];
+  evidenceFloor: SystemMapEvidenceFloor;
+  includedSourceScopes: readonly BoundarySourceScope[];
+  blindSpots: readonly string[];
+}
+
+function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopology {
+  const presentedNodeIds = new Set(input.presentation.regionIds);
+  const presentedRelationKeys = new Set(input.presentation.relationKeys);
+  const anchors: ExplorationTopologyAnchor[] = input.anchors.map((anchor, index) => {
+    const id = topologyId('anchor', String(index), anchor.kind, anchor.query);
+    const symbolNodeIds = [...input.symbolStates.values()]
+      .filter((state) => state.anchorQueries.has(anchor.query))
+      .map((state) => symbolTopologyNodeId(state.definition.symbol));
+    const literalOwnerNodeIds = input.literalHits
+      .filter((hit) => hit.query === anchor.query && hit.ownerSymbol && input.symbolStates.has(hit.ownerSymbol))
+      .map((hit) => symbolTopologyNodeId(hit.ownerSymbol!));
+    const matchedNodeIds = uniqueSorted(
+      anchor.kind === 'symbol'
+        ? symbolNodeIds
+        : literalOwnerNodeIds.length > 0
+          ? literalOwnerNodeIds
+          : anchor.matchedRegionIds,
+    );
+    return {
+      id,
+      kind: anchor.kind,
+      query: anchor.query,
+      status: anchor.status,
+      nodeIds: anchor.status === 'ambiguous' ? [] : matchedNodeIds,
+      candidateNodeIds: anchor.status === 'ambiguous' ? matchedNodeIds : [],
+      omittedCandidates: anchor.omittedSymbolCandidates ?? 0,
+    };
+  });
+  const anchorIdsByNode = new Map<string, string[]>();
+  for (const anchor of anchors) {
+    for (const nodeId of [...anchor.nodeIds, ...anchor.candidateNodeIds]) {
+      const ids = anchorIdsByNode.get(nodeId) ?? [];
+      ids.push(anchor.id);
+      anchorIdsByNode.set(nodeId, ids);
+    }
+  }
+
+  const nodes: ExplorationTopologyNode[] = input.regions.map((region) => ({
+    id: region.id,
+    kind: 'structural-region',
+    label: region.label,
+    disposition: presentedNodeIds.has(region.id) ? 'emitted' : 'folded',
+    location: null,
+    anchorIds: uniqueSorted(anchorIdsByNode.get(region.id) ?? []),
+    attributes: {
+      workspace: region.workspace,
+      structuralPath: region.structuralPath,
+      minimumDepth: region.minDepth,
+      files: region.fileCount,
+      symbols: region.symbolCount,
+      expanded: region.expanded,
+    },
+  }));
+  for (const state of input.symbolStates.values()) {
+    const regionId = input.regionForFile.get(state.definition.relativePath)?.id;
+    if (!regionId) throw new Error(`System-map symbol ${state.definition.symbol} has no structural region.`);
+    const id = symbolTopologyNodeId(state.definition.symbol);
+    const explicitlyAnchored = (anchorIdsByNode.get(id)?.length ?? 0) > 0;
+    nodes.push({
+      id,
+      kind: 'symbol',
+      label: shortenSymbol(state.definition.symbol),
+      disposition:
+        explicitlyAnchored || input.regions.find((region) => region.id === regionId)?.expanded ? 'emitted' : 'folded',
+      location: {
+        file: state.definition.relativePath,
+        line: state.definition.startLine,
+        endLine: state.definition.endLine,
+      },
+      anchorIds: uniqueSorted(anchorIdsByNode.get(id) ?? []),
+      attributes: {
+        regionId,
+        depth: state.depth,
+        referenceScope: state.referenceScope,
+      },
+    });
+  }
+  const knownNodeIds = new Set(nodes.map((node) => node.id));
+  const relationEndpoint = (symbol: string | null, regionId: string): string => {
+    const symbolNodeId = symbol ? symbolTopologyNodeId(symbol) : null;
+    return symbolNodeId && knownNodeIds.has(symbolNodeId) ? symbolNodeId : regionId;
+  };
+  const edges: ExplorationTopologyEdge[] = [];
+  const groupedRelations = groupBy(
+    input.relations,
+    (relation) =>
+      `${relationEndpoint(relation.fromSymbol, relation.fromRegionId)}\u0000${relationEndpoint(relation.toSymbol, relation.toRegionId)}\u0000${relation.kind}`,
+  );
+  for (const bucket of groupedRelations.values()) {
+    const first = bucket[0]!;
+    const fromNodeId = relationEndpoint(first.fromSymbol, first.fromRegionId);
+    const toNodeId = relationEndpoint(first.toSymbol, first.toRegionId);
+    const endpointsEmitted = [fromNodeId, toNodeId].every(
+      (nodeId) => nodes.find((node) => node.id === nodeId)?.disposition === 'emitted',
+    );
+    edges.push({
+      id: topologyId('edge', first.kind, fromNodeId, toNodeId),
+      kind: first.kind,
+      fromNodeId,
+      toNodeId,
+      directed: true,
+      disposition:
+        endpointsEmitted || presentedRelationKeys.has(systemMapRegionRelationKey(first)) ? 'emitted' : 'folded',
+      evidence: uniqueExplorationEvidence(
+        bucket.map((relation) => ({
+          method: relation.evidence,
+          strength: relation.strength ?? 'unknown',
+          identity: `${relation.fromSymbol ?? relation.fromFile} -> ${relation.toSymbol ?? relation.toFile}`,
+          location: relation.line === null ? null : { file: relation.fromFile, line: relation.line },
+        })),
+      ),
+    });
+  }
+
+  for (const boundary of input.externalBoundaries) {
+    const nodeId = topologyId('external', boundary.kind, boundary.name);
+    const fromNodeIds = uniqueSorted(boundary.fromRegionIds);
+    const emitted = fromNodeIds.some((id) => presentedNodeIds.has(id));
+    nodes.push({
+      id: nodeId,
+      kind: boundary.kind,
+      label: boundary.name,
+      disposition: emitted ? 'emitted' : 'folded',
+      location: null,
+      anchorIds: [],
+      attributes: {},
+    });
+    for (const fromNodeId of fromNodeIds) {
+      edges.push({
+        id: topologyId('edge', boundary.kind, fromNodeId, nodeId),
+        kind: boundary.kind,
+        fromNodeId,
+        toNodeId: nodeId,
+        directed: true,
+        disposition: presentedNodeIds.has(fromNodeId) ? 'emitted' : 'folded',
+        evidence: [
+          {
+            method: 'indexed-or-source-import',
+            strength: 'mixed',
+            identity: `${fromNodeId} -> ${boundary.name}`,
+            location: null,
+          },
+        ],
+      });
+    }
+  }
+
+  const frontiers: ExplorationFrontierGroup[] = [];
+  input.boundaryFrontiers.forEach((frontier, index) => {
+    const fromNodeId = input.regionForFile.get(frontier.file)?.id;
+    if (!fromNodeId) {
+      throw new Error(`Runtime-boundary frontier ${frontier.observationId} has no system-map region.`);
+    }
+    const nodeId = topologyId('unsupported', 'runtime-boundary', frontier.observationId, String(index));
+    const edgeId = topologyId('edge', 'runtime-boundary-frontier', fromNodeId, nodeId);
+    nodes.push({
+      id: nodeId,
+      kind: 'runtime-boundary-frontier',
+      label: frontier.address,
+      disposition: 'unsupported',
+      location: { file: frontier.file, line: frontier.line },
+      anchorIds: [],
+      attributes: {
+        action: frontier.action,
+        strength: frontier.strength,
+        owner: frontier.ownerShortName,
+      },
+    });
+    edges.push({
+      id: edgeId,
+      kind: 'runtime-boundary-frontier',
+      fromNodeId,
+      toNodeId: nodeId,
+      directed: true,
+      disposition: 'unsupported',
+      evidence: [
+        {
+          method: 'runtime-boundary-extractor',
+          strength: frontier.strength,
+          identity: frontier.observationId,
+          location: { file: frontier.file, line: frontier.line },
+        },
+      ],
+    });
+    frontiers.push({
+      id: topologyId('frontier', 'runtime-boundary', frontier.observationId, String(index)),
+      kind: 'runtime-boundary',
+      direction: 'unresolved',
+      fromNodeIds: [fromNodeId],
+      edgeIds: [edgeId],
+      memberNodeIds: [nodeId],
+      memberCount: 1,
+      disposition: 'unsupported',
+      reason: frontier.reason,
+      expansion: null,
+    });
+  });
+
+  return createExplorationTopology({
+    anchors,
+    nodes,
+    edges,
+    paths: [],
+    frontiers,
+    scope: `explicit anchors; relations ${input.requestedRelationKinds.join(', ')}; depth ${input.maxDepth}; evidence floor ${input.evidenceFloor}; source scopes ${input.includedSourceScopes.join(', ')}`,
+    blindSpots: input.blindSpots,
+    incompleteReasons:
+      input.closureStatus === 'incomplete'
+        ? [`${input.omittedSymbolCandidates} ambiguous symbol candidate(s) were omitted`]
+        : [],
+  });
+}
+
+function uniqueExplorationEvidence(evidence: readonly ExplorationEvidenceSource[]): ExplorationEvidenceSource[] {
+  const keyed = new Map<string, ExplorationEvidenceSource>();
+  for (const source of evidence) {
+    const location = source.location ? `${source.location.file}:${source.location.line}` : '';
+    keyed.set(`${source.method}\u0000${source.strength}\u0000${source.identity ?? ''}\u0000${location}`, source);
+  }
+  return [...keyed.values()].sort(
+    (left, right) =>
+      left.method.localeCompare(right.method) ||
+      (left.identity ?? '').localeCompare(right.identity ?? '') ||
+      (left.location?.file ?? '').localeCompare(right.location?.file ?? '') ||
+      (left.location?.line ?? 0) - (right.location?.line ?? 0),
+  );
+}
+
+function topologyId(...parts: readonly string[]): string {
+  return parts.map((part) => encodeURIComponent(part)).join(':');
+}
+
+function symbolTopologyNodeId(symbol: string): string {
+  return topologyId('symbol', symbol);
+}
+
+function calleeEvidenceStrength(source: CalleeEvidenceSource): SystemMapRelationStrength {
+  return source === 'semantic-callee' || source === 'scip-chunk' ? 'exact' : 'derived';
 }
 
 function buildSystemMapExpansion(
@@ -1625,6 +1928,7 @@ function collapseRegionRelations(relations: readonly SystemMapRelation[]): Syste
           bucket.flatMap((relation) => (relation.toSymbol ? [shortenSymbol(relation.toSymbol)] : [])),
         ),
         evidence: uniqueSorted(bucket.map((relation) => relation.evidence)),
+        strengths: uniqueSorted(bucket.map((relation) => relation.strength ?? 'unknown')),
       }),
     )
     .sort(

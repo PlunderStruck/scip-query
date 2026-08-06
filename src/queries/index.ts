@@ -195,10 +195,27 @@ export type {
   SystemMapRelationEvidence,
   SystemMapRelationFamilyCoverage,
   SystemMapRelationKind,
+  SystemMapRelationStrength,
   SystemMapResult,
   SystemMapSourceScope,
   SystemMapSymbol,
 } from './graph/system-map.js';
+export type {
+  ExplorationAnchorStatus,
+  ExplorationDisposition,
+  ExplorationDispositionCounts,
+  ExplorationEvidenceSource,
+  ExplorationEvidenceStrength,
+  ExplorationFrontierGroup,
+  ExplorationSourceLocation,
+  ExplorationTopology,
+  ExplorationTopologyAnchor,
+  ExplorationTopologyCoverage,
+  ExplorationTopologyEdge,
+  ExplorationTopologyInput,
+  ExplorationTopologyNode,
+  ExplorationTopologyPath,
+} from './internal/exploration-topology.js';
 export type {
   DriftActionTier,
   DriftArchitectureEvidence,

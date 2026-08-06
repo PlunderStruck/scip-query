@@ -189,6 +189,43 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
+  it('populates the universal topology with typed compiler and runtime evidence', () => {
+    const db = createSystemMapDb();
+    try {
+      const result = systemMap(db, {
+        searches: ['work_session_stream_events'],
+        symbols: ['appendStreamEvents'],
+        maxDepth: 3,
+      });
+
+      expect(result.topology).toBeDefined();
+      const topology = result.topology!;
+      expect(topology.schemaVersion).toBe(1);
+      expect(topology.edges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'call',
+            evidence: expect.arrayContaining([
+              expect.objectContaining({ method: 'ast-callsite', strength: 'derived' }),
+            ]),
+          }),
+          expect.objectContaining({
+            kind: 'runtime-boundary',
+            evidence: expect.arrayContaining([
+              expect.objectContaining({ method: 'runtime-boundary:http.method-path', strength: 'exact' }),
+            ]),
+          }),
+        ]),
+      );
+      expect(topology.coverage.status).toBe('accounted');
+      expect(topology.nodes.every((node) => ['emitted', 'folded', 'unsupported'].includes(node.disposition))).toBe(
+        true,
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it('traverses only the requested relation families', () => {
     const db = createSystemMapDb();
     try {
