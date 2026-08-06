@@ -203,7 +203,9 @@ describe('Rust LSP batch worker', () => {
       });
 
       expect(response.available).toBe(true);
-      expect(response.callees).toEqual([[1, [{ symbol: 'compute_total', file: 'src/math.rs', line: 0 }]]]);
+      expect(response.callees).toEqual([
+        [1, [{ symbol: 'compute_total', file: 'src/math.rs', line: 0, callsiteLine: 1 }]],
+      ]);
       expect(referenceTimeouts).toEqual([100]);
       expect(prepareTimeouts).toEqual([100]);
       expect(outgoingTimeouts).toEqual([100]);

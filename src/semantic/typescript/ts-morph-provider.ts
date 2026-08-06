@@ -1199,7 +1199,15 @@ class TsMorphSemanticProvider implements SemanticProvider {
       stats.targetMisses += 1;
     }
     return target
-      ? { callerId: caller.symbolId, target: { symbol: target.symbol, file: target.file, line: target.line } }
+      ? {
+          callerId: caller.symbolId,
+          target: {
+            symbol: target.symbol,
+            file: target.file,
+            line: target.line,
+            callsiteLine: lineOfCompilerNode(sourceFile, node),
+          },
+        }
       : null;
   }
 
@@ -1446,7 +1454,7 @@ function dedupeCallees(callees: SemanticCallee[]): SemanticCallee[] {
   const seen = new Set<string>();
   const out: SemanticCallee[] = [];
   for (const callee of callees) {
-    const key = `${callee.symbol}|${callee.file}|${callee.line}`;
+    const key = `${callee.symbol}|${callee.file}|${callee.line}|${callee.callsiteLine ?? ''}`;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(callee);

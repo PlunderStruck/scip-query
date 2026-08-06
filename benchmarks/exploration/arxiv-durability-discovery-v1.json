@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "id": "arxiv-durability-discovery-v1",
+  "question": "How does a fetched paper become durable local state, and what protects that state from duplicates, concurrent writers, and interrupted updates?",
+  "requiredFacts": [
+    {
+      "id": "record-and-temporary-file",
+      "description": "The store derives safe destination and random temporary paths, hashes the PDF, counts pages, builds its record, and writes an exclusive mode-0600 temporary file.",
+      "answerEvidenceAlternatives": [
+        ["safeLibraryFile", "sha256", "countPdfPages", "wx", "0o600"],
+        ["temporary", "hash", "pages", "exclusive", "0600"],
+        ["safe filename", "SHA-256", "page count", "exclusive", "0600"]
+      ]
+    },
+    {
+      "id": "mutex-and-precommit-reconciliation",
+      "description": "The store serializes persistence with a SQLite-backed mutex and sweeps and reconciles filesystem/index state before deciding how to commit the exact version.",
+      "answerEvidenceAlternatives": [
+        ["withSqliteMutex", "sweepLocked", "reconcileLocked", "exactId"],
+        ["SQLite mutex", "sweep", "reconcile", "exact version"],
+        ["SQLite-backed", "mutex", "sweeps", "reconciles"]
+      ]
+    },
+    {
+      "id": "duplicate-is-idempotent",
+      "description": "If the exact version is already active, the store removes the new temporary file and returns the existing live entry.",
+      "answerEvidenceAlternatives": [
+        ["existing", "active", "temporary", "live"],
+        ["already active", "deletes", "temporary", "existing"],
+        ["already live", "removes", "temporary", "existing"]
+      ]
+    },
+    {
+      "id": "ordered-commit-and-cleanup",
+      "description": "A new entry is committed by renaming the temporary PDF before appending an add event, compacting when needed, returning a live entry, and cleaning the temporary path in finally.",
+      "answerEvidenceAlternatives": [
+        ["rename", "appendLibraryEvent", "compactIfNeeded", "finally", "live"],
+        ["renames", "appends", "compacts", "finally", "live"],
+        ["rename happens before", "add event", "compact", "finally"]
+      ]
+    },
+    {
+      "id": "reconciliation-recovers-disagreement",
+      "description": "Reconciliation emits add/restore events for live files, add/rm events for trash files, rm events for active records missing from disk, validates matched files, and compacts after changes.",
+      "answerEvidenceAlternatives": [
+        ["incompleteRecord", "restore", "trash", "rm", "validateRecordedFile", "compactIfNeeded"],
+        ["live files", "restore", "trash", "missing", "remove", "compacts"],
+        ["filesystem", "index", "add", "restore", "rm", "validates"]
+      ]
+    },
+    {
+      "id": "crash-window-is-reconciled-not-atomic",
+      "description": "The final rename and index append are not one fsync-backed transaction; interruption between them is repaired by later reconciliation rather than prevented atomically.",
+      "answerEvidenceAlternatives": [
+        ["rename", "index append", "not", "transaction", "reconciliation"],
+        ["crash", "between", "rename", "append", "reconcile"],
+        ["not fsync", "recovered", "reconciliation"]
+      ]
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "atomic-pdf-index-transaction",
+      "answerIncludesAny": [
+        "the PDF and index are committed atomically",
+        "the rename and index append form one atomic transaction"
+      ]
+    },
+    {
+      "id": "in-memory-only-lock",
+      "answerIncludesAny": ["the lock only coordinates callers inside one process"]
+    }
+  ],
+  "budgets": {
+    "maxToolCalls": 6,
+    "maxSemanticQueries": 4,
+    "maxRenderedCharacters": 60000,
+    "maxNativeExplorationReads": 0
+  }
+}

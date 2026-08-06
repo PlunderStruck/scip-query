@@ -1,0 +1,25 @@
+{
+  "acceptedAt": "2026-08-06T19:02:05.019Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "59a324a0e334c960573895d88ace346269c742422afaa14f31e2dc391884f69a",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "entry-added",
+      "message": "Added public declaration path ./queries/anchors.",
+      "target": "./queries/anchors"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module queries/anchors.d.ts was removed or renamed.",
+      "target": "queries/anchors.d.ts"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "4687a9ae897f735f98ba334f6ce5df915b43549a0f89d6149ae09ad43d78ab82",
+  "reason": "Publish the existing anchors declarations at their own subpath; the generated manifest moves that declaration from the internal inventory without narrowing it.",
+  "schemaVersion": 1
+}

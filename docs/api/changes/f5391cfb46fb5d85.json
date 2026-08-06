@@ -1,0 +1,223 @@
+{
+  "acceptedAt": "2026-08-06T22:48:21.849Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "f5391cfb46fb5d85bca8da8ab86820511f6bccf40b013b6b4147dace53675af8",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AnchorDiscoveryCandidate changed from interface AnchorDiscoveryCandidate { symbol: string; label: string; leaf: string; file: string; line: number; endLine: number; kind: 'callable' | 'type' | 'symbol'; fileKind: Fi... to interface AnchorDiscoveryCandidate { symbol: string; label: string; leaf: string; file: string; line: number; endLine: number; kind: 'callable' | 'type' | 'symbol'; fileKind: Fi....",
+      "target": "./queries:AnchorDiscoveryCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AnchorDiscoveryGroup changed from interface AnchorDiscoveryGroup { id: string; roots: AnchorDiscoveryCandidate[]; keyAnchors: AnchorDiscoveryCandidate[]; matchedTerms: string[]; relations: AnchorDiscoveryRelatio... to interface AnchorDiscoveryGroup { id: string; kind: 'cross-boundary-flow' | 'connected-flow' | 'shared-callee-owners'; roots: AnchorDiscoveryCandidate[]; keyAnchors: AnchorDiscov....",
+      "target": "./queries:AnchorDiscoveryGroup"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AnchorDiscoveryRelation changed from interface AnchorDiscoveryRelation { fromSymbol: string; fromLabel: string; fromFile: string; toSymbol: string; toLabel: string; toFile: string; depth: 1 | 2; strength: 'exact' |... to interface AnchorDiscoveryRelation { kind: 'call' | 'runtime-boundary'; fromSymbol: string; fromLabel: string; fromFile: string; toSymbol: string; toLabel: string; toFile: string....",
+      "target": "./queries:AnchorDiscoveryRelation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export AnchorDiscoveryUpstreamEntry.",
+      "target": "./queries:AnchorDiscoveryUpstreamEntry"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ConnectedBehaviorOptions changed from interface ConnectedBehaviorOptions { maxSteps?: number; } to interface ConnectedBehaviorOptions { maxSteps?: number; focusLocations?: readonly ExplorationSourceLocation[]; }.",
+      "target": "./queries:ConnectedBehaviorOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ConnectedBehaviorPacket changed from interface ConnectedBehaviorPacket { status: 'connected' | 'partial' | 'ambiguous' | 'unavailable'; steps: ConnectedBehaviorStep[]; transitions: ConnectedBehaviorTransition[]; pa... to interface ConnectedBehaviorPacket { status: 'connected' | 'partial' | 'ambiguous' | 'unavailable'; steps: ConnectedBehaviorStep[]; transitions: ConnectedBehaviorTransition[]; pa....",
+      "target": "./queries:ConnectedBehaviorPacket"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapOptions changed from interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind... to interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; behaviorFocusLocations?: readonly { file: string; line: number; }[]; maxDepth?: number; e....",
+      "target": "./queries:SystemMapOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AnchorDiscoveryCandidate changed from interface AnchorDiscoveryCandidate { symbol: string; label: string; leaf: string; file: string; line: number; endLine: number; kind: 'callable' | 'type' | 'symbol'; fileKind: Fi... to interface AnchorDiscoveryCandidate { symbol: string; label: string; leaf: string; file: string; line: number; endLine: number; kind: 'callable' | 'type' | 'symbol'; fileKind: Fi....",
+      "target": "./queries/anchors:AnchorDiscoveryCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AnchorDiscoveryGroup changed from interface AnchorDiscoveryGroup { id: string; roots: AnchorDiscoveryCandidate[]; keyAnchors: AnchorDiscoveryCandidate[]; matchedTerms: string[]; relations: AnchorDiscoveryRelatio... to interface AnchorDiscoveryGroup { id: string; kind: 'cross-boundary-flow' | 'connected-flow' | 'shared-callee-owners'; roots: AnchorDiscoveryCandidate[]; keyAnchors: AnchorDiscov....",
+      "target": "./queries/anchors:AnchorDiscoveryGroup"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AnchorDiscoveryRelation changed from interface AnchorDiscoveryRelation { fromSymbol: string; fromLabel: string; fromFile: string; toSymbol: string; toLabel: string; toFile: string; depth: 1 | 2; strength: 'exact' |... to interface AnchorDiscoveryRelation { kind: 'call' | 'runtime-boundary'; fromSymbol: string; fromLabel: string; fromFile: string; toSymbol: string; toLabel: string; toFile: string....",
+      "target": "./queries/anchors:AnchorDiscoveryRelation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export AnchorDiscoveryUpstreamEntry.",
+      "target": "./queries/anchors:AnchorDiscoveryUpstreamEntry"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AnchorDiscoveryCandidate changed from interface AnchorDiscoveryCandidate { symbol: string; label: string; leaf: string; file: string; line: number; endLine: number; kind: 'callable' | 'type' | 'symbol'; fileKind: Fi... to interface AnchorDiscoveryCandidate { symbol: string; label: string; leaf: string; file: string; line: number; endLine: number; kind: 'callable' | 'type' | 'symbol'; fileKind: Fi....",
+      "target": "./queries/index:AnchorDiscoveryCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AnchorDiscoveryGroup changed from interface AnchorDiscoveryGroup { id: string; roots: AnchorDiscoveryCandidate[]; keyAnchors: AnchorDiscoveryCandidate[]; matchedTerms: string[]; relations: AnchorDiscoveryRelatio... to interface AnchorDiscoveryGroup { id: string; kind: 'cross-boundary-flow' | 'connected-flow' | 'shared-callee-owners'; roots: AnchorDiscoveryCandidate[]; keyAnchors: AnchorDiscov....",
+      "target": "./queries/index:AnchorDiscoveryGroup"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AnchorDiscoveryRelation changed from interface AnchorDiscoveryRelation { fromSymbol: string; fromLabel: string; fromFile: string; toSymbol: string; toLabel: string; toFile: string; depth: 1 | 2; strength: 'exact' |... to interface AnchorDiscoveryRelation { kind: 'call' | 'runtime-boundary'; fromSymbol: string; fromLabel: string; fromFile: string; toSymbol: string; toLabel: string; toFile: string....",
+      "target": "./queries/index:AnchorDiscoveryRelation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export AnchorDiscoveryUpstreamEntry.",
+      "target": "./queries/index:AnchorDiscoveryUpstreamEntry"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ConnectedBehaviorOptions changed from interface ConnectedBehaviorOptions { maxSteps?: number; } to interface ConnectedBehaviorOptions { maxSteps?: number; focusLocations?: readonly ExplorationSourceLocation[]; }.",
+      "target": "./queries/index:ConnectedBehaviorOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ConnectedBehaviorPacket changed from interface ConnectedBehaviorPacket { status: 'connected' | 'partial' | 'ambiguous' | 'unavailable'; steps: ConnectedBehaviorStep[]; transitions: ConnectedBehaviorTransition[]; pa... to interface ConnectedBehaviorPacket { status: 'connected' | 'partial' | 'ambiguous' | 'unavailable'; steps: ConnectedBehaviorStep[]; transitions: ConnectedBehaviorTransition[]; pa....",
+      "target": "./queries/index:ConnectedBehaviorPacket"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapOptions changed from interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind... to interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; behaviorFocusLocations?: readonly { file: string; line: number; }[]; maxDepth?: number; e....",
+      "target": "./queries/index:SystemMapOptions"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/source-inspection; review their variance and runtime meaning.",
+      "target": "./queries/source-inspection"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ConnectedBehaviorOptions changed from interface ConnectedBehaviorOptions { maxSteps?: number; } to interface ConnectedBehaviorOptions { maxSteps?: number; focusLocations?: readonly ExplorationSourceLocation[]; }.",
+      "target": "./queries/system-map:ConnectedBehaviorOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ConnectedBehaviorPacket changed from interface ConnectedBehaviorPacket { status: 'connected' | 'partial' | 'ambiguous' | 'unavailable'; steps: ConnectedBehaviorStep[]; transitions: ConnectedBehaviorTransition[]; pa... to interface ConnectedBehaviorPacket { status: 'connected' | 'partial' | 'ambiguous' | 'unavailable'; steps: ConnectedBehaviorStep[]; transitions: ConnectedBehaviorTransition[]; pa....",
+      "target": "./queries/system-map:ConnectedBehaviorPacket"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapOptions changed from interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind... to interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; behaviorFocusLocations?: readonly { file: string; line: number; }[]; maxDepth?: number; e....",
+      "target": "./queries/system-map:SystemMapOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "E changed from interface ExplorationTopologyNode { id: string; kind: string; label: string; disposition: ExplorationDisposition; location: ExplorationSourceLocation | null; anchorIds: string[]... to interface ExplorationSourceLocation { file: string; line: number; endLine?: number; }.",
+      "target": "exploration-topology-<hash>.d.ts:E"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "a changed from interface ExplorationEvidenceSource { method: string; strength: ExplorationEvidenceStrength; identity: string | null; location: ExplorationSourceLocation | null; } to interface ExplorationTopologyNode { id: string; kind: string; label: string; disposition: ExplorationDisposition; location: ExplorationSourceLocation | null; anchorIds: string[]....",
+      "target": "exploration-topology-<hash>.d.ts:a"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "b changed from type ExplorationEvidenceStrength = 'exact' | 'derived' | 'candidate' | 'mixed' | 'unknown'; to interface ExplorationEvidenceSource { method: string; strength: ExplorationEvidenceStrength; identity: string | null; location: ExplorationSourceLocation | null; }.",
+      "target": "exploration-topology-<hash>.d.ts:b"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "c changed from type BoundarySourceScope = 'production' | 'test' | 'fixture' | 'example' | 'generated' | 'script' | 'unknown'; to type ExplorationEvidenceStrength = 'exact' | 'derived' | 'candidate' | 'mixed' | 'unknown';.",
+      "target": "exploration-topology-<hash>.d.ts:c"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "d changed from interface ExplorationTopology { schemaVersion: 1; anchors: ExplorationTopologyAnchor[]; nodes: ExplorationTopologyNode[]; edges: ExplorationTopologyEdge[]; paths: ExplorationTop... to type BoundarySourceScope = 'production' | 'test' | 'fixture' | 'example' | 'generated' | 'script' | 'unknown';.",
+      "target": "exploration-topology-<hash>.d.ts:d"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "e changed from interface BehaviorSkeleton { callable?: { name: string; startLine: number; endLine: number; }; representation: 'outline'; constructKind: string; signature: string; lines: Behavi... to interface ExplorationTopology { schemaVersion: 1; anchors: ExplorationTopologyAnchor[]; nodes: ExplorationTopologyNode[]; edges: ExplorationTopologyEdge[]; paths: ExplorationTop....",
+      "target": "exploration-topology-<hash>.d.ts:e"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "f changed from type ExplorationAnchorStatus = 'matched' | 'ambiguous' | 'missing'; to interface BehaviorSkeleton { callable?: { name: string; startLine: number; endLine: number; }; representation: 'outline'; constructKind: string; signature: string; lines: Behavi....",
+      "target": "exploration-topology-<hash>.d.ts:f"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "g changed from interface ExplorationCompletion { status: ExplorationCompletionStatus; scope: string; explanation: string; } to type ExplorationAnchorStatus = 'matched' | 'ambiguous' | 'missing';.",
+      "target": "exploration-topology-<hash>.d.ts:g"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "h changed from type ExplorationCompletionStatus = 'selection-complete' | 'connector-complete' | 'frontier-accounted' | 'coverage-incomplete'; to interface ExplorationCompletion { status: ExplorationCompletionStatus; scope: string; explanation: string; }.",
+      "target": "exploration-topology-<hash>.d.ts:h"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "i changed from type ExplorationDisposition = 'emitted' | 'folded' | 'excluded' | 'unsupported'; to type ExplorationCompletionStatus = 'selection-complete' | 'connector-complete' | 'frontier-accounted' | 'coverage-incomplete';.",
+      "target": "exploration-topology-<hash>.d.ts:i"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "j changed from interface ExplorationDispositionCounts { total: number; emitted: number; folded: number; excluded: number; unsupported: number; } to type ExplorationDisposition = 'emitted' | 'folded' | 'excluded' | 'unsupported';.",
+      "target": "exploration-topology-<hash>.d.ts:j"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "k changed from interface ExplorationFrontierGroup { id: string; kind: string; direction: 'incoming' | 'outgoing' | 'undirected' | 'unresolved'; fromNodeIds: string[]; edgeIds: string[]; member... to interface ExplorationDispositionCounts { total: number; emitted: number; folded: number; excluded: number; unsupported: number; }.",
+      "target": "exploration-topology-<hash>.d.ts:k"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "l changed from interface ExplorationSourceLocation { file: string; line: number; endLine?: number; } to interface ExplorationFrontierGroup { id: string; kind: string; direction: 'incoming' | 'outgoing' | 'undirected' | 'unresolved'; fromNodeIds: string[]; edgeIds: string[]; member....",
+      "target": "exploration-topology-<hash>.d.ts:l"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "59a324a0e334c960573895d88ace346269c742422afaa14f31e2dc391884f69a",
+  "reason": "Extend public exploration results with focus coverage, mechanically ranked owner coverage, typed runtime-boundary relations, cross-boundary group identity, and optional upstream entry evidence; required result fields and generalized relation depth change TypeScript construction contracts.",
+  "schemaVersion": 1
+}

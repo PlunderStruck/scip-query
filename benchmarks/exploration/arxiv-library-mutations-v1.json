@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "id": "arxiv-library-mutations-v1",
+  "question": "Which operations can change the local library's membership or metadata, how are those mutations serialized, and how is filesystem/index disagreement repaired?",
+  "requiredFacts": [
+    {
+      "id": "mutation-surface",
+      "description": "The mutation surface includes addPdf, refreshMetadata, remove, restore, reconciliation, and repair.",
+      "answerEvidenceAlternatives": [
+        ["addPdf", "refreshMetadata", "remove", "restore", "reconcile", "repair"],
+        ["add PDF", "refresh metadata", "remove", "restore", "reconciliation", "repair"]
+      ]
+    },
+    {
+      "id": "sqlite-serialization",
+      "description": "Mutations are serialized across processes by the per-library SQLite mutex before reading and changing folded index/filesystem state.",
+      "answerEvidenceAlternatives": [
+        ["withSqliteMutex", "per-library", "SQLite", "folded"],
+        ["SQLite mutex", "across processes", "serialized", "index"]
+      ]
+    },
+    {
+      "id": "event-kinds-and-identity",
+      "description": "Adds and metadata refreshes append add events, removal appends rm, restoration appends restore, and events identify records by ID plus version.",
+      "answerEvidenceAlternatives": [
+        ["refreshMetadata", "op: \"add\"", "op: \"rm\"", "op: \"restore\"", "version"],
+        ["metadata refresh", "add event", "rm event", "restore event", "version"]
+      ]
+    },
+    {
+      "id": "remove-and-restore-ordering",
+      "description": "Remove and restore reject a destination collision, rename the PDF between papers and trash before appending the matching event, compact, and return the new state.",
+      "answerEvidenceAlternatives": [
+        ["exists in both papers and trash", "rename", "op: \"rm\"", "op: \"restore\"", "compactIfNeeded"],
+        ["destination", "collision", "rename", "rm", "restore", "compact"]
+      ]
+    },
+    {
+      "id": "reconciliation-rules",
+      "description": "Reconciliation adds or restores discovered live files, adds then removes unindexed trash files, removes indexed-live records missing from disk, validates matching files, and compacts when it changed the log.",
+      "answerEvidenceAlternatives": [
+        ["discovered.live", "discovered.trash", "restore", "rm", "validateRecordedFile", "compactIfNeeded"],
+        ["live files", "trash files", "restore", "missing", "validates", "compacts"]
+      ]
+    },
+    {
+      "id": "repair-rebuilds-from-files",
+      "description": "Repair holds the mutex, rejects unsupported index versions, tolerates corruption, backs up the index, discovers papers and trash, reuses or reconstructs records, and writes a compact rebuilt index.",
+      "answerEvidenceAlternatives": [
+        ["UnsupportedIndexVersionError", "CorruptIndexError", "backupIndex", "discoverFiles", "compactLibraryIndex"],
+        ["unsupported index", "corrupt", "backup", "papers", "trash", "rebuild"]
+      ]
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "events-precede-file-moves",
+      "answerIncludesAny": [
+        "the remove event is appended before moving the file",
+        "the restore event is appended before moving the file"
+      ]
+    },
+    {
+      "id": "repair-redownloads-papers",
+      "answerIncludesAny": ["repair redownloads missing PDFs from arXiv"]
+    }
+  ],
+  "budgets": {
+    "maxToolCalls": 6,
+    "maxSemanticQueries": 4,
+    "maxRenderedCharacters": 60000,
+    "maxNativeExplorationReads": 0
+  }
+}

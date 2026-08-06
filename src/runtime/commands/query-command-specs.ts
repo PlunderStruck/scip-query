@@ -14,6 +14,7 @@ const queryCommandOrder = [
   'session',
   'inspect',
   'search',
+  'anchors',
   'methods',
   'refs',
   'trace',

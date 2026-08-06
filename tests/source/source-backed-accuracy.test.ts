@@ -145,7 +145,14 @@ describe('source-backed accuracy regressions', () => {
             new Map([
               [
                 definition.symbolId,
-                [{ symbol: 'custom src/`helper.custom`/helper().', file: 'src/helper.custom', line: 4 }],
+                [
+                  {
+                    symbol: 'custom src/`helper.custom`/helper().',
+                    file: 'src/helper.custom',
+                    line: 4,
+                    callsiteLine: 1,
+                  },
+                ],
               ],
             ]),
         };
@@ -155,6 +162,7 @@ describe('source-backed accuracy regressions', () => {
           file: 'src/helper.custom',
           chunkId: -1,
           source: 'semantic-callee',
+          callsiteLine: 1,
         });
         expect(buildCrossFileCallerMap(db, [definition], { semanticEvidence }).get(definition.symbolId)).toContain(
           'src/semantic-caller.ts',
@@ -240,12 +248,14 @@ describe('source-backed accuracy regressions', () => {
           file: 'src/nested.ts',
           chunkId: 2,
           source: 'ast-callsite',
+          callsiteLine: 2,
         });
         expect(map.get(1)).toContainEqual({
           symbol: 'scip-typescript npm fixture 1.0.0 src/`nested.ts`/outer().inner().',
           file: 'src/nested.ts',
           chunkId: 4,
           source: 'ast-callsite',
+          callsiteLine: 4,
         });
       },
     );
@@ -372,6 +382,7 @@ describe('source-backed accuracy regressions', () => {
             file: 'src/demo/core.clj',
             chunkId: 4,
             source: 'ast-callsite',
+            callsiteLine: 4,
           },
         ]);
         expect(byKind(db, 'function').map((result) => result.shortName)).toEqual([

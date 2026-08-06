@@ -43,7 +43,7 @@ describe('setupAgent', () => {
     expect(agentsMd).toContain('read connected behavior');
     expect(agentsMd).toContain('retrieve exact current source');
     expect(agentsMd).toContain('scip-query system-map');
-    expect(agentsMd).toContain('smallest independent');
+    expect(agentsMd).toContain('shared-callee-owners');
     expect(agentsMd).toContain('Do not force both');
     expect(agentsMd).toContain('never pass the same loose term to both selectors');
     expect(agentsMd).toContain('evidence seen but left implicit is not recovered');

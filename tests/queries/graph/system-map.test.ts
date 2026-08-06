@@ -480,6 +480,11 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       expect(result.behavior!.steps.some((step) => step.label.includes('dispatchCommand'))).toBe(true);
       expect(result.behavior!.steps.some((step) => step.label.includes('dispatchStreamEvents'))).toBe(true);
       expect(
+        result
+          .behavior!.steps.flatMap((step) => step.behavior?.lines ?? [])
+          .some((line) => line.text.includes('appendStreamEvents(events)') && line.signals.includes('call')),
+      ).toBe(true);
+      expect(
         result.behavior!.steps.some(
           (step) =>
             step.location?.file === 'packages/companion/src/client.ts' && step.label.includes('appendStreamEvents'),
@@ -515,6 +520,18 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
           }),
         ]),
       );
+      expect(result.nextAnchors).toBeDefined();
+      expect(result.nextAnchors!.visibleCallsites).toBeGreaterThan(0);
+      expect(result.nextAnchors!.anchors.length + result.nextAnchors!.withheldAnchors.length).toBe(
+        result.nextAnchors!.candidateAnchors,
+      );
+      for (const command of [
+        result.nextAnchors!.inspectCommand,
+        ...result.nextAnchors!.remainingInspectCommands,
+      ].filter((command): command is string => command !== null)) {
+        expect(command).toContain('--at');
+        expect(command).not.toContain('--symbol');
+      }
     } finally {
       db.close();
     }

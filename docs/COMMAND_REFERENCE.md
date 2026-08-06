@@ -33,8 +33,9 @@ Cross-command evidence citations are off by default. With an explicit `SCIP_QUER
 |---|---|---|
 | `files <pattern>` | Find current project files matching a path pattern | `--json`<br>`--result-only`<br>`--compact` |
 | `session` | Show evidence already delivered in this agent exploration session | `--reset` |
-| `inspect` | Batch related searches, symbols, and source locations into one deduplicated source packet | `--search <text>`<br>`--symbol <symbol>`<br>`--at <file:line>`<br>`-s, --scope <path>`<br>`-C, --context <n>`<br>`-n, --limit <n>`<br>`--max-units <n>`<br>`--max-characters <n>`<br>`--view <view>`<br>`--unit-lines <n>`<br>`--total-lines <n>`<br>`--include <part>`<br>`--evidence-budget <channel=n>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `inspect` | Batch related searches, symbols, and source locations into one deduplicated source packet | `--search <text>`<br>`--symbol <symbol>`<br>`--at <file:line>`<br>`-s, --scope <path>`<br>`-C, --context <n>`<br>`-n, --limit <n>`<br>`--max-units <n>`<br>`--max-characters <n>`<br>`--view <view>`<br>`--allow-large-source`<br>`--allow-large-behavior`<br>`--unit-lines <n>`<br>`--total-lines <n>`<br>`--include <part>`<br>`--evidence-budget <channel=n>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `search <text>` | Count current project text matches and preview a bounded, recoverable identity and source manifest | `-s, --scope <path>`<br>`-C, --context <n>`<br>`-n, --limit <n>`<br>`--full`<br>`--regexp`<br>`-i, --ignore-case`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `anchors <question>` | Turn repository vocabulary into compact, graph-connected candidate anchor sets | `-s, --scope <path>`<br>`-n, --limit <n>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `methods <className>` | List methods of one exactly resolved class; ambiguity and missing targets fail explicitly | `--json`<br>`--result-only`<br>`--compact` |
 | `refs <symbol>` | Find all files referencing a symbol | `--full`<br>`-n, --limit <n>`<br>`--cursor <cursor>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `trace <symbol>` | Trace a symbol: definition + all references | `--full`<br>`--json`<br>`--result-only`<br>`--compact` |
@@ -105,7 +106,7 @@ Cross-command evidence citations are off by default. With an explicit `SCIP_QUER
 | `deep-chains` | Find the longest condensed dependency-component chains | `-n, --limit <n>`<br>`-s, --scope <path>`<br>`--min-depth <n>`<br>`--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `entrypoints [text]` | Find callables where control may enter from outside the indexed call graph | `-s, --scope <path>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `entry-map <entry>` | Map the complete indexed call graph from one detected entry point, collapsed by file | `--expand <region-id>`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `system-map` | Map structural regions, compiler relationships, and exact runtime boundaries from explicit anchors | `--search <literal>`<br>`--symbol <symbol>`<br>`--depth <n>`<br>`--relation <kind>`<br>`--evidence-floor <floor>`<br>`--topology-characters <n>`<br>`--source-scope <scope>`<br>`--full-literal-traversal`<br>`--expand <region-id>`<br>`--frontier <frontier-id>`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `system-map` | Map structural regions, compiler relationships, and exact runtime boundaries from explicit anchors | `--search <literal>`<br>`--symbol <symbol>`<br>`--focus-at <file:line>`<br>`--depth <n>`<br>`--relation <kind>`<br>`--evidence-floor <floor>`<br>`--topology-characters <n>`<br>`--source-scope <scope>`<br>`--full-literal-traversal`<br>`--expand <region-id>`<br>`--frontier <frontier-id>`<br>`--gap-callee <name>`<br>`--gap-recovery-only`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `call-graph <symbol>` | Show incoming callers and outgoing callees for a symbol | `--full`<br>`--json`<br>`--result-only`<br>`--compact` |
 
 ### Impact

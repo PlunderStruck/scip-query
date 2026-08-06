@@ -9,6 +9,39 @@ import { getCrossLanguageDispatchNames, getRustAttrReferencedNames, getSourceFac
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
 describe('source facts', () => {
+  it('extracts TypeScript private-method calls without the private marker', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-source-facts-private-method-'));
+    try {
+      const projectRoot = join(tempDir, 'project');
+      const dbPath = join(tempDir, 'index.db');
+      writeFixtureFiles(projectRoot, {
+        'src/store.ts': [
+          'export class Store {',
+          '  async commit() {',
+          '    await this.#sweepLocked();',
+          '    await this.#reconcileLocked();',
+          '  }',
+          '  async #sweepLocked() {}',
+          '  async #reconcileLocked() {}',
+          '}',
+        ].join('\n'),
+      });
+      evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/store.ts').write();
+
+      const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(tempDir, 'index.scip') });
+      try {
+        expect(getSourceFacts(db, 'src/store.ts')?.callSites).toEqual([
+          expect.objectContaining({ calleeLeaf: 'sweepLocked', calleeText: 'this.#sweepLocked', line: 2 }),
+          expect.objectContaining({ calleeLeaf: 'reconcileLocked', calleeText: 'this.#reconcileLocked', line: 3 }),
+        ]);
+      } finally {
+        db.close();
+      }
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('extracts Clojure callable and callsite facts for clj cljs and cljc files', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-source-facts-clojure-'));
     try {

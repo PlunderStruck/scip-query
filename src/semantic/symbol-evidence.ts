@@ -227,7 +227,7 @@ function semanticCalleeCacheEntriesForPrefetchedRows(
   return { entries, sourceMissing, skippedUnsupportedLanguage };
 }
 
-const TYPESCRIPT_CALLEE_SCHEMA = 'typescript-callees-v1';
+const TYPESCRIPT_CALLEE_SCHEMA = 'typescript-callees-v2-callsite-line';
 
 function semanticCalleeDepsDigest(db: ScipDatabase, relativePath: string): string | null {
   const language = semanticProviderLanguageForPath(relativePath);
@@ -241,7 +241,7 @@ function semanticCalleeDepsDigest(db: ScipDatabase, relativePath: string): strin
         kind: 'semantic-callees',
         language,
         engine: rustSemanticEngineIdentity(db.config.projectRoot),
-        positionMapping: 'nearby-leaf-v1',
+        positionMapping: 'nearby-leaf-v2-callsite-line',
         depsDigest,
       }),
     );

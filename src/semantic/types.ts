@@ -69,7 +69,10 @@ export interface SemanticReferenceFragment {
 export interface SemanticCallee {
   symbol: string;
   file: string;
+  /** Zero-based definition line of the resolved target. */
   line: number;
+  /** Zero-based source line of the call expression when the provider retains it. */
+  callsiteLine?: number;
 }
 
 export interface SemanticReferenceAndCalleeMaps {

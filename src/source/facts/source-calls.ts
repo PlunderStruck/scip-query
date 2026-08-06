@@ -69,8 +69,9 @@ export function extractCallLeaf(node: SyntaxNode): string | null {
     case 'type_identifier':
     case 'field_identifier':
     case 'property_identifier':
+    case 'private_property_identifier':
     case 'shorthand_property_identifier':
-      return node.text;
+      return node.text.replace(/^#/u, '');
     case 'field_expression':
     case 'member_expression':
     case 'attribute': {

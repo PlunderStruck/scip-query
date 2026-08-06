@@ -33,6 +33,76 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
       '',
     ].join('\n');
     fixture.document(181, 'typescript', 'src/object-commands.ts');
+    files['src/anchor-download.ts'] = [
+      "import { persistPaper } from './anchor-store.js';",
+      'export async function executeDownload(fetchedPaper: Buffer) {',
+      '  return await persistPaper(fetchedPaper);',
+      '}',
+      '',
+    ].join('\n');
+    files['src/anchor-store.ts'] = [
+      "import { withMutex } from './anchor-mutex.js';",
+      'export async function persistPaper(paper: Buffer) {',
+      "  const localState = 'duplicate';",
+      '  return await withMutex(() => reconcileInterruptedUpdate(paper));',
+      '}',
+      'export async function reconcileInterruptedUpdate(paper: Buffer) { return paper; }',
+      '',
+    ].join('\n');
+    files['src/anchor-mutex.ts'] = [
+      'export async function withMutex<T>(work: () => Promise<T>) {',
+      '  return await work();',
+      '}',
+      '',
+    ].join('\n');
+    const expansiveFlow = [
+      'export function expansiveFlow() {',
+      ...Array.from(
+        { length: 600 },
+        (_, index) => `  // mechanically irrelevant padding ${String(index).padStart(3, '0')} ${'x'.repeat(32)}`,
+      ),
+      '  return true;',
+      '}',
+      '',
+    ];
+    files['src/expansive-flow.ts'] = expansiveFlow.join('\n');
+    const expansiveBehavior = [
+      'export function expansiveBehavior(input: number) {',
+      '  let result = 0;',
+      ...Array.from({ length: 650 }, (_, index) => `  if (input === ${index}) result += ${index};`),
+      '  return result;',
+      '}',
+      '',
+    ];
+    files['src/expansive-behavior.ts'] = expansiveBehavior.join('\n');
+    fixture
+      .document(182, 'typescript', 'src/anchor-download.ts')
+      .document(183, 'typescript', 'src/anchor-store.ts')
+      .document(184, 'typescript', 'src/anchor-mutex.ts')
+      .document(185, 'typescript', 'src/expansive-flow.ts')
+      .document(186, 'typescript', 'src/expansive-behavior.ts')
+      .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`anchor-download.ts`/executeDownload().', 'executeDownload', 12)
+      .symbol(2, 'scip-typescript npm fixture 1.0.0 src/`anchor-store.ts`/persistPaper().', 'persistPaper', 12)
+      .symbol(
+        3,
+        'scip-typescript npm fixture 1.0.0 src/`anchor-store.ts`/reconcileInterruptedUpdate().',
+        'reconcileInterruptedUpdate',
+        12,
+      )
+      .symbol(4, 'scip-typescript npm fixture 1.0.0 src/`anchor-mutex.ts`/withMutex().', 'withMutex', 12)
+      .symbol(5, 'scip-typescript npm fixture 1.0.0 src/`expansive-flow.ts`/expansiveFlow().', 'expansiveFlow', 12)
+      .symbol(
+        6,
+        'scip-typescript npm fixture 1.0.0 src/`expansive-behavior.ts`/expansiveBehavior().',
+        'expansiveBehavior',
+        12,
+      )
+      .definition(1, 182, 1, 1, 0, 3, 1)
+      .definition(2, 183, 2, 1, 0, 4, 1)
+      .definition(3, 183, 3, 5, 0, 5, 88)
+      .definition(4, 184, 4, 0, 0, 2, 1)
+      .definition(5, 185, 5, 0, 0, expansiveFlow.length - 2, 1)
+      .definition(6, 186, 6, 0, 0, expansiveBehavior.length - 2, 1);
     writeFixtureFiles(fixtureRoot, files);
     fixture.write();
   });
@@ -117,10 +187,68 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
     expect(invocation.stdout).not.toContain('<file scope> @ 2');
   });
 
+  it('returns compact connected anchor sets without materializing function source', () => {
+    const invocation = runCommand('anchors', [
+      'How does a fetched paper become local state, and what protects duplicates from interrupted updates?',
+      '--limit',
+      '2',
+    ]);
+
+    expect(invocation.status).toBe(0);
+    expect(invocation.stderr).toBe('');
+    expect(invocation.stdout).toContain('NORMALIZED REPOSITORY VOCABULARY');
+    expect(invocation.stdout).toContain('EVIDENCE-GROUNDED ANCHOR SETS');
+    expect(invocation.stdout).toContain('executeDownload');
+    expect(invocation.stdout).toContain('persistPaper');
+    expect(invocation.stdout).toContain('withMutex');
+    expect(invocation.stdout).toContain("--symbol 'src/anchor-store.ts:2-5'");
+    expect(invocation.stdout).not.toContain('const localState');
+  });
+
+  it('refuses an accidentally broad exact-source inspect before transport and preserves compact recovery', () => {
+    const refused = runCommand('inspect', ['--at', 'src/expansive-flow.ts:1', '--view', 'source']);
+
+    expect(refused.status).toBe(1);
+    expect(refused.stdout).toBe('');
+    expect(refused.stderr).toContain('INSPECT SOURCE PACKET REFUSED');
+    expect(refused.stderr).toContain('No partial source was emitted.');
+    expect(refused.stderr).toContain("scip-query inspect --at 'src/expansive-flow.ts:1' --view behavior");
+    expect(refused.stderr).toContain('--allow-large-source');
+
+    const compact = runCommand('inspect', ['--at', 'src/expansive-flow.ts:1', '--view', 'behavior']);
+    expect(compact.status).toBe(0);
+    expect(compact.stderr).toBe('');
+    expect(compact.stdout).toContain('expansiveFlow');
+    expect(compact.stdout.length).toBeLessThan(5_000);
+  });
+
+  it('requires an interior focus for oversized behavior and does not let --full bypass the contract', () => {
+    for (const extraArgs of [[], ['--full']]) {
+      const refused = runCommand('inspect', [
+        '--at',
+        'src/expansive-behavior.ts:1',
+        '--view',
+        'behavior',
+        ...extraArgs,
+      ]);
+
+      expect(refused.status).toBe(1);
+      expect(refused.stdout).toBe('');
+      expect(refused.stderr).toContain('INSPECT BEHAVIOR FOCUS REQUIRED');
+      expect(refused.stderr).toContain('No partial behavior was emitted');
+      expect(refused.stderr).toContain('interior file:line locations');
+      expect(refused.stderr).toContain('--allow-large-behavior');
+    }
+  });
+
   function runSearch(args: readonly string[]): ReturnType<typeof spawnSync> {
+    return runCommand('search', args);
+  }
+
+  function runCommand(command: string, args: readonly string[]): ReturnType<typeof spawnSync> {
     return spawnSync(
       join(repositoryRoot, 'node_modules', '.bin', 'vite-node'),
-      ['--script', join(repositoryRoot, 'src', 'runtime', 'cli.ts'), 'search', ...args],
+      ['--script', join(repositoryRoot, 'src', 'runtime', 'cli.ts'), command, ...args],
       {
         cwd: repositoryRoot,
         encoding: 'utf8',

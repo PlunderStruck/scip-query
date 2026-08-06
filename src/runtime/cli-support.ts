@@ -217,10 +217,14 @@ export function commandAnalysisBudget(
   }
 
   if (!opts.quiet) {
+    const expansionGuidance =
+      commandName === 'inspect'
+        ? 'Use --full only when every omitted semantic candidate can change the decision; it does not override source or behavior materialization ceilings.'
+        : `Run "scip-query ${commandName} --full" for the unbounded semantic pass.`;
     console.error(
       `Large index detected; ${commandName} is using its bounded default analysis with semantic enrichment disabled. ` +
         `Candidate scans, when this command uses one, are capped at ${DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT}. ` +
-        `Run "scip-query ${commandName} --full" for the unbounded semantic pass.`,
+        expansionGuidance,
     );
   }
   return {

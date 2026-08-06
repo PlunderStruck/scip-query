@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "id": "tslint-config-inheritance-heldout-v1",
+  "question": "When TSLint lints files without an explicit --config, how does it find and load each configuration, follow inherited configs, and determine the final rules, rule directories, and default severity?",
+  "requiredFacts": [
+    {
+      "id": "runner-reuses-config-per-folder",
+      "description": "The runner resolves an implicit configuration per file folder and reuses it while consecutive files remain in the same folder.",
+      "answerEvidenceAlternatives": [
+        ["lastFolder", "findConfiguration", "folder"],
+        ["per folder", "reuses", "configuration"]
+      ]
+    },
+    {
+      "id": "configuration-search-order",
+      "description": "Implicit discovery starts at the input file's directory, walks ancestors for tslint.json, tslint.yaml, or tslint.yml in that preference order, and then checks the home directory.",
+      "answerEvidenceAlternatives": [
+        ["tslint.json", "tslint.yaml", "tslint.yml", "home"],
+        ["input file", "ancestor", "home directory"]
+      ]
+    },
+    {
+      "id": "configuration-read-formats",
+      "description": "JSON and YAML configs are read as text and parsed, while other extensions are loaded with require and then evicted from require.cache.",
+      "answerEvidenceAlternatives": [
+        ["JSON", "YAML", "require.cache"],
+        ["JSON.parse", "yaml.safeLoad", "require", "cache"]
+      ]
+    },
+    {
+      "id": "extends-resolution",
+      "description": "Each extends value may name a built-in tslint config or a Node-resolved path/package and is resolved relative to the directory of the config that declares it.",
+      "answerEvidenceAlternatives": [
+        ["tslint:", "Node", "relative", "declaring"],
+        ["resolveConfigurationPath", "relativePath", "dir", "built-in"]
+      ]
+    },
+    {
+      "id": "depth-first-order",
+      "description": "Inherited configs are loaded recursively depth first, with bases placed before the config that extends them.",
+      "answerEvidenceAlternatives": [
+        ["depth first", "base", "before"],
+        ["loadExtendsRecursive", "configs.push", "raw"]
+      ]
+    },
+    {
+      "id": "derived-config-precedence",
+      "description": "The depth-first list is reduced from an empty config so later/derived configs override earlier rule and linter properties, while rule option objects are merged.",
+      "answerEvidenceAlternatives": [
+        ["reduce", "EMPTY_CONFIG", "overwrites"],
+        ["derived", "override", "rule", "linter"]
+      ]
+    },
+    {
+      "id": "severity-and-rule-directories",
+      "description": "The last explicit defaultSeverity encountered in extends order supplies defaults during rule parsing, and rule directories are resolved relative to their config, concatenated in merge order, and deduplicated.",
+      "answerEvidenceAlternatives": [
+        ["defaultSeverity", "last", "rulesDirectory", "deduplicated"],
+        ["default severity", "last", "relative", "rule directories", "deduplic"]
+      ]
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "derived-loaded-before-bases",
+      "answerIncludesAny": [
+        "derived config is loaded before its bases",
+        "child config is merged before parent configs"
+      ]
+    },
+    {
+      "id": "rule-directories-overwritten",
+      "answerIncludesAny": [
+        "derived rule directories replace inherited directories",
+        "rulesDirectory is overwritten"
+      ]
+    }
+  ],
+  "budgets": {
+    "maxToolCalls": 6,
+    "maxSemanticQueries": 4,
+    "maxRenderedCharacters": 60000,
+    "maxNativeExplorationReads": 0
+  }
+}

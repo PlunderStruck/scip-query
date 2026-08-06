@@ -11,6 +11,7 @@ export interface SymbolSemanticCallee {
   symbol: string;
   file: string;
   line: number;
+  callsiteLine?: number;
 }
 
 export interface SymbolSemanticEvidencePort {

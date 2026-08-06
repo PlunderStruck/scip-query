@@ -1,0 +1,181 @@
+{
+  "acceptedAt": "2026-08-06T19:00:52.658Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "4687a9ae897f735f98ba334f6ce5df915b43549a0f89d6149ae09ad43d78ab82",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export AnchorDiscoveryCandidate.",
+      "target": "./queries:AnchorDiscoveryCandidate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export AnchorDiscoveryGroup.",
+      "target": "./queries:AnchorDiscoveryGroup"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export AnchorDiscoveryMatchSource.",
+      "target": "./queries:AnchorDiscoveryMatchSource"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export AnchorDiscoveryOptions.",
+      "target": "./queries:AnchorDiscoveryOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export AnchorDiscoveryRelation.",
+      "target": "./queries:AnchorDiscoveryRelation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export AnchorDiscoveryResult.",
+      "target": "./queries:AnchorDiscoveryResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export AnchorDiscoveryTermMatch.",
+      "target": "./queries:AnchorDiscoveryTermMatch"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries:SystemMapResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export discoverAnchors.",
+      "target": "./queries:discoverAnchors"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export normalizeAnchorQuery.",
+      "target": "./queries:normalizeAnchorQuery"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export AnchorDiscoveryCandidate.",
+      "target": "./queries/index:AnchorDiscoveryCandidate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export AnchorDiscoveryGroup.",
+      "target": "./queries/index:AnchorDiscoveryGroup"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export AnchorDiscoveryMatchSource.",
+      "target": "./queries/index:AnchorDiscoveryMatchSource"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export AnchorDiscoveryOptions.",
+      "target": "./queries/index:AnchorDiscoveryOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export AnchorDiscoveryRelation.",
+      "target": "./queries/index:AnchorDiscoveryRelation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export AnchorDiscoveryResult.",
+      "target": "./queries/index:AnchorDiscoveryResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export AnchorDiscoveryTermMatch.",
+      "target": "./queries/index:AnchorDiscoveryTermMatch"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries/index:SystemMapResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export discoverAnchors.",
+      "target": "./queries/index:discoverAnchors"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export normalizeAnchorQuery.",
+      "target": "./queries/index:normalizeAnchorQuery"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapNextAnchor.",
+      "target": "./queries/system-map:SystemMapNextAnchor"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapNextAnchorAlternative.",
+      "target": "./queries/system-map:SystemMapNextAnchorAlternative"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SystemMapNextAnchorPacket.",
+      "target": "./queries/system-map:SystemMapNextAnchorPacket"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries/system-map:SystemMapResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "C changed from interface CalleeRow { symbol: string; file: string; chunkId: number; source: CalleeEvidenceSource; } to interface CalleeRow { symbol: string; file: string; chunkId: number; source: CalleeEvidenceSource; callsiteLine?: number; }.",
+      "target": "call-graph-evidence-<hash>.d.ts:C"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "b changed from type BoundarySourceScope = 'production' | 'test' | 'fixture' | 'example' | 'generated' | 'script' | 'unknown'; to type ExplorationEvidenceStrength = 'exact' | 'derived' | 'candidate' | 'mixed' | 'unknown';.",
+      "target": "exploration-topology-<hash>.d.ts:b"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "c changed from type ExplorationEvidenceStrength = 'exact' | 'derived' | 'candidate' | 'mixed' | 'unknown'; to type BoundarySourceScope = 'production' | 'test' | 'fixture' | 'example' | 'generated' | 'script' | 'unknown';.",
+      "target": "exploration-topology-<hash>.d.ts:c"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module queries/anchors.d.ts was added or renamed.",
+      "target": "queries/anchors.d.ts"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "478963da6452cc4e136691cbd24df172cf3feeb748187f4fedbac94942778b6f",
+  "reason": "Publish the additive anchors query; the conservative breaking signal is generated internal alias reordering, with no named public export removed or narrowed.",
+  "schemaVersion": 1
+}

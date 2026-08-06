@@ -1,5 +1,10 @@
 import type { BehaviorSignal } from '../../source/facts/behavior-skeleton.js';
-import { behaviorConstructRange, behaviorReceipt, behaviorSkeleton } from '../../source/facts/behavior-skeleton.js';
+import {
+  behaviorConstructRange,
+  behaviorReceipt,
+  behaviorSignalsByLine,
+  behaviorSkeleton,
+} from '../../source/facts/behavior-skeleton.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
 import { getSourceLines } from '../../source/primitives/source-text.js';
 import type { ScipDatabase } from '../../storage/db.js';
@@ -7,6 +12,7 @@ import { findIdentifierLines } from '../../symbols/identifier-index.js';
 import { readRuntimeBoundaryObservations } from './runtime-boundary-evidence.js';
 import type {
   ExplorationEvidenceSource,
+  ExplorationSourceLocation,
   ExplorationTopology,
   ExplorationTopologyEdge,
   ExplorationTopologyNode,
@@ -93,6 +99,9 @@ export interface ConnectedBehaviorPacket {
     omittedNodeIds: string[];
     returnedTransitions: number;
     withheldStatements: number;
+    requestedFocusLocations: ExplorationSourceLocation[];
+    matchedFocusLocations: ExplorationSourceLocation[];
+    unmatchedFocusLocations: ExplorationSourceLocation[];
   };
   behaviorCommand: string | null;
   exactSourceCommand: string | null;
@@ -101,6 +110,8 @@ export interface ConnectedBehaviorPacket {
 export interface ConnectedBehaviorOptions {
   /** Soft limit: matched anchors and nodes on an anchor-connector path are never omitted. */
   maxSteps?: number;
+  /** Exact source locations that should focus behavior inside otherwise-large selected constructs. */
+  focusLocations?: readonly ExplorationSourceLocation[];
 }
 
 /** Build one graph-ordered behavior packet from an already selected topology. */
@@ -115,6 +126,8 @@ export function connectedBehaviorPacket(
   }
 
   const nodeById = new Map(topology.nodes.map((node) => [node.id, node]));
+  const requestedFocusLocations = orderedFocusLocations(options.focusLocations ?? []);
+  const matchedFocusLocations = new Set<string>();
   const edgeById = new Map(topology.edges.map((edge) => [edge.id, edge]));
   const pathNodeIds = orderedUnique(topology.paths.flatMap((path) => path.nodeIds));
   const matchedAnchorNodeIds = orderedUnique(
@@ -224,6 +237,8 @@ export function connectedBehaviorPacket(
   const anchorNodeIds = new Set(topology.anchors.flatMap((anchor) => [...anchor.nodeIds, ...anchor.candidateNodeIds]));
   const steps = selectedNodeIds.map((nodeId, order): ConnectedBehaviorStep => {
     const node = nodeById.get(nodeId)!;
+    const explicitFocusLines = explicitFocusLinesForNode(node, requestedFocusLocations);
+    for (const line of explicitFocusLines) matchedFocusLocations.add(focusLocationKey(node.location!.file, line));
     return {
       id: stepIdByNode.get(nodeId)!,
       nodeId,
@@ -235,10 +250,12 @@ export function connectedBehaviorPacket(
       behavior: behaviorForNode(
         db,
         node,
-        focusLinesForNode(db, node, knownCausalEdges, nodeById, pathEdgeIds, expansiveNodeIds),
-        expansiveNodeIds.has(node.id),
+        explicitFocusLines.length > 0
+          ? explicitFocusLines
+          : focusLinesForNode(db, node, knownCausalEdges, nodeById, pathEdgeIds, expansiveNodeIds),
+        expansiveNodeIds.has(node.id) && explicitFocusLines.length === 0,
         supplementalNodeIds.has(node.id),
-        completeOutlineNodeIds.has(node.id),
+        completeOutlineNodeIds.has(node.id) && explicitFocusLines.length === 0,
       ),
     };
   });
@@ -312,6 +329,13 @@ export function connectedBehaviorPacket(
       omittedNodeIds: candidateNodeIds.filter((nodeId) => !selectedNodeIdSet.has(nodeId)),
       returnedTransitions: transitions.length,
       withheldStatements: steps.reduce((total, step) => total + (step.behavior?.coverage.omittedStatements ?? 0), 0),
+      requestedFocusLocations,
+      matchedFocusLocations: requestedFocusLocations.filter((location) =>
+        matchedFocusLocations.has(focusLocationKey(location.file, location.line)),
+      ),
+      unmatchedFocusLocations: requestedFocusLocations.filter(
+        (location) => !matchedFocusLocations.has(focusLocationKey(location.file, location.line)),
+      ),
     },
     behaviorCommand: inspectionCommand(locations, 'behavior'),
     exactSourceCommand: inspectionCommand(locations, 'source'),
@@ -369,6 +393,7 @@ function behaviorForNode(
   if (outline) return outlineRepresentation(outline);
   const selectedSourceLines = sourceLines.slice(range.startLine, range.endLine + 1);
   const source = selectedSourceLines.join('\n');
+  const signalsByLine = behaviorSignalsByLine(db, node.location.file, range.startLine, range.endLine);
   return {
     kind: 'source',
     constructKind: 'source construct',
@@ -377,7 +402,7 @@ function behaviorForNode(
       line: range.startLine + offset,
       endLine: range.startLine + offset,
       depth: 0,
-      signals: [],
+      signals: signalsByLine.get(range.startLine + offset) ?? [],
       text,
       copied: true,
     })),
@@ -453,6 +478,37 @@ function focusLinesForNode(
   return [...lines].sort((left, right) => left - right);
 }
 
+function explicitFocusLinesForNode(
+  node: ExplorationTopologyNode,
+  locations: readonly ExplorationSourceLocation[],
+): number[] {
+  if (!node.location) return [];
+  const endLine = node.location.endLine ?? node.location.line;
+  return locations
+    .filter(
+      (location) =>
+        location.file === node.location!.file && location.line >= node.location!.line && location.line <= endLine,
+    )
+    .map((location) => location.line);
+}
+
+function orderedFocusLocations(locations: readonly ExplorationSourceLocation[]): ExplorationSourceLocation[] {
+  const unique = new Map<string, ExplorationSourceLocation>();
+  for (const location of locations) {
+    if (!location.file || !Number.isSafeInteger(location.line) || location.line < 0) {
+      throw new RangeError(
+        `Behavior focus locations require a repository file and non-negative line; received ${JSON.stringify(location)}.`,
+      );
+    }
+    unique.set(focusLocationKey(location.file, location.line), { file: location.file, line: location.line });
+  }
+  return [...unique.values()].sort((left, right) => left.file.localeCompare(right.file) || left.line - right.line);
+}
+
+function focusLocationKey(file: string, line: number): string {
+  return `${file}\0${line}`;
+}
+
 function focusedConnectorSlice(
   db: ScipDatabase,
   node: ExplorationTopologyNode,
@@ -481,6 +537,7 @@ function focusedConnectorSlice(
     governingUse: number;
     lines: NonNullable<typeof outline>['lines'];
   }> = [];
+  const behaviorSignals = behaviorSignalsByLine(db, node.location.file, startLine, endLine);
   for (const focusLine of focusLines) {
     const binding = bindingName(sourceLines[focusLine] ?? '');
     if (!binding) continue;
@@ -490,19 +547,35 @@ function focusedConnectorSlice(
     const firstUse = uses[0];
     if (firstUse !== undefined) selectedLines.add(firstUse);
     const governingUse = uses.find((line) =>
-      (outline?.lines ?? []).some(
-        (candidate) =>
-          candidate.line === line && candidate.signals.some((signal) => signal === 'branch' || signal === 'loop'),
-      ),
+      (behaviorSignals.get(line) ?? []).some((signal) => signal === 'branch' || signal === 'loop'),
     );
     if (governingUse === undefined) continue;
     selectedLines.add(governingUse);
-    const governingLine = (outline?.lines ?? []).find((line) => line.line === governingUse);
-    if (!governingLine) continue;
+    const governingLine = (outline?.lines ?? []).find((line) => line.line === governingUse) ?? {
+      line: governingUse,
+      endLine: Math.min(endLine, governingUse + 40),
+      depth: 0,
+      signals: behaviorSignals.get(governingUse) ?? [],
+      text: (sourceLines[governingUse] ?? '').trim(),
+      copied: true,
+    };
+    const governedLines =
+      outline?.lines ??
+      sourceLines.slice(governingLine.line, governingLine.endLine + 1).map((text, offset) => {
+        const line = governingLine.line + offset;
+        return {
+          line,
+          endLine: line,
+          depth: 0,
+          signals: behaviorSignals.get(line) ?? [],
+          text: text.trim(),
+          copied: true,
+        };
+      });
     governedFocusBlocks.push({
       focusLine,
       governingUse,
-      lines: (outline?.lines ?? []).filter(
+      lines: governedLines.filter(
         (line) =>
           line.line >= governingLine.line &&
           line.line <= governingLine.endLine &&
@@ -525,7 +598,7 @@ function focusedConnectorSlice(
   }
   const facts = getSourceFacts(db, node.location.file);
   const callLines = new Set(facts?.callSites.map((site) => site.line) ?? []);
-  const outlineSignalsByLine = new Map((outline?.lines ?? []).map((line) => [line.line, line.signals] as const));
+  const outlineSignalsByLine = behaviorSignals;
   const receiptSignalsByLine = new Map(
     (receipt?.lines ?? []).map(
       (line) => [line.line, line.signals.filter((signal): signal is BehaviorSignal => signal !== 'lifecycle')] as const,

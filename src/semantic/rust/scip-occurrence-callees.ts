@@ -179,6 +179,7 @@ function loadScipOccurrenceCalleeIndex(db: ScipDatabase): RustScipOccurrenceCall
             symbol: calleeDefinition.symbol,
             file: calleeDefinition.relativePath,
             line: calleeDefinition.startLine,
+            callsiteLine: line,
           },
         });
       }

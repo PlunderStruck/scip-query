@@ -1,6 +1,7 @@
 import * as queries from '../../queries/index.js';
 import type { SystemMapEvidenceFloor, SystemMapRelationKind, SystemMapSourceScope } from '../../queries/index.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
+import type { CommandOptions } from '../command-kit/command-execution.js';
 import {
   agentContract,
   collectValues,
@@ -461,6 +462,7 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
   const result = queries.systemMap(db, {
     searches: stringArrayOptionValue(opts, 'search'),
     symbols: stringArrayOptionValue(opts, 'symbol'),
+    behaviorFocusLocations: stringArrayOptionValue(opts, 'focusAt').map(systemMapBehaviorFocus),
     maxDepth: definedNumberOption(opts, 'depth', 5),
     expand: stringArrayOptionValue(opts, 'expand'),
     relations: stringArrayOptionValue(opts, 'relation') as SystemMapRelationKind[],
@@ -478,6 +480,10 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
         returned: result.regions.length,
       },
     });
+    return;
+  }
+  if (booleanOptionValue(opts, 'gapRecoveryOnly')) {
+    printSystemMapGapRecovery(result.nextAnchors, stringArrayOptionValue(opts, 'gapCallee'));
     return;
   }
   const presentedRegionIds = new Set(result.presentation.regionIds);
@@ -595,6 +601,18 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
         `${result.behavior.transitions.length} evidenced transition(s); ` +
         `${result.behavior.coverage.withheldStatements} non-connector statement(s) withheld with exact-source recovery.`,
     );
+    if (result.behavior.coverage.requestedFocusLocations.length > 0) {
+      console.log(
+        `  Question-aligned focus: ${result.behavior.coverage.matchedFocusLocations.length}/${result.behavior.coverage.requestedFocusLocations.length} exact location(s) fell inside selected constructs.`,
+      );
+      for (const location of result.behavior.coverage.unmatchedFocusLocations) {
+        console.log(`  [unmatched focus] ${location.file}:${displayLine(location.line)}`);
+      }
+    }
+    console.log(
+      '  Read every relevant sibling branch under the explicit anchors before using optional gap recovery; ' +
+        'the branch outcomes are jointly required behavior, not alternative search results.',
+    );
     const stepNumberById = new Map(result.behavior.steps.map((step) => [step.id, step.order + 1]));
     for (const step of result.behavior.steps) {
       const location = step.location ? ` @ ${step.location.file}:${displayLine(step.location.line)}` : '';
@@ -658,6 +676,28 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
     }
     if (result.behavior.exactSourceCommand) {
       console.log(`  Exact source for every returned construct: ${result.behavior.exactSourceCommand}`);
+    }
+  }
+
+  if (result.nextAnchors && result.nextAnchors.candidateAnchors > 0) {
+    console.log('\n═══ OPTIONAL GAP RECOVERY ═══');
+    console.log(
+      `  [folded] ${result.nextAnchors.candidateAnchors} callable target(s) are accounted but hidden because ` +
+        'connected behavior is the evidence to exhaust first.',
+    );
+    const exactTargets = result.nextAnchors.anchors.filter((anchor) => anchor.alternativeCount === 1);
+    for (const anchor of exactTargets) {
+      const target = anchor.alternatives[0]!;
+      console.log(
+        `  [${anchor.status}] ${anchor.callsite.calleeLeaf} → ${target.file}:${displayLine(target.line)}; ` +
+          `inspect if material: scip-query inspect --at ${shellArgument(`${target.file}:${displayLine(target.line)}`)} --view behavior`,
+      );
+    }
+    if (result.nextAnchors.candidateAnchors > exactTargets.length) {
+      console.log(
+        `  ${result.nextAnchors.candidateAnchors - exactTargets.length} additional or ambiguous target(s) remain recoverable with ` +
+          `${systemMapGapRecoveryCommand(opts, ['<callee-from-connected-behavior>'])}.`,
+      );
     }
   }
 
@@ -859,6 +899,122 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
     );
   }
 });
+
+type SystemMapNextAnchors = NonNullable<ReturnType<typeof queries.systemMap>['nextAnchors']>;
+
+function printSystemMapGapRecovery(
+  nextAnchors: SystemMapNextAnchors | undefined,
+  requestedCallees: readonly string[],
+): void {
+  console.log('═══ OPTIONAL GAP RECOVERY (ONLY AFTER NAMING A MISSING FACT) ═══');
+  if (!nextAnchors || nextAnchors.candidateAnchors === 0) {
+    console.log('  No callable drill targets were resolved from the connected behavior.');
+    return;
+  }
+  if (requestedCallees.length === 0) {
+    throw new Error('--gap-recovery-only requires at least one --gap-callee named in connected behavior.');
+  }
+  const requested = new Set(requestedCallees.map(normalizedGapCallee));
+  const selected = [...nextAnchors.anchors, ...nextAnchors.withheldAnchors].filter((anchor) =>
+    [anchor.callsite.calleeLeaf, ...anchor.alternatives.map((alternative) => alternative.label)].some((value) =>
+      requested.has(normalizedGapCallee(value)),
+    ),
+  );
+  if (selected.length === 0) {
+    console.log(
+      `  No resolved target matched ${requestedCallees.map(shellArgument).join(', ')}. ` +
+        'Copy callee names exactly from connected behavior.',
+    );
+    return;
+  }
+  console.log(
+    `  ${selected.length}/${nextAnchors.candidateAnchors} callable target(s) matched the named callee selector(s); ` +
+      'no English intent inferred.',
+  );
+  for (const anchor of selected) {
+    const first = anchor.alternatives[0];
+    const target = first
+      ? `${compactSystemMapIdentity(first.label)} @ ${first.file}:${displayLine(first.line)}`
+      : anchor.callsite.calleeLeaf;
+    const signals = anchor.callsite.signals.filter((signal) => signal !== 'anchor' && signal !== 'call').join(',');
+    console.log(
+      `  [${anchor.status}; ${anchor.source}${signals ? `; ${signals}` : ''}] ${target}` +
+        `${anchor.alternativeCount > 1 ? ` — ${anchor.alternativeCount} possible identities` : ''}`,
+    );
+    console.log(
+      `    from ${compactSystemMapIdentity(anchor.fromLabel)} @ ${anchor.callsite.file}:${displayLine(anchor.callsite.line)} — ` +
+        anchor.callsite.text.slice(0, 220),
+    );
+    if (anchor.alternativeCount > 1) {
+      for (const alternative of anchor.alternatives) {
+        console.log(
+          `      candidate: ${compactSystemMapIdentity(alternative.label)} @ ${alternative.file}:${displayLine(alternative.line)}`,
+        );
+      }
+    }
+  }
+  const exactTargets = new Map<string, { file: string; line: number }>();
+  for (const anchor of selected) {
+    if (anchor.alternativeCount !== 1) continue;
+    const target = anchor.alternatives[0];
+    if (target) exactTargets.set(`${target.file}:${target.line}`, target);
+  }
+  if (exactTargets.size > 0) {
+    console.log(
+      `  Inspect named targets together: scip-query inspect ${[...exactTargets.values()]
+        .map((target) => `--at ${shellArgument(`${target.file}:${displayLine(target.line)}`)}`)
+        .join(' ')} --view behavior`,
+    );
+  }
+  if (selected.some((anchor) => anchor.source === 'leaf-identity-candidate' || anchor.status === 'ambiguous')) {
+    console.log(
+      '  Identity candidates locate possible definitions but do not prove the receiver-to-callee edge; confirm before making a relationship claim.',
+    );
+  }
+}
+
+function systemMapGapRecoveryCommand(
+  opts: CommandOptions,
+  callees = stringArrayOptionValue(opts, 'gapCallee'),
+): string {
+  const parts = ['scip-query', 'system-map'];
+  for (const search of stringArrayOptionValue(opts, 'search')) parts.push('--search', shellArgument(search));
+  for (const symbol of stringArrayOptionValue(opts, 'symbol')) parts.push('--symbol', shellArgument(symbol));
+  for (const focus of stringArrayOptionValue(opts, 'focusAt')) parts.push('--focus-at', shellArgument(focus));
+  parts.push('--depth', String(definedNumberOption(opts, 'depth', 5)));
+  for (const relation of stringArrayOptionValue(opts, 'relation')) parts.push('--relation', shellArgument(relation));
+  const evidenceFloor = stringOptionValue(opts, 'evidenceFloor');
+  if (evidenceFloor) parts.push('--evidence-floor', shellArgument(evidenceFloor));
+  for (const scope of stringArrayOptionValue(opts, 'sourceScope')) {
+    parts.push('--source-scope', shellArgument(scope));
+  }
+  if (booleanOptionValue(opts, 'fullLiteralTraversal')) parts.push('--full-literal-traversal');
+  for (const region of stringArrayOptionValue(opts, 'expand')) parts.push('--expand', shellArgument(region));
+  for (const frontier of stringArrayOptionValue(opts, 'frontier')) parts.push('--frontier', shellArgument(frontier));
+  for (const callee of callees) parts.push('--gap-callee', shellArgument(callee));
+  parts.push('--gap-recovery-only');
+  return parts.join(' ');
+}
+
+function normalizedGapCallee(value: string): string {
+  const compact = value.replace(/\(\)$/u, '').replace(/^#/u, '');
+  return (
+    compact.slice(Math.max(compact.lastIndexOf(':'), compact.lastIndexOf('.')) + 1) || compact
+  ).toLocaleLowerCase();
+}
+
+function systemMapBehaviorFocus(value: string): { file: string; line: number } {
+  const match = value.match(/^(.+):(\d+)$/u);
+  const display = match ? Number(match[2]) : Number.NaN;
+  if (!match || !Number.isSafeInteger(display) || display <= 0) {
+    throw new Error(`Invalid --focus-at location '${value}'; expected path:line with a positive line number.`);
+  }
+  return { file: match[1]!, line: display - 1 };
+}
+
+function shellArgument(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
 
 function printSystemMapChildFiles(region: ReturnType<typeof queries.systemMap>['regions'][number]): void {
   const symbolsByFile = groupMapValues(region.symbols, (symbol) => symbol.file);
@@ -1228,6 +1384,12 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     options: withJsonOption([
       option('--search <literal>', 'Add an exact indexed-source anchor; repeat to include several', collectValues, []),
       option('--symbol <symbol>', 'Add a symbol anchor; repeat to include several', collectValues, []),
+      option(
+        '--focus-at <file:line>',
+        'Focus connected behavior at one exact source location inside a selected construct; repeat to include several',
+        collectValues,
+        [],
+      ),
       option('--depth <n>', 'Traverse this many relationship levels', parseInteger, 5),
       option(
         '--relation <kind>',
@@ -1264,6 +1426,13 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
         collectValues,
         [],
       ),
+      option(
+        '--gap-callee <name>',
+        'Resolve one callee already shown in connected behavior; repeat to batch a named gap',
+        collectValues,
+        [],
+      ),
+      option('--gap-recovery-only', 'Render only the --gap-callee targets and one exact batched recovery command'),
     ]),
     evidence: 'mixed',
     claims: mixedClaimContract(

@@ -281,9 +281,31 @@ export function behaviorConstructRange(
   endLine: number,
   focusLines: readonly number[] = [],
 ): BehaviorConstructRange {
+  const selectedFocusLines = focusLines.filter((line) => line >= startLine && line <= endLine);
+  const tree = getAst(db, relativePath);
+  if (selectedFocusLines.length > 0 && tree) {
+    const focusedNodes: SyntaxNode[] = [];
+    walk(tree.rootNode, (node) => {
+      if (
+        isBehaviorFocusNode(node) &&
+        node.startPosition.row >= startLine &&
+        node.endPosition.row <= endLine &&
+        selectedFocusLines.every((line) => node.startPosition.row <= line && node.endPosition.row >= line)
+      ) {
+        focusedNodes.push(node);
+      }
+    });
+    const focusedNode = focusedNodes.sort(
+      (left, right) =>
+        left.endPosition.row - left.startPosition.row - (right.endPosition.row - right.startPosition.row) ||
+        left.startPosition.row - right.startPosition.row,
+    )[0];
+    if (focusedNode) {
+      return { startLine: focusedNode.startPosition.row, endLine: focusedNode.endPosition.row };
+    }
+  }
   const covering = smallestCoveringCallable(db, relativePath, startLine, endLine);
   if (covering) return { startLine: covering.startLine, endLine: covering.endLine };
-  const selectedFocusLines = focusLines.filter((line) => line >= startLine && line <= endLine);
   if (selectedFocusLines.length === 0) return { startLine, endLine };
   const focused = (getSourceFacts(db, relativePath)?.callables ?? [])
     .filter(
@@ -296,7 +318,6 @@ export function behaviorConstructRange(
       (left, right) =>
         left.endLine - left.startLine - (right.endLine - right.startLine) || left.startLine - right.startLine,
     )[0];
-  const tree = getAst(db, relativePath);
   if (!tree) {
     return focused ? { startLine: focused.startLine, endLine: focused.endLine } : { startLine, endLine };
   }
@@ -387,6 +408,28 @@ export function behaviorReceipt(
 }
 
 /**
+ * Preserve the parser-derived behavior attached to exact source lines. This
+ * is the lossless companion to a compact outline: callers that intentionally
+ * render raw source can still rank calls and effects without reinterpreting
+ * the text or pretending that the raw representation is semantically empty.
+ */
+export function behaviorSignalsByLine(
+  db: ScipDatabase,
+  relativePath: string,
+  startLine: number,
+  endLine: number,
+): Map<number, BehaviorSignal[]> {
+  const collected = collectBehaviorCandidates(db, relativePath, startLine, endLine, [], false);
+  if (!collected) return new Map();
+  return new Map(
+    collected.candidates.map((candidate) => [
+      candidate.line,
+      candidate.signals.filter((signal): signal is BehaviorSignal => signal !== 'lifecycle'),
+    ]),
+  );
+}
+
+/**
  * Produce one receipt for a normal callable, or one per direct callable inside
  * a large class/module surface so unrelated methods cannot dilute one another.
  */
@@ -450,6 +493,17 @@ const CATCH_NODE_TYPES = new Set(['catch_clause', 'except_clause', 'rescue']);
 const FINALLY_NODE_TYPES = new Set(['ensure', 'finally_clause']);
 const ELSE_NODE_TYPES = new Set(['else', 'else_clause']);
 const COMMENT_NODE_TYPES = new Set(['block_comment', 'comment', 'line_comment']);
+
+function isBehaviorFocusNode(node: SyntaxNode): boolean {
+  return (
+    CALLABLE_NODE_TYPES.has(node.type) ||
+    LOOP_NODE_TYPES.has(node.type) ||
+    SWITCH_NODE_TYPES.has(node.type) ||
+    TRY_NODE_TYPES.has(node.type) ||
+    CATCH_NODE_TYPES.has(node.type) ||
+    FINALLY_NODE_TYPES.has(node.type)
+  );
+}
 
 function buildBehaviorOutline(
   root: SyntaxNode,

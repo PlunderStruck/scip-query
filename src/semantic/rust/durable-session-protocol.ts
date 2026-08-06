@@ -530,7 +530,8 @@ function isSemanticCallee(value: unknown): value is SemanticCallee {
     isRecordObject(value) &&
     typeof value.symbol === 'string' &&
     typeof value.file === 'string' &&
-    isNonNegativeInteger(value.line)
+    isNonNegativeInteger(value.line) &&
+    (value.callsiteLine === undefined || isNonNegativeInteger(value.callsiteLine))
   );
 }
 

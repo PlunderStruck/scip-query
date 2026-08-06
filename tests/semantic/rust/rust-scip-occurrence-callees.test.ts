@@ -171,7 +171,7 @@ describe('Rust SCIP occurrence callees', () => {
       const caller = rustDefinition(2, CALLER_SYMBOL, { startLine: 2, startChar: 7, endLine: 4, endChar: 1 });
 
       expect(rustScipOccurrenceCalleeMap(db, [caller])).toEqual(
-        new Map([[2, [{ symbol: HELPER_SYMBOL, file: 'src/lib.rs', line: 0 }]]]),
+        new Map([[2, [{ symbol: HELPER_SYMBOL, file: 'src/lib.rs', line: 0, callsiteLine: 3 }]]]),
       );
     });
   });

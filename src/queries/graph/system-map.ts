@@ -22,6 +22,7 @@ import { isModuleLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.j
 import { ProjectIndex } from '../internal/project-index.js';
 import { SOURCE_INSPECTION_MAX_SELECTORS } from '../internal/inspection-limits.js';
 import { connectedBehaviorPacket, type ConnectedBehaviorPacket } from '../internal/connected-behavior.js';
+import { systemMapNextAnchorPacket, type SystemMapNextAnchorPacket } from '../internal/next-anchor-candidates.js';
 import {
   createExplorationTopology,
   selectExplorationTopology,
@@ -78,10 +79,16 @@ export type {
   ConnectedBehaviorStepRole,
   ConnectedBehaviorTransition,
 } from '../internal/connected-behavior.js';
+export type {
+  SystemMapNextAnchor,
+  SystemMapNextAnchorAlternative,
+  SystemMapNextAnchorPacket,
+} from '../internal/next-anchor-candidates.js';
 
 export interface SystemMapOptions {
   searches?: readonly string[];
   symbols?: readonly string[];
+  behaviorFocusLocations?: readonly { file: string; line: number }[];
   maxDepth?: number;
   expand?: readonly string[];
   relations?: readonly SystemMapRelationKind[];
@@ -369,6 +376,8 @@ export interface SystemMapResult {
   topology?: ExplorationTopology;
   /** Graph-ordered constructs and the evidence-bearing transitions between them. */
   behavior?: ConnectedBehaviorPacket;
+  /** Structurally important callable targets not yet materialized in behavior. */
+  nextAnchors?: SystemMapNextAnchorPacket;
   closure: SystemMapQueryClosure;
   coverage: SystemMapCoverage;
 }
@@ -731,6 +740,12 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
 
   for (let depth = 0; depth < maxDepth; depth += 1) {
     const symbolFrontier = [...symbols.values()].filter((state) => !state.processed && state.depth <= depth);
+    const structuralCallees = relationPolicy.has('call')
+      ? index.calleeMap(
+          symbolFrontier.map((state) => state.definition),
+          { additive: false, semantic: false },
+        )
+      : new Map();
     for (const state of symbolFrontier) {
       state.processed = true;
       const definition = state.definition;
@@ -815,9 +830,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
         }
       }
 
-      for (const callee of relationPolicy.has('call')
-        ? (index.calleeMap([definition], { additive: false, semantic: false }).get(definition.symbolId) ?? [])
-        : []) {
+      for (const callee of structuralCallees.get(definition.symbolId) ?? []) {
         const target = resolveIndexedDefinitions(db, index, callee.symbol).matches.find(
           (candidate) => candidate.relativePath === callee.file,
         );
@@ -1255,7 +1268,18 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
     maxTopologyCharacters,
     fullLiteralTraversal: opts.fullLiteralTraversal ?? false,
   });
-  const behavior = connectedBehaviorPacket(db, topology);
+  const focusedBehaviorNodes =
+    (opts.behaviorFocusLocations?.length ?? 0) > 0
+      ? new Set([
+          ...topology.anchors.flatMap((anchor) => anchor.nodeIds),
+          ...topology.paths.flatMap((path) => path.nodeIds),
+        ]).size
+      : undefined;
+  const behavior = connectedBehaviorPacket(db, topology, {
+    focusLocations: opts.behaviorFocusLocations,
+    ...(focusedBehaviorNodes ? { maxSteps: focusedBehaviorNodes } : {}),
+  });
+  const nextAnchors = systemMapNextAnchorPacket(db, topology, behavior, { sourceAllowed });
   const connectorRegionIds = topologyRegionIds(topology);
   const presentation = buildSystemMapPresentation(
     searches,
@@ -1296,6 +1320,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
     presentation,
     topology,
     behavior,
+    nextAnchors,
     closure: {
       status: closureStatus,
       emitted: {
@@ -1308,7 +1333,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
         files: frontierFiles + supportFilesNotTraversed,
         regions: topology.nodes.filter((node) => node.kind === 'structural-region' && node.disposition === 'folded')
           .length,
-        drillAnchors: drilldown?.omittedAnchors ?? 0,
+        drillAnchors: (drilldown?.omittedAnchors ?? 0) + nextAnchors.omittedAnchors,
         literalMatches: withheldLiteralMatches,
       },
       ambiguous: {

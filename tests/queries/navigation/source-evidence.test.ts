@@ -479,6 +479,35 @@ describe('related source evidence', () => {
     }
   });
 
+  it('withholds an oversized behavior unit before rendering while returning a smaller requested unit', () => {
+    const db = createSourceEvidenceDb();
+    try {
+      const packet = inspectSource(db, {
+        locations: ['src/long-command.ts:1', 'src/api.ts:1'],
+        maxCharacters: 120,
+        view: 'behavior',
+      });
+
+      expect(packet.units).toHaveLength(1);
+      expect(packet.units?.[0]).toMatchObject({ kind: 'source', relativePath: 'src/api.ts' });
+      expect(packet.returnedViewCharacters).toBeLessThanOrEqual(120);
+      expect(packet.packetCoverage).toMatchObject({
+        mode: 'bounded',
+        omittedUnits: 1,
+        exactSelectorsComplete: false,
+      });
+      expect(packet.omissionGroups).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            anchors: expect.arrayContaining([expect.objectContaining({ relativePath: 'src/long-command.ts' })]),
+          }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it('returns raw source when a compact function is cheaper than a behavioral outline', () => {
     const db = createSourceEvidenceDb();
     try {
@@ -748,6 +777,25 @@ describe('related source evidence', () => {
     }
   });
 
+  it('narrows an interior behavior location to its governing control-flow construct', () => {
+    const db = createSourceEvidenceDb();
+    try {
+      const packet = inspectSource(db, { locations: ['src/nested-focus.ts:4'], view: 'behavior' });
+      const unit = packet.units?.find(
+        (candidate) => candidate.kind === 'source' && candidate.relativePath === 'src/nested-focus.ts',
+      );
+
+      expect(unit).toMatchObject({ kind: 'source', startLine: 2, endLine: 6 });
+      if (!unit || unit.kind !== 'source') return;
+      expect(unit.source).toContain('for (const item of items)');
+      expect(unit.source).toContain('result.push(item);');
+      expect(unit.source).not.toContain('const result: number[] = [];');
+      expect(unit.source).not.toContain('return result;');
+    } finally {
+      db.close();
+    }
+  });
+
   it('identifies owning construct kind and retains raw source when normalization cannot save tokens', () => {
     const db = createSourceEvidenceDb();
     try {
@@ -983,6 +1031,17 @@ describe('related source evidence', () => {
         '};',
       ],
       'src/long-command.ts': longCommandSource(),
+      'src/nested-focus.ts': [
+        'export function nestedFocus(items: number[]) {',
+        '  const result: number[] = [];',
+        '  for (const item of items) {',
+        '    if (item < 0) continue;',
+        '    result.push(item);',
+        '    console.log(item);',
+        '  }',
+        '  return result;',
+        '}',
+      ],
       'src/__tests__/filler.test.ts': ['export const fillerTest = true;'],
       'src/behavior.ts': [
         'export async function deliver(enabled: boolean, customHeaders: Record<string, string>) {',
@@ -1237,6 +1296,7 @@ describe('related source evidence', () => {
       .document(27, 'typescript', 'src/registry-table.ts')
       .document(28, 'typescript', 'src/api.test.ts')
       .document(29, 'typescript', 'src/outline-dense.ts')
+      .document(30, 'typescript', 'src/nested-focus.ts')
       .symbol(1, target, 'appendThing', 12, 'function appendThing|function appendThing(value: string): string')
       .symbol(2, caller, 'run', 12, 'function run|function run(): string[]')
       .symbol(4, 'scip-typescript npm pkg 1.0.0 src/`commands.ts`/commandSet.', 'commandSet', 13)
@@ -1266,6 +1326,7 @@ describe('related source evidence', () => {
         12,
       )
       .symbol(23, testCaller, 'testAppendThing', 12)
+      .symbol(24, 'scip-typescript npm pkg 1.0.0 src/`nested-focus.ts`/nestedFocus().', 'nestedFocus', 12)
       .definition(1, 1, 1, 0, 0, 2, 1)
       .definition(2, 2, 2, 2, 0, 13, 1)
       .definition(4, 4, 4, 0, 0, 0, 32)
@@ -1280,6 +1341,7 @@ describe('related source evidence', () => {
       .definition(21, 17, 21, 0, 0, 0, 33)
       .definition(22, 19, 22, 1, 0, 3, 1)
       .definition(23, 28, 23, 1, 0, 1, 66)
+      .definition(24, 30, 24, 0, 0, 8, 1)
       .chunk(1, 1, 0, 2)
       .chunk(2, 2, 2, 13)
       .chunk(4, 4, 0, 5)

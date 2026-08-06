@@ -1,6 +1,7 @@
 export { stats } from './navigation/stats.js';
 export { files } from './navigation/files.js';
 export { searchSource } from './navigation/source-search.js';
+export { discoverAnchors, normalizeAnchorQuery } from './navigation/anchor-discovery.js';
 export { inspectSource } from './navigation/source-inspection.js';
 export { symbols } from './navigation/symbols.js';
 export { methods, resolveMethods } from './navigation/methods.js';
@@ -93,6 +94,16 @@ export type {
   SourceObservationFreshness,
   SourceSemanticFreshnessState,
 } from './navigation/source-search.js';
+export type {
+  AnchorDiscoveryCandidate,
+  AnchorDiscoveryGroup,
+  AnchorDiscoveryMatchSource,
+  AnchorDiscoveryOptions,
+  AnchorDiscoveryRelation,
+  AnchorDiscoveryResult,
+  AnchorDiscoveryTermMatch,
+  AnchorDiscoveryUpstreamEntry,
+} from './navigation/anchor-discovery.js';
 export type {
   SourceInspectionContinuation,
   SourceInspectionChannelCoverage,

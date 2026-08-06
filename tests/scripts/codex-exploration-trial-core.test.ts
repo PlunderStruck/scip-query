@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 // @ts-expect-error native script modules do not ship TypeScript declarations
 import {
   classifyExplorationCommand,
+  disciplinedControlPrompt,
+  minimalTreatmentPrompt,
   parseCodexJsonl,
   treatmentPrompt,
 } from '../../scripts/codex-exploration-trial-core.mjs';
@@ -89,14 +91,38 @@ describe('Codex exploration trial core', () => {
   it('makes lossless scip-only exploration and selective expansion explicit', () => {
     const prompt = treatmentPrompt('How does the path work?');
     expect(prompt).toContain('scip-query as the only repository exploration surface');
-    expect(prompt).toContain('at most one locating search');
-    expect(prompt).toContain('make system-map the first graph/detail operation');
+    expect(prompt).toContain('cross-boundary-flow');
+    expect(prompt).toContain('upstream entry');
+    expect(prompt).toContain('Use exactly one initial locator');
+    expect(prompt).toContain('one shell-safely quoted positional argument');
+    expect(prompt).toContain('operation kind and record-identity fields');
+    expect(prompt).toContain("Run the chosen set's printed system-map command unchanged");
     expect(prompt).toContain('never pass the same loose term to both selectors');
     expect(prompt).toContain('Do not run inspect, evidence, code, or command help before the map');
     expect(prompt).toContain('connected behavior is already source evidence');
+    expect(prompt).toContain('private evidence ledger for every explicit anchor');
+    expect(prompt).toContain('sibling branches are jointly required behavior');
     expect(prompt).toContain('stop immediately when they establish all of them');
-    expect(prompt).toContain('one locating query, one map, and at most one batched gap query');
+    expect(prompt).toContain('one locator, one map, and one scoped gap batch');
     expect(prompt).toContain('evidence seen but left implicit is not recovered');
+    expect(prompt).toContain('Optional gap recovery is folded by default');
+    expect(prompt).toContain('--gap-callee');
+    expect(prompt).toContain('--gap-recovery-only');
+    expect(prompt).toContain('ranking is navigation help, not a claim');
+    expect(prompt).toContain('shared-callee-owners');
     expect(prompt).toContain('Do not use rg');
+  });
+
+  it('supports prompt ablations without leaking task-specific navigation', () => {
+    const minimal = minimalTreatmentPrompt('How does the path work?');
+    expect(minimal).toContain('scip-query as the only repository exploration surface');
+    expect(minimal).toContain('whatever scip-query commands you judge necessary');
+    expect(minimal).not.toContain('exactly one initial locator');
+
+    const disciplined = disciplinedControlPrompt('How does the path work?');
+    expect(disciplined).toContain('Do not run scip-query');
+    expect(disciplined).toContain('few material claims');
+    expect(disciplined).toContain('Batch independent searches and reads');
+    expect(disciplined).not.toContain('system-map');
   });
 });

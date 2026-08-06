@@ -32,7 +32,7 @@ import { enclosingSourceUnitSnippet, sourceSnippet, type SourceUnitSnippet } fro
 const DEFAULT_CONTEXT = 6;
 const DEFAULT_SEARCH_LIMIT = 12;
 const DEFAULT_MAX_UNITS = 48;
-const DEFAULT_MAX_CHARACTERS = 60_000;
+const DEFAULT_MAX_CHARACTERS = 20_000;
 const MAX_SCOPE_HINTS = 12;
 const UNBOUNDED_LIMIT = Number.MAX_SAFE_INTEGER;
 const DEFAULT_SYMBOL_EVIDENCE_PARTS = ['definition', 'callers', 'callees'] as const satisfies readonly EvidencePart[];
@@ -258,7 +258,7 @@ export interface SourceInspectionOptions {
   totalLines?: number;
   /** @deprecated Inspect no longer applies a packet unit budget. */
   sliceLimit?: number;
-  /** Soft displayed-evidence character ceiling; a returned syntax unit is never clipped. */
+  /** Displayed-evidence character ceiling; source view may surface one whole oversized unit for CLI refusal. */
   maxCharacters?: number;
   evidence?: EvidenceOptions;
   /** Independent unit ceilings; omitted channel evidence remains recoverable in coverage and omission groups. */
@@ -328,6 +328,7 @@ export function inspectSource(db: ScipDatabase, opts: SourceInspectionOptions): 
     request.maxUnits,
     request.maxCharacters,
     (left, right) => compareCandidates(left.candidate, right.candidate),
+    request.view === 'source',
   );
   const selectedCandidates = selected.map((item) => item.candidate);
   const omittedCandidates = [...channelSelection.omitted, ...omitted].map((item) => item.candidate);

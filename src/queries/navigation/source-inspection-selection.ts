@@ -61,6 +61,7 @@ export function selectInspectionCandidates<T extends InspectionSelectionCandidat
   maxUnits: number,
   maxCharacters: number,
   compareStable: (left: T, right: T) => number,
+  allowOversizedFirst = false,
 ): InspectionSelection<T> {
   const remaining = [...candidates];
   const selected: T[] = [];
@@ -69,7 +70,9 @@ export function selectInspectionCandidates<T extends InspectionSelectionCandidat
 
   while (remaining.length > 0 && selected.length < maxUnits) {
     const fitting = remaining.filter(
-      (candidate) => selected.length === 0 || selectedCharacters + candidate.evidenceCharacters <= maxCharacters,
+      (candidate) =>
+        selectedCharacters + candidate.evidenceCharacters <= maxCharacters ||
+        (allowOversizedFirst && selected.length === 0),
     );
     if (fitting.length === 0) break;
 

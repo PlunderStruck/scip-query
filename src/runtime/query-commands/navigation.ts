@@ -42,6 +42,8 @@ import {
 } from './symbol-resolution.js';
 import { directNavigationQueryCommandDescriptors } from './direct-navigation.js';
 
+const DEFAULT_SAFE_INSPECT_SOURCE_CHARACTERS = 20_000;
+
 export function inspectSearchLimitOption(opts: Readonly<Record<string, unknown>>): number | undefined {
   const full = booleanOptionValue(opts, 'full');
   const searchLimit = definedLimitOption(opts, 'limit', 12);
@@ -276,6 +278,87 @@ function sourceSearchSections(result: queries.SourceSearchResult): ReportSection
   ];
 }
 
+function anchorDiscoverySections(result: queries.AnchorDiscoveryResult): ReportSection[] {
+  const groupRows = result.groups.flatMap((group, index) => {
+    const rootLabel =
+      group.kind === 'shared-callee-owners'
+        ? 'shared callee'
+        : group.kind === 'cross-boundary-flow'
+          ? 'basis root'
+          : 'root';
+    const renderedRoots = group.roots.slice(0, 6);
+    const rootRows = renderedRoots.map((root) => {
+      const terms = root.matches.map((match) => `${match.term}[${match.sources.join('+')}]`).join(', ');
+      return `    ${rootLabel} ${root.label} — ${root.file}:${displayLine(root.line)} — ${terms}`;
+    });
+    const relationRows = group.relations.map(
+      (relation) =>
+        `    ${relation.fromLabel} → ${relation.toLabel} [${relation.kind}; ${relation.strength}; ${relation.evidence}; depth ${relation.depth}${relation.runtimeBoundaryKey ? `; ${relation.runtimeBoundaryKey}` : ''}]`,
+    );
+    return [
+      `  [${index + 1}] ${group.kind}; terms: ${group.matchedTerms.join(', ') || '(structural only)'}`,
+      ...(group.kind === 'shared-callee-owners'
+        ? [
+            `    map owners: ${group.keyAnchors.map((anchor) => anchor.label).join(', ')}`,
+            ...(group.omittedCandidateOwners.length > 0
+              ? [
+                  `    additional candidate owners: ${group.omittedCandidateOwners.map((owner) => owner.label).join(', ')}`,
+                  ...group.ownerRecoveryCommands.map(
+                    (command) => `    additional owner map if those candidates can change the answer: ${command}`,
+                  ),
+                ]
+              : []),
+          ]
+        : group.kind === 'cross-boundary-flow'
+          ? [
+              `    map anchors: ${group.keyAnchors.map((anchor) => anchor.label).join(', ')}`,
+              ...group.upstreamEntries.map(
+                (entry) =>
+                  `    upstream entry: ${entry.name} — ${entry.file}:${displayLine(entry.line)}; if command preconditions can change the answer, include this location in the one batched gap inspect after the map.`,
+              ),
+            ]
+          : []),
+      ...rootRows,
+      ...(group.roots.length > renderedRoots.length
+        ? [`    ... ${group.roots.length - renderedRoots.length} additional basis owner(s) retained in the result.`]
+        : []),
+      ...relationRows,
+      ...(group.omittedRelations > 0
+        ? [`    ... ${group.omittedRelations} additional relationship(s) withheld from this compact view.`]
+        : []),
+      `    map: ${group.systemMapCommand}`,
+    ];
+  });
+  return [
+    {
+      title: 'NORMALIZED REPOSITORY VOCABULARY',
+      rows: [
+        `  matched: ${result.matchedTerms.join(', ') || '(none)'}`,
+        `  unmatched: ${result.unmatchedTerms.join(', ') || '(none)'}`,
+      ],
+    },
+    {
+      title: `EVIDENCE-GROUNDED ANCHOR SETS (${result.groups.length} SHOWN)`,
+      rows: groupRows,
+    },
+    {
+      title: 'ANCHOR DISCOVERY COVERAGE',
+      rows: [
+        `  Repository scan: ${result.scannedFiles} current text file(s), ${result.scannedBytes.toLocaleString()} byte(s).`,
+        `  Lexical owners: ${result.candidateRootCount}; structurally analyzed: ${result.analyzedRootCount}; lower-ranked owners not graph-expanded: ${result.omittedRootCount}.`,
+        `  Displayed anchor sets: ${result.groups.length}; withheld sets or unanalyzed roots: ${result.omittedGroupCount}.`,
+        '  cross-boundary-flow joins otherwise separate call groups only when an indexed runtime producer→consumer link and bounded downstream calls connect them; connected-flow follows calls forward from matched owners; shared-callee-owners finds callable owners that converge on common callees without claiming those callees are effects.',
+        '  Ranking uses repository vocabulary, compiler ownership, and bounded call connectivity; it does not establish task relevance.',
+        ...(result.recoveryCommand
+          ? [
+              `  Expand the ranked manifest only if the shown sets cannot establish the requested flow: ${result.recoveryCommand}`,
+            ]
+          : ['  Every candidate owner was structurally analyzed and every resulting anchor set was shown.']),
+      ],
+    },
+  ];
+}
+
 function sourceSearchTextCoverageComplete(result: queries.SourceSearchResult): boolean {
   const coverage = result.textCoverage;
   return Boolean(
@@ -399,6 +482,70 @@ function chunk<T>(values: readonly T[], size: number): T[][] {
 
 function shellArgument(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+
+function inspectBehaviorFallbackCommand(opts: Readonly<Record<string, unknown>>): string {
+  const parts = ['scip-query inspect'];
+  for (const search of stringArrayOptionValue(opts, 'search')) parts.push(`--search ${shellArgument(search)}`);
+  for (const symbol of stringArrayOptionValue(opts, 'symbol')) parts.push(`--symbol ${shellArgument(symbol)}`);
+  for (const location of stringArrayOptionValue(opts, 'at')) parts.push(`--at ${shellArgument(location)}`);
+  const scope = stringOptionValue(opts, 'scope');
+  if (scope) parts.push(`--scope ${shellArgument(scope)}`);
+  parts.push('--view behavior');
+  return parts.join(' ');
+}
+
+function enforceInspectSourceMaterializationContract(
+  result: queries.SourceInspectionResult,
+  opts: Readonly<Record<string, unknown>>,
+): void {
+  if (
+    result.view !== 'source' ||
+    booleanOptionValue(opts, 'allowLargeSource') ||
+    (result.returnedCharacters ?? 0) <= DEFAULT_SAFE_INSPECT_SOURCE_CHARACTERS
+  ) {
+    return;
+  }
+  throw new Error(
+    [
+      'INSPECT SOURCE PACKET REFUSED',
+      `${result.returnedCharacters ?? 0} exact source character(s) across ${result.units?.length ?? 0} selected unit(s) exceed the ${DEFAULT_SAFE_INSPECT_SOURCE_CHARACTERS}-character safe materialization ceiling.`,
+      'No partial source was emitted.',
+      `Read the same constructs with complete statement accounting: ${inspectBehaviorFallbackCommand(opts)}`,
+      'Narrow to smaller exact selectors, or rerun with --allow-large-source only when the omitted syntax itself can change the decision.',
+    ].join('\n'),
+  );
+}
+
+function enforceInspectBehaviorFocusContract(
+  result: queries.SourceInspectionResult,
+  opts: Readonly<Record<string, unknown>>,
+): void {
+  if (result.view !== 'behavior' || booleanOptionValue(opts, 'allowLargeBehavior')) return;
+  const oversizedOmissions = (result.omissionGroups ?? []).filter(
+    (group) =>
+      group.sourceCharacters > DEFAULT_SAFE_INSPECT_SOURCE_CHARACTERS &&
+      group.roles.some((role) => role === 'location' || role === 'definition'),
+  );
+  if (
+    oversizedOmissions.length === 0 &&
+    (result.returnedViewCharacters ?? 0) <= DEFAULT_SAFE_INSPECT_SOURCE_CHARACTERS
+  ) {
+    return;
+  }
+  const broadAnchors = oversizedOmissions
+    .flatMap((group) => group.anchors)
+    .map((anchor) => `${anchor.relativePath}:${displayLine(anchor.line)}`);
+  const selectors = broadAnchors.length > 0 ? broadAnchors.join(', ') : stringArrayOptionValue(opts, 'at').join(', ');
+  throw new Error(
+    [
+      'INSPECT BEHAVIOR FOCUS REQUIRED',
+      `The selector set resolves to behavioral constructs above the ${DEFAULT_SAFE_INSPECT_SOURCE_CHARACTERS}-character evidence ceiling${selectors ? ` (${selectors})` : ''}.`,
+      'No partial behavior was emitted, and this refusal does not establish an exploration obligation.',
+      'Use one or more interior file:line locations already visible in connected behavior, and batch only the named gaps. Do not use --full to turn a broad construct into a focus.',
+      'Use --allow-large-behavior only when every statement in the construct can change the decision.',
+    ].join('\n'),
+  );
 }
 
 function sourceInspectionSections(result: queries.SourceInspectionResult): ReportSection[] {
@@ -818,12 +965,20 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       option('--max-units <n>', 'Set the ranked packet unit ceiling (default 48)', parsePositiveInteger),
       option(
         '--max-characters <n>',
-        'Set the soft displayed-evidence character ceiling (default 60000)',
+        'Set the displayed-evidence character ceiling (default 20000)',
         parsePositiveInteger,
       ),
       option(
         '--view <view>',
         'Render exact source, or raw/normalized behavior chosen by token cost with complete statement accounting (source or behavior; default source)',
+      ),
+      option(
+        '--allow-large-source',
+        `Explicitly allow an exact-source packet above the ${DEFAULT_SAFE_INSPECT_SOURCE_CHARACTERS}-character safety ceiling`,
+      ),
+      option(
+        '--allow-large-behavior',
+        `Explicitly allow a behavioral construct above the ${DEFAULT_SAFE_INSPECT_SOURCE_CHARACTERS}-character focus ceiling`,
       ),
       option(
         '--unit-lines <n>',
@@ -864,7 +1019,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     ]),
     query: ({ db, opts, budget }) => {
       const full = booleanOptionValue(opts, 'full');
-      return queries.inspectSource(db, {
+      const result = queries.inspectSource(db, {
         searches: stringArrayOptionValue(opts, 'search'),
         symbols: stringArrayOptionValue(opts, 'symbol'),
         locations: stringArrayOptionValue(opts, 'at'),
@@ -885,6 +1040,9 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
         },
         evidenceBudgets: inspectionEvidenceBudgets(stringArrayOptionValue(opts, 'evidenceBudget')),
       });
+      enforceInspectBehaviorFocusContract(result, opts);
+      enforceInspectSourceMaterializationContract(result, opts);
+      return result;
     },
     coverage: (result, { budget }) => {
       const omittedMatches = result.searches.reduce((total, search) => total + search.omittedMatches, 0);
@@ -983,6 +1141,79 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       textCoverage: result.textCoverage,
     }),
     sections: sourceSearchSections,
+  }),
+  sectionedQueryCommand({
+    id: 'anchors',
+    command: 'anchors <question>',
+    description: 'Turn repository vocabulary into compact, graph-connected candidate anchor sets',
+    options: [
+      option('-s, --scope <path>', 'Limit candidate ownership and text evidence to indexed paths matching this text'),
+      option(
+        '-n, --limit <n>',
+        'Connected anchor sets to return; omitted candidates remain counted',
+        parsePositiveInteger,
+        4,
+      ),
+      option('--full', 'Analyze and return every candidate anchor group'),
+    ],
+    agent: agentContract(
+      'Which small graph-connected code regions contain repository vocabulary from this question?',
+      'ranked candidate owners, two-hop compiler call evidence, exact map commands, and an omission ledger',
+      ['pattern'],
+      'bounded',
+    ),
+    docs: doc('Navigation', [
+      `scip-query anchors 'How does a fetched paper become durable local state?'`,
+      `scip-query anchors 'Where is session authorization checked and persisted?' --scope src`,
+    ]),
+    query: ({ db, args, opts }) =>
+      queries.discoverAnchors(db, stringArg(args, 0), {
+        scope: stringOptionValue(opts, 'scope'),
+        limit: definedLimitOption(opts, 'limit', 4),
+        full: booleanOptionValue(opts, 'full'),
+      }),
+    emptyMessage: (result) =>
+      result.candidateRootCount === 0
+        ? `No compiler-owned repository construct matched the normalized terms: ${result.normalizedTerms.join(', ')}.`
+        : undefined,
+    coverage: (result) =>
+      result.omittedRootCount === 0 && result.omittedGroupCount === 0
+        ? {
+            complete: true,
+            totalKnown: true,
+            returned: result.candidateRootCount,
+            total: result.candidateRootCount,
+            omitted: 0,
+          }
+        : {
+            complete: false,
+            totalKnown: true,
+            returned: result.analyzedRootCount,
+            total: result.candidateRootCount,
+            omitted: result.omittedRootCount,
+          },
+    agentResult: (result) => ({
+      normalizedTerms: result.normalizedTerms,
+      matchedTerms: result.matchedTerms,
+      unmatchedTerms: result.unmatchedTerms,
+      candidateRoots: result.candidateRootCount,
+      analyzedRoots: result.analyzedRootCount,
+      omittedRoots: result.omittedRootCount,
+      omittedAnchorSets: result.omittedGroupCount,
+      anchorSets: result.groups.map((group) => ({
+        roots: group.roots.map((root) => ({
+          symbol: root.symbol,
+          file: root.file,
+          line: displayLine(root.line),
+          matchedTerms: root.matchedTerms,
+        })),
+        keyAnchors: group.keyAnchors.map((anchor) => ({ file: anchor.file, line: displayLine(anchor.line) })),
+        relations: group.relations,
+        systemMapCommand: group.systemMapCommand,
+      })),
+      recoveryCommand: result.recoveryCommand,
+    }),
+    sections: anchorDiscoverySections,
   }),
   {
     id: 'methods',

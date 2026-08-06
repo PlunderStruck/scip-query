@@ -27,6 +27,8 @@ export interface CalleeRow {
   file: string;
   chunkId: number;
   source: CalleeEvidenceSource;
+  /** Zero-based source line of the call expression when retained by the evidence source. */
+  callsiteLine?: number;
 }
 
 // scip-query: ignore-stale — exported caller evidence record shared through
@@ -356,6 +358,7 @@ export function buildAstCalleeMap(db: ScipDatabase, definitions: ReadonlyArray<S
         file: pick.file,
         chunkId: site.line,
         source: 'ast-callsite',
+        callsiteLine: site.line,
       });
     }
   }
@@ -616,12 +619,20 @@ function symbolLocationsByDocument(definitions: ReadonlyArray<SymbolLocation>): 
 // scip-query: ignore-extract — this is the bulk caller-map merge policy:
 // SCIP mentions, AST callsites, Rust attribute calls, and TypeScript semantics
 // intentionally contribute to one cross-file reference map.
-function toCalleeRows(semantic: Map<number, Array<{ symbol: string; file: string }>>): Map<number, CalleeRow[]> {
+function toCalleeRows(
+  semantic: Map<number, Array<{ symbol: string; file: string; callsiteLine?: number }>>,
+): Map<number, CalleeRow[]> {
   const out = new Map<number, CalleeRow[]>();
   for (const [symbolId, callees] of semantic) {
     const rows: CalleeRow[] = [];
     for (const callee of callees) {
-      rows.push({ symbol: callee.symbol, file: callee.file, chunkId: -1, source: 'semantic-callee' });
+      rows.push({
+        symbol: callee.symbol,
+        file: callee.file,
+        chunkId: -1,
+        source: 'semantic-callee',
+        ...(callee.callsiteLine === undefined ? {} : { callsiteLine: callee.callsiteLine }),
+      });
     }
     out.set(symbolId, rows);
   }

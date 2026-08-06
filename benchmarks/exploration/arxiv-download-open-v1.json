@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "id": "arxiv-download-open-v1",
+  "question": "Explain how arxiv download works end to end.",
+  "requiredFacts": [
+    {
+      "id": "command-validates-batch",
+      "description": "The download command requires one to three IDs, parses each ID, and processes the IDs sequentially.",
+      "answerEvidenceAlternatives": [
+        ["at least one", "at most 3", "parseArxivId"],
+        ["one to three", "parseArxivId", "sequential"],
+        ["1–3 IDs", "parseArxivId", "sequential"]
+      ]
+    },
+    {
+      "id": "metadata-resolution-splits",
+      "description": "Unversioned or otherwise non-exact input is resolved through executeGet with noStale, while exact versioned input uses cached metadata or constructs an explicitly incomplete metadata record.",
+      "answerEvidenceAlternatives": [
+        ["executeGet", "noStale", "incompleteMetadata", "incomplete"],
+        ["exact versioned", "cached metadata", "incomplete metadata"],
+        ["executeGet", "noStale", "exact-ID", "incomplete"]
+      ]
+    },
+    {
+      "id": "client-download-validates",
+      "description": "The client requires an exact versioned ID, constructs an encoded PDF URL, requests it with the PDF retry policy, validates the PDF response, and returns the body.",
+      "answerEvidenceAlternatives": [
+        ["exact versioned ID", "requestWithRetries", "validatePdfResponse", "response.body"],
+        ["encoded", "PDF URL", "retry", "validates", "body"],
+        ["encoded PDF URL", "retried PDF request", "validates the response", "returns its body"]
+      ]
+    },
+    {
+      "id": "record-and-temporary-file",
+      "description": "addPdf derives safe destination and random temporary paths, hashes the PDF, counts pages, builds the record, and writes the temporary file exclusively with mode 0600.",
+      "answerEvidenceAlternatives": [
+        ["safeLibraryFile", "sha256", "countPdfPages", "wx", "0o600"],
+        ["temporary", "hash", "pages", "exclusive", "0600"],
+        ["safe filename", "SHA-256", "page count", "exclusive", "0600"]
+      ]
+    },
+    {
+      "id": "mutex-reconciles-state",
+      "description": "Persistence runs under the SQLite mutex and sweeps and reconciles library state before checking the current exact-ID record.",
+      "answerEvidenceAlternatives": [
+        ["withSqliteMutex", "sweepLocked", "reconcileLocked", "exactId"],
+        ["SQLite mutex", "sweep", "reconcile", "existing"],
+        ["SQLite-backed store mutex", "sweeps", "reconciles", "same exact version"]
+      ]
+    },
+    {
+      "id": "duplicate-is-idempotent",
+      "description": "If the exact version is already active, addPdf removes the temporary file and returns the existing live entry without rewriting it.",
+      "answerEvidenceAlternatives": [
+        ["existing", "active", "rm", "temporary", "live"],
+        ["already active", "deletes", "temporary", "existing"],
+        ["already live", "deletes", "temporary", "existing"]
+      ]
+    },
+    {
+      "id": "commit-and-cleanup",
+      "description": "For a new entry, addPdf clears stale trash, rejects an occupied destination, atomically renames the temporary PDF, appends an add event, compacts if needed, returns the live entry, and removes any remaining temporary file in finally.",
+      "answerEvidenceAlternatives": [
+        ["oldTrash", "destination already exists", "rename", "appendLibraryEvent", "compactIfNeeded", "finally"],
+        ["trash", "occupied destination", "rename", "add event", "compact", "finally"],
+        ["trash", "destination collision", "renames", "appends", "compacts", "finally"]
+      ]
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "download-writes-before-lock",
+      "answerIncludesAny": [
+        "writes the final PDF before acquiring the mutex",
+        "appends the library event before moving the PDF"
+      ]
+    },
+    {
+      "id": "exact-id-always-fetches-metadata",
+      "answerIncludesAny": [
+        "always fetches metadata for every exact versioned ID",
+        "exact versioned IDs always call executeGet"
+      ]
+    }
+  ],
+  "budgets": {
+    "maxToolCalls": 6,
+    "maxSemanticQueries": 4,
+    "maxRenderedCharacters": 60000,
+    "maxNativeExplorationReads": 0
+  }
+}

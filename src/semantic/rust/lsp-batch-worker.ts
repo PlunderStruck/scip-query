@@ -483,6 +483,7 @@ function outgoingCallsToSemanticCallees(
     symbol: call.to.name,
     file: documentUriToRelativePath(projectRoot, call.to.uri),
     line: call.to.selectionRange.start.line,
+    ...(call.fromRanges[0] === undefined ? {} : { callsiteLine: call.fromRanges[0].start.line }),
   }));
 }
 
@@ -490,7 +491,7 @@ function dedupeSemanticCallees(callees: readonly SemanticCallee[]): SemanticCall
   const seen = new Set<string>();
   const out: SemanticCallee[] = [];
   for (const callee of callees) {
-    const key = `${callee.symbol}\0${callee.file}\0${callee.line}`;
+    const key = `${callee.symbol}\0${callee.file}\0${callee.line}\0${callee.callsiteLine ?? ''}`;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(callee);
