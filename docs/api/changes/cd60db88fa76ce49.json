@@ -1,0 +1,493 @@
+{
+  "acceptedAt": "2026-08-06T01:46:50.146Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "cd60db88fa76ce49e07b515dd998de2503947f6988fc0c6c41ad649a4519fa94",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorLine.",
+      "target": "./queries:ConnectedBehaviorLine"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorOptions.",
+      "target": "./queries:ConnectedBehaviorOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorPacket.",
+      "target": "./queries:ConnectedBehaviorPacket"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorPath.",
+      "target": "./queries:ConnectedBehaviorPath"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorRepresentation.",
+      "target": "./queries:ConnectedBehaviorRepresentation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorStep.",
+      "target": "./queries:ConnectedBehaviorStep"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorStepRole.",
+      "target": "./queries:ConnectedBehaviorStepRole"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorTransition.",
+      "target": "./queries:ConnectedBehaviorTransition"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries:SystemMapResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorLine.",
+      "target": "./queries/index:ConnectedBehaviorLine"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorOptions.",
+      "target": "./queries/index:ConnectedBehaviorOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorPacket.",
+      "target": "./queries/index:ConnectedBehaviorPacket"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorPath.",
+      "target": "./queries/index:ConnectedBehaviorPath"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorRepresentation.",
+      "target": "./queries/index:ConnectedBehaviorRepresentation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorStep.",
+      "target": "./queries/index:ConnectedBehaviorStep"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorStepRole.",
+      "target": "./queries/index:ConnectedBehaviorStepRole"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorTransition.",
+      "target": "./queries/index:ConnectedBehaviorTransition"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries/index:SystemMapResult"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/source-inspection; review their variance and runtime meaning.",
+      "target": "./queries/source-inspection"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorLine.",
+      "target": "./queries/system-map:ConnectedBehaviorLine"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorOptions.",
+      "target": "./queries/system-map:ConnectedBehaviorOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorPacket.",
+      "target": "./queries/system-map:ConnectedBehaviorPacket"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorPath.",
+      "target": "./queries/system-map:ConnectedBehaviorPath"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorRepresentation.",
+      "target": "./queries/system-map:ConnectedBehaviorRepresentation"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorStep.",
+      "target": "./queries/system-map:ConnectedBehaviorStep"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorStepRole.",
+      "target": "./queries/system-map:ConnectedBehaviorStepRole"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ConnectedBehaviorTransition.",
+      "target": "./queries/system-map:ConnectedBehaviorTransition"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapResult changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "./queries/system-map:SystemMapResult"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module behavior-skeleton-<hash>.d.ts was added or renamed.",
+      "target": "behavior-skeleton-<hash>.d.ts"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "A changed from interface SystemMapRegion { id: string; label: string; workspace: string; structuralPath: string; minDepth: number; fileCount: number; sourceFileCount: number; testFileCount: nu... to type SystemMapEvidenceFloor = 'exact' | 'derived';.",
+      "target": "system-map-<hash>.d.ts:A"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "B changed from interface SystemMapRegionRelation { fromRegionId: string; toRegionId: string; kinds: SystemMapRelationKind[]; relationCount: number; fromFiles: string[]; toFiles: string[]; from... to interface SystemMapExternalBoundary { kind: 'external-import'; name: string; fromRegionIds: string[]; fromFiles: string[]; }.",
+      "target": "system-map-<hash>.d.ts:B"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "C changed from interface SystemMapRelation { kind: SystemMapRelationKind; evidence: SystemMapRelationEvidence; fromRegionId: string; fromFile: string; fromSymbol: string | null; toRegionId: st... to interface ConnectedBehaviorLine { line: number; endLine: number; depth: number; signals: BehaviorSignal[]; text: string; copied: boolean; }.",
+      "target": "system-map-<hash>.d.ts:C"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "D changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import-candidate' | 'compiler-cross-workspace-symbol' | 'indexed-or-source-reference' | 'indexed-or-source-im... to interface SystemMapFile { file: string; kind: FileKind; depth: number; origins: string[]; }.",
+      "target": "system-map-<hash>.d.ts:D"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "F changed from interface SystemMapRelationFamilyCoverage { evidence: 'compiler-graph' | 'exact-source' | 'mixed'; scope: string; completeWithinScope: true; } to interface SystemMapLiteralHit { query: string; file: string; line: number; ownerSymbol: string | null; ownerShortName: string | null; sourceLine: string; matchKind?: 'exact-valu....",
+      "target": "system-map-<hash>.d.ts:F"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "G changed from type SystemMapRelationKind = 'call' | 'contract-symbol' | 'import' | 'reference' | 'runtime-boundary'; to interface SystemMapNotableSymbol { shortName: string; file: string; origins: string[]; }.",
+      "target": "system-map-<hash>.d.ts:G"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "H changed from type SystemMapRelationStrength = ExplorationEvidenceStrength; to interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind....",
+      "target": "system-map-<hash>.d.ts:H"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "I changed from interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ... to type SystemMapReferenceScope = 'none' | 'all' | 'forward-regions' | 'cross-workspace-or-forward';.",
+      "target": "system-map-<hash>.d.ts:I"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "J changed from type SystemMapSourceScope = BoundarySourceScope; to interface SystemMapRegion { id: string; label: string; workspace: string; structuralPath: string; minDepth: number; fileCount: number; sourceFileCount: number; testFileCount: nu....",
+      "target": "system-map-<hash>.d.ts:J"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "K changed from interface SystemMapSymbol { symbol: string; shortName: string; file: string; startLine: number; endLine: number; depth: number; origins: string[]; anchorQueries: string[]; refer... to interface SystemMapRegionRelation { fromRegionId: string; toRegionId: string; kinds: SystemMapRelationKind[]; relationCount: number; fromFiles: string[]; toFiles: string[]; from....",
+      "target": "system-map-<hash>.d.ts:K"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "L changed from declare function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapResult; to interface SystemMapRelation { kind: SystemMapRelationKind; evidence: SystemMapRelationEvidence; fromRegionId: string; fromFile: string; fromSymbol: string | null; toRegionId: st....",
+      "target": "system-map-<hash>.d.ts:L"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "M changed from interface SystemMapBoundaryFrontier { observationId: string; action: string; strength: 'exact' | 'derived' | 'candidate'; file: string; line: number; ownerShortName: string | nu... to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-member-import-candidate' | 'compiler-cross-workspace-symbol' | 'indexed-or-source-reference' | 'indexed-or-source-im....",
+      "target": "system-map-<hash>.d.ts:M"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "N changed from interface SystemMapExpansion { command: string | null; regionCount: number; regionIds: string[]; candidateRegionCount?: number; omittedRegionIds?: string[]; } to interface SystemMapRelationFamilyCoverage { evidence: 'compiler-graph' | 'exact-source' | 'mixed'; scope: string; completeWithinScope: true; }.",
+      "target": "system-map-<hash>.d.ts:N"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "O changed from interface SystemMapPresentation { maxCharacters: number; estimatedCharacters: number; totalEstimatedCharacters: number; regionIds: string[]; omittedRegionIds: string[]; relation... to type SystemMapRelationKind = 'call' | 'contract-symbol' | 'import' | 'reference' | 'runtime-boundary';.",
+      "target": "system-map-<hash>.d.ts:O"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "P changed from interface SystemMapQueryClosure { status: 'accounted' | 'incomplete'; emitted: { regions: number; relations: number; runtimeLinks: number; }; withheld: { symbols: number; files:... to type SystemMapRelationStrength = ExplorationEvidenceStrength;.",
+      "target": "system-map-<hash>.d.ts:P"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "Q changed from declare function systemMapRegionRelationKey(relation: Pick<SystemMapRegionRelation, 'fromRegionId' | 'toRegionId'>): string; to interface SystemMapResult { anchors: SystemMapAnchor[]; regions: SystemMapRegion[]; regionRelations: SystemMapRegionRelation[]; externalBoundaries: SystemMapExternalBoundary[]; ....",
+      "target": "system-map-<hash>.d.ts:Q"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration R.",
+      "target": "system-map-<hash>.d.ts:R"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration T.",
+      "target": "system-map-<hash>.d.ts:T"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration U.",
+      "target": "system-map-<hash>.d.ts:U"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration V.",
+      "target": "system-map-<hash>.d.ts:V"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration W.",
+      "target": "system-map-<hash>.d.ts:W"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration X.",
+      "target": "system-map-<hash>.d.ts:X"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration Y.",
+      "target": "system-map-<hash>.d.ts:Y"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration Z.",
+      "target": "system-map-<hash>.d.ts:Z"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "a changed from type ExplorationDisposition = 'emitted' | 'folded' | 'excluded' | 'unsupported'; to interface ConnectedBehaviorOptions { maxSteps?: number; }.",
+      "target": "system-map-<hash>.d.ts:a"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "b changed from interface ExplorationDispositionCounts { total: number; emitted: number; folded: number; excluded: number; unsupported: number; } to interface ConnectedBehaviorPacket { status: 'connected' | 'partial' | 'ambiguous' | 'unavailable'; steps: ConnectedBehaviorStep[]; transitions: ConnectedBehaviorTransition[]; pa....",
+      "target": "system-map-<hash>.d.ts:b"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "c changed from interface ExplorationEvidenceSource { method: string; strength: ExplorationEvidenceStrength; identity: string | null; location: ExplorationSourceLocation | null; } to interface ConnectedBehaviorPath { id: string; status: 'connected' | 'partial' | 'candidate'; stepIds: string[]; transitionIds: string[]; }.",
+      "target": "system-map-<hash>.d.ts:c"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "d changed from type ExplorationEvidenceStrength = 'exact' | 'derived' | 'candidate' | 'mixed' | 'unknown'; to interface ConnectedBehaviorRepresentation { kind: 'connector-slice' | 'outline' | 'source'; constructKind: string; signature: string; lines: ConnectedBehaviorLine[]; coverage: {....",
+      "target": "system-map-<hash>.d.ts:d"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "e changed from interface ExplorationFrontierGroup { id: string; kind: string; direction: 'incoming' | 'outgoing' | 'undirected' | 'unresolved'; fromNodeIds: string[]; edgeIds: string[]; member... to interface ConnectedBehaviorStep { id: string; nodeId: string; order: number; role: ConnectedBehaviorStepRole; kind: string; label: string; location: ExplorationTopologyNode['loc....",
+      "target": "system-map-<hash>.d.ts:e"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "f changed from interface ExplorationSourceLocation { file: string; line: number; endLine?: number; } to type ConnectedBehaviorStepRole = 'anchor' | 'connector' | 'junction';.",
+      "target": "system-map-<hash>.d.ts:f"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "g changed from interface ExplorationTopology { schemaVersion: 1; anchors: ExplorationTopologyAnchor[]; nodes: ExplorationTopologyNode[]; edges: ExplorationTopologyEdge[]; paths: ExplorationTop... to interface ConnectedBehaviorTransition { id: string; edgeId: string; order: number; kind: string; fromStepId: string; toStepId: string; directed: true; pathTraversal: 'forward' |....",
+      "target": "system-map-<hash>.d.ts:g"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "h changed from interface ExplorationTopologyAnchor { id: string; kind: string; query: string; status: ExplorationAnchorStatus; nodeIds: string[]; candidateNodeIds: string[]; omittedCandidates:... to type ExplorationDisposition = 'emitted' | 'folded' | 'excluded' | 'unsupported';.",
+      "target": "system-map-<hash>.d.ts:h"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "i changed from interface ExplorationTopologyCoverage { status: 'accounted' | 'incomplete'; scope: string; nodes: ExplorationDispositionCounts; edges: ExplorationDispositionCounts; matchedAncho... to interface ExplorationDispositionCounts { total: number; emitted: number; folded: number; excluded: number; unsupported: number; }.",
+      "target": "system-map-<hash>.d.ts:i"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "j changed from interface ExplorationTopologyEdge { id: string; kind: string; fromNodeId: string; toNodeId: string; directed: true; disposition: ExplorationDisposition; evidence: ExplorationEvi... to interface ExplorationEvidenceSource { method: string; strength: ExplorationEvidenceStrength; identity: string | null; location: ExplorationSourceLocation | null; }.",
+      "target": "system-map-<hash>.d.ts:j"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "k changed from interface ExplorationTopologyInput { anchors: readonly ExplorationTopologyAnchor[]; nodes: readonly ExplorationTopologyNode[]; edges: readonly ExplorationTopologyEdge[]; paths?:... to type ExplorationEvidenceStrength = 'exact' | 'derived' | 'candidate' | 'mixed' | 'unknown';.",
+      "target": "system-map-<hash>.d.ts:k"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "l changed from interface ExplorationTopologyNode { id: string; kind: string; label: string; disposition: ExplorationDisposition; location: ExplorationSourceLocation | null; anchorIds: string[]... to interface ExplorationFrontierGroup { id: string; kind: string; direction: 'incoming' | 'outgoing' | 'undirected' | 'unresolved'; fromNodeIds: string[]; edgeIds: string[]; member....",
+      "target": "system-map-<hash>.d.ts:l"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "m changed from interface ExplorationTopologyPath { id: string; fromAnchorId: string; toAnchorId: string; status: 'connected' | 'partial' | 'candidate'; nodeIds: string[]; edgeIds: string[]; } to interface ExplorationSourceLocation { file: string; line: number; endLine?: number; }.",
+      "target": "system-map-<hash>.d.ts:m"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "n changed from interface SystemMapAnchorCandidate extends SymbolResolutionCandidate { endLine: number; } to interface ExplorationTopology { schemaVersion: 1; anchors: ExplorationTopologyAnchor[]; nodes: ExplorationTopologyNode[]; edges: ExplorationTopologyEdge[]; paths: ExplorationTop....",
+      "target": "system-map-<hash>.d.ts:n"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "o changed from type SystemMapAnchorKind = 'literal' | 'symbol'; to interface ExplorationTopologyAnchor { id: string; kind: string; query: string; status: ExplorationAnchorStatus; nodeIds: string[]; candidateNodeIds: string[]; omittedCandidates:....",
+      "target": "system-map-<hash>.d.ts:o"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "p changed from type SystemMapAnchorStatus = 'matched' | 'ambiguous' | 'missing'; to interface ExplorationTopologyCoverage { status: 'accounted' | 'incomplete'; scope: string; nodes: ExplorationDispositionCounts; edges: ExplorationDispositionCounts; matchedAncho....",
+      "target": "system-map-<hash>.d.ts:p"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "q changed from interface SystemMapCoverage { explicitAnchorCount: number; requestedRelationKinds: SystemMapRelationKind[]; evidenceFloor: SystemMapEvidenceFloor; includedSourceScopes: Boundary... to interface ExplorationTopologyEdge { id: string; kind: string; fromNodeId: string; toNodeId: string; directed: true; disposition: ExplorationDisposition; evidence: ExplorationEvi....",
+      "target": "system-map-<hash>.d.ts:q"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "r changed from interface SystemMapDrilldown { command: string | null; definitionCommand: string | null; candidateAnchors: number; selectedAnchors: number; omittedAnchors: number; anchors: Syst... to interface ExplorationTopologyInput { anchors: readonly ExplorationTopologyAnchor[]; nodes: readonly ExplorationTopologyNode[]; edges: readonly ExplorationTopologyEdge[]; paths?:....",
+      "target": "system-map-<hash>.d.ts:r"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "s changed from interface SystemMapDrilldownAnchor { kind: 'symbol' | 'literal'; regionId: string; file: string; line: number; endLine: number | null; label: string; } to interface ExplorationTopologyNode { id: string; kind: string; label: string; disposition: ExplorationDisposition; location: ExplorationSourceLocation | null; anchorIds: string[]....",
+      "target": "system-map-<hash>.d.ts:s"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "t changed from type SystemMapEvidenceFloor = 'exact' | 'derived'; to interface ExplorationTopologyPath { id: string; fromAnchorId: string; toAnchorId: string; status: 'connected' | 'partial' | 'candidate'; nodeIds: string[]; edgeIds: string[]; }.",
+      "target": "system-map-<hash>.d.ts:t"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "u changed from interface SystemMapExternalBoundary { kind: 'external-import'; name: string; fromRegionIds: string[]; fromFiles: string[]; } to interface SystemMapAnchorCandidate extends SymbolResolutionCandidate { endLine: number; }.",
+      "target": "system-map-<hash>.d.ts:u"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "v changed from interface SystemMapFile { file: string; kind: FileKind; depth: number; origins: string[]; } to type SystemMapAnchorKind = 'literal' | 'symbol';.",
+      "target": "system-map-<hash>.d.ts:v"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "w changed from interface SystemMapLiteralHit { query: string; file: string; line: number; ownerSymbol: string | null; ownerShortName: string | null; sourceLine: string; matchKind?: 'exact-valu... to type SystemMapAnchorStatus = 'matched' | 'ambiguous' | 'missing';.",
+      "target": "system-map-<hash>.d.ts:w"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "x changed from interface SystemMapNotableSymbol { shortName: string; file: string; origins: string[]; } to interface SystemMapCoverage { explicitAnchorCount: number; requestedRelationKinds: SystemMapRelationKind[]; evidenceFloor: SystemMapEvidenceFloor; includedSourceScopes: Boundary....",
+      "target": "system-map-<hash>.d.ts:x"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "y changed from interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; maxDepth?: number; expand?: readonly string[]; relations?: readonly SystemMapRelationKind... to interface SystemMapDrilldown { command: string | null; definitionCommand: string | null; candidateAnchors: number; selectedAnchors: number; omittedAnchors: number; anchors: Syst....",
+      "target": "system-map-<hash>.d.ts:y"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "z changed from type SystemMapReferenceScope = 'none' | 'all' | 'forward-regions' | 'cross-workspace-or-forward'; to interface SystemMapDrilldownAnchor { kind: 'symbol' | 'literal'; regionId: string; file: string; line: number; endLine: number | null; label: string; }.",
+      "target": "system-map-<hash>.d.ts:z"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module types-<hash>.d.ts was removed or renamed.",
+      "target": "types-<hash>.d.ts"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "f28b16969939b37ff1e4380ec0935775216540a621219342f904f8c40eda6830",
+  "reason": "Add graph-ordered connected behavior packets to system-map without removing existing fields.",
+  "schemaVersion": 1
+}

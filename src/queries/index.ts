@@ -175,6 +175,14 @@ export type {
   EntryPointsOptions,
 } from './graph/entry-map.js';
 export type {
+  ConnectedBehaviorLine,
+  ConnectedBehaviorOptions,
+  ConnectedBehaviorPacket,
+  ConnectedBehaviorPath,
+  ConnectedBehaviorRepresentation,
+  ConnectedBehaviorStep,
+  ConnectedBehaviorStepRole,
+  ConnectedBehaviorTransition,
   SystemMapAnchor,
   SystemMapAnchorCandidate,
   SystemMapAnchorKind,

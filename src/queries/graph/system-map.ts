@@ -8,7 +8,7 @@ import { getSourceImports } from '../../language-parsers/index.js';
 import { getSourceLines } from '../../source/primitives/source-text.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
-import { findEnclosingDefinition } from '../../symbols/definition-catalog.js';
+import { findEnclosingDefinition, getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import type { CalleeEvidenceSource } from '../../symbols/graph/call-graph-evidence.js';
 import { importedMemberCallTargets } from '../../symbols/graph/member-call-targets.js';
 import { findIdentifierLines } from '../../symbols/identifier-index.js';
@@ -16,6 +16,7 @@ import { resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { isModuleLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../internal/project-index.js';
 import { SOURCE_INSPECTION_MAX_SELECTORS } from '../internal/inspection-limits.js';
+import { connectedBehaviorPacket, type ConnectedBehaviorPacket } from '../internal/connected-behavior.js';
 import {
   createExplorationTopology,
   selectExplorationTopology,
@@ -55,6 +56,16 @@ export type SystemMapRelationEvidence =
   | 'indexed-or-source-import'
   | `runtime-boundary:${string}`;
 export type SystemMapRelationStrength = ExplorationEvidenceStrength;
+export type {
+  ConnectedBehaviorLine,
+  ConnectedBehaviorOptions,
+  ConnectedBehaviorPacket,
+  ConnectedBehaviorPath,
+  ConnectedBehaviorRepresentation,
+  ConnectedBehaviorStep,
+  ConnectedBehaviorStepRole,
+  ConnectedBehaviorTransition,
+} from '../internal/connected-behavior.js';
 
 export interface SystemMapOptions {
   searches?: readonly string[];
@@ -300,6 +311,8 @@ export interface SystemMapResult {
   presentation: SystemMapPresentation;
   /** Additive universal graph contract; absent only in results serialized by older builds. */
   topology?: ExplorationTopology;
+  /** Graph-ordered constructs and the evidence-bearing transitions between them. */
+  behavior?: ConnectedBehaviorPacket;
   closure: SystemMapQueryClosure;
   coverage: SystemMapCoverage;
 }
@@ -473,13 +486,44 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
     return state;
   };
 
-  const addBoundaryObservation = (observation: BoundaryObservation, depth: number, origin: string): void => {
+  const addBoundaryObservation = (observation: BoundaryObservation, depth: number, origin: string): string | null => {
     addFile(observation.source.file, depth, origin, true, true);
-    if (!observation.owner.symbol) return;
-    const owner = resolveIndexedDefinitions(db, index, observation.owner.symbol).matches.find(
-      (candidate) => candidate.relativePath === observation.source.file,
-    );
-    if (owner && !isModuleLikeSymbol(owner.symbol)) addSymbol(owner, depth, origin, undefined, 'none', true);
+    const owner =
+      (observation.owner.symbol
+        ? resolveIndexedDefinitions(db, index, observation.owner.symbol).matches.find(
+            (candidate) => candidate.relativePath === observation.source.file,
+          )
+        : null) ??
+      findEnclosingDefinition(getDefinitionsForFile(db, observation.source.file), observation.source.startLine);
+    if (owner && !isModuleLikeSymbol(owner.symbol)) {
+      addSymbol(owner, depth, origin, undefined, 'none', true);
+      return owner.symbol;
+    }
+
+    const referencedHandlers = index
+      .definitionsForFile(observation.source.file)
+      .filter(
+        (definition) =>
+          Boolean(definition.leaf) &&
+          findIdentifierLines(db, observation.source.file, definition.leaf!).some(
+            (line) => line >= observation.source.startLine && line <= observation.source.endLine,
+          ),
+      );
+    if (referencedHandlers.length === 1) {
+      const handler = referencedHandlers[0]!;
+      addSymbol(handler, depth, `${origin}:handler-identifier`, undefined, 'none', true);
+      addRelation(pendingRelations, {
+        kind: 'runtime-boundary',
+        evidence: 'runtime-boundary:handler-identifier',
+        fromFile: observation.source.file,
+        fromSymbol: null,
+        toFile: handler.relativePath,
+        toSymbol: handler.symbol,
+        line: observation.source.startLine,
+        strength: 'derived',
+      });
+    }
+    return null;
   };
 
   for (const query of searches) {
@@ -704,15 +748,23 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
       if (!fromReached && !toReached) continue;
 
       const nextDepth = depth + 1;
-      addBoundaryObservation(from, fromReached ? fromState!.depth : nextDepth, `runtime-boundary:${link.joinRule}`);
-      addBoundaryObservation(to, toReached ? toState!.depth : nextDepth, `runtime-boundary:${link.joinRule}`);
+      const fromSymbol = addBoundaryObservation(
+        from,
+        fromReached ? fromState!.depth : nextDepth,
+        `runtime-boundary:${link.joinRule}`,
+      );
+      const toSymbol = addBoundaryObservation(
+        to,
+        toReached ? toState!.depth : nextDepth,
+        `runtime-boundary:${link.joinRule}`,
+      );
       addRelation(pendingRelations, {
         kind: 'runtime-boundary',
         evidence: `runtime-boundary:${link.joinRule}`,
         fromFile: from.source.file,
-        fromSymbol: from.owner.symbol,
+        fromSymbol,
         toFile: to.source.file,
-        toSymbol: to.owner.symbol,
+        toSymbol,
         line: from.source.startLine,
         strength: link.strength,
       });
@@ -866,6 +918,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
     expandedRegionIds: [...expandedIds],
     maxTopologyCharacters,
   });
+  const behavior = connectedBehaviorPacket(db, topology);
   const connectorRegionIds = topologyRegionIds(topology);
   const presentation = buildSystemMapPresentation(
     searches,
@@ -903,6 +956,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
     drilldown,
     presentation,
     topology,
+    behavior,
     closure: {
       status: closureStatus,
       emitted: {
@@ -1098,6 +1152,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
       attributes: {
         regionId,
         depth: state.depth,
+        leaf: state.definition.leaf ?? shortenSymbol(state.definition.symbol),
         referenceScope: state.referenceScope,
       },
     });

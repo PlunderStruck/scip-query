@@ -485,6 +485,7 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
     presentedRelationKeys.has(`${relation.fromRegionId}\u0000${relation.toRegionId}`),
   );
   const hasExpandedRegions = presentedRegions.some((region) => region.expanded);
+  const hasConnectedBehavior = Boolean(result.behavior?.paths.some((path) => path.stepIds.length > 0));
 
   console.log('═══ EXPLICIT ANCHORS ═══');
   for (const anchor of result.anchors) {
@@ -503,7 +504,10 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
       console.log(`    regions: ${anchor.matchedRegionIds.join(', ')}`);
     }
     if (!hasExpandedRegions) {
-      for (const candidate of anchor.symbolCandidates ?? []) {
+      const shownCandidates = hasConnectedBehavior
+        ? (anchor.symbolCandidates ?? []).slice(0, 3)
+        : (anchor.symbolCandidates ?? []);
+      for (const candidate of shownCandidates) {
         console.log(
           `    ${candidate.relativePath}:${displayLine(candidate.startLine)}  ${compactSystemMapIdentity(candidate.shortName)}`,
         );
@@ -531,14 +535,17 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
       const labels = path.nodeIds.map((id) => topologyNodeById.get(id)?.label ?? id);
       console.log(`  [${path.status}] ${labels.length > 0 ? labels.join(' ↔ ') : 'no proved connector'}`);
     }
-    for (const edge of emittedEdges.slice(0, 24)) {
+    const shownEdgeLimit = hasConnectedBehavior ? 4 : 8;
+    for (const edge of emittedEdges.slice(0, shownEdgeLimit)) {
       const from = topologyNodeById.get(edge.fromNodeId)?.label ?? edge.fromNodeId;
       const to = topologyNodeById.get(edge.toNodeId)?.label ?? edge.toNodeId;
       const strengths = [...new Set(edge.evidence.map((source) => source.strength))].join('/');
       console.log(`  ${from} → ${to} — ${edge.kind} [${strengths}]`);
     }
-    if (emittedEdges.length > 24) console.log(`  +${emittedEdges.length - 24} selected connector edge(s).`);
-    const shownFrontiers = foldedFrontiers.slice(0, 8);
+    if (emittedEdges.length > shownEdgeLimit) {
+      console.log(`  +${emittedEdges.length - shownEdgeLimit} selected connector edge(s).`);
+    }
+    const shownFrontiers = foldedFrontiers.slice(0, hasConnectedBehavior ? 1 : 2);
     for (const frontier of shownFrontiers) {
       const examples = frontier.memberNodeIds
         .slice(0, 2)
@@ -550,7 +557,7 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
       );
     }
     const firstExpansion = shownFrontiers.find((frontier) => frontier.expansion)?.expansion;
-    if (firstExpansion) {
+    if (firstExpansion && !hasConnectedBehavior) {
       const expansionBase = firstExpansion.replace(/ --frontier '[^']+'$/u, '');
       console.log(
         `  Expand shown frontiers together: ${expansionBase} ${shownFrontiers
@@ -558,8 +565,57 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
           .join(' ')}`,
       );
     }
-    if (foldedFrontiers.length > 8) {
-      console.log(`  +${foldedFrontiers.length - 8} frontier group(s); use --json for every exact member id.`);
+    if (foldedFrontiers.length > shownFrontiers.length) {
+      console.log(
+        `  +${foldedFrontiers.length - shownFrontiers.length} frontier group(s); ` +
+          'all exact members and expansion commands remain in the structured result.',
+      );
+    }
+  }
+
+  if (result.behavior && result.behavior.steps.length > 0) {
+    console.log('\n═══ CONNECTED BEHAVIOR ═══');
+    console.log(
+      `  [${result.behavior.status}] ${result.behavior.steps.length}/${result.behavior.coverage.candidateNodes} selected construct(s); ` +
+        `${result.behavior.transitions.length} evidenced transition(s); ` +
+        `${result.behavior.coverage.withheldStatements} non-connector statement(s) withheld with exact-source recovery.`,
+    );
+    const stepNumberById = new Map(result.behavior.steps.map((step) => [step.id, step.order + 1]));
+    for (const step of result.behavior.steps) {
+      const location = step.location ? ` @ ${step.location.file}:${displayLine(step.location.line)}` : '';
+      console.log(
+        `  ${step.order + 1}. [${step.role}; ${step.kind}] ${compactSystemMapIdentity(step.label)}${location}`,
+      );
+      if (!step.behavior) continue;
+      console.log(
+        `     [${step.behavior.kind}; ${step.behavior.constructKind}] ${step.behavior.signature} ` +
+          `(${step.behavior.renderedCharacters}/${step.behavior.rawCharacters} chars; ` +
+          `${step.behavior.coverage.representedStatements}/${step.behavior.coverage.sourceStatements} detected behavior statements selected)`,
+      );
+      for (const line of step.behavior.lines) {
+        const signals = line.signals.length > 0 ? ` [${line.signals.join(',')}]` : '';
+        console.log(`       ${displayLine(line.line)}${signals} ${'  '.repeat(line.depth)}${line.text}`);
+      }
+    }
+    if (result.behavior.transitions.length > 0) {
+      console.log('  Transitions (arrows preserve repository-edge direction):');
+      for (const transition of result.behavior.transitions) {
+        const evidence = transition.evidence.map((source) => `${source.method}/${source.strength}`).join(', ');
+        console.log(
+          `    ${stepNumberById.get(transition.fromStepId) ?? '?'} → ` +
+            `${stepNumberById.get(transition.toStepId) ?? '?'} — ${transition.kind}; ` +
+            `path=${transition.pathTraversal}; ${evidence}`,
+        );
+      }
+    }
+    if (result.behavior.coverage.omittedNodeIds.length > 0) {
+      console.log(
+        `  ${result.behavior.coverage.omittedNodeIds.length} lower-ranked emitted construct(s) were not materialized; ` +
+          'their identities remain in behavior.coverage.omittedNodeIds.',
+      );
+    }
+    if (result.behavior.exactSourceCommand) {
+      console.log(`  Exact source for every returned construct: ${result.behavior.exactSourceCommand}`);
     }
   }
 
@@ -577,6 +633,14 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
             `${region.relationKinds.join(',') || 'anchor-only'}; ` +
             `${region.incomingRegionIds.length} in/${region.outgoingRegionIds.length} out` +
             `${region.memberCallCandidateRelationCount > 0 ? `; ${region.memberCallCandidateRelationCount} M-candidate` : ''}`,
+        );
+        continue;
+      }
+      if (hasConnectedBehavior) {
+        console.log(
+          `  d${region.minDepth} [${expansion}] ${region.id} — ${region.fileCount} file; ` +
+            `${region.symbolCount} sym; ${region.relationKinds.join(',') || 'anchor-only'}; ` +
+            `${region.incomingRegionIds.length} in/${region.outgoingRegionIds.length} out`,
         );
         continue;
       }
@@ -616,7 +680,7 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
     );
   }
 
-  if (!hasExpandedRegions && result.expansion?.command) {
+  if (!hasExpandedRegions && !hasConnectedBehavior && result.expansion?.command) {
     console.log('\n═══ NEXT ABSTRACTION LEVEL ═══');
     if (result.expansion.command) {
       const matchOnlyRegions = result.regions.length - result.expansion.regionCount;
@@ -637,9 +701,11 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
 
   if (presentedRelations.length > 0) {
     console.log('\n═══ CROSS-REGION RELATIONSHIPS ═══');
-    console.log(
-      '  Evidence A=AST callsite; M=source candidate (receiver type unproved); S=semantic callee; C=SCIP chunk; K=cross-workspace contract symbol; I=index/source import; R=index/source reference; B=proven runtime-boundary join.',
-    );
+    if (!hasConnectedBehavior) {
+      console.log(
+        '  Evidence A=AST callsite; M=source candidate (receiver type unproved); S=semantic callee; C=SCIP chunk; K=cross-workspace contract symbol; I=index/source import; R=index/source reference; B=proven runtime-boundary join.',
+      );
+    }
     for (const relation of presentedRelations) {
       console.log(
         `  ${compactSystemMapRegionId(relation.fromRegionId)} → ${compactSystemMapRegionId(relation.toRegionId)} — ` +
@@ -672,12 +738,14 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
   if (result.externalBoundaries.length > 0) {
     console.log('\n═══ EXTERNAL IMPORT BOUNDARIES ═══');
     console.log(
-      `  ${result.externalBoundaries.length} imported external symbol(s): ` +
-        `${summarizeMapValues(
-          result.externalBoundaries.map((boundary) => boundary.name),
-          12,
-        )}. ` +
-        'Use --json when the complete external-import list can change the decision.',
+      hasConnectedBehavior
+        ? `  ${result.externalBoundaries.length} imported external symbol(s) remain accounted in the structured result.`
+        : `  ${result.externalBoundaries.length} imported external symbol(s): ` +
+            `${summarizeMapValues(
+              result.externalBoundaries.map((boundary) => boundary.name),
+              12,
+            )}. ` +
+            'Use --json when the complete external-import list can change the decision.',
     );
   }
 
@@ -741,7 +809,13 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
     console.log(`Symbol resolution omitted ${result.coverage.omittedSymbolCandidates} ambiguous candidate(s).`);
   }
   console.log('Blind spots:');
-  for (const blindSpot of result.coverage.blindSpots) console.log(`  - ${blindSpot}`);
+  const shownBlindSpots = hasConnectedBehavior ? result.coverage.blindSpots.slice(0, 2) : result.coverage.blindSpots;
+  for (const blindSpot of shownBlindSpots) console.log(`  - ${blindSpot}`);
+  if (result.coverage.blindSpots.length > shownBlindSpots.length) {
+    console.log(
+      `  - ${result.coverage.blindSpots.length - shownBlindSpots.length} additional disclosed limitation(s) remain in coverage.blindSpots.`,
+    );
+  }
 });
 
 function printSystemMapChildFiles(region: ReturnType<typeof queries.systemMap>['regions'][number]): void {

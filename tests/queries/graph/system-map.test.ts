@@ -226,6 +226,75 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
+  it('returns connector-ordered behavior with evidence for every transition', () => {
+    const db = createSystemMapDb();
+    try {
+      const result = systemMap(db, {
+        symbols: [symbols.dispatch, symbols.apiRoute],
+        maxDepth: 1,
+      });
+
+      expect(result.behavior).toBeDefined();
+      expect(result.behavior).toMatchObject({
+        status: 'connected',
+        coverage: { withheldStatements: expect.any(Number) },
+        exactSourceCommand: expect.stringContaining('--view source'),
+      });
+      expect(result.behavior!.steps.some((step) => step.label.includes('dispatchCommand'))).toBe(true);
+      expect(result.behavior!.steps.some((step) => step.label.includes('dispatchStreamEvents'))).toBe(true);
+      expect(result.behavior!.transitions).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'runtime-boundary',
+            directed: true,
+            evidence: expect.arrayContaining([
+              expect.objectContaining({ method: 'runtime-boundary:http.method-path', strength: 'exact' }),
+            ]),
+          }),
+        ]),
+      );
+      expect(result.behavior!.paths).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            status: 'connected',
+            stepIds: expect.arrayContaining([
+              expect.stringContaining('dispatchCommand'),
+              expect.stringContaining('dispatchStreamEvents'),
+            ]),
+          }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('keeps a decisive branch predicate in the connected behavior representation', () => {
+    const db = createSystemMapDb();
+    try {
+      const result = systemMap(db, {
+        symbols: [symbols.webRealtime, symbols.render],
+        maxDepth: 2,
+      });
+      const realtime = result.behavior?.steps.find((step) => step.label.includes('handleRealtime'));
+
+      expect(realtime?.behavior?.lines).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            text: expect.stringContaining('type === sessionRealtimeEventTypes.workSession'),
+          }),
+        ]),
+      );
+      expect(
+        (realtime?.behavior?.coverage.representedStatements ?? 0) +
+          (realtime?.behavior?.coverage.omittedStatements ?? 0),
+      ).toBe(realtime?.behavior?.coverage.sourceStatements);
+      expect(result.behavior?.exactSourceCommand).toContain('--view source');
+    } finally {
+      db.close();
+    }
+  });
+
   it('traverses only the requested relation families', () => {
     const db = createSystemMapDb();
     try {
