@@ -43,6 +43,30 @@ describe('system-map program edge semantics', () => {
     ]);
   });
 
+  it('projects a carrier discriminator only when the runtime join proved data-mediated dispatch', () => {
+    expect(
+      systemMapRelationProgramSemantics({
+        kind: 'runtime-boundary',
+        evidence: 'runtime-boundary:carrier.discriminator',
+        runtimeBoundaryKey: 'carrier\u0000work_session_stream_events',
+        fromBoundaryParticipant: { protocol: 'http' },
+        toBoundaryParticipant: { protocol: 'http' },
+      }),
+    ).toEqual([
+      expect.objectContaining({ family: 'control', subtype: 'runtime-handoff' }),
+      {
+        family: 'data',
+        subtype: 'serialized-discriminator-transfer',
+        context: {
+          crossesRuntimeBoundary: true,
+          protocol: 'http',
+          runtimeKey: 'carrier\u0000work_session_stream_events',
+        },
+        attributes: { joinRule: 'carrier.discriminator' },
+      },
+    ]);
+  });
+
   it('maps system-map topology scaffolding while leaving unresolved frontiers outside the proved graph', () => {
     expect(systemMapSyntheticEdgeProgramSemantics('structural-membership')).toEqual([
       { family: 'identity', subtype: 'contains' },

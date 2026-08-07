@@ -196,7 +196,8 @@ export interface ExplorationTopologyCoverage {
   missingAnchors: number;
   omittedCandidates: number;
   frontierGroups: number;
-  programEdges: ProgramEdgeInventory;
+  /** Additive semantic inventory; absent on topology values produced before semantic projection. */
+  programEdges?: ProgramEdgeInventory;
   blindSpots: string[];
   explanation: string;
 }

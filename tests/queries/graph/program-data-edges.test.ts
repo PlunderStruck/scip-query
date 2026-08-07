@@ -92,4 +92,90 @@ describe('canonical program data edges', () => {
       }),
     ]);
   });
+
+  it('preserves mechanically derived property and return values as distinct data subtypes', () => {
+    const caller = definition(1, 'caller-symbol', 'caller', 'src/caller.ts');
+    const callee = definition(2, 'callee-symbol', 'callee', 'src/callee.ts');
+    const baseFlow: CallParameterValueFlow = {
+      caller,
+      callee,
+      call: { file: 'src/caller.ts', startLine: 1, endLine: 1 },
+      transfers: [],
+      unknown: [
+        {
+          calleePosition: 0,
+          argumentText: 'METHODS.create',
+          reason: 'argument-not-direct-parameter',
+          proof: { file: 'src/caller.ts', startLine: 1, endLine: 1 },
+        },
+      ],
+    };
+
+    const property = programDataElementsForParameterFlow(
+      baseFlow,
+      new Map([
+        [
+          0,
+          {
+            value: 'POST',
+            evidence: 'constant' as const,
+            term: { kind: 'literal' as const, value: 'POST' },
+            precision: 'literal' as const,
+            derivation: {
+              kind: 'mechanically-derived' as const,
+              rule: 'member-constant',
+              ruleVersion: '1',
+              inputFactIds: ['method-symbol'],
+              sourceSpans: [{ file: 'src/constants.ts', startLine: 3, endLine: 3 }],
+            },
+          },
+        ],
+      ]),
+    );
+    expect(property.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          disposition: 'folded',
+          semantics: [expect.objectContaining({ family: 'data', subtype: 'property-to-parameter' })],
+          evidence: [
+            expect.objectContaining({
+              method: 'static-value:member-constant',
+              strength: 'derived',
+              location: { file: 'src/constants.ts', line: 3, endLine: 3 },
+            }),
+          ],
+        }),
+      ]),
+    );
+    expect(property.frontiers).toEqual([]);
+
+    const returned = programDataElementsForParameterFlow(
+      baseFlow,
+      new Map([
+        [
+          0,
+          {
+            value: 'queued',
+            evidence: 'constant' as const,
+            term: { kind: 'literal' as const, value: 'queued' },
+            precision: 'literal' as const,
+            derivation: {
+              kind: 'mechanically-derived' as const,
+              rule: 'bounded-call-return',
+              ruleVersion: '1',
+              inputFactIds: ['factory-symbol'],
+              sourceSpans: [{ file: 'src/factory.ts', startLine: 5, endLine: 5 }],
+            },
+          },
+        ],
+      ]),
+    );
+    expect(returned.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          semantics: [expect.objectContaining({ family: 'data', subtype: 'return-to-parameter' })],
+        }),
+      ]),
+    );
+  });
 });

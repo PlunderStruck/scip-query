@@ -152,7 +152,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
           edge.semantics?.some(({ family, subtype }) => family === 'control' && subtype === 'call'),
         ),
       ).toBe(true);
-      expect(result.topology?.coverage.programEdges.unmappedKinds).toEqual([]);
+      expect(result.topology?.coverage.programEdges?.unmappedKinds).toEqual([]);
       const loopStep = result.behavior?.steps.filter((step) => step.label === 'loop') ?? [];
       expect(loopStep).toHaveLength(1);
       expect(loopStep[0]?.behavior?.lines.map((line) => line.line)).toEqual(expect.arrayContaining([2, 3]));
@@ -165,7 +165,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     const db = createSystemMapDb();
     try {
       const result = systemMap(db, {
-        symbols: [symbols.companionCommand, symbols.companionAppend],
+        symbols: [symbols.companionCommand, symbols.companionAppend, symbols.dispatch],
         maxDepth: 1,
         relations: ['call'],
       });
@@ -183,14 +183,28 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
               }),
             ],
           }),
+          expect.objectContaining({
+            disposition: 'folded',
+            semantics: [
+              expect.objectContaining({
+                family: 'data',
+                subtype: 'constant-to-parameter',
+                attributes: expect.objectContaining({
+                  value: 'work_session_stream_events',
+                  precision: 'literal',
+                  calleePosition: 0,
+                }),
+              }),
+            ],
+          }),
         ]),
       );
-      expect(result.topology?.coverage.programEdges.families.data).toMatchObject({
+      expect(result.topology?.coverage.programEdges?.families.data).toMatchObject({
         sourceEdges: expect.any(Number),
         projectedEdges: expect.any(Number),
-        subtypes: ['argument-to-parameter'],
+        subtypes: ['argument-to-parameter', 'constant-to-parameter'],
       });
-      expect(result.topology?.coverage.programEdges.families.data.projectedEdges).toBeGreaterThan(0);
+      expect(result.topology?.coverage.programEdges?.families.data.projectedEdges).toBeGreaterThan(0);
     } finally {
       db.close();
     }

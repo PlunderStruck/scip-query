@@ -1,8 +1,14 @@
 import type { IndexedDefinition } from '../../domain/types.js';
+import { getAst } from '../../source/ast/ast-core.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { resolvedCallSitesForDefinition } from '../../symbols/graph/resolved-call-sites.js';
-import { parameterValueFlowAtCall, type CallParameterValueFlow } from '../../symbols/graph/value-flow.js';
+import { evaluateStaticValue } from '../../symbols/graph/static-value-flow.js';
+import {
+  parameterValueFlowAtCall,
+  type CallParameterValueFlow,
+  type EvaluatedStaticValue,
+} from '../../symbols/graph/value-flow.js';
 import type {
   ExplorationFrontierGroup,
   ExplorationTopologyEdge,
@@ -18,7 +24,10 @@ export interface ProgramDataElements {
 }
 
 /** Project one proved compiler-call parameter flow into repository-independent data edges. */
-export function programDataElementsForParameterFlow(flow: CallParameterValueFlow): ProgramDataElements {
+export function programDataElementsForParameterFlow(
+  flow: CallParameterValueFlow,
+  staticArguments: ReadonlyMap<number, EvaluatedStaticValue> = new Map(),
+): ProgramDataElements {
   const nodes = new Map<string, ExplorationTopologyNode>();
   const edges = new Map<string, ExplorationTopologyEdge>();
   const frontiers: ExplorationFrontierGroup[] = [];
@@ -73,11 +82,16 @@ export function programDataElementsForParameterFlow(flow: CallParameterValueFlow
   }
 
   flow.unknown.forEach((unknown, index) => {
-    const expression = argumentExpressionNode(flow, unknown.calleePosition, unknown.argumentText);
     const calleeParameter = parameterNode(flow.callee, unknown.calleePosition);
-    addNode(nodes, expression);
     addNode(nodes, calleeParameter);
     addParameterOwnerEdge(edges, flow.callee, calleeParameter);
+    const staticValue = staticArguments.get(unknown.calleePosition);
+    if (staticValue && isProvedStaticValue(staticValue)) {
+      addStaticValueTransfer(edges, nodes, flow, unknown.calleePosition, unknown.argumentText, staticValue);
+      return;
+    }
+    const expression = argumentExpressionNode(flow, unknown.calleePosition, unknown.argumentText);
+    addNode(nodes, expression);
     const edgeId = id(
       'edge',
       'data-transfer-unsupported',
@@ -125,7 +139,7 @@ export function programDataElementsForParameterFlow(flow: CallParameterValueFlow
       memberNodeIds: [calleeParameter.id],
       memberCount: 1,
       disposition: 'unsupported',
-      reason: unknown.reason,
+      reason: staticValue?.derivation.rule ?? unknown.reason,
       expansion: null,
     });
   });
@@ -174,7 +188,16 @@ export function programDataElementsForSystemMapRelations(
     const callsiteKey = `${site.file}\0${site.callNode.startIndex}\0${site.callNode.endIndex}\0${callee.symbol}`;
     if (seenCallsites.has(callsiteKey)) continue;
     seenCallsites.add(callsiteKey);
-    mergeElements(result, programDataElementsForParameterFlow(parameterValueFlowAtCall(db, site)));
+    const flow = parameterValueFlowAtCall(db, site);
+    const root = getAst(db, site.file)?.rootNode;
+    const staticArguments = new Map<number, EvaluatedStaticValue>();
+    if (root) {
+      for (const unknown of flow.unknown) {
+        const value = evaluateStaticValue({ db, file: site.file, root }, site.arguments[unknown.calleePosition]);
+        if (value) staticArguments.set(unknown.calleePosition, value);
+      }
+    }
+    mergeElements(result, programDataElementsForParameterFlow(flow, staticArguments));
   }
 
   result.blindSpots = [...new Set(result.blindSpots)].sort();
@@ -247,6 +270,99 @@ function argumentExpressionNode(
     anchorIds: [],
     attributes: { calleeSymbol: flow.callee.symbol, position: calleePosition },
   };
+}
+
+function staticValueNode(
+  flow: CallParameterValueFlow,
+  calleePosition: number,
+  value: EvaluatedStaticValue,
+): ExplorationTopologyNode {
+  return {
+    id: id(
+      'static-value',
+      flow.call.file,
+      String(flow.call.startLine),
+      String(flow.call.endLine),
+      String(calleePosition),
+    ),
+    kind: 'static-value',
+    label: value.value,
+    disposition: 'folded',
+    location: { file: flow.call.file, line: flow.call.startLine, endLine: flow.call.endLine },
+    anchorIds: [],
+    attributes: {
+      value: value.value,
+      precision: value.precision,
+      evidence: value.evidence,
+      termKind: value.term.kind,
+      derivationRule: value.derivation.rule,
+    },
+  };
+}
+
+function addStaticValueTransfer(
+  edges: Map<string, ExplorationTopologyEdge>,
+  nodes: Map<string, ExplorationTopologyNode>,
+  flow: CallParameterValueFlow,
+  calleePosition: number,
+  argumentText: string,
+  value: EvaluatedStaticValue,
+): void {
+  const source = staticValueNode(flow, calleePosition, value);
+  const target = parameterNode(flow.callee, calleePosition);
+  addNode(nodes, source);
+  const edgeId = id(
+    'edge',
+    'static-value-transfer',
+    flow.call.file,
+    String(flow.call.startLine),
+    String(calleePosition),
+  );
+  edges.set(edgeId, {
+    id: edgeId,
+    kind: 'data-transfer',
+    fromNodeId: source.id,
+    toNodeId: target.id,
+    directed: true,
+    disposition: 'folded',
+    semantics: [
+      {
+        family: 'data',
+        subtype: staticValueTransferSubtype(value),
+        attributes: {
+          argumentText,
+          calleePosition,
+          value: value.value,
+          precision: value.precision,
+          derivationRule: value.derivation.rule,
+        },
+      },
+    ],
+    evidence: staticValueEvidence(value, flow),
+  });
+}
+
+function isProvedStaticValue(value: EvaluatedStaticValue): boolean {
+  return value.derivation.kind !== 'heuristic' && value.precision !== 'symbolic' && value.precision !== 'unknown';
+}
+
+function staticValueTransferSubtype(value: EvaluatedStaticValue): string {
+  if (value.derivation.rule === 'bounded-call-return') return 'return-to-parameter';
+  if (value.derivation.rule === 'member-constant' || value.term.kind === 'property') return 'property-to-parameter';
+  return 'constant-to-parameter';
+}
+
+function staticValueEvidence(
+  value: EvaluatedStaticValue,
+  flow: CallParameterValueFlow,
+): ExplorationTopologyEdge['evidence'] {
+  const spans = value.derivation.sourceSpans.length > 0 ? value.derivation.sourceSpans : [flow.call];
+  return spans.map((span) => ({
+    method: `static-value:${value.derivation.rule}`,
+    strength: value.derivation.kind === 'direct' ? 'exact' : 'derived',
+    identity: value.derivation.inputFactIds.join(',') || value.value,
+    location: { file: span.file, line: span.startLine, endLine: span.endLine },
+  }));
 }
 
 function addNode(nodes: Map<string, ExplorationTopologyNode>, node: ExplorationTopologyNode): void {

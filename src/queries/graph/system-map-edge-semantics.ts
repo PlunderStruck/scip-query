@@ -1,14 +1,14 @@
 import type { ProgramEdgeSemantic } from '../internal/exploration-topology.js';
 
+export type SystemMapRelationKind = 'call' | 'contract-symbol' | 'import' | 'reference' | 'runtime-boundary';
+
 export const SYSTEM_MAP_RELATION_KINDS = [
   'call',
   'contract-symbol',
   'import',
   'reference',
   'runtime-boundary',
-] as const;
-
-export type SystemMapRelationKind = (typeof SYSTEM_MAP_RELATION_KINDS)[number];
+] as const satisfies readonly SystemMapRelationKind[];
 
 export type SystemMapSyntheticEdgeKind = 'structural-membership' | 'boundary-observation' | 'external-import';
 
@@ -18,6 +18,7 @@ interface SystemMapSemanticRuntimeParticipant {
 
 interface SystemMapSemanticRelation {
   kind: SystemMapRelationKind;
+  evidence?: string;
   runtimeBoundaryKey?: string;
   fromBoundaryParticipant?: SystemMapSemanticRuntimeParticipant;
   toBoundaryParticipant?: SystemMapSemanticRuntimeParticipant;
@@ -41,17 +42,27 @@ export function systemMapRelationProgramSemantics(relation: SystemMapSemanticRel
   if (relation.kind !== 'runtime-boundary') return cloneSemantics(STATIC_RELATION_SEMANTICS[relation.kind]);
 
   const protocol = relation.fromBoundaryParticipant?.protocol ?? relation.toBoundaryParticipant?.protocol;
-  return [
+  const context = {
+    crossesRuntimeBoundary: true as const,
+    ...(protocol ? { protocol } : {}),
+    ...(relation.runtimeBoundaryKey ? { runtimeKey: relation.runtimeBoundaryKey } : {}),
+  };
+  const semantics: ProgramEdgeSemantic[] = [
     {
       family: 'control',
       subtype: 'runtime-handoff',
-      context: {
-        crossesRuntimeBoundary: true,
-        ...(protocol ? { protocol } : {}),
-        ...(relation.runtimeBoundaryKey ? { runtimeKey: relation.runtimeBoundaryKey } : {}),
-      },
+      context,
     },
   ];
+  if (relation.evidence === 'runtime-boundary:carrier.discriminator') {
+    semantics.push({
+      family: 'data',
+      subtype: 'serialized-discriminator-transfer',
+      context: { ...context },
+      attributes: { joinRule: 'carrier.discriminator' },
+    });
+  }
+  return semantics;
 }
 
 /** Map topology-only relationships that do not originate in SystemMapRelation. */

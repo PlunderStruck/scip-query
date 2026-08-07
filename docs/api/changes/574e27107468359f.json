@@ -1,0 +1,55 @@
+{
+  "acceptedAt": "2026-08-07T17:34:22.867Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "574e27107468359fef6e00a4c5811d844a11500efae11978da08ab3649ec8cee",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ExplorationTopologyCoverage changed from interface ExplorationTopologyCoverage { status: 'accounted' | 'incomplete'; scope: string; nodes: ExplorationDispositionCounts; edges: ExplorationDispositionCounts; matchedAncho... to interface ExplorationTopologyCoverage { status: 'accounted' | 'incomplete'; scope: string; nodes: ExplorationDispositionCounts; edges: ExplorationDispositionCounts; matchedAncho....",
+      "target": "./queries:ExplorationTopologyCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ExplorationTopologyEdge changed from interface ExplorationTopologyEdge { id: string; kind: string; fromNodeId: string; toNodeId: string; directed: true; disposition: ExplorationDisposition; evidence: ExplorationEvi... to interface ExplorationTopologyEdge { id: string; kind: string; fromNodeId: string; toNodeId: string; directed: true; disposition: ExplorationDisposition; evidence: ExplorationEvi....",
+      "target": "./queries:ExplorationTopologyEdge"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ExplorationTopologyCoverage changed from interface ExplorationTopologyCoverage { status: 'accounted' | 'incomplete'; scope: string; nodes: ExplorationDispositionCounts; edges: ExplorationDispositionCounts; matchedAncho... to interface ExplorationTopologyCoverage { status: 'accounted' | 'incomplete'; scope: string; nodes: ExplorationDispositionCounts; edges: ExplorationDispositionCounts; matchedAncho....",
+      "target": "./queries/index:ExplorationTopologyCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ExplorationTopologyEdge changed from interface ExplorationTopologyEdge { id: string; kind: string; fromNodeId: string; toNodeId: string; directed: true; disposition: ExplorationDisposition; evidence: ExplorationEvi... to interface ExplorationTopologyEdge { id: string; kind: string; fromNodeId: string; toNodeId: string; directed: true; disposition: ExplorationDisposition; evidence: ExplorationEvi....",
+      "target": "./queries/index:ExplorationTopologyEdge"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/system-map; review their variance and runtime meaning.",
+      "target": "./queries/system-map"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "p changed from interface ExplorationTopologyCoverage { status: 'accounted' | 'incomplete'; scope: string; nodes: ExplorationDispositionCounts; edges: ExplorationDispositionCounts; matchedAncho... to interface ExplorationTopologyCoverage { status: 'accounted' | 'incomplete'; scope: string; nodes: ExplorationDispositionCounts; edges: ExplorationDispositionCounts; matchedAncho....",
+      "target": "next-anchor-candidates-<hash>.d.ts:p"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "q changed from interface ExplorationTopologyEdge { id: string; kind: string; fromNodeId: string; toNodeId: string; directed: true; disposition: ExplorationDisposition; evidence: ExplorationEvi... to interface ExplorationTopologyEdge { id: string; kind: string; fromNodeId: string; toNodeId: string; directed: true; disposition: ExplorationDisposition; evidence: ExplorationEvi....",
+      "target": "next-anchor-candidates-<hash>.d.ts:q"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "9d513cc0dc48325f8e5e2e72e180d6bef036b894fc8fd9a370e051899532d1d6",
+  "reason": "The only runtime contract changes are optional response metadata fields. Existing fields and relation-kind values are unchanged; generated shared declaration references caused the conservative uncertainty.",
+  "schemaVersion": 1
+}
