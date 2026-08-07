@@ -14,6 +14,7 @@ import { scipOccurrenceCallTargetsForRange } from '../../symbols/graph/scip-occu
 import { getGlobalLeafIndex, pickAstCallCandidate, sameLanguageCandidates } from '../../symbols/leaf-symbol-index.js';
 import { isModuleLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../internal/project-index.js';
+import { COMPLETE_ANCHOR_SOURCE_CHARACTER_LIMIT } from '../internal/connected-behavior.js';
 
 const DEFAULT_GROUP_LIMIT = 4;
 const DEFAULT_ANALYSIS_MULTIPLIER = 3;
@@ -101,6 +102,8 @@ export interface AnchorDiscoveryCandidate {
   identityMatchedTerms: string[];
   rarity: number;
   symbolRarity: number;
+  /** Exact current source size for the compiler-owned range, when available. */
+  sourceCharacters?: number;
 }
 
 export interface AnchorDiscoveryRelation {
@@ -183,6 +186,7 @@ interface MutableCandidate {
   definition: IndexedDefinition;
   matches: Map<string, MutableTermMatch>;
   symbolPhraseLength: number;
+  sourceCharacters?: number;
 }
 
 interface MutableTermMatch {
@@ -300,6 +304,16 @@ export function discoverAnchors(
   }
 
   const candidateFrequencies = candidateTermFrequencies(mutableCandidates);
+  const sourceLinesByFile = new Map(
+    inventory.files.map((file) => [file.relativePath, file.text.split(/\r?\n/u)] as const),
+  );
+  for (const candidate of mutableCandidates.values()) {
+    const sourceLines = sourceLinesByFile.get(candidate.definition.relativePath);
+    if (!sourceLines) continue;
+    candidate.sourceCharacters = sourceLines
+      .slice(candidate.definition.startLine, candidate.definition.endLine + 1)
+      .join('\n').length;
+  }
   const candidateRoots = [...mutableCandidates.values()]
     .map((candidate) => publicCandidate(candidate, candidateFrequencies))
     .sort(compareCandidates);
@@ -604,6 +618,7 @@ function publicCandidate(
     identityMatchedTerms,
     rarity,
     symbolRarity,
+    ...(candidate.sourceCharacters === undefined ? {} : { sourceCharacters: candidate.sourceCharacters }),
   };
 }
 
@@ -958,7 +973,7 @@ function parallelPathGroups(
       if (![...leftPathTerms].some((term) => !rightPathTerms.has(term))) continue;
       if (![...rightPathTerms].some((term) => !leftPathTerms.has(term))) continue;
 
-      const keyAnchors = balancedParallelAnchors(left.keyAnchors, right.keyAnchors);
+      const keyAnchors = primaryParallelAnchors(left, right);
       if (keyAnchors.length < 2) continue;
       const relations = deduplicateRelations([...left.relations, ...right.relations]).sort(compareRelations);
       const renderedRelations = relations.slice(0, MAX_RENDERED_RELATIONS);
@@ -1025,19 +1040,37 @@ function groupPathTerms(group: AnchorDiscoveryGroup): Set<string> {
   );
 }
 
-function balancedParallelAnchors(
-  left: readonly AnchorDiscoveryCandidate[],
-  right: readonly AnchorDiscoveryCandidate[],
-): AnchorDiscoveryCandidate[] {
-  const selected: AnchorDiscoveryCandidate[] = [];
-  for (let index = 0; selected.length < MAX_KEY_ANCHORS && (index < left.length || index < right.length); index += 1) {
-    for (const candidate of [left[index], right[index]]) {
-      if (!candidate || selected.some((item) => item.symbol === candidate.symbol)) continue;
-      selected.push(candidate);
-      if (selected.length >= MAX_KEY_ANCHORS) break;
-    }
+function primaryParallelAnchors(left: AnchorDiscoveryGroup, right: AnchorDiscoveryGroup): AnchorDiscoveryCandidate[] {
+  return uniqueCandidates(
+    [parallelSideRoot(left), parallelSideRoot(right)].filter((candidate) => candidate !== undefined),
+  );
+}
+
+function parallelSideRoot(group: AnchorDiscoveryGroup): AnchorDiscoveryCandidate | undefined {
+  const keySymbols = new Set(group.keyAnchors.map((candidate) => candidate.symbol));
+  const outgoingCounts = new Map<string, number>();
+  for (const relation of group.relations) {
+    if (!keySymbols.has(relation.fromSymbol) || !keySymbols.has(relation.toSymbol)) continue;
+    outgoingCounts.set(relation.fromSymbol, (outgoingCounts.get(relation.fromSymbol) ?? 0) + 1);
   }
-  return selected;
+  return [...group.keyAnchors].sort(
+    (left, right) =>
+      Number((outgoingCounts.get(right.symbol) ?? 0) > 0) - Number((outgoingCounts.get(left.symbol) ?? 0) > 0) ||
+      parallelRootCoverageScore(right) - parallelRootCoverageScore(left) ||
+      right.identityMatchedTerms.length - left.identityMatchedTerms.length ||
+      right.symbolMatchedTerms.length - left.symbolMatchedTerms.length ||
+      (outgoingCounts.get(right.symbol) ?? 0) - (outgoingCounts.get(left.symbol) ?? 0) ||
+      compareCandidates(left, right),
+  )[0];
+}
+
+function parallelRootCoverageScore(candidate: AnchorDiscoveryCandidate): number {
+  // An identity hit is stronger than incidental source vocabulary, but a
+  // narrow symbol name must not displace an implementation that covers the
+  // several independently named parts of its path. One extra identity term is
+  // therefore worth two ordinary repository terms instead of acting as an
+  // absolute lexicographic gate.
+  return candidate.matchedTerms.length + candidate.identityMatchedTerms.length * 2;
 }
 
 interface BoundaryContinuation {
@@ -2343,9 +2376,14 @@ function longestContiguousMatch(value: string, orderedTerms: readonly string[]):
 function normalizedWordSet(value: string): Set<string> {
   return new Set(
     splitWords(value)
-      .map(canonicalWord)
+      .flatMap(comparisonWordVariants)
       .filter((word) => word.length >= 3),
   );
+}
+
+function comparisonWordVariants(value: string): string[] {
+  const canonical = canonicalWord(value);
+  return canonical.length > 4 && canonical.endsWith('e') ? [canonical, canonical.slice(0, -1)] : [canonical];
 }
 
 function canonicalWord(value: string): string {
@@ -2433,7 +2471,7 @@ function systemMapCommand(
   );
   const anchorSymbols = new Set(anchors.map((anchor) => anchor.symbol));
   const focusParts = anchors.flatMap((anchor) =>
-    anchor.endLine - anchor.line >= 200
+    (anchor.sourceCharacters ?? 0) > COMPLETE_ANCHOR_SOURCE_CHARACTER_LIMIT
       ? mapFocusLocations(anchor, relations, matchedTerms, anchorSymbols).map(
           (location) => `--focus-at ${shellArgument(`${location.file}:${location.line + 1}`)}`,
         )
@@ -2472,7 +2510,7 @@ function mapFocusLocations(
       connectsAnchor: anchorSymbols.has(relation.toSymbol),
       overlap: new Set(
         splitWords(relationLeaf(relation.toLabel))
-          .map(canonicalWord)
+          .flatMap(comparisonWordVariants)
           .filter((term) => queryTerms.has(term)),
       ).size,
       strength: relation.strength,
@@ -2499,7 +2537,7 @@ function mapFocusLocations(
   ];
   const selected: Array<{ file: string; line: number }> = [];
   for (const location of candidates) {
-    if (selected.some((existing) => existing.file === location.file && Math.abs(existing.line - location.line) < 8)) {
+    if (selected.some((existing) => existing.file === location.file && existing.line === location.line)) {
       continue;
     }
     selected.push({ file: location.file, line: location.line });

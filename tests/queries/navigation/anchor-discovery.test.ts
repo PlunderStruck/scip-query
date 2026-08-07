@@ -284,6 +284,71 @@ describe('anchor discovery', () => {
     }
   });
 
+  it('matches inflected query terms to compiler symbols with a terminal e', () => {
+    fixtureRoot = mkdtempSync(join(tmpdir(), 'scip-anchor-terminal-e-inflection-'));
+    writeFixtureFiles(fixtureRoot, {
+      'src/policy.ts': ['export function isAutoApprove() {', '  return true;', '}'],
+    });
+    const symbol = 'scip-typescript npm fixture 1.0.0 src/`policy.ts`/isAutoApprove().';
+    evidenceFixtureDb(join(fixtureRoot, 'index.db'))
+      .document(1, 'typescript', 'src/policy.ts')
+      .symbol(1, symbol, 'isAutoApprove', 12)
+      .definition(1, 1, 1, 0, 0, 2, 1)
+      .write();
+    const db = new ScipDatabase({
+      dbPath: join(fixtureRoot, 'index.db'),
+      indexPath: join(fixtureRoot, 'index.scip'),
+      projectRoot: fixtureRoot,
+    });
+    try {
+      const result = discoverAnchors(db, 'How is the command approved?', {
+        semantic: false,
+      });
+
+      expect(result.groups.flatMap((group) => group.roots).map((root) => root.leaf)).toContain('isAutoApprove');
+    } finally {
+      db.close();
+    }
+  });
+
+  it('adds query-owned focus to a source-large anchor even when its line count is below 200', () => {
+    fixtureRoot = mkdtempSync(join(tmpdir(), 'scip-anchor-source-size-focus-'));
+    const padding = Array.from(
+      { length: 80 },
+      (_, index) => `  void 'padding-${String(index).padStart(4, '0')}-abcdefghijklmnopqrstuvwxyz0123456789';`,
+    );
+    const source = [
+      'export function executeBash(input: string) {',
+      '  const foreground = input;',
+      '  const normalized = foreground.trim();',
+      ...padding,
+      '  return normalized;',
+      '}',
+    ];
+    writeFixtureFiles(fixtureRoot, { 'src/bash.ts': source });
+    const symbol = 'scip-typescript npm fixture 1.0.0 src/`bash.ts`/executeBash().';
+    evidenceFixtureDb(join(fixtureRoot, 'index.db'))
+      .document(1, 'typescript', 'src/bash.ts')
+      .symbol(1, symbol, 'executeBash', 12)
+      .definition(1, 1, 1, 0, 0, source.length - 1, 1)
+      .write();
+    const db = new ScipDatabase({
+      dbPath: join(fixtureRoot, 'index.db'),
+      indexPath: join(fixtureRoot, 'index.scip'),
+      projectRoot: fixtureRoot,
+    });
+    try {
+      const result = discoverAnchors(db, 'How is the foreground command normalized?', {
+        semantic: false,
+      });
+      const group = result.groups.find((candidate) => candidate.roots.some((root) => root.leaf === 'executeBash'));
+
+      expect(group?.systemMapCommand).toContain("--focus-at 'src/bash.ts:3'");
+    } finally {
+      db.close();
+    }
+  });
+
   it('prefers causally evidenced implementations on both sides of a parallel-path comparison', () => {
     fixtureRoot = mkdtempSync(join(tmpdir(), 'scip-anchor-parallel-connected-'));
     writeFixtureFiles(fixtureRoot, {
@@ -297,7 +362,12 @@ describe('anchor discovery', () => {
         '}',
         '',
         'export function compactIfNeeded() {',
+        '  // Alpha compaction implementation.',
         '  return selectAlpha();',
+        '}',
+        '',
+        'function alphaCompaction() {',
+        '  return buildPrompt();',
         '}',
       ],
       'packages/beta/src/compaction.ts': [
@@ -338,11 +408,18 @@ describe('anchor discovery', () => {
         'processCompaction',
         12,
       )
+      .symbol(
+        6,
+        'scip-typescript npm fixture 1.0.0 packages/alpha/src/`compaction.ts`/alphaCompaction().',
+        'alphaCompaction',
+        12,
+      )
       .definition(1, 1, 1, 0, 0, 2, 1)
       .definition(2, 1, 2, 4, 0, 6, 1)
-      .definition(3, 1, 3, 8, 0, 10, 1)
+      .definition(3, 1, 3, 8, 0, 11, 1)
       .definition(4, 2, 4, 0, 0, 2, 1)
       .definition(5, 2, 5, 4, 0, 6, 1)
+      .definition(6, 1, 6, 13, 0, 15, 1)
       .write();
     const db = new ScipDatabase({
       dbPath: join(fixtureRoot, 'index.db'),
@@ -357,10 +434,12 @@ describe('anchor discovery', () => {
       expect(parallel?.parallelConnectedSides).toBe(2);
       expect(parallel?.parallelOrchestrationSides).toBe(2);
       expect(parallel?.parallelSharedPathTerms).toContain('compaction');
+      expect(parallel?.keyAnchors).toHaveLength(2);
       expect(parallel?.keyAnchors.map((anchor) => anchor.leaf)).toEqual(
         expect.arrayContaining(['compactIfNeeded', 'processCompaction']),
       );
       expect(parallel?.keyAnchors.map((anchor) => anchor.leaf)).not.toContain('buildPrompt');
+      expect(parallel?.keyAnchors.map((anchor) => anchor.leaf)).not.toContain('alphaCompaction');
     } finally {
       db.close();
     }

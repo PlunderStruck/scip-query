@@ -166,7 +166,9 @@ describe('Codex exploration trial core', () => {
     expect(prompt).toContain('never pass the same loose term to both selectors');
     expect(prompt).toContain('Do not run inspect, evidence, code, or command help before the map');
     expect(prompt).toContain('connected behavior is already source evidence');
-    expect(prompt).toContain('private evidence ledger for every explicit anchor');
+    expect(prompt).toContain('private evidence ledger');
+    expect(prompt).toContain('one ledger row per material claim');
+    expect(prompt).toContain('A constant name is not a recovered bound');
     expect(prompt).toContain('sibling branches are jointly required behavior');
     expect(prompt).toContain('stop immediately when they establish all of them');
     expect(prompt).toContain('one locator, one map, one scoped gap batch');

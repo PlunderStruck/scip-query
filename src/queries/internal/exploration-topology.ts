@@ -551,9 +551,12 @@ export function selectExplorationTopology(
     selectedNodeIds.add(nodeId);
   }
 
+  const matchedAnchorNodeIds = uniqueSorted(
+    topology.anchors.filter((anchor) => anchor.status === 'matched').flatMap((anchor) => anchor.nodeIds),
+  );
   const upstreamCausalPaths = selectUpstreamCausalPaths(
     topology,
-    topology.anchors.filter((anchor) => anchor.status === 'matched').flatMap((anchor) => anchor.nodeIds),
+    matchedAnchorNodeIds.length === 1 ? matchedAnchorNodeIds : [],
     {
       maxPaths: maxUpstreamCausalPaths,
       maxAdditionalNodes: maxUpstreamCausalNodes,
@@ -561,7 +564,8 @@ export function selectExplorationTopology(
   );
   for (const path of upstreamCausalPaths) path.nodeIds.forEach((nodeId) => selectedNodeIds.add(nodeId));
 
-  addAdjacentJunctionsToFixedPoint(topology, selectedNodeIds, maxSelectedNodes);
+  const hasSelectedConnectorPath = paths.length === 0 || paths.some((path) => path.edgeIds.length > 0);
+  if (hasSelectedConnectorPath) addAdjacentJunctionsToFixedPoint(topology, selectedNodeIds, maxSelectedNodes);
   const baselineFrontiers = foldedComponentFrontiers(topology, selectedNodeIds);
   const requestedFrontiers = new Set(options.expandedFrontierIds ?? []);
   const knownFrontierIds = new Set(baselineFrontiers.map((frontier) => frontier.id));
@@ -573,7 +577,7 @@ export function selectExplorationTopology(
     if (!requestedFrontiers.has(frontier.id)) continue;
     frontier.memberNodeIds.forEach((id) => selectedNodeIds.add(id));
   }
-  addAdjacentJunctionsToFixedPoint(topology, selectedNodeIds, maxSelectedNodes);
+  if (hasSelectedConnectorPath) addAdjacentJunctionsToFixedPoint(topology, selectedNodeIds, maxSelectedNodes);
 
   const upstreamEndpointByNodeId = new Map(
     upstreamCausalPaths.map((path) => [path.endpointNodeId, path.endpointKind] as const),
@@ -695,8 +699,10 @@ function selectUpstreamCausalPaths(
     );
   }
 
+  const rootAnchorNodeIds = causalRootAnchorNodeIds(topology, anchorNodeIds);
   const candidates: UpstreamCausalPath[] = [];
-  for (const anchorNodeId of uniqueSorted(anchorNodeIds)) {
+  for (const anchorNodeId of rootAnchorNodeIds) {
+    if (nodeById.get(anchorNodeId)?.attributes['publicEntry'] === true) continue;
     const queue: TraversedPath[] = [{ nodeIds: [anchorNodeId], edgeIds: [] }];
     const visited = new Set([anchorNodeId]);
     for (let cursor = 0; cursor < queue.length; cursor += 1) {
@@ -792,6 +798,37 @@ function selectUpstreamCausalPaths(
   return selected;
 }
 
+function causalRootAnchorNodeIds(topology: ExplorationTopology, anchorNodeIds: readonly string[]): string[] {
+  const anchors = uniqueSorted(anchorNodeIds);
+  const outgoing = new Map<string, string[]>();
+  for (const edge of topology.edges) {
+    if (!isProvedCausalEdge(edge)) continue;
+    const targets = outgoing.get(edge.fromNodeId) ?? [];
+    targets.push(edge.toNodeId);
+    outgoing.set(edge.fromNodeId, targets);
+  }
+  const reaches = (startNodeId: string, targetNodeId: string): boolean => {
+    const visited = new Set([startNodeId]);
+    const queue = [startNodeId];
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      for (const nextNodeId of outgoing.get(queue[cursor]!) ?? []) {
+        if (nextNodeId === targetNodeId) return true;
+        if (visited.has(nextNodeId)) continue;
+        visited.add(nextNodeId);
+        queue.push(nextNodeId);
+      }
+    }
+    return false;
+  };
+  return anchors.filter(
+    (anchorNodeId) =>
+      !anchors.some((otherNodeId) => {
+        if (otherNodeId === anchorNodeId || !reaches(otherNodeId, anchorNodeId)) return false;
+        return !reaches(anchorNodeId, otherNodeId) || otherNodeId.localeCompare(anchorNodeId) < 0;
+      }),
+  );
+}
+
 function compareUpstreamCausalPaths(left: UpstreamCausalPath, right: UpstreamCausalPath): number {
   return (
     right.endpointPriority - left.endpointPriority ||
@@ -854,26 +891,42 @@ export function queryAlignedCausalSpineNodeIds(
     nodeIds: string[];
     score: number;
     crossesRuntimeBoundary: boolean;
+    queryOverlap: number;
   }
   const candidates: SpineCandidate[] = [];
   const maxEdges = Math.min(6, Math.max(2, maxAdditionalNodes + 1));
-  const visit = (nodeId: string, nodeIds: string[], score: number, crossesRuntimeBoundary: boolean): void => {
-    if (nodeIds.length > 1) candidates.push({ nodeIds, score, crossesRuntimeBoundary });
+  const visit = (
+    nodeId: string,
+    nodeIds: string[],
+    score: number,
+    crossesRuntimeBoundary: boolean,
+    queryOverlap: number,
+  ): void => {
+    if (nodeIds.length > 1 && queryOverlap > 0) {
+      candidates.push({ nodeIds, score, crossesRuntimeBoundary, queryOverlap });
+    }
     if (nodeIds.length - 1 >= maxEdges) return;
     for (const edge of outgoing.get(nodeId) ?? []) {
-      if (nodeIds.includes(edge.toNodeId)) continue;
-      const target = nodeById.get(edge.toNodeId);
-      if (!target) continue;
-      const runtimeBoundary = isRuntimeCausalEdge(edge);
-      const nextScore =
-        score +
-        (runtimeBoundary ? 100 : 8) +
-        topologyIdentifierOverlap(target.label, queryTerms) * 24 +
-        topologyEdgeEvidenceRank(edge);
-      visit(edge.toNodeId, [...nodeIds, edge.toNodeId], nextScore, crossesRuntimeBoundary || runtimeBoundary);
-    }
-  };
-  for (const anchorNodeId of anchorNodeIds) visit(anchorNodeId, [anchorNodeId], 0, false);
+        if (nodeIds.includes(edge.toNodeId)) continue;
+        const target = nodeById.get(edge.toNodeId);
+        if (!target) continue;
+        const runtimeBoundary = isRuntimeCausalEdge(edge);
+        const targetQueryOverlap = topologyIdentifierOverlap(target.label, queryTerms);
+        const nextScore =
+          score +
+          (runtimeBoundary ? 100 : 8) +
+          targetQueryOverlap * 24 +
+          topologyEdgeEvidenceRank(edge);
+        visit(
+          edge.toNodeId,
+          [...nodeIds, edge.toNodeId],
+          nextScore,
+          crossesRuntimeBoundary || runtimeBoundary,
+          queryOverlap + targetQueryOverlap,
+        );
+      }
+    };
+  for (const anchorNodeId of anchorNodeIds) visit(anchorNodeId, [anchorNodeId], 0, false, 0);
 
   const best = candidates.sort(
     (left, right) =>
@@ -908,7 +961,8 @@ function topologyIdentifierTerms(value: string): string[] {
 }
 
 function topologyIdentifierOverlap(label: string, queryTerms: ReadonlySet<string>): number {
-  return topologyIdentifierTerms(label).filter(
+  const constructLabel = label.split(':').at(-1) || label;
+  return topologyIdentifierTerms(constructLabel).filter(
     (term, index, terms) => terms.indexOf(term) === index && queryTerms.has(term),
   ).length;
 }
@@ -930,20 +984,35 @@ function shortestAnchorPath(
   to: ExplorationTopologyAnchor,
   includeCandidateEvidence: boolean,
 ): TraversedPath | null {
+  return (
+    shortestDirectedAnchorPath(topology, from, to, includeCandidateEvidence) ??
+    shortestDirectedAnchorPath(topology, to, from, includeCandidateEvidence)
+  );
+}
+
+function shortestDirectedAnchorPath(
+  topology: ExplorationTopology,
+  from: ExplorationTopologyAnchor,
+  to: ExplorationTopologyAnchor,
+  includeCandidateEvidence: boolean,
+): TraversedPath | null {
   const starts = [...from.nodeIds, ...from.candidateNodeIds].sort();
   const targets = new Set([...to.nodeIds, ...to.candidateNodeIds]);
   if (starts.some((id) => targets.has(id))) {
     const shared = starts.find((id) => targets.has(id))!;
     return { nodeIds: [shared], edgeIds: [] };
   }
+  const structuralNodeIds = new Set(
+    topology.nodes.filter((node) => node.kind === 'structural-region').map((node) => node.id),
+  );
   const adjacency = new Map<string, Array<{ nodeId: string; edgeId: string }>>();
   for (const edge of topology.edges) {
     if (edge.disposition === 'excluded' || edge.disposition === 'unsupported') continue;
     if (edge.kind === 'structural-membership') continue;
+    if (structuralNodeIds.has(edge.fromNodeId) || structuralNodeIds.has(edge.toNodeId)) continue;
     const candidateOnly = edge.evidence.every((source) => ['candidate', 'unknown'].includes(source.strength));
     if (candidateOnly && !includeCandidateEvidence) continue;
     pushAdjacency(adjacency, edge.fromNodeId, edge.toNodeId, edge.id);
-    pushAdjacency(adjacency, edge.toNodeId, edge.fromNodeId, edge.id);
   }
   for (const neighbors of adjacency.values()) {
     neighbors.sort((left, right) => left.nodeId.localeCompare(right.nodeId) || left.edgeId.localeCompare(right.edgeId));
@@ -996,10 +1065,11 @@ function addAdjacentJunctions(
   for (const edge of topology.edges) {
     const fromSelected = selectedNodeIds.has(edge.fromNodeId);
     const toSelected = selectedNodeIds.has(edge.toNodeId);
-    if (fromSelected === toSelected) continue;
-    const candidateId = fromSelected ? edge.toNodeId : edge.fromNodeId;
-    const node = topology.nodes.find((entry) => entry.id === candidateId);
-    const nodeDegree = degree.get(candidateId) ?? { incoming: 0, outgoing: 0 };
+      if (fromSelected === toSelected) continue;
+      const candidateId = fromSelected ? edge.toNodeId : edge.fromNodeId;
+      const node = topology.nodes.find((entry) => entry.id === candidateId);
+      if (node?.kind === 'structural-region') continue;
+      const nodeDegree = degree.get(candidateId) ?? { incoming: 0, outgoing: 0 };
     const boundaryJunction =
       /(?:runtime-boundary|external)/u.test(edge.kind) || Boolean(node && /(?:frontier|external)/u.test(node.kind));
     const branchOrMerge = nodeDegree.incoming > 1 || nodeDegree.outgoing > 1;

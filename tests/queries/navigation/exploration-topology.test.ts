@@ -225,6 +225,162 @@ describe('universal exploration topology', () => {
     expect(selected.nodes.find((entry) => entry.id === 'schema')?.disposition).toBe('folded');
   });
 
+  it('matches query vocabulary against the construct name rather than repository path segments', () => {
+    const input: ExplorationTopologyInput = {
+      scope: 'an agent request anchor with an unrelated same-directory callee',
+      anchors: [
+        {
+          id: 'anchor:request',
+          kind: 'symbol',
+          query: 'agent request',
+          status: 'matched',
+          nodeIds: ['request'],
+          candidateNodeIds: [],
+          omittedCandidates: 0,
+        },
+      ],
+      nodes: [
+        node('request', 'src:agent:runRequest', ['anchor:request']),
+        node('compact', 'src:agent:compactMessagesWithSummary'),
+      ],
+      edges: [edge('request-compact', 'call', 'request', 'compact', 'exact')],
+    };
+
+    const selected = selectExplorationTopology(createExplorationTopology(input), {
+      maxUpstreamCausalPaths: 0,
+    });
+
+    expect(selected.nodes.find((entry) => entry.id === 'compact')?.disposition).toBe('folded');
+  });
+
+  it('does not prepend unrelated callers when multiple anchors already define the exploration corridor', () => {
+    const input: ExplorationTopologyInput = {
+      scope: 'a public entry anchor connected to its downstream operation',
+      anchors: [
+        {
+          id: 'anchor:entry',
+          kind: 'symbol',
+          query: 'request dispatch',
+          status: 'matched',
+          nodeIds: ['entry'],
+          candidateNodeIds: [],
+          omittedCandidates: 0,
+        },
+        {
+          id: 'anchor:operation',
+          kind: 'symbol',
+          query: 'operation execute',
+          status: 'matched',
+          nodeIds: ['operation'],
+          candidateNodeIds: [],
+          omittedCandidates: 0,
+        },
+      ],
+      nodes: [
+        node('unrelated-caller', 'unrelatedCaller'),
+        node('entry', 'dispatchRequest', ['anchor:entry']),
+        node('operation', 'executeOperation', ['anchor:operation']),
+      ],
+      edges: [
+        edge('caller-entry', 'call', 'unrelated-caller', 'entry', 'exact'),
+        edge('entry-operation', 'call', 'entry', 'operation', 'exact'),
+      ],
+    };
+
+    const selected = selectExplorationTopology(createExplorationTopology(input));
+
+    expect(selected.nodes.find((entry) => entry.id === 'entry')?.disposition).toBe('emitted');
+    expect(selected.nodes.find((entry) => entry.id === 'operation')?.disposition).toBe('emitted');
+    expect(selected.nodes.find((entry) => entry.id === 'unrelated-caller')?.disposition).toBe('folded');
+    expect(selected.nodes.find((entry) => entry.id === 'unrelated-caller')?.attributes).not.toHaveProperty(
+      'upstreamCausalPath',
+    );
+  });
+
+  it('does not connect unrelated anchors by walking backward through a structural region', () => {
+    const input: ExplorationTopologyInput = {
+      scope: 'two anchors exported from one structural region without a causal path between them',
+      anchors: [
+        {
+          id: 'anchor:left',
+          kind: 'symbol',
+          query: 'left operation',
+          status: 'matched',
+          nodeIds: ['left'],
+          candidateNodeIds: [],
+          omittedCandidates: 0,
+        },
+        {
+          id: 'anchor:right',
+          kind: 'symbol',
+          query: 'right operation',
+          status: 'matched',
+          nodeIds: ['right'],
+          candidateNodeIds: [],
+          omittedCandidates: 0,
+        },
+      ],
+      nodes: [
+        { ...node('region', 'root:feature'), kind: 'structural-region' },
+        node('left', 'leftOperation', ['anchor:left']),
+        node('right', 'rightOperation', ['anchor:right']),
+      ],
+      edges: [
+        edge('region-left', 'call', 'region', 'left', 'derived'),
+        edge('region-right', 'call', 'region', 'right', 'derived'),
+      ],
+    };
+
+    const selected = selectExplorationTopology(createExplorationTopology(input));
+
+    expect(selected.paths).toEqual([
+      expect.objectContaining({ status: 'partial', nodeIds: [], edgeIds: [] }),
+    ]);
+    expect(selected.nodes.find((entry) => entry.id === 'region')?.disposition).toBe('folded');
+  });
+
+  it('does not connect anchors by zig-zagging backward through a shared callee', () => {
+    const input: ExplorationTopologyInput = {
+      scope: 'two callers share a callee but neither causes the other',
+      anchors: [
+        {
+          id: 'anchor:left',
+          kind: 'symbol',
+          query: 'left operation',
+          status: 'matched',
+          nodeIds: ['left'],
+          candidateNodeIds: [],
+          omittedCandidates: 0,
+        },
+        {
+          id: 'anchor:right',
+          kind: 'symbol',
+          query: 'right operation',
+          status: 'matched',
+          nodeIds: ['right'],
+          candidateNodeIds: [],
+          omittedCandidates: 0,
+        },
+      ],
+      nodes: [
+        node('left', 'leftOperation', ['anchor:left']),
+        node('right', 'rightOperation', ['anchor:right']),
+        node('shared', 'sharedCallee'),
+      ],
+      edges: [
+        edge('left-shared', 'call', 'left', 'shared', 'exact'),
+        edge('right-shared', 'call', 'right', 'shared', 'exact'),
+      ],
+    };
+
+    const selected = selectExplorationTopology(createExplorationTopology(input));
+
+    expect(selected.paths).toEqual([
+      expect.objectContaining({ status: 'partial', nodeIds: [], edgeIds: [] }),
+    ]);
+    expect(selected.nodes.find((entry) => entry.id === 'shared')?.disposition).toBe('folded');
+  });
+
   it('selects a proved upstream path through the nearest runtime boundary', () => {
     const input: ExplorationTopologyInput = {
       scope: 'one implementation anchor with a proved external activation path',

@@ -1,5 +1,6 @@
 import * as queries from '../../queries/index.js';
 import type {
+  ConnectedBehaviorPacket,
   ExplorationTopology,
   SystemMapEvidenceFloor,
   SystemMapRelationKind,
@@ -615,7 +616,7 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
           'all exact members and expansion commands remain in the structured result.',
       );
     }
-    renderCausalCorridor(result.topology);
+    renderCausalCorridor(result.topology, result.behavior);
   }
 
   if (result.behavior && result.behavior.steps.length > 0) {
@@ -652,6 +653,17 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
       for (const line of step.behavior.lines) {
         const signals = line.signals.length > 0 ? ` [${line.signals.join(',')}]` : '';
         behaviorLines.push(`       ${displayLine(line.line)}${signals} ${'  '.repeat(line.depth)}${line.text}`);
+      }
+      for (const declaration of step.behavior.supportingDeclarations ?? []) {
+        const text = declaration.text.replace(/\s*\n\s*/gu, ' ');
+        behaviorLines.push(
+          `       [support; ${declaration.kind}] ${declaration.label} @ ${declaration.file}:${displayLine(declaration.line)} — ${text}`,
+        );
+      }
+      for (const declaration of step.behavior.omittedSupportingDeclarations ?? []) {
+        behaviorLines.push(
+          `       [support omitted; ${declaration.reason}] ${declaration.label} @ ${declaration.file}:${displayLine(declaration.line)}-${displayLine(declaration.endLine)}`,
+        );
       }
       console.log(
         renderSessionEvidence({
@@ -1052,7 +1064,7 @@ function systemMapBehaviorFocus(value: string): { file: string; line: number } {
   return { file: match[1]!, line: display - 1 };
 }
 
-export function renderCausalCorridor(topology: ExplorationTopology): void {
+export function renderCausalCorridor(topology: ExplorationTopology, behavior?: ConnectedBehaviorPacket): void {
   const corridor = topology.corridor;
   if (!corridor) return;
   const nodeById = new Map(topology.nodes.map((node) => [node.id, node]));
@@ -1060,7 +1072,31 @@ export function renderCausalCorridor(topology: ExplorationTopology): void {
   const labels = (nodeIds: readonly string[]): string =>
     nodeIds.map((nodeId) => compactSystemMapIdentity(nodeById.get(nodeId)?.label ?? nodeId)).join(', ');
   const ownedByOwner = new Map<string, string[]>();
-  const localControlByOwner = new Map<string, Map<string, number>>();
+  const representedBehaviorLinesByFile = new Map<string, Array<{ line: number; endLine: number }>>();
+  for (const step of behavior?.steps ?? []) {
+    if (!step.location || !step.behavior) continue;
+    const lines = representedBehaviorLinesByFile.get(step.location.file) ?? [];
+    lines.push(...step.behavior.lines.map((line) => ({ line: line.line, endLine: line.endLine })));
+    representedBehaviorLinesByFile.set(step.location.file, lines);
+  }
+  const behaviorRepresents = (node: (typeof topology.nodes)[number] | undefined): boolean => {
+    if (!node?.location) return false;
+    return (representedBehaviorLinesByFile.get(node.location.file) ?? []).some(
+      (line) => node.location!.line >= line.line && node.location!.line <= line.endLine,
+    );
+  };
+  const summarizedControlByOwner = new Map<string, Map<string, number>>();
+  const localControlByOwner = new Map<
+    string,
+    Map<
+      string,
+      {
+        controllerLabel: string;
+        controllerLocation: { file: string; line: number } | null;
+        outcomes: Map<string, Set<string>>;
+      }
+    >
+  >();
   const materialFacts: Array<{
     edge: (typeof topology.edges)[number];
     semantic: NonNullable<(typeof topology.edges)[number]['semantics']>[number];
@@ -1087,11 +1123,26 @@ export function renderCausalCorridor(topology: ExplorationTopology): void {
         ownedByOwner.set(edge.fromNodeId, children);
       } else if (semantic.family === 'control' && !isRenderedNavigationSemantic(semantic.subtype)) {
         const from = nodeById.get(edge.fromNodeId);
+        const target = nodeById.get(edge.toNodeId);
         const ownerId =
           typeof from?.attributes['ownerNodeId'] === 'string' ? from.attributes['ownerNodeId'] : edge.fromNodeId;
-        const counts = localControlByOwner.get(ownerId) ?? new Map<string, number>();
-        counts.set(semantic.subtype, (counts.get(semantic.subtype) ?? 0) + 1);
-        localControlByOwner.set(ownerId, counts);
+        if (behaviorRepresents(from) && behaviorRepresents(target)) {
+          const counts = summarizedControlByOwner.get(ownerId) ?? new Map<string, number>();
+          counts.set(semantic.subtype, (counts.get(semantic.subtype) ?? 0) + 1);
+          summarizedControlByOwner.set(ownerId, counts);
+          continue;
+        }
+        const decisions = localControlByOwner.get(ownerId) ?? new Map();
+        const decision = decisions.get(edge.fromNodeId) ?? {
+          controllerLabel: from?.label ?? compactSystemMapIdentity(edge.fromNodeId),
+          controllerLocation: from?.location ? { file: from.location.file, line: from.location.line } : null,
+          outcomes: new Map<string, Set<string>>(),
+        };
+        const outcomes = decision.outcomes.get(semantic.subtype) ?? new Set<string>();
+        outcomes.add(target?.label ?? compactSystemMapIdentity(edge.toNodeId));
+        decision.outcomes.set(semantic.subtype, outcomes);
+        decisions.set(edge.fromNodeId, decision);
+        localControlByOwner.set(ownerId, decisions);
       } else if (shouldGroupCorridorSemantic(semantic.family, semantic.subtype)) {
         const owner = corridorFactOwner(edge.fromNodeId, nodeById);
         const key = `${semantic.family}\0${semantic.subtype}\0${owner.label}`;
@@ -1136,12 +1187,29 @@ export function renderCausalCorridor(topology: ExplorationTopology): void {
       .join(', ');
     console.log(`  [owns] ${labels([ownerId])} → ${new Set(childIds).size} local construct(s) [${kindSummary}]`);
   }
-  for (const [ownerId, counts] of [...localControlByOwner].sort(([left], [right]) => left.localeCompare(right))) {
+  for (const [ownerId, counts] of [...summarizedControlByOwner].sort(([left], [right]) => left.localeCompare(right))) {
     const summary = [...counts]
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([subtype, count]) => `${subtype}×${count}`)
       .join(', ');
-    console.log(`  [local-control] ${labels([ownerId])} — ${summary}`);
+    console.log(`  [local-control] ${labels([ownerId])} — ${summary}; exact decisions are represented below`);
+  }
+  for (const [ownerId, decisions] of [...localControlByOwner].sort(([left], [right]) => left.localeCompare(right))) {
+    for (const decision of [...decisions.values()].sort(
+      (left, right) =>
+        (left.controllerLocation?.file ?? '').localeCompare(right.controllerLocation?.file ?? '') ||
+        (left.controllerLocation?.line ?? -1) - (right.controllerLocation?.line ?? -1) ||
+        left.controllerLabel.localeCompare(right.controllerLabel),
+    )) {
+      const outcomes = [...decision.outcomes]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .flatMap(([subtype, targetLabels]) => [...targetLabels].sort().map((target) => `${subtype} → ${target}`))
+        .join('; ');
+      const location = decision.controllerLocation
+        ? ` @ ${decision.controllerLocation.file}:${displayLine(decision.controllerLocation.line)}`
+        : '';
+      console.log(`  [local-control] ${labels([ownerId])}: ${decision.controllerLabel} — ${outcomes}${location}`);
+    }
   }
   for (const group of [...groupedFacts.values()].sort(
     (left, right) =>

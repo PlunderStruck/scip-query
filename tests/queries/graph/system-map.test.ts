@@ -1543,6 +1543,228 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
+    it('keeps every answer-determinative sibling branch while compacting a source-large explicit anchor', () => {
+    root = mkdtempSync(join(tmpdir(), 'scip-system-map-complete-explicit-anchor-'));
+    const padding = Array.from(
+      { length: 80 },
+      (_, index) => `  // padding-${String(index).padStart(4, '0')}-abcdefghijklmnopqrstuvwxyz0123456789`,
+    );
+    const source = [
+      'export function execute(input: string) {',
+      '  const command = input.trim();',
+      '  if (!command) {',
+      "    return { action: 'block', reason: 'empty command' };",
+      '  }',
+      ...padding,
+      "  if (command.endsWith('&')) {",
+      "    return { action: 'background', command };",
+      '  }',
+      "  return { action: 'foreground', command };",
+      '}',
+    ];
+    writeFixtureFiles(root, { 'src/bash.ts': source });
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/bash.ts').write();
+    const db = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
+    try {
+      const topology = createExplorationTopology({
+        anchors: [
+          {
+            id: 'anchor:execute',
+            kind: 'symbol',
+            query: 'execute',
+            status: 'matched',
+            nodeIds: ['execute'],
+            candidateNodeIds: [],
+            omittedCandidates: 0,
+          },
+        ],
+        nodes: [
+          {
+            id: 'execute',
+            kind: 'symbol',
+            label: 'execute',
+            disposition: 'emitted',
+            location: { file: 'src/bash.ts', line: 0, endLine: source.length - 1 },
+            anchorIds: ['anchor:execute'],
+            attributes: { leaf: 'execute' },
+          },
+        ],
+        edges: [],
+        paths: [],
+        scope: 'complete explicit anchor fixture',
+      });
+      const packet = connectedBehaviorPacket(db, topology, {
+        focusLocations: [{ file: 'src/bash.ts', line: source.length - 4 }],
+      });
+      const behavior = packet.steps.find((step) => step.label === 'execute')?.behavior;
+      const rendered = behavior?.lines.map((line) => line.text).join('\n') ?? '';
+
+        expect(behavior?.kind).not.toBe('source');
+        expect(behavior?.renderedCharacters).toBeLessThan(behavior?.rawCharacters ?? 0);
+        expect(rendered).toContain('const command = input.trim()');
+        expect(rendered).toContain('if !command');
+        expect(rendered).toContain("return { action: 'block', reason: 'empty command' }");
+        expect(rendered).toContain("return { action: 'background', command }");
+        expect(rendered).toContain("return { action: 'foreground', command }");
+        expect(rendered).not.toContain('padding-0001');
+    } finally {
+      db.close();
+    }
+  });
+
+  it('falls back to complete source when an explicit anchor cannot be compressed losslessly', () => {
+      root = mkdtempSync(join(tmpdir(), 'scip-system-map-complete-explicit-source-'));
+      const body = [`  performMaterialEffect('${'material-unknown-'.repeat(260)}');`];
+    const source = [
+      'export function execute(input: string) {',
+      '  const command = input.trim();',
+      '  if (!command) return false;',
+      ...body,
+      '  return command.length > 0;',
+      '}',
+    ];
+    writeFixtureFiles(root, { 'src/bash.ts': source });
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/bash.ts').write();
+    const db = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
+    try {
+      const topology = createExplorationTopology({
+        anchors: [
+          {
+            id: 'anchor:execute',
+            kind: 'symbol',
+            query: 'execute',
+            status: 'matched',
+            nodeIds: ['execute'],
+            candidateNodeIds: [],
+            omittedCandidates: 0,
+          },
+        ],
+        nodes: [
+          {
+            id: 'execute',
+            kind: 'symbol',
+            label: 'execute',
+            disposition: 'emitted',
+            location: { file: 'src/bash.ts', line: 0, endLine: source.length - 1 },
+            anchorIds: ['anchor:execute'],
+            attributes: { leaf: 'execute' },
+          },
+        ],
+        edges: [],
+        paths: [],
+        scope: 'complete explicit source fixture',
+      });
+      const packet = connectedBehaviorPacket(db, topology, {
+        focusLocations: [{ file: 'src/bash.ts', line: source.length - 2 }],
+      });
+      const behavior = packet.steps.find((step) => step.label === 'execute')?.behavior;
+
+      expect(behavior?.kind).toBe('source');
+      expect(behavior?.coverage.omittedStatements).toBe(0);
+      expect(behavior?.lines.map((line) => line.text)).toEqual(source);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('materializes every exact callee selected by explicit question focus', () => {
+    root = mkdtempSync(join(tmpdir(), 'scip-system-map-focused-callees-'));
+    const source = [
+      'export function execute() {',
+      '  classify();',
+      '  approve();',
+      '  startBackground();',
+      '  return finish();',
+      '}',
+      'function classify() { return true; }',
+      'function approve() { return true; }',
+      'function startBackground() { return true; }',
+      'function finish() { return true; }',
+    ];
+    writeFixtureFiles(root, { 'src/flow.ts': source });
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/flow.ts').write();
+    const db = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
+    const node = (id: string, line: number, anchorIds: string[] = []) => ({
+      id,
+      kind: 'symbol' as const,
+      label: id,
+      disposition: anchorIds.length > 0 ? ('emitted' as const) : ('folded' as const),
+      location: { file: 'src/flow.ts', line, endLine: line },
+      anchorIds,
+      attributes: { leaf: id },
+    });
+    const edge = (toNodeId: string, line: number) => ({
+      id: `edge:execute:${toNodeId}`,
+      kind: 'call' as const,
+      fromNodeId: 'execute',
+      toNodeId,
+      directed: true as const,
+      disposition: toNodeId === 'finish' ? ('emitted' as const) : ('folded' as const),
+      evidence: [
+        {
+          method: 'scip-occurrence-callsite',
+          strength: toNodeId === 'finish' ? ('exact' as const) : ('derived' as const),
+          location: { file: 'src/flow.ts', line },
+        },
+      ],
+    });
+    try {
+      const topology = createExplorationTopology({
+        anchors: [
+          {
+            id: 'anchor:execute',
+            kind: 'symbol',
+            query: 'execute classification approval background',
+            status: 'matched',
+            nodeIds: ['execute'],
+            candidateNodeIds: [],
+            omittedCandidates: 0,
+          },
+          {
+            id: 'anchor:finish',
+            kind: 'symbol',
+            query: 'finish result',
+            status: 'matched',
+            nodeIds: ['finish'],
+            candidateNodeIds: [],
+            omittedCandidates: 0,
+          },
+        ],
+        nodes: [
+          { ...node('execute', 0, ['anchor:execute']), location: { file: 'src/flow.ts', line: 0, endLine: 5 } },
+          node('classify', 6),
+          node('approve', 7),
+          node('startBackground', 8),
+          node('finish', 9, ['anchor:finish']),
+        ],
+        edges: [edge('classify', 1), edge('approve', 2), edge('startBackground', 3), edge('finish', 4)],
+        paths: [
+          {
+            id: 'path:execute:finish',
+            fromAnchorId: 'anchor:execute',
+            toAnchorId: 'anchor:finish',
+            status: 'connected',
+            nodeIds: ['execute', 'finish'],
+            edgeIds: ['edge:execute:finish'],
+          },
+        ],
+        scope: 'focused direct callee fixture',
+      });
+      const packet = connectedBehaviorPacket(db, topology, {
+        focusLocations: [1, 2, 3].map((line) => ({ file: 'src/flow.ts', line })),
+      });
+
+      expect(packet.steps.map((step) => step.label)).toEqual(
+        expect.arrayContaining(['execute', 'classify', 'approve', 'startBackground', 'finish']),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it('includes a bounded recursive caller spine above a selected construct', () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-caller-spine-'));
     const source = [

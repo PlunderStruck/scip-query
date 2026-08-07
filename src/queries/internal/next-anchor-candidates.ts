@@ -100,6 +100,10 @@ interface ResolvedCalleeTarget {
   alternative: SystemMapNextAnchorAlternative;
 }
 
+function definitionLocationKey(file: string, line: number, endLine: number | null): string {
+  return `${file}\0${line}\0${endLine ?? line}`;
+}
+
 /**
  * Find callable units that can extend the returned behavior packet without
  * guessing what the user's English concern means. Exact graph targets rank
@@ -123,12 +127,24 @@ export function systemMapNextAnchorPacket(
   const sourceAllowed = options.sourceAllowed ?? (() => true);
   const nodeById = new Map(topology.nodes.map((node) => [node.id, node]));
   const returnedNodeIds = new Set(behavior.steps.map((step) => step.nodeId));
-  const returnedSymbols = new Set(
-    behavior.steps.flatMap((step) => {
-      const symbol = symbolIdentityForNode(nodeById.get(step.nodeId));
-      return symbol ? [symbol] : [];
-    }),
-  );
+    const returnedSymbols = new Set(
+      behavior.steps.flatMap((step) => {
+        const symbol = symbolIdentityForNode(nodeById.get(step.nodeId));
+        return symbol ? [symbol] : [];
+      }),
+    );
+    const returnedDefinitionLocations = new Set<string>();
+    for (const step of behavior.steps) {
+      for (const declaration of step.behavior?.supportingDeclarations ?? []) {
+        returnedSymbols.add(declaration.symbol);
+        returnedDefinitionLocations.add(
+          definitionLocationKey(declaration.file, declaration.line, declaration.endLine),
+        );
+      }
+    }
+    const alternativeAlreadyReturned = (alternative: SystemMapNextAnchorAlternative): boolean =>
+      (alternative.symbol !== null && returnedSymbols.has(alternative.symbol)) ||
+      returnedDefinitionLocations.has(definitionLocationKey(alternative.file, alternative.line, alternative.endLine));
   const downstreamNodeIds = forwardReachableBehaviorNodeIds(topology);
   const stepDefinitions = new Map(
     behavior.steps.flatMap((step) => {
@@ -178,6 +194,7 @@ export function systemMapNextAnchorPacket(
       const alternative =
         edge.kind === 'call' ? callableAlternativeForNode(db, candidateNode) : alternativeForNode(candidateNode);
       if (!alternative) continue;
+      if (alternativeAlreadyReturned(alternative)) continue;
       const location = evidenceLocation(edge, candidateNode.location.file) ?? candidateNode.location;
       const sourceLine = getSourceLines(db, location.file)[location.line]?.trim();
       const direction = incoming ? 'upstream' : 'downstream';
@@ -242,6 +259,7 @@ export function systemMapNextAnchorPacket(
       if (!target?.location || !sourceAllowed(target.location.file)) continue;
       const alternative = callableAlternativeForNode(db, target);
       if (!alternative) continue;
+      if (alternativeAlreadyReturned(alternative)) continue;
       const leaf = nodeLeaf(target);
       const line = evidenceLocation(edge, step.location.file)?.line;
       const materialLine = step.behavior.lines.find(
@@ -307,7 +325,7 @@ export function systemMapNextAnchorPacket(
       step.location.endLine ?? step.location.line,
     );
     for (const target of exactRangeTargets.targets) {
-      if (!sourceAllowed(target.definition.relativePath) || returnedSymbols.has(target.definition.symbol)) continue;
+      if (!sourceAllowed(target.definition.relativePath)) continue;
       const callsiteKey = sourceCallsiteKey(step.location.file, target.sourceLine, target.calleeLeaf);
       if (evidencedCallsiteKeys.has(callsiteKey)) continue;
       evidencedCallsiteKeys.add(callsiteKey);
@@ -319,6 +337,7 @@ export function systemMapNextAnchorPacket(
         line: target.definition.startLine,
         endLine: target.definition.endLine,
       };
+      if (alternativeAlreadyReturned(alternative)) continue;
       const effectEvidence =
         targetEffectEvidence.get(target.definition.symbol) ??
         calleeEffectEvidence(
@@ -398,7 +417,7 @@ export function systemMapNextAnchorPacket(
     const resolvedTargets = resolvedCalleeTargets(db, definition ? (calleeMap.get(definition.symbolId) ?? []) : []);
     const targetCountByLeaf = countResolvedTargetsByLeaf(resolvedTargets);
     for (const target of resolvedTargets) {
-      if (!sourceAllowed(target.alternative.file) || returnedSymbols.has(target.alternative.symbol ?? '')) continue;
+      if (!sourceAllowed(target.alternative.file) || alternativeAlreadyReturned(target.alternative)) continue;
       const leaf = normalizedCallableLeaf(target.alternative.label);
       const callsite = bestCallsiteForResolvedTarget(
         callsites,
@@ -480,6 +499,7 @@ export function systemMapNextAnchorPacket(
       evidencedCallsiteKeys.add(callsiteKey);
       const alternative = alternativeForNode(target);
       if (!alternative) continue;
+      if (alternativeAlreadyReturned(alternative)) continue;
       const strength = strongestEvidence(edge.evidence);
       ranked.push({
         anchor: {
@@ -530,7 +550,16 @@ export function systemMapNextAnchorPacket(
             (definition) => definition.symbol === candidate.symbol && definition.isFunctionLike,
           ),
         )
-        .filter((definition) => sourceAllowed(definition.relativePath) && !returnedSymbols.has(definition.symbol));
+        .filter((definition) =>
+          sourceAllowed(definition.relativePath) &&
+          !alternativeAlreadyReturned({
+            symbol: definition.symbol,
+            label: definition.leaf,
+            file: definition.relativePath,
+            line: definition.startLine,
+            endLine: definition.endLine,
+          }),
+        );
       const alternatives = uniqueAlternatives(
         definitions.map((definition) => ({
           symbol: definition.symbol,
@@ -999,7 +1028,10 @@ function nextAnchorPacketFromCandidates(
     }),
   ).sort(compareRankedNextAnchors);
   const selectedCandidates = coverageDiverseNextAnchors(
-    candidates.filter((candidate) => nextAnchorInspectSafe(db, candidate)),
+    recommendedNextAnchorCandidates(
+      candidates.filter((candidate) => nextAnchorInspectSafe(db, candidate)),
+      steps,
+    ),
     steps,
     limit,
     normalizedSelectionTerms,
@@ -1039,6 +1071,63 @@ export function nextAnchorInspectSafe(db: ScipDatabase, candidate: RankedNextAnc
       .slice(target.line, endLine + 1)
       .join('\n').length <= SOURCE_INSPECTION_SAFE_CHARACTERS
   );
+}
+
+/**
+ * Admit only optional drilldowns whose relevance is established by the selected
+ * causal path. Rejected candidates remain in the packet's withheld ledger, so
+ * this controls recommendation cost without turning omission into evidence of
+ * absence.
+ */
+export function recommendedNextAnchorCandidates(
+  candidates: readonly RankedNextAnchor[],
+  steps: readonly ConnectedBehaviorStep[],
+): RankedNextAnchor[] {
+  const anchorStepCount = new Set(steps.filter((step) => step.role === 'anchor').map((step) => step.id)).size;
+  const roleByStepId = new Map(steps.map((step) => [step.id, step.role]));
+
+  return candidates.filter((candidate) => {
+    const { anchor } = candidate;
+    const proven =
+      anchor.alternativeCount === 1 &&
+      anchor.status !== 'ambiguous' &&
+      anchor.status !== 'candidate' &&
+      anchor.status !== 'unknown';
+    if (!proven) return false;
+
+    // One anchor has not established a corridor yet, so its exact immediate
+    // neighborhood is evidence needed to discover that corridor.
+    if (anchorStepCount <= 1) return true;
+
+    // A connector belongs to the selected path rather than adjacent breadth.
+    if (roleByStepId.get(anchor.fromStepId) === 'connector') return true;
+
+    // Locator vocabulary is admissible only when it names the target identity
+    // or source unit. Matches inside a path or target body remain leads.
+    if (Object.values(candidate.selectionTermRanks ?? {}).some((rank) => rank <= 1)) return true;
+
+    if (
+      anchor.causalRole === 'result-callback' ||
+      anchor.causalRole === 'runtime-producer' ||
+      anchor.causalRole === 'runtime-consumer'
+    ) {
+      return true;
+    }
+
+    const bodyDimensions = new Set(candidate.coverageDimensions ?? []);
+    if (
+      bodyDimensions.has('control-outcome') ||
+      bodyDimensions.has('state-effect') ||
+      bodyDimensions.has('callee-state-effect') ||
+      bodyDimensions.has('returned-result')
+    ) {
+      return true;
+    }
+
+    const signals = anchor.callsite.signals;
+    if (signals.some((signal) => ['return', 'branch', 'catch', 'finally', 'throw'].includes(signal))) return true;
+    return signals.includes('mutation') && writesThroughObjectIdentity(anchor.callsite.text);
+  });
 }
 
 function callsiteSignals(signals: readonly BehaviorSignal[] | undefined): BehaviorSignal[] {
@@ -1103,6 +1192,20 @@ export function coverageDiverseNextAnchors(
       candidate.anchor.causalRole === 'result-callback',
   );
   if (resultCallback) select(resultCallback);
+
+  // A call on a returned-value line can change the externally observed
+  // contract of the selected path (for example truncation, serialization, or
+  // error wrapping). Reserve one proved transformer before lexical locator
+  // terms consume the remaining packet; those terms locate a path but cannot
+  // make its final value semantically complete.
+  const returnedValueTransformer = candidates.find(
+    (candidate) =>
+      candidate.anchor.direction !== 'upstream' &&
+      candidate.anchor.alternativeCount === 1 &&
+      candidate.anchor.status !== 'ambiguous' &&
+      downstreamEvidenceDimensions(candidate).includes('returned-result'),
+  );
+  if (returnedValueTransformer) select(returnedValueTransformer);
 
   // The locator may carry forward a bounded set of rare normalized terms from
   // the user's question. They do not establish relevance or create an edge;
@@ -1309,9 +1412,7 @@ function calleeEffectEvidence(
  * for. This deliberately recognizes syntax, not repository-specific names.
  */
 export function writesThroughObjectIdentity(sourceLine: string): boolean {
-  return /(?:\bthis|\b[$A-Z_a-z][$\w]*)\s*(?:\.|\[[^\]]+\])[^;\n]*?(?:\+\+|--|(?:\+|-|\*|\/|%|&&|\|\||\?\?)?=(?!=|>))/.test(
-    sourceLine,
-  );
+  return /(?:\bthis|\b[$A-Z_a-z][$\w]*)(?:\s*(?:\.\s*[$A-Z_a-z][$\w]*|\[[^\]\n]+\]))+\s*(?:\+\+|--|(?:\+|-|\*|\/|%|&&|\|\||\?\?)?=(?!=|>))/.test(sourceLine);
 }
 
 function forwardReachableBehaviorNodeIds(topology: ExplorationTopology): Set<string> {

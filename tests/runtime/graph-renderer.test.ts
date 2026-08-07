@@ -78,6 +78,126 @@ describe('causal corridor renderer', () => {
     expect(output.some((line) => line.includes('[state:writes-resource]'))).toBe(true);
     expect(output.some((line) => line.includes('[state:writes-resource; grouped]'))).toBe(false);
   });
+
+  it('renders complete local control decisions instead of replacing predicates and sibling outcomes with counts', () => {
+    const output: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((value) => output.push(String(value)));
+    const owner = node('owner', 'execute()', 0);
+    const predicate = node('predicate', 'if (!allowed)', 2, 'owner', 'control-predicate');
+    const blocked = node('blocked', "return { action: 'block' }", 3, 'owner', 'control-outcome');
+    const allowed = node('allowed', "return { action: 'allow' }", 5, 'owner', 'control-outcome');
+    const edges = [
+      edge('blocked-edge', 'predicate', 'blocked', 'control', 'branch-consequence'),
+      edge('allowed-edge', 'predicate', 'allowed', 'control', 'branch-alternative'),
+    ];
+    const topology = createExplorationTopology({
+      scope: 'renderer control fixture',
+      anchors: [
+        {
+          id: 'anchor:owner',
+          kind: 'symbol',
+          query: 'execute',
+          status: 'matched',
+          nodeIds: ['owner'],
+          candidateNodeIds: [],
+          omittedCandidates: 0,
+        },
+      ],
+      nodes: [owner, predicate, blocked, allowed],
+      edges,
+    });
+    topology.corridor = {
+      schemaVersion: 1,
+      status: 'complete',
+      startNodeIds: ['owner'],
+      outcomeNodeIds: ['blocked', 'allowed'],
+      baseNodeIds: ['owner', 'predicate', 'blocked', 'allowed'],
+      baseEdgeIds: edges.map(({ id }) => id),
+      nodeIds: topology.nodes.map(({ id }) => id),
+      edgeIds: edges.map(({ id }) => id),
+      accountedFrontierIds: [],
+      unresolvedFrontierIds: [],
+      unresolvedEdgeIds: [],
+      coverage: {
+        protectedNodes: topology.nodes.length,
+        protectedEdges: edges.length,
+        baseNodes: 4,
+        baseEdges: 2,
+        accountedFrontiers: 0,
+        unresolvedFrontiers: 0,
+        unresolvedEdges: 0,
+      },
+      explanation: 'fixture',
+    };
+
+    renderCausalCorridor(topology);
+
+    const decision = output.find((line) => line.includes('[local-control]')) ?? '';
+    expect(decision).toContain('if (!allowed)');
+    expect(decision).toContain("branch-consequence → return { action: 'block' }");
+    expect(decision).toContain("branch-alternative → return { action: 'allow' }");
+
+    output.length = 0;
+    renderCausalCorridor(topology, {
+      status: 'connected',
+      steps: [
+        {
+          id: 'step:owner',
+          nodeId: 'owner',
+          order: 0,
+          role: 'anchor',
+          kind: 'symbol',
+          label: 'execute()',
+          location: owner.location,
+          behavior: {
+            kind: 'connector-slice',
+            constructKind: 'function',
+            signature: 'execute()',
+            lines: [
+              { line: 2, endLine: 2, depth: 0, signals: ['branch'], text: 'if (!allowed)', copied: true },
+              {
+                line: 3,
+                endLine: 3,
+                depth: 1,
+                signals: ['return'],
+                text: "return { action: 'block' }",
+                copied: true,
+              },
+              {
+                line: 5,
+                endLine: 5,
+                depth: 0,
+                signals: ['return'],
+                text: "return { action: 'allow' }",
+                copied: true,
+              },
+            ],
+            coverage: { sourceStatements: 3, representedStatements: 3, copiedStatements: 3, omittedStatements: 0 },
+            rawCharacters: 80,
+            renderedCharacters: 70,
+          },
+        },
+      ],
+      transitions: [],
+      paths: [],
+      coverage: {
+        candidateNodes: 1,
+        returnedNodes: 1,
+        omittedNodeIds: [],
+        returnedTransitions: 0,
+        withheldStatements: 0,
+        requestedFocusLocations: [],
+        matchedFocusLocations: [],
+        unmatchedFocusLocations: [],
+      },
+      behaviorCommand: null,
+      exactSourceCommand: null,
+    });
+    const summarized = output.find((line) => line.includes('[local-control]')) ?? '';
+    expect(summarized).toContain('branch-alternative×1');
+    expect(summarized).toContain('branch-consequence×1');
+    expect(summarized).not.toContain('if (!allowed)');
+  });
 });
 
 function node(
@@ -102,7 +222,7 @@ function edge(
   id: string,
   fromNodeId: string,
   toNodeId: string,
-  family: 'data' | 'state' | 'temporal',
+    family: 'control' | 'data' | 'state' | 'temporal',
   subtype: string,
 ): ExplorationTopologyEdge {
   return {

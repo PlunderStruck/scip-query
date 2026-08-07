@@ -7,6 +7,7 @@ import {
   callableReferenceCausalRole,
   deduplicateRankedAnchors,
   nextAnchorInspectSafe,
+  recommendedNextAnchorCandidates,
   nextAnchorSelectionTermRank,
   systemMapNextAnchorPacket,
   type RankedNextAnchor,
@@ -33,6 +34,7 @@ describe('next-anchor target selection', () => {
     expect(writesThroughObjectIdentity('info.status = "exited";')).toBe(true);
     expect(writesThroughObjectIdentity('this.nextId++;')).toBe(true);
     expect(writesThroughObjectIdentity('state[key] ??= createValue();')).toBe(true);
+    expect(writesThroughObjectIdentity("if (userText.startsWith('\\n', next)) next += 1;")).toBe(false);
   });
 
   it('reserves a semantic continuation for a causal connector and prevents one anchor from monopolizing the budget', () => {
@@ -96,6 +98,133 @@ describe('next-anchor target selection', () => {
     expect(coverageDiverseNextAnchors(candidates, steps, 4, ['prun', 'history']).map((item) => item.anchor.id)).toEqual(
       ['prune', 'entries-for-runner', 'ordinary-1', 'ordinary-2'],
     );
+  });
+
+  it('does not let locator reservations hide a return-value transformer', () => {
+    const steps = [step('anchor-a', 'anchor'), step('anchor-b', 'anchor')];
+    const upstreamA = candidate('upstream-a', 'anchor-a', 400, {
+      direction: 'upstream',
+      causalRole: 'caller',
+    });
+    upstreamA.anchor.alternatives[0]!.file = 'packages/a/src/entry.ts';
+    const upstreamB = candidate('upstream-b', 'anchor-b', 390, {
+      direction: 'upstream',
+      causalRole: 'caller',
+    });
+    upstreamB.anchor.alternatives[0]!.file = 'packages/b/src/entry.ts';
+    const transformer = candidate('truncate-result', 'anchor-b', 80, {}, ['call', 'return']);
+    const termCandidates = ['foreground', 'background', 'classify', 'approve'].map((term, index) => {
+      const item = candidate(`term-${term}`, 'anchor-a', 300 - index);
+      item.selectionTermMatches = [term];
+      item.selectionTermRanks = { [term]: 0 };
+      return item;
+    });
+
+    expect(
+      coverageDiverseNextAnchors([upstreamA, upstreamB, ...termCandidates, transformer], steps, 6, [
+        'foreground',
+        'background',
+        'classify',
+        'approve',
+      ]).map((item) => item.anchor.id),
+    ).toContain('truncate-result');
+  });
+
+  it('recommends only drilldowns with a mechanically established evidence obligation', () => {
+    const steps = [step('anchor-a', 'anchor'), step('anchor-b', 'anchor'), step('connector', 'connector')];
+    const ordinaryUpstream = candidate('ordinary-upstream', 'anchor-a', 400, {
+      direction: 'upstream',
+      causalRole: 'caller',
+    });
+    const ordinaryDownstream = candidate('ordinary-downstream', 'anchor-a', 390, {
+      direction: 'downstream',
+      causalRole: 'callee',
+    });
+    const awaitedLocalValue = candidate(
+      'awaited-local-value',
+      'anchor-b',
+      380,
+      { direction: 'downstream', causalRole: 'callee' },
+      ['call', 'await', 'binding'],
+    );
+    awaitedLocalValue.anchor.callsite.text = 'const value = await awaitedLocalValue();';
+    const identityMatch = candidate('policy-classifier', 'anchor-a', 100, {
+      direction: 'downstream',
+      causalRole: 'callee',
+    });
+    identityMatch.selectionTermMatches = ['classify'];
+    identityMatch.selectionTermRanks = { classify: 0 };
+    const incidentalSourceMatch = candidate('incidental-source-match', 'anchor-a', 90, {
+      direction: 'downstream',
+      causalRole: 'callee',
+    });
+    incidentalSourceMatch.selectionTermMatches = ['classify'];
+    incidentalSourceMatch.selectionTermRanks = { classify: 3 };
+    const resultTransformer = candidate(
+      'result-transformer',
+      'anchor-b',
+      80,
+      { direction: 'downstream', causalRole: 'callee' },
+      ['call', 'return'],
+    );
+    const reachableMutation = candidate(
+      'reachable-mutation',
+      'anchor-b',
+      70,
+      { direction: 'downstream', causalRole: 'callee' },
+      ['call', 'mutation'],
+    );
+    reachableMutation.anchor.callsite.text = 'state.result = reachableMutation();';
+    const resultCallback = candidate('result-callback', 'anchor-b', 60, {
+      direction: 'downstream',
+      causalRole: 'result-callback',
+    });
+    const connectorContinuation = candidate('connector-continuation', 'connector', 50, {
+      direction: 'downstream',
+      causalRole: 'callee',
+    });
+    const ambiguousReturn = candidate(
+      'ambiguous-return',
+      'anchor-b',
+      40,
+      { direction: 'downstream', causalRole: 'callee' },
+      ['call', 'return'],
+    );
+    ambiguousReturn.anchor.status = 'ambiguous';
+    ambiguousReturn.anchor.alternativeCount = 2;
+
+    expect(
+      recommendedNextAnchorCandidates(
+        [
+          ordinaryUpstream,
+          ordinaryDownstream,
+          awaitedLocalValue,
+          identityMatch,
+          incidentalSourceMatch,
+          resultTransformer,
+          reachableMutation,
+          resultCallback,
+          connectorContinuation,
+          ambiguousReturn,
+        ],
+        steps,
+      ).map((item) => item.anchor.id),
+    ).toEqual([
+      'policy-classifier',
+      'result-transformer',
+      'reachable-mutation',
+      'result-callback',
+      'connector-continuation',
+    ]);
+  });
+
+  it('keeps an exact upstream caller eligible when one anchor needs activation context', () => {
+    const upstream = candidate('upstream-caller', 'anchor-a', 100, {
+      direction: 'upstream',
+      causalRole: 'caller',
+    });
+
+    expect(recommendedNextAnchorCandidates([upstream], [step('anchor-a', 'anchor')])).toEqual([upstream]);
   });
 
   it('prefers a locator term in symbol identity over the same term in an incidental filename', () => {
@@ -217,11 +346,11 @@ describe('next-anchor target selection', () => {
     ];
 
     expect(coverageDiverseNextAnchors(candidates, steps, 6).map((item) => item.anchor.id)).toEqual([
-      'ordinary-1',
+      'result',
       'control',
       'effect',
-      'result',
       'value',
+      'ordinary-1',
       'ordinary-2',
     ]);
   });
@@ -246,8 +375,8 @@ describe('next-anchor target selection', () => {
     ];
 
     expect(coverageDiverseNextAnchors(candidates, steps, 3).map((item) => item.anchor.id)).toEqual([
-      'ordinary-1',
       'result',
+      'ordinary-1',
       'ordinary-2',
     ]);
   });
@@ -264,9 +393,9 @@ describe('next-anchor target selection', () => {
     ];
 
     expect(coverageDiverseNextAnchors(candidates, steps, 3).map((item) => item.anchor.id)).toEqual([
-      'ordinary-1',
       'returned-result',
       'effect-owner',
+      'ordinary-1',
     ]);
   });
 
@@ -394,16 +523,43 @@ describe('next-anchor target selection', () => {
         exactSourceCommand: null,
       });
 
-      expect(packet.anchors).toEqual([
-        expect.objectContaining({
-          status: 'exact',
+        expect(packet.anchors).toEqual([
+          expect.objectContaining({
+            status: 'exact',
           direction: 'downstream',
           causalRole: 'callee',
           relationKind: 'call',
-          alternatives: [expect.objectContaining({ symbol: HANDLER_SYMBOL })],
-        }),
-      ]);
-    } finally {
+            alternatives: [expect.objectContaining({ symbol: HANDLER_SYMBOL })],
+          }),
+        ]);
+
+        const inlineBehavior = connectedFixtureBehavior(sourceNodeId);
+        const packetWithInlineSupport = systemMapNextAnchorPacket(db, topology, {
+          ...inlineBehavior,
+          steps: [
+            {
+              ...inlineBehavior.steps[0]!,
+              behavior: {
+                ...inlineBehavior.steps[0]!.behavior!,
+                supportingDeclarations: [
+                  {
+                    kind: 'focused-causal-target',
+                    symbol: 'source-fallback:src/handler.ts:handleEvent',
+                    label: 'handleEvent',
+                    file: 'src/handler.ts',
+                    line: 0,
+                    endLine: 0,
+                    text: 'export function handleEvent() { return true; }',
+                  },
+                ],
+              },
+            },
+          ],
+        });
+
+        expect(packetWithInlineSupport.anchors).toEqual([]);
+        expect(packetWithInlineSupport.inspectCommand).toBeNull();
+      } finally {
       db.close();
       rmSync(root, { recursive: true, force: true });
     }
@@ -551,6 +707,55 @@ describe('next-anchor target selection', () => {
 
 function step(id: string, role: ConnectedBehaviorStep['role']): ConnectedBehaviorStep {
   return { id, nodeId: id, order: 0, role, kind: 'symbol', label: id, location: null, behavior: null };
+}
+
+function connectedFixtureBehavior(nodeId: string): Parameters<typeof systemMapNextAnchorPacket>[2] {
+  return {
+    status: 'connected',
+    steps: [
+      {
+        id: 'step:source',
+        nodeId,
+        order: 0,
+        role: 'anchor',
+        kind: 'symbol',
+        label: 'src:registry:exposeHandler()',
+        location: { file: 'src/registry.ts', line: 1, endLine: 4 },
+        behavior: {
+          kind: 'outline',
+          constructKind: 'module function',
+          signature: 'export function exposeHandler()',
+          lines: [
+            {
+              line: 3,
+              endLine: 3,
+              depth: 0,
+              signals: ['return'],
+              text: 'return true;',
+              copied: true,
+            },
+          ],
+          coverage: { sourceStatements: 2, representedStatements: 1, copiedStatements: 1, omittedStatements: 1 },
+          rawCharacters: 32,
+          renderedCharacters: 12,
+        },
+      },
+    ],
+    transitions: [],
+    paths: [],
+    coverage: {
+      candidateNodes: 2,
+      returnedNodes: 1,
+      omittedNodeIds: [],
+      returnedTransitions: 0,
+      withheldStatements: 1,
+      requestedFocusLocations: [],
+      matchedFocusLocations: [],
+      unmatchedFocusLocations: [],
+    },
+    behaviorCommand: null,
+    exactSourceCommand: null,
+  };
 }
 
 function candidate(

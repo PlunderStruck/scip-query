@@ -254,6 +254,7 @@ export function behaviorSkeleton(
   startLine: number,
   endLine: number,
   focusLines: readonly number[] = [],
+  options: { requireSavings?: boolean } = {},
 ): BehaviorSkeleton | null {
   const tree = getAst(db, relativePath);
   if (!tree) return null;
@@ -272,7 +273,7 @@ export function behaviorSkeleton(
 
   const rawCharacters = renderedRawCharacterEstimate(sourceLines, rangeStart, rangeEnd);
   const outlineCharacters = renderedOutlineCharacterEstimate(outline);
-  if (outlineCharacters >= rawCharacters * OUTLINE_SAVINGS_RATIO) return null;
+  if ((options.requireSavings ?? true) && outlineCharacters >= rawCharacters * OUTLINE_SAVINGS_RATIO) return null;
 
   const signals = SIGNAL_ORDER.filter((signal) => outline.lines.some((line) => line.signals.includes(signal)));
 
@@ -1236,7 +1237,11 @@ function collectBehaviorCandidates(
   const callable = smallestCoveringCallable(db, relativePath, startLine, endLine);
   const rangeStart = expandToCallable ? (callable?.startLine ?? startLine) : startLine;
   const rangeEnd = expandToCallable ? (callable?.endLine ?? endLine) : endLine;
-  const root = smallestNodeCoveringLines(tree.rootNode, rangeStart, rangeEnd);
+  const exactCallableRoot =
+    callable?.startLine === rangeStart && callable.endLine === rangeEnd
+      ? findCallableNode(tree.rootNode, rangeStart, rangeEnd)
+      : null;
+  const root = exactCallableRoot ?? smallestNodeCoveringLines(tree.rootNode, rangeStart, rangeEnd);
   if (!root) return null;
 
   const signalsByLine = new Map<number, Set<BehaviorSignal | 'lifecycle'>>();

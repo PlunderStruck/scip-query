@@ -12,6 +12,11 @@ export interface ScipOccurrenceCallTarget {
   definition: IndexedDefinition;
 }
 
+export interface ScipOccurrenceDefinitionTarget {
+  sourceLine: number;
+  definition: IndexedDefinition;
+}
+
 export interface ScipOccurrenceCallTargetsResult {
   available: boolean;
   targets: ScipOccurrenceCallTarget[];
@@ -24,7 +29,7 @@ export interface ScipOccurrenceCallableReferencesResult {
   targets: ScipOccurrenceCallTarget[];
 }
 
-type IndexedOccurrenceCallTarget = ScipOccurrenceCallTarget;
+type IndexedOccurrenceCallTarget = ScipOccurrenceDefinitionTarget;
 
 interface ScipOccurrenceCallTargetIndex {
   byFile: Map<string, IndexedOccurrenceCallTarget[]>;
@@ -54,9 +59,9 @@ export function scipOccurrenceCallTargetsForRange(
   if (!index) {
     return { available: false, targets: [], resolvedCallsites: 0, unresolvedCallsites: callsites.length };
   }
-  const occurrences = (index.byFile.get(relativePath) ?? []).filter(
-    (target) => target.sourceLine >= startLine && target.sourceLine <= endLine,
-  );
+  const occurrences = (index.byFile.get(relativePath) ?? [])
+    .filter((target) => target.sourceLine >= startLine && target.sourceLine <= endLine)
+    .map((target): ScipOccurrenceCallTarget => ({ ...target, calleeLeaf: target.definition.leaf }));
   const sourceCounts = lineLeafCounts(callsites.map((site) => ({ line: site.line, leaf: site.calleeLeaf })));
   const occurrenceCounts = lineLeafCounts(
     occurrences.map((occurrence) => ({ line: occurrence.sourceLine, leaf: occurrence.calleeLeaf })),
@@ -73,6 +78,23 @@ export function scipOccurrenceCallTargetsForRange(
     targets,
     resolvedCallsites,
     unresolvedCallsites: Math.max(0, callsites.length - resolvedCallsites),
+  };
+}
+
+/** Return compiler-resolved repository definitions referenced by one exact source range. */
+export function scipOccurrenceDefinitionTargetsForRange(
+  db: ScipDatabase,
+  relativePath: string,
+  startLine: number,
+  endLine: number,
+): { available: boolean; targets: ScipOccurrenceDefinitionTarget[] } {
+  const index = scipOccurrenceCallTargetIndex(db);
+  if (!index) return { available: false, targets: [] };
+  return {
+    available: true,
+    targets: (index.byFile.get(relativePath) ?? []).filter(
+      (target) => target.sourceLine >= startLine && target.sourceLine <= endLine,
+    ),
   };
 }
 
@@ -93,10 +115,14 @@ export function scipOccurrenceCallableReferencesForRange(
   if (!index) return { available: false, targets: [] };
   return {
     available: true,
-    targets: (index.byFile.get(relativePath) ?? []).filter(
-      (target) =>
-        target.sourceLine >= startLine && target.sourceLine <= endLine && sourceConfirmsCallable(db, target.definition),
-    ),
+    targets: (index.byFile.get(relativePath) ?? [])
+      .filter(
+        (target) =>
+          target.sourceLine >= startLine &&
+          target.sourceLine <= endLine &&
+          scipDefinitionSourceConfirmsCallable(db, target.definition),
+      )
+      .map((target): ScipOccurrenceCallTarget => ({ ...target, calleeLeaf: target.definition.leaf })),
   };
 }
 
@@ -116,7 +142,7 @@ function loadScipOccurrenceCallTargetIndex(db: ScipDatabase): ScipOccurrenceCall
     // `any` when a function factory's dependencies are unavailable. Bare
     // callable references are filtered separately above because they lack
     // that call-syntax proof.
-    const definitions = getAllDefinitions(db).filter((definition) => definition.isFunctionLike);
+    const definitions = getAllDefinitions(db);
     const definitionBySymbol = new Map(definitions.map((definition) => [definition.symbol, definition]));
     const scipIndex = readScipArtifact(db.generation.indexPath, 'SCIP source-range call-target index');
     const byFile = new Map<string, IndexedOccurrenceCallTarget[]>();
@@ -129,7 +155,7 @@ function loadScipOccurrenceCallTargetIndex(db: ScipDatabase): ScipOccurrenceCall
         const definition = definitionBySymbol.get(occurrence.symbol);
         const sourceLine = occurrence.range?.[0];
         if (!definition || !Number.isInteger(sourceLine)) continue;
-        targets.push({ sourceLine, calleeLeaf: definition.leaf, definition });
+        targets.push({ sourceLine, definition });
       }
       byFile.set(relativePath, targets);
     }
@@ -139,7 +165,7 @@ function loadScipOccurrenceCallTargetIndex(db: ScipDatabase): ScipOccurrenceCall
   }
 }
 
-function sourceConfirmsCallable(db: ScipDatabase, definition: IndexedDefinition): boolean {
+export function scipDefinitionSourceConfirmsCallable(db: ScipDatabase, definition: IndexedDefinition): boolean {
   if (!definition.isFunctionLike) return false;
   const facts = getSourceFacts(db, definition.relativePath);
   if (!facts) return true;
