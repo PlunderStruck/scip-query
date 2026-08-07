@@ -444,6 +444,7 @@ was deleted by the runner.
 | v18 repeated-unit filter attempt         |      546,195 |         52,466 |              94,884 |             5 |          1/7 |
 | v19 direct-anchor constraint reservation |      545,943 |         64,563 |              82,057 |             5 |          1/7 |
 | v20 anchor-first adaptive frontier       |      615,229 |         44,949 |              89,904 |             9 |          0/7 |
+| v21 universal task-evidence contract     |      590,979 |         67,733 |              88,433 |             9 |          0/7 |
 
 v15 remains the efficiency and accuracy high-water mark for this task. Against
 control it used 51.7% fewer total tokens, 51.9% fewer uncached input tokens,
@@ -525,6 +526,27 @@ remain because they repair a source-evidence invariant directly and pass a
 repository-independent multiline-condition regression test. v15 remains the
 comparison high-water mark for the next accuracy change.
 
+v21 tested whether transporting the original question into the system map with
+a universal agent-owned evidence ledger would prevent fact omissions. The ten
+categories—scope, entry, guards, transformations, effects, boundaries, outputs,
+failures, recovery, and variants—began unassessed, and the agent was told that
+graph presence did not establish task relevance. The task text affected neither
+anchor ranking nor graph traversal.
+
+This did not solve evidence selection. The ledger named broad kinds of facts but
+did not connect each requested comparison to the unexpanded graph region that
+could establish it. The agent attempted one inspect before the required map,
+retried the map while the prepared index was settling, and spent its final
+drill-down on `filterCompacted` while still omitting exact trigger, retention,
+summary, and resumption details. It recovered 0/7 strict facts and used 10.0%
+more total tokens, 41.0% more uncached input, 7.7% more rendered characters, and
+four more calls than v15. Against native control it still saved 46.9% of total
+tokens and 82.0% of rendered characters, but accuracy was worse. The universal
+ledger implementation was therefore reverted. The next structural experiment
+must connect explicit question obligations to candidate graph regions and report
+which obligations remain unresolved; merely repeating generic categories is not
+actionable navigation evidence.
+
 Artifacts:
 
 - `benchmarks/exploration/opencode-compaction-implementations-v1.json`
@@ -535,3 +557,4 @@ Artifacts:
 - `/tmp/opencode-compaction-implementations-treatment-causal-sol-medium-v18.json`
 - `/tmp/opencode-compaction-implementations-treatment-causal-sol-medium-v19.json`
 - `/tmp/opencode-compaction-implementations-treatment-causal-sol-medium-v20.json`
+- `/tmp/opencode-compaction-implementations-treatment-evidence-contract-sol-medium-v21.json`
