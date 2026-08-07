@@ -14,7 +14,7 @@ import { getSourceImports } from '../../language-parsers/index.js';
 import { getSourceLines } from '../../source/primitives/source-text.js';
 import { getAst, type SyntaxNode } from '../../source/ast.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
-import { behaviorConstructRange } from '../../source/facts/behavior-skeleton.js';
+import { behaviorConstructRange, governingBehaviorControlLines } from '../../source/facts/behavior-skeleton.js';
 import { focusedSourceConstructRange, readableSourceUnitRange } from '../../source/facts/source-construct.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { indexedDocumentPaths, resolveIndexedDocumentCandidates } from '../../storage/scip-documents.js';
@@ -50,12 +50,14 @@ import {
 import { programDataElementsForSystemMapRelations } from './program-data-edges.js';
 import { programControlElementsForTopologyNodes } from './program-control-edges.js';
 import { programStateTemporalElementsForTopologyNodes } from './program-state-temporal-edges.js';
+import { buildCausalCorridor } from '../internal/causal-corridor.js';
 import {
   createExplorationTopology,
   selectExplorationTopology,
   type ExplorationEvidenceSource,
   type ExplorationEvidenceStrength,
   type ExplorationFrontierGroup,
+  type ExplorationSourceLocation,
   type ExplorationTopology,
   type ExplorationTopologyAnchor,
   type ExplorationTopologyEdge,
@@ -72,6 +74,17 @@ const NOTABLE_SYMBOL_LIMIT = 12;
 const DEFAULT_EXPANSION_REGION_LIMIT = 12;
 const DEFAULT_DRILLDOWN_ANCHOR_LIMIT = 12;
 const MAX_RECURSIVE_CALLER_BRANCHES = 2;
+const CAUSAL_CORRIDOR_LOCAL_SIGNALS = new Set([
+  'branch',
+  'loop',
+  'call',
+  'await',
+  'return',
+  'throw',
+  'mutation',
+  'catch',
+  'finally',
+]);
 // Leave enough of the default 32k human-output page for connected behavior,
 // anchor identities, and an explicit omission ledger. The topology budget is
 // independently recoverable and must not force a transport continuation.
@@ -1612,11 +1625,22 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
           ...topology.paths.flatMap((path) => path.nodeIds),
         ]).size
       : undefined;
-  const behavior = connectedBehaviorPacket(db, topology, {
+  let behavior = connectedBehaviorPacket(db, topology, {
     focusLocations: opts.behaviorFocusLocations,
     ...(focusedBehaviorNodes ? { maxSteps: focusedBehaviorNodes } : {}),
   });
   enrichResultCallbackControlSemantics(db, topology, behavior);
+  const corridorFocusLocations = causalCorridorFocusLocations(
+    db,
+    topology,
+    behavior,
+    opts.behaviorFocusLocations ?? [],
+  );
+  topology.corridor = buildCausalCorridor(topology, { focusLocations: corridorFocusLocations });
+  behavior = connectedBehaviorPacket(db, topology, {
+    focusLocations: opts.behaviorFocusLocations,
+    ...(focusedBehaviorNodes ? { maxSteps: Math.max(focusedBehaviorNodes, topology.corridor.nodeIds.length) } : {}),
+  });
   const nextAnchors = systemMapNextAnchorPacket(db, topology, behavior, {
     sourceAllowed,
     selectionTerms: opts.selectionTerms,
@@ -1762,6 +1786,61 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
       blindSpots,
     },
   };
+}
+
+function causalCorridorFocusLocations(
+  db: ScipDatabase,
+  topology: ExplorationTopology,
+  behavior: ConnectedBehaviorPacket,
+  explicitFocusLocations: readonly ExplorationSourceLocation[],
+): ExplorationSourceLocation[] {
+  const locations = new Map<string, ExplorationSourceLocation>();
+  const add = (location: ExplorationSourceLocation): void => {
+    locations.set(`${location.file}\0${location.line}`, location);
+  };
+  for (const location of explicitFocusLocations) add(location);
+  const matchedAnchorNodeIds = new Set(
+    topology.anchors.filter((anchor) => anchor.status === 'matched').flatMap((anchor) => anchor.nodeIds),
+  );
+  for (const step of behavior.steps) {
+    if (!step.location || !matchedAnchorNodeIds.has(step.nodeId) || (step.behavior?.rawCharacters ?? Infinity) > 3_000)
+      continue;
+    for (const line of step.behavior?.lines ?? []) {
+      if (!line.signals.some((signal) => CAUSAL_CORRIDOR_LOCAL_SIGNALS.has(signal))) continue;
+      add({ file: step.location.file, line: line.line, endLine: line.endLine });
+    }
+  }
+  const selectedEvidenceLocations = topology.edges
+    .filter((edge) => edge.disposition === 'emitted')
+    .flatMap((edge) => edge.evidence.flatMap((evidence) => (evidence.location ? [evidence.location] : [])));
+  for (const location of selectedEvidenceLocations) {
+    add(location);
+    const owner = topology.nodes
+      .filter(
+        (node) =>
+          node.location?.file === location.file &&
+          ['symbol', 'source-construct', 'runtime-boundary-participant'].includes(node.kind) &&
+          node.location.line <= location.line &&
+          (node.location.endLine ?? node.location.line) >= location.line,
+      )
+      .sort(
+        (left, right) =>
+          (left.location!.endLine ?? left.location!.line) -
+            left.location!.line -
+            ((right.location!.endLine ?? right.location!.line) - right.location!.line) ||
+          left.id.localeCompare(right.id),
+      )[0];
+    if (!owner?.location) continue;
+    const governingLines = governingBehaviorControlLines(
+      db,
+      location.file,
+      owner.location.line,
+      owner.location.endLine ?? owner.location.line,
+      [location.line],
+    );
+    for (const line of governingLines) add({ file: location.file, line: line.line, endLine: line.endLine });
+  }
+  return [...locations.values()].sort((left, right) => left.file.localeCompare(right.file) || left.line - right.line);
 }
 
 interface SystemMapTopologyInput {
@@ -2269,16 +2348,6 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     });
   }
 
-  const programData = programDataElementsForSystemMapRelations(input.db, input.relations);
-  nodes.push(...programData.nodes);
-  edges.push(...programData.edges);
-  const programControl = programControlElementsForTopologyNodes(input.db, nodes);
-  nodes.push(...programControl.nodes);
-  edges.push(...programControl.edges);
-  const programStateTemporal = programStateTemporalElementsForTopologyNodes(input.db, nodes, input.boundaryFrontiers);
-  nodes.push(...programStateTemporal.nodes);
-  edges.push(...programStateTemporal.edges);
-
   for (const boundary of input.externalBoundaries) {
     const nodeId = topologyId('external', boundary.kind, boundary.name);
     const fromNodeIds = uniqueSorted(boundary.fromRegionIds);
@@ -2312,11 +2381,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     }
   }
 
-  const frontiers: ExplorationFrontierGroup[] = [
-    ...programData.frontiers,
-    ...programControl.frontiers,
-    ...programStateTemporal.frontiers,
-  ];
+  const frontiers: ExplorationFrontierGroup[] = [];
   input.boundaryFrontiers.forEach((frontier, index) => {
     const fromNodeId = input.regionForFile.get(frontier.file)?.id;
     if (!fromNodeId) {
@@ -2374,25 +2439,122 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     paths: [],
     frontiers,
     scope: `explicit anchors; relations ${input.requestedRelationKinds.join(', ')}; depth ${input.maxDepth}; evidence floor ${input.evidenceFloor}; source scopes ${input.includedSourceScopes.join(', ')}`,
-    blindSpots: [
-      ...input.blindSpots,
-      ...programData.blindSpots,
-      ...programControl.blindSpots,
-      ...programStateTemporal.blindSpots,
-    ],
+    blindSpots: [...input.blindSpots],
     incompleteReasons:
       input.closureStatus === 'incomplete'
         ? [`${input.omittedSymbolCandidates} ambiguous symbol candidate(s) were omitted`]
         : [],
   });
+  const expandProgramFacts = input.topologyFrontiers.some((frontierId) => frontierId === 'frontier:program-facts');
   const selectedTopology = selectExplorationTopology(completeTopology, {
-    expandedFrontierIds: input.topologyFrontiers,
+    expandedFrontierIds: input.topologyFrontiers.filter((frontierId) => frontierId !== 'frontier:program-facts'),
   });
-  for (const frontier of selectedTopology.frontiers) {
+  const selectedOwnerNodes = selectedTopology.nodes.filter(
+    (node) =>
+      node.disposition === 'emitted' ||
+      selectedTopology.anchors.some((anchor) => anchor.status === 'matched' && anchor.nodeIds.includes(node.id)),
+  );
+  const selectedRelations = input.relations.filter((relation) =>
+    selectedOwnerNodes.some((node) => relationTouchesSelectedOwner(relation, node)),
+  );
+  const selectedRuntimeObservations = input.boundaryFrontiers.filter((observation) =>
+    selectedOwnerNodes.some((node) => runtimeObservationTouchesSelectedOwner(observation, node)),
+  );
+  const programData = programDataElementsForSystemMapRelations(input.db, selectedRelations);
+  const programControl = programControlElementsForTopologyNodes(input.db, selectedOwnerNodes);
+  const programStateTemporal = programStateTemporalElementsForTopologyNodes(
+    input.db,
+    selectedOwnerNodes,
+    selectedRuntimeObservations,
+  );
+  const programNodes = [...programData.nodes, ...programControl.nodes, ...programStateTemporal.nodes].map((node) =>
+    expandProgramFacts && node.disposition === 'folded' ? { ...node, disposition: 'emitted' as const } : node,
+  );
+  const programEdges = [...programData.edges, ...programControl.edges, ...programStateTemporal.edges].map((edge) =>
+    expandProgramFacts && edge.disposition === 'folded' ? { ...edge, disposition: 'emitted' as const } : edge,
+  );
+  const programFrontier = expandProgramFacts
+    ? null
+    : programFactFrontier(selectedOwnerNodes, programNodes, programEdges);
+  const augmentedTopology = createExplorationTopology({
+    anchors: selectedTopology.anchors,
+    nodes: [...selectedTopology.nodes, ...programNodes],
+    edges: [...selectedTopology.edges, ...programEdges],
+    paths: selectedTopology.paths,
+    frontiers: [
+      ...selectedTopology.frontiers,
+      ...programData.frontiers,
+      ...programControl.frontiers,
+      ...programStateTemporal.frontiers,
+      ...(programFrontier ? [programFrontier] : []),
+    ],
+    scope: selectedTopology.coverage.scope,
+    blindSpots: [
+      ...selectedTopology.coverage.blindSpots,
+      ...programData.blindSpots,
+      ...programControl.blindSpots,
+      ...programStateTemporal.blindSpots,
+    ],
+    incompleteReasons: selectedTopology.coverage.status === 'incomplete' ? [selectedTopology.coverage.explanation] : [],
+  });
+  augmentedTopology.completion = selectedTopology.completion;
+  for (const frontier of augmentedTopology.frontiers) {
     if (frontier.disposition !== 'folded') continue;
+    if (frontier.id.startsWith('frontier:program-facts:')) continue;
     frontier.expansion = systemMapFrontierExpansionCommand(input, frontier.id);
   }
-  return selectedTopology;
+  return augmentedTopology;
+}
+
+function relationTouchesSelectedOwner(relation: SystemMapRelation, node: ExplorationTopologyNode): boolean {
+  if (relation.fromSymbol && node.id === symbolTopologyNodeId(relation.fromSymbol)) return true;
+  if (relation.toSymbol && node.id === symbolTopologyNodeId(relation.toSymbol)) return true;
+  if (!node.location) return false;
+  const endLine = node.location.endLine ?? node.location.line;
+  return (
+    (node.location.file === relation.fromFile &&
+      relation.line !== null &&
+      relation.line >= node.location.line &&
+      relation.line <= endLine) ||
+    node.location.file === relation.toFile
+  );
+}
+
+function runtimeObservationTouchesSelectedOwner(
+  observation: SystemMapBoundaryFrontier,
+  node: ExplorationTopologyNode,
+): boolean {
+  if (!node.location || node.location.file !== observation.file) return false;
+  const endLine = node.location.endLine ?? node.location.line;
+  return (
+    (observation.line >= node.location.line && observation.line <= endLine) ||
+    node.label === observation.ownerShortName ||
+    (typeof observation.ownerShortName === 'string' && node.label.includes(observation.ownerShortName))
+  );
+}
+
+function programFactFrontier(
+  ownerNodes: readonly ExplorationTopologyNode[],
+  programNodes: readonly ExplorationTopologyNode[],
+  programEdges: readonly ExplorationTopologyEdge[],
+): ExplorationFrontierGroup | null {
+  const memberNodeIds = uniqueSorted(
+    programNodes.filter((node) => node.disposition === 'folded').map((node) => node.id),
+  );
+  const edgeIds = uniqueSorted(programEdges.filter((edge) => edge.disposition === 'folded').map((edge) => edge.id));
+  if (memberNodeIds.length === 0 && edgeIds.length === 0) return null;
+  return {
+    id: topologyId('frontier', 'program-facts'),
+    kind: 'program-facts',
+    direction: 'outgoing',
+    fromNodeIds: uniqueSorted(ownerNodes.map((node) => node.id)),
+    edgeIds,
+    memberNodeIds,
+    memberCount: memberNodeIds.length,
+    disposition: 'folded',
+    reason: 'Control, data, state, and temporal facts are folded beneath the selected high-level owners.',
+    expansion: null,
+  };
 }
 
 function systemMapFrontierExpansionCommand(input: SystemMapTopologyInput, frontierId: string): string {

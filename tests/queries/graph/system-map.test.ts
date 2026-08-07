@@ -205,6 +205,13 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
         subtypes: ['argument-to-parameter', 'constant-to-parameter'],
       });
       expect(result.topology?.coverage.programEdges?.families.data.projectedEdges).toBeGreaterThan(0);
+      const corridorDataSubtypes =
+        result.topology?.edges
+          .filter((edge) => result.topology?.corridor?.edgeIds.includes(edge.id))
+          .flatMap((edge) => edge.semantics ?? [])
+          .filter((semantic) => semantic.family === 'data')
+          .map((semantic) => semantic.subtype) ?? [];
+      expect(corridorDataSubtypes).toEqual(expect.arrayContaining(['argument-to-parameter', 'constant-to-parameter']));
     } finally {
       db.close();
     }
@@ -1234,6 +1241,21 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
           .filter((semantic) => semantic.family === 'control')
           .map((semantic) => semantic.subtype) ?? [];
       expect(allControlSubtypes).toEqual(expect.arrayContaining(['predicate-case', 'predicate-default']));
+      const corridorControlSubtypes =
+        result.topology?.edges
+          .filter((edge) => result.topology?.corridor?.edgeIds.includes(edge.id))
+          .flatMap((edge) => edge.semantics ?? [])
+          .filter((semantic) => semantic.family === 'control')
+          .map((semantic) => semantic.subtype) ?? [];
+      expect(result.topology?.corridor?.status).toBe('complete');
+      expect(corridorControlSubtypes).toEqual(
+        expect.arrayContaining([
+          'predicate-consequence',
+          'predicate-alternative',
+          'predicate-return',
+          'predicate-throw',
+        ]),
+      );
     } finally {
       db.close();
     }
@@ -1278,6 +1300,18 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
           expect.objectContaining({ family: 'data', subtype: 'value-to-state' }),
           expect.objectContaining({ family: 'temporal', subtype: 'lexical-successor' }),
           expect.objectContaining({ family: 'temporal', subtype: 'awaits-completion' }),
+          expect.objectContaining({ family: 'temporal', subtype: 'await-completion-before' }),
+        ]),
+      );
+      const corridorSemantics =
+        result.topology?.edges
+          .filter((edge) => result.topology?.corridor?.edgeIds.includes(edge.id))
+          .flatMap((edge) => edge.semantics ?? []) ?? [];
+      expect(result.topology?.corridor?.status).toBe('complete');
+      expect(corridorSemantics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ family: 'state', subtype: 'writes-resource' }),
+          expect.objectContaining({ family: 'data', subtype: 'value-to-state' }),
           expect.objectContaining({ family: 'temporal', subtype: 'await-completion-before' }),
         ]),
       );

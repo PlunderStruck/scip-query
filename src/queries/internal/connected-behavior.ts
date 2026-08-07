@@ -135,6 +135,12 @@ export function connectedBehaviorPacket(
   const matchedAnchorNodeIds = orderedUnique(
     topology.anchors.filter((anchor) => anchor.status === 'matched').flatMap((anchor) => anchor.nodeIds),
   );
+  const corridorBehaviorNodeIds = orderedUnique(
+    (topology.corridor?.nodeIds ?? []).flatMap((nodeId) => {
+      const ownerNodeId = nodeById.get(nodeId)?.attributes['ownerNodeId'];
+      return typeof ownerNodeId === 'string' ? [ownerNodeId] : [];
+    }),
+  );
   const upstreamCausalNodeIds = topology.nodes
     .filter((node) => node.disposition === 'emitted' && node.attributes['upstreamCausalPath'] === true)
     .sort(
@@ -152,7 +158,12 @@ export function connectedBehaviorPacket(
   );
   const causalSpineNodeIdSet = new Set(causalSpineNodeIds);
   const completeOutlineNodeIds = new Set(causalSpineNodeIds);
-  const requiredNodeIds = new Set([...pathNodeIds, ...upstreamCausalNodeIds, ...matchedAnchorNodeIds]);
+  const requiredNodeIds = new Set([
+    ...pathNodeIds,
+    ...upstreamCausalNodeIds,
+    ...matchedAnchorNodeIds,
+    ...corridorBehaviorNodeIds,
+  ]);
   const emittedCausalEdges = topology.edges.filter(
     (edge) => edge.disposition === 'emitted' && edge.kind !== 'structural-membership',
   );
@@ -162,6 +173,7 @@ export function connectedBehaviorPacket(
   );
   const pathEdgeIds = new Set([
     ...topology.paths.flatMap((path) => path.edgeIds),
+    ...(topology.corridor?.edgeIds ?? []),
     ...emittedCausalEdges
       .filter((edge) => upstreamCausalNodeIdSet.has(edge.fromNodeId) && upstreamCausalNodeIdSet.has(edge.toNodeId))
       .map((edge) => edge.id),
@@ -202,7 +214,7 @@ export function connectedBehaviorPacket(
   // recoverable next-anchor manifest: their exact callsites remain visible in
   // the caller skeleton and do not displace entry-to-operation context.
   const supplementalNodeIds = new Set(
-    orderedUnique([...upstreamContextNodeIds, ...(hasConnectorPath ? [] : directEffectNodeIds)]),
+    orderedUnique([...upstreamContextNodeIds, ...(hasConnectorPath || topology.corridor ? [] : directEffectNodeIds)]),
   );
   for (const nodeId of supplementalNodeIds) expansiveNodeIds.add(nodeId);
   const adjacentNodeIds = orderedUnique(
@@ -224,6 +236,7 @@ export function connectedBehaviorPacket(
     ...upstreamCausalNodeIds,
     ...pathNodeIds,
     ...matchedAnchorNodeIds,
+    ...corridorBehaviorNodeIds,
     ...causalSpineNodeIds,
     ...supplementalNodeIds,
     ...adjacentNodeIds,
@@ -244,7 +257,7 @@ export function connectedBehaviorPacket(
   }
   const selectedNodeIdSet = new Set(selectedNodeIds);
   const stepIdByNode = new Map(selectedNodeIds.map((nodeId) => [nodeId, connectedStepId(nodeId)]));
-  const connectorNodeIds = new Set([...pathNodeIds, ...upstreamCausalNodeIds]);
+  const connectorNodeIds = new Set([...pathNodeIds, ...upstreamCausalNodeIds, ...corridorBehaviorNodeIds]);
   const anchorNodeIds = new Set(topology.anchors.flatMap((anchor) => [...anchor.nodeIds, ...anchor.candidateNodeIds]));
   const steps = selectedNodeIds.map((nodeId, order): ConnectedBehaviorStep => {
     const node = nodeById.get(nodeId)!;

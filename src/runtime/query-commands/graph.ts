@@ -1,5 +1,10 @@
 import * as queries from '../../queries/index.js';
-import type { SystemMapEvidenceFloor, SystemMapRelationKind, SystemMapSourceScope } from '../../queries/index.js';
+import type {
+  ExplorationTopology,
+  SystemMapEvidenceFloor,
+  SystemMapRelationKind,
+  SystemMapSourceScope,
+} from '../../queries/index.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
 import type { CommandOptions } from '../command-kit/command-execution.js';
 import {
@@ -610,6 +615,7 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
           'all exact members and expansion commands remain in the structured result.',
       );
     }
+    renderCausalCorridor(result.topology);
   }
 
   if (result.behavior && result.behavior.steps.length > 0) {
@@ -1044,6 +1050,130 @@ function systemMapBehaviorFocus(value: string): { file: string; line: number } {
     throw new Error(`Invalid --focus-at location '${value}'; expected path:line with a positive line number.`);
   }
   return { file: match[1]!, line: display - 1 };
+}
+
+function renderCausalCorridor(topology: ExplorationTopology): void {
+  const corridor = topology.corridor;
+  if (!corridor) return;
+  const nodeById = new Map(topology.nodes.map((node) => [node.id, node]));
+  const edgeById = new Map(topology.edges.map((edge) => [edge.id, edge]));
+  const labels = (nodeIds: readonly string[]): string =>
+    nodeIds.map((nodeId) => compactSystemMapIdentity(nodeById.get(nodeId)?.label ?? nodeId)).join(', ');
+  const ownedByOwner = new Map<string, string[]>();
+  const localControlByOwner = new Map<string, Map<string, number>>();
+  const materialFacts: Array<{
+    edge: (typeof topology.edges)[number];
+    semantic: NonNullable<(typeof topology.edges)[number]['semantics']>[number];
+  }> = [];
+  for (const edgeId of corridor.edgeIds) {
+    const edge = edgeById.get(edgeId);
+    if (!edge) continue;
+    for (const semantic of edge.semantics ?? []) {
+      if (semantic.family === 'identity') {
+        const children = ownedByOwner.get(edge.fromNodeId) ?? [];
+        children.push(edge.toNodeId);
+        ownedByOwner.set(edge.fromNodeId, children);
+      } else if (semantic.family === 'control' && !isRenderedNavigationSemantic(semantic.subtype)) {
+        const from = nodeById.get(edge.fromNodeId);
+        const ownerId =
+          typeof from?.attributes['ownerNodeId'] === 'string' ? from.attributes['ownerNodeId'] : edge.fromNodeId;
+        const counts = localControlByOwner.get(ownerId) ?? new Map<string, number>();
+        counts.set(semantic.subtype, (counts.get(semantic.subtype) ?? 0) + 1);
+        localControlByOwner.set(ownerId, counts);
+      } else {
+        materialFacts.push({ edge, semantic });
+      }
+    }
+  }
+
+  console.log('\n═══ CAUSAL CORRIDOR ═══');
+  console.log(
+    `  [${corridor.status}] ${corridor.startNodeIds.length} anchor node(s) → ${corridor.outcomeNodeIds.length} mechanical outcome(s); ` +
+      `${corridor.coverage.protectedNodes} protected node(s), ${corridor.coverage.protectedEdges} protected edge(s).`,
+  );
+  console.log(`  Starts: ${labels(corridor.startNodeIds) || 'none proved'}`);
+  console.log(`  Outcomes: ${renderCorridorOutcomes(corridor.outcomeNodeIds, topology)}`);
+  for (const [ownerId, childIds] of [...ownedByOwner].sort(([left], [right]) => left.localeCompare(right))) {
+    const kinds = new Map<string, number>();
+    for (const childId of new Set(childIds)) {
+      const kind = nodeById.get(childId)?.kind ?? 'unknown';
+      kinds.set(kind, (kinds.get(kind) ?? 0) + 1);
+    }
+    const kindSummary = [...kinds]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([kind, count]) => `${kind}×${count}`)
+      .join(', ');
+    console.log(`  [owns] ${labels([ownerId])} → ${new Set(childIds).size} local construct(s) [${kindSummary}]`);
+  }
+  for (const [ownerId, counts] of [...localControlByOwner].sort(([left], [right]) => left.localeCompare(right))) {
+    const summary = [...counts]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([subtype, count]) => `${subtype}×${count}`)
+      .join(', ');
+    console.log(`  [local-control] ${labels([ownerId])} — ${summary}`);
+  }
+  for (const { edge, semantic } of materialFacts) {
+    const qualifiers = {
+      ...(semantic.context ?? {}),
+      ...(semantic.attributes ?? {}),
+    };
+    const renderedQualifiers = Object.entries(qualifiers)
+      .map(([key, value]) => `${key}=${String(value)}`)
+      .join(', ');
+    const location = edge.evidence.find((evidence) => evidence.location)?.location;
+    console.log(
+      `  [${semantic.family}:${semantic.subtype}] ${labels([edge.fromNodeId])} → ${labels([edge.toNodeId])}` +
+        `${renderedQualifiers ? `; ${renderedQualifiers}` : ''}` +
+        `${location ? ` @ ${location.file}:${displayLine(location.line)}` : ''}`,
+    );
+  }
+  console.log(
+    `  Frontier manifest: ${corridor.accountedFrontierIds.length} accounted; ` +
+      `${corridor.unresolvedFrontierIds.length} unsupported; ${corridor.unresolvedEdgeIds.length} candidate/unknown edge(s).`,
+  );
+  if (corridor.status === 'incomplete') console.log(`  ${corridor.explanation}`);
+}
+
+function isRenderedNavigationSemantic(subtype: string): boolean {
+  return ['call', 'discriminator-dispatch', 'result-callback', 'runtime-handoff'].includes(subtype);
+}
+
+function renderCorridorOutcomes(outcomeNodeIds: readonly string[], topology: ExplorationTopology): string {
+  if (outcomeNodeIds.length === 0) return 'none proved';
+  const outcomes = new Set(outcomeNodeIds);
+  const nodeById = new Map(topology.nodes.map((node) => [node.id, node]));
+  const stateResources = new Set<string>();
+  const navigationTargets = new Set<string>();
+  let returned = 0;
+  let thrown = 0;
+  const classified = new Set<string>();
+  for (const edge of topology.edges) {
+    if (!outcomes.has(edge.toNodeId)) continue;
+    for (const semantic of edge.semantics ?? []) {
+      if (semantic.family === 'state') {
+        stateResources.add(compactSystemMapIdentity(nodeById.get(edge.toNodeId)?.label ?? edge.toNodeId));
+        classified.add(edge.toNodeId);
+      } else if (semantic.family === 'control' && isRenderedNavigationSemantic(semantic.subtype)) {
+        navigationTargets.add(compactSystemMapIdentity(nodeById.get(edge.toNodeId)?.label ?? edge.toNodeId));
+        classified.add(edge.toNodeId);
+      } else if (semantic.family === 'control' && semantic.subtype === 'returns') {
+        returned += 1;
+        classified.add(edge.toNodeId);
+      } else if (semantic.family === 'control' && semantic.subtype === 'throws') {
+        thrown += 1;
+        classified.add(edge.toNodeId);
+      }
+    }
+  }
+  return [
+    navigationTargets.size > 0 ? `navigation=[${[...navigationTargets].sort().join(', ')}]` : '',
+    stateResources.size > 0 ? `resources=[${[...stateResources].sort().join(', ')}]` : '',
+    returned > 0 ? `return×${returned}` : '',
+    thrown > 0 ? `throw×${thrown}` : '',
+    outcomeNodeIds.length > classified.size ? `other-causal-sink×${outcomeNodeIds.length - classified.size}` : '',
+  ]
+    .filter(Boolean)
+    .join('; ');
 }
 
 function shellArgument(value: string): string {

@@ -1,0 +1,31 @@
+{
+  "acceptedAt": "2026-08-07T18:34:44.283Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "4056294efa3db042e5a364284c1c1840896a7c80340ff13bc5497d428d7ead74",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ExplorationTopology changed from interface ExplorationTopology { schemaVersion: 1; anchors: ExplorationTopologyAnchor[]; nodes: ExplorationTopologyNode[]; edges: ExplorationTopologyEdge[]; paths: ExplorationTop... to interface ExplorationTopology { schemaVersion: 1; anchors: ExplorationTopologyAnchor[]; nodes: ExplorationTopologyNode[]; edges: ExplorationTopologyEdge[]; paths: ExplorationTop....",
+      "target": "./queries:ExplorationTopology"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ExplorationTopology changed from interface ExplorationTopology { schemaVersion: 1; anchors: ExplorationTopologyAnchor[]; nodes: ExplorationTopologyNode[]; edges: ExplorationTopologyEdge[]; paths: ExplorationTop... to interface ExplorationTopology { schemaVersion: 1; anchors: ExplorationTopologyAnchor[]; nodes: ExplorationTopologyNode[]; edges: ExplorationTopologyEdge[]; paths: ExplorationTop....",
+      "target": "./queries/index:ExplorationTopology"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "e changed from interface ExplorationTopology { schemaVersion: 1; anchors: ExplorationTopologyAnchor[]; nodes: ExplorationTopologyNode[]; edges: ExplorationTopologyEdge[]; paths: ExplorationTop... to interface ExplorationTopology { schemaVersion: 1; anchors: ExplorationTopologyAnchor[]; nodes: ExplorationTopologyNode[]; edges: ExplorationTopologyEdge[]; paths: ExplorationTop....",
+      "target": "next-anchor-candidates-<hash>.d.ts:e"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "b47ab1f6835c667160b64f947831b19e108f0c7449731487f440df0f104e8fbc",
+  "reason": "Add an optional causal-corridor manifest to exploration topology; existing fields and command inputs are unchanged.",
+  "schemaVersion": 1
+}

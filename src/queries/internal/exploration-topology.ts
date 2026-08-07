@@ -211,6 +211,8 @@ export interface ExplorationTopology {
   frontiers: ExplorationFrontierGroup[];
   coverage: ExplorationTopologyCoverage;
   completion?: ExplorationCompletion;
+  /** Optional proved anchor-to-outcome closure used by system-map rendering. */
+  corridor?: ExplorationCausalCorridor;
 }
 
 export interface ExplorationTopologyInput {
@@ -232,6 +234,52 @@ export interface ExplorationTopologySelectionOptions {
   /** Maximum nodes added by upstream paths; a path is never selected partially. */
   maxUpstreamCausalNodes?: number;
   expandedFrontierIds?: readonly string[];
+}
+
+export type CausalCorridorStatus = 'complete' | 'incomplete';
+
+export interface CausalCorridorCoverage {
+  protectedNodes: number;
+  protectedEdges: number;
+  baseNodes: number;
+  baseEdges: number;
+  accountedFrontiers: number;
+  unresolvedFrontiers: number;
+  unresolvedEdges: number;
+}
+
+export interface CausalCorridorObligation {
+  kind: 'start' | 'outcome' | 'node' | 'edge' | 'frontier';
+  id: string;
+  reason: string;
+}
+
+/**
+ * A causal corridor is the proved subgraph from explicit anchors to mechanical
+ * outcomes, closed over the facts required to interpret that path without
+ * guessing from names or repository vocabulary.
+ */
+export interface ExplorationCausalCorridor {
+  schemaVersion: 1;
+  status: CausalCorridorStatus;
+  startNodeIds: string[];
+  outcomeNodeIds: string[];
+  baseNodeIds: string[];
+  baseEdgeIds: string[];
+  nodeIds: string[];
+  edgeIds: string[];
+  accountedFrontierIds: string[];
+  unresolvedFrontierIds: string[];
+  unresolvedEdgeIds: string[];
+  coverage: CausalCorridorCoverage;
+  explanation: string;
+}
+
+export interface CausalCorridorAudit {
+  status: CausalCorridorStatus;
+  missingObligations: CausalCorridorObligation[];
+  unexpectedNodeIds: string[];
+  unexpectedEdgeIds: string[];
 }
 
 export type ExplorationUpstreamEndpointKind = 'public-entry' | 'runtime-boundary' | 'traversal-root';
