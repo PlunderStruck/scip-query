@@ -340,57 +340,52 @@ describe('next-anchor target selection', () => {
         ],
         scope: 'fixture omitted callsite',
       });
-      const packet = systemMapNextAnchorPacket(
-        db,
-        topology,
-        {
-          status: 'connected',
-          steps: [
-            {
-              id: 'step:source',
-              nodeId: sourceNodeId,
-              order: 0,
-              role: 'anchor',
-              kind: 'symbol',
-              label: 'src:registry:exposeHandler()',
-              location: { file: 'src/registry.ts', line: 1, endLine: 4 },
-              behavior: {
-                kind: 'outline',
-                constructKind: 'module function',
-                signature: 'export function exposeHandler()',
-                lines: [
-                  {
-                    line: 3,
-                    endLine: 3,
-                    depth: 0,
-                    signals: ['return'],
-                    text: 'return true;',
-                    copied: true,
-                  },
-                ],
-                coverage: { sourceStatements: 2, representedStatements: 1, copiedStatements: 1, omittedStatements: 1 },
-                rawCharacters: 32,
-                renderedCharacters: 12,
-              },
+      const packet = systemMapNextAnchorPacket(db, topology, {
+        status: 'connected',
+        steps: [
+          {
+            id: 'step:source',
+            nodeId: sourceNodeId,
+            order: 0,
+            role: 'anchor',
+            kind: 'symbol',
+            label: 'src:registry:exposeHandler()',
+            location: { file: 'src/registry.ts', line: 1, endLine: 4 },
+            behavior: {
+              kind: 'outline',
+              constructKind: 'module function',
+              signature: 'export function exposeHandler()',
+              lines: [
+                {
+                  line: 3,
+                  endLine: 3,
+                  depth: 0,
+                  signals: ['return'],
+                  text: 'return true;',
+                  copied: true,
+                },
+              ],
+              coverage: { sourceStatements: 2, representedStatements: 1, copiedStatements: 1, omittedStatements: 1 },
+              rawCharacters: 32,
+              renderedCharacters: 12,
             },
-          ],
-          transitions: [],
-          paths: [],
-          coverage: {
-            candidateNodes: 2,
-            returnedNodes: 1,
-            omittedNodeIds: [handlerNodeId],
-            returnedTransitions: 0,
-            withheldStatements: 1,
-            requestedFocusLocations: [],
-            matchedFocusLocations: [],
-            unmatchedFocusLocations: [],
           },
-          behaviorCommand: null,
-          exactSourceCommand: null,
+        ],
+        transitions: [],
+        paths: [],
+        coverage: {
+          candidateNodes: 2,
+          returnedNodes: 1,
+          omittedNodeIds: [handlerNodeId],
+          returnedTransitions: 0,
+          withheldStatements: 1,
+          requestedFocusLocations: [],
+          matchedFocusLocations: [],
+          unmatchedFocusLocations: [],
         },
-        { selectionTerms: ['event', 'missing'] },
-      );
+        behaviorCommand: null,
+        exactSourceCommand: null,
+      });
 
       expect(packet.anchors).toEqual([
         expect.objectContaining({
@@ -398,21 +393,8 @@ describe('next-anchor target selection', () => {
           direction: 'downstream',
           causalRole: 'callee',
           relationKind: 'call',
-          selectionTermMatches: ['event'],
           alternatives: [expect.objectContaining({ symbol: HANDLER_SYMBOL })],
         }),
-      ]);
-      expect(packet.selectionTermCoverage).toEqual([
-        {
-          term: 'event',
-          selectedAnchorIds: [packet.anchors[0]!.id],
-          withheldAnchorIds: [],
-        },
-        {
-          term: 'missing',
-          selectedAnchorIds: [],
-          withheldAnchorIds: [],
-        },
       ]);
     } finally {
       db.close();
