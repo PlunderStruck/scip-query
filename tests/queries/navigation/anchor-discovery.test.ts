@@ -187,6 +187,7 @@ describe('anchor discovery', () => {
         '  return await work();',
         '}',
       ],
+      'src/catalog.ts': ['export interface FetchedPaperDuplicateInterruptedUpdate {}'],
     });
 
     const execute = 'scip-typescript npm fixture 1.0.0 src/`download.ts`/executeDownload().';
@@ -197,10 +198,12 @@ describe('anchor discovery', () => {
     const restore = 'scip-typescript npm fixture 1.0.0 src/`store.ts`/restore().';
     const repair = 'scip-typescript npm fixture 1.0.0 src/`store.ts`/repair().';
     const mutex = 'scip-typescript npm fixture 1.0.0 src/`mutex.ts`/withSqliteMutex().';
+    const catalog = 'scip-typescript npm fixture 1.0.0 src/`catalog.ts`/FetchedPaperDuplicateInterruptedUpdate#';
     evidenceFixtureDb(join(fixtureRoot, 'index.db'))
       .document(1, 'typescript', 'src/download.ts')
       .document(2, 'typescript', 'src/store.ts')
       .document(3, 'typescript', 'src/mutex.ts')
+      .document(4, 'typescript', 'src/catalog.ts')
       .symbol(1, execute, 'executeDownload', 12)
       .symbol(2, add, 'addPdf', 12)
       .symbol(3, reconcile, 'reconcileLocked', 12)
@@ -209,6 +212,7 @@ describe('anchor discovery', () => {
       .symbol(6, remove, 'remove', 12)
       .symbol(7, restore, 'restore', 12)
       .symbol(8, repair, 'repair', 12)
+      .symbol(9, catalog, 'FetchedPaperDuplicateInterruptedUpdate', 5)
       .definition(1, 1, 1, 2, 0, 4, 1)
       .definition(2, 2, 2, 2, 0, 6, 1)
       .definition(3, 2, 3, 8, 0, 11, 1)
@@ -217,6 +221,7 @@ describe('anchor discovery', () => {
       .definition(6, 2, 6, 17, 0, 19, 1)
       .definition(7, 2, 7, 21, 0, 23, 1)
       .definition(8, 2, 8, 25, 0, 27, 1)
+      .definition(9, 4, 9, 0, 0, 0, 65)
       .write();
 
     const config: ScipQueryConfig = {

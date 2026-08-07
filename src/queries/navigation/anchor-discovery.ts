@@ -282,7 +282,7 @@ export function discoverAnchors(
     options.semantic !== false,
   );
   const groups = [...crossBoundaryGroups, ...connectedGroups, ...effectGroups].sort(compareGroups);
-  const selectedGroups = full ? groups : groups.slice(0, limit);
+  const selectedGroups = full ? groups : selectDisplayedGroups(groups, limit);
   const matchedTerms = normalizedTerms.filter((term) => candidateFrequencies.has(term));
   const unmatchedTerms = normalizedTerms.filter((term) => !candidateFrequencies.has(term));
   const omittedRootCount = Math.max(0, candidateRoots.length - analyzedRootCount);
@@ -1643,6 +1643,46 @@ function compareGroups(left: AnchorDiscoveryGroup, right: AnchorDiscoveryGroup):
     left.relationCount - right.relationCount ||
     left.id.localeCompare(right.id)
   );
+}
+
+/**
+ * Keep a graph-related sibling-owner surface beside a highly ranked forward
+ * flow. Global ranking otherwise places every connected-flow before every
+ * shared-callee-owners group, which can hide the complementary reverse view
+ * outside the default result limit even when both describe the same symbols.
+ *
+ * This selection is repository-evidence driven: a sibling surface is promoted
+ * only when its anchors or relations overlap a forward group that already made
+ * the ranked shortlist. The query's English phrasing does not choose the kind.
+ */
+function selectDisplayedGroups(rankedGroups: readonly AnchorDiscoveryGroup[], limit: number): AnchorDiscoveryGroup[] {
+  const selected = rankedGroups.slice(0, limit);
+  if (limit < 2 || selected.some((group) => group.kind === 'shared-callee-owners')) return selected;
+
+  const sharedGroups = rankedGroups.filter((group) => group.kind === 'shared-callee-owners');
+  for (const flow of selected) {
+    if (flow.kind === 'shared-callee-owners') continue;
+    const flowSymbols = new Set(groupEvidenceSymbols(flow));
+    const companion = sharedGroups
+      .map((group) => ({ group, overlap: groupEvidenceOverlap(group, flowSymbols) }))
+      .filter(({ overlap }) => overlap > 0)
+      .sort(
+        ({ group: left, overlap: leftOverlap }, { group: right, overlap: rightOverlap }) =>
+          rightOverlap - leftOverlap || compareGroups(left, right),
+      )[0]?.group;
+    if (!companion) continue;
+
+    let replacement = selected.length - 1;
+    while (replacement >= 0 && selected[replacement] === flow) replacement -= 1;
+    if (replacement < 0) return selected;
+    selected[replacement] = companion;
+    return [...selected].sort(compareGroups);
+  }
+  return selected;
+}
+
+function groupEvidenceOverlap(group: AnchorDiscoveryGroup, symbols: ReadonlySet<string>): number {
+  return groupEvidenceSymbols(group).filter((symbol) => symbols.has(symbol)).length;
 }
 
 function groupKindRank(kind: AnchorDiscoveryGroup['kind']): number {
