@@ -49,6 +49,16 @@ export interface SystemMapNextAnchor {
   alternatives: SystemMapNextAnchorAlternative[];
   alternativeCount: number;
   evidence: ExplorationEvidenceSource[];
+  /** Query vocabulary matched by this target's existing identity or source evidence. Locator evidence only. */
+  selectionTermMatches?: string[];
+}
+
+export interface SystemMapSelectionTermCoverage {
+  term: string;
+  /** Targets already included in the recommended one-shot drill packet. */
+  selectedAnchorIds: string[];
+  /** Recoverable targets outside the recommended packet. */
+  withheldAnchorIds: string[];
 }
 
 export interface SystemMapNextAnchorPacket {
@@ -67,6 +77,8 @@ export interface SystemMapNextAnchorPacket {
   runtimeCandidates?: number;
   inspectCommand: string | null;
   remainingInspectCommands: string[];
+  /** Mechanical query-term attribution; never evidence that a requested fact is relevant or complete. */
+  selectionTermCoverage?: SystemMapSelectionTermCoverage[];
 }
 
 export interface RankedNextAnchor {
@@ -954,8 +966,8 @@ function nextAnchorPacketFromCandidates(
   );
   const selectedIds = new Set(selectedCandidates.map((candidate) => candidate.anchor.id));
   const withheldCandidates = candidates.filter((candidate) => !selectedIds.has(candidate.anchor.id));
-  const selected = selectedCandidates.map((candidate) => candidate.anchor);
-  const withheld = withheldCandidates.map((candidate) => candidate.anchor);
+  const selected = selectedCandidates.map(publicNextAnchor);
+  const withheld = withheldCandidates.map(publicNextAnchor);
   const inspectAlternatives = uniqueAlternatives(
     selected.flatMap((anchor) => (anchor.alternativeCount === 1 ? anchor.alternatives : [])),
   );
@@ -975,7 +987,25 @@ function nextAnchorPacketFromCandidates(
     remainingInspectCommands: chunked(withheldInspectAlternatives, 8).map(
       (alternatives) => `scip-query inspect ${alternatives.map(inspectSelector).join(' ')} --view behavior`,
     ),
+    ...(normalizedSelectionTerms.length > 0
+      ? {
+          selectionTermCoverage: normalizedSelectionTerms.map((term) => ({
+            term,
+            selectedAnchorIds: selectedCandidates
+              .filter((candidate) => candidate.selectionTermMatches?.includes(term))
+              .map((candidate) => candidate.anchor.id),
+            withheldAnchorIds: withheldCandidates
+              .filter((candidate) => candidate.selectionTermMatches?.includes(term))
+              .map((candidate) => candidate.anchor.id),
+          })),
+        }
+      : {}),
   };
+}
+
+function publicNextAnchor(candidate: RankedNextAnchor): SystemMapNextAnchor {
+  const matches = candidate.selectionTermMatches ?? [];
+  return matches.length > 0 ? { ...candidate.anchor, selectionTermMatches: [...matches] } : candidate.anchor;
 }
 
 export function nextAnchorInspectSafe(db: ScipDatabase, candidate: RankedNextAnchor): boolean {

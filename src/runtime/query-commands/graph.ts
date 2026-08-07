@@ -1,4 +1,5 @@
 import * as queries from '../../queries/index.js';
+import type { SystemMapNextAnchor, SystemMapNextAnchorPacket } from '../../queries/internal/next-anchor-candidates.js';
 import type { SystemMapEvidenceFloor, SystemMapRelationKind, SystemMapSourceScope } from '../../queries/index.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
 import type { CommandOptions } from '../command-kit/command-execution.js';
@@ -706,6 +707,7 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
       `  [folded] ${result.nextAnchors.candidateAnchors} causal target(s) are accounted but hidden because ` +
         'connected behavior is the evidence to exhaust first.',
     );
+    printSystemMapSelectionTermTargets(result.nextAnchors);
     const exactTargets = result.nextAnchors.anchors.filter((anchor) => anchor.alternativeCount === 1);
     if (result.nextAnchors.inspectCommand) {
       console.log(`  Recommended one-shot drill batch: ${result.nextAnchors.inspectCommand}`);
@@ -931,6 +933,45 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
 });
 
 type SystemMapNextAnchors = NonNullable<ReturnType<typeof queries.systemMap>['nextAnchors']>;
+
+function printSystemMapSelectionTermTargets(nextAnchors: SystemMapNextAnchorPacket): void {
+  const coverage = nextAnchors.selectionTermCoverage ?? [];
+  if (coverage.length === 0) return;
+
+  console.log('  Query-term gap targets (locator evidence only; not task relevance or fact completion):');
+  const withheldById = new Map(nextAnchors.withheldAnchors.map((anchor) => [anchor.id, anchor]));
+
+  for (const anchor of nextAnchors.anchors) {
+    const terms = coverage.filter((item) => item.selectedAnchorIds.includes(anchor.id)).map((item) => item.term);
+    if (terms.length === 0) continue;
+    console.log(`    selected ${terms.join(', ')} → ${systemMapSelectionTarget(anchor)}`);
+  }
+
+  const withheldTermsById = new Map<string, string[]>();
+  for (const item of coverage) {
+    if (item.selectedAnchorIds.length > 0 || item.withheldAnchorIds.length === 0) continue;
+    const anchorId = item.withheldAnchorIds[0]!;
+    const terms = withheldTermsById.get(anchorId) ?? [];
+    terms.push(item.term);
+    withheldTermsById.set(anchorId, terms);
+  }
+  for (const [anchorId, terms] of withheldTermsById) {
+    const anchor = withheldById.get(anchorId);
+    if (anchor) console.log(`    withheld ${terms.join(', ')} → ${systemMapSelectionTarget(anchor)}`);
+  }
+
+  const unmatched = coverage
+    .filter((item) => item.selectedAnchorIds.length === 0 && item.withheldAnchorIds.length === 0)
+    .map((item) => item.term);
+  if (unmatched.length > 0) console.log(`    no causal target: ${unmatched.join(', ')}`);
+}
+
+function systemMapSelectionTarget(anchor: SystemMapNextAnchor): string {
+  const target = anchor.alternativeCount === 1 ? anchor.alternatives[0] : null;
+  return target
+    ? `${target.label} @ ${target.file}:${displayLine(target.line)}`
+    : `${anchor.callsite.calleeLeaf} @ ${anchor.callsite.file}:${displayLine(anchor.callsite.line)} (${anchor.alternativeCount} candidates)`;
+}
 
 function printSystemMapGapRecovery(
   nextAnchors: SystemMapNextAnchors | undefined,
