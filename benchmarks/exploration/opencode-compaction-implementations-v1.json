@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "id": "opencode-compaction-implementations-v1",
+  "question": "OpenCode has compaction implementations under packages/opencode and packages/core. Which externally reachable session path owns each implementation, and how do their triggering, retained-history selection, summary execution, resumption, later-context reconstruction, and tool-output pruning behaviors differ?",
+  "requiredFacts": [
+    {
+      "id": "http-path-ownership",
+      "description": "The session.prompt and session.prompt_async HTTP handlers call SessionPrompt.prompt, whose default layer provides the packages/opencode SessionCompaction service and whose run loop queues and processes compaction tasks.",
+      "answerEvidenceAlternatives": [
+        ["session.prompt", "SessionPrompt", "packages/opencode", "SessionCompaction"],
+        ["promptAsync", "promptSvc.prompt", "SessionPrompt.loop", "compaction.process"]
+      ]
+    },
+    {
+      "id": "native-path-ownership",
+      "description": "The public native Effect API's OpenCode.sessions.prompt calls SessionV2.prompt; its layer provides SessionExecutionLocal, which reaches SessionRunnerLLM and constructs the packages/core SessionCompaction implementation.",
+      "answerEvidenceAlternatives": [
+        ["OpenCode.sessions.prompt", "SessionV2", "SessionExecutionLocal", "SessionRunnerLLM"],
+        ["native", "packages/core", "SessionExecution", "compactIfNeeded"]
+      ]
+    },
+    {
+      "id": "trigger-difference",
+      "description": "The HTTP/SessionPrompt path tests a completed non-summary assistant's recorded tokens after a loop iteration and queues a compaction user part, while the native/core runner estimates the complete request before a provider turn and can also compact directly after a provider context-overflow response.",
+      "answerEvidenceAlternatives": [
+        ["completed", "non-summary", "queued", "complete request", "provider"],
+        ["lastFinished", "compaction.create", "compactIfNeeded", "compactAfterOverflow"]
+      ]
+    },
+    {
+      "id": "retention-difference",
+      "description": "The HTTP path retains at most tail_turns recent user turns under a quarter-of-usable-capacity budget clamped to 2,000-8,000 tokens and records tail_start_id; the core path uses an 8,000-token keep budget to divide serialized conversation into an older head and verbatim recent suffix, splitting one boundary message if needed.",
+      "answerEvidenceAlternatives": [
+        ["tail_turns", "tail_start_id", "8,000", "head", "recent"],
+        ["quarter", "2,000", "8,000", "keep", "split"]
+      ]
+    },
+    {
+      "id": "summary-execution-difference",
+      "description": "The HTTP path hides prior completed compaction pairs, runs plugin compaction and cloned-message transforms, and creates a summary assistant processed with toolChoice none; the core path publishes Compaction.Started, streams one no-tools summary request capped at 4,096 output tokens, and publishes Compaction.Ended only for non-empty error-free text.",
+      "answerEvidenceAlternatives": [
+        ["plugin", "toolChoice", "Compaction.Started", "4,096", "Compaction.Ended"],
+        ["experimental.session.compacting", "summary", "tools", "4096", "non-empty"]
+      ]
+    },
+    {
+      "id": "resume-difference",
+      "description": "After HTTP-path automatic compaction, OpenCode either replays the displaced user request with media placeholders or appends an autocontinue-controlled synthetic compaction_continue message; the core runner signals a rebuild and retries the same pending turn, with repeated overflow after recovery treated as terminal.",
+      "answerEvidenceAlternatives": [
+        ["replay", "media", "compaction_continue", "rebuild", "retries"],
+        ["autocontinue", "placeholder", "pending turn", "terminal"]
+      ]
+    },
+    {
+      "id": "later-context-and-pruning-difference",
+      "description": "The HTTP path keeps durable history but filterCompacted reconstructs model context as compaction request, summary, retained tail, and continuation messages, and optional pruning marks old tool parts compacted after protecting skill results and 40,000 tokens plus a 20,000-token minimum; the core path projects Compaction.Ended into a summary/recent checkpoint and later starts runner history at the newest compaction row.",
+      "answerEvidenceAlternatives": [
+        ["filterCompacted", "retained tail", "40,000", "20,000", "newest compaction"],
+        ["not deleted", "skill", "compacted", "summary", "recent", "entriesForRunner"]
+      ]
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "one-implementation-is-dead",
+      "answerIncludesAny": ["packages/core compaction is dead code", "packages/opencode compaction is dead code"]
+    },
+    {
+      "id": "same-runtime-path",
+      "answerIncludesAny": ["both implementations run on the same session entrypoint"]
+    },
+    {
+      "id": "compaction-deletes-history",
+      "answerIncludesAny": ["compaction permanently deletes the earlier conversation"]
+    }
+  ],
+  "budgets": {
+    "maxToolCalls": 8,
+    "maxSemanticQueries": 4,
+    "maxRenderedCharacters": 70000,
+    "maxNativeExplorationReads": 0
+  }
+}
