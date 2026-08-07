@@ -174,7 +174,7 @@ normalization problem.
 
 | Sol medium mode | Total tokens | Uncached input | Rendered characters | Exploration calls | Agent duration | Manual strict facts |
 | --------------- | -----------: | -------------: | ------------------: | ----------------: | -------------: | ------------------: |
-| scip-query       |      148,993 |         23,576 |              33,497 |                 3 |        137.0 s |                 3/7 |
+| scip-query      |      148,993 |         23,576 |              33,497 |                 3 |        137.0 s |                 3/7 |
 | Native control  |      231,594 |         55,361 |              62,973 |                 8 |        109.5 s |                 5/7 |
 
 The treatment reduced total model tokens by 35.7%, uncached input by 57.4%,
@@ -258,3 +258,128 @@ Artifacts:
 - `/tmp/tslint-config-causal-treatment-sol-medium.json`
 - `/tmp/tslint-config-causal-reference-treatment-sol-medium.json`
 - `/tmp/vega-work-session-causal-reference-sol-medium.json`
+
+## OpenCode third-repository compaction diagnostic
+
+The next held-out task used OpenCode commit
+`1a8e94dc8e7462d3d0d860e1337b448c71947f6b`. The seven facts were frozen
+before either model turn. They asked how automatic session compaction is
+triggered and queued, how its retained tail is selected, how the summary is
+generated, how work resumes, how future model history is reconstructed, and
+how old tool output is pruned.
+
+Both Sol-medium arms used independent disposable worktrees. Treatment received
+a fresh private index; control received no index and was forbidden from using
+scip-query. The worktrees and caches were removed after completion.
+
+| Sol medium mode | Total tokens | Uncached input | Rendered characters | Exploration calls | Agent duration | Manual strict facts |
+| --------------- | -----------: | -------------: | ------------------: | ----------------: | -------------: | ------------------: |
+| Native control  |      508,976 |         59,345 |             568,453 |                10 |        125.6 s |                 2/7 |
+| scip-query      |      530,272 |         70,176 |             160,005 |                 9 |        324.5 s |                 0/7 |
+
+Treatment rendered 71.9% fewer repository characters, but used 4.2% more total
+tokens and 18.3% more uncached input tokens. Its private index took 60.2 seconds
+outside the measured model turn. It made no native repository reads, but used
+seven semantic queries plus two transport continuations, exceeding the intended
+one-locator, one-map, one-inspect path. Five of those queries repeated the same
+`anchors` question with different limits; the first two were exact duplicates.
+
+The native control's first broad `rg` returned 438,860 characters. That is the
+noise scip-query is supposed to avoid. Despite that cost, the control noticed
+that the monorepo contains two materially different compaction implementations:
+the `packages/opencode` prompt-loop compactor and a newer `packages/core`
+compactor. It centered the requested lifecycle on the former and explicitly
+separated the latter. It completely established retained-tail selection and
+future-context reconstruction. Its other five facts were substantial but
+strictly incomplete: it omitted at least one required predicate or branch from
+each compound fact.
+
+Treatment selected the `packages/core` compactor as its main system, then mixed
+isolated `packages/opencode` details into that explanation. It did not establish
+the `packages/opencode` queued compaction task, complete tail policy, plugin and
+summary contract, failure/resume branches, `filterCompacted` reconstruction, or
+tool-output pruning. Its own answer correctly disclosed the outer loop and
+pruning as unexamined. Therefore none of the seven frozen facts was complete.
+
+The deterministic matcher reported 1/7 for control and 0/7 for treatment. The
+manual strict score above gives credit only when the whole frozen behavior is
+stated, consistent with earlier benchmark adjudication.
+
+This pair is a valid diagnostic but not an acceptance-quality treatment/control
+claim. The question said “OpenCode” without choosing between two implementations,
+while the frozen facts targeted `packages/opencode`. A correct open-ended answer
+should surface that ambiguity rather than silently choose one, so treatment's
+failure remains meaningful. However, the prompt's underspecified scope is a live
+alternative explanation for which implementation was selected. The next clean
+benchmark must either name the runtime/package boundary in advance or define
+facts that require recognizing and distinguishing both implementations.
+
+Artifacts:
+
+- `benchmarks/exploration/opencode-session-compaction-heldout-v1.json`
+- `/tmp/opencode-session-compaction-control-sol-medium.json`
+- `/tmp/opencode-session-compaction-treatment-sol-medium.json`
+
+## Meta-harness bash-lifecycle heldout comparison
+
+Because the OpenCode prompt left two same-named systems in scope, the next
+acceptance-quality pair used a fourth repository and named one unique runtime
+surface. The repository was meta-harness at commit
+`7106e38fb5cc8ef4bfb0fff6b57cd3cd6f4caf41`. The question asked how an agent's
+`bash` request moves through phase gating, command normalization, safety policy,
+confirmation, foreground or background execution, termination, and reinsertion
+into the next model turn. Seven facts and three forbidden claims were frozen
+before either arm ran.
+
+| Sol medium mode | Total tokens | Uncached input | Rendered characters | Exploration calls | Agent duration | Manual strict facts |
+| --------------- | -----------: | -------------: | ------------------: | ----------------: | -------------: | ------------------: |
+| Native control  |      356,261 |         62,103 |             158,809 |                 7 |        106.6 s |                 1/7 |
+| scip-query      |      183,115 |         30,558 |              45,327 |                 4 |        154.3 s |                 3/7 |
+
+Treatment used 48.6% fewer total model tokens, 50.8% fewer uncached input
+tokens, and 71.5% fewer rendered exploration characters. It made four semantic
+queries and no native repository reads. The native arm made seven repository
+reads. Treatment's fresh private index took 2.0 seconds outside model timing.
+Treatment agent time was 44.8% longer despite the lower token and query counts.
+
+Strict adjudication requires the whole frozen fact, including any stated hard
+bound or safety branch. Treatment completely recovered:
+
+- command trimming, background-suffix removal, empty-command rejection, and
+  dedicated routing of direct scip-query invocations;
+- the unbypassable fork-bomb, privilege-escalation, and system-root deletion
+  blocks; and
+- foreground spawn context, timeout bounds, stream-size bound, and the distinct
+  behavior of user cancellation versus timeout or buffer overflow.
+
+The native control completely recovered the hard-block fact. It substantially
+described the other paths but omitted at least one frozen requirement from each:
+phase-local dispatch gating, empty-input handling, path-resolution details,
+the exact background log location, foreground defaults/stdin behavior, and the
+16,000-byte final transcript bound.
+
+Treatment's four incomplete facts identify the next selection gaps rather than
+a wrong-system failure. It omitted phase-local precedence plus unknown/thrown
+tool error conversion; the `insideRepo`/home-expansion details of containment;
+the `ProcessManager.start()` log, buffer, and state transitions; and the exact
+16,000-byte `truncate()` bound. Its answer explicitly disclosed the process
+manager and truncation internals as unmaterialized. These are downstream helper
+or effect-owner details reachable from already-correct anchors, so the result
+supports expanding causal-target diversity rather than changing initial anchor
+discovery for this task.
+
+The deterministic matcher reported 0/7 for control and 1/7 for treatment. It
+again undercounted valid paraphrases and is not the accuracy authority. Neither
+answer made a frozen forbidden claim. Both detached worktrees and private cache
+parents were removed, and no Git worktree registration remained.
+
+For this pinned repository, question, fixture, model, and runner, scip-query
+therefore improved strict fact recovery while approximately halving model-token
+cost. This is a second independent task shape after configuration inheritance;
+it does not establish arbitrary-task reliability.
+
+Artifacts:
+
+- `benchmarks/exploration/meta-harness-bash-lifecycle-heldout-v1.json`
+- `/tmp/meta-harness-bash-lifecycle-control-sol-medium.json`
+- `/tmp/meta-harness-bash-lifecycle-treatment-sol-medium.json`

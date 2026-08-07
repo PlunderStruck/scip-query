@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "id": "meta-harness-bash-lifecycle-heldout-v1",
+  "question": "In meta-harness, what happens end to end when an agent requests the bash tool: how is the command classified and approved, how do foreground and background commands execute and terminate, and how does the result get back into the next model turn?",
+  "requiredFacts": [
+    {
+      "id": "dispatch-and-phase-gate",
+      "description": "The agent loop resolves a phase-local tool first, refuses a global tool omitted from allowedGlobalTools even if the model calls it, otherwise dispatches through executeTool, and converts thrown or unknown-tool failures into error results.",
+      "answerEvidenceAlternatives": [
+        ["phase-local", "allowedGlobalTools", "executeTool", "error result"],
+        ["phaseTool", "allowedGlobalTools", "unknown tool", "isError"],
+        ["defense-in-depth", "global tool", "dispatcher", "error"]
+      ]
+    },
+    {
+      "id": "bash-input-and-scip-routing",
+      "description": "bash trims the raw command, interprets a trailing ampersand as background mode and strips it, rejects an empty remainder, and before safety classification refuses direct scip-query CLI use in favor of the dedicated scip tool.",
+      "answerEvidenceAlternatives": [
+        ["trailing", "ampersand", "strips", "empty", "scip"],
+        ["BACKGROUND_SUFFIX_RE", "command is required", "scip-query", "scip tool"],
+        ["background", "trim", "empty", "dedicated", "scip"]
+      ]
+    },
+    {
+      "id": "unbypassable-hard-blocks",
+      "description": "Classification always blocks fork-bomb patterns, sudo or doas command words, and recursive forced deletion of literal system roots; session auto-approve does not bypass these hard blocks.",
+      "answerEvidenceAlternatives": [
+        ["fork bomb", "sudo", "doas", "system root", "auto-approve"],
+        ["hard block", "rm -rf", "system", "privilege escalation", "even"]
+      ]
+    },
+    {
+      "id": "confirmation-and-containment",
+      "description": "Confirmation is required for any rm -rf, force push, hard reset, git clean -f, recursive chmod, download piped to a shell, write-style targets outside the project, and redirects outside it; relative paths are resolved from the project root and leading home paths expand. Auto-approve bypasses this tier, while missing or denied confirmation prevents execution.",
+      "answerEvidenceAlternatives": [
+        ["rm -rf", "force push", "hard reset", "git clean", "outside", "auto-approve", "denied"],
+        ["confirmation", "recursive chmod", "piped", "project root", "home", "no interactive"],
+        ["confirm", "write-style", "redirect", "outside project", "isAutoApprove"]
+      ]
+    },
+    {
+      "id": "background-process-lifecycle",
+      "description": "A background command is handed to the singleton ProcessManager, which spawns sh -c in the project root, writes combined output to .meta-harness/logs while retaining a bounded recent buffer, tracks running/exited/killed/error state, and returns its id, log path, and process_output/kill_process instructions immediately.",
+      "answerEvidenceAlternatives": [
+        ["ProcessManager", "sh", "project root", ".meta-harness", "process_output", "kill_process"],
+        ["background", "log path", "recent", "status", "returns", "id"],
+        ["pm.start", "recentOutput", "running", "exited", "killed", "error"]
+      ]
+    },
+    {
+      "id": "foreground-limits-and-cancellation",
+      "description": "A foreground command spawns sh -c in the project root with ignored stdin and piped output; timeout is clamped from 1,000 to 600,000 ms with a 60,000 ms default, each collected stream is capped at 10 MiB, user abort is rethrown, and timeout or buffer overflow aborts the child but becomes a rendered result.",
+      "answerEvidenceAlternatives": [
+        ["sh", "ignored stdin", "60,000", "600,000", "10 MiB", "user abort"],
+        ["foreground", "project root", "timeout", "maxBuffer", "rethrow"],
+        ["AbortController", "1_000", "600_000", "10 * 1024 * 1024", "cancelReason"]
+      ]
+    },
+    {
+      "id": "result-reenters-model-history",
+      "description": "Foreground output is assembled from the command, stdout, labeled stderr, exit/signal/error/timeout details and truncated to 16,000 bytes; the loop reports the result callback, creates a tool_result preserving tool_use_id, content and isError, appends all results as a user message, and starts the next chat round unless a successful terminal tool ended the phase or cancellation intervened.",
+      "answerEvidenceAlternatives": [
+        ["stdout", "stderr", "exit", "16,000", "tool_use_id", "user message"],
+        ["truncate", "onToolResult", "tool_result", "isError", "next chat"],
+        ["command", "signal", "timeout", "results", "messages.push", "terminal"]
+      ]
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "auto-approve-bypasses-blocks",
+      "answerIncludesAny": ["auto-approve bypasses hard blocks", "yolo mode allows sudo and system-root deletion"]
+    },
+    {
+      "id": "background-waits-for-exit",
+      "answerIncludesAny": [
+        "the bash call waits for a background process to exit",
+        "background output is returned only after the child finishes"
+      ]
+    },
+    {
+      "id": "missing-confirmation-allows",
+      "answerIncludesAny": [
+        "missing confirmation defaults to approval",
+        "non-interactive mode automatically runs confirm-tier commands"
+      ]
+    }
+  ],
+  "budgets": {
+    "maxToolCalls": 8,
+    "maxSemanticQueries": 4,
+    "maxRenderedCharacters": 70000,
+    "maxNativeExplorationReads": 0
+  }
+}

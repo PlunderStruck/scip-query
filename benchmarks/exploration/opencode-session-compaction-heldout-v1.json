@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "id": "opencode-session-compaction-heldout-v1",
+  "question": "How does OpenCode decide that a session needs automatic compaction, choose what history to summarize versus retain, execute the compaction, resume work afterward, and reduce old context on later turns?",
+  "requiredFacts": [
+    {
+      "id": "overflow-threshold",
+      "description": "Automatic compaction is disabled when compaction.auto is false or the model has no context limit; otherwise the completed assistant's total token count is compared with usable input capacity after reserving configured space or an output-token allowance capped by a 20,000-token buffer.",
+      "answerEvidenceAlternatives": [
+        ["compaction.auto", "context", "20,000", "reserved"],
+        ["auto", "context limit", "20_000", "usable"],
+        ["automatic compaction", "disabled", "total tokens", "output", "buffer"]
+      ]
+    },
+    {
+      "id": "compaction-is-queued-work",
+      "description": "When a non-summary completed assistant overflows, the prompt loop creates a new user message with a compaction part; on the next loop iteration that pending compaction task is processed before an ordinary model response.",
+      "answerEvidenceAlternatives": [
+        ["lastFinished", "summary", "compaction.create", "task", "compaction.process"],
+        ["non-summary", "user message", "compaction part", "next", "processed"],
+        ["overflow", "queued", "compaction task", "before", "ordinary"]
+      ]
+    },
+    {
+      "id": "bounded-retained-tail",
+      "description": "Selection retains at most compaction.tail_turns recent user turns (default two) under a preserve-recent token budget that defaults to 25% of usable capacity clamped to 2,000-8,000 tokens; it may split the oldest retained turn and records the retained start as tail_start_id.",
+      "answerEvidenceAlternatives": [
+        ["tail_turns", "two", "25%", "2,000", "8,000", "tail_start_id"],
+        ["default two", "recent turns", "quarter", "2,000", "8,000", "split"],
+        ["DEFAULT_TAIL_TURNS", "preserveRecentBudget", "splitTurn", "tail_start_id"]
+      ]
+    },
+    {
+      "id": "summary-execution-contract",
+      "description": "Compaction hides prior completed compaction request/summary pairs, lets plugins inject context or replace the prompt and transform a cloned history, creates an assistant message marked mode/agent compaction and summary=true, and calls the processor with toolChoice none plus explicit summary-only instructions.",
+      "answerEvidenceAlternatives": [
+        ["prior", "compaction", "plugin", "summary=true", "toolChoice", "none"],
+        ["completed compaction", "hidden", "plugin", "summary", "no tools"],
+        ["experimental.session.compacting", "experimental.chat.messages.transform", "summary", "toolChoice"]
+      ]
+    },
+    {
+      "id": "success-failure-and-resume",
+      "description": "If the summarizer itself still overflows, compaction records a ContextOverflowError and stops; on success it updates tail_start_id, and automatic compaction either replays the displaced user request (replacing media with text placeholders) or, subject to the autocontinue plugin, appends a synthetic continue message marked compaction_continue.",
+      "answerEvidenceAlternatives": [
+        ["ContextOverflowError", "tail_start_id", "replay", "media", "compaction_continue"],
+        ["still overflows", "stops", "replays", "placeholder", "synthetic continue"],
+        ["experimental.compaction.autocontinue", "replay", "compaction_continue", "stop"]
+      ]
+    },
+    {
+      "id": "later-context-reconstruction",
+      "description": "History is not deleted: filterCompacted recognizes a finished, non-error summary for a compaction user message, starts future model context at that compaction, and when tail_start_id exists reorders the view as compaction request, summary, retained tail, then later continuation messages.",
+      "answerEvidenceAlternatives": [
+        ["filterCompacted", "not deleted", "summary", "retained tail", "continuation"],
+        ["history", "filtered", "compaction request", "summary", "tail", "reorder"],
+        ["completed", "tail_start_id", "compactionIndex", "summaryIndex", "tailIndex"]
+      ]
+    },
+    {
+      "id": "tool-output-pruning",
+      "description": "After the loop, optional pruning scans backward beyond the newest user turn, stops at a summary or already-compacted tool part, protects skill-tool results and the newest 40,000 estimated tool-output tokens, and only when more than another 20,000 tokens are eligible marks old completed tool parts compacted so later conversion renders a cleared-output placeholder.",
+      "answerEvidenceAlternatives": [
+        ["40,000", "20,000", "skill", "compacted", "Old tool result content cleared"],
+        ["PRUNE_PROTECT", "PRUNE_MINIMUM", "skill", "time.compacted", "placeholder"],
+        ["scans backward", "newest", "summary", "40,000", "20,000", "cleared"]
+      ]
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "compaction-deletes-history",
+      "answerIncludesAny": [
+        "compaction deletes the old messages from storage",
+        "old history is permanently deleted during compaction"
+      ]
+    },
+    {
+      "id": "prune-deletes-tool-parts",
+      "answerIncludesAny": ["pruning deletes the old tool parts", "the tool records are removed from the database"]
+    },
+    {
+      "id": "all-overflow-is-prevented",
+      "answerIncludesAny": [
+        "compaction guarantees the session cannot overflow",
+        "the summarizer can never exceed the context limit"
+      ]
+    }
+  ],
+  "budgets": {
+    "maxToolCalls": 8,
+    "maxSemanticQueries": 4,
+    "maxRenderedCharacters": 70000,
+    "maxNativeExplorationReads": 0
+  }
+}
