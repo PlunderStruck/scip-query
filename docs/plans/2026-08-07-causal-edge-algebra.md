@@ -345,3 +345,13 @@ These checks define completion before the remaining implementation changes are m
 - Source contradictions, unsupported language constructs, benchmark misses, and knowingly deferred detector families must be recorded here with their observed evidence; none may be silently described as complete.
 - A slice is committed separately only after its focused falsification probe and full repository gates pass.
 - Nothing is currently deferred from the six-family implementation or causal-corridor proof. Framework-specific adapters beyond those required by the frozen fixtures remain deferred until the canonical analyzers expose a measured unsupported gap.
+
+## Implementation checkpoint: direct parameter flow
+
+- `system-map` now reuses the existing compiler-resolved callsite and parameter-flow analyzers to emit distinct caller-parameter and callee-parameter nodes plus exact `data:argument-to-parameter` edges.
+- Each transfer retains the callsite, argument text, caller position, and callee position. Parameter ownership is connected through canonical identity edges, so data evidence remains attached to its callable owners.
+- Non-direct arguments are not guessed. Their exact expression is emitted as an unsupported data-transfer edge and an unresolved frontier with the analyzer's reason.
+- The older `dataflow` and `slice` commands were not relabeled as value flow: their implementation is primarily call/reference co-occurrence, so presenting those results as causal data would weaken the evidence contract.
+- The focused adapter test was observed failing before implementation. The real `system-map` fixture then proved the complete path through indexed symbols, resolved call syntax, AST parameter matching, topology projection, and family inventory.
+- Typecheck, formatting, ESLint/API/build checks, and all 2,279 repository tests pass. The first full-suite run caught the new helper missing from the private-query manifest; that omission was fixed and the complete suite was rerun successfully.
+- Architecture remains at its pre-existing non-clean baseline: two forbidden dependency families and one unmapped file. This slice added no forbidden boundary edge; the new helper belongs to `queries-graph`.

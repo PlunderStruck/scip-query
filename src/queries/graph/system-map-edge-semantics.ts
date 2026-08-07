@@ -63,5 +63,6 @@ function cloneSemantics(semantics: readonly ProgramEdgeSemantic[]): ProgramEdgeS
   return semantics.map((semantic) => ({
     ...semantic,
     ...(semantic.context ? { context: { ...semantic.context } } : {}),
+    ...(semantic.attributes ? { attributes: { ...semantic.attributes } } : {}),
   }));
 }

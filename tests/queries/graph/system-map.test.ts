@@ -161,6 +161,41 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
+  it('joins compiler-resolved argument flow to call edges in the first system map', () => {
+    const db = createSystemMapDb();
+    try {
+      const result = systemMap(db, {
+        symbols: [symbols.companionCommand, symbols.companionAppend],
+        maxDepth: 1,
+        relations: ['call'],
+      });
+
+      const dataEdges = result.topology?.edges.filter((edge) => edge.kind === 'data-transfer') ?? [];
+      expect(dataEdges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            disposition: 'folded',
+            semantics: [
+              expect.objectContaining({
+                family: 'data',
+                subtype: 'argument-to-parameter',
+                attributes: expect.objectContaining({ argumentText: 'events', callerPosition: 0, calleePosition: 0 }),
+              }),
+            ],
+          }),
+        ]),
+      );
+      expect(result.topology?.coverage.programEdges.families.data).toMatchObject({
+        sourceEdges: expect.any(Number),
+        projectedEdges: expect.any(Number),
+        subtypes: ['argument-to-parameter'],
+      });
+      expect(result.topology?.coverage.programEdges.families.data.projectedEdges).toBeGreaterThan(0);
+    } finally {
+      db.close();
+    }
+  });
+
   it('reverse-connects an imported service member call to its source-only implementation', () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-source-service-member-'));
     const projectRoot = join(root, 'project');

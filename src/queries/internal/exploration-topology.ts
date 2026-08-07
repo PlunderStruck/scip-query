@@ -36,11 +36,15 @@ export interface ProgramEdgeSemanticContext {
   synchronizationScope?: string;
 }
 
+export type ProgramEdgeSemanticAttribute = string | number | boolean | null;
+
 /** One primitive interpretation of an existing evidenced topology edge. */
 export interface ProgramEdgeSemantic {
   family: ProgramEdgeFamily;
   subtype: string;
   context?: ProgramEdgeSemanticContext;
+  /** Evidence-specific values that qualify this primitive relationship. */
+  attributes?: Record<string, ProgramEdgeSemanticAttribute>;
 }
 
 /**
@@ -317,6 +321,7 @@ export function projectProgramEdges(edges: readonly ExplorationTopologyEdge[]): 
         family: semantic.family,
         subtype: semantic.subtype,
         ...(semantic.context ? { context: { ...semantic.context } } : {}),
+        ...(semantic.attributes ? { attributes: { ...semantic.attributes } } : {}),
       })),
     )
     .sort((left, right) => left.id.localeCompare(right.id));

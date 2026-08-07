@@ -43,6 +43,7 @@ import {
   systemMapSyntheticEdgeProgramSemantics,
   type SystemMapRelationKind,
 } from './system-map-edge-semantics.js';
+import { programDataElementsForSystemMapRelations } from './program-data-edges.js';
 import {
   createExplorationTopology,
   selectExplorationTopology,
@@ -2244,6 +2245,10 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     });
   }
 
+  const programData = programDataElementsForSystemMapRelations(input.db, input.relations);
+  nodes.push(...programData.nodes);
+  edges.push(...programData.edges);
+
   for (const boundary of input.externalBoundaries) {
     const nodeId = topologyId('external', boundary.kind, boundary.name);
     const fromNodeIds = uniqueSorted(boundary.fromRegionIds);
@@ -2277,7 +2282,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     }
   }
 
-  const frontiers: ExplorationFrontierGroup[] = [];
+  const frontiers: ExplorationFrontierGroup[] = [...programData.frontiers];
   input.boundaryFrontiers.forEach((frontier, index) => {
     const fromNodeId = input.regionForFile.get(frontier.file)?.id;
     if (!fromNodeId) {
@@ -2335,7 +2340,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     paths: [],
     frontiers,
     scope: `explicit anchors; relations ${input.requestedRelationKinds.join(', ')}; depth ${input.maxDepth}; evidence floor ${input.evidenceFloor}; source scopes ${input.includedSourceScopes.join(', ')}`,
-    blindSpots: input.blindSpots,
+    blindSpots: [...input.blindSpots, ...programData.blindSpots],
     incompleteReasons:
       input.closureStatus === 'incomplete'
         ? [`${input.omittedSymbolCandidates} ambiguous symbol candidate(s) were omitted`]
