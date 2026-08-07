@@ -10,6 +10,7 @@ import type { BoundaryObservation } from '../../analysis/runtime-boundaries/type
 import { runtimeBoundarySourceScope } from '../../analysis/runtime-boundaries/source-scope.js';
 import type { BoundarySourceScope } from '../../analysis/runtime-boundaries/types.js';
 import type { IndexedDefinition, SymbolMatch, SymbolResolutionCandidate } from '../../domain/types.js';
+import { createTaskEvidenceContract, type TaskEvidenceContract } from '../../domain/task-evidence.js';
 import { getSourceImports } from '../../language-parsers/index.js';
 import { getSourceLines } from '../../source/primitives/source-text.js';
 import { getAst, type SyntaxNode } from '../../source/ast.js';
@@ -120,6 +121,8 @@ export interface SystemMapOptions {
   fullLiteralTraversal?: boolean;
   /** Mechanically normalized task terms used only to rank already-proven causal drill targets. */
   selectionTerms?: readonly string[];
+  /** Original agent task transported from anchor discovery; never used to infer graph relevance. */
+  task?: string;
 }
 
 export interface SystemMapAnchorCandidate extends SymbolResolutionCandidate {
@@ -403,6 +406,8 @@ export interface SystemMapResult {
   behavior?: ConnectedBehaviorPacket;
   /** Structurally important callable targets not yet materialized in behavior. */
   nextAnchors?: SystemMapNextAnchorPacket;
+  /** Additive agent-owned task checklist; absent for direct maps without a transported task. */
+  taskEvidence?: TaskEvidenceContract;
   closure: SystemMapQueryClosure;
   coverage: SystemMapCoverage;
 }
@@ -1637,6 +1642,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
     topology,
     behavior,
     nextAnchors,
+    ...(opts.task?.trim() ? { taskEvidence: createTaskEvidenceContract(opts.task) } : {}),
     closure: {
       status: closureStatus,
       emitted: {

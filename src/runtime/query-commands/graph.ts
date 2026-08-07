@@ -28,6 +28,7 @@ import {
 import { budgetedSectionedQueryCommand, tableQueryCommand } from '../command-kit/query-command-builders.js';
 import { displayLine, render } from '../render.js';
 import { renderSessionEvidence } from '../source-emission-session.js';
+import { taskEvidenceContractRows } from '../task-evidence-renderer.js';
 import { symbolResolutionBefore, symbolResolutionEmptyMessage, withSymbolResolutionJson } from './symbol-resolution.js';
 
 const handleBottlenecks = budgetedTableCommand('bottlenecks', {
@@ -472,6 +473,7 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
     topologyFrontiers: stringArrayOptionValue(opts, 'frontier'),
     fullLiteralTraversal: booleanOptionValue(opts, 'fullLiteralTraversal'),
     selectionTerms: stringArrayOptionValue(opts, 'selectionTerm'),
+    task: stringOptionValue(opts, 'task'),
   });
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('system-map', args, opts, result, {
@@ -496,6 +498,11 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
   const hasExpandedRegions = presentedRegions.some((region) => region.expanded);
   const hasConnectedBehavior = Boolean(result.behavior?.paths.some((path) => path.stepIds.length > 0));
 
+  if (result.taskEvidence) {
+    console.log('═══ TASK EVIDENCE CONTRACT ═══');
+    for (const row of taskEvidenceContractRows(result.taskEvidence)) console.log(row);
+    console.log();
+  }
   console.log('═══ EXPLICIT ANCHORS ═══');
   for (const anchor of result.anchors) {
     const count =
@@ -1471,6 +1478,10 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
         'Rank already-proven causal drill targets by one normalized locator term; repeat to preserve several concerns',
         collectValues,
         [],
+      ),
+      option(
+        '--task <question>',
+        'Transport the original agent task into an explicit evidence contract; never used to infer graph relevance',
       ),
       option('--gap-recovery-only', 'Render only the --gap-callee targets and one exact batched recovery command'),
     ]),

@@ -1,4 +1,5 @@
 import type { IndexedDefinition } from '../../domain/types.js';
+import { createTaskEvidenceContract, type TaskEvidenceContract } from '../../domain/task-evidence.js';
 import { readRuntimeBoundaryGraph } from '../../analysis/runtime-boundaries/index.js';
 import type { BoundaryLink, BoundaryObservation } from '../../analysis/runtime-boundaries/types.js';
 import { behaviorConstructRange } from '../../source/facts/behavior-skeleton.js';
@@ -170,6 +171,8 @@ export interface AnchorDiscoveryResult {
   scannedFiles: number;
   scannedBytes: number;
   recoveryCommand: string | null;
+  /** Additive task-level checklist; older serialized results may omit it. */
+  taskEvidence?: TaskEvidenceContract;
 }
 
 export interface AnchorDiscoveryOptions {
@@ -361,7 +364,10 @@ export function discoverAnchors(
   const groups = [...crossBoundaryGroups, ...parallelGroups, ...connectedGroups, ...effectGroups]
     .map((group) => ({
       ...group,
-      systemMapCommand: appendSystemMapSelectionTerms(group.systemMapCommand, selectionTerms),
+      systemMapCommand: appendSystemMapTask(
+        appendSystemMapSelectionTerms(group.systemMapCommand, selectionTerms),
+        query,
+      ),
     }))
     .sort(compareGroups);
   const selectedGroups = full ? groups : selectDisplayedGroups(groups, limit);
@@ -386,6 +392,7 @@ export function discoverAnchors(
     omittedGroupCount,
     scannedFiles: inventory.files.length,
     scannedBytes: inventory.scannedBytes,
+    taskEvidence: createTaskEvidenceContract(query),
     recoveryCommand:
       omittedGroupCount === 0
         ? null
@@ -2179,6 +2186,10 @@ function selectSystemMapSelectionTerms(terms: readonly string[], frequencies: Re
 function appendSystemMapSelectionTerms(command: string, terms: readonly string[]): string {
   if (terms.length === 0) return command;
   return `${command} ${terms.map((term) => `--selection-term ${shellArgument(term)}`).join(' ')}`;
+}
+
+function appendSystemMapTask(command: string, task: string): string {
+  return `${command} --task ${shellArgument(task)}`;
 }
 
 function compareGroups(left: AnchorDiscoveryGroup, right: AnchorDiscoveryGroup): number {
