@@ -1625,7 +1625,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
           ...topology.paths.flatMap((path) => path.nodeIds),
         ]).size
       : undefined;
-  let behavior = connectedBehaviorPacket(db, topology, {
+  const behavior = connectedBehaviorPacket(db, topology, {
     focusLocations: opts.behaviorFocusLocations,
     ...(focusedBehaviorNodes ? { maxSteps: focusedBehaviorNodes } : {}),
   });
@@ -1637,10 +1637,6 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
     opts.behaviorFocusLocations ?? [],
   );
   topology.corridor = buildCausalCorridor(topology, { focusLocations: corridorFocusLocations });
-  behavior = connectedBehaviorPacket(db, topology, {
-    focusLocations: opts.behaviorFocusLocations,
-    ...(focusedBehaviorNodes ? { maxSteps: Math.max(focusedBehaviorNodes, topology.corridor.nodeIds.length) } : {}),
-  });
   const nextAnchors = systemMapNextAnchorPacket(db, topology, behavior, {
     sourceAllowed,
     selectionTerms: opts.selectionTerms,

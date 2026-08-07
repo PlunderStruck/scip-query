@@ -109,6 +109,64 @@ describe('causal corridor', () => {
       expect.arrayContaining([expect.objectContaining({ kind: 'edge', id: 'candidate-effect' })]),
     );
   });
+
+  it('uses exact transfer evidence instead of a callable-wide parameter range when focus is narrow', () => {
+    const transfer = (id: string, fromNodeId: string, toNodeId: string, line: number): ExplorationTopologyEdge => ({
+      ...semanticEdge(id, fromNodeId, toNodeId, 'data', 'argument-to-parameter'),
+      kind: 'data-transfer',
+      evidence: [
+        {
+          method: 'fixture-callsite',
+          strength: 'exact',
+          identity: id,
+          location: { file: 'src/fixture.ts', line },
+        },
+      ],
+    });
+    const topology = createExplorationTopology({
+      scope: 'focused parameter transfer fixture',
+      anchors: [
+        {
+          id: 'anchor:handler',
+          kind: 'symbol',
+          query: 'handler',
+          status: 'matched',
+          nodeIds: ['handler'],
+          candidateNodeIds: [],
+          omittedCandidates: 0,
+        },
+      ],
+      nodes: [
+        programNode('handler', 'handler()', ['anchor:handler']),
+        { ...programNode('call-one', 'firstCall()'), location: { file: 'src/fixture.ts', line: 10 } },
+        { ...programNode('call-two', 'secondCall()'), location: { file: 'src/fixture.ts', line: 20 } },
+        {
+          ...programNode('parameter-one', 'payload'),
+          kind: 'parameter',
+          location: { file: 'src/fixture.ts', line: 0, endLine: 30 },
+        },
+        {
+          ...programNode('parameter-two', 'payload'),
+          kind: 'parameter',
+          location: { file: 'src/fixture.ts', line: 0, endLine: 30 },
+        },
+      ],
+      edges: [
+        { ...semanticEdge('call-one', 'handler', 'call-one', 'control', 'call'), disposition: 'emitted' },
+        { ...semanticEdge('call-two', 'handler', 'call-two', 'control', 'call'), disposition: 'emitted' },
+        transfer('transfer-one', 'call-one', 'parameter-one', 10),
+        transfer('transfer-two', 'call-two', 'parameter-two', 20),
+      ],
+    });
+
+    const corridor = buildCausalCorridor(topology, {
+      focusLocations: [{ file: 'src/fixture.ts', line: 10 }],
+    });
+
+    expect(corridor.edgeIds).toContain('transfer-one');
+    expect(corridor.edgeIds).not.toContain('transfer-two');
+    expect(corridor.nodeIds).not.toContain('parameter-two');
+  });
 });
 
 function causalFixture(): ExplorationTopology {

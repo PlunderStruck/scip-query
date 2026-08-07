@@ -365,6 +365,7 @@ function anchorDiscoverySections(result: queries.AnchorDiscoveryResult): ReportS
         `  Displayed anchor sets: ${result.groups.length}; withheld sets or unanalyzed roots: ${result.omittedGroupCount}.`,
         '  cross-boundary-flow joins otherwise separate call groups only when an indexed runtime producer→consumer link and bounded downstream calls connect them; parallel-paths batches disconnected regions only when the query names distinct path vocabulary shared by those regions and does not claim a causal edge; connected-flow follows calls forward from matched owners; shared-callee-owners finds callable owners that converge on common callees without claiming those callees are effects.',
         '  Ranking uses repository vocabulary, compiler ownership, and bounded call connectivity; it does not establish task relevance.',
+        '  Selection gate: reject a set whose roots and matched terms omit an object, branch, or stage named by a material claim. Connectivity cannot make a partial set eligible. Among sets that cover every named part, use the first ranked eligible set; use parallel-paths when no connected-flow covers them together.',
         '  Anchor roots are locator evidence, not behavior evidence. Select one set, run its next-abstraction command to transport completion, and only then decide whether source inspection is necessary. Never run a map and inspect concurrently.',
         ...(result.recoveryCommand
           ? [

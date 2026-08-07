@@ -240,6 +240,50 @@ describe('anchor discovery', () => {
     }
   });
 
+  it('ranks discriminative query coverage ahead of a larger set of common repository terms', () => {
+    fixtureRoot = mkdtempSync(join(tmpdir(), 'scip-anchor-discriminative-coverage-'));
+    const genericFiles = Array.from({ length: 6 }, (_, index) => ({
+      path: `src/generic-${index}.ts`,
+      leaf: `processRequestWorkflowHandler${index}`,
+    }));
+    const specific = { path: 'src/bash.ts', leaf: 'classifyForegroundBash' };
+    writeFixtureFiles(
+      fixtureRoot,
+      Object.fromEntries(
+        [...genericFiles, specific].map(({ path, leaf }) => [
+          path,
+          [`export function ${leaf}() {`, `  return '${leaf}';`, '}'],
+        ]),
+      ),
+    );
+    const fixture = evidenceFixtureDb(join(fixtureRoot, 'index.db'));
+    [...genericFiles, specific].forEach(({ path, leaf }, index) => {
+      const id = index + 1;
+      fixture
+        .document(id, 'typescript', path)
+        .symbol(id, `scip-typescript npm fixture 1.0.0 ${path}/\`${path.split('/').at(-1)}\`/${leaf}().`, leaf, 12)
+        .definition(id, id, id, 0, 0, 2, 1);
+    });
+    fixture.write();
+    const db = new ScipDatabase({
+      dbPath: join(fixtureRoot, 'index.db'),
+      indexPath: join(fixtureRoot, 'index.scip'),
+      projectRoot: fixtureRoot,
+    });
+    try {
+      const result = discoverAnchors(
+        db,
+        'How does the process request workflow handler compare with foreground bash classification?',
+        { full: true, semantic: false },
+      );
+
+      expect(result.groups[0]?.roots[0]?.leaf).toBe('classifyForegroundBash');
+      expect(result.groups[0]?.matchedTerms).toEqual(expect.arrayContaining(['foreground', 'bash']));
+    } finally {
+      db.close();
+    }
+  });
+
   it('prefers causally evidenced implementations on both sides of a parallel-path comparison', () => {
     fixtureRoot = mkdtempSync(join(tmpdir(), 'scip-anchor-parallel-connected-'));
     writeFixtureFiles(fixtureRoot, {

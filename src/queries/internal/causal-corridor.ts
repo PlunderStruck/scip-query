@@ -43,13 +43,15 @@ export function buildCausalCorridor(
 ): ExplorationCausalCorridor {
   const nodeById = new Map(topology.nodes.map((node) => [node.id, node]));
   const focusedNodeIds = focusedProgramNodeIds(topology.nodes, options.focusLocations);
+  const focusedEdgeIds = focusedProgramEdgeIds(topology.edges, options.focusLocations);
+  const focusedEdgeNodeIds = focusedProgramEdgeNodeIds(topology.edges, focusedEdgeIds);
   const pathEdgeIds = new Set(topology.paths.flatMap((path) => path.edgeIds));
   const starts = sortedUnique(
     topology.anchors.filter((anchor) => anchor.status === 'matched').flatMap((anchor) => anchor.nodeIds),
   );
   const reliableEdges = topology.edges.filter(isReliableCausalEdge);
   const traversableEdges = reliableEdges.filter((edge) =>
-    isTraversableEdge(edge, focusedNodeIds, nodeById, pathEdgeIds),
+    isTraversableEdge(edge, focusedNodeIds, focusedEdgeIds, focusedEdgeNodeIds, nodeById, pathEdgeIds),
   );
   const forward = reachable(starts, traversableEdges, 'forward');
   const outcomes = mechanicalOutcomeNodeIds(forward, traversableEdges);
@@ -64,7 +66,7 @@ export function buildCausalCorridor(
 
   const protectedNodes = new Set(baseNodes);
   const protectedEdges = new Set(baseEdges);
-  closeMaterialFacts(reliableEdges, protectedNodes, protectedEdges, focusedNodeIds);
+  closeMaterialFacts(reliableEdges, protectedNodes, protectedEdges, focusedNodeIds, focusedEdgeIds);
 
   const touchingFrontiers = topology.frontiers.filter((frontier) => frontierTouches(frontier, protectedNodes));
   const unresolvedFrontierIds = sortedUnique(
@@ -182,12 +184,13 @@ function closeMaterialFacts(
   protectedNodes: Set<string>,
   protectedEdges: Set<string>,
   focusedNodeIds: ReadonlySet<string> | null,
+  focusedEdgeIds: ReadonlySet<string> | null,
 ): void {
   let changed = true;
   while (changed) {
     changed = false;
     for (const edge of reliableEdges) {
-      if (!isClosureEdge(edge, protectedNodes, focusedNodeIds)) continue;
+      if (!isClosureEdge(edge, protectedNodes, focusedNodeIds, focusedEdgeIds)) continue;
       if (!protectedEdges.has(edge.id)) {
         protectedEdges.add(edge.id);
         changed = true;
@@ -208,6 +211,7 @@ function isClosureEdge(
   edge: ExplorationTopologyEdge,
   protectedNodes: ReadonlySet<string>,
   focusedNodeIds: ReadonlySet<string> | null,
+  focusedEdgeIds: ReadonlySet<string> | null,
 ): boolean {
   const fromProtected = protectedNodes.has(edge.fromNodeId);
   const toProtected = protectedNodes.has(edge.toNodeId);
@@ -228,7 +232,13 @@ function isClosureEdge(
       return true;
     }
     if (semantic.family === 'data') {
-      return toProtected && (fromProtected || focusedNodeIds === null || focusedNodeIds.has(edge.fromNodeId));
+      return (
+        toProtected &&
+        (fromProtected ||
+          focusedNodeIds === null ||
+          focusedNodeIds.has(edge.fromNodeId) ||
+          focusedEdgeIds?.has(edge.id) === true)
+      );
     }
     if (semantic.family === 'control') {
       if (isNavigationSemantic(semantic)) return false;
@@ -303,12 +313,16 @@ function reachable(
 function isTraversableEdge(
   edge: ExplorationTopologyEdge,
   focusedNodeIds: ReadonlySet<string> | null,
+  focusedEdgeIds: ReadonlySet<string> | null,
+  focusedEdgeNodeIds: ReadonlySet<string> | null,
   nodeById: ReadonlyMap<string, ExplorationTopologyNode>,
   pathEdgeIds: ReadonlySet<string>,
 ): boolean {
   return (edge.semantics ?? []).some((semantic) => {
     if (semantic.family === 'identity' && OWNERSHIP_SUBTYPES.has(semantic.subtype)) {
-      return focusedNodeIds === null || focusedNodeIds.has(edge.toNodeId);
+      return (
+        focusedNodeIds === null || focusedNodeIds.has(edge.toNodeId) || focusedEdgeNodeIds?.has(edge.toNodeId) === true
+      );
     }
     if (!TRAVERSAL_FAMILIES.has(semantic.family)) return false;
     if (isNavigationSemantic(semantic)) return edge.disposition === 'emitted' || pathEdgeIds.has(edge.id);
@@ -318,7 +332,11 @@ function isTraversableEdge(
     if (focusedNodeIds === null) return true;
     if (semantic.family === 'state') return focusedNodeIds.has(edge.fromNodeId);
     if (semantic.family === 'data') {
-      return focusedNodeIds.has(edge.fromNodeId) || focusedNodeIds.has(edge.toNodeId);
+      return (
+        focusedNodeIds.has(edge.fromNodeId) ||
+        focusedNodeIds.has(edge.toNodeId) ||
+        focusedEdgeIds?.has(edge.id) === true
+      );
     }
     if (semantic.family === 'temporal') {
       if (semantic.subtype === 'lexical-successor') {
@@ -370,11 +388,51 @@ function focusedProgramNodeIds(
     nodes
       .filter((node) => {
         if (!node.location) return false;
+        // Parameter nodes currently inherit their callable's full source range.
+        // Treating that range as a parameter-level focus would select every
+        // parameter transfer in a large focused function. The transfer edge's
+        // exact callsite evidence is the focus authority instead.
+        if (node.kind === 'parameter') return false;
         const lines = linesByFile.get(node.location.file) ?? [];
         const endLine = node.location.endLine ?? node.location.line;
         return lines.some((line) => line >= node.location!.line && line <= endLine);
       })
       .map((node) => node.id),
+  );
+}
+
+function focusedProgramEdgeIds(
+  edges: readonly ExplorationTopologyEdge[],
+  locations: readonly ExplorationSourceLocation[] | undefined,
+): Set<string> | null {
+  if (!locations) return null;
+  const linesByFile = new Map<string, number[]>();
+  for (const location of locations) {
+    const lines = linesByFile.get(location.file) ?? [];
+    lines.push(location.line);
+    linesByFile.set(location.file, lines);
+  }
+  return new Set(
+    edges
+      .filter((edge) =>
+        edge.evidence.some((evidence) => {
+          if (!evidence.location) return false;
+          const lines = linesByFile.get(evidence.location.file) ?? [];
+          const endLine = evidence.location.endLine ?? evidence.location.line;
+          return lines.some((line) => line >= evidence.location!.line && line <= endLine);
+        }),
+      )
+      .map((edge) => edge.id),
+  );
+}
+
+function focusedProgramEdgeNodeIds(
+  edges: readonly ExplorationTopologyEdge[],
+  focusedEdgeIds: ReadonlySet<string> | null,
+): Set<string> | null {
+  if (focusedEdgeIds === null) return null;
+  return new Set(
+    edges.filter((edge) => focusedEdgeIds.has(edge.id)).flatMap((edge) => [edge.fromNodeId, edge.toNodeId]),
   );
 }
 

@@ -1052,7 +1052,7 @@ function systemMapBehaviorFocus(value: string): { file: string; line: number } {
   return { file: match[1]!, line: display - 1 };
 }
 
-function renderCausalCorridor(topology: ExplorationTopology): void {
+export function renderCausalCorridor(topology: ExplorationTopology): void {
   const corridor = topology.corridor;
   if (!corridor) return;
   const nodeById = new Map(topology.nodes.map((node) => [node.id, node]));
@@ -1065,6 +1065,18 @@ function renderCausalCorridor(topology: ExplorationTopology): void {
     edge: (typeof topology.edges)[number];
     semantic: NonNullable<(typeof topology.edges)[number]['semantics']>[number];
   }> = [];
+  const groupedFacts = new Map<
+    string,
+    {
+      family: string;
+      subtype: string;
+      ownerLabel: string;
+      ownerLocation: { file: string; line: number } | null;
+      count: number;
+      targetLabels: Set<string>;
+      values: Set<string>;
+    }
+  >();
   for (const edgeId of corridor.edgeIds) {
     const edge = edgeById.get(edgeId);
     if (!edge) continue;
@@ -1080,6 +1092,25 @@ function renderCausalCorridor(topology: ExplorationTopology): void {
         const counts = localControlByOwner.get(ownerId) ?? new Map<string, number>();
         counts.set(semantic.subtype, (counts.get(semantic.subtype) ?? 0) + 1);
         localControlByOwner.set(ownerId, counts);
+      } else if (shouldGroupCorridorSemantic(semantic.family, semantic.subtype)) {
+        const owner = corridorFactOwner(edge.fromNodeId, nodeById);
+        const key = `${semantic.family}\0${semantic.subtype}\0${owner.label}`;
+        const group = groupedFacts.get(key) ?? {
+          family: semantic.family,
+          subtype: semantic.subtype,
+          ownerLabel: owner.label,
+          ownerLocation: owner.location,
+          count: 0,
+          targetLabels: new Set<string>(),
+          values: new Set<string>(),
+        };
+        group.count += 1;
+        group.targetLabels.add(compactSystemMapIdentity(nodeById.get(edge.toNodeId)?.label ?? edge.toNodeId));
+        const value = semantic.attributes?.['value'];
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+          group.values.add(String(value));
+        }
+        groupedFacts.set(key, group);
       } else {
         materialFacts.push({ edge, semantic });
       }
@@ -1112,6 +1143,27 @@ function renderCausalCorridor(topology: ExplorationTopology): void {
       .join(', ');
     console.log(`  [local-control] ${labels([ownerId])} — ${summary}`);
   }
+  for (const group of [...groupedFacts.values()].sort(
+    (left, right) =>
+      left.ownerLabel.localeCompare(right.ownerLabel) ||
+      left.family.localeCompare(right.family) ||
+      left.subtype.localeCompare(right.subtype),
+  )) {
+    const targets =
+      group.family === 'control'
+        ? `; targets=[${[...group.targetLabels].sort().join(', ')}]`
+        : group.family === 'data' && group.subtype === 'constant-to-parameter'
+          ? `; values=[${[...group.values].sort().join(', ')}]`
+          : group.family === 'data'
+            ? `; ${group.targetLabels.size} parameter target(s)`
+            : '';
+    const location = group.ownerLocation
+      ? ` @ ${group.ownerLocation.file}:${displayLine(group.ownerLocation.line)}`
+      : '';
+    console.log(
+      `  [${group.family}:${group.subtype}; grouped] ${group.ownerLabel} — ${group.count} proved edge(s)${targets}${location}`,
+    );
+  }
   for (const { edge, semantic } of materialFacts) {
     const qualifiers = {
       ...(semantic.context ?? {}),
@@ -1131,7 +1183,34 @@ function renderCausalCorridor(topology: ExplorationTopology): void {
     `  Frontier manifest: ${corridor.accountedFrontierIds.length} accounted; ` +
       `${corridor.unresolvedFrontierIds.length} unsupported; ${corridor.unresolvedEdgeIds.length} candidate/unknown edge(s).`,
   );
+  if (groupedFacts.size > 0) {
+    console.log(
+      '  Grouped edge identities remain in the structured corridor; inspect a named owner only when that flow is material.',
+    );
+  }
   if (corridor.status === 'incomplete') console.log(`  ${corridor.explanation}`);
+}
+
+function shouldGroupCorridorSemantic(family: string, subtype: string): boolean {
+  return (
+    (family === 'control' && isRenderedNavigationSemantic(subtype)) ||
+    (family === 'data' && ['argument-to-parameter', 'constant-to-parameter'].includes(subtype)) ||
+    (family === 'temporal' && ['await-completion-before', 'awaits-completion', 'lexical-successor'].includes(subtype))
+  );
+}
+
+function corridorFactOwner(
+  nodeId: string,
+  nodeById: ReadonlyMap<string, ExplorationTopology['nodes'][number]>,
+): { label: string; location: { file: string; line: number } | null } {
+  const node = nodeById.get(nodeId);
+  const ownerNodeId = typeof node?.attributes['ownerNodeId'] === 'string' ? node.attributes['ownerNodeId'] : null;
+  const ownerNode = ownerNodeId ? nodeById.get(ownerNodeId) : null;
+  const ownerSymbol = typeof node?.attributes['ownerSymbol'] === 'string' ? node.attributes['ownerSymbol'] : null;
+  return {
+    label: compactSystemMapIdentity(ownerNode?.label ?? ownerSymbol ?? node?.label ?? nodeId),
+    location: ownerNode?.location ?? node?.location ?? null,
+  };
 }
 
 function isRenderedNavigationSemantic(subtype: string): boolean {

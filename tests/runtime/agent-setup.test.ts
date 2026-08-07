@@ -45,7 +45,10 @@ describe('setupAgent', () => {
     expect(agentsMd).toContain('scip-query system-map');
     expect(agentsMd).toContain('shared-callee-owners');
     expect(agentsMd).toContain('parallel-paths');
-    expect(agentsMd).toContain('connected-flow` whose displayed roots already cover every named side');
+    expect(agentsMd).toContain('connected-flow` whose displayed roots already cover every named material part');
+    expect(agentsMd).toContain('Do not choose a set merely because it is connected');
+    expect(agentsMd).toContain('reject any set whose displayed roots and matched terms omit');
+    expect(agentsMd).toContain('first ranked eligible set');
     expect(agentsMd).toContain('upstream callers');
     expect(agentsMd).toContain('result-producing callbacks');
     expect(agentsMd).toContain('Anchor roots are locator evidence, not behavior evidence');

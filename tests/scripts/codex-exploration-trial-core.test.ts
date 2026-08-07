@@ -150,7 +150,10 @@ describe('Codex exploration trial core', () => {
     expect(prompt).toContain('scip-query as the only repository exploration surface');
     expect(prompt).toContain('cross-boundary-flow');
     expect(prompt).toContain('parallel-paths');
-    expect(prompt).toContain('connected-flow whose displayed roots already cover every named side');
+    expect(prompt).toContain('connected-flow whose displayed roots already cover every named material part');
+    expect(prompt).toContain('Do not choose a set merely because it is connected');
+    expect(prompt).toContain('reject any set whose displayed roots and matched terms omit');
+    expect(prompt).toContain('first ranked eligible set');
     expect(prompt).toContain('upstream callers');
     expect(prompt).toContain('result-producing callbacks');
     expect(prompt).toContain('Use exactly one initial locator');

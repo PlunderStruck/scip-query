@@ -355,6 +355,7 @@ export function discoverAnchors(
     index,
     connectedGroups,
     definitionBySymbol,
+    candidateFrequencies,
     options.semantic !== false,
   );
   const selectionTerms = selectSystemMapSelectionTerms(normalizedTerms, candidateFrequencies);
@@ -363,8 +364,8 @@ export function discoverAnchors(
       ...group,
       systemMapCommand: appendSystemMapSelectionTerms(group.systemMapCommand, selectionTerms),
     }))
-    .sort(compareGroups);
-  const selectedGroups = full ? groups : selectDisplayedGroups(groups, limit);
+    .sort((left, right) => compareGroups(left, right, candidateFrequencies));
+  const selectedGroups = full ? groups : selectDisplayedGroups(groups, limit, candidateFrequencies);
   const matchedTerms = normalizedTerms.filter((term) => candidateFrequencies.has(term));
   const unmatchedTerms = normalizedTerms.filter((term) => !candidateFrequencies.has(term));
   const omittedRootCount = Math.max(0, candidateRoots.length - analyzedRootCount);
@@ -1010,7 +1011,7 @@ function parallelPathGroups(
         right.connectedSides - left.connectedSides ||
         left.sharedOrder - right.sharedOrder ||
         right.group.matchedTerms.length - left.group.matchedTerms.length ||
-        compareGroups(left.group, right.group),
+        compareGroups(left.group, right.group, frequencies),
     )
     .slice(0, MAX_PARALLEL_PATH_GROUPS)
     .map((candidate) => candidate.group);
@@ -1057,6 +1058,7 @@ function crossBoundaryFlowGroups(
   index: ProjectIndex,
   groups: readonly AnchorDiscoveryGroup[],
   definitionBySymbol: ReadonlyMap<string, IndexedDefinition>,
+  frequencies: ReadonlyMap<string, number>,
   semantic: boolean,
 ): AnchorDiscoveryGroup[] {
   const graph = readRuntimeBoundaryGraph(db);
@@ -1064,7 +1066,9 @@ function crossBoundaryFlowGroups(
   const observations = new Map(graph.observations.map((observation) => [observation.id, observation]));
   const continuationCache = new Map<string, BoundaryContinuation>();
   const composedByIdentity = new Map<string, AnchorDiscoveryGroup>();
-  const sourceGroups = [...groups].sort(compareGroups).slice(0, MAX_COMPOSITION_SOURCE_GROUPS);
+  const sourceGroups = [...groups]
+    .sort((left, right) => compareGroups(left, right, frequencies))
+    .slice(0, MAX_COMPOSITION_SOURCE_GROUPS);
   const links = graph.links
     .filter((link): link is BoundaryLink & { strength: 'exact' | 'derived' } => link.strength !== 'candidate')
     .sort(
@@ -1097,7 +1101,7 @@ function crossBoundaryFlowGroups(
         .sort(
           (left, right) =>
             candidateIdentityOverlap(producerCandidate, right) - candidateIdentityOverlap(producerCandidate, left) ||
-            compareGroups(left, right),
+            compareGroups(left, right, frequencies),
         )
         .slice(0, MAX_COMPOSITION_DESTINATION_GROUPS);
       if (destinationGroups.length === 0) continue;
@@ -1157,7 +1161,7 @@ function crossBoundaryFlowGroups(
   for (const [identity, group] of composedByIdentity) {
     const sourceGroupId = identity.slice(0, identity.indexOf('\0'));
     const existing = bestBySourceGroup.get(sourceGroupId);
-    if (!existing || compareGroups(group, existing) < 0) bestBySourceGroup.set(sourceGroupId, group);
+    if (!existing || compareGroups(group, existing, frequencies) < 0) bestBySourceGroup.set(sourceGroupId, group);
   }
   return [...bestBySourceGroup.values()];
 }
@@ -2181,7 +2185,11 @@ function appendSystemMapSelectionTerms(command: string, terms: readonly string[]
   return `${command} ${terms.map((term) => `--selection-term ${shellArgument(term)}`).join(' ')}`;
 }
 
-function compareGroups(left: AnchorDiscoveryGroup, right: AnchorDiscoveryGroup): number {
+function compareGroups(
+  left: AnchorDiscoveryGroup,
+  right: AnchorDiscoveryGroup,
+  frequencies: ReadonlyMap<string, number>,
+): number {
   const leftSymbolTerms = new Set(left.roots.flatMap((root) => root.symbolMatchedTerms));
   const rightSymbolTerms = new Set(right.roots.flatMap((root) => root.symbolMatchedTerms));
   return (
@@ -2194,6 +2202,7 @@ function compareGroups(left: AnchorDiscoveryGroup, right: AnchorDiscoveryGroup):
         (right.parallelOrchestrationSides ?? 0) - (left.parallelOrchestrationSides ?? 0) ||
         (right.parallelSharedPathTerms?.length ?? 0) - (left.parallelSharedPathTerms?.length ?? 0)
       : 0) ||
+    groupDiscriminativeCoverage(right, frequencies) - groupDiscriminativeCoverage(left, frequencies) ||
     right.matchedTerms.length - left.matchedTerms.length ||
     Math.max(...right.roots.map((root) => root.symbolPhraseLength)) -
       Math.max(...left.roots.map((root) => root.symbolPhraseLength)) ||
@@ -2203,6 +2212,10 @@ function compareGroups(left: AnchorDiscoveryGroup, right: AnchorDiscoveryGroup):
     left.relationCount - right.relationCount ||
     left.id.localeCompare(right.id)
   );
+}
+
+function groupDiscriminativeCoverage(group: AnchorDiscoveryGroup, frequencies: ReadonlyMap<string, number>): number {
+  return group.matchedTerms.reduce((score, term) => score + 1 / Math.max(1, frequencies.get(term) ?? 1), 0);
 }
 
 function groupFileKindRank(group: AnchorDiscoveryGroup): number {
@@ -2225,7 +2238,11 @@ function groupConnectivityRank(group: AnchorDiscoveryGroup): number {
  * only when its anchors or relations overlap a forward group that already made
  * the ranked shortlist. The query's English phrasing does not choose the kind.
  */
-function selectDisplayedGroups(rankedGroups: readonly AnchorDiscoveryGroup[], limit: number): AnchorDiscoveryGroup[] {
+function selectDisplayedGroups(
+  rankedGroups: readonly AnchorDiscoveryGroup[],
+  limit: number,
+  frequencies: ReadonlyMap<string, number>,
+): AnchorDiscoveryGroup[] {
   const selected = rankedGroups.slice(0, limit);
   if (limit < 2 || selected.some((group) => group.kind === 'shared-callee-owners')) return selected;
 
@@ -2238,7 +2255,7 @@ function selectDisplayedGroups(rankedGroups: readonly AnchorDiscoveryGroup[], li
       .filter(({ overlap }) => overlap > 0)
       .sort(
         ({ group: left, overlap: leftOverlap }, { group: right, overlap: rightOverlap }) =>
-          rightOverlap - leftOverlap || compareGroups(left, right),
+          rightOverlap - leftOverlap || compareGroups(left, right, frequencies),
       )[0]?.group;
     if (!companion) continue;
 
@@ -2246,7 +2263,7 @@ function selectDisplayedGroups(rankedGroups: readonly AnchorDiscoveryGroup[], li
     while (replacement >= 0 && selected[replacement] === flow) replacement -= 1;
     if (replacement < 0) return selected;
     selected[replacement] = companion;
-    return [...selected].sort(compareGroups);
+    return [...selected].sort((left, right) => compareGroups(left, right, frequencies));
   }
   return selected;
 }

@@ -1613,6 +1613,94 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
+  it('does not materialize owner source merely because the causal corridor protects an internal fact', () => {
+    root = mkdtempSync(join(tmpdir(), 'scip-system-map-corridor-source-budget-'));
+    writeFixtureFiles(root, {
+      'src/flow.ts': [
+        'export function selectedEntry() { return true; }',
+        'export function unrelatedOwner(payload: string) { return payload.length; }',
+      ],
+    });
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/flow.ts').write();
+    const db = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
+    try {
+      const topology = createExplorationTopology({
+        anchors: [
+          {
+            id: 'anchor:selected',
+            kind: 'symbol',
+            query: 'selectedEntry',
+            status: 'matched',
+            nodeIds: ['selected'],
+            candidateNodeIds: [],
+            omittedCandidates: 0,
+          },
+        ],
+        nodes: [
+          {
+            id: 'selected',
+            kind: 'symbol',
+            label: 'selectedEntry',
+            disposition: 'emitted',
+            location: { file: 'src/flow.ts', line: 0, endLine: 0 },
+            anchorIds: ['anchor:selected'],
+            attributes: { leaf: 'selectedEntry' },
+          },
+          {
+            id: 'unrelated',
+            kind: 'symbol',
+            label: 'unrelatedOwner',
+            disposition: 'emitted',
+            location: { file: 'src/flow.ts', line: 1, endLine: 1 },
+            anchorIds: [],
+            attributes: { leaf: 'unrelatedOwner' },
+          },
+          {
+            id: 'parameter:payload',
+            kind: 'parameter',
+            label: 'payload',
+            disposition: 'emitted',
+            location: { file: 'src/flow.ts', line: 1, endLine: 1 },
+            anchorIds: [],
+            attributes: { ownerNodeId: 'unrelated', ownerSymbol: 'unrelatedOwner' },
+          },
+        ],
+        edges: [],
+        scope: 'corridor source budget fixture',
+      });
+      topology.corridor = {
+        schemaVersion: 1,
+        status: 'complete',
+        startNodeIds: ['selected'],
+        outcomeNodeIds: ['selected'],
+        baseNodeIds: ['selected'],
+        baseEdgeIds: [],
+        nodeIds: ['selected', 'parameter:payload'],
+        edgeIds: [],
+        accountedFrontierIds: [],
+        unresolvedFrontierIds: [],
+        unresolvedEdgeIds: [],
+        coverage: {
+          protectedNodes: 2,
+          protectedEdges: 0,
+          baseNodes: 1,
+          baseEdges: 0,
+          accountedFrontiers: 0,
+          unresolvedFrontiers: 0,
+          unresolvedEdges: 0,
+        },
+        explanation: 'fixture',
+      };
+
+      const packet = connectedBehaviorPacket(db, topology);
+
+      expect(packet.steps.map((step) => step.label)).toEqual(['selectedEntry']);
+    } finally {
+      db.close();
+    }
+  });
+
   it('traverses only the requested relation families', () => {
     const db = createSystemMapDb();
     try {

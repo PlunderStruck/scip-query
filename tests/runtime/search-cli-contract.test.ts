@@ -204,6 +204,8 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
     expect(invocation.stdout).toContain("--symbol 'src/anchor-store.ts:2-5'");
     expect(invocation.stdout).toContain('next abstraction (run to completion before any inspect)');
     expect(invocation.stdout).toContain('Anchor roots are locator evidence, not behavior evidence.');
+    expect(invocation.stdout).toContain('Connectivity cannot make a partial set eligible.');
+    expect(invocation.stdout).toContain('use the first ranked eligible set');
     expect(invocation.stdout).toContain('Never run a map and inspect concurrently.');
     expect(invocation.stdout).not.toContain('const localState');
   });
