@@ -49,11 +49,25 @@ describe('system-map program edge semantics', () => {
         kind: 'runtime-boundary',
         evidence: 'runtime-boundary:carrier.discriminator',
         runtimeBoundaryKey: 'carrier\u0000work_session_stream_events',
-        fromBoundaryParticipant: { protocol: 'http' },
-        toBoundaryParticipant: { protocol: 'http' },
+        fromBoundaryParticipant: { protocol: 'http', action: 'dispatch', role: 'producer' },
+        toBoundaryParticipant: { protocol: 'http', action: 'handle', role: 'consumer' },
       }),
     ).toEqual([
       expect.objectContaining({ family: 'control', subtype: 'runtime-handoff' }),
+      {
+        family: 'control',
+        subtype: 'discriminator-dispatch',
+        context: {
+          crossesRuntimeBoundary: true,
+          protocol: 'http',
+          runtimeKey: 'carrier\u0000work_session_stream_events',
+        },
+        attributes: {
+          joinRule: 'carrier.discriminator',
+          producerAction: 'dispatch',
+          consumerAction: 'handle',
+        },
+      },
       {
         family: 'data',
         subtype: 'serialized-discriminator-transfer',

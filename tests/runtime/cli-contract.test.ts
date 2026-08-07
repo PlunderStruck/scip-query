@@ -65,6 +65,7 @@ const PRIVATE_QUERY_SOURCE_PATHS = {
   'source-inspection-selection': 'src/queries/navigation/source-inspection-selection.ts',
   'source-snippet': 'src/queries/navigation/source-snippet.ts',
   'architecture-baseline': 'src/queries/graph/architecture-baseline.ts',
+  'program-control-edges': 'src/queries/graph/program-control-edges.ts',
   'program-data-edges': 'src/queries/graph/program-data-edges.ts',
   'system-map-edge-semantics': 'src/queries/graph/system-map-edge-semantics.ts',
   'test-boundary-policy': 'src/queries/graph/test-boundary-policy.ts',

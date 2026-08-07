@@ -1101,6 +1101,70 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
+  it('connects a predicate to both sibling outcomes and their distinct terminal behavior', () => {
+    root = mkdtempSync(join(tmpdir(), 'scip-system-map-control-dependence-'));
+    const projectRoot = join(root, 'project');
+    const dbPath = join(root, 'index.db');
+    writeFixtureFiles(projectRoot, {
+      'src/control.ts': [
+        'export function decide(ready: boolean) {',
+        '  if (ready) {',
+        '    return "accepted";',
+        '  } else {',
+        '    throw new Error("rejected");',
+        '  }',
+        '}',
+      ],
+      'src/selection.ts': [
+        'export function select(kind: string) {',
+        '  switch (kind) {',
+        '    case "known": return true;',
+        '    default: throw new Error("unknown");',
+        '  }',
+        '}',
+      ],
+    });
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/control.ts')
+      .document(2, 'typescript', 'src/selection.ts')
+      .write();
+    const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(root, 'index.scip') });
+    try {
+      const result = systemMap(db, {
+        symbols: ['src/control.ts:0-6', 'src/selection.ts:0-5'],
+        maxDepth: 1,
+        relations: ['call'],
+      });
+      const predicate = result.topology?.nodes.find(
+        (node) => node.kind === 'control-predicate' && node.label.includes('ready'),
+      );
+      const governed =
+        result.topology?.edges
+          .filter((edge) => edge.fromNodeId === predicate?.id)
+          .flatMap((edge) => edge.semantics ?? [])
+          .filter((semantic) => semantic.family === 'control')
+          .map((semantic) => semantic.subtype) ?? [];
+
+      expect(predicate).toBeDefined();
+      expect(governed).toEqual(
+        expect.arrayContaining([
+          'predicate-consequence',
+          'predicate-alternative',
+          'predicate-return',
+          'predicate-throw',
+        ]),
+      );
+      const allControlSubtypes =
+        result.topology?.edges
+          .flatMap((edge) => edge.semantics ?? [])
+          .filter((semantic) => semantic.family === 'control')
+          .map((semantic) => semantic.subtype) ?? [];
+      expect(allControlSubtypes).toEqual(expect.arrayContaining(['predicate-case', 'predicate-default']));
+    } finally {
+      db.close();
+    }
+  });
+
   it('compresses a multiline governing predicate as one complete connector line', () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-multiline-connector-predicate-'));
     const projectRoot = join(root, 'project');

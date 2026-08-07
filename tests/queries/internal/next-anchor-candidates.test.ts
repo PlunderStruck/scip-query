@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   coverageDiverseNextAnchors,
+  callableReferenceCausalRole,
   deduplicateRankedAnchors,
   nextAnchorInspectSafe,
   nextAnchorSelectionTermRank,
@@ -20,6 +21,12 @@ const SOURCE_SYMBOL = 'scip-typescript npm fixture 1.0.0 src/`registry.ts`/expos
 const HANDLER_SYMBOL = 'scip-typescript npm fixture 1.0.0 src/`handler.ts`/handleEvent().';
 
 describe('next-anchor target selection', () => {
+  it('distinguishes result-producing callbacks from ordinary callable references', () => {
+    expect(callableReferenceCausalRole(['call', 'return'])).toBe('result-callback');
+    expect(callableReferenceCausalRole(['call', 'mutation'])).toBe('result-callback');
+    expect(callableReferenceCausalRole(['return', 'shape'])).toBe('callable-reference');
+  });
+
   it('distinguishes reachable object-state writes from local scalar bookkeeping', () => {
     expect(writesThroughObjectIdentity('cur = c;')).toBe(false);
     expect(writesThroughObjectIdentity('quote = null;')).toBe(false);

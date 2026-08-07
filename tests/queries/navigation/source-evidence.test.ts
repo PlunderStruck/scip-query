@@ -14,7 +14,12 @@ import {
   type BoundaryEvidenceStrength,
   type BoundaryObservation,
 } from '../../../src/queries/internal/runtime-boundary-evidence.js';
-import { behaviorReceipt, behaviorReceipts, behaviorSkeleton } from '../../../src/source/facts/behavior-skeleton.js';
+import {
+  behaviorControlAnalysis,
+  behaviorReceipt,
+  behaviorReceipts,
+  behaviorSkeleton,
+} from '../../../src/source/facts/behavior-skeleton.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../../fixtures/evidence-fixture.js';
 
@@ -729,6 +734,32 @@ describe('related source evidence', () => {
         ]),
       );
       expect(outline?.lines.find((line) => line.line <= 13 && line.endLine >= 13)?.signals).toContain('anchor');
+    } finally {
+      db.close();
+    }
+  });
+
+  it('derives sibling, loop, exception, cleanup, and terminal control facts from the behavior AST', () => {
+    const db = createSourceEvidenceDb();
+    try {
+      const analysis = behaviorControlAnalysis(db, 'src/outline-sensitive.ts', 0, 22);
+      const subtypes = analysis?.facts.map((fact) => fact.subtype) ?? [];
+
+      expect(subtypes).toEqual(
+        expect.arrayContaining([
+          'predicate-consequence',
+          'predicate-fallthrough',
+          'loop-iteration',
+          'loop-exit',
+          'exception-handler',
+          'finally-cleanup',
+          'handler-throw',
+        ]),
+      );
+      expect(analysis?.terminals.map((terminal) => terminal.label)).toEqual(
+        expect.arrayContaining(['throw error;', 'return saved;']),
+      );
+      expect(analysis?.unsupported).toEqual([]);
     } finally {
       db.close();
     }

@@ -67,6 +67,42 @@ export interface BehaviorConstructRange {
   endLine: number;
 }
 
+export type BehaviorControlSubtype =
+  | 'predicate-consequence'
+  | 'predicate-alternative'
+  | 'predicate-fallthrough'
+  | 'predicate-case'
+  | 'predicate-default'
+  | 'predicate-return'
+  | 'predicate-throw'
+  | 'loop-iteration'
+  | 'loop-exit'
+  | 'exception-handler'
+  | 'finally-cleanup'
+  | 'handler-return'
+  | 'handler-throw';
+
+export interface BehaviorControlConstruct {
+  kind: 'predicate' | 'scope' | 'outcome' | 'terminal' | 'handler';
+  label: string;
+  startLine: number;
+  endLine: number;
+  implicit: boolean;
+}
+
+export interface BehaviorControlFact {
+  controller: BehaviorControlConstruct;
+  outcome: BehaviorControlConstruct;
+  subtype: BehaviorControlSubtype;
+  attributes: Record<string, string | boolean>;
+}
+
+export interface BehaviorControlAnalysis {
+  facts: BehaviorControlFact[];
+  terminals: BehaviorControlConstruct[];
+  unsupported: Array<{ startLine: number; endLine: number; reason: string }>;
+}
+
 export interface BehaviorReceiptLine {
   line: number;
   signals: Array<BehaviorSignal | 'lifecycle'>;
@@ -305,6 +341,50 @@ export function governingBehaviorControlLines(
 }
 
 /**
+ * Recover exact control-dependence facts from the same parser evidence used by
+ * behavior outlines. Branch outcomes are regions, so every statement inside a
+ * branch remains covered without emitting one redundant edge per statement.
+ */
+export function behaviorControlAnalysis(
+  db: ScipDatabase,
+  relativePath: string,
+  startLine: number,
+  endLine: number,
+): BehaviorControlAnalysis | null {
+  const tree = getAst(db, relativePath);
+  if (!tree) return null;
+  const root =
+    findCallableNode(tree.rootNode, startLine, endLine) ?? smallestNodeCoveringLines(tree.rootNode, startLine, endLine);
+  if (!root) return null;
+
+  const facts: BehaviorControlFact[] = [];
+  const terminals = terminalControlConstructs(root);
+  const unsupported: BehaviorControlAnalysis['unsupported'] = [];
+
+  walkControlNodes(root, root, (node) => {
+    if (IF_NODE_TYPES.has(node.type) || CONDITIONAL_EXPRESSION_NODE_TYPES.has(node.type)) {
+      addConditionalControlFacts(facts, unsupported, node);
+      return;
+    }
+    if (LOOP_NODE_TYPES.has(node.type)) {
+      addLoopControlFacts(facts, unsupported, node);
+      return;
+    }
+    if (SWITCH_NODE_TYPES.has(node.type)) {
+      addSwitchControlFacts(facts, unsupported, node);
+      return;
+    }
+    if (TRY_NODE_TYPES.has(node.type)) addTryControlFacts(facts, node);
+  });
+
+  return {
+    facts: uniqueControlFacts(facts),
+    terminals: uniqueControlConstructs(terminals),
+    unsupported,
+  };
+}
+
+/**
  * Narrow an over-broad indexed unit to one callable only when every selected
  * focus line belongs to that same callable. Multiple sibling focuses retain
  * their shared parent so no requested construct disappears.
@@ -513,6 +593,7 @@ const CALLABLE_NODE_TYPES = new Set([
 const BLOCK_NODE_TYPES = new Set(['block', 'body', 'compound_statement', 'declaration_list', 'statement_block']);
 
 const IF_NODE_TYPES = new Set(['if_expression', 'if_statement', 'unless', 'unless_statement']);
+const CONDITIONAL_EXPRESSION_NODE_TYPES = new Set(['conditional_expression', 'ternary_expression']);
 const LOOP_NODE_TYPES = new Set([
   'do_statement',
   'enhanced_for_statement',
@@ -529,7 +610,264 @@ const TRY_NODE_TYPES = new Set(['try_expression', 'try_statement']);
 const CATCH_NODE_TYPES = new Set(['catch_clause', 'except_clause', 'rescue']);
 const FINALLY_NODE_TYPES = new Set(['ensure', 'finally_clause']);
 const ELSE_NODE_TYPES = new Set(['else', 'else_clause']);
+const TERMINAL_NODE_TYPES = new Set(['raise_statement', 'return_statement', 'throw_statement']);
 const COMMENT_NODE_TYPES = new Set(['block_comment', 'comment', 'line_comment']);
+
+function addConditionalControlFacts(
+  facts: BehaviorControlFact[],
+  unsupported: BehaviorControlAnalysis['unsupported'],
+  node: SyntaxNode,
+): void {
+  const condition = node.childForFieldName('condition') ?? firstNonBodyChild(node);
+  const consequence =
+    node.childForFieldName('consequence') ??
+    node.childForFieldName('body') ??
+    node.namedChildren.find((child) => BLOCK_NODE_TYPES.has(child.type));
+  const alternative =
+    node.childForFieldName('alternative') ?? node.namedChildren.find((child) => ELSE_NODE_TYPES.has(child.type));
+  if (!condition || !consequence) {
+    unsupported.push(controlUnsupported(node, 'conditional-fields-unresolved'));
+    return;
+  }
+  const controller = controlConstruct(condition, 'predicate', condition.text);
+  const consequenceOutcome = controlConstruct(consequence, outcomeKind(consequence), 'consequence');
+  addControlFact(facts, controller, consequenceOutcome, 'predicate-consequence', { branchRole: 'consequence' });
+  addTerminalControlFacts(facts, controller, consequence, 'consequence');
+
+  if (alternative) {
+    const alternativeOutcome = controlConstruct(alternative, outcomeKind(alternative), 'alternative');
+    addControlFact(facts, controller, alternativeOutcome, 'predicate-alternative', { branchRole: 'alternative' });
+    addTerminalControlFacts(facts, controller, alternative, 'alternative');
+    return;
+  }
+  addControlFact(
+    facts,
+    controller,
+    implicitControlConstruct(controller, 'otherwise continue'),
+    'predicate-fallthrough',
+    { branchRole: 'fallthrough' },
+  );
+}
+
+function addLoopControlFacts(
+  facts: BehaviorControlFact[],
+  unsupported: BehaviorControlAnalysis['unsupported'],
+  node: SyntaxNode,
+): void {
+  const body = node.childForFieldName('body') ?? node.namedChildren.find((child) => BLOCK_NODE_TYPES.has(child.type));
+  if (!body) {
+    unsupported.push(controlUnsupported(node, 'loop-body-unresolved'));
+    return;
+  }
+  const condition = node.childForFieldName('condition');
+  const controller = controlConstruct(condition ?? node, 'predicate', condition?.text ?? headerBeforeChild(node, body));
+  addControlFact(facts, controller, controlConstruct(body, 'outcome', 'iteration'), 'loop-iteration', {
+    branchRole: 'iteration',
+  });
+  addTerminalControlFacts(facts, controller, body, 'iteration');
+  addControlFact(facts, controller, implicitControlConstruct(controller, 'loop exits'), 'loop-exit', {
+    branchRole: 'exit',
+  });
+}
+
+function addSwitchControlFacts(
+  facts: BehaviorControlFact[],
+  unsupported: BehaviorControlAnalysis['unsupported'],
+  node: SyntaxNode,
+): void {
+  const body = node.childForFieldName('body') ?? node.namedChildren.find((child) => BLOCK_NODE_TYPES.has(child.type));
+  const subject =
+    node.childForFieldName('value') ??
+    node.childForFieldName('condition') ??
+    node.childForFieldName('subject') ??
+    firstNonBodyChild(node);
+  const cases = switchCases(body ?? node);
+  if (!subject || cases.length === 0) {
+    unsupported.push(controlUnsupported(node, 'switch-cases-unresolved'));
+    return;
+  }
+  const controller = controlConstruct(subject, 'predicate', subject.text);
+  let hasDefault = false;
+  for (const candidate of cases) {
+    const defaultCase = isDefaultCase(candidate);
+    hasDefault ||= defaultCase;
+    const label = headerBeforeChild(
+      candidate,
+      candidate.namedChildren.find((child) => isStatementNode(child)),
+    );
+    addControlFact(
+      facts,
+      controller,
+      controlConstruct(candidate, 'outcome', label || (defaultCase ? 'default' : 'case')),
+      defaultCase ? 'predicate-default' : 'predicate-case',
+      { branchRole: defaultCase ? 'default' : 'case' },
+    );
+    addTerminalControlFacts(facts, controller, candidate, defaultCase ? 'default' : 'case');
+  }
+  if (!hasDefault) {
+    addControlFact(
+      facts,
+      controller,
+      implicitControlConstruct(controller, 'no case matched'),
+      'predicate-fallthrough',
+      { branchRole: 'fallthrough' },
+    );
+  }
+}
+
+function addTryControlFacts(facts: BehaviorControlFact[], node: SyntaxNode): void {
+  const controller = controlConstruct(node, 'scope', 'try');
+  for (const handler of tryHandlers(node)) {
+    const isFinally = FINALLY_NODE_TYPES.has(handler.type);
+    const handlerConstruct = controlConstruct(
+      handler,
+      'handler',
+      isFinally ? 'finally' : headerBeforeChild(handler, callableBody(handler)),
+    );
+    addControlFact(facts, controller, handlerConstruct, isFinally ? 'finally-cleanup' : 'exception-handler', {
+      branchRole: isFinally ? 'finally' : 'catch',
+    });
+    addHandlerTerminalFacts(facts, handlerConstruct, handler, isFinally ? 'finally' : 'catch');
+  }
+}
+
+function addHandlerTerminalFacts(
+  facts: BehaviorControlFact[],
+  controller: BehaviorControlConstruct,
+  handler: SyntaxNode,
+  branchRole: string,
+): void {
+  for (const terminal of terminalControlConstructs(handler)) {
+    const terminalKind = terminal.label.startsWith('throw') || terminal.label.startsWith('raise') ? 'throw' : 'return';
+    addControlFact(facts, controller, terminal, terminalKind === 'throw' ? 'handler-throw' : 'handler-return', {
+      branchRole,
+      terminalKind,
+    });
+  }
+}
+
+function addTerminalControlFacts(
+  facts: BehaviorControlFact[],
+  controller: BehaviorControlConstruct,
+  outcome: SyntaxNode,
+  branchRole: string,
+): void {
+  for (const terminal of terminalControlConstructs(outcome)) {
+    const terminalKind = terminal.label.startsWith('throw') || terminal.label.startsWith('raise') ? 'throw' : 'return';
+    addControlFact(facts, controller, terminal, terminalKind === 'throw' ? 'predicate-throw' : 'predicate-return', {
+      branchRole,
+      terminalKind,
+    });
+  }
+}
+
+function addControlFact(
+  facts: BehaviorControlFact[],
+  controller: BehaviorControlConstruct,
+  outcome: BehaviorControlConstruct,
+  subtype: BehaviorControlSubtype,
+  attributes: Record<string, string | boolean>,
+): void {
+  facts.push({ controller, outcome, subtype, attributes });
+}
+
+function controlConstruct(
+  node: SyntaxNode,
+  kind: BehaviorControlConstruct['kind'],
+  label: string,
+): BehaviorControlConstruct {
+  return {
+    kind,
+    label: normalizeClauseText(label).slice(0, MAX_OUTLINE_LINE_CHARACTERS),
+    startLine: node.startPosition.row,
+    endLine: node.endPosition.row,
+    implicit: false,
+  };
+}
+
+function implicitControlConstruct(controller: BehaviorControlConstruct, label: string): BehaviorControlConstruct {
+  return { ...controller, kind: 'outcome', label, implicit: true };
+}
+
+function outcomeKind(node: SyntaxNode): BehaviorControlConstruct['kind'] {
+  return TERMINAL_NODE_TYPES.has(node.type) ? 'terminal' : 'outcome';
+}
+
+function terminalControlConstructs(root: SyntaxNode): BehaviorControlConstruct[] {
+  const terminals: BehaviorControlConstruct[] = [];
+  walkControlNodes(root, root, (node) => {
+    if (TERMINAL_NODE_TYPES.has(node.type)) terminals.push(controlConstruct(node, 'terminal', node.text));
+  });
+  return uniqueControlConstructs(terminals);
+}
+
+function walkControlNodes(root: SyntaxNode, node: SyntaxNode, visit: (candidate: SyntaxNode) => void): void {
+  visit(node);
+  for (const child of node.namedChildren) {
+    if (child !== root && CALLABLE_NODE_TYPES.has(child.type)) continue;
+    walkControlNodes(root, child, visit);
+  }
+}
+
+function switchCases(root: SyntaxNode): SyntaxNode[] {
+  const result: SyntaxNode[] = [];
+  const visit = (node: SyntaxNode): void => {
+    for (const child of node.namedChildren) {
+      if (SWITCH_NODE_TYPES.has(child.type)) continue;
+      if (CASE_NODE_TYPES.has(child.type)) result.push(child);
+      else visit(child);
+    }
+  };
+  visit(root);
+  return result;
+}
+
+function tryHandlers(root: SyntaxNode): SyntaxNode[] {
+  const result: SyntaxNode[] = [];
+  const visit = (node: SyntaxNode): void => {
+    for (const child of node.namedChildren) {
+      if (TRY_NODE_TYPES.has(child.type)) continue;
+      if (CATCH_NODE_TYPES.has(child.type) || FINALLY_NODE_TYPES.has(child.type)) result.push(child);
+      else if (!CALLABLE_NODE_TYPES.has(child.type)) visit(child);
+    }
+  };
+  visit(root);
+  return result;
+}
+
+function isDefaultCase(node: SyntaxNode): boolean {
+  const header = headerBeforeChild(
+    node,
+    node.namedChildren.find((child) => isStatementNode(child)),
+  ).trim();
+  return node.type === 'switch_default' || /^(?:default\b|_\s*=>)/u.test(header);
+}
+
+function controlUnsupported(node: SyntaxNode, reason: string): BehaviorControlAnalysis['unsupported'][number] {
+  return { startLine: node.startPosition.row, endLine: node.endPosition.row, reason };
+}
+
+function uniqueControlFacts(facts: readonly BehaviorControlFact[]): BehaviorControlFact[] {
+  const keyed = new Map<string, BehaviorControlFact>();
+  for (const fact of facts) {
+    keyed.set(
+      `${fact.controller.startLine}\u0000${fact.controller.endLine}\u0000${fact.outcome.startLine}\u0000${fact.outcome.endLine}\u0000${fact.subtype}\u0000${fact.outcome.label}`,
+      fact,
+    );
+  }
+  return [...keyed.values()];
+}
+
+function uniqueControlConstructs(constructs: readonly BehaviorControlConstruct[]): BehaviorControlConstruct[] {
+  const keyed = new Map<string, BehaviorControlConstruct>();
+  for (const construct of constructs) {
+    keyed.set(
+      `${construct.startLine}\u0000${construct.endLine}\u0000${construct.kind}\u0000${construct.label}`,
+      construct,
+    );
+  }
+  return [...keyed.values()];
+}
 
 function isBehaviorFocusNode(node: SyntaxNode): boolean {
   return (

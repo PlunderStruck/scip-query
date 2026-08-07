@@ -36,7 +36,11 @@ import { ProjectIndex } from '../internal/project-index.js';
 import { isExportedDefinition } from '../internal/exported-definition.js';
 import { SOURCE_INSPECTION_MAX_SELECTORS } from '../internal/inspection-limits.js';
 import { connectedBehaviorPacket, type ConnectedBehaviorPacket } from '../internal/connected-behavior.js';
-import { systemMapNextAnchorPacket, type SystemMapNextAnchorPacket } from '../internal/next-anchor-candidates.js';
+import {
+  enrichResultCallbackControlSemantics,
+  systemMapNextAnchorPacket,
+  type SystemMapNextAnchorPacket,
+} from '../internal/next-anchor-candidates.js';
 import {
   SYSTEM_MAP_RELATION_KINDS,
   systemMapRelationProgramSemantics,
@@ -44,6 +48,7 @@ import {
   type SystemMapRelationKind,
 } from './system-map-edge-semantics.js';
 import { programDataElementsForSystemMapRelations } from './program-data-edges.js';
+import { programControlElementsForTopologyNodes } from './program-control-edges.js';
 import {
   createExplorationTopology,
   selectExplorationTopology,
@@ -1593,6 +1598,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
     focusLocations: opts.behaviorFocusLocations,
     ...(focusedBehaviorNodes ? { maxSteps: focusedBehaviorNodes } : {}),
   });
+  enrichResultCallbackControlSemantics(db, topology, behavior);
   const nextAnchors = systemMapNextAnchorPacket(db, topology, behavior, {
     sourceAllowed,
     selectionTerms: opts.selectionTerms,
@@ -2248,6 +2254,9 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
   const programData = programDataElementsForSystemMapRelations(input.db, input.relations);
   nodes.push(...programData.nodes);
   edges.push(...programData.edges);
+  const programControl = programControlElementsForTopologyNodes(input.db, nodes);
+  nodes.push(...programControl.nodes);
+  edges.push(...programControl.edges);
 
   for (const boundary of input.externalBoundaries) {
     const nodeId = topologyId('external', boundary.kind, boundary.name);
@@ -2282,7 +2291,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     }
   }
 
-  const frontiers: ExplorationFrontierGroup[] = [...programData.frontiers];
+  const frontiers: ExplorationFrontierGroup[] = [...programData.frontiers, ...programControl.frontiers];
   input.boundaryFrontiers.forEach((frontier, index) => {
     const fromNodeId = input.regionForFile.get(frontier.file)?.id;
     if (!fromNodeId) {
@@ -2340,7 +2349,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     paths: [],
     frontiers,
     scope: `explicit anchors; relations ${input.requestedRelationKinds.join(', ')}; depth ${input.maxDepth}; evidence floor ${input.evidenceFloor}; source scopes ${input.includedSourceScopes.join(', ')}`,
-    blindSpots: [...input.blindSpots, ...programData.blindSpots],
+    blindSpots: [...input.blindSpots, ...programData.blindSpots, ...programControl.blindSpots],
     incompleteReasons:
       input.closureStatus === 'incomplete'
         ? [`${input.omittedSymbolCandidates} ambiguous symbol candidate(s) were omitted`]

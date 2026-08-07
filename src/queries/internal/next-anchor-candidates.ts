@@ -250,10 +250,8 @@ export function systemMapNextAnchorPacket(
           candidate.text.includes(leaf),
       );
       if (!materialLine) continue;
-      const resultProducing =
-        materialLine.signals.includes('call') &&
-        materialLine.signals.some((signal) => ['return', 'mutation', 'shape', 'spread', 'binding'].includes(signal));
-      const causalRole = resultProducing ? 'result-callback' : 'callable-reference';
+      const causalRole = callableReferenceCausalRole(materialLine.signals);
+      const resultProducing = causalRole === 'result-callback';
       const strength = strongestEvidence(edge.evidence);
       ranked.push({
         anchor: {
@@ -606,6 +604,60 @@ export function systemMapNextAnchorPacket(
     },
     options.selectionTerms,
   );
+}
+
+/**
+ * Project the already-proved result-callback classification onto its topology
+ * edge so causal traversal does not have to rediscover it from rendered text.
+ */
+export function enrichResultCallbackControlSemantics(
+  db: ScipDatabase,
+  topology: ExplorationTopology,
+  behavior: ConnectedBehaviorPacket,
+): void {
+  const nodeById = new Map(topology.nodes.map((node) => [node.id, node]));
+  for (const step of behavior.steps) {
+    if (!step.behavior || !step.location) continue;
+    for (const edge of topology.edges) {
+      if (
+        edge.kind !== 'reference' ||
+        edge.fromNodeId !== step.nodeId ||
+        edge.disposition === 'excluded' ||
+        edge.disposition === 'unsupported'
+      ) {
+        continue;
+      }
+      const target = nodeById.get(edge.toNodeId);
+      if (!target?.location || !callableAlternativeForNode(db, target)) continue;
+      const leaf = nodeLeaf(target);
+      const line = evidenceLocation(edge, step.location.file)?.line;
+      const materialLine = step.behavior.lines.find(
+        (candidate) =>
+          (line === undefined || (line >= candidate.line && line <= candidate.endLine)) &&
+          candidate.text.includes(leaf),
+      );
+      if (!materialLine || callableReferenceCausalRole(materialLine.signals) !== 'result-callback') continue;
+      if (edge.semantics?.some(({ family, subtype }) => family === 'control' && subtype === 'result-callback'))
+        continue;
+      edge.semantics = [
+        ...(edge.semantics ?? []),
+        {
+          family: 'control',
+          subtype: 'result-callback',
+          attributes: { evidenceRole: 'result-producing-callable-reference' },
+        },
+      ];
+    }
+  }
+}
+
+export function callableReferenceCausalRole(
+  signals: readonly BehaviorSignal[],
+): 'result-callback' | 'callable-reference' {
+  return signals.includes('call') &&
+    signals.some((signal) => ['return', 'mutation', 'shape', 'spread', 'binding'].includes(signal))
+    ? 'result-callback'
+    : 'callable-reference';
 }
 
 /**

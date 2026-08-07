@@ -14,6 +14,8 @@ export type SystemMapSyntheticEdgeKind = 'structural-membership' | 'boundary-obs
 
 interface SystemMapSemanticRuntimeParticipant {
   protocol: string;
+  action?: string;
+  role?: string;
 }
 
 interface SystemMapSemanticRelation {
@@ -55,6 +57,18 @@ export function systemMapRelationProgramSemantics(relation: SystemMapSemanticRel
     },
   ];
   if (relation.evidence === 'runtime-boundary:carrier.discriminator') {
+    semantics.push({
+      family: 'control',
+      subtype: 'discriminator-dispatch',
+      context: { ...context },
+      attributes: {
+        joinRule: 'carrier.discriminator',
+        ...(relation.fromBoundaryParticipant?.action
+          ? { producerAction: relation.fromBoundaryParticipant.action }
+          : {}),
+        ...(relation.toBoundaryParticipant?.action ? { consumerAction: relation.toBoundaryParticipant.action } : {}),
+      },
+    });
     semantics.push({
       family: 'data',
       subtype: 'serialized-discriminator-transfer',
