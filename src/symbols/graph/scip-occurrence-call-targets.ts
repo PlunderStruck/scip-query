@@ -19,6 +19,11 @@ export interface ScipOccurrenceCallTargetsResult {
   unresolvedCallsites: number;
 }
 
+export interface ScipOccurrenceCallableReferencesResult {
+  available: boolean;
+  targets: ScipOccurrenceCallTarget[];
+}
+
 type IndexedOccurrenceCallTarget = ScipOccurrenceCallTarget;
 
 interface ScipOccurrenceCallTargetIndex {
@@ -71,6 +76,29 @@ export function scipOccurrenceCallTargetsForRange(
   };
 }
 
+/**
+ * Return every compiler-resolved reference to a callable definition in a
+ * source range. Unlike {@link scipOccurrenceCallTargetsForRange}, this view
+ * deliberately includes function values passed to higher-order operations,
+ * registry entries, and other non-call references. Callers that also request
+ * direct calls should deduplicate them by exact line-and-symbol identity.
+ */
+export function scipOccurrenceCallableReferencesForRange(
+  db: ScipDatabase,
+  relativePath: string,
+  startLine: number,
+  endLine: number,
+): ScipOccurrenceCallableReferencesResult {
+  const index = scipOccurrenceCallTargetIndex(db);
+  if (!index) return { available: false, targets: [] };
+  return {
+    available: true,
+    targets: (index.byFile.get(relativePath) ?? []).filter(
+      (target) => target.sourceLine >= startLine && target.sourceLine <= endLine,
+    ),
+  };
+}
+
 function scipOccurrenceCallTargetIndex(db: ScipDatabase): ScipOccurrenceCallTargetIndex | null {
   if (SCIP_OCCURRENCE_CALL_TARGET_INDEX.has(db)) return SCIP_OCCURRENCE_CALL_TARGET_INDEX.get(db) ?? null;
   const index = loadScipOccurrenceCallTargetIndex(db);
@@ -81,7 +109,7 @@ function scipOccurrenceCallTargetIndex(db: ScipDatabase): ScipOccurrenceCallTarg
 function loadScipOccurrenceCallTargetIndex(db: ScipDatabase): ScipOccurrenceCallTargetIndex | null {
   if (!db.generation.indexPath || !existsSync(db.generation.indexPath)) return null;
   try {
-    const definitions = getAllDefinitions(db).filter((definition) => definition.isFunctionLike);
+    const definitions = getAllDefinitions(db).filter((definition) => sourceConfirmsCallable(db, definition));
     const definitionBySymbol = new Map(definitions.map((definition) => [definition.symbol, definition]));
     const scipIndex = readScipArtifact(db.generation.indexPath, 'SCIP source-range call-target index');
     const byFile = new Map<string, IndexedOccurrenceCallTarget[]>();
@@ -102,6 +130,18 @@ function loadScipOccurrenceCallTargetIndex(db: ScipDatabase): ScipOccurrenceCall
   } catch {
     return null;
   }
+}
+
+function sourceConfirmsCallable(db: ScipDatabase, definition: IndexedDefinition): boolean {
+  if (!definition.isFunctionLike) return false;
+  const facts = getSourceFacts(db, definition.relativePath);
+  if (!facts) return true;
+  return facts.callables.some(
+    (callable) =>
+      callable.name === definition.leaf &&
+      callable.startLine === definition.startLine &&
+      callable.endLine === definition.endLine,
+  );
 }
 
 function lineLeafCounts(items: readonly { line: number; leaf: string }[]): Map<string, number> {

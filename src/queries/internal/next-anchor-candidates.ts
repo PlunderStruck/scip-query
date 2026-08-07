@@ -1,5 +1,6 @@
 import type { BehaviorSignal } from '../../source/facts/behavior-skeleton.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
+import { getSourceLines } from '../../source/primitives/source-text.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import type { CalleeEvidenceSource, CalleeRow } from '../../symbols/graph/call-graph-evidence.js';
@@ -9,6 +10,7 @@ import type {
   ExplorationEvidenceSource,
   ExplorationEvidenceStrength,
   ExplorationTopology,
+  ExplorationTopologyEdge,
   ExplorationTopologyNode,
 } from './exploration-topology.js';
 import { ProjectIndex } from './project-index.js';
@@ -25,7 +27,11 @@ export interface SystemMapNextAnchorAlternative {
 export interface SystemMapNextAnchor {
   id: string;
   status: ExplorationEvidenceStrength | 'ambiguous';
-  source: 'graph-call' | 'leaf-identity-candidate';
+  source: 'graph-call' | 'graph-relation' | 'leaf-identity-candidate';
+  /** Optional on legacy call candidates; populated for newly rendered causal targets. */
+  direction?: 'upstream' | 'downstream' | 'connector';
+  causalRole?: 'caller' | 'callee' | 'result-callback' | 'callable-reference' | 'runtime-producer' | 'runtime-consumer';
+  relationKind?: string;
   fromStepId: string;
   fromLabel: string;
   callsite: {
@@ -52,6 +58,9 @@ export interface SystemMapNextAnchorPacket {
   identityCandidateCallsites: number;
   ambiguousCallsites: number;
   unresolvedCallsites: number;
+  upstreamCandidates?: number;
+  resultCandidates?: number;
+  runtimeCandidates?: number;
   inspectCommand: string | null;
   remainingInspectCommands: string[];
 }
@@ -120,9 +129,136 @@ export function systemMapNextAnchorPacket(
   let identityCandidateCallsites = 0;
   let ambiguousCallsites = 0;
   let unresolvedCallsites = 0;
+  let upstreamCandidates = 0;
+  let resultCandidates = 0;
+  let runtimeCandidates = 0;
 
   for (const step of behavior.steps) {
     if (!step.location || !step.behavior) continue;
+    const adjacentCausalEdges = topology.edges.filter(
+      (edge) =>
+        ['call', 'runtime-boundary'].includes(edge.kind) &&
+        (edge.fromNodeId === step.nodeId || edge.toNodeId === step.nodeId) &&
+        edge.disposition !== 'excluded' &&
+        edge.disposition !== 'unsupported',
+    );
+    for (const edge of adjacentCausalEdges) {
+      const incoming = edge.toNodeId === step.nodeId;
+      if (!incoming && edge.kind === 'call') continue;
+      const candidateNodeId = incoming ? edge.fromNodeId : edge.toNodeId;
+      if (returnedNodeIds.has(candidateNodeId)) continue;
+      const candidateNode = nodeById.get(candidateNodeId);
+      if (!candidateNode?.location || !sourceAllowed(candidateNode.location.file)) continue;
+      const alternative =
+        edge.kind === 'call' ? callableAlternativeForNode(db, candidateNode) : alternativeForNode(candidateNode);
+      if (!alternative) continue;
+      const location = evidenceLocation(edge, candidateNode.location.file) ?? candidateNode.location;
+      const sourceLine = getSourceLines(db, location.file)[location.line]?.trim();
+      const direction = incoming ? 'upstream' : 'downstream';
+      const causalRole =
+        edge.kind === 'runtime-boundary' ? (incoming ? 'runtime-producer' : 'runtime-consumer') : 'caller';
+      const signals: BehaviorSignal[] = ['call'];
+      const strength = strongestEvidence(edge.evidence);
+      const leaf = nodeLeaf(candidateNode);
+      ranked.push({
+        anchor: {
+          id: nextAnchorId(step.id, location.line, candidateNode.id),
+          status: strength,
+          source: 'graph-relation',
+          direction,
+          causalRole,
+          relationKind: edge.kind,
+          fromStepId: step.id,
+          fromLabel: step.label,
+          callsite: {
+            file: location.file,
+            line: location.line,
+            endLine: location.endLine ?? location.line,
+            text: sourceLine || `${candidateNode.label} → ${step.label}`,
+            signals,
+            calleeLeaf: leaf,
+          },
+          alternatives: [alternative],
+          alternativeCount: 1,
+          evidence: edge.evidence,
+        },
+        priority: nextAnchorPriority(
+          strength,
+          signals,
+          step.location.file !== alternative.file,
+          1,
+          !incoming && downstreamNodeIds.has(step.nodeId),
+          step.role,
+          direction,
+          causalRole,
+        ),
+      });
+      if (incoming) upstreamCandidates += 1;
+      if (edge.kind === 'runtime-boundary') runtimeCandidates += 1;
+    }
+
+    const callableReferences = topology.edges.filter(
+      (edge) =>
+        edge.kind === 'reference' &&
+        edge.fromNodeId === step.nodeId &&
+        edge.disposition !== 'excluded' &&
+        edge.disposition !== 'unsupported' &&
+        !returnedNodeIds.has(edge.toNodeId),
+    );
+    for (const edge of callableReferences) {
+      const target = nodeById.get(edge.toNodeId);
+      if (!target?.location || !sourceAllowed(target.location.file)) continue;
+      const alternative = callableAlternativeForNode(db, target);
+      if (!alternative) continue;
+      const leaf = nodeLeaf(target);
+      const line = evidenceLocation(edge, step.location.file)?.line;
+      const materialLine = step.behavior.lines.find(
+        (candidate) =>
+          (line === undefined || (line >= candidate.line && line <= candidate.endLine)) &&
+          candidate.text.includes(leaf),
+      );
+      if (!materialLine) continue;
+      const resultProducing =
+        materialLine.signals.includes('call') &&
+        materialLine.signals.some((signal) => ['return', 'mutation', 'shape', 'spread', 'binding'].includes(signal));
+      const causalRole = resultProducing ? 'result-callback' : 'callable-reference';
+      const strength = strongestEvidence(edge.evidence);
+      ranked.push({
+        anchor: {
+          id: nextAnchorId(step.id, materialLine.line, target.id),
+          status: strength,
+          source: 'graph-relation',
+          direction: 'downstream',
+          causalRole,
+          relationKind: 'reference',
+          fromStepId: step.id,
+          fromLabel: step.label,
+          callsite: {
+            file: step.location.file,
+            line: materialLine.line,
+            endLine: materialLine.endLine,
+            text: materialLine.text,
+            signals: materialLine.signals,
+            calleeLeaf: leaf,
+          },
+          alternatives: [alternative],
+          alternativeCount: 1,
+          evidence: edge.evidence,
+        },
+        priority: nextAnchorPriority(
+          strength,
+          materialLine.signals,
+          step.location.file !== alternative.file,
+          1,
+          downstreamNodeIds.has(step.nodeId),
+          step.role,
+          'downstream',
+          causalRole,
+        ),
+      });
+      if (resultProducing) resultCandidates += 1;
+    }
+
     const callLines = step.behavior.lines.filter((line) => line.signals.includes('call'));
     if (callLines.length === 0) continue;
     scannedBehaviorSteps += 1;
@@ -169,6 +305,9 @@ export function systemMapNextAnchorPacket(
           id: nextAnchorId(step.id, callsite.line, target.alternative.symbol ?? target.alternative.file),
           status: strength,
           source: 'graph-call',
+          direction: 'downstream',
+          causalRole: 'callee',
+          relationKind: 'call',
           fromStepId: step.id,
           fromLabel: step.label,
           callsite: {
@@ -197,6 +336,8 @@ export function systemMapNextAnchorPacket(
           1,
           downstreamNodeIds.has(step.nodeId),
           step.role,
+          'downstream',
+          'callee',
         ),
       });
     }
@@ -231,6 +372,9 @@ export function systemMapNextAnchorPacket(
           id: nextAnchorId(step.id, callsite.line, target.id),
           status: strength,
           source: 'graph-call',
+          direction: 'downstream',
+          causalRole: 'callee',
+          relationKind: 'call',
           fromStepId: step.id,
           fromLabel: step.label,
           callsite: {
@@ -252,6 +396,8 @@ export function systemMapNextAnchorPacket(
           1,
           downstreamNodeIds.has(step.nodeId),
           step.role,
+          'downstream',
+          'callee',
         ),
       });
     }
@@ -295,6 +441,9 @@ export function systemMapNextAnchorPacket(
           id: nextAnchorId(step.id, callsite.line, callsite.calleeLeaf),
           status: ambiguous ? 'ambiguous' : 'candidate',
           source: 'leaf-identity-candidate',
+          direction: 'downstream',
+          causalRole: 'callee',
+          relationKind: 'call',
           fromStepId: step.id,
           fromLabel: step.label,
           callsite: {
@@ -316,6 +465,8 @@ export function systemMapNextAnchorPacket(
           alternatives.length,
           downstreamNodeIds.has(step.nodeId),
           step.role,
+          'downstream',
+          'callee',
         ),
       });
     }
@@ -344,6 +495,9 @@ export function systemMapNextAnchorPacket(
     identityCandidateCallsites,
     ambiguousCallsites,
     unresolvedCallsites,
+    upstreamCandidates,
+    resultCandidates,
+    runtimeCandidates,
     inspectCommand:
       inspectAlternatives.length === 0
         ? null
@@ -371,14 +525,25 @@ export function coverageDiverseNextAnchors(
   const roleByStepId = new Map(steps.map((step) => [step.id, step.role]));
   const selected: RankedNextAnchor[] = [];
   const selectedIds = new Set<string>();
-  const representedStepIds = new Set<string>();
+  const representedForwardStepIds = new Set<string>();
 
   const select = (candidate: RankedNextAnchor): void => {
     if (selected.length >= limit || selectedIds.has(candidate.anchor.id)) return;
     selected.push(candidate);
     selectedIds.add(candidate.anchor.id);
-    representedStepIds.add(candidate.anchor.fromStepId);
+    if (candidate.anchor.direction !== 'upstream') representedForwardStepIds.add(candidate.anchor.fromStepId);
   };
+
+  for (const predicate of [
+    (candidate: RankedNextAnchor) => candidate.anchor.direction === 'upstream',
+    (candidate: RankedNextAnchor) => candidate.anchor.causalRole === 'result-callback',
+  ]) {
+    const reserved = candidates.find(
+      (candidate) =>
+        candidate.anchor.alternativeCount === 1 && candidate.anchor.status !== 'ambiguous' && predicate(candidate),
+    );
+    if (reserved) select(reserved);
+  }
 
   const connectorReservationLimit = Math.max(1, Math.floor(limit / 4));
   let reservedConnectors = 0;
@@ -388,7 +553,7 @@ export function coverageDiverseNextAnchors(
     if (
       candidate.anchor.source !== 'graph-call' ||
       candidate.anchor.alternativeCount !== 1 ||
-      representedStepIds.has(candidate.anchor.fromStepId)
+      representedForwardStepIds.has(candidate.anchor.fromStepId)
     ) {
       continue;
     }
@@ -399,7 +564,7 @@ export function coverageDiverseNextAnchors(
   for (const candidate of candidates) {
     if (selected.length >= limit) break;
     const role = roleByStepId.get(candidate.anchor.fromStepId);
-    if (role !== 'anchor' || representedStepIds.has(candidate.anchor.fromStepId)) continue;
+    if (role !== 'anchor' || representedForwardStepIds.has(candidate.anchor.fromStepId)) continue;
     select(candidate);
   }
 
@@ -550,6 +715,29 @@ function alternativeForNode(node: ExplorationTopologyNode): SystemMapNextAnchorA
   };
 }
 
+function callableAlternativeForNode(
+  db: ScipDatabase,
+  node: ExplorationTopologyNode,
+): SystemMapNextAnchorAlternative | null {
+  const alternative = alternativeForNode(node);
+  if (!alternative?.symbol) return null;
+  const callable = getDefinitionsForFile(db, alternative.file).some(
+    (definition) => definition.symbol === alternative.symbol && definition.isFunctionLike,
+  );
+  return callable ? alternative : null;
+}
+
+function evidenceLocation(
+  edge: ExplorationTopologyEdge,
+  preferredFile: string,
+): { file: string; line: number; endLine?: number } | null {
+  return (
+    edge.evidence.find((source) => source.location?.file === preferredFile)?.location ??
+    edge.evidence.find((source) => source.location !== null)?.location ??
+    null
+  );
+}
+
 function strongestEvidence(evidence: readonly ExplorationEvidenceSource[]): ExplorationEvidenceStrength {
   const rank: Record<ExplorationEvidenceStrength, number> = {
     exact: 5,
@@ -571,6 +759,8 @@ function nextAnchorPriority(
   alternativeCount: number,
   downstreamOfAnchor: boolean,
   sourceRole: ConnectedBehaviorPacket['steps'][number]['role'],
+  direction: SystemMapNextAnchor['direction'] = 'downstream',
+  causalRole: SystemMapNextAnchor['causalRole'] = 'callee',
 ): number {
   const strengthScore: Record<ExplorationEvidenceStrength, number> = {
     exact: 50,
@@ -591,6 +781,10 @@ function nextAnchorPriority(
   if (crossesFile) score += 5;
   if (alternativeCount === 1) score += 5;
   if (downstreamOfAnchor) score += 15;
+  if (direction === 'upstream') score += 35;
+  if (causalRole === 'result-callback') score += 45;
+  if (causalRole === 'runtime-producer' || causalRole === 'runtime-consumer') score += 35;
+  if (causalRole === 'callable-reference') score += 10;
   // A next anchor should first deepen the units the caller explicitly chose.
   // Calls found only in a junction are valid but describe incidental path
   // context, so they must not displace direct effects of an anchor merely

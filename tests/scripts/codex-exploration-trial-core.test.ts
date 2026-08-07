@@ -85,6 +85,10 @@ describe('Codex exploration trial core', () => {
       ),
     ).toEqual({ surface: 'other', kind: 'other' });
     expect(classifyExplorationCommand('rg -n handler src')).toEqual({ surface: 'native-search', kind: 'query' });
+    expect(classifyExplorationCommand("scip-query anchors 'How does it find configuration?'")).toEqual({
+      surface: 'scip-query',
+      kind: 'query',
+    });
     expect(classifyExplorationCommand('pwd')).toEqual({ surface: 'other', kind: 'other' });
   });
 
@@ -92,7 +96,8 @@ describe('Codex exploration trial core', () => {
     const prompt = treatmentPrompt('How does the path work?');
     expect(prompt).toContain('scip-query as the only repository exploration surface');
     expect(prompt).toContain('cross-boundary-flow');
-    expect(prompt).toContain('upstream entry');
+    expect(prompt).toContain('upstream callers');
+    expect(prompt).toContain('result-producing callbacks');
     expect(prompt).toContain('Use exactly one initial locator');
     expect(prompt).toContain('one shell-safely quoted positional argument');
     expect(prompt).toContain('operation kind and record-identity fields');
@@ -105,7 +110,7 @@ describe('Codex exploration trial core', () => {
     expect(prompt).toContain('stop immediately when they establish all of them');
     expect(prompt).toContain('one locator, one map, and one scoped gap batch');
     expect(prompt).toContain('evidence seen but left implicit is not recovered');
-    expect(prompt).toContain('Optional gap recovery is folded by default');
+    expect(prompt).toContain('Optional causal recovery is folded by default');
     expect(prompt).toContain('--gap-callee');
     expect(prompt).toContain('--gap-recovery-only');
     expect(prompt).toContain('ranking is navigation help, not a claim');

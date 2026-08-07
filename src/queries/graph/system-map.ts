@@ -14,7 +14,10 @@ import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { findEnclosingDefinition, getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import type { CalleeEvidenceSource } from '../../symbols/graph/call-graph-evidence.js';
 import { importedMemberCallTargets } from '../../symbols/graph/member-call-targets.js';
-import { scipOccurrenceCallTargetsForRange } from '../../symbols/graph/scip-occurrence-call-targets.js';
+import {
+  scipOccurrenceCallableReferencesForRange,
+  scipOccurrenceCallTargetsForRange,
+} from '../../symbols/graph/scip-occurrence-call-targets.js';
 import { resolveImportedDefinitions } from '../../symbols/imported-definitions.js';
 import { findIdentifierLines } from '../../symbols/identifier-index.js';
 import { resolveSymbol } from '../../symbols/symbol-lookup.js';
@@ -64,6 +67,7 @@ export type SystemMapRelationEvidence =
   | 'ast-constructed-member-callsite'
   | 'ast-member-import-candidate'
   | 'scip-occurrence-callsite'
+  | 'scip-occurrence-reference'
   | 'compiler-cross-workspace-symbol'
   | 'indexed-or-source-reference'
   | 'indexed-or-source-import'
@@ -940,6 +944,44 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
               strength: 'exact',
             });
             compilerResolvedCallsiteKeys.add(`${target.sourceLine}\u0000${target.calleeLeaf}`);
+          }
+        }
+      }
+      if (relationPolicy.has('reference')) {
+        for (const range of traversalRanges) {
+          const references = scipOccurrenceCallableReferencesForRange(db, state.file, range.startLine, range.endLine);
+          for (const target of references.targets) {
+            if (!sourceAllowed(target.definition.relativePath)) continue;
+            if (compilerResolvedCallsiteKeys.has(`${target.sourceLine}\u0000${target.calleeLeaf}`)) continue;
+            const sourceSymbol = sourceSymbolAtLine(target.sourceLine);
+            if (sourceSymbol?.definition.symbol === target.definition.symbol) continue;
+            const sourceConstruct = sourceOwnedRanges.find(
+              (construct) => construct.startLine <= target.sourceLine && construct.endLine >= target.sourceLine,
+            );
+            const boundaryObservation = boundaryRanges.find((observation) => {
+              const observationRange = runtimeObservationTraversalRange(db, observation);
+              return observationRange.startLine <= target.sourceLine && observationRange.endLine >= target.sourceLine;
+            });
+            addSymbol(
+              target.definition,
+              depth + 1,
+              `scip-occurrence-reference:${state.file}:${target.sourceLine + 1}`,
+              undefined,
+              'none',
+              true,
+            );
+            addRelation(pendingRelations, {
+              kind: 'reference',
+              evidence: 'scip-occurrence-reference',
+              fromFile: state.file,
+              fromSymbol: sourceSymbol?.definition.symbol ?? null,
+              toFile: target.definition.relativePath,
+              toSymbol: target.definition.symbol,
+              fromBoundaryParticipant: boundaryObservation ? boundaryParticipant(boundaryObservation) : undefined,
+              fromSourceConstruct: sourceConstruct ? sourceConstructIdentity(sourceConstruct) : undefined,
+              line: target.sourceLine,
+              strength: 'exact',
+            });
           }
         }
       }

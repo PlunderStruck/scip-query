@@ -212,3 +212,49 @@ Artifacts:
 
 - `/tmp/tslint-config-heldout-treatment-sol-medium.json`
 - `/tmp/tslint-config-heldout-control-sol-medium.json`
+
+## Bidirectional causal-slice follow-up
+
+The next implementation made the drill packet bidirectional. It now reserves
+one exact incoming caller, recognizes compiler-resolved callable references
+such as reducer callbacks, and preserves the enclosing control/effect signals
+when a multiline statement is reduced to one focused line. Direct call
+occurrences are deduplicated from callable-reference occurrences, and source
+AST evidence prevents ordinary constants from being mislabeled as callable
+continuations.
+
+| Frozen Sol medium run                              | Total tokens | Uncached input | Rendered characters | Semantic queries | Native reads | Manual strict facts |
+| -------------------------------------------------- | -----------: | -------------: | ------------------: | ---------------: | -----------: | ------------------: |
+| TSLint native control                              |      231,594 |         55,361 |              62,973 |                0 |            8 |                 5/7 |
+| TSLint treatment before causal selection           |      148,993 |         23,576 |              33,497 |                2 |            0 |                 3/7 |
+| TSLint incoming-call-only treatment                |      156,772 |         26,009 |              34,193 |                3 |            0 |                 4/7 |
+| TSLint caller plus callable-reference treatment    |      148,002 |         24,522 |              37,126 |                3 |            0 |                 6/7 |
+| Vega isolated treatment before callable references |      224,775 |         40,189 |              58,335 |                4 |            0 |                 7/7 |
+| Vega causal-reference regression                   |      176,197 |         26,081 |              44,262 |                3 |            0 |                 7/7 |
+
+On TSLint, the final packet selected both `doLinting()` as the upstream caller
+and `extendConfigurationFile()` as the result-producing callback. The agent
+inspected both in one batch and recovered runner reuse, depth-first inheritance,
+field-wise merge precedence, rule-directory deduplication, and severity flow.
+Its only strict miss was naming the exact `tslint.json`, `tslint.yaml`, then
+`tslint.yml` filename preference; it described the ordered `CONFIG_FILENAMES`
+search without expanding the constant. Compared with native control, the run
+used 36.1% fewer total tokens, 55.7% fewer uncached input tokens, and 41.0% fewer
+rendered exploration characters while recovering one more strict fact.
+
+The frozen Vega regression retained 7/7 strict facts. It used one fewer semantic
+query than the prior isolated run and reduced total tokens by 21.6%, uncached
+input by 35.1%, and rendered exploration characters by 24.1%. This is evidence
+that compiler-resolved callable-reference edges generalize beyond the TSLint
+holdout and do not regress the established HTTP/runtime-boundary flow.
+
+The deterministic phrase evaluator again undercounted both answers (2/7 for
+TSLint and 3/7 for Vega) even though the answers explicitly stated the facts
+above. Manual strict adjudication remains the accuracy authority for these
+runs.
+
+Artifacts:
+
+- `/tmp/tslint-config-causal-treatment-sol-medium.json`
+- `/tmp/tslint-config-causal-reference-treatment-sol-medium.json`
+- `/tmp/vega-work-session-causal-reference-sol-medium.json`

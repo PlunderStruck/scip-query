@@ -456,10 +456,12 @@ function focusLinesForNode(
   for (const edge of edges) {
     if (edge.fromNodeId !== node.id && edge.toNodeId !== node.id) continue;
     const otherNode = nodeById.get(edge.fromNodeId === node.id ? edge.toNodeId : edge.fromNodeId);
-    const isExpansiveOutgoingCall =
-      expansiveNodeIds.has(node.id) && edge.kind === 'call' && edge.fromNodeId === node.id;
+    const isExpansiveOutgoingCausalEdge =
+      expansiveNodeIds.has(node.id) &&
+      ['call', 'reference', 'runtime-boundary'].includes(edge.kind) &&
+      edge.fromNodeId === node.id;
     const touchesExplicitAnchor = (otherNode?.anchorIds.length ?? 0) > 0;
-    if (!pathEdgeIds.has(edge.id) && !isExpansiveOutgoingCall && !touchesExplicitAnchor) continue;
+    if (!pathEdgeIds.has(edge.id) && !isExpansiveOutgoingCausalEdge && !touchesExplicitAnchor) continue;
     const evidenceLines = edge.evidence.flatMap((source) =>
       source.location?.file === node.location!.file ? [source.location.line] : [],
     );
@@ -614,6 +616,9 @@ function focusedConnectorSlice(
         depth: 0,
         signals: orderedSignals([
           ...(outlineSignalsByLine.get(line) ?? []),
+          ...(outline?.lines
+            .filter((candidate) => line >= candidate.line && line <= candidate.endLine)
+            .flatMap((candidate) => candidate.signals) ?? []),
           ...(receiptSignalsByLine.get(line) ?? []),
           ...(focusLines.includes(line) ? (['anchor'] as const) : []),
           ...(callLines.has(line) ? (['call'] as const) : []),

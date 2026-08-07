@@ -1,0 +1,43 @@
+{
+  "acceptedAt": "2026-08-06T23:59:35.010Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "474a7993db2ddb98461c2ecda90c3cda6d0d48fdfa4fd2f79bd2d15b81edccee",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-constructed-member-callsite' | 'ast-member-import-candidate' | 'scip-occurrence-callsite' | 'compiler-cross-workspac... to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-constructed-member-callsite' | 'ast-member-import-candidate' | 'scip-occurrence-callsite' | 'scip-occurrence-referen....",
+      "target": "./queries:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-constructed-member-callsite' | 'ast-member-import-candidate' | 'scip-occurrence-callsite' | 'compiler-cross-workspac... to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-constructed-member-callsite' | 'ast-member-import-candidate' | 'scip-occurrence-callsite' | 'scip-occurrence-referen....",
+      "target": "./queries/index:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapNextAnchor changed from interface SystemMapNextAnchor { id: string; status: ExplorationEvidenceStrength | 'ambiguous'; source: 'graph-call' | 'leaf-identity-candidate'; fromStepId: string; fromLabel: s... to interface SystemMapNextAnchor { id: string; status: ExplorationEvidenceStrength | 'ambiguous'; source: 'graph-call' | 'graph-relation' | 'leaf-identity-candidate'; direction?: '....",
+      "target": "./queries/system-map:SystemMapNextAnchor"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapNextAnchorPacket changed from interface SystemMapNextAnchorPacket { anchors: SystemMapNextAnchor[]; withheldAnchors: SystemMapNextAnchor[]; candidateAnchors: number; omittedAnchors: number; scannedBehaviorSt... to interface SystemMapNextAnchorPacket { anchors: SystemMapNextAnchor[]; withheldAnchors: SystemMapNextAnchor[]; candidateAnchors: number; omittedAnchors: number; scannedBehaviorSt....",
+      "target": "./queries/system-map:SystemMapNextAnchorPacket"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-constructed-member-callsite' | 'ast-member-import-candidate' | 'scip-occurrence-callsite' | 'compiler-cross-workspac... to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-constructed-member-callsite' | 'ast-member-import-candidate' | 'scip-occurrence-callsite' | 'scip-occurrence-referen....",
+      "target": "./queries/system-map:SystemMapRelationEvidence"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "f5391cfb46fb5d85bca8da8ab86820511f6bccf40b013b6b4147dace53675af8",
+  "reason": "system-map now exposes typed upstream, runtime, and compiler-resolved callable-reference causal targets; exhaustive consumers must handle the new graph-relation source and occurrence-reference evidence method",
+  "schemaVersion": 1
+}

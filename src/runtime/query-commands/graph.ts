@@ -682,14 +682,15 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
   if (result.nextAnchors && result.nextAnchors.candidateAnchors > 0) {
     console.log('\n═══ OPTIONAL GAP RECOVERY ═══');
     console.log(
-      `  [folded] ${result.nextAnchors.candidateAnchors} callable target(s) are accounted but hidden because ` +
+      `  [folded] ${result.nextAnchors.candidateAnchors} causal target(s) are accounted but hidden because ` +
         'connected behavior is the evidence to exhaust first.',
     );
     const exactTargets = result.nextAnchors.anchors.filter((anchor) => anchor.alternativeCount === 1);
     for (const anchor of exactTargets) {
       const target = anchor.alternatives[0]!;
+      const causalLabel = [anchor.direction, anchor.causalRole, anchor.relationKind].filter(Boolean).join(' ');
       console.log(
-        `  [${anchor.status}] ${anchor.callsite.calleeLeaf} → ${target.file}:${displayLine(target.line)}; ` +
+        `  [${anchor.status}${causalLabel ? `; ${causalLabel}` : ''}] ${anchor.callsite.calleeLeaf} → ${target.file}:${displayLine(target.line)}; ` +
           `inspect if material: scip-query inspect --at ${shellArgument(`${target.file}:${displayLine(target.line)}`)} --view behavior`,
       );
     }
@@ -908,7 +909,7 @@ function printSystemMapGapRecovery(
 ): void {
   console.log('═══ OPTIONAL GAP RECOVERY (ONLY AFTER NAMING A MISSING FACT) ═══');
   if (!nextAnchors || nextAnchors.candidateAnchors === 0) {
-    console.log('  No callable drill targets were resolved from the connected behavior.');
+    console.log('  No causal drill targets were resolved from the connected behavior.');
     return;
   }
   if (requestedCallees.length === 0) {
@@ -928,7 +929,7 @@ function printSystemMapGapRecovery(
     return;
   }
   console.log(
-    `  ${selected.length}/${nextAnchors.candidateAnchors} callable target(s) matched the named callee selector(s); ` +
+    `  ${selected.length}/${nextAnchors.candidateAnchors} causal target(s) matched the named callee selector(s); ` +
       'no English intent inferred.',
   );
   for (const anchor of selected) {
@@ -937,8 +938,9 @@ function printSystemMapGapRecovery(
       ? `${compactSystemMapIdentity(first.label)} @ ${first.file}:${displayLine(first.line)}`
       : anchor.callsite.calleeLeaf;
     const signals = anchor.callsite.signals.filter((signal) => signal !== 'anchor' && signal !== 'call').join(',');
+    const causal = [anchor.direction, anchor.causalRole, anchor.relationKind].filter(Boolean).join('; ');
     console.log(
-      `  [${anchor.status}; ${anchor.source}${signals ? `; ${signals}` : ''}] ${target}` +
+      `  [${anchor.status}; ${anchor.source}${causal ? `; ${causal}` : ''}${signals ? `; ${signals}` : ''}] ${target}` +
         `${anchor.alternativeCount > 1 ? ` — ${anchor.alternativeCount} possible identities` : ''}`,
     );
     console.log(

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 const COMMAND_BOUNDARY = String.raw`(?:^|[\s'";&|()])`;
 const COMMAND_END = String.raw`(?=[\s'"]|$)`;
+const SHELL_COMMAND_POSITION = String.raw`(?:^|(?:\|\||&&|[;|])\s*|(?:-lc|-c)\s+["']?)`;
 const NATIVE_SEARCH = new RegExp(
   `${COMMAND_BOUNDARY}(?:rg|grep|find|fd|ls|tree|git\\s+(?:grep|ls-files))${COMMAND_END}`,
   'iu',
@@ -12,6 +13,14 @@ const NATIVE_READ = new RegExp(
 );
 const SCRIPTED_READ = /(?:readFile(?:Sync)?|read_text|\.read\(|open\s*\()/u;
 const SCIP_QUERY = new RegExp(`${COMMAND_BOUNDARY}(?:[^\\s'"]*/)?scip-query${COMMAND_END}`, 'iu');
+const MIXED_NATIVE_SEARCH = new RegExp(
+  `${SHELL_COMMAND_POSITION}(?:rg|grep|find|fd|ls|tree|git\\s+(?:grep|ls-files))${COMMAND_END}`,
+  'iu',
+);
+const MIXED_NATIVE_READ = new RegExp(
+  `${SHELL_COMMAND_POSITION}(?:cat|sed|awk|head|tail|nl|bat|less|more|perl|git\\s+show)${COMMAND_END}`,
+  'iu',
+);
 
 export function treatmentPrompt(question) {
   return `You are running a read-only codebase-exploration benchmark. Answer this question accurately:
@@ -22,9 +31,9 @@ Use scip-query as the only repository exploration surface for tracked nonbinary 
 
 First run scip-query status --capabilities once. Privately reduce the question to the few material claims the answer must establish. For an end-to-end explanation, material facts include every relevant behavior-changing predicate, authorization check, data reshaping, hard bound, runtime crossing, durable state change, emitted notification, and returned value on the selected causal path; preserve them in the answer instead of summarizing them away. For a multi-step mutation, preserve external-effect order plus compaction, rollback, or cleanup. For every event, log, or outbox write, preserve its operation kind and record-identity fields. For coordination, state the lock's scope and which read/check/write steps occur inside it. For interrupted-update behavior, state whether the sequence is atomic, prevented, rolled back, or repaired later.
 
-Use exactly one initial locator. Use search only when the question quotes an exact source/runtime literal or supplies an exact compiler symbol; an unquoted domain term, feature name, or command name is not an exact selector. Otherwise run scip-query anchors with the complete question as one shell-safely quoted positional argument; there is no --question option. Anchor discovery mechanically joins normalized repository words to compiler owners and bounded call relationships; its ranking is navigation help, not a claim that a set answers the question. For a cross-process or cross-protocol causal sequence, choose the first cross-boundary-flow whose displayed producer, runtime key, and downstream owner match the requested operation. Otherwise choose the smallest connected-flow set that covers the sequence. For an exhaustive "which operations/callers can" question, choose the smallest shared-callee-owners set that covers the candidate sibling owners; common callees do not by themselves prove state-changing effects. Run the chosen set's printed system-map command unchanged. If the selected cross-boundary set prints an upstream entry and command preconditions can change the answer, include that location in the one batched gap inspect after the map. Do not run inspect, evidence, code, or command help before the map. A source-owned search identity remains --search; use --symbol only for a printed compiler identity, and never pass the same loose term to both selectors.
+Use exactly one initial locator. Use search only when the question quotes an exact source/runtime literal or supplies an exact compiler symbol; an unquoted domain term, feature name, or command name is not an exact selector. Otherwise run scip-query anchors with the complete question as one shell-safely quoted positional argument; there is no --question option. Anchor discovery mechanically joins normalized repository words to compiler owners and bounded call relationships; its ranking is navigation help, not a claim that a set answers the question. For a cross-process or cross-protocol causal sequence, choose the first cross-boundary-flow whose displayed producer, runtime key, and downstream owner match the requested operation. Otherwise choose the smallest connected-flow set that covers the sequence. For an exhaustive "which operations/callers can" question, choose the smallest shared-callee-owners set that covers the candidate sibling owners; common callees do not by themselves prove state-changing effects. Run the chosen set's printed system-map command unchanged. The map labels exact causal targets as upstream callers, downstream callees, result-producing callbacks, or runtime producers/consumers without claiming they all matter. If one corresponds to a named missing material fact, include its printed location in the one batched gap inspect after the map. Do not run inspect, evidence, code, or command help before the map. A source-owned search identity remains --search; use --symbol only for a printed compiler identity, and never pass the same loose term to both selectors.
 
-The map's connected behavior is already source evidence: compare its lines and transitions with the material claims and stop immediately when they establish all of them. Before any gap query, make a private evidence ledger for every explicit anchor. Preserve every relevant sibling branch outcome shown under an anchor; sibling branches are jointly required behavior, not alternative search results. Optional gap recovery is folded by default. Only if one material claim is absent may you name that exact gap plus the specific callee body already visible in connected behavior that can establish it. Resolve category-changing gaps first—process versus cross-process, atomic versus later repair, durable versus merely written—before adding detail to behavior already established. When the map prints that callee's exact inspect target, use it directly in one batched inspect --view behavior command. Use --gap-callee / --gap-recovery-only only for an additional or ambiguous target whose exact location was not printed. If inspect requires behavior focus, use interior file:line locations already visible in the map; do not use --full, and do not treat the refusal itself as missing task evidence. Do not override an exact-source materialization refusal unless omitted syntax itself can change the decision. Do not enumerate helpers, implementation families, examples, tests, or unrelated frontiers. The normal allowance is one locator, one map, and one scoped gap batch. Treat exact edges as facts only within reported coverage and candidates as leads. Before sending, audit the draft itself against the material claims: evidence seen but left implicit is not recovered, and returned file/line identities must be copied exactly rather than reconstructed. If output emits Continue exactly:, run it unchanged.
+The map's connected behavior is already source evidence: compare its lines and transitions with the material claims and stop immediately when they establish all of them. Before any gap query, make a private evidence ledger for every explicit anchor. Preserve every relevant sibling branch outcome shown under an anchor; sibling branches are jointly required behavior, not alternative search results. Optional causal recovery is folded by default. Only if one material claim is absent may you name that exact gap plus the specific printed upstream caller, downstream callee, result callback, or runtime participant that can establish it. Resolve category-changing gaps first—process versus cross-process, atomic versus later repair, durable versus merely written—before adding detail to behavior already established. Use exact printed targets directly in one batched inspect --view behavior command. Use --gap-callee / --gap-recovery-only only for an additional or ambiguous target whose exact location was not printed. If inspect requires behavior focus, use interior file:line locations already visible in the map; do not use --full, and do not treat the refusal itself as missing task evidence. Do not override an exact-source materialization refusal unless omitted syntax itself can change the decision. Do not enumerate helpers, implementation families, examples, tests, or unrelated frontiers. The normal allowance is one locator, one map, and one scoped gap batch. Treat exact edges as facts only within reported coverage and candidates as leads. Before sending, audit the draft itself against the material claims: evidence seen but left implicit is not recovered, and returned file/line identities must be copied exactly rather than reconstructed. If output emits Continue exactly:, run it unchanged.
 
 Return a concise explanation with concrete symbol and file/line evidence and state any material coverage limitation.`;
 }
@@ -92,14 +101,21 @@ export function parseCodexJsonl(jsonl, metadata = {}) {
 export function classifyExplorationCommand(command) {
   if (isSkillInstructionRead(command)) return { surface: 'other', kind: 'other' };
   const scipQuery = SCIP_QUERY.test(command);
+  // Classify the primary exploration surface before scanning its quoted
+  // arguments. Natural-language anchor questions can contain words such as
+  // "find" without executing the native find command.
+  if (scipQuery) {
+    if (MIXED_NATIVE_SEARCH.test(command)) return { surface: 'native-search', kind: 'query' };
+    if (MIXED_NATIVE_READ.test(command)) return { surface: 'native-read', kind: 'query' };
+    if (/\bscip-query\s+status\b/iu.test(command)) return { surface: 'scip-query', kind: 'status' };
+    if (/\bscip-query\s+continue\b/iu.test(command) || /--output-cursor\b/u.test(command)) {
+      return { surface: 'scip-query', kind: 'continuation' };
+    }
+    return { surface: 'scip-query', kind: 'query' };
+  }
   if (NATIVE_SEARCH.test(command)) return { surface: 'native-search', kind: 'query' };
   if (NATIVE_READ.test(command) || SCRIPTED_READ.test(command)) return { surface: 'native-read', kind: 'query' };
-  if (!scipQuery) return { surface: 'other', kind: 'other' };
-  if (/\bscip-query\s+status\b/iu.test(command)) return { surface: 'scip-query', kind: 'status' };
-  if (/\bscip-query\s+continue\b/iu.test(command) || /--output-cursor\b/u.test(command)) {
-    return { surface: 'scip-query', kind: 'continuation' };
-  }
-  return { surface: 'scip-query', kind: 'query' };
+  return { surface: 'other', kind: 'other' };
 }
 
 function isSkillInstructionRead(command) {
