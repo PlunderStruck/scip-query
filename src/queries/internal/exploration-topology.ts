@@ -17,6 +17,65 @@ export type ExplorationDisposition = 'emitted' | 'folded' | 'excluded' | 'unsupp
 export type ExplorationAnchorStatus = 'matched' | 'ambiguous' | 'missing';
 
 /**
+ * The closed semantic families used to explain program relationships without
+ * baking language or framework vocabulary into the universal graph contract.
+ */
+export const PROGRAM_EDGE_FAMILIES = ['identity', 'contract', 'control', 'data', 'state', 'temporal'] as const;
+
+export type ProgramEdgeFamily = (typeof PROGRAM_EDGE_FAMILIES)[number];
+
+const PROGRAM_EDGE_FAMILY_SET: ReadonlySet<string> = new Set(PROGRAM_EDGE_FAMILIES);
+
+/** Context that qualifies a semantic relationship without changing its family. */
+export interface ProgramEdgeSemanticContext {
+  crossesRuntimeBoundary?: true;
+  protocol?: string;
+  runtimeKey?: string;
+  process?: string;
+  transaction?: string;
+  synchronizationScope?: string;
+}
+
+/** One primitive interpretation of an existing evidenced topology edge. */
+export interface ProgramEdgeSemantic {
+  family: ProgramEdgeFamily;
+  subtype: string;
+  context?: ProgramEdgeSemanticContext;
+}
+
+/**
+ * A projected program edge preserves the original topology evidence while
+ * giving causal traversal a repository-independent family and subtype.
+ */
+export interface ProgramEdge extends ProgramEdgeSemantic {
+  id: string;
+  sourceEdgeId: string;
+  sourceKind: string;
+  fromNodeId: string;
+  toNodeId: string;
+  directed: true;
+  disposition: ExplorationDisposition;
+  evidence: ExplorationEvidenceSource[];
+}
+
+export interface ProgramEdgeFamilyInventory {
+  sourceEdges: number;
+  projectedEdges: number;
+  subtypes: string[];
+}
+
+/** Diagnostic accounting for semantic coverage of one topology packet. */
+export interface ProgramEdgeInventory {
+  sourceEdges: number;
+  mappedSourceEdges: number;
+  projectedEdges: number;
+  unmappedSourceEdges: number;
+  unsupportedSourceEdges: number;
+  unmappedKinds: string[];
+  families: Record<ProgramEdgeFamily, ProgramEdgeFamilyInventory>;
+}
+
+/**
  * A completion status names what one repository query established, never
  * whether the agent has finished the user's task. Selection completion covers
  * requested units, connector completion covers proved paths between anchors,
@@ -78,6 +137,8 @@ export interface ExplorationTopologyEdge {
   directed: true;
   disposition: ExplorationDisposition;
   evidence: ExplorationEvidenceSource[];
+  /** Additive semantic projection; absent means this producer has not mapped the edge yet. */
+  semantics?: ProgramEdgeSemantic[];
 }
 
 /** A path records a proved or still-partial connection between explicit anchors. */
@@ -131,6 +192,7 @@ export interface ExplorationTopologyCoverage {
   missingAnchors: number;
   omittedCandidates: number;
   frontierGroups: number;
+  programEdges: ProgramEdgeInventory;
   blindSpots: string[];
   explanation: string;
 }
@@ -190,6 +252,7 @@ export function createExplorationTopology(input: ExplorationTopologyInput): Expl
   for (const edge of edges) {
     assertReferencesExist(`edge ${edge.id}`, [edge.fromNodeId, edge.toNodeId], nodeIds, 'node');
     if (edge.evidence.length === 0) throw new Error(`Exploration edge ${edge.id} has no evidence source.`);
+    validateProgramEdgeSemantics(edge);
   }
   for (const path of paths) {
     assertReferencesExist(`path ${path.id}`, [path.fromAnchorId, path.toAnchorId], anchorIds, 'anchor');
@@ -227,6 +290,7 @@ export function createExplorationTopology(input: ExplorationTopologyInput): Expl
       missingAnchors: anchors.filter((anchor) => anchor.status === 'missing').length,
       omittedCandidates,
       frontierGroups: frontiers.length,
+      programEdges: programEdgeInventory(edges),
       blindSpots: uniqueSorted(input.blindSpots ?? []),
       explanation:
         status === 'accounted'
@@ -235,6 +299,105 @@ export function createExplorationTopology(input: ExplorationTopologyInput): Expl
     },
     completion: topologyCompletion(status, paths, input.scope),
   };
+}
+
+/** Flatten semantic annotations without weakening or duplicating their source evidence. */
+export function projectProgramEdges(edges: readonly ExplorationTopologyEdge[]): ProgramEdge[] {
+  return edges
+    .flatMap((edge) =>
+      sortedProgramEdgeSemantics(edge.semantics ?? []).map((semantic) => ({
+        id: programEdgeId(edge.id, semantic),
+        sourceEdgeId: edge.id,
+        sourceKind: edge.kind,
+        fromNodeId: edge.fromNodeId,
+        toNodeId: edge.toNodeId,
+        directed: true as const,
+        disposition: edge.disposition,
+        evidence: [...edge.evidence],
+        family: semantic.family,
+        subtype: semantic.subtype,
+        ...(semantic.context ? { context: { ...semantic.context } } : {}),
+      })),
+    )
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+/** Summarize which semantic families a topology producer mapped and which it did not. */
+export function programEdgeInventory(edges: readonly ExplorationTopologyEdge[]): ProgramEdgeInventory {
+  const projected = projectProgramEdges(edges);
+  const mappedSourceEdgeIds = new Set(projected.map((edge) => edge.sourceEdgeId));
+  const sourceEdgeIdsByFamily = new Map<ProgramEdgeFamily, Set<string>>(
+    PROGRAM_EDGE_FAMILIES.map((family) => [family, new Set<string>()]),
+  );
+  const subtypesByFamily = new Map<ProgramEdgeFamily, Set<string>>(
+    PROGRAM_EDGE_FAMILIES.map((family) => [family, new Set<string>()]),
+  );
+  const projectedByFamily = new Map<ProgramEdgeFamily, number>(PROGRAM_EDGE_FAMILIES.map((family) => [family, 0]));
+
+  for (const edge of projected) {
+    sourceEdgeIdsByFamily.get(edge.family)!.add(edge.sourceEdgeId);
+    subtypesByFamily.get(edge.family)!.add(edge.subtype);
+    projectedByFamily.set(edge.family, projectedByFamily.get(edge.family)! + 1);
+  }
+
+  return {
+    sourceEdges: edges.length,
+    mappedSourceEdges: mappedSourceEdgeIds.size,
+    projectedEdges: projected.length,
+    unmappedSourceEdges: edges.length - mappedSourceEdgeIds.size,
+    unsupportedSourceEdges: edges.filter((edge) => edge.disposition === 'unsupported').length,
+    unmappedKinds: uniqueSorted(edges.filter((edge) => !mappedSourceEdgeIds.has(edge.id)).map((edge) => edge.kind)),
+    families: {
+      identity: familyInventory('identity', sourceEdgeIdsByFamily, projectedByFamily, subtypesByFamily),
+      contract: familyInventory('contract', sourceEdgeIdsByFamily, projectedByFamily, subtypesByFamily),
+      control: familyInventory('control', sourceEdgeIdsByFamily, projectedByFamily, subtypesByFamily),
+      data: familyInventory('data', sourceEdgeIdsByFamily, projectedByFamily, subtypesByFamily),
+      state: familyInventory('state', sourceEdgeIdsByFamily, projectedByFamily, subtypesByFamily),
+      temporal: familyInventory('temporal', sourceEdgeIdsByFamily, projectedByFamily, subtypesByFamily),
+    },
+  };
+}
+
+function familyInventory(
+  family: ProgramEdgeFamily,
+  sourceEdgeIdsByFamily: ReadonlyMap<ProgramEdgeFamily, ReadonlySet<string>>,
+  projectedByFamily: ReadonlyMap<ProgramEdgeFamily, number>,
+  subtypesByFamily: ReadonlyMap<ProgramEdgeFamily, ReadonlySet<string>>,
+): ProgramEdgeFamilyInventory {
+  return {
+    sourceEdges: sourceEdgeIdsByFamily.get(family)?.size ?? 0,
+    projectedEdges: projectedByFamily.get(family) ?? 0,
+    subtypes: [...(subtypesByFamily.get(family) ?? [])].sort(),
+  };
+}
+
+function validateProgramEdgeSemantics(edge: ExplorationTopologyEdge): void {
+  const seen = new Set<string>();
+  for (const semantic of edge.semantics ?? []) {
+    if (!PROGRAM_EDGE_FAMILY_SET.has(semantic.family)) {
+      throw new Error(`Exploration edge ${edge.id} has unknown program edge family: ${semantic.family}.`);
+    }
+    if (semantic.subtype.trim().length === 0) {
+      throw new Error(`Exploration edge ${edge.id} has an empty program edge subtype.`);
+    }
+    const key = programEdgeSemanticKey(semantic);
+    if (seen.has(key)) throw new Error(`Exploration edge ${edge.id} repeats program edge semantic ${key}.`);
+    seen.add(key);
+  }
+}
+
+function sortedProgramEdgeSemantics(semantics: readonly ProgramEdgeSemantic[]): ProgramEdgeSemantic[] {
+  return [...semantics].sort((left, right) =>
+    programEdgeSemanticKey(left).localeCompare(programEdgeSemanticKey(right)),
+  );
+}
+
+function programEdgeSemanticKey(semantic: ProgramEdgeSemantic): string {
+  return `${semantic.family}:${semantic.subtype}`;
+}
+
+function programEdgeId(sourceEdgeId: string, semantic: ProgramEdgeSemantic): string {
+  return `program:${encodeURIComponent(sourceEdgeId)}:${semantic.family}:${encodeURIComponent(semantic.subtype)}`;
 }
 
 function topologyCompletion(

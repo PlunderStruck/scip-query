@@ -38,6 +38,12 @@ import { SOURCE_INSPECTION_MAX_SELECTORS } from '../internal/inspection-limits.j
 import { connectedBehaviorPacket, type ConnectedBehaviorPacket } from '../internal/connected-behavior.js';
 import { systemMapNextAnchorPacket, type SystemMapNextAnchorPacket } from '../internal/next-anchor-candidates.js';
 import {
+  SYSTEM_MAP_RELATION_KINDS,
+  systemMapRelationProgramSemantics,
+  systemMapSyntheticEdgeProgramSemantics,
+  type SystemMapRelationKind,
+} from './system-map-edge-semantics.js';
+import {
   createExplorationTopology,
   selectExplorationTopology,
   type ExplorationEvidenceSource,
@@ -63,17 +69,11 @@ const MAX_RECURSIVE_CALLER_BRANCHES = 2;
 // anchor identities, and an explicit omission ledger. The topology budget is
 // independently recoverable and must not force a transport continuation.
 const DEFAULT_TOPOLOGY_CHARACTERS = 9_000;
-const ALL_RELATION_KINDS: readonly SystemMapRelationKind[] = [
-  'call',
-  'contract-symbol',
-  'import',
-  'reference',
-  'runtime-boundary',
-];
+const ALL_RELATION_KINDS: readonly SystemMapRelationKind[] = SYSTEM_MAP_RELATION_KINDS;
 
 export type SystemMapAnchorKind = 'literal' | 'symbol';
 export type SystemMapAnchorStatus = 'matched' | 'ambiguous' | 'missing';
-export type SystemMapRelationKind = 'call' | 'contract-symbol' | 'import' | 'reference' | 'runtime-boundary';
+export type { SystemMapRelationKind } from './system-map-edge-semantics.js';
 export type SystemMapEvidenceFloor = 'exact' | 'derived';
 export type SystemMapSourceScope = BoundarySourceScope;
 export type SystemMapReferenceScope = 'none' | 'all' | 'forward-regions' | 'cross-workspace-or-forward';
@@ -2145,6 +2145,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
       toNodeId: symbolNodeId,
       directed: true,
       disposition: 'folded',
+      semantics: systemMapSyntheticEdgeProgramSemantics('structural-membership'),
       evidence: [
         {
           method: 'indexed-definition-file',
@@ -2203,6 +2204,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
           toNodeId: participantNodeId,
           directed: true,
           disposition: 'folded',
+          semantics: systemMapSyntheticEdgeProgramSemantics('boundary-observation'),
           evidence: [
             {
               method: 'runtime-boundary-observation-owner',
@@ -2227,6 +2229,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
       toNodeId,
       directed: true,
       disposition: 'folded',
+      semantics: systemMapRelationProgramSemantics(first),
       evidence: uniqueExplorationEvidence(
         bucket.map((relation) => ({
           method: relation.evidence,
@@ -2261,6 +2264,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
         toNodeId: nodeId,
         directed: true,
         disposition: 'folded',
+        semantics: systemMapSyntheticEdgeProgramSemantics('external-import'),
         evidence: [
           {
             method: 'indexed-or-source-import',

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createExplorationTopology,
+  projectProgramEdges,
   selectExplorationTopology,
   type ExplorationTopologyInput,
 } from '../../../src/queries/internal/exploration-topology.js';
@@ -20,7 +21,32 @@ describe('universal exploration topology', () => {
       edges: { total: 2, emitted: 1, folded: 1, excluded: 0, unsupported: 0 },
       matchedAnchors: 2,
       frontierGroups: 1,
+      programEdges: {
+        sourceEdges: 2,
+        mappedSourceEdges: 2,
+        projectedEdges: 2,
+        unmappedSourceEdges: 0,
+        unmappedKinds: [],
+        families: { control: { sourceEdges: 2, projectedEdges: 2, subtypes: ['call', 'runtime-handoff'] } },
+      },
     });
+    expect(projectProgramEdges(topology.edges)).toMatchObject([
+      {
+        sourceEdgeId: 'compiler-edge',
+        sourceKind: 'compiler:call',
+        family: 'control',
+        subtype: 'call',
+        evidence: [{ method: 'semantic-callee', strength: 'exact' }],
+      },
+      {
+        sourceEdgeId: 'runtime-edge',
+        sourceKind: 'runtime:http.method-path',
+        family: 'control',
+        subtype: 'runtime-handoff',
+        context: { crossesRuntimeBoundary: true, protocol: 'http' },
+        evidence: [{ method: 'framework-adapter:http.method-path', strength: 'derived' }],
+      },
+    ]);
     expect(topology.frontiers[0]).toMatchObject({
       memberNodeIds: ['consumer'],
       memberCount: 1,
@@ -512,6 +538,7 @@ function fixtureInput(): ExplorationTopologyInput {
         toNodeId: 'collector',
         directed: true,
         disposition: 'emitted',
+        semantics: [{ family: 'control', subtype: 'call' }],
         evidence: [
           {
             method: 'semantic-callee',
@@ -528,6 +555,13 @@ function fixtureInput(): ExplorationTopologyInput {
         toNodeId: 'consumer',
         directed: true,
         disposition: 'folded',
+        semantics: [
+          {
+            family: 'control',
+            subtype: 'runtime-handoff',
+            context: { crossesRuntimeBoundary: true, protocol: 'http' },
+          },
+        ],
         evidence: [
           {
             method: 'framework-adapter:http.method-path',

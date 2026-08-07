@@ -145,6 +145,14 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       const loopNodes = result.topology?.nodes.filter((node) => node.label === 'loop') ?? [];
       expect(loopNodes).toHaveLength(1);
       expect(loopNodes[0]?.location).toEqual({ file: 'src/service.ts', line: 1, endLine: 4 });
+      const callEdges = result.topology?.edges.filter((edge) => edge.kind === 'call') ?? [];
+      expect(callEdges.length).toBeGreaterThan(0);
+      expect(
+        callEdges.every((edge) =>
+          edge.semantics?.some(({ family, subtype }) => family === 'control' && subtype === 'call'),
+        ),
+      ).toBe(true);
+      expect(result.topology?.coverage.programEdges.unmappedKinds).toEqual([]);
       const loopStep = result.behavior?.steps.filter((step) => step.label === 'loop') ?? [];
       expect(loopStep).toHaveLength(1);
       expect(loopStep[0]?.behavior?.lines.map((line) => line.line)).toEqual(expect.arrayContaining([2, 3]));

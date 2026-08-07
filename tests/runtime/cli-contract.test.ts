@@ -41,6 +41,7 @@ const PRIVATE_QUERY_MODULES = [
   'source-inspection-selection',
   'source-snippet',
   'architecture-baseline',
+  'system-map-edge-semantics',
   'test-boundary-policy',
 ] as const;
 
@@ -63,6 +64,7 @@ const PRIVATE_QUERY_SOURCE_PATHS = {
   'source-inspection-selection': 'src/queries/navigation/source-inspection-selection.ts',
   'source-snippet': 'src/queries/navigation/source-snippet.ts',
   'architecture-baseline': 'src/queries/graph/architecture-baseline.ts',
+  'system-map-edge-semantics': 'src/queries/graph/system-map-edge-semantics.ts',
   'test-boundary-policy': 'src/queries/graph/test-boundary-policy.ts',
 } as const satisfies Record<(typeof PRIVATE_QUERY_MODULES)[number], string>;
 

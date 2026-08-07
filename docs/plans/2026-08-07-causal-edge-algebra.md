@@ -294,3 +294,15 @@ The graph determines what is causally connected. It does not determine which con
 Implement Slice 0 and Slice 1 first. They are the smallest way to test the design without destabilizing the working exploration surface: inventory and adapt the relationships SkipQuery already knows, expose their coverage, and verify that the six-family projection loses no information. Only after that mapping passes should we add missing control, data, state, and temporal derivations.
 
 The first falsification test is simple: take every relationship currently emitted by `system-map`, callgraph, dataflow, slice, architecture, compiler identity, and runtime-boundary extraction. If any relationship cannot be represented in the six-family schema while preserving its task-relevant meaning, evidence strength, and recovery path, revise the schema before building corridor selection on top of it.
+
+## Implementation checkpoint: 2026-08-07
+
+The first canonical projection slice is implemented on the feature branch:
+
+- The universal topology defines the six semantic families, additive semantic descriptors, evidence-preserving `ProgramEdge` projection, and per-family mapping inventory.
+- Every proved `system-map` relation kind is mapped conservatively. Calls become control edges; contract-symbol relationships become contract edges; imports and references become identity edges; runtime links become control handoffs with their protocol and rendezvous key retained.
+- Structural membership, runtime-observation ownership, and external imports are mapped as identity relationships.
+- Unresolved runtime-boundary frontiers remain unsupported and unmapped. The projection does not invent data, state, or temporal edges merely because a runtime link exists.
+- Focused contracts, TypeScript checks, lint/API/build checks, and the complete 2,277-test suite pass.
+
+The next implementation slice should adapt the existing dataflow and parameter-flow machinery into canonical data edges. After that adapter reports its coverage, add missing control-dependence edges for complete predicates and sibling outcomes. New framework detectors should wait until these existing analyzers are projected, because the inventory will then identify the remaining evidence gaps precisely.
