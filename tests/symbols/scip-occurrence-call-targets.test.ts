@@ -15,6 +15,8 @@ import {
   scipOccurrenceCallableReferencesForRange,
   scipOccurrenceCallTargetsForRange,
 } from '../../src/symbols/graph/scip-occurrence-call-targets.js';
+import { sourceRangeNextAnchorPacket } from '../../src/queries/internal/next-anchor-candidates.js';
+import { inspectSource } from '../../src/queries/navigation/source-inspection.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
@@ -117,6 +119,53 @@ describe('SCIP occurrence call targets for source ranges', () => {
           }),
         ],
       });
+
+      const frontier = sourceRangeNextAnchorPacket(db, [
+        {
+          id: 'registry',
+          label: 'registry',
+          file: 'src/registry.ts',
+          startLine: 1,
+          endLine: 8,
+        },
+      ]);
+      expect(frontier).toMatchObject({
+        candidateAnchors: 1,
+        graphEvidencedCallsites: 1,
+        anchors: [
+          expect.objectContaining({
+            status: 'exact',
+            direction: 'downstream',
+            causalRole: 'callee',
+            callsite: expect.objectContaining({ signals: expect.arrayContaining(['call', 'return']) }),
+            alternatives: [expect.objectContaining({ symbol: TARGET_SYMBOL, file: 'src/service.ts', line: 1 })],
+          }),
+        ],
+      });
+
+      const inspection = inspectSource(db, { locations: ['src/registry.ts:2'], view: 'behavior' });
+      expect(inspection.causalFrontier?.anchors).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            alternatives: [expect.objectContaining({ symbol: TARGET_SYMBOL })],
+          }),
+        ]),
+      );
+
+      const boundedInspection = inspectSource(db, {
+        locations: ['src/registry.ts:2'],
+        view: 'behavior',
+        maxCharacters: 1,
+      });
+      expect(boundedInspection.units).toHaveLength(0);
+      expect(boundedInspection.omittedUnits).toBeGreaterThan(0);
+      expect(boundedInspection.causalFrontier?.anchors).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            alternatives: [expect.objectContaining({ symbol: TARGET_SYMBOL })],
+          }),
+        ]),
+      );
     } finally {
       db.close();
       rmSync(projectRoot, { recursive: true, force: true });

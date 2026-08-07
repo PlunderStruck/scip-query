@@ -1,0 +1,49 @@
+{
+  "acceptedAt": "2026-08-07T02:02:57.226Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "ae556d744eab1c59a1b2a925bb9a74d9f61c6523c41a3eb0b48a0c26c7329ef2",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionResult changed from interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid... to interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid....",
+      "target": "./queries:SourceInspectionResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionResult changed from interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid... to interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid....",
+      "target": "./queries/index:SourceInspectionResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SourceInspectionResult changed from interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid... to interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid....",
+      "target": "./queries/source-inspection:SourceInspectionResult"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/system-map; review their variance and runtime meaning.",
+      "target": "./queries/system-map"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module exploration-topology-<hash>.d.ts was removed or renamed.",
+      "target": "exploration-topology-<hash>.d.ts"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module next-anchor-candidates-<hash>.d.ts was added or renamed.",
+      "target": "next-anchor-candidates-<hash>.d.ts"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "474a7993db2ddb98461c2ecda90c3cda6d0d48fdfa4fd2f79bd2d15b81edccee",
+  "reason": "SourceInspectionResult gains one optional causalFrontier field; the uncertain residue is declaration-chunk refactoring for the already-public SystemMapNextAnchorPacket, and existing consumers remain source compatible",
+  "schemaVersion": 1
+}

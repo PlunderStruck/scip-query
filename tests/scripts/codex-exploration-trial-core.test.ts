@@ -101,6 +101,9 @@ describe('Codex exploration trial core', () => {
     expect(prompt).toContain('Use exactly one initial locator');
     expect(prompt).toContain('one shell-safely quoted positional argument');
     expect(prompt).toContain('operation kind and record-identity fields');
+    expect(prompt).toContain('handler-resolution precedence');
+    expect(prompt).toContain('fallback or unknown-handler behavior');
+    expect(prompt).toContain('exception-to-result conversion');
     expect(prompt).toContain("Run the chosen set's printed system-map command unchanged");
     expect(prompt).toContain('never pass the same loose term to both selectors');
     expect(prompt).toContain('Do not run inspect, evidence, code, or command help before the map');
@@ -108,7 +111,9 @@ describe('Codex exploration trial core', () => {
     expect(prompt).toContain('private evidence ledger for every explicit anchor');
     expect(prompt).toContain('sibling branches are jointly required behavior');
     expect(prompt).toContain('stop immediately when they establish all of them');
-    expect(prompt).toContain('one locator, one map, and one scoped gap batch');
+    expect(prompt).toContain('one locator, one map, one scoped gap batch');
+    expect(prompt).toContain('must use the remaining semantic-query allowance for one final batched recovery inspect');
+    expect(prompt).toContain('do not report a coverage limitation for an exact in-budget recovery command');
     expect(prompt).toContain('evidence seen but left implicit is not recovered');
     expect(prompt).toContain('Optional causal recovery is folded by default');
     expect(prompt).toContain('--gap-callee');

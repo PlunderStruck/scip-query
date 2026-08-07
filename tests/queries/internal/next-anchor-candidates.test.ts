@@ -6,6 +6,7 @@ import {
   coverageDiverseNextAnchors,
   systemMapNextAnchorPacket,
   type RankedNextAnchor,
+  writesThroughObjectIdentity,
 } from '../../../src/queries/internal/next-anchor-candidates.js';
 import type { ConnectedBehaviorStep } from '../../../src/queries/internal/connected-behavior.js';
 import { createExplorationTopology } from '../../../src/queries/internal/exploration-topology.js';
@@ -16,6 +17,14 @@ const SOURCE_SYMBOL = 'scip-typescript npm fixture 1.0.0 src/`registry.ts`/expos
 const HANDLER_SYMBOL = 'scip-typescript npm fixture 1.0.0 src/`handler.ts`/handleEvent().';
 
 describe('next-anchor target selection', () => {
+  it('distinguishes reachable object-state writes from local scalar bookkeeping', () => {
+    expect(writesThroughObjectIdentity('cur = c;')).toBe(false);
+    expect(writesThroughObjectIdentity('quote = null;')).toBe(false);
+    expect(writesThroughObjectIdentity('info.status = "exited";')).toBe(true);
+    expect(writesThroughObjectIdentity('this.nextId++;')).toBe(true);
+    expect(writesThroughObjectIdentity('state[key] ??= createValue();')).toBe(true);
+  });
+
   it('reserves a semantic continuation for a causal connector and prevents one anchor from monopolizing the budget', () => {
     const steps = [
       step('anchor-a', 'anchor'),
@@ -58,6 +67,72 @@ describe('next-anchor target selection', () => {
       'result-callback',
       'a-ordinary',
       'b-ordinary',
+    ]);
+  });
+
+  it('preserves distinct downstream evidence dimensions inside the fixed packet budget', () => {
+    const steps = [step('anchor-a', 'anchor')];
+    const candidates = [
+      candidate('ordinary-1', 'anchor-a', 500),
+      candidate('ordinary-2', 'anchor-a', 490),
+      candidate('ordinary-3', 'anchor-a', 480),
+      candidate('control', 'anchor-a', 100, {}, ['call', 'branch']),
+      candidate('effect', 'anchor-a', 90, {}, ['call', 'await']),
+      candidate('result', 'anchor-a', 80, {}, ['call', 'return']),
+      candidate('value', 'anchor-a', 70, {}, ['call', 'binding']),
+    ];
+
+    expect(coverageDiverseNextAnchors(candidates, steps, 6).map((item) => item.anchor.id)).toEqual([
+      'ordinary-1',
+      'control',
+      'effect',
+      'result',
+      'value',
+      'ordinary-2',
+    ]);
+  });
+
+  it('does not reserve ambiguous identity candidates as evidence coverage', () => {
+    const steps = [step('anchor-a', 'anchor')];
+    const ambiguous = candidate('ambiguous-control', 'anchor-a', 200, {}, ['call', 'branch']);
+    ambiguous.anchor.status = 'ambiguous';
+    ambiguous.anchor.alternativeCount = 2;
+    ambiguous.anchor.alternatives.push({
+      symbol: 'ambiguous-control-2',
+      label: 'ambiguous-control-2',
+      file: 'src/other-target.ts',
+      line: 0,
+      endLine: 0,
+    });
+    const candidates = [
+      candidate('ordinary-1', 'anchor-a', 300),
+      candidate('ordinary-2', 'anchor-a', 290),
+      ambiguous,
+      candidate('result', 'anchor-a', 100, {}, ['call', 'return']),
+    ];
+
+    expect(coverageDiverseNextAnchors(candidates, steps, 3).map((item) => item.anchor.id)).toEqual([
+      'ordinary-1',
+      'result',
+      'ordinary-2',
+    ]);
+  });
+
+  it('reserves a callee proven to own state effects even when the caller only binds its result', () => {
+    const steps = [step('anchor-a', 'anchor')];
+    const effectOwner = candidate('effect-owner', 'anchor-a', 50);
+    effectOwner.coverageDimensions = ['callee-state-effect'];
+    const candidates = [
+      candidate('ordinary-1', 'anchor-a', 300),
+      candidate('ordinary-2', 'anchor-a', 290),
+      candidate('returned-result', 'anchor-a', 100, {}, ['call', 'return']),
+      effectOwner,
+    ];
+
+    expect(coverageDiverseNextAnchors(candidates, steps, 3).map((item) => item.anchor.id)).toEqual([
+      'ordinary-1',
+      'returned-result',
+      'effect-owner',
     ]);
   });
 
@@ -210,6 +285,7 @@ function candidate(
   fromStepId: string,
   priority: number,
   causal: Pick<RankedNextAnchor['anchor'], 'direction' | 'causalRole'> = {},
+  signals: RankedNextAnchor['anchor']['callsite']['signals'] = ['call'],
 ): RankedNextAnchor {
   return {
     priority,
@@ -225,7 +301,7 @@ function candidate(
         line: 0,
         endLine: 0,
         text: `${id}()`,
-        signals: ['call'],
+        signals,
         calleeLeaf: id,
       },
       alternatives: [{ symbol: id, label: id, file: 'src/target.ts', line: 0, endLine: 0 }],

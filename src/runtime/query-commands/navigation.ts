@@ -41,6 +41,7 @@ import {
   withSymbolResolutionJson,
 } from './symbol-resolution.js';
 import { directNavigationQueryCommandDescriptors } from './direct-navigation.js';
+import { SOURCE_INSPECTION_MAX_SELECTORS } from '../../queries/internal/inspection-limits.js';
 
 const DEFAULT_SAFE_INSPECT_SOURCE_CHARACTERS = 20_000;
 
@@ -583,6 +584,7 @@ function sourceInspectionSections(result: queries.SourceInspectionResult): Repor
   const sourceRows = units.map(sourceInspectionUnitRow);
   const bindingRows = bindingClosureRows(result.bindingClosure);
   const omissionRows = (result.omissionGroups ?? []).map(sourceInspectionOmissionGroupRow);
+  const causalFrontierRows = sourceInspectionCausalFrontierRows(result);
   const resolutionRows = result.evidence.flatMap((item) => {
     const failure = evidenceFailureMessage(item, 'inspect');
     return failure ? [`  ${failure}`] : [];
@@ -624,12 +626,58 @@ function sourceInspectionSections(result: queries.SourceInspectionResult): Repor
     { title: 'EVIDENCE PACKET', rows: sourceRows, skipIfEmpty: true },
     { title: 'LITERAL VALUES', rows: bindingRows, skipIfEmpty: true },
     { title: 'OMISSION LEDGER', rows: omissionRows, skipIfEmpty: true },
+    { title: 'NEXT CAUSAL FRONTIER', rows: causalFrontierRows, skipIfEmpty: true },
     {
       title: 'PACKET COVERAGE',
       rows: packetRows,
     },
     { title: 'QUERY COMPLETION', rows: stoppingRows, skipIfEmpty: true },
   ];
+}
+
+function sourceInspectionCausalFrontierRows(result: queries.SourceInspectionResult): string[] {
+  const frontier = result.causalFrontier;
+  if (!frontier || frontier.candidateAnchors === 0) return [];
+  const selected = frontier.anchors.filter((anchor) => anchor.alternativeCount === 1);
+  const rows = [
+    `  ${selected.length}/${frontier.candidateAnchors} bounded downstream target(s) are exact and visible; these targets are outside the materialized constructs, not evidence already inspected.`,
+  ];
+  for (const anchor of selected) {
+    const target = anchor.alternatives[0]!;
+    const signals = anchor.callsite.signals.length > 0 ? ` [${anchor.callsite.signals.join(',')}]` : '';
+    rows.push(
+      `  ${anchor.direction ?? 'downstream'} ${anchor.causalRole ?? 'callee'} from ${anchor.fromLabel} at ${anchor.callsite.file}:${displayLine(anchor.callsite.line)}${signals}`,
+      `    ${target.label} — ${target.file}:${displayLine(target.line)}`,
+    );
+  }
+
+  const locations = uniqueInspectionLocations([
+    ...(result.omissionGroups ?? []).flatMap((group) =>
+      group.anchors.map((anchor) => ({ file: anchor.relativePath, line: anchor.line })),
+    ),
+    ...selected.map((anchor) => ({ file: anchor.alternatives[0]!.file, line: anchor.alternatives[0]!.line })),
+  ]).slice(0, SOURCE_INSPECTION_MAX_SELECTORS);
+  if (locations.length > 0) {
+    rows.push(
+      `  If any listed target or withheld requested construct remains material, run this one final recovery batch before answering: scip-query inspect ${locations
+        .map((location) => `--at ${shellArgument(`${location.file}:${displayLine(location.line)}`)}`)
+        .join(' ')} --view behavior`,
+    );
+  }
+  if (frontier.omittedAnchors > 0) {
+    rows.push(
+      `  ${frontier.omittedAnchors} additional downstream target(s) remain accounted in the frontier; use the printed remaining inspect commands only for a named unresolved fact.`,
+    );
+  }
+  return rows;
+}
+
+function uniqueInspectionLocations(
+  locations: readonly { file: string; line: number }[],
+): Array<{ file: string; line: number }> {
+  const unique = new Map<string, { file: string; line: number }>();
+  for (const location of locations) unique.set(`${location.file}\0${location.line}`, location);
+  return [...unique.values()];
 }
 
 function renderInspectionRoleCounts(counts: Partial<Record<queries.SourceInspectionUnitRole, number>>): string {
@@ -1071,6 +1119,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       omittedUnits: result.omittedUnits ?? result.omittedSlices,
       view: result.view,
       omissionGroups: result.omissionGroups,
+      causalFrontier: result.causalFrontier,
       packetCoverage: result.packetCoverage,
       stoppingSummary: result.stoppingSummary,
     }),

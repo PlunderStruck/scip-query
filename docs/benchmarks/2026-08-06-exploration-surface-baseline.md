@@ -383,3 +383,44 @@ Artifacts:
 - `benchmarks/exploration/meta-harness-bash-lifecycle-heldout-v1.json`
 - `/tmp/meta-harness-bash-lifecycle-control-sol-medium.json`
 - `/tmp/meta-harness-bash-lifecycle-treatment-sol-medium.json`
+
+## Meta-harness causal-frontier accuracy follow-up
+
+The next implementation continued the evidence chain across `inspect`. It uses
+SCIP call occurrences inside every exact requested source range—including a
+requested construct withheld by the current character ceiling—to expose a
+bounded downstream frontier. Selection preserves different caller roles and
+reserves callees whose bodies write through reachable object identities. Local
+scalar reassignment is not treated as a state-owning effect. One printed final
+batch combines withheld requested constructs with the selected exact callees.
+
+| Sol medium mode                     | Total tokens | Uncached input | Rendered characters | Semantic queries | Native reads | Manual strict facts |
+| ----------------------------------- | -----------: | -------------: | ------------------: | ---------------: | -----------: | ------------------: |
+| Frozen native control               |      356,261 |         62,103 |             158,809 |                0 |            7 |                 1/7 |
+| Original scip-query treatment       |      183,115 |         30,558 |              45,327 |                4 |            0 |                 3/7 |
+| Causal frontier plus final recovery |      198,169 |         34,581 |              54,947 |                4 |            0 |                 7/7 |
+
+The final treatment used 44.4% fewer total tokens, 44.3% fewer uncached input
+tokens, and 65.4% fewer rendered exploration characters than native control.
+It recovered all seven strict facts while control recovered one. Relative to
+the original treatment, full accuracy cost 8.2% more total tokens, 13.2% more
+uncached input, and 21.2% more rendered evidence. No native tracked-source read
+occurred, the private index took 2.1 seconds outside agent timing, and the
+detached repository and cache were deleted after the run.
+
+The decisive final recovery batch included the withheld classifier and global
+dispatcher plus `ProcessManager.start()`, `insideRepo()`, `truncate()`, the
+compaction owner, and auto-approval state. The answer then explicitly preserved
+phase-local precedence and unknown/thrown conversion, home expansion and
+relative-path containment, hard-block non-bypass, foreground bounds and abort
+behavior, background log/buffer/state transitions, and reinsertion into model
+history.
+
+The deterministic matcher reported 2/7 despite those explicit statements. Its
+false negatives are retained rather than repaired after seeing the answer;
+they demonstrate the need for a semantic or independently adjudicated accuracy
+layer. Strict manual adjudication remains the authority for this experiment.
+
+Artifact:
+
+- `/tmp/meta-harness-bash-lifecycle-treatment-causal-complete-sol-medium.json`

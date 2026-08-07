@@ -28,6 +28,7 @@ import {
 import { selectInspectionCandidates, selectInspectionCandidatesByChannel } from './source-inspection-selection.js';
 import { searchSource, type SourceSearchTextCoverage } from './source-search.js';
 import { enclosingSourceUnitSnippet, sourceSnippet, type SourceUnitSnippet } from './source-snippet.js';
+import { sourceRangeNextAnchorPacket, type SystemMapNextAnchorPacket } from '../internal/next-anchor-candidates.js';
 
 const DEFAULT_CONTEXT = 6;
 const DEFAULT_SEARCH_LIMIT = 12;
@@ -237,6 +238,8 @@ export interface SourceInspectionResult {
   omissionGroups?: SourceInspectionOmissionGroup[];
   packetCoverage?: SourceInspectionPacketCoverage;
   stoppingSummary?: SourceInspectionStoppingSummary;
+  /** Exact downstream call targets outside the materialized behavior constructs. */
+  causalFrontier?: SystemMapNextAnchorPacket;
   bindingClosure?: BindingClosure;
   /** @deprecated Inspect no longer emits semantic packet continuations. */
   continuation?: SourceInspectionContinuation | null;
@@ -385,6 +388,26 @@ export function inspectSource(db: ScipDatabase, opts: SourceInspectionOptions): 
     searches,
     expansionCommand,
   );
+  // Build the continuation frontier from every exact construct named by the
+  // request, including constructs withheld from the current evidence packet.
+  // Otherwise a character ceiling can hide both a requested construct and its
+  // direct callees, forcing an avoidable extra inspect generation to discover
+  // the next causal step.
+  const causalSeeds = candidates
+    .filter(
+      (candidate): candidate is CandidateSourceUnit =>
+        request.view === 'behavior' &&
+        candidate.kind === 'source' &&
+        candidate.roles.some((role) => role === 'location' || role === 'definition' || role === 'search'),
+    )
+    .map((candidate) => ({
+      id: `inspect:${candidate.relativePath}:${candidate.startLine}-${candidate.endLine}`,
+      label: candidate.ownerShort ?? `${candidate.relativePath}:${candidate.startLine + 1}`,
+      file: candidate.relativePath,
+      startLine: candidate.startLine,
+      endLine: candidate.endLine,
+    }));
+  const causalFrontier = causalSeeds.length > 0 ? sourceRangeNextAnchorPacket(db, causalSeeds) : undefined;
 
   return {
     searches,
@@ -418,6 +441,7 @@ export function inspectSource(db: ScipDatabase, opts: SourceInspectionOptions): 
       ...(expansionCommand ? { expansionCommand } : {}),
     },
     stoppingSummary,
+    ...(causalFrontier && causalFrontier.candidateAnchors > 0 ? { causalFrontier } : {}),
     bindingClosure,
     continuation: null,
   };
