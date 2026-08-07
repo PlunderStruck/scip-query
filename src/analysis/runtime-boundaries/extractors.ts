@@ -34,10 +34,109 @@ const SQL_EXECUTE_METHODS = new Set(['execute', 'query', 'raw']);
 export const BOUNDARY_EXTRACTORS: readonly BoundaryExtractor[] = [
   httpExtractor(),
   effectHttpApiExtractor(),
+  nodeChildProcessExtractor(),
   registryExtractor(),
   persistenceExtractor(),
   queueExtractor(),
 ];
+
+const NODE_CHILD_PROCESS_OPERATIONS = new Set([
+  'exec',
+  'execFile',
+  'execFileSync',
+  'execSync',
+  'fork',
+  'spawn',
+  'spawnSync',
+]);
+
+function nodeChildProcessExtractor(): BoundaryExtractor {
+  return {
+    id: 'builtin.node-child-process',
+    supports: (source) =>
+      /(?:from\s*|require\s*\(\s*)['"](?:node:)?child_process['"]/u.test(source) &&
+      /\b(?:exec|execFile|execFileSync|execSync|fork|spawn|spawnSync)\s*\(/u.test(source),
+    extract: (context) => {
+      const bindings = nodeChildProcessBindings(context.source);
+      const observations: BoundaryObservation[] = [];
+      walk(context.root, (node) => {
+        if (node.type !== 'call_expression') return;
+        const callee = callTarget(node);
+        if (!callee) return;
+        const directOperation = bindings.direct.get(callee);
+        const member = /^(.*?)\.([A-Za-z_$][\w$]*)$/u.exec(callee);
+        const memberOperation = member && bindings.namespaces.has(member[1]!) ? member[2]! : null;
+        const operation = directOperation ?? memberOperation;
+        if (!operation || !NODE_CHILD_PROCESS_OPERATIONS.has(operation)) return;
+
+        const args = callArguments(node);
+        const executable = addressedArgument(args[0], context) ?? {
+          value: args[0]?.text.trim() || '<missing>',
+          evidence: 'expression' as const,
+        };
+        const action = ['exec', 'execFile', 'execFileSync', 'execSync'].includes(operation)
+          ? 'process.exec'
+          : 'process.spawn';
+        observations.push(
+          observation(
+            context,
+            node,
+            'builtin.node-child-process',
+            action,
+            [
+              { name: 'operation', value: operation, evidence: 'literal' },
+              { name: 'executable', ...executable },
+            ],
+            'exact',
+            'node-child-process-import',
+          ),
+        );
+      });
+      return observations;
+    },
+  };
+}
+
+function nodeChildProcessBindings(source: string): {
+  direct: Map<string, string>;
+  namespaces: Set<string>;
+} {
+  const direct = new Map<string, string>();
+  const namespaces = new Set<string>();
+  const modulePattern = String.raw`['"](?:node:)?child_process['"]`;
+  const namedImport = new RegExp(String.raw`\bimport\s*\{([^}]*)\}\s*from\s*${modulePattern}`, 'gu');
+  for (const match of source.matchAll(namedImport)) {
+    for (const rawSpecifier of (match[1] ?? '').split(',')) {
+      const specifier = /^\s*([A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?\s*$/u.exec(rawSpecifier);
+      if (specifier && NODE_CHILD_PROCESS_OPERATIONS.has(specifier[1]!)) {
+        direct.set(specifier[2] ?? specifier[1]!, specifier[1]!);
+      }
+    }
+  }
+  const destructuredRequire = new RegExp(
+    String.raw`\b(?:const|let)\s*\{([^}]*)\}\s*=\s*require\s*\(\s*${modulePattern}\s*\)`,
+    'gu',
+  );
+  for (const match of source.matchAll(destructuredRequire)) {
+    for (const rawSpecifier of (match[1] ?? '').split(',')) {
+      const specifier = /^\s*([A-Za-z_$][\w$]*)(?:\s*:\s*([A-Za-z_$][\w$]*))?\s*$/u.exec(rawSpecifier);
+      if (specifier && NODE_CHILD_PROCESS_OPERATIONS.has(specifier[1]!)) {
+        direct.set(specifier[2] ?? specifier[1]!, specifier[1]!);
+      }
+    }
+  }
+  const namespaceImport = new RegExp(
+    String.raw`\bimport\s*\*\s*as\s*([A-Za-z_$][\w$]*)\s*from\s*${modulePattern}`,
+    'gu',
+  );
+  for (const match of source.matchAll(namespaceImport)) namespaces.add(match[1]!);
+  const namespaceRequire = new RegExp(
+    String.raw`\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*require\s*\(\s*${modulePattern}\s*\)`,
+    'gu',
+  );
+  for (const match of source.matchAll(namespaceRequire)) namespaces.add(match[1]!);
+  return { direct, namespaces };
+}
 
 export function boundaryFileContext(db: ScipDatabase, file: string): BoundaryFileContext | null {
   const root = getAst(db, file)?.rootNode;
@@ -619,7 +718,7 @@ function observation(
 function boundaryRole(action: string): string {
   const leaf = action.split('.').at(-1) ?? action;
   if (['handle', 'subscribe', 'consume', 'read'].includes(leaf)) return 'consumer';
-  if (['request', 'publish', 'send', 'write', 'dispatch'].includes(leaf)) return 'producer';
+  if (['request', 'publish', 'send', 'write', 'dispatch', 'spawn', 'exec'].includes(leaf)) return 'producer';
   return 'observe';
 }
 

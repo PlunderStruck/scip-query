@@ -31,6 +31,7 @@ describe('runtime-boundary evidence', () => {
     const db = createBoundaryDb();
     try {
       const graph = collectRuntimeBoundaryGraph(db);
+      expect(graph.extractorVersion).toBe('runtime-boundaries-v12');
 
       expect(graph.observations).toEqual(
         expect.arrayContaining([
@@ -216,6 +217,65 @@ describe('runtime-boundary evidence', () => {
       );
 
       writeRuntimeBoundaryGraph(db.config.dbPath, graph);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('extracts exact Node child-process crossings from imported bindings only', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-runtime-process-boundaries-'));
+    const files = {
+      'src/process.ts': [
+        "import { spawn as startChild, execFileSync } from 'node:child_process';",
+        "import * as childProcess from 'child_process';",
+        'export function run(command: string) {',
+        "  const child = startChild('sh', ['-c', command], { stdio: ['ignore', 'pipe', 'pipe'] });",
+        "  execFileSync('/usr/bin/git', ['status']);",
+        "  return childProcess.fork('./worker.js');",
+        '}',
+      ],
+      'src/local.ts': [
+        'function spawn(command: string) { return command; }',
+        "spawn('not-a-runtime-boundary');",
+      ],
+    };
+    writeFixtureFiles(tempDir, files);
+    const builder = evidenceFixtureDb(join(tempDir, 'index.db'));
+    Object.keys(files).forEach((file, index) => builder.document(index + 1, 'typescript', file));
+    builder.write();
+    const db = new ScipDatabase({
+      projectRoot: tempDir,
+      dbPath: join(tempDir, 'index.db'),
+      indexPath: join(tempDir, 'index.scip'),
+    });
+
+    try {
+      const processObservations = collectRuntimeBoundaryGraph(db).observations.filter(
+        (observation) => observation.protocol === 'process',
+      );
+      expect(processObservations).toEqual([
+        expect.objectContaining({
+          action: 'process.spawn',
+          role: 'producer',
+          strength: 'exact',
+          evidence: 'node-child-process-import',
+          source: expect.objectContaining({ file: 'src/process.ts', startLine: 3 }),
+          keyParts: expect.arrayContaining([
+            expect.objectContaining({ name: 'operation', value: 'spawn', evidence: 'literal' }),
+            expect.objectContaining({ name: 'executable', value: 'sh', evidence: 'literal' }),
+          ]),
+        }),
+        expect.objectContaining({
+          action: 'process.exec',
+          source: expect.objectContaining({ file: 'src/process.ts', startLine: 4 }),
+          keyParts: expect.arrayContaining([expect.objectContaining({ name: 'executable', value: '/usr/bin/git' })]),
+        }),
+        expect.objectContaining({
+          action: 'process.spawn',
+          source: expect.objectContaining({ file: 'src/process.ts', startLine: 5 }),
+          keyParts: expect.arrayContaining([expect.objectContaining({ name: 'operation', value: 'fork' })]),
+        }),
+      ]);
     } finally {
       db.close();
     }

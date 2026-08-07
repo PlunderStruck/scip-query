@@ -302,9 +302,10 @@ export function connectedBehaviorPacket(
         db,
         node,
         anchorNodeIds.has(nodeId),
-        explicitFocusLines.length > 0
-          ? explicitFocusLines
-          : focusLinesForNode(db, node, knownCausalEdges, nodeById, pathEdgeIds, expansiveNodeIds),
+          [...new Set([
+            ...explicitFocusLines,
+            ...focusLinesForNode(db, node, knownCausalEdges, nodeById, pathEdgeIds, expansiveNodeIds),
+          ])],
         explicitFocusLines,
           expansiveNodeIds.has(node.id) && (explicitFocusLines.length === 0 || anchorNodeIds.has(node.id)),
         supplementalNodeIds.has(node.id),

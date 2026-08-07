@@ -120,6 +120,56 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
+  it('protects an exact process crossing inside a large anchored construct', () => {
+    root = mkdtempSync(join(tmpdir(), 'scip-system-map-process-crossing-'));
+    const projectRoot = join(root, 'project');
+    const dbPath = join(root, 'index.db');
+    const filler = Array.from(
+      { length: 70 },
+      (_, index) => `  const bookkeeping${index} = '${'x'.repeat(70)}-${index}';`,
+    );
+    const source = [
+      "import { spawn } from 'node:child_process';",
+      'export function run(command: string) {',
+      ...filler.slice(0, 35),
+      "  const child = spawn('sh', ['-c', command], { cwd: '/repo', stdio: ['ignore', 'pipe', 'pipe'] });",
+      ...filler.slice(35),
+      '  return child;',
+      '}',
+    ];
+    writeFixtureFiles(projectRoot, { 'src/runner.ts': source });
+    evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/runner.ts').write();
+    const config = { projectRoot, dbPath, indexPath: join(root, 'index.scip') };
+    const initial = new ScipDatabase(config);
+    const graph = collectRuntimeBoundaryGraph(initial);
+    initial.close();
+    writeRuntimeBoundaryGraph(dbPath, graph);
+    const db = new ScipDatabase(config);
+    try {
+      expect(
+        readRuntimeBoundaryGraph(db)?.observations.some(
+          (observation) => observation.action === 'process.spawn' && observation.source.startLine === 37,
+        ),
+      ).toBe(true);
+      const result = systemMap(db, {
+        symbols: [`src/runner.ts:2-${source.length}`],
+        maxDepth: 1,
+        relations: ['runtime-boundary'],
+        behaviorFocusLocations: [{ file: 'src/runner.ts', line: 2 }],
+      });
+
+      const runner = result.behavior?.steps.find((step) => step.location?.file === 'src/runner.ts');
+      expect(runner?.behavior?.kind).toBe('connector-slice');
+      expect(runner?.behavior?.lines).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ text: expect.stringContaining("spawn('sh'") }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it('materializes one source construct when several callsites share the same enclosing callable', () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-source-construct-deduplication-'));
     const projectRoot = join(root, 'project');

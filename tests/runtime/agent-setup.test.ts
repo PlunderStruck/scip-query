@@ -57,7 +57,8 @@ describe('setupAgent', () => {
     expect(agentsMd).toContain('never pass the same loose term to both selectors');
     expect(agentsMd).toContain('evidence seen but left implicit is not recovered');
     expect(agentsMd).toContain('one ledger row per material claim');
-    expect(agentsMd).toContain('A constant name is not a recovered bound');
+      expect(agentsMd).toContain('A constant name is not a recovered bound');
+      expect(agentsMd).toContain('Do not inspect an explicit anchor or any source line already rendered');
     expect(agentsMd).toContain('--full-literal-traversal');
     expect(agentsMd).toContain('query connector graph');
     expect(agentsMd).toContain('accounted frontiers');
