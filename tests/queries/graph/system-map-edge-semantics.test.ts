@@ -81,6 +81,34 @@ describe('system-map program edge semantics', () => {
     ]);
   });
 
+  it('projects queue order only when an exact queue send-to-consume join exists', () => {
+    expect(
+      systemMapRelationProgramSemantics({
+        kind: 'runtime-boundary',
+        evidence: 'runtime-boundary:queue.address',
+        runtimeBoundaryKey: 'queue\u0000jobs',
+        fromBoundaryParticipant: { protocol: 'queue', action: 'queue.send', role: 'producer' },
+        toBoundaryParticipant: { protocol: 'queue', action: 'queue.consume', role: 'consumer' },
+      }),
+    ).toEqual([
+      expect.objectContaining({ family: 'control', subtype: 'runtime-handoff' }),
+      {
+        family: 'temporal',
+        subtype: 'enqueue-before-consume',
+        context: {
+          crossesRuntimeBoundary: true,
+          protocol: 'queue',
+          runtimeKey: 'queue\u0000jobs',
+        },
+        attributes: {
+          producerAction: 'queue.send',
+          consumerAction: 'queue.consume',
+          retryPolicy: 'unknown',
+        },
+      },
+    ]);
+  });
+
   it('maps system-map topology scaffolding while leaving unresolved frontiers outside the proved graph', () => {
     expect(systemMapSyntheticEdgeProgramSemantics('structural-membership')).toEqual([
       { family: 'identity', subtype: 'contains' },

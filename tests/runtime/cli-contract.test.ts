@@ -42,6 +42,7 @@ const PRIVATE_QUERY_MODULES = [
   'source-snippet',
   'architecture-baseline',
   'program-data-edges',
+  'program-state-temporal-edges',
   'system-map-edge-semantics',
   'test-boundary-policy',
 ] as const;
@@ -67,6 +68,7 @@ const PRIVATE_QUERY_SOURCE_PATHS = {
   'architecture-baseline': 'src/queries/graph/architecture-baseline.ts',
   'program-control-edges': 'src/queries/graph/program-control-edges.ts',
   'program-data-edges': 'src/queries/graph/program-data-edges.ts',
+  'program-state-temporal-edges': 'src/queries/graph/program-state-temporal-edges.ts',
   'system-map-edge-semantics': 'src/queries/graph/system-map-edge-semantics.ts',
   'test-boundary-policy': 'src/queries/graph/test-boundary-policy.ts',
 } as const satisfies Record<(typeof PRIVATE_QUERY_MODULES)[number], string>;

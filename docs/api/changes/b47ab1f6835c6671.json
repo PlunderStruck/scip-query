@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-08-07T18:16:28.465Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "b47ab1f6835c667160b64f947831b19e108f0c7449731487f440df0f104e8fbc",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapBoundaryFrontier changed from interface SystemMapBoundaryFrontier { observationId: string; action: string; strength: 'exact' | 'derived' | 'candidate'; file: string; line: number; ownerShortName: string | nu... to interface SystemMapBoundaryFrontier { observationId: string; action: string; strength: 'exact' | 'derived' | 'candidate'; file: string; line: number; ownerShortName: string | nu....",
+      "target": "./queries/system-map:SystemMapBoundaryFrontier"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "574e27107468359fef6e00a4c5811d844a11500efae11978da08ab3649ec8cee",
+  "reason": "Retain optional exact runtime observation context so unresolved database and queue crossings can still expose proved state effects without implying a linked peer.",
+  "schemaVersion": 1
+}

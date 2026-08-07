@@ -49,6 +49,7 @@ import {
 } from './system-map-edge-semantics.js';
 import { programDataElementsForSystemMapRelations } from './program-data-edges.js';
 import { programControlElementsForTopologyNodes } from './program-control-edges.js';
+import { programStateTemporalElementsForTopologyNodes } from './program-state-temporal-edges.js';
 import {
   createExplorationTopology,
   selectExplorationTopology,
@@ -267,6 +268,13 @@ export interface SystemMapBoundaryFrontier {
   ownerShortName: string | null;
   address: string;
   reason: string;
+  /** Exact observation context retained even when its runtime peer is unresolved. */
+  protocol?: string;
+  role?: string;
+  modality?: 'must' | 'may' | 'unknown';
+  resolution?: 'locally-linked' | 'external' | 'unresolved' | 'ambiguous';
+  sourceScope?: BoundarySourceScope;
+  keyParts?: Array<{ name: string; value: string; evidence: string }>;
 }
 
 export interface SystemMapNotableSymbol {
@@ -1520,6 +1528,16 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
           ownerShortName: observation.owner.name,
           address: renderBoundaryAddress(observation),
           reason: frontier.reason,
+          protocol: observation.protocol,
+          role: observation.role,
+          modality: observation.modality,
+          resolution: observation.resolution,
+          sourceScope: observation.sourceScope,
+          keyParts: observation.keyParts.map((part) => ({
+            name: part.name,
+            value: part.value,
+            evidence: part.evidence,
+          })),
         },
       ];
     })
@@ -2257,6 +2275,9 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
   const programControl = programControlElementsForTopologyNodes(input.db, nodes);
   nodes.push(...programControl.nodes);
   edges.push(...programControl.edges);
+  const programStateTemporal = programStateTemporalElementsForTopologyNodes(input.db, nodes, input.boundaryFrontiers);
+  nodes.push(...programStateTemporal.nodes);
+  edges.push(...programStateTemporal.edges);
 
   for (const boundary of input.externalBoundaries) {
     const nodeId = topologyId('external', boundary.kind, boundary.name);
@@ -2291,7 +2312,11 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     }
   }
 
-  const frontiers: ExplorationFrontierGroup[] = [...programData.frontiers, ...programControl.frontiers];
+  const frontiers: ExplorationFrontierGroup[] = [
+    ...programData.frontiers,
+    ...programControl.frontiers,
+    ...programStateTemporal.frontiers,
+  ];
   input.boundaryFrontiers.forEach((frontier, index) => {
     const fromNodeId = input.regionForFile.get(frontier.file)?.id;
     if (!fromNodeId) {
@@ -2349,7 +2374,12 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     paths: [],
     frontiers,
     scope: `explicit anchors; relations ${input.requestedRelationKinds.join(', ')}; depth ${input.maxDepth}; evidence floor ${input.evidenceFloor}; source scopes ${input.includedSourceScopes.join(', ')}`,
-    blindSpots: [...input.blindSpots, ...programData.blindSpots, ...programControl.blindSpots],
+    blindSpots: [
+      ...input.blindSpots,
+      ...programData.blindSpots,
+      ...programControl.blindSpots,
+      ...programStateTemporal.blindSpots,
+    ],
     incompleteReasons:
       input.closureStatus === 'incomplete'
         ? [`${input.omittedSymbolCandidates} ambiguous symbol candidate(s) were omitted`]

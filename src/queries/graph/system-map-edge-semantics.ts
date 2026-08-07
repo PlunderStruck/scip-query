@@ -76,6 +76,22 @@ export function systemMapRelationProgramSemantics(relation: SystemMapSemanticRel
       attributes: { joinRule: 'carrier.discriminator' },
     });
   }
+  if (
+    relation.evidence === 'runtime-boundary:queue.address' &&
+    relation.fromBoundaryParticipant?.action === 'queue.send' &&
+    relation.toBoundaryParticipant?.action === 'queue.consume'
+  ) {
+    semantics.push({
+      family: 'temporal',
+      subtype: 'enqueue-before-consume',
+      context: { ...context },
+      attributes: {
+        producerAction: relation.fromBoundaryParticipant.action,
+        consumerAction: relation.toBoundaryParticipant.action,
+        retryPolicy: 'unknown',
+      },
+    });
+  }
   return semantics;
 }
 

@@ -530,6 +530,80 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
+  it('retains an exact database state effect when its runtime peer is unresolved', () => {
+    const seededDb = createSystemMapDb();
+    const config = seededDb.config;
+    const graph = readRuntimeBoundaryGraph(seededDb)!;
+    const basis = graph.observations[0]!;
+    seededDb.close();
+    graph.observations.push({
+      ...basis,
+      id: 'fixture-database-write',
+      extractor: 'persistence',
+      action: 'database.write',
+      owner: {
+        file: 'apps/api/src/modules/sessions/events.ts',
+        symbol: symbols.apiAppend,
+        name: 'appendStreamEvents',
+        startLine: 2,
+        endLine: 4,
+      },
+      source: { file: 'apps/api/src/modules/sessions/events.ts', startLine: 3, endLine: 3 },
+      keyParts: [{ name: 'resource', value: 'agent_work_session_events', evidence: 'literal' }],
+      evidence: 'persistence-insert',
+      strength: 'exact',
+      protocol: 'database',
+      role: 'producer',
+      modality: 'must',
+      resolution: 'unresolved',
+      sourceScope: 'production',
+    });
+    graph.frontiers.push({
+      observationId: 'fixture-database-write',
+      reason: 'No exact database reader was linked.',
+      missingKeyParts: [],
+      sourceScope: 'production',
+      kind: 'observation',
+    });
+    writeRuntimeBoundaryGraph(config.dbPath, graph);
+
+    const db = new ScipDatabase(config);
+    try {
+      const result = systemMap(db, { symbols: [symbols.apiAppend], maxDepth: 1 });
+      const stateSemantics =
+        result.topology?.edges
+          .flatMap((edge) => edge.semantics ?? [])
+          .filter((semantic) => semantic.family === 'state') ?? [];
+
+      expect(stateSemantics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            subtype: 'writes-resource',
+            context: expect.objectContaining({ crossesRuntimeBoundary: true, protocol: 'database' }),
+            attributes: expect.objectContaining({
+              operation: 'database.write',
+              durabilityClass: 'external-durable-intent',
+              resource: 'agent_work_session_events',
+              recordIdentity: null,
+              resolution: 'unresolved',
+            }),
+          }),
+        ]),
+      );
+      expect(result.topology?.frontiers).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'runtime-boundary',
+            disposition: 'unsupported',
+            reason: 'No exact database reader was linked.',
+          }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it('materializes a source-backed runtime participant when the consumer has no compiler symbol', () => {
     const db = createSystemMapDb({ unindexedRuntimeParticipant: true });
     try {
@@ -1160,6 +1234,174 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
           .filter((semantic) => semantic.family === 'control')
           .map((semantic) => semantic.subtype) ?? [];
       expect(allControlSubtypes).toEqual(expect.arrayContaining(['predicate-case', 'predicate-default']));
+    } finally {
+      db.close();
+    }
+  });
+
+  it('projects exact state mutations, assigned values, and await ordering from source constructs', () => {
+    root = mkdtempSync(join(tmpdir(), 'scip-system-map-state-temporal-'));
+    const projectRoot = join(root, 'project');
+    const dbPath = join(root, 'index.db');
+    writeFixtureFiles(projectRoot, {
+      'src/state.ts': [
+        'export async function update(state: State, id: string, payload: Payload) {',
+        '  state.records[id] = payload;',
+        '  await persist(state.records[id]);',
+        '  state.version += 1;',
+        '  notify(id);',
+        '}',
+      ],
+    });
+    evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/state.ts').write();
+    const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(root, 'index.scip') });
+    try {
+      const result = systemMap(db, {
+        symbols: ['src/state.ts:0-5'],
+        maxDepth: 1,
+        relations: ['call'],
+      });
+      const semantics = result.topology?.edges.flatMap((edge) => edge.semantics ?? []) ?? [];
+
+      expect(semantics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            family: 'state',
+            subtype: 'writes-resource',
+            attributes: expect.objectContaining({
+              operation: 'assign',
+              durabilityClass: 'in-memory',
+              resource: 'state.records[]',
+              recordIdentity: 'id',
+            }),
+          }),
+          expect.objectContaining({ family: 'data', subtype: 'value-to-state' }),
+          expect.objectContaining({ family: 'temporal', subtype: 'lexical-successor' }),
+          expect.objectContaining({ family: 'temporal', subtype: 'awaits-completion' }),
+          expect.objectContaining({ family: 'temporal', subtype: 'await-completion-before' }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('distinguishes an exactly captured lexical value from a local assignment value', () => {
+    root = mkdtempSync(join(tmpdir(), 'scip-system-map-captured-state-'));
+    const projectRoot = join(root, 'project');
+    const dbPath = join(root, 'index.db');
+    writeFixtureFiles(projectRoot, {
+      'src/captured.ts': [
+        'export function makeWriter(prefix: string) {',
+        '  return (state: State, id: string) => {',
+        '    state.values[id] = prefix;',
+        '  };',
+        '}',
+      ],
+    });
+    evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/captured.ts').write();
+    const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(root, 'index.scip') });
+    try {
+      const result = systemMap(db, {
+        symbols: ['src/captured.ts:0-4'],
+        maxDepth: 1,
+        relations: ['call'],
+      });
+      const semantics = result.topology?.edges.flatMap((edge) => edge.semantics ?? []) ?? [];
+
+      expect(semantics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            family: 'data',
+            subtype: 'captured-value-to-state',
+            attributes: expect.objectContaining({ value: 'prefix', resource: 'state.values[]' }),
+          }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('projects syntax-proved lock membership without inferring a lock from a call name', () => {
+    root = mkdtempSync(join(tmpdir(), 'scip-system-map-lock-scope-'));
+    const projectRoot = join(root, 'project');
+    const dbPath = join(root, 'index.db');
+    writeFixtureFiles(projectRoot, {
+      'src/StateStore.java': [
+        'class StateStore {',
+        '  void update() {',
+        '    synchronized (guard) {',
+        '      checkVersion();',
+        '      state.value = 1;',
+        '      persist();',
+        '    }',
+        '  }',
+        '}',
+      ],
+    });
+    evidenceFixtureDb(dbPath).document(1, 'java', 'src/StateStore.java').write();
+    const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(root, 'index.scip') });
+    try {
+      const result = systemMap(db, {
+        searches: ['synchronized'],
+        maxDepth: 1,
+        relations: ['call'],
+      });
+      const lockSemantics =
+        result.topology?.edges
+          .flatMap((edge) => edge.semantics ?? [])
+          .filter((semantic) => semantic.family === 'temporal' && semantic.subtype === 'inside-lock-scope') ?? [];
+
+      expect(lockSemantics.length).toBeGreaterThanOrEqual(3);
+      expect(lockSemantics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ context: expect.objectContaining({ synchronizationScope: 'guard' }) }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('does not infer lock or transaction membership from call names', () => {
+    root = mkdtempSync(join(tmpdir(), 'scip-system-map-unproved-scopes-'));
+    const projectRoot = join(root, 'project');
+    const dbPath = join(root, 'index.db');
+    writeFixtureFiles(projectRoot, {
+      'src/unproved.ts': [
+        'export function update(state: State) {',
+        '  lock(() => { state.value = 1; });',
+        '  transaction(() => { state.value = 2; });',
+        '}',
+      ],
+    });
+    evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/unproved.ts').write();
+    const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(root, 'index.scip') });
+    try {
+      const result = systemMap(db, {
+        symbols: ['src/unproved.ts:0-3'],
+        maxDepth: 1,
+        relations: ['call'],
+      });
+      const semantics = result.topology?.edges.flatMap((edge) => edge.semantics ?? []) ?? [];
+
+      expect(semantics).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ family: 'temporal', subtype: 'inside-lock-scope' })]),
+      );
+      expect(
+        semantics.some(
+          (semantic) => semantic.context?.transaction !== undefined || semantic.subtype.includes('transaction'),
+        ),
+      ).toBe(false);
+      expect(semantics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            family: 'state',
+            attributes: expect.objectContaining({ transactionMembership: 'unknown' }),
+          }),
+        ]),
+      );
     } finally {
       db.close();
     }
