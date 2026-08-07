@@ -306,3 +306,42 @@ The first canonical projection slice is implemented on the feature branch:
 - Focused contracts, TypeScript checks, lint/API/build checks, and the complete 2,277-test suite pass.
 
 The next implementation slice should adapt the existing dataflow and parameter-flow machinery into canonical data edges. After that adapter reports its coverage, add missing control-dependence edges for complete predicates and sibling outcomes. New framework detectors should wait until these existing analyzers are projected, because the inventory will then identify the remaining evidence gaps precisely.
+
+## Pre-registered completion proof
+
+These checks define completion before the remaining implementation changes are made. A later green result counts only after the relevant check has first been observed failing against the missing behavior or an intentionally planted invalid fixture.
+
+### Repository baseline
+
+- The starting branch is `codex/evidence-navigation-runtime-boundaries` at `797fbfcc`.
+- The complete repository suite contains 2,277 passing tests. Completion requires at least that many passing tests and zero failures.
+- Typecheck, formatting, ESLint/API-surface validation, and the production build are green at the starting point and must remain green after every committed slice.
+- The existing semantic projection maps all five proved `system-map` relation kinds and all three emitted synthetic relation kinds. Unresolved runtime frontiers remain explicitly unsupported rather than guessed.
+
+### Edge-family acceptance
+
+- **Data:** the canonical graph must expose argument-to-parameter transfer, returned-result flow, assignment/property flow, captured values, constants/defaults, serialization, and discriminators when the installed analyzers prove them. Unknown, ambiguous, and bounded results must remain visible in coverage. At minimum one command-level integration fixture must join data edges to its call or runtime handoff without requiring a separate exploratory query.
+- **Control:** every selected behavior-changing predicate must connect to every governed outcome, including relevant sibling branches. Return, throw, catch, finally, callback, dispatch, and runtime handoff must be representable without flattening distinct meanings into one subtype.
+- **State:** mutations must identify the affected resource, operation, durability class, and record identity when available. Transactional, external, in-memory, and unresolved-alias cases must remain distinguishable.
+- **Temporal:** exact program order, await completion, transaction membership, and recognized lock scope must be emitted when proved. Queue separation, retry, timeout, compensation, and repair may be emitted only with source evidence and explicit limitations.
+- **Coverage:** every relationship the canonical projection does not emit must be recoverably folded, explicitly excluded, unsupported, ambiguous, external, or unresolved. No bounded result may imply an absence claim.
+
+### Causal-corridor acceptance
+
+- A corridor begins from compiler-owned anchors and ends at named or mechanically observable outcomes. It is selected by the intersection of forward and backward proved traversals, not by task-specific vocabulary rules.
+- Before compression, the corridor closes over owner identity, contracts, complete governing predicates, referenced constants/defaults, relevant sibling outcomes, result-producing callbacks, failure/cleanup, runtime participants, and state/temporal facts.
+- A repository-independent fixture must demonstrate that removing any answer-determinative predicate, value, terminal branch, state effect, or temporal constraint makes the completeness check fail.
+- The rendered packet must be smaller than the corresponding complete source packet while retaining every frozen strict fact and an omission/frontier manifest.
+
+### Frozen benchmark targets
+
+- **Meta-harness bash lifecycle:** retain 7/7 manual strict facts and zero forbidden claims. The frozen accepted treatment used 198,169 total tokens, 34,581 uncached input tokens, and 54,947 rendered exploration characters; the completed system must not regress strict accuracy, and any efficiency regression against that treatment must be explained.
+- **OpenCode dual compactor:** improve the current treatment high-water mark from 2/7 to 7/7 manual strict facts with zero forbidden claims. It must still beat the native control's 1,112,372 total tokens and 490,269 rendered characters. The v15 treatment values—537,031 total tokens and 82,127 rendered characters—remain the efficiency comparison, but accuracy takes priority.
+- **TSLint configuration inheritance:** improve the current treatment from 6/7 to 7/7 by preserving the exact filename-preference constant, while retaining zero native source reads and lower total tokens than the 231,594-token native control.
+- **Generality holdout:** run at least one additional repository/task pair frozen before treatment. Treatment must recover at least as many strict facts as its no-tool control, make no forbidden claims, use no native tracked-source reads, and use fewer total tokens and rendered exploration characters.
+
+### Deviation and defer ledger
+
+- Source contradictions, unsupported language constructs, benchmark misses, and knowingly deferred detector families must be recorded here with their observed evidence; none may be silently described as complete.
+- A slice is committed separately only after its focused falsification probe and full repository gates pass.
+- Nothing is currently deferred from the six-family implementation or causal-corridor proof. Framework-specific adapters beyond those required by the frozen fixtures remain deferred until the canonical analyzers expose a measured unsupported gap.
