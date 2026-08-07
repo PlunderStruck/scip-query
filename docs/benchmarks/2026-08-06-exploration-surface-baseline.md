@@ -445,6 +445,7 @@ was deleted by the runner.
 | v19 direct-anchor constraint reservation |      545,943 |         64,563 |              82,057 |             5 |          1/7 |
 | v20 anchor-first adaptive frontier       |      615,229 |         44,949 |              89,904 |             9 |          0/7 |
 | v21 universal task-evidence contract     |      590,979 |         67,733 |              88,433 |             9 |          0/7 |
+| v22 query-term causal-target manifest    |      574,082 |         79,047 |              93,739 |             5 |          1/7 |
 
 v15 remains the efficiency and accuracy high-water mark for this task. Against
 control it used 51.7% fewer total tokens, 51.9% fewer uncached input tokens,
@@ -547,6 +548,28 @@ must connect explicit question obligations to candidate graph regions and report
 which obligations remain unresolved; merely repeating generic categories is not
 actionable navigation evidence.
 
+v22 exposed a relationship the CLI already computed and discarded: each carried
+query term's selected, withheld, or absent causal drill targets. The human output
+grouped terms beside exact target identities and explicitly labeled the mapping
+as locator evidence rather than task relevance or fact completion. The agent
+then followed the required map-first workflow, ran the recommended batch, and
+used its final inspect on `filterCompacted`, `processCompaction`, and the core
+compactor. The resulting answer contained correct partial evidence for every
+frozen fact and was qualitatively stronger than v21.
+
+It still did not reach the strict product criterion. Manual adjudication credits
+only the later-context/pruning compound fact. The answer omitted exact service
+and layer owners, one trigger predicate and the core overflow-recovery trigger,
+both retention-budget constants, plugin/cloned-message summary transforms, and
+the repeated-overflow terminal branch. It used 48.4% fewer total tokens than
+native control but 6.9% more than v15, with 64.5% more uncached input and 14.1%
+more rendered characters than v15. This demonstrates that unlabeled drill
+targets were not the limiting cause on this task: the model found the material
+functions but the emitted evidence and final compression still lost decisive
+owners, values, predicates, and terminal outcomes. The manifest implementation
+was reverted. Next work should preserve those repository facts directly before
+another selection-policy experiment.
+
 Artifacts:
 
 - `benchmarks/exploration/opencode-compaction-implementations-v1.json`
@@ -558,3 +581,4 @@ Artifacts:
 - `/tmp/opencode-compaction-implementations-treatment-causal-sol-medium-v19.json`
 - `/tmp/opencode-compaction-implementations-treatment-causal-sol-medium-v20.json`
 - `/tmp/opencode-compaction-implementations-treatment-evidence-contract-sol-medium-v21.json`
+- `/tmp/opencode-compaction-implementations-treatment-query-term-targets-sol-medium-v22.json`
