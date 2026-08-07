@@ -1,0 +1,85 @@
+{
+  "acceptedAt": "2026-08-07T14:44:20.194Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "9d513cc0dc48325f8e5e2e72e180d6bef036b894fc8fd9a370e051899532d1d6",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "AnchorDiscoveryGroup changed from interface AnchorDiscoveryGroup { id: string; kind: 'cross-boundary-flow' | 'parallel-paths' | 'connected-flow' | 'shared-callee-owners'; roots: AnchorDiscoveryCandidate[]; keyAn... to interface AnchorDiscoveryGroup { id: string; kind: 'cross-boundary-flow' | 'parallel-paths' | 'connected-flow' | 'shared-callee-owners'; roots: AnchorDiscoveryCandidate[]; keyAn....",
+      "target": "./queries:AnchorDiscoveryGroup"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapBoundaryParticipant changed from interface SystemMapBoundaryParticipant { observationId: string; action: string; protocol: string; role: string; file: string; line: number; endLine: number; ownerName: string | ... to interface SystemMapBoundaryParticipant { observationId: string; action: string; protocol: string; role: string; address?: string; file: string; line: number; endLine: number; ow....",
+      "target": "./queries:SystemMapBoundaryParticipant"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapOptions changed from interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; behaviorFocusLocations?: readonly { file: string; line: number; }[]; maxDepth?: number; e... to interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; behaviorFocusLocations?: readonly { file: string; line: number; }[]; maxDepth?: number; e....",
+      "target": "./queries:SystemMapOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-constructed-member-callsite' | 'ast-member-import-candidate' | 'scip-occurrence-callsite' | 'scip-occurrence-referen... to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-constructed-member-callsite' | 'ast-factory-callback-callsite' | 'ast-service-member-callsite' | 'ast-member-import-....",
+      "target": "./queries:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "AnchorDiscoveryGroup changed from interface AnchorDiscoveryGroup { id: string; kind: 'cross-boundary-flow' | 'parallel-paths' | 'connected-flow' | 'shared-callee-owners'; roots: AnchorDiscoveryCandidate[]; keyAn... to interface AnchorDiscoveryGroup { id: string; kind: 'cross-boundary-flow' | 'parallel-paths' | 'connected-flow' | 'shared-callee-owners'; roots: AnchorDiscoveryCandidate[]; keyAn....",
+      "target": "./queries/anchors:AnchorDiscoveryGroup"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "AnchorDiscoveryGroup changed from interface AnchorDiscoveryGroup { id: string; kind: 'cross-boundary-flow' | 'parallel-paths' | 'connected-flow' | 'shared-callee-owners'; roots: AnchorDiscoveryCandidate[]; keyAn... to interface AnchorDiscoveryGroup { id: string; kind: 'cross-boundary-flow' | 'parallel-paths' | 'connected-flow' | 'shared-callee-owners'; roots: AnchorDiscoveryCandidate[]; keyAn....",
+      "target": "./queries/index:AnchorDiscoveryGroup"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapBoundaryParticipant changed from interface SystemMapBoundaryParticipant { observationId: string; action: string; protocol: string; role: string; file: string; line: number; endLine: number; ownerName: string | ... to interface SystemMapBoundaryParticipant { observationId: string; action: string; protocol: string; role: string; address?: string; file: string; line: number; endLine: number; ow....",
+      "target": "./queries/index:SystemMapBoundaryParticipant"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapOptions changed from interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; behaviorFocusLocations?: readonly { file: string; line: number; }[]; maxDepth?: number; e... to interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; behaviorFocusLocations?: readonly { file: string; line: number; }[]; maxDepth?: number; e....",
+      "target": "./queries/index:SystemMapOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-constructed-member-callsite' | 'ast-member-import-candidate' | 'scip-occurrence-callsite' | 'scip-occurrence-referen... to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-constructed-member-callsite' | 'ast-factory-callback-callsite' | 'ast-service-member-callsite' | 'ast-member-import-....",
+      "target": "./queries/index:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapBoundaryParticipant changed from interface SystemMapBoundaryParticipant { observationId: string; action: string; protocol: string; role: string; file: string; line: number; endLine: number; ownerName: string | ... to interface SystemMapBoundaryParticipant { observationId: string; action: string; protocol: string; role: string; address?: string; file: string; line: number; endLine: number; ow....",
+      "target": "./queries/system-map:SystemMapBoundaryParticipant"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "SystemMapOptions changed from interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; behaviorFocusLocations?: readonly { file: string; line: number; }[]; maxDepth?: number; e... to interface SystemMapOptions { searches?: readonly string[]; symbols?: readonly string[]; behaviorFocusLocations?: readonly { file: string; line: number; }[]; maxDepth?: number; e....",
+      "target": "./queries/system-map:SystemMapOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemMapRelationEvidence changed from type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-constructed-member-callsite' | 'ast-member-import-candidate' | 'scip-occurrence-callsite' | 'scip-occurrence-referen... to type SystemMapRelationEvidence = CalleeEvidenceSource | 'ast-constructed-member-callsite' | 'ast-factory-callback-callsite' | 'ast-service-member-callsite' | 'ast-member-import-....",
+      "target": "./queries/system-map:SystemMapRelationEvidence"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "635e2acd4f45f060dbeea51275adf075079d4186b2501a274bea20eac878ecae",
+  "reason": "System-map evidence now exposes selection terms, runtime addresses, and factory/service member-call provenance; exhaustive consumers must handle the new relation-evidence cases.",
+  "schemaVersion": 1
+}

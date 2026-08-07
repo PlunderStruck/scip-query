@@ -73,6 +73,16 @@ export function isPackageSurfaceFile(db: ScipDatabase, normalizedRelativePath: s
   return surface.pathPrefixes.some((prefix) => normalizedRelativePath.startsWith(prefix));
 }
 
+/**
+ * True when a manifest target names this file exactly. Unlike a wildcard
+ * surface, an explicit surface identifies one deliberate package doorway;
+ * both are externally reachable, but the exact doorway is stronger evidence
+ * when choosing an explanatory ownership path.
+ */
+export function isExplicitPackageSurfaceFile(db: ScipDatabase, normalizedRelativePath: string): boolean {
+  return getPackageSurface(db).files.has(normalizedRelativePath);
+}
+
 export function getPackageOperationalSurface(db: ScipDatabase): PackageOperationalSurface {
   return packageOperationalSurfaceCache.get(db, () => derivePackageOperationalSurface(db.config.projectRoot));
 }

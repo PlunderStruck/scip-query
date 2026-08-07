@@ -424,3 +424,114 @@ layer. Strict manual adjudication remains the authority for this experiment.
 Artifact:
 
 - `/tmp/meta-harness-bash-lifecycle-treatment-causal-complete-sol-medium.json`
+
+## OpenCode dual-compactor selection follow-up
+
+The follow-up fixture names both compaction implementations and requires a
+comparison, removing the scope ambiguity from the earlier OpenCode diagnostic.
+Every arm used Sol medium, OpenCode commit
+`1a8e94dc8e7462d3d0d860e1337b448c71947f6b`, and an independently prepared
+detached worktree. The control used native reads without an index. Each
+treatment used scip-query exclusively, and every disposable worktree and cache
+was deleted by the runner.
+
+| Frozen run                               | Total tokens | Uncached input | Rendered characters | Tracked calls | Strict facts |
+| ---------------------------------------- | -----------: | -------------: | ------------------: | ------------: | -----------: |
+| Native control                           |    1,112,372 |         99,879 |             490,269 |            16 |          1/7 |
+| v15 exact-call frontier                  |      537,031 |         48,052 |              82,127 |             5 |          2/7 |
+| v16 inspect-safe frontier                |      548,772 |         65,087 |              82,037 |             5 |          2/7 |
+| v17 broad constraint reservation         |      575,041 |         68,717 |              95,710 |             5 |          1/7 |
+| v18 repeated-unit filter attempt         |      546,195 |         52,466 |              94,884 |             5 |          1/7 |
+| v19 direct-anchor constraint reservation |      545,943 |         64,563 |              82,057 |             5 |          1/7 |
+| v20 anchor-first adaptive frontier       |      615,229 |         44,949 |              89,904 |             9 |          0/7 |
+
+v15 remains the efficiency and accuracy high-water mark for this task. Against
+control it used 51.7% fewer total tokens, 51.9% fewer uncached input tokens,
+83.2% fewer rendered exploration characters, and 68.8% fewer tracked calls.
+It completely established the HTTP ownership and summary-execution facts. Its
+answer also contained substantial correct partial evidence for the other five
+compound facts, but omitted one or more required owner names, predicates,
+numeric limits, or terminal branches from each.
+
+The v15 map printed a drill batch containing an oversized `createUserMessage`
+construct that `inspect` correctly refused. The model recovered by issuing a
+replacement batch, but paid for the failed query. v16 added an inspect-safety
+contract: a target larger than the legal one-shot behavior limit remains in the
+withheld manifest but cannot enter the printed batch. The printed command then
+succeeded unchanged. This is a retained correctness improvement, although
+model variance and the final audit query left v16 slightly more expensive than
+v15 without improving strict accuracy.
+
+v17 through v19 tested whether source-owned numeric limits and named constants
+should reserve frontier slots. The underlying source-range check proved that
+`settings()` and `preserveRecentBudget()` were compiler-resolved candidates.
+In the full map, however, unrelated connector arithmetic and duplicate source-
+construct/compiler-symbol identities competed for the same slots. Narrowing
+the heuristic to direct anchor callees still did not improve the frozen score.
+The constraint-ranking experiment and its attempted repeated-unit filter were
+therefore removed rather than retained as benchmark-specific complexity.
+
+This series establishes a boundary between the working and missing mechanisms.
+The graph reliably finds both runtime paths and cuts repository text sharply;
+the remaining failures come from information lost or weakly prioritized after
+the path is found:
+
+1. Multiline branch compression can show the effect call while omitting a
+   qualifying predicate such as “completed, non-summary assistant.”
+2. A selected function can reference an exact named constant without exposing
+   that constant's compiler-resolved value, forcing another drill merely to
+   recover `8_000` or the `2_000`–`8_000` clamp.
+3. A wrapper that returns `filterCompacted(stream(...))` can send the final
+   drill toward the input producer (`stream`) instead of the result-defining
+   transformation (`filterCompacted`).
+4. Compact connector labels can preserve the call path while dropping owning
+   service names required to distinguish `SessionV2`, `SessionExecutionLocal`,
+   and `SessionRunnerLLM`.
+
+The next principled accuracy work should address those evidence contracts
+directly: preserve complete branch predicates, project compiler-resolved
+constant/value dependencies beside the selected behavior, rank calls whose
+results define a returned transformation, and retain owner-qualified connector
+identity. Another frontier vocabulary heuristic should not be benchmarked
+until those slices have repository-independent tests.
+
+v20 tested a structural alternative rather than another constant-name rule. It
+reserved one continuation for every explicit anchor, expanded the automatic
+frontier from six to eight targets for a six-anchor comparison, and spent a
+second round across anchors before lexical reservations. The same build also
+fixed the first evidence-contract gap above: behavior ownership now resolves to
+the smallest nested callable, and a connector slice preserves the complete
+parser-derived governing predicate. The live map consequently rendered the
+OpenCode trigger as `lastFinished && lastFinished.summary !== true &&
+isOverflow(...)` instead of showing only the last physical line of that
+multiline condition.
+
+The allocation experiment regressed the benchmark. It displaced the history,
+runner, and context-filter targets used by v15 with broader input, tool, and
+session helpers. The agent also tried `inspect` before completing the required
+map twice while a private-index refresh was settling; the navigation session
+correctly refused both calls, but their refusal packets and later replacement
+queries increased the trace to nine tracked calls. The final answer was broadly
+correct but omitted at least one decisive predicate, owner, numeric limit, or
+terminal branch from every frozen compound fact, so both deterministic and
+manual strict adjudication are 0/7. It still used 44.7% fewer total model tokens,
+55.0% fewer uncached input tokens, and 81.7% fewer rendered exploration
+characters than native control, but efficiency without fact parity does not
+pass the product criterion.
+
+The adaptive eight-target and anchor-first/second-round allocation were removed
+after this result. The nested-callable and complete-governing-predicate fixes
+remain because they repair a source-evidence invariant directly and pass a
+repository-independent multiline-condition regression test. v15 remains the
+comparison high-water mark for the next accuracy change.
+
+Artifacts:
+
+- `benchmarks/exploration/opencode-compaction-implementations-v1.json`
+- `/tmp/opencode-compaction-implementations-control-sol-medium.json`
+- `/tmp/opencode-compaction-implementations-treatment-causal-sol-medium-v15.json`
+- `/tmp/opencode-compaction-implementations-treatment-causal-sol-medium-v16.json`
+- `/tmp/opencode-compaction-implementations-treatment-causal-sol-medium-v17.json`
+- `/tmp/opencode-compaction-implementations-treatment-causal-sol-medium-v18.json`
+- `/tmp/opencode-compaction-implementations-treatment-causal-sol-medium-v19.json`
+- `/tmp/opencode-compaction-implementations-treatment-causal-sol-medium-v20.json`

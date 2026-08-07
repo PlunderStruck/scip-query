@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { createHash, randomUUID } from 'node:crypto';
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createExplorationSandbox } from './codex-exploration-sandbox.mjs';
 import { evaluateExplorationTrial, validateExplorationBenchmarkDefinition } from './exploration-benchmark-core.mjs';
 import {
@@ -15,6 +17,7 @@ import {
 
 const MODES = new Set(['treatment', 'treatment-minimal', 'control', 'control-disciplined']);
 const ISOLATION_MODES = new Set(['detached', 'live']);
+const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 main().catch(fail);
 
@@ -27,11 +30,13 @@ async function main() {
     options.isolation === 'detached'
       ? createExplorationSandbox(options.repo, { ref: options.ref })
       : liveRepository(options.repo);
+  let cli;
   let indexSetup = null;
   let artifact;
 
   try {
-    const environment = benchmarkEnvironment(sandbox, sessionId);
+    cli = createCliShim(options.cli);
+    const environment = benchmarkEnvironment(sandbox, sessionId, cli.directory);
     if (isTreatment(options.mode) && sandbox.kind === 'detached-worktree') {
       indexSetup = await prepareTreatmentIndex(sandbox.repository, environment);
     }
@@ -68,9 +73,17 @@ async function main() {
         indexDurationMs: indexSetup?.durationMs ?? null,
         cleaned: sandbox.kind === 'live-repository',
       },
+      tool: {
+        cliPath: cli.path,
+        cliSha256: cli.sha256,
+      },
     };
   } finally {
-    sandbox.remove();
+    try {
+      sandbox.remove();
+    } finally {
+      cli?.remove();
+    }
   }
 
   artifact.isolation.cleaned = true;
@@ -85,7 +98,10 @@ function parseArgs(args) {
   for (let index = 0; index < rest.length; index += 2) {
     const flag = rest[index];
     const value = rest[index + 1];
-    if (!['--repo', '--output', '--model', '--reasoning', '--isolation', '--ref'].includes(flag) || value === undefined)
+    if (
+      !['--repo', '--output', '--model', '--reasoning', '--isolation', '--ref', '--cli'].includes(flag) ||
+      value === undefined
+    )
       usage();
     values.set(flag, value);
   }
@@ -101,12 +117,13 @@ function parseArgs(args) {
     reasoning: values.get('--reasoning') ?? 'max',
     isolation: isolationMode(values.get('--isolation')),
     ref: values.get('--ref') ?? 'HEAD',
+    cli: resolve(values.get('--cli') ?? join(PROJECT_ROOT, 'dist', 'cli.js')),
   };
 }
 
 function usage() {
   process.stderr.write(
-    'Usage: node scripts/codex-exploration-trial.mjs <definition.json> <treatment|treatment-minimal|control|control-disciplined> --repo <path> --output <path> [--model <model>] [--reasoning <effort>] [--isolation <detached|live>] [--ref <git-ref>]\n',
+    'Usage: node scripts/codex-exploration-trial.mjs <definition.json> <treatment|treatment-minimal|control|control-disciplined> --repo <path> --output <path> [--model <model>] [--reasoning <effort>] [--isolation <detached|live>] [--ref <git-ref>] [--cli <executable>]\n',
   );
   process.exit(2);
 }
@@ -156,13 +173,31 @@ function liveRepository(repository) {
   };
 }
 
-function benchmarkEnvironment(sandbox, sessionId) {
+function benchmarkEnvironment(sandbox, sessionId, cliDirectory) {
   return {
     ...process.env,
+    PATH: `${cliDirectory}:${process.env.PATH ?? ''}`,
     SCIP_QUERY_SESSION: sessionId,
     SCIP_QUERY_PROJECT_ROOT: sandbox.repository,
     SCIP_QUERY_SKIP_WATCH_SERVICE: '1',
     ...(sandbox.cacheDir ? { SCIP_QUERY_CACHE_DIR: sandbox.cacheDir } : {}),
+  };
+}
+
+function createCliShim(cliPath) {
+  if (!existsSync(cliPath)) {
+    throw new Error(`scip-query benchmark CLI does not exist: ${cliPath}. Run npm run build first or pass --cli.`);
+  }
+  const directory = mkdtempSync(join(tmpdir(), 'scip-query-benchmark-cli-'));
+  const shim = join(directory, 'scip-query');
+  symlinkSync(cliPath, shim);
+  return {
+    path: cliPath,
+    directory,
+    sha256: createHash('sha256').update(readFileSync(cliPath)).digest('hex'),
+    remove() {
+      rmSync(directory, { recursive: true, force: true });
+    },
   };
 }
 

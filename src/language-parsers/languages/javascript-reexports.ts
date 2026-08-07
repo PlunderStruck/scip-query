@@ -58,7 +58,7 @@ function parseStarAsReExportsRegex(db: ScipDatabase, relativePath: string, sourc
     results.push({
       kind: 'star-as',
       sourcePath: resolveImportPath(db, relativePath, specifier),
-      names: [],
+      names: match[1] ? [match[1]] : [],
       startLine: start,
       endLine: end,
     });
@@ -153,7 +153,16 @@ function parseReExportClause(
 
   const namespaceExport = firstChildOfType(node, 'namespace_export');
   if (namespaceExport) {
-    return { kind: 'star-as', sourcePath, names: [], startLine, endLine };
+    const namespaceName = namespaceExport.namedChildren.find(
+      (child) => child.type === 'identifier' || child.type === 'type_identifier',
+    )?.text;
+    return {
+      kind: 'star-as',
+      sourcePath,
+      names: namespaceName ? [namespaceName] : [],
+      startLine,
+      endLine,
+    };
   }
 
   return { kind: 'star', sourcePath, names: [], startLine, endLine };

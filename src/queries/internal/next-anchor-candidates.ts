@@ -1,9 +1,11 @@
 import { behaviorSignalsByLine, type BehaviorSignal } from '../../source/facts/behavior-skeleton.js';
+import { readableSourceUnitRange } from '../../source/facts/source-construct.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
 import { getSourceLines } from '../../source/primitives/source-text.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import type { CalleeEvidenceSource, CalleeRow } from '../../symbols/graph/call-graph-evidence.js';
+import { importedMemberCallTargets } from '../../symbols/graph/member-call-targets.js';
 import { scipOccurrenceCallTargetsForRange } from '../../symbols/graph/scip-occurrence-call-targets.js';
 import { getGlobalLeafIndex, sameLanguageCandidates } from '../../symbols/leaf-symbol-index.js';
 import type { ConnectedBehaviorLine, ConnectedBehaviorPacket, ConnectedBehaviorStep } from './connected-behavior.js';
@@ -15,6 +17,7 @@ import type {
   ExplorationTopologyNode,
 } from './exploration-topology.js';
 import { ProjectIndex } from './project-index.js';
+import { SOURCE_INSPECTION_SAFE_CHARACTERS } from './inspection-limits.js';
 
 const DEFAULT_NEXT_ANCHOR_LIMIT = 6;
 export interface SystemMapNextAnchorAlternative {
@@ -71,6 +74,10 @@ export interface RankedNextAnchor {
   priority: number;
   /** Internal selection evidence about the target body; never rendered as caller behavior. */
   coverageDimensions?: DownstreamEvidenceDimension[];
+  /** Normalized locator terms matched by the already-proven target identity. */
+  selectionTermMatches?: string[];
+  /** Lower is stronger: identity, path, target source, then one proven callee. */
+  selectionTermRanks?: Record<string, number>;
 }
 
 export interface SourceRangeNextAnchorSeed {
@@ -106,6 +113,7 @@ export function systemMapNextAnchorPacket(
   options: {
     limit?: number;
     sourceAllowed?: (file: string) => boolean;
+    selectionTerms?: readonly string[];
   } = {},
 ): SystemMapNextAnchorPacket {
   const limit = options.limit ?? DEFAULT_NEXT_ANCHOR_LIMIT;
@@ -140,6 +148,7 @@ export function systemMapNextAnchorPacket(
     semantic: true,
   });
   const ranked: RankedNextAnchor[] = [];
+  const targetEffectEvidence = new Map<string, { dimensions: DownstreamEvidenceDimension[]; priorityBonus: number }>();
   const evidencedCallsiteKeys = new Set<string>();
   const consideredCandidateKeys = new Set<string>();
   let scannedBehaviorSteps = 0;
@@ -162,7 +171,6 @@ export function systemMapNextAnchorPacket(
     );
     for (const edge of adjacentCausalEdges) {
       const incoming = edge.toNodeId === step.nodeId;
-      if (!incoming && edge.kind === 'call') continue;
       const candidateNodeId = incoming ? edge.fromNodeId : edge.toNodeId;
       if (returnedNodeIds.has(candidateNodeId)) continue;
       const candidateNode = nodeById.get(candidateNodeId);
@@ -174,7 +182,13 @@ export function systemMapNextAnchorPacket(
       const sourceLine = getSourceLines(db, location.file)[location.line]?.trim();
       const direction = incoming ? 'upstream' : 'downstream';
       const causalRole =
-        edge.kind === 'runtime-boundary' ? (incoming ? 'runtime-producer' : 'runtime-consumer') : 'caller';
+        edge.kind === 'runtime-boundary'
+          ? incoming
+            ? 'runtime-producer'
+            : 'runtime-consumer'
+          : incoming
+            ? 'caller'
+            : 'callee';
       const signals: BehaviorSignal[] = ['call'];
       const strength = strongestEvidence(edge.evidence);
       const leaf = nodeLeaf(candidateNode);
@@ -277,6 +291,89 @@ export function systemMapNextAnchorPacket(
       if (resultProducing) resultCandidates += 1;
     }
 
+    // Behavior compression is allowed to omit ordinary statements, but that
+    // must not erase a compiler-resolved continuation. Recover exact call
+    // occurrences across the complete returned construct before restricting
+    // the lower-confidence callsite analysis to rendered behavior lines.
+    const exactRangeTargets = scipOccurrenceCallTargetsForRange(
+      db,
+      step.location.file,
+      step.location.line,
+      step.location.endLine ?? step.location.line,
+    );
+    const sourceLines = getSourceLines(db, step.location.file);
+    const signalsByLine = behaviorSignalsByLine(
+      db,
+      step.location.file,
+      step.location.line,
+      step.location.endLine ?? step.location.line,
+    );
+    for (const target of exactRangeTargets.targets) {
+      if (!sourceAllowed(target.definition.relativePath) || returnedSymbols.has(target.definition.symbol)) continue;
+      const callsiteKey = sourceCallsiteKey(step.location.file, target.sourceLine, target.calleeLeaf);
+      if (evidencedCallsiteKeys.has(callsiteKey)) continue;
+      evidencedCallsiteKeys.add(callsiteKey);
+      const signals = callsiteSignals(signalsByLine.get(target.sourceLine));
+      const alternative: SystemMapNextAnchorAlternative = {
+        symbol: target.definition.symbol,
+        label: target.definition.leaf,
+        file: target.definition.relativePath,
+        line: target.definition.startLine,
+        endLine: target.definition.endLine,
+      };
+      const effectEvidence =
+        targetEffectEvidence.get(target.definition.symbol) ??
+        calleeEffectEvidence(
+          db,
+          target.definition.relativePath,
+          target.definition.startLine,
+          target.definition.endLine,
+        );
+      targetEffectEvidence.set(target.definition.symbol, effectEvidence);
+      ranked.push({
+        anchor: {
+          id: nextAnchorId(step.id, target.sourceLine, target.definition.symbol),
+          status: 'exact',
+          source: 'graph-call',
+          direction: 'downstream',
+          causalRole: 'callee',
+          relationKind: 'call',
+          fromStepId: step.id,
+          fromLabel: step.label,
+          callsite: {
+            file: step.location.file,
+            line: target.sourceLine,
+            endLine: target.sourceLine,
+            text: sourceLines[target.sourceLine]?.trim() || `${target.calleeLeaf}()`,
+            signals,
+            calleeLeaf: target.calleeLeaf,
+          },
+          alternatives: [alternative],
+          alternativeCount: 1,
+          evidence: [
+            {
+              method: 'scip-occurrence-callsite',
+              strength: 'exact',
+              identity: target.definition.symbol,
+              location: { file: step.location.file, line: target.sourceLine },
+            },
+          ],
+        },
+        priority:
+          nextAnchorPriority(
+            'exact',
+            signals,
+            step.location.file !== alternative.file,
+            1,
+            downstreamNodeIds.has(step.nodeId),
+            step.role,
+            'downstream',
+            'callee',
+          ) + effectEvidence.priorityBonus,
+        coverageDimensions: effectEvidence.dimensions,
+      });
+    }
+
     const callLines = step.behavior.lines.filter((line) => line.signals.includes('call'));
     if (callLines.length === 0) continue;
     scannedBehaviorSteps += 1;
@@ -316,6 +413,7 @@ export function systemMapNextAnchorPacket(
       const materialLine = materialLineForCallsite(callLines, callsite.line, leaf);
       if (!materialLine) continue;
       const callsiteKey = sourceCallsiteKey(step.location.file, callsite.line, leaf);
+      if (evidencedCallsiteKeys.has(callsiteKey)) continue;
       evidencedCallsiteKeys.add(callsiteKey);
       const strength = calleeRowEvidenceStrength(target.row.source);
       ranked.push({
@@ -490,17 +588,24 @@ export function systemMapNextAnchorPacket(
     }
   }
 
-  return nextAnchorPacketFromCandidates(ranked, behavior.steps, limit, {
-    scannedBehaviorSteps,
-    visibleCallsites,
-    graphEvidencedCallsites: evidencedCallsiteKeys.size,
-    identityCandidateCallsites,
-    ambiguousCallsites,
-    unresolvedCallsites,
-    upstreamCandidates,
-    resultCandidates,
-    runtimeCandidates,
-  });
+  return nextAnchorPacketFromCandidates(
+    db,
+    ranked,
+    behavior.steps,
+    limit,
+    {
+      scannedBehaviorSteps,
+      visibleCallsites,
+      graphEvidencedCallsites: evidencedCallsiteKeys.size,
+      identityCandidateCallsites,
+      ambiguousCallsites,
+      unresolvedCallsites,
+      upstreamCandidates,
+      resultCandidates,
+      runtimeCandidates,
+    },
+    options.selectionTerms,
+  );
 }
 
 /**
@@ -630,6 +735,104 @@ export function sourceRangeNextAnchorPacket(
     }
     graphEvidencedCallsites += exact.resolvedCallsites;
 
+    const memberTargets = importedMemberCallTargets(db, seed.file, {
+      ranges: [{ startLine: seed.startLine, endLine: seed.endLine }],
+    });
+    const memberTargetsByCallsite = new Map<string, typeof memberTargets.targets>();
+    for (const target of memberTargets.targets) {
+      const callsiteLeaf = callsites.find((callsite) => callsite.line === target.line)?.calleeLeaf ?? target.calleeLeaf;
+      const key = sourceCallsiteKey(seed.file, target.line, callsiteLeaf);
+      const group = memberTargetsByCallsite.get(key) ?? [];
+      group.push(target);
+      memberTargetsByCallsite.set(key, group);
+    }
+    for (const [key, groupedTargets] of memberTargetsByCallsite) {
+      if (exactCallsiteKeys.has(key)) continue;
+      exactCallsiteKeys.add(key);
+      const targets = groupedTargets.filter(
+        (target) =>
+          sourceAllowed(target.targetFile) &&
+          !materializedRanges.some(
+            (range) =>
+              range.file === target.targetFile &&
+              range.startLine <= target.targetStartLine &&
+              range.endLine >= target.targetEndLine,
+          ),
+      );
+      if (targets.length === 0) continue;
+      const target = targets[0]!;
+      const callsiteLeaf = callsites.find((callsite) => callsite.line === target.line)?.calleeLeaf ?? target.calleeLeaf;
+      const signals = callsiteSignals(signalsByLine.get(target.line));
+      const alternatives = uniqueAlternatives(
+        targets.map((candidate) => ({
+          symbol: candidate.targetSymbol ?? null,
+          label: candidate.calleeLeaf,
+          file: candidate.targetFile,
+          line: candidate.targetStartLine,
+          endLine: candidate.targetEndLine,
+        })),
+      );
+      const strength: ExplorationEvidenceStrength = targets.some(
+        (candidate) => (candidate.resolutionAlternativeCount ?? 0) > 1,
+      )
+        ? 'candidate'
+        : targets.every((candidate) => candidate.strength === 'exact')
+          ? 'exact'
+          : 'derived';
+      ranked.push({
+        anchor: {
+          id: nextAnchorId(
+            seed.id,
+            target.line,
+            alternatives.map((alternative) => `${alternative.file}:${alternative.line}`).join('|'),
+          ),
+          status: alternatives.length > 1 ? 'ambiguous' : strength,
+          source: 'graph-call',
+          direction: 'downstream',
+          causalRole: 'callee',
+          relationKind: 'call',
+          fromStepId: seed.id,
+          fromLabel: seed.label,
+          callsite: {
+            file: seed.file,
+            line: target.line,
+            endLine: target.line,
+            text: sourceLines[target.line]?.trim() || `${target.calleeLeaf}()`,
+            signals,
+            calleeLeaf: callsiteLeaf,
+          },
+          alternatives: alternatives.slice(0, 3),
+          alternativeCount: alternatives.length,
+          evidence: targets.map((candidate) => ({
+            method:
+              candidate.resolution === 'constructed-member-receiver'
+                ? 'ast-constructed-member-callsite'
+                : candidate.resolution === 'factory-callback-member'
+                  ? 'ast-factory-callback-callsite'
+                  : candidate.resolution === 'imported-service-object-member'
+                    ? 'ast-service-member-callsite'
+                    : 'ast-import-member-callsite',
+            strength,
+            identity:
+              candidate.targetSymbol ??
+              `${candidate.targetFile}:${candidate.targetStartLine}-${candidate.targetEndLine}`,
+            location: { file: seed.file, line: target.line },
+          })),
+        },
+        priority: nextAnchorPriority(
+          strength,
+          signals,
+          alternatives.some((alternative) => seed.file !== alternative.file),
+          alternatives.length,
+          true,
+          'anchor',
+          'downstream',
+          'callee',
+        ),
+      });
+    }
+    graphEvidencedCallsites += memberTargetsByCallsite.size;
+
     for (const callsite of callsites) {
       const key = sourceCallsiteKey(seed.file, callsite.line, callsite.calleeLeaf);
       if (exactCallsiteKeys.has(key)) continue;
@@ -693,7 +896,7 @@ export function sourceRangeNextAnchorPacket(
     }
   }
 
-  return nextAnchorPacketFromCandidates(ranked, steps, limit, {
+  return nextAnchorPacketFromCandidates(db, ranked, steps, limit, {
     scannedBehaviorSteps: seeds.length,
     visibleCallsites,
     graphEvidencedCallsites,
@@ -719,13 +922,36 @@ interface NextAnchorPacketStats {
 }
 
 function nextAnchorPacketFromCandidates(
+  db: ScipDatabase,
   ranked: readonly RankedNextAnchor[],
   steps: readonly ConnectedBehaviorStep[],
   limit: number,
   stats: NextAnchorPacketStats,
+  selectionTerms: readonly string[] = [],
 ): SystemMapNextAnchorPacket {
-  const candidates = deduplicateRankedAnchors(ranked).sort(compareRankedNextAnchors);
-  const selectedCandidates = coverageDiverseNextAnchors(candidates, steps, limit);
+  const normalizedSelectionTerms = [
+    ...new Set(selectionTerms.map((term) => term.trim().toLocaleLowerCase()).filter(Boolean)),
+  ];
+  const selectionEvidenceByTarget = new Map<string, { direct: string; oneHop: string }>();
+  const candidates = deduplicateRankedAnchors(
+    ranked.map((candidate) => {
+      const selectionEvidence = nextAnchorSelectionEvidence(db, candidate, selectionEvidenceByTarget);
+      const matches = normalizedSelectionTerms
+        .map((term) => ({ term, rank: nextAnchorSelectionTermRank(candidate, term, selectionEvidence) }))
+        .filter((match): match is { term: string; rank: number } => match.rank !== null);
+      return {
+        ...candidate,
+        selectionTermMatches: matches.map((match) => match.term),
+        selectionTermRanks: Object.fromEntries(matches.map((match) => [match.term, match.rank])),
+      };
+    }),
+  ).sort(compareRankedNextAnchors);
+  const selectedCandidates = coverageDiverseNextAnchors(
+    candidates.filter((candidate) => nextAnchorInspectSafe(db, candidate)),
+    steps,
+    limit,
+    normalizedSelectionTerms,
+  );
   const selectedIds = new Set(selectedCandidates.map((candidate) => candidate.anchor.id));
   const withheldCandidates = candidates.filter((candidate) => !selectedIds.has(candidate.anchor.id));
   const selected = selectedCandidates.map((candidate) => candidate.anchor);
@@ -752,6 +978,17 @@ function nextAnchorPacketFromCandidates(
   };
 }
 
+export function nextAnchorInspectSafe(db: ScipDatabase, candidate: RankedNextAnchor): boolean {
+  if (candidate.anchor.alternativeCount !== 1) return true;
+  const target = candidate.anchor.alternatives[0]!;
+  const endLine = target.endLine ?? target.line;
+  return (
+    getSourceLines(db, target.file)
+      .slice(target.line, endLine + 1)
+      .join('\n').length <= SOURCE_INSPECTION_SAFE_CHARACTERS
+  );
+}
+
 function callsiteSignals(signals: readonly BehaviorSignal[] | undefined): BehaviorSignal[] {
   return signals?.includes('call') ? [...signals] : ['call', ...(signals ?? [])];
 }
@@ -768,6 +1005,7 @@ export function coverageDiverseNextAnchors(
   candidates: readonly RankedNextAnchor[],
   steps: readonly ConnectedBehaviorStep[],
   limit: number,
+  selectionTerms: readonly string[] = [],
 ): RankedNextAnchor[] {
   if (limit <= 0 || candidates.length === 0) return [];
   const roleByStepId = new Map(steps.map((step) => [step.id, step.role]));
@@ -780,19 +1018,65 @@ export function coverageDiverseNextAnchors(
     if (selected.length >= limit || selectedIds.has(candidate.anchor.id)) return;
     selected.push(candidate);
     selectedIds.add(candidate.anchor.id);
-    if (candidate.anchor.direction !== 'upstream') representedForwardStepIds.add(candidate.anchor.fromStepId);
+    if (candidate.anchor.direction !== 'upstream') {
+      representedForwardStepIds.add(candidate.anchor.fromStepId);
+    }
     for (const dimension of downstreamEvidenceDimensions(candidate)) representedEvidenceDimensions.add(dimension);
   };
 
-  for (const predicate of [
-    (candidate: RankedNextAnchor) => candidate.anchor.direction === 'upstream',
-    (candidate: RankedNextAnchor) => candidate.anchor.causalRole === 'result-callback',
-  ]) {
-    const reserved = candidates.find(
-      (candidate) =>
-        candidate.anchor.alternativeCount === 1 && candidate.anchor.status !== 'ambiguous' && predicate(candidate),
-    );
-    if (reserved) select(reserved);
+  // Parallel implementations often have independent activation chains. Keep
+  // one exact upstream continuation from several repository areas so a single
+  // high-ranking path cannot hide the ownership of the others.
+  const upstreamReservationLimit = Math.max(1, Math.floor(limit / 3));
+  const representedUpstreamAreas = new Set<string>();
+  for (const candidate of candidates) {
+    if (representedUpstreamAreas.size >= upstreamReservationLimit) break;
+    if (
+      candidate.anchor.direction !== 'upstream' ||
+      candidate.anchor.alternativeCount !== 1 ||
+      candidate.anchor.status === 'ambiguous'
+    ) {
+      continue;
+    }
+    const area = nextAnchorRepositoryArea(candidate);
+    if (representedUpstreamAreas.has(area)) continue;
+    select(candidate);
+    representedUpstreamAreas.add(area);
+  }
+
+  const resultCallback = candidates.find(
+    (candidate) =>
+      candidate.anchor.alternativeCount === 1 &&
+      candidate.anchor.status !== 'ambiguous' &&
+      candidate.anchor.causalRole === 'result-callback',
+  );
+  if (resultCallback) select(resultCallback);
+
+  // The locator may carry forward a bounded set of rare normalized terms from
+  // the user's question. They do not establish relevance or create an edge;
+  // they only reserve space for exact causal targets whose existing identity
+  // matches a term. Preserve different terms so one vocabulary family cannot
+  // monopolize the fixed packet.
+  const selectionReservationLimit = Math.max(1, Math.ceil((limit * 2) / 3));
+  let selectedByTerm = 0;
+  for (const term of selectionTerms) {
+    if (selectedByTerm >= selectionReservationLimit || selected.length >= limit) break;
+    const candidate = candidates
+      .filter(
+        (entry) =>
+          !selectedIds.has(entry.anchor.id) &&
+          entry.anchor.alternativeCount === 1 &&
+          entry.anchor.status !== 'ambiguous' &&
+          entry.selectionTermMatches?.includes(term),
+      )
+      .sort(
+        (left, right) =>
+          (left.selectionTermRanks?.[term] ?? Number.MAX_SAFE_INTEGER) -
+            (right.selectionTermRanks?.[term] ?? Number.MAX_SAFE_INTEGER) || compareRankedNextAnchors(left, right),
+      )[0];
+    if (!candidate) continue;
+    select(candidate);
+    selectedByTerm += 1;
   }
 
   const connectorReservationLimit = Math.max(1, Math.floor(limit / 4));
@@ -813,8 +1097,8 @@ export function coverageDiverseNextAnchors(
 
   for (const candidate of candidates) {
     if (selected.length >= limit) break;
-    const role = roleByStepId.get(candidate.anchor.fromStepId);
-    if (role !== 'anchor' || representedForwardStepIds.has(candidate.anchor.fromStepId)) continue;
+    const stepId = candidate.anchor.fromStepId;
+    if (roleByStepId.get(stepId) !== 'anchor' || representedForwardStepIds.has(stepId)) continue;
     select(candidate);
   }
 
@@ -837,6 +1121,104 @@ export function coverageDiverseNextAnchors(
     select(candidate);
   }
   return selected;
+}
+
+function nextAnchorRepositoryArea(candidate: RankedNextAnchor): string {
+  const file = candidate.anchor.alternatives[0]?.file ?? candidate.anchor.callsite.file;
+  const segments = file.split('/').filter((segment) => segment.length > 0);
+  if (segments.length <= 1) return file;
+  return `${segments[0]}/${segments[1]}`;
+}
+
+export function nextAnchorSelectionTermRank(
+  candidate: RankedNextAnchor,
+  term: string,
+  evidence: { direct?: string; oneHop?: string } = {},
+): number | null {
+  const identityValues = [
+    candidate.anchor.callsite.calleeLeaf,
+    ...candidate.anchor.alternatives.map((item) => item.label),
+  ];
+  if (identityValues.some((value) => selectionVocabularyMatches(value, term))) return 0;
+  for (const alternative of candidate.anchor.alternatives) {
+    const basename = alternative.file.slice(alternative.file.lastIndexOf('/') + 1).replace(/\.[^.]+$/u, '');
+    if (selectionVocabularyMatches(basename, term)) return 1;
+  }
+  if (candidate.anchor.alternatives.some((alternative) => selectionVocabularyMatches(alternative.file, term))) return 2;
+  if (evidence.direct && selectionVocabularyMatches(evidence.direct, term)) return 3;
+  return evidence.oneHop && selectionVocabularyMatches(evidence.oneHop, term) ? 4 : null;
+}
+
+function nextAnchorSelectionEvidence(
+  db: ScipDatabase,
+  candidate: RankedNextAnchor,
+  cache: Map<string, { direct: string; oneHop: string }>,
+): { direct: string; oneHop: string } {
+  const target = candidate.anchor.alternativeCount === 1 ? candidate.anchor.alternatives[0] : null;
+  if (!target) return { direct: '', oneHop: '' };
+  const key = target.symbol ?? `${target.file}:${target.line}:${target.endLine ?? target.line}`;
+  const cached = cache.get(key);
+  if (cached) return cached;
+  const declaredEndLine = target.endLine ?? target.line;
+  const readableRange = readableSourceUnitRange(db, target.file, target.line);
+  const startLine = readableRange?.startLine ?? target.line;
+  const endLine = Math.max(declaredEndLine, readableRange?.endLine ?? declaredEndLine);
+  const direct = sourceIdentifierVocabulary(db, target.file, startLine, endLine);
+  const oneHop = scipOccurrenceCallTargetsForRange(db, target.file, startLine, endLine)
+    .targets.filter((callee) => callee.definition.symbol !== target.symbol)
+    .map((callee) =>
+      sourceIdentifierVocabulary(
+        db,
+        callee.definition.relativePath,
+        callee.definition.startLine,
+        callee.definition.endLine,
+      ),
+    )
+    .join(' ');
+  const evidence = { direct, oneHop };
+  cache.set(key, evidence);
+  return evidence;
+}
+
+function sourceIdentifierVocabulary(db: ScipDatabase, file: string, startLine: number, endLine: number): string {
+  const facts = getSourceFacts(db, file);
+  if (!facts) return '';
+  return [...facts.identifierLineMap]
+    .filter(([, lines]) => lines.some((line) => line >= startLine && line <= endLine))
+    .map(([identifier]) => identifier)
+    .join(' ');
+}
+
+function selectionVocabularyMatches(value: string, term: string): boolean {
+  const vocabulary = new Set<string>();
+  for (const word of value
+    .replace(/([\p{Ll}\p{N}])([\p{Lu}])/gu, '$1 $2')
+    .toLocaleLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((part) => part.length >= 3)) {
+    for (const variant of selectionWordVariants(word)) vocabulary.add(variant);
+  }
+  return selectionWordVariants(term).some((variant) => vocabulary.has(variant));
+}
+
+function selectionWordVariants(value: string): string[] {
+  const word = value.toLocaleLowerCase();
+  const variants = new Set([word]);
+  if (word.length > 4 && word.endsWith('e')) variants.add(word.slice(0, -1));
+  if (word.length > 5 && word.endsWith('ing')) variants.add(undoubleSelectionConsonant(word.slice(0, -3)));
+  if (word.length > 4 && word.endsWith('ed')) variants.add(undoubleSelectionConsonant(word.slice(0, -2)));
+  if (word.length > 5 && word.endsWith('tion')) {
+    const base = word.slice(0, -3);
+    variants.add(base);
+    variants.add(`${base}e`);
+  }
+  return [...variants];
+}
+
+function undoubleSelectionConsonant(value: string): string {
+  if (value.length < 2) return value;
+  const last = value.at(-1)!;
+  return last === value.at(-2) && !'aeiou'.includes(last) ? value.slice(0, -1) : value;
 }
 
 function downstreamEvidenceDimensions(candidate: RankedNextAnchor): DownstreamEvidenceDimension[] {
@@ -1108,7 +1490,7 @@ function compareRankedNextAnchors(left: RankedNextAnchor, right: RankedNextAncho
   );
 }
 
-function deduplicateRankedAnchors(candidates: readonly RankedNextAnchor[]): RankedNextAnchor[] {
+export function deduplicateRankedAnchors(candidates: readonly RankedNextAnchor[]): RankedNextAnchor[] {
   const bestByTarget = new Map<string, RankedNextAnchor>();
   for (const candidate of candidates) {
     const target = candidate.anchor.alternatives[0];
@@ -1116,9 +1498,29 @@ function deduplicateRankedAnchors(candidates: readonly RankedNextAnchor[]): Rank
       target?.symbol ??
       `${candidate.anchor.callsite.file}:${candidate.anchor.callsite.line}:${candidate.anchor.callsite.calleeLeaf}`;
     const existing = bestByTarget.get(key);
-    if (!existing || compareRankedNextAnchors(candidate, existing) < 0) bestByTarget.set(key, candidate);
+    if (!existing || compareDeduplicatedTargetEvidence(candidate, existing) < 0) bestByTarget.set(key, candidate);
   }
   return [...bestByTarget.values()];
+}
+
+function compareDeduplicatedTargetEvidence(left: RankedNextAnchor, right: RankedNextAnchor): number {
+  return (
+    nextAnchorStatusRank(left.anchor.status) - nextAnchorStatusRank(right.anchor.status) ||
+    left.anchor.alternativeCount - right.anchor.alternativeCount ||
+    compareRankedNextAnchors(left, right)
+  );
+}
+
+function nextAnchorStatusRank(status: SystemMapNextAnchor['status']): number {
+  const rank: Record<SystemMapNextAnchor['status'], number> = {
+    exact: 0,
+    derived: 1,
+    mixed: 2,
+    candidate: 3,
+    unknown: 4,
+    ambiguous: 5,
+  };
+  return rank[status];
 }
 
 function uniqueAlternatives(alternatives: readonly SystemMapNextAnchorAlternative[]): SystemMapNextAnchorAlternative[] {

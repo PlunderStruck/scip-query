@@ -13,6 +13,7 @@ import { byKind, kindCounts } from '../../src/queries/navigation/by-kind.js';
 import { complexityHotspots } from '../../src/queries/quality/complexity-hotspots.js';
 import { buildAstCalleeMap, buildCalleeMap, buildChunkCalleeMap } from '../../src/symbols/graph/call-graph-evidence.js';
 import { buildCrossFileCallerMap } from '../../src/symbols/references/reference-callers.js';
+import { pickAstCallCandidate } from '../../src/symbols/leaf-symbol-index.js';
 import type { ScipQueryConfig } from '../../src/domain/types.js';
 import type { SymbolSemanticEvidencePort } from '../../src/symbols/semantic-evidence-port.js';
 
@@ -257,6 +258,97 @@ describe('source-backed accuracy regressions', () => {
           source: 'ast-callsite',
           callsiteLine: 4,
         });
+      },
+    );
+  });
+
+  it('uses the imported receiver identity before admitting a member-call candidate', () => {
+    withFixture(
+      'qualified-member-callee',
+      {
+        'src/caller.ts': [
+          "import * as Correct from './correct.js';",
+          "import * as Other from './other.js';",
+          'export function correct() { return Correct.make(); }',
+          'export function unrelated() { return Other.make(); }',
+        ].join('\n'),
+        'src/correct.ts': 'export function make() { return 1; }\n',
+        'src/other.ts': 'export function make() { return 2; }\n',
+      },
+      (sqliteDb) => {
+        sqliteDb.exec(`
+          INSERT INTO documents (id, language, relative_path) VALUES
+            (1, 'typescript', 'src/caller.ts'),
+            (2, 'typescript', 'src/correct.ts'),
+            (3, 'typescript', 'src/other.ts');
+        `);
+      },
+      (db) => {
+        const candidate = {
+          symbol: 'scip-typescript npm fixture 1.0.0 src/`correct.ts`/make().',
+          file: 'src/correct.ts',
+        };
+        expect(pickAstCallCandidate(db, 'src/caller.ts', [candidate], true, 'Correct')).toEqual(candidate);
+        expect(pickAstCallCandidate(db, 'src/caller.ts', [candidate], true, 'Other')).toBeNull();
+        expect(pickAstCallCandidate(db, 'src/caller.ts', [candidate], true, 'localService')).toBeNull();
+      },
+    );
+  });
+
+  it('does not turn an unrelated imported receiver into a same-leaf callee edge', () => {
+    withFixture(
+      'qualified-member-callee-map',
+      {
+        'src/caller.ts': [
+          "import * as Correct from './correct.js';",
+          "import * as Other from './other.js';",
+          'export function run() { Correct.make(); Other.make(); }',
+        ].join('\n'),
+        'src/correct.ts': 'export function make() { return 1; }\n',
+        'src/other.ts': 'export function make() { return 2; }\n',
+      },
+      (sqliteDb) => {
+        sqliteDb.exec(`
+          INSERT INTO documents (id, language, relative_path) VALUES
+            (1, 'typescript', 'src/caller.ts'),
+            (2, 'typescript', 'src/correct.ts'),
+            (3, 'typescript', 'src/other.ts');
+          INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
+            (1, 'scip-typescript npm fixture 1.0.0 src/\`caller.ts\`/run().', 'run', 12, 'function run'),
+            (2, 'scip-typescript npm fixture 1.0.0 src/\`correct.ts\`/make().', 'make', 12, 'function make');
+          INSERT INTO defn_enclosing_ranges
+            (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+            (1, 1, 1, 2, 0, 2, 58),
+            (2, 2, 2, 0, 0, 0, 36);
+          INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+            (1, 1, 0, 2, 2, X'00'),
+            (2, 2, 0, 0, 0, X'00');
+          INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+            (1, 1, 1),
+            (2, 2, 1);
+        `);
+      },
+      (db) => {
+        const callees = buildAstCalleeMap(db, [
+          {
+            symbolId: 1,
+            documentId: 1,
+            startLine: 2,
+            endLine: 2,
+            symbol: 'scip-typescript npm fixture 1.0.0 src/`caller.ts`/run().',
+            relativePath: 'src/caller.ts',
+          },
+        ]).get(1);
+
+        expect(callees).toEqual([
+          {
+            symbol: 'scip-typescript npm fixture 1.0.0 src/`correct.ts`/make().',
+            file: 'src/correct.ts',
+            chunkId: 2,
+            source: 'ast-callsite',
+            callsiteLine: 2,
+          },
+        ]);
       },
     );
   });

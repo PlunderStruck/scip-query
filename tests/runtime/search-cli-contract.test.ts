@@ -202,7 +202,59 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
     expect(invocation.stdout).toContain('persistPaper');
     expect(invocation.stdout).toContain('withMutex');
     expect(invocation.stdout).toContain("--symbol 'src/anchor-store.ts:2-5'");
+    expect(invocation.stdout).toContain('next abstraction (run to completion before any inspect)');
+    expect(invocation.stdout).toContain('Anchor roots are locator evidence, not behavior evidence.');
+    expect(invocation.stdout).toContain('Never run a map and inspect concurrently.');
     expect(invocation.stdout).not.toContain('const localState');
+  });
+
+  it('mechanically requires the selected map before detail inspection in an explicit session', () => {
+    const navigationEnv = {
+      SCIP_QUERY_SESSION: 'search-cli-map-order',
+      SCIP_QUERY_SESSION_DIR: join(fixtureRoot, '.navigation-sessions'),
+    };
+    const anchors = runCommand(
+      'anchors',
+      ['How does a fetched paper become local state, and what protects duplicates from interrupted updates?'],
+      navigationEnv,
+    );
+    expect(anchors.status).toBe(0);
+
+    const premature = runCommand('inspect', ['--at', 'src/anchor-store.ts:2', '--view', 'behavior'], navigationEnv);
+    expect(premature.status).toBe(1);
+    expect(premature.stdout).toBe('');
+    expect(premature.stderr).toContain('NAVIGATION MAP REQUIRED');
+    expect(premature.stderr).toContain('map and detail exploration cannot run concurrently');
+
+    const mapped = runCommand(
+      'system-map',
+      ['--symbol', 'src/anchor-store.ts:2-5', '--symbol', 'src/anchor-mutex.ts:1-3'],
+      navigationEnv,
+    );
+    expect(mapped.status).toBe(0);
+
+    const inspected = runCommand('inspect', ['--at', 'src/anchor-store.ts:2', '--view', 'behavior'], navigationEnv);
+    expect(inspected.status).toBe(0);
+    expect(inspected.stdout).toContain('persistPaper');
+  });
+
+  it('replaces repeated behavior projections with session evidence receipts', () => {
+    const sessionEnv = {
+      SCIP_QUERY_SESSION: 'search-cli-behavior-ledger',
+      SCIP_QUERY_SESSION_DIR: join(fixtureRoot, '.behavior-sessions'),
+    };
+    const args = ['--at', 'src/expansive-flow.ts:1', '--view', 'behavior'];
+
+    const first = runCommand('inspect', args, sessionEnv);
+    const second = runCommand('inspect', args, sessionEnv);
+
+    expect(first.status).toBe(0);
+    expect(first.stdout).toContain('expansiveFlow');
+    expect(first.stdout).toContain('coverage:');
+    expect(second.status).toBe(0);
+    expect(second.stdout).toContain('unit evidence previously emitted: receipt');
+    expect(second.stdout).not.toContain('coverage:');
+    expect(second.stdout.length).toBeLessThan(first.stdout.length);
   });
 
   it('refuses an accidentally broad exact-source inspect before transport and preserves compact recovery', () => {
@@ -245,7 +297,11 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
     return runCommand('search', args);
   }
 
-  function runCommand(command: string, args: readonly string[]): ReturnType<typeof spawnSync> {
+  function runCommand(
+    command: string,
+    args: readonly string[],
+    extraEnvironment: Readonly<Record<string, string>> = {},
+  ): ReturnType<typeof spawnSync> {
     return spawnSync(
       join(repositoryRoot, 'node_modules', '.bin', 'vite-node'),
       ['--script', join(repositoryRoot, 'src', 'runtime', 'cli.ts'), command, ...args],
@@ -261,6 +317,7 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
           SCIP_QUERY_SHARED_CACHE: '0',
           SCIP_QUERY_UPDATE_CHECK: '0',
           XDG_CACHE_HOME: join(fixtureRoot, '.xdg-cache'),
+          ...extraEnvironment,
         },
       },
     );

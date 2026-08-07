@@ -9,6 +9,36 @@ import { getCrossLanguageDispatchNames, getRustAttrReferencedNames, getSourceFac
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
 describe('source facts', () => {
+  it('extracts a generator function supplied to a curried callable wrapper', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-source-facts-wrapped-generator-'));
+    try {
+      const projectRoot = join(tempDir, 'project');
+      const dbPath = join(tempDir, 'index.db');
+      writeFixtureFiles(projectRoot, {
+        'src/service.ts': [
+          "const process = Effect.fn('Session.process')(function* (input: Input) {",
+          '  if (!input.ready) return false;',
+          '  yield* persist(input);',
+          '  return true;',
+          '});',
+          'const result = ordinaryOperation(() => true);',
+        ],
+      });
+      evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/service.ts').write();
+
+      const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(tempDir, 'index.scip') });
+      try {
+        expect(getSourceFacts(db, 'src/service.ts')?.callables).toEqual([
+          expect.objectContaining({ name: 'process', startLine: 0, endLine: 4 }),
+        ]);
+      } finally {
+        db.close();
+      }
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('extracts TypeScript private-method calls without the private marker', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-source-facts-private-method-'));
     try {

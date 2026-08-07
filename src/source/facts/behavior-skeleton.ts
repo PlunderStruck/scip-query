@@ -227,7 +227,7 @@ export function behaviorSkeleton(
   const rangeStart = callable?.startLine ?? startLine;
   const rangeEnd = callable?.endLine ?? endLine;
   const root =
-    (callable ? findCallableNode(tree.rootNode, callable.startLine, callable.endLine) : null) ??
+    (callable ? findCallableNode(tree.rootNode, constructRange.startLine, constructRange.endLine) : null) ??
     smallestNodeCoveringLines(tree.rootNode, rangeStart, rangeEnd);
   if (!root) return null;
   const outline = buildBehaviorOutline(root, sourceLines, rangeStart, rangeEnd, focusLines);
@@ -267,6 +267,41 @@ export function behaviorSkeleton(
     candidateLines: outline.sourceStatements,
     omittedLines: 0,
   };
+}
+
+/**
+ * Return complete parser-derived control headers that govern selected source
+ * lines, even when a full behavior outline would not save enough characters
+ * to replace the raw construct. Connector slices use this smaller contract so
+ * a multiline predicate cannot collapse to only its first physical line.
+ */
+export function governingBehaviorControlLines(
+  db: ScipDatabase,
+  relativePath: string,
+  startLine: number,
+  endLine: number,
+  focusLines: readonly number[],
+): BehaviorSkeletonLine[] {
+  if (focusLines.length === 0) return [];
+  const tree = getAst(db, relativePath);
+  if (!tree) return [];
+  const sourceLines = getSourceLines(db, relativePath);
+  const constructRange = behaviorConstructRange(db, relativePath, startLine, endLine, focusLines);
+  const callable = smallestCoveringCallable(db, relativePath, constructRange.startLine, constructRange.endLine);
+  const rangeStart = callable?.startLine ?? startLine;
+  const rangeEnd = callable?.endLine ?? endLine;
+  const root =
+    (callable ? findCallableNode(tree.rootNode, constructRange.startLine, constructRange.endLine) : null) ??
+    smallestNodeCoveringLines(tree.rootNode, rangeStart, rangeEnd);
+  if (!root) return [];
+  const outline = buildBehaviorOutline(root, sourceLines, rangeStart, rangeEnd, focusLines);
+  if (!outline) return [];
+  return outline.lines.filter(
+    (line) =>
+      line.text.length <= MAX_OUTLINE_LINE_CHARACTERS &&
+      line.signals.some((signal) => ['branch', 'loop', 'catch', 'finally'].includes(signal)) &&
+      focusLines.some((focusLine) => focusLine >= line.line && focusLine <= line.endLine),
+  );
 }
 
 /**
@@ -465,6 +500,8 @@ const CALLABLE_NODE_TYPES = new Set([
   'function_declaration',
   'function_definition',
   'function_expression',
+  'generator_function',
+  'generator_function_declaration',
   'function_item',
   'lambda',
   'lambda_expression',
@@ -699,15 +736,23 @@ function buildBehaviorOutline(
 }
 
 function findCallableNode(node: SyntaxNode, startLine: number, endLine: number): SyntaxNode | null {
-  if (CALLABLE_NODE_TYPES.has(node.type)) return node;
   const matching = node.namedChildren.filter(
     (child) => child.startPosition.row <= startLine && child.endPosition.row >= endLine,
   );
-  for (const child of matching) {
+  for (const child of matching.sort(compareNodeSpan)) {
     const callable = findCallableNode(child, startLine, endLine);
     if (callable) return callable;
   }
-  return null;
+  return CALLABLE_NODE_TYPES.has(node.type) && node.startPosition.row <= startLine && node.endPosition.row >= endLine
+    ? node
+    : null;
+}
+
+function compareNodeSpan(left: SyntaxNode, right: SyntaxNode): number {
+  return (
+    left.endPosition.row - left.startPosition.row - (right.endPosition.row - right.startPosition.row) ||
+    left.startPosition.row - right.startPosition.row
+  );
 }
 
 function callableBody(node: SyntaxNode): SyntaxNode | null {

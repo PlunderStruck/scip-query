@@ -129,7 +129,11 @@ export interface ParsedSourceExport {
 export interface ParsedReExport {
   kind: 'named' | 'star' | 'star-as';
   sourcePath: string | null;
-  /** For 'named': the list of re-exported identifiers as they appear in THIS file. */
+  /**
+   * Exported identifiers as they appear in THIS file. Named re-exports retain
+   * every exported binding; `star-as` retains its one namespace binding; a
+   * plain star re-export has no local binding.
+   */
   names: string[];
   /** Start line in the source (0-indexed) — inclusive. */
   startLine: number;

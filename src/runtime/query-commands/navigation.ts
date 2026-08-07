@@ -33,7 +33,7 @@ import {
 } from '../command-kit/query-command-builders.js';
 import { displayLine, displayPathRange, displayRange, render } from '../render.js';
 import type { ReportSection } from '../render.js';
-import { renderSourceEvidence } from '../source-emission-session.js';
+import { renderSessionEvidence, renderSourceEvidence } from '../source-emission-session.js';
 import {
   symbolResolutionJson,
   symbolResolutionBefore,
@@ -41,9 +41,11 @@ import {
   withSymbolResolutionJson,
 } from './symbol-resolution.js';
 import { directNavigationQueryCommandDescriptors } from './direct-navigation.js';
-import { SOURCE_INSPECTION_MAX_SELECTORS } from '../../queries/internal/inspection-limits.js';
-
-const DEFAULT_SAFE_INSPECT_SOURCE_CHARACTERS = 20_000;
+import {
+  SOURCE_INSPECTION_MAX_SELECTORS,
+  SOURCE_INSPECTION_SAFE_CHARACTERS,
+} from '../../queries/internal/inspection-limits.js';
+import { assertNavigationDetailAllowed, stageNavigationMapCommands } from '../navigation-session.js';
 
 export function inspectSearchLimitOption(opts: Readonly<Record<string, unknown>>): number | undefined {
   const full = booleanOptionValue(opts, 'full');
@@ -284,7 +286,7 @@ function anchorDiscoverySections(result: queries.AnchorDiscoveryResult): ReportS
     const rootLabel =
       group.kind === 'shared-callee-owners'
         ? 'shared callee'
-        : group.kind === 'cross-boundary-flow'
+        : group.kind === 'cross-boundary-flow' || group.kind === 'parallel-paths'
           ? 'basis root'
           : 'root';
     const renderedRoots = group.roots.slice(0, 6);
@@ -310,9 +312,15 @@ function anchorDiscoverySections(result: queries.AnchorDiscoveryResult): ReportS
                 ]
               : []),
           ]
-        : group.kind === 'cross-boundary-flow'
+        : group.kind === 'cross-boundary-flow' || group.kind === 'parallel-paths'
           ? [
               `    map anchors: ${group.keyAnchors.map((anchor) => anchor.label).join(', ')}`,
+              ...(group.kind === 'parallel-paths'
+                ? [
+                    `    shared path vocabulary: ${group.parallelSharedPathTerms?.join(', ') || '(none)'}`,
+                    `    causal evidence on ${group.parallelConnectedSides ?? 0}/2 independently named path(s); matched orchestration roots on ${group.parallelOrchestrationSides ?? 0}/2; no cross-path edge is claimed.`,
+                  ]
+                : []),
               ...group.upstreamEntries.map(
                 (entry) =>
                   `    upstream entry: ${entry.name} — ${entry.file}:${displayLine(entry.line)}; if command preconditions can change the answer, include this location in the one batched gap inspect after the map.`,
@@ -327,10 +335,17 @@ function anchorDiscoverySections(result: queries.AnchorDiscoveryResult): ReportS
       ...(group.omittedRelations > 0
         ? [`    ... ${group.omittedRelations} additional relationship(s) withheld from this compact view.`]
         : []),
-      `    map: ${group.systemMapCommand}`,
+      `    next abstraction (run to completion before any inspect): ${group.systemMapCommand}`,
     ];
   });
   return [
+    {
+      title: 'REQUIRED NEXT STEP',
+      rows: [
+        '  Choose one evidence-grounded anchor set below and run its exact next-abstraction system-map command to transport completion.',
+        '  inspect, code, and evidence are intentionally unavailable until that map completes.',
+      ],
+    },
     {
       title: 'NORMALIZED REPOSITORY VOCABULARY',
       rows: [
@@ -348,8 +363,9 @@ function anchorDiscoverySections(result: queries.AnchorDiscoveryResult): ReportS
         `  Repository scan: ${result.scannedFiles} current text file(s), ${result.scannedBytes.toLocaleString()} byte(s).`,
         `  Lexical owners: ${result.candidateRootCount}; structurally analyzed: ${result.analyzedRootCount}; lower-ranked owners not graph-expanded: ${result.omittedRootCount}.`,
         `  Displayed anchor sets: ${result.groups.length}; withheld sets or unanalyzed roots: ${result.omittedGroupCount}.`,
-        '  cross-boundary-flow joins otherwise separate call groups only when an indexed runtime producer→consumer link and bounded downstream calls connect them; connected-flow follows calls forward from matched owners; shared-callee-owners finds callable owners that converge on common callees without claiming those callees are effects.',
+        '  cross-boundary-flow joins otherwise separate call groups only when an indexed runtime producer→consumer link and bounded downstream calls connect them; parallel-paths batches disconnected regions only when the query names distinct path vocabulary shared by those regions and does not claim a causal edge; connected-flow follows calls forward from matched owners; shared-callee-owners finds callable owners that converge on common callees without claiming those callees are effects.',
         '  Ranking uses repository vocabulary, compiler ownership, and bounded call connectivity; it does not establish task relevance.',
+        '  Anchor roots are locator evidence, not behavior evidence. Select one set, run its next-abstraction command to transport completion, and only then decide whether source inspection is necessary. Never run a map and inspect concurrently.',
         ...(result.recoveryCommand
           ? [
               `  Expand the ranked manifest only if the shown sets cannot establish the requested flow: ${result.recoveryCommand}`,
@@ -503,14 +519,14 @@ function enforceInspectSourceMaterializationContract(
   if (
     result.view !== 'source' ||
     booleanOptionValue(opts, 'allowLargeSource') ||
-    (result.returnedCharacters ?? 0) <= DEFAULT_SAFE_INSPECT_SOURCE_CHARACTERS
+    (result.returnedCharacters ?? 0) <= SOURCE_INSPECTION_SAFE_CHARACTERS
   ) {
     return;
   }
   throw new Error(
     [
       'INSPECT SOURCE PACKET REFUSED',
-      `${result.returnedCharacters ?? 0} exact source character(s) across ${result.units?.length ?? 0} selected unit(s) exceed the ${DEFAULT_SAFE_INSPECT_SOURCE_CHARACTERS}-character safe materialization ceiling.`,
+      `${result.returnedCharacters ?? 0} exact source character(s) across ${result.units?.length ?? 0} selected unit(s) exceed the ${SOURCE_INSPECTION_SAFE_CHARACTERS}-character safe materialization ceiling.`,
       'No partial source was emitted.',
       `Read the same constructs with complete statement accounting: ${inspectBehaviorFallbackCommand(opts)}`,
       'Narrow to smaller exact selectors, or rerun with --allow-large-source only when the omitted syntax itself can change the decision.',
@@ -525,13 +541,10 @@ function enforceInspectBehaviorFocusContract(
   if (result.view !== 'behavior' || booleanOptionValue(opts, 'allowLargeBehavior')) return;
   const oversizedOmissions = (result.omissionGroups ?? []).filter(
     (group) =>
-      group.sourceCharacters > DEFAULT_SAFE_INSPECT_SOURCE_CHARACTERS &&
+      group.sourceCharacters > SOURCE_INSPECTION_SAFE_CHARACTERS &&
       group.roles.some((role) => role === 'location' || role === 'definition'),
   );
-  if (
-    oversizedOmissions.length === 0 &&
-    (result.returnedViewCharacters ?? 0) <= DEFAULT_SAFE_INSPECT_SOURCE_CHARACTERS
-  ) {
+  if (oversizedOmissions.length === 0 && (result.returnedViewCharacters ?? 0) <= SOURCE_INSPECTION_SAFE_CHARACTERS) {
     return;
   }
   const broadAnchors = oversizedOmissions
@@ -541,7 +554,7 @@ function enforceInspectBehaviorFocusContract(
   throw new Error(
     [
       'INSPECT BEHAVIOR FOCUS REQUIRED',
-      `The selector set resolves to behavioral constructs above the ${DEFAULT_SAFE_INSPECT_SOURCE_CHARACTERS}-character evidence ceiling${selectors ? ` (${selectors})` : ''}.`,
+      `The selector set resolves to behavioral constructs above the ${SOURCE_INSPECTION_SAFE_CHARACTERS}-character evidence ceiling${selectors ? ` (${selectors})` : ''}.`,
       'No partial behavior was emitted, and this refusal does not establish an exploration obligation.',
       'Use one or more interior file:line locations already visible in connected behavior, and batch only the named gaps. Do not use --full to turn a broad construct into a focus.',
       'Use --allow-large-behavior only when every statement in the construct can change the decision.',
@@ -640,7 +653,7 @@ function sourceInspectionCausalFrontierRows(result: queries.SourceInspectionResu
   if (!frontier || frontier.candidateAnchors === 0) return [];
   const selected = frontier.anchors.filter((anchor) => anchor.alternativeCount === 1);
   const rows = [
-    `  ${selected.length}/${frontier.candidateAnchors} bounded downstream target(s) are exact and visible; these targets are outside the materialized constructs, not evidence already inspected.`,
+    `  ${selected.length}/${frontier.candidateAnchors} bounded downstream target(s) are uniquely resolved and visible; these targets are outside the materialized constructs, not evidence already inspected.`,
   ];
   for (const anchor of selected) {
     const target = anchor.alternatives[0]!;
@@ -706,9 +719,7 @@ function sourceInspectionUnitRow(unit: queries.SourceInspectionUnit): string {
       const owner = unit.ownerShort ? `  in ${unit.ownerShort}` : '';
       if (unit.behavior) {
         const coverage = unit.behavior.coverage;
-        const rows = [
-          `  ${displayPathRange(unit.relativePath, unit.startLine, unit.endLine)}${owner}`,
-          `    roles: ${unit.roles.join(', ')}; selected by ${unit.reasons.join(', ')}`,
+        const evidenceRows = [
           `    ${unit.behavior.constructKind}: ${unit.behavior.signature}`,
           ...unit.behavior.lines.map(
             (line) =>
@@ -720,7 +731,17 @@ function sourceInspectionUnitRow(unit: queries.SourceInspectionUnit): string {
           ...sourceInspectionRuntimeFactRows(unit.runtimeFacts ?? []),
           `    coverage: ${coverage.representedStatements}/${coverage.sourceStatements} source statement(s) represented; ${coverage.copiedStatements} verbatim; ${coverage.omittedStatements} omitted; ${unit.behavior.outlineCharacters}/${unit.behavior.rawCharacters} estimated characters`,
         ];
-        return rows.join('\n');
+        return [
+          `  ${displayPathRange(unit.relativePath, unit.startLine, unit.endLine)}${owner}`,
+          `    roles: ${unit.roles.join(', ')}; selected by ${unit.reasons.join(', ')}`,
+          renderSessionEvidence({
+            kind: 'unit',
+            identity: `inspect-behavior:${unit.relativePath}:${unit.startLine}:${unit.endLine}`,
+            content: evidenceRows.join('\n'),
+            label: unit.ownerShort ?? `${unit.relativePath}:${displayLine(unit.startLine)}`,
+            indent: '    ',
+          }),
+        ].join('\n');
       }
       const source = renderSourceEvidence({
         relativePath: unit.relativePath,
@@ -1022,11 +1043,11 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       ),
       option(
         '--allow-large-source',
-        `Explicitly allow an exact-source packet above the ${DEFAULT_SAFE_INSPECT_SOURCE_CHARACTERS}-character safety ceiling`,
+        `Explicitly allow an exact-source packet above the ${SOURCE_INSPECTION_SAFE_CHARACTERS}-character safety ceiling`,
       ),
       option(
         '--allow-large-behavior',
-        `Explicitly allow a behavioral construct above the ${DEFAULT_SAFE_INSPECT_SOURCE_CHARACTERS}-character focus ceiling`,
+        `Explicitly allow a behavioral construct above the ${SOURCE_INSPECTION_SAFE_CHARACTERS}-character focus ceiling`,
       ),
       option(
         '--unit-lines <n>',
@@ -1066,6 +1087,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       'scip-query inspect --at src/api.ts:42 --at src/web.tsx:90',
     ]),
     query: ({ db, opts, budget }) => {
+      assertNavigationDetailAllowed(db.config.projectRoot, 'inspect', opts['session'] !== false);
       const full = booleanOptionValue(opts, 'full');
       const result = queries.inspectSource(db, {
         searches: stringArrayOptionValue(opts, 'search'),
@@ -1203,7 +1225,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
         parsePositiveInteger,
         4,
       ),
-      option('--full', 'Analyze and return every candidate anchor group'),
+      option('--full', 'Analyze every candidate anchor group with semantic enrichment'),
     ],
     agent: agentContract(
       'Which small graph-connected code regions contain repository vocabulary from this question?',
@@ -1215,12 +1237,20 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       `scip-query anchors 'How does a fetched paper become durable local state?'`,
       `scip-query anchors 'Where is session authorization checked and persisted?' --scope src`,
     ]),
-    query: ({ db, args, opts }) =>
-      queries.discoverAnchors(db, stringArg(args, 0), {
+    query: ({ db, args, opts }) => {
+      const result = queries.discoverAnchors(db, stringArg(args, 0), {
         scope: stringOptionValue(opts, 'scope'),
         limit: definedLimitOption(opts, 'limit', 4),
         full: booleanOptionValue(opts, 'full'),
-      }),
+        semantic: booleanOptionValue(opts, 'full'),
+      });
+      stageNavigationMapCommands(
+        db.config.projectRoot,
+        result.groups.map((group) => group.systemMapCommand),
+        opts['session'] !== false,
+      );
+      return result;
+    },
     emptyMessage: (result) =>
       result.candidateRootCount === 0
         ? `No compiler-owned repository construct matched the normalized terms: ${result.normalizedTerms.join(', ')}.`
@@ -1360,13 +1390,15 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       'scip-query evidence appendEvent',
       'scip-query evidence appendEvent --include definition,references,callers,callees',
     ]),
-    query: ({ db, args, opts, budget }) =>
-      queries.qualifiedEvidence(db, stringArg(args, 0), {
+    query: ({ db, args, opts, budget }) => {
+      assertNavigationDetailAllowed(db.config.projectRoot, 'evidence', opts['session'] !== false);
+      return queries.qualifiedEvidence(db, stringArg(args, 0), {
         parts: selectedEvidenceParts(stringArrayOptionValue(opts, 'include')),
         referenceContext: definedNumberOption(opts, 'context', 2),
         relatedSourceLines: definedNumberOption(opts, 'relatedSourceLines', 80),
         semantic: budget.semantic,
-      }),
+      });
+    },
     emptyMessage: (result) => evidenceFailureMessage(result),
     before: (result) => {
       if (result.kind !== 'matched') process.exitCode = 1;

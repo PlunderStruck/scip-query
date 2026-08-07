@@ -393,7 +393,7 @@ function resolveAstCalleeCandidate(
   if (candidates.length === 0) return null;
   const clojurePick = pickClojureQualifiedCandidate(db, file, candidates, site.calleeQualifier);
   if (clojurePick) return clojurePick;
-  return pickAstCallCandidate(db, file, candidates, site.memberAccess);
+  return pickAstCallCandidate(db, file, candidates, site.memberAccess, site.calleeQualifier);
 }
 
 function pickClojureQualifiedCandidate<T extends { symbol: string; file: string }>(

@@ -46,6 +46,7 @@ import {
   symbolResolutionJson,
   withSymbolResolutionJson,
 } from './symbol-resolution.js';
+import { assertNavigationDetailAllowed } from '../navigation-session.js';
 
 const handleOutline = dbCommand(({ db, args, opts }) => {
   const filePattern = stringArg(args, 0);
@@ -251,6 +252,7 @@ function keysetReferencePage(
 }
 
 const handleCode = dbCommand(({ db, args, opts }) => {
+  assertNavigationDetailAllowed(db.config.projectRoot, 'code', opts['session'] !== false);
   const selectors = stringArrayArg(args, 0);
   const context = definedNumberOption(opts, 'context', 0);
   const members = codeFileMemberMode(opts);

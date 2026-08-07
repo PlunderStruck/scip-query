@@ -29,6 +29,12 @@ import {
   type CliOutputPaginationOptions,
 } from '../../src/runtime/output-pagination.js';
 import { bindSourceEmissionGeneration, renderSourceEvidence } from '../../src/runtime/source-emission-session.js';
+import {
+  assertNavigationDetailAllowed,
+  assertNavigationMapCanStart,
+  recordNavigationOutputDelivery,
+  stageNavigationMapCommands,
+} from '../../src/runtime/navigation-session.js';
 
 const tempDirs: string[] = [];
 
@@ -388,6 +394,102 @@ describe('universal CLI output pagination', () => {
     } finally {
       restoreEnvironment('SCIP_QUERY_SESSION', priorSession);
       restoreEnvironment('SCIP_QUERY_SESSION_DIR', priorSessionRoot);
+    }
+  });
+
+  it('keeps detail locked until the final system-map transport page is delivered', async () => {
+    const sessionRoot = freshSnapshotRoot();
+    const snapshotRoot = freshSnapshotRoot();
+    const priorSession = process.env['SCIP_QUERY_SESSION'];
+    const priorSessionRoot = process.env['SCIP_QUERY_SESSION_DIR'];
+    const priorProjectRoot = process.env['SCIP_QUERY_PROJECT_ROOT'];
+    process.env['SCIP_QUERY_SESSION'] = `navigation-${randomUUID()}`;
+    process.env['SCIP_QUERY_SESSION_DIR'] = sessionRoot;
+    process.env['SCIP_QUERY_PROJECT_ROOT'] = '/repo';
+    try {
+      await invoke('anchor choices\n', { command: 'anchors', cwd: '/repo' });
+      expect(() => assertNavigationDetailAllowed('/repo', 'inspect')).toThrow('NAVIGATION MAP REQUIRED');
+
+      const firstMapPage = parseHumanPage(
+        (
+          await invoke('map evidence\n'.repeat(80), {
+            command: 'system-map',
+            argv: ['system-map', '--output-page-size', '256'],
+            cwd: '/repo',
+            pageSize: 256,
+            snapshotRoot,
+          })
+        ).stdout,
+      );
+      expect(firstMapPage.cursor).toBeDefined();
+      expect(() => assertNavigationDetailAllowed('/repo', 'inspect')).toThrow('NAVIGATION MAP REQUIRED');
+      expect(() => assertNavigationMapCanStart('/repo')).toThrow(/MAP TRANSPORT INCOMPLETE.*Continue exactly:/su);
+      await expect(
+        invoke('must not recompute', {
+          command: 'system-map',
+          argv: ['system-map', '--output-page-size', '256'],
+          cwd: '/repo',
+          pageSize: 256,
+          snapshotRoot,
+        }),
+      ).rejects.toThrow('MAP TRANSPORT INCOMPLETE');
+
+      let cursor = firstMapPage.cursor;
+      while (cursor) {
+        const page = parseHumanPage((await continueOutput(cursor, snapshotRoot)).stdout);
+        cursor = page.cursor;
+      }
+      expect(() => assertNavigationDetailAllowed('/repo', 'inspect')).not.toThrow();
+    } finally {
+      restoreEnvironment('SCIP_QUERY_SESSION', priorSession);
+      restoreEnvironment('SCIP_QUERY_SESSION_DIR', priorSessionRoot);
+      restoreEnvironment('SCIP_QUERY_PROJECT_ROOT', priorProjectRoot);
+    }
+  });
+
+  it('replays the exact ranked map choices when detail is requested too early', async () => {
+    const sessionRoot = freshSnapshotRoot();
+    const priorSession = process.env['SCIP_QUERY_SESSION'];
+    const priorSessionRoot = process.env['SCIP_QUERY_SESSION_DIR'];
+    const priorProjectRoot = process.env['SCIP_QUERY_PROJECT_ROOT'];
+    process.env['SCIP_QUERY_SESSION'] = `navigation-${randomUUID()}`;
+    process.env['SCIP_QUERY_SESSION_DIR'] = sessionRoot;
+    process.env['SCIP_QUERY_PROJECT_ROOT'] = '/repo';
+    const rankedFirst = "scip-query system-map --symbol 'src/entry.ts:10-20' --relation call";
+    const rankedSecond = "scip-query system-map --symbol 'src/worker.ts:30-40' --relation dataflow";
+    try {
+      stageNavigationMapCommands('/repo', [rankedFirst, rankedSecond]);
+      await invoke('anchor choices\n', { command: 'anchors', cwd: '/repo' });
+
+      const requestDetail = () => assertNavigationDetailAllowed('/repo', 'inspect');
+      expect(requestDetail).toThrow('recoverable protocol step');
+      expect(requestDetail).toThrow(rankedFirst);
+      expect(requestDetail).toThrow(rankedSecond);
+    } finally {
+      restoreEnvironment('SCIP_QUERY_SESSION', priorSession);
+      restoreEnvironment('SCIP_QUERY_SESSION_DIR', priorSessionRoot);
+      restoreEnvironment('SCIP_QUERY_PROJECT_ROOT', priorProjectRoot);
+    }
+  });
+
+  it('rejects a parallel map before either execution can produce output', async () => {
+    const sessionRoot = freshSnapshotRoot();
+    const priorSession = process.env['SCIP_QUERY_SESSION'];
+    const priorSessionRoot = process.env['SCIP_QUERY_SESSION_DIR'];
+    const priorProjectRoot = process.env['SCIP_QUERY_PROJECT_ROOT'];
+    process.env['SCIP_QUERY_SESSION'] = `navigation-${randomUUID()}`;
+    process.env['SCIP_QUERY_SESSION_DIR'] = sessionRoot;
+    process.env['SCIP_QUERY_PROJECT_ROOT'] = '/repo';
+    try {
+      await invoke('anchor choices\n', { command: 'anchors', cwd: '/repo' });
+      expect(() => assertNavigationMapCanStart('/repo')).not.toThrow();
+      expect(() => assertNavigationMapCanStart('/repo')).toThrow('NAVIGATION MAP ALREADY RUNNING');
+      recordNavigationOutputDelivery('system-map', '/repo', true);
+      expect(() => assertNavigationDetailAllowed('/repo', 'inspect')).not.toThrow();
+    } finally {
+      restoreEnvironment('SCIP_QUERY_SESSION', priorSession);
+      restoreEnvironment('SCIP_QUERY_SESSION_DIR', priorSessionRoot);
+      restoreEnvironment('SCIP_QUERY_PROJECT_ROOT', priorProjectRoot);
     }
   });
 

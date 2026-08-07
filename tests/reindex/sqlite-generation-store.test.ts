@@ -315,6 +315,34 @@ describe('SQLite generation handoff', () => {
     }
   });
 
+  test('refreshes generation identity after post-index tables change the stable database', () => {
+    const fixture = createFixture();
+    promoteReindexArtifacts({ ...fixture.paths });
+    const prior = openFixtureDatabase(fixture);
+    const stable = new Database(fixture.paths.outputDb);
+    try {
+      stable.prepare('UPDATE generation_value SET value = ?').run('augmented');
+    } finally {
+      stable.close();
+    }
+    expect(inspectSqliteGeneration(fixture.paths.outputDb, fixture.paths.metaPath).state).toBe('drifted');
+
+    refreshSqliteGenerationMetadata(fixture.paths.outputDb, fixture.paths.metaPath);
+
+    const current = openFixtureDatabase(fixture);
+    try {
+      expect(inspectSqliteGeneration(fixture.paths.outputDb, fixture.paths.metaPath)).toEqual(
+        expect.objectContaining({ state: 'current', currentMatches: true }),
+      );
+      expect(readValueFromDatabase(prior.db)).toBe('new');
+      expect(readValueFromDatabase(current.db)).toBe('augmented');
+      expect(current.generation.identity).not.toBe(prior.generation.identity);
+    } finally {
+      prior.close();
+      current.close();
+    }
+  });
+
   test('fails closed when an immutable generation named by the pointer is missing', () => {
     const fixture = createFixture();
     const result = promoteReindexArtifacts({ ...fixture.paths });

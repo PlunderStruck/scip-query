@@ -59,7 +59,10 @@ describe('universal exploration topology', () => {
   });
 
   it('selects anchor connectors and folds the remaining component with exact membership', () => {
-    const selected = selectExplorationTopology(createExplorationTopology(fixtureInput()), { maxSelectedNodes: 2 });
+    const selected = selectExplorationTopology(createExplorationTopology(fixtureInput()), {
+      maxSelectedNodes: 2,
+      maxUpstreamCausalPaths: 0,
+    });
 
     expect(selected.nodes.filter((node) => node.disposition === 'emitted').map((node) => node.id)).toEqual([
       'collector',
@@ -89,9 +92,13 @@ describe('universal exploration topology', () => {
 
   it('expands a frontier losslessly and reconstructs the oracle graph', () => {
     const topology = createExplorationTopology(fixtureInput());
-    const selected = selectExplorationTopology(topology, { maxSelectedNodes: 2 });
+    const selected = selectExplorationTopology(topology, {
+      maxSelectedNodes: 2,
+      maxUpstreamCausalPaths: 0,
+    });
     const expanded = selectExplorationTopology(topology, {
       maxSelectedNodes: 2,
+      maxUpstreamCausalPaths: 0,
       expandedFrontierIds: selected.frontiers.map((frontier) => frontier.id),
     });
 
@@ -138,7 +145,10 @@ describe('universal exploration topology', () => {
       },
     ];
 
-    const selected = selectExplorationTopology(createExplorationTopology(input), { maxSelectedNodes: 2 });
+    const selected = selectExplorationTopology(createExplorationTopology(input), {
+      maxSelectedNodes: 2,
+      maxUpstreamCausalPaths: 0,
+    });
 
     expect(selected.frontiers).toEqual([
       expect.objectContaining({
@@ -187,6 +197,228 @@ describe('universal exploration topology', () => {
     );
     expect(selected.nodes.find((entry) => entry.id === 'unrelated')?.disposition).toBe('folded');
     expect(selected.nodes.find((entry) => entry.id === 'schema')?.disposition).toBe('folded');
+  });
+
+  it('selects a proved upstream path through the nearest runtime boundary', () => {
+    const input: ExplorationTopologyInput = {
+      scope: 'one implementation anchor with a proved external activation path',
+      anchors: [
+        {
+          id: 'anchor:compact',
+          kind: 'symbol',
+          query: 'compact',
+          status: 'matched',
+          nodeIds: ['compact'],
+          candidateNodeIds: [],
+          omittedCandidates: 0,
+        },
+      ],
+      nodes: [
+        node('endpoint', 'POST /session/prompt'),
+        node('handler', 'promptHandler'),
+        node('service', 'Sessions.prompt'),
+        node('compact', 'processCompaction', ['anchor:compact']),
+        node('noise', 'unrelatedCaller'),
+      ],
+      edges: [
+        edge('http-boundary', 'runtime-boundary', 'endpoint', 'handler', 'derived'),
+        edge('handler-call', 'call', 'handler', 'service', 'exact'),
+        edge('service-call', 'call', 'service', 'compact', 'exact'),
+        edge('noise-call', 'call', 'noise', 'handler', 'candidate'),
+      ],
+    };
+
+    const selected = selectExplorationTopology(createExplorationTopology(input), {
+      maxSelectedNodes: 1,
+      maxUpstreamCausalPaths: 1,
+      maxUpstreamCausalNodes: 3,
+    });
+
+    expect(selected.nodes.filter((entry) => entry.disposition === 'emitted').map((entry) => entry.id)).toEqual([
+      'compact',
+      'endpoint',
+      'handler',
+      'service',
+    ]);
+    expect(selected.nodes.find((entry) => entry.id === 'endpoint')?.attributes).toMatchObject({
+      upstreamCausalPath: true,
+      upstreamCausalDistance: 3,
+      upstreamCausalEndpoint: 'runtime-boundary',
+    });
+    expect(selected.nodes.find((entry) => entry.id === 'noise')?.disposition).toBe('folded');
+    expect(selected.edges.filter((entry) => entry.disposition === 'emitted').map((entry) => entry.id)).toEqual([
+      'handler-call',
+      'http-boundary',
+      'service-call',
+    ]);
+  });
+
+  it('labels the earliest proved caller as a traversal root without crossing candidate-only evidence', () => {
+    const input: ExplorationTopologyInput = {
+      scope: 'one implementation anchor whose earlier runtime relationship is only a candidate',
+      anchors: [
+        {
+          id: 'anchor:effect',
+          kind: 'symbol',
+          query: 'effect',
+          status: 'matched',
+          nodeIds: ['effect'],
+          candidateNodeIds: [],
+          omittedCandidates: 0,
+        },
+      ],
+      nodes: [
+        node('candidate-endpoint', 'POST /candidate'),
+        node('root', 'runRequest'),
+        node('effect', 'writeEffect', ['anchor:effect']),
+      ],
+      edges: [
+        edge('candidate-boundary', 'runtime-boundary', 'candidate-endpoint', 'root', 'candidate'),
+        edge('root-call', 'call', 'root', 'effect', 'exact'),
+      ],
+    };
+
+    const selected = selectExplorationTopology(createExplorationTopology(input), {
+      maxSelectedNodes: 1,
+      maxUpstreamCausalPaths: 1,
+      maxUpstreamCausalNodes: 2,
+    });
+
+    expect(selected.nodes.find((entry) => entry.id === 'root')?.attributes).toMatchObject({
+      upstreamCausalEndpoint: 'traversal-root',
+      upstreamCausalDistance: 1,
+    });
+    expect(selected.nodes.find((entry) => entry.id === 'candidate-endpoint')?.disposition).toBe('folded');
+    expect(selected.edges.find((entry) => entry.id === 'candidate-boundary')?.disposition).toBe('folded');
+  });
+
+  it('prefers a proved public entry path over a nearer internal traversal root', () => {
+    const input: ExplorationTopologyInput = {
+      scope: 'one effect with internal and externally reachable causal owners',
+      anchors: [
+        {
+          id: 'anchor:effect',
+          kind: 'symbol',
+          query: 'effect',
+          status: 'matched',
+          nodeIds: ['effect'],
+          candidateNodeIds: [],
+          omittedCandidates: 0,
+        },
+      ],
+      nodes: [
+        { ...node('public', 'OpenCode.sessions.prompt'), attributes: { publicEntry: true } },
+        node('adapter', 'sessions.prompt'),
+        node('effect', 'writeEffect', ['anchor:effect']),
+        node('internal-root', 'runTurn'),
+      ],
+      edges: [
+        edge('public-call', 'call', 'public', 'adapter', 'exact'),
+        edge('adapter-call', 'call', 'adapter', 'effect', 'exact'),
+        edge('internal-call', 'call', 'internal-root', 'effect', 'exact'),
+      ],
+    };
+
+    const selected = selectExplorationTopology(createExplorationTopology(input), {
+      maxSelectedNodes: 1,
+      maxUpstreamCausalPaths: 1,
+      maxUpstreamCausalNodes: 2,
+    });
+
+    expect(selected.nodes.find((entry) => entry.id === 'public')?.attributes).toMatchObject({
+      upstreamCausalEndpoint: 'public-entry',
+      upstreamCausalDistance: 2,
+    });
+    expect(selected.nodes.find((entry) => entry.id === 'adapter')?.disposition).toBe('emitted');
+    expect(selected.nodes.find((entry) => entry.id === 'internal-root')?.disposition).toBe('folded');
+  });
+
+  it('prefers an explicit public entry over a shorter wildcard package surface', () => {
+    const input: ExplorationTopologyInput = {
+      scope: 'one effect with two public ownership paths of different precision',
+      anchors: [
+        {
+          id: 'anchor:effect',
+          kind: 'symbol',
+          query: 'effect',
+          status: 'matched',
+          nodeIds: ['effect'],
+          candidateNodeIds: [],
+          omittedCandidates: 0,
+        },
+      ],
+      nodes: [
+        { ...node('explicit', 'OpenCode.sessions.prompt'), attributes: { publicEntry: true, publicEntryPriority: 2 } },
+        { ...node('wildcard', 'internalLayer'), attributes: { publicEntry: true, publicEntryPriority: 1 } },
+        node('effect', 'writeEffect', ['anchor:effect']),
+      ],
+      edges: [
+        edge('explicit-call', 'call', 'explicit', 'wildcard', 'exact'),
+        edge('wildcard-call', 'call', 'wildcard', 'effect', 'exact'),
+      ],
+    };
+
+    const selected = selectExplorationTopology(createExplorationTopology(input), {
+      maxSelectedNodes: 1,
+      maxUpstreamCausalPaths: 1,
+      maxUpstreamCausalNodes: 2,
+    });
+
+    expect(selected.nodes.find((entry) => entry.id === 'explicit')?.attributes).toMatchObject({
+      upstreamCausalEndpoint: 'public-entry',
+      upstreamCausalDistance: 2,
+    });
+    expect(selected.nodes.find((entry) => entry.id === 'wildcard')?.disposition).toBe('emitted');
+  });
+
+  it('does not let area diversity displace stronger entry evidence', () => {
+    const input: ExplorationTopologyInput = {
+      scope: 'two exact operations in one API area and one weaker operation elsewhere',
+      anchors: [
+        {
+          id: 'anchor:effect',
+          kind: 'symbol',
+          query: 'effect',
+          status: 'matched',
+          nodeIds: ['effect'],
+          candidateNodeIds: [],
+          omittedCandidates: 0,
+        },
+      ],
+      nodes: [
+        {
+          ...node('prompt', 'POST /session/:id/prompt'),
+          location: { file: 'packages/api/src/prompt.ts', line: 0 },
+          attributes: { publicEntry: true, publicEntryPriority: 2 },
+        },
+        {
+          ...node('prompt-async', 'POST /session/:id/prompt_async'),
+          location: { file: 'packages/api/src/prompt-async.ts', line: 0 },
+          attributes: { publicEntry: true, publicEntryPriority: 2 },
+        },
+        {
+          ...node('compat', 'compatibilityLayer'),
+          location: { file: 'packages/core/src/compat.ts', line: 0 },
+          attributes: { publicEntry: true, publicEntryPriority: 1 },
+        },
+        node('effect', 'processCompaction', ['anchor:effect']),
+      ],
+      edges: [
+        edge('prompt-call', 'call', 'prompt', 'effect', 'exact'),
+        edge('prompt-async-call', 'call', 'prompt-async', 'effect', 'exact'),
+        edge('compat-call', 'call', 'compat', 'effect', 'exact'),
+      ],
+    };
+
+    const selected = selectExplorationTopology(createExplorationTopology(input), {
+      maxSelectedNodes: 1,
+      maxUpstreamCausalPaths: 2,
+      maxUpstreamCausalNodes: 2,
+    });
+
+    expect(selected.nodes.find((entry) => entry.id === 'prompt')?.disposition).toBe('emitted');
+    expect(selected.nodes.find((entry) => entry.id === 'prompt-async')?.disposition).toBe('emitted');
+    expect(selected.nodes.find((entry) => entry.id === 'compat')?.disposition).toBe('folded');
   });
 });
 

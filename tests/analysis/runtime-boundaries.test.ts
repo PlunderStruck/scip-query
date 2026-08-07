@@ -467,6 +467,97 @@ describe('runtime-boundary evidence', () => {
     }
   });
 
+  it('joins Effect HttpApi endpoint declarations to their uniquely registered handlers', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-effect-httpapi-boundaries-'));
+    const files = {
+      'src/groups.ts': [
+        'import { HttpApi, HttpApiEndpoint as Endpoint, HttpApiGroup } from "effect/unstable/httpapi";',
+        'const Paths = { prompt: "/session/:sessionID/message" } as const;',
+        'export const SessionApi = HttpApi.make("api").add(',
+        '  HttpApiGroup.make("session").add(Endpoint.post("prompt", Paths.prompt)),',
+        ');',
+      ],
+      'src/handlers.ts': [
+        'import { HttpApiBuilder as Builder } from "effect/unstable/httpapi";',
+        'const prompt = (ctx: unknown) => ctx;',
+        'export const handlers = Builder.group(SessionApi, "session", (handlers) =>',
+        '  handlers.handle("prompt", prompt),',
+        ');',
+      ],
+      'src/client.ts': ['fetch("/session/:sessionID/message", { method: "POST" });'],
+    };
+    writeFixtureFiles(tempDir, files);
+    const builder = evidenceFixtureDb(join(tempDir, 'index.db'));
+    Object.keys(files).forEach((file, index) => builder.document(index + 1, 'typescript', file));
+    builder
+      .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`groups.ts`/SessionApi.', 'SessionApi', 13)
+      .definition(1, 1, 1, 2, 0, 4, 2)
+      .symbol(2, 'scip-typescript npm fixture 1.0.0 src/`handlers.ts`/handlers.', 'handlers', 13)
+      .definition(2, 2, 2, 2, 0, 4, 2)
+      .write();
+    const db = new ScipDatabase({
+      projectRoot: tempDir,
+      dbPath: join(tempDir, 'index.db'),
+      indexPath: join(tempDir, 'index.scip'),
+    });
+    try {
+      const graph = collectRuntimeBoundaryGraph(db);
+      expect(graph.observations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            action: 'http.handle',
+            evidence: 'effect-httpapi-endpoint-declaration',
+            keyParts: expect.arrayContaining([
+              expect.objectContaining({ name: 'method', value: 'POST' }),
+              expect.objectContaining({ name: 'path', value: '/session/:sessionID/message' }),
+            ]),
+          }),
+          expect.objectContaining({
+            action: 'framework.declare',
+            strength: 'exact',
+            keyParts: expect.arrayContaining([
+              expect.objectContaining({ name: 'group', value: 'session' }),
+              expect.objectContaining({ name: 'operation', value: 'prompt' }),
+            ]),
+          }),
+          expect.objectContaining({
+            action: 'framework.handle',
+            strength: 'exact',
+            owner: expect.objectContaining({
+              file: 'src/handlers.ts',
+              name: 'prompt',
+              startLine: 1,
+              symbol: expect.stringContaining('source-callable:'),
+            }),
+          }),
+        ]),
+      );
+      expect(graph.links).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ joinRule: 'http.method-path' }),
+          expect.objectContaining({ joinRule: 'framework.effect-httpapi-operation', strength: 'exact' }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('does not guess an Effect HttpApi handler when an operation registration is ambiguous', () => {
+    const declaration = syntheticFrameworkObservation('declaration', 'declaration');
+    const first = syntheticFrameworkObservation('consumer', 'handler-a');
+    const second = syntheticFrameworkObservation('consumer', 'handler-b');
+    const observations = [declaration, first, second];
+    const groups = buildRelationGroups(observations);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({
+      joinRule: 'framework.effect-httpapi-operation',
+      declarationIds: [declaration.id],
+      consumerIds: [first.id, second.id],
+    });
+    expect(materializeBoundedLinks(observations, groups)).toEqual([]);
+  });
+
   it('factorizes a 1,000 by 1,000 partial join without materializing a pairwise product', () => {
     const observations: BoundaryObservation[] = [
       ...Array.from({ length: 1_000 }, (_, index) => syntheticHttpObservation('producer', index)),
@@ -690,6 +781,31 @@ function syntheticHttpObservation(role: 'producer' | 'consumer', index: number):
     },
     valuePrecision: 'literal',
     modality: 'may',
+    resolution: 'unresolved',
+    sourceScope: 'production',
+  };
+}
+
+function syntheticFrameworkObservation(role: 'declaration' | 'consumer', id: string): BoundaryObservation {
+  return {
+    id,
+    extractor: 'fixture',
+    action: role === 'declaration' ? 'framework.declare' : 'framework.handle',
+    owner: { file: `src/${id}.ts`, symbol: null, name: id, startLine: 0, endLine: 0 },
+    source: { file: `src/${id}.ts`, startLine: 0, endLine: 0 },
+    keyParts: [
+      { name: 'adapter', value: 'effect-httpapi', evidence: 'literal' },
+      { name: 'group', value: 'session', evidence: 'literal' },
+      { name: 'operation', value: 'prompt', evidence: 'literal' },
+    ],
+    evidence: 'fixture',
+    strength: 'exact',
+    protocol: 'framework',
+    role,
+    executionDomain: null,
+    derivation: { kind: 'direct', rule: 'fixture', ruleVersion: '1', inputFactIds: [], sourceSpans: [] },
+    valuePrecision: 'literal',
+    modality: 'must',
     resolution: 'unresolved',
     sourceScope: 'production',
   };

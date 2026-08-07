@@ -73,6 +73,7 @@ export function validateExplorationTrial(value) {
             ? parsed.output.length
             : 0
           : nonNegativeInteger(parsed.outputCharacters, `trial calls[${index}].outputCharacters`),
+      preconditionRefusal: parsed.preconditionRefusal === true,
     };
   });
   const usage = trial.usage === undefined ? undefined : modelUsage(trial.usage, 'trial usage');
@@ -110,7 +111,9 @@ export function evaluateExplorationTrial(definitionValue, trialValue) {
   }));
   const metrics = {
     toolCalls: trial.calls.filter((call) => call.kind !== 'status' && call.surface !== 'other').length,
-    semanticQueries: trial.calls.filter((call) => call.surface === 'scip-query' && call.kind === 'query').length,
+    semanticQueries: trial.calls.filter(
+      (call) => call.surface === 'scip-query' && call.kind === 'query' && !call.preconditionRefusal,
+    ).length,
     transportContinuations: trial.calls.filter((call) => call.surface === 'scip-query' && call.kind === 'continuation')
       .length,
     renderedCharacters: trial.calls

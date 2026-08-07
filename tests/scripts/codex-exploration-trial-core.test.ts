@@ -46,12 +46,61 @@ describe('Codex exploration trial core', () => {
           surface: 'scip-query',
           kind: 'query',
           outputCharacters: 11,
+          preconditionRefusal: false,
           exitCode: 0,
         },
       ],
       usage: { inputTokens: 30, cachedInputTokens: 10, outputTokens: 5, reasoningOutputTokens: 2 },
     });
     expect(parsed.calls[0].outputSha256).toHaveLength(64);
+  });
+
+  it('records a navigation precondition refusal without retaining command output', () => {
+    const parsed = parseCodexJsonl(
+      [
+        JSON.stringify({
+          type: 'item.completed',
+          item: {
+            type: 'command_execution',
+            command: 'scip-query inspect --at src/file.ts:1',
+            aggregated_output: 'error: NAVIGATION MAP REQUIRED',
+            exit_code: 1,
+          },
+        }),
+        JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'final answer' } }),
+        JSON.stringify({
+          type: 'turn.completed',
+          usage: { input_tokens: 1, cached_input_tokens: 0, output_tokens: 1, reasoning_output_tokens: 0 },
+        }),
+      ].join('\n'),
+      { benchmarkId: 'fixture' },
+    );
+
+    expect(parsed.calls[0]).toMatchObject({ preconditionRefusal: true, exitCode: 1, output: '' });
+  });
+
+  it('classifies a duplicate map refusal as a precondition rather than semantic work', () => {
+    const parsed = parseCodexJsonl(
+      [
+        JSON.stringify({
+          type: 'item.completed',
+          item: {
+            type: 'command_execution',
+            command: 'scip-query system-map --symbol target',
+            aggregated_output: 'error: MAP TRANSPORT INCOMPLETE\nContinue exactly: scip-query continue abc',
+            exit_code: 1,
+          },
+        }),
+        JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'final answer' } }),
+        JSON.stringify({
+          type: 'turn.completed',
+          usage: { input_tokens: 1, cached_input_tokens: 0, output_tokens: 1, reasoning_output_tokens: 0 },
+        }),
+      ].join('\n'),
+      { benchmarkId: 'fixture' },
+    );
+
+    expect(parsed.calls[0]).toMatchObject({ preconditionRefusal: true, exitCode: 1 });
   });
 
   it('classifies native exploration before a mixed scip-query pipeline can hide it', () => {
@@ -85,6 +134,10 @@ describe('Codex exploration trial core', () => {
       ),
     ).toEqual({ surface: 'other', kind: 'other' });
     expect(classifyExplorationCommand('rg -n handler src')).toEqual({ surface: 'native-search', kind: 'query' });
+    expect(classifyExplorationCommand('ps -ax -o pid=,command=')).toEqual({
+      surface: 'native-search',
+      kind: 'query',
+    });
     expect(classifyExplorationCommand("scip-query anchors 'How does it find configuration?'")).toEqual({
       surface: 'scip-query',
       kind: 'query',
@@ -96,6 +149,8 @@ describe('Codex exploration trial core', () => {
     const prompt = treatmentPrompt('How does the path work?');
     expect(prompt).toContain('scip-query as the only repository exploration surface');
     expect(prompt).toContain('cross-boundary-flow');
+    expect(prompt).toContain('parallel-paths');
+    expect(prompt).toContain('connected-flow whose displayed roots already cover every named side');
     expect(prompt).toContain('upstream callers');
     expect(prompt).toContain('result-producing callbacks');
     expect(prompt).toContain('Use exactly one initial locator');
@@ -121,6 +176,11 @@ describe('Codex exploration trial core', () => {
     expect(prompt).toContain('ranking is navigation help, not a claim');
     expect(prompt).toContain('shared-callee-owners');
     expect(prompt).toContain('Do not use rg');
+    expect(prompt).toContain('poll the existing terminal execution session');
+    expect(prompt).toContain('The map and source inspection are sequential, never parallel');
+    expect(prompt).toContain('Inspection selection is invalid until the map has completed');
+    expect(prompt).toContain('Never run ps');
+    expect(prompt).toContain('Never use perl to print it');
   });
 
   it('supports prompt ablations without leaking task-specific navigation', () => {

@@ -1,0 +1,31 @@
+{
+  "acceptedAt": "2026-08-07T04:34:33.912Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "635e2acd4f45f060dbeea51275adf075079d4186b2501a274bea20eac878ecae",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AnchorDiscoveryGroup changed from interface AnchorDiscoveryGroup { id: string; kind: 'cross-boundary-flow' | 'connected-flow' | 'shared-callee-owners'; roots: AnchorDiscoveryCandidate[]; keyAnchors: AnchorDiscov... to interface AnchorDiscoveryGroup { id: string; kind: 'cross-boundary-flow' | 'parallel-paths' | 'connected-flow' | 'shared-callee-owners'; roots: AnchorDiscoveryCandidate[]; keyAn....",
+      "target": "./queries:AnchorDiscoveryGroup"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AnchorDiscoveryGroup changed from interface AnchorDiscoveryGroup { id: string; kind: 'cross-boundary-flow' | 'connected-flow' | 'shared-callee-owners'; roots: AnchorDiscoveryCandidate[]; keyAnchors: AnchorDiscov... to interface AnchorDiscoveryGroup { id: string; kind: 'cross-boundary-flow' | 'parallel-paths' | 'connected-flow' | 'shared-callee-owners'; roots: AnchorDiscoveryCandidate[]; keyAn....",
+      "target": "./queries/anchors:AnchorDiscoveryGroup"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AnchorDiscoveryGroup changed from interface AnchorDiscoveryGroup { id: string; kind: 'cross-boundary-flow' | 'connected-flow' | 'shared-callee-owners'; roots: AnchorDiscoveryCandidate[]; keyAnchors: AnchorDiscov... to interface AnchorDiscoveryGroup { id: string; kind: 'cross-boundary-flow' | 'parallel-paths' | 'connected-flow' | 'shared-callee-owners'; roots: AnchorDiscoveryCandidate[]; keyAn....",
+      "target": "./queries/index:AnchorDiscoveryGroup"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "ae556d744eab1c59a1b2a925bb9a74d9f61c6523c41a3eb0b48a0c26c7329ef2",
+  "reason": "Anchor discovery now returns a parallel-paths group for explicitly named disconnected implementations; consumers with exhaustive kind handling must add the new case.",
+  "schemaVersion": 1
+}

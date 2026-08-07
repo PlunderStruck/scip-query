@@ -94,7 +94,8 @@ export function scipOccurrenceCallableReferencesForRange(
   return {
     available: true,
     targets: (index.byFile.get(relativePath) ?? []).filter(
-      (target) => target.sourceLine >= startLine && target.sourceLine <= endLine,
+      (target) =>
+        target.sourceLine >= startLine && target.sourceLine <= endLine && sourceConfirmsCallable(db, target.definition),
     ),
   };
 }
@@ -109,7 +110,13 @@ function scipOccurrenceCallTargetIndex(db: ScipDatabase): ScipOccurrenceCallTarg
 function loadScipOccurrenceCallTargetIndex(db: ScipDatabase): ScipOccurrenceCallTargetIndex | null {
   if (!db.generation.indexPath || !existsSync(db.generation.indexPath)) return null;
   try {
-    const definitions = getAllDefinitions(db).filter((definition) => sourceConfirmsCallable(db, definition));
+    // A direct call target is proven jointly by call syntax at the source
+    // line and a SCIP occurrence with the same line-and-leaf cardinality. It
+    // does not need a declaration hover signature, which may degrade to
+    // `any` when a function factory's dependencies are unavailable. Bare
+    // callable references are filtered separately above because they lack
+    // that call-syntax proof.
+    const definitions = getAllDefinitions(db).filter((definition) => definition.isFunctionLike);
     const definitionBySymbol = new Map(definitions.map((definition) => [definition.symbol, definition]));
     const scipIndex = readScipArtifact(db.generation.indexPath, 'SCIP source-range call-target index');
     const byFile = new Map<string, IndexedOccurrenceCallTarget[]>();
@@ -136,11 +143,26 @@ function sourceConfirmsCallable(db: ScipDatabase, definition: IndexedDefinition)
   if (!definition.isFunctionLike) return false;
   const facts = getSourceFacts(db, definition.relativePath);
   if (!facts) return true;
-  return facts.callables.some(
-    (callable) =>
-      callable.name === definition.leaf &&
-      callable.startLine === definition.startLine &&
-      callable.endLine === definition.endLine,
+  if (
+    facts.callables.some(
+      (callable) =>
+        callable.name === definition.leaf &&
+        callable.startLine === definition.startLine &&
+        callable.endLine === definition.endLine,
+    )
+  ) {
+    return true;
+  }
+  return compilerDocumentationConfirmsCallable(definition);
+}
+
+function compilerDocumentationConfirmsCallable(definition: IndexedDefinition): boolean {
+  const documentation = definition.documentation;
+  if (!documentation) return false;
+  const leaf = definition.leaf.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  return (
+    new RegExp(`\\bfunction\\s+${leaf}\\s*(?:<[^>]*>)?\\s*\\(`, 'u').test(documentation) ||
+    new RegExp(`\\b(?:const|let|var)\\s+${leaf}\\s*:\\s*(?:<[^>]*>\\s*)?\\([^\\n]*\\)\\s*=>`, 'u').test(documentation)
   );
 }
 

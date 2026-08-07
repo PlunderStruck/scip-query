@@ -1,4 +1,10 @@
-import { classifyFile, type FileKind } from '../../analysis/file-classifier.js';
+import {
+  classifyFile,
+  isExplicitPackageSurfaceSymbol,
+  rootedSymbolEvidence,
+  type FileKind,
+  type RootedSymbolEvidence,
+} from '../../analysis/file-classifier.js';
 import { readRuntimeBoundaryGraph } from '../../analysis/runtime-boundaries/index.js';
 import type { BoundaryObservation } from '../../analysis/runtime-boundaries/types.js';
 import { runtimeBoundarySourceScope } from '../../analysis/runtime-boundaries/source-scope.js';
@@ -6,14 +12,18 @@ import type { BoundarySourceScope } from '../../analysis/runtime-boundaries/type
 import type { IndexedDefinition, SymbolMatch, SymbolResolutionCandidate } from '../../domain/types.js';
 import { getSourceImports } from '../../language-parsers/index.js';
 import { getSourceLines } from '../../source/primitives/source-text.js';
+import { getAst, type SyntaxNode } from '../../source/ast.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
 import { behaviorConstructRange } from '../../source/facts/behavior-skeleton.js';
 import { focusedSourceConstructRange, readableSourceUnitRange } from '../../source/facts/source-construct.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { indexedDocumentPaths } from '../../storage/scip-documents.js';
+import { indexedDocumentPaths, resolveIndexedDocumentCandidates } from '../../storage/scip-documents.js';
 import { findEnclosingDefinition, getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import type { CalleeEvidenceSource } from '../../symbols/graph/call-graph-evidence.js';
-import { importedMemberCallTargets } from '../../symbols/graph/member-call-targets.js';
+import {
+  importedMemberCallTargets,
+  serviceDeclarationFilesForImplementation,
+} from '../../symbols/graph/member-call-targets.js';
 import {
   scipOccurrenceCallableReferencesForRange,
   scipOccurrenceCallTargetsForRange,
@@ -23,6 +33,7 @@ import { findIdentifierLines } from '../../symbols/identifier-index.js';
 import { resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { isModuleLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../internal/project-index.js';
+import { isExportedDefinition } from '../internal/exported-definition.js';
 import { SOURCE_INSPECTION_MAX_SELECTORS } from '../internal/inspection-limits.js';
 import { connectedBehaviorPacket, type ConnectedBehaviorPacket } from '../internal/connected-behavior.js';
 import { systemMapNextAnchorPacket, type SystemMapNextAnchorPacket } from '../internal/next-anchor-candidates.js';
@@ -47,7 +58,11 @@ const LITERAL_SCOPE_COMMAND_LIMIT = 6;
 const NOTABLE_SYMBOL_LIMIT = 12;
 const DEFAULT_EXPANSION_REGION_LIMIT = 12;
 const DEFAULT_DRILLDOWN_ANCHOR_LIMIT = 12;
-const DEFAULT_TOPOLOGY_CHARACTERS = 20_000;
+const MAX_RECURSIVE_CALLER_BRANCHES = 2;
+// Leave enough of the default 32k human-output page for connected behavior,
+// anchor identities, and an explicit omission ledger. The topology budget is
+// independently recoverable and must not force a transport continuation.
+const DEFAULT_TOPOLOGY_CHARACTERS = 9_000;
 const ALL_RELATION_KINDS: readonly SystemMapRelationKind[] = [
   'call',
   'contract-symbol',
@@ -65,6 +80,8 @@ export type SystemMapReferenceScope = 'none' | 'all' | 'forward-regions' | 'cros
 export type SystemMapRelationEvidence =
   | CalleeEvidenceSource
   | 'ast-constructed-member-callsite'
+  | 'ast-factory-callback-callsite'
+  | 'ast-service-member-callsite'
   | 'ast-member-import-candidate'
   | 'scip-occurrence-callsite'
   | 'scip-occurrence-reference'
@@ -101,6 +118,8 @@ export interface SystemMapOptions {
   maxTopologyCharacters?: number;
   topologyFrontiers?: readonly string[];
   fullLiteralTraversal?: boolean;
+  /** Mechanically normalized task terms used only to rank already-proven causal drill targets. */
+  selectionTerms?: readonly string[];
 }
 
 export interface SystemMapAnchorCandidate extends SymbolResolutionCandidate {
@@ -203,6 +222,8 @@ export interface SystemMapBoundaryParticipant {
   action: string;
   protocol: string;
   role: string;
+  /** Stable, source-derived key parts that distinguish operations sharing one owner file. */
+  address?: string;
   file: string;
   line: number;
   endLine: number;
@@ -399,6 +420,8 @@ interface SourceConstructState extends SystemMapSourceConstruct {
   depth: number;
   origins: Set<string>;
   anchorQueries: Set<string>;
+  reverseCallExpansion: boolean;
+  traversalEligible: boolean;
 }
 
 interface SymbolState {
@@ -492,6 +515,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
 
   const index = new ProjectIndex(db);
   const fileGraph = index.fileDependencyGraph();
+  const reverseFileGraph = reverseFileDependencyGraph(fileGraph);
   const workspaces = inferIndexedWorkspaces(index.sourceFiles());
   const runtimeBoundaries = readRuntimeBoundaryGraph(db);
   const boundaryObservations = new Map(
@@ -517,6 +541,16 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
   let filteredUnverifiedCallEdges = 0;
   let memberCallCandidateEdges = 0;
   let unresolvedMemberCallsites = 0;
+  const reverseExpandedSourceConstructs = new Set<string>();
+  const serviceCallerFilesBySourceConstruct = new Map<string, Set<string>>();
+  const fullFileMemberCallTargets = new Map<string, ReturnType<typeof importedMemberCallTargets>>();
+  const memberCallTargetsForWholeFile = (file: string): ReturnType<typeof importedMemberCallTargets> => {
+    const cached = fullFileMemberCallTargets.get(file);
+    if (cached) return cached;
+    const resolved = importedMemberCallTargets(db, file, { excludeIndexedTargets: false });
+    fullFileMemberCallTargets.set(file, resolved);
+    return resolved;
+  };
 
   const addFile = (
     file: string,
@@ -580,6 +614,8 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
     depth: number,
     origin: string,
     anchorQuery?: string,
+    reverseCallExpansion = false,
+    traversalEligible = true,
   ): SourceConstructState => {
     const key = sourceConstructKey(construct);
     const existing = sourceConstructs.get(key);
@@ -587,7 +623,9 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
       existing.depth = Math.min(existing.depth, depth);
       existing.origins.add(origin);
       if (anchorQuery) existing.anchorQueries.add(anchorQuery);
-      addFile(construct.file, depth, origin, true, true);
+      existing.reverseCallExpansion ||= reverseCallExpansion;
+      existing.traversalEligible ||= traversalEligible;
+      addFile(construct.file, depth, origin, existing.traversalEligible, true);
       return existing;
     }
     const state: SourceConstructState = {
@@ -595,24 +633,44 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
       depth,
       origins: new Set([origin]),
       anchorQueries: new Set(anchorQuery ? [anchorQuery] : []),
+      reverseCallExpansion,
+      traversalEligible,
     };
     sourceConstructs.set(key, state);
-    addFile(construct.file, depth, origin, true, true);
+    addFile(construct.file, depth, origin, traversalEligible, true);
     return state;
   };
 
   const addBoundaryObservation = (observation: BoundaryObservation, depth: number, origin: string): string | null => {
     addFile(observation.source.file, depth, origin, true, true);
+    if (observation.owner.file !== observation.source.file) {
+      addFile(observation.owner.file, depth, `${origin}:owner`, true, true);
+    }
     const owner =
       (observation.owner.symbol
         ? resolveIndexedDefinitions(db, index, observation.owner.symbol).matches.find(
-            (candidate) => candidate.relativePath === observation.source.file,
+            (candidate) => candidate.relativePath === observation.owner.file,
           )
         : null) ??
-      findEnclosingDefinition(getDefinitionsForFile(db, observation.source.file), observation.source.startLine);
+      findEnclosingDefinition(getDefinitionsForFile(db, observation.owner.file), observation.owner.startLine);
     if (owner && !isModuleLikeSymbol(owner.symbol)) {
       addSymbol(owner, depth, origin, undefined, 'none', true);
       return owner.symbol;
+    }
+
+    if (observation.owner.name) {
+      addSourceConstruct(
+        {
+          file: observation.owner.file,
+          name: observation.owner.name,
+          startLine: observation.owner.startLine,
+          endLine: observation.owner.endLine,
+        },
+        depth,
+        `${origin}:source-owner`,
+        undefined,
+        true,
+      );
     }
 
     const referencedHandlers = index
@@ -685,6 +743,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
           0,
           `literal-source-owner:${query}`,
           query,
+          true,
         );
       }
       if (traversalSeed && match.ownerSymbol) {
@@ -730,19 +789,150 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
   for (const query of symbolQueries) {
     const resolution = resolveIndexedDefinitions(db, index, query);
     omittedSymbolCandidates += resolution.omitted;
-    for (const definition of resolution.matches) addSymbol(definition, 0, 'symbol-anchor', query, 'all', true);
+    const sourceConstruct = sourceConstructForLocationQuery(db, query);
+    const preciseCompilerMatches = resolution.matches.filter((definition) => !isModuleLikeSymbol(definition.symbol));
+    const useSourceConstruct = sourceConstruct !== null && preciseCompilerMatches.length === 0;
+    if (useSourceConstruct) addSourceConstruct(sourceConstruct, 0, 'source-construct-anchor', query, true);
+    const selectedDefinitions = useSourceConstruct ? preciseCompilerMatches : resolution.matches;
+    for (const definition of selectedDefinitions) addSymbol(definition, 0, 'symbol-anchor', query, 'all', true);
+    const sourceCandidate = useSourceConstruct ? sourceConstructAnchorCandidate(sourceConstruct) : null;
+    const totalCandidates = useSourceConstruct ? 1 : resolution.total;
     anchors.push({
       kind: 'symbol',
       query,
-      status: resolution.total === 0 ? 'missing' : resolution.total === 1 ? 'matched' : 'ambiguous',
+      status: totalCandidates === 0 ? 'missing' : totalCandidates === 1 ? 'matched' : 'ambiguous',
       matchedRegionIds: [],
-      symbolCandidates: resolution.matches.map(anchorCandidate),
-      totalSymbolCandidates: resolution.total,
+      symbolCandidates: [...(sourceCandidate ? [sourceCandidate] : []), ...selectedDefinitions.map(anchorCandidate)],
+      totalSymbolCandidates: totalCandidates,
       omittedSymbolCandidates: resolution.omitted,
     });
   }
 
   for (let depth = 0; depth < maxDepth; depth += 1) {
+    if (relationPolicy.has('call')) {
+      const sourceConstructFrontier = [...sourceConstructs.values()].filter(
+        (state) =>
+          state.traversalEligible &&
+          state.reverseCallExpansion &&
+          state.depth <= depth &&
+          !reverseExpandedSourceConstructs.has(sourceConstructKey(state)),
+      );
+      for (const targetConstruct of sourceConstructFrontier) {
+        reverseExpandedSourceConstructs.add(sourceConstructKey(targetConstruct));
+
+        // Source-only callables still form a real local activation chain even
+        // when the compiler emitted no symbol for a wrapped function. Admit a
+        // reverse edge only when this file has one callable with the target
+        // name and the call is a direct (not receiver-member) invocation. The
+        // result is derived rather than exact because lexical shadowing can
+        // still change runtime identity without a compiler occurrence.
+        const targetFacts = getSourceFacts(db, targetConstruct.file);
+        const matchingLocalDefinitions = (targetFacts?.callables ?? []).filter(
+          (callable) =>
+            callable.name === targetConstruct.name &&
+            callable.startLine <= targetConstruct.endLine &&
+            callable.endLine >= targetConstruct.startLine,
+        );
+        if (matchingLocalDefinitions.length === 1) {
+          const localCallsites = (targetFacts?.callSites ?? []).filter(
+            (callsite) => callsite.calleeLeaf === targetConstruct.name && !callsite.memberAccess,
+          );
+          for (const callsite of localCallsites) {
+            const nextDepth = depth + 1;
+            const owner = findEnclosingDefinition(getDefinitionsForFile(db, targetConstruct.file), callsite.line);
+            let fromSymbol: string | null = null;
+            let fromSourceConstruct: SourceConstructState | null = null;
+            if (owner && !isModuleLikeSymbol(owner.symbol)) {
+              if (
+                owner.relativePath === targetConstruct.file &&
+                owner.startLine <= targetConstruct.endLine &&
+                owner.endLine >= targetConstruct.startLine
+              )
+                continue;
+              addSymbol(owner, nextDepth, 'reverse-local-call-owner', undefined, 'forward-regions', true);
+              fromSymbol = owner.symbol;
+            } else {
+              const callable = sourceOwnerConstructAtLine(db, targetConstruct.file, callsite.line);
+              if (callable && sourceConstructKey(callable) !== sourceConstructKey(targetConstruct)) {
+                fromSourceConstruct = addSourceConstruct(
+                  callable,
+                  nextDepth,
+                  'reverse-local-call-source-owner',
+                  undefined,
+                  true,
+                );
+              }
+            }
+            if (!fromSymbol && !fromSourceConstruct) continue;
+            addRelation(pendingRelations, {
+              kind: 'call',
+              evidence: 'ast-callsite',
+              fromFile: targetConstruct.file,
+              fromSymbol,
+              toFile: targetConstruct.file,
+              toSymbol: null,
+              fromSourceConstruct: fromSourceConstruct ? sourceConstructIdentity(fromSourceConstruct) : undefined,
+              toSourceConstruct: sourceConstructIdentity(targetConstruct),
+              line: callsite.line,
+              strength: 'derived',
+            });
+          }
+        }
+
+        const reverseCallerFiles = new Set([
+          ...(reverseFileGraph.get(targetConstruct.file) ?? []),
+          ...(serviceCallerFilesBySourceConstruct.get(sourceConstructKey(targetConstruct)) ?? []),
+          ...serviceDeclarationFilesForImplementation(db, targetConstruct.file).flatMap((serviceFile) => [
+            ...(reverseFileGraph.get(serviceFile) ?? []),
+          ]),
+        ]);
+        for (const callerFile of reverseCallerFiles) {
+          if (!sourceAllowed(callerFile)) continue;
+          const memberTargets = memberCallTargetsForWholeFile(callerFile);
+          const matchingCalls = memberTargets.targets.filter(
+            (target) =>
+              target.targetFile === targetConstruct.file &&
+              target.targetStartLine <= targetConstruct.endLine &&
+              target.targetEndLine >= targetConstruct.startLine,
+          );
+          for (const target of matchingCalls) {
+            const nextDepth = depth + 1;
+            const owner = findEnclosingDefinition(getDefinitionsForFile(db, callerFile), target.line);
+            let fromSymbol: string | null = null;
+            let fromSourceConstruct: SourceConstructState | null = null;
+            if (owner && !isModuleLikeSymbol(owner.symbol)) {
+              addSymbol(owner, nextDepth, 'reverse-member-call-owner', undefined, 'cross-workspace-or-forward', true);
+              fromSymbol = owner.symbol;
+            } else {
+              const callable = sourceOwnerConstructAtLine(db, callerFile, target.line);
+              if (callable) {
+                fromSourceConstruct = addSourceConstruct(
+                  callable,
+                  nextDepth,
+                  'reverse-member-call-source-owner',
+                  undefined,
+                  true,
+                );
+              }
+            }
+            if (!fromSymbol && !fromSourceConstruct) continue;
+            addRelation(pendingRelations, {
+              kind: 'call',
+              evidence: 'ast-service-member-callsite',
+              fromFile: callerFile,
+              fromSymbol,
+              toFile: targetConstruct.file,
+              toSymbol: null,
+              fromSourceConstruct: fromSourceConstruct ? sourceConstructIdentity(fromSourceConstruct) : undefined,
+              toSourceConstruct: sourceConstructIdentity(targetConstruct),
+              line: target.line,
+              strength: target.strength === 'exact' ? 'exact' : 'derived',
+            });
+          }
+        }
+      }
+    }
+
     const symbolFrontier = [...symbols.values()].filter((state) => !state.processed && state.depth <= depth);
     const structuralCallees = relationPolicy.has('call')
       ? index.calleeMap(
@@ -755,26 +945,88 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
       const definition = state.definition;
       if (
         state.referenceScope !== 'none' &&
-        (relationPolicy.has('reference') || relationPolicy.has('contract-symbol'))
+        (relationPolicy.has('call') || relationPolicy.has('reference') || relationPolicy.has('contract-symbol'))
       ) {
-        for (const site of systemMapReferenceSites(db, index, definition)) {
-          if (!sourceAllowed(site.file)) continue;
-          if (!referenceSiteIsInScope(state, site.file, files, workspaces)) continue;
+        const referenceSites = systemMapReferenceSites(db, index, definition).filter(
+          (site) => sourceAllowed(site.file) && referenceSiteIsInScope(state, site.file, files, workspaces),
+        );
+        const recursiveCallerSymbols = new Set(
+          referenceSites
+            .flatMap((site) => {
+              const isCallsite =
+                relationPolicy.has('call') &&
+                getSourceFacts(db, site.file)?.callSites.some(
+                  (callsite) => callsite.line === site.line && callsite.calleeLeaf === definition.leaf,
+                ) === true;
+              if (!isCallsite || !site.enclosingSymbol) return [];
+              const owner = resolveIndexedDefinitions(db, index, site.enclosingSymbol).matches[0];
+              return owner && !isModuleLikeSymbol(owner.symbol) ? [{ owner, site }] : [];
+            })
+            .sort((left, right) => {
+              const targetWorkspace = workspaceForFile(definition.relativePath, workspaces).relativeDir;
+              const leftLocal = workspaceForFile(left.owner.relativePath, workspaces).relativeDir === targetWorkspace;
+              const rightLocal = workspaceForFile(right.owner.relativePath, workspaces).relativeDir === targetWorkspace;
+              const leftPublic = publicEntryPriorityForDefinition(db, left.owner);
+              const rightPublic = publicEntryPriorityForDefinition(db, right.owner);
+              const leftSpan = left.owner.endLine - left.owner.startLine;
+              const rightSpan = right.owner.endLine - right.owner.startLine;
+              return (
+                Number(rightLocal) - Number(leftLocal) ||
+                rightPublic - leftPublic ||
+                leftSpan - rightSpan ||
+                left.owner.symbol.localeCompare(right.owner.symbol)
+              );
+            })
+            .filter(
+              (candidate, index, candidates) =>
+                candidates.findIndex((other) => other.owner.symbol === candidate.owner.symbol) === index,
+            )
+            .reduce<Array<{ symbol: string; workspace: string }>>((selected, candidate) => {
+              if (selected.length >= MAX_RECURSIVE_CALLER_BRANCHES) return selected;
+              const workspace = workspaceForFile(candidate.owner.relativePath, workspaces).relativeDir;
+              if (selected.some((entry) => entry.workspace === workspace)) return selected;
+              selected.push({ symbol: candidate.owner.symbol, workspace });
+              return selected;
+            }, [])
+            .map((candidate) => candidate.symbol),
+        );
+        for (const site of referenceSites) {
           const nextDepth = depth + 1;
           addFile(site.file, nextDepth, `reference:${shortenSymbol(definition.symbol)}`, true);
+          const isCallsite =
+            relationPolicy.has('call') &&
+            getSourceFacts(db, site.file)?.callSites.some(
+              (callsite) => callsite.line === site.line && callsite.calleeLeaf === definition.leaf,
+            ) === true;
           let referenceOwnerSymbol: string | null = null;
           let referenceSourceConstruct: SourceConstructState | null = null;
           if (site.enclosingSymbol) {
             const owner = resolveIndexedDefinitions(db, index, site.enclosingSymbol).matches[0];
             if (owner && !isModuleLikeSymbol(owner.symbol)) {
-              addSymbol(owner, nextDepth, 'reference-owner');
+              // A proven callsite is one step in the selected operation's
+              // activation chain. Preserve the bounded reverse scope so the
+              // next graph layer can discover its caller. Non-call references
+              // remain one-hop evidence and cannot recursively fan out.
+              addSymbol(
+                owner,
+                nextDepth,
+                'reference-owner',
+                undefined,
+                isCallsite && recursiveCallerSymbols.has(owner.symbol) ? state.referenceScope : 'none',
+              );
               referenceOwnerSymbol = owner.symbol;
             }
           }
           if (!referenceOwnerSymbol && site.line !== null) {
-            const callable = sourceCallableConstructAtLine(db, site.file, site.line);
+            const callable = sourceOwnerConstructAtLine(db, site.file, site.line);
             if (callable) {
-              referenceSourceConstruct = addSourceConstruct(callable, nextDepth, 'reference-source-owner');
+              referenceSourceConstruct = addSourceConstruct(
+                callable,
+                nextDepth,
+                'reference-source-owner',
+                undefined,
+                isCallsite,
+              );
             }
           }
           if (relationPolicy.has('reference')) {
@@ -792,12 +1044,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
               strength: 'mixed',
             });
           }
-          if (
-            relationPolicy.has('call') &&
-            getSourceFacts(db, site.file)?.callSites.some(
-              (callsite) => callsite.line === site.line && callsite.calleeLeaf === definition.leaf,
-            )
-          ) {
+          if (isCallsite) {
             addRelation(pendingRelations, {
               kind: 'call',
               evidence: 'ast-callsite',
@@ -867,7 +1114,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
     for (const state of fileFrontier) {
       state.processed = true;
       const sourceOwnedRanges = [...sourceConstructs.values()].filter(
-        (construct) => construct.file === state.file && construct.depth <= depth,
+        (construct) => construct.traversalEligible && construct.file === state.file && construct.depth <= depth,
       );
       const symbolRanges = [...symbols.values()]
         .filter((symbol) => symbol.definition.relativePath === state.file && symbol.depth <= depth)
@@ -995,8 +1242,13 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
       const additionalMemberTargets = memberCalls.targets.filter(
         (target) => !compilerResolvedCallsiteKeys.has(`${target.line}\u0000${target.calleeLeaf}`),
       );
-      memberCallCandidateEdges += additionalMemberTargets.filter((target) => target.strength !== 'exact').length;
+      memberCallCandidateEdges += additionalMemberTargets.filter(
+        (target) =>
+          target.strength !== 'exact' &&
+          (target.resolution !== 'imported-service-object-member' || (target.resolutionAlternativeCount ?? 0) > 1),
+      ).length;
       for (const target of additionalMemberTargets) {
+        const uniquelyResolved = (target.resolutionAlternativeCount ?? 1) === 1;
         const targetDefinition = target.targetSymbol
           ? getDefinitionsForFile(db, target.targetFile).find((definition) => definition.symbol === target.targetSymbol)
           : undefined;
@@ -1011,7 +1263,16 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
               },
               depth + 1,
               `member-call:${state.file}`,
+              undefined,
+              target.resolution === 'imported-service-object-member' && uniquelyResolved,
+              uniquelyResolved,
             );
+        if (targetConstruct && target.serviceFile) {
+          const key = sourceConstructKey(targetConstruct);
+          const callers = serviceCallerFilesBySourceConstruct.get(key) ?? new Set<string>();
+          for (const callerFile of reverseFileGraph.get(target.serviceFile) ?? []) callers.add(callerFile);
+          serviceCallerFilesBySourceConstruct.set(key, callers);
+        }
         if (targetDefinition) {
           addSymbol(targetDefinition, depth + 1, `member-call:${state.file}`, undefined, 'none', true);
         }
@@ -1028,7 +1289,11 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
           evidence:
             target.resolution === 'constructed-member-receiver'
               ? 'ast-constructed-member-callsite'
-              : 'ast-member-import-candidate',
+              : target.resolution === 'factory-callback-member'
+                ? 'ast-factory-callback-callsite'
+                : target.resolution === 'imported-service-object-member'
+                  ? 'ast-service-member-callsite'
+                  : 'ast-member-import-candidate',
           fromFile: state.file,
           fromSymbol: sourceSymbol?.definition.symbol ?? null,
           toFile: target.targetFile,
@@ -1037,7 +1302,12 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
           fromSourceConstruct: sourceConstruct ? sourceConstructIdentity(sourceConstruct) : undefined,
           toSourceConstruct: targetConstruct ? sourceConstructIdentity(targetConstruct) : undefined,
           line: target.line,
-          strength: target.strength ?? 'candidate',
+          strength:
+            target.resolution === 'imported-service-object-member'
+              ? (target.resolutionAlternativeCount ?? 0) === 1
+                ? 'derived'
+                : 'candidate'
+              : (target.strength ?? 'candidate'),
         });
       }
       for (const imported of relationPolicy.has('import') || relationPolicy.has('call')
@@ -1132,10 +1402,10 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
       if (fromDepth === null && toDepth === null) continue;
 
       const nextDepth = depth + 1;
-      const fromSourceConstruct = smallestSourceConstructAtObservation(sourceConstructs, from);
-      const toSourceConstruct = smallestSourceConstructAtObservation(sourceConstructs, to);
       const fromSymbol = addBoundaryObservation(from, fromDepth ?? nextDepth, `runtime-boundary:${link.joinRule}`);
       const toSymbol = addBoundaryObservation(to, toDepth ?? nextDepth, `runtime-boundary:${link.joinRule}`);
+      const fromSourceConstruct = smallestSourceConstructAtObservation(sourceConstructs, from);
+      const toSourceConstruct = smallestSourceConstructAtObservation(sourceConstructs, to);
       boundaryObservationDepths.set(from.id, fromDepth ?? nextDepth);
       boundaryObservationDepths.set(to.id, toDepth ?? nextDepth);
       addRelation(pendingRelations, {
@@ -1282,13 +1552,14 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
       ? 'Built-in runtime-boundary extractors traverse direct and replayably derived links; heuristic candidates, unsupported frameworks, reflection, generated names, and dependency wiring not recoverable from compiler occurrences or constructor assignments remain disclosed frontiers.'
       : 'Runtime-boundary evidence is unavailable for this index; run scip-query reindex with this build to extract supported HTTP, event, registry, and persistence observations.',
     'Reverse references do not recursively expand from discovered callers or callees.',
-    'Member calls use compiler occurrences when available, exact constructor-assigned this-field types when uniquely provable, and candidate direct-import receiver matches otherwise; factory-produced receivers, nested dependency injection, and ambiguous declarations remain unrepresented.',
+    'Member calls use compiler occurrences, exact constructor-assigned fields, bounded unique service providers, direct factory-return members, and compiler-resolved object-literal callbacks when available. Ambiguous providers remain candidate frontiers; callback values routed through mutation, reflection, or unsupported dependency containers remain unrepresented.',
     'Literal traversal is bounded to the smallest parser-delimited source construct; parser gaps may reduce an owner to one source line and leave its continuation untraversed.',
     'Schema consumers stay within forward-flow regions; cross-workspace contracts may discover consumers in other workspaces. Add an explicit symbol anchor to widen either scope.',
     `Traversal stops after depth ${maxDepth}; nonzero frontier counts identify evidence that was discovered but not traversed.`,
     'Region labels are structural path groupings, not inferred runtime or architectural boundaries.',
   ];
   const topology = buildSystemMapTopology({
+    db,
     anchors,
     regions,
     symbolStates: symbols,
@@ -1321,7 +1592,10 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
     focusLocations: opts.behaviorFocusLocations,
     ...(focusedBehaviorNodes ? { maxSteps: focusedBehaviorNodes } : {}),
   });
-  const nextAnchors = systemMapNextAnchorPacket(db, topology, behavior, { sourceAllowed });
+  const nextAnchors = systemMapNextAnchorPacket(db, topology, behavior, {
+    sourceAllowed,
+    selectionTerms: opts.selectionTerms,
+  });
   const connectorRegionIds = topologyRegionIds(topology);
   const presentation = buildSystemMapPresentation(
     searches,
@@ -1466,6 +1740,7 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
 }
 
 interface SystemMapTopologyInput {
+  db: ScipDatabase;
   anchors: readonly SystemMapAnchor[];
   regions: readonly SystemMapRegion[];
   symbolStates: ReadonlyMap<string, SymbolState>;
@@ -1518,17 +1793,137 @@ function sourceConstructIdentity(construct: SystemMapSourceConstruct): SystemMap
   };
 }
 
+/**
+ * Give every topology node one callable identity even when traversal used
+ * several narrow line-focused slices of that callable. Relations retain their
+ * exact evidence lines, so behavior can render one compact multi-line connector
+ * slice instead of repeating the enclosing function for every callsite.
+ */
+function canonicalSourceConstruct(db: ScipDatabase, construct: SystemMapSourceConstruct): SystemMapSourceConstruct {
+  const callable = smallestSourceCallable(getSourceFacts(db, construct.file)?.callables ?? [], construct.startLine);
+  if (callable && callable.endLine >= construct.endLine) {
+    return {
+      file: construct.file,
+      name:
+        /^source@\d+$/u.test(callable.name) && !/^source@\d+$/u.test(construct.name) ? construct.name : callable.name,
+      startLine: callable.startLine,
+      endLine: callable.endLine,
+    };
+  }
+  const binding = sourceBindingOwnerAtLine(db, construct.file, construct.startLine);
+  if (binding && binding.endLine >= construct.endLine) {
+    return {
+      file: construct.file,
+      name: binding.name,
+      startLine: binding.startLine,
+      endLine: binding.endLine,
+    };
+  }
+  return sourceConstructIdentity(construct);
+}
+
 function sourceConstructTopologyNodeId(hit: SourceConstructHit): string {
   return topologyId('source-construct', hit.file, String(hit.startLine), String(hit.endLine), hit.name);
 }
 
-function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopology {
-  const sourceConstructHits = [...input.sourceConstructStates.values()]
-    .map(sourceConstructIdentity)
+function publicEntryEvidenceForDefinition(
+  db: ScipDatabase,
+  definition: IndexedDefinition,
+): { evidence: RootedSymbolEvidence[]; priority: number } {
+  const evidence = rootedSymbolEvidence(db, definition.symbol, definition.relativePath);
+  const packageEvidence = new Set<RootedSymbolEvidence>(['package-surface-file', 'transitive-package-surface']);
+  const filtered = evidence.filter((item) => !packageEvidence.has(item) || isExportedDefinition(db, definition));
+  const nonPackageEvidence = filtered.some((item) => !packageEvidence.has(item));
+  return {
+    evidence: filtered,
+    priority:
+      nonPackageEvidence || isExplicitPackageSurfaceSymbol(db, definition.symbol, definition.relativePath) ? 2 : 1,
+  };
+}
+
+function publicEntryPriorityForDefinition(db: ScipDatabase, definition: IndexedDefinition): number {
+  const result = publicEntryEvidenceForDefinition(db, definition);
+  return result.evidence.length > 0 ? result.priority : 0;
+}
+
+function publicEntryForSourceConstruct(
+  db: ScipDatabase,
+  construct: SourceConstructHit,
+): { evidence: RootedSymbolEvidence[]; priority: number } {
+  const definitions = getDefinitionsForFile(db, construct.file);
+  const containingDefinitions = definitions
+    .filter((definition) => definition.startLine <= construct.startLine && definition.endLine >= construct.startLine)
     .sort(
       (left, right) =>
-        left.file.localeCompare(right.file) || left.startLine - right.startLine || left.endLine - right.endLine,
+        left.endLine - left.startLine - (right.endLine - right.startLine) || left.startLine - right.startLine,
     );
+  for (const definition of containingDefinitions) {
+    const result = publicEntryEvidenceForDefinition(db, definition);
+    if (result.evidence.length > 0) return result;
+  }
+  for (const owner of syntaxDeclarationOwnersAtLine(db, construct.file, construct.startLine)) {
+    const matchingDefinitions = definitions
+      .filter((definition) => definition.leaf === owner.name)
+      .sort(
+        (left, right) =>
+          Math.abs(left.startLine - owner.startLine) - Math.abs(right.startLine - owner.startLine) ||
+          left.symbol.localeCompare(right.symbol),
+      );
+    for (const definition of matchingDefinitions) {
+      const result = publicEntryEvidenceForDefinition(db, definition);
+      if (result.evidence.length > 0) return result;
+    }
+    // The nearest named declaration owns this construct. If that declaration
+    // is private, a wider exported declaration is only lexical containment,
+    // not evidence that the nested construct is externally callable.
+    return { evidence: [], priority: 0 };
+  }
+  return { evidence: [], priority: 0 };
+}
+
+/**
+ * Declaration owners are named source declarations whose syntax encloses a
+ * location. They connect an anonymous nested callback to the exported binding
+ * that publishes the containing object, even when the compiler records that
+ * binding's definition range as only its declaration line.
+ */
+function syntaxDeclarationOwnersAtLine(
+  db: ScipDatabase,
+  relativePath: string,
+  line: number,
+): Array<{ name: string; startLine: number }> {
+  const root = getAst(db, relativePath)?.rootNode;
+  if (!root || root.startPosition.row > line || root.endPosition.row < line) return [];
+  const owners: Array<{ name: string; startLine: number }> = [];
+  let current: SyntaxNode | null = deepestSyntaxNodeAtLine(root, line);
+  while (current) {
+    if (
+      current.type === 'variable_declarator' ||
+      current.type === 'function_declaration' ||
+      current.type === 'generator_function_declaration' ||
+      current.type === 'class_declaration'
+    ) {
+      const name = current.childForFieldName('name') ?? current.namedChild(0);
+      if (name?.type === 'identifier' || name?.type === 'type_identifier') {
+        owners.push({ name: name.text, startLine: current.startPosition.row });
+      }
+    }
+    current = current.parent;
+  }
+  return owners;
+}
+
+function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopology {
+  const sourceConstructHits = [
+    ...new Map(
+      [...input.sourceConstructStates.values()]
+        .map((state) => canonicalSourceConstruct(input.db, state))
+        .map((construct) => [sourceConstructKey(construct), construct]),
+    ).values(),
+  ].sort(
+    (left, right) =>
+      left.file.localeCompare(right.file) || left.startLine - right.startLine || left.endLine - right.endLine,
+  );
   const anchors: ExplorationTopologyAnchor[] = input.anchors.map((anchor, index) => {
     const id = topologyId('anchor', String(index), anchor.kind, anchor.query);
     const symbolNodeIds = [...input.symbolStates.values()]
@@ -1540,6 +1935,9 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
           .map((hit) => sourceConstructTopologyNodeId(hit));
         return containedSourceNodes.length > 0 ? containedSourceNodes : [symbolTopologyNodeId(state.definition.symbol)];
       });
+    const explicitSourceNodeIds = [...input.sourceConstructStates.values()]
+      .filter((state) => state.anchorQueries.has(anchor.query))
+      .map((state) => sourceConstructTopologyNodeId(canonicalSourceConstruct(input.db, state)));
     const literalOwnerNodeIds = input.literalHits
       .filter(
         (hit) =>
@@ -1560,10 +1958,10 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
           hit.ownerEndLine !== null &&
           hit.ownerEndLine !== undefined,
       )
-      .map((hit) => sourceConstructTopologyNodeId(sourceConstructHit(hit)));
+      .map((hit) => sourceConstructTopologyNodeId(canonicalSourceConstruct(input.db, sourceConstructHit(hit))));
     const matchedNodeIds = uniqueSorted(
       anchor.kind === 'symbol'
-        ? symbolNodeIds
+        ? [...symbolNodeIds, ...explicitSourceNodeIds]
         : literalOwnerNodeIds.length + literalSourceNodeIds.length > 0
           ? [...literalOwnerNodeIds, ...literalSourceNodeIds]
           : (anchor.seedRegionIds ?? []),
@@ -1586,6 +1984,11 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
       anchorIdsByNode.set(nodeId, ids);
     }
   }
+  const boundaryOwnerNames = input.relations.flatMap((relation) =>
+    [relation.fromBoundaryParticipant, relation.toBoundaryParticipant].flatMap((participant) =>
+      participant?.ownerName ? [participant] : [],
+    ),
+  );
 
   const nodes: ExplorationTopologyNode[] = input.regions.map((region) => ({
     id: region.id,
@@ -1607,6 +2010,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     const regionId = input.regionForFile.get(state.definition.relativePath)?.id;
     if (!regionId) throw new Error(`System-map symbol ${state.definition.symbol} has no structural region.`);
     const id = symbolTopologyNodeId(state.definition.symbol);
+    const publicEntry = publicEntryEvidenceForDefinition(input.db, state.definition);
     nodes.push({
       id,
       kind: 'symbol',
@@ -1623,6 +2027,13 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
         depth: state.depth,
         leaf: state.definition.leaf ?? shortenSymbol(state.definition.symbol),
         referenceScope: state.referenceScope,
+        ...(publicEntry.evidence.length > 0
+          ? {
+              publicEntry: true,
+              publicEntryPriority: publicEntry.priority,
+              publicEntryEvidence: publicEntry.evidence.join(','),
+            }
+          : {}),
       },
     });
   }
@@ -1630,22 +2041,39 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     const regionId = input.regionForFile.get(hit.file)?.id;
     if (!regionId) throw new Error(`Source construct ${hit.name} has no structural region.`);
     const id = sourceConstructTopologyNodeId(hit);
+    const boundaryOwnerName = boundaryOwnerNames.find(
+      (participant) =>
+        participant.file === hit.file && participant.line >= hit.startLine && participant.line <= hit.endLine,
+    )?.ownerName;
+    const label = boundaryOwnerName ?? hit.name;
+    const publicEntry = publicEntryForSourceConstruct(input.db, hit);
     nodes.push({
       id,
       kind: 'source-construct',
-      label: hit.name,
+      label,
       disposition: (anchorIdsByNode.get(id)?.length ?? 0) > 0 ? 'emitted' : 'folded',
       location: { file: hit.file, line: hit.startLine, endLine: hit.endLine },
       anchorIds: uniqueSorted(anchorIdsByNode.get(id) ?? []),
-      attributes: { regionId, leaf: hit.name, sourceOwned: true },
+      attributes: {
+        regionId,
+        leaf: label,
+        sourceOwned: true,
+        ...(publicEntry.evidence.length > 0
+          ? {
+              publicEntry: true,
+              publicEntryPriority: publicEntry.priority,
+              publicEntryEvidence: publicEntry.evidence.join(','),
+            }
+          : {}),
+      },
     });
   }
   const boundaryParticipants = new Map<string, SystemMapBoundaryParticipant>();
   for (const relation of input.relations) {
-    if (!relation.fromSymbol && !relation.fromSourceConstruct && relation.fromBoundaryParticipant) {
+    if (relation.fromBoundaryParticipant) {
       boundaryParticipants.set(relation.fromBoundaryParticipant.observationId, relation.fromBoundaryParticipant);
     }
-    if (!relation.toSymbol && !relation.toSourceConstruct && relation.toBoundaryParticipant) {
+    if (relation.toBoundaryParticipant) {
       boundaryParticipants.set(relation.toBoundaryParticipant.observationId, relation.toBoundaryParticipant);
     }
   }
@@ -1658,7 +2086,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     nodes.push({
       id: runtimeBoundaryParticipantTopologyNodeId(participant.observationId),
       kind: 'runtime-boundary-participant',
-      label: participant.ownerName ?? `${participant.role} ${participant.action}`,
+      label: participant.address || participant.ownerName || `${participant.role} ${participant.action}`,
       disposition: 'folded',
       location: { file: participant.file, line: participant.line, endLine: participant.endLine },
       anchorIds: [],
@@ -1667,6 +2095,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
         action: participant.action,
         protocol: participant.protocol,
         role: participant.role,
+        ...(participant.address ? { address: participant.address } : {}),
         ownerSymbol: participant.ownerSymbol,
       },
     });
@@ -1680,14 +2109,16 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     regionId: string,
     file: string,
     line: number | null,
+    preferParticipant = false,
   ): string => {
     const symbolNodeId = symbol ? symbolTopologyNodeId(symbol) : null;
     if (symbolNodeId && knownNodeIds.has(symbolNodeId) && !isModuleLikeSymbol(symbol!)) return symbolNodeId;
+    const participantNodeId = participant ? runtimeBoundaryParticipantTopologyNodeId(participant.observationId) : null;
+    if (preferParticipant && participantNodeId && knownNodeIds.has(participantNodeId)) return participantNodeId;
     const explicitSourceNodeId = explicitSourceConstruct
-      ? sourceConstructTopologyNodeId(explicitSourceConstruct)
+      ? sourceConstructTopologyNodeId(canonicalSourceConstruct(input.db, explicitSourceConstruct))
       : null;
     if (explicitSourceNodeId && knownNodeIds.has(explicitSourceNodeId)) return explicitSourceNodeId;
-    const participantNodeId = participant ? runtimeBoundaryParticipantTopologyNodeId(participant.observationId) : null;
     if (participantNodeId && knownNodeIds.has(participantNodeId)) return participantNodeId;
     const sourceConstruct =
       line === null
@@ -1731,8 +2162,9 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
   const groupedRelations = groupBy(
     input.relations,
     (relation) =>
-      `${relationEndpoint(relation.fromSymbol, relation.fromBoundaryParticipant, relation.fromSourceConstruct, relation.fromRegionId, relation.fromFile, relation.line)}\u0000${relationEndpoint(relation.toSymbol, relation.toBoundaryParticipant, relation.toSourceConstruct, relation.toRegionId, relation.toFile, null)}\u0000${relation.kind}`,
+      `${relationEndpoint(relation.fromSymbol, relation.fromBoundaryParticipant, relation.fromSourceConstruct, relation.fromRegionId, relation.fromFile, relation.line, relation.kind === 'runtime-boundary')}\u0000${relationEndpoint(relation.toSymbol, relation.toBoundaryParticipant, relation.toSourceConstruct, relation.toRegionId, relation.toFile, null)}\u0000${relation.kind}`,
   );
+  const attachedBoundaryObservations = new Set<string>();
   for (const bucket of groupedRelations.values()) {
     const first = bucket[0]!;
     const fromNodeId = relationEndpoint(
@@ -1742,6 +2174,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
       first.fromRegionId,
       first.fromFile,
       first.line,
+      first.kind === 'runtime-boundary',
     );
     const toNodeId = relationEndpoint(
       first.toSymbol,
@@ -1751,6 +2184,40 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
       first.toFile,
       null,
     );
+    if (first.kind === 'runtime-boundary' && first.fromBoundaryParticipant) {
+      const participantNodeId = runtimeBoundaryParticipantTopologyNodeId(first.fromBoundaryParticipant.observationId);
+      const concreteFromNodeId = relationEndpoint(
+        first.fromSymbol,
+        undefined,
+        first.fromSourceConstruct,
+        first.fromRegionId,
+        first.fromFile,
+        first.line,
+      );
+      if (concreteFromNodeId !== participantNodeId && !attachedBoundaryObservations.has(participantNodeId)) {
+        attachedBoundaryObservations.add(participantNodeId);
+        edges.push({
+          id: topologyId('edge', 'boundary-observation', concreteFromNodeId, participantNodeId),
+          kind: 'boundary-observation',
+          fromNodeId: concreteFromNodeId,
+          toNodeId: participantNodeId,
+          directed: true,
+          disposition: 'folded',
+          evidence: [
+            {
+              method: 'runtime-boundary-observation-owner',
+              strength: first.strength ?? 'unknown',
+              identity: first.fromBoundaryParticipant.observationId,
+              location: {
+                file: first.fromBoundaryParticipant.file,
+                line: first.fromBoundaryParticipant.line,
+                endLine: first.fromBoundaryParticipant.endLine,
+              },
+            },
+          ],
+        });
+      }
+    }
     const selfNode = fromNodeId === toNodeId ? nodes.find((node) => node.id === fromNodeId) : null;
     if (selfNode?.kind === 'structural-region') continue;
     edges.push({
@@ -2312,19 +2779,117 @@ function smallestSourceCallable(
   );
 }
 
-function sourceCallableConstructAtLine(
+function sourceOwnerConstructAtLine(
   db: ScipDatabase,
   relativePath: string,
   line: number,
 ): SystemMapSourceConstruct | null {
   const callable = smallestSourceCallable(getSourceFacts(db, relativePath)?.callables ?? [], line);
+  const owner = callable ?? sourceBindingOwnerAtLine(db, relativePath, line);
+  if (!owner) return null;
+  const range = focusedSourceConstructRange(db, relativePath, line, owner.startLine, owner.endLine);
+  return {
+    file: relativePath,
+    name: owner.name,
+    startLine: range.startLine,
+    endLine: range.endLine,
+  };
+}
+
+function sourceBindingOwnerAtLine(
+  db: ScipDatabase,
+  relativePath: string,
+  line: number,
+): { name: string; startLine: number; endLine: number } | null {
+  const root = getAst(db, relativePath)?.rootNode;
+  if (!root || root.startPosition.row > line || root.endPosition.row < line) return null;
+  let current: SyntaxNode | null = deepestSyntaxNodeAtLine(root, line);
+  while (current) {
+    if (current.type === 'variable_declarator') {
+      const name = current.childForFieldName('name') ?? current.namedChild(0);
+      const value = current.childForFieldName('value') ?? current.namedChild(1);
+      if (name?.type === 'identifier' && value && syntaxCallableContainsLine(value, line)) {
+        return {
+          name: name.text,
+          startLine: current.startPosition.row,
+          endLine: current.endPosition.row,
+        };
+      }
+    }
+    if (current.type === 'pair') {
+      const key = current.childForFieldName('key') ?? current.namedChild(0);
+      const value = current.childForFieldName('value') ?? current.namedChild(1);
+      const name = key?.text.replace(/^(?:['"])(.*)(?:['"])$/u, '$1');
+      if (name && value && /^[A-Za-z_$][\w$]*$/u.test(name) && syntaxCallableContainsLine(value, line)) {
+        return {
+          name,
+          startLine: current.startPosition.row,
+          endLine: current.endPosition.row,
+        };
+      }
+    }
+    current = current.parent;
+  }
+  const readable = readableSourceUnitRange(db, relativePath, line);
+  return readable ? { name: `source@${line + 1}`, startLine: readable.startLine, endLine: readable.endLine } : null;
+}
+
+function syntaxCallableContainsLine(node: SyntaxNode, line: number): boolean {
+  if (
+    ['arrow_function', 'function_expression', 'generator_function', 'generator_function_declaration'].includes(
+      node.type,
+    ) &&
+    node.startPosition.row <= line &&
+    node.endPosition.row >= line
+  ) {
+    return true;
+  }
+  return node.namedChildren.some(
+    (child) =>
+      child.startPosition.row <= line && child.endPosition.row >= line && syntaxCallableContainsLine(child, line),
+  );
+}
+
+function deepestSyntaxNodeAtLine(node: SyntaxNode, line: number): SyntaxNode {
+  const child = node.namedChildren
+    .filter((candidate) => candidate.startPosition.row <= line && candidate.endPosition.row >= line)
+    .sort(
+      (left, right) =>
+        left.endIndex - left.startIndex - (right.endIndex - right.startIndex) ||
+        left.startPosition.row - right.startPosition.row,
+    )[0];
+  return child ? deepestSyntaxNodeAtLine(child, line) : node;
+}
+
+function sourceConstructForLocationQuery(db: ScipDatabase, query: string): SystemMapSourceConstruct | null {
+  const match = query.match(/^(.+):(\d+)-(\d+)$/u);
+  if (!match) return null;
+  const relativePath = resolveIndexedDocumentCandidates(db, match[1]!, { allowMultiple: false })[0]?.relativePath;
+  if (!relativePath) return null;
+  const startLine = Math.max(0, Number.parseInt(match[2]!, 10) - 1);
+  const endLine = Math.max(startLine, Number.parseInt(match[3]!, 10) - 1);
+  const callable = (getSourceFacts(db, relativePath)?.callables ?? [])
+    .filter((candidate) => candidate.startLine <= startLine && candidate.endLine >= endLine)
+    .sort(
+      (left, right) =>
+        left.endLine - left.startLine - (right.endLine - right.startLine) || left.startLine - right.startLine,
+    )[0];
   if (!callable) return null;
-  const range = focusedSourceConstructRange(db, relativePath, line, callable.startLine, callable.endLine);
   return {
     file: relativePath,
     name: callable.name,
-    startLine: range.startLine,
-    endLine: range.endLine,
+    startLine: callable.startLine,
+    endLine: callable.endLine,
+  };
+}
+
+function sourceConstructAnchorCandidate(construct: SystemMapSourceConstruct): SystemMapAnchorCandidate {
+  return {
+    symbol: `source-construct:${construct.file}:${construct.startLine}:${construct.endLine}:${construct.name}`,
+    shortName: construct.name,
+    relativePath: construct.file,
+    startLine: construct.startLine,
+    endLine: construct.endLine,
   };
 }
 
@@ -2577,6 +3142,7 @@ function boundaryParticipant(observation: BoundaryObservation): SystemMapBoundar
     action: observation.action,
     protocol: observation.protocol,
     role: observation.role,
+    address: renderBoundaryAddress(observation),
     file: observation.source.file,
     line: observation.source.startLine,
     endLine: observation.source.endLine,
@@ -2599,19 +3165,22 @@ function smallestSourceConstructAtObservation(
   sourceConstructs: ReadonlyMap<string, SourceConstructState>,
   observation: BoundaryObservation,
 ): SourceConstructState | null {
-  return (
-    [...sourceConstructs.values()]
+  const constructs = [...sourceConstructs.values()];
+  for (const location of [observation.owner, observation.source]) {
+    const match = constructs
       .filter(
         (construct) =>
-          construct.file === observation.source.file &&
-          construct.startLine <= observation.source.startLine &&
-          construct.endLine >= observation.source.startLine,
+          construct.file === location.file &&
+          construct.startLine <= location.startLine &&
+          construct.endLine >= location.startLine,
       )
       .sort(
         (left, right) =>
           left.endLine - left.startLine - (right.endLine - right.startLine) || left.startLine - right.startLine,
-      )[0] ?? null
-  );
+      )[0];
+    if (match) return match;
+  }
+  return null;
 }
 
 function reachedObservationDepth(
@@ -2628,27 +3197,30 @@ function reachedObservationDepth(
   for (const state of symbols.values()) {
     if (state.depth > maxDepth) continue;
     const definition = state.definition;
-    if (
-      definition.relativePath === observation.source.file &&
-      definition.startLine <= observation.source.startLine &&
-      definition.endLine >= observation.source.startLine
-    ) {
+    if (boundaryObservationLocationReached(definition, observation)) {
       reachedDepths.push(state.depth);
     }
   }
 
   for (const construct of sourceConstructs.values()) {
     if (construct.depth > maxDepth) continue;
-    if (
-      construct.file === observation.source.file &&
-      construct.startLine <= observation.source.startLine &&
-      construct.endLine >= observation.source.startLine
-    ) {
+    if (boundaryObservationLocationReached(construct, observation)) {
       reachedDepths.push(construct.depth);
     }
   }
 
   return reachedDepths.length > 0 ? Math.min(...reachedDepths) : null;
+}
+
+function boundaryObservationLocationReached(
+  range: { relativePath?: string; file?: string; startLine: number; endLine: number },
+  observation: BoundaryObservation,
+): boolean {
+  const file = range.relativePath ?? range.file;
+  return [observation.owner, observation.source].some(
+    (location) =>
+      file === location.file && range.startLine <= location.startLine && range.endLine >= location.startLine,
+  );
 }
 
 function runtimeBoundaryParticipantTopologyNodeId(observationId: string): string {
@@ -2693,6 +3265,18 @@ function widerReferenceScope(left: SystemMapReferenceScope, right: SystemMapRefe
     all: 3,
   };
   return rank[left] >= rank[right] ? left : right;
+}
+
+function reverseFileDependencyGraph(graph: ReadonlyMap<string, ReadonlySet<string>>): Map<string, Set<string>> {
+  const reversed = new Map<string, Set<string>>();
+  for (const [fromFile, toFiles] of graph) {
+    for (const toFile of toFiles) {
+      const callers = reversed.get(toFile) ?? new Set<string>();
+      callers.add(fromFile);
+      reversed.set(toFile, callers);
+    }
+  }
+  return reversed;
 }
 
 function workspaceForFile(file: string, workspaces: readonly StructuralWorkspace[]): StructuralWorkspace {

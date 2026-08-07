@@ -31,6 +31,7 @@ import { quoteShellArgument } from '../platform/shell-arguments.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import { isNonNegativeInteger, isRecordObject } from '../domain/record-validation.js';
 import { finalizeSourceEmission, runWithSourceEmissionInvocation } from './source-emission-session.js';
+import { assertNavigationMapCanStart, recordNavigationOutputDelivery } from './navigation-session.js';
 
 export const CLI_OUTPUT_PAGE_KIND = 'scip-query-output-page' as const;
 export const CLI_OUTPUT_PAGE_SCHEMA_VERSION = 1 as const;
@@ -340,6 +341,9 @@ async function runWithCliOutputPaginationInSession(
   }
 
   if (options.json && options.pageSize === undefined && options.cursor === undefined) {
+    if (options.command === 'system-map') {
+      assertNavigationMapCanStart(options.cwd, options.sourceSession !== false);
+    }
     await runJsonWithOversizeWarning(options, action, runtime);
     return;
   }
@@ -348,6 +352,9 @@ async function runWithCliOutputPaginationInSession(
   const invocationPrefix = normalizeInvocationPrefix(options.invocationPrefix);
   const invocationHash = hashInvocation(options.command, options.cwd, invocationPrefix, filteredArgv);
   const decodedCursor = options.cursor === undefined ? undefined : decodeOutputCursor(options.cursor, invocationHash);
+  if (options.command === 'system-map' && !decodedCursor) {
+    assertNavigationMapCanStart(options.cwd, options.sourceSession !== false);
+  }
   let snapshotId = decodedCursor?.snapshotId;
   let completed: {
     content: string;
@@ -423,6 +430,14 @@ async function runWithCliOutputPaginationInSession(
         snapshotId: requireSnapshotId(snapshotId),
       });
 
+  recordNavigationOutputDelivery(
+    options.command,
+    options.cwd,
+    complete,
+    options.sourceSession !== false,
+    continuation?.command,
+  );
+
   if (completed.offset === 0 && complete && options.cursor === undefined) {
     runtime.writeStdout(completed.content);
     finalizeSourceEmission(true);
@@ -492,6 +507,7 @@ export async function continueCliOutput(
       argv: [...metadata.argv, '--output-page-size', String(metadata.pageSize), '--output-cursor', cursor],
       cwd: metadata.cwd,
       json: metadata.argv.some((argument) => argument === '--json' || argument.startsWith('--json=')),
+      sourceSession: !metadata.argv.some((argument) => argument === '--no-session'),
       pageSize: metadata.pageSize,
       cursor,
       snapshotRoot,
@@ -567,6 +583,7 @@ async function runJsonWithOversizeWarning(
     }
     if (remainder.bytes.length > 0) originalWrite.call(process.stdout, remainder.bytes);
     if (warningWritten) runtime.writeStderr(warning);
+    recordNavigationOutputDelivery(options.command, options.cwd, true, options.sourceSession !== false);
   } finally {
     process.stdout.write = originalWrite;
   }

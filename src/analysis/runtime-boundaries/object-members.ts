@@ -1,6 +1,7 @@
 import { getReExports, getSourceImports } from '../../language-parsers/index.js';
 import { getAst } from '../../source/ast/ast-core.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
+import { getSourceFacts } from '../../source/facts/source-facts.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import type { IndexedDefinition } from '../../domain/types.js';
@@ -150,6 +151,8 @@ function resolveExportedBinding(
 
   const local = getDefinitionsForFile(db, sourceFile).filter((definition) => definition.leaf === binding);
   if (local.length > 0) return local;
+  const sourceCallables = sourceCallableBindings(db, sourceFile, binding);
+  if (sourceCallables.length > 0) return sourceCallables;
 
   const imported = getSourceImports(db, sourceFile).find((item) => item.localName === binding && item.sourcePath);
   if (imported?.sourcePath) {
@@ -159,6 +162,30 @@ function resolveExportedBinding(
   }
 
   return resolveExportFromFile(db, sourceFile, binding, depth + 1, new Set(seen));
+}
+
+function sourceCallableBindings(db: ScipDatabase, sourceFile: string, binding: string): IndexedDefinition[] {
+  const documentId = db.get<{ id: number }>('SELECT id FROM documents WHERE relative_path = ?', sourceFile)?.id;
+  if (documentId === undefined) return [];
+  return (getSourceFacts(db, sourceFile)?.callables ?? [])
+    .filter((callable) => callable.name === binding)
+    .map((callable) => ({
+      documentId,
+      symbolId: -1,
+      symbol: `source-callable:${sourceFile}:${callable.startLine}:${binding}`,
+      relativePath: sourceFile,
+      startLine: callable.startLine,
+      startChar: 0,
+      endLine: callable.endLine,
+      endChar: 0,
+      leaf: binding,
+      parentTypeName: null,
+      isFunctionLike: true,
+      isTypeLike: false,
+      kind: null,
+      documentation: null,
+      enclosingSymbol: null,
+    }));
 }
 
 function resolveExportFromFile(

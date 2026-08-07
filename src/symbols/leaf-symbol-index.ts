@@ -2,7 +2,8 @@ import type { ScipDatabase } from '../storage/db.js';
 import { detectAstLanguage } from '../source/ast.js';
 import { getSourceImports } from '../language-parsers/index.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
-import { leafName } from './symbol-parser.js';
+import { getSourceText } from '../source/primitives/source-text.js';
+import { leafName, parentTypeName } from './symbol-parser.js';
 import { pathsResolveSame } from '../domain/path-normalization.js';
 
 export function sameLanguageCandidates<T extends { file: string }>(sourceFile: string, candidates: T[]): T[] {
@@ -16,13 +17,18 @@ export function pickAstCallCandidate<T extends { symbol: string; file: string }>
   sourceFile: string,
   candidates: T[],
   memberAccess: boolean,
+  calleeQualifier?: string,
 ): T | null {
   const sameFile = candidates.find((candidate) => candidate.file === sourceFile);
   if (sameFile) return sameFile;
 
   if (memberAccess) {
+    const receiverRoot = calleeQualifier?.match(/^[A-Za-z_$][\w$]*/u)?.[0];
+    if (!receiverRoot) return null;
+    const sourceImports = getSourceImports(db, sourceFile);
     const importedSourcePaths = new Set(
-      getSourceImports(db, sourceFile)
+      sourceImports
+        .filter((entry) => entry.localName === receiverRoot || entry.importedName === receiverRoot)
         .map((entry) => entry.sourcePath)
         .filter((path): path is string => Boolean(path)),
     );
@@ -31,10 +37,46 @@ export function pickAstCallCandidate<T extends { symbol: string; file: string }>
         if (pathsResolveSame(sourcePath, candidate.file)) return candidate;
       }
     }
+
+    const ownerNames = localReceiverOwnerNames(getSourceText(db, sourceFile) ?? '', receiverRoot);
+    if (ownerNames.size === 0) return null;
+    const ownerSourcePaths = new Set(
+      sourceImports
+        .filter((entry) => ownerNames.has(entry.localName ?? entry.importedName))
+        .map((entry) => entry.sourcePath)
+        .filter((path): path is string => Boolean(path)),
+    );
+    const ownerMatches = candidates.filter(
+      (candidate) =>
+        ownerNames.has(parentTypeName(candidate.symbol) ?? '') &&
+        [...ownerSourcePaths].some((sourcePath) => pathsResolveSame(sourcePath, candidate.file)),
+    );
+    if (ownerMatches.length === 1) return ownerMatches[0]!;
     return null;
   }
 
   return candidates.length === 1 ? candidates[0]! : null;
+}
+
+/**
+ * Recover the imported owner of a local member-call receiver from direct,
+ * source-visible type evidence. A receiver is attributed only when every
+ * recognized declaration names the same owner type. This covers typed
+ * parameters (`store: Store`) and direct construction (`sim =
+ * GardenSimulation()` or `const store = new Store()`) without treating an
+ * arbitrary local variable as an imported namespace.
+ */
+function localReceiverOwnerNames(source: string, receiver: string): Set<string> {
+  const escapedReceiver = receiver.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  const owners = new Set<string>();
+  const patterns = [
+    new RegExp(`\\b${escapedReceiver}\\s*:\\s*([A-Za-z_$][\\w$]*)`, 'gu'),
+    new RegExp(`\\b${escapedReceiver}\\s*=\\s*(?:new\\s+)?([A-Za-z_$][\\w$]*)\\s*\\(`, 'gu'),
+  ];
+  for (const pattern of patterns) {
+    for (const match of source.matchAll(pattern)) owners.add(match[1]!);
+  }
+  return owners.size === 1 ? owners : new Set();
 }
 
 function astLanguageFamily(relativePath: string): string | null {

@@ -20,7 +20,7 @@ import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import { normalizePathSeparators as normalizePath } from '../domain/path-normalization.js';
 import { leafName } from '../symbols/symbol-parser.js';
 import { getReExports } from '../language-parsers/index.js';
-import { isPackageSurfaceFile } from './package-surface.js';
+import { isExplicitPackageSurfaceFile, isPackageSurfaceFile } from './package-surface.js';
 import { isRustPublicLibrarySymbol } from './rust-package-surface.js';
 import { classifyFile } from '../source/primitives/file-kind.js';
 
@@ -184,6 +184,10 @@ const packageSurfaceReachabilityCache = createPerDbValue<Map<string, PackageSurf
   'package-surface-reachability',
   { clearGroups: ['whole-project'] },
 );
+const explicitPackageSurfaceReachabilityCache = createPerDbValue<Map<string, PackageSurfaceVisibility>>(
+  'explicit-package-surface-reachability',
+  { clearGroups: ['whole-project'] },
+);
 
 function isTransitivelyPackageSurfaceSymbol(db: ScipDatabase, symbol: string, file: string): boolean {
   const visibility = packageSurfaceReachability(db).get(file);
@@ -191,33 +195,58 @@ function isTransitivelyPackageSurfaceSymbol(db: ScipDatabase, symbol: string, fi
   return visibility === null || visibility.has(leafName(symbol));
 }
 
+/**
+ * True when a symbol is published from an exact manifest target, either in
+ * that file or through its re-export closure. This is the stronger subset of
+ * package reachability; wildcard targets remain valid public reachability but
+ * do not identify an intentional ownership doorway as precisely.
+ */
+export function isExplicitPackageSurfaceSymbol(db: ScipDatabase, symbol: string, file: string): boolean {
+  const visibility = explicitPackageSurfaceReachability(db).get(file);
+  if (visibility === undefined) return false;
+  return visibility === null || visibility.has(leafName(symbol));
+}
+
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function packageSurfaceReachability(db: ScipDatabase): Map<string, PackageSurfaceVisibility> {
   return packageSurfaceReachabilityCache.get(db, () => {
-    const visibility = new Map<string, PackageSurfaceVisibility>();
-    const queue: string[] = [];
-
-    for (const path of indexedDocumentPaths(db, { includeIgnored: false })) {
-      if (!isPackageSurfaceFile(db, path)) continue;
-      visibility.set(path, null);
-      queue.push(path);
-    }
-
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      const currentVisibility = visibility.get(current);
-      if (currentVisibility === undefined) continue;
-
-      for (const reexport of getReExports(db, current)) {
-        if (!reexport.sourcePath || db.isIgnored(reexport.sourcePath)) continue;
-        const propagated = propagatedReexportVisibility(currentVisibility, reexport);
-        if (propagated === undefined) continue;
-        if (mergePackageVisibility(visibility, reexport.sourcePath, propagated)) queue.push(reexport.sourcePath);
-      }
-    }
-
-    return visibility;
+    return computePackageSurfaceReachability(db, (path) => isPackageSurfaceFile(db, path));
   });
+}
+
+function explicitPackageSurfaceReachability(db: ScipDatabase): Map<string, PackageSurfaceVisibility> {
+  return explicitPackageSurfaceReachabilityCache.get(db, () => {
+    return computePackageSurfaceReachability(db, (path) => isExplicitPackageSurfaceFile(db, path));
+  });
+}
+
+function computePackageSurfaceReachability(
+  db: ScipDatabase,
+  isSurfaceFile: (path: string) => boolean,
+): Map<string, PackageSurfaceVisibility> {
+  const visibility = new Map<string, PackageSurfaceVisibility>();
+  const queue: string[] = [];
+
+  for (const path of indexedDocumentPaths(db, { includeIgnored: false })) {
+    if (!isSurfaceFile(path)) continue;
+    visibility.set(path, null);
+    queue.push(path);
+  }
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const currentVisibility = visibility.get(current);
+    if (currentVisibility === undefined) continue;
+
+    for (const reexport of getReExports(db, current)) {
+      if (!reexport.sourcePath || db.isIgnored(reexport.sourcePath)) continue;
+      const propagated = propagatedReexportVisibility(currentVisibility, reexport);
+      if (propagated === undefined) continue;
+      if (mergePackageVisibility(visibility, reexport.sourcePath, propagated)) queue.push(reexport.sourcePath);
+    }
+  }
+
+  return visibility;
 }
 
 function propagatedReexportVisibility(
@@ -228,7 +257,9 @@ function propagatedReexportVisibility(
     return reexport.kind === 'named' ? new Set(reexport.names) : null;
   }
   if (reexport.kind === 'star') return new Set(current);
-  if (reexport.kind === 'star-as') return undefined;
+  if (reexport.kind === 'star-as') {
+    return reexport.names.some((name) => current.has(name)) ? null : undefined;
+  }
   const names = reexport.names.filter((name) => current.has(name));
   return names.length > 0 ? new Set(names) : undefined;
 }

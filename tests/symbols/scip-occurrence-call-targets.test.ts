@@ -22,6 +22,7 @@ import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixtu
 
 const TARGET_SYMBOL = 'scip-typescript npm fixture 1.0.0 src/`service.ts`/Service#execute().';
 const CALLBACK_SYMBOL = 'scip-typescript npm fixture 1.0.0 src/`registry.ts`/mergeResults().';
+const FACTORY_CALLABLE_SYMBOL = 'scip-typescript npm fixture 1.0.0 src/`service.ts`/runWrapped.';
 
 describe('SCIP occurrence call targets for source ranges', () => {
   it('admits exact compiler targets while keeping unmatched source calls unresolved', () => {
@@ -40,8 +41,16 @@ describe('SCIP occurrence call targets for source ranges', () => {
         '    return values.reduce(mergeResults, 0);',
         '  },',
         '};',
+        'export function invokeWrapped() {',
+        '  return runWrapped();',
+        '}',
       ],
-      'src/service.ts': ['export class Service {', '  execute() { return 1; }', '}'],
+      'src/service.ts': [
+        'export class Service {',
+        '  execute() { return 1; }',
+        '}',
+        'export const runWrapped = Effect.fnUntraced(function* () { return 2; });',
+      ],
     });
     evidenceFixtureDb(dbPath)
       .document(1, 'typescript', 'src/registry.ts')
@@ -50,6 +59,8 @@ describe('SCIP occurrence call targets for source ranges', () => {
       .definition(1, 2, 1, 1, 2, 1, 25)
       .symbol(2, CALLBACK_SYMBOL, 'mergeResults')
       .definition(2, 1, 2, 0, 0, 0, 76)
+      .symbol(3, FACTORY_CALLABLE_SYMBOL, 'runWrapped', null, '```ts\nvar runWrapped: any\n```')
+      .definition(3, 2, 3, 3, 0, 3, 72)
       .write();
     writeFileSync(
       indexPath,
@@ -75,17 +86,30 @@ describe('SCIP occurrence call targets for source ranges', () => {
                   symbolRoles: 0,
                   range: [7, 25, 7, 37],
                 }),
+                create(OccurrenceSchema, {
+                  symbol: FACTORY_CALLABLE_SYMBOL,
+                  symbolRoles: 0,
+                  range: [11, 9, 11, 19],
+                }),
               ],
             }),
             create(DocumentSchema, {
               language: 'typescript',
               relativePath: 'src/service.ts',
-              symbols: [create(SymbolInformationSchema, { symbol: TARGET_SYMBOL })],
+              symbols: [
+                create(SymbolInformationSchema, { symbol: TARGET_SYMBOL }),
+                create(SymbolInformationSchema, { symbol: FACTORY_CALLABLE_SYMBOL }),
+              ],
               occurrences: [
                 create(OccurrenceSchema, {
                   symbol: TARGET_SYMBOL,
                   symbolRoles: SymbolRole.Definition,
                   range: [1, 2, 1, 9],
+                }),
+                create(OccurrenceSchema, {
+                  symbol: FACTORY_CALLABLE_SYMBOL,
+                  symbolRoles: SymbolRole.Definition,
+                  range: [3, 13, 3, 23],
                 }),
               ],
             }),
@@ -116,6 +140,20 @@ describe('SCIP occurrence call targets for source ranges', () => {
             sourceLine: 7,
             calleeLeaf: 'mergeResults',
             definition: expect.objectContaining({ symbol: CALLBACK_SYMBOL, relativePath: 'src/registry.ts' }),
+          }),
+        ],
+      });
+
+      const wrappedFactory = scipOccurrenceCallTargetsForRange(db, 'src/registry.ts', 10, 12);
+      expect(wrappedFactory).toMatchObject({
+        available: true,
+        resolvedCallsites: 1,
+        unresolvedCallsites: 0,
+        targets: [
+          expect.objectContaining({
+            sourceLine: 11,
+            calleeLeaf: 'runWrapped',
+            definition: expect.objectContaining({ symbol: FACTORY_CALLABLE_SYMBOL, relativePath: 'src/service.ts' }),
           }),
         ],
       });

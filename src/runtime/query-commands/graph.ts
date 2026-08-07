@@ -468,9 +468,10 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
     relations: stringArrayOptionValue(opts, 'relation') as SystemMapRelationKind[],
     evidenceFloor: stringOptionValue(opts, 'evidenceFloor') as SystemMapEvidenceFloor | undefined,
     sourceScopes: stringArrayOptionValue(opts, 'sourceScope') as SystemMapSourceScope[],
-    maxTopologyCharacters: definedNumberOption(opts, 'topologyCharacters', 20_000),
+    maxTopologyCharacters: definedNumberOption(opts, 'topologyCharacters', 12_000),
     topologyFrontiers: stringArrayOptionValue(opts, 'frontier'),
     fullLiteralTraversal: booleanOptionValue(opts, 'fullLiteralTraversal'),
+    selectionTerms: stringArrayOptionValue(opts, 'selectionTerm'),
   });
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('system-map', args, opts, result, {
@@ -555,6 +556,23 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
     for (const path of result.topology.paths) {
       const labels = path.nodeIds.map((id) => topologyNodeById.get(id)?.label ?? id);
       console.log(`  [${path.status}] ${labels.length > 0 ? labels.join(' ↔ ') : 'no proved connector'}`);
+    }
+    const upstreamCausalRoots = emittedNodes.filter(
+      (node) => typeof node.attributes['upstreamCausalEndpoint'] === 'string',
+    );
+    if (upstreamCausalRoots.length > 0) {
+      console.log(
+        '  Upstream causal roots are the earliest source-backed constructs selected on bounded proved paths into the anchors; ' +
+          'a traversal root has no earlier proved caller in this query graph and is not necessarily a public application entry.',
+      );
+      for (const node of upstreamCausalRoots) {
+        const location = node.location ? ` @ ${node.location.file}:${displayLine(node.location.line)}` : '';
+        const distance = Number(node.attributes['upstreamCausalDistance'] ?? 0);
+        console.log(
+          `  [${String(node.attributes['upstreamCausalEndpoint'])}; ${distance} edge(s) to anchor] ` +
+            `${compactSystemMapIdentity(node.label)}${location}`,
+        );
+      }
     }
     const shownEdgeLimit = hasConnectedBehavior ? 4 : 8;
     for (const edge of emittedEdges.slice(0, shownEdgeLimit)) {
@@ -675,7 +693,10 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
       );
     }
     if (result.behavior.exactSourceCommand) {
-      console.log(`  Exact source for every returned construct: ${result.behavior.exactSourceCommand}`);
+      console.log(
+        `  Exhaustive exact-source recovery (usually unnecessary; never combine with the drill batch below): ` +
+          result.behavior.exactSourceCommand,
+      );
     }
   }
 
@@ -686,6 +707,9 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
         'connected behavior is the evidence to exhaust first.',
     );
     const exactTargets = result.nextAnchors.anchors.filter((anchor) => anchor.alternativeCount === 1);
+    if (result.nextAnchors.inspectCommand) {
+      console.log(`  Recommended one-shot drill batch: ${result.nextAnchors.inspectCommand}`);
+    }
     for (const anchor of exactTargets) {
       const target = anchor.alternatives[0]!;
       const causalLabel = [anchor.direction, anchor.causalRole, anchor.relationKind].filter(Boolean).join(' ');
@@ -801,19 +825,24 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
   if (result.boundaryFrontiers.length > 0) {
     console.log('\n═══ UNRESOLVED RUNTIME BOUNDARIES ═══');
     const buckets = groupSystemMapBoundaryFrontiers(result.boundaryFrontiers);
-    const shown = buckets.slice(0, 8);
+    const shown = buckets.slice(0, hasConnectedBehavior ? 3 : 8);
     for (const bucket of shown) {
       const examples = bucket.frontiers
-        .slice(0, 2)
+        .slice(0, hasConnectedBehavior ? 1 : 2)
         .map(
           (frontier) => `${compactBoundaryAddress(frontier.address)} @ ${frontier.file}:${displayLine(frontier.line)}`,
         );
       console.log(`  [${bucket.strength}] ${bucket.action} ×${bucket.frontiers.length} — ${examples.join('; ')}`);
-      console.log(`    ${bucket.reason}`);
+      if (!hasConnectedBehavior) console.log(`    ${bucket.reason}`);
     }
     if (buckets.length > shown.length) {
       console.log(
-        `  ${buckets.length - shown.length} additional frontier bucket(s); use --json for every observation and proof.`,
+        `  ${buckets.length - shown.length} additional frontier bucket(s); every observation and reason remains in --json.`,
+      );
+    }
+    if (hasConnectedBehavior) {
+      console.log(
+        '  These are disclosed candidate observations, not proven connector edges; expand only when a named missing fact crosses one of them.',
       );
     }
   }
@@ -993,6 +1022,9 @@ function systemMapGapRecoveryCommand(
   if (booleanOptionValue(opts, 'fullLiteralTraversal')) parts.push('--full-literal-traversal');
   for (const region of stringArrayOptionValue(opts, 'expand')) parts.push('--expand', shellArgument(region));
   for (const frontier of stringArrayOptionValue(opts, 'frontier')) parts.push('--frontier', shellArgument(frontier));
+  for (const term of stringArrayOptionValue(opts, 'selectionTerm')) {
+    parts.push('--selection-term', shellArgument(term));
+  }
   for (const callee of callees) parts.push('--gap-callee', shellArgument(callee));
   parts.push('--gap-recovery-only');
   return parts.join(' ');
@@ -1404,7 +1436,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
         '--topology-characters <n>',
         'Soft character budget for the first human topology view; complete JSON facts remain available',
         parseInteger,
-        20_000,
+        12_000,
       ),
       option(
         '--source-scope <scope>',
@@ -1431,6 +1463,12 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
       option(
         '--gap-callee <name>',
         'Resolve one callee already shown in connected behavior; repeat to batch a named gap',
+        collectValues,
+        [],
+      ),
+      option(
+        '--selection-term <term>',
+        'Rank already-proven causal drill targets by one normalized locator term; repeat to preserve several concerns',
         collectValues,
         [],
       ),

@@ -5,7 +5,7 @@ import { behaviorConstructRange } from '../../source/facts/behavior-skeleton.js'
 import { getSourceFacts } from '../../source/facts/source-facts.js';
 import { getSourceLines } from '../../source/primitives/source-text.js';
 import { classifyFile, type FileKind } from '../../source/primitives/file-kind.js';
-import { repositoryTextInventory } from '../../source/primitives/repository-text.js';
+import { repositoryTextInventory, type RepositoryTextFile } from '../../source/primitives/repository-text.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { findEnclosingDefinition, getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import type { CalleeEvidenceSource, CalleeRow } from '../../symbols/graph/call-graph-evidence.js';
@@ -21,7 +21,7 @@ const MIN_ANALYZED_ROOTS = 12;
 const MIN_SYMBOL_ANALYZED_ROOTS = 48;
 const MAX_CALLEES_PER_NODE = 64;
 const MAX_RENDERED_RELATIONS = 10;
-const MAX_KEY_ANCHORS = 5;
+const MAX_KEY_ANCHORS = 6;
 const MAX_EFFECT_TARGETS = 24;
 const MAX_EFFECT_CALLER_DEFINITIONS = 320;
 const MAX_EFFECT_KEY_ANCHORS = 6;
@@ -29,6 +29,14 @@ const MAX_COMPOSITION_SOURCE_GROUPS = 12;
 const MAX_COMPOSITION_DESTINATION_GROUPS = 1;
 const MAX_COMPOSITION_CALL_DEPTH = 4;
 const MAX_COMPOSITION_KEY_ANCHORS = 7;
+const MAX_PARALLEL_PATH_GROUPS = 12;
+const SOURCE_CONSTRUCT_SYMBOL_PREFIX = 'source-construct:';
+const MAX_SOURCE_CANDIDATE_FILES = 96;
+const MAX_PATH_SOURCE_CANDIDATE_FILES = 32;
+const MAX_TERM_COVERAGE_ROOTS = 4;
+const MAX_PATH_CALLABLE_ROOTS = 32;
+const MAX_PATH_CALLABLES_PER_FILE = 8;
+const MAX_SYSTEM_MAP_SELECTION_TERMS = 16;
 
 const QUERY_STOP_WORDS = new Set([
   'a',
@@ -116,7 +124,7 @@ export interface AnchorDiscoveryRelation {
 
 export interface AnchorDiscoveryGroup {
   id: string;
-  kind: 'cross-boundary-flow' | 'connected-flow' | 'shared-callee-owners';
+  kind: 'cross-boundary-flow' | 'parallel-paths' | 'connected-flow' | 'shared-callee-owners';
   roots: AnchorDiscoveryCandidate[];
   keyAnchors: AnchorDiscoveryCandidate[];
   candidateOwnerCount: number;
@@ -126,6 +134,16 @@ export interface AnchorDiscoveryGroup {
   matchedTerms: string[];
   relations: AnchorDiscoveryRelation[];
   relationCount: number;
+  /** Number of independently named sides that carry at least one causal edge. */
+  parallelConnectedSides?: number;
+  /** Number of independently named sides whose matched root has an outgoing causal edge. */
+  parallelOrchestrationSides?: number;
+  /** Query vocabulary that occurs in the repository path on every batched side. */
+  parallelSharedPathTerms?: string[];
+  /** Rarest repository frequency among the shared path terms; lower is more discriminative. */
+  parallelSharedPathFrequency?: number;
+  /** Matched roots that initiate at least one returned causal relationship. */
+  orchestrationRootCount?: number;
   omittedRelations: number;
   systemMapCommand: string;
 }
@@ -201,21 +219,21 @@ export function discoverAnchors(
   }
 
   const index = new ProjectIndex(db);
-  const definitions = index
+  const compilerDefinitions = index
     .scopedDefinitions(options.scope)
     .filter((definition) => !isModuleLikeSymbol(definition.symbol));
+  const definitions = [...compilerDefinitions];
   const definitionBySymbol = new Map(definitions.map((definition) => [definition.symbol, definition]));
   const mutableCandidates = new Map<string, MutableCandidate>();
 
-  for (const definition of definitions) {
+  for (const definition of compilerDefinitions) {
     matchDefinitionVocabulary(mutableCandidates, definition, normalizedTerms);
   }
 
   const inventory = repositoryTextInventory(db, { scope: options.scope });
   for (const file of inventory.files) {
-    const fileDefinitions = getDefinitionsForFile(db, file.relativePath).filter(
-      (definition) => !isModuleLikeSymbol(definition.symbol),
-    );
+    const indexedFileDefinitions = getDefinitionsForFile(db, file.relativePath);
+    const fileDefinitions = indexedFileDefinitions.filter((definition) => !isModuleLikeSymbol(definition.symbol));
     if (fileDefinitions.length === 0) continue;
     const lines = searchableLines(file.text);
     for (let line = 0; line < lines.length; line += 1) {
@@ -225,6 +243,59 @@ export function discoverAnchors(
       const owner = findEnclosingDefinition(fileDefinitions, line);
       if (!owner || isModuleLikeSymbol(owner.symbol)) continue;
       for (const term of matched) addCandidateMatch(mutableCandidates, owner, term, 'source', file.relativePath, line);
+    }
+  }
+
+  const preliminaryFrequencies = candidateTermFrequencies(mutableCandidates);
+  const preliminaryRoots = [...mutableCandidates.values()]
+    .map((candidate) => publicCandidate(candidate, preliminaryFrequencies))
+    .sort(compareCandidates);
+  const sourceCandidateFiles = selectSourceCandidateFiles(inventory.files, preliminaryRoots, normalizedTerms);
+  let nextSourceConstructId = -1;
+  for (const file of sourceCandidateFiles) {
+    const indexedFileDefinitions = getDefinitionsForFile(db, file.relativePath);
+    const fileDefinitions = indexedFileDefinitions.filter((definition) => !isModuleLikeSymbol(definition.symbol));
+    const callables = getSourceFacts(db, file.relativePath)?.callables ?? [];
+    const sourceDefinitions = new Map<string, IndexedDefinition>();
+    const sourceDefinitionFor = (callable: (typeof callables)[number]): IndexedDefinition | null => {
+      const key = `${callable.startLine}\0${callable.endLine}\0${callable.name}`;
+      const existing = sourceDefinitions.get(key);
+      if (existing) return existing;
+      const definition = sourceCallableDefinition(
+        file.relativePath,
+        indexedFileDefinitions,
+        callable,
+        () => nextSourceConstructId--,
+      );
+      if (!definition) return null;
+      sourceDefinitions.set(key, definition);
+      definitions.push(definition);
+      definitionBySymbol.set(definition.symbol, definition);
+      matchDefinitionVocabulary(mutableCandidates, definition, normalizedTerms);
+      return definition;
+    };
+    for (const callable of callables) {
+      const leafTerms = normalizedWordSet(callable.name);
+      if (normalizedTerms.some((term) => leafTerms.has(term))) sourceDefinitionFor(callable);
+    }
+    if (callables.length === 0) continue;
+    const lines = searchableLines(file.text);
+    for (let line = 0; line < lines.length; line += 1) {
+      const lineTerms = normalizedWordSet(lines[line] ?? '');
+      const matched = normalizedTerms.filter((term) => lineTerms.has(term));
+      if (matched.length === 0) continue;
+      const callable = smallestSourceCallable(callables, line);
+      const sourceDefinition = callable ? sourceDefinitionFor(callable) : null;
+      if (!sourceDefinition) continue;
+      const compilerOwner = smallestEnclosingDefinition(fileDefinitions, line);
+      const owner = smallestEnclosingDefinition(
+        compilerOwner ? [compilerOwner, sourceDefinition] : [sourceDefinition],
+        line,
+      );
+      if (owner?.symbol !== sourceDefinition.symbol) continue;
+      for (const term of matched) {
+        addCandidateMatch(mutableCandidates, sourceDefinition, term, 'source', file.relativePath, line);
+      }
     }
   }
 
@@ -243,17 +314,21 @@ export function discoverAnchors(
         ...[...candidateRoots]
           .sort(compareSymbolCandidates)
           .slice(0, Math.max(MIN_SYMBOL_ANALYZED_ROOTS, analysisBudget)),
+        ...selectTermCoverageRoots(candidateRoots, normalizedTerms),
+        ...selectPathCallableRoots(candidateRoots, normalizedTerms, candidateFrequencies),
       ]);
   const analyzedRootCount = analyzedRoots.length;
   const rootDefinitions = analyzedRoots
     .map((candidate) => definitionBySymbol.get(candidate.symbol))
     .filter((definition): definition is IndexedDefinition => definition?.isFunctionLike === true);
+  const sourceDefinitionIndex = indexSourceConstructDefinitions(definitions);
   const neighborhoods = buildRootNeighborhoods(
     db,
     index,
     analyzedRoots,
     rootDefinitions,
     definitionBySymbol,
+    sourceDefinitionIndex,
     new Set(mutableCandidates.keys()),
     options.semantic !== false,
   );
@@ -264,6 +339,7 @@ export function discoverAnchors(
     candidateFrequencies,
     definitionBySymbol,
   );
+  const parallelGroups = parallelPathGroups(connectedGroups, candidateFrequencies, normalizedTerms);
   const effectGroups = effectOwnerGroups(
     db,
     index,
@@ -281,7 +357,13 @@ export function discoverAnchors(
     definitionBySymbol,
     options.semantic !== false,
   );
-  const groups = [...crossBoundaryGroups, ...connectedGroups, ...effectGroups].sort(compareGroups);
+  const selectionTerms = selectSystemMapSelectionTerms(normalizedTerms, candidateFrequencies);
+  const groups = [...crossBoundaryGroups, ...parallelGroups, ...connectedGroups, ...effectGroups]
+    .map((group) => ({
+      ...group,
+      systemMapCommand: appendSystemMapSelectionTerms(group.systemMapCommand, selectionTerms),
+    }))
+    .sort(compareGroups);
   const selectedGroups = full ? groups : selectDisplayedGroups(groups, limit);
   const matchedTerms = normalizedTerms.filter((term) => candidateFrequencies.has(term));
   const unmatchedTerms = normalizedTerms.filter((term) => !candidateFrequencies.has(term));
@@ -369,6 +451,121 @@ function candidateTermFrequencies(candidates: ReadonlyMap<string, MutableCandida
   return frequencies;
 }
 
+function sourceCallableDefinition(
+  relativePath: string,
+  indexedDefinitions: readonly IndexedDefinition[],
+  callable: { name: string; startLine: number; endLine: number },
+  nextSymbolId: () => number,
+): IndexedDefinition | null {
+  const documentId = indexedDefinitions[0]?.documentId;
+  if (documentId === undefined) return null;
+  const compilerDefinition = indexedDefinitions.find(
+    (definition) =>
+      definition.isFunctionLike &&
+      definition.leaf === callable.name &&
+      definition.startLine === callable.startLine &&
+      definition.endLine === callable.endLine,
+  );
+  if (compilerDefinition) return null;
+  const symbolId = nextSymbolId();
+  return {
+    documentId,
+    symbolId,
+    symbol: `${SOURCE_CONSTRUCT_SYMBOL_PREFIX}${relativePath}:${callable.startLine}:${callable.endLine}:${callable.name}`,
+    relativePath,
+    startLine: callable.startLine,
+    startChar: 0,
+    endLine: callable.endLine,
+    endChar: 0,
+    leaf: callable.name,
+    parentTypeName: null,
+    isFunctionLike: true,
+    isTypeLike: false,
+    kind: null,
+    documentation: null,
+    enclosingSymbol: null,
+  } satisfies IndexedDefinition;
+}
+
+function selectSourceCandidateFiles(
+  files: readonly RepositoryTextFile[],
+  preliminaryRoots: readonly AnchorDiscoveryCandidate[],
+  queryTerms: readonly string[],
+): RepositoryTextFile[] {
+  const selectedPaths = new Set(
+    preliminaryRoots.slice(0, MAX_SOURCE_CANDIDATE_FILES).map((candidate) => candidate.file),
+  );
+  const queryTermSet = new Set(queryTerms);
+  const pathCandidates = files
+    .map((file) => {
+      const pathTerms = normalizedWordSet(file.relativePath);
+      const basename = file.relativePath.slice(file.relativePath.lastIndexOf('/') + 1).replace(/\.[^.]+$/u, '');
+      const basenameTerms = normalizedWordSet(basename);
+      const pathOverlap = [...pathTerms].filter((term) => queryTermSet.has(term)).length;
+      const basenameOverlap = [...basenameTerms].filter((term) => queryTermSet.has(term)).length;
+      return { file, score: basenameOverlap * 4 + pathOverlap };
+    })
+    .filter((candidate) => candidate.score > 0)
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        fileKindRank(classifyFile(left.file.relativePath)) - fileKindRank(classifyFile(right.file.relativePath)) ||
+        left.file.relativePath.localeCompare(right.file.relativePath),
+    )
+    .slice(0, MAX_PATH_SOURCE_CANDIDATE_FILES);
+  for (const candidate of pathCandidates) selectedPaths.add(candidate.file.relativePath);
+  return files.filter((file) => selectedPaths.has(file.relativePath));
+}
+
+function smallestSourceCallable<T extends { startLine: number; endLine: number }>(
+  callables: readonly T[],
+  line: number,
+): T | undefined {
+  return callables
+    .filter((callable) => callable.startLine <= line && callable.endLine >= line)
+    .sort(
+      (left, right) =>
+        left.endLine - left.startLine - (right.endLine - right.startLine) || left.startLine - right.startLine,
+    )[0];
+}
+
+function indexSourceConstructDefinitions(
+  definitions: readonly IndexedDefinition[],
+): ReadonlyMap<string, readonly IndexedDefinition[]> {
+  const index = new Map<string, IndexedDefinition[]>();
+  for (const definition of definitions) {
+    if (!isSourceConstructDefinition(definition)) continue;
+    const key = `${definition.relativePath}\0${normalizedCallableLeaf(definition.leaf)}`;
+    const bucket = index.get(key) ?? [];
+    bucket.push(definition);
+    index.set(key, bucket);
+  }
+  return index;
+}
+
+function smallestEnclosingDefinition(
+  definitions: readonly IndexedDefinition[],
+  line: number,
+): IndexedDefinition | undefined {
+  return definitions
+    .filter((definition) => definition.startLine <= line && definition.endLine >= line)
+    .sort(
+      (left, right) =>
+        left.endLine - left.startLine - (right.endLine - right.startLine) ||
+        Number(isSourceConstructDefinition(right)) - Number(isSourceConstructDefinition(left)) ||
+        left.startLine - right.startLine ||
+        left.symbol.localeCompare(right.symbol),
+    )[0];
+}
+
+function isSourceConstructDefinition(definition: Pick<IndexedDefinition, 'symbol'>): boolean {
+  return definition.symbol.startsWith(SOURCE_CONSTRUCT_SYMBOL_PREFIX);
+}
+
+function candidateLabel(definition: IndexedDefinition): string {
+  return isSourceConstructDefinition(definition) ? definition.leaf : shortenSymbol(definition.symbol);
+}
+
 function publicCandidate(
   candidate: MutableCandidate,
   frequencies: ReadonlyMap<string, number>,
@@ -391,7 +588,7 @@ function publicCandidate(
     .reduce((score, match) => score + 1 / Math.max(1, frequencies.get(match.term) ?? 1), 0);
   return {
     symbol: definition.symbol,
-    label: shortenSymbol(definition.symbol),
+    label: candidateLabel(definition),
     leaf: definition.leaf,
     file: definition.relativePath,
     line: definition.startLine,
@@ -415,45 +612,60 @@ function buildRootNeighborhoods(
   roots: readonly AnchorDiscoveryCandidate[],
   rootDefinitions: readonly IndexedDefinition[],
   definitionBySymbol: ReadonlyMap<string, IndexedDefinition>,
+  sourceDefinitionIndex: ReadonlyMap<string, readonly IndexedDefinition[]>,
   priorityTargetSymbols: ReadonlySet<string>,
   semantic: boolean,
 ): RootNeighborhood[] {
-  const directMap = index.calleeMap(rootDefinitions, { additive: false, semantic });
+  const compilerRootDefinitions = rootDefinitions.filter((definition) => !isSourceConstructDefinition(definition));
+  const directMap = index.calleeMap(compilerRootDefinitions, { additive: false, semantic });
   const directRelations = new Map<string, AnchorDiscoveryRelation[]>();
   const firstHopDefinitions = new Map<string, IndexedDefinition>();
 
   for (const root of roots) {
     const definition = definitionBySymbol.get(root.symbol);
     const relations = definition
-      ? calleeRelations(
-          db,
-          definition,
-          directMap.get(definition.symbolId) ?? [],
-          definitionBySymbol,
-          1,
-          priorityTargetSymbols,
-        )
+      ? isSourceConstructDefinition(definition)
+        ? sourceConstructCalleeRelations(db, definition, definitionBySymbol, sourceDefinitionIndex, 1)
+        : calleeRelations(
+            db,
+            definition,
+            directMap.get(definition.symbolId) ?? [],
+            definitionBySymbol,
+            1,
+            priorityTargetSymbols,
+          )
       : [];
     directRelations.set(root.symbol, relations);
     for (const relation of relations) {
       const target = definitionBySymbol.get(relation.toSymbol);
-      if (target?.isFunctionLike) firstHopDefinitions.set(target.symbol, target);
+      if (
+        target?.isFunctionLike &&
+        (!definition || !isSourceConstructDefinition(definition) || isSourceConstructDefinition(target))
+      ) {
+        firstHopDefinitions.set(target.symbol, target);
+      }
     }
   }
 
-  const secondMap = index.calleeMap([...firstHopDefinitions.values()], { additive: false, semantic });
+  const secondDefinitions = [...firstHopDefinitions.values()];
+  const secondMap = index.calleeMap(
+    secondDefinitions.filter((definition) => !isSourceConstructDefinition(definition)),
+    { additive: false, semantic },
+  );
   const secondRelations = new Map<string, AnchorDiscoveryRelation[]>();
-  for (const definition of firstHopDefinitions.values()) {
+  for (const definition of secondDefinitions) {
     secondRelations.set(
       definition.symbol,
-      calleeRelations(
-        db,
-        definition,
-        secondMap.get(definition.symbolId) ?? [],
-        definitionBySymbol,
-        2,
-        priorityTargetSymbols,
-      ),
+      isSourceConstructDefinition(definition)
+        ? sourceConstructCalleeRelations(db, definition, definitionBySymbol, sourceDefinitionIndex, 2)
+        : calleeRelations(
+            db,
+            definition,
+            secondMap.get(definition.symbolId) ?? [],
+            definitionBySymbol,
+            2,
+            priorityTargetSymbols,
+          ),
     );
   }
 
@@ -508,6 +720,93 @@ function calleeRelations(
         compareRelations(left, right),
     )
     .slice(0, MAX_CALLEES_PER_NODE);
+}
+
+function sourceConstructCalleeRelations(
+  db: ScipDatabase,
+  from: IndexedDefinition,
+  definitionBySymbol: ReadonlyMap<string, IndexedDefinition>,
+  sourceDefinitionIndex: ReadonlyMap<string, readonly IndexedDefinition[]>,
+  depth: number,
+): AnchorDiscoveryRelation[] {
+  const relations: AnchorDiscoveryRelation[] = scipOccurrenceCallTargetsForRange(
+    db,
+    from.relativePath,
+    from.startLine,
+    from.endLine,
+  ).targets.flatMap((target) => {
+    const definition = definitionBySymbol.get(target.definition.symbol) ?? target.definition;
+    if (!definition.isFunctionLike || definition.symbol === from.symbol) return [];
+    return [
+      {
+        kind: 'call',
+        fromSymbol: from.symbol,
+        fromLabel: candidateLabel(from),
+        fromFile: from.relativePath,
+        toSymbol: definition.symbol,
+        toLabel: candidateLabel(definition),
+        toFile: definition.relativePath,
+        depth,
+        strength: 'exact',
+        evidence: 'scip-occurrence-callsite',
+        callsiteLine: target.sourceLine,
+      } satisfies AnchorDiscoveryRelation,
+    ];
+  });
+
+  for (const memberTarget of importedMemberCallTargets(db, from.relativePath, {
+    ranges: [{ startLine: from.startLine, endLine: from.endLine }],
+    excludeIndexedTargets: false,
+  }).targets) {
+    const target = [
+      ...(sourceDefinitionIndex.get(`${memberTarget.targetFile}\0${normalizedCallableLeaf(memberTarget.calleeLeaf)}`) ??
+        []),
+      ...getDefinitionsForFile(db, memberTarget.targetFile).filter(
+        (definition) =>
+          definition.isFunctionLike && normalizedCallableLeaf(definition.leaf) === memberTarget.calleeLeaf,
+      ),
+    ].find(
+      (definition) =>
+        definition.startLine === memberTarget.targetStartLine && definition.endLine === memberTarget.targetEndLine,
+    );
+    if (!target || target.symbol === from.symbol) continue;
+    relations.push({
+      kind: 'call',
+      fromSymbol: from.symbol,
+      fromLabel: candidateLabel(from),
+      fromFile: from.relativePath,
+      toSymbol: target.symbol,
+      toLabel: candidateLabel(target),
+      toFile: target.relativePath,
+      depth,
+      strength: memberTarget.strength === 'exact' ? 'exact' : 'derived',
+      evidence: 'ast-member-import-candidate',
+      callsiteLine: memberTarget.line,
+    });
+  }
+
+  for (const site of getSourceFacts(db, from.relativePath)?.callSites ?? []) {
+    if (site.line < from.startLine || site.line > from.endLine || site.memberAccess) continue;
+    const targets = (
+      sourceDefinitionIndex.get(`${from.relativePath}\0${normalizedCallableLeaf(site.calleeLeaf)}`) ?? []
+    ).filter((definition) => definition.symbol !== from.symbol);
+    if (targets.length !== 1) continue;
+    const target = targets[0]!;
+    relations.push({
+      kind: 'call',
+      fromSymbol: from.symbol,
+      fromLabel: candidateLabel(from),
+      fromFile: from.relativePath,
+      toSymbol: target.symbol,
+      toLabel: candidateLabel(target),
+      toFile: target.relativePath,
+      depth,
+      strength: 'derived',
+      evidence: 'ast-callsite',
+      callsiteLine: site.line,
+    });
+  }
+  return deduplicateRelations(relations).sort(compareRelations);
 }
 
 function firstCallsiteLine(db: ScipDatabase, from: IndexedDefinition, target: IndexedDefinition): number | null {
@@ -603,6 +902,9 @@ function connectedRootGroups(
       }
     }
     const keyAnchors = selectKeyAnchors(componentRoots, relations, candidatesBySymbol);
+    const orchestrationRootCount = componentRoots.filter((root) =>
+      relations.some((relation) => relation.fromSymbol === root.symbol),
+    ).length;
     const matchedTerms = [...new Set(componentRoots.flatMap((root) => root.matchedTerms))].sort();
     const renderedRelations = selectRenderedRelations(relations, keyAnchors, rootSymbols, candidatesBySymbol);
     return {
@@ -617,10 +919,124 @@ function connectedRootGroups(
       matchedTerms,
       relations: renderedRelations,
       relationCount: relations.length,
+      orchestrationRootCount,
       omittedRelations: Math.max(0, relations.length - MAX_RENDERED_RELATIONS),
       systemMapCommand: systemMapCommand(keyAnchors, relations, matchedTerms),
     };
   });
+}
+
+/**
+ * Bundle disconnected implementations only when the query itself names
+ * distinct repository paths and those paths share indexed vocabulary. This
+ * gives comparison tasks one batched map without inventing a causal edge
+ * between the implementations.
+ */
+function parallelPathGroups(
+  groups: readonly AnchorDiscoveryGroup[],
+  frequencies: ReadonlyMap<string, number>,
+  orderedTerms: readonly string[],
+): AnchorDiscoveryGroup[] {
+  const termOrder = new Map(orderedTerms.map((term, index) => [term, index]));
+  const candidates: Array<{
+    group: AnchorDiscoveryGroup;
+    sharedOrder: number;
+    sharedFrequency: number;
+    connectedSides: number;
+    orchestrationSides: number;
+  }> = [];
+  for (let leftIndex = 0; leftIndex < groups.length; leftIndex += 1) {
+    const left = groups[leftIndex]!;
+    const leftPathTerms = groupPathTerms(left);
+    if (leftPathTerms.size === 0) continue;
+    for (let rightIndex = leftIndex + 1; rightIndex < groups.length; rightIndex += 1) {
+      const right = groups[rightIndex]!;
+      const rightPathTerms = groupPathTerms(right);
+      const shared = [...leftPathTerms].filter((term) => rightPathTerms.has(term));
+      if (shared.length === 0) continue;
+      if (![...leftPathTerms].some((term) => !rightPathTerms.has(term))) continue;
+      if (![...rightPathTerms].some((term) => !leftPathTerms.has(term))) continue;
+
+      const keyAnchors = balancedParallelAnchors(left.keyAnchors, right.keyAnchors);
+      if (keyAnchors.length < 2) continue;
+      const relations = deduplicateRelations([...left.relations, ...right.relations]).sort(compareRelations);
+      const renderedRelations = relations.slice(0, MAX_RENDERED_RELATIONS);
+      const roots = uniqueCandidates([...left.roots, ...right.roots]).sort(compareCandidates);
+      const matchedTerms = [...new Set([...left.matchedTerms, ...right.matchedTerms])].sort();
+      const sharedPathTerms = shared.sort(
+        (leftTerm, rightTerm) =>
+          (termOrder.get(leftTerm) ?? Number.MAX_SAFE_INTEGER) -
+            (termOrder.get(rightTerm) ?? Number.MAX_SAFE_INTEGER) || leftTerm.localeCompare(rightTerm),
+      );
+      const connectedSides = Number(left.relationCount > 0) + Number(right.relationCount > 0);
+      const orchestrationSides =
+        Number((left.orchestrationRootCount ?? 0) > 0) + Number((right.orchestrationRootCount ?? 0) > 0);
+      const sharedFrequency = Math.min(
+        ...sharedPathTerms.map((term) => frequencies.get(term) ?? Number.MAX_SAFE_INTEGER),
+      );
+      candidates.push({
+        sharedOrder: Math.min(...sharedPathTerms.map((term) => termOrder.get(term) ?? Number.MAX_SAFE_INTEGER)),
+        sharedFrequency,
+        connectedSides,
+        orchestrationSides,
+        group: {
+          id: `parallel-paths:${stableLocation(left.roots[0]!)}:${stableLocation(right.roots[0]!)}`,
+          kind: 'parallel-paths',
+          roots,
+          keyAnchors,
+          candidateOwnerCount: keyAnchors.length,
+          omittedCandidateOwners: [],
+          ownerRecoveryCommands: [],
+          upstreamEntries: [...left.upstreamEntries, ...right.upstreamEntries],
+          matchedTerms,
+          relations: renderedRelations,
+          relationCount: relations.length,
+          parallelConnectedSides: connectedSides,
+          parallelOrchestrationSides: orchestrationSides,
+          parallelSharedPathTerms: sharedPathTerms,
+          parallelSharedPathFrequency: sharedFrequency,
+          orchestrationRootCount: (left.orchestrationRootCount ?? 0) + (right.orchestrationRootCount ?? 0),
+          omittedRelations: Math.max(0, relations.length - renderedRelations.length),
+          systemMapCommand: systemMapCommand(keyAnchors, relations, matchedTerms),
+        },
+      });
+    }
+  }
+  return candidates
+    .sort(
+      (left, right) =>
+        left.sharedFrequency - right.sharedFrequency ||
+        right.orchestrationSides - left.orchestrationSides ||
+        right.connectedSides - left.connectedSides ||
+        left.sharedOrder - right.sharedOrder ||
+        right.group.matchedTerms.length - left.group.matchedTerms.length ||
+        compareGroups(left.group, right.group),
+    )
+    .slice(0, MAX_PARALLEL_PATH_GROUPS)
+    .map((candidate) => candidate.group);
+}
+
+function groupPathTerms(group: AnchorDiscoveryGroup): Set<string> {
+  return new Set(
+    group.roots.flatMap((root) =>
+      root.matches.filter((match) => match.sources.includes('path')).map((match) => match.term),
+    ),
+  );
+}
+
+function balancedParallelAnchors(
+  left: readonly AnchorDiscoveryCandidate[],
+  right: readonly AnchorDiscoveryCandidate[],
+): AnchorDiscoveryCandidate[] {
+  const selected: AnchorDiscoveryCandidate[] = [];
+  for (let index = 0; selected.length < MAX_KEY_ANCHORS && (index < left.length || index < right.length); index += 1) {
+    for (const candidate of [left[index], right[index]]) {
+      if (!candidate || selected.some((item) => item.symbol === candidate.symbol)) continue;
+      selected.push(candidate);
+      if (selected.length >= MAX_KEY_ANCHORS) break;
+    }
+  }
+  return selected;
 }
 
 interface BoundaryContinuation {
@@ -956,7 +1372,13 @@ function boundaryEntryDefinitions(
   const derived = (facts?.callSites ?? []).flatMap((site) => {
     if (site.line < construct.startLine || site.line > construct.endLine) return [];
     const candidates = sameLanguageCandidates(observation.source.file, leafIndex.get(site.calleeLeaf) ?? []);
-    const selected = pickAstCallCandidate(db, observation.source.file, candidates, site.memberAccess);
+    const selected = pickAstCallCandidate(
+      db,
+      observation.source.file,
+      candidates,
+      site.memberAccess,
+      site.calleeQualifier,
+    );
     const definition = selected ? definitionBySymbol.get(selected.symbol) : undefined;
     return definition?.isFunctionLike ? [{ definition, evidence: 'ast-callsite' as const, line: site.line }] : [];
   });
@@ -1132,12 +1554,18 @@ function effectOwnerGroups(
   definitionBySymbol: ReadonlyMap<string, IndexedDefinition>,
   semantic: boolean,
 ): AnchorDiscoveryGroup[] {
-  const directByRoot = neighborhoods.map((neighborhood) => ({
-    root: neighborhood.root,
-    relations: neighborhood.relations.filter(
-      (relation) => relation.depth === 1 && relation.fromSymbol === neighborhood.root.symbol,
-    ),
-  }));
+  const directByRoot = neighborhoods
+    // Reverse owner recovery requires compiler identity for the caller. A
+    // parser-delimited local construct has exact source ownership but no
+    // stable symbol that callerFileMap can reverse; its forward relations are
+    // already preserved in connected-flow groups.
+    .filter((neighborhood) => !neighborhood.root.symbol.startsWith(SOURCE_CONSTRUCT_SYMBOL_PREFIX))
+    .map((neighborhood) => ({
+      root: neighborhood.root,
+      relations: neighborhood.relations.filter(
+        (relation) => relation.depth === 1 && relation.fromSymbol === neighborhood.root.symbol,
+      ),
+    }));
   const components = denseRootComponents(directByRoot);
 
   return components.flatMap((component, sequence) => {
@@ -1391,7 +1819,7 @@ function selectRenderedRelations(
 function publicUnmatchedCandidate(definition: IndexedDefinition): AnchorDiscoveryCandidate {
   return {
     symbol: definition.symbol,
-    label: shortenSymbol(definition.symbol),
+    label: candidateLabel(definition),
     leaf: definition.leaf,
     file: definition.relativePath,
     line: definition.startLine,
@@ -1511,6 +1939,29 @@ function selectKeyAnchors(
     }
   }
 
+  while (selected.length >= 2 && selected.length < MAX_KEY_ANCHORS) {
+    const selectedSymbols = new Set(selected.map((candidate) => candidate.symbol));
+    const graphJunction = [...candidatesBySymbol.values()]
+      .filter(
+        (candidate) =>
+          !selectedSymbols.has(candidate.symbol) &&
+          (outgoingCounts.get(candidate.symbol) ?? 0) > 0 &&
+          relations.some(
+            (relation) => selectedSymbols.has(relation.fromSymbol) && relation.toSymbol === candidate.symbol,
+          ),
+      )
+      .sort(
+        (left, right) =>
+          right.identityMatchedTerms.length - left.identityMatchedTerms.length ||
+          right.symbolMatchedTerms.length - left.symbolMatchedTerms.length ||
+          right.matchedTerms.length - left.matchedTerms.length ||
+          (outgoingCounts.get(right.symbol) ?? 0) - (outgoingCounts.get(left.symbol) ?? 0) ||
+          compareCandidates(left, right),
+      )[0];
+    if (!graphJunction) break;
+    add(graphJunction);
+  }
+
   if (selected.length < 2) {
     const primary = selected[0];
     const upstreamRoot = primary
@@ -1625,8 +2076,109 @@ function compareSymbolCandidates(left: AnchorDiscoveryCandidate, right: AnchorDi
   );
 }
 
+function selectTermCoverageRoots(
+  candidates: readonly AnchorDiscoveryCandidate[],
+  terms: readonly string[],
+): AnchorDiscoveryCandidate[] {
+  return terms.flatMap((term) => {
+    const ranked = candidates
+      .filter((candidate) => candidate.matchedTerms.includes(term))
+      .sort((left, right) => compareTermCandidates(left, right, term));
+    const selected: AnchorDiscoveryCandidate[] = [];
+    const selectedFiles = new Set<string>();
+    for (const candidate of ranked) {
+      if (selectedFiles.has(candidate.file)) continue;
+      selected.push(candidate);
+      selectedFiles.add(candidate.file);
+      if (selected.length >= MAX_TERM_COVERAGE_ROOTS) return selected;
+    }
+    for (const candidate of ranked) {
+      if (selected.some((item) => item.symbol === candidate.symbol)) continue;
+      selected.push(candidate);
+      if (selected.length >= MAX_TERM_COVERAGE_ROOTS) break;
+    }
+    return selected;
+  });
+}
+
+/**
+ * A query term that names a source filename identifies a concrete repository
+ * region even when the callable names use different vocabulary. Reserve a
+ * bounded set of production callables from the best-matching files so graph
+ * expansion can discover their behavior instead of stopping at constants or
+ * documentation whose names happen to repeat more query words.
+ */
+function selectPathCallableRoots(
+  candidates: readonly AnchorDiscoveryCandidate[],
+  terms: readonly string[],
+  frequencies: ReadonlyMap<string, number>,
+): AnchorDiscoveryCandidate[] {
+  const termSet = new Set(terms);
+  const byFile = new Map<string, AnchorDiscoveryCandidate[]>();
+  for (const candidate of candidates) {
+    if (candidate.kind !== 'callable') continue;
+    const basename = candidate.file.slice(candidate.file.lastIndexOf('/') + 1).replace(/\.[^.]+$/u, '');
+    if (![...normalizedWordSet(basename)].some((term) => termSet.has(term))) continue;
+    const fileCandidates = byFile.get(candidate.file) ?? [];
+    fileCandidates.push(candidate);
+    byFile.set(candidate.file, fileCandidates);
+  }
+
+  return [...byFile.entries()]
+    .map(([file, fileCandidates]) => {
+      const basename = file.slice(file.lastIndexOf('/') + 1).replace(/\.[^.]+$/u, '');
+      const sharedTerms = [...normalizedWordSet(basename)].filter((term) => termSet.has(term));
+      return {
+        file,
+        fileCandidates,
+        sharedFrequency: Math.min(...sharedTerms.map((term) => frequencies.get(term) ?? Number.MAX_SAFE_INTEGER)),
+      };
+    })
+    .sort(
+      (left, right) =>
+        fileKindRank(left.fileCandidates[0]!.fileKind) - fileKindRank(right.fileCandidates[0]!.fileKind) ||
+        left.sharedFrequency - right.sharedFrequency ||
+        left.file.localeCompare(right.file),
+    )
+    .flatMap(({ fileCandidates }) => [...fileCandidates].sort(compareCandidates).slice(0, MAX_PATH_CALLABLES_PER_FILE))
+    .slice(0, MAX_PATH_CALLABLE_ROOTS);
+}
+
+function compareTermCandidates(left: AnchorDiscoveryCandidate, right: AnchorDiscoveryCandidate, term: string): number {
+  return (
+    candidateTermSourceRank(left, term) - candidateTermSourceRank(right, term) ||
+    fileKindRank(left.fileKind) - fileKindRank(right.fileKind) ||
+    right.symbolPhraseLength - left.symbolPhraseLength ||
+    candidateKindRank(left.kind) - candidateKindRank(right.kind) ||
+    compareCandidates(left, right)
+  );
+}
+
+function candidateTermSourceRank(candidate: AnchorDiscoveryCandidate, term: string): number {
+  const sources = candidate.matches.find((match) => match.term === term)?.sources ?? [];
+  return Math.min(...sources.map(matchSourceRank), Number.MAX_SAFE_INTEGER);
+}
+
 function uniqueCandidates(candidates: readonly AnchorDiscoveryCandidate[]): AnchorDiscoveryCandidate[] {
   return [...new Map(candidates.map((candidate) => [candidate.symbol, candidate])).values()];
+}
+
+function selectSystemMapSelectionTerms(terms: readonly string[], frequencies: ReadonlyMap<string, number>): string[] {
+  const order = new Map(terms.map((term, index) => [term, index]));
+  return terms
+    .filter((term) => frequencies.has(term))
+    .sort(
+      (left, right) =>
+        (frequencies.get(left) ?? Number.MAX_SAFE_INTEGER) - (frequencies.get(right) ?? Number.MAX_SAFE_INTEGER) ||
+        (order.get(left) ?? Number.MAX_SAFE_INTEGER) - (order.get(right) ?? Number.MAX_SAFE_INTEGER) ||
+        left.localeCompare(right),
+    )
+    .slice(0, MAX_SYSTEM_MAP_SELECTION_TERMS);
+}
+
+function appendSystemMapSelectionTerms(command: string, terms: readonly string[]): string {
+  if (terms.length === 0) return command;
+  return `${command} ${terms.map((term) => `--selection-term ${shellArgument(term)}`).join(' ')}`;
 }
 
 function compareGroups(left: AnchorDiscoveryGroup, right: AnchorDiscoveryGroup): number {
@@ -1634,15 +2186,33 @@ function compareGroups(left: AnchorDiscoveryGroup, right: AnchorDiscoveryGroup):
   const rightSymbolTerms = new Set(right.roots.flatMap((root) => root.symbolMatchedTerms));
   return (
     groupKindRank(left.kind) - groupKindRank(right.kind) ||
+    groupFileKindRank(left) - groupFileKindRank(right) ||
+    groupConnectivityRank(left) - groupConnectivityRank(right) ||
+    (left.kind === 'parallel-paths' && right.kind === 'parallel-paths'
+      ? (left.parallelSharedPathFrequency ?? Number.MAX_SAFE_INTEGER) -
+          (right.parallelSharedPathFrequency ?? Number.MAX_SAFE_INTEGER) ||
+        (right.parallelOrchestrationSides ?? 0) - (left.parallelOrchestrationSides ?? 0) ||
+        (right.parallelSharedPathTerms?.length ?? 0) - (left.parallelSharedPathTerms?.length ?? 0)
+      : 0) ||
+    right.matchedTerms.length - left.matchedTerms.length ||
     Math.max(...right.roots.map((root) => root.symbolPhraseLength)) -
       Math.max(...left.roots.map((root) => root.symbolPhraseLength)) ||
     rightSymbolTerms.size - leftSymbolTerms.size ||
-    right.matchedTerms.length - left.matchedTerms.length ||
     compareCandidates(left.roots[0]!, right.roots[0]!) ||
     right.roots.length - left.roots.length ||
     left.relationCount - right.relationCount ||
     left.id.localeCompare(right.id)
   );
+}
+
+function groupFileKindRank(group: AnchorDiscoveryGroup): number {
+  return Math.min(...group.roots.map((root) => fileKindRank(root.fileKind)));
+}
+
+function groupConnectivityRank(group: AnchorDiscoveryGroup): number {
+  if (group.kind === 'parallel-paths') return 2 - (group.parallelConnectedSides ?? 0);
+  if (group.kind !== 'connected-flow') return 0;
+  return group.relationCount > 0 ? 0 : 1;
 }
 
 /**
@@ -1661,7 +2231,7 @@ function selectDisplayedGroups(rankedGroups: readonly AnchorDiscoveryGroup[], li
 
   const sharedGroups = rankedGroups.filter((group) => group.kind === 'shared-callee-owners');
   for (const flow of selected) {
-    if (flow.kind === 'shared-callee-owners') continue;
+    if (flow.kind === 'shared-callee-owners' || flow.kind === 'parallel-paths') continue;
     const flowSymbols = new Set(groupEvidenceSymbols(flow));
     const companion = sharedGroups
       .map((group) => ({ group, overlap: groupEvidenceOverlap(group, flowSymbols) }))
@@ -1689,6 +2259,7 @@ function groupKindRank(kind: AnchorDiscoveryGroup['kind']): number {
   switch (kind) {
     case 'cross-boundary-flow':
       return 0;
+    case 'parallel-paths':
     case 'connected-flow':
       return 1;
     case 'shared-callee-owners':
@@ -1851,7 +2422,16 @@ function systemMapCommand(
         )
       : [],
   );
-  return `scip-query system-map ${[...symbolParts, ...focusParts].join(' ')}`;
+  // Anchor discovery groups are built from call and runtime-boundary evidence.
+  // Keep the first abstraction on those causal relations instead of admitting
+  // generic imports and references that can dwarf the paths which justified
+  // the anchors. Other relation families remain explicitly recoverable.
+  return `scip-query system-map ${[
+    ...symbolParts,
+    ...focusParts,
+    '--relation call',
+    '--relation runtime-boundary',
+  ].join(' ')}`;
 }
 
 function mapFocusLocations(

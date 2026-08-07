@@ -67,6 +67,8 @@ describe('anchor discovery', () => {
       expect(flow?.systemMapCommand).toContain("--symbol 'src/store.ts:9-12'");
       expect(flow?.systemMapCommand).not.toContain("--symbol 'src/mutex.ts:1-3'");
       expect(flow?.systemMapCommand).not.toContain('scip-typescript npm');
+      expect(flow?.systemMapCommand).toContain("--selection-term 'interrupt'");
+      expect(flow?.systemMapCommand).not.toContain("--selection-term 'durable'");
 
       const sharedCalleeSurface = result.groups.find((group) => group.kind === 'shared-callee-owners');
       expect(sharedCalleeSurface).toBeDefined();
@@ -94,6 +96,227 @@ describe('anchor discovery', () => {
       expect(full.omittedRootCount).toBe(0);
       expect(full.omittedGroupCount).toBe(0);
       expect(full.recoveryCommand).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  it('promotes connected wrapped source callables over isolated matching constants', () => {
+    fixtureRoot = mkdtempSync(join(tmpdir(), 'scip-anchor-wrapped-callable-'));
+    writeFixtureFiles(fixtureRoot, {
+      'src/compaction.ts': [
+        'const TOOL_OUTPUT_MAX_CHARS = 2_000;',
+        "const select = Effect.fn('Compaction.select')(function* () {",
+        "  return 'retained history';",
+        '});',
+        "const processCompaction = Effect.fn('Compaction.process')(function* () {",
+        '  const summary = yield* select();',
+        '  return summary;',
+        '});',
+      ],
+      'src/mock-open-code.ts': ['export function mockOpenCodeServer() {', "  return 'session path';", '}'],
+    });
+    const constant = 'scip-typescript npm fixture 1.0.0 src/`compaction.ts`/TOOL_OUTPUT_MAX_CHARS.';
+    const distractor = 'scip-typescript npm fixture 1.0.0 src/`mock-open-code.ts`/mockOpenCodeServer().';
+    evidenceFixtureDb(join(fixtureRoot, 'index.db'))
+      .document(1, 'typescript', 'src/compaction.ts')
+      .symbol(1, constant, 'TOOL_OUTPUT_MAX_CHARS', 13)
+      .definition(1, 1, 1, 0, 0, 0, 32)
+      .document(2, 'typescript', 'src/mock-open-code.ts')
+      .symbol(2, distractor, 'mockOpenCodeServer', 12)
+      .definition(2, 2, 2, 0, 0, 2, 1)
+      .write();
+    const db = new ScipDatabase({
+      dbPath: join(fixtureRoot, 'index.db'),
+      indexPath: join(fixtureRoot, 'index.scip'),
+      projectRoot: fixtureRoot,
+    });
+    try {
+      const result = discoverAnchors(
+        db,
+        'Open Code has compaction packages. How does it retain history and produce summary tool output?',
+        {
+          limit: 2,
+          semantic: false,
+        },
+      );
+
+      expect(result.groups[0]?.relationCount).toBeGreaterThan(0);
+      expect(result.groups[0]?.roots.map((root) => root.leaf)).toEqual(
+        expect.arrayContaining(['processCompaction', 'select']),
+      );
+      expect(result.groups[0]?.systemMapCommand).toContain("--symbol 'src/compaction.ts:2-4'");
+      expect(result.groups[0]?.systemMapCommand).toContain("--symbol 'src/compaction.ts:5-8'");
+    } finally {
+      db.close();
+    }
+  });
+
+  it('connects a wrapped caller to an imported service object implementation', () => {
+    fixtureRoot = mkdtempSync(join(tmpdir(), 'scip-anchor-service-member-'));
+    writeFixtureFiles(fixtureRoot, {
+      'package.json': JSON.stringify({ private: true, type: 'module' }),
+      'tsconfig.json': JSON.stringify({ compilerOptions: { module: 'NodeNext', moduleResolution: 'NodeNext' } }),
+      'src/runner.ts': [
+        "import { SessionCompaction } from './compaction.js';",
+        'const SESSION_LOOP_MARKER = true;',
+        "const runLoop = Effect.fn('SessionPrompt.runLoop')(function* () {",
+        '  const compaction = yield* SessionCompaction.Service;',
+        '  return yield* compaction.process();',
+        '});',
+      ],
+      'src/compaction.ts': [
+        'const COMPACTION_MARKER = true;',
+        "const processCompaction = Effect.fn('SessionCompaction.process')(function* () {",
+        "  return 'retained history summary';",
+        '});',
+        'export const layer = Service.of({ process: processCompaction });',
+      ],
+    });
+    const runnerMarker = 'scip-typescript npm fixture 1.0.0 src/`runner.ts`/SESSION_LOOP_MARKER.';
+    const compactionMarker = 'scip-typescript npm fixture 1.0.0 src/`compaction.ts`/COMPACTION_MARKER.';
+    evidenceFixtureDb(join(fixtureRoot, 'index.db'))
+      .document(1, 'typescript', 'src/runner.ts')
+      .document(2, 'typescript', 'src/compaction.ts')
+      .symbol(1, runnerMarker, 'SESSION_LOOP_MARKER', 13)
+      .symbol(2, compactionMarker, 'COMPACTION_MARKER', 13)
+      .definition(1, 1, 1, 1, 0, 1, 20)
+      .definition(2, 2, 2, 0, 0, 0, 24)
+      .write();
+    const db = new ScipDatabase({
+      dbPath: join(fixtureRoot, 'index.db'),
+      indexPath: join(fixtureRoot, 'index.scip'),
+      projectRoot: fixtureRoot,
+    });
+    try {
+      const result = discoverAnchors(db, 'How does the session run loop process compaction and retained history?', {
+        semantic: false,
+      });
+      const flow = result.groups.find((group) =>
+        group.relations.some(
+          (relation) => relation.fromLabel === 'runLoop' && relation.toLabel === 'processCompaction',
+        ),
+      );
+      expect(flow).toBeDefined();
+      expect(flow?.systemMapCommand).toContain("--symbol 'src/runner.ts:3-6'");
+      expect(flow?.systemMapCommand).toContain("--symbol 'src/compaction.ts:2-4'");
+    } finally {
+      db.close();
+    }
+  });
+
+  it('batches explicitly named parallel repository paths without claiming they are connected', () => {
+    fixtureRoot = mkdtempSync(join(tmpdir(), 'scip-anchor-parallel-paths-'));
+    writeFixtureFiles(fixtureRoot, {
+      'packages/alpha/src/compaction.ts': ['export function compactAlpha() {', "  return 'alpha';", '}'],
+      'packages/beta/src/compaction.ts': ['export function compactBeta() {', "  return 'beta';", '}'],
+    });
+    const alpha = 'scip-typescript npm fixture 1.0.0 packages/alpha/src/`compaction.ts`/compactAlpha().';
+    const beta = 'scip-typescript npm fixture 1.0.0 packages/beta/src/`compaction.ts`/compactBeta().';
+    evidenceFixtureDb(join(fixtureRoot, 'index.db'))
+      .document(1, 'typescript', 'packages/alpha/src/compaction.ts')
+      .document(2, 'typescript', 'packages/beta/src/compaction.ts')
+      .symbol(1, alpha, 'compactAlpha', 12)
+      .symbol(2, beta, 'compactBeta', 12)
+      .definition(1, 1, 1, 0, 0, 2, 1)
+      .definition(2, 2, 2, 0, 0, 2, 1)
+      .write();
+    const db = new ScipDatabase({
+      dbPath: join(fixtureRoot, 'index.db'),
+      indexPath: join(fixtureRoot, 'index.scip'),
+      projectRoot: fixtureRoot,
+    });
+    try {
+      const result = discoverAnchors(db, 'How do packages alpha and beta compaction paths differ?', {
+        semantic: false,
+      });
+      const parallel = result.groups.find((group) => group.kind === 'parallel-paths');
+      expect(parallel).toBeDefined();
+      expect(parallel?.relations).toEqual([]);
+      expect(parallel?.systemMapCommand).toContain("--symbol 'packages/alpha/src/compaction.ts:1-3'");
+      expect(parallel?.systemMapCommand).toContain("--symbol 'packages/beta/src/compaction.ts:1-3'");
+    } finally {
+      db.close();
+    }
+  });
+
+  it('prefers causally evidenced implementations on both sides of a parallel-path comparison', () => {
+    fixtureRoot = mkdtempSync(join(tmpdir(), 'scip-anchor-parallel-connected-'));
+    writeFixtureFiles(fixtureRoot, {
+      'packages/alpha/src/compaction.ts': [
+        'function buildPrompt() {',
+        "  return 'prompt';",
+        '}',
+        '',
+        'function selectAlpha() {',
+        '  return [];',
+        '}',
+        '',
+        'export function compactIfNeeded() {',
+        '  return selectAlpha();',
+        '}',
+      ],
+      'packages/beta/src/compaction.ts': [
+        'function selectBeta() {',
+        '  return [];',
+        '}',
+        '',
+        'export function processCompaction() {',
+        '  return selectBeta();',
+        '}',
+      ],
+    });
+    evidenceFixtureDb(join(fixtureRoot, 'index.db'))
+      .document(1, 'typescript', 'packages/alpha/src/compaction.ts')
+      .document(2, 'typescript', 'packages/beta/src/compaction.ts')
+      .symbol(
+        1,
+        'scip-typescript npm fixture 1.0.0 packages/alpha/src/`compaction.ts`/buildPrompt().',
+        'buildPrompt',
+        12,
+      )
+      .symbol(
+        2,
+        'scip-typescript npm fixture 1.0.0 packages/alpha/src/`compaction.ts`/selectAlpha().',
+        'selectAlpha',
+        12,
+      )
+      .symbol(
+        3,
+        'scip-typescript npm fixture 1.0.0 packages/alpha/src/`compaction.ts`/compactIfNeeded().',
+        'compactIfNeeded',
+        12,
+      )
+      .symbol(4, 'scip-typescript npm fixture 1.0.0 packages/beta/src/`compaction.ts`/selectBeta().', 'selectBeta', 12)
+      .symbol(
+        5,
+        'scip-typescript npm fixture 1.0.0 packages/beta/src/`compaction.ts`/processCompaction().',
+        'processCompaction',
+        12,
+      )
+      .definition(1, 1, 1, 0, 0, 2, 1)
+      .definition(2, 1, 2, 4, 0, 6, 1)
+      .definition(3, 1, 3, 8, 0, 10, 1)
+      .definition(4, 2, 4, 0, 0, 2, 1)
+      .definition(5, 2, 5, 4, 0, 6, 1)
+      .write();
+    const db = new ScipDatabase({
+      dbPath: join(fixtureRoot, 'index.db'),
+      indexPath: join(fixtureRoot, 'index.scip'),
+      projectRoot: fixtureRoot,
+    });
+    try {
+      const result = discoverAnchors(db, 'How do packages alpha and beta compaction implementations differ?', {
+        semantic: false,
+      });
+      const parallel = result.groups.find((group) => group.kind === 'parallel-paths');
+      expect(parallel?.parallelConnectedSides).toBe(2);
+      expect(parallel?.parallelOrchestrationSides).toBe(2);
+      expect(parallel?.parallelSharedPathTerms).toContain('compaction');
+      expect(parallel?.keyAnchors.map((anchor) => anchor.leaf)).toEqual(
+        expect.arrayContaining(['compactIfNeeded', 'processCompaction']),
+      );
+      expect(parallel?.keyAnchors.map((anchor) => anchor.leaf)).not.toContain('buildPrompt');
     } finally {
       db.close();
     }

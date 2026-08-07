@@ -23,15 +23,18 @@ import type {
 
 // Increment whenever direct facts or any derived propagation rule changes so an
 // older persisted graph can never be incrementally mixed with newer semantics.
-export const RUNTIME_BOUNDARY_EXTRACTOR_VERSION = 'runtime-boundaries-v9';
+export const RUNTIME_BOUNDARY_EXTRACTOR_VERSION = 'runtime-boundaries-v11';
 
 interface GroupRule {
   id: string;
   protocol: string;
   producerActions: readonly string[];
   consumerActions: readonly string[];
+  declarationActions?: readonly string[];
   keyNames: readonly string[];
   traversable: boolean;
+  linkFrom?: 'producer' | 'declaration';
+  requireUniquePair?: boolean;
 }
 
 const GROUP_RULES: readonly GroupRule[] = [
@@ -74,6 +77,17 @@ const GROUP_RULES: readonly GroupRule[] = [
     consumerActions: ['database.read'],
     keyNames: ['resource'],
     traversable: false,
+  },
+  {
+    id: 'framework.effect-httpapi-operation',
+    protocol: 'framework',
+    producerActions: [],
+    consumerActions: ['framework.handle'],
+    declarationActions: ['framework.declare'],
+    keyNames: ['adapter', 'group', 'operation'],
+    traversable: true,
+    linkFrom: 'declaration',
+    requireUniquePair: true,
   },
 ];
 
@@ -279,7 +293,7 @@ function normalizeBoundaryFile(file: string): string {
 export function buildRelationGroups(observations: readonly BoundaryObservation[]): BoundaryRelationGroup[] {
   const groups = new Map<string, BoundaryRelationGroup>();
   for (const rule of GROUP_RULES) {
-    const actions = new Set([...rule.producerActions, ...rule.consumerActions]);
+    const actions = new Set([...rule.producerActions, ...rule.consumerActions, ...(rule.declarationActions ?? [])]);
     for (const observation of observations) {
       if (!actions.has(observation.action) || observation.strength === 'candidate') continue;
       const keyParts = resolvedKeys(observation, rule.keyNames);
@@ -309,6 +323,7 @@ export function buildRelationGroups(observations: readonly BoundaryObservation[]
       };
       if (rule.producerActions.includes(observation.action)) group.producerIds.push(observation.id);
       if (rule.consumerActions.includes(observation.action)) group.consumerIds.push(observation.id);
+      if (rule.declarationActions?.includes(observation.action)) group.declarationIds.push(observation.id);
       group.derivation.inputFactIds.push(observation.id);
       group.derivation.sourceSpans.push(observation.source);
       groups.set(id, group);
@@ -341,12 +356,14 @@ export function materializeBoundedLinks(
 ): BoundaryLink[] {
   const byId = new Map(observations.map((observation) => [observation.id, observation]));
   const links = new Map<string, BoundaryLink>();
-  const traversableRules = new Set(GROUP_RULES.filter((rule) => rule.traversable).map((rule) => rule.id));
   for (const group of groups) {
-    if (!traversableRules.has(group.joinRule) || group.producerIds.length === 0 || group.consumerIds.length === 0)
-      continue;
-    if (group.producerIds.length * group.consumerIds.length > MAX_MATERIALIZED_PAIRS_PER_GROUP) continue;
-    for (const from of group.producerIds) {
+    const rule = GROUP_RULES.find((candidate) => candidate.id === group.joinRule);
+    if (!rule?.traversable) continue;
+    const fromIds = rule.linkFrom === 'declaration' ? group.declarationIds : group.producerIds;
+    if (fromIds.length === 0 || group.consumerIds.length === 0) continue;
+    if (rule.requireUniquePair && (fromIds.length !== 1 || group.consumerIds.length !== 1)) continue;
+    if (fromIds.length * group.consumerIds.length > MAX_MATERIALIZED_PAIRS_PER_GROUP) continue;
+    for (const from of fromIds) {
       for (const to of group.consumerIds) {
         const left = byId.get(from);
         const right = byId.get(to);
@@ -380,13 +397,14 @@ function applyResolutionState(
   observations: readonly BoundaryObservation[],
   groups: readonly BoundaryRelationGroup[],
 ): void {
-  const linked = new Set(
-    groups
-      .filter((group) => group.producerIds.length > 0 && group.consumerIds.length > 0)
-      .flatMap((group) => [...group.producerIds, ...group.consumerIds]),
-  );
+  const linked = new Set(groups.filter(groupHasProvenCounterpart).flatMap(groupParticipants));
+  const ambiguous = new Set(groups.filter(groupHasAmbiguousCounterpart).flatMap(groupParticipants));
   for (const observation of observations) {
-    observation.resolution = linked.has(observation.id) ? 'locally-linked' : 'unresolved';
+    observation.resolution = linked.has(observation.id)
+      ? 'locally-linked'
+      : ambiguous.has(observation.id)
+        ? 'ambiguous'
+        : 'unresolved';
   }
 }
 
@@ -402,12 +420,8 @@ function unresolvedFrontiers(
           `${observation.action}\0${observation.source.file}\0${observation.source.startLine}\0${observation.source.endLine}`,
       ),
   );
-  const grouped = new Set(groups.flatMap((group) => [...group.producerIds, ...group.consumerIds]));
-  const paired = new Set(
-    groups
-      .filter((group) => group.producerIds.length > 0 && group.consumerIds.length > 0)
-      .flatMap((group) => [...group.producerIds, ...group.consumerIds]),
-  );
+  const grouped = new Set(groups.flatMap(groupParticipants));
+  const paired = new Set(groups.filter(groupHasProvenCounterpart).flatMap(groupParticipants));
   return observations
     .filter((observation) => observation.sourceScope === 'production')
     .filter(
@@ -425,9 +439,11 @@ function unresolvedFrontiers(
       const reason =
         missingKeyParts.length > 0
           ? `${observation.extractor} observed ${observation.action}, but ${missingKeyParts.join(', ')} remained symbolic or unknown.`
-          : grouped.has(observation.id)
-            ? `${observation.extractor} established the address for ${observation.action}, but the indexed production scope contains no counterpart role in that relation group.`
-            : `${observation.extractor} observed ${observation.action}, but no supported factorization rule could establish its addressed relation.`;
+          : observation.resolution === 'ambiguous'
+            ? `${observation.extractor} established the address for ${observation.action}, but more than one indexed peer has the same runtime key.`
+            : grouped.has(observation.id)
+              ? `${observation.extractor} established the address for ${observation.action}, but the indexed production scope contains no counterpart role in that relation group.`
+              : `${observation.extractor} observed ${observation.action}, but no supported factorization rule could establish its addressed relation.`;
       return {
         observationId: observation.id,
         reason,
@@ -436,6 +452,25 @@ function unresolvedFrontiers(
       };
     })
     .sort((left, right) => left.observationId.localeCompare(right.observationId));
+}
+
+function groupParticipants(group: BoundaryRelationGroup): string[] {
+  return [...group.producerIds, ...group.consumerIds, ...group.declarationIds];
+}
+
+function groupHasProvenCounterpart(group: BoundaryRelationGroup): boolean {
+  const rule = GROUP_RULES.find((candidate) => candidate.id === group.joinRule);
+  if (!rule) return false;
+  const fromIds = rule.linkFrom === 'declaration' ? group.declarationIds : group.producerIds;
+  if (fromIds.length === 0 || group.consumerIds.length === 0) return false;
+  return !rule.requireUniquePair || (fromIds.length === 1 && group.consumerIds.length === 1);
+}
+
+function groupHasAmbiguousCounterpart(group: BoundaryRelationGroup): boolean {
+  const rule = GROUP_RULES.find((candidate) => candidate.id === group.joinRule);
+  if (!rule?.requireUniquePair) return false;
+  const fromIds = rule.linkFrom === 'declaration' ? group.declarationIds : group.producerIds;
+  return fromIds.length > 0 && group.consumerIds.length > 0 && (fromIds.length !== 1 || group.consumerIds.length !== 1);
 }
 
 function deduplicateFrontiers(frontiers: readonly BoundaryFrontier[]): BoundaryFrontier[] {

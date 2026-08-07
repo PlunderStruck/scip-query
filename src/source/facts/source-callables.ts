@@ -4,10 +4,13 @@ import { isCommentNode } from './source-node-kinds.js';
 
 const JAVASCRIPT_NAMED_CALLABLE_TYPES = new Set([
   'function_declaration',
+  'generator_function_declaration',
   'method_definition',
   'method_signature',
   'function_signature',
 ]);
+
+const JAVASCRIPT_FUNCTION_VALUE_TYPES = new Set(['arrow_function', 'function_expression', 'generator_function']);
 
 export interface CallableParamFact {
   name: string;
@@ -103,19 +106,43 @@ function namedCallableNode(
     const name = node.childForFieldName('name') ?? node.namedChild(0);
     const value = node.childForFieldName('value') ?? node.namedChild(1);
     if (!name || !value) return null;
-    if (value.type !== 'arrow_function' && value.type !== 'function_expression') return null;
-    return { name: name.text, definitionNode: node, functionNode: value };
+    const functionValue = javascriptFunctionValue(value);
+    if (!functionValue) return null;
+    return { name: name.text, definitionNode: node, functionNode: functionValue };
   }
 
   if (node.type === 'public_field_definition') {
     const name = node.childForFieldName('name') ?? node.namedChild(0);
     const value = node.childForFieldName('value') ?? node.namedChild(1);
     if (!name || !value) return null;
-    if (value.type !== 'arrow_function' && value.type !== 'function_expression') return null;
-    return { name: name.text, definitionNode: node, functionNode: value };
+    const functionValue = javascriptFunctionValue(value);
+    if (!functionValue) return null;
+    return { name: name.text, definitionNode: node, functionNode: functionValue };
   }
 
   return null;
+}
+
+/**
+ * Recognize a function value directly assigned to a binding, plus the common
+ * curried-wrapper form `const work = wrapper(metadata)(function* () { ... })`.
+ *
+ * The curried-call restriction is deliberate. A callback passed to an
+ * ordinary operation usually does not make the receiving binding callable;
+ * a second invocation layer is concrete syntax evidence that the first call
+ * is configuring a function-producing wrapper. The result remains a
+ * source-derived callable rather than a compiler-identity claim.
+ */
+function javascriptFunctionValue(value: SyntaxNode): SyntaxNode | null {
+  if (JAVASCRIPT_FUNCTION_VALUE_TYPES.has(value.type)) return value;
+  if (value.type !== 'call_expression') return null;
+  const callee = value.childForFieldName('function') ?? value.namedChild(0);
+  if (callee?.type !== 'call_expression') return null;
+  const args = value.childForFieldName('arguments') ?? value.namedChildren.find((child) => child.type === 'arguments');
+  const functionArguments = (args?.namedChildren ?? []).filter((child) =>
+    JAVASCRIPT_FUNCTION_VALUE_TYPES.has(child.type),
+  );
+  return functionArguments.length === 1 ? functionArguments[0]! : null;
 }
 
 function parameterCount(fnNode: SyntaxNode): number {

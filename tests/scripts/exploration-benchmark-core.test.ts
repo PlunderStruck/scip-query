@@ -91,6 +91,22 @@ describe('exploration benchmark core', () => {
     expect(evaluateExplorationTrial(DEFINITION, oversized).gates.renderedCharacters).toBe(false);
   });
 
+  it('does not charge a map-order precondition refusal as executed semantic analysis', () => {
+    const refused = structuredClone(COMPLETE_TRIAL);
+    refused.calls.push({
+      surface: 'scip-query',
+      kind: 'query',
+      command: 'scip-query inspect --at src/file.ts:1',
+      output: 'error: NAVIGATION MAP REQUIRED',
+      preconditionRefusal: true,
+    });
+
+    expect(evaluateExplorationTrial(DEFINITION, refused).metrics).toMatchObject({
+      toolCalls: 3,
+      semanticQueries: 2,
+    });
+  });
+
   it('rejects malformed definitions before scoring them', () => {
     expect(() => validateExplorationBenchmarkDefinition({ ...DEFINITION, requiredFacts: [] })).toThrow(
       'requiredFacts must not be empty',

@@ -680,6 +680,16 @@ function reuseExistingIndexIfPossible(opts: {
     opts.onStatus,
     true,
   );
+  // Reuse normally leaves the immutable SQLite generation untouched. A
+  // post-index augmentation may still replace derived tables in the stable
+  // database (for example, after an extractor schema upgrade). Publish that
+  // completed database as a new immutable generation before returning, or
+  // every later command will correctly classify the stable mirror as drifted
+  // and pay for another reindex.
+  if (inspectSqliteGeneration(opts.paths.outputDb, opts.paths.metaPath).state === 'drifted') {
+    refreshSqliteGenerationMetadata(opts.paths.outputDb, opts.paths.metaPath);
+    opts.onStatus('Published refreshed SQLite generation after post-index augmentation');
+  }
   const durationMs = monotonicNowMs() - opts.monotonicStart;
   const lastRefresh = buildLastRefresh({
     trigger: opts.opts.trigger,

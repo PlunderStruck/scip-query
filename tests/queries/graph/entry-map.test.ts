@@ -134,6 +134,22 @@ describe('entry-rooted call maps', () => {
       packageFixture.close();
     }
   });
+
+  it('follows a named namespace re-export to the callable exports beneath that namespace', () => {
+    const packageFixture = openNamespacePackageSurfaceFixture();
+    try {
+      const result = entryPoints(packageFixture.db).find(
+        (candidate) => candidate.symbol === advancedFixture.symbols.handle,
+      );
+
+      expect(result).toMatchObject({
+        confidence: 'root',
+        evidence: ['package-public-export'],
+      });
+    } finally {
+      packageFixture.close();
+    }
+  });
 });
 
 function openPackageSurfaceFixture(source: string): { db: ScipDatabase; close: () => void } {
@@ -143,6 +159,31 @@ function openPackageSurfaceFixture(source: string): { db: ScipDatabase; close: (
   mkdirSync(join(projectRoot, 'app'), { recursive: true });
   writeFileSync(join(projectRoot, 'package.json'), JSON.stringify({ exports: './app/controller.ts' }));
   writeFileSync(join(projectRoot, advancedFixture.files.controller), source);
+  const packageDb = new ScipDatabase({
+    dbPath,
+    indexPath: join(projectRoot, 'index.scip'),
+    projectRoot,
+  });
+  return {
+    db: packageDb,
+    close: () => {
+      packageDb.close();
+      rmSync(projectRoot, { recursive: true, force: true });
+    },
+  };
+}
+
+function openNamespacePackageSurfaceFixture(): { db: ScipDatabase; close: () => void } {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-entry-namespace-package-'));
+  const dbPath = join(projectRoot, 'index.db');
+  createAdvancedFixtureDb(dbPath);
+  mkdirSync(join(projectRoot, 'app'), { recursive: true });
+  writeFileSync(join(projectRoot, 'package.json'), JSON.stringify({ exports: './app/entry.ts' }));
+  writeFileSync(join(projectRoot, advancedFixture.files.entry), "export { OpenCode } from './controller.js';\n");
+  writeFileSync(
+    join(projectRoot, advancedFixture.files.controller),
+    "export * as OpenCode from './controller.js';\nexport function handle() { return 1; }\n",
+  );
   const packageDb = new ScipDatabase({
     dbPath,
     indexPath: join(projectRoot, 'index.scip'),

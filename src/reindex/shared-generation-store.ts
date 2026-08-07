@@ -73,9 +73,14 @@ import { TYPESCRIPT_OVERLAY_STORE_DIRECTORY, TYPESCRIPT_OVERLAY_STORE_VERSION } 
 
 export const SHARED_GENERATION_FORMAT_VERSION = 1;
 export const SHARED_GENERATION_ENV = 'SCIP_QUERY_SHARED_CACHE';
+// Bump when persisted post-index evidence changes independently of the npm
+// package version. A clean source tree must never attach a shared database
+// whose derived-fact schema belongs to an older development build.
+export const POST_INDEX_AUGMENTATION_SCHEMA_VERSION = 2;
 export const SHARED_GENERATION_PRODUCER_IDENTITY = JSON.stringify({
   cliVersion,
   artifactCatalogVersion: INDEX_ARTIFACT_CATALOG_VERSION,
+  postIndexAugmentationSchemaVersion: POST_INDEX_AUGMENTATION_SCHEMA_VERSION,
   sqliteGenerationStoreVersion: SQLITE_GENERATION_STORE_VERSION,
   typescriptFragmentStoreVersion: TYPESCRIPT_FRAGMENT_STORE_VERSION,
   typescriptOverlayStoreVersion: TYPESCRIPT_OVERLAY_STORE_VERSION,

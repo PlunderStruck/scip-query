@@ -5,6 +5,7 @@ import { getAst } from '../../source/ast/ast-core.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
 import { getSourceText } from '../../source/primitives/source-text.js';
+import { resolveCallableExpression } from './object-members.js';
 import { runtimeBoundarySourceScope } from './source-scope.js';
 import { evaluateStaticValue as evaluateBoundaryValue } from '../../symbols/graph/static-value-flow.js';
 import type { BoundaryEvidenceStrength, BoundaryKeyPart, BoundaryObservation, BoundaryOwner } from './types.js';
@@ -32,6 +33,7 @@ const SQL_EXECUTE_METHODS = new Set(['execute', 'query', 'raw']);
 
 export const BOUNDARY_EXTRACTORS: readonly BoundaryExtractor[] = [
   httpExtractor(),
+  effectHttpApiExtractor(),
   registryExtractor(),
   persistenceExtractor(),
   queueExtractor(),
@@ -79,6 +81,188 @@ export function boundaryFileContext(db: ScipDatabase, file: string): BoundaryFil
         endLine: callable?.endLine ?? line,
       };
     },
+  };
+}
+
+/**
+ * Effect HttpApi separates an HTTP endpoint declaration from the callable
+ * registered to implement it. The runtime joins those sites by group and
+ * operation name, so neither a call graph nor a path-only HTTP extractor can
+ * recover the handoff on its own.
+ */
+function effectHttpApiExtractor(): BoundaryExtractor {
+  return {
+    id: 'builtin.effect-httpapi',
+    supports: (source) =>
+      effectHttpApiImportedBindings(source, 'HttpApiEndpoint').size > 0 ||
+      effectHttpApiImportedBindings(source, 'HttpApiBuilder').size > 0,
+    extract: (context) => {
+      const observations: BoundaryObservation[] = [];
+      const endpointBindings = effectHttpApiImportedBindings(context.source, 'HttpApiEndpoint');
+      const groupBindings = effectHttpApiImportedBindings(context.source, 'HttpApiGroup');
+      const builderBindings = effectHttpApiImportedBindings(context.source, 'HttpApiBuilder');
+
+      walk(context.root, (node) => {
+        if (node.type !== 'call_expression') return;
+        const callee = callMember(node);
+        if (!callee) return;
+        const args = callArguments(node);
+
+        if (endpointBindings.has(callee.receiver) && HTTP_METHODS.has(callee.member)) {
+          const operation = addressedArgument(args[0], context);
+          const path = addressedArgument(args[1], context);
+          const group = enclosingFrameworkCallArgument(node, groupBindings, 'make', 0, context);
+          if (!operation || !path || !group) return;
+          const method = callee.member.toUpperCase();
+          observations.push(
+            observation(
+              context,
+              node,
+              'builtin.effect-httpapi',
+              'http.handle',
+              [
+                { name: 'method', value: method, evidence: 'literal' },
+                { name: 'path', ...path },
+              ],
+              resolvedStrength([{ name: 'path', ...path }]),
+              'effect-httpapi-endpoint-declaration',
+            ),
+          );
+          observations.push(
+            observation(
+              context,
+              node,
+              'builtin.effect-httpapi',
+              'framework.declare',
+              effectHttpApiOperationKey(group, operation),
+              resolvedStrength(effectHttpApiOperationKey(group, operation)),
+              'effect-httpapi-operation-declaration',
+            ),
+          );
+          return;
+        }
+
+        if (!['handle', 'handleRaw'].includes(callee.member)) return;
+        const group = enclosingFrameworkCallArgument(node, builderBindings, 'group', 1, context);
+        const operation = addressedArgument(args[0], context);
+        const handler = args[1];
+        if (!group || !operation || !handler) return;
+        const keyParts = effectHttpApiOperationKey(group, operation);
+        const targets = resolveCallableExpression(context.db, context.file, handler.text);
+        const registration = observation(
+          context,
+          node,
+          'builtin.effect-httpapi',
+          'framework.handle',
+          keyParts,
+          targets.length === 1 ? resolvedStrength(keyParts) : 'candidate',
+          'effect-httpapi-handler-registration',
+        );
+        const target = targets[0];
+        if (targets.length === 1 && target) {
+          registration.owner = {
+            file: target.relativePath,
+            symbol: target.symbol,
+            name: target.leaf,
+            startLine: target.startLine,
+            endLine: target.endLine,
+          };
+        }
+        observations.push(registration);
+      });
+      return observations;
+    },
+  };
+}
+
+function effectHttpApiOperationKey(
+  group: Omit<BoundaryKeyPart, 'name'>,
+  operation: Omit<BoundaryKeyPart, 'name'>,
+): BoundaryKeyPart[] {
+  return [
+    { name: 'adapter', value: 'effect-httpapi', evidence: 'literal' },
+    { name: 'group', ...group },
+    { name: 'operation', ...operation },
+  ];
+}
+
+function effectHttpApiImportedBindings(source: string, importedName: string): Set<string> {
+  const bindings = new Set<string>();
+  const namedImport = /\bimport\s*\{([\s\S]*?)\}\s*from\s*['"]([^'"]+)['"]/gu;
+  for (const match of source.matchAll(namedImport)) {
+    const moduleName = match[2] ?? '';
+    if (!effectHttpApiModule(moduleName)) continue;
+    for (const rawSpecifier of (match[1] ?? '').split(',')) {
+      const specifier = rawSpecifier.trim().replace(/^type\s+/u, '');
+      const imported = /^([A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?$/u.exec(specifier);
+      if (imported?.[1] === importedName) bindings.add(imported[2] ?? imported[1]);
+    }
+  }
+  const namespaceImport = /\bimport\s*\*\s*as\s*([A-Za-z_$][\w$]*)\s*from\s*['"]([^'"]+)['"]/gu;
+  for (const match of source.matchAll(namespaceImport)) {
+    const moduleName = match[2] ?? '';
+    if (moduleName.endsWith(`/${importedName}`) && effectHttpApiModule(moduleName)) bindings.add(match[1]!);
+  }
+  return bindings;
+}
+
+function effectHttpApiModule(moduleName: string): boolean {
+  return (
+    moduleName === 'effect/unstable/httpapi' ||
+    moduleName === '@effect/platform' ||
+    moduleName.startsWith('@effect/platform/HttpApi')
+  );
+}
+
+function enclosingFrameworkCallArgument(
+  node: SyntaxNode,
+  bindings: ReadonlySet<string>,
+  member: string,
+  argumentIndex: number,
+  context: BoundaryFileContext,
+): Omit<BoundaryKeyPart, 'name'> | null {
+  let current = node.parent;
+  while (current) {
+    if (current.type === 'call_expression') {
+      const direct = frameworkCallArgument(current, bindings, member, argumentIndex, context);
+      if (direct) return direct;
+      const receiver = current.childForFieldName('function') ?? current.namedChild(0);
+      let nested: Omit<BoundaryKeyPart, 'name'> | null = null;
+      if (receiver) {
+        walk(receiver, (candidate) => {
+          if (!nested && candidate.type === 'call_expression') {
+            nested = frameworkCallArgument(candidate, bindings, member, argumentIndex, context);
+          }
+        });
+      }
+      if (nested) return nested;
+    }
+    current = current.parent;
+  }
+  return null;
+}
+
+function frameworkCallArgument(
+  node: SyntaxNode,
+  bindings: ReadonlySet<string>,
+  member: string,
+  argumentIndex: number,
+  context: BoundaryFileContext,
+): Omit<BoundaryKeyPart, 'name'> | null {
+  const callee = callMember(node);
+  if (!callee || callee.member !== member || !bindings.has(callee.receiver)) return null;
+  return addressedArgument(callArguments(node)[argumentIndex], context);
+}
+
+function callMember(node: SyntaxNode): { receiver: string; member: string } | null {
+  const target = node.childForFieldName('function') ?? node.namedChild(0);
+  if (!target || !['member_expression', 'subscript_expression'].includes(target.type)) return null;
+  const object = target.childForFieldName('object') ?? target.namedChild(0);
+  const property = target.childForFieldName('property') ?? target.childForFieldName('index') ?? target.namedChild(1);
+  if (!object || !property) return null;
+  return {
+    receiver: object.text.replace(/\s+/gu, ''),
+    member: property.text.replace(/^['"`]|['"`]$/gu, ''),
   };
 }
 

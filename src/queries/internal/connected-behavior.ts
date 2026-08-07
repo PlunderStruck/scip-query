@@ -4,6 +4,7 @@ import {
   behaviorReceipt,
   behaviorSignalsByLine,
   behaviorSkeleton,
+  governingBehaviorControlLines,
 } from '../../source/facts/behavior-skeleton.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
 import { getSourceLines } from '../../source/primitives/source-text.js';
@@ -19,7 +20,8 @@ import type {
 } from './exploration-topology.js';
 import { queryAlignedCausalSpineNodeIds } from './exploration-topology.js';
 
-const DEFAULT_MAX_STEPS = 12;
+const DEFAULT_MAX_STEPS = 16;
+const MAX_ACTIVATION_CONTEXT_DEPTH = 4;
 
 export type ConnectedBehaviorStepRole = 'anchor' | 'connector' | 'junction';
 
@@ -133,6 +135,15 @@ export function connectedBehaviorPacket(
   const matchedAnchorNodeIds = orderedUnique(
     topology.anchors.filter((anchor) => anchor.status === 'matched').flatMap((anchor) => anchor.nodeIds),
   );
+  const upstreamCausalNodeIds = topology.nodes
+    .filter((node) => node.disposition === 'emitted' && node.attributes['upstreamCausalPath'] === true)
+    .sort(
+      (left, right) =>
+        Number(right.attributes['upstreamCausalDistance'] ?? 0) -
+          Number(left.attributes['upstreamCausalDistance'] ?? 0) || left.id.localeCompare(right.id),
+    )
+    .map((node) => node.id);
+  const upstreamCausalNodeIdSet = new Set(upstreamCausalNodeIds);
   const causalSpineNodeIds = queryAlignedCausalSpineNodeIds(
     topology,
     matchedAnchorNodeIds,
@@ -141,7 +152,7 @@ export function connectedBehaviorPacket(
   );
   const causalSpineNodeIdSet = new Set(causalSpineNodeIds);
   const completeOutlineNodeIds = new Set(causalSpineNodeIds);
-  const requiredNodeIds = new Set([...pathNodeIds, ...matchedAnchorNodeIds]);
+  const requiredNodeIds = new Set([...pathNodeIds, ...upstreamCausalNodeIds, ...matchedAnchorNodeIds]);
   const emittedCausalEdges = topology.edges.filter(
     (edge) => edge.disposition === 'emitted' && edge.kind !== 'structural-membership',
   );
@@ -149,7 +160,12 @@ export function connectedBehaviorPacket(
     (edge) =>
       edge.disposition !== 'excluded' && edge.disposition !== 'unsupported' && edge.kind !== 'structural-membership',
   );
-  const pathEdgeIds = new Set(topology.paths.flatMap((path) => path.edgeIds));
+  const pathEdgeIds = new Set([
+    ...topology.paths.flatMap((path) => path.edgeIds),
+    ...emittedCausalEdges
+      .filter((edge) => upstreamCausalNodeIdSet.has(edge.fromNodeId) && upstreamCausalNodeIdSet.has(edge.toNodeId))
+      .map((edge) => edge.id),
+  ]);
   const hasConnectorPath = topology.paths.some((path) => path.edgeIds.length > 0);
   // An explicit anchor owns behavior the caller deliberately selected. Connector
   // direction must not reduce an anchor to only the callsite that happened to
@@ -170,29 +186,23 @@ export function connectedBehaviorPacket(
       for (const nodeId of anchor.nodeIds) expansiveNodeIds.add(nodeId);
     }
   }
-  const activationContextNodeIds = mostSpecificCallers(matchedAnchorNodeIds, knownCausalEdges, nodeById);
-  const activationContextSet = new Set(activationContextNodeIds);
-  const lifecycleSiblingNodeIds = orderedUnique(
-    knownCausalEdges
-      .filter((edge) => edge.kind === 'call' && activationContextSet.has(edge.fromNodeId))
-      .map((edge) => edge.toNodeId),
-  ).filter((nodeId) => !requiredNodeIds.has(nodeId));
+  const upstreamContextNodeIds = mostSpecificCallerSpine(
+    matchedAnchorNodeIds,
+    knownCausalEdges,
+    nodeById,
+    MAX_ACTIVATION_CONTEXT_DEPTH,
+  );
   const directEffectNodeIds = orderedUnique(
     emittedCausalEdges
       .filter((edge) => edge.kind === 'call' && matchedAnchorNodeIds.includes(edge.fromNodeId))
       .map((edge) => edge.toNodeId),
   );
-  // A connector packet already names an anchor's direct effects in its causal
-  // slice. Spend the remaining construct budget on the most specific caller
-  // and that caller's sibling effects, which exposes activation and lifecycle
-  // context without expanding every callee body. A lone anchor still receives
-  // direct-effect bodies because there is no connector path to orient it.
+  // A connector packet already names direct effects in its causal slice. Add
+  // the bounded caller spine itself, but leave sibling callee bodies in the
+  // recoverable next-anchor manifest: their exact callsites remain visible in
+  // the caller skeleton and do not displace entry-to-operation context.
   const supplementalNodeIds = new Set(
-    orderedUnique([
-      ...activationContextNodeIds,
-      ...lifecycleSiblingNodeIds,
-      ...(hasConnectorPath ? [] : directEffectNodeIds),
-    ]),
+    orderedUnique([...upstreamContextNodeIds, ...(hasConnectorPath ? [] : directEffectNodeIds)]),
   );
   for (const nodeId of supplementalNodeIds) expansiveNodeIds.add(nodeId);
   const adjacentNodeIds = orderedUnique(
@@ -211,6 +221,7 @@ export function connectedBehaviorPacket(
     )
     .map((node) => node.id);
   const candidateNodeIds = orderedUnique([
+    ...upstreamCausalNodeIds,
     ...pathNodeIds,
     ...matchedAnchorNodeIds,
     ...causalSpineNodeIds,
@@ -233,7 +244,7 @@ export function connectedBehaviorPacket(
   }
   const selectedNodeIdSet = new Set(selectedNodeIds);
   const stepIdByNode = new Map(selectedNodeIds.map((nodeId) => [nodeId, connectedStepId(nodeId)]));
-  const connectorNodeIds = new Set(pathNodeIds);
+  const connectorNodeIds = new Set([...pathNodeIds, ...upstreamCausalNodeIds]);
   const anchorNodeIds = new Set(topology.anchors.flatMap((anchor) => [...anchor.nodeIds, ...anchor.candidateNodeIds]));
   const steps = selectedNodeIds.map((nodeId, order): ConnectedBehaviorStep => {
     const node = nodeById.get(nodeId)!;
@@ -526,14 +537,15 @@ function focusedConnectorSlice(
   const receipt = includeEffectReceipt
     ? behaviorReceipt(db, node.location.file, startLine, endLine, { minimumBodyLines: 0 })
     : null;
+  const governingControls =
+    outline?.lines.filter(
+      (line) =>
+        line.text.length <= 500 &&
+        line.signals.some((signal) => ['branch', 'loop', 'catch', 'finally'].includes(signal)) &&
+        focusLines.some((focusLine) => focusLine >= line.line && focusLine <= line.endLine),
+    ) ?? governingBehaviorControlLines(db, node.location.file, startLine, endLine, focusLines);
   for (const line of receipt?.lines ?? []) selectedLines.add(line.line);
-  for (const line of outline?.lines ?? []) {
-    const governsFocus =
-      line.text.length <= 500 &&
-      line.signals.some((signal) => ['branch', 'loop', 'catch', 'finally'].includes(signal)) &&
-      focusLines.some((focusLine) => focusLine >= line.line && focusLine <= line.endLine);
-    if (governsFocus) selectedLines.add(line.line);
-  }
+  for (const line of governingControls) selectedLines.add(line.line);
   const governedFocusBlocks: Array<{
     focusLine: number;
     governingUse: number;
@@ -601,6 +613,11 @@ function focusedConnectorSlice(
   const facts = getSourceFacts(db, node.location.file);
   const callLines = new Set(facts?.callSites.map((site) => site.line) ?? []);
   const outlineSignalsByLine = behaviorSignals;
+  const compressedControlByLine = new Map(
+    [...(outline?.lines ?? []), ...governingControls]
+      .filter((line) => line.signals.some((signal) => ['branch', 'loop', 'catch', 'finally'].includes(signal)))
+      .map((line) => [line.line, line] as const),
+  );
   const receiptSignalsByLine = new Map(
     (receipt?.lines ?? []).map(
       (line) => [line.line, line.signals.filter((signal): signal is BehaviorSignal => signal !== 'lifecycle')] as const,
@@ -609,11 +626,12 @@ function focusedConnectorSlice(
   const lines = [...selectedLines]
     .filter((line) => line >= startLine && line <= endLine)
     .sort((left, right) => left - right)
-    .map(
-      (line): ConnectedBehaviorLine => ({
+    .map((line): ConnectedBehaviorLine => {
+      const compressedControl = compressedControlByLine.get(line);
+      return {
         line,
-        endLine: line,
-        depth: 0,
+        endLine: compressedControl?.endLine ?? line,
+        depth: compressedControl?.depth ?? 0,
         signals: orderedSignals([
           ...(outlineSignalsByLine.get(line) ?? []),
           ...(outline?.lines
@@ -623,10 +641,15 @@ function focusedConnectorSlice(
           ...(focusLines.includes(line) ? (['anchor'] as const) : []),
           ...(callLines.has(line) ? (['call'] as const) : []),
         ]),
-        text: (sourceLines[line] ?? '').trim(),
-        copied: true,
-      }),
-    )
+        // A connector slice normally preserves exact source lines. A
+        // multiline control header is the exception: copying only its first
+        // physical line produces `if (` and loses the predicate that governs
+        // the selected effect. The parser-derived outline is a source-faithful
+        // single-line encoding of that complete header.
+        text: compressedControl?.text ?? (sourceLines[line] ?? '').trim(),
+        copied: compressedControl?.copied ?? true,
+      };
+    })
     .filter((line) => line.text.length > 0);
   if (lines.length === 0) return null;
   const receiptStatements =
@@ -686,18 +709,81 @@ function mostSpecificCallers(
 ): string[] {
   return orderedUnique(
     anchorNodeIds.flatMap((anchorNodeId) => {
+      const anchorNode = nodeById.get(anchorNodeId);
       const callers = edges
         .filter((edge) => edge.kind === 'call' && edge.toNodeId === anchorNodeId)
-        .map((edge) => nodeById.get(edge.fromNodeId))
-        .filter((node): node is ExplorationTopologyNode => node?.kind === 'symbol' && node.location !== null)
+        .map((edge) => ({ edge, node: nodeById.get(edge.fromNodeId) }))
+        .filter(
+          (candidate): candidate is { edge: ExplorationTopologyEdge; node: ExplorationTopologyNode } =>
+            candidate.node !== undefined &&
+            ['symbol', 'source-construct', 'runtime-boundary-participant'].includes(candidate.node.kind) &&
+            candidate.node.location !== null,
+        )
         .sort((left, right) => {
-          const leftSpan = (left.location?.endLine ?? left.location?.line ?? 0) - (left.location?.line ?? 0);
-          const rightSpan = (right.location?.endLine ?? right.location?.line ?? 0) - (right.location?.line ?? 0);
-          return leftSpan - rightSpan || left.label.localeCompare(right.label);
+          const evidenceDifference = strongestEdgeEvidenceRank(right.edge) - strongestEdgeEvidenceRank(left.edge);
+          if (evidenceDifference !== 0) return evidenceDifference;
+          const leftLocal = sameRepositoryArea(left.node, anchorNode) ? 0 : 1;
+          const rightLocal = sameRepositoryArea(right.node, anchorNode) ? 0 : 1;
+          const leftSpan =
+            (left.node.location?.endLine ?? left.node.location?.line ?? 0) - (left.node.location?.line ?? 0);
+          const rightSpan =
+            (right.node.location?.endLine ?? right.node.location?.line ?? 0) - (right.node.location?.line ?? 0);
+          return leftLocal - rightLocal || leftSpan - rightSpan || left.node.label.localeCompare(right.node.label);
         });
-      return callers[0] ? [callers[0].id] : [];
+      return callers[0] ? [callers[0].node.id] : [];
     }),
   );
+}
+
+function strongestEdgeEvidenceRank(edge: ExplorationTopologyEdge): number {
+  const rank: Record<ExplorationEvidenceSource['strength'], number> = {
+    exact: 4,
+    mixed: 3,
+    derived: 2,
+    candidate: 1,
+    unknown: 0,
+  };
+  return Math.max(0, ...edge.evidence.map((evidence) => rank[evidence.strength]));
+}
+
+function sameRepositoryArea(left: ExplorationTopologyNode, right: ExplorationTopologyNode | undefined): boolean {
+  if (!left.location || !right?.location) return false;
+  return repositoryArea(left.location.file) === repositoryArea(right.location.file);
+}
+
+function repositoryArea(file: string): string {
+  return file.split('/').filter(Boolean).slice(0, 2).join('/');
+}
+
+/**
+ * Follow the most specific exact caller of each selected construct repeatedly.
+ * A single caller identifies only the immediate activation site; the bounded
+ * spine exposes the enclosing entry-to-operation chain without expanding all
+ * reverse references or guessing which repository-specific entry name matters.
+ */
+function mostSpecificCallerSpine(
+  anchorNodeIds: readonly string[],
+  edges: readonly ExplorationTopologyEdge[],
+  nodeById: ReadonlyMap<string, ExplorationTopologyNode>,
+  maxDepth: number,
+): string[] {
+  const seedNodeIds = new Set(anchorNodeIds);
+  const traversedNodeIds = new Set<string>();
+  const result: string[] = [];
+  let frontier = orderedUnique(anchorNodeIds);
+
+  for (let depth = 0; depth < maxDepth && frontier.length > 0; depth += 1) {
+    const current = frontier.filter((nodeId) => !traversedNodeIds.has(nodeId));
+    for (const nodeId of current) traversedNodeIds.add(nodeId);
+    const callers = mostSpecificCallers(current, edges, nodeById);
+    frontier = [];
+    for (const callerNodeId of callers) {
+      if (!seedNodeIds.has(callerNodeId) && !result.includes(callerNodeId)) result.push(callerNodeId);
+      if (!traversedNodeIds.has(callerNodeId)) frontier.push(callerNodeId);
+    }
+  }
+
+  return result;
 }
 
 function compareTransitionEdges(
