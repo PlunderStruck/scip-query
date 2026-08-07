@@ -46,7 +46,6 @@ import {
   SOURCE_INSPECTION_SAFE_CHARACTERS,
 } from '../../queries/internal/inspection-limits.js';
 import { assertNavigationDetailAllowed, stageNavigationMapCommands } from '../navigation-session.js';
-import { taskEvidenceContractRows } from '../task-evidence-renderer.js';
 
 export function inspectSearchLimitOption(opts: Readonly<Record<string, unknown>>): number | undefined {
   const full = booleanOptionValue(opts, 'full');
@@ -340,14 +339,6 @@ function anchorDiscoverySections(result: queries.AnchorDiscoveryResult): ReportS
     ];
   });
   return [
-    ...(result.taskEvidence
-      ? [
-          {
-            title: 'TASK EVIDENCE CONTRACT',
-            rows: taskEvidenceContractRows(result.taskEvidence),
-          },
-        ]
-      : []),
     {
       title: 'REQUIRED NEXT STEP',
       rows: [

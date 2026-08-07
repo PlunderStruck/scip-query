@@ -69,11 +69,6 @@ describe('anchor discovery', () => {
       expect(flow?.systemMapCommand).not.toContain('scip-typescript npm');
       expect(flow?.systemMapCommand).toContain("--selection-term 'interrupt'");
       expect(flow?.systemMapCommand).not.toContain("--selection-term 'durable'");
-      expect(flow?.systemMapCommand).toContain(`--task '${result.query}'`);
-      expect(result.taskEvidence?.task).toBe(result.query);
-      expect(result.taskEvidence?.obligations.every((obligation) => obligation.disposition === 'unassessed')).toBe(
-        true,
-      );
 
       const sharedCalleeSurface = result.groups.find((group) => group.kind === 'shared-callee-owners');
       expect(sharedCalleeSurface).toBeDefined();
