@@ -8,7 +8,7 @@ commands:
     when: 'Locate compiler-owned constructs in a known file.'
   - template: 'scip-query entrypoints <text>'
     when: 'Locate an external callable root when its entry surface is known.'
-    - template: 'scip-query evidence --symbol <symbol> --edge <family> --direction <direction> --depth <n> --max-edges <n>'
+  - template: 'scip-query evidence --symbol <symbol> --edge <family> --direction <direction> --depth <n> --max-edges <n>'
     when: 'Project explicitly selected typed relationships from one exact root.'
   - template: 'scip-query inspect --at <file:line> --view behavior'
     when: 'Read connected behavior for a named implementation gap.'

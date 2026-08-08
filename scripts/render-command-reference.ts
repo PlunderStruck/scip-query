@@ -118,13 +118,15 @@ export function parseSkillCommands(raw: string, sourceLabel: string): SkillComma
     // apostrophe (e.g. "the model's Next relation"). Both quote styles must
     // parse, or a plain `prettier --write` silently empties a skill's
     // commands list (this once broke a routed TLA+ skill preview row).
-    const templateMatch = line.match(/^\s*-\s*template:\s*(?:"(.*)"|'(.*)')\s*$/);
-    const whenMatch = line.match(/^\s*when:\s*(?:"(.*)"|'(.*)')\s*$/);
+    const templateMatch = line.match(/^  - template:\s*(?:"(.*)"|'(.*)')\s*$/);
+    const whenMatch = line.match(/^    when:\s*(?:"(.*)"|'(.*)')\s*$/);
     if (templateMatch) {
       if (current?.template) entries.push(finishSkillCommandEntry(current, sourceLabel));
       current = { template: templateMatch[1] ?? templateMatch[2] };
     } else if (whenMatch && current) {
       current.when = whenMatch[1] ?? whenMatch[2];
+    } else if (line.trim().length > 0) {
+      throw new Error(`${sourceLabel}: malformed commands frontmatter line: ${line.trim()}`);
     }
   }
   if (current?.template) entries.push(finishSkillCommandEntry(current, sourceLabel));

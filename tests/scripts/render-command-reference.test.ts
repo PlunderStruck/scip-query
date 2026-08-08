@@ -85,6 +85,20 @@ commands:
 `;
     expect(() => parseSkillCommands(raw, 'skills/broken-skill/SKILL.md')).toThrow(/missing when/);
   });
+
+  it('rejects a nested list item that a YAML parser would not accept as another command', () => {
+    const raw = `---
+name: broken-skill
+description: broken
+commands:
+  - template: 'scip-query refs <symbol>'
+    when: 'Find consumers.'
+    - template: 'scip-query outline <file>'
+    when: 'Locate constructs.'
+---
+`;
+    expect(() => parseSkillCommands(raw, 'skills/broken-skill/SKILL.md')).toThrow(/malformed commands frontmatter/);
+  });
 });
 
 describe('validateSkillCommand', () => {
