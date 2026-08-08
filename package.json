@@ -96,6 +96,14 @@
       "import": "./dist/queries/dataflow.js",
       "types": "./dist/queries/dataflow.d.ts"
     },
+    "./queries/dependence-slice": {
+      "import": "./dist/queries/dependence-slice.js",
+      "types": "./dist/queries/dependence-slice.d.ts"
+    },
+    "./queries/dependency-depth": {
+      "import": "./dist/queries/dependency-depth.js",
+      "types": "./dist/queries/dependency-depth.d.ts"
+    },
     "./queries/dead": {
       "import": "./dist/queries/dead.js",
       "types": "./dist/queries/dead.d.ts"
@@ -216,6 +224,14 @@
       "import": "./dist/queries/redundant-reexports.js",
       "types": "./dist/queries/redundant-reexports.d.ts"
     },
+    "./queries/reference-neighborhood": {
+      "import": "./dist/queries/reference-neighborhood.js",
+      "types": "./dist/queries/reference-neighborhood.d.ts"
+    },
+    "./queries/reference-reachability": {
+      "import": "./dist/queries/reference-reachability.js",
+      "types": "./dist/queries/reference-reachability.d.ts"
+    },
     "./queries/refs": {
       "import": "./dist/queries/refs.js",
       "types": "./dist/queries/refs.d.ts"
@@ -315,6 +331,10 @@
     "./queries/unused-params": {
       "import": "./dist/queries/unused-params.js",
       "types": "./dist/queries/unused-params.d.ts"
+    },
+    "./queries/value-flow": {
+      "import": "./dist/queries/value-flow.js",
+      "types": "./dist/queries/value-flow.d.ts"
     },
     "./queries/unused-imports": {
       "import": "./dist/queries/unused-imports.js",

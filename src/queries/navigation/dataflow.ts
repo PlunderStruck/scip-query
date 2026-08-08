@@ -21,24 +21,27 @@ export interface DataflowResult {
   consumers: Array<{ symbol: string; shortName: string; file: string }>;
 }
 
+export interface ReferenceNeighborhoodResult {
+  symbol: string;
+  shortName: string;
+  relativePath: string;
+  definitionSites: Array<{ file: string; line: number }>;
+  referenceSites: Array<{ file: string; line: number; enclosingSymbol: string; enclosingShort: string }>;
+  outgoingCalls: Array<{ symbol: string; shortName: string; file: string }>;
+  incomingCalls: Array<{ symbol: string; shortName: string; file: string }>;
+}
+
 /**
- * Reference-level dataflow analysis: where does data around this symbol
- * come from and where does it go?
- *
- * This is not value-level dataflow (we can't trace x = foo(); bar(x);
- * as a chain). Instead it shows:
- * - Where the symbol is defined and used
- * - What other symbols appear in the same enclosing scope (co-occurring data)
- * - What feeds into the function that defines it (producers)
- * - What consumes the function that uses it (consumers)
- *
- * Language-agnostic: works with any SCIP index.
+ * Compiler-identified definition/reference sites plus the static call
+ * neighborhood of one symbol. This projection deliberately makes no value-flow
+ * claim: an outgoing callee is not necessarily a producer and an incoming
+ * caller is not necessarily a consumer of a returned value.
  */
-export function dataflow(
+export function referenceNeighborhood(
   db: ScipDatabase,
   symbolPattern: string,
   opts: { semantic?: boolean } = {},
-): DataflowResult | null {
+): ReferenceNeighborhoodResult | null {
   const match = findFirstSymbolMatch(db, symbolPattern);
   if (!match) return null;
 
@@ -59,7 +62,7 @@ export function dataflow(
     enclosingShort: site.enclosingSymbol ? shortenSymbol(site.enclosingSymbol) : '(top-level)',
   }));
 
-  const { producers, consumers } = collectFlowEndpoints(db, match, normalizedUsageSites, {
+  const { outgoingCalls, incomingCalls } = collectReferenceEndpoints(db, match, normalizedUsageSites, {
     semantic: opts.semantic !== false,
   });
 
@@ -68,11 +71,11 @@ export function dataflow(
     shortName: shortenSymbol(match.symbol),
     relativePath: match.relativePath,
     definitionSites: defSites.filter((s) => !db.isIgnored(s.file)),
-    usageSites: normalizedUsageSites,
-    producers: producers
+    referenceSites: normalizedUsageSites,
+    outgoingCalls: outgoingCalls
       .filter((p) => !db.isIgnored(p.file))
       .map((p) => ({ symbol: p.symbol, shortName: shortenSymbol(p.symbol), file: p.file })),
-    consumers: consumers
+    incomingCalls: incomingCalls
       .filter((c) => !db.isIgnored(c.file))
       .map((c) => ({
         symbol: c.symbol,
@@ -82,18 +85,41 @@ export function dataflow(
   };
 }
 
+/**
+ * @deprecated This historical command returns a reference/call neighborhood,
+ * not value-level data flow. Use `referenceNeighborhood` for that projection
+ * and `valueFlow` for proved data-dependence edges.
+ */
+export function dataflow(
+  db: ScipDatabase,
+  symbolPattern: string,
+  opts: { semantic?: boolean } = {},
+): DataflowResult | null {
+  const result = referenceNeighborhood(db, symbolPattern, opts);
+  if (!result) return null;
+  return {
+    symbol: result.symbol,
+    shortName: result.shortName,
+    relativePath: result.relativePath,
+    definitionSites: result.definitionSites,
+    usageSites: result.referenceSites,
+    producers: result.outgoingCalls,
+    consumers: result.incomingCalls,
+  };
+}
+
 interface SymbolRow {
   symbol: string;
   file: string;
 }
 
-function collectFlowEndpoints(
+function collectReferenceEndpoints(
   db: ScipDatabase,
   match: Parameters<typeof getCalleeRowsForSymbol>[1],
   normalizedUsageSites: { file: string; enclosingSymbol: string }[],
   opts: { semantic: boolean },
-): { producers: SymbolRow[]; consumers: SymbolRow[] } {
-  const producers = uniqueSymbolFileRows(
+): { outgoingCalls: SymbolRow[]; incomingCalls: SymbolRow[] } {
+  const outgoingCalls = uniqueSymbolFileRows(
     getCalleeRowsForSymbol(db, match, {
       limit: 30,
       semantic: opts.semantic,
@@ -110,7 +136,7 @@ function collectFlowEndpoints(
       semanticEvidence: symbolSemanticEvidence,
     }),
   );
-  const consumers =
+  const incomingCalls =
     astConsumers.length > 0
       ? astConsumers
       : uniqueSymbolFileRows(
@@ -119,5 +145,5 @@ function collectFlowEndpoints(
             file: site.file,
           })),
         );
-  return { producers, consumers };
+  return { outgoingCalls, incomingCalls };
 }

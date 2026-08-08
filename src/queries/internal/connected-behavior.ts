@@ -24,7 +24,6 @@ import type {
   ExplorationTopologyEdge,
   ExplorationTopologyNode,
 } from './exploration-topology.js';
-import { queryAlignedCausalSpineNodeIds } from './exploration-topology.js';
 
 const DEFAULT_MAX_STEPS = 16;
 const MAX_ACTIVATION_CONTEXT_DEPTH = 4;
@@ -184,12 +183,7 @@ export function connectedBehaviorPacket(
     requestedFocusLocations,
     additionalNodeBudget,
   );
-  const causalSpineNodeIds = orderedUnique([
-    ...focusedCausalNodeIds,
-    ...queryAlignedCausalSpineNodeIds(topology, matchedAnchorNodeIds, additionalNodeBudget, {
-      emittedOnly: true,
-    }),
-  ]).slice(0, additionalNodeBudget);
+  const causalSpineNodeIds = focusedCausalNodeIds.slice(0, additionalNodeBudget);
   const causalSpineNodeIdSet = new Set(causalSpineNodeIds);
   const completeOutlineNodeIds = new Set(causalSpineNodeIds);
   const requiredNodeIds = new Set([...pathNodeIds, ...upstreamCausalNodeIds, ...matchedAnchorNodeIds]);
@@ -302,12 +296,14 @@ export function connectedBehaviorPacket(
         db,
         node,
         anchorNodeIds.has(nodeId),
-          [...new Set([
+        [
+          ...new Set([
             ...explicitFocusLines,
             ...focusLinesForNode(db, node, knownCausalEdges, nodeById, pathEdgeIds, expansiveNodeIds),
-          ])],
+          ]),
+        ],
         explicitFocusLines,
-          expansiveNodeIds.has(node.id) && (explicitFocusLines.length === 0 || anchorNodeIds.has(node.id)),
+        expansiveNodeIds.has(node.id) && (explicitFocusLines.length === 0 || anchorNodeIds.has(node.id)),
         supplementalNodeIds.has(node.id),
         completeOutlineNodeIds.has(node.id) && explicitFocusLines.length === 0,
       ),
@@ -456,38 +452,38 @@ function behaviorForNode(
     node.kind === 'runtime-boundary-participant'
       ? behaviorConstructRange(db, node.location.file, 0, Math.max(0, sourceLines.length - 1), [node.location.line])
       : behaviorConstructRange(db, node.location.file, node.location.line, endLine, rangeFocusLines);
-    const inRangeFocusLines = focusLines.filter((line) => line >= range.startLine && line <= range.endLine);
-    const outline = behaviorSkeleton(db, node.location.file, range.startLine, range.endLine, inRangeFocusLines);
-    const causalOutline =
-      outline ??
-      (inRangeFocusLines.length > 0
-        ? behaviorSkeleton(db, node.location.file, range.startLine, range.endLine, inRangeFocusLines, {
-            requireSavings: false,
-          })
-        : null);
-    const connectorSlice =
-      inRangeFocusLines.length > 0
-        ? focusedConnectorSlice(
-            db,
-            node,
+  const inRangeFocusLines = focusLines.filter((line) => line >= range.startLine && line <= range.endLine);
+  const outline = behaviorSkeleton(db, node.location.file, range.startLine, range.endLine, inRangeFocusLines);
+  const causalOutline =
+    outline ??
+    (inRangeFocusLines.length > 0
+      ? behaviorSkeleton(db, node.location.file, range.startLine, range.endLine, inRangeFocusLines, {
+          requireSavings: false,
+        })
+      : null);
+  const connectorSlice =
+    inRangeFocusLines.length > 0
+      ? focusedConnectorSlice(
+          db,
+          node,
           range.startLine,
-            range.endLine,
-            inRangeFocusLines,
-            causalOutline,
-            includeEffectReceipt,
-          )
-        : null;
-    const exactSourceCharacters = sourceLines.slice(range.startLine, range.endLine + 1).join('\n').length;
-    const rangeSignals = behaviorSignalsByLine(db, node.location.file, range.startLine, range.endLine);
-    const hasOversizedMaterialLine = sourceLines
-      .slice(range.startLine, range.endLine + 1)
-      .some(
-        (text, offset) =>
-          text.length > MAX_CAUSAL_SLICE_MATERIAL_LINE_CHARACTERS &&
-          (rangeSignals.get(range.startLine + offset) ?? []).some((signal) =>
-            ['binding', 'branch', 'loop', 'call', 'return', 'throw', 'mutation'].includes(signal),
-          ),
-      );
+          range.endLine,
+          inRangeFocusLines,
+          causalOutline,
+          includeEffectReceipt,
+        )
+      : null;
+  const exactSourceCharacters = sourceLines.slice(range.startLine, range.endLine + 1).join('\n').length;
+  const rangeSignals = behaviorSignalsByLine(db, node.location.file, range.startLine, range.endLine);
+  const hasOversizedMaterialLine = sourceLines
+    .slice(range.startLine, range.endLine + 1)
+    .some(
+      (text, offset) =>
+        text.length > MAX_CAUSAL_SLICE_MATERIAL_LINE_CHARACTERS &&
+        (rangeSignals.get(range.startLine + offset) ?? []).some((signal) =>
+          ['binding', 'branch', 'loop', 'call', 'return', 'throw', 'mutation'].includes(signal),
+        ),
+    );
   const withSupport = (representation: ConnectedBehaviorRepresentation): ConnectedBehaviorRepresentation =>
     withCompilerReferencedSupportingDeclarations(
       db,
@@ -500,21 +496,21 @@ function behaviorForNode(
   const retainCompleteConstruct =
     (preferCompleteSmallConstruct || node.kind === 'runtime-boundary-participant' || node.anchorIds.length > 0) &&
     exactSourceCharacters <= COMPLETE_ANCHOR_SOURCE_CHARACTER_LIMIT;
-    // Small anchors remain complete. A source-large anchor with explicit causal
-    // focus uses the closed connector slice below; that slice must retain the
-    // governing predicates and sibling outcomes while omitting unrelated regions.
-    const retainCompleteAnchorBehavior =
-      preserveCompleteAnchorBehavior && (inRangeFocusLines.length === 0 || retainCompleteConstruct);
-    if (outline && (preferCompleteOutline || retainCompleteAnchorBehavior)) {
-      return withSupport(outlineRepresentation(outline));
-    }
+  // Small anchors remain complete. A source-large anchor with explicit causal
+  // focus uses the closed connector slice below; that slice must retain the
+  // governing predicates and sibling outcomes while omitting unrelated regions.
+  const retainCompleteAnchorBehavior =
+    preserveCompleteAnchorBehavior && (inRangeFocusLines.length === 0 || retainCompleteConstruct);
+  if (outline && (preferCompleteOutline || retainCompleteAnchorBehavior)) {
+    return withSupport(outlineRepresentation(outline));
+  }
   if (
     !preferCompleteOutline &&
-      !retainCompleteAnchorBehavior &&
-      connectorSlice &&
-      !hasOversizedMaterialLine &&
-      !retainCompleteConstruct &&
-      connectorSlice.renderedCharacters < (causalOutline?.outlineCharacters ?? exactSourceCharacters)
+    !retainCompleteAnchorBehavior &&
+    connectorSlice &&
+    !hasOversizedMaterialLine &&
+    !retainCompleteConstruct &&
+    connectorSlice.renderedCharacters < (causalOutline?.outlineCharacters ?? exactSourceCharacters)
   ) {
     return withSupport(connectorSlice);
   }
@@ -665,21 +661,16 @@ function withCompilerReferencedSupportingDeclarations(
       left.definition.symbol.localeCompare(right.definition.symbol),
   );
   const supportingDeclarations: ConnectedBehaviorSupportingDeclaration[] = [];
-    const omittedSupportingDeclarations: NonNullable<ConnectedBehaviorRepresentation['omittedSupportingDeclarations']> =
-      [];
-    for (const { definition, kind } of declarations) {
-      const declarationRange =
-        kind === 'compiler-referenced-declaration'
-          ? supportingDeclarationRange(
-              db,
-              definition.relativePath,
-              definition.startLine,
-              definition.endLine,
-            )
-          : { startLine: definition.startLine, endLine: definition.endLine };
-      const sourceText = getSourceLines(db, definition.relativePath)
-        .slice(declarationRange.startLine, declarationRange.endLine + 1)
-        .join('\n');
+  const omittedSupportingDeclarations: NonNullable<ConnectedBehaviorRepresentation['omittedSupportingDeclarations']> =
+    [];
+  for (const { definition, kind } of declarations) {
+    const declarationRange =
+      kind === 'compiler-referenced-declaration'
+        ? supportingDeclarationRange(db, definition.relativePath, definition.startLine, definition.endLine)
+        : { startLine: definition.startLine, endLine: definition.endLine };
+    const sourceText = getSourceLines(db, definition.relativePath)
+      .slice(declarationRange.startLine, declarationRange.endLine + 1)
+      .join('\n');
     const callableOutline =
       kind === 'compiler-referenced-declaration'
         ? null
@@ -695,14 +686,14 @@ function withCompilerReferencedSupportingDeclarations(
     const text = outlineText && outlineText.length < sourceText.length ? outlineText : sourceText;
     const base = {
       symbol: definition.symbol,
-        label: definition.leaf,
-        file: definition.relativePath,
-        line: declarationRange.startLine,
-        endLine: declarationRange.endLine,
-      };
-      const characterLimit = kind === 'compiler-referenced-declaration' ? 1_000 : 8_000;
-      const lineLimit = kind === 'compiler-referenced-declaration' ? 12 : 120;
-      if (text.length > characterLimit || declarationRange.endLine - declarationRange.startLine > lineLimit) {
+      label: definition.leaf,
+      file: definition.relativePath,
+      line: declarationRange.startLine,
+      endLine: declarationRange.endLine,
+    };
+    const characterLimit = kind === 'compiler-referenced-declaration' ? 1_000 : 8_000;
+    const lineLimit = kind === 'compiler-referenced-declaration' ? 12 : 120;
+    if (text.length > characterLimit || declarationRange.endLine - declarationRange.startLine > lineLimit) {
       omittedSupportingDeclarations.push({ ...base, reason: 'source-too-large' });
       continue;
     }
@@ -850,52 +841,52 @@ function focusedConnectorSlice(
   focusLines: readonly number[],
   outline: ReturnType<typeof behaviorSkeleton>,
   includeEffectReceipt: boolean,
-  ): ConnectedBehaviorRepresentation | null {
-    if (!node.location) return null;
-    const sourceLines = getSourceLines(db, node.location.file);
-    const behaviorSignals = behaviorSignalsByLine(db, node.location.file, startLine, endLine);
-    const materialLineNumbers = [...behaviorSignals]
-      .filter(([, signals]) => signals.length > 0)
-      .map(([line]) => line)
-      .sort((left, right) => left - right);
-    const normalizedFocusLines = focusLines.map((line) => {
-      if ((behaviorSignals.get(line) ?? []).length > 0) return line;
-      return materialLineNumbers.find((candidate) => candidate > line && candidate - line <= 8) ?? line;
-    });
-    const selectedLines = new Set([...focusLines, ...normalizedFocusLines]);
+): ConnectedBehaviorRepresentation | null {
+  if (!node.location) return null;
+  const sourceLines = getSourceLines(db, node.location.file);
+  const behaviorSignals = behaviorSignalsByLine(db, node.location.file, startLine, endLine);
+  const materialLineNumbers = [...behaviorSignals]
+    .filter(([, signals]) => signals.length > 0)
+    .map(([line]) => line)
+    .sort((left, right) => left - right);
+  const normalizedFocusLines = focusLines.map((line) => {
+    if ((behaviorSignals.get(line) ?? []).length > 0) return line;
+    return materialLineNumbers.find((candidate) => candidate > line && candidate - line <= 8) ?? line;
+  });
+  const selectedLines = new Set([...focusLines, ...normalizedFocusLines]);
   const receipt = includeEffectReceipt
     ? behaviorReceipt(db, node.location.file, startLine, endLine, { minimumBodyLines: 0 })
     : null;
-    const governingControls = outline
-      ? [
-          ...new Map(
-            normalizedFocusLines.flatMap((focusLine) =>
-              outline.lines
-                .filter(
-                  (line) =>
-                    line.text.length <= 500 &&
-                    line.signals.some((signal) => ['branch', 'loop', 'catch', 'finally'].includes(signal)) &&
-                    focusLine >= line.line &&
-                    focusLine <= line.endLine,
-                )
-                .sort(
-                  (left, right) =>
-                    left.endLine - left.line - (right.endLine - right.line) || left.line - right.line,
-                )
-                .slice(0, 2)
-                .map((line) => [`${line.line}\0${line.endLine}`, line] as const),
-            ),
-          ).values(),
-        ]
-      : governingBehaviorControlLines(db, node.location.file, startLine, endLine, normalizedFocusLines);
+  const governingControls = outline
+    ? [
+        ...new Map(
+          normalizedFocusLines.flatMap((focusLine) =>
+            outline.lines
+              .filter(
+                (line) =>
+                  line.text.length <= 500 &&
+                  line.signals.some((signal) => ['branch', 'loop', 'catch', 'finally'].includes(signal)) &&
+                  focusLine >= line.line &&
+                  focusLine <= line.endLine,
+              )
+              .sort((left, right) => left.endLine - left.line - (right.endLine - right.line) || left.line - right.line)
+              .slice(0, 2)
+              .map((line) => [`${line.line}\0${line.endLine}`, line] as const),
+          ),
+        ).values(),
+      ]
+    : governingBehaviorControlLines(db, node.location.file, startLine, endLine, normalizedFocusLines);
   for (const line of receipt?.lines ?? []) selectedLines.add(line.line);
   for (const line of governingControls) selectedLines.add(line.line);
+  for (const [line, signals] of behaviorSignals) {
+    if (signals.includes('call') && signals.includes('shape')) selectedLines.add(line);
+  }
   const governedFocusBlocks: Array<{
     focusLine: number;
     governingUse: number;
     lines: NonNullable<typeof outline>['lines'];
   }> = [];
-    for (const focusLine of normalizedFocusLines) {
+  for (const focusLine of normalizedFocusLines) {
     const binding = bindingName(sourceLines[focusLine] ?? '');
     if (!binding) continue;
     const uses = findIdentifierLines(db, node.location.file, binding).filter(
@@ -945,62 +936,71 @@ function focusedConnectorSlice(
   // state across phases of the construct. Preserve the decisive statements in
   // the longest-lived blocks first; otherwise a large number of nearby call
   // sites can consume the slice budget before the later effect is shown.
-    for (const block of governedFocusBlocks
+  for (const block of governedFocusBlocks
     .sort(
       (left, right) =>
         right.governingUse - right.focusLine - (left.governingUse - left.focusLine) || left.focusLine - right.focusLine,
     )
     .slice(0, 2)) {
-      for (const line of block.lines.slice(0, 14)) selectedLines.add(line.line);
+    for (const line of block.lines.slice(0, 14)) selectedLines.add(line.line);
+  }
+  const materialSignals = new Set<BehaviorSignal>(['binding', 'branch', 'loop', 'call', 'return', 'throw', 'mutation']);
+  for (const control of governingControls) {
+    for (const line of outline?.lines ?? []) {
+      if (line.line < control.line || line.line > control.endLine) continue;
+      if (!line.signals.some((signal) => materialSignals.has(signal))) continue;
+      selectedLines.add(line.line);
     }
-    const materialSignals = new Set<BehaviorSignal>(['binding', 'branch', 'loop', 'call', 'return', 'throw', 'mutation']);
-    for (const control of governingControls) {
-      for (const line of outline?.lines ?? []) {
-        if (line.line < control.line || line.line > control.endLine) continue;
-        if (!line.signals.some((signal) => materialSignals.has(signal))) continue;
-        selectedLines.add(line.line);
+  }
+  const bindings = sourceLines.slice(startLine, endLine + 1).flatMap((text, offset) => {
+    const name = bindingName(text);
+    return name ? [{ name, line: startLine + offset }] : [];
+  });
+  let bindingClosureChanged = true;
+  while (bindingClosureChanged) {
+    bindingClosureChanged = false;
+    for (const binding of bindings) {
+      const selectedUsesBinding = [...selectedLines].some((line) =>
+        identifierAppears(sourceLines[line] ?? '', binding.name),
+      );
+      if (!selectedUsesBinding) continue;
+      if (!selectedLines.has(binding.line)) {
+        selectedLines.add(binding.line);
+        bindingClosureChanged = true;
+      }
+      for (const line of findIdentifierLines(db, node.location.file, binding.name)) {
+        if (line < startLine || line > endLine || selectedLines.has(line)) continue;
+        if (!(behaviorSignals.get(line) ?? []).some((signal) => materialSignals.has(signal))) continue;
+        selectedLines.add(line);
+        bindingClosureChanged = true;
       }
     }
-    const bindings = sourceLines
-      .slice(startLine, endLine + 1)
-      .flatMap((text, offset) => {
-        const name = bindingName(text);
-        return name ? [{ name, line: startLine + offset }] : [];
-      });
-    let bindingClosureChanged = true;
-    while (bindingClosureChanged) {
-      bindingClosureChanged = false;
-      for (const binding of bindings) {
-        const selectedUsesBinding = [...selectedLines].some((line) =>
-          identifierAppears(sourceLines[line] ?? '', binding.name),
-        );
-        if (!selectedUsesBinding) continue;
-        if (!selectedLines.has(binding.line)) {
-          selectedLines.add(binding.line);
-          bindingClosureChanged = true;
-        }
-        for (const line of findIdentifierLines(db, node.location.file, binding.name)) {
-          if (line < startLine || line > endLine || selectedLines.has(line)) continue;
-          if (!(behaviorSignals.get(line) ?? []).some((signal) => materialSignals.has(signal))) continue;
-          selectedLines.add(line);
-          bindingClosureChanged = true;
-        }
-      }
+  }
+  for (const control of outline?.lines ?? []) {
+    if (!control.signals.some((signal) => ['branch', 'loop', 'catch', 'finally'].includes(signal))) continue;
+    if (!selectedLines.has(control.line)) continue;
+    for (const line of outline?.lines ?? []) {
+      if (line.line < control.line || line.line > control.endLine) continue;
+      if (line.signals.some((signal) => materialSignals.has(signal))) selectedLines.add(line.line);
     }
-    for (const control of outline?.lines ?? []) {
-      if (!control.signals.some((signal) => ['branch', 'loop', 'catch', 'finally'].includes(signal))) continue;
-      if (!selectedLines.has(control.line)) continue;
-      for (const line of outline?.lines ?? []) {
-        if (line.line < control.line || line.line > control.endLine) continue;
-        if (line.signals.some((signal) => materialSignals.has(signal))) selectedLines.add(line.line);
-      }
-    }
+  }
   const facts = getSourceFacts(db, node.location.file);
   const callLines = new Set(facts?.callSites.map((site) => site.line) ?? []);
   const outlineSignalsByLine = behaviorSignals;
   const compressedControlByLine = new Map(
     [...(outline?.lines ?? []), ...governingControls]
       .filter((line) => line.signals.some((signal) => ['branch', 'loop', 'catch', 'finally'].includes(signal)))
+      .map((line) => [line.line, line] as const),
+  );
+  const compressedStructuredDataByLine = new Map(
+    (outline?.lines ?? [])
+      .filter(
+        (line) =>
+          line.text.length <= 500 &&
+          line.signals.includes('shape') &&
+          (line.signals.includes('call') || line.signals.includes('mutation') || line.signals.includes('return')),
+      )
+      .sort((left, right) => left.endLine - left.line - (right.endLine - right.line) || left.line - right.line)
       .map((line) => [line.line, line] as const),
   );
   const receiptSignalsByLine = new Map(
@@ -1012,11 +1012,11 @@ function focusedConnectorSlice(
     .filter((line) => line >= startLine && line <= endLine)
     .sort((left, right) => left - right)
     .map((line): ConnectedBehaviorLine => {
-      const compressedControl = compressedControlByLine.get(line);
+      const compressedStatement = compressedControlByLine.get(line) ?? compressedStructuredDataByLine.get(line);
       return {
         line,
-        endLine: compressedControl?.endLine ?? line,
-        depth: compressedControl?.depth ?? 0,
+        endLine: compressedStatement?.endLine ?? line,
+        depth: compressedStatement?.depth ?? 0,
         signals: orderedSignals([
           ...(outlineSignalsByLine.get(line) ?? []),
           ...(outline?.lines
@@ -1026,13 +1026,13 @@ function focusedConnectorSlice(
           ...(focusLines.includes(line) ? (['anchor'] as const) : []),
           ...(callLines.has(line) ? (['call'] as const) : []),
         ]),
-        // A connector slice normally preserves exact source lines. A
-        // multiline control header is the exception: copying only its first
-        // physical line produces `if (` and loses the predicate that governs
-        // the selected effect. The parser-derived outline is a source-faithful
-        // single-line encoding of that complete header.
-        text: compressedControl?.text ?? (sourceLines[line] ?? '').trim(),
-        copied: compressedControl?.copied ?? true,
+        // A connector slice normally preserves exact source lines. Multiline
+        // control headers and structured mutations/returns are exceptions:
+        // copying only their first physical line loses either the governing
+        // predicate or the exact payload shape. The parser-derived outline is
+        // preserves the complete statement.
+        text: compressedStatement?.text ?? (sourceLines[line] ?? '').trim(),
+        copied: compressedStatement?.copied ?? true,
       };
     })
     .filter((line) => line.text.length > 0);

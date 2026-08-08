@@ -1,0 +1,127 @@
+{
+  "acceptedAt": "2026-08-08T22:13:07.234Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "b26ee92d41383e6e08ece37544eec4e807cdbdebccae99902e3490b94936c124",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DependenceSliceCoverage changed from interface DependenceSliceCoverage { status: GraphEvidenceCoverage['status']; criterionKind: 'symbol-summary' | 'source-location-summary'; basis: 'partial-system-dependence-graph... to interface DependenceSliceCoverage { status: GraphEvidenceCoverage['status']; criterionKind: 'symbol-summary' | 'source-location-summary'; basis: 'partial-system-dependence-graph....",
+      "target": "./queries:DependenceSliceCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "GraphEvidenceEdge changed from interface GraphEvidenceEdge { id: string; family: GraphEvidenceFamily; semanticFamily: ProgramEdgeSemantic['family']; subtype: string; from: GraphEvidenceNode; to: GraphEvidence... to interface GraphEvidenceEdge { id: string; family: GraphEvidenceFamily; semanticFamily: ProgramEdgeSemantic['family']; subtype: string; from: GraphEvidenceNode; to: GraphEvidence....",
+      "target": "./queries:GraphEvidenceEdge"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "GraphEvidenceFold changed from interface GraphEvidenceFold { id: string; family: GraphEvidenceFamily; subtype: string; edgeCount: number; edgeIds: string[]; nodeIds: string[]; minimumMaxEdges: number; } to interface GraphEvidenceFold { id: string; mode: 'linear' | 'scc' | 'topology'; family: GraphEvidenceFamily; subtype: string; edgeCount: number; edgeIds: string[]; nodeIds: strin....",
+      "target": "./queries:GraphEvidenceFold"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "GraphEvidenceOptions changed from interface GraphEvidenceOptions { view?: GraphEvidenceView; families?: readonly GraphEvidenceFamily[]; direction?: GraphProjectionDirection; subtypes?: readonly string[]; connect... to interface GraphEvidenceOptions { view?: GraphEvidenceView; families?: readonly GraphEvidenceFamily[]; direction?: GraphProjectionDirection; subtypes?: readonly string[]; connect....",
+      "target": "./queries:GraphEvidenceOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "GraphEvidenceSelection changed from interface GraphEvidenceSelection { direction: GraphProjectionDirection; subtypes: string[]; connecting: boolean; inventoryOnly: boolean; } to interface GraphEvidenceSelection { direction: GraphProjectionDirection; subtypes: string[]; connecting: boolean; inventoryOnly: boolean; foldIds: string[]; }.",
+      "target": "./queries:GraphEvidenceSelection"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ValueFlowCoverage changed from interface ValueFlowCoverage { status: GraphEvidenceCoverage['status']; basis: 'proved-bounded-static-value-flow'; supportedRelations: string[]; unsupportedRelations: string[]; g... to interface ValueFlowCoverage { status: GraphEvidenceCoverage['status']; basis: 'proved-bounded-static-value-flow'; analysisBasis: 'partial-system-definition-use'; providers: read....",
+      "target": "./queries:ValueFlowCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DependenceSliceCoverage changed from interface DependenceSliceCoverage { status: GraphEvidenceCoverage['status']; criterionKind: 'symbol-summary' | 'source-location-summary'; basis: 'partial-system-dependence-graph... to interface DependenceSliceCoverage { status: GraphEvidenceCoverage['status']; criterionKind: 'symbol-summary' | 'source-location-summary'; basis: 'partial-system-dependence-graph....",
+      "target": "./queries/dependence-slice:DependenceSliceCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DependenceSliceCoverage changed from interface DependenceSliceCoverage { status: GraphEvidenceCoverage['status']; criterionKind: 'symbol-summary' | 'source-location-summary'; basis: 'partial-system-dependence-graph... to interface DependenceSliceCoverage { status: GraphEvidenceCoverage['status']; criterionKind: 'symbol-summary' | 'source-location-summary'; basis: 'partial-system-dependence-graph....",
+      "target": "./queries/index:DependenceSliceCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "GraphEvidenceEdge changed from interface GraphEvidenceEdge { id: string; family: GraphEvidenceFamily; semanticFamily: ProgramEdgeSemantic['family']; subtype: string; from: GraphEvidenceNode; to: GraphEvidence... to interface GraphEvidenceEdge { id: string; family: GraphEvidenceFamily; semanticFamily: ProgramEdgeSemantic['family']; subtype: string; from: GraphEvidenceNode; to: GraphEvidence....",
+      "target": "./queries/index:GraphEvidenceEdge"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "GraphEvidenceFold changed from interface GraphEvidenceFold { id: string; family: GraphEvidenceFamily; subtype: string; edgeCount: number; edgeIds: string[]; nodeIds: string[]; minimumMaxEdges: number; } to interface GraphEvidenceFold { id: string; mode: 'linear' | 'scc' | 'topology'; family: GraphEvidenceFamily; subtype: string; edgeCount: number; edgeIds: string[]; nodeIds: strin....",
+      "target": "./queries/index:GraphEvidenceFold"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "GraphEvidenceOptions changed from interface GraphEvidenceOptions { view?: GraphEvidenceView; families?: readonly GraphEvidenceFamily[]; direction?: GraphProjectionDirection; subtypes?: readonly string[]; connect... to interface GraphEvidenceOptions { view?: GraphEvidenceView; families?: readonly GraphEvidenceFamily[]; direction?: GraphProjectionDirection; subtypes?: readonly string[]; connect....",
+      "target": "./queries/index:GraphEvidenceOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "GraphEvidenceSelection changed from interface GraphEvidenceSelection { direction: GraphProjectionDirection; subtypes: string[]; connecting: boolean; inventoryOnly: boolean; } to interface GraphEvidenceSelection { direction: GraphProjectionDirection; subtypes: string[]; connecting: boolean; inventoryOnly: boolean; foldIds: string[]; }.",
+      "target": "./queries/index:GraphEvidenceSelection"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ValueFlowCoverage changed from interface ValueFlowCoverage { status: GraphEvidenceCoverage['status']; basis: 'proved-bounded-static-value-flow'; supportedRelations: string[]; unsupportedRelations: string[]; g... to interface ValueFlowCoverage { status: GraphEvidenceCoverage['status']; basis: 'proved-bounded-static-value-flow'; analysisBasis: 'partial-system-definition-use'; providers: read....",
+      "target": "./queries/index:ValueFlowCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export systemMapTopology.",
+      "target": "./queries/system-map:systemMapTopology"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ValueFlowCoverage changed from interface ValueFlowCoverage { status: GraphEvidenceCoverage['status']; basis: 'proved-bounded-static-value-flow'; supportedRelations: string[]; unsupportedRelations: string[]; g... to interface ValueFlowCoverage { status: GraphEvidenceCoverage['status']; basis: 'proved-bounded-static-value-flow'; analysisBasis: 'partial-system-definition-use'; providers: read....",
+      "target": "./queries/value-flow:ValueFlowCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "a changed from interface GraphEvidenceEdge { id: string; family: GraphEvidenceFamily; semanticFamily: ProgramEdgeSemantic['family']; subtype: string; from: GraphEvidenceNode; to: GraphEvidence... to interface GraphEvidenceEdge { id: string; family: GraphEvidenceFamily; semanticFamily: ProgramEdgeSemantic['family']; subtype: string; from: GraphEvidenceNode; to: GraphEvidence....",
+      "target": "graph-evidence-<hash>.d.ts:a"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "f changed from interface GraphEvidenceFold { id: string; family: GraphEvidenceFamily; subtype: string; edgeCount: number; edgeIds: string[]; nodeIds: string[]; minimumMaxEdges: number; } to interface GraphEvidenceFold { id: string; mode: 'linear' | 'scc' | 'topology'; family: GraphEvidenceFamily; subtype: string; edgeCount: number; edgeIds: string[]; nodeIds: strin....",
+      "target": "graph-evidence-<hash>.d.ts:f"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "i changed from interface GraphEvidenceOptions { view?: GraphEvidenceView; families?: readonly GraphEvidenceFamily[]; direction?: GraphProjectionDirection; subtypes?: readonly string[]; connect... to interface GraphEvidenceOptions { view?: GraphEvidenceView; families?: readonly GraphEvidenceFamily[]; direction?: GraphProjectionDirection; subtypes?: readonly string[]; connect....",
+      "target": "graph-evidence-<hash>.d.ts:i"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "k changed from interface GraphEvidenceSelection { direction: GraphProjectionDirection; subtypes: string[]; connecting: boolean; inventoryOnly: boolean; } to interface GraphEvidenceSelection { direction: GraphProjectionDirection; subtypes: string[]; connecting: boolean; inventoryOnly: boolean; foldIds: string[]; }.",
+      "target": "graph-evidence-<hash>.d.ts:k"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "cdebf9d8a3ed85b29be6cb83897715f751b3b8ebbff17617d8be51afa0cf000f",
+  "reason": "Breaking public coverage and fold contracts intentionally expose provider provenance, exact fold recovery, and honest partial-analysis semantics for the canonical evidence surface.",
+  "schemaVersion": 1
+}

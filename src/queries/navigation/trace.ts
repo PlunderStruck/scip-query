@@ -4,7 +4,7 @@ import { referenceEvidenceForSymbol } from '../../symbols/references/reference-s
 import { getSourceText } from '../../source/primitives/source-text.js';
 import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
-import { SOURCE_INSPECTION_MAX_SELECTORS } from '../internal/inspection-limits.js';
+import { SOURCE_INSPECTION_MAX_SELECTORS } from '../../domain/source-inspection-limits.js';
 import { referenceSourceSnippet } from './source-snippet.js';
 
 export interface TraceResult {

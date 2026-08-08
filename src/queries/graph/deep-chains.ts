@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
+import { buildFileDepGraph, type FileDependencyEdgeBasis } from '../../symbols/graph/file-dep-graph.js';
 import { stronglyConnectedComponents } from '../../analysis/strongly-connected-components.js';
 
 export interface DeepChainResult {
@@ -11,6 +11,8 @@ export interface DeepChainResult {
   depth: number;
   /** Total files represented by the condensed component path. */
   fileCount: number;
+  /** The file relation whose condensed depth was measured. */
+  edgeBasis?: FileDependencyEdgeBasis;
   actionTier: 'signal';
   chainKind: 'transitive-dependency-depth';
   evidenceReasons: string[];
@@ -31,12 +33,16 @@ export interface DeepChainResult {
  * exponential blow-up of enumerating every simple path (which OOMs on
  * dense graphs with cycles, like cross-crate Rust workspaces).
  */
-export function deepChains(
+export function dependencyDepth(
   db: ScipDatabase,
-  opts: { limit?: number; scope?: string; minDepth?: number } = {},
+  opts: { limit?: number; scope?: string; minDepth?: number; edgeBasis?: FileDependencyEdgeBasis } = {},
 ): DeepChainResult[] {
-  const { limit = 10, scope, minDepth = 3 } = opts;
-  const graph = buildFileDepGraph(db, scope);
+  const { limit = 10, scope, minDepth = 3, edgeBasis = 'symbol-references' } = opts;
+  const graph = buildFileDepGraph(
+    db,
+    scope,
+    edgeBasis === 'imports' ? { scipEdges: 'imports-only', sourceEdges: 'imports-only' } : undefined,
+  );
 
   // 1. Condense mutually reachable files into dependency components.
   type SccId = number;
@@ -67,9 +73,12 @@ export function deepChains(
   for (let s = 0; s < sccs.length; s++) {
     let bestTail: SccId[] = [];
     let bestTailLength = 0;
-    for (const next of dag.get(s)!) {
+    for (const next of [...dag.get(s)!].sort((left, right) => left - right)) {
       const tailLength = pathLength[next]!;
-      if (tailLength > bestTailLength) {
+      if (
+        tailLength > bestTailLength ||
+        (tailLength === bestTailLength && compareComponentPaths(longestSccPath[next]!, bestTail, sccs) < 0)
+      ) {
         bestTailLength = tailLength;
         bestTail = longestSccPath[next]!;
       }
@@ -96,14 +105,33 @@ export function deepChains(
     const key = chain.join(' ');
     if (seen.has(key)) continue;
     seen.add(key);
-    results.push(deepChainResult(chain, components));
+    results.push(deepChainResult(chain, components, edgeBasis));
   }
 
-  results.sort((a, b) => b.depth - a.depth);
+  results.sort((a, b) => b.depth - a.depth || a.chain.join('\0').localeCompare(b.chain.join('\0')));
   return dedupeSuffixChains(results).slice(0, limit);
 }
 
-function deepChainResult(chain: string[], components: string[][]): DeepChainResult {
+/** @deprecated Prefer `dependencyDepth`, which names the computed graph property. */
+export function deepChains(
+  db: ScipDatabase,
+  opts: { limit?: number; scope?: string; minDepth?: number } = {},
+): DeepChainResult[] {
+  return dependencyDepth(db, opts);
+}
+
+function compareComponentPaths(
+  left: readonly number[],
+  right: readonly number[],
+  components: readonly string[][],
+): number {
+  if (right.length === 0) return -1;
+  const leftKey = left.map((id) => [...components[id]!].sort()[0] ?? '').join('\0');
+  const rightKey = right.map((id) => [...components[id]!].sort()[0] ?? '').join('\0');
+  return leftKey.localeCompare(rightKey);
+}
+
+function deepChainResult(chain: string[], components: string[][], edgeBasis: FileDependencyEdgeBasis): DeepChainResult {
   const fileCount = components.reduce((sum, component) => sum + component.length, 0);
   const cycleCount = components.filter((component) => component.length > 1).length;
   return {
@@ -111,11 +139,13 @@ function deepChainResult(chain: string[], components: string[][]): DeepChainResu
     components,
     depth: components.length,
     fileCount,
+    edgeBasis,
     actionTier: 'signal',
     chainKind: 'transitive-dependency-depth',
     evidenceReasons: [
       `${components.length} condensed dependency component(s) form the representative transitive path`,
       `${fileCount} file(s) are represented; ${cycleCount} component(s) contain a dependency cycle`,
+      `edge basis: ${edgeBasis === 'imports' ? 'resolved file imports' : 'cross-file symbol references plus resolved source imports'}`,
       'cycles count once toward depth and retain their full membership separately',
     ],
     recommendation:

@@ -9,6 +9,9 @@ import {
   writeRuntimeBoundaryGraph,
 } from '../../../src/analysis/runtime-boundaries/index.js';
 import { systemMap } from '../../../src/queries/graph/system-map.js';
+import { dependenceSlice } from '../../../src/queries/graph/dependence-slice.js';
+import { graphEvidence } from '../../../src/queries/graph/graph-evidence.js';
+import { valueFlow } from '../../../src/queries/graph/value-flow.js';
 import { connectedBehaviorPacket } from '../../../src/queries/internal/connected-behavior.js';
 import { createExplorationTopology } from '../../../src/queries/internal/exploration-topology.js';
 import { ProjectIndex } from '../../../src/queries/internal/project-index.js';
@@ -31,6 +34,8 @@ const symbols = {
   refresh: 'scip-typescript npm web 1.0.0 src/components/sessions/`client.ts`/refreshEvents().',
   render: 'scip-typescript npm web 1.0.0 src/components/sessions/`view.ts`/renderEvent().',
   memberRegistry: 'scip-typescript npm api 1.0.0 src/modules/member-flow/`registry.ts`/memberRegistry.',
+  capabilityInstruction: 'scip-typescript npm companion 1.0.0 src/`background.ts`/',
+  capabilityHandler: 'scip-typescript npm companion 1.0.0 src/`kill-process.ts`/',
 } as const;
 
 describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
@@ -39,6 +44,171 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
   afterEach(() => {
     if (root) rmSync(root, { recursive: true, force: true });
     root = null;
+  });
+
+  it('projects several exact roots into one compact typed evidence packet', () => {
+    const db = createSystemMapDb();
+    try {
+      const result = graphEvidence(
+        db,
+        { symbols: [symbols.companionCommand, symbols.apiAppend] },
+        { view: 'complete', maxDepth: 2, maxEdges: 40 },
+      );
+
+      expect(result.targets).toEqual([
+        expect.objectContaining({ query: symbols.companionCommand, status: 'matched' }),
+        expect.objectContaining({ query: symbols.apiAppend, status: 'matched' }),
+      ]);
+      expect(result.edges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ family: 'execution', subtype: 'call' }),
+          expect.objectContaining({ family: 'dataflow' }),
+        ]),
+      );
+      const temporalInventory = result.inventory.find((row) => row.family === 'temporal');
+      expect(temporalInventory?.both).toBeGreaterThan(0);
+      if (!result.edges.some((edge) => edge.family === 'temporal')) {
+        expect(result.folds).toEqual(expect.arrayContaining([expect.objectContaining({ family: 'temporal' })]));
+      }
+      expect(result.edges.some((edge) => edge.from.location || edge.to.location)).toBe(true);
+      expect(result.coverage).toMatchObject({ maxDepth: 2, maxEdges: 40, returnedEdges: result.edges.length });
+    } finally {
+      db.close();
+    }
+  });
+
+  it('keeps explicit edge selection and edge-budget omissions visible', () => {
+    const db = createSystemMapDb();
+    try {
+      const result = graphEvidence(
+        db,
+        { symbols: [symbols.apiAppend] },
+        { families: ['execution'], maxDepth: 2, maxEdges: 1 },
+      );
+      const expanded = graphEvidence(
+        db,
+        { symbols: [symbols.apiAppend] },
+        { families: ['execution'], maxDepth: 2, maxEdges: 1_000 },
+      );
+
+      expect(result.view).toBe('custom');
+      expect(result.families).toEqual(['execution']);
+      expect(result.edges).toHaveLength(1);
+      expect(result.edges[0]?.family).toBe('execution');
+      expect(result.coverage.eligibleEdges).toBeGreaterThanOrEqual(1);
+      expect(result.coverage.omittedEdges).toBe(result.coverage.eligibleEdges - 1);
+      expect(result.coverage.status).toBe(result.coverage.omittedEdges > 0 ? 'bounded' : 'accounted');
+      const emittedIds = new Set(result.edges.map((edge) => edge.id));
+      const foldedIds = result.folds.flatMap((fold) => fold.edgeIds);
+      expect(new Set([...emittedIds, ...foldedIds])).toEqual(new Set(expanded.edges.map((edge) => edge.id)));
+      expect(foldedIds).toHaveLength(new Set(foldedIds).size);
+      expect(result.folds.every((fold) => fold.minimumMaxEdges <= expanded.coverage.eligibleEdges)).toBe(true);
+      expect(result.folds.every((fold) => ['linear', 'scc', 'topology'].includes(fold.mode))).toBe(true);
+      const fold = result.folds[0];
+      if (fold) {
+        const materialized = graphEvidence(
+          db,
+          { symbols: [symbols.apiAppend] },
+          { families: ['execution'], maxDepth: 2, maxEdges: 1, foldIds: [fold.id] },
+        );
+        expect(materialized.selection.foldIds).toEqual([fold.id]);
+        expect(materialized.edges.map((edge) => edge.id).sort()).toEqual(fold.edgeIds);
+        expect(materialized.folds).toEqual([]);
+        expect(materialized.coverage).toMatchObject({ status: 'accounted', omittedEdges: 0 });
+        expect(() =>
+          graphEvidence(
+            db,
+            { symbols: [symbols.apiAppend] },
+            { families: ['execution'], maxDepth: 2, maxEdges: 1, foldIds: ['fold:unknown'] },
+          ),
+        ).toThrow('Unknown evidence fold');
+      }
+    } finally {
+      db.close();
+    }
+  });
+
+  it('projects explicit directions and reports exact inventory without materializing edges', () => {
+    const db = createSystemMapDb();
+    try {
+      const selectors = { symbols: [symbols.apiAppend] };
+      const shared = { families: ['execution'] as const, maxDepth: 2, maxEdges: 1_000 };
+      const incoming = graphEvidence(db, selectors, { ...shared, direction: 'incoming' });
+      const outgoing = graphEvidence(db, selectors, { ...shared, direction: 'outgoing' });
+      const both = graphEvidence(db, selectors, { ...shared, direction: 'both' });
+      const inventory = graphEvidence(db, selectors, { ...shared, inventoryOnly: true });
+
+      expect(incoming.selection.direction).toBe('incoming');
+      expect(outgoing.selection.direction).toBe('outgoing');
+      expect(both.selection.direction).toBe('both');
+      expect(incoming.edges.length).toBeGreaterThan(0);
+      expect(outgoing.edges.length).toBeGreaterThan(0);
+      const bothIds = new Set(both.edges.map((edge) => edge.id));
+      expect([...incoming.edges, ...outgoing.edges].every((edge) => bothIds.has(edge.id))).toBe(true);
+      expect(inventory.edges).toEqual([]);
+      expect(inventory.coverage).toMatchObject({
+        matchedEdges: both.coverage.matchedEdges,
+        eligibleEdges: 0,
+        returnedEdges: 0,
+        omittedEdges: 0,
+      });
+      expect(inventory.inventory.reduce((total, row) => total + row.incoming, 0)).toBe(incoming.coverage.matchedEdges);
+      expect(inventory.inventory.reduce((total, row) => total + row.outgoing, 0)).toBe(outgoing.coverage.matchedEdges);
+      expect(inventory.inventory.reduce((total, row) => total + row.both, 0)).toBe(both.coverage.matchedEdges);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('filters exact subtypes and returns deterministic connecting paths for several roots', () => {
+    const db = createSystemMapDb();
+    try {
+      const selectors = { symbols: [symbols.companionCommand, symbols.apiAppend] };
+      const complete = graphEvidence(db, selectors, { view: 'complete', maxDepth: 8, maxEdges: 1_000 });
+      const subtype = complete.inventory.find((row) => row.both > 0)?.subtype;
+      expect(subtype).toBeDefined();
+
+      const filtered = graphEvidence(db, selectors, {
+        view: 'complete',
+        subtypes: [subtype!],
+        maxDepth: 8,
+        maxEdges: 1_000,
+      });
+      expect(filtered.selection.subtypes).toEqual([subtype]);
+      expect(filtered.edges.every((edge) => edge.subtype === subtype)).toBe(true);
+
+      const first = graphEvidence(db, selectors, {
+        view: 'complete',
+        direction: 'both',
+        connecting: true,
+        maxDepth: 8,
+        maxEdges: 1_000,
+      });
+      const second = graphEvidence(db, selectors, {
+        view: 'complete',
+        direction: 'both',
+        connecting: true,
+        maxDepth: 8,
+        maxEdges: 1_000,
+      });
+      expect(first.selection.connecting).toBe(true);
+      expect(first.edges.length).toBeGreaterThan(0);
+      expect(first.edges.map((edge) => edge.id)).toEqual(second.edges.map((edge) => edge.id));
+      expect(first.edges.every((edge) => complete.edges.some((candidate) => candidate.id === edge.id))).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('rejects connecting projections that do not resolve at least two roots', () => {
+    const db = createSystemMapDb();
+    try {
+      expect(() => graphEvidence(db, { symbols: [symbols.apiAppend] }, { connecting: true })).toThrow(
+        'Connecting evidence requires at least two resolved root nodes.',
+      );
+    } finally {
+      db.close();
+    }
   });
 
   it('preserves every literal hit and every ambiguous symbol candidate', () => {
@@ -73,6 +243,26 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       );
       expect(result.coverage.literalSearchesComplete).toBe(true);
       expect(result.coverage.symbolCandidateSetsComplete).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('keeps compatibility selection terms from changing graph or recovery membership', () => {
+    const db = createSystemMapDb();
+    try {
+      const selectors = {
+        symbols: [symbols.companionCommand, symbols.apiAppend],
+        maxDepth: 3,
+      };
+      const baseline = systemMap(db, selectors);
+      const relabeled = systemMap(db, {
+        ...selectors,
+        selectionTerms: ['persistence', 'authorization', 'unrelated-vocabulary'],
+      });
+
+      expect(relabeled.topology).toEqual(baseline.topology);
+      expect(relabeled.nextAnchors).toEqual(baseline.nextAnchors);
     } finally {
       db.close();
     }
@@ -161,9 +351,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       const runner = result.behavior?.steps.find((step) => step.location?.file === 'src/runner.ts');
       expect(runner?.behavior?.kind).toBe('connector-slice');
       expect(runner?.behavior?.lines).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ text: expect.stringContaining("spawn('sh'") }),
-        ]),
+        expect.arrayContaining([expect.objectContaining({ text: expect.stringContaining("spawn('sh'") })]),
       );
     } finally {
       db.close();
@@ -211,7 +399,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('joins compiler-resolved argument flow to call edges in the first system map', () => {
+  it('joins compiler-resolved argument and return flow to call edges in the first system map', () => {
     const db = createSystemMapDb();
     try {
       const result = systemMap(db, {
@@ -252,7 +440,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       expect(result.topology?.coverage.programEdges?.families.data).toMatchObject({
         sourceEdges: expect.any(Number),
         projectedEdges: expect.any(Number),
-        subtypes: ['argument-to-parameter', 'constant-to-parameter'],
+        subtypes: ['argument-to-parameter', 'constant-to-parameter', 'definition-to-use', 'return-to-call-result'],
       });
       expect(result.topology?.coverage.programEdges?.families.data.projectedEdges).toBeGreaterThan(0);
       const corridorDataSubtypes =
@@ -261,7 +449,80 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
           .flatMap((edge) => edge.semantics ?? [])
           .filter((semantic) => semantic.family === 'data')
           .map((semantic) => semantic.subtype) ?? [];
-      expect(corridorDataSubtypes).toEqual(expect.arrayContaining(['argument-to-parameter', 'constant-to-parameter']));
+      expect(corridorDataSubtypes).toEqual(
+        expect.arrayContaining(['argument-to-parameter', 'constant-to-parameter', 'return-to-call-result']),
+      );
+      expect(
+        result.topology?.nodes.some(
+          (node) => node.kind === 'call-result' && node.attributes['calleeSymbol'] === symbols.companionAppend,
+        ),
+      ).toBe(true);
+      expect(
+        result.topology?.nodes.some(
+          (node) => node.kind === 'call-result' && node.attributes['calleeSymbol'] === symbols.publish,
+        ),
+      ).toBe(false);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('keeps proved value flow distinct from reference and call neighborhoods', () => {
+    const db = createSystemMapDb();
+    try {
+      const flow = valueFlow(db, { symbols: [symbols.companionCommand, symbols.companionAppend] }, { maxDepth: 1 });
+
+      expect(flow.kind).toBe('value-flow');
+      expect(flow.edges).toEqual(
+        expect.arrayContaining([expect.objectContaining({ family: 'dataflow', subtype: 'argument-to-parameter' })]),
+      );
+      expect(flow.edges.every((edge) => edge.family === 'dataflow')).toBe(true);
+      expect(flow.edges).toEqual(
+        expect.arrayContaining([expect.objectContaining({ family: 'dataflow', subtype: 'return-to-call-result' })]),
+      );
+      expect(flow.edges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            family: 'dataflow',
+            subtype: 'definition-to-use',
+            providerId: 'typescript-local-dependence',
+          }),
+        ]),
+      );
+      expect(flow.coverage).toMatchObject({
+        basis: 'proved-bounded-static-value-flow',
+        analysisBasis: 'partial-system-definition-use',
+        providers: ['bounded-static-value-flow', 'typescript-local-dependence'],
+      });
+      expect(flow.coverage.unsupportedRelations).not.toContain('general local definition-use chains');
+      expect(flow.coverage.unsupportedRelations).toContain(
+        'general heap alias and cross-instance field points-to flow',
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('computes a directional dependence slice and labels call connectors as support', () => {
+    const db = createSystemMapDb();
+    try {
+      const result = dependenceSlice(db, symbols.companionAppend, {
+        direction: 'backward',
+        maxDepth: 2,
+        maxEdges: 200,
+      });
+
+      expect(result).toMatchObject({
+        kind: 'dependence-slice',
+        direction: 'backward',
+        coverage: { basis: 'partial-system-dependence-graph', criterionKind: 'symbol-summary' },
+      });
+      expect(result.edges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ family: 'dataflow', subtype: 'argument-to-parameter', supporting: false }),
+          expect.objectContaining({ family: 'execution', subtype: 'call', supporting: true }),
+        ]),
+      );
     } finally {
       db.close();
     }
@@ -531,9 +792,6 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       expect(result.behavior?.steps).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            location: expect.objectContaining({ file: 'packages/companion/src/dispatch.ts' }),
-          }),
-          expect.objectContaining({
             location: expect.objectContaining({ file: 'apps/api/src/modules/sessions/routes.ts' }),
           }),
           expect.objectContaining({
@@ -656,6 +914,14 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
           }),
         ]),
       );
+      const evidence = graphEvidence(
+        db,
+        { symbols: [symbols.apiAppend] },
+        { families: ['state'], maxDepth: 1, maxEdges: 4 },
+      );
+      expect(evidence.edges).toEqual(
+        expect.arrayContaining([expect.objectContaining({ family: 'state', subtype: 'writes-resource' })]),
+      );
     } finally {
       db.close();
     }
@@ -705,7 +971,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('reaches a framework registration through its resolved source-callable owner', () => {
+  it('catalogues a framework registration through its resolved source-callable owner', () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-framework-owner-'));
     const projectRoot = join(root, 'project');
     const dbPath = join(root, 'index.db');
@@ -757,19 +1023,14 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
           expect.objectContaining({
             disposition: 'emitted',
             location: expect.objectContaining({ file: 'src/groups.ts', line: 2 }),
-            attributes: expect.objectContaining({
-              upstreamCausalPath: true,
-              upstreamCausalDistance: 1,
-              upstreamCausalEndpoint: 'runtime-boundary',
-            }),
           }),
         ]),
       );
-      expect(result.behavior?.steps).toEqual(
+      expect(result.topology?.routeCatalog?.routes).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            role: 'connector',
-            location: expect.objectContaining({ file: 'src/groups.ts', line: 2 }),
+            endpointKind: 'runtime-boundary',
+            endpointLocation: expect.objectContaining({ file: 'src/groups.ts', line: 2 }),
           }),
         ]),
       );
@@ -819,11 +1080,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       });
 
       const selectedOperations = (result.topology?.nodes ?? [])
-        .filter(
-          (node) =>
-            node.kind === 'runtime-boundary-participant' &&
-            node.attributes.upstreamCausalEndpoint === 'runtime-boundary',
-        )
+        .filter((node) => node.kind === 'runtime-boundary-participant')
         .map((node) => node.label);
       expect(selectedOperations).toEqual(
         expect.arrayContaining([
@@ -918,7 +1175,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('uses an unindexed source callable as a literal anchor and follows its exact imported call', () => {
+  it('uses an unindexed source callable as a literal anchor and preserves its exact imported call as graph evidence', () => {
     const db = createSystemMapDb({ unindexedSourceAnchor: true });
     try {
       const result = systemMap(db, {
@@ -939,11 +1196,18 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
               ]),
             }),
           }),
-          expect.objectContaining({ label: expect.stringContaining('appendStreamEvents') }),
         ]),
       );
-      expect(result.behavior?.transitions).toEqual(
-        expect.arrayContaining([expect.objectContaining({ kind: 'call', evidence: expect.any(Array) })]),
+      const anchorNodeId = result.topology?.anchors[0]?.nodeIds[0];
+      expect(result.topology?.edges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'call',
+            fromNodeId: anchorNodeId,
+            toNodeId: expect.stringContaining('appendStreamEvents'),
+            evidence: expect.any(Array),
+          }),
+        ]),
       );
     } finally {
       db.close();
@@ -1019,7 +1283,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('attributes a nested callback to its enclosing exported package doorway', () => {
+  it('catalogues a nested callback under its enclosing exported package doorway', () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-public-owner-'));
     const projectRoot = join(root, 'project');
     const dbPath = join(root, 'index.db');
@@ -1062,12 +1326,30 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
             attributes: expect.objectContaining({
               publicEntry: true,
               publicEntryPriority: 2,
-              upstreamCausalEndpoint: 'public-entry',
             }),
+            disposition: 'folded',
           }),
         ]),
       );
       expect(result.topology?.nodes.find((node) => node.label === 'hidden')?.attributes['publicEntry']).not.toBe(true);
+      expect(result.topology?.routeCatalog?.routes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            endpointKind: 'public-entry',
+            endpointLocation: expect.objectContaining({ file: 'src/public.ts' }),
+            anchorLabel: expect.stringContaining('compact'),
+          }),
+        ]),
+      );
+      const routeId = result.topology?.routeCatalog?.routes[0]?.id;
+      expect(routeId).toBeDefined();
+      const selected = systemMap(db, {
+        symbols: [compactSymbol],
+        maxDepth: 1,
+        relations: ['call'],
+        routeIds: [routeId!],
+      });
+      expect(selected.topology?.routeCatalog?.selectedRouteIds).toEqual([routeId]);
     } finally {
       db.close();
     }
@@ -1304,6 +1586,21 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
           'predicate-alternative',
           'predicate-return',
           'predicate-throw',
+        ]),
+      );
+      const compilerDependence = graphEvidence(
+        db,
+        { symbols: ['src/control.ts:0-6'] },
+        { families: ['execution'], subtypes: ['control-dependence'], maxDepth: 1, maxEdges: 100 },
+      );
+      expect(compilerDependence.edges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            family: 'execution',
+            subtype: 'control-dependence',
+            providerId: 'typescript-local-dependence',
+            evidenceStrength: 'exact',
+          }),
         ]),
       );
     } finally {
@@ -1593,21 +1890,31 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-    it('keeps every answer-determinative sibling branch while compacting a source-large explicit anchor', () => {
+  it('keeps every answer-determinative sibling branch while compacting a source-large explicit anchor', () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-complete-explicit-anchor-'));
     const padding = Array.from(
       { length: 80 },
       (_, index) => `  // padding-${String(index).padStart(4, '0')}-abcdefghijklmnopqrstuvwxyz0123456789`,
     );
     const source = [
-      'export function execute(input: string) {',
+      'export function execute(input: string, results: unknown[], block: { id: string }, r: { content: string; isError: boolean }) {',
       '  const command = input.trim();',
       '  if (!command) {',
       "    return { action: 'block', reason: 'empty command' };",
       '  }',
       ...padding,
+      '  results.push({',
+      "    type: 'tool_result',",
+      '    tool_use_id: block.id,',
+      '    content: r.content,',
+      '    isError: r.isError,',
+      '  });',
       "  if (command.endsWith('&')) {",
-      "    return { action: 'background', command };",
+      '    return {',
+      "      action: 'background',",
+      '      command,',
+      '      content: `started background process\\nlog: ${command}\\nuse process_output and kill_process`,',
+      '    };',
       '  }',
       "  return { action: 'foreground', command };",
       '}',
@@ -1650,22 +1957,30 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       const behavior = packet.steps.find((step) => step.label === 'execute')?.behavior;
       const rendered = behavior?.lines.map((line) => line.text).join('\n') ?? '';
 
-        expect(behavior?.kind).not.toBe('source');
-        expect(behavior?.renderedCharacters).toBeLessThan(behavior?.rawCharacters ?? 0);
-        expect(rendered).toContain('const command = input.trim()');
-        expect(rendered).toContain('if !command');
-        expect(rendered).toContain("return { action: 'block', reason: 'empty command' }");
-        expect(rendered).toContain("return { action: 'background', command }");
-        expect(rendered).toContain("return { action: 'foreground', command }");
-        expect(rendered).not.toContain('padding-0001');
+      expect(behavior?.kind).not.toBe('source');
+      expect(behavior?.renderedCharacters).toBeLessThan(behavior?.rawCharacters ?? 0);
+      expect(rendered).toContain('const command = input.trim()');
+      expect(rendered).toContain('if !command');
+      expect(rendered).toContain("return { action: 'block', reason: 'empty command' }");
+      expect(rendered).toContain(
+        "results.push({ type: 'tool_result', tool_use_id: block.id, content: r.content, isError: r.isError, });",
+      );
+      const structuredCall = behavior?.lines.find((line) => line.text.startsWith('results.push'));
+      expect(structuredCall?.signals).toEqual(expect.arrayContaining(['call', 'shape']));
+      expect(structuredCall?.signals).not.toContain('mutation');
+      expect(rendered).toContain("action: 'background'");
+      expect(rendered).toContain('log: ${command}');
+      expect(rendered).toContain('use process_output and kill_process');
+      expect(rendered).toContain("return { action: 'foreground', command }");
+      expect(rendered).not.toContain('padding-0001');
     } finally {
       db.close();
     }
   });
 
   it('falls back to complete source when an explicit anchor cannot be compressed losslessly', () => {
-      root = mkdtempSync(join(tmpdir(), 'scip-system-map-complete-explicit-source-'));
-      const body = [`  performMaterialEffect('${'material-unknown-'.repeat(260)}');`];
+    root = mkdtempSync(join(tmpdir(), 'scip-system-map-complete-explicit-source-'));
+    const body = [`  performMaterialEffect('${'material-unknown-'.repeat(260)}');`];
     const source = [
       'export function execute(input: string) {',
       '  const command = input.trim();',
@@ -1987,6 +2302,46 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       expect(result.regionRelations.flatMap((relation) => relation.kinds)).toEqual(['runtime-boundary']);
       expect(result.regions.map((region) => region.label)).toEqual(
         expect.arrayContaining(['companion:root', 'api:modules/sessions']),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('traverses exact named-capability references to their unique handlers', () => {
+    const db = createSystemMapDb({ capabilityRegistry: true });
+    try {
+      const result = systemMap(db, {
+        symbols: [symbols.capabilityInstruction, symbols.capabilityHandler],
+        maxDepth: 1,
+        relations: ['runtime-boundary'],
+      });
+
+      expect(result.coverage.runtimeBoundaryExactLinks).toBeGreaterThan(0);
+      expect(result.coverage.runtimeBoundaryTraversedLinks).toBeGreaterThan(0);
+      expect(
+        result.behavior?.transitions,
+        JSON.stringify(
+          {
+            runtimeEdges: result.topology?.edges.filter((edge) => edge.kind === 'runtime-boundary'),
+            paths: result.topology?.paths,
+            behavior: result.behavior,
+          },
+          null,
+          2,
+        ),
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'runtime-boundary',
+            evidence: expect.arrayContaining([
+              expect.objectContaining({ method: 'runtime-boundary:registry.capability-key' }),
+            ]),
+          }),
+        ]),
+      );
+      expect(result.behavior?.steps.map((step) => step.location?.file)).toEqual(
+        expect.arrayContaining(['packages/companion/src/background.ts', 'packages/companion/src/kill-process.ts']),
       );
     } finally {
       db.close();
@@ -2401,6 +2756,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     options: {
       broadLiteral?: string;
       boundedLiteral?: string;
+      capabilityRegistry?: boolean;
       moduleOwnedReference?: boolean;
       unindexedRuntimeParticipant?: boolean;
       unindexedSourceAnchor?: boolean;
@@ -2421,6 +2777,21 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
         source[file] = [`${lines[0]} // '${options.boundedLiteral}'`];
         remaining -= 1;
       }
+    }
+    if (options.capabilityRegistry) {
+      source['packages/companion/src/background.ts'] = [
+        'export function backgroundInstructions(id: string) {',
+        '  return `Use kill_process({ id: "${id}" }) to stop.`;',
+        '}',
+      ];
+      source['packages/companion/src/kill-process.ts'] = [
+        'export const killProcessTool = {',
+        '  def: { name: "kill_process" },',
+        '  async execute(input: { id: string }) {',
+        '    return input.id;',
+        '  },',
+        '};',
+      ];
     }
     if (options.moduleOwnedReference) {
       source['packages/companion/src/object-commands.ts'] = [
@@ -2491,6 +2862,24 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
         file: 'packages/companion/src/entry.ts',
         start: 2,
       },
+      ...(options.capabilityRegistry
+        ? [
+            {
+              symbol: symbols.capabilityInstruction,
+              displayName: 'background.ts',
+              file: 'packages/companion/src/background.ts',
+              start: 0,
+              kind: 1,
+            },
+            {
+              symbol: symbols.capabilityHandler,
+              displayName: 'kill-process.ts',
+              file: 'packages/companion/src/kill-process.ts',
+              start: 0,
+              kind: 1,
+            },
+          ]
+        : []),
     ];
 
     const builder = evidenceFixtureDb(join(root, 'index.db'));
@@ -2504,9 +2893,12 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
         .chunk(id, id, 0, lines.length - 1)
         .mention(id, id, 1);
     });
-    paths.slice(definitions.length).forEach((file, index) => {
-      builder.document(definitions.length + index + 1, 'typescript', file);
-    });
+    const definedFiles = new Set(definitions.map((definition) => definition.file));
+    paths
+      .filter((file) => !definedFiles.has(file))
+      .forEach((file, index) => {
+        builder.document(definitions.length + index + 1, 'typescript', file);
+      });
 
     const mention = (documentId: number, symbolId: number, role: number): void => {
       builder.mention(documentId, symbolId, role);

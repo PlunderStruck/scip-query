@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { findFirstSymbolMatch } from '../../../src/symbols/symbol-lookup.js';
-import { affected } from '../../../src/queries/graph/affected.js';
+import { affected, possibleImpactClosure } from '../../../src/queries/graph/affected.js';
 import { bottlenecks } from '../../../src/queries/graph/bottlenecks.js';
 import { byKind } from '../../../src/queries/navigation/by-kind.js';
 import { callGraph } from '../../../src/queries/navigation/call-graph.js';
@@ -251,6 +251,19 @@ describe('command accuracy fixes', () => {
 
     expect(names).toEqual(expect.arrayContaining(['src:flow:alpha()', 'src:flow:beta()']));
     expect(names).not.toContain('src:flow');
+  });
+
+  it('reports when a possible-impact closure stops before exhausting its frontier', () => {
+    const result = possibleImpactClosure(db, 'sharedOne', { maxDepth: 0 });
+
+    expect(result.rows).toEqual([]);
+    expect(result.coverage).toMatchObject({
+      status: 'bounded',
+      edgeBasis: 'reverse-static-call-or-reference-evidence',
+      maxDepth: 0,
+      reachedDepth: 0,
+      remainingFrontierSymbols: 1,
+    });
   });
 
   it('isolates callee fingerprints between adjacent functions so ranges do not cross-pollute', () => {

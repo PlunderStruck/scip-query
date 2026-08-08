@@ -61,7 +61,12 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
         { length: 600 },
         (_, index) => `  // mechanically irrelevant padding ${String(index).padStart(3, '0')} ${'x'.repeat(32)}`,
       ),
-      '  return true;',
+      '  return {',
+      "    type: 'tool_result',",
+      "    tool_use_id: 'call-1',",
+      "    content: 'ok',",
+      '    isError: false,',
+      '  };',
       '}',
       '',
     ];
@@ -234,10 +239,35 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
       navigationEnv,
     );
     expect(mapped.status).toBe(0);
+    expect(mapped.stdout).toContain('ANSWER EVIDENCE CONTRACT');
+    expect(mapped.stdout).toContain('condition and outcome');
+    expect(mapped.stdout).toContain('working directory');
+    expect(mapped.stdout).toContain('singleton/shared/per-invocation');
+    expect(mapped.stdout).toContain('stops or continues');
+    expect(mapped.stdout).toContain('precedence and bypass scope');
 
     const inspected = runCommand('inspect', ['--at', 'src/anchor-store.ts:2', '--view', 'behavior'], navigationEnv);
     expect(inspected.status).toBe(0);
     expect(inspected.stdout).toContain('persistPaper');
+  });
+
+  it('prints the answer contract when disconnected anchors still render behavior', () => {
+    const mapped = runCommand('system-map', [
+      '--symbol',
+      'scip-typescript npm fixture 1.0.0 src/`anchor-download.ts`/executeDownload().',
+      '--symbol',
+      'scip-typescript npm fixture 1.0.0 src/`expansive-flow.ts`/expansiveFlow().',
+    ]);
+
+    expect(mapped.status).toBe(0);
+    expect(mapped.stdout).toContain('CONNECTED BEHAVIOR');
+    expect(mapped.stdout).toContain('ANSWER EVIDENCE CONTRACT');
+    expect(mapped.stdout).toContain('Draft audit — structured payloads:');
+    expect(mapped.stdout).toContain('src/expansive-flow.ts:602');
+    expect(mapped.stdout).toContain(
+      "return { type: 'tool_result', tool_use_id: 'call-1', content: 'ok', isError: false, };",
+    );
+    expect(mapped.stdout).toContain('Draft audit — terminal outcomes:');
   });
 
   it('replaces repeated behavior projections with session evidence receipts', () => {

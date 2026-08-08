@@ -4,7 +4,11 @@ import { describe, it, expect, vi } from 'vitest';
 import { program, renderHeuristicNotice } from '../../src/runtime/cli.js';
 import { commandDescriptors } from '../../src/runtime/commands/command-descriptors.js';
 import { commandResultUnitPolicy } from '../../src/runtime/commands/command-registry.js';
-import { commandDocEntries, renderCommandReferenceMarkdown } from '../../src/runtime/command-kit/command-docs.js';
+import {
+  commandDocEntries,
+  descriptorSemanticContract,
+  renderCommandReferenceMarkdown,
+} from '../../src/runtime/command-kit/command-docs.js';
 import {
   commandOptions,
   definedLimitOption,
@@ -50,6 +54,7 @@ const PRIVATE_QUERY_MODULES = [
 const PRIVATE_QUERY_SOURCE_PATHS = {
   'binding-closure': 'src/queries/navigation/binding-closure.ts',
   'boundary-evidence': 'src/queries/cleanup/boundary-evidence.ts',
+  'graph-evidence': 'src/queries/graph/graph-evidence.ts',
   'callable-contracts': 'src/queries/cleanup/callable-contracts.ts',
   'coverage-contracts': 'src/queries/cleanup/coverage-contracts.ts',
   'dead-exclusions': 'src/queries/cleanup/dead-exclusions.ts',
@@ -123,6 +128,12 @@ describe('CLI contract', () => {
 
   it('keeps detailed context output opt-in', () => {
     expect(optionFlags('context')).toContain('--detail');
+  });
+
+  it('keeps exact fold recovery on the canonical evidence command', () => {
+    expect(optionFlags('evidence')).toEqual(
+      expect.arrayContaining(['--inventory-only', '--fold <id>', '--direction <direction>', '--subtype <subtype>']),
+    );
   });
 
   it('registers universal resumable output options at the program boundary', () => {
@@ -235,6 +246,40 @@ describe('CLI contract', () => {
     }
   });
 
+  it('gives every public command one executable semantic kind', () => {
+    const semanticKinds = new Set(['locator', 'graph-projection', 'source-read', 'analysis', 'maintenance']);
+    const outputCosts = new Set(['small', 'bounded', 'potentially-large', 'variable']);
+    const commandIds = new Set(commandDescriptors.map((entry) => entry.id));
+    for (const descriptor of commandDescriptors.filter((entry) => !entry.hidden)) {
+      const semantic = descriptorSemanticContract(descriptor);
+      expect(semanticKinds.has(semantic.kind), descriptor.id).toBe(true);
+      expect(semantic.nonClaims.length, `${descriptor.id}: semantic non-claims`).toBeGreaterThan(0);
+      expect(outputCosts.has(semantic.outputCost), `${descriptor.id}: output cost`).toBe(true);
+      expect(
+        semantic.frontierClosure.every((command) => commandIds.has(command)),
+        `${descriptor.id}: frontier closure references known commands`,
+      ).toBe(true);
+    }
+
+    expect(descriptorSemanticContract(commandDescriptors.find((entry) => entry.id === 'search')!)).toMatchObject({
+      kind: 'locator',
+      ranking: 'identity-only',
+    });
+    expect(descriptorSemanticContract(commandDescriptors.find((entry) => entry.id === 'evidence')!)).toMatchObject({
+      kind: 'graph-projection',
+      directions: ['incoming', 'outgoing', 'both'],
+      compression: ['none', 'linear', 'scc', 'topology'],
+      outputCost: 'bounded',
+    });
+    expect(descriptorSemanticContract(commandDescriptors.find((entry) => entry.id === 'code')!)).toMatchObject({
+      kind: 'source-read',
+    });
+    expect(descriptorSemanticContract(commandDescriptors.find((entry) => entry.id === 'anchors')!)).toMatchObject({
+      kind: 'locator',
+      compatibility: 'deprecated',
+    });
+  });
+
   it('selects operation roles from parsed invocation values before execution', () => {
     const health = commandDescriptors.find((descriptor) => descriptor.id === 'health')!.agent!.operation;
     const setup = commandDescriptors.find((descriptor) => descriptor.id === 'setup')!.agent!.operation;
@@ -286,6 +331,7 @@ describe('CLI contract', () => {
     expect(docs.map((entry) => entry.id)).toEqual(
       commandDescriptors.filter((descriptor) => !descriptor.hidden).map((descriptor) => descriptor.id),
     );
+    expect(docs.every((entry) => entry.semantic.nonClaims.length > 0)).toBe(true);
     expect(docs.find((entry) => entry.id === 'health')?.options).toEqual([
       '-s, --scope <path>',
       '--full',
@@ -390,7 +436,11 @@ describe('CLI contract', () => {
     expect(readSkill('scip-query')).toMatch(/React, Vue/);
     expect(readSkill('scip-query')).not.toMatch(/diff-gate|Stop hook|Gherkin/i);
     expect(readSkill('scip-query')).toContain('not a second workflow layered on top of grep');
-    expect(readSkill('scip-explore')).toContain('Start with the question');
+    expect(readSkill('scip-query')).toContain('a suggested command count is an efficiency heuristic only');
+    expect(readSkill('scip-explore')).toContain('An exploration is a code-reading investigation');
+    expect(readSkill('scip-explore')).toContain('Accuracy determines when to stop');
+    expect(readSkill('scip-explore')).toContain('private evidence ledger');
+    expect(readSkill('scip-explore')).toContain('never make a known recoverable material claim optional');
     expect(readSkill('scip-explore')).toContain('scip-query inspect');
     expect(readSkill('scip-explore')).toContain('scip-query evidence');
     expect(readSkill('concrete-plan')).toContain('Direct evidence');

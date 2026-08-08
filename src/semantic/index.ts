@@ -1,4 +1,5 @@
 export { getSemanticProvider } from './provider-cache.js';
+export { semanticLocalFlowForDefinition, semanticLocalFlowForRange } from './local-flow.js';
 export { SemanticSessionManager, semanticSessionKey } from './session-manager.js';
 export {
   semanticEvidenceProduct,
@@ -17,6 +18,12 @@ export type {
   SemanticProviderLanguage,
   SemanticReference,
 } from './types.js';
+export type {
+  TypeScriptLocalFlowCoverage,
+  TypeScriptLocalFlowEdge,
+  TypeScriptLocalFlowPoint,
+  TypeScriptLocalFlowResult,
+} from './local-flow.js';
 export type {
   SemanticEvidenceCapability,
   SemanticEvidenceProduct,

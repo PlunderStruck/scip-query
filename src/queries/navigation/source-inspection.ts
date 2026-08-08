@@ -12,7 +12,7 @@ import { classifyFile, type FileKind } from '../../source/primitives/file-kind.j
 import { getSourceLines } from '../../source/primitives/source-text.js';
 import { resolveIndexedFile } from '../internal/file-resolution.js';
 import { evidence, type EvidenceOptions, type EvidenceResult } from './evidence.js';
-import { SOURCE_INSPECTION_MAX_SELECTORS } from '../internal/inspection-limits.js';
+import { SOURCE_INSPECTION_MAX_SELECTORS } from '../../domain/source-inspection-limits.js';
 import type { ExplorationCompletionStatus } from '../internal/exploration-topology.js';
 import {
   readRuntimeBoundaryObservations,

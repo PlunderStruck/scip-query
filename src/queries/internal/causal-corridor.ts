@@ -50,7 +50,10 @@ export function buildCausalCorridor(
     topology.anchors.filter((anchor) => anchor.status === 'matched').flatMap((anchor) => anchor.nodeIds),
   );
   const reliableEdges = topology.edges.filter(isReliableCausalEdge);
-  const traversableEdges = reliableEdges.filter((edge) =>
+  const selectedEvidenceEdges = reliableEdges.filter((edge) =>
+    isSelectedCorridorEvidence(edge, focusedNodeIds, focusedEdgeIds, pathEdgeIds),
+  );
+  const traversableEdges = selectedEvidenceEdges.filter((edge) =>
     isTraversableEdge(edge, focusedNodeIds, focusedEdgeIds, focusedEdgeNodeIds, nodeById, pathEdgeIds),
   );
   const forward = reachable(starts, traversableEdges, 'forward');
@@ -66,7 +69,7 @@ export function buildCausalCorridor(
 
   const protectedNodes = new Set(baseNodes);
   const protectedEdges = new Set(baseEdges);
-  closeMaterialFacts(reliableEdges, protectedNodes, protectedEdges, focusedNodeIds, focusedEdgeIds);
+  closeMaterialFacts(selectedEvidenceEdges, protectedNodes, protectedEdges, focusedNodeIds, focusedEdgeIds);
 
   const touchingFrontiers = topology.frontiers.filter((frontier) => frontierTouches(frontier, protectedNodes));
   const unresolvedFrontierIds = sortedUnique(
@@ -115,6 +118,43 @@ export function buildCausalCorridor(
         ? 'Every proved anchor-to-outcome path is closed over its material causal facts within reported coverage.'
         : reasons.join(' '),
   };
+}
+
+/**
+ * Keep the corridor subordinate to the preceding topology/behavior selection.
+ * Folded repository evidence remains recoverable through frontiers unless its
+ * exact source location was selected as a local material fact.
+ */
+function isSelectedCorridorEvidence(
+  edge: ExplorationTopologyEdge,
+  focusedNodeIds: ReadonlySet<string> | null,
+  focusedEdgeIds: ReadonlySet<string> | null,
+  pathEdgeIds: ReadonlySet<string>,
+): boolean {
+  if (focusedNodeIds === null) return true;
+  if (edge.disposition === 'emitted' || pathEdgeIds.has(edge.id) || focusedEdgeIds?.has(edge.id) === true) {
+    return true;
+  }
+  return (edge.semantics ?? []).some((semantic) => {
+    if (semantic.family === 'identity' && OWNERSHIP_SUBTYPES.has(semantic.subtype)) {
+      return focusedNodeIds.has(edge.toNodeId);
+    }
+    if (semantic.family === 'contract') {
+      return focusedNodeIds.has(edge.fromNodeId) && focusedNodeIds.has(edge.toNodeId);
+    }
+    if (semantic.family === 'state') return focusedNodeIds.has(edge.fromNodeId);
+    if (semantic.family === 'data' || semantic.family === 'temporal') {
+      return focusedNodeIds.has(edge.fromNodeId) || focusedNodeIds.has(edge.toNodeId);
+    }
+    if (semantic.family === 'control') {
+      if (isBranchSemantic(semantic)) return focusedNodeIds.has(edge.fromNodeId);
+      if (['returns', 'throws'].includes(semantic.subtype)) return focusedNodeIds.has(edge.toNodeId);
+      if (semantic.subtype === 'completion-callback') {
+        return focusedNodeIds.has(edge.fromNodeId) || focusedNodeIds.has(edge.toNodeId);
+      }
+    }
+    return false;
+  });
 }
 
 /** Recompute the required corridor and identify any protected fact omitted by a rendered packet. */
@@ -319,13 +359,14 @@ function isTraversableEdge(
   pathEdgeIds: ReadonlySet<string>,
 ): boolean {
   return (edge.semantics ?? []).some((semantic) => {
+    if (edge.disposition === 'emitted' || pathEdgeIds.has(edge.id)) return true;
     if (semantic.family === 'identity' && OWNERSHIP_SUBTYPES.has(semantic.subtype)) {
       return (
         focusedNodeIds === null || focusedNodeIds.has(edge.toNodeId) || focusedEdgeNodeIds?.has(edge.toNodeId) === true
       );
     }
     if (!TRAVERSAL_FAMILIES.has(semantic.family)) return false;
-    if (isNavigationSemantic(semantic)) return edge.disposition === 'emitted' || pathEdgeIds.has(edge.id);
+    if (isNavigationSemantic(semantic)) return false;
     if (semantic.family === 'control' && ['returns', 'throws'].includes(semantic.subtype) && focusedNodeIds !== null) {
       return focusedNodeIds.has(edge.toNodeId);
     }

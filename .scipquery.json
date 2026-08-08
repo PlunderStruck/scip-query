@@ -123,11 +123,13 @@
           "src/runtime/cli-json-envelope.ts",
           "src/runtime/cursor-codec.ts",
           "src/runtime/evidence-command-freshness.ts",
+          "src/runtime/generated-agent-command-catalog.ts",
           "src/runtime/health-capability-disclosure.ts",
           "src/runtime/health-dossier.ts",
           "src/runtime/health-report-cache.ts",
           "src/runtime/index-freshness.ts",
           "src/runtime/isolated-analysis-runner.ts",
+          "src/runtime/navigation-session.ts",
           "src/runtime/observation-receipt.ts",
           "src/runtime/output-pagination.ts",
           "src/runtime/project-readiness.ts",
@@ -151,7 +153,8 @@
           "src/runtime/watch-service.ts",
           "src/runtime/watch.ts",
           "src/runtime/worker-request-lane.ts"
-        ]
+        ],
+        "maxFiles": 41
       },
       {
         "name": "test-fixtures",
@@ -174,6 +177,7 @@
         "paths": [
           "src/semantic/definition-groups.ts",
           "src/semantic/index.ts",
+          "src/semantic/local-flow.ts",
           "src/semantic/provider-cache.ts",
           "src/semantic/session-manager.ts",
           "src/semantic/shared-primitives.ts",
@@ -331,7 +335,7 @@
       ],
       "reindex-augmentation": ["filesystem", "source"],
       "reindex-vue": ["platform", "reindex-augmentation"],
-      "runtime-command-kit": ["runtime-services", "storage"],
+      "runtime-command-kit": ["domain", "runtime-services", "storage"],
       "runtime-commands": [
         "domain",
         "platform",

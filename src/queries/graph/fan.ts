@@ -16,6 +16,16 @@ export interface FanInResult extends FanResult {
   definedIn: string;
 }
 
+export interface ExternalSymbolFanOutResult extends FanResult {
+  file: string;
+  basis: 'external-symbol-references';
+}
+
+export interface FileDependencyOutDegreeResult extends FanResult {
+  file: string;
+  basis: 'file-dependency-edges';
+}
+
 /**
  * Fan-in: how many distinct files reference this symbol.
  * High fan-in = widely depended upon = high blast radius for changes.
@@ -53,11 +63,8 @@ export function fanIn(db: ScipDatabase, symbolPattern: string): FanInResult[] {
   ];
 }
 
-/**
- * Fan-out: how many external symbols does this file reference.
- * High fan-out = depends on many things = fragile to upstream changes.
- */
-export function fanOut(db: ScipDatabase, filePattern: string): FanResult[] {
+/** Count distinct externally defined symbols referenced by one indexed file. */
+export function externalSymbolFanOut(db: ScipDatabase, filePattern: string): ExternalSymbolFanOutResult[] {
   const resolvedFile = resolveIndexedFile(db, filePattern);
   if (!resolvedFile) {
     return [];
@@ -93,12 +100,17 @@ export function fanOut(db: ScipDatabase, filePattern: string): FanResult[] {
     .map((r) => ({
       name: r.relative_path,
       count: r.symbol_count,
+      file: r.relative_path,
+      basis: 'external-symbol-references' as const,
     }));
 
-  if (indexedResults.length > 0) {
-    return indexedResults;
-  }
+  return indexedResults;
+}
 
+/** Count outgoing edges in the file symbol-reference dependency graph. */
+export function fileDependencyOutDegree(db: ScipDatabase, filePattern: string): FileDependencyOutDegreeResult[] {
+  const resolvedFile = resolveIndexedFile(db, filePattern);
+  if (!resolvedFile) return [];
   const graph = buildFileDepGraph(db);
   const deps = graph.get(resolvedFile);
   if (!deps || deps.size === 0) {
@@ -109,8 +121,20 @@ export function fanOut(db: ScipDatabase, filePattern: string): FanResult[] {
     {
       name: resolvedFile,
       count: deps.size,
+      file: resolvedFile,
+      basis: 'file-dependency-edges',
     },
   ];
+}
+
+/**
+ * @deprecated This compatibility query changes its counting unit when SCIP
+ * mention rows are unavailable. Use `externalSymbolFanOut` or
+ * `fileDependencyOutDegree` so the selected graph and unit remain explicit.
+ */
+export function fanOut(db: ScipDatabase, filePattern: string): FanResult[] {
+  const externalSymbols = externalSymbolFanOut(db, filePattern);
+  return externalSymbols.length > 0 ? externalSymbols : fileDependencyOutDegree(db, filePattern);
 }
 
 /**

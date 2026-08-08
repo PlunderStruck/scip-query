@@ -10,6 +10,8 @@ import type { CommandDescriptor } from '../command-kit/command-descriptor-types.
 import type { CommandOptions } from '../command-kit/command-execution.js';
 import {
   agentContract,
+  graphProjectionSemanticContract,
+  locatorSemanticContract,
   collectValues,
   doc,
   fixedClaimFamily,
@@ -18,6 +20,8 @@ import {
   parseInteger,
   withJsonOption,
 } from '../command-kit/command-spec-builders.js';
+import { GRAPH_EVIDENCE_FAMILIES } from '../../domain/graph-exploration-contract.js';
+import { REPOSITORY_OBSERVATION_OPERATION } from '../command-operation.js';
 import {
   budgetedTableCommand,
   booleanOptionValue,
@@ -86,7 +90,7 @@ const handleFanOut = dbCommand(({ db, args, opts }) => {
   const file = optionalStringArg(args, 0);
   const limit = definedLimitOption(opts, 'limit', 30);
   if (file) {
-    const results = queries.fanOut(db, file);
+    const results = queries.externalSymbolFanOut(db, file);
     if (booleanOptionValue(opts, 'json')) {
       printJsonEnvelope('fan-out', args, opts, { mode: 'file', file, rows: results });
       return;
@@ -138,37 +142,33 @@ const handleCoupling = dbCommand(({ db, args, opts }) => {
 const handleCycles = reportCommand({
   commandName: 'cycles',
   query: ({ db, opts }) =>
-    queries.cycleSummary(db, {
+    queries.dependencyCycleSummary(db, {
       scope: stringOptionValue(opts, 'scope'),
       maxDepth: definedNumberOption(opts, 'maxDepth', 10),
+      edgeBasis: booleanOptionValue(opts, 'importsOnly') ? 'imports' : 'symbol-references',
     }),
   emptyMessage: (result) =>
-    result.cycles.length === 0
-      ? result.truncated
-        ? `No circular dependencies found. Search truncated at depth ${result.maxDepth}; deeper cycles may exist.`
-        : 'No circular dependencies found.'
-      : undefined,
+    result.cycles.length === 0 ? `No cycles found in the ${result.edgeBasis} graph.` : undefined,
   toJson: (result) => result,
   render: (result) => {
-    const real = result.cycles.filter((r) => r.kind === 'real');
-    const moduleHierarchy = result.cycles.filter((r) => r.kind === 'module-hierarchy');
-    for (let i = 0; i < real.length; i++) {
-      console.log(`\nCycle ${i + 1} (${real[i]!.path.length - 1} files):`);
-      for (let j = 0; j < real[i]!.path.length; j++) {
-        const arrow = j < real[i]!.path.length - 1 ? ' →' : ' (cycle)';
-        console.log(`  ${real[i]!.path[j]}${arrow}`);
+    console.log(`Cyclic strongly connected components in the ${result.edgeBasis} graph:`);
+    for (let i = 0; i < result.cycles.length; i++) {
+      const cycle = result.cycles[i]!;
+      const component = cycle.component ?? [...new Set(cycle.path.slice(0, -1))].sort();
+      console.log(
+        `\nComponent ${i + 1} (${component.length} files; ${cycle.classification ?? cycle.kind}; one witness follows):`,
+      );
+      for (let j = 0; j < cycle.path.length; j++) {
+        const arrow = j < cycle.path.length - 1 ? ' →' : ' (cycle witness)';
+        console.log(`  ${cycle.path[j]}${arrow}`);
+      }
+      if (component.length > new Set(cycle.path.slice(0, -1)).size) {
+        console.log(`  Full component: ${component.join(', ')}`);
       }
     }
-    if (real.length === 0) console.log('No real circular dependencies found.');
-    else console.log(`\n${real.length} real cycle(s) found.`);
-    if (result.truncated) {
-      console.log(`(search truncated at depth ${result.maxDepth} — deeper cycles may exist)`);
-    }
-    if (moduleHierarchy.length > 0) {
-      console.log(
-        `(${moduleHierarchy.length} module-hierarchy cycle(s) hidden — barrel files participating in normal parent/child re-export patterns. Pass --include-module-hierarchy to see them.)`,
-      );
-    }
+    console.log(
+      `\n${result.cycles.length} cyclic component(s) found; results are SCC-complete, not all simple cycles.`,
+    );
   },
 });
 
@@ -318,28 +318,34 @@ const handleArchitecture = reportCommand({
   },
 });
 
-const handleDeepChains = reportCommand({
-  commandName: 'deep-chains',
-  query: ({ db, opts }) =>
-    queries.deepChains(db, {
-      limit: definedLimitOption(opts, 'limit', 10),
-      scope: stringOptionValue(opts, 'scope'),
-      minDepth: definedNumberOption(opts, 'minDepth', 3),
-    }),
-  emptyMessage: (results) => (results.length === 0 ? 'No deep chains found.' : undefined),
-  render: (results) => {
-    for (let i = 0; i < results.length; i++) {
-      console.log(`\nChain ${i + 1} (depth ${results[i]!.depth}):`);
-      for (const component of results[i]!.components) {
-        const label = component.length === 1 ? component[0]! : `{ ${component.join(', ')} } (cycle)`;
-        console.log(`  → ${label}`);
+function dependencyDepthHandler(commandName: 'deep-chains' | 'dependency-depth') {
+  return reportCommand({
+    commandName,
+    query: ({ db, opts }) =>
+      queries.dependencyDepth(db, {
+        limit: definedLimitOption(opts, 'limit', 10),
+        scope: stringOptionValue(opts, 'scope'),
+        minDepth: definedNumberOption(opts, 'minDepth', 3),
+        edgeBasis: booleanOptionValue(opts, 'importsOnly') ? 'imports' : 'symbol-references',
+      }),
+    emptyMessage: (results) => (results.length === 0 ? 'No deep chains found.' : undefined),
+    render: (results) => {
+      for (let i = 0; i < results.length; i++) {
+        console.log(`\nChain ${i + 1} (condensed depth ${results[i]!.depth}; ${results[i]!.edgeBasis}):`);
+        for (const component of results[i]!.components) {
+          const label = component.length === 1 ? component[0]! : `{ ${component.join(', ')} } (cycle)`;
+          console.log(`  → ${label}`);
+        }
+        console.log(`  Tier: ${results[i]!.actionTier}  Risk: ${results[i]!.chainKind}`);
+        console.log(`  Recommendation: ${results[i]!.recommendation}`);
+        console.log(`  Evidence: ${results[i]!.evidenceReasons.join('; ')}`);
       }
-      console.log(`  Tier: ${results[i]!.actionTier}  Risk: ${results[i]!.chainKind}`);
-      console.log(`  Recommendation: ${results[i]!.recommendation}`);
-      console.log(`  Evidence: ${results[i]!.evidenceReasons.join('; ')}`);
-    }
-  },
-});
+    },
+  });
+}
+
+const handleDeepChains = dependencyDepthHandler('deep-chains');
+const handleDependencyDepth = dependencyDepthHandler('dependency-depth');
 
 const handleEntryPoints = dbCommand(({ db, args, opts }) => {
   const search = optionalStringArg(args, 0);
@@ -465,6 +471,7 @@ const handleEntryMap = dbCommand(({ db, args, opts }) => {
 });
 
 const handleSystemMap = dbCommand(({ db, args, opts }) => {
+  const selectionTerms = stringArrayOptionValue(opts, 'selectionTerm');
   const result = queries.systemMap(db, {
     searches: stringArrayOptionValue(opts, 'search'),
     symbols: stringArrayOptionValue(opts, 'symbol'),
@@ -476,9 +483,15 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
     sourceScopes: stringArrayOptionValue(opts, 'sourceScope') as SystemMapSourceScope[],
     maxTopologyCharacters: definedNumberOption(opts, 'topologyCharacters', 12_000),
     topologyFrontiers: stringArrayOptionValue(opts, 'frontier'),
+    routeIds: stringArrayOptionValue(opts, 'route'),
     fullLiteralTraversal: booleanOptionValue(opts, 'fullLiteralTraversal'),
-    selectionTerms: stringArrayOptionValue(opts, 'selectionTerm'),
+    selectionTerms,
   });
+  if (selectionTerms.length > 0 && !booleanOptionValue(opts, 'json')) {
+    console.error(
+      'Deprecated: --selection-term is accepted as a no-op; graph selection is explicit and query-neutral.',
+    );
+  }
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('system-map', args, opts, result, {
       coverage: {
@@ -500,7 +513,7 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
     presentedRelationKeys.has(`${relation.fromRegionId}\u0000${relation.toRegionId}`),
   );
   const hasExpandedRegions = presentedRegions.some((region) => region.expanded);
-  const hasConnectedBehavior = Boolean(result.behavior?.paths.some((path) => path.stepIds.length > 0));
+  const hasConnectedBehavior = Boolean(result.behavior && result.behavior.steps.length > 0);
 
   console.log('═══ EXPLICIT ANCHORS ═══');
   for (const anchor of result.anchors) {
@@ -562,6 +575,37 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
     for (const path of result.topology.paths) {
       const labels = path.nodeIds.map((id) => topologyNodeById.get(id)?.label ?? id);
       console.log(`  [${path.status}] ${labels.length > 0 ? labels.join(' ↔ ') : 'no proved connector'}`);
+    }
+    const routeCatalog = result.topology.routeCatalog;
+    if (routeCatalog) {
+      const selectedRouteIds = new Set(routeCatalog.selectedRouteIds);
+      console.log(
+        `  Route catalogue [${routeCatalog.coverage.status}]: ${routeCatalog.routes.length} distinct proved public/runtime endpoint route(s); ` +
+          `${routeCatalog.coverage.enumeration}; depth ≤ ${routeCatalog.coverage.maximumDepth}.`,
+      );
+      for (const route of routeCatalog.routes) {
+        const selected = selectedRouteIds.has(route.id) ? '; selected' : '';
+        const families = route.relatedEdgeFamilies.length > 0 ? route.relatedEdgeFamilies.join(',') : 'control';
+        const chain = route.nodeIds
+          .map((nodeId) => compactSystemMapIdentity(topologyNodeById.get(nodeId)?.label ?? nodeId))
+          .join(' → ');
+        console.log(
+          `  [${route.id}; ${route.endpointKind}; ${route.edgeIds.length} edge(s); families ${families}${selected}] ` +
+            `${chain} @ ${route.endpointLocation.file}:${displayLine(route.endpointLocation.line)}`,
+        );
+      }
+      if (routeCatalog.coverage.anchorsWithoutRoutes.length > 0) {
+        console.log(
+          `  [no proved public/runtime route] ${routeCatalog.coverage.anchorsWithoutRoutes.length} anchor node(s): ` +
+            routeCatalog.coverage.anchorsWithoutRoutes.join(', '),
+        );
+      }
+      if (routeCatalog.routes.length > 0 && routeCatalog.selectedRouteIds.length === 0) {
+        console.log(
+          `  Select only routes whose interior behavior is a named missing fact; repeat --route to batch: ` +
+            `${systemMapRouteSelectionCommand(opts, [])} --route '<route-id>'`,
+        );
+      }
     }
     const upstreamCausalRoots = emittedNodes.filter(
       (node) => typeof node.attributes['upstreamCausalEndpoint'] === 'string',
@@ -706,7 +750,7 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
     }
     if (result.behavior.coverage.omittedNodeIds.length > 0) {
       console.log(
-        `  ${result.behavior.coverage.omittedNodeIds.length} lower-ranked emitted construct(s) were not materialized; ` +
+        `  ${result.behavior.coverage.omittedNodeIds.length} bounded emitted construct(s) were not materialized; ` +
           'their identities remain in behavior.coverage.omittedNodeIds.',
       );
     }
@@ -719,29 +763,22 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
   }
 
   if (result.nextAnchors && result.nextAnchors.candidateAnchors > 0) {
-    console.log('\n═══ OPTIONAL GAP RECOVERY ═══');
+    console.log('\n═══ ADJACENT RECOVERY INVENTORY ═══');
+    const adjacent = [...result.nextAnchors.anchors, ...result.nextAnchors.withheldAnchors];
+    const inventory = new Map<string, number>();
+    for (const anchor of adjacent) {
+      const key = `${anchor.direction}/${anchor.relationKind}/${anchor.causalRole}`;
+      inventory.set(key, (inventory.get(key) ?? 0) + 1);
+    }
     console.log(
-      `  [folded] ${result.nextAnchors.candidateAnchors} causal target(s) are accounted but hidden because ` +
-        'connected behavior is the evidence to exhaust first.',
+      `  ${result.nextAnchors.candidateAnchors} exact or candidate adjacent target(s) are recoverably folded.`,
     );
-    const exactTargets = result.nextAnchors.anchors.filter((anchor) => anchor.alternativeCount === 1);
-    if (result.nextAnchors.inspectCommand) {
-      console.log(`  Recommended one-shot drill batch: ${result.nextAnchors.inspectCommand}`);
+    for (const [kind, count] of [...inventory].sort(([left], [right]) => left.localeCompare(right))) {
+      console.log(`  ${kind}: ${count}`);
     }
-    for (const anchor of exactTargets) {
-      const target = anchor.alternatives[0]!;
-      const causalLabel = [anchor.direction, anchor.causalRole, anchor.relationKind].filter(Boolean).join(' ');
-      console.log(
-        `  [${anchor.status}${causalLabel ? `; ${causalLabel}` : ''}] ${anchor.callsite.calleeLeaf} → ${target.file}:${displayLine(target.line)}; ` +
-          `inspect if material: scip-query inspect --at ${shellArgument(`${target.file}:${displayLine(target.line)}`)} --view behavior`,
-      );
-    }
-    if (result.nextAnchors.candidateAnchors > exactTargets.length) {
-      console.log(
-        `  ${result.nextAnchors.candidateAnchors - exactTargets.length} additional or ambiguous target(s) remain recoverable with ` +
-          `${systemMapGapRecoveryCommand(opts, ['<callee-from-connected-behavior>'])}.`,
-      );
-    }
+    console.log(
+      `  Select a named missing callee without relevance inference: ${systemMapGapRecoveryCommand(opts, ['<callee-from-connected-behavior>'])}.`,
+    );
   }
 
   if (result.regions.length === 0) {
@@ -946,6 +983,52 @@ const handleSystemMap = dbCommand(({ db, args, opts }) => {
       `  - ${result.coverage.blindSpots.length - shownBlindSpots.length} additional disclosed limitation(s) remain in coverage.blindSpots.`,
     );
   }
+  if (hasConnectedBehavior) {
+    const answerAuditEntries = new Map<string, Map<string, string | null>>([
+      ['branch conditions', new Map()],
+      ['structured payloads', new Map()],
+      ['terminal outcomes', new Map()],
+    ]);
+    for (const step of result.behavior?.steps ?? []) {
+      if (!step.location || !step.behavior) continue;
+      for (const line of step.behavior.lines) {
+        const location = `${step.location.file}:${displayLine(line.line)}`;
+        if (line.signals.includes('branch')) answerAuditEntries.get('branch conditions')?.set(location, null);
+        if (
+          line.signals.includes('shape') &&
+          (line.signals.includes('call') || line.signals.includes('mutation') || line.signals.includes('return'))
+        ) {
+          answerAuditEntries.get('structured payloads')?.set(location, line.text.replace(/\s*\n\s*/gu, ' '));
+        }
+        if (line.signals.includes('return') || line.signals.includes('throw')) {
+          answerAuditEntries.get('terminal outcomes')?.set(location, null);
+        }
+      }
+    }
+    console.log('\n═══ ANSWER EVIDENCE CONTRACT ═══');
+    console.log(
+      '  Before another query, account for each question-relevant condition and outcome already rendered above. ' +
+        'Preserve exact ownership/lifetime (including singleton/shared/per-invocation scope), normalization and path rules, invocation arguments, working directory ' +
+        'and standard I/O, bounds/defaults, returned fields or instructions, every condition that stops or continues ' +
+        'the enclosing loop, policy or dispatch precedence and bypass scope, and rethrown-versus-rendered ' +
+        'interruption behavior.',
+    );
+    console.log(
+      '  Draft audit locations are mechanically derived from selected syntax. For every category material to the question, explicitly account for every listed location:',
+    );
+    for (const [label, entries] of answerAuditEntries) {
+      if (entries.size === 0) continue;
+      if (label === 'structured payloads') {
+        console.log(`  Draft audit — ${label}:`);
+        for (const [location, source] of entries) console.log(`    ${location} — ${source ?? ''}`);
+      } else {
+        console.log(`  Draft audit — ${label}: ${[...entries.keys()].join(', ')}`);
+      }
+    }
+    console.log(
+      '  No causal target is automatically recommended. Use the adjacent recovery inventory only for a named material fact with no rendered evidence; otherwise answer from the map.',
+    );
+  }
 });
 
 type SystemMapNextAnchors = NonNullable<ReturnType<typeof queries.systemMap>['nextAnchors']>;
@@ -1040,11 +1123,26 @@ function systemMapGapRecoveryCommand(
   if (booleanOptionValue(opts, 'fullLiteralTraversal')) parts.push('--full-literal-traversal');
   for (const region of stringArrayOptionValue(opts, 'expand')) parts.push('--expand', shellArgument(region));
   for (const frontier of stringArrayOptionValue(opts, 'frontier')) parts.push('--frontier', shellArgument(frontier));
-  for (const term of stringArrayOptionValue(opts, 'selectionTerm')) {
-    parts.push('--selection-term', shellArgument(term));
-  }
+  for (const route of stringArrayOptionValue(opts, 'route')) parts.push('--route', shellArgument(route));
   for (const callee of callees) parts.push('--gap-callee', shellArgument(callee));
   parts.push('--gap-recovery-only');
+  return parts.join(' ');
+}
+
+function systemMapRouteSelectionCommand(opts: CommandOptions, routes: readonly string[]): string {
+  const parts = ['scip-query', 'system-map'];
+  for (const search of stringArrayOptionValue(opts, 'search')) parts.push('--search', shellArgument(search));
+  for (const symbol of stringArrayOptionValue(opts, 'symbol')) parts.push('--symbol', shellArgument(symbol));
+  for (const focus of stringArrayOptionValue(opts, 'focusAt')) parts.push('--focus-at', shellArgument(focus));
+  parts.push('--depth', String(definedNumberOption(opts, 'depth', 5)));
+  for (const relation of stringArrayOptionValue(opts, 'relation')) parts.push('--relation', shellArgument(relation));
+  const evidenceFloor = stringOptionValue(opts, 'evidenceFloor');
+  if (evidenceFloor) parts.push('--evidence-floor', shellArgument(evidenceFloor));
+  for (const scope of stringArrayOptionValue(opts, 'sourceScope')) parts.push('--source-scope', shellArgument(scope));
+  if (booleanOptionValue(opts, 'fullLiteralTraversal')) parts.push('--full-literal-traversal');
+  for (const region of stringArrayOptionValue(opts, 'expand')) parts.push('--expand', shellArgument(region));
+  for (const frontier of stringArrayOptionValue(opts, 'frontier')) parts.push('--frontier', shellArgument(frontier));
+  for (const route of routes) parts.push('--route', shellArgument(route));
   return parts.join(' ');
 }
 
@@ -1472,10 +1570,10 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
   tableQueryCommand({
     id: 'hotspots',
     command: 'hotspots',
-    description: 'Most-referenced symbols in the codebase (choke points)',
+    description: 'Rank symbols by cross-file reference count; a reference metric, not runtime contention',
     agent: agentContract(
-      'Which symbols are the largest reference choke points?',
-      'ranked symbol identities with reference and file counts',
+      'Which symbols have the most observed cross-file reference evidence?',
+      'ranked symbol identities with explicit evidence basis and counting units',
       [],
       'bounded',
       'repository',
@@ -1505,6 +1603,13 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
         ['symbol'],
         'bounded',
         'repository',
+        REPOSITORY_OBSERVATION_OPERATION,
+        locatorSemanticContract(
+          ['symbol', 'construct'],
+          [
+            'Entry-point detection reports evidenced external roots and candidates; it does not establish task relevance.',
+          ],
+        ),
       ),
       resultUnits: { kind: 'field', field: 'rows' },
     },
@@ -1540,7 +1645,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'coupling',
     command: 'coupling [file1] [file2]',
-    description: 'Coupling between two files, or top coupled pairs in codebase',
+    description: 'Count shared-symbol coupling between two files, or rank file pairs by that metric',
     agent: agentContract(
       'How strongly are these files coupled, or which pairs are most coupled?',
       'file pairs with coupling evidence and scores',
@@ -1560,17 +1665,23 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'cycles',
     command: 'cycles',
-    description: 'Detect circular dependency chains between files',
+    description: 'Find every cyclic file-dependency component and show one deterministic witness for each',
     agent: agentContract(
       'Which file dependency cycles exist?',
       'dependency-cycle file chains',
       [],
-      'bounded',
+      'complete',
       'repository',
     ),
     options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
-      option('--max-depth <n>', 'Bound DFS search depth', parseInteger, 10),
+      option('--imports-only', 'Analyze only resolved file imports instead of all cross-file symbol references'),
+      option(
+        '--max-depth <n>',
+        'Deprecated compatibility option; SCC detection no longer truncates by depth',
+        parseInteger,
+        10,
+      ),
     ]),
     renderShape: 'custom',
     docs: doc('Graph'),
@@ -1604,10 +1715,10 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'bottlenecks',
     command: 'bottlenecks',
-    description: 'Find coupling hubs: high fan-in AND high fan-out',
+    description: 'Rank coordination hubs by incoming evidence files × outgoing cross-file callable targets',
     agent: agentContract(
-      'Which files are high-connectivity coupling hubs?',
-      'ranked files with fan-in and fan-out counts',
+      'Which callable symbols are high-connectivity coordination hubs?',
+      'ranked callable symbols with incoming evidence-file and outgoing callable-target counts',
       [],
       'bounded',
       'repository',
@@ -1627,7 +1738,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'deep-chains',
     command: 'deep-chains',
-    description: 'Find the longest condensed dependency-component chains',
+    description: 'Deprecated alias for dependency-depth',
     agent: agentContract(
       'Which dependency chains are deepest and riskiest?',
       'ranked component chains with depth, risk, and recommendation',
@@ -1639,11 +1750,34 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
       option('-n, --limit <n>', 'Number of chains to show', parseInteger, 10),
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--min-depth <n>', 'Minimum chain depth', parseInteger, 3),
+      option('--imports-only', 'Measure the import graph instead of the symbol-reference dependency graph'),
       option('--full', 'Run unbounded analysis on large indexes'),
     ]),
     renderShape: 'custom',
     docs: doc('Graph'),
     handler: handleDeepChains,
+  },
+  {
+    id: 'dependency-depth',
+    command: 'dependency-depth',
+    description: 'Find longest paths through the SCC-condensed file dependency graph',
+    agent: agentContract(
+      'Which file dependency paths have the greatest condensed depth?',
+      'ranked component paths with full cycle membership, edge basis, and condensed depth',
+      [],
+      'bounded',
+      'repository',
+    ),
+    options: withJsonOption([
+      option('-n, --limit <n>', 'Number of paths to show', parseInteger, 10),
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('--min-depth <n>', 'Minimum condensed component depth', parseInteger, 3),
+      option('--imports-only', 'Measure the import graph instead of the symbol-reference dependency graph'),
+      option('--full', 'Run unbounded analysis on large indexes'),
+    ]),
+    renderShape: 'custom',
+    docs: doc('Graph'),
+    handler: handleDependencyDepth,
   },
   {
     id: 'entrypoints',
@@ -1670,6 +1804,16 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
       'all reachable file regions, cross-region call edges, coverage, and selected expanded symbol details',
       ['symbol'],
       'complete',
+      undefined,
+      REPOSITORY_OBSERVATION_OPERATION,
+      graphProjectionSemanticContract({
+        rootKinds: ['symbol', 'construct'],
+        edgeFamilies: ['execution'],
+        directions: ['outgoing'],
+        operations: ['reachability'],
+        compression: ['topology'],
+        nonClaims: ['Static may-call reachability does not establish runtime execution.'],
+      }),
     ),
     options: withJsonOption([
       option('--expand <region-id>', 'Expand one file region; repeat to expand several together', collectValues, []),
@@ -1684,13 +1828,26 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'system-map',
     command: 'system-map',
-    description: 'Map structural regions, compiler relationships, and exact runtime boundaries from explicit anchors',
+    description: 'Deprecated compatibility view for collapsed regions and legacy route catalogues; use evidence',
     agent: agentContract(
       'Which components and proven compiler or runtime relationships connect these explicit literals or symbols?',
       'all matched anchors, collapsed structural regions, compiler and exact runtime relationships, unresolved boundary frontiers, simultaneous drilldown summaries, and explicit coverage gaps',
       [],
       'bounded',
       'repository',
+      REPOSITORY_OBSERVATION_OPERATION,
+      graphProjectionSemanticContract({
+        rootKinds: ['text', 'symbol', 'construct', 'runtime-key'],
+        edgeFamilies: GRAPH_EVIDENCE_FAMILIES,
+        directions: ['incoming', 'outgoing', 'both'],
+        operations: ['reachability', 'connecting'],
+        compression: ['topology'],
+        nonClaims: [
+          'Legacy region and next-anchor ranking does not establish task relevance.',
+          'Structural region membership does not establish execution.',
+        ],
+        compatibility: 'deprecated',
+      }),
     ),
     options: withJsonOption([
       option('--search <literal>', 'Add an exact indexed-source anchor; repeat to include several', collectValues, []),
@@ -1738,6 +1895,12 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
         [],
       ),
       option(
+        '--route <route-id>',
+        'Select one proved upstream route; repeat to materialize several routes together',
+        collectValues,
+        [],
+      ),
+      option(
         '--gap-callee <name>',
         'Resolve one callee already shown in connected behavior; repeat to batch a named gap',
         collectValues,
@@ -1745,7 +1908,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
       ),
       option(
         '--selection-term <term>',
-        'Rank already-proven causal drill targets by one normalized locator term; repeat to preserve several concerns',
+        'Deprecated no-op retained for command compatibility; query vocabulary no longer changes graph selection',
         collectValues,
         [],
       ),
@@ -1762,19 +1925,16 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
       ],
     ),
     renderShape: 'custom',
-    docs: doc('Graph', [
-      "scip-query system-map --search 'work_session_stream_events' --symbol appendWorkSessionStreamEvents",
-      "scip-query system-map --search 'work_session_stream_events' --expand 'region:apps/api:modules/sessions' --expand 'region:apps/web:components/sessions'",
-    ]),
+    docs: doc('Compatibility'),
     handler: handleSystemMap,
   },
   budgetedSectionedQueryCommand({
     id: 'call-graph',
     command: 'call-graph <symbol>',
-    description: 'Show incoming callers and outgoing callees for a symbol',
+    description: 'Show static may-call edges with exact/candidate evidence and explicit blind spots',
     agent: agentContract(
       'Who calls this symbol and what does it call?',
-      'caller and callee symbol identities with files',
+      'caller and callee symbol identities, files, evidence strengths, and static-analysis blind spots',
       ['symbol'],
       'bounded',
     ),
@@ -1796,11 +1956,30 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
         ? [
             {
               title: `CALLERS (${result.callers.length})`,
-              rows: result.callers.map((c) => `  ${c.file}  ${c.shortName}`),
+              rows: result.callerEvidence
+                ? result.callerEvidence.map(
+                    (c) =>
+                      `  [${c.evidenceStrength}:${c.relationship}] ${c.file}  ${c.shortName}  (${c.evidenceSource})`,
+                  )
+                : result.callers.map((c) => `  ${c.file}  ${c.shortName}`),
             },
             {
               title: `CALLEES (${result.callees.length})`,
-              rows: result.callees.map((c) => `  ${c.file}  ${c.shortName}`),
+              rows: result.calleeEvidence
+                ? result.calleeEvidence.map(
+                    (c) =>
+                      `  [${c.evidenceStrength}:${c.relationship}] ${c.file}  ${c.shortName}  (${c.evidenceSource})`,
+                  )
+                : result.callees.map((c) => `  ${c.file}  ${c.shortName}`),
+            },
+            {
+              title: 'COVERAGE',
+              rows: result.coverage
+                ? [
+                    `  ${result.coverage.scope}`,
+                    ...result.coverage.blindSpots.map((blindSpot) => `  Blind spot: ${blindSpot}`),
+                  ]
+                : ['  Legacy result: explicit static-analysis coverage was not reported.'],
             },
           ]
         : [],

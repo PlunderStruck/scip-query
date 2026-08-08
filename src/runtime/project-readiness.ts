@@ -1,5 +1,13 @@
 import { execFileSync } from 'node:child_process';
 import type { ProjectConfig, SupportedLanguage } from '../domain/types.js';
+import type { GraphEvidenceFamily } from '../domain/graph-exploration-contract.js';
+import { GRAPH_RELATION_CONTRACTS } from '../domain/graph-relation-contracts.js';
+import {
+  GRAPH_RELATION_PROVIDER_CONTRACTS,
+  type GraphRelationProviderContract,
+  type GraphRelationProviderRequirement,
+  type GraphRelationSubtypeContract,
+} from '../domain/graph-relation-providers.js';
 import { getIndexerDependencyStatus } from '../platform/indexer-toolchain.js';
 import { detectLanguages } from '../reindex/detect.js';
 import { getIndexerConfig } from '../reindex/indexers.js';
@@ -69,6 +77,35 @@ export interface ProjectCapabilityReport {
   languages: SupportedLanguage[];
   capabilities: ProjectCapability[];
   matrix: LanguageCapability[];
+  relations: ProjectRelationCapability[];
+}
+
+export type GraphRelationSupportStatus = 'exact' | 'partial' | 'candidate' | 'unsupported';
+
+export interface ProjectRelationCapability {
+  family: GraphEvidenceFamily;
+  status: GraphRelationSupportStatus;
+  establishes: string;
+  nonClaims: readonly string[];
+  providers: readonly string[];
+  providerCapabilities: ProjectRelationProviderCapability[];
+  reason: string;
+}
+
+export interface LanguageRelationProviderCapability {
+  language: SupportedLanguage;
+  status: GraphRelationSupportStatus;
+  reason: string;
+}
+
+export interface ProjectRelationProviderCapability {
+  id: string;
+  label: string;
+  status: GraphRelationSupportStatus;
+  requirements: readonly GraphRelationProviderRequirement[];
+  subtypes: string[];
+  languages: LanguageRelationProviderCapability[];
+  reason: string;
 }
 
 const LANGUAGE_EXTENSIONS: Record<SupportedLanguage, string[]> = {
@@ -179,6 +216,7 @@ export function getProjectCapabilities(
   return {
     languages: readiness.languages,
     matrix,
+    relations: projectRelationCapabilities(matrix, graphDataAvailable),
     capabilities: [
       {
         id: 'indexing',
@@ -225,6 +263,104 @@ export function getProjectCapabilities(
       },
     ],
   };
+}
+
+function projectRelationCapabilities(
+  matrix: readonly LanguageCapability[],
+  graphDataAvailable: boolean,
+): ProjectRelationCapability[] {
+  return GRAPH_RELATION_CONTRACTS.map((contract) => {
+    const providerCapabilities = GRAPH_RELATION_PROVIDER_CONTRACTS.flatMap((provider) => {
+      const relations = provider.relations.filter((relation) => relation.family === contract.family);
+      return relations.length === 0 ? [] : [projectProviderCapability(provider, relations, matrix, graphDataAvailable)];
+    });
+    const status = aggregateRelationSupport(providerCapabilities.map((provider) => provider.status));
+    return {
+      ...contract,
+      status,
+      providerCapabilities,
+      reason:
+        status === 'unsupported'
+          ? graphDataAvailable
+            ? 'The current project has no available provider for this relationship family.'
+            : 'An indexed graph is required before this relationship family can be queried.'
+          : status === 'exact'
+            ? 'Exact within indexed compiler/source identity coverage; dynamic or unindexed constructs remain outside scope.'
+            : 'Supported by bounded static providers; unresolved and unsupported constructs remain explicitly reported.',
+    };
+  });
+}
+
+function projectProviderCapability(
+  provider: GraphRelationProviderContract,
+  relations: readonly GraphRelationSubtypeContract[],
+  matrix: readonly LanguageCapability[],
+  graphDataAvailable: boolean,
+): ProjectRelationProviderCapability {
+  const languages = matrix.map((row) => languageProviderCapability(provider, relations, row, graphDataAvailable));
+  const status = aggregateRelationSupport(languages.map((language) => language.status));
+  const availableLanguages = languages
+    .filter((language) => language.status !== 'unsupported')
+    .map((row) => row.language);
+  return {
+    id: provider.id,
+    label: provider.label,
+    status,
+    requirements: provider.requirements,
+    subtypes: relations.map((relation) => relation.subtype),
+    languages,
+    reason:
+      availableLanguages.length === 0
+        ? `Unavailable: requires ${provider.requirements.join(', ')}.`
+        : `${status} support for ${availableLanguages.join(', ')}; analytical ceiling is declared per subtype.`,
+  };
+}
+
+function languageProviderCapability(
+  provider: GraphRelationProviderContract,
+  relations: readonly GraphRelationSubtypeContract[],
+  language: LanguageCapability,
+  graphDataAvailable: boolean,
+): LanguageRelationProviderCapability {
+  const missing = provider.requirements.filter(
+    (requirement) => !providerRequirementAvailable(requirement, language, graphDataAvailable),
+  );
+  if (missing.length > 0) {
+    return {
+      language: language.language,
+      status: 'unsupported',
+      reason: `Missing ${missing.join(', ')}.`,
+    };
+  }
+  const status = aggregateRelationSupport(relations.map((relation) => relation.supportCeiling));
+  return {
+    language: language.language,
+    status,
+    reason: `${provider.label} is available; subtype coverage is ${status}.`,
+  };
+}
+
+function providerRequirementAvailable(
+  requirement: GraphRelationProviderRequirement,
+  language: LanguageCapability,
+  graphDataAvailable: boolean,
+): boolean {
+  switch (requirement) {
+    case 'indexed-graph':
+      return graphDataAvailable && language.indexing.status !== 'unavailable';
+    case 'source-facts':
+      return language.sourceFacts.status !== 'unavailable';
+    case 'typescript-semantic':
+      return language.language === 'typescript' && language.semantic.status === 'available';
+  }
+}
+
+function aggregateRelationSupport(statuses: readonly GraphRelationSupportStatus[]): GraphRelationSupportStatus {
+  const available = statuses.filter((status) => status !== 'unsupported');
+  if (available.length === 0) return 'unsupported';
+  if (available.every((status) => status === 'exact')) return 'exact';
+  if (available.some((status) => status === 'exact' || status === 'partial')) return 'partial';
+  return 'candidate';
 }
 
 function projectSemanticCapabilities(readiness: ProjectReadiness): ProjectCapability[] {

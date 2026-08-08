@@ -417,10 +417,12 @@ describe('query engine', () => {
 
   describe('surface', () => {
     it('finds externally consumed symbols', () => {
-      const results = queries.surface(db, 'auth.service');
+      const results = queries.consumerSurface(db, 'auth.service');
       expect(results.length).toBeGreaterThan(0);
       const consumers = results.map((r) => r.consumer);
       expect(consumers).toContain('src/controllers/auth.controller.ts');
+      expect(consumers).not.toContain('src/services/auth.service.ts');
+      expect(results.every((result) => result.basis === 'external-reference')).toBe(true);
     });
   });
 

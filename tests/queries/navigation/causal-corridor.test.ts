@@ -110,6 +110,21 @@ describe('causal corridor', () => {
     );
   });
 
+  it('does not reopen folded causal branches after topology selection', () => {
+    const topology = causalFixture();
+    topology.edges = topology.edges.map((edge) =>
+      edge.id === 'returns-accepted' ? { ...edge, disposition: 'emitted' as const } : edge,
+    );
+    topology.edges.push(semanticEdge('accepted-to-unrelated', 'accepted', 'unrelated', 'control', 'call'));
+
+    const corridor = buildCausalCorridor(topology, { focusLocations: [] });
+
+    expect(corridor.nodeIds).toEqual(['accepted', 'handler']);
+    expect(corridor.edgeIds).toEqual(['returns-accepted']);
+    expect(corridor.nodeIds).not.toContain('unrelated');
+    expect(corridor.edgeIds).not.toContain('accepted-to-unrelated');
+  });
+
   it('uses exact transfer evidence instead of a callable-wide parameter range when focus is narrow', () => {
     const transfer = (id: string, fromNodeId: string, toNodeId: string, line: number): ExplorationTopologyEdge => ({
       ...semanticEdge(id, fromNodeId, toNodeId, 'data', 'argument-to-parameter'),

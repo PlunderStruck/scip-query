@@ -82,7 +82,7 @@ describe.sequential('source emission sessions', () => {
     ]);
   });
 
-  it('replaces only the same complete exact unit with a visible receipt', () => {
+  it('replaces the same complete exact unit with a visible receipt', () => {
     const render = () =>
       renderSourceEvidence({
         relativePath: 'src/exact.ts',
@@ -95,6 +95,31 @@ describe.sequential('source emission sessions', () => {
     expect(first).toContain('export function exact()');
     expect(second).toContain('src/exact.ts:5-7  [source previously emitted: session #1 via code; not repeated]');
     expect(second).not.toContain('export function exact()');
+  });
+
+  it('replaces a byte-identical exact subset of a prior exact source read with a receipt', () => {
+    const first = invocation('code', () =>
+      renderSourceEvidence({
+        relativePath: 'src/exact.ts',
+        startLine: 4,
+        source: 'four\nfive\nsix\nseven\neight',
+        sessionPolicy: 'exact-unit',
+        ownerSymbol: 'larger-range',
+      }),
+    );
+    const second = invocation('code', () =>
+      renderSourceEvidence({
+        relativePath: 'src/exact.ts',
+        startLine: 5,
+        source: 'five\nsix\nseven',
+        sessionPolicy: 'exact-unit',
+        ownerSymbol: 'nested-range',
+      }),
+    );
+
+    expect(first).toContain('5  four');
+    expect(second).toContain('src/exact.ts:6-8  [source previously emitted: session #1 via code; not repeated]');
+    expect(second).not.toContain('five');
   });
 
   it('re-emits an exact unit when current bytes change without a generation change', () => {

@@ -33,6 +33,10 @@ export function coupling(db: ScipDatabase, file1: string, file2: string): Coupli
   };
 }
 
+export function sharedSymbolCoupling(db: ScipDatabase, file1: string, file2: string): CouplingResult {
+  return coupling(db, file1, file2);
+}
+
 /**
  * Find the most coupled file pairs in the codebase.
  */
@@ -49,8 +53,8 @@ export function topCoupling(db: ScipDatabase, opts: { limit?: number; scope?: st
     shared: number;
   }>(
     `SELECT
-      def_d.relative_path AS file1,
-      ref_d.relative_path AS file2,
+      CASE WHEN def_d.relative_path < ref_d.relative_path THEN def_d.relative_path ELSE ref_d.relative_path END AS file1,
+      CASE WHEN def_d.relative_path < ref_d.relative_path THEN ref_d.relative_path ELSE def_d.relative_path END AS file2,
       COUNT(DISTINCT gs.id) AS shared
     FROM mentions m
     JOIN chunks c ON m.chunk_id = c.id
@@ -68,8 +72,8 @@ export function topCoupling(db: ScipDatabase, opts: { limit?: number; scope?: st
       AND def_d.id != ref_d.id
       ${db.pathExclusionsFor('def_d', 'ref_d')}
       ${scopeFilter}
-    GROUP BY def_d.id, ref_d.id
-    ORDER BY shared DESC
+    GROUP BY file1, file2
+    ORDER BY shared DESC, file1, file2
     LIMIT ?`,
     ...scopeParams,
     limit,
@@ -78,6 +82,13 @@ export function topCoupling(db: ScipDatabase, opts: { limit?: number; scope?: st
   return rows
     .filter((r) => !db.isIgnored(r.file1) && !db.isIgnored(r.file2))
     .map((r) => couplingResult(r.file1, r.file2, r.shared));
+}
+
+export function topSharedSymbolCoupling(
+  db: ScipDatabase,
+  opts: { limit?: number; scope?: string } = {},
+): CouplingResult[] {
+  return topCoupling(db, opts);
 }
 
 function couplingResult(file1: string, file2: string, sharedSymbols: number): CouplingResult {

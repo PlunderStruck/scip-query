@@ -35,6 +35,7 @@ export const BOUNDARY_EXTRACTORS: readonly BoundaryExtractor[] = [
   httpExtractor(),
   effectHttpApiExtractor(),
   nodeChildProcessExtractor(),
+  capabilityRegistryExtractor(),
   registryExtractor(),
   persistenceExtractor(),
   queueExtractor(),
@@ -497,6 +498,74 @@ function httpExtractor(): BoundaryExtractor {
   };
 }
 
+function capabilityRegistryExtractor(): BoundaryExtractor {
+  return {
+    id: 'builtin.capability-registry',
+    supports: (source) =>
+      /\b(?:execute|handler|invoke|run)\s*(?:[:(])/u.test(source) ||
+      /['"`][^'"`\n]{0,256}\b[A-Za-z_$][\w$-]*\s*\(/u.test(source),
+    extract: (context) => {
+      const observations: BoundaryObservation[] = [];
+      const seen = new Set<string>();
+      walk(context.root, (node) => {
+        if (node.type === 'pair') {
+          const keyNode = node.childForFieldName('key') ?? node.namedChild(0);
+          const valueNode = node.childForFieldName('value') ?? node.namedChild(1);
+          const field = keyNode?.text.replace(/^['"`]|['"`]$/gu, '');
+          if (field !== 'name' && field !== 'id') return;
+          const key = registryKey(valueNode, context);
+          const handler = capabilityDescriptorHandler(node);
+          if (!key || key.evidence !== 'literal' || !handler) return;
+          const identity = `handle\0${key.value}\0${handler.startPosition.row}`;
+          if (seen.has(identity)) return;
+          seen.add(identity);
+          observations.push(
+            observation(
+              context,
+              handler,
+              'builtin.capability-registry',
+              'registry.handle',
+              [{ name: 'key', ...key }],
+              'exact',
+              'capability-descriptor',
+            ),
+          );
+          return;
+        }
+        if (!['string', 'string_literal', 'template_string'].includes(node.type)) return;
+        const text = node.text.replace(/^['"`]|['"`]$/gu, '');
+        for (const match of text.matchAll(/\b([A-Za-z_$][\w$-]*)\s*\(/gu)) {
+          const key = match[1]!;
+          if (!isCapabilityReference(text, key, match.index)) continue;
+          const identity = `reference\0${key}\0${node.startPosition.row}`;
+          if (seen.has(identity)) continue;
+          seen.add(identity);
+          observations.push(
+            observation(
+              context,
+              node,
+              'builtin.capability-registry',
+              'registry.reference',
+              [{ name: 'key', value: key, evidence: 'literal' }],
+              'exact',
+              'capability-instruction-reference',
+            ),
+          );
+        }
+      });
+      return observations;
+    },
+  };
+}
+
+function isCapabilityReference(text: string, key: string, offset: number): boolean {
+  if (key.includes('_') || key.includes('-')) return true;
+  const prefix = text.slice(Math.max(0, offset - 64), offset);
+  return /\b(?:use|call|invoke|run|via|with|read|stop)(?:\s+the)?(?:\s+(?:tool|capability|command))?\s*$/iu.test(
+    prefix,
+  );
+}
+
 function registryExtractor(): BoundaryExtractor {
   return {
     id: 'builtin.registry',
@@ -718,7 +787,9 @@ function observation(
 function boundaryRole(action: string): string {
   const leaf = action.split('.').at(-1) ?? action;
   if (['handle', 'subscribe', 'consume', 'read'].includes(leaf)) return 'consumer';
-  if (['request', 'publish', 'send', 'write', 'dispatch', 'spawn', 'exec'].includes(leaf)) return 'producer';
+  if (['request', 'publish', 'send', 'write', 'dispatch', 'reference', 'invoke', 'spawn', 'exec'].includes(leaf)) {
+    return 'producer';
+  }
   return 'observe';
 }
 
@@ -877,6 +948,34 @@ function directlyCallable(node: SyntaxNode): boolean {
 function registryValueLike(node: SyntaxNode): boolean {
   if (directlyCallable(node) || node.type === 'member_expression') return true;
   return node.type === 'identifier' && /(?:command|controller|dispatch|handle|handler)/iu.test(node.text);
+}
+
+function capabilityDescriptorHandler(identityPair: SyntaxNode): SyntaxNode | null {
+  let current = identityPair.parent;
+  while (current && current.type !== 'variable_declarator') {
+    if (['object', 'object_literal', 'dictionary'].includes(current.type)) {
+      for (const child of current.namedChildren) {
+        if (child.type === 'pair') {
+          const key = child.childForFieldName('key') ?? child.namedChild(0);
+          const value = child.childForFieldName('value') ?? child.namedChild(1);
+          const field = key?.text.replace(/^['"`]|['"`]$/gu, '');
+          if (field && ['execute', 'handler', 'invoke', 'run'].includes(field) && value && registryValueLike(value)) {
+            return current;
+          }
+        }
+        const name = child.childForFieldName('name') ?? child.namedChild(0);
+        if (
+          name &&
+          ['execute', 'handler', 'invoke', 'run'].includes(name.text.replace(/^['"`]|['"`]$/gu, '')) &&
+          /(?:function|method)/u.test(child.type)
+        ) {
+          return current;
+        }
+      }
+    }
+    current = current.parent;
+  }
+  return null;
 }
 
 type PersistenceAdapter = 'database' | 'orm' | 'repository';

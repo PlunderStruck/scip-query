@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { writeRuntimeBoundaryGraph } from '../../../src/analysis/runtime-boundaries/index.js';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
-import { discoverAnchors, normalizeAnchorQuery } from '../../../src/queries/navigation/anchor-discovery.js';
+import { discoverAnchors, normalizeAnchorQuery } from '../../../src/queries/graph/anchor-discovery.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../../fixtures/evidence-fixture.js';
 
@@ -67,8 +67,7 @@ describe('anchor discovery', () => {
       expect(flow?.systemMapCommand).toContain("--symbol 'src/store.ts:9-12'");
       expect(flow?.systemMapCommand).not.toContain("--symbol 'src/mutex.ts:1-3'");
       expect(flow?.systemMapCommand).not.toContain('scip-typescript npm');
-      expect(flow?.systemMapCommand).toContain("--selection-term 'interrupt'");
-      expect(flow?.systemMapCommand).not.toContain("--selection-term 'durable'");
+      expect(flow?.systemMapCommand).not.toContain('--selection-term');
 
       const sharedCalleeSurface = result.groups.find((group) => group.kind === 'shared-callee-owners');
       expect(sharedCalleeSurface).toBeDefined();
@@ -379,10 +378,16 @@ describe('anchor discovery', () => {
         '  return selectBeta();',
         '}',
       ],
+      'packages/alpha/test/session-runner.test.ts': [
+        'export function verifyCompactionPromptRunner() {',
+        "  return 'test-only compaction prompt runner';",
+        '}',
+      ],
     });
     evidenceFixtureDb(join(fixtureRoot, 'index.db'))
       .document(1, 'typescript', 'packages/alpha/src/compaction.ts')
       .document(2, 'typescript', 'packages/beta/src/compaction.ts')
+      .document(3, 'typescript', 'packages/alpha/test/session-runner.test.ts')
       .symbol(
         1,
         'scip-typescript npm fixture 1.0.0 packages/alpha/src/`compaction.ts`/buildPrompt().',
@@ -414,12 +419,19 @@ describe('anchor discovery', () => {
         'alphaCompaction',
         12,
       )
+      .symbol(
+        7,
+        'scip-typescript npm fixture 1.0.0 packages/alpha/test/`session-runner.test.ts`/verifyCompactionPromptRunner().',
+        'verifyCompactionPromptRunner',
+        12,
+      )
       .definition(1, 1, 1, 0, 0, 2, 1)
       .definition(2, 1, 2, 4, 0, 6, 1)
       .definition(3, 1, 3, 8, 0, 11, 1)
       .definition(4, 2, 4, 0, 0, 2, 1)
       .definition(5, 2, 5, 4, 0, 6, 1)
       .definition(6, 1, 6, 13, 0, 15, 1)
+      .definition(7, 3, 7, 0, 0, 2, 1)
       .write();
     const db = new ScipDatabase({
       dbPath: join(fixtureRoot, 'index.db'),
@@ -427,10 +439,18 @@ describe('anchor discovery', () => {
       projectRoot: fixtureRoot,
     });
     try {
-      const result = discoverAnchors(db, 'How do packages alpha and beta compaction implementations differ?', {
-        semantic: false,
-      });
+      const result = discoverAnchors(
+        db,
+        'How do packages/alpha and packages/beta. compaction implementations differ?',
+        {
+          semantic: false,
+        },
+      );
       const parallel = result.groups.find((group) => group.kind === 'parallel-paths');
+      expect(result.queryPathFragments).toEqual(['packages/alpha', 'packages/beta']);
+      expect(result.groups[0]?.kind).toBe('parallel-paths');
+      expect(result.groups[0]?.keyAnchors.every((anchor) => anchor.fileKind !== 'test')).toBe(true);
+      expect(parallel?.queryPathMatches).toEqual(['packages/alpha', 'packages/beta']);
       expect(parallel?.parallelConnectedSides).toBe(2);
       expect(parallel?.parallelOrchestrationSides).toBe(2);
       expect(parallel?.parallelSharedPathTerms).toContain('compaction');

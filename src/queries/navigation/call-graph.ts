@@ -6,13 +6,36 @@ import { isFunctionLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser
 import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 import { uniqueSymbolFileRows } from '../query-utils.js';
 
+export interface CallGraphEvidenceRow {
+  symbol: string;
+  shortName: string;
+  file: string;
+  relationship: 'resolved-call' | 'reference-candidate' | 'chunk-candidate';
+  evidenceStrength: 'exact' | 'candidate';
+  evidenceSource: string;
+}
+
 export interface CallGraphResult {
   symbol: string;
   shortName: string;
   /** Symbols that call this one (incoming) */
-  callers: Array<{ symbol: string; shortName: string; file: string }>;
+  callers: Array<{
+    symbol: string;
+    shortName: string;
+    file: string;
+  }>;
   /** Symbols called by this one (outgoing) */
-  callees: Array<{ symbol: string; shortName: string; file: string }>;
+  callees: Array<{
+    symbol: string;
+    shortName: string;
+    file: string;
+  }>;
+  callerEvidence?: CallGraphEvidenceRow[];
+  calleeEvidence?: CallGraphEvidenceRow[];
+  coverage?: {
+    scope: 'indexed-static-call-graph';
+    blindSpots: string[];
+  };
 }
 
 /**
@@ -54,18 +77,41 @@ export function callGraph(
     }),
   );
 
+  const callerEvidence: CallGraphEvidenceRow[] = callerRows.map((r) => ({
+    symbol: r.symbol,
+    shortName: shortenSymbol(r.symbol),
+    file: r.file,
+    relationship:
+      r.source !== 'caller-map-inversion'
+        ? 'reference-candidate'
+        : r.callEvidence === 'scip-chunk'
+          ? 'chunk-candidate'
+          : 'resolved-call',
+    evidenceStrength: r.source === 'caller-map-inversion' && r.callEvidence !== 'scip-chunk' ? 'exact' : 'candidate',
+    evidenceSource: r.callEvidence ?? r.source,
+  }));
+  const calleeEvidence: CallGraphEvidenceRow[] = calleeRows.map((r) => ({
+    symbol: r.symbol,
+    shortName: shortenSymbol(r.symbol),
+    file: r.file,
+    relationship: r.source === 'scip-chunk' ? 'chunk-candidate' : 'resolved-call',
+    evidenceStrength: r.source === 'scip-chunk' ? 'candidate' : 'exact',
+    evidenceSource: r.source,
+  }));
   return {
     symbol: target.symbol,
     shortName: shortenSymbol(target.symbol),
-    callers: callerRows.map((r) => ({
-      symbol: r.symbol,
-      shortName: shortenSymbol(r.symbol),
-      file: r.file,
-    })),
-    callees: calleeRows.map((r) => ({
-      symbol: r.symbol,
-      shortName: shortenSymbol(r.symbol),
-      file: r.file,
-    })),
+    callers: callerEvidence.map(({ symbol, shortName, file }) => ({ symbol, shortName, file })),
+    callees: calleeEvidence.map(({ symbol, shortName, file }) => ({ symbol, shortName, file })),
+    callerEvidence,
+    calleeEvidence,
+    coverage: {
+      scope: 'indexed-static-call-graph',
+      blindSpots: [
+        'unresolved dynamic dispatch and reflection',
+        'external or unindexed callees without a resolved symbol identity',
+        'SCIP chunk co-occurrence is retained only as candidate call evidence',
+      ],
+    },
   };
 }

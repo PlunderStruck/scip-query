@@ -295,11 +295,11 @@ batched drilldowns for selected owners. `search --full` expands every source
 window and is not needed to establish complete text-match coverage.
 
 Cross-command evidence citations are off by default. With an explicit
-`SCIP_QUERY_SESSION`, a complete source unit or graph unit/edge may be replaced
-only by a visible receipt for content-identical evidence from the same index
-generation. Partial source coverage never suppresses an exact unit. Changed
-bytes, changed graph content, a new generation, or `--reemit` force full
-evidence.
+`SCIP_QUERY_SESSION`, a complete source unit, a byte-identical exact subset of a
+prior exact source read, or a graph unit/edge may be replaced by a visible
+receipt from the same index generation. Preview coverage never suppresses an
+exact unit. Changed bytes, changed graph content, a new generation, or
+`--reemit` force full evidence.
 
 If output prints `Continue exactly:`, run the emitted command unchanged until
 transport is complete. Transport completion means every rendered character was

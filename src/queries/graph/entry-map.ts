@@ -49,6 +49,7 @@ export interface EntryMapSymbolEdge {
   toShortName: string;
   toFile: string;
   source: CalleeEvidenceSource;
+  evidenceStrength?: 'exact' | 'candidate';
 }
 
 export interface EntryMapExternalCall {
@@ -59,6 +60,7 @@ export interface EntryMapExternalCall {
   toShortName: string;
   reportedFile: string;
   source: CalleeEvidenceSource;
+  evidenceStrength?: 'exact' | 'candidate';
 }
 
 export interface EntryMapRegionEdge {
@@ -67,6 +69,8 @@ export interface EntryMapRegionEdge {
   toRegionId: string;
   toFile: string;
   callCount: number;
+  exactCallCount?: number;
+  candidateCallCount?: number;
   fromSymbols: string[];
   toSymbols: string[];
   evidence: CalleeEvidenceSource[];
@@ -88,10 +92,15 @@ export interface EntryMapRegion {
 }
 
 export interface EntryMapCoverage {
+  /** @deprecated Candidate SCIP chunk co-occurrence may also be present. */
   completeWithinIndexedStaticCallEdges: true;
+  completeWithinSelectedStaticEvidence?: true;
+  candidateReachabilityIncluded?: boolean;
   dynamicDispatchRepresented: false;
   symbolCount: number;
   symbolEdgeCount: number;
+  exactSymbolEdgeCount?: number;
+  candidateSymbolEdgeCount?: number;
   regionCount: number;
   regionEdgeCount: number;
   externalCallCount: number;
@@ -221,9 +230,13 @@ export function entryCallMap(
     unmatchedExpansions,
     coverage: {
       completeWithinIndexedStaticCallEdges: true,
+      completeWithinSelectedStaticEvidence: true,
+      candidateReachabilityIncluded: graph.edges.some((edge) => edge.evidenceStrength === 'candidate'),
       dynamicDispatchRepresented: false,
       symbolCount: graph.symbols.length,
       symbolEdgeCount: graph.edges.length,
+      exactSymbolEdgeCount: graph.edges.filter((edge) => edge.evidenceStrength === 'exact').length,
+      candidateSymbolEdgeCount: graph.edges.filter((edge) => edge.evidenceStrength === 'candidate').length,
       regionCount: projected.regions.length,
       regionEdgeCount: projected.regionEdges.length,
       externalCallCount: graph.externalCalls.length,
@@ -397,6 +410,7 @@ function symbolEdge(from: IndexedDefinition, to: IndexedDefinition, evidence: Ca
     toShortName: shortenSymbol(to.symbol),
     toFile: to.relativePath,
     source: evidence.source,
+    evidenceStrength: evidence.source === 'scip-chunk' ? 'candidate' : 'exact',
   };
 }
 
@@ -409,6 +423,7 @@ function externalCall(from: IndexedDefinition, callee: CalleeRow): EntryMapExter
     toShortName: shortenSymbol(callee.symbol),
     reportedFile: callee.file,
     source: callee.source,
+    evidenceStrength: callee.source === 'scip-chunk' ? 'candidate' : 'exact',
   };
 }
 
@@ -469,6 +484,8 @@ function collapseRegionEdges(edges: readonly EntryMapSymbolEdge[]): EntryMapRegi
         toRegionId: regionId(first.toFile),
         toFile: first.toFile,
         callCount: bucket.length,
+        exactCallCount: bucket.filter((edge) => edge.evidenceStrength === 'exact').length,
+        candidateCallCount: bucket.filter((edge) => edge.evidenceStrength === 'candidate').length,
         fromSymbols: uniqueSorted(bucket.map((edge) => edge.fromShortName)),
         toSymbols: uniqueSorted(bucket.map((edge) => edge.toShortName)),
         evidence: uniqueSorted(bucket.map((edge) => edge.source)),

@@ -8,13 +8,29 @@ import { ProjectIndex } from '../internal/project-index.js';
 import { applyScanLimit } from '../query-utils.js';
 import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 
+export interface CoordinationHubCalleeEvidence {
+  symbol: string;
+  shortName: string;
+  file: string;
+  evidenceStrength: 'exact' | 'candidate';
+  evidenceSource: string;
+}
+
 export interface BottleneckResult {
   symbol: string;
   shortName: string;
   fanIn: number;
   fanOut: number;
   callerFiles: string[];
-  externalCallees: Array<{ symbol: string; shortName: string; file: string }>;
+  candidateCallerFiles?: string[];
+  externalCallees: Array<{
+    symbol: string;
+    shortName: string;
+    file: string;
+  }>;
+  externalCalleeEvidence?: CoordinationHubCalleeEvidence[];
+  candidateExternalCallees?: string[];
+  inputBasis?: 'mixed-static-call-or-reference-evidence';
   /** fanIn * fanOut — higher = more central coupling hub */
   score: number;
   definedIn: string;
@@ -25,11 +41,11 @@ export interface BottleneckResult {
 }
 
 /**
- * Find coupling hubs: symbols with both high fan-in (many consumers)
- * AND high fan-out (references many other symbols).
+ * Find coordination hubs: symbols with both many incoming caller/reference
+ * evidence files and many outgoing cross-file callable targets.
  *
- * These are the most dangerous symbols to change — they sit at the
- * intersection of many dependency paths. Score = fanIn * fanOut.
+ * This is a coordination-hub heuristic, not a graph-theoretic articulation
+ * point or proof that a change is dangerous. Score = fanIn * fanOut.
  */
 // scip-query: ignore-similar — shares the SCIP-DB join shape with topFanOut /
 // hotspots, but measures fan-in × fan-out coupling, not fan-out alone.
@@ -72,6 +88,20 @@ export function bottlenecks(
     .slice(0, limit);
 }
 
+export function coordinationHubs(
+  db: ScipDatabase,
+  opts: {
+    limit?: number;
+    scope?: string;
+    minFanIn?: number;
+    minFanOut?: number;
+    scanLimit?: number;
+    semantic?: boolean;
+  } = {},
+): BottleneckResult[] {
+  return bottlenecks(db, opts);
+}
+
 function bottleneckRowFor(
   db: ScipDatabase,
   definition: IndexedDefinition,
@@ -79,7 +109,14 @@ function bottleneckRowFor(
   callerRows: readonly CallerRow[],
 ): BottleneckResult {
   const callerFiles = [...new Set(callerRows.map((row) => row.file))].sort();
-  const externalCalleeByIdentity = new Map<string, { symbol: string; shortName: string; file: string }>();
+  const candidateCallerFiles = [
+    ...new Set(
+      callerRows
+        .filter((row) => row.source !== 'caller-map-inversion' || row.callEvidence === 'scip-chunk')
+        .map((row) => row.file),
+    ),
+  ].sort();
+  const externalCalleeByIdentity = new Map<string, CoordinationHubCalleeEvidence>();
   for (const row of getCalleeRowsForSymbol(db, definition, {
     limit: 500,
     semantic,
@@ -92,22 +129,31 @@ function bottleneckRowFor(
         symbol: row.symbol,
         shortName: shortenSymbol(row.symbol),
         file: row.file,
+        evidenceStrength: row.source === 'scip-chunk' ? 'candidate' : 'exact',
+        evidenceSource: row.source,
       });
     }
   }
-  const externalCallees = [...externalCalleeByIdentity.values()].sort(
+  const externalCalleeEvidence = [...externalCalleeByIdentity.values()].sort(
     (left, right) => left.file.localeCompare(right.file) || left.symbol.localeCompare(right.symbol),
   );
   const fanIn = callerFiles.length;
-  const fanOut = externalCallees.length;
+  const fanOut = externalCalleeEvidence.length;
   const score = fanIn * fanOut;
+  const candidateExternalCallees = externalCalleeEvidence
+    .filter((callee) => callee.evidenceStrength === 'candidate')
+    .map((callee) => callee.symbol);
   return {
     symbol: definition.symbol,
     shortName: shortenSymbol(definition.symbol),
     fanIn,
     fanOut,
     callerFiles,
-    externalCallees,
+    candidateCallerFiles,
+    externalCallees: externalCalleeEvidence.map(({ symbol, shortName, file }) => ({ symbol, shortName, file })),
+    externalCalleeEvidence,
+    candidateExternalCallees,
+    inputBasis: 'mixed-static-call-or-reference-evidence',
     score,
     definedIn: definition.relativePath,
     actionTier: 'signal',
@@ -116,6 +162,7 @@ function bottleneckRowFor(
       `${fanIn} incoming file(s) reference this symbol`,
       `${fanOut} distinct cross-file callee symbol(s) are reached from it`,
       `centrality score is ${score} (fan-in * fan-out)`,
+      `${candidateCallerFiles.length} incoming file(s) and ${candidateExternalCallees.length} outgoing target(s) rely on candidate rather than exact call evidence`,
     ],
     recommendation:
       'Review ownership, API stability, and caller groups before changing this central symbol; do not refactor solely from graph centrality.',

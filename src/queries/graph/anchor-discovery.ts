@@ -1,3 +1,4 @@
+/** Deprecated compatibility discovery; canonical evidence traversal starts from explicit referents. */
 import type { IndexedDefinition } from '../../domain/types.js';
 import { readRuntimeBoundaryGraph } from '../../analysis/runtime-boundaries/index.js';
 import type { BoundaryLink, BoundaryObservation } from '../../analysis/runtime-boundaries/types.js';
@@ -37,7 +38,6 @@ const MAX_PATH_SOURCE_CANDIDATE_FILES = 32;
 const MAX_TERM_COVERAGE_ROOTS = 4;
 const MAX_PATH_CALLABLE_ROOTS = 32;
 const MAX_PATH_CALLABLES_PER_FILE = 8;
-const MAX_SYSTEM_MAP_SELECTION_TERMS = 16;
 
 const QUERY_STOP_WORDS = new Set([
   'a',
@@ -102,6 +102,8 @@ export interface AnchorDiscoveryCandidate {
   identityMatchedTerms: string[];
   rarity: number;
   symbolRarity: number;
+  /** Exact slash-delimited query path fragments matched by this candidate's repository path. */
+  queryPathMatches?: string[];
   /** Exact current source size for the compiler-owned range, when available. */
   sourceCharacters?: number;
 }
@@ -135,6 +137,8 @@ export interface AnchorDiscoveryGroup {
   ownerRecoveryCommands: string[];
   upstreamEntries: AnchorDiscoveryUpstreamEntry[];
   matchedTerms: string[];
+  /** Exact slash-delimited query path fragments covered by the group's roots. */
+  queryPathMatches?: string[];
   relations: AnchorDiscoveryRelation[];
   relationCount: number;
   /** Number of independently named sides that carry at least one causal edge. */
@@ -161,6 +165,8 @@ export interface AnchorDiscoveryUpstreamEntry {
 
 export interface AnchorDiscoveryResult {
   query: string;
+  /** Slash-delimited repository path fragments preserved from the original query. */
+  queryPathFragments?: string[];
   normalizedTerms: string[];
   matchedTerms: string[];
   unmatchedTerms: string[];
@@ -213,6 +219,7 @@ export function discoverAnchors(
   options: AnchorDiscoveryOptions = {},
 ): AnchorDiscoveryResult {
   const normalizedTerms = normalizeAnchorQuery(query);
+  const queryPathFragments = extractQueryPathFragments(query);
   if (normalizedTerms.length === 0) {
     throw new Error('Anchor discovery requires at least one non-trivial repository term.');
   }
@@ -252,7 +259,7 @@ export function discoverAnchors(
 
   const preliminaryFrequencies = candidateTermFrequencies(mutableCandidates);
   const preliminaryRoots = [...mutableCandidates.values()]
-    .map((candidate) => publicCandidate(candidate, preliminaryFrequencies))
+    .map((candidate) => publicCandidate(candidate, preliminaryFrequencies, queryPathFragments))
     .sort(compareCandidates);
   const sourceCandidateFiles = selectSourceCandidateFiles(inventory.files, preliminaryRoots, normalizedTerms);
   let nextSourceConstructId = -1;
@@ -315,7 +322,7 @@ export function discoverAnchors(
       .join('\n').length;
   }
   const candidateRoots = [...mutableCandidates.values()]
-    .map((candidate) => publicCandidate(candidate, candidateFrequencies))
+    .map((candidate) => publicCandidate(candidate, candidateFrequencies, queryPathFragments))
     .sort(compareCandidates);
   const analysisBudget = Math.min(
     candidateRoots.length,
@@ -372,11 +379,10 @@ export function discoverAnchors(
     candidateFrequencies,
     options.semantic !== false,
   );
-  const selectionTerms = selectSystemMapSelectionTerms(normalizedTerms, candidateFrequencies);
   const groups = [...crossBoundaryGroups, ...parallelGroups, ...connectedGroups, ...effectGroups]
     .map((group) => ({
       ...group,
-      systemMapCommand: appendSystemMapSelectionTerms(group.systemMapCommand, selectionTerms),
+      queryPathMatches: groupQueryPathMatches(group),
     }))
     .sort((left, right) => compareGroups(left, right, candidateFrequencies));
   const selectedGroups = full ? groups : selectDisplayedGroups(groups, limit, candidateFrequencies);
@@ -384,12 +390,11 @@ export function discoverAnchors(
   const unmatchedTerms = normalizedTerms.filter((term) => !candidateFrequencies.has(term));
   const omittedRootCount = Math.max(0, candidateRoots.length - analyzedRootCount);
   const omittedGroupCount = Math.max(0, groups.length - selectedGroups.length) + omittedRootCount;
-  const expandedLimit = full
-    ? candidateRoots.length
-    : Math.min(candidateRoots.length, Math.max(limit + DEFAULT_GROUP_LIMIT, analyzedRootCount));
+  const expandedLimit = full ? candidateRoots.length : Math.min(candidateRoots.length, limit + DEFAULT_GROUP_LIMIT);
 
   return {
     query,
+    queryPathFragments,
     normalizedTerms,
     matchedTerms,
     unmatchedTerms,
@@ -584,6 +589,7 @@ function candidateLabel(definition: IndexedDefinition): string {
 function publicCandidate(
   candidate: MutableCandidate,
   frequencies: ReadonlyMap<string, number>,
+  queryPathFragments: readonly string[] = [],
 ): AnchorDiscoveryCandidate {
   const definition = candidate.definition;
   const matches = [...candidate.matches.entries()]
@@ -618,6 +624,7 @@ function publicCandidate(
     identityMatchedTerms,
     rarity,
     symbolRarity,
+    queryPathMatches: matchingQueryPathFragments(definition.relativePath, queryPathFragments),
     ...(candidate.sourceCharacters === undefined ? {} : { sourceCharacters: candidate.sourceCharacters }),
   };
 }
@@ -911,7 +918,7 @@ function connectedRootGroups(
     for (const symbol of new Set(relations.flatMap((relation) => [relation.fromSymbol, relation.toSymbol]))) {
       const candidate = mutableCandidates.get(symbol);
       if (candidate) {
-        candidatesBySymbol.set(symbol, publicCandidate(candidate, frequencies));
+        if (!candidatesBySymbol.has(symbol)) candidatesBySymbol.set(symbol, publicCandidate(candidate, frequencies));
       } else {
         const definition = definitionBySymbol.get(symbol);
         if (definition) candidatesBySymbol.set(symbol, publicUnmatchedCandidate(definition));
@@ -1070,7 +1077,11 @@ function parallelRootCoverageScore(candidate: AnchorDiscoveryCandidate): number 
   // several independently named parts of its path. One extra identity term is
   // therefore worth two ordinary repository terms instead of acting as an
   // absolute lexicographic gate.
-  return candidate.matchedTerms.length + candidate.identityMatchedTerms.length * 2;
+  return (
+    candidate.matchedTerms.length +
+    candidate.identityMatchedTerms.length * 2 +
+    (candidate.queryPathMatches?.length ?? 0) * 4
+  );
 }
 
 interface BoundaryContinuation {
@@ -2093,6 +2104,7 @@ function shortestRelationPath(
 
 function compareCandidates(left: AnchorDiscoveryCandidate, right: AnchorDiscoveryCandidate): number {
   return (
+    (right.queryPathMatches?.length ?? 0) - (left.queryPathMatches?.length ?? 0) ||
     right.identityMatchedTerms.length - left.identityMatchedTerms.length ||
     right.matchedTerms.length - left.matchedTerms.length ||
     right.rarity - left.rarity ||
@@ -2200,24 +2212,6 @@ function uniqueCandidates(candidates: readonly AnchorDiscoveryCandidate[]): Anch
   return [...new Map(candidates.map((candidate) => [candidate.symbol, candidate])).values()];
 }
 
-function selectSystemMapSelectionTerms(terms: readonly string[], frequencies: ReadonlyMap<string, number>): string[] {
-  const order = new Map(terms.map((term, index) => [term, index]));
-  return terms
-    .filter((term) => frequencies.has(term))
-    .sort(
-      (left, right) =>
-        (frequencies.get(left) ?? Number.MAX_SAFE_INTEGER) - (frequencies.get(right) ?? Number.MAX_SAFE_INTEGER) ||
-        (order.get(left) ?? Number.MAX_SAFE_INTEGER) - (order.get(right) ?? Number.MAX_SAFE_INTEGER) ||
-        left.localeCompare(right),
-    )
-    .slice(0, MAX_SYSTEM_MAP_SELECTION_TERMS);
-}
-
-function appendSystemMapSelectionTerms(command: string, terms: readonly string[]): string {
-  if (terms.length === 0) return command;
-  return `${command} ${terms.map((term) => `--selection-term ${shellArgument(term)}`).join(' ')}`;
-}
-
 function compareGroups(
   left: AnchorDiscoveryGroup,
   right: AnchorDiscoveryGroup,
@@ -2226,6 +2220,7 @@ function compareGroups(
   const leftSymbolTerms = new Set(left.roots.flatMap((root) => root.symbolMatchedTerms));
   const rightSymbolTerms = new Set(right.roots.flatMap((root) => root.symbolMatchedTerms));
   return (
+    (right.queryPathMatches?.length ?? 0) - (left.queryPathMatches?.length ?? 0) ||
     groupKindRank(left.kind) - groupKindRank(right.kind) ||
     groupFileKindRank(left) - groupFileKindRank(right) ||
     groupConnectivityRank(left) - groupConnectivityRank(right) ||
@@ -2251,8 +2246,13 @@ function groupDiscriminativeCoverage(group: AnchorDiscoveryGroup, frequencies: R
   return group.matchedTerms.reduce((score, term) => score + 1 / Math.max(1, frequencies.get(term) ?? 1), 0);
 }
 
+function groupQueryPathMatches(group: AnchorDiscoveryGroup): string[] {
+  return [...new Set(group.roots.flatMap((root) => root.queryPathMatches ?? []))].sort();
+}
+
 function groupFileKindRank(group: AnchorDiscoveryGroup): number {
-  return Math.min(...group.roots.map((root) => fileKindRank(root.fileKind)));
+  const materialRoots = group.keyAnchors.length > 0 ? group.keyAnchors : group.roots;
+  return Math.max(...materialRoots.map((root) => fileKindRank(root.fileKind)));
 }
 
 function groupConnectivityRank(group: AnchorDiscoveryGroup): number {
@@ -2352,6 +2352,22 @@ function splitWords(value: string): string[] {
       .replace(/([\p{Lu}]+)([\p{Lu}][\p{Ll}])/gu, '$1 $2')
       .match(/[\p{L}\d]+/gu) ?? []
   );
+}
+
+function extractQueryPathFragments(query: string): string[] {
+  const fragments = query.match(/[\p{L}\d_.-]+(?:\/[\p{L}\d_.-]+)+/gu) ?? [];
+  return [...new Set(fragments.map((fragment) => fragment.replace(/[.;:!?]+$/gu, '').toLocaleLowerCase()))];
+}
+
+function matchingQueryPathFragments(relativePath: string, fragments: readonly string[]): string[] {
+  const normalizedPath = relativePath.replace(/\\/gu, '/').toLocaleLowerCase();
+  return fragments.filter((fragment) => {
+    const start = normalizedPath.indexOf(fragment);
+    if (start < 0) return false;
+    const before = start === 0 ? '/' : normalizedPath[start - 1];
+    const after = normalizedPath[start + fragment.length];
+    return before === '/' && (after === undefined || after === '/');
+  });
 }
 
 function longestContiguousMatch(value: string, orderedTerms: readonly string[]): number {

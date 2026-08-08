@@ -1171,7 +1171,10 @@ function signalsForNode(
     walk(node, (candidate) => {
       const signal = NODE_SIGNALS[candidate.type];
       if (signal) signals.add(signal);
-      if (candidate.type === 'call_expression') signals.add('call');
+      if (candidate.type === 'call_expression') {
+        signals.add('call');
+        if (hasStructuredCallPayload(candidate)) signals.add('shape');
+      }
       if (BINDING_NODE_TYPES.has(candidate.type)) signals.add('binding');
     });
   }
@@ -1263,6 +1266,13 @@ function collectBehaviorCandidates(
     if (node.type === 'call_expression') {
       const callee = node.childForFieldName('function') ?? node.namedChild(0);
       const leaf = callee?.text.split('.').at(-1);
+      if (hasStructuredCallPayload(node)) {
+        record(node.startPosition.row, 'shape');
+        const completeCall = normalizeSourceLine(node.text);
+        if (completeCall.length <= MAX_RECEIPT_LINE_CHARACTERS) {
+          textOverrides.set(node.startPosition.row, completeCall);
+        }
+      }
       if (leaf && LIFECYCLE_CALLS.has(leaf)) {
         record(node.startPosition.row, 'lifecycle');
         const completeCall = normalizeSourceLine(node.text);
@@ -1393,6 +1403,20 @@ function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {
 
 function normalizeSourceLine(sourceLine: string): string {
   return sourceLine.trim().replace(/\s+/gu, ' ');
+}
+
+function hasStructuredCallPayload(node: SyntaxNode): boolean {
+  if (node.type !== 'call_expression') return false;
+  const argumentsNode =
+    node.childForFieldName('arguments') ??
+    node.namedChildren.find((child) => child.type === 'arguments' || child.type === 'argument_list');
+  if (!argumentsNode) return false;
+
+  let hasStructuredPayload = false;
+  walk(argumentsNode, (candidate) => {
+    if (SHAPE_CONTAINER_NODE_TYPES.has(candidate.type)) hasStructuredPayload = true;
+  });
+  return hasStructuredPayload;
 }
 
 function behaviorSignalCounts(

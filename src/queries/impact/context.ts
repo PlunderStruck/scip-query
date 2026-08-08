@@ -316,7 +316,14 @@ export function repositoryContext(
   const depsResults = profileRepositoryContextComponent(
     'deps',
     target,
-    () => (reuseSystemEdges ? systemResult.dependsOn.map((relativePath) => ({ relativePath })) : deps(db, target)),
+    () =>
+      reuseSystemEdges
+        ? systemResult.dependsOn.map((relativePath) => ({
+            relativePath,
+            edgeBasis: 'symbol-references' as const,
+            evidence: 'cross-file SCIP references plus resolved source imports' as const,
+          }))
+        : deps(db, target),
     (result) => ({
       files: result.length,
       reusedSystem: reuseSystemEdges,
@@ -325,7 +332,14 @@ export function repositoryContext(
   const rdepsResults = profileRepositoryContextComponent(
     'rdeps',
     target,
-    () => (reuseSystemEdges ? systemResult.dependedOnBy.map((relativePath) => ({ relativePath })) : rdeps(db, target)),
+    () =>
+      reuseSystemEdges
+        ? systemResult.dependedOnBy.map((relativePath) => ({
+            relativePath,
+            edgeBasis: 'symbol-references' as const,
+            evidence: 'cross-file SCIP references plus resolved source imports' as const,
+          }))
+        : rdeps(db, target),
     (result) => ({
       files: result.length,
       reusedSystem: reuseSystemEdges,

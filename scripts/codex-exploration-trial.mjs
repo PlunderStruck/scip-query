@@ -9,13 +9,14 @@ import { createExplorationSandbox } from './codex-exploration-sandbox.mjs';
 import { evaluateExplorationTrial, validateExplorationBenchmarkDefinition } from './exploration-benchmark-core.mjs';
 import {
   controlPrompt,
+  directGraphTreatmentPrompt,
   disciplinedControlPrompt,
   minimalTreatmentPrompt,
   parseCodexJsonl,
   treatmentPrompt,
 } from './codex-exploration-trial-core.mjs';
 
-const MODES = new Set(['treatment', 'treatment-minimal', 'control', 'control-disciplined']);
+const MODES = new Set(['treatment', 'treatment-direct', 'treatment-minimal', 'control', 'control-disciplined']);
 const ISOLATION_MODES = new Set(['detached', 'live']);
 const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -24,7 +25,7 @@ main().catch(fail);
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const definition = validateExplorationBenchmarkDefinition(readJson(options.definition));
-  const prompt = promptForMode(options.mode, definition.question);
+  const prompt = promptForMode(options.mode, definition);
   const sessionId = `benchmark-${definition.id}-${options.mode}-${randomUUID()}`;
   const sandbox =
     options.isolation === 'detached'
@@ -123,15 +124,18 @@ function parseArgs(args) {
 
 function usage() {
   process.stderr.write(
-    'Usage: node scripts/codex-exploration-trial.mjs <definition.json> <treatment|treatment-minimal|control|control-disciplined> --repo <path> --output <path> [--model <model>] [--reasoning <effort>] [--isolation <detached|live>] [--ref <git-ref>] [--cli <executable>]\n',
+    'Usage: node scripts/codex-exploration-trial.mjs <definition.json> <treatment|treatment-direct|treatment-minimal|control|control-disciplined> --repo <path> --output <path> [--model <model>] [--reasoning <effort>] [--isolation <detached|live>] [--ref <git-ref>] [--cli <executable>]\n',
   );
   process.exit(2);
 }
 
-function promptForMode(mode, question) {
+function promptForMode(mode, definition) {
+  const { question } = definition;
   switch (mode) {
     case 'treatment':
-      return treatmentPrompt(question);
+      return treatmentPrompt(question, definition.budgets.maxSemanticQueries);
+    case 'treatment-direct':
+      return directGraphTreatmentPrompt(question);
     case 'treatment-minimal':
       return minimalTreatmentPrompt(question);
     case 'control':
@@ -159,7 +163,7 @@ function isolationMode(value) {
 }
 
 function isTreatment(mode) {
-  return mode === 'treatment' || mode === 'treatment-minimal';
+  return mode === 'treatment' || mode === 'treatment-direct' || mode === 'treatment-minimal';
 }
 
 function liveRepository(repository) {

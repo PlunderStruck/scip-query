@@ -14,8 +14,23 @@ export interface AffectedResult {
   depth: number;
 }
 
+export interface PossibleImpactCoverage {
+  status: 'accounted' | 'bounded' | 'incomplete';
+  edgeBasis: 'reverse-static-call-or-reference-evidence';
+  maxDepth: number;
+  reachedDepth: number;
+  perSymbolEvidenceLimit: number | null;
+  remainingFrontierSymbols: number;
+  reasons: string[];
+}
+
+export interface PossibleImpactClosureResult {
+  rows: AffectedResult[];
+  coverage: PossibleImpactCoverage;
+}
+
 /**
- * Full transitive closure of symbols that could break if a given symbol changes.
+ * Bounded reverse closure of symbols that may consume a given symbol.
  * BFS from the target through the mention graph: depth 1 = direct consumers,
  * depth 2 = consumers of consumers, etc.
  */
@@ -24,28 +39,67 @@ export function affected(
   symbolPattern: string,
   opts: { maxDepth?: number; scope?: string } = {},
 ): AffectedResult[] {
+  return computePossibleImpactClosure(db, symbolPattern, opts).rows;
+}
+
+/** Conservative reverse reference/caller closure; rows are possible impacts, not predicted failures. */
+export function possibleImpactClosure(
+  db: ScipDatabase,
+  symbolPattern: string,
+  opts: { maxDepth?: number; scope?: string } = {},
+): PossibleImpactClosureResult {
+  return computePossibleImpactClosure(db, symbolPattern, opts);
+}
+
+function computePossibleImpactClosure(
+  db: ScipDatabase,
+  symbolPattern: string,
+  opts: { maxDepth?: number; scope?: string },
+): PossibleImpactClosureResult {
   const { maxDepth = 5, scope } = opts;
   const full = maxDepth === Number.MAX_SAFE_INTEGER;
+  const perSymbolEvidenceLimit = full ? null : 500;
 
   const target = findFirstSymbolMatch(db, symbolPattern);
-  if (!target) return [];
+  if (!target) {
+    return {
+      rows: [],
+      coverage: {
+        status: 'incomplete',
+        edgeBasis: 'reverse-static-call-or-reference-evidence',
+        maxDepth,
+        reachedDepth: 0,
+        perSymbolEvidenceLimit,
+        remainingFrontierSymbols: 0,
+        reasons: ['The requested symbol could not be resolved.'],
+      },
+    };
+  }
 
   const results: AffectedResult[] = [];
   const visited = new Set<number>([target.symbolId]);
   const seenResults = new Set<string>();
   let frontier = [target];
+  let reachedDepth = 0;
+  let perSymbolEvidenceBounded = false;
 
   for (let depth = 1; depth <= maxDepth; depth++) {
     if (frontier.length === 0) break;
+    reachedDepth = depth;
 
     const nextFrontier: typeof frontier = [];
     const callerRows = getCallerRowsMapForSymbols(db, frontier, {
-      ...(full ? {} : { limit: 500 }),
+      ...(full ? {} : { limit: perSymbolEvidenceLimit! + 1 }),
       semanticEvidence: symbolSemanticEvidence,
     });
 
     for (const current of frontier) {
-      for (const row of getDirectAffectedRows(db, current, scope, callerRows.get(current.symbolId) ?? [])) {
+      const prefetched = callerRows.get(current.symbolId) ?? [];
+      if (perSymbolEvidenceLimit !== null && prefetched.length > perSymbolEvidenceLimit) {
+        perSymbolEvidenceBounded = true;
+      }
+      const selected = perSymbolEvidenceLimit === null ? prefetched : prefetched.slice(0, perSymbolEvidenceLimit);
+      for (const row of getDirectAffectedRows(db, current, scope, selected)) {
         const resultKey = `${row.file}|${row.shortName}`;
         if (row.symbolId !== null) {
           if (visited.has(row.symbolId)) continue;
@@ -73,7 +127,25 @@ export function affected(
 
   // Sort by depth then file path
   results.sort((a, b) => a.depth - b.depth || a.file.localeCompare(b.file));
-  return results;
+  const depthBounded = frontier.length > 0;
+  const reasons: string[] = [];
+  if (depthBounded) reasons.push(`${frontier.length} symbol(s) remain eligible beyond depth ${maxDepth}.`);
+  if (perSymbolEvidenceBounded) {
+    reasons.push(`At least one symbol had more than ${perSymbolEvidenceLimit} incoming evidence row(s).`);
+  }
+  if (reasons.length === 0) reasons.push('The discovered reverse evidence frontier was exhausted.');
+  return {
+    rows: results,
+    coverage: {
+      status: depthBounded || perSymbolEvidenceBounded ? 'bounded' : 'accounted',
+      edgeBasis: 'reverse-static-call-or-reference-evidence',
+      maxDepth,
+      reachedDepth,
+      perSymbolEvidenceLimit,
+      remainingFrontierSymbols: frontier.length,
+      reasons,
+    },
+  };
 }
 
 // scip-query: ignore-similar — shares enclosing-definition + symbol-lookup

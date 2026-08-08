@@ -86,3 +86,8 @@ export function hierarchy(db: ScipDatabase, symbolPattern: string): HierarchyNod
 
   return syntheticChain;
 }
+
+/** Name-preserving projection of lexical/compiler ownership, not type inheritance. */
+export function ownershipChain(db: ScipDatabase, symbolPattern: string): HierarchyNode[] {
+  return hierarchy(db, symbolPattern);
+}

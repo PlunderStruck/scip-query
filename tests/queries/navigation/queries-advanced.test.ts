@@ -142,8 +142,9 @@ describe('advanced queries', () => {
     expect(capped.patternDeviations).toBe(full.patternDeviations);
   });
 
-  it('reports dataflow through definition, usage, producer, and consumer sites', () => {
+  it('preserves the legacy dataflow shape behind an honest reference-neighborhood API', () => {
     const result = queries.dataflow(db, 'process');
+    const neighborhood = queries.referenceNeighborhood(db, 'process');
 
     expect(result).not.toBeNull();
     expect(result!.symbol).toBe(advancedFixture.symbols.process);
@@ -164,9 +165,14 @@ describe('advanced queries', () => {
       expect.arrayContaining([advancedFixture.files.controller, advancedFixture.files.entry]),
     );
     expect(result!.consumers.some((consumer) => consumer.shortName === 'app:controller:handle()')).toBe(true);
+    expect(neighborhood).toMatchObject({
+      outgoingCalls: result!.producers,
+      incomingCalls: result!.consumers,
+      referenceSites: result!.usageSites,
+    });
   });
 
-  it('computes backward slices from direct tracked inputs', () => {
+  it('preserves legacy backward callee reachability', () => {
     const result = queries.slice(db, 'process', { direction: 'backward' });
 
     expect(result).not.toBeNull();
@@ -183,7 +189,7 @@ describe('advanced queries', () => {
     );
   });
 
-  it('computes forward slices from downstream consumers', () => {
+  it('preserves legacy forward reference-owner reachability', () => {
     const result = queries.slice(db, 'normalize', { direction: 'forward' });
 
     expect(result).not.toBeNull();

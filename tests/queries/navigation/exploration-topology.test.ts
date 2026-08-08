@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  catalogExplorationRoutes,
   createExplorationTopology,
   projectProgramEdges,
   selectExplorationTopology,
@@ -184,7 +185,7 @@ describe('universal exploration topology', () => {
     ]);
   });
 
-  it('selects a query-aligned causal spine before unrelated junctions', () => {
+  it('keeps topology selection invariant when only anchor query vocabulary changes', () => {
     const input: ExplorationTopologyInput = {
       scope: 'one literal query with multiple exact owners',
       anchors: [
@@ -217,22 +218,72 @@ describe('universal exploration topology', () => {
     };
 
     const selected = selectExplorationTopology(createExplorationTopology(input), { maxSelectedNodes: 5 });
+    const relabeledInput: ExplorationTopologyInput = {
+      ...input,
+      anchors: input.anchors.map((anchor) => ({ ...anchor, query: 'completely unrelated vocabulary' })),
+    };
+    const relabeled = selectExplorationTopology(createExplorationTopology(relabeledInput), { maxSelectedNodes: 5 });
 
-    expect(selected.nodes.filter((entry) => entry.disposition === 'emitted').map((entry) => entry.id)).toEqual(
-      expect.arrayContaining(['producer', 'config', 'registry', 'controller', 'service']),
+    expect(selected.nodes.map((entry) => [entry.id, entry.disposition])).toEqual(
+      relabeled.nodes.map((entry) => [entry.id, entry.disposition]),
     );
+    expect(selected.nodes.filter((entry) => entry.disposition === 'emitted').map((entry) => entry.id)).toEqual([
+      'config',
+      'producer',
+      'registry',
+    ]);
+    expect(selected.nodes.find((entry) => entry.id === 'controller')?.disposition).toBe('folded');
+    expect(selected.nodes.find((entry) => entry.id === 'service')?.disposition).toBe('folded');
     expect(selected.nodes.find((entry) => entry.id === 'unrelated')?.disposition).toBe('folded');
     expect(selected.nodes.find((entry) => entry.id === 'schema')?.disposition).toBe('folded');
   });
 
-  it('matches query vocabulary against the construct name rather than repository path segments', () => {
+  it('adds a true connector junction without crawling through a merely high-degree neighbor', () => {
+    const input: ExplorationTopologyInput = {
+      scope: 'two selected owners with one shared connector and one popular neighbor',
+      anchors: [
+        {
+          id: 'anchor:paths',
+          kind: 'symbol',
+          query: 'left right paths',
+          status: 'matched',
+          nodeIds: ['left', 'right'],
+          candidateNodeIds: [],
+          omittedCandidates: 0,
+        },
+      ],
+      nodes: [
+        node('left', 'leftPath', ['anchor:paths']),
+        node('right', 'rightPath', ['anchor:paths']),
+        node('junction', 'sharedConnector'),
+        node('popular', 'genericHelper'),
+        node('other', 'otherCaller'),
+      ],
+      edges: [
+        edge('left-junction', 'call', 'left', 'junction', 'exact'),
+        edge('right-junction', 'call', 'right', 'junction', 'exact'),
+        edge('left-popular', 'call', 'left', 'popular', 'exact'),
+        edge('other-popular', 'call', 'other', 'popular', 'exact'),
+      ],
+    };
+
+    const selected = selectExplorationTopology(createExplorationTopology(input), {
+      maxSelectedNodes: 3,
+      maxUpstreamCausalPaths: 0,
+    });
+
+    expect(selected.nodes.find((entry) => entry.id === 'junction')?.disposition).toBe('emitted');
+    expect(selected.nodes.find((entry) => entry.id === 'popular')?.disposition).toBe('folded');
+  });
+
+  it('does not emit a callee merely because its name overlaps anchor query vocabulary', () => {
     const input: ExplorationTopologyInput = {
       scope: 'an agent request anchor with an unrelated same-directory callee',
       anchors: [
         {
           id: 'anchor:request',
           kind: 'symbol',
-          query: 'agent request',
+          query: 'compact messages summary',
           status: 'matched',
           nodeIds: ['request'],
           candidateNodeIds: [],
@@ -297,6 +348,68 @@ describe('universal exploration topology', () => {
     );
   });
 
+  it('catalogues upstream public paths without selecting any unrequested route', () => {
+    const input: ExplorationTopologyInput = {
+      scope: 'two independent implementations with public callers',
+      anchors: [
+        {
+          id: 'anchor:first',
+          kind: 'symbol',
+          query: 'first implementation',
+          status: 'matched',
+          nodeIds: ['first'],
+          candidateNodeIds: [],
+          omittedCandidates: 0,
+        },
+        {
+          id: 'anchor:second',
+          kind: 'symbol',
+          query: 'second implementation',
+          status: 'matched',
+          nodeIds: ['second'],
+          candidateNodeIds: [],
+          omittedCandidates: 0,
+        },
+      ],
+      nodes: [
+        {
+          ...node('public-first', 'POST /first'),
+          attributes: { publicEntry: true, publicEntryPriority: 2 },
+        },
+        {
+          ...node('public-first-alt', 'POST /first_async'),
+          attributes: { publicEntry: true, publicEntryPriority: 2 },
+        },
+        {
+          ...node('public-second', 'OpenCode.second'),
+          attributes: { publicEntry: true, publicEntryPriority: 2 },
+        },
+        node('first', 'firstImplementation', ['anchor:first']),
+        node('second', 'secondImplementation', ['anchor:second']),
+        node('internal-first', 'internalFirstCaller'),
+      ],
+      edges: [
+        edge('public-first-call', 'call', 'public-first', 'first', 'exact'),
+        edge('public-first-alt-call', 'call', 'public-first-alt', 'first', 'exact'),
+        edge('public-second-call', 'call', 'public-second', 'second', 'exact'),
+        edge('internal-first-call', 'call', 'internal-first', 'first', 'exact'),
+      ],
+    };
+
+    const selected = selectExplorationTopology(createExplorationTopology(input));
+
+    expect(selected.routeCatalog?.routes.map((route) => route.endpointNodeId)).toEqual([
+      'public-first-alt',
+      'public-first',
+      'public-second',
+    ]);
+    expect(selected.nodes.find((entry) => entry.id === 'public-first')?.disposition).toBe('folded');
+    expect(selected.nodes.find((entry) => entry.id === 'public-first-alt')?.disposition).toBe('folded');
+    expect(selected.nodes.find((entry) => entry.id === 'public-second')?.disposition).toBe('folded');
+    expect(selected.nodes.find((entry) => entry.id === 'internal-first')?.disposition).toBe('folded');
+    expect(selected.nodes.every((entry) => entry.attributes['upstreamCausalEndpoint'] === undefined)).toBe(true);
+  });
+
   it('does not connect unrelated anchors by walking backward through a structural region', () => {
     const input: ExplorationTopologyInput = {
       scope: 'two anchors exported from one structural region without a causal path between them',
@@ -333,9 +446,7 @@ describe('universal exploration topology', () => {
 
     const selected = selectExplorationTopology(createExplorationTopology(input));
 
-    expect(selected.paths).toEqual([
-      expect.objectContaining({ status: 'partial', nodeIds: [], edgeIds: [] }),
-    ]);
+    expect(selected.paths).toEqual([expect.objectContaining({ status: 'partial', nodeIds: [], edgeIds: [] })]);
     expect(selected.nodes.find((entry) => entry.id === 'region')?.disposition).toBe('folded');
   });
 
@@ -375,13 +486,11 @@ describe('universal exploration topology', () => {
 
     const selected = selectExplorationTopology(createExplorationTopology(input));
 
-    expect(selected.paths).toEqual([
-      expect.objectContaining({ status: 'partial', nodeIds: [], edgeIds: [] }),
-    ]);
+    expect(selected.paths).toEqual([expect.objectContaining({ status: 'partial', nodeIds: [], edgeIds: [] })]);
     expect(selected.nodes.find((entry) => entry.id === 'shared')?.disposition).toBe('folded');
   });
 
-  it('selects a proved upstream path through the nearest runtime boundary', () => {
+  it('keeps a proved runtime route folded until its route id is requested', () => {
     const input: ExplorationTopologyInput = {
       scope: 'one implementation anchor with a proved external activation path',
       anchors: [
@@ -416,26 +525,20 @@ describe('universal exploration topology', () => {
       maxUpstreamCausalNodes: 3,
     });
 
+    expect(selected.routeCatalog?.routes).toEqual([
+      expect.objectContaining({ endpointNodeId: 'endpoint', endpointKind: 'runtime-boundary' }),
+    ]);
     expect(selected.nodes.filter((entry) => entry.disposition === 'emitted').map((entry) => entry.id)).toEqual([
       'compact',
-      'endpoint',
-      'handler',
-      'service',
     ]);
-    expect(selected.nodes.find((entry) => entry.id === 'endpoint')?.attributes).toMatchObject({
-      upstreamCausalPath: true,
-      upstreamCausalDistance: 3,
-      upstreamCausalEndpoint: 'runtime-boundary',
-    });
+    expect(selected.nodes.find((entry) => entry.id === 'endpoint')?.disposition).toBe('folded');
+    expect(selected.nodes.find((entry) => entry.id === 'handler')?.disposition).toBe('folded');
+    expect(selected.nodes.find((entry) => entry.id === 'service')?.disposition).toBe('folded');
     expect(selected.nodes.find((entry) => entry.id === 'noise')?.disposition).toBe('folded');
-    expect(selected.edges.filter((entry) => entry.disposition === 'emitted').map((entry) => entry.id)).toEqual([
-      'handler-call',
-      'http-boundary',
-      'service-call',
-    ]);
+    expect(selected.edges.filter((entry) => entry.disposition === 'emitted')).toEqual([]);
   });
 
-  it('labels the earliest proved caller as a traversal root without crossing candidate-only evidence', () => {
+  it('does not invent an upstream route to a traversal root', () => {
     const input: ExplorationTopologyInput = {
       scope: 'one implementation anchor whose earlier runtime relationship is only a candidate',
       anchors: [
@@ -466,15 +569,16 @@ describe('universal exploration topology', () => {
       maxUpstreamCausalNodes: 2,
     });
 
-    expect(selected.nodes.find((entry) => entry.id === 'root')?.attributes).toMatchObject({
-      upstreamCausalEndpoint: 'traversal-root',
-      upstreamCausalDistance: 1,
-    });
+    expect(selected.routeCatalog?.routes).toEqual([]);
+    expect(selected.nodes.find((entry) => entry.id === 'root')?.disposition).toBe('folded');
+    expect(selected.nodes.find((entry) => entry.id === 'root')?.attributes).not.toHaveProperty(
+      'upstreamCausalEndpoint',
+    );
     expect(selected.nodes.find((entry) => entry.id === 'candidate-endpoint')?.disposition).toBe('folded');
     expect(selected.edges.find((entry) => entry.id === 'candidate-boundary')?.disposition).toBe('folded');
   });
 
-  it('prefers a proved public entry path over a nearer internal traversal root', () => {
+  it('catalogues a proved public entry without automatically preferring it', () => {
     const input: ExplorationTopologyInput = {
       scope: 'one effect with internal and externally reachable causal owners',
       anchors: [
@@ -507,15 +611,15 @@ describe('universal exploration topology', () => {
       maxUpstreamCausalNodes: 2,
     });
 
-    expect(selected.nodes.find((entry) => entry.id === 'public')?.attributes).toMatchObject({
-      upstreamCausalEndpoint: 'public-entry',
-      upstreamCausalDistance: 2,
-    });
-    expect(selected.nodes.find((entry) => entry.id === 'adapter')?.disposition).toBe('emitted');
+    expect(selected.routeCatalog?.routes).toEqual([
+      expect.objectContaining({ endpointNodeId: 'public', endpointKind: 'public-entry' }),
+    ]);
+    expect(selected.nodes.find((entry) => entry.id === 'public')?.disposition).toBe('folded');
+    expect(selected.nodes.find((entry) => entry.id === 'adapter')?.disposition).toBe('folded');
     expect(selected.nodes.find((entry) => entry.id === 'internal-root')?.disposition).toBe('folded');
   });
 
-  it('prefers an explicit public entry over a shorter wildcard package surface', () => {
+  it('catalogues explicit and wildcard public entries without choosing between them', () => {
     const input: ExplorationTopologyInput = {
       scope: 'one effect with two public ownership paths of different precision',
       anchors: [
@@ -546,14 +650,12 @@ describe('universal exploration topology', () => {
       maxUpstreamCausalNodes: 2,
     });
 
-    expect(selected.nodes.find((entry) => entry.id === 'explicit')?.attributes).toMatchObject({
-      upstreamCausalEndpoint: 'public-entry',
-      upstreamCausalDistance: 2,
-    });
-    expect(selected.nodes.find((entry) => entry.id === 'wildcard')?.disposition).toBe('emitted');
+    expect(selected.routeCatalog?.routes.map((route) => route.endpointNodeId)).toEqual(['explicit', 'wildcard']);
+    expect(selected.nodes.find((entry) => entry.id === 'explicit')?.disposition).toBe('folded');
+    expect(selected.nodes.find((entry) => entry.id === 'wildcard')?.disposition).toBe('folded');
   });
 
-  it('does not let area diversity displace stronger entry evidence', () => {
+  it('catalogues every public entry without applying repository-area diversity selection', () => {
     const input: ExplorationTopologyInput = {
       scope: 'two exact operations in one API area and one weaker operation elsewhere',
       anchors: [
@@ -598,9 +700,107 @@ describe('universal exploration topology', () => {
       maxUpstreamCausalNodes: 2,
     });
 
-    expect(selected.nodes.find((entry) => entry.id === 'prompt')?.disposition).toBe('emitted');
-    expect(selected.nodes.find((entry) => entry.id === 'prompt-async')?.disposition).toBe('emitted');
+    expect(selected.routeCatalog?.routes.map((route) => route.endpointNodeId)).toEqual([
+      'prompt-async',
+      'compat',
+      'prompt',
+    ]);
+    expect(selected.nodes.find((entry) => entry.id === 'prompt')?.disposition).toBe('folded');
+    expect(selected.nodes.find((entry) => entry.id === 'prompt-async')?.disposition).toBe('folded');
     expect(selected.nodes.find((entry) => entry.id === 'compat')?.disposition).toBe('folded');
+  });
+
+  it('catalogues every distinct proved endpoint and selects several stable routes together', () => {
+    const input: ExplorationTopologyInput = {
+      scope: 'one effect with two public routes, one runtime route, and non-control evidence',
+      anchors: [
+        {
+          id: 'anchor:effect',
+          kind: 'symbol',
+          query: 'effect',
+          status: 'matched',
+          nodeIds: ['effect'],
+          candidateNodeIds: [],
+          omittedCandidates: 0,
+        },
+      ],
+      nodes: [
+        { ...node('prompt', 'POST /prompt'), attributes: { publicEntry: true, publicEntryPriority: 2 } },
+        { ...node('prompt-async', 'POST /prompt_async'), attributes: { publicEntry: true, publicEntryPriority: 2 } },
+        node('adapter', 'promptAdapter'),
+        node('runtime-producer', 'work_session_stream_events'),
+        node('effect', 'persistPrompt', ['anchor:effect']),
+        node('state', 'promptStore'),
+      ],
+      edges: [
+        {
+          ...edge('prompt-call', 'call', 'prompt', 'adapter', 'exact'),
+          semantics: [{ family: 'control', subtype: 'call' }],
+        },
+        {
+          ...edge('adapter-call', 'call', 'adapter', 'effect', 'derived'),
+          semantics: [{ family: 'control', subtype: 'call' }],
+        },
+        {
+          ...edge('prompt-async-call', 'call', 'prompt-async', 'effect', 'exact'),
+          semantics: [{ family: 'control', subtype: 'call' }],
+        },
+        {
+          ...edge('runtime-call', 'runtime-boundary', 'runtime-producer', 'effect', 'derived'),
+          semantics: [
+            { family: 'control', subtype: 'runtime-handoff', context: { crossesRuntimeBoundary: true } },
+            { family: 'data', subtype: 'serialized-transfer', context: { crossesRuntimeBoundary: true } },
+            { family: 'temporal', subtype: 'enqueue-before-consume' },
+          ],
+        },
+        {
+          ...edge('state-write', 'state-write', 'effect', 'state', 'exact'),
+          semantics: [{ family: 'state', subtype: 'write' }],
+        },
+        {
+          ...edge('contract', 'contract-symbol', 'effect', 'state', 'exact'),
+          semantics: [{ family: 'contract', subtype: 'implements' }],
+        },
+      ],
+    };
+    const topology = createExplorationTopology(input);
+    const catalog = catalogExplorationRoutes(topology);
+
+    expect(catalog.coverage).toMatchObject({
+      status: 'accounted',
+      enumeration: 'one-shortest-proved-path-per-endpoint',
+      anchorsWithRoutes: ['effect'],
+      anchorsWithoutRoutes: [],
+      routeCount: 3,
+    });
+    expect(catalog.routes.map((route) => route.endpointNodeId)).toEqual(['prompt-async', 'runtime-producer', 'prompt']);
+    expect(catalog.routes.find((route) => route.endpointNodeId === 'runtime-producer')).toMatchObject({
+      endpointKind: 'runtime-boundary',
+      crossesRuntimeBoundary: true,
+      spineEdgeFamilies: ['control', 'data', 'temporal'],
+      relatedEdgeFamilies: ['contract', 'control', 'data', 'state', 'temporal'],
+    });
+
+    const selectedRouteIds = catalog.routes
+      .filter((route) => route.endpointNodeId !== 'prompt-async')
+      .map((route) => route.id);
+    const selected = selectExplorationTopology(topology, {
+      routeIds: selectedRouteIds,
+      maxSelectedNodes: 1,
+      maxUpstreamCausalPaths: 0,
+      maxUpstreamCausalNodes: 0,
+    });
+
+    expect(selected.routeCatalog?.selectedRouteIds).toEqual([...selectedRouteIds].sort());
+    expect(selected.nodes.find((entry) => entry.id === 'prompt')?.disposition).toBe('emitted');
+    expect(selected.nodes.find((entry) => entry.id === 'runtime-producer')?.disposition).toBe('emitted');
+    expect(selected.nodes.find((entry) => entry.id === 'prompt-async')?.disposition).toBe('folded');
+    expect(() => selectExplorationTopology(topology, { routeIds: ['route:missing'] })).toThrow(
+      'Unknown exploration route id(s): route:missing',
+    );
+    expect(
+      catalogExplorationRoutes(createExplorationTopology({ ...input, nodes: [...input.nodes].reverse() })).routes,
+    ).toEqual(catalog.routes);
   });
 });
 

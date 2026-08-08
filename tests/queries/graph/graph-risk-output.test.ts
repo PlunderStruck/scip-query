@@ -7,7 +7,7 @@ import { bottlenecks } from '../../../src/queries/graph/bottlenecks.js';
 import { coupling, topCoupling } from '../../../src/queries/graph/coupling.js';
 import { deepChains } from '../../../src/queries/graph/deep-chains.js';
 import { TARGET_COUPLING_SQL } from '../../../src/queries/internal/target-coupling.js';
-import { topFanIn, topFanOut } from '../../../src/queries/graph/fan.js';
+import { externalSymbolFanOut, fileDependencyOutDegree, topFanIn, topFanOut } from '../../../src/queries/graph/fan.js';
 import { hotspots } from '../../../src/queries/graph/hotspots.js';
 import { drift } from '../../../src/queries/cleanup/drift.js';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
@@ -264,6 +264,9 @@ describe('graph-risk output classification', () => {
         fanOut: 2,
         score: 4,
         callerFiles: ['src/caller-one.ts', 'src/caller-two.ts'],
+        candidateCallerFiles: [],
+        candidateExternalCallees: [],
+        inputBasis: 'mixed-static-call-or-reference-evidence',
         externalCallees: [
           {
             symbol: sym('dep-one.ts', 'depOne'),
@@ -297,10 +300,28 @@ describe('graph-risk output classification', () => {
         name: 'src/central.ts',
         count: 2,
       });
+      expect(externalSymbolFanOut(db, 'src/view.ts')).toEqual([
+        {
+          name: 'src/view.ts',
+          file: 'src/view.ts',
+          count: 2,
+          basis: 'external-symbol-references',
+        },
+      ]);
+      expect(fileDependencyOutDegree(db, 'src/view.ts')).toEqual([
+        {
+          name: 'src/view.ts',
+          file: 'src/view.ts',
+          count: 1,
+          basis: 'file-dependency-edges',
+        },
+      ]);
       expect(hotspots(db, { limit: 20 }).find((row) => row.shortName === 'src:central:central()')).toMatchObject({
         refCount: 2,
         fileCount: 2,
         definedIn: 'src/central.ts',
+        basis: 'scip-cross-file-mentions',
+        countUnit: 'reference-occurrences',
       });
 
       const pair = coupling(db, 'src/model.ts', 'src/view.ts');
@@ -310,6 +331,13 @@ describe('graph-risk output classification', () => {
         sharedSymbols: 2,
       });
       expect(pair.recommendation).toContain('intentional boundary');
+
+      const rankedPairs = topCoupling(db, { limit: 100 });
+      expect(new Set(rankedPairs.map((row) => `${row.file1}\0${row.file2}`)).size).toBe(rankedPairs.length);
+      expect(rankedPairs.every((row) => row.file1 < row.file2)).toBe(true);
+      for (const ranked of rankedPairs) {
+        expect(ranked.sharedSymbols).toBe(coupling(db, ranked.file1, ranked.file2).sharedSymbols);
+      }
 
       const plan = db.all<{ detail: string }>(
         `EXPLAIN QUERY PLAN ${TARGET_COUPLING_SQL}`,
@@ -334,6 +362,7 @@ describe('graph-risk output classification', () => {
       expect(chains.find((result) => result.chain[0] === 'src/a.ts')).toMatchObject({
         actionTier: 'signal',
         chainKind: 'transitive-dependency-depth',
+        edgeBasis: 'symbol-references',
       });
     });
   });

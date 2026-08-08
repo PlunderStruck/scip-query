@@ -370,27 +370,46 @@ function isRecognizedCacheEntry(name: string): boolean {
 function hardenLegacyCacheEntries(cacheDir: string): void {
   for (const name of readdirSync(cacheDir)) {
     const path = join(cacheDir, name);
-    const stat = lstatSync(path);
-    if (stat.isSymbolicLink()) {
-      throw cacheOwnershipError(cacheDir, `legacy cache entry ${name} is a symlink`);
+    try {
+      const stat = lstatSync(path);
+      if (stat.isSymbolicLink()) {
+        throw cacheOwnershipError(cacheDir, `legacy cache entry ${name} is a symlink`);
+      }
+      if (stat.isDirectory()) chmodPrivateDirectory(path);
+      else if (stat.isFile()) chmodPrivateFile(path);
+      else throw cacheOwnershipError(cacheDir, `legacy cache entry ${name} is not a file or directory`);
+    } catch (error) {
+      // Process-lock candidates and other temporary artifacts can disappear
+      // after the directory snapshot. Their absence leaves nothing to harden.
+      if (isMissingCacheEntryError(error)) continue;
+      throw error;
     }
-    if (stat.isDirectory()) chmodPrivateDirectory(path);
-    else if (stat.isFile()) chmodPrivateFile(path);
-    else throw cacheOwnershipError(cacheDir, `legacy cache entry ${name} is not a file or directory`);
   }
   chmodPrivateDirectory(cacheDir);
 }
 
-function hardenTree(root: string): void {
-  const stat = lstatSync(root);
-  if (stat.isSymbolicLink()) throw cacheOwnershipError(root, 'managed cache tree contains a symlink');
-  if (stat.isFile()) {
-    chmodPrivateFile(root);
-    return;
+function hardenTree(root: string, allowMissing = false): void {
+  try {
+    const stat = lstatSync(root);
+    if (stat.isSymbolicLink()) throw cacheOwnershipError(root, 'managed cache tree contains a symlink');
+    if (stat.isFile()) {
+      chmodPrivateFile(root);
+      return;
+    }
+    if (!stat.isDirectory()) throw cacheOwnershipError(root, 'managed cache tree contains a special file');
+    chmodPrivateDirectory(root);
+    for (const name of readdirSync(root)) hardenTree(join(root, name), true);
+  } catch (error) {
+    // A child observed in readdir may be an atomically published or removed
+    // temporary. The owned root itself must still exist.
+    if (allowMissing && isMissingCacheEntryError(error)) return;
+    throw error;
   }
-  if (!stat.isDirectory()) throw cacheOwnershipError(root, 'managed cache tree contains a special file');
-  chmodPrivateDirectory(root);
-  for (const name of readdirSync(root)) hardenTree(join(root, name));
+}
+
+function isMissingCacheEntryError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  return code === 'ENOENT' || code === 'ENOTDIR';
 }
 
 function mkdirPrivate(

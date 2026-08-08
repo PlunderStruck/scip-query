@@ -34,16 +34,26 @@ const handleAffected = dbCommand(({ db, args, opts }) => {
       '--full cannot be combined with --max-depth. Use --full for complete traversal or --max-depth N for a bounded traversal.',
     );
   }
-  const results = queries.affected(db, query, {
+  const result = queries.possibleImpactClosure(db, query, {
     maxDepth: full ? Number.MAX_SAFE_INTEGER : maxDepth,
     scope: stringOptionValue(opts, 'scope'),
   });
+  const results = result.rows;
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('affected', args, opts, withSymbolResolutionJson(db, query, results, 'affected'));
+    printJsonEnvelope('affected', args, opts, {
+      ...withSymbolResolutionJson(db, query, results, 'affected'),
+      coverage: result.coverage,
+    });
     return;
   }
   if (results.length === 0) {
-    return render.empty(symbolResolutionEmptyMessage(db, query, 'No affected symbols found.'));
+    return render.empty(
+      symbolResolutionEmptyMessage(
+        db,
+        query,
+        'No possible impacts found in the bounded reverse caller/reference closure.',
+      ),
+    );
   }
   symbolResolutionBefore(db, query);
   let prevDepth = -1;
@@ -54,7 +64,10 @@ const handleAffected = dbCommand(({ db, args, opts }) => {
     }
     console.log(`  ${r.file}  ${r.shortName}`);
   }
-  console.log(`\n${results.length} affected symbol(s) across ${new Set(results.map((r) => r.file)).size} files.`);
+  console.log(
+    `\n${results.length} possible-impact symbol(s) across ${new Set(results.map((r) => r.file)).size} files; reachability does not prove breakage.`,
+  );
+  console.log(`  coverage: ${result.coverage.status} — ${result.coverage.reasons.join(' ')}`);
 });
 
 const handleCoChange = budgetedDbCommand('co-change', ({ db, args, opts, budget }) => {
@@ -222,10 +235,10 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'affected',
     command: 'affected <symbol>',
-    description: 'Transitive closure of symbols that could break if this symbol changes',
+    description: 'Conservative reverse caller/reference closure of symbols that may be impacted by a change',
     agent: agentContract(
-      'Which downstream symbols could break if this symbol changes?',
-      'affected symbol identities, files, and traversal depths',
+      'Which downstream symbols are statically reachable as possible change impacts?',
+      'possible-impact symbol identities, files, and traversal depths; not predicted failures',
       ['symbol'],
       'bounded',
     ),

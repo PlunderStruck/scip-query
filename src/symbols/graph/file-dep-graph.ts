@@ -26,6 +26,8 @@ interface SourceDependencyEdgeSet {
 }
 
 export type SourceDependencyEdgeMode = 'imports-only' | 'imports-and-reexports';
+/** The public relation selected by file dependency analyses. */
+export type FileDependencyEdgeBasis = 'symbol-references' | 'imports';
 
 const FILE_DEPENDENCY_GRAPH_PRODUCT = createProjectEvidenceProduct<FileDependencyGraphPayload>({
   kind: 'file-dependency-graph',

@@ -1341,6 +1341,29 @@ function renderCapabilityReport(report: ReturnType<typeof getProjectCapabilities
     console.log(`  ${capability.status.toUpperCase().padEnd(11)} ${capability.label} [${capability.evidence}]`);
     console.log(`             ${capability.reason}`);
   }
+  console.log('\nDirect graph navigation:');
+  console.log("  Locate exact text:  scip-query search 'literal'");
+  console.log('  Locate file symbols: scip-query outline path/to/file.ts');
+  console.log("  Traverse causality: scip-query evidence --symbol '<exact-symbol>' --view causal --depth 2");
+  console.log("  Traverse a construct: scip-query evidence --at 'path/to/file.ts:line' --view complete --depth 2");
+  console.log("  Batch exact roots: scip-query evidence --symbol '<first>' --symbol '<second>' --view complete");
+  console.log(
+    '  Edge families: execution, runtime, dataflow, state, temporal, contract, identity, ownership, dependencies',
+  );
+  console.log("  Read behavior last: scip-query inspect --at 'path/to/file.ts:line' --view behavior");
+  console.log('  Anchors are optional fallback discovery when no exact referent is known.');
+  console.log('\nRelationship support:');
+  for (const relation of report.relations) {
+    console.log(`  ${relation.status.toUpperCase().padEnd(11)} ${relation.family}`);
+    console.log(`             ${relation.establishes}`);
+    console.log(`             Does not establish: ${relation.nonClaims.join(' ')}`);
+    for (const provider of relation.providerCapabilities) {
+      console.log(
+        `             ${provider.status.toUpperCase().padEnd(11)} ${provider.id}: ${provider.subtypes.join(', ')}`,
+      );
+      console.log(`                         ${provider.reason}`);
+    }
+  }
   if (report.matrix.length === 0) return;
 
   console.log('\nLanguage matrix:');

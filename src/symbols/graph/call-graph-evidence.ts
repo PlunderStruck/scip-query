@@ -37,6 +37,8 @@ export interface CallerRow {
   symbol: string;
   file: string;
   source: CallerEvidenceSource;
+  /** Evidence that originally created the caller-to-callee edge, when retained. */
+  callEvidence?: CalleeEvidenceSource;
 }
 
 export function getCalleeRowsForSymbol(
@@ -150,6 +152,7 @@ export function buildCallerRowsMap(
           symbol: callerDef.symbol,
           file: callerDef.relativePath,
           source: 'caller-map-inversion',
+          callEvidence: callee.source,
         });
       }
     }

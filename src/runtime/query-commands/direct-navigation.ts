@@ -13,11 +13,13 @@ import type { CommandDescriptor, InvocationCoverage } from '../command-kit/comma
 import {
   doc,
   agentContract,
+  locatorSemanticContract,
   option,
   parseNonNegativeInteger,
   parsePositiveInteger,
   withCompactJsonOptions,
   withJsonOption,
+  sourceReadSemanticContract,
 } from '../command-kit/command-spec-builders.js';
 import {
   booleanOptionValue,
@@ -69,6 +71,14 @@ const handleOutline = dbCommand(({ db, args, opts }) => {
     }
   }
   printTree(roots, 0);
+  console.log('\nGraph traversal (choose only roots relevant to the question):');
+  for (const node of roots.slice(0, 6)) {
+    const symbol = `'${node.symbol.replaceAll("'", "'\\''")}'`;
+    console.log(`  ${node.shortName}: scip-query evidence --symbol ${symbol} --view causal --depth 2`);
+  }
+  if (roots.length > 6) {
+    console.log(`  ${roots.length - 6} additional root selector(s) remain available in --json.`);
+  }
 });
 
 function trimSignature(signature: string): string {
@@ -825,6 +835,12 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
       'symbol names, nesting, and line ranges',
       ['file'],
       'complete',
+      undefined,
+      REPOSITORY_OBSERVATION_OPERATION,
+      locatorSemanticContract(
+        ['file', 'symbol', 'construct'],
+        ['File ownership and nesting do not establish execution or task relevance.'],
+      ),
     ),
     options: withJsonOption([option('--signatures', 'Show trimmed symbol signatures')]),
     renderShape: 'custom',
@@ -841,6 +857,12 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
         'per-selector resolution, complete definition source, exact ranges with statically attributed same-file call closure, file export surfaces, omitted-local ledgers, and line ranges',
         [['symbol', 'file']],
         'complete',
+        undefined,
+        REPOSITORY_OBSERVATION_OPERATION,
+        sourceReadSemanticContract(
+          ['construct', 'exact-source'],
+          ['Source materialization does not establish callers, runtime reachability, or task relevance by itself.'],
+        ),
       ),
       resultUnits: { kind: 'field', field: 'code' },
     },

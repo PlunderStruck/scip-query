@@ -41,3 +41,8 @@ export function system(db: ScipDatabase, modulePattern: string): SystemResult {
 
   return { files, symbols, dependsOn, dependedOnBy };
 }
+
+/** One-hop module summary; this does not infer a repository subsystem boundary. */
+export function moduleMap(db: ScipDatabase, modulePattern: string): SystemResult {
+  return system(db, modulePattern);
+}

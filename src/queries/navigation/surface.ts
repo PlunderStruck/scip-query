@@ -9,7 +9,15 @@ export interface SurfaceResult {
   shortName: string;
 }
 
-/** Public API surface: what symbols do external consumers actually use from this module? */
+export interface ConsumerSurfaceResult extends SurfaceResult {
+  basis: 'external-reference';
+}
+
+/**
+ * @deprecated Historical union of externally referenced symbols and every
+ * indexed callable definition in the selected module. Use `consumerSurface`
+ * when the claim is specifically about observed external use.
+ */
 export function surface(db: ScipDatabase, modulePattern: string): SurfaceResult[] {
   const matchedPaths = resolveIndexedPaths(db, modulePattern);
   if (matchedPaths.length === 0) {
@@ -22,6 +30,15 @@ export function surface(db: ScipDatabase, modulePattern: string): SurfaceResult[
   ])
     .filter((row) => !db.isIgnored(row.relative_path))
     .map(surfaceResultFromRow);
+}
+
+/** Callable or value symbols in a module that have an observed reference from outside it. */
+export function consumerSurface(db: ScipDatabase, modulePattern: string): ConsumerSurfaceResult[] {
+  const matchedPaths = resolveIndexedPaths(db, modulePattern);
+  if (matchedPaths.length === 0) return [];
+  return dedupeSurfaceRows(loadExternalSurfaceRows(db, matchedPaths))
+    .filter((row) => !db.isIgnored(row.relative_path))
+    .map((row) => ({ ...surfaceResultFromRow(row), basis: 'external-reference' }));
 }
 
 interface SurfaceRow {

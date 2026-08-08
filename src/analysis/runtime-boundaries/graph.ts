@@ -23,7 +23,7 @@ import type {
 
 // Increment whenever direct facts or any derived propagation rule changes so an
 // older persisted graph can never be incrementally mixed with newer semantics.
-export const RUNTIME_BOUNDARY_EXTRACTOR_VERSION = 'runtime-boundaries-v12';
+export const RUNTIME_BOUNDARY_EXTRACTOR_VERSION = 'runtime-boundaries-v15';
 
 interface GroupRule {
   id: string;
@@ -35,6 +35,7 @@ interface GroupRule {
   traversable: boolean;
   linkFrom?: 'producer' | 'declaration';
   requireUniquePair?: boolean;
+  requireUniqueConsumer?: boolean;
 }
 
 const GROUP_RULES: readonly GroupRule[] = [
@@ -53,6 +54,15 @@ const GROUP_RULES: readonly GroupRule[] = [
     consumerActions: ['registry.handle'],
     keyNames: ['registry', 'key'],
     traversable: true,
+  },
+  {
+    id: 'registry.capability-key',
+    protocol: 'registry',
+    producerActions: ['registry.reference'],
+    consumerActions: ['registry.handle'],
+    keyNames: ['key'],
+    traversable: true,
+    requireUniqueConsumer: true,
   },
   {
     id: 'queue.address',
@@ -362,6 +372,7 @@ export function materializeBoundedLinks(
     const fromIds = rule.linkFrom === 'declaration' ? group.declarationIds : group.producerIds;
     if (fromIds.length === 0 || group.consumerIds.length === 0) continue;
     if (rule.requireUniquePair && (fromIds.length !== 1 || group.consumerIds.length !== 1)) continue;
+    if (rule.requireUniqueConsumer && group.consumerIds.length !== 1) continue;
     if (fromIds.length * group.consumerIds.length > MAX_MATERIALIZED_PAIRS_PER_GROUP) continue;
     for (const from of fromIds) {
       for (const to of group.consumerIds) {

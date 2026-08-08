@@ -1,4 +1,4 @@
-/** Shared ceiling for one inspect request and commands that compose inspect selectors. */
+/** Shared public ceiling for one source-inspection request and commands that compose its selectors. */
 export const SOURCE_INSPECTION_MAX_SELECTORS = 24;
 
 /** Raw source above this size requires an interior behavior focus. */

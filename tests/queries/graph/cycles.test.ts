@@ -2,12 +2,12 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
-import { cycleSummary } from '../../../src/queries/graph/cycles.js';
+import { cycleSummary, dependencyCycleSummary } from '../../../src/queries/graph/cycles.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../../fixtures/evidence-fixture.js';
 
 describe('cycles', () => {
-  it('reports simple source-import cycles and exposes search truncation', () => {
+  it('reports every cyclic component once with a deterministic witness', () => {
     withCycleFixture((db) => {
       const full = cycleSummary(db, { maxDepth: 5 });
 
@@ -15,17 +15,22 @@ describe('cycles', () => {
       expect(full.cycles).toEqual([
         expect.objectContaining({
           kind: 'real',
+          classification: 'dependency-cycle',
+          component: ['src/a.ts', 'src/b.ts', 'src/c.ts'],
+          edgeBasis: 'symbol-references',
+          witness: true,
           path: ['src/a.ts', 'src/b.ts', 'src/c.ts', 'src/a.ts'],
         }),
       ]);
 
-      const truncated = cycleSummary(db, { maxDepth: 1 });
-      expect(truncated.truncated).toBe(true);
-      expect(truncated.maxDepth).toBe(1);
+      const legacyDepth = cycleSummary(db, { maxDepth: 1 });
+      expect(legacyDepth.truncated).toBe(false);
+      expect(legacyDepth.maxDepth).toBe(1);
+      expect(legacyDepth.cycles).toHaveLength(1);
     });
   });
 
-  it('does not turn ordinary cross-file symbol mentions into import cycles', () => {
+  it('distinguishes symbol-reference cycles from the narrower import graph', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-query-ambient-cycle-'));
     try {
       const dbPath = join(root, 'index.db');
@@ -49,7 +54,13 @@ describe('cycles', () => {
         .write();
       const db = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
       try {
-        expect(cycleSummary(db, { maxDepth: 5 }).cycles).toEqual([]);
+        expect(cycleSummary(db).cycles).toEqual([
+          expect.objectContaining({
+            component: ['src/a.ts', 'src/b.ts'],
+            edgeBasis: 'symbol-references',
+          }),
+        ]);
+        expect(dependencyCycleSummary(db, { edgeBasis: 'imports' }).cycles).toEqual([]);
       } finally {
         db.close();
       }

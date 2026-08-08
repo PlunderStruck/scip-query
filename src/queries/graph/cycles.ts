@@ -1,12 +1,25 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
+import { buildFileDepGraph, type FileDependencyEdgeBasis } from '../../symbols/graph/file-dep-graph.js';
 import { classifyFile, isBarrel as isBarrelFile } from '../../analysis/file-classifier.js';
+import { stronglyConnectedComponents } from '../../analysis/strongly-connected-components.js';
+
+export type { FileDependencyEdgeBasis } from '../../symbols/graph/file-dep-graph.js';
 
 export interface CycleResult {
-  /** Files forming a cycle, in order */
+  /** One deterministic directed witness path; the first file is repeated at the end. */
   path: string[];
+  /** Every file in the cyclic strongly connected component represented by the witness. */
+  component?: string[];
+  /** The file edge relation on which cyclic reachability was computed. */
+  edgeBasis?: FileDependencyEdgeBasis;
+  /** Distinguishes a witness from an enumeration of every simple cycle. */
+  witness?: true;
+  classification?: 'dependency-cycle' | 'module-structure-candidate';
   /**
-   * Classification of the cycle:
+   * @deprecated Compatibility field. Prefer `classification`: “real” was too
+   * strong for a static dependency observation.
+   *
+   * Historical classification of the cycle:
    *   - 'real':            architectural cycle worth fixing
    *   - 'module-hierarchy': barrel-file pattern (mod.rs / index.ts /
    *                        __init__.py declaring children that re-import
@@ -19,76 +32,66 @@ export interface CycleResult {
 export interface CycleSummary {
   cycles: CycleResult[];
   truncated: boolean;
+  edgeBasis?: FileDependencyEdgeBasis;
   maxDepth: number;
+}
+
+export interface DependencyCycleOptions {
+  scope?: string;
+  /** @deprecated Cycle enumeration is SCC-complete; this value is reported only for legacy callers. */
+  maxDepth?: number;
+  edgeBasis?: FileDependencyEdgeBasis;
 }
 
 /**
  * Detect circular dependency chains between files.
  * A cycle exists when file A depends on B, B depends on C, and C depends on A.
  *
- * Uses the same dependency edges as the `deps` command (symbol definitions
- * referenced across files), then runs DFS cycle detection.
+ * By default this uses the same symbol-reference plus source-import dependency
+ * edges as `deps`. `edgeBasis: 'imports'` selects the narrower import graph.
+ * Every cyclic strongly connected component is returned exactly once with one
+ * deterministic witness path; this is not an enumeration of every simple cycle.
  */
 export function cycles(db: ScipDatabase, opts: { scope?: string; maxDepth?: number } = {}): CycleResult[] {
   return cycleSummary(db, opts).cycles;
 }
 
 export function cycleSummary(db: ScipDatabase, opts: { scope?: string; maxDepth?: number } = {}): CycleSummary {
-  const { scope, maxDepth = 10 } = opts;
-  const graph = buildFileDepGraph(db, scope, { scipEdges: 'imports-only' });
+  return dependencyCycleSummary(db, opts);
+}
 
-  // DFS cycle detection
-  const allCycles: CycleResult[] = [];
-  const visited = new Set<string>();
-  const inStack = new Set<string>();
-  const stack: string[] = [];
-  let truncated = false;
+/**
+ * Enumerate cyclic strongly connected components in a named file-dependency
+ * relation. This is the explicit replacement for selecting a different graph
+ * through the legacy `cycles` API.
+ */
+export function dependencyCycles(db: ScipDatabase, opts: DependencyCycleOptions = {}): CycleResult[] {
+  return dependencyCycleSummary(db, opts).cycles;
+}
 
-  function dfs(node: string, depth: number): void {
-    if (depth > maxDepth) {
-      truncated = true;
-      return;
-    }
-    if (inStack.has(node)) {
-      // Found a cycle — extract it from the stack
-      const cycleStart = stack.indexOf(node);
-      if (cycleStart !== -1) {
-        const cyclePath = stack.slice(cycleStart).concat(node);
-        // Normalize: start from the lexicographically smallest file
-        const minIdx = cyclePath.indexOf(cyclePath.reduce((a, b) => (a < b ? a : b)));
-        const normalized = [...cyclePath.slice(minIdx, -1), ...cyclePath.slice(0, minIdx), cyclePath[minIdx]!];
-        // Deduplicate
-        const key = normalized.join(' -> ');
-        if (!seenCycles.has(key)) {
-          seenCycles.add(key);
-          allCycles.push({ path: normalized, kind: classifyCycle(normalized) });
-        }
-      }
-      return;
-    }
-    if (visited.has(node)) return;
-
-    visited.add(node);
-    inStack.add(node);
-    stack.push(node);
-
-    const neighbors = graph.get(node);
-    if (neighbors) {
-      for (const neighbor of neighbors) {
-        dfs(neighbor, depth + 1);
-      }
-    }
-
-    stack.pop();
-    inStack.delete(node);
-  }
-
-  const seenCycles = new Set<string>();
-  for (const node of graph.keys()) {
-    if (!visited.has(node)) {
-      dfs(node, 0);
-    }
-  }
+export function dependencyCycleSummary(db: ScipDatabase, opts: DependencyCycleOptions = {}): CycleSummary {
+  const { scope, maxDepth = 10, edgeBasis = 'symbol-references' } = opts;
+  const graph = buildFileDepGraph(
+    db,
+    scope,
+    edgeBasis === 'imports' ? { scipEdges: 'imports-only', sourceEdges: 'imports-only' } : undefined,
+  );
+  const { components } = stronglyConnectedComponents(graph);
+  const allCycles = components
+    .filter((component) => isCyclicComponent(graph, component))
+    .map((members) => {
+      const component = [...members].sort();
+      const path = cycleWitness(graph, component);
+      const kind = classifyCycle(path);
+      return {
+        path,
+        component,
+        edgeBasis,
+        witness: true as const,
+        classification: kind === 'real' ? ('dependency-cycle' as const) : ('module-structure-candidate' as const),
+        kind,
+      };
+    });
 
   // Sort: real cycles first (more actionable), then by length.
   allCycles.sort((a, b) => {
@@ -98,9 +101,54 @@ export function cycleSummary(db: ScipDatabase, opts: { scope?: string; maxDepth?
 
   return {
     cycles: allCycles,
-    truncated,
+    truncated: false,
+    edgeBasis,
     maxDepth,
   };
+}
+
+function isCyclicComponent(graph: ReadonlyMap<string, ReadonlySet<string>>, component: readonly string[]): boolean {
+  if (component.length > 1) return true;
+  const only = component[0];
+  return only !== undefined && graph.get(only)?.has(only) === true;
+}
+
+function cycleWitness(graph: ReadonlyMap<string, ReadonlySet<string>>, component: readonly string[]): string[] {
+  const start = component[0];
+  if (!start) return [];
+  const members = new Set(component);
+  for (const neighbor of [...(graph.get(start) ?? [])].filter((node) => members.has(node)).sort()) {
+    if (neighbor === start) return [start, start];
+    const returnPath = shortestPathWithinComponent(graph, neighbor, start, members);
+    if (returnPath) return [start, ...returnPath];
+  }
+  throw new Error(`Cyclic component did not contain a witness path from ${start}.`);
+}
+
+function shortestPathWithinComponent(
+  graph: ReadonlyMap<string, ReadonlySet<string>>,
+  from: string,
+  target: string,
+  members: ReadonlySet<string>,
+): string[] | null {
+  const queue = [from];
+  const parent = new Map<string, string | null>([[from, null]]);
+  for (let index = 0; index < queue.length; index += 1) {
+    const current = queue[index]!;
+    if (current === target) {
+      const reversed: string[] = [];
+      for (let cursor: string | null = current; cursor !== null; cursor = parent.get(cursor) ?? null) {
+        reversed.push(cursor);
+      }
+      return reversed.reverse();
+    }
+    for (const neighbor of [...(graph.get(current) ?? [])].filter((node) => members.has(node)).sort()) {
+      if (parent.has(neighbor)) continue;
+      parent.set(neighbor, current);
+      queue.push(neighbor);
+    }
+  }
+  return null;
 }
 
 /**

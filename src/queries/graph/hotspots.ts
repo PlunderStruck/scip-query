@@ -11,11 +11,13 @@ export interface HotspotResult {
   refCount: number;
   fileCount: number;
   definedIn: string;
+  basis?: 'scip-cross-file-mentions' | 'source-backed-incoming-evidence';
+  countUnit?: 'reference-occurrences' | 'distinct-incoming-evidence-rows';
 }
 
 /**
- * Find the most-referenced symbols in the codebase — the choke points
- * where changes have the widest blast radius.
+ * Rank symbols by cross-file reference count. This is a reference-frequency
+ * metric, not proof of runtime contention or change impact.
  */
 // scip-query: ignore-similar — shares SCIP-DB join shape with bottlenecks /
 // topFanOut; counts cross-file references per definition. Different question.
@@ -68,6 +70,8 @@ export function hotspots(db: ScipDatabase, opts: { limit?: number; scope?: strin
       refCount: r.ref_count,
       fileCount: r.file_count,
       definedIn: r.defined_in,
+      basis: 'scip-cross-file-mentions' as const,
+      countUnit: 'reference-occurrences' as const,
     }));
 
   if (indexedResults.length > 0) {
@@ -75,6 +79,10 @@ export function hotspots(db: ScipDatabase, opts: { limit?: number; scope?: strin
   }
 
   return hotspotsByDefinitionFallback(db, scope, limit);
+}
+
+export function referenceHotspots(db: ScipDatabase, opts: { limit?: number; scope?: string } = {}): HotspotResult[] {
+  return hotspots(db, opts);
 }
 
 function hotspotsByDefinitionFallback(db: ScipDatabase, scope: string | undefined, limit: number): HotspotResult[] {
@@ -98,5 +106,7 @@ function hotspotRowFor(db: ScipDatabase, definition: IndexedDefinition): Hotspot
     refCount: crossFileCallers.length,
     fileCount: new Set(crossFileCallers.map((row) => row.file)).size,
     definedIn: definition.relativePath,
+    basis: 'source-backed-incoming-evidence',
+    countUnit: 'distinct-incoming-evidence-rows',
   };
 }

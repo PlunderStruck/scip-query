@@ -570,6 +570,47 @@ owners, values, predicates, and terminal outcomes. The manifest implementation
 was reverted. Next work should preserve those repository facts directly before
 another selection-policy experiment.
 
+### 2026-08-07 bounded upstream-route experiment
+
+A later isolated rerun tested the multi-anchor topology selector at the same
+OpenCode commit (`1a8e94dc8e7462d3d0d860e1337b448c71947f6b`). v22 selected one
+proved upstream path for each independent anchor. v23 additionally rendered up
+to three other proved public/runtime endpoints per anchor as a compact folded
+manifest; it also ranked an all-production anchor group ahead of a group whose
+material roots included test code.
+
+| run            | strict facts | total model tokens | uncached input | rendered characters | semantic queries | native reads |
+| -------------- | -----------: | -----------------: | -------------: | ------------------: | ---------------: | -----------: |
+| native control |            — |          1,112,372 |              — |             490,269 |                — |            — |
+| treatment v22  |          1/7 |            596,972 |         58,275 |             115,120 |                3 |            0 |
+| treatment v23  |          1/7 |            665,362 |         62,632 |             108,844 |                4 |            0 |
+
+v23 did not pass the promotion gate. The extra endpoint manifest reduced
+rendered output by 5.5% from v22, but the model performed another inspect and
+used 11.5% more total tokens without recovering another strict fact. The
+manifest implementation was therefore reverted. The production-over-test
+ranking correction remains because it repairs a repository-independent source
+scope error and is covered by a neutral fixture.
+
+The strict result also exposes a benchmark ambiguity that must not be encoded
+as a ranking heuristic. The treatment proved
+`HTTP summarize -> handler summarize -> prompt.loop -> runLoop ->
+processCompaction`, which is a real externally reachable owner path, while the
+frozen rubric accepts only the sibling `session.prompt` and
+`session.prompt_async` paths. Preferring those names would overfit the tool to
+the rubric. The real coverage failures are independent of that ambiguity: the
+map did not prove the core public native path, and the answer still omitted
+several exact trigger, retention, retry, and later-history facts.
+
+The next architectural requirement is consequently not another best-route
+ranking rule. Anchor discovery needs a complete compact route index: enumerate
+proved public/runtime ingress paths by graph identity, give each a stable route
+selector and exact endpoint location, and allow several selected routes to be
+materialized in one map. This preserves alternatives without guessing which
+English phrase makes one sibling relevant. Promotion remains blocked until that
+surface passes the frozen primary holdout and then unchanged cross-repository
+accuracy and token gates.
+
 Artifacts:
 
 - `benchmarks/exploration/opencode-compaction-implementations-v1.json`
@@ -582,3 +623,133 @@ Artifacts:
 - `/tmp/opencode-compaction-implementations-treatment-causal-sol-medium-v20.json`
 - `/tmp/opencode-compaction-implementations-treatment-evidence-contract-sol-medium-v21.json`
 - `/tmp/opencode-compaction-implementations-treatment-query-term-targets-sol-medium-v22.json`
+- `/tmp/opencode-compaction-implementations-treatment-sol-medium-v22.json`
+- `/tmp/opencode-compaction-implementations-treatment-sol-medium-v23.json`
+
+### 2026-08-07 accuracy-first route-index trial
+
+v24 implemented the complete compact route index proposed after v23. The
+initial map enumerated nine distinct proved public/runtime ingress endpoints,
+gave each a stable route ID, and accepted all nine IDs in one subsequent map.
+The agent used no native exploration reads and recovered one more strict fact
+than v22/v23, including the previously omitted summary-execution difference.
+
+| run                       | strict facts | total model tokens | uncached input | rendered characters | semantic queries | native reads |
+| ------------------------- | -----------: | -----------------: | -------------: | ------------------: | ---------------: | -----------: |
+| native control            |            — |          1,112,372 |              — |             490,269 |                — |            — |
+| treatment v22             |          1/7 |            596,972 |         58,275 |             115,120 |                3 |            0 |
+| treatment v23             |          1/7 |            665,362 |         62,632 |             108,844 |                4 |            0 |
+| treatment v24 route index |          2/7 |          6,111,854 |        190,888 |             521,639 |               11 |            0 |
+
+v24 failed both the accuracy and cost gates. Total model tokens were 10.2× v22
+and 5.5× native control; rendered characters were 4.5× v22 and slightly above
+native control. The trace identifies two separate causes:
+
+1. Anchor discovery was rerun at limits 4, 8, 12, 16, 20, and 24 because no
+   initially displayed set covered every named concern. Each expansion repeated
+   earlier evidence, so accumulated context paid for the same locator surface
+   several times.
+2. The first map printed an “select all routes” command. Materializing nine
+   valid routes produced five transport pages even though the compact route
+   identities and chains were sufficient to establish most ownership claims.
+
+The route-index mechanism itself is retained: it exposed all nine ingress
+alternatives without a repository-specific ranking rule, and the agent used the
+stable IDs correctly. The “select all” presentation is removed. Human output
+now shows each complete endpoint-to-anchor chain compactly and instructs the
+agent to select a route only when a named fact depends on interior behavior not
+already established by that chain and the connected behavior.
+
+The next general bottleneck is now the locator level, not graph expressiveness.
+Anchor discovery needs a complete compact group catalogue in its first response
+with stable group selection, so increasing coverage does not require replaying
+the whole locator at successively larger limits. After that, route-selected
+behavior needs a baseline-aware output controller that preserves claim-changing
+predicates, values, and outcomes while folding source for shared or already
+proved route segments.
+
+Artifact:
+
+- `/tmp/opencode-compaction-implementations-treatment-route-index-sol-medium-v24.json`
+
+## Direct graph-navigation ablation
+
+The next frozen run removed the mandatory `anchors` → `system-map` protocol.
+The agent was instead told that any exact returned referent could start navigation,
+given a compact relationship-to-command guide, and allowed to use `anchors` only
+as a fallback. The repository, commit, question, model, evaluator, detached
+isolation, and CLI binary were otherwise identical to the route-index run.
+
+| Sol medium mode | Total tokens | Uncached input | Rendered characters | Semantic queries | Agent duration | Frozen strict facts |
+| --------------- | -----------: | -------------: | ------------------: | ---------------: | -------------: | ------------------: |
+| v24 anchor/route protocol | 6,111,854 | 190,888 | 521,639 | 11 | 1,045.5 s | 2/7 |
+| v25 direct graph navigation | 3,100,350 | 242,731 | 297,184 | 46 | 400.2 s | 1/7 |
+| Native control | 1,112,372 | 99,879 | 490,269 | 16 tracked calls | — | 1/7 |
+
+Direct navigation completed without `anchors` and produced a detailed comparison
+covering both externally reachable stacks, triggering, retention, execution,
+resumption, reconstruction, and pruning. The frozen all-terms evaluator credited
+only the retention row because several other rows used accurate paraphrases while
+omitting one required literal or compiler name. This score remains comparable to
+the other frozen runs, but it understates the semantic content of the answer.
+
+The trace nevertheless fails the efficiency gate decisively. It made 46 semantic
+queries: broad `files` listings, exact searches, outlines, command help, and many
+whole-file or large-range `code` reads. Apart from two `rdeps` calls, it did not
+use the relationship commands named in the prompt. One intuitive
+`symbols <file>` attempt failed, after which the agent requested general help and
+continued primarily through source materialization.
+
+This ablation establishes that anchor discovery is not necessary for recovering
+an end-to-end answer. It does not establish that an unstructured menu of graph
+commands is sufficient. The next direct-navigation experiment should make graph
+operations executable from the identities already printed by locator and outline
+commands, include exact command recipes and relative cost in the capability
+surface, and have every result recommend the cheapest relationship-preserving
+next commands. It should retain a query/output budget so direct navigation cannot
+devolve into repeated full-source reads.
+
+Artifact:
+
+- `/tmp/opencode-compaction-implementations-treatment-direct-sol-medium-v25.json`
+
+## Unified direct-evidence Luna-max comparison
+
+v26 replaced the command-menu ablation with one executable graph projection.
+`evidence` accepts several exact roots, explicit causal/structural views, typed
+edge-family selection, distance-ranked relationships, exact follow-ups, and a
+counted omission contract. The treatment prompt set a normal one-locator,
+one-evidence, one-inspect budget; anchors and `system-map` were optional.
+
+Both arms used Luna 5.6 max on the same frozen OpenCode commit and facts in
+independent detached worktrees. Treatment received a private index; control had
+neither the index nor scip-query. Both sandboxes and private caches were removed.
+
+| Luna max arm | Total tokens | Uncached input | Rendered characters | Calls | Agent duration | Frozen strict facts |
+| ------------ | -----------: | -------------: | ------------------: | ----: | -------------: | ------------------: |
+| Direct scip-query | 1,879,901 | 111,678 | 177,446 | 23 | 713.1 s | 0/7 |
+| Native control | 3,306,711 | 222,426 | 1,275,575 | 63 | 467.0 s | 0/7 |
+
+Treatment reduced total tokens by 43.1%, uncached input by 49.8%, rendered
+repository characters by 86.1%, and calls by 63.5%. It took 52.7% longer and
+still exceeded the four-query and 70,000-character acceptance budgets.
+
+The 0/7 tie is substantively correct under the compound-fact standard, not only
+a literal-matcher artifact. Both answers recovered most of each behavioral area
+but omitted at least one required qualifier from every frozen fact. Treatment was
+stronger on compact internal lifecycle recovery, including media-placeholder
+replay, autocontinue, compaction events, `tail_start_id`, and pruning thresholds;
+control was stronger on external ownership. Treatment explicitly stopped short
+of the HTTP/native adapter chains, while control still omitted the exact complete
+ownership chains frozen by the rubric.
+
+The result establishes a matched efficiency win with accuracy parity at the
+strict threshold. It does not satisfy promotion. The remaining general gap is
+evidence obligation coverage: the surface needs to make externally reachable
+ownership and missing compound qualifiers visible soon enough that the agent can
+close them without broad repeated inspection.
+
+Artifacts:
+
+- `/tmp/opencode-compaction-implementations-treatment-direct-luna-max-v26.json`
+- `/tmp/opencode-compaction-implementations-control-luna-max-v26.json`

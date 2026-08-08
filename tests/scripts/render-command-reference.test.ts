@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   parseSkillCommands,
   renderAgentContractCatalogMarkdown,
+  renderAgentSetupCommandCatalogSource,
   renderSkillCommandsMarkdown,
   validateSkillCommand,
 } from '../../scripts/render-command-reference.js';
@@ -164,5 +165,18 @@ describe('renderAgentContractCatalogMarkdown', () => {
     expect(markdown).toContain('`repository-observation`');
     expect(markdown).toContain('`bounded`');
     expect(markdown).toContain('<!-- END GENERATED AGENT CONTRACT CATALOG -->');
+  });
+});
+
+describe('renderAgentSetupCommandCatalogSource', () => {
+  it('generates the canonical nondeprecated catalogue from command descriptors', () => {
+    const source = renderAgentSetupCommandCatalogSource();
+
+    expect(source).toContain('scip-query evidence [symbol]');
+    expect(source).toContain('scip-query inspect');
+    expect(source).toContain('[bounded; bounded coverage]');
+    expect(source).not.toContain('appendEvent');
+    expect(source).not.toContain('scip-query anchors');
+    expect(source).not.toContain('scip-query system-map');
   });
 });

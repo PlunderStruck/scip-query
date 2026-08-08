@@ -473,7 +473,7 @@ describe('python repo accuracy regressions', () => {
 
     const result = system(db, 'simulation.py');
     expect(result.files).toEqual(['simulation.py']);
-    expect(result.dependedOnBy).toEqual(['analysis.py', 'app.py', 'tests/test_simulation.py']);
+    expect(result.dependedOnBy).toEqual(['analysis.py', 'app.py', 'exports.py', 'tests/test_simulation.py']);
   });
 
   it('infers useful kinds when the Python index omits kind metadata', () => {

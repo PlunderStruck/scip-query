@@ -12,7 +12,7 @@ import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { buildCalleeMap } from '../../symbols/graph/call-graph-evidence.js';
 import { findFirstSymbolMatch, nearestSymbolNames, resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
-import { SOURCE_INSPECTION_MAX_SELECTORS } from '../internal/inspection-limits.js';
+import { SOURCE_INSPECTION_MAX_SELECTORS } from '../../domain/source-inspection-limits.js';
 import {
   bindingClosureForRange,
   mergeBindingClosures,

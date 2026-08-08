@@ -1,5 +1,11 @@
 import type { IndexedDefinition } from '../../domain/types.js';
+import {
+  semanticLocalFlowForRange,
+  type TypeScriptLocalFlowEdge,
+  type TypeScriptLocalFlowPoint,
+} from '../../semantic/index.js';
 import { getAst } from '../../source/ast/ast-core.js';
+import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { resolvedCallSitesForDefinition } from '../../symbols/graph/resolved-call-sites.js';
@@ -156,6 +162,7 @@ export function programDataElementsForParameterFlow(
 export function programDataElementsForSystemMapRelations(
   db: ScipDatabase,
   relations: readonly SystemMapRelation[],
+  topologyNodes: readonly ExplorationTopologyNode[] = [],
 ): ProgramDataElements {
   const result = emptyElements();
   const definitionCache = new Map<string, IndexedDefinition | null>();
@@ -198,10 +205,207 @@ export function programDataElementsForSystemMapRelations(
       }
     }
     mergeElements(result, programDataElementsForParameterFlow(flow, staticArguments));
+    if (flow.caller && callResultIsUsed(site.callNode)) addCallResultTransfer(result, flow, site.callNode);
+  }
+
+  for (const owner of topologyNodes) {
+    if (!owner.location || !['source-construct', 'symbol'].includes(owner.kind)) continue;
+    const endLine = owner.location.endLine ?? owner.location.line;
+    const analysis = semanticLocalFlowForRange(db, owner.location.file, owner.location.line, endLine);
+    if (!analysis) continue;
+    mergeElements(result, programDataElementsForLocalFlow(owner, analysis.points, analysis.edges));
+    for (const reason of analysis.coverage.unsupported) {
+      result.blindSpots.push(
+        `TypeScript local flow is partial for ${owner.location.file}:${owner.location.line + 1}-${endLine + 1}: ${reason} Recover with: scip-query inspect --at '${owner.location.file}:${owner.location.line + 1}-${endLine + 1}' --view behavior.`,
+      );
+    }
   }
 
   result.blindSpots = [...new Set(result.blindSpots)].sort();
   return result;
+}
+
+function programDataElementsForLocalFlow(
+  owner: ExplorationTopologyNode,
+  points: readonly TypeScriptLocalFlowPoint[],
+  localEdges: readonly TypeScriptLocalFlowEdge[],
+): ProgramDataElements {
+  const result = emptyElements();
+  const nodes = new Map<string, ExplorationTopologyNode>();
+  const edges = new Map<string, ExplorationTopologyEdge>();
+  const pointNodeIds = new Map<string, string>();
+  const file = owner.location!.file;
+
+  for (const point of points) {
+    const node = localFlowPointNode(owner, file, point);
+    pointNodeIds.set(point.id, node.id);
+    nodes.set(node.id, node);
+    addLocalFlowOwnerEdge(edges, owner, node);
+  }
+
+  for (const edge of localEdges) {
+    const fromNodeId = pointNodeIds.get(edge.fromPointId);
+    const toNodeId = pointNodeIds.get(edge.toPointId);
+    if (!fromNodeId || !toNodeId) continue;
+    const semantics = localFlowSemantics(edge);
+    const edgeId = id('edge', 'typescript-local-flow', file, edge.id);
+    edges.set(edgeId, {
+      id: edgeId,
+      kind: edge.kind === 'control-dependence' ? 'control-dependence' : 'data-transfer',
+      fromNodeId,
+      toNodeId,
+      directed: true,
+      disposition: 'folded',
+      semantics: [semantics],
+      evidence: [
+        {
+          method: 'typescript-compiler-cfg-reaching-definitions',
+          strength: edge.strength,
+          identity: edge.reason,
+          location: nodes.get(fromNodeId)?.location ?? owner.location,
+        },
+      ],
+    });
+  }
+
+  result.nodes = [...nodes.values()];
+  result.edges = [...edges.values()];
+  return result;
+}
+
+function localFlowPointNode(
+  owner: ExplorationTopologyNode,
+  file: string,
+  point: TypeScriptLocalFlowPoint,
+): ExplorationTopologyNode {
+  return {
+    id: id('local-flow-point', file, String(point.start), String(point.end), point.kind, point.symbolKey ?? point.name),
+    kind:
+      point.kind === 'parameter-definition' || point.kind === 'definition'
+        ? 'local-definition'
+        : point.kind === 'use'
+          ? 'local-use'
+          : point.kind === 'predicate'
+            ? 'control-predicate'
+            : 'local-statement',
+    label: point.name,
+    disposition: 'folded',
+    location: { file, line: point.line, endLine: point.line },
+    anchorIds: [],
+    attributes: {
+      ownerNodeId: owner.id,
+      pointKind: point.kind,
+      callableId: point.callableId,
+      symbolKey: point.symbolKey,
+      column: point.column,
+    },
+  };
+}
+
+function addLocalFlowOwnerEdge(
+  edges: Map<string, ExplorationTopologyEdge>,
+  owner: ExplorationTopologyNode,
+  point: ExplorationTopologyNode,
+): void {
+  const edgeId = id('edge', 'local-flow-owner', owner.id, point.id);
+  if (edges.has(edgeId)) return;
+  edges.set(edgeId, {
+    id: edgeId,
+    kind: 'local-flow-owner',
+    fromNodeId: owner.id,
+    toNodeId: point.id,
+    directed: true,
+    disposition: 'folded',
+    semantics: [{ family: 'identity', subtype: 'contains' }],
+    evidence: [
+      {
+        method: 'typescript-compiler-local-flow-owner',
+        strength: 'exact',
+        identity: owner.id,
+        location: point.location,
+      },
+    ],
+  });
+}
+
+function localFlowSemantics(edge: TypeScriptLocalFlowEdge): NonNullable<ExplorationTopologyEdge['semantics']>[number] {
+  switch (edge.kind) {
+    case 'reaching-definition':
+      return { family: 'data', subtype: 'definition-to-use' };
+    case 'value-source':
+      return { family: 'data', subtype: 'value-to-definition' };
+    case 'closure-capture':
+      return { family: 'data', subtype: 'closure-capture' };
+    case 'field-definition-to-use':
+      return { family: 'data', subtype: 'field-definition-to-use' };
+    case 'control-dependence':
+      return { family: 'control', subtype: 'control-dependence' };
+  }
+}
+
+function callResultIsUsed(call: SyntaxNode): boolean {
+  let current = call;
+  while (
+    current.parent &&
+    ['await_expression', 'yield_expression', 'parenthesized_expression', 'as_expression', 'type_assertion'].includes(
+      current.parent.type,
+    )
+  ) {
+    current = current.parent;
+  }
+  return current.parent !== null && current.parent.type !== 'expression_statement';
+}
+
+function addCallResultTransfer(result: ProgramDataElements, flow: CallParameterValueFlow, call: SyntaxNode): void {
+  if (!flow.caller) return;
+  const resultNode: ExplorationTopologyNode = {
+    id: id('call-result', flow.call.file, String(call.startIndex), String(call.endIndex), flow.callee.symbol),
+    kind: 'call-result',
+    label: `result of ${flow.callee.leaf}`,
+    disposition: 'folded',
+    location: { file: flow.call.file, line: flow.call.startLine, endLine: flow.call.endLine },
+    anchorIds: [],
+    attributes: { calleeSymbol: flow.callee.symbol, callerSymbol: flow.caller.symbol },
+  };
+  const transferId = id('edge', 'return-to-call-result', flow.callee.symbol, resultNode.id);
+  const ownerId = id('edge', 'call-result-owner', flow.caller.symbol, resultNode.id);
+  result.nodes.push(resultNode);
+  result.edges.push(
+    {
+      id: transferId,
+      kind: 'data-transfer',
+      fromNodeId: symbolNodeId(flow.callee.symbol),
+      toNodeId: resultNode.id,
+      directed: true,
+      disposition: 'folded',
+      semantics: [{ family: 'data', subtype: 'return-to-call-result' }],
+      evidence: [
+        {
+          method: 'compiler-callsite-used-result',
+          strength: 'exact',
+          identity: `${flow.callee.symbol} -> ${flow.caller.symbol}`,
+          location: resultNode.location,
+        },
+      ],
+    },
+    {
+      id: ownerId,
+      kind: 'call-result-owner',
+      fromNodeId: symbolNodeId(flow.caller.symbol),
+      toNodeId: resultNode.id,
+      directed: true,
+      disposition: 'folded',
+      semantics: [{ family: 'identity', subtype: 'contains-call-result' }],
+      evidence: [
+        {
+          method: 'compiler-call-result-owner',
+          strength: 'exact',
+          identity: flow.caller.symbol,
+          location: resultNode.location,
+        },
+      ],
+    },
+  );
 }
 
 function emptyElements(): ProgramDataElements {

@@ -439,6 +439,21 @@ function sourceChunks(
       },
     ];
   }
+  const containingExactReceipt =
+    sessionPolicy === 'exact-unit' && !invocation.reemit
+      ? coveringExactEmission(persisted, relativePath, startLine, endLine, lineHashes)
+      : undefined;
+  if (containingExactReceipt) {
+    return [
+      {
+        kind: 'covered',
+        startLine,
+        endLine,
+        ordinal: containingExactReceipt.ordinal,
+        command: containingExactReceipt.command,
+      },
+    ];
+  }
   const coverage = sourceLines.map((_, index) =>
     coveringEmission(persisted, relativePath, startLine + index, lineHashes[index]!),
   );
@@ -484,6 +499,25 @@ function coveringEmission(
   );
   if (prior) return { ordinal: prior.ordinal, command: prior.command };
   return undefined;
+}
+
+function coveringExactEmission(
+  persisted: readonly PersistedSourceRange[],
+  relativePath: string,
+  startLine: number,
+  endLine: number,
+  lineHashes: readonly string[],
+): { ordinal: number | null; command: string } | undefined {
+  const prior = findLastMatching(
+    persisted,
+    (range) =>
+      range.policy === 'exact-unit' &&
+      range.relativePath === relativePath &&
+      range.startLine <= startLine &&
+      range.endLine >= endLine &&
+      lineHashes.every((hash, index) => range.lineHashes[startLine - range.startLine + index] === hash),
+  );
+  return prior ? { ordinal: prior.ordinal, command: prior.command } : undefined;
 }
 
 function sameCoverage(

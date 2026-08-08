@@ -1,30 +1,31 @@
 export { stats } from './navigation/stats.js';
 export { files } from './navigation/files.js';
 export { searchSource } from './navigation/source-search.js';
-export { discoverAnchors, normalizeAnchorQuery } from './navigation/anchor-discovery.js';
+export { discoverAnchors, normalizeAnchorQuery } from './graph/anchor-discovery.js';
 export { inspectSource } from './navigation/source-inspection.js';
 export { symbols } from './navigation/symbols.js';
 export { methods, resolveMethods } from './navigation/methods.js';
 export { refs } from './navigation/refs.js';
 export { qualifiedTraceEvidence, trace, traceEvidence } from './navigation/trace.js';
 export { evidence, qualifiedEvidence } from './navigation/evidence.js';
+export { GRAPH_EVIDENCE_FAMILIES, GRAPH_EVIDENCE_VIEWS, graphEvidence } from './graph/graph-evidence.js';
 export { deps, rdeps } from './navigation/deps.js';
-export { system } from './navigation/system.js';
-export { surface } from './navigation/surface.js';
+export { moduleMap, system } from './navigation/system.js';
+export { consumerSurface, surface } from './navigation/surface.js';
 export { dead } from './cleanup/dead.js';
-export { hotspots } from './graph/hotspots.js';
+export { hotspots, referenceHotspots } from './graph/hotspots.js';
 export { imports, importedBy, unusedImports } from './navigation/imports.js';
 export { outline } from './navigation/outline.js';
 export { members } from './navigation/members.js';
-export { fanIn, fanOut, topFanIn, topFanOut } from './graph/fan.js';
-export { coupling, topCoupling } from './graph/coupling.js';
-export { cycles, cycleSummary } from './graph/cycles.js';
+export { externalSymbolFanOut, fanIn, fanOut, fileDependencyOutDegree, topFanIn, topFanOut } from './graph/fan.js';
+export { coupling, sharedSymbolCoupling, topCoupling, topSharedSymbolCoupling } from './graph/coupling.js';
+export { cycles, cycleSummary, dependencyCycles, dependencyCycleSummary } from './graph/cycles.js';
 export { analyzeArchitectureGraph, architecture, architectureFindingIdentities } from './graph/architecture.js';
-export { bottlenecks } from './graph/bottlenecks.js';
+export { bottlenecks, coordinationHubs } from './graph/bottlenecks.js';
 export { isolated } from './cleanup/isolated.js';
 export { byKind, kindCounts } from './navigation/by-kind.js';
-export { deepChains } from './graph/deep-chains.js';
-export { hierarchy } from './navigation/hierarchy.js';
+export { deepChains, dependencyDepth } from './graph/deep-chains.js';
+export { hierarchy, ownershipChain } from './navigation/hierarchy.js';
 export { callGraph } from './navigation/call-graph.js';
 export { entryCallMap, entryPoints } from './graph/entry-map.js';
 export { systemMap } from './graph/system-map.js';
@@ -39,7 +40,7 @@ export { vueLargeViewPressure } from './frontend/vue-large-view-pressure.js';
 export { similarChains } from './cleanup/similar-chains.js';
 export { extractCandidates } from './cleanup/extract-candidates.js';
 export { localityCandidates } from './cleanup/locality-candidates.js';
-export { affected } from './graph/affected.js';
+export { affected, possibleImpactClosure } from './graph/affected.js';
 export { changeSurface } from './impact/change-surface.js';
 export { cleanupPlan } from './cleanup/cleanup-plan.js';
 export { incompleteMigration } from './impact/incomplete-migration.js';
@@ -74,8 +75,10 @@ export { HEALTH_PHASES, health, healthPhase, healthReportFromPhases } from './he
 export { convergence } from './cleanup/convergence.js';
 export { code, codeBatch } from './navigation/code.js';
 export { complexity } from './quality/complexity.js';
-export { dataflow } from './navigation/dataflow.js';
-export { slice } from './navigation/slice.js';
+export { dataflow, referenceNeighborhood } from './navigation/dataflow.js';
+export { valueFlow } from './graph/value-flow.js';
+export { slice, referenceReachability } from './navigation/slice.js';
+export { dependenceSlice } from './graph/dependence-slice.js';
 export { redundantReexports } from './cleanup/redundant-reexports.js';
 export { selfAudit } from './quality/self-audit.js';
 export { similarSignatures } from './cleanup/similar-signatures.js';
@@ -103,7 +106,7 @@ export type {
   AnchorDiscoveryResult,
   AnchorDiscoveryTermMatch,
   AnchorDiscoveryUpstreamEntry,
-} from './navigation/anchor-discovery.js';
+} from './graph/anchor-discovery.js';
 export type {
   SourceInspectionContinuation,
   SourceInspectionChannelCoverage,
@@ -151,8 +154,23 @@ export type {
   EvidenceResult,
   QualifiedEvidenceResult,
 } from './navigation/evidence.js';
+export type {
+  GraphEvidenceCoverage,
+  GraphEvidenceEdge,
+  GraphEvidenceFamily,
+  GraphEvidenceFold,
+  GraphEvidenceInventoryRow,
+  GraphEvidenceNode,
+  GraphEvidenceOptions,
+  GraphEvidenceResult,
+  GraphEvidenceSelection,
+  GraphEvidenceSelectors,
+  GraphEvidenceTarget,
+  GraphEvidenceView,
+  GraphProjectionDirection,
+} from './graph/graph-evidence.js';
 export type { SystemResult } from './navigation/system.js';
-export type { SurfaceResult } from './navigation/surface.js';
+export type { ConsumerSurfaceResult, SurfaceResult } from './navigation/surface.js';
 export type { DeadSymbolResult, DeadSummary } from './cleanup/dead.js';
 export type { HotspotResult } from './graph/hotspots.js';
 export type { ImportResult, UnusedImportResult } from './navigation/imports.js';
@@ -160,7 +178,7 @@ export type { OutlineNode } from './navigation/outline.js';
 export type { MemberResult } from './navigation/members.js';
 export type { FanResult } from './graph/fan.js';
 export type { CouplingResult } from './graph/coupling.js';
-export type { CycleResult, CycleSummary } from './graph/cycles.js';
+export type { CycleResult, CycleSummary, FileDependencyEdgeBasis } from './graph/cycles.js';
 export type {
   ArchitectureAmbiguousFile,
   ArchitectureBoundaryEdge,
@@ -172,12 +190,12 @@ export type {
   ArchitectureReciprocalPair,
   ArchitectureReport,
 } from './graph/architecture.js';
-export type { BottleneckResult } from './graph/bottlenecks.js';
+export type { BottleneckResult, CoordinationHubCalleeEvidence } from './graph/bottlenecks.js';
 export type { IsolatedResult } from './cleanup/isolated.js';
 export type { ByKindResult } from './navigation/by-kind.js';
 export type { DeepChainResult } from './graph/deep-chains.js';
 export type { HierarchyNode } from './navigation/hierarchy.js';
-export type { CallGraphResult } from './navigation/call-graph.js';
+export type { CallGraphEvidenceRow, CallGraphResult } from './navigation/call-graph.js';
 export type {
   EntryCallMapResult,
   EntryMapCoverage,
@@ -317,8 +335,15 @@ export type {
 } from './navigation/code.js';
 export type { BindingClosure, BindingDefinitionEvidence, CoveredSourceRange } from './navigation/binding-closure.js';
 export type { ComplexityResult } from './quality/complexity.js';
-export type { DataflowResult } from './navigation/dataflow.js';
+export type { DataflowResult, ReferenceNeighborhoodResult } from './navigation/dataflow.js';
+export type { ValueFlowCoverage, ValueFlowResult } from './graph/value-flow.js';
 export type { SliceResult } from './navigation/slice.js';
+export type {
+  DependenceSliceCoverage,
+  DependenceSliceDirection,
+  DependenceSliceEdge,
+  DependenceSliceResult,
+} from './graph/dependence-slice.js';
 export type { AffectedResult } from './graph/affected.js';
 export type { ChangeSurfaceEntry, ChangeSurfaceResult } from './impact/change-surface.js';
 export type { CleanupBatch, CleanupPlanEntry, CleanupPlanResult } from './cleanup/cleanup-plan.js';

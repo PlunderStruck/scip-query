@@ -1,0 +1,163 @@
+{
+  "acceptedAt": "2026-08-08T19:46:51.039Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "cdebf9d8a3ed85b29be6cb83897715f751b3b8ebbff17617d8be51afa0cf000f",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "GraphEvidenceCoverage changed from interface GraphEvidenceCoverage { status: 'accounted' | 'bounded' | 'incomplete'; topologyStatus: 'accounted' | 'incomplete'; scope: string; maxDepth: number; maxEdges: number; ... to interface GraphEvidenceCoverage { status: 'accounted' | 'bounded' | 'incomplete'; topologyStatus: 'accounted' | 'incomplete'; scope: string; maxDepth: number; maxEdges: number; ....",
+      "target": "./queries:GraphEvidenceCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphEvidenceFold.",
+      "target": "./queries:GraphEvidenceFold"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphEvidenceInventoryRow.",
+      "target": "./queries:GraphEvidenceInventoryRow"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "GraphEvidenceOptions changed from interface GraphEvidenceOptions { view?: GraphEvidenceView; families?: readonly GraphEvidenceFamily[]; maxDepth?: number; maxEdges?: number; } to interface GraphEvidenceOptions { view?: GraphEvidenceView; families?: readonly GraphEvidenceFamily[]; direction?: GraphProjectionDirection; subtypes?: readonly string[]; connect....",
+      "target": "./queries:GraphEvidenceOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "GraphEvidenceResult changed from interface GraphEvidenceResult { kind: 'graph'; view: GraphEvidenceView | 'custom'; families: GraphEvidenceFamily[]; targets: GraphEvidenceTarget[]; edges: GraphEvidenceEdge[]; c... to interface GraphEvidenceResult { kind: 'graph'; view: GraphEvidenceView | 'custom'; families: GraphEvidenceFamily[]; selection?: GraphEvidenceSelection; targets: GraphEvidenceTar....",
+      "target": "./queries:GraphEvidenceResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphEvidenceSelection.",
+      "target": "./queries:GraphEvidenceSelection"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphProjectionDirection.",
+      "target": "./queries:GraphProjectionDirection"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "GraphEvidenceCoverage changed from interface GraphEvidenceCoverage { status: 'accounted' | 'bounded' | 'incomplete'; topologyStatus: 'accounted' | 'incomplete'; scope: string; maxDepth: number; maxEdges: number; ... to interface GraphEvidenceCoverage { status: 'accounted' | 'bounded' | 'incomplete'; topologyStatus: 'accounted' | 'incomplete'; scope: string; maxDepth: number; maxEdges: number; ....",
+      "target": "./queries/index:GraphEvidenceCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphEvidenceFold.",
+      "target": "./queries/index:GraphEvidenceFold"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphEvidenceInventoryRow.",
+      "target": "./queries/index:GraphEvidenceInventoryRow"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "GraphEvidenceOptions changed from interface GraphEvidenceOptions { view?: GraphEvidenceView; families?: readonly GraphEvidenceFamily[]; maxDepth?: number; maxEdges?: number; } to interface GraphEvidenceOptions { view?: GraphEvidenceView; families?: readonly GraphEvidenceFamily[]; direction?: GraphProjectionDirection; subtypes?: readonly string[]; connect....",
+      "target": "./queries/index:GraphEvidenceOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "GraphEvidenceResult changed from interface GraphEvidenceResult { kind: 'graph'; view: GraphEvidenceView | 'custom'; families: GraphEvidenceFamily[]; targets: GraphEvidenceTarget[]; edges: GraphEvidenceEdge[]; c... to interface GraphEvidenceResult { kind: 'graph'; view: GraphEvidenceView | 'custom'; families: GraphEvidenceFamily[]; selection?: GraphEvidenceSelection; targets: GraphEvidenceTar....",
+      "target": "./queries/index:GraphEvidenceResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphEvidenceSelection.",
+      "target": "./queries/index:GraphEvidenceSelection"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphProjectionDirection.",
+      "target": "./queries/index:GraphProjectionDirection"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "G changed from interface GraphEvidenceCoverage { status: 'accounted' | 'bounded' | 'incomplete'; topologyStatus: 'accounted' | 'incomplete'; scope: string; maxDepth: number; maxEdges: number; ... to interface GraphEvidenceCoverage { status: 'accounted' | 'bounded' | 'incomplete'; topologyStatus: 'accounted' | 'incomplete'; scope: string; maxDepth: number; maxEdges: number; ....",
+      "target": "graph-evidence-<hash>.d.ts:G"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "f changed from interface GraphEvidenceNode { id: string; kind: string; label: string; symbol: string | null; location: ExplorationSourceLocation | null; } to interface GraphEvidenceFold { id: string; family: GraphEvidenceFamily; subtype: string; edgeCount: number; edgeIds: string[]; nodeIds: string[]; minimumMaxEdges: number; }.",
+      "target": "graph-evidence-<hash>.d.ts:f"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "g changed from interface GraphEvidenceOptions { view?: GraphEvidenceView; families?: readonly GraphEvidenceFamily[]; maxDepth?: number; maxEdges?: number; } to interface GraphEvidenceInventoryRow { family: GraphEvidenceFamily; subtype: string; incoming: number; outgoing: number; both: number; }.",
+      "target": "graph-evidence-<hash>.d.ts:g"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "h changed from interface GraphEvidenceResult { kind: 'graph'; view: GraphEvidenceView | 'custom'; families: GraphEvidenceFamily[]; targets: GraphEvidenceTarget[]; edges: GraphEvidenceEdge[]; c... to interface GraphEvidenceNode { id: string; kind: string; label: string; symbol: string | null; location: ExplorationSourceLocation | null; }.",
+      "target": "graph-evidence-<hash>.d.ts:h"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "i changed from interface GraphEvidenceSelectors { symbols?: readonly string[]; locations?: readonly string[]; searches?: readonly string[]; } to interface GraphEvidenceOptions { view?: GraphEvidenceView; families?: readonly GraphEvidenceFamily[]; direction?: GraphProjectionDirection; subtypes?: readonly string[]; connect....",
+      "target": "graph-evidence-<hash>.d.ts:i"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "j changed from type GraphEvidenceView = (typeof GRAPH_EVIDENCE_VIEWS)[number]; to interface GraphEvidenceResult { kind: 'graph'; view: GraphEvidenceView | 'custom'; families: GraphEvidenceFamily[]; selection?: GraphEvidenceSelection; targets: GraphEvidenceTar....",
+      "target": "graph-evidence-<hash>.d.ts:j"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "k changed from declare function graphEvidence(db: ScipDatabase, selectors: GraphEvidenceSelectors, options?: GraphEvidenceOptions): GraphEvidenceResult; to interface GraphEvidenceSelection { direction: GraphProjectionDirection; subtypes: string[]; connecting: boolean; inventoryOnly: boolean; }.",
+      "target": "graph-evidence-<hash>.d.ts:k"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration l.",
+      "target": "graph-evidence-<hash>.d.ts:l"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration m.",
+      "target": "graph-evidence-<hash>.d.ts:m"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration n.",
+      "target": "graph-evidence-<hash>.d.ts:n"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration o.",
+      "target": "graph-evidence-<hash>.d.ts:o"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "179f08ae83e2f46bca1b22a1bfcdd33c3da06c7514797e8267a7996737d697df",
+  "reason": "Expand the exploration API with explicit graph projections and new edge-analysis operations; generated declaration-module aliases also change, so the conservative API contract records a breaking release boundary.",
+  "schemaVersion": 1
+}

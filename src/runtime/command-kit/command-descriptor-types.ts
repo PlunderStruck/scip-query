@@ -1,5 +1,12 @@
 import type { CommandOperationSelector } from '../command-operation.js';
 import type { CommandClaimContract } from '../claim-qualification.js';
+import type {
+  GraphCompressionMode,
+  GraphEvidenceFamily,
+  GraphProjectionDirection,
+  GraphProjectionOperation,
+  ProgramGraphRootKind,
+} from '../../domain/graph-exploration-contract.js';
 
 export type CommandOptionParser = (value: string, previous: unknown) => unknown;
 export type CommandHandler = (...args: unknown[]) => void | Promise<void>;
@@ -131,6 +138,63 @@ export type CommandResultUnitPolicy = { kind: 'rows' } | { kind: 'report' } | { 
  */
 export type CommandInputSlot = CommandInputKind | readonly CommandInputKind[];
 
+export type CommandOutputCost = 'small' | 'bounded' | 'potentially-large' | 'variable';
+
+export interface CommandSemanticOperationalContract {
+  /** Approximate repository-evidence volume before universal transport paging. */
+  outputCost: CommandOutputCost;
+  /** Commands that can resolve a material limitation disclosed by this operation. */
+  frontierClosure: readonly string[];
+}
+
+export interface CommandLocatorSemanticContract extends CommandSemanticOperationalContract {
+  kind: 'locator';
+  locates: readonly ProgramGraphRootKind[];
+  ranking: 'identity-only' | 'none';
+  nonClaims: readonly string[];
+  compatibility?: 'deprecated';
+}
+
+export interface CommandGraphProjectionSemanticContract extends CommandSemanticOperationalContract {
+  kind: 'graph-projection';
+  rootKinds: readonly ProgramGraphRootKind[];
+  edgeFamilies: readonly GraphEvidenceFamily[];
+  directions: readonly GraphProjectionDirection[];
+  operations: readonly GraphProjectionOperation[];
+  compression: readonly GraphCompressionMode[];
+  nonClaims: readonly string[];
+  compatibility?: 'deprecated';
+}
+
+export interface CommandSourceReadSemanticContract extends CommandSemanticOperationalContract {
+  kind: 'source-read';
+  reads: readonly ('behavior' | 'construct' | 'exact-source')[];
+  nonClaims: readonly string[];
+  compatibility?: 'deprecated';
+}
+
+export interface CommandAnalysisSemanticContract extends CommandSemanticOperationalContract {
+  kind: 'analysis';
+  analysis: string;
+  resultMeaning: string;
+  nonClaims: readonly string[];
+  compatibility?: 'deprecated';
+}
+
+export interface CommandMaintenanceSemanticContract extends CommandSemanticOperationalContract {
+  kind: 'maintenance';
+  effect: string;
+  nonClaims: readonly string[];
+  compatibility?: 'deprecated';
+}
+
+export type CommandSemanticContract =
+  | CommandLocatorSemanticContract
+  | CommandGraphProjectionSemanticContract
+  | CommandSourceReadSemanticContract
+  | CommandAnalysisSemanticContract
+  | CommandMaintenanceSemanticContract;
+
 /**
  * What an agent needs to know before choosing this command: which questions it
  * settles, what units come back, and how complete the default answer is.
@@ -159,6 +223,8 @@ export interface CommandAgentContract {
    * independent from evidence origin and result coverage.
    */
   operation: CommandOperationSelector;
+  /** Executable meaning used to generate the compact agent capability surface. */
+  semantic?: CommandSemanticContract;
   /**
    * Descriptor-owned semantic unit extraction. When omitted, registration
    * derives rows vs. one report from the descriptor's render shape.

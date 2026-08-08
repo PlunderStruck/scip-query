@@ -13,6 +13,6 @@ export function runtimeBoundarySourceScope(file: string): BoundarySourceScope {
   if (/(?:^|\/)(?:generated|dist|build|coverage)\//iu.test(normalized) || /\.generated\./iu.test(normalized)) {
     return 'generated';
   }
-  if (/(?:^|\/)(?:scripts?|tools?)\//iu.test(normalized)) return 'script';
+  if (/^(?:scripts?|tools?)\//iu.test(normalized)) return 'script';
   return 'production';
 }

@@ -1,9 +1,15 @@
 import type {
   CommandAgentContract,
+  CommandAnalysisSemanticContract,
   CommandDescriptor,
+  CommandGraphProjectionSemanticContract,
   CommandInputSlot,
+  CommandLocatorSemanticContract,
+  CommandMaintenanceSemanticContract,
   CommandOptionParser,
+  CommandSemanticOperationalContract,
   CommandScope,
+  CommandSourceReadSemanticContract,
   CoveragePolicy,
 } from './command-descriptor-types.js';
 import type { ClaimFamilyContract, ClaimOrigin, CommandClaimContract } from '../claim-qualification.js';
@@ -132,6 +138,7 @@ export function agentContract(
   coverage: CoveragePolicy,
   scope?: CommandScope,
   operation: CommandOperationSelector = REPOSITORY_OBSERVATION_OPERATION,
+  semantic?: CommandAgentContract['semantic'],
 ): CommandAgentContract {
   return {
     answers: typeof answers === 'string' ? [answers] : answers,
@@ -139,6 +146,88 @@ export function agentContract(
     inputs,
     coverage,
     operation,
+    ...(semantic ? { semantic } : {}),
     ...(scope ? { scope } : {}),
+  };
+}
+
+export function locatorSemanticContract(
+  locates: CommandLocatorSemanticContract['locates'],
+  nonClaims: readonly string[],
+  options: Pick<CommandLocatorSemanticContract, 'ranking' | 'compatibility'> &
+    Partial<CommandSemanticOperationalContract> = { ranking: 'identity-only' },
+): CommandLocatorSemanticContract {
+  return {
+    kind: 'locator',
+    locates,
+    nonClaims,
+    outputCost: 'small',
+    frontierClosure: ['evidence', 'inspect', 'code'],
+    ...options,
+  };
+}
+
+export function graphProjectionSemanticContract(
+  contract: Omit<CommandGraphProjectionSemanticContract, 'kind' | keyof CommandSemanticOperationalContract> &
+    Partial<CommandSemanticOperationalContract>,
+): CommandGraphProjectionSemanticContract {
+  return {
+    kind: 'graph-projection',
+    outputCost: 'bounded',
+    frontierClosure: ['inspect', 'code'],
+    ...contract,
+  };
+}
+
+export function sourceReadSemanticContract(
+  reads: CommandSourceReadSemanticContract['reads'],
+  nonClaims: readonly string[],
+  compatibility?: CommandSourceReadSemanticContract['compatibility'],
+  operational: Partial<CommandSemanticOperationalContract> = {},
+): CommandSourceReadSemanticContract {
+  return {
+    kind: 'source-read',
+    reads,
+    nonClaims,
+    outputCost: 'potentially-large',
+    frontierClosure: [],
+    ...(compatibility ? { compatibility } : {}),
+    ...operational,
+  };
+}
+
+export function analysisSemanticContract(
+  analysis: string,
+  resultMeaning: string,
+  nonClaims: readonly string[],
+  compatibility?: CommandAnalysisSemanticContract['compatibility'],
+  operational: Partial<CommandSemanticOperationalContract> = {},
+): CommandAnalysisSemanticContract {
+  return {
+    kind: 'analysis',
+    analysis,
+    resultMeaning,
+    nonClaims,
+    outputCost: 'bounded',
+    frontierClosure: ['inspect', 'code'],
+    ...(compatibility ? { compatibility } : {}),
+    ...operational,
+  };
+}
+
+export function maintenanceSemanticContract(
+  effect: string,
+  nonClaims: readonly string[],
+  compatibility?: CommandMaintenanceSemanticContract['compatibility'],
+  operational: Partial<CommandSemanticOperationalContract> = {},
+): CommandMaintenanceSemanticContract {
+  return {
+    kind: 'maintenance',
+    effect,
+    nonClaims,
+    outputCost: 'variable',
+    frontierClosure: [],
+    ...(compatibility ? { compatibility } : {}),
+    ...operational,
   };
 }

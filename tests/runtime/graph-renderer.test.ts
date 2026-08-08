@@ -222,7 +222,7 @@ function edge(
   id: string,
   fromNodeId: string,
   toNodeId: string,
-    family: 'control' | 'data' | 'state' | 'temporal',
+  family: 'control' | 'data' | 'state' | 'temporal',
   subtype: string,
 ): ExplorationTopologyEdge {
   return {

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 // @ts-expect-error native script modules do not ship TypeScript declarations
 import {
   classifyExplorationCommand,
+  directGraphTreatmentPrompt,
   disciplinedControlPrompt,
   minimalTreatmentPrompt,
   parseCodexJsonl,
@@ -145,47 +146,25 @@ describe('Codex exploration trial core', () => {
     expect(classifyExplorationCommand('pwd')).toEqual({ surface: 'other', kind: 'other' });
   });
 
-  it('makes lossless scip-only exploration and selective expansion explicit', () => {
-    const prompt = treatmentPrompt('How does the path work?');
+  it('makes explicit, bounded, query-neutral graph exploration the treatment contract', () => {
+    const prompt = treatmentPrompt('How does the path work?', 4);
     expect(prompt).toContain('scip-query as the only repository exploration surface');
-    expect(prompt).toContain('cross-boundary-flow');
-    expect(prompt).toContain('parallel-paths');
-    expect(prompt).toContain('connected-flow whose displayed roots already cover every named material part');
-    expect(prompt).toContain('Do not choose a set merely because it is connected');
-    expect(prompt).toContain('reject any set whose displayed roots and matched terms omit');
-    expect(prompt).toContain('first ranked eligible set');
-    expect(prompt).toContain('upstream callers');
-    expect(prompt).toContain('result-producing callbacks');
-    expect(prompt).toContain('Use exactly one initial locator');
-    expect(prompt).toContain('one shell-safely quoted positional argument');
-    expect(prompt).toContain('operation kind and record-identity fields');
-    expect(prompt).toContain('handler-resolution precedence');
-    expect(prompt).toContain('fallback or unknown-handler behavior');
-    expect(prompt).toContain('exception-to-result conversion');
-    expect(prompt).toContain("Run the chosen set's printed system-map command unchanged");
-    expect(prompt).toContain('never pass the same loose term to both selectors');
-    expect(prompt).toContain('Do not run inspect, evidence, code, or command help before the map');
-    expect(prompt).toContain('connected behavior is already source evidence');
-    expect(prompt).toContain('private evidence ledger');
-    expect(prompt).toContain('one ledger row per material claim');
-    expect(prompt).toContain('A constant name is not a recovered bound');
-    expect(prompt).toContain('sibling branches are jointly required behavior');
-    expect(prompt).toContain('stop immediately when they establish all of them');
-    expect(prompt).toContain('one locator, one map, one scoped gap batch');
-    expect(prompt).toContain('must use the remaining semantic-query allowance for one final batched recovery inspect');
-    expect(prompt).toContain('do not report a coverage limitation for an exact in-budget recovery command');
-    expect(prompt).toContain('evidence seen but left implicit is not recovered');
-    expect(prompt).toContain('Optional causal recovery is folded by default');
-    expect(prompt).toContain('--gap-callee');
-    expect(prompt).toContain('--gap-recovery-only');
-    expect(prompt).toContain('ranking is navigation help, not a claim');
-    expect(prompt).toContain('shared-callee-owners');
+    expect(prompt).toContain('hard allowance of 4 semantic repository queries');
+    expect(prompt).toContain('Spend at most one query locating exact referents');
+    expect(prompt).toContain('Use one batched scip-query evidence call for all selected roots');
+    expect(prompt).toContain('Explicitly choose incoming, outgoing, or both');
+    expect(prompt).toContain('edge families or exact subtypes');
+    expect(prompt).toContain('provider provenance');
+    expect(prompt).toContain('stable folds');
+    expect(prompt).toContain('Data, state, temporal, contract, identity, ownership, and dependency edges');
+    expect(prompt).toContain('A named constant is not an established value');
+    expect(prompt).toContain('evidence seen but omitted from the answer is not recovered');
+    expect(prompt).toContain('ordering is candidate presentation, not inferred relevance');
+    expect(prompt).toContain('Do not use anchor groups, selection terms, automatic routes, next-anchor scores');
+    expect(prompt).not.toContain('first ranked eligible set');
+    expect(prompt).not.toContain('printed system-map command');
     expect(prompt).toContain('Do not use rg');
-    expect(prompt).toContain('poll the existing terminal execution session');
-    expect(prompt).toContain('The map and source inspection are sequential, never parallel');
-    expect(prompt).toContain('Inspection selection is invalid until the map has completed');
-    expect(prompt).toContain('Never run ps');
-    expect(prompt).toContain('Never use perl to print it');
+    expect(prompt).toContain('Never restart a running command');
   });
 
   it('supports prompt ablations without leaking task-specific navigation', () => {
@@ -199,5 +178,19 @@ describe('Codex exploration trial core', () => {
     expect(disciplined).toContain('few material claims');
     expect(disciplined).toContain('Batch independent searches and reads');
     expect(disciplined).not.toContain('system-map');
+  });
+
+  it('supports direct graph navigation without requiring anchor discovery', () => {
+    const prompt = directGraphTreatmentPrompt('How does the path work?');
+
+    expect(prompt).toContain('read the scip-explore and scip-query SKILL.md instruction files once');
+    expect(prompt).toContain('scip-explore defines the investigation purpose, evidence ledger, and stopping rule');
+    expect(prompt).toContain('scip-query defines command and evidence semantics');
+    expect(prompt).toContain('There is no fixed semantic-query allowance');
+    expect(prompt).toContain('a material claim remains unresolved and an exact relevant recovery path is available');
+    expect(prompt).toContain("a tool packet's completion as completion of the user's task");
+    expect(prompt).not.toContain('The normal exploration budget is');
+    expect(prompt).not.toContain("scip-query evidence --symbol '<first>'");
+    expect(prompt).not.toContain("Run the chosen set's printed system-map command unchanged");
   });
 });

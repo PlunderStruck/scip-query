@@ -34,7 +34,7 @@ import { resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { isModuleLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../internal/project-index.js';
 import { isExportedDefinition } from '../internal/exported-definition.js';
-import { SOURCE_INSPECTION_MAX_SELECTORS } from '../internal/inspection-limits.js';
+import { SOURCE_INSPECTION_MAX_SELECTORS } from '../../domain/source-inspection-limits.js';
 import { connectedBehaviorPacket, type ConnectedBehaviorPacket } from '../internal/connected-behavior.js';
 import {
   enrichResultCallbackControlSemantics,
@@ -137,8 +137,10 @@ export interface SystemMapOptions {
   sourceScopes?: readonly SystemMapSourceScope[];
   maxTopologyCharacters?: number;
   topologyFrontiers?: readonly string[];
+  /** Stable upstream route IDs to materialize together. */
+  routeIds?: readonly string[];
   fullLiteralTraversal?: boolean;
-  /** Mechanically normalized task terms used only to rank already-proven causal drill targets. */
+  /** @deprecated Accepted as a no-op; query vocabulary no longer affects graph selection. */
   selectionTerms?: readonly string[];
 }
 
@@ -496,6 +498,29 @@ interface StructuralWorkspace {
  * and exposes traversal and runtime blind spots in the result.
  */
 export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapResult {
+  return executeSystemMap(db, opts, 'full');
+}
+
+/**
+ * Build only the canonical typed topology for an explicit system-map request.
+ *
+ * Unlike {@link systemMap}, this operation does not materialize connected
+ * behavior, causal corridors, adjacent-recovery candidates, legacy
+ * presentation, or expansion commands. Canonical graph projections use this
+ * seam so compatibility-only presentation work cannot leak into their cost or
+ * semantics.
+ */
+export function systemMapTopology(db: ScipDatabase, opts: SystemMapOptions): ExplorationTopology {
+  return executeSystemMap(db, opts, 'topology');
+}
+
+function executeSystemMap(db: ScipDatabase, opts: SystemMapOptions, mode: 'full'): SystemMapResult;
+function executeSystemMap(db: ScipDatabase, opts: SystemMapOptions, mode: 'topology'): ExplorationTopology;
+function executeSystemMap(
+  db: ScipDatabase,
+  opts: SystemMapOptions,
+  mode: 'full' | 'topology',
+): SystemMapResult | ExplorationTopology {
   const searches = uniqueNonEmpty(opts.searches ?? []);
   const symbolQueries = uniqueNonEmpty(opts.symbols ?? []);
   const requestedRelationKinds = uniqueNonEmpty(
@@ -673,13 +698,15 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
     if (observation.owner.file !== observation.source.file) {
       addFile(observation.owner.file, depth, `${origin}:owner`, true, true);
     }
+    const definitions = getDefinitionsForFile(db, observation.owner.file);
+    const declaredOwner = observation.owner.symbol
+      ? resolveIndexedDefinitions(db, index, observation.owner.symbol).matches.find(
+          (candidate) => candidate.relativePath === observation.owner.file,
+        )
+      : null;
     const owner =
-      (observation.owner.symbol
-        ? resolveIndexedDefinitions(db, index, observation.owner.symbol).matches.find(
-            (candidate) => candidate.relativePath === observation.owner.file,
-          )
-        : null) ??
-      findEnclosingDefinition(getDefinitionsForFile(db, observation.owner.file), observation.owner.startLine);
+      (declaredOwner && !isModuleLikeSymbol(declaredOwner.symbol) ? declaredOwner : null) ??
+      findEnclosingDefinition(definitions, observation.source.startLine);
     if (owner && !isModuleLikeSymbol(owner.symbol)) {
       addSymbol(owner, depth, origin, undefined, 'none', true);
       return owner.symbol;
@@ -1431,8 +1458,8 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
       const nextDepth = depth + 1;
       const fromSymbol = addBoundaryObservation(from, fromDepth ?? nextDepth, `runtime-boundary:${link.joinRule}`);
       const toSymbol = addBoundaryObservation(to, toDepth ?? nextDepth, `runtime-boundary:${link.joinRule}`);
-      const fromSourceConstruct = smallestSourceConstructAtObservation(sourceConstructs, from);
-      const toSourceConstruct = smallestSourceConstructAtObservation(sourceConstructs, to);
+      const fromSourceConstruct = fromSymbol ? null : smallestSourceConstructAtObservation(sourceConstructs, from);
+      const toSourceConstruct = toSymbol ? null : smallestSourceConstructAtObservation(sourceConstructs, to);
       boundaryObservationDepths.set(from.id, fromDepth ?? nextDepth);
       boundaryObservationDepths.set(to.id, toDepth ?? nextDepth);
       addRelation(pendingRelations, {
@@ -1614,10 +1641,12 @@ export function systemMap(db: ScipDatabase, opts: SystemMapOptions): SystemMapRe
     includedSourceScopes,
     blindSpots,
     topologyFrontiers: opts.topologyFrontiers ?? [],
+    routeIds: opts.routeIds ?? [],
     expandedRegionIds: [...expandedIds],
     maxTopologyCharacters,
     fullLiteralTraversal: opts.fullLiteralTraversal ?? false,
   });
+  if (mode === 'topology') return topology;
   const focusedBehaviorNodes =
     (opts.behaviorFocusLocations?.length ?? 0) > 0
       ? new Set([
@@ -1858,6 +1887,7 @@ interface SystemMapTopologyInput {
   includedSourceScopes: readonly BoundarySourceScope[];
   blindSpots: readonly string[];
   topologyFrontiers: readonly string[];
+  routeIds: readonly string[];
   expandedRegionIds: readonly string[];
   maxTopologyCharacters: number;
   fullLiteralTraversal: boolean;
@@ -2444,6 +2474,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
   const expandProgramFacts = input.topologyFrontiers.some((frontierId) => frontierId === 'frontier:program-facts');
   const selectedTopology = selectExplorationTopology(completeTopology, {
     expandedFrontierIds: input.topologyFrontiers.filter((frontierId) => frontierId !== 'frontier:program-facts'),
+    routeIds: input.routeIds,
   });
   const selectedOwnerNodes = selectedTopology.nodes.filter(
     (node) =>
@@ -2456,7 +2487,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
   const selectedRuntimeObservations = input.boundaryFrontiers.filter((observation) =>
     selectedOwnerNodes.some((node) => runtimeObservationTouchesSelectedOwner(observation, node)),
   );
-  const programData = programDataElementsForSystemMapRelations(input.db, selectedRelations);
+  const programData = programDataElementsForSystemMapRelations(input.db, selectedRelations, selectedOwnerNodes);
   const programControl = programControlElementsForTopologyNodes(input.db, selectedOwnerNodes);
   const programStateTemporal = programStateTemporalElementsForTopologyNodes(
     input.db,
@@ -2492,6 +2523,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
       ...programStateTemporal.blindSpots,
     ],
     incompleteReasons: selectedTopology.coverage.status === 'incomplete' ? [selectedTopology.coverage.explanation] : [],
+    ...(selectedTopology.routeCatalog ? { routeCatalog: selectedTopology.routeCatalog } : {}),
   });
   augmentedTopology.completion = selectedTopology.completion;
   for (const frontier of augmentedTopology.frontiers) {
@@ -2568,6 +2600,7 @@ function systemMapFrontierExpansionCommand(input: SystemMapTopologyInput, fronti
     `--topology-characters ${input.maxTopologyCharacters}`,
     ...input.expandedRegionIds.map((regionId) => `--expand ${shellArgument(regionId)}`),
     ...input.topologyFrontiers.map((id) => `--frontier ${shellArgument(id)}`),
+    ...input.routeIds.map((id) => `--route ${shellArgument(id)}`),
     `--frontier ${shellArgument(frontierId)}`,
   ];
   return `scip-query system-map ${selectors.join(' ')}`;

@@ -18,8 +18,7 @@ export interface SliceResult {
 }
 
 /**
- * Reference-level program slicing: track what affects a symbol (backward)
- * or what a symbol affects (forward).
+ * Historical reference/call reachability projection.
  *
  * Backward slice: "What feeds into this?" — transitive closure of callees.
  * Depth 1 = direct callees, depth 2 = their callees, etc.
@@ -28,9 +27,11 @@ export interface SliceResult {
  * is referenced, find the enclosing function, then find what that function
  * exports/defines. These are the outputs/consumers.
  *
- * Language-agnostic: works with any SCIP index.
+ * This is not a program slice: call reachability does not establish data or
+ * control dependence. It remains available under an honest name so existing
+ * callers can migrate without losing behavior.
  */
-export function slice(
+export function referenceReachability(
   db: ScipDatabase,
   symbolPattern: string,
   opts: { direction?: 'backward' | 'forward'; maxDepth?: number; semantic?: boolean } = {},
@@ -45,6 +46,19 @@ export function slice(
   } else {
     return forwardSlice(db, match, { semantic: opts.semantic !== false });
   }
+}
+
+/**
+ * @deprecated The historical implementation traverses calls and reference
+ * owners, not a program-dependence graph. Use `referenceReachability` for that
+ * legacy projection and `dependenceSlice` for data/control slicing.
+ */
+export function slice(
+  db: ScipDatabase,
+  symbolPattern: string,
+  opts: { direction?: 'backward' | 'forward'; maxDepth?: number; semantic?: boolean } = {},
+): SliceResult | null {
+  return referenceReachability(db, symbolPattern, opts);
 }
 
 // scip-query: ignore-similar — shares callee-row helpers with forwardSlice but

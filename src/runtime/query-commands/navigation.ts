@@ -6,12 +6,16 @@ import {
   collectValues,
   compactOption,
   doc,
+  graphProjectionSemanticContract,
+  locatorSemanticContract,
   option,
   parseInteger,
   parseNonNegativeInteger,
   parsePositiveInteger,
   withJsonOption,
+  sourceReadSemanticContract,
 } from '../command-kit/command-spec-builders.js';
+import { GRAPH_EVIDENCE_FAMILIES } from '../../domain/graph-exploration-contract.js';
 import {
   booleanOptionValue,
   budgetedDbCommand,
@@ -44,7 +48,7 @@ import { directNavigationQueryCommandDescriptors } from './direct-navigation.js'
 import {
   SOURCE_INSPECTION_MAX_SELECTORS,
   SOURCE_INSPECTION_SAFE_CHARACTERS,
-} from '../../queries/internal/inspection-limits.js';
+} from '../../domain/source-inspection-limits.js';
 import { assertNavigationDetailAllowed, stageNavigationMapCommands } from '../navigation-session.js';
 
 export function inspectSearchLimitOption(opts: Readonly<Record<string, unknown>>): number | undefined {
@@ -169,6 +173,14 @@ const EVIDENCE_PARTS = [
   'consumers',
 ] as const satisfies readonly queries.EvidencePart[];
 
+interface EvidenceGraphPacket {
+  kind: 'graph-packet';
+  graph: queries.GraphEvidenceResult;
+  source: queries.QualifiedEvidenceResult[];
+}
+
+type EvidenceCommandResult = queries.QualifiedEvidenceResult | EvidenceGraphPacket;
+
 const INSPECTION_EVIDENCE_CHANNELS = [
   'search',
   'exact-source',
@@ -193,6 +205,50 @@ function selectedEvidenceParts(values: readonly string[]): queries.EvidencePart[
     throw new Error(`Unknown evidence part: ${invalid.join(', ')}. Use ${EVIDENCE_PARTS.join(', ')}, or all.`);
   }
   return [...new Set(expanded as queries.EvidencePart[])];
+}
+
+function selectedGraphEvidenceFamilies(values: readonly string[]): queries.GraphEvidenceFamily[] | undefined {
+  if (values.length === 0) return undefined;
+  const expanded = values
+    .flatMap((value) => value.split(','))
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (expanded.includes('all')) return [...queries.GRAPH_EVIDENCE_FAMILIES];
+  const invalid = expanded.filter(
+    (value) => !queries.GRAPH_EVIDENCE_FAMILIES.includes(value as queries.GraphEvidenceFamily),
+  );
+  if (invalid.length > 0) {
+    throw new Error(
+      `Unknown graph evidence family: ${invalid.join(', ')}. Use ${queries.GRAPH_EVIDENCE_FAMILIES.join(', ')}, or all.`,
+    );
+  }
+  return [...new Set(expanded as queries.GraphEvidenceFamily[])];
+}
+
+function graphEvidenceView(value: string | undefined): queries.GraphEvidenceView | undefined {
+  if (value === undefined) return undefined;
+  if (queries.GRAPH_EVIDENCE_VIEWS.includes(value as queries.GraphEvidenceView)) {
+    return value as queries.GraphEvidenceView;
+  }
+  throw new Error(`Unknown evidence view: ${value}. Use ${queries.GRAPH_EVIDENCE_VIEWS.join(', ')}.`);
+}
+
+function graphEvidenceDirection(value: string | undefined): queries.GraphProjectionDirection | undefined {
+  if (value === undefined) return undefined;
+  if (['incoming', 'outgoing', 'both'].includes(value)) return value as queries.GraphProjectionDirection;
+  throw new Error(`Unknown evidence direction: ${value}. Use incoming, outgoing, or both.`);
+}
+
+function selectedGraphEvidenceSubtypes(values: readonly string[]): string[] | undefined {
+  const selected = [
+    ...new Set(
+      values
+        .flatMap((value) => value.split(','))
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  ];
+  return selected.length > 0 ? selected : undefined;
 }
 
 function inspectionEvidenceBudgets(values: readonly string[]): queries.SourceInspectionEvidenceBudgets | undefined {
@@ -872,6 +928,110 @@ function evidenceSections(result: queries.QualifiedEvidenceResult): ReportSectio
   ];
 }
 
+function evidenceCommandSections(result: EvidenceCommandResult): ReportSection[] {
+  if (result.kind !== 'graph-packet') return evidenceSections(result);
+  const selection = result.graph.selection ?? {
+    direction: 'both',
+    subtypes: [],
+    connecting: false,
+    inventoryOnly: false,
+    foldIds: [],
+  };
+  const selectionRows = [
+    `  direction=${selection.direction}; subtypes=${selection.subtypes.length > 0 ? selection.subtypes.join(',') : 'all'}; ` +
+      `operation=${selection.connecting ? 'connecting' : 'reachability'}; materialization=${selection.inventoryOnly ? 'inventory-only' : selection.foldIds.length > 0 ? `folds(${selection.foldIds.join(',')})` : 'edges'}`,
+  ];
+  const targetRows = result.graph.targets.map((target) => {
+    const omitted = target.omittedCandidates > 0 ? `; ${target.omittedCandidates} candidate(s) omitted` : '';
+    return `  [${target.status}] ${target.kind} ${target.query}${omitted}`;
+  });
+  const relationshipRows = queries.GRAPH_EVIDENCE_FAMILIES.flatMap((family) => {
+    const edges = result.graph.edges.filter((edge) => edge.family === family);
+    if (edges.length === 0) return [];
+    return [`  ${family} (${edges.length})`, ...edges.map((edge) => `    ${graphEvidenceEdgeRow(edge)}`)];
+  });
+  const inventoryRows = (result.graph.inventory ?? []).map(
+    (row) => `  ${row.family}/${row.subtype}: incoming=${row.incoming}; outgoing=${row.outgoing}; both=${row.both}`,
+  );
+  const foldRows = graphEvidenceFoldRows(result.graph.folds ?? []);
+  const coverage = result.graph.coverage;
+  const coverageRows = [
+    `  ${coverage.status}: ${coverage.returnedEdges}/${coverage.eligibleEdges} materialized relationship(s); ${coverage.matchedEdges ?? coverage.eligibleEdges} matched the projection; depth <= ${coverage.maxDepth}; ${coverage.frontierGroups} accounted frontier group(s); ${coverage.unsupportedFrontiers} unsupported frontier(s).`,
+    `  ${coverage.explanation}`,
+    ...(coverage.omittedEdges > 0 && foldRows.length === 0
+      ? [
+          `  Expand the same selectors only if an omitted relationship is material: add --max-edges ${coverage.eligibleEdges}.`,
+        ]
+      : []),
+    ...coverage.blindSpots.slice(0, 3).map((blindSpot) => `  Blind spot: ${blindSpot}`),
+    ...(coverage.blindSpots.length > 3
+      ? [`  ${coverage.blindSpots.length - 3} additional blind spot(s) remain in --json.`]
+      : []),
+  ];
+  const sourceSections = result.source.flatMap((item) => {
+    if (item.kind !== 'matched') {
+      return [{ title: `SOURCE SELECTOR — ${item.query}`, rows: [`  [${item.kind}]`] } satisfies ReportSection];
+    }
+    return evidenceSections(item).map((section) => ({
+      ...section,
+      title: `${item.shortName} — ${section.title}`,
+    }));
+  });
+  return [
+    { title: 'EXPLICIT PROJECTION', rows: selectionRows },
+    { title: 'EXACT SELECTORS', rows: targetRows, skipIfEmpty: true },
+    { title: 'EDGE INVENTORY', rows: inventoryRows, skipIfEmpty: true },
+    { title: 'TYPED RELATIONSHIPS', rows: relationshipRows, skipIfEmpty: true },
+    { title: 'FOLDED RELATIONSHIPS', rows: foldRows, skipIfEmpty: true },
+    { title: 'GRAPH COVERAGE', rows: coverageRows },
+    ...sourceSections,
+  ];
+}
+
+function graphEvidenceFoldRows(folds: readonly queries.GraphEvidenceFold[]): string[] {
+  return [...folds]
+    .sort(
+      (left, right) =>
+        left.family.localeCompare(right.family) ||
+        left.subtype.localeCompare(right.subtype) ||
+        left.id.localeCompare(right.id),
+    )
+    .map(
+      (fold) =>
+        `  ${fold.id} [${fold.mode}]: ${fold.edgeCount} ${fold.family}/${fold.subtype} relationship(s) across ${fold.nodeIds.length} node(s); ` +
+        `materialize exactly this fold by adding --fold ${fold.id} to the same command.`,
+    );
+}
+
+function graphEvidenceEdgeRow(edge: queries.GraphEvidenceEdge): string {
+  const context = edge.context
+    ? Object.entries(edge.context)
+        .filter(([, value]) => value !== undefined)
+        .map(([key, value]) => `${key}=${graphEvidenceQualifierValue(value)}`)
+    : [];
+  const attributes = edge.attributes
+    ? Object.entries(edge.attributes).map(([key, value]) => `${key}=${graphEvidenceQualifierValue(value)}`)
+    : [];
+  const qualifiers = [...context, ...attributes];
+  return (
+    `[${edge.evidenceStrength}] ${graphEvidenceNodeLabel(edge.from)} -> ${graphEvidenceNodeLabel(edge.to)} — ` +
+    `${edge.subtype}${qualifiers.length > 0 ? `; ${qualifiers.join(', ')}` : ''}`
+  );
+}
+
+function graphEvidenceQualifierValue(value: unknown): string {
+  if (value === null) return 'null';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function graphEvidenceNodeLabel(node: queries.GraphEvidenceNode): string {
+  const location = node.location
+    ? ` @ ${displayPathRange(node.location.file, node.location.line, node.location.endLine ?? node.location.line)}`
+    : '';
+  return `${node.label}${location}`;
+}
+
 function bindingClosureRows(closure: queries.BindingClosure | undefined): string[] {
   if (!closure) return [];
   const rows: string[] = [];
@@ -920,6 +1080,68 @@ const handleDataflow = budgetedDbCommand('dataflow', ({ db, args, opts, budget }
   }
 });
 
+const handleReferenceNeighborhood = budgetedDbCommand('reference-neighborhood', ({ db, args, opts, budget }) => {
+  const query = stringArg(args, 0);
+  const result = queries.referenceNeighborhood(db, query, { semantic: budget.semantic });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope(
+      'reference-neighborhood',
+      args,
+      opts,
+      withSymbolResolutionJson(db, query, result, 'reference-neighborhood'),
+      { analysisBudget: budget.analysisBudget },
+    );
+    return;
+  }
+  if (!result) return render.empty(symbolResolutionEmptyMessage(db, query, 'No reference neighborhood found.'));
+  symbolResolutionBefore(db, query);
+  console.log(`${result.shortName}  (${result.relativePath})\n`);
+  if (result.definitionSites.length > 0) {
+    console.log('  ═══ DEFINITION ═══');
+    for (const site of result.definitionSites) console.log(`    ${site.file}:${displayLine(site.line)}`);
+  }
+  if (result.referenceSites.length > 0) {
+    console.log('\n  ═══ REFERENCES ═══');
+    for (const site of result.referenceSites) {
+      console.log(`    ${site.file}:${displayLine(site.line)}  in ${site.enclosingShort}`);
+    }
+  }
+  if (result.incomingCalls.length > 0) {
+    console.log('\n  ═══ INCOMING CALLS ═══');
+    for (const caller of result.incomingCalls) console.log(`    ${caller.file}  ${caller.shortName}`);
+  }
+  if (result.outgoingCalls.length > 0) {
+    console.log('\n  ═══ OUTGOING CALLS ═══');
+    for (const callee of result.outgoingCalls) console.log(`    ${callee.file}  ${callee.shortName}`);
+  }
+});
+
+const handleValueFlow = dbCommand(({ db, args, opts }) => {
+  const query = stringArg(args, 0);
+  const result = queries.valueFlow(
+    db,
+    { symbols: [query] },
+    {
+      maxDepth: definedNumberOption(opts, 'depth', 2),
+      maxEdges: definedNumberOption(opts, 'maxEdges', 48),
+    },
+  );
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('value-flow', args, opts, result);
+    return;
+  }
+  symbolResolutionBefore(db, query);
+  if (result.edges.length === 0) {
+    render.empty(
+      'No proved value transfers found. Missing output is not evidence that no value flow exists; inspect coverage.',
+    );
+  } else {
+    render.list(result.edges, (edge) => `  ${graphEvidenceEdgeRow(edge)}`);
+  }
+  console.log(`\nCoverage: ${result.coverage.status}; ${result.coverage.basis}.`);
+  for (const blindSpot of result.coverage.graph.blindSpots.slice(0, 3)) console.log(`  Blind spot: ${blindSpot}`);
+});
+
 const handleSlice = budgetedDbCommand('slice', ({ db, args, opts, budget }) => {
   const query = stringArg(args, 0);
   const direction = booleanOptionValue(opts, 'forward') ? 'forward' : 'backward';
@@ -943,6 +1165,55 @@ const handleSlice = budgetedDbCommand('slice', ({ db, args, opts, budget }) => {
   }
   render.list(result.connectedSymbols, (s) => `  ${s.file}  ${s.shortName}\n    ${s.relationship}`);
   console.log(`\n${result.connectedSymbols.length} connected symbol(s).`);
+});
+
+const handleReferenceReachability = budgetedDbCommand('reference-reachability', ({ db, args, opts, budget }) => {
+  const query = stringArg(args, 0);
+  const direction = booleanOptionValue(opts, 'forward') ? 'forward' : 'backward';
+  const result = queries.referenceReachability(db, query, {
+    direction,
+    maxDepth: definedNumberOption(opts, 'depth', 3),
+    semantic: budget.semantic,
+  });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope(
+      'reference-reachability',
+      args,
+      opts,
+      withSymbolResolutionJson(db, query, result, 'reference-reachability'),
+      { analysisBudget: budget.analysisBudget },
+    );
+    return;
+  }
+  if (!result) return render.empty(symbolResolutionEmptyMessage(db, query, 'No reference reachability found.'));
+  symbolResolutionBefore(db, query);
+  console.log(`${result.direction} reference/call reachability from ${result.shortName}\n`);
+  render.list(result.connectedSymbols, (symbol) => `  ${symbol.file}  ${symbol.shortName}\n    ${symbol.relationship}`);
+  console.log(`\n${result.connectedSymbols.length} connected symbol(s).`);
+});
+
+const handleDependenceSlice = dbCommand(({ db, args, opts }) => {
+  const criterion = stringArg(args, 0);
+  const result = queries.dependenceSlice(db, criterion, {
+    direction: booleanOptionValue(opts, 'forward') ? 'forward' : 'backward',
+    maxDepth: definedNumberOption(opts, 'depth', 3),
+    maxEdges: definedNumberOption(opts, 'maxEdges', 200),
+  });
+  if (booleanOptionValue(opts, 'json')) {
+    printJsonEnvelope('dependence-slice', args, opts, result);
+    return;
+  }
+  console.log(`${result.direction} dependence slice of ${criterion}\n`);
+  if (result.edges.length === 0) {
+    render.empty('No proved dependence path found. Missing output is not evidence of absence; inspect coverage.');
+  } else {
+    render.list(
+      result.edges,
+      (edge) => `  depth ${edge.traversalDepth} ${edge.supporting ? '[support] ' : ''}${graphEvidenceEdgeRow(edge)}`,
+    );
+  }
+  console.log(`\nCoverage: ${result.coverage.status}; ${result.coverage.basis}; ${result.coverage.criterionKind}.`);
+  for (const blindSpot of result.coverage.graph.blindSpots.slice(0, 3)) console.log(`  Blind spot: ${blindSpot}`);
 });
 
 const handleMethods = dbCommand(({ db, args, opts }) => {
@@ -1081,6 +1352,14 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       [],
       'bounded',
       'repository',
+      REPOSITORY_OBSERVATION_OPERATION,
+      sourceReadSemanticContract(
+        ['behavior', 'construct', 'exact-source'],
+        [
+          'A source packet does not choose which implementation details are relevant to the user task.',
+          'A reference mention does not establish executable reachability.',
+        ],
+      ),
     ),
     docs: doc('Navigation', [
       "scip-query inspect --search sessionStreamEvents --search work_session_stream_events --search 'agent:work_session' --view behavior",
@@ -1150,7 +1429,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   }),
   sectionedQueryCommand({
     id: 'search',
-    command: 'search <text>',
+    command: 'search <exact-text>',
     description: 'Count current project text matches and preview a bounded, recoverable identity and source manifest',
     options: [
       option('-s, --scope <path>', 'Limit the search to current project paths matching this text'),
@@ -1175,6 +1454,15 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       'exact cardinality, bounded identities and source, and scope commands that recover withheld matches',
       ['pattern'],
       'bounded',
+      undefined,
+      REPOSITORY_OBSERVATION_OPERATION,
+      locatorSemanticContract(
+        ['text', 'symbol', 'construct', 'runtime-key'],
+        [
+          'Structural source ranking orders exact matches but does not establish task relevance.',
+          'A literal co-occurrence does not establish a graph relationship.',
+        ],
+      ),
     ),
     docs: doc('Navigation', ["scip-query search 'eventName'", "scip-query search 'send.*event' --regexp --scope src"]),
     query: ({ db, args, opts }) =>
@@ -1217,7 +1505,8 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   sectionedQueryCommand({
     id: 'anchors',
     command: 'anchors <question>',
-    description: 'Turn repository vocabulary into compact, graph-connected candidate anchor sets',
+    description:
+      'Deprecated compatibility view for query-vocabulary candidate groups; use exact locators plus evidence',
     options: [
       option('-s, --scope <path>', 'Limit candidate ownership and text evidence to indexed paths matching this text'),
       option(
@@ -1233,11 +1522,18 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       'ranked candidate owners, two-hop compiler call evidence, exact map commands, and an omission ledger',
       ['pattern'],
       'bounded',
+      undefined,
+      REPOSITORY_OBSERVATION_OPERATION,
+      locatorSemanticContract(
+        ['text', 'symbol', 'construct'],
+        [
+          'Connected candidate groups are compatibility navigation hints, not inferred task relevance.',
+          'Candidate grouping does not establish implementation behavior.',
+        ],
+        { ranking: 'identity-only', compatibility: 'deprecated' },
+      ),
     ),
-    docs: doc('Navigation', [
-      `scip-query anchors 'How does a fetched paper become durable local state?'`,
-      `scip-query anchors 'Where is session authorization checked and persisted?' --scope src`,
-    ]),
+    docs: doc('Compatibility'),
     query: ({ db, args, opts }) => {
       const result = queries.discoverAnchors(db, stringArg(args, 0), {
         scope: stringOptionValue(opts, 'scope'),
@@ -1358,9 +1654,36 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   }),
   budgetedSectionedQueryCommand({
     id: 'evidence',
-    command: 'evidence <symbol>',
-    description: 'Compose related source for one exact symbol in a single evidence view',
+    command: 'evidence [symbol]',
+    description: 'Traverse selected typed relationships around exact referents, with optional source evidence',
     options: [
+      option('--symbol <symbol>', 'Add an exact compiler symbol; repeat to batch', collectValues, []),
+      option(
+        '--at <file:line>',
+        'Add the construct owning an exact source location; repeat to batch',
+        collectValues,
+        [],
+      ),
+      option('--search <literal>', 'Add an exact source or runtime literal; repeat to batch', collectValues, []),
+      option('--view <view>', 'Select causal, structure, or complete graph evidence'),
+      option(
+        '--edge <family>',
+        'Select execution, runtime, dataflow, state, temporal, contract, identity, ownership, dependencies, or all; repeat or comma-separate',
+        collectValues,
+        [],
+      ),
+      option('--direction <direction>', 'Traverse incoming, outgoing, or both directed relationships'),
+      option('--subtype <subtype>', 'Select exact relationship subtypes; repeat or comma-separate', collectValues, []),
+      option('--connecting', 'Return deterministic shortest paths connecting the resolved roots'),
+      option('--inventory-only', 'Count relationships by family, subtype, and direction without rendering edges'),
+      option(
+        '--fold <id>',
+        'Materialize an exact recoverable fold from the same projection; repeat to batch',
+        collectValues,
+        [],
+      ),
+      option('--depth <n>', 'Maximum graph traversal depth', parseNonNegativeInteger, 2),
+      option('--max-edges <n>', 'Maximum typed relationships to render', parsePositiveInteger, 48),
       option(
         '--include <part>',
         'Add definition, references, callers, callees, dependencies, consumers, or all; repeat or comma-separate',
@@ -1375,36 +1698,142 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     agent: {
       operation: REPOSITORY_OBSERVATION_OPERATION,
       answers: [
-        'Where is this exact symbol defined, and what source uses it?',
-        'Which related callers, callees, dependencies, or consumers must be read together?',
+        'Which exact execution, runtime, data, state, temporal, contract, identity, ownership, or dependency relationships surround these referents?',
+        'Which related source must be read only when graph evidence leaves a named implementation gap?',
       ],
       returns: [
-        'definition source',
-        'deduplicated reference-centered source windows',
-        'selected related symbol source and file relationships',
+        'batched exact selectors and typed graph relationships',
+        'compact endpoints with exact locations and follow-up commands',
+        'coverage and recoverable omissions',
+        'optional definition and reference-centered source',
         'explicit ambiguity failure with exact rerun commands',
       ],
       inputs: ['symbol'],
+      scope: 'repository',
       coverage: 'bounded',
+      semantic: graphProjectionSemanticContract({
+        rootKinds: ['text', 'symbol', 'construct', 'runtime-key', 'state-resource'],
+        edgeFamilies: GRAPH_EVIDENCE_FAMILIES,
+        directions: ['incoming', 'outgoing', 'both'],
+        operations: ['adjacency', 'reachability', 'connecting', 'slice'],
+        compression: ['none', 'linear', 'scc', 'topology'],
+        nonClaims: [
+          'The projection does not infer which relationships are relevant to the user task.',
+          'Reference, dependency, data, state, temporal, contract, and identity edges do not become execution claims.',
+        ],
+      }),
     },
     docs: doc('Navigation', [
       'scip-query evidence appendEvent',
+      "scip-query evidence --symbol 'exact-symbol' --view causal --depth 2",
+      "scip-query evidence --symbol 'first' --symbol 'second' --view complete",
+      "scip-query evidence --at 'src/file.ts:40' --edge runtime,state,contract",
       'scip-query evidence appendEvent --include definition,references,callers,callees',
     ]),
-    query: ({ db, args, opts, budget }) => {
-      assertNavigationDetailAllowed(db.config.projectRoot, 'evidence', opts['session'] !== false);
-      return queries.qualifiedEvidence(db, stringArg(args, 0), {
-        parts: selectedEvidenceParts(stringArrayOptionValue(opts, 'include')),
-        referenceContext: definedNumberOption(opts, 'context', 2),
-        relatedSourceLines: definedNumberOption(opts, 'relatedSourceLines', 80),
-        semantic: budget.semantic,
-      });
+    query: ({ db, args, opts, budget }): EvidenceCommandResult => {
+      const positional = typeof args[0] === 'string' && args[0].trim() !== '' ? [args[0]] : [];
+      const symbols = [...positional, ...stringArrayOptionValue(opts, 'symbol')];
+      const locations = stringArrayOptionValue(opts, 'at');
+      const searches = stringArrayOptionValue(opts, 'search');
+      const view = graphEvidenceView(stringOptionValue(opts, 'view'));
+      const families = selectedGraphEvidenceFamilies(stringArrayOptionValue(opts, 'edge'));
+      const direction = graphEvidenceDirection(stringOptionValue(opts, 'direction'));
+      const subtypes = selectedGraphEvidenceSubtypes(stringArrayOptionValue(opts, 'subtype'));
+      const connecting = booleanOptionValue(opts, 'connecting');
+      const inventoryOnly = booleanOptionValue(opts, 'inventoryOnly');
+      const foldIds = stringArrayOptionValue(opts, 'fold');
+      const graphRequested =
+        view !== undefined ||
+        families !== undefined ||
+        direction !== undefined ||
+        subtypes !== undefined ||
+        connecting ||
+        inventoryOnly ||
+        foldIds.length > 0 ||
+        stringArrayOptionValue(opts, 'symbol').length > 0 ||
+        locations.length > 0 ||
+        searches.length > 0;
+      if (!graphRequested) {
+        assertNavigationDetailAllowed(db.config.projectRoot, 'evidence', opts['session'] !== false);
+        return queries.qualifiedEvidence(db, stringArg(args, 0), {
+          parts: selectedEvidenceParts(stringArrayOptionValue(opts, 'include')),
+          referenceContext: definedNumberOption(opts, 'context', 2),
+          relatedSourceLines: definedNumberOption(opts, 'relatedSourceLines', 80),
+          semantic: budget.semantic,
+        });
+      }
+      const sourceParts = selectedEvidenceParts(stringArrayOptionValue(opts, 'include'));
+      const sourceSelectors = [...symbols, ...locations];
+      return {
+        kind: 'graph-packet',
+        graph: queries.graphEvidence(
+          db,
+          { symbols, locations, searches },
+          {
+            view,
+            families,
+            direction,
+            subtypes,
+            connecting,
+            inventoryOnly,
+            foldIds,
+            maxDepth: definedNumberOption(opts, 'depth', 2),
+            maxEdges: definedNumberOption(opts, 'maxEdges', 48),
+          },
+        ),
+        source:
+          sourceParts === undefined
+            ? []
+            : sourceSelectors.map((selector) =>
+                queries.qualifiedEvidence(db, selector, {
+                  parts: sourceParts,
+                  referenceContext: definedNumberOption(opts, 'context', 2),
+                  relatedSourceLines: definedNumberOption(opts, 'relatedSourceLines', 80),
+                  semantic: budget.semantic,
+                }),
+              ),
+      };
     },
-    emptyMessage: (result) => evidenceFailureMessage(result),
+    emptyMessage: (result) => (result.kind === 'graph-packet' ? undefined : evidenceFailureMessage(result)),
     before: (result) => {
+      if (result.kind === 'graph-packet') {
+        if (result.graph.targets.some((target) => target.status !== 'matched')) process.exitCode = 1;
+        return;
+      }
       if (result.kind !== 'matched') process.exitCode = 1;
     },
     coverage: (result, { budget }) => {
+      if (result.kind === 'graph-packet') {
+        const returned =
+          result.graph.edges.length +
+          result.source.reduce(
+            (total, item) =>
+              total +
+              (item.kind === 'matched'
+                ? (item.definition ? 1 : 0) +
+                  item.referenceWindows.length +
+                  item.callers.length +
+                  item.callees.length +
+                  item.dependencies.length +
+                  item.consumers.length
+                : 0),
+            0,
+          );
+        const targetsComplete = result.graph.targets.every((target) => target.status === 'matched');
+        const sourceMayBeBudgeted = result.source.length > 0 && Boolean(budget.analysisBudget);
+        const complete = result.graph.coverage.status === 'accounted' && targetsComplete && !sourceMayBeBudgeted;
+        if (complete) return { complete: true, totalKnown: true, returned, total: returned, omitted: 0 };
+        if (result.graph.coverage.status === 'incomplete' || !targetsComplete || sourceMayBeBudgeted) {
+          return { complete: false, totalKnown: false, returned };
+        }
+        return {
+          complete: false,
+          totalKnown: true,
+          returned,
+          total: returned + result.graph.coverage.omittedEdges,
+          omitted: result.graph.coverage.omittedEdges,
+        };
+      }
       if (result.kind !== 'matched') return { complete: true, totalKnown: true, returned: 0, total: 0, omitted: 0 };
       const returned =
         (result.definition ? 1 : 0) +
@@ -1418,20 +1847,31 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
         : { complete: true, totalKnown: true, returned, total: returned, omitted: 0 };
     },
     agentResult: (result) =>
-      result.kind === 'matched'
+      result.kind === 'graph-packet'
         ? {
-            symbol: result.symbol,
-            file: result.file,
-            parts: result.parts,
-            referenceSites: result.referenceWindows.reduce((total, window) => total + window.references.length, 0),
-            sourceWindows: result.referenceWindows.length,
-            callers: result.callers.length,
-            callees: result.callees.length,
-            dependencies: result.dependencies.length,
-            consumers: result.consumers.length,
+            view: result.graph.view,
+            families: result.graph.families,
+            selection: result.graph.selection,
+            targets: result.graph.targets,
+            inventory: result.graph.inventory,
+            relationshipCount: result.graph.edges.length,
+            coverage: result.graph.coverage,
+            sourceSelectors: result.source.length,
           }
-        : result,
-    sections: evidenceSections,
+        : result.kind === 'matched'
+          ? {
+              symbol: result.symbol,
+              file: result.file,
+              parts: result.parts,
+              referenceSites: result.referenceWindows.reduce((total, window) => total + window.references.length, 0),
+              sourceWindows: result.referenceWindows.length,
+              callers: result.callers.length,
+              callees: result.callees.length,
+              dependencies: result.dependencies.length,
+              consumers: result.consumers.length,
+            }
+          : result,
+    sections: evidenceCommandSections,
   }),
   listQueryCommand({
     id: 'deps',
@@ -1464,14 +1904,17 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   sectionedQueryCommand({
     id: 'system',
     command: 'system <module>',
-    description: 'Full module map: files, symbols, deps in/out',
+    description: 'One-hop module summary: matched files, documented symbols, and file reference dependencies',
     options: [compactOption()],
     agent: {
       operation: REPOSITORY_OBSERVATION_OPERATION,
-      answers: ['What is in this module?', 'What does this module depend on, and what depends on it?'],
+      answers: [
+        'Which files and documented symbols match this module selector?',
+        'What one-hop file reference dependencies cross the selected module?',
+      ],
       returns: [
         'module file paths',
-        'exported symbols with line ranges',
+        'documented indexed symbols with line ranges',
         'internal dependencies',
         'reverse dependencies',
       ],
@@ -1481,7 +1924,8 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       contrasts: [
         {
           command: 'surface',
-          distinction: 'system lists everything the module exports; surface lists only what consumers actually use.',
+          distinction:
+            'system lists documented indexed symbols; surface lists callable symbols that external consumers actually use.',
         },
         { command: 'outline', distinction: 'system is module-scoped; outline covers a single file.' },
       ],
@@ -1505,13 +1949,13 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       dependedOnBy: result.dependedOnBy,
       detail: {
         location: 'result',
-        symbolUnits: 'result.symbols contains every exported symbol with its line range',
+        symbolUnits: 'result.symbols contains documented indexed symbols with their line ranges',
       },
     }),
     sections: (result) => [
       { title: 'FILES', rows: result.files },
       {
-        title: 'EXPORTED SYMBOLS',
+        title: 'DOCUMENTED INDEXED SYMBOLS',
         rows: result.symbols.map((s) => `  ${displayRange(s.startLine, s.endLine)}  ${s.shortName}`),
       },
       { title: 'DEPENDS ON (internal)', rows: result.dependsOn.map((d) => `  ${d}`) },
@@ -1529,7 +1973,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       'complete',
     ),
     docs: doc('Navigation'),
-    query: ({ db, args }) => queries.surface(db, stringArg(args, 0)),
+    query: ({ db, args }) => queries.consumerSurface(db, stringArg(args, 0)),
     format: (r) => `  ${r.consumer} → ${r.shortName}`,
   }),
   {
@@ -1637,10 +2081,10 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'dataflow',
     command: 'dataflow <symbol>',
-    description: 'Reference-level dataflow: definition sites, usage sites, producers, consumers',
+    description: 'Deprecated compatibility alias for a reference/call neighborhood; use value-flow',
     agent: agentContract(
-      'What defines, uses, produces, and consumes this symbol?',
-      'definition sites, usage sites, producer symbols, and consumer symbols',
+      'What definitions, references, incoming calls, and outgoing calls surround this symbol?',
+      'legacy reference sites and call-neighborhood rows; no value-flow claim',
       ['symbol'],
       'bounded',
     ),
@@ -1651,12 +2095,46 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     handler: handleDataflow,
   },
   {
+    id: 'reference-neighborhood',
+    command: 'reference-neighborhood <symbol>',
+    description: 'Show definition/reference sites and incoming/outgoing static calls without value-flow claims',
+    agent: agentContract(
+      'What exact references and static calls surround this symbol?',
+      'definition sites, reference sites, incoming calls, and outgoing calls',
+      ['symbol'],
+      'bounded',
+    ),
+    options: withJsonOption([option('--full', 'Run unbounded semantic analysis on large indexes')]),
+    budget: 'semantic',
+    renderShape: 'custom',
+    docs: doc('Navigation'),
+    handler: handleReferenceNeighborhood,
+  },
+  {
+    id: 'value-flow',
+    command: 'value-flow <symbol>',
+    description: 'Show only proved argument/parameter and bounded static-value transfers around a symbol',
+    agent: agentContract(
+      'Which values are proved to flow into or through this symbol?',
+      'typed value-transfer edges with evidence strength and explicit unsupported relations',
+      ['symbol'],
+      'bounded',
+    ),
+    options: withJsonOption([
+      option('--depth <n>', 'Maximum graph depth', parseInteger, 2),
+      option('--max-edges <n>', 'Maximum typed value-transfer edges', parseInteger, 48),
+    ]),
+    renderShape: 'custom',
+    docs: doc('Navigation'),
+    handler: handleValueFlow,
+  },
+  {
     id: 'slice',
     command: 'slice <symbol>',
-    description: 'Reference-level program slice: what affects this (backward) or what this affects (forward)',
+    description: 'Deprecated compatibility alias for reference/call reachability; use dependence-slice',
     agent: agentContract(
-      'What transitively affects this symbol, or what does it affect?',
-      'connected symbols with relationship and depth',
+      'Which calls or reference owners are reachable from this symbol under the legacy traversal?',
+      'legacy connected symbols; no program-dependence claim',
       ['symbol'],
       'bounded',
     ),
@@ -1669,5 +2147,44 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     renderShape: 'custom',
     docs: doc('Navigation'),
     handler: handleSlice,
+  },
+  {
+    id: 'reference-reachability',
+    command: 'reference-reachability <symbol>',
+    description: 'Traverse legacy callee or reference-owner reachability without calling it a program slice',
+    agent: agentContract(
+      'Which call/reference nodes are reachable from this symbol?',
+      'connected symbols with relationship and traversal depth',
+      ['symbol'],
+      'bounded',
+    ),
+    options: withJsonOption([
+      option('--forward', 'Traverse reference owners. Default traverses callees.'),
+      option('--depth <n>', 'Maximum callee depth', parseInteger, 3),
+      option('--full', 'Run unbounded semantic analysis on large indexes'),
+    ]),
+    budget: 'semantic',
+    renderShape: 'custom',
+    docs: doc('Navigation'),
+    handler: handleReferenceReachability,
+  },
+  {
+    id: 'dependence-slice',
+    command: 'dependence-slice <symbol-or-location>',
+    description: 'Directional slice over proved data/control dependencies with explicit supporting call edges',
+    agent: agentContract(
+      'What proved program dependencies can affect this criterion, or be affected by it?',
+      'directional dependence edges, supporting connectors, and coverage limits',
+      [['symbol', 'path']],
+      'bounded',
+    ),
+    options: withJsonOption([
+      option('--forward', 'Compute a forward slice. Default is backward.'),
+      option('--depth <n>', 'Maximum dependence traversal depth', parseInteger, 3),
+      option('--max-edges <n>', 'Maximum topology edges considered', parseInteger, 200),
+    ]),
+    renderShape: 'custom',
+    docs: doc('Navigation'),
+    handler: handleDependenceSlice,
   },
 ];

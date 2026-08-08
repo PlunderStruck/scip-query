@@ -39,6 +39,43 @@ describe('getProjectCapabilities', () => {
     expect(python?.semantic.reason).toContain('No semantic provider is registered for python');
     expect(python?.cleanupVerification.status).toBe('unavailable');
     expect(python?.cleanupVerification.reason).toContain('.py');
+    expect(report.relations.map((relation) => relation.family)).toEqual([
+      'execution',
+      'runtime',
+      'dataflow',
+      'state',
+      'temporal',
+      'contract',
+      'identity',
+      'ownership',
+      'dependencies',
+    ]);
+    expect(report.relations.find((relation) => relation.family === 'identity')?.status).toBe('exact');
+    expect(report.relations.find((relation) => relation.family === 'execution')?.status).toBe('partial');
+    expect(report.relations.find((relation) => relation.family === 'dataflow')?.nonClaims).toContain(
+      'Current partial providers do not establish general interprocedural definition-use coverage.',
+    );
+    const dataflow = report.relations.find((relation) => relation.family === 'dataflow');
+    expect(dataflow?.providerCapabilities.map((provider) => provider.id)).toEqual([
+      'runtime-boundary-join',
+      'bounded-static-value-flow',
+      'typescript-local-dependence',
+      'parser-state-temporal',
+    ]);
+    expect(
+      dataflow?.providerCapabilities.every(
+        (provider) => provider.subtypes.length > 0 && provider.languages.length === report.matrix.length,
+      ),
+    ).toBe(true);
+    const localDependence = dataflow?.providerCapabilities.find(
+      (provider) => provider.id === 'typescript-local-dependence',
+    );
+    expect(localDependence?.languages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ language: 'typescript', status: 'partial' }),
+        expect.objectContaining({ language: 'python', status: 'unsupported' }),
+      ]),
+    );
   });
 
   it('reports syntax-only validation as partial at language and project level', () => {
@@ -182,6 +219,7 @@ describe('getProjectCapabilities', () => {
 
     expect(report.matrix[0]?.indexing.status).toBe('unavailable');
     expect(report.matrix[0]?.sourceFacts.status).toBe('unavailable');
+    expect(report.relations.every((relation) => relation.status === 'unsupported')).toBe(true);
   });
 
   it('reports Clojure as graph-backed with source callsite facts and clj-kondo cleanup verification', () => {

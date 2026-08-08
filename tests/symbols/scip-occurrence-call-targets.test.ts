@@ -52,38 +52,38 @@ describe('SCIP occurrence call targets for source ranges', () => {
         '  return runWrapped();',
         '}',
       ],
-        'src/service.ts': [
-          'export class Service {',
-          '  execute() {',
-          '    const value = normalize(RESULT);',
-          '    return value;',
-          '  }',
-          '}',
-          'export const runWrapped = Effect.fnUntraced(function* () { return 2; });',
-          'export const DEFAULT_TIMEOUT = 60_000;',
-          'export const RESULT =',
-          '  1;',
-          'export function normalize(value: number) { return decode(value); }',
-          'export function decode(value: number) { return value; }',
-        ],
+      'src/service.ts': [
+        'export class Service {',
+        '  execute() {',
+        '    const value = normalize(RESULT);',
+        '    return value;',
+        '  }',
+        '}',
+        'export const runWrapped = Effect.fnUntraced(function* () { return 2; });',
+        'export const DEFAULT_TIMEOUT = 60_000;',
+        'export const RESULT =',
+        '  1;',
+        'export function normalize(value: number) { return decode(value); }',
+        'export function decode(value: number) { return value; }',
+      ],
     });
     evidenceFixtureDb(dbPath)
       .document(1, 'typescript', 'src/registry.ts')
       .document(2, 'typescript', 'src/service.ts')
       .symbol(1, TARGET_SYMBOL, 'execute')
-        .definition(1, 2, 1, 1, 2, 4, 3)
+      .definition(1, 2, 1, 1, 2, 4, 3)
       .symbol(2, CALLBACK_SYMBOL, 'mergeResults')
       .definition(2, 1, 2, 0, 0, 0, 76)
       .symbol(3, FACTORY_CALLABLE_SYMBOL, 'runWrapped', null, '```ts\nvar runWrapped: any\n```')
-        .definition(3, 2, 3, 6, 0, 6, 72)
+      .definition(3, 2, 3, 6, 0, 6, 72)
       .symbol(4, TIMEOUT_SYMBOL, 'DEFAULT_TIMEOUT', 13)
-        .definition(4, 2, 4, 7, 0, 7, 38)
+      .definition(4, 2, 4, 7, 0, 7, 38)
       .symbol(5, RESULT_SYMBOL, 'RESULT', 13)
-        .definition(5, 2, 5, 8, 0, 8, 24)
-        .symbol(6, NORMALIZE_SYMBOL, 'normalize')
-        .definition(6, 2, 6, 10, 0, 10, 66)
-        .symbol(7, DECODE_SYMBOL, 'decode')
-        .definition(7, 2, 7, 11, 0, 11, 55)
+      .definition(5, 2, 5, 8, 0, 8, 24)
+      .symbol(6, NORMALIZE_SYMBOL, 'normalize')
+      .definition(6, 2, 6, 10, 0, 10, 66)
+      .symbol(7, DECODE_SYMBOL, 'decode')
+      .definition(7, 2, 7, 11, 0, 11, 55)
       .write();
     writeFileSync(
       indexPath,
@@ -119,63 +119,63 @@ describe('SCIP occurrence call targets for source ranges', () => {
                   symbolRoles: 0,
                   range: [11, 9, 11, 19],
                 }),
-                ],
+              ],
             }),
             create(DocumentSchema, {
               language: 'typescript',
               relativePath: 'src/service.ts',
-                symbols: [
-                  create(SymbolInformationSchema, { symbol: TARGET_SYMBOL }),
-                  create(SymbolInformationSchema, { symbol: FACTORY_CALLABLE_SYMBOL }),
-                  create(SymbolInformationSchema, { symbol: NORMALIZE_SYMBOL }),
-                  create(SymbolInformationSchema, { symbol: DECODE_SYMBOL }),
-                ],
-                occurrences: [
+              symbols: [
+                create(SymbolInformationSchema, { symbol: TARGET_SYMBOL }),
+                create(SymbolInformationSchema, { symbol: FACTORY_CALLABLE_SYMBOL }),
+                create(SymbolInformationSchema, { symbol: NORMALIZE_SYMBOL }),
+                create(SymbolInformationSchema, { symbol: DECODE_SYMBOL }),
+              ],
+              occurrences: [
                 create(OccurrenceSchema, {
-                    symbol: TARGET_SYMBOL,
-                    symbolRoles: SymbolRole.Definition,
-                    range: [1, 2, 1, 9],
-                  }),
-                  create(OccurrenceSchema, {
-                    symbol: NORMALIZE_SYMBOL,
-                    symbolRoles: 0,
-                    range: [2, 18, 2, 27],
-                  }),
-                  create(OccurrenceSchema, {
-                    symbol: RESULT_SYMBOL,
-                    symbolRoles: 0,
-                    range: [2, 28, 2, 34],
-                  }),
-                  create(OccurrenceSchema, {
-                    symbol: FACTORY_CALLABLE_SYMBOL,
-                    symbolRoles: SymbolRole.Definition,
-                    range: [6, 13, 6, 23],
-                  }),
-                  create(OccurrenceSchema, {
-                    symbol: TIMEOUT_SYMBOL,
-                    symbolRoles: SymbolRole.Definition,
-                    range: [7, 13, 7, 28],
-                  }),
-                  create(OccurrenceSchema, {
-                    symbol: RESULT_SYMBOL,
-                    symbolRoles: SymbolRole.Definition,
-                    range: [8, 13, 8, 19],
-                  }),
-                  create(OccurrenceSchema, {
-                    symbol: NORMALIZE_SYMBOL,
-                    symbolRoles: SymbolRole.Definition,
-                    range: [10, 16, 10, 25],
-                  }),
-                  create(OccurrenceSchema, {
-                    symbol: DECODE_SYMBOL,
-                    symbolRoles: 0,
-                    range: [10, 50, 10, 56],
-                  }),
-                  create(OccurrenceSchema, {
-                    symbol: DECODE_SYMBOL,
-                    symbolRoles: SymbolRole.Definition,
-                    range: [11, 16, 11, 22],
-                  }),
+                  symbol: TARGET_SYMBOL,
+                  symbolRoles: SymbolRole.Definition,
+                  range: [1, 2, 1, 9],
+                }),
+                create(OccurrenceSchema, {
+                  symbol: NORMALIZE_SYMBOL,
+                  symbolRoles: 0,
+                  range: [2, 18, 2, 27],
+                }),
+                create(OccurrenceSchema, {
+                  symbol: RESULT_SYMBOL,
+                  symbolRoles: 0,
+                  range: [2, 28, 2, 34],
+                }),
+                create(OccurrenceSchema, {
+                  symbol: FACTORY_CALLABLE_SYMBOL,
+                  symbolRoles: SymbolRole.Definition,
+                  range: [6, 13, 6, 23],
+                }),
+                create(OccurrenceSchema, {
+                  symbol: TIMEOUT_SYMBOL,
+                  symbolRoles: SymbolRole.Definition,
+                  range: [7, 13, 7, 28],
+                }),
+                create(OccurrenceSchema, {
+                  symbol: RESULT_SYMBOL,
+                  symbolRoles: SymbolRole.Definition,
+                  range: [8, 13, 8, 19],
+                }),
+                create(OccurrenceSchema, {
+                  symbol: NORMALIZE_SYMBOL,
+                  symbolRoles: SymbolRole.Definition,
+                  range: [10, 16, 10, 25],
+                }),
+                create(OccurrenceSchema, {
+                  symbol: DECODE_SYMBOL,
+                  symbolRoles: 0,
+                  range: [10, 50, 10, 56],
+                }),
+                create(OccurrenceSchema, {
+                  symbol: DECODE_SYMBOL,
+                  symbolRoles: SymbolRole.Definition,
+                  range: [11, 16, 11, 22],
+                }),
               ],
             }),
           ],
@@ -248,36 +248,36 @@ describe('SCIP occurrence call targets for source ranges', () => {
       expect(behavior?.supportingDeclarations).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-              label: 'DEFAULT_TIMEOUT',
-              file: 'src/service.ts',
-              line: 7,
+            label: 'DEFAULT_TIMEOUT',
+            file: 'src/service.ts',
+            line: 7,
             text: 'export const DEFAULT_TIMEOUT = 60_000;',
           }),
           expect.objectContaining({
-              kind: 'return-value-transformer',
-              label: 'execute',
-              file: 'src/service.ts',
-              line: 1,
-            }),
-            expect.objectContaining({
-              kind: 'focused-causal-target',
-              label: 'normalize',
-              file: 'src/service.ts',
-              line: 10,
-            }),
-            expect.objectContaining({
-              kind: 'focused-causal-target',
-              label: 'decode',
-              file: 'src/service.ts',
-              line: 11,
-            }),
+            kind: 'return-value-transformer',
+            label: 'execute',
+            file: 'src/service.ts',
+            line: 1,
+          }),
+          expect.objectContaining({
+            kind: 'focused-causal-target',
+            label: 'normalize',
+            file: 'src/service.ts',
+            line: 10,
+          }),
+          expect.objectContaining({
+            kind: 'focused-causal-target',
+            label: 'decode',
+            file: 'src/service.ts',
+            line: 11,
+          }),
           expect.objectContaining({
             kind: 'compiler-referenced-declaration',
-              label: 'RESULT',
-              file: 'src/service.ts',
-              line: 8,
-              endLine: 9,
-              text: 'export const RESULT =\n  1;',
+            label: 'RESULT',
+            file: 'src/service.ts',
+            line: 8,
+            endLine: 9,
+            text: 'export const RESULT =\n  1;',
           }),
         ]),
       );

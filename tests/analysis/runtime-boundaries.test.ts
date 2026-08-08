@@ -10,6 +10,7 @@ import {
   writeRuntimeBoundaryGraph,
 } from '../../src/analysis/runtime-boundaries/index.js';
 import { buildRelationGroups, materializeBoundedLinks } from '../../src/analysis/runtime-boundaries/graph.js';
+import { runtimeBoundarySourceScope } from '../../src/analysis/runtime-boundaries/source-scope.js';
 import type { BoundaryObservation } from '../../src/analysis/runtime-boundaries/types.js';
 import { runtimeBoundaryAugmentationStage } from '../../src/reindex/runtime-boundaries.js';
 import { runPostIndexAugmentation } from '../../src/reindex/augmentation/post-index-augmentation.js';
@@ -22,6 +23,13 @@ import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixtu
 describe('runtime-boundary evidence', () => {
   let tempDir: string | null = null;
 
+  it('distinguishes repository scripts from application modules named tools', () => {
+    expect(runtimeBoundarySourceScope('tools/release.ts')).toBe('script');
+    expect(runtimeBoundarySourceScope('scripts/reindex.ts')).toBe('script');
+    expect(runtimeBoundarySourceScope('src/agent/tools/bash.ts')).toBe('production');
+    expect(runtimeBoundarySourceScope('packages/api/src/tools/dispatch.ts')).toBe('production');
+  });
+
   afterEach(() => {
     if (tempDir) rmSync(tempDir, { recursive: true, force: true });
     tempDir = null;
@@ -31,7 +39,7 @@ describe('runtime-boundary evidence', () => {
     const db = createBoundaryDb();
     try {
       const graph = collectRuntimeBoundaryGraph(db);
-      expect(graph.extractorVersion).toBe('runtime-boundaries-v12');
+      expect(graph.extractorVersion).toBe('runtime-boundaries-v15');
 
       expect(graph.observations).toEqual(
         expect.arrayContaining([
@@ -234,10 +242,7 @@ describe('runtime-boundary evidence', () => {
         "  return childProcess.fork('./worker.js');",
         '}',
       ],
-      'src/local.ts': [
-        'function spawn(command: string) { return command; }',
-        "spawn('not-a-runtime-boundary');",
-      ],
+      'src/local.ts': ['function spawn(command: string) { return command; }', "spawn('not-a-runtime-boundary');"],
     };
     writeFixtureFiles(tempDir, files);
     const builder = evidenceFixtureDb(join(tempDir, 'index.db'));
@@ -276,6 +281,107 @@ describe('runtime-boundary evidence', () => {
           keyParts: expect.arrayContaining([expect.objectContaining({ name: 'operation', value: 'fork' })]),
         }),
       ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('links exact capability instructions to unique descriptor handlers', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-runtime-capability-boundaries-'));
+    const files = {
+      'src/bash.ts': [
+        'export function backgroundInstructions(id: string) {',
+        '  return [`started ${id}`, `Use kill_process({id: "${id}"}) to stop.`].join("\\n");',
+        '}',
+        'export const diagnostic = "Formatting issue() while JSON.stringify(value) remains visible.";',
+      ],
+      'src/kill-process.ts': [
+        'export const killProcessTool = {',
+        '  def: { name: "kill_process" },',
+        '  async execute(input: Record<string, unknown>) {',
+        '    return String(input.id ?? "");',
+        '  },',
+        '};',
+      ],
+    };
+    writeFixtureFiles(tempDir, files);
+    const builder = evidenceFixtureDb(join(tempDir, 'index.db'));
+    Object.keys(files).forEach((file, index) => builder.document(index + 1, 'typescript', file));
+    builder.write();
+    const db = new ScipDatabase({
+      projectRoot: tempDir,
+      dbPath: join(tempDir, 'index.db'),
+      indexPath: join(tempDir, 'index.scip'),
+    });
+
+    try {
+      const graph = collectRuntimeBoundaryGraph(db);
+      expect(graph.observations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            action: 'registry.reference',
+            evidence: 'capability-instruction-reference',
+            strength: 'exact',
+            source: expect.objectContaining({ file: 'src/bash.ts' }),
+            keyParts: [expect.objectContaining({ name: 'key', value: 'kill_process', evidence: 'literal' })],
+          }),
+          expect.objectContaining({
+            action: 'registry.handle',
+            evidence: 'capability-descriptor',
+            strength: 'exact',
+            source: expect.objectContaining({ file: 'src/kill-process.ts' }),
+            keyParts: [expect.objectContaining({ name: 'key', value: 'kill_process', evidence: 'literal' })],
+          }),
+        ]),
+      );
+      expect(graph.links).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            joinRule: 'registry.capability-key',
+            strength: 'exact',
+          }),
+        ]),
+      );
+      const capabilityReferences = graph.observations.filter(
+        (item) => item.evidence === 'capability-instruction-reference',
+      );
+      expect(capabilityReferences).toHaveLength(1);
+      expect(capabilityReferences[0]?.keyParts[0]?.value).toBe('kill_process');
+    } finally {
+      db.close();
+    }
+  });
+
+  it('does not resolve a capability reference when multiple handlers claim the same key', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-runtime-ambiguous-capability-'));
+    const files = {
+      'src/instructions.ts': ['export const instructions = "Use kill_process() to stop.";'],
+      'src/first.ts': [
+        'export const first = {',
+        '  def: { name: "kill_process" },',
+        '  execute() { return "first"; },',
+        '};',
+      ],
+      'src/second.ts': [
+        'export const second = {',
+        '  def: { name: "kill_process" },',
+        '  execute() { return "second"; },',
+        '};',
+      ],
+    };
+    writeFixtureFiles(tempDir, files);
+    const builder = evidenceFixtureDb(join(tempDir, 'index.db'));
+    Object.keys(files).forEach((file, index) => builder.document(index + 1, 'typescript', file));
+    builder.write();
+    const db = new ScipDatabase({
+      projectRoot: tempDir,
+      dbPath: join(tempDir, 'index.db'),
+      indexPath: join(tempDir, 'index.scip'),
+    });
+
+    try {
+      const graph = collectRuntimeBoundaryGraph(db);
+      expect(graph.links.filter((link) => link.joinRule === 'registry.capability-key')).toHaveLength(0);
     } finally {
       db.close();
     }
