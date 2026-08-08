@@ -136,6 +136,16 @@ describe('CLI contract', () => {
     );
   });
 
+  it('does not silently choose canonical graph projection bounds or direction', () => {
+    const evidence = command('evidence');
+    for (const flag of ['--direction <direction>', '--depth <n>', '--max-edges <n>']) {
+      const option = evidence.options.find((candidate) => candidate.flags === flag);
+      expect(option, flag).toBeDefined();
+      expect(option?.defaultValue, flag).toBeUndefined();
+    }
+    expect(evidence.options.find((candidate) => candidate.flags === '--edge <family>')?.defaultValue).toEqual([]);
+  });
+
   it('registers universal resumable output options at the program boundary', () => {
     expect(program.options.map((option) => option.flags)).toEqual(
       expect.arrayContaining(['--output-page-size <characters>', '--output-cursor <cursor>']),

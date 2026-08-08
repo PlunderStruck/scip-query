@@ -104,6 +104,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       expect(foldedIds).toHaveLength(new Set(foldedIds).size);
       expect(result.folds.every((fold) => fold.minimumMaxEdges <= expanded.coverage.eligibleEdges)).toBe(true);
       expect(result.folds.every((fold) => ['linear', 'scc', 'topology'].includes(fold.mode))).toBe(true);
+      expect(result.folds.every((fold) => (fold.region?.length ?? 0) > 0)).toBe(true);
+      expect(result.folds.every((fold) => (fold.subtypes?.length ?? 0) > 0)).toBe(true);
       const fold = result.folds[0];
       if (fold) {
         const materialized = graphEvidence(
@@ -123,6 +125,35 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
           ),
         ).toThrow('Unknown evidence fold');
       }
+    } finally {
+      db.close();
+    }
+  });
+
+  it('resolves a single-line location selector to its containing source construct', () => {
+    const db = createSystemMapDb();
+    try {
+      const result = graphEvidence(
+        db,
+        { locations: ['packages/companion/src/client.ts:4'] },
+        { families: ['execution'], direction: 'outgoing', maxDepth: 1, maxEdges: 20 },
+      );
+
+      expect(result.targets).toEqual([
+        expect.objectContaining({
+          query: 'packages/companion/src/client.ts:4',
+          status: 'matched',
+        }),
+      ]);
+      expect(result.edges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            family: 'execution',
+            from: expect.objectContaining({ label: expect.stringContaining('appendStreamEvents') }),
+            to: expect.objectContaining({ label: expect.stringContaining('dispatchCommand') }),
+          }),
+        ]),
+      );
     } finally {
       db.close();
     }

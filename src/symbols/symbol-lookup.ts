@@ -220,7 +220,7 @@ function alternateCandidates(hydrated: SymbolMatch[], match: SymbolMatch): Symbo
 }
 
 function findFileLineSymbolRow(db: ScipDatabase, symbolPattern: string): SymbolQueryRow | undefined {
-  const fileLineMatch = symbolPattern.match(/^(.+):(\d+)-(\d+)$/);
+  const fileLineMatch = symbolPattern.match(/^(.+):(\d+)(?:-(\d+))?$/);
   if (!fileLineMatch) {
     return undefined;
   }
@@ -229,7 +229,7 @@ function findFileLineSymbolRow(db: ScipDatabase, symbolPattern: string): SymbolQ
   const relativePath = resolveIndexedDocumentCandidates(db, filePath!, { allowMultiple: false })[0]?.relativePath;
   if (!relativePath) return undefined;
   const userStart0 = Math.max(0, parseInt(startStr!, 10) - 1);
-  const userEnd0 = Math.max(userStart0, parseInt(endStr!, 10) - 1);
+  const userEnd0 = endStr ? Math.max(userStart0, parseInt(endStr, 10) - 1) : userStart0;
   return (
     findDefinitionRangeRow(db, relativePath, userStart0, userEnd0) ??
     findDefinitionChunkRow(db, relativePath, userStart0, userEnd0)

@@ -62,7 +62,12 @@ export interface GraphEvidenceFold {
   id: string;
   mode: 'linear' | 'scc' | 'topology';
   family: GraphEvidenceFamily;
+  /** One subtype name, or `mixed` when this structural fold contains several. */
   subtype: string;
+  /** Complete subtype inventory for the folded relationships. */
+  subtypes?: string[];
+  /** Query-neutral structural region shared by the folded relationships. */
+  region?: string;
   edgeCount: number;
   edgeIds: string[];
   nodeIds: string[];
@@ -145,6 +150,7 @@ const VIEW_FAMILIES: Record<GraphEvidenceView, readonly GraphEvidenceFamily[]> =
 
 const DEFAULT_DEPTH = 2;
 const DEFAULT_MAX_EDGES = 48;
+const MAX_EDGES_PER_RECOVERABLE_FOLD = 64;
 // The internal topology is deliberately wider than the rendered packet. The
 // renderer applies its own edge budget after coverage-diverse selection; using
 // a small system-map presentation budget here would silently starve later edge
@@ -469,42 +475,32 @@ function graphEvidenceInventory(
 
 function graphEvidenceFolds(edges: readonly GraphEvidenceEdge[], maxEdges: number): GraphEvidenceFold[] {
   const omitted = edges.slice(maxEdges);
-  const byKind = new Map<string, GraphEvidenceEdge[]>();
+  const byRegion = new Map<string, GraphEvidenceEdge[]>();
   for (const edge of omitted) {
-    const key = `${edge.family}\u0000${edge.subtype}`;
-    const rows = byKind.get(key) ?? [];
+    const region = graphFoldRegion(edge);
+    const key = `${edge.family}\u0000${region}`;
+    const rows = byRegion.get(key) ?? [];
     rows.push(edge);
-    byKind.set(key, rows);
+    byRegion.set(key, rows);
   }
   const positionById = new Map(edges.map((edge, index) => [edge.id, index + 1]));
   const folds: GraphEvidenceFold[] = [];
-  for (const [key, rows] of byKind) {
-    const unseen = new Map(rows.map((edge) => [edge.id, edge]));
-    while (unseen.size > 0) {
-      const first = [...unseen.values()].sort((left, right) => left.id.localeCompare(right.id))[0]!;
-      const component: GraphEvidenceEdge[] = [];
-      const nodeIds = new Set([first.from.id, first.to.id]);
-      const queue = [first];
-      unseen.delete(first.id);
-      for (let index = 0; index < queue.length; index += 1) {
-        const current = queue[index]!;
-        component.push(current);
-        for (const candidate of [...unseen.values()]) {
-          if (!nodeIds.has(candidate.from.id) && !nodeIds.has(candidate.to.id)) continue;
-          unseen.delete(candidate.id);
-          nodeIds.add(candidate.from.id);
-          nodeIds.add(candidate.to.id);
-          queue.push(candidate);
-        }
-      }
-      const [family, subtype] = key.split('\u0000') as [GraphEvidenceFamily, string];
-      const edgeIds = component.map((edge) => edge.id).sort();
-      const sortedNodeIds = [...nodeIds].sort();
+  for (const [key, rows] of [...byRegion].sort(([left], [right]) => left.localeCompare(right))) {
+    const [family, region] = key.split('\u0000') as [GraphEvidenceFamily, string];
+    const ordered = [...rows].sort((left, right) => left.id.localeCompare(right.id));
+    for (let offset = 0; offset < ordered.length; offset += MAX_EDGES_PER_RECOVERABLE_FOLD) {
+      const chunk = ordered.slice(offset, offset + MAX_EDGES_PER_RECOVERABLE_FOLD);
+      const edgeIds = chunk.map((edge) => edge.id);
+      const subtypes = uniqueNonEmpty(chunk.map((edge) => edge.subtype)).sort();
+      const subtype = subtypes.length === 1 ? subtypes[0]! : 'mixed';
+      const sortedNodeIds = [...new Set(chunk.flatMap((edge) => [edge.from.id, edge.to.id]))].sort();
       folds.push({
-        id: stableGraphFoldId(family, subtype, edgeIds),
-        mode: graphFoldMode(component),
+        id: stableGraphFoldId(family, subtypes.join('\u0000'), edgeIds),
+        mode: graphFoldMode(chunk),
         family,
         subtype,
+        subtypes,
+        region,
         edgeCount: edgeIds.length,
         edgeIds,
         nodeIds: sortedNodeIds,
@@ -515,9 +511,15 @@ function graphEvidenceFolds(edges: readonly GraphEvidenceEdge[], maxEdges: numbe
   return folds.sort(
     (left, right) =>
       GRAPH_EVIDENCE_FAMILIES.indexOf(left.family) - GRAPH_EVIDENCE_FAMILIES.indexOf(right.family) ||
-      left.subtype.localeCompare(right.subtype) ||
+      (left.region ?? '').localeCompare(right.region ?? '') ||
       left.id.localeCompare(right.id),
   );
+}
+
+function graphFoldRegion(edge: GraphEvidenceEdge): string {
+  const from = edge.from.location?.file ?? `kind:${edge.from.kind}`;
+  const to = edge.to.location?.file ?? `kind:${edge.to.kind}`;
+  return from === to ? from : `${from} -> ${to}`;
 }
 
 function selectedFoldEdgeIds(

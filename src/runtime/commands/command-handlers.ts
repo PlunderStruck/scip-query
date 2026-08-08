@@ -1344,11 +1344,20 @@ function renderCapabilityReport(report: ReturnType<typeof getProjectCapabilities
   console.log('\nDirect graph navigation:');
   console.log("  Locate exact text:  scip-query search 'literal'");
   console.log('  Locate file symbols: scip-query outline path/to/file.ts');
-  console.log("  Traverse causality: scip-query evidence --symbol '<exact-symbol>' --view causal --depth 2");
-  console.log("  Traverse a construct: scip-query evidence --at 'path/to/file.ts:line' --view complete --depth 2");
-  console.log("  Batch exact roots: scip-query evidence --symbol '<first>' --symbol '<second>' --view complete");
+  console.log(
+    "  Traverse causality: scip-query evidence --symbol '<exact-symbol>' --edge execution --edge dataflow --direction both --depth 2 --max-edges 32",
+  );
+  console.log(
+    "  Inventory a construct: scip-query evidence --at 'path/to/file.ts:line' --edge execution --edge runtime --direction both --depth 2 --inventory-only",
+  );
+  console.log(
+    "  Connect exact roots: scip-query evidence --symbol '<first>' --symbol '<second>' --edge runtime --direction both --depth 3 --max-edges 32 --connecting",
+  );
   console.log(
     '  Edge families: execution, runtime, dataflow, state, temporal, contract, identity, ownership, dependencies',
+  );
+  console.log(
+    '  Repeat --edge for each selected family; never materialize all families merely to discover what exists.',
   );
   console.log("  Read behavior last: scip-query inspect --at 'path/to/file.ts:line' --view behavior");
   console.log('  Anchors are optional fallback discovery when no exact referent is known.');

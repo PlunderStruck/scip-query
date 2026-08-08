@@ -51,6 +51,23 @@ describe('symbol resolution metadata', () => {
     }
   });
 
+  it('resolves a single-line file location to its narrowest indexed declaration', () => {
+    const db = createResolutionDb();
+    try {
+      expect(resolveSymbol(db, 'src/a.ts:3')).toMatchObject({
+        total: 1,
+        match: {
+          symbol: 'scip-typescript npm pkg 1.0.0 src/`a.ts`/SystemMapAnchorKind#',
+          relativePath: 'src/a.ts',
+          startLine: 2,
+          endLine: 2,
+        },
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   it('prefers an exact callable leaf over same-prefix type declarations', () => {
     const db = createResolutionDb();
     try {

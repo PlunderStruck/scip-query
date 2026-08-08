@@ -3101,12 +3101,12 @@ function deepestSyntaxNodeAtLine(node: SyntaxNode, line: number): SyntaxNode {
 }
 
 function sourceConstructForLocationQuery(db: ScipDatabase, query: string): SystemMapSourceConstruct | null {
-  const match = query.match(/^(.+):(\d+)-(\d+)$/u);
+  const match = query.match(/^(.+):(\d+)(?:-(\d+))?$/u);
   if (!match) return null;
   const relativePath = resolveIndexedDocumentCandidates(db, match[1]!, { allowMultiple: false })[0]?.relativePath;
   if (!relativePath) return null;
   const startLine = Math.max(0, Number.parseInt(match[2]!, 10) - 1);
-  const endLine = Math.max(startLine, Number.parseInt(match[3]!, 10) - 1);
+  const endLine = match[3] ? Math.max(startLine, Number.parseInt(match[3], 10) - 1) : startLine;
   const callable = (getSourceFacts(db, relativePath)?.callables ?? [])
     .filter((candidate) => candidate.startLine <= startLine && candidate.endLine >= endLine)
     .sort(

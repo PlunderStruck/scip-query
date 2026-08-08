@@ -47,9 +47,9 @@ describe('setupAgent', () => {
     expect(agentsMd).toContain('`--subtype <subtype>`');
     expect(agentsMd).toContain('`--inventory-only`');
     expect(agentsMd).toContain('`--connecting`');
-    expect(agentsMd).toContain('`causal` covers execution, runtime, dataflow, state, and temporal relationships');
-    expect(agentsMd).toContain('`structure` covers contract, identity, ownership, and dependencies');
-    expect(agentsMd).toContain('the agent chooses what can establish its claim');
+    expect(agentsMd).toContain('one or more repeated `--edge <family>` flags');
+    expect(agentsMd).toContain('`--max-edges <n>`');
+    expect(agentsMd).toContain('Never request `complete`, `all`, or every family merely to discover what exists');
     expect(agentsMd).toContain(
       'the CLI resolves identity, direction, evidence strength, provider support, and coverage',
     );

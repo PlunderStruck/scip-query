@@ -1,0 +1,31 @@
+{
+  "acceptedAt": "2026-08-08T23:43:42.755Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "374e6a1c174b53a69e81dc22d84828063f9775bc3ab4ce9a5e416a6b66905bde",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "GraphEvidenceFold changed from interface GraphEvidenceFold { id: string; mode: 'linear' | 'scc' | 'topology'; family: GraphEvidenceFamily; subtype: string; edgeCount: number; edgeIds: string[]; nodeIds: strin... to interface GraphEvidenceFold { id: string; mode: 'linear' | 'scc' | 'topology'; family: GraphEvidenceFamily; subtype: string; subtypes?: string[]; region?: string; edgeCount: num....",
+      "target": "./queries:GraphEvidenceFold"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "GraphEvidenceFold changed from interface GraphEvidenceFold { id: string; mode: 'linear' | 'scc' | 'topology'; family: GraphEvidenceFamily; subtype: string; edgeCount: number; edgeIds: string[]; nodeIds: strin... to interface GraphEvidenceFold { id: string; mode: 'linear' | 'scc' | 'topology'; family: GraphEvidenceFamily; subtype: string; subtypes?: string[]; region?: string; edgeCount: num....",
+      "target": "./queries/index:GraphEvidenceFold"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "f changed from interface GraphEvidenceFold { id: string; mode: 'linear' | 'scc' | 'topology'; family: GraphEvidenceFamily; subtype: string; edgeCount: number; edgeIds: string[]; nodeIds: strin... to interface GraphEvidenceFold { id: string; mode: 'linear' | 'scc' | 'topology'; family: GraphEvidenceFamily; subtype: string; subtypes?: string[]; region?: string; edgeCount: num....",
+      "target": "graph-evidence-<hash>.d.ts:f"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "b26ee92d41383e6e08ece37544eec4e807cdbdebccae99902e3490b94936c124",
+  "reason": "Expose optional structural fold regions and subtype inventories for lossless graph evidence recovery.",
+  "schemaVersion": 1
+}

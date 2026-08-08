@@ -455,24 +455,71 @@ function sourceSearchIdentityCoverage(
 }
 
 function sourceSearchScopeRows(result: queries.SourceSearchResult): string[] {
-  const hints = result.scopeHints ?? [];
+  const files = result.fileCoverage ?? [];
+  const identitiesByFile = new Map<string, queries.SourceSearchIdentity[]>();
+  for (const identity of sourceSearchIdentities(result)) {
+    const rows = identitiesByFile.get(identity.relativePath) ?? [];
+    rows.push(identity);
+    identitiesByFile.set(identity.relativePath, rows);
+  }
+  const byScope = new Map<string, queries.SourceSearchFileCoverage[]>();
+  for (const file of files) {
+    const separator = file.relativePath.lastIndexOf('/');
+    const scope = separator < 0 ? '<root>' : file.relativePath.slice(0, separator);
+    const rows = byScope.get(scope) ?? [];
+    rows.push(file);
+    byScope.set(scope, rows);
+  }
+  const manifestRows = [...byScope]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .flatMap(([scope, scopeFiles]) => {
+      const orderedFiles = [...scopeFiles].sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+      const matchingLines = orderedFiles.reduce((total, file) => total + file.matchingLines, 0);
+      if (orderedFiles.length > 12) {
+        return [
+          `    ${scope}: ${matchingLines} matching line(s) across ${orderedFiles.length} file(s); expand this structural region with scip-query search ${shellArgument(result.pattern)} --scope ${shellArgument(scope)}`,
+        ];
+      }
+      return [
+        `    ${scope}: ${matchingLines} matching line(s) across ${orderedFiles.length} file(s)`,
+        ...orderedFiles.map((file) => {
+          const owners = [...(identitiesByFile.get(file.relativePath) ?? [])]
+            .sort((left, right) => left.focusLine - right.focusLine)
+            .filter(
+              (identity, index, rows) =>
+                rows.findIndex(
+                  (candidate) =>
+                    candidate.ownerSymbol === identity.ownerSymbol &&
+                    candidate.ownerStartLine === identity.ownerStartLine,
+                ) === index,
+            );
+          const visibleOwners = owners.slice(0, 2).map((identity) => {
+            const label = identity.ownerShort ?? '<file scope>';
+            const line = displayLine(identity.ownerStartLine ?? identity.focusLine);
+            return `${label} @ ${line}`;
+          });
+          const omittedOwners = Math.max(0, owners.length - visibleOwners.length);
+          const ownerSummary =
+            visibleOwners.length === 0
+              ? ''
+              : `; exact starting construct(s): ${visibleOwners.join('; ')}${
+                  omittedOwners > 0
+                    ? `; +${omittedOwners} more via scip-query outline ${shellArgument(file.relativePath)}`
+                    : ''
+                }`;
+          return `      ${file.relativePath}: ${file.matchingLines} match(es)${ownerSummary}`;
+        }),
+      ];
+    });
   return [
     '  Broad selector: identity enumeration stopped before output transport; there is no cursor to drain.',
-    ...(hints.length > 0
+    ...(manifestRows.length > 0
       ? [
-          '  Highest-coverage scopes available for focused re-query:',
-          ...hints.map(
-            (hint) =>
-              `    ${hint.scope}: ${hint.matchingLines} matching line(s) across ${hint.matchingFiles} file(s); scip-query search ${shellArgument(result.pattern)} --scope ${shellArgument(hint.scope)}`,
-          ),
+          '  Complete structural file manifest; small regions expose exact starting constructs and large regions remain recoverable as one scope:',
+          ...manifestRows,
         ]
       : []),
-    ...((result.omittedScopeHints ?? 0) > 0
-      ? [
-          `    ... ${result.omittedScopeHints} additional matching scope(s) remain recoverable by narrowing the selector.`,
-        ]
-      : []),
-    '  Prefer a more distinctive literal or one relevant scope; use inspect to batch the chosen anchors.',
+    '  Choose explicit file/line roots from this manifest or narrow one structural region; the ordering does not infer task relevance.',
   ];
 }
 
@@ -989,18 +1036,23 @@ function evidenceCommandSections(result: EvidenceCommandResult): ReportSection[]
 }
 
 function graphEvidenceFoldRows(folds: readonly queries.GraphEvidenceFold[]): string[] {
-  return [...folds]
+  if (folds.length === 0) return [];
+  const rows = [...folds]
     .sort(
       (left, right) =>
         left.family.localeCompare(right.family) ||
-        left.subtype.localeCompare(right.subtype) ||
+        (left.region ?? '').localeCompare(right.region ?? '') ||
         left.id.localeCompare(right.id),
     )
-    .map(
-      (fold) =>
-        `  ${fold.id} [${fold.mode}]: ${fold.edgeCount} ${fold.family}/${fold.subtype} relationship(s) across ${fold.nodeIds.length} node(s); ` +
-        `materialize exactly this fold by adding --fold ${fold.id} to the same command.`,
-    );
+    .map((fold) => {
+      const subtypes = fold.subtypes ?? [fold.subtype];
+      const subtypeSummary = subtypes.length === 1 ? subtypes[0]! : `${subtypes.length} subtypes`;
+      return `  ${fold.id}  ${fold.family}/${subtypeSummary}  ${fold.edgeCount} edge(s), ${fold.nodeIds.length} node(s), ${fold.mode}  @ ${fold.region ?? 'unscoped'}`;
+    });
+  return [
+    '  Recovery: rerun the same selectors and bounds with --fold <id>; each ID materializes exactly that row.',
+    ...rows,
+  ];
 }
 
 function graphEvidenceEdgeRow(edge: queries.GraphEvidenceEdge): string {
@@ -1682,8 +1734,8 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
         collectValues,
         [],
       ),
-      option('--depth <n>', 'Maximum graph traversal depth', parseNonNegativeInteger, 2),
-      option('--max-edges <n>', 'Maximum typed relationships to render', parsePositiveInteger, 48),
+      option('--depth <n>', 'Required maximum graph traversal depth', parseNonNegativeInteger),
+      option('--max-edges <n>', 'Required maximum typed relationships to render', parsePositiveInteger),
       option(
         '--include <part>',
         'Add definition, references, callers, callees, dependencies, consumers, or all; repeat or comma-separate',
@@ -1725,9 +1777,9 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     },
     docs: doc('Navigation', [
       'scip-query evidence appendEvent',
-      "scip-query evidence --symbol 'exact-symbol' --view causal --depth 2",
-      "scip-query evidence --symbol 'first' --symbol 'second' --view complete",
-      "scip-query evidence --at 'src/file.ts:40' --edge runtime,state,contract",
+      "scip-query evidence --symbol 'exact-symbol' --edge execution --edge dataflow --direction both --depth 2 --max-edges 32",
+      "scip-query evidence --symbol 'first' --symbol 'second' --edge runtime --direction both --depth 3 --max-edges 32 --connecting",
+      "scip-query evidence --at 'src/file.ts:40' --edge runtime --edge state --edge contract --direction outgoing --depth 2 --inventory-only",
       'scip-query evidence appendEvent --include definition,references,callers,callees',
     ]),
     query: ({ db, args, opts, budget }): EvidenceCommandResult => {
@@ -1742,6 +1794,8 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       const connecting = booleanOptionValue(opts, 'connecting');
       const inventoryOnly = booleanOptionValue(opts, 'inventoryOnly');
       const foldIds = stringArrayOptionValue(opts, 'fold');
+      const maxDepth = numberOptionValue(opts, 'depth');
+      const maxEdges = numberOptionValue(opts, 'maxEdges');
       const graphRequested =
         view !== undefined ||
         families !== undefined ||
@@ -1762,6 +1816,20 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
           semantic: budget.semantic,
         });
       }
+      if (families === undefined) {
+        throw new Error(
+          'Graph evidence requires at least one explicit --edge <family>; repeat --edge to select several relationship families.',
+        );
+      }
+      if (direction === undefined) {
+        throw new Error('Graph evidence requires explicit --direction incoming, outgoing, or both.');
+      }
+      if (maxDepth === undefined) {
+        throw new Error('Graph evidence requires an explicit finite --depth <n>.');
+      }
+      if (!inventoryOnly && maxEdges === undefined) {
+        throw new Error('Materialized graph evidence requires an explicit finite --max-edges <n>.');
+      }
       const sourceParts = selectedEvidenceParts(stringArrayOptionValue(opts, 'include'));
       const sourceSelectors = [...symbols, ...locations];
       return {
@@ -1777,8 +1845,8 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
             connecting,
             inventoryOnly,
             foldIds,
-            maxDepth: definedNumberOption(opts, 'depth', 2),
-            maxEdges: definedNumberOption(opts, 'maxEdges', 48),
+            maxDepth,
+            maxEdges: maxEdges ?? 1,
           },
         ),
         source:

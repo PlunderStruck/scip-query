@@ -1,7 +1,7 @@
 # Navigation Inference Retirement
 
 **Date:** 2026-08-08  
-**Status:** Implementation complete; held acceptance benchmark pending  
+**Status:** Implementation repaired after held failures; acceptance rerun pending
 **Scope:** Remove inferred task relevance from the canonical exploration path while preserving exact graph facts, explicit projections, lossless compression, and public compatibility.
 
 ## Outcome
@@ -251,14 +251,19 @@ Completed on 2026-08-08:
 - Made the held treatment prompt enforce its preregistered semantic-query budget and teach only the canonical locate → explicit project → targeted read protocol. It no longer asks the model to rank anchor groups, choose a recommended route, or follow next-anchor scores.
 - Fixed the cache-lifecycle race in which a temporary or process-lock entry could disappear between directory enumeration and hardening; missing descendants are tolerated while a missing managed root still fails.
 - Made the generated agent command catalogue reproducibly Prettier-clean so generation and validation no longer rewrite each other's output.
+- After the first bounded held runs, made graph projection parameters explicit at the canonical CLI boundary: materialized projections now require selected edge families, direction, finite depth, and a finite edge budget. Library defaults remain for compatibility. This prevents a broad `complete` projection from being an accidental discovery operation.
+- Made every plain `file:line` selector resolve through the same narrowest indexed-declaration lookup as a range selector, with a source-callable fallback for unindexed constructs. The TSLint held run had exposed an interface line that was incorrectly reported as a missing symbol.
+- Replaced one fold per disconnected local component with query-neutral structural folds grouped by relationship family, subtype inventory, and file region. Human output states exact fold recovery once and renders compact fold rows. Every omitted edge ID remains in exactly one recoverable fold.
+- Changed broad literal search coverage into a complete structural file manifest. Small regions enumerate every matching file and exact starting constructs; large regions remain recoverable with one scoped search, and files with additional constructs point to an exact `outline` command. Ordering remains lexical and makes no relevance claim.
 
 Validation completed:
 
 - TypeScript typecheck, formatting, ESLint, generated API check, public-consumer compilation, and skill-link validation pass through `npm run lint`.
-- The full suite passes 2,338/2,338 tests across 285 files with two workers. A four-worker run produced one timeout-only failure in a subprocess-heavy CLI assertion; that file passed 19/19 alone and the entire suite passed at the lower-concurrency validation setting.
+- The full suite passes 2,341/2,341 tests across 285 files with two workers. A four-worker run produced one timeout-only failure in a subprocess-heavy CLI assertion; that file passed 19/19 alone and the entire suite passed at the lower-concurrency validation setting.
 - A packaged-CLI inventory request over `graphEvidence()` reported 458 matching typed relationships and materialized zero. A five-edge outgoing execution projection emitted five exact relationships and represented the 47 withheld relationships in six human-readable recoverable fold rows.
 - A packaged-CLI session probe emitted `graph-evidence.ts:1-140` once, then replaced a later exact request for lines 30-60 with a one-line receipt referencing session emission 1.
 - Agent setup refreshed `AGENTS.md`. The architecture policy maps 469/469 indexed files across 36 declared boundaries and reports no forbidden dependency edges.
+- A direct TSLint replay reduced the formerly 155,700-character broad evidence packet to 19,224 characters for a 32-edge execution/dataflow projection, 21,799 characters for 48 edges, and 28,716 characters when ownership was also selected. The same replay now reports `src/configuration.ts:33` as a matched interface root and exposes `src/runner.ts` in the initial broad-search structural manifest. These are packet-shape probes, not acceptance results.
 
 First held Luna 5.6 max treatment result (`v27`, pinned OpenCode compaction task):
 
@@ -279,3 +284,10 @@ Still required before calling the product direction validated:
 
 - Run the preregistered bounded-round treatment against native controls on at least three held repositories and task shapes, in disposable sandboxes, recording fact recovery, exploration tokens, native-read fallbacks, model, prompt, checkout, index generation, and any transport retry.
 - Treat accuracy non-inferiority as the gate. Token savings are a secondary result, not evidence that the exploration contract is correct.
+
+Bounded held results that triggered the repair above:
+
+- On the meta-harness lifecycle task, the bounded treatment used 324,829 tokens and 102,976 rendered repository characters versus 463,504 tokens and 268,568 characters for native exploration. Both answers recovered only about one of seven strict compound facts. The treatment was more efficient and accuracy-noninferior, but neither answer was acceptable.
+- Removing the interaction bound did not repair accuracy: direct treatment used 949,892 tokens across 24 semantic queries and recovered only about three of seven strict facts. The model reverted to serial locating and inspection instead of using the graph projection.
+- On the TSLint configuration-inheritance task, the pre-repair bounded treatment used 593,972 tokens and recovered about three of seven strict facts. Native exploration used 1,216,133 tokens and recovered about six. The treatment therefore saved about 51% of tokens but failed the accuracy non-inferiority gate.
+- Trace inspection tied that TSLint failure to three surface defects rather than to a need for inferred relevance: the broad search hid `src/runner.ts`, a plain interface `file:line` root was unresolved, and tiny fold rows expanded one graph packet to roughly 156,000 characters. The implementation changes above address those exact general contract failures; the held treatment must now be rerun before any acceptance claim.

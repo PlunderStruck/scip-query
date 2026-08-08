@@ -74,7 +74,9 @@ const handleOutline = dbCommand(({ db, args, opts }) => {
   console.log('\nGraph traversal (choose only roots relevant to the question):');
   for (const node of roots.slice(0, 6)) {
     const symbol = `'${node.symbol.replaceAll("'", "'\\''")}'`;
-    console.log(`  ${node.shortName}: scip-query evidence --symbol ${symbol} --view causal --depth 2`);
+    console.log(
+      `  ${node.shortName}: scip-query evidence --symbol ${symbol} --edge execution --direction both --depth 2 --max-edges 32`,
+    );
   }
   if (roots.length > 6) {
     console.log(`  ${roots.length - 6} additional root selector(s) remain available in --json.`);
