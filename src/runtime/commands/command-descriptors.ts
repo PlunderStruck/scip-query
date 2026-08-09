@@ -225,7 +225,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       commandOperation('environment-observation'),
     ),
     description: 'Report which mapping and analysis capabilities are available in this project',
-    options: withJsonOption([option('--matrix', 'Render the project capability matrix (default output)')]),
+    options: withJsonOption([option('--matrix', 'Add exhaustive provider and language support details')]),
     renderShape: 'custom',
     docs: doc('Maintenance'),
     handler: handlers.handleCapabilities,

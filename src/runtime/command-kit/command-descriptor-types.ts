@@ -147,6 +147,10 @@ export interface CommandSemanticOperationalContract {
   outputCost: CommandOutputCost;
   /** Commands that can resolve a material limitation disclosed by this operation. */
   frontierClosure: readonly string[];
+  /** Concrete referent or selector the operator must supply to use this control deliberately. */
+  manualInput?: string;
+  /** Strongest claim this control can establish when its declared providers and coverage are available. */
+  evidenceCeiling?: string;
 }
 
 export interface CommandLocatorSemanticContract extends CommandSemanticOperationalContract {

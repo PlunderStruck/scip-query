@@ -9,6 +9,30 @@ export interface GraphRelationContract {
   relations: ReadonlyArray<GraphRelationSubtypeContract & { providerId: string; providerLabel: string }>;
 }
 
+export interface GraphRelationQuestionContract {
+  question: string;
+  family: GraphEvidenceFamily;
+  direction: 'incoming' | 'outgoing' | 'both';
+}
+
+/**
+ * Operator-owned questions mapped to the directed relationship capable of
+ * answering them. This is a control legend, not an intent classifier.
+ */
+export const GRAPH_RELATION_QUESTIONS: readonly GraphRelationQuestionContract[] = [
+  { question: 'Who can call or reach this?', family: 'execution', direction: 'incoming' },
+  { question: 'What can this call or reach?', family: 'execution', direction: 'outgoing' },
+  { question: 'Where can this value come from?', family: 'dataflow', direction: 'incoming' },
+  { question: 'Where can this value go?', family: 'dataflow', direction: 'outgoing' },
+  { question: 'Which producer and consumer rendezvous?', family: 'runtime', direction: 'both' },
+  { question: 'What resource is observed or changed?', family: 'state', direction: 'both' },
+  { question: 'What occurs before or after this?', family: 'temporal', direction: 'both' },
+  { question: 'What interface constrains this?', family: 'contract', direction: 'both' },
+  { question: 'Are these observations the same entity?', family: 'identity', direction: 'both' },
+  { question: 'What contains or owns this?', family: 'ownership', direction: 'both' },
+  { question: 'What does this statically rely on?', family: 'dependencies', direction: 'outgoing' },
+] as const;
+
 const CONTRACTS = {
   execution: {
     establishes: 'Static may-call reachability between resolved program constructs.',

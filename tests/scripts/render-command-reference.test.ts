@@ -188,7 +188,9 @@ describe('renderAgentSetupCommandCatalogSource', () => {
 
     expect(source).toContain('scip-query evidence`');
     expect(source).toContain('scip-query inspect');
-    expect(source).toContain('[bounded; bounded coverage]');
+    expect(source).toContain('GENERATED_EXPLORATION_CONTROLS');
+    expect(source.toLowerCase()).toContain('typed edges only to each registered provider ceiling');
+    expect(source).toContain('Relationship controls:');
     expect(source).not.toContain('appendEvent');
     expect(source).not.toContain('scip-query anchors');
     expect(source).not.toContain('scip-query system-map');

@@ -1791,6 +1791,22 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
         ['pattern'],
         'complete',
         'repository',
+        REPOSITORY_OBSERVATION_OPERATION,
+        locatorSemanticContract(
+          ['symbol', 'construct'],
+          [
+            'A package-public export or zero indexed callers is an entry candidate, not proof of runtime ingress.',
+            'Entry classification does not establish that the callable executes.',
+          ],
+          {
+            ranking: 'identity-only',
+            manualInput: 'Optional exact text to filter candidates; otherwise the current indexed repository.',
+            evidenceCeiling:
+              'Source/compiler-grounded entry evidence and indexed caller counts; exported-only candidates remain candidates.',
+            outputCost: 'bounded',
+            frontierClosure: ['evidence', 'inspect', 'code'],
+          },
+        ),
       ),
       contrasts: [
         {

@@ -1440,6 +1440,12 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
             'A source packet does not choose which implementation details are relevant to the user task.',
             'A reference mention does not establish executable reachability.',
           ],
+          undefined,
+          {
+            manualInput: 'One or more exact text, symbol, or file:line selectors naming the unresolved behavior.',
+            evidenceCeiling:
+              'Complete current source for every materialized syntax unit; bounded selector and packet coverage remain explicit.',
+          },
         ),
       ),
       contrasts: [
@@ -1555,6 +1561,12 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
             'Structural source ranking orders exact matches but does not establish task relevance.',
             'A literal co-occurrence does not establish a graph relationship.',
           ],
+          {
+            ranking: 'identity-only',
+            manualInput: 'One exact text literal or deliberately bounded regular expression.',
+            evidenceCeiling:
+              'Exact current-text cardinality and locations within reported text coverage; compiler ownership only where aligned.',
+          },
         ),
       ),
       contrasts: [
@@ -1824,6 +1836,10 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
           'The projection does not infer which relationships are relevant to the user task.',
           'Reference, dependency, data, state, temporal, contract, and identity edges do not become execution claims.',
         ],
+        manualInput:
+          'One or more exact symbol, file:line, or literal roots plus explicit family, direction, depth, and output bound.',
+        evidenceCeiling:
+          'Typed edges only to each registered provider ceiling within the explicitly selected projection and reported coverage.',
       }),
       contrasts: [
         {

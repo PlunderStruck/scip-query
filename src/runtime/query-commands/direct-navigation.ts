@@ -843,6 +843,12 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
         locatorSemanticContract(
           ['file', 'symbol', 'construct'],
           ['File ownership and nesting do not establish execution or task relevance.'],
+          {
+            ranking: 'identity-only',
+            manualInput: 'One exact current project file path.',
+            evidenceCeiling:
+              'Exact compiler-owned constructs and ranges when the file is indexed; no invented semantic overlay.',
+          },
         ),
       ),
       contrasts: [
@@ -877,6 +883,12 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
         sourceReadSemanticContract(
           ['construct', 'exact-source'],
           ['Source materialization does not establish callers, runtime reachability, or task relevance by itself.'],
+          undefined,
+          {
+            manualInput: 'One or more exact symbols, file:line ranges, or file paths.',
+            evidenceCeiling:
+              'Exact current source bytes for every resolved selector, with omitted file-local constructs disclosed.',
+          },
         ),
       ),
       resultUnits: { kind: 'field', field: 'code' },

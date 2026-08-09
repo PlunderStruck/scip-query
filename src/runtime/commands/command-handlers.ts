@@ -88,6 +88,8 @@ import {
   stringOptionValue,
 } from '../command-kit/command-execution.js';
 import { printIsolatedAnalysisResult } from '../isolated-analysis-runner.js';
+import { GENERATED_EXPLORATION_CONTROLS } from '../generated-agent-command-catalog.js';
+import { explorationRelationshipManualRows } from '../command-kit/exploration-manual.js';
 import { sanitizeTerminalLine } from '../../platform/terminal-output.js';
 import { reindexConfiguredProject } from '../project-reindex.js';
 import { evaluateArchitectureStop, renderArchitectureStopOutput } from './architecture-stop-hook.js';
@@ -378,10 +380,14 @@ function renderCapabilities(rawOpts: unknown): void {
     hasIndexedGraph: existsSync(dbPath) && freshness.state !== 'missing',
   });
   if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('capabilities', [], opts, report);
+    printJsonEnvelope('capabilities', [], opts, {
+      ...report,
+      explorationControls: GENERATED_EXPLORATION_CONTROLS,
+      relationshipQuestions: explorationRelationshipManualRows(),
+    });
     return;
   }
-  renderCapabilityReport(report);
+  renderCapabilityReport(report, { matrix: booleanOptionValue(opts, 'matrix') });
 }
 
 export function handleInit(): void {
@@ -1335,32 +1341,51 @@ function renderStatusStats(exists: boolean): void {
   });
 }
 
-function renderCapabilityReport(report: ReturnType<typeof getProjectCapabilities>): void {
-  console.log(`Capabilities for: ${report.languages.join(', ') || '(no detected languages)'}`);
+function renderCapabilityReport(
+  report: ReturnType<typeof getProjectCapabilities>,
+  options: { matrix?: boolean } = {},
+): void {
+  console.log(`Exploration capabilities for: ${report.languages.join(', ') || '(no detected languages)'}`);
+  console.log('\nPrimary controls:');
+  for (const control of GENERATED_EXPLORATION_CONTROLS) {
+    console.log(`  ${control.stage.toUpperCase().padEnd(8)} scip-query ${control.command} [${control.outputCost}]`);
+    console.log(`             Answers: ${control.question}`);
+    console.log(`             Input: ${control.requiredInput}`);
+    console.log(`             Returns: ${control.returnedFact}`);
+    console.log(`             Ceiling: ${control.evidenceCeiling}`);
+    console.log(`             Does not establish: ${control.nonClaim}`);
+    if (control.contrasts.length > 0) console.log(`             Contrast: ${control.contrasts.join(' ')}`);
+    if (control.gapClosingCommands.length > 0) {
+      console.log(`             Close disclosed gaps with: ${control.gapClosingCommands.join(', ')}`);
+    }
+  }
+  console.log('\nRelationship controls:');
+  for (const row of explorationRelationshipManualRows()) {
+    const relation = report.relations.find((candidate) => candidate.family === row.family);
+    const status = relation?.status ?? 'unsupported';
+    console.log(`  ${status.toUpperCase().padEnd(11)} ${row.family} ${row.direction} — ${row.question}`);
+    console.log(`             Establishes: ${row.establishes}`);
+    console.log(`             Strengths: ${row.evidenceStrengths.join(', ') || 'none registered'}`);
+    console.log(`             Provider ceilings: ${row.supportCeilings.join(', ') || 'none registered'}`);
+    console.log(`             Does not establish: ${row.nonClaim}`);
+  }
+  console.log(
+    '\nThe agent chooses a question, family, and direction; this command reports support and does not infer intent.',
+  );
+  if (!options.matrix) {
+    console.log('Run `scip-query capabilities --matrix` for provider and language details.');
+    return;
+  }
+
+  renderCapabilityMatrix(report);
+}
+
+function renderCapabilityMatrix(report: ReturnType<typeof getProjectCapabilities>): void {
+  console.log('\nProject capability matrix:');
   for (const capability of report.capabilities) {
     console.log(`  ${capability.status.toUpperCase().padEnd(11)} ${capability.label} [${capability.evidence}]`);
     console.log(`             ${capability.reason}`);
   }
-  console.log('\nDirect graph navigation:');
-  console.log("  Locate exact text:  scip-query search 'literal'");
-  console.log('  Locate file symbols: scip-query outline path/to/file.ts');
-  console.log(
-    "  Traverse causality: scip-query evidence --symbol '<exact-symbol>' --edge execution --edge dataflow --direction both --depth 2 --max-edges 32",
-  );
-  console.log(
-    "  Inventory a construct: scip-query evidence --at 'path/to/file.ts:line' --edge execution --edge runtime --direction both --depth 2 --inventory-only",
-  );
-  console.log(
-    "  Connect exact roots: scip-query evidence --symbol '<first>' --symbol '<second>' --edge runtime --direction both --depth 3 --max-edges 32 --connecting",
-  );
-  console.log(
-    '  Edge families: execution, runtime, dataflow, state, temporal, contract, identity, ownership, dependencies',
-  );
-  console.log(
-    '  Repeat --edge for each selected family; never materialize all families merely to discover what exists.',
-  );
-  console.log("  Read behavior last: scip-query inspect --at 'path/to/file.ts:line' --view behavior");
-  console.log('  These operations report evidence and provider support; they do not rank task relevance.');
   console.log('\nRelationship support:');
   for (const relation of report.relations) {
     console.log(`  ${relation.status.toUpperCase().padEnd(11)} ${relation.family}`);

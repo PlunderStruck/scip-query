@@ -3,6 +3,7 @@ import type { CommandClaimContract } from '../claim-qualification.js';
 import { commandOperationRoles } from '../command-operation.js';
 import { GRAPH_RELATION_CONTRACTS } from '../../domain/graph-relation-contracts.js';
 import { GRAPH_RELATION_PROVIDER_CONTRACTS } from '../../domain/graph-relation-providers.js';
+import { renderExplorationManualMarkdown } from './exploration-manual.js';
 
 export interface CommandDocEntry {
   id: string;
@@ -123,6 +124,8 @@ export function renderCommandReferenceMarkdown(descriptors: readonly CommandDesc
     'Cross-command evidence citations are off by default. With an explicit `SCIP_QUERY_SESSION`, a complete source unit, a byte-identical exact subset of a prior exact source read, or a graph unit/edge may be replaced by a visible receipt from the same index generation. Preview coverage never suppresses an exact unit; changed bytes, changed graph content, a new generation, or global `--reemit` force full evidence.',
     '',
   ];
+
+  lines.push(...renderExplorationManualMarkdown(descriptors).split('\n'), '');
 
   lines.push('### Agent operation catalogue', '');
   lines.push('| Operation | Commands |');
