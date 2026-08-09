@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import Database from 'better-sqlite3';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { resolveIndexedPaths } from '../../../src/queries/internal/file-resolution.js';
+import { findFirstSymbolMatch } from '../../../src/symbols/symbol-lookup.js';
 
-function withPathFixture(run: (db: ScipDatabase) => void): void {
+function withPathFixture(run: (db: ScipDatabase, root: string) => void): void {
   const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-path-resolver-'));
   const dbPath = join(tempDir, 'index.db');
   const sqliteDb = new Database(dbPath);
@@ -54,11 +55,16 @@ function withPathFixture(run: (db: ScipDatabase) => void): void {
         end_line INTEGER NOT NULL,
         occurrences BLOB NOT NULL
       );
-      INSERT INTO documents (id, language, relative_path) VALUES
-        (1, 'typescript', 'backend/src/routes/horses.ts'),
-        (2, 'typescript', 'backend/src/routes/onboarding/horses.ts'),
-        (3, 'typescript', 'shared/src/contracts/horses.ts');
-    `);
+        INSERT INTO documents (id, language, relative_path) VALUES
+          (1, 'typescript', 'backend/src/routes/horses.ts'),
+          (2, 'typescript', 'backend/src/routes/onboarding/horses.ts'),
+          (3, 'typescript', 'shared/src/contracts/horses.ts');
+        INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
+          (1, 'scip-typescript npm fixture 1.0.0 src/agents().', 'AGENTS.md', 12, 'AGENTS.md setup helper');
+        INSERT INTO defn_enclosing_ranges
+          (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+          (1, 1, 1, 0, 0, 0, 1);
+      `);
     sqliteDb.close();
     sqliteClosed = true;
 
@@ -68,7 +74,7 @@ function withPathFixture(run: (db: ScipDatabase) => void): void {
       projectRoot: tempDir,
     });
     try {
-      run(db);
+      run(db, tempDir);
     } finally {
       db.close();
     }
@@ -93,6 +99,14 @@ describe('path resolver', () => {
         'backend/src/routes/onboarding/horses.ts',
         'shared/src/contracts/horses.ts',
       ]);
+    });
+  });
+
+  it('does not reinterpret an exact unindexed disk path as a fuzzy symbol', () => {
+    withPathFixture((db, root) => {
+      writeFileSync(join(root, 'AGENTS.md'), '# Repository instructions\n');
+      expect(findFirstSymbolMatch(db, 'AGENTS.md')?.relativePath).toBe('backend/src/routes/horses.ts');
+      expect(resolveIndexedPaths(db, 'AGENTS.md')).toEqual([]);
     });
   });
 });

@@ -64,6 +64,12 @@ export function resolveDocumentCandidates(
 ): IndexedDocumentPathCandidate[] {
   const indexed = resolveIndexedDocumentCandidates(db, filePattern, opts);
   if (indexed.length === 0) {
+    // A concrete tracked path is authoritative even when no compiler indexer
+    // emitted a document for it. Falling through to fuzzy symbol lookup can
+    // attach an unrelated same-name symbol's file to Markdown, Vue, generated,
+    // or otherwise unindexed source.
+    if (resolveOnDiskFile(db, filePattern)) return [];
+
     const symbolMatch = findFirstSymbolMatch(db, filePattern);
     if (!symbolMatch || db.isIgnored(symbolMatch.relativePath)) {
       return [];

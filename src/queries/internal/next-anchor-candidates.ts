@@ -795,53 +795,10 @@ export function sourceRangeNextAnchorPacket(
     for (const callsite of callsites) {
       const key = sourceCallsiteKey(seed.file, callsite.line, callsite.calleeLeaf);
       if (exactCallsiteKeys.has(key)) continue;
-      const definitions = sameLanguageCandidates(seed.file, getGlobalLeafIndex(db).get(callsite.calleeLeaf) ?? [])
-        .flatMap((candidate) =>
-          getDefinitionsForFile(db, candidate.file).filter(
-            (definition) => definition.symbol === candidate.symbol && definition.isFunctionLike,
-          ),
-        )
-        .filter((definition) => sourceAllowed(definition.relativePath));
-      const alternatives = uniqueAlternatives(
-        definitions.map((definition) => ({
-          symbol: definition.symbol,
-          label: definition.leaf || callsite.calleeLeaf,
-          file: definition.relativePath,
-          line: definition.startLine,
-          endLine: definition.endLine,
-        })),
-      );
-      if (alternatives.length === 0) {
-        unresolvedCallsites += 1;
-        continue;
-      }
-      const ambiguous = alternatives.length > 1;
-      if (ambiguous) ambiguousCallsites += 1;
-      else identityCandidateCallsites += 1;
-      const signals = callsiteSignals(signalsByLine.get(callsite.line));
-      candidates.push({
-        anchor: {
-          id: nextAnchorId(seed.id, callsite.line, callsite.calleeLeaf),
-          status: ambiguous ? 'ambiguous' : 'candidate',
-          source: 'leaf-identity-candidate',
-          direction: 'downstream',
-          causalRole: 'callee',
-          relationKind: 'call',
-          fromStepId: seed.id,
-          fromLabel: seed.label,
-          callsite: {
-            file: seed.file,
-            line: callsite.line,
-            endLine: callsite.line,
-            text: sourceLines[callsite.line]?.trim() || `${callsite.calleeLeaf}()`,
-            signals,
-            calleeLeaf: callsite.calleeLeaf,
-          },
-          alternatives: alternatives.slice(0, 3),
-          alternativeCount: alternatives.length,
-          evidence: [],
-        },
-      });
+      // A repository-wide same-leaf match is not call-target evidence. Keep
+      // the callsite visible in unresolved accounting until SCIP/compiler or
+      // source-grounded member resolution establishes its identity.
+      unresolvedCallsites += 1;
     }
   }
 

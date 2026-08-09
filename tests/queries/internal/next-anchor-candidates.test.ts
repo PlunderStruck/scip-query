@@ -6,6 +6,7 @@ import {
   callableReferenceCausalRole,
   deduplicateNextAnchorCandidates,
   nextAnchorInspectSafe,
+  sourceRangeNextAnchorPacket,
   systemMapNextAnchorPacket,
   type NextAnchorCandidate,
 } from '../../../src/queries/internal/next-anchor-candidates.js';
@@ -62,6 +63,52 @@ describe('next-anchor target selection', () => {
 
       expect(nextAnchorInspectSafe(db, compact)).toBe(true);
       expect(nextAnchorInspectSafe(db, oversized)).toBe(false);
+    } finally {
+      db.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('does not turn unrelated same-leaf definitions into call-target candidates', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-query-next-anchor-leaf-collision-'));
+    writeFixtureFiles(root, {
+      'src/source.ts': [
+        'export function source(values: string[]) {',
+        "  values.push('x');",
+        '  return values.slice(1);',
+        '}',
+      ],
+      'src/push.ts': ['export function push() { return true; }'],
+      'src/slice.ts': ['export function slice() { return true; }'],
+    });
+    const dbPath = join(root, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/source.ts')
+      .document(2, 'typescript', 'src/push.ts')
+      .document(3, 'typescript', 'src/slice.ts')
+      .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`source.ts`/source().', 'source')
+      .symbol(2, 'scip-typescript npm fixture 1.0.0 src/`push.ts`/push().', 'push')
+      .symbol(3, 'scip-typescript npm fixture 1.0.0 src/`slice.ts`/slice().', 'slice')
+      .definition(1, 1, 1, 0, 0, 3, 1)
+      .definition(2, 2, 2, 0, 0, 0, 39)
+      .definition(3, 3, 3, 0, 0, 0, 40)
+      .write();
+    const db = new ScipDatabase({ dbPath, indexPath: join(root, 'index.scip'), projectRoot: root });
+    try {
+      const packet = sourceRangeNextAnchorPacket(db, [
+        {
+          id: 'source',
+          label: 'source',
+          file: 'src/source.ts',
+          startLine: 0,
+          endLine: 3,
+        },
+      ]);
+
+      expect(packet.anchors).toEqual([]);
+      expect(packet.identityCandidateCallsites).toBe(0);
+      expect(packet.unresolvedCallsites).toBe(2);
+      expect(packet.inspectCommand).toBeNull();
     } finally {
       db.close();
       rmSync(root, { recursive: true, force: true });
