@@ -4,7 +4,9 @@ import { homedir, platform } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const IS_WINDOWS = platform() === 'win32';
-export const BUILTIN_SKILLS = ['scip-query', 'scip-explore', 'concrete-plan'] as const;
+export const BUILTIN_SKILLS = ['scip-query', 'scip-plan', 'scip-setup'] as const;
+export const COMPATIBILITY_SKILLS = ['scip-explore', 'concrete-plan'] as const;
+const INSTALLABLE_SKILLS = [...BUILTIN_SKILLS, ...COMPATIBILITY_SKILLS] as const;
 // ── Skills Installation ────────────────────────────────────
 
 export interface InstallSkillsResult {
@@ -56,7 +58,7 @@ export function installSkills(opts: { quiet?: boolean } = {}): InstallSkillsResu
     const toolName = toolNameForTarget(targetDir);
     pruneStaleOwnedSkillLinks(targetDir, skillsSource, toolName, result, log);
 
-    for (const skill of BUILTIN_SKILLS) {
+    for (const skill of INSTALLABLE_SKILLS) {
       const source = join(skillsSource, skill);
       const target = join(targetDir, skill);
 
@@ -99,7 +101,7 @@ function pruneStaleOwnedSkillLinks(
   result: InstallSkillsResult,
   log: (message: string) => void,
 ): void {
-  const shipped = new Set<string>(BUILTIN_SKILLS);
+  const shipped = new Set<string>(INSTALLABLE_SKILLS);
   for (const entry of readdirSync(targetDir)) {
     if (shipped.has(entry)) continue;
     const target = join(targetDir, entry);

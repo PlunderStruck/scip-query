@@ -154,7 +154,7 @@ describe('Codex exploration trial core', () => {
   it('delegates exploration semantics to installed repository guidance', () => {
     const prompt = treatmentPrompt('How does the path work?');
     expect(prompt).toContain('scip-query as the only repository exploration surface');
-    expect(prompt).toContain('installed scip-query and scip-explore guidance');
+    expect(prompt).toContain('installed scip-query guidance');
     expect(prompt).toContain('Query count is measurement only');
     expect(prompt).toContain('update the answer instead of querying again');
     expect(prompt).not.toContain('target of 4 queries');
@@ -169,7 +169,7 @@ describe('Codex exploration trial core', () => {
   it('supports prompt ablations without leaking task-specific navigation', () => {
     const minimal = minimalTreatmentPrompt('How does the path work?');
     expect(minimal).toContain('scip-query as the only repository exploration surface');
-    expect(minimal).toContain('installed scip-query and scip-explore guidance');
+    expect(minimal).toContain('installed scip-query guidance');
     expect(minimal).not.toContain('exactly one initial locator');
 
     const disciplined = disciplinedControlPrompt('How does the path work?');
@@ -182,7 +182,7 @@ describe('Codex exploration trial core', () => {
   it('supports direct graph navigation without requiring anchor discovery', () => {
     const prompt = directGraphTreatmentPrompt('How does the path work?');
 
-    expect(prompt).toContain('installed scip-query and scip-explore guidance');
+    expect(prompt).toContain('installed scip-query guidance');
     expect(prompt).toContain('use the explicit evidence family and direction');
     expect(prompt).toContain('Query count is measurement only');
     expect(prompt).not.toContain('The normal exploration budget is');

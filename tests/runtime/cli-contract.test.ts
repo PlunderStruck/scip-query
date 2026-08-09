@@ -466,13 +466,13 @@ describe('CLI contract', () => {
     const skillMentionedCommands = readSkillMentionedCommands();
 
     expect(
-      ['inspect', 'search', 'evidence', 'context', 'diff-impact', 'architecture', 'health'].filter(
+        ['inspect', 'search', 'evidence', 'diff-impact', 'architecture', 'health'].filter(
         (command) => !skillMentionedCommands.has(command),
       ),
     ).toEqual([]);
   });
 
-  it('keeps one router and two concise specialist skills without work-state ceremony', () => {
+  it('keeps one exploration skill and two concise workflow skills without work-state ceremony', () => {
     const readSkill = (name: string) => readFileSync(join(process.cwd(), 'skills', name, 'SKILL.md'), 'utf8');
 
     expect(readSkill('scip-query')).toContain('scip-query search');
@@ -483,17 +483,17 @@ describe('CLI contract', () => {
     expect(readSkill('scip-query')).not.toMatch(/diff-gate|Stop hook|Gherkin/i);
     expect(readSkill('scip-query')).toContain('rather than a parallel grep/read workflow');
     expect(readSkill('scip-query')).toContain('query count is never a correctness cutoff');
-    expect(readSkill('scip-explore')).toContain('An exploration is a code-reading investigation');
-    expect(readSkill('scip-explore')).toContain('Accuracy determines when to stop');
-    expect(readSkill('scip-explore')).toContain('private evidence ledger');
-    expect(readSkill('scip-explore')).toContain('never make a known recoverable material claim optional');
-    expect(readSkill('scip-explore')).toContain('scip-query inspect');
-    expect(readSkill('scip-explore')).toContain('scip-query evidence');
-    expect(readSkill('concrete-plan')).toContain('Direct evidence');
-    expect(readSkill('concrete-plan')).toMatch(
-      /\| Change\s+\| Direct evidence\s+\| Preserve\s+\| Retire\s+\| Prove\s+\|/,
-    );
-    expect(`${readSkill('scip-query')}\n${readSkill('scip-explore')}\n${readSkill('concrete-plan')}`).not.toMatch(
+    expect(readSkill('scip-query')).toContain('An exploration is a code-reading investigation');
+    expect(readSkill('scip-query')).toContain('Accuracy determines when to stop');
+    expect(readSkill('scip-query')).toContain('private evidence ledger');
+    expect(readSkill('scip-query')).toContain('never make a known recoverable material claim optional');
+    expect(readSkill('scip-plan')).toContain('Direct evidence');
+    expect(readSkill('scip-plan')).toMatch(/\| Change\s+\| Direct evidence\s+\| Preserve\s+\| Retire\s+\| Prove\s+\|/);
+    expect(readSkill('scip-setup')).toContain('scip-query doctor');
+    expect(readSkill('scip-setup')).toContain('scip-query status');
+    expect(readSkill('scip-explore')).toContain('compatibility alias');
+    expect(readSkill('concrete-plan')).toContain('compatibility alias');
+    expect(`${readSkill('scip-query')}\n${readSkill('scip-plan')}\n${readSkill('scip-setup')}`).not.toMatch(
       /diff-gate|Gherkin/i,
     );
   });

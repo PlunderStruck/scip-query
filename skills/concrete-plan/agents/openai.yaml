@@ -1,4 +1,4 @@
 interface:
-  display_name: 'Concrete Plan'
-  short_description: 'Write concise repository-grounded code plans'
-  default_prompt: 'Use $concrete-plan to write a concise evidence-backed implementation plan.'
+  display_name: 'Concrete Plan (compatibility)'
+  short_description: 'Forward old planning prompts to SCIP Plan'
+  default_prompt: 'Use $scip-plan for this repository plan. $concrete-plan is only a compatibility alias.'

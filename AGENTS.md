@@ -7,7 +7,7 @@ scip-query separates two responsibilities: the agent decides what repository fac
 
 - Use scip-query for repository exploration, including literal search and exact source reads. Native tools are for applying edits, running checks, binary content, or a specific unsupported gap that scip-query has explicitly reported—not a parallel exploration workflow.
 - Before exploring, state the few material repository facts the answer depends on. Include behavior-changing predicates, authorization checks, data reshaping, hard bounds, runtime crossings, durable state changes, emitted notifications, returned values, relevant sibling outcomes, and externally visible ordering only when the request depends on them.
-- For end-to-end explanations, use the installed scip-explore guidance to maintain the evidence ledger and audit the final answer; scip-query supplies the repository observations.
+- For end-to-end explanations, the installed scip-query skill maintains a private evidence ledger and audits the final answer as part of the same exploration workflow.
 - `scip-query search <exact-text>` — Where does this exact text occur in current project text, and which aligned compiler symbol owns each line? Requires: One exact text literal or deliberately bounded regular expression; insert `--` before a literal that starts with a dash.
 - `scip-query outline <file>` — What symbols and nesting exist in this file? Requires: One exact current project file path.
 - `scip-query entrypoints [text]` — Which detected external roots or entry-surface candidates match this text? Requires: Optional exact text to filter candidates; otherwise the current indexed repository.

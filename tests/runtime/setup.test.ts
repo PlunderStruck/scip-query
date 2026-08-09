@@ -40,19 +40,22 @@ afterEach(() => {
 describe('skill installation', () => {
   it('keeps the builtin skill list in lockstep with the shipped directories', async () => {
     const { module } = await loadSetup();
-    expect([...module.BUILTIN_SKILLS].sort()).toEqual(readdirSync(join(process.cwd(), 'skills')).sort());
+    expect([...module.BUILTIN_SKILLS].sort()).toEqual(['scip-plan', 'scip-query', 'scip-setup']);
+    expect(readdirSync(join(process.cwd(), 'skills')).sort()).toEqual(
+      ['concrete-plan', 'scip-explore', 'scip-plan', 'scip-query', 'scip-setup'].sort(),
+    );
   });
 
   it('ships one primary router and two focused workflow skills', async () => {
     const { module } = await loadSetup();
-    expect(module.BUILTIN_SKILLS).toEqual(['scip-query', 'scip-explore', 'concrete-plan']);
+    expect(module.BUILTIN_SKILLS).toEqual(['scip-query', 'scip-plan', 'scip-setup']);
   });
 
   it('installs every bundled skill into Claude, Codex, and shared agent roots', async () => {
     const { module, symlinkSync } = await loadSetup();
     const result = module.installSkills({ quiet: true });
 
-    for (const skill of module.BUILTIN_SKILLS) {
+    for (const skill of ['scip-query', 'scip-plan', 'scip-setup', 'scip-explore', 'concrete-plan']) {
       expect(result.installed).toEqual(
         expect.arrayContaining([`Claude/${skill}`, `Codex/${skill}`, `Agents/${skill}`]),
       );
@@ -63,18 +66,18 @@ describe('skill installation', () => {
   it('prunes stale scip-query skill links without touching unrelated links', async () => {
     const { module, readlinkSync, readdirSync, unlinkSync } = await loadSetup();
     readdirSync.mockImplementation((target: string) =>
-      target === '/home/test/.codex/skills' ? ['scip-plan', 'custom'] : [],
+      target === '/home/test/.codex/skills' ? ['scip-legacy', 'custom'] : [],
     );
     readlinkSync.mockImplementation((target: string) => {
-      if (target.endsWith('/scip-plan')) return '/pkg/skills/scip-plan';
+      if (target.endsWith('/scip-legacy')) return '/pkg/skills/scip-legacy';
       if (target.endsWith('/custom')) return '/elsewhere/custom';
       throw new Error('not-a-link');
     });
 
     const result = module.installSkills({ quiet: true });
 
-    expect(result.pruned).toContain('Codex/scip-plan');
-    expect(unlinkSync).toHaveBeenCalledWith('/home/test/.codex/skills/scip-plan');
+    expect(result.pruned).toContain('Codex/scip-legacy');
+    expect(unlinkSync).toHaveBeenCalledWith('/home/test/.codex/skills/scip-legacy');
     expect(unlinkSync).not.toHaveBeenCalledWith('/home/test/.codex/skills/custom');
   });
 
