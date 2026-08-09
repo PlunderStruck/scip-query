@@ -10,7 +10,7 @@ The complete current-state evidence and product standard are recorded in [2026-0
 
 - Phases 1–6 are implemented in the branch history: collision-safe sensors, non-oracle guidance, canonical command semantics, the generated cockpit manual, normalized readouts, and separated command panels.
 - Phase 7 is implemented and focused validation passes. Provider contracts now reject unregistered evidence strengths at projection time; parser subtype unions are owned by the provider contract; TypeScript and Rust fixtures verify exact ownership plus partial execution/data/state/temporal ceilings and statement-complete behavior outlines; every known analyzer limit is an explicit non-lexical frontier in evidence coverage, `capabilities`, JSON, and generated documentation.
-- Phase 8 is active. Full repository gates and repeated held treatment/control benchmarks remain before this program can be called complete or release-ready.
+- Phase 8 is active. The first final-calibration TSLint, meta-harness, and OpenCode treatment/control comparisons are recorded in `docs/benchmarks/2026-08-09-exploration-surface-calibration-results.md`; manual strict accuracy was non-inferior and treatment reduced total and uncached tokens in all three. Collision, additional-language, variance, and final repository gates remain before this program can be called complete or release-ready.
 
 ## Current path
 
