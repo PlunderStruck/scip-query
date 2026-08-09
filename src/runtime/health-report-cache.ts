@@ -16,7 +16,8 @@ import { readSmallArtifactText } from '../platform/bounded-file.js';
 // cache identity. A partial 30s default report and an unbounded report are not
 // interchangeable.
 // Q3: bumped 3 -> 4 when the report envelope changed.
-const HEALTH_REPORT_CACHE_VERSION = 4;
+// Q4: bumped 4 -> 5 when typed detector evidence contracts became required.
+const HEALTH_REPORT_CACHE_VERSION = 5;
 const HEALTH_REPORT_CACHE_FILE = 'health-report-cache.json';
 
 export interface HealthReportCacheOptions {
@@ -169,7 +170,8 @@ function isHealthReport(value: unknown): value is HealthReport {
     Array.isArray(candidate.scoreBreakdown) &&
     Array.isArray(candidate.actions) &&
     Array.isArray(candidate.pressure) &&
-    Array.isArray(candidate.topComplexity)
+    Array.isArray(candidate.topComplexity) &&
+    Array.isArray(candidate.detectorEvidence)
   );
 }
 

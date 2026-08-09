@@ -780,6 +780,18 @@ export function renderHealthReport(report: HealthReport): void {
     }
   }
 
+  if (report.detectorEvidence.length > 0) {
+    console.log('\n  Detector Evidence Calibration:');
+    for (const contract of report.detectorEvidence) {
+      const unavailable =
+        contract.unavailableRequirements.length > 0
+          ? `; unavailable: ${contract.unavailableRequirements.join(', ')}`
+          : '';
+      console.log(`    ${contract.detector}: ${contract.status}/${contract.providerCoverage}${unavailable}`);
+    }
+    console.log('    Full claims, non-claims, providers, and recovery commands are available in health --json.');
+  }
+
   renderHealthAxes(report);
   renderHealthPressure(report);
 

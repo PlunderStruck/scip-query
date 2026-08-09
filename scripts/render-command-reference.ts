@@ -10,6 +10,7 @@ import {
   renderExplorationSkillGuideMarkdown,
 } from '../src/runtime/command-kit/exploration-manual.js';
 import { commandOperationRoles } from '../src/runtime/command-operation.js';
+import { renderDetectorEvidenceContractsMarkdown } from '../src/queries/health/detector-evidence-contracts.js';
 
 const generated = renderCommandReferenceMarkdown(commandDescriptors);
 
@@ -231,6 +232,7 @@ const isTestImport = process.env['VITEST'] === 'true';
 
 if (!isTestImport && process.argv.includes('--write')) {
   replaceGeneratedBlock(join(process.cwd(), 'docs/COMMAND_REFERENCE.md'), 'COMMAND REFERENCE', generated);
+  writeFileSync(join(process.cwd(), 'docs/DETECTOR_EVIDENCE_CONTRACTS.md'), renderDetectorEvidenceContractsMarkdown());
   if (process.argv.includes('--docs-only')) process.exit(0);
   writeFileSync(
     join(process.cwd(), 'src/runtime/generated-agent-command-catalog.ts'),

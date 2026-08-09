@@ -89,6 +89,7 @@ function minimalReport(overrides: Partial<HealthReport> = {}): HealthReport {
     actions: [],
     pressure: [],
     topComplexity: [],
+    detectorEvidence: [],
     ...overrides,
   };
 }

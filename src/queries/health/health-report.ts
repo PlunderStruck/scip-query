@@ -1,4 +1,5 @@
 import type { ChangeAmplificationSummary, HealthAnalyses } from './health-types.js';
+import type { DetectorEvidenceAssessment } from './detector-evidence-contracts.js';
 
 export type FindingEvidence = 'graph-fact' | 'heuristic' | 'change-graph';
 
@@ -11,6 +12,8 @@ export interface HealthAction {
   locRecoverable: number;
   /** What kind of evidence backs this action — agents should trust accordingly. */
   evidence: FindingEvidence;
+  /** Descriptor id in detectorEvidence; absent for analyses without a typed detector contract. */
+  evidenceContractId?: string;
 }
 
 /** One deduction line — the score is the sum of these, so it is auditable. */
@@ -119,6 +122,8 @@ export interface HealthReport {
   actions: HealthAction[];
   pressure: HealthPressure[];
   topComplexity: Array<{ symbol: string; score: number; file?: string }>;
+  /** Calibrated claim limits and recovery paths for detector evidence. */
+  detectorEvidence: DetectorEvidenceAssessment[];
   warnings?: string[];
 }
 
@@ -178,6 +183,7 @@ export function buildHealthReport(analyses: HealthAnalyses): HealthReport {
     actions,
     pressure,
     topComplexity: analyses.complexity.top,
+    detectorEvidence: analyses.detectorEvidence,
     warnings: analyses.warnings.length > 0 ? analyses.warnings : undefined,
   };
 }
@@ -325,6 +331,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Dead code',
       evidence: 'graph-fact',
+      evidenceContractId: 'dead-visible-references',
       description: `${analyses.dead.count} indexed symbols with no visible repository references — review runtime/framework roots and the capability disclosure, then verify any deletion with cleanup-plan --verify`,
       effort: 'low',
       impact: 'high',
@@ -337,7 +344,8 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Isolated symbols',
       evidence: 'graph-fact',
-      description: `${analyses.isolated.count} symbols completely disconnected from the codebase graph`,
+      evidenceContractId: 'isolated-visible-connectivity',
+      description: `${analyses.isolated.count} symbols with no visible indexed or source-supported caller/callee after root exclusions — runtime reflection and generated dispatch remain disclosed blind spots`,
       effort: 'low',
       impact: 'medium',
       count: analyses.isolated.count,
@@ -361,6 +369,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Similar functions',
       evidence: 'heuristic',
+      evidenceContractId: 'duplicate-structural-candidate',
       description: `${analyses.similarCount} pairs share disclosed call or source-token evidence beyond imports — review domain identity before considering consolidation`,
       effort: 'medium',
       impact: 'medium',
@@ -373,6 +382,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Duplicate function bodies',
       evidence: 'heuristic',
+      evidenceContractId: 'duplicate-structural-candidate',
       description: `${analyses.duplicateBodies.count} exact small-body group(s) across files — consolidate only when the domain concept matches`,
       effort: 'low',
       impact: 'medium',
@@ -481,6 +491,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Wrapper functions',
       evidence: 'heuristic',
+      evidenceContractId: 'wrapper-indirection-candidate',
       description: `${analyses.wrappers.count} single-consumer symbols${scoreCountNote(analyses.wrappers, 'boundary-evidence discount')} — inspect whether each is indirection or an intentional API, framework, or ownership boundary`,
       effort: 'low',
       impact: 'low',
@@ -493,6 +504,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Passthrough functions',
       evidence: 'heuristic',
+      evidenceContractId: 'passthrough-forwarding-candidate',
       description: `${analyses.passthroughs.count} functions that literally forward to one callee — inspect whether each is unnecessary indirection or an intentional boundary`,
       effort: 'low',
       impact: 'low',
@@ -508,6 +520,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Stale abstractions',
       evidence: 'heuristic',
+      evidenceContractId: 'stale-abstraction-candidate',
       description: `${parts.join(', ')} — review public, runtime-registration, and ownership evidence before removing, moving, or inlining`,
       effort: 'low',
       impact: 'medium',

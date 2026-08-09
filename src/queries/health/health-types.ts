@@ -1,4 +1,5 @@
 import type { stats } from '../navigation/stats.js';
+import type { DetectorEvidenceAssessment } from './detector-evidence-contracts.js';
 
 /**
  * Structural copy of analysis/git-history's ChangeAmplification — defined
@@ -14,6 +15,7 @@ export interface ChangeAmplificationSummary {
 export interface HealthAnalyses {
   statsResult: ReturnType<typeof stats>;
   warnings: string[];
+  detectorEvidence: DetectorEvidenceAssessment[];
   dead: CountLocSummary;
   isolated: CountLocSummary;
   realCycleCount: number;

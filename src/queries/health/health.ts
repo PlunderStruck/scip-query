@@ -39,6 +39,7 @@ import type {
   StaleSummary,
   SuppressionSummary,
 } from './health-types.js';
+import { assessDetectorEvidenceContracts } from './detector-evidence-contracts.js';
 
 interface HealthBudget {
   candidateScanLimit: number | undefined;
@@ -266,6 +267,7 @@ function healthAnalysesFromPhases(phaseResults: readonly HealthPhaseResult[]): H
   const analyses: HealthAnalyses = {
     statsResult: overview.statsResult,
     warnings: overview.warnings,
+    detectorEvidence: assessDetectorEvidenceContracts(),
     dead: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'dead' }>>(phaseResults, 'dead').dead,
     isolated: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'isolated' }>>(phaseResults, 'isolated').isolated,
     realCycleCount: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'cycles' }>>(phaseResults, 'cycles')
