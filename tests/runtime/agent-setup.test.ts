@@ -59,7 +59,9 @@ describe('setupAgent', () => {
     expect(agentsMd).toContain('`bounded` means');
     expect(agentsMd).toContain('`incomplete` means');
     expect(agentsMd).toContain('stable recoverable folds');
-    expect(agentsMd).toContain('one locator, one batched projection, and at most one batched gap read');
+    expect(agentsMd).toContain('Query count measures exploration efficiency');
+    expect(agentsMd).toContain('never makes a known recoverable material fact optional');
+    expect(agentsMd).toContain('repeat only while a named fact remains unresolved');
     expect(agentsMd).toContain('batch independent roots and gaps');
     expect(agentsMd).toContain('system-map` and `scip-query anchors` are compatibility views');
     expect(agentsMd).toContain('no next target is automatically recommended');

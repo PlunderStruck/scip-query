@@ -149,9 +149,11 @@ describe('Codex exploration trial core', () => {
   it('makes explicit, bounded, query-neutral graph exploration the treatment contract', () => {
     const prompt = treatmentPrompt('How does the path work?', 4);
     expect(prompt).toContain('scip-query as the only repository exploration surface');
-    expect(prompt).toContain('hard allowance of 4 semantic repository queries');
-    expect(prompt).toContain('Spend at most one query locating exact referents');
-    expect(prompt).toContain('Use one batched scip-query evidence call for all selected roots');
+    expect(prompt).toContain('efficiency against a target of 4 queries');
+    expect(prompt).toContain('this is not a correctness cutoff');
+    expect(prompt).toContain('Prefer one batched query to locate exact referents');
+    expect(prompt).toContain('Batch compatible selected roots into a scip-query evidence call');
+    expect(prompt).toContain('Repeat only while a named claim remains unresolved');
     expect(prompt).toContain('Explicitly choose incoming, outgoing, or both');
     expect(prompt).toContain('edge families or exact subtypes');
     expect(prompt).toContain('provider provenance');
