@@ -1,3 +1,6 @@
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { delimiter, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // Native benchmark runners intentionally remain ESM scripts outside the shipped TypeScript tree.
 // @ts-expect-error native script modules do not ship TypeScript declarations
@@ -7,6 +10,7 @@ import {
   disciplinedControlPrompt,
   minimalTreatmentPrompt,
   parseCodexJsonl,
+  pathWithoutExecutable,
   treatmentPrompt,
 } from '../../scripts/codex-exploration-trial-core.mjs';
 
@@ -147,7 +151,7 @@ describe('Codex exploration trial core', () => {
   });
 
   it('delegates exploration semantics to installed repository guidance', () => {
-    const prompt = treatmentPrompt('How does the path work?', 4);
+    const prompt = treatmentPrompt('How does the path work?');
     expect(prompt).toContain('scip-query as the only repository exploration surface');
     expect(prompt).toContain('follow the installed repository scip-query guidance');
     expect(prompt).toContain('no query-count correctness cutoff');
@@ -182,5 +186,20 @@ describe('Codex exploration trial core', () => {
     expect(prompt).not.toContain('The normal exploration budget is');
     expect(prompt).not.toContain("scip-query evidence --symbol '<first>'");
     expect(prompt).not.toContain("Run the chosen set's printed system-map command unchanged");
+  });
+
+  it('removes every PATH directory that could expose the treatment executable to a control', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-query-control-path-'));
+    try {
+      const clean = join(root, 'clean');
+      const contaminated = join(root, 'contaminated');
+      mkdirSync(clean);
+      mkdirSync(contaminated);
+      writeFileSync(join(contaminated, 'scip-query'), '#!/bin/sh\n');
+
+      expect(pathWithoutExecutable([contaminated, clean].join(delimiter), 'scip-query')).toBe(clean);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

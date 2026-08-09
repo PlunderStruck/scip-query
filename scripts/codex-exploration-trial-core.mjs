@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { delimiter, join } from 'node:path';
 
 const COMMAND_BOUNDARY = String.raw`(?:^|[\s'";&|()])`;
 const COMMAND_END = String.raw`(?=[\s'"]|$)`;
@@ -22,7 +24,7 @@ const MIXED_NATIVE_READ = new RegExp(
   'iu',
 );
 
-export function treatmentPrompt(question, _maxSemanticQueries = 4) {
+export function treatmentPrompt(question) {
   return treatmentBenchmarkPrompt(question);
 }
 
@@ -35,6 +37,15 @@ export function directGraphTreatmentPrompt(question) {
     question,
     'When the answer depends on code relationships, use the explicit evidence family and direction taught by the repository guidance.',
   );
+}
+
+export function pathWithoutExecutable(pathValue, executable) {
+  const executableNames = [executable, `${executable}.cmd`, `${executable}.exe`, `${executable}.bat`];
+  return pathValue
+    .split(delimiter)
+    .filter((directory) => directory !== '')
+    .filter((directory) => !executableNames.some((name) => existsSync(join(directory, name))))
+    .join(delimiter);
 }
 
 function treatmentBenchmarkPrompt(question, additionalGuidance = '') {

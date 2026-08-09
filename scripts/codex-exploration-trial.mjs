@@ -13,6 +13,7 @@ import {
   disciplinedControlPrompt,
   minimalTreatmentPrompt,
   parseCodexJsonl,
+  pathWithoutExecutable,
   treatmentPrompt,
 } from './codex-exploration-trial-core.mjs';
 
@@ -36,8 +37,8 @@ async function main() {
   let artifact;
 
   try {
-    cli = createCliShim(options.cli);
-    const environment = benchmarkEnvironment(sandbox, sessionId, cli.directory);
+    cli = isTreatment(options.mode) ? createCliShim(options.cli) : null;
+    const environment = benchmarkEnvironment(sandbox, sessionId, cli?.directory ?? null);
     if (isTreatment(options.mode) && sandbox.kind === 'detached-worktree') {
       indexSetup = await prepareTreatmentIndex(sandbox.repository, environment);
     }
@@ -76,8 +77,10 @@ async function main() {
         cleaned: sandbox.kind === 'live-repository',
       },
       tool: {
-        cliPath: cli.path,
-        cliSha256: cli.sha256,
+        available: cli !== null,
+        cliPath: cli?.path ?? null,
+        cliSha256: cli?.sha256 ?? null,
+        pathIsolation: cli === null ? 'scip-query-executable-directories-removed' : 'treatment-shim-prepended',
       },
     };
   } finally {
@@ -134,7 +137,7 @@ function promptForMode(mode, definition) {
   const { question } = definition;
   switch (mode) {
     case 'treatment':
-      return treatmentPrompt(question, definition.budgets.maxSemanticQueries);
+      return treatmentPrompt(question);
     case 'treatment-direct':
       return directGraphTreatmentPrompt(question);
     case 'treatment-minimal':
@@ -179,9 +182,17 @@ function liveRepository(repository) {
 }
 
 function benchmarkEnvironment(sandbox, sessionId, cliDirectory) {
+  const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('SCIP_QUERY_')));
+  const inheritedPath = process.env.PATH ?? '';
+  if (cliDirectory === null) {
+    return {
+      ...environment,
+      PATH: pathWithoutExecutable(inheritedPath, 'scip-query'),
+    };
+  }
   return {
-    ...process.env,
-    PATH: `${cliDirectory}:${process.env.PATH ?? ''}`,
+    ...environment,
+    PATH: `${cliDirectory}:${inheritedPath}`,
     SCIP_QUERY_SESSION: sessionId,
     SCIP_QUERY_PROJECT_ROOT: sandbox.repository,
     SCIP_QUERY_SKIP_WATCH_SERVICE: '1',

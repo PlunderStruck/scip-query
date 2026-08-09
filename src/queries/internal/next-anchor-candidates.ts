@@ -635,8 +635,8 @@ export function sourceRangeNextAnchorPacket(
   }));
   let visibleCallsites = 0;
   let graphEvidencedCallsites = 0;
-  let identityCandidateCallsites = 0;
-  let ambiguousCallsites = 0;
+  const identityCandidateCallsites = 0;
+  const ambiguousCallsites = 0;
   let unresolvedCallsites = 0;
   for (const seed of seeds) {
     const sourceLines = getSourceLines(db, seed.file);
