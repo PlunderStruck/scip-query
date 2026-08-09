@@ -79,6 +79,16 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
         ),
       ).toBe(true);
       expect(result.coverage).toMatchObject({ maxDepth: 2, maxEdges: 40, returnedEdges: result.edges.length });
+      expect(result.coverage.blindSpots).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('[general-interprocedural-value-flow]'),
+          expect.stringContaining('[heap-aliasing]'),
+          expect.stringContaining('[exceptional-flow]'),
+          expect.stringContaining('[reflection]'),
+          expect.stringContaining('[generated-dispatch]'),
+          expect.stringContaining('[unsupported-framework-adapters]'),
+        ]),
+      );
     } finally {
       db.close();
     }

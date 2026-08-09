@@ -2,7 +2,10 @@ import type { CommandDescriptor, CommandEvidenceTier, CommandSemanticContract } 
 import type { CommandClaimContract } from '../claim-qualification.js';
 import { commandOperationRoles } from '../command-operation.js';
 import { GRAPH_RELATION_CONTRACTS } from '../../domain/graph-relation-contracts.js';
-import { GRAPH_RELATION_PROVIDER_CONTRACTS } from '../../domain/graph-relation-providers.js';
+import {
+  GRAPH_RELATION_PROVIDER_CONTRACTS,
+  GRAPH_RELATION_UNAVAILABLE_FRONTIERS,
+} from '../../domain/graph-relation-providers.js';
 import { renderExplorationManualMarkdown } from './exploration-manual.js';
 
 export interface CommandDocEntry {
@@ -168,6 +171,19 @@ export function renderCommandReferenceMarkdown(descriptors: readonly CommandDesc
       ];
       lines.push(`| ${cells.join(' | ')} |`);
     }
+  }
+  lines.push('');
+  lines.push('### Explicitly unavailable relationship analyses', '');
+  lines.push(
+    'An unavailable frontier is a relationship class for which no registered analyzer can provide complete evidence. Its absence from a graph is therefore not evidence that the relationship does not exist.',
+    '',
+  );
+  lines.push('| Frontier | Families | Unavailable capability | Consequence | Recover selected paths with |');
+  lines.push('|---|---|---|---|---|');
+  for (const frontier of GRAPH_RELATION_UNAVAILABLE_FRONTIERS) {
+    lines.push(
+      `| \`${frontier.id}\` | ${frontier.families.map((family) => `\`${family}\``).join(', ')} | ${escapeTableCell(frontier.capability)} | ${escapeTableCell(frontier.consequence)} | ${frontier.recoverWith.map((command) => `\`${escapeCode(command)}\``).join(', ')} |`,
+    );
   }
   lines.push('');
 

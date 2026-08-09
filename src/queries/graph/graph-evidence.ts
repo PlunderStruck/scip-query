@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { ScipDatabase } from '../../storage/db.js';
-import { graphRelationProviderFor } from '../../domain/graph-relation-providers.js';
+import { graphRelationProviderFor, graphRelationUnavailableBlindSpots } from '../../domain/graph-relation-providers.js';
 import {
   GRAPH_EVIDENCE_FAMILIES,
   type GraphEvidenceFamily,
@@ -266,7 +266,7 @@ export function graphEvidence(
       omittedEdges,
       frontierGroups: topology.frontiers.length,
       unsupportedFrontiers,
-      blindSpots: [...topology.coverage.blindSpots],
+      blindSpots: uniqueNonEmpty([...topology.coverage.blindSpots, ...graphRelationUnavailableBlindSpots(families)]),
       explanation: inventoryOnly
         ? `${matched.length} relationship(s) match the explicit projection; only exact inventory counts were requested.`
         : foldIds.length > 0
@@ -312,6 +312,12 @@ function graphEdgesFor(
     if (!providerContract) {
       throw new Error(`No graph relation provider contract is registered for ${family}/${semantic.subtype}.`);
     }
+    const evidenceStrength = combinedEvidenceStrength(edge);
+    if (!providerContract.relation.evidenceStrengths.includes(evidenceStrength)) {
+      throw new Error(
+        `Graph relation provider ${providerContract.provider.id} does not admit ${evidenceStrength} evidence for ${family}/${semantic.subtype}.`,
+      );
+    }
     return [
       {
         id: `${edge.id}:${index}:${family}`,
@@ -326,7 +332,7 @@ function graphEdgesFor(
         establishes: providerContract.relation.establishes,
         nonClaims: [...providerContract.relation.nonClaims],
         recoverWith: [...providerContract.relation.recoverWith],
-        evidenceStrength: combinedEvidenceStrength(edge),
+        evidenceStrength,
         evidenceMethods: uniqueNonEmpty(edge.evidence.map((source) => source.method)),
         evidenceConstituents: uniqueEvidenceConstituents(edge.evidence),
         context: semantic.context ? { ...semantic.context } : null,

@@ -45,6 +45,84 @@ export interface GraphRelationProviderContract {
   relations: readonly GraphRelationSubtypeContract[];
 }
 
+/**
+ * One analysis limit that no registered provider closes. These are capability
+ * frontiers, not observed graph edges: they explain which relationship could
+ * exist without being present in a projection.
+ */
+export interface GraphRelationUnavailableFrontier {
+  id: string;
+  families: readonly GraphEvidenceFamily[];
+  capability: string;
+  consequence: string;
+  recoverWith: readonly string[];
+}
+
+export const GRAPH_RELATION_UNAVAILABLE_FRONTIERS: readonly GraphRelationUnavailableFrontier[] = [
+  {
+    id: 'general-interprocedural-value-flow',
+    families: ['dataflow'],
+    capability: 'Whole-program definition-use flow through arbitrary calls and returns is unavailable.',
+    consequence: 'Missing dataflow edges cannot establish that a value never crosses an unmodeled call.',
+    recoverWith: ['value-flow', 'dependence-slice', 'inspect', 'code'],
+  },
+  {
+    id: 'heap-aliasing',
+    families: ['dataflow', 'state'],
+    capability: 'Heap points-to and cross-instance alias analysis are unavailable.',
+    consequence: 'Missing field or state edges cannot establish that two references never reach the same object.',
+    recoverWith: ['value-flow', 'dependence-slice', 'inspect', 'code'],
+  },
+  {
+    id: 'exceptional-flow',
+    families: ['execution', 'dataflow', 'temporal'],
+    capability: 'Interprocedural exception propagation and finally completion flow are unavailable.',
+    consequence: 'Normal-path reachability and ordering do not establish behavior after a throw or rejection.',
+    recoverWith: ['dependence-slice', 'inspect', 'code'],
+  },
+  {
+    id: 'reflection',
+    families: ['execution', 'runtime', 'identity', 'dependencies'],
+    capability:
+      'Reflective lookup, dynamic loading, and name-computed invocation are unavailable without exact evidence.',
+    consequence: 'Missing static edges cannot establish that a construct is unreachable through reflection.',
+    recoverWith: ['search', 'inspect', 'code'],
+  },
+  {
+    id: 'generated-dispatch',
+    families: ['execution', 'runtime', 'identity'],
+    capability: 'Dispatch tables or names created only by generated or unavailable source are unavailable.',
+    consequence: 'Missing dispatch edges cannot establish that no generated consumer exists.',
+    recoverWith: ['search', 'inspect', 'code'],
+  },
+  {
+    id: 'unsupported-framework-adapters',
+    families: ['runtime', 'dataflow', 'state', 'temporal'],
+    capability: 'Framework runtime crossings without a registered source adapter are unavailable.',
+    consequence:
+      'Missing boundary edges cannot establish that no producer, consumer, state effect, or ordering exists.',
+    recoverWith: ['search', 'inspect', 'code'],
+  },
+] as const;
+
+export function graphRelationUnavailableFrontiersFor(
+  families: readonly GraphEvidenceFamily[],
+): GraphRelationUnavailableFrontier[] {
+  const selected = new Set(families);
+  return GRAPH_RELATION_UNAVAILABLE_FRONTIERS.filter((frontier) =>
+    frontier.families.some((family) => selected.has(family)),
+  );
+}
+
+export function graphRelationUnavailableBlindSpots(families: readonly GraphEvidenceFamily[]): string[] {
+  return graphRelationUnavailableFrontiersFor(families).map(
+    (frontier) =>
+      `[${frontier.id}] ${frontier.capability} ${frontier.consequence} Recover selected paths with: ${frontier.recoverWith
+        .map((command) => `scip-query ${command}`)
+        .join(', ')}.`,
+  );
+}
+
 const BOTH = ['incoming', 'outgoing', 'both'] as const;
 
 function relation(
@@ -72,7 +150,7 @@ function relation(
   };
 }
 
-const CONTROL_DEPENDENCE_SUBTYPES = [
+export const PARSER_CONTROL_RELATION_SUBTYPES = [
   'predicate-consequence',
   'predicate-alternative',
   'predicate-fallthrough',
@@ -87,8 +165,9 @@ const CONTROL_DEPENDENCE_SUBTYPES = [
   'handler-return',
   'handler-throw',
 ] as const;
+export type ParserControlRelationSubtype = (typeof PARSER_CONTROL_RELATION_SUBTYPES)[number];
 
-const STATE_VALUE_SUBTYPES = [
+export const PARSER_STATE_VALUE_RELATION_SUBTYPES = [
   'captured-value-to-state',
   'constant-to-state',
   'expression-to-state',
@@ -96,13 +175,15 @@ const STATE_VALUE_SUBTYPES = [
   'return-to-state',
   'value-to-state',
 ] as const;
+export type ParserStateValueRelationSubtype = (typeof PARSER_STATE_VALUE_RELATION_SUBTYPES)[number];
 
-const TEMPORAL_SUBTYPES = [
+export const PARSER_TEMPORAL_RELATION_SUBTYPES = [
   'await-completion-before',
   'awaits-completion',
   'inside-lock-scope',
   'lexical-successor',
 ] as const;
+export type ParserTemporalRelationSubtype = (typeof PARSER_TEMPORAL_RELATION_SUBTYPES)[number];
 
 export const GRAPH_RELATION_PROVIDER_CONTRACTS: readonly GraphRelationProviderContract[] = [
   {
@@ -202,7 +283,7 @@ export const GRAPH_RELATION_PROVIDER_CONTRACTS: readonly GraphRelationProviderCo
     label: 'parser-proved intraprocedural control dependence',
     requirements: ['indexed-graph', 'source-facts'],
     relations: [
-      ...CONTROL_DEPENDENCE_SUBTYPES.map((subtype) =>
+      ...PARSER_CONTROL_RELATION_SUBTYPES.map((subtype) =>
         relation('execution', subtype, 'The outcome is control-dependent on the reported predicate or handler.', {
           strengths: ['exact'],
           nonClaims: ['Local control dependence does not establish that the containing function executes.'],
@@ -211,10 +292,12 @@ export const GRAPH_RELATION_PROVIDER_CONTRACTS: readonly GraphRelationProviderCo
       ),
       relation('execution', 'returns', 'The selected construct contains the reported return terminal.', {
         strengths: ['exact'],
+        nonClaims: ['A local return terminal does not establish that the containing callable executes.'],
         recoverWith: ['inspect', 'code'],
       }),
       relation('execution', 'throws', 'The selected construct contains the reported throw terminal.', {
         strengths: ['exact'],
+        nonClaims: ['A local throw terminal does not establish propagation, handling, or callable execution.'],
         recoverWith: ['inspect', 'code'],
       }),
     ],
@@ -309,7 +392,7 @@ export const GRAPH_RELATION_PROVIDER_CONTRACTS: readonly GraphRelationProviderCo
     label: 'parser-proved local state and temporal facts',
     requirements: ['indexed-graph', 'source-facts'],
     relations: [
-      ...STATE_VALUE_SUBTYPES.map((subtype) =>
+      ...PARSER_STATE_VALUE_RELATION_SUBTYPES.map((subtype) =>
         relation('dataflow', subtype, 'The reported source value is assigned into the identified state resource.', {
           strengths: ['exact'],
           nonClaims: ['The edge does not establish alias, heap, or later read flow.'],
@@ -329,7 +412,7 @@ export const GRAPH_RELATION_PROVIDER_CONTRACTS: readonly GraphRelationProviderCo
             },
           ),
       ),
-      ...TEMPORAL_SUBTYPES.map((subtype) =>
+      ...PARSER_TEMPORAL_RELATION_SUBTYPES.map((subtype) =>
         relation('temporal', subtype, 'The reported source constructs have the named local ordering relationship.', {
           strengths: ['exact'],
           nonClaims: ['Local source order does not establish cross-process happens-before or durable completion.'],

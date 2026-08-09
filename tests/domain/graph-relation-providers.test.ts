@@ -3,6 +3,8 @@ import { GRAPH_EVIDENCE_FAMILIES } from '../../src/domain/graph-exploration-cont
 import { GRAPH_RELATION_CONTRACTS } from '../../src/domain/graph-relation-contracts.js';
 import {
   GRAPH_RELATION_PROVIDER_CONTRACTS,
+  GRAPH_RELATION_UNAVAILABLE_FRONTIERS,
+  graphRelationUnavailableFrontiersFor,
   graphRelationProviderFor,
 } from '../../src/domain/graph-relation-providers.js';
 
@@ -21,6 +23,29 @@ describe('graph relation provider contracts', () => {
         expect(relation.directions.length).toBeGreaterThan(0);
         expect(relation.evidenceStrengths.length).toBeGreaterThan(0);
         expect(relation.establishes.trim()).not.toBe('');
+        expect(relation.nonClaims.length, `${relation.family}/${exampleSubtype}`).toBeGreaterThan(0);
+        expect(relation.recoverWith.length, `${relation.family}/${exampleSubtype}`).toBeGreaterThan(0);
+        if (relation.supportCeiling === 'exact') {
+          expect(relation.evidenceStrengths, `${relation.family}/${exampleSubtype}`).not.toContain('candidate');
+        }
+        if (relation.supportCeiling === 'candidate') {
+          expect(relation.evidenceStrengths, `${relation.family}/${exampleSubtype}`).toEqual(['candidate']);
+        }
+      }
+    }
+  });
+
+  it('keeps provider matchers non-overlapping for every registered family and subtype', () => {
+    const relations = GRAPH_RELATION_PROVIDER_CONTRACTS.flatMap((provider) => provider.relations);
+    for (const [index, left] of relations.entries()) {
+      for (const right of relations.slice(index + 1)) {
+        if (left.family !== right.family) continue;
+        const leftExample = left.match === 'prefix' ? `${left.subtype}fixture` : left.subtype;
+        const rightExample = right.match === 'prefix' ? `${right.subtype}fixture` : right.subtype;
+        expect(
+          matches(left, rightExample) || matches(right, leftExample),
+          `${left.family}/${left.subtype} overlaps ${right.family}/${right.subtype}`,
+        ).toBe(false);
       }
     }
   });
@@ -37,4 +62,34 @@ describe('graph relation provider contracts', () => {
       expect(contract.providers.length, contract.family).toBeGreaterThan(0);
     }
   });
+
+  it('declares every known unavailable analysis as an explicit non-lexical frontier', () => {
+    expect(GRAPH_RELATION_UNAVAILABLE_FRONTIERS.map((frontier) => frontier.id)).toEqual([
+      'general-interprocedural-value-flow',
+      'heap-aliasing',
+      'exceptional-flow',
+      'reflection',
+      'generated-dispatch',
+      'unsupported-framework-adapters',
+    ]);
+    for (const frontier of GRAPH_RELATION_UNAVAILABLE_FRONTIERS) {
+      expect(frontier.families.length, frontier.id).toBeGreaterThan(0);
+      expect(frontier.capability.trim(), frontier.id).not.toBe('');
+      expect(frontier.consequence.trim(), frontier.id).not.toBe('');
+      expect(frontier.recoverWith.length, frontier.id).toBeGreaterThan(0);
+      expect(frontier.recoverWith, frontier.id).not.toContain('similar');
+      expect(frontier.recoverWith, frontier.id).not.toContain('anchors');
+    }
+    expect(graphRelationUnavailableFrontiersFor(['identity']).map((frontier) => frontier.id)).toEqual([
+      'reflection',
+      'generated-dispatch',
+    ]);
+  });
 });
+
+function matches(
+  relation: (typeof GRAPH_RELATION_PROVIDER_CONTRACTS)[number]['relations'][number],
+  subtype: string,
+): boolean {
+  return relation.match === 'prefix' ? subtype.startsWith(relation.subtype) : subtype === relation.subtype;
+}

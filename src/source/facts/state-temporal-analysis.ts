@@ -1,16 +1,14 @@
 import { getAst } from '../ast/ast-core.js';
 import type { SyntaxNode } from '../ast/ast-types.js';
 import type { ScipDatabase } from '../../storage/db.js';
+import type {
+  ParserStateValueRelationSubtype,
+  ParserTemporalRelationSubtype,
+} from '../../domain/graph-relation-providers.js';
 
 export type SourceMutationOperation = 'assign' | 'update' | 'delete';
 export type SourceStateDurability = 'in-memory';
-export type SourceStateDataSubtype =
-  | 'captured-value-to-state'
-  | 'constant-to-state'
-  | 'expression-to-state'
-  | 'property-to-state'
-  | 'return-to-state'
-  | 'value-to-state';
+export type SourceStateDataSubtype = ParserStateValueRelationSubtype;
 
 export interface SourceProgramConstruct {
   kind: 'event' | 'lock' | 'resource' | 'value';
@@ -29,11 +27,7 @@ export interface SourceStateMutationFact {
   dataSubtype: SourceStateDataSubtype | null;
 }
 
-export type SourceTemporalSubtype =
-  | 'await-completion-before'
-  | 'awaits-completion'
-  | 'inside-lock-scope'
-  | 'lexical-successor';
+export type SourceTemporalSubtype = ParserTemporalRelationSubtype;
 
 export interface SourceTemporalFact {
   from: SourceProgramConstruct;

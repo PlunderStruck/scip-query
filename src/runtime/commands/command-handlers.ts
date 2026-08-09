@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { SupportedLanguage } from '../../domain/types.js';
+import { GRAPH_RELATION_UNAVAILABLE_FRONTIERS } from '../../domain/graph-relation-providers.js';
 import { resolveIndexStoragePaths } from '../../platform/cache-layout.js';
 import { WATCH_LOCK_FILE } from '../../platform/watch-service-state.js';
 import * as queries from '../../queries/index.js';
@@ -385,6 +386,7 @@ function renderCapabilities(rawOpts: unknown): void {
       ...report,
       explorationControls: GENERATED_EXPLORATION_CONTROLS,
       relationshipQuestions: explorationRelationshipManualRows(),
+      unavailableRelationshipFrontiers: GRAPH_RELATION_UNAVAILABLE_FRONTIERS,
     });
     return;
   }
@@ -1398,6 +1400,13 @@ function renderCapabilityReport(
   console.log('\nEvidence strength legend:');
   for (const [strength, meaning] of Object.entries(GRAPH_EVIDENCE_STRENGTH_DEFINITIONS)) {
     console.log(`  ${strength.toUpperCase().padEnd(11)} ${meaning}`);
+  }
+  console.log('\nExplicitly unavailable relationship analyses:');
+  for (const frontier of GRAPH_RELATION_UNAVAILABLE_FRONTIERS) {
+    console.log(`  ${frontier.id} [${frontier.families.join(', ')}]`);
+    console.log(`             ${frontier.capability}`);
+    console.log(`             Consequence: ${frontier.consequence}`);
+    console.log(`             Recover selected paths with: ${frontier.recoverWith.join(', ')}`);
   }
   console.log(
     '\nThe agent chooses a question, family, and direction; this command reports support and does not infer intent.',

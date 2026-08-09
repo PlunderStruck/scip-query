@@ -108,8 +108,8 @@ The operator chooses the material question and deliberately selects a control. T
 | `parser-control-dependence` | `execution/finally-cleanup` | `incoming`, `outgoing`, `both` | `partial` | The outcome is control-dependent on the reported predicate or handler. | Local control dependence does not establish that the containing function executes. |
 | `parser-control-dependence` | `execution/handler-return` | `incoming`, `outgoing`, `both` | `partial` | The outcome is control-dependent on the reported predicate or handler. | Local control dependence does not establish that the containing function executes. |
 | `parser-control-dependence` | `execution/handler-throw` | `incoming`, `outgoing`, `both` | `partial` | The outcome is control-dependent on the reported predicate or handler. | Local control dependence does not establish that the containing function executes. |
-| `parser-control-dependence` | `execution/returns` | `incoming`, `outgoing`, `both` | `partial` | The selected construct contains the reported return terminal. | - |
-| `parser-control-dependence` | `execution/throws` | `incoming`, `outgoing`, `both` | `partial` | The selected construct contains the reported throw terminal. | - |
+| `parser-control-dependence` | `execution/returns` | `incoming`, `outgoing`, `both` | `partial` | The selected construct contains the reported return terminal. | A local return terminal does not establish that the containing callable executes. |
+| `parser-control-dependence` | `execution/throws` | `incoming`, `outgoing`, `both` | `partial` | The selected construct contains the reported throw terminal. | A local throw terminal does not establish propagation, handling, or callable execution. |
 | `bounded-static-value-flow` | `dataflow/argument-to-parameter` | `incoming`, `outgoing`, `both` | `partial` | The reported value may reach the target through the evidenced callsite transfer. | This provider does not establish general local definition-use, alias, field, or heap flow. |
 | `bounded-static-value-flow` | `dataflow/constant-to-parameter` | `incoming`, `outgoing`, `both` | `partial` | The reported value may reach the target through the evidenced callsite transfer. | This provider does not establish general local definition-use, alias, field, or heap flow. |
 | `bounded-static-value-flow` | `dataflow/property-to-parameter` | `incoming`, `outgoing`, `both` | `partial` | The reported value may reach the target through the evidenced callsite transfer. | This provider does not establish general local definition-use, alias, field, or heap flow. |
@@ -135,6 +135,19 @@ The operator chooses the material question and deliberately selects a control. T
 | `parser-state-temporal` | `temporal/awaits-completion` | `incoming`, `outgoing`, `both` | `partial` | The reported source constructs have the named local ordering relationship. | Local source order does not establish cross-process happens-before or durable completion. |
 | `parser-state-temporal` | `temporal/inside-lock-scope` | `incoming`, `outgoing`, `both` | `partial` | The reported source constructs have the named local ordering relationship. | Local source order does not establish cross-process happens-before or durable completion. |
 | `parser-state-temporal` | `temporal/lexical-successor` | `incoming`, `outgoing`, `both` | `partial` | The reported source constructs have the named local ordering relationship. | Local source order does not establish cross-process happens-before or durable completion. |
+
+### Explicitly unavailable relationship analyses
+
+An unavailable frontier is a relationship class for which no registered analyzer can provide complete evidence. Its absence from a graph is therefore not evidence that the relationship does not exist.
+
+| Frontier | Families | Unavailable capability | Consequence | Recover selected paths with |
+|---|---|---|---|---|
+| `general-interprocedural-value-flow` | `dataflow` | Whole-program definition-use flow through arbitrary calls and returns is unavailable. | Missing dataflow edges cannot establish that a value never crosses an unmodeled call. | `value-flow`, `dependence-slice`, `inspect`, `code` |
+| `heap-aliasing` | `dataflow`, `state` | Heap points-to and cross-instance alias analysis are unavailable. | Missing field or state edges cannot establish that two references never reach the same object. | `value-flow`, `dependence-slice`, `inspect`, `code` |
+| `exceptional-flow` | `execution`, `dataflow`, `temporal` | Interprocedural exception propagation and finally completion flow are unavailable. | Normal-path reachability and ordering do not establish behavior after a throw or rejection. | `dependence-slice`, `inspect`, `code` |
+| `reflection` | `execution`, `runtime`, `identity`, `dependencies` | Reflective lookup, dynamic loading, and name-computed invocation are unavailable without exact evidence. | Missing static edges cannot establish that a construct is unreachable through reflection. | `search`, `inspect`, `code` |
+| `generated-dispatch` | `execution`, `runtime`, `identity` | Dispatch tables or names created only by generated or unavailable source are unavailable. | Missing dispatch edges cannot establish that no generated consumer exists. | `search`, `inspect`, `code` |
+| `unsupported-framework-adapters` | `runtime`, `dataflow`, `state`, `temporal` | Framework runtime crossings without a registered source adapter are unavailable. | Missing boundary edges cannot establish that no producer, consumer, state effect, or ordering exists. | `search`, `inspect`, `code` |
 
 ### Indexing
 

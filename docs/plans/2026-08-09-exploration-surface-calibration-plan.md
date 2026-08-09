@@ -6,6 +6,12 @@ Deliver scip-query as a calibrated repository instrument panel: six primary expl
 
 The complete current-state evidence and product standard are recorded in [2026-08-09-exploration-surface-audit.md](2026-08-09-exploration-surface-audit.md).
 
+## Implementation status
+
+- Phases 1–6 are implemented in the branch history: collision-safe sensors, non-oracle guidance, canonical command semantics, the generated cockpit manual, normalized readouts, and separated command panels.
+- Phase 7 is implemented and focused validation passes. Provider contracts now reject unregistered evidence strengths at projection time; parser subtype unions are owned by the provider contract; TypeScript and Rust fixtures verify exact ownership plus partial execution/data/state/temporal ceilings and statement-complete behavior outlines; every known analyzer limit is an explicit non-lexical frontier in evidence coverage, `capabilities`, JSON, and generated documentation.
+- Phase 8 is active. Full repository gates and repeated held treatment/control benchmarks remain before this program can be called complete or release-ready.
+
 ## Current path
 
 Repository guidance and the two exploration skills already assign objective selection and stopping to the agent (`AGENTS.md:4-35`, `skills/scip-explore/SKILL.md:8-34`, `skills/scip-query/SKILL.md:48-76`). Command descriptors already declare agent questions, result units, semantic operations, costs, gap-closing commands, coverage, and a limited set of contrasts (`src/runtime/command-kit/command-descriptor-types.ts:206-235`). `evidence` already projects explicit typed relationships (`src/runtime/query-commands/navigation.ts:1736-1885`). The implementation work is therefore consolidation and correctness repair, not a new relevance engine.
@@ -84,4 +90,3 @@ Each slice must leave the repository type-correct, testable, and compatible befo
 ## Open uncertainty
 
 The public compatibility boundary for a new hidden legacy source-evidence command must be checked against the generated API manifest before implementation. Resolve it with `npm run api:check` and the descriptor/public-consumer tests; preserve the current positional invocation if external consumers would otherwise break, but remove it from all canonical documentation and skills.
-

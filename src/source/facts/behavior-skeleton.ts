@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../../storage/db.js';
+import type { ParserControlRelationSubtype } from '../../domain/graph-relation-providers.js';
 import { getAst } from '../ast/ast-core.js';
 import type { SyntaxNode } from '../ast/ast-types.js';
 import { classifyFile } from '../primitives/file-kind.js';
@@ -67,20 +68,7 @@ export interface BehaviorConstructRange {
   endLine: number;
 }
 
-export type BehaviorControlSubtype =
-  | 'predicate-consequence'
-  | 'predicate-alternative'
-  | 'predicate-fallthrough'
-  | 'predicate-case'
-  | 'predicate-default'
-  | 'predicate-return'
-  | 'predicate-throw'
-  | 'loop-iteration'
-  | 'loop-exit'
-  | 'exception-handler'
-  | 'finally-cleanup'
-  | 'handler-return'
-  | 'handler-throw';
+export type BehaviorControlSubtype = ParserControlRelationSubtype;
 
 export interface BehaviorControlConstruct {
   kind: 'predicate' | 'scope' | 'outcome' | 'terminal' | 'handler';
