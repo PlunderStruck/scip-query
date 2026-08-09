@@ -3,6 +3,7 @@ import type {
   GraphRelationEvidenceStrength,
   GraphRelationSupportCeiling,
 } from '../../domain/graph-relation-providers.js';
+import { GRAPH_EVIDENCE_STRENGTH_DEFINITIONS } from '../../domain/graph-relation-providers.js';
 import type { GraphEvidenceFamily, GraphProjectionDirection } from '../../domain/graph-exploration-contract.js';
 import type { CommandDescriptor, CommandOutputCost } from './command-descriptor-types.js';
 
@@ -116,6 +117,10 @@ export function renderExplorationManualMarkdown(descriptors: readonly CommandDes
       `| ${escapeCell(row.question)} | \`${row.family}\` | \`${row.direction}\` | ${escapeCell(row.establishes)} | ${row.evidenceStrengths.map((strength) => `\`${strength}\``).join(', ')} | ${row.supportCeilings.map((ceiling) => `\`${ceiling}\``).join(', ')} | ${escapeCell(row.nonClaim)} |`,
     );
   }
+  lines.push('', '### Evidence strength legend', '', '| Strength | Meaning |', '|---|---|');
+  for (const [strength, meaning] of Object.entries(GRAPH_EVIDENCE_STRENGTH_DEFINITIONS)) {
+    lines.push(`| \`${strength}\` | ${escapeCell(meaning)} |`);
+  }
   return lines.join('\n');
 }
 
@@ -127,9 +132,13 @@ export function renderExplorationManualAgentLines(descriptors: readonly CommandD
   const relationships = explorationRelationshipManualRows()
     .map((row) => `\`${row.family} ${row.direction}\` — ${row.question}`)
     .join('; ');
+  const strengths = Object.entries(GRAPH_EVIDENCE_STRENGTH_DEFINITIONS)
+    .map(([strength, meaning]) => `\`${strength}\`: ${meaning}`)
+    .join(' ');
   return [
     ...controls,
     `- Relationship controls: ${relationships}. Choose these explicitly; the CLI does not infer them from English intent.`,
+    `- Evidence strengths: ${strengths}`,
   ];
 }
 

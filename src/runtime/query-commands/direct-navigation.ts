@@ -58,8 +58,21 @@ const handleOutline = dbCommand(({ db, args, opts }) => {
     printJsonEnvelope('outline', args, opts, roots);
     return;
   }
+  console.log(
+    `═══ REQUEST ═══\n  file=${JSON.stringify(filePattern)}; signatures=${showSignatures ? 'shown' : 'hidden'}`,
+  );
   if (roots.length === 0) {
-    return render.empty(`No symbols found for "${filePattern}".`);
+    console.log(
+      `\n═══ OBSERVED FACTS ═══\n  No compiler-owned constructs were found for ${JSON.stringify(filePattern)}.`,
+    );
+    console.log(
+      '\n═══ EVIDENCE CALIBRATION ═══\n  Missing compiler constructs do not establish that the current text file is empty or irrelevant.',
+    );
+    console.log('\n═══ COVERAGE ═══\n  Compiler ownership is unavailable or empty for this exact file selector.');
+    console.log(
+      `\n═══ RECOVERY ═══\n  Read current source exactly with: scip-query code ${shellArgument(filePattern)}`,
+    );
+    return;
   }
 
   function printTree(nodes: typeof roots, indent: number): void {
@@ -70,18 +83,26 @@ const handleOutline = dbCommand(({ db, args, opts }) => {
       printTree(node.children, indent + 1);
     }
   }
+  console.log('\n═══ OBSERVED FACTS ═══');
   printTree(roots, 0);
-  console.log('\nGraph traversal (choose only roots relevant to the question):');
-  for (const node of roots.slice(0, 6)) {
+  console.log(
+    '\n═══ EVIDENCE CALIBRATION ═══\n  These are compiler-owned identities and source ranges. Ownership and nesting do not establish execution or task relevance.',
+  );
+  console.log(
+    `\n═══ COVERAGE ═══\n  ${outlineNodeCount(roots)} compiler construct(s) returned in ${roots.length} top-level tree(s).`,
+  );
+  console.log(
+    '\n═══ RECOVERY ═══\n  Every displayed file:line is an exact evidence root. Exact top-level symbol selectors:',
+  );
+  for (const node of roots) {
     const symbol = `'${node.symbol.replaceAll("'", "'\\''")}'`;
-    console.log(
-      `  ${node.shortName}: scip-query evidence --symbol ${symbol} --edge execution --direction both --depth 2 --max-edges 32`,
-    );
-  }
-  if (roots.length > 6) {
-    console.log(`  ${roots.length - 6} additional root selector(s) remain available in --json.`);
+    console.log(`  ${node.shortName}: ${symbol}`);
   }
 });
+
+function outlineNodeCount(nodes: ReturnType<typeof outline>): number {
+  return nodes.reduce((total, node) => total + 1 + outlineNodeCount(node.children), 0);
+}
 
 function trimSignature(signature: string): string {
   const maxLength = 120;
@@ -347,7 +368,10 @@ function singleExactCodeResult(result: CodeBatchResult): CodeResult | null {
 
 function codeBatchText(result: CodeBatchResult, sessionAware = false): string {
   const lines: string[] = [
-    `═══ DEFINITIONS (${result.requested} requested: ${result.matched} matched, ${result.ambiguous} ambiguous, ${result.missing} missing) ═══`,
+    '═══ REQUEST ═══',
+    `  ${result.entries.map((entry) => entry.selector).join(', ')}`,
+    '',
+    `═══ OBSERVED FACTS (${result.requested} requested: ${result.matched} matched, ${result.ambiguous} ambiguous, ${result.missing} missing) ═══`,
   ];
   const rendered = new Set<string>();
   for (const entry of result.entries) {
@@ -420,23 +444,35 @@ function appendCodeRangeCoverage(lines: string[], entry: CodeBatchEntry): void {
 }
 
 function codeResultText(result: CodeResult, closure?: CodeResult['bindingClosure'], sessionAware = false): string {
-  const lines: string[] = [];
+  const lines: string[] = ['═══ REQUEST ═══', `  resolved-selector=${result.symbol}`, '', '═══ OBSERVED FACTS ═══'];
   appendCodeResult(lines, result, sessionAware);
   appendCodeBindingClosure(lines, closure);
   appendCodeFreshness(lines, [result]);
+  lines.push(
+    '',
+    '═══ COVERAGE ═══',
+    '  One exact selector resolved to the complete source body shown. Source identity does not establish callers or runtime relationships.',
+  );
   return `${lines.join('\n')}\n`;
 }
 
 function appendCodeFreshness(lines: string[], results: readonly CodeResult[]): void {
   const observations = results.flatMap((result) => (result.freshness ? [result.freshness] : []));
-  if (observations.length === 0) return;
+  lines.push(
+    '',
+    '═══ EVIDENCE CALIBRATION ═══',
+    '  Source bodies are exact current working-tree text. Compiler identity and binding closure apply only within their reported semantic coverage.',
+  );
+  if (observations.length === 0) {
+    lines.push('  No source-freshness overlay was available.');
+    return;
+  }
   const semantic = {
     aligned: observations.filter((item) => item.semantic.state === 'aligned').length,
     stale: observations.filter((item) => item.semantic.state === 'stale').length,
     unavailable: observations.filter((item) => item.semantic.state === 'unavailable').length,
   };
   lines.push(
-    '',
     `Text freshness: ${observations.length}/${results.length} returned source body(ies) read from current working-tree bytes; ` +
       `semantic overlay ${semantic.aligned} aligned, ${semantic.stale} stale, ${semantic.unavailable} unavailable.`,
   );
@@ -542,7 +578,8 @@ function appendCodeCoverage(lines: string[], result: CodeBatchResult): void {
   if (fileCoverage.length === 0 && rangeCoverage.length === 0) {
     lines.push(
       '',
-      `Coverage: ${result.requested}/${result.requested} selector(s) resolved to the source bodies shown. Selector accounting does not claim that referenced definitions or runtime relationships are complete. Source lines use absolute file line numbers and are citation-ready.`,
+      '═══ COVERAGE ═══',
+      `  ${result.requested}/${result.requested} selector(s) resolved to the source bodies shown. Selector accounting does not claim that referenced definitions or runtime relationships are complete. Source lines use absolute file line numbers and are citation-ready.`,
     );
     return;
   }
@@ -570,7 +607,8 @@ function appendCodeCoverage(lines: string[], result: CodeBatchResult): void {
   ];
   lines.push(
     '',
-    `Coverage: ${result.requested}/${result.requested} selectors resolved; ${details.join('; ')}. Source lines use absolute file line numbers and are citation-ready.`,
+    '═══ COVERAGE ═══',
+    `  ${result.requested}/${result.requested} selectors resolved; ${details.join('; ')}. Source lines use absolute file line numbers and are citation-ready.`,
   );
 }
 

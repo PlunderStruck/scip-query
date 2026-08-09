@@ -1,0 +1,31 @@
+{
+  "acceptedAt": "2026-08-09T03:09:28.672Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "d37c6227f0187cee132b4eae4803006a45ee4bec8a4c97e502a3976270d3bfeb",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "GraphEvidenceEdge changed from interface GraphEvidenceEdge { id: string; family: GraphEvidenceFamily; semanticFamily: ProgramEdgeSemantic['family']; subtype: string; from: GraphEvidenceNode; to: GraphEvidence... to interface GraphEvidenceEdge { id: string; family: GraphEvidenceFamily; semanticFamily: ProgramEdgeSemantic['family']; subtype: string; from: GraphEvidenceNode; to: GraphEvidence....",
+      "target": "./queries:GraphEvidenceEdge"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "GraphEvidenceEdge changed from interface GraphEvidenceEdge { id: string; family: GraphEvidenceFamily; semanticFamily: ProgramEdgeSemantic['family']; subtype: string; from: GraphEvidenceNode; to: GraphEvidence... to interface GraphEvidenceEdge { id: string; family: GraphEvidenceFamily; semanticFamily: ProgramEdgeSemantic['family']; subtype: string; from: GraphEvidenceNode; to: GraphEvidence....",
+      "target": "./queries/index:GraphEvidenceEdge"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "a changed from interface GraphEvidenceEdge { id: string; family: GraphEvidenceFamily; semanticFamily: ProgramEdgeSemantic['family']; subtype: string; from: GraphEvidenceNode; to: GraphEvidence... to interface GraphEvidenceEdge { id: string; family: GraphEvidenceFamily; semanticFamily: ProgramEdgeSemantic['family']; subtype: string; from: GraphEvidenceNode; to: GraphEvidence....",
+      "target": "graph-evidence-<hash>.d.ts:a"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "374e6a1c174b53a69e81dc22d84828063f9775bc3ab4ce9a5e416a6b66905bde",
+  "reason": "Expose per-provider evidence strengths for mixed graph relationships while preserving compatibility for edge consumers.",
+  "schemaVersion": 1
+}

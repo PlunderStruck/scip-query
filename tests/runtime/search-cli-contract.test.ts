@@ -121,8 +121,9 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
 
     expect(invocation.status).toBe(0);
     expect(invocation.stderr).toBe('');
-    expect(invocation.stdout).toContain('MATCH IDENTITIES (30/30, COMPLETE)');
-    expect(invocation.stdout).toContain('REPRESENTATIVE SOURCE (2/30 WINDOWS)');
+    expect(invocation.stdout).toContain('OBSERVED MATCH IDENTITIES (30/30, COMPLETE)');
+    expect(invocation.stdout).toContain('OBSERVED SOURCE (2/30 WINDOWS)');
+    expect(invocation.stdout).toContain('EVIDENCE CALIBRATION');
     expect(invocation.stdout).toContain('Exact cardinality: 30 matching line(s) across 30 file(s).');
     expect(invocation.stdout).toContain('Identity manifest: 30/30 matching line(s); complete.');
     expect(invocation.stdout).toContain('Recover every unmaterialized owning unit in 2 bounded batch command(s)');
@@ -134,8 +135,8 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
     const invocation = runSearch(['needle']);
 
     expect(invocation.status).toBe(0);
-    expect(invocation.stdout).toContain('MATCH IDENTITIES (30/30, COMPLETE)');
-    expect(invocation.stdout).toContain('REPRESENTATIVE SOURCE (6/30 WINDOWS)');
+    expect(invocation.stdout).toContain('OBSERVED MATCH IDENTITIES (30/30, COMPLETE)');
+    expect(invocation.stdout).toContain('OBSERVED SOURCE (6/30 WINDOWS)');
     expect(invocation.stdout).toContain('Identity manifest: 30/30 matching line(s); complete.');
   });
 
@@ -154,8 +155,8 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
     const invocation = runSearch(['needle', '--full', '--context', '0']);
 
     expect(invocation.status).toBe(0);
-    expect(invocation.stdout).toContain('MATCH IDENTITIES (30/30, COMPLETE)');
-    expect(invocation.stdout).toContain('REPRESENTATIVE SOURCE (30/30 WINDOWS)');
+    expect(invocation.stdout).toContain('OBSERVED MATCH IDENTITIES (30/30, COMPLETE)');
+    expect(invocation.stdout).toContain('OBSERVED SOURCE (30/30 WINDOWS)');
     expect(invocation.stdout).toContain('Every matching source window was materialized; no drilldown remains.');
   });
 
@@ -164,7 +165,7 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
 
     expect(invocation.status).toBe(0);
     expect(invocation.stderr).toBe('');
-    expect(invocation.stdout).toContain('MATCH IDENTITIES (64/150, BOUNDED)');
+    expect(invocation.stdout).toContain('OBSERVED MATCH IDENTITIES (64/150, BOUNDED)');
     expect(invocation.stdout).toContain('Exact cardinality: 150 matching line(s) across 150 file(s).');
     expect(invocation.stdout).toContain('Broad selector: identity enumeration stopped before output transport');
     expect(invocation.stdout).toContain("scip-query search 'broad_selector_token' --scope 'src'");
@@ -189,10 +190,15 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
     ]);
 
     expect(invocation.status).toBe(0);
-    expect(invocation.stdout).toContain('SOURCE MATERIALIZATION DEFERRED');
+    expect(invocation.stdout).toContain('REQUEST');
+    expect(invocation.stdout).toContain('OBSERVED FACTS');
+    expect(invocation.stdout).toContain('EVIDENCE CALIBRATION');
+    expect(invocation.stdout).toContain('COVERAGE');
+    expect(invocation.stdout).toContain('RECOVERY');
     expect(invocation.stdout).toContain('Graph traversal stays graph-sized');
     expect(invocation.stdout).toContain("scip-query inspect --at 'src/expansive-flow.ts:1' --view source");
     expect(invocation.stdout).not.toContain('mechanically irrelevant padding');
+    expect(invocation.stdout).not.toContain('additional blind spot(s) remain in --json');
     expect(invocation.stdout).not.toContain('[scip-query output page:');
   });
 
@@ -327,6 +333,7 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
     expect(compact.status).toBe(0);
     expect(compact.stderr).toBe('');
     expect(compact.stdout).toContain('expansiveFlow');
+    expect(compact.stdout).toContain('representation: statement-complete behavioral outline');
     expect(compact.stdout.length).toBeLessThan(5_000);
   });
 

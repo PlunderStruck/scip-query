@@ -44,6 +44,16 @@ The operator chooses the material question and deliberately selects a control. T
 | What contains or owns this? | `ownership` | `both` | A source construct, symbol, runtime observation, or state resource is contained or owned by another program entity. | `exact`, `derived`, `mixed` | `exact` | Structural ownership does not establish lifetime, singleton scope, or runtime execution unless qualified. |
 | What does this statically rely on? | `dependencies` | `outgoing` | A file, module, or symbol statically relies on another indexed entity. | `exact`, `derived`, `mixed` | `partial` | A dependency edge does not establish that the depended-on code executes. |
 
+### Evidence strength legend
+
+| Strength | Meaning |
+|---|---|
+| `exact` | Direct compiler or source evidence establishes this relationship within the provider's reported coverage. |
+| `derived` | A deterministic analysis computed this relationship from reported input facts; it was not directly observed. |
+| `candidate` | Ambiguous or heuristic evidence identifies a lead that requires exact graph or source confirmation. |
+| `mixed` | The relationship combines evidence of different strengths; its constituent methods and strengths remain disclosed. |
+| `unknown` | The relationship has no calibrated evidence strength and cannot support a stronger claim than its raw observation. |
+
 ### Agent operation catalogue
 
 | Operation | Commands |

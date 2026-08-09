@@ -27,6 +27,10 @@ describe('code CLI output contract', () => {
     expect(invocation.stderr).toBe('');
     expect(invocation.stdout).toBe(
       [
+        '═══ REQUEST ═══',
+        '  resolved-selector=scip-typescript npm pkg 1.0.0 src/`watch.ts`/Watcher#',
+        '',
+        '═══ OBSERVED FACTS ═══',
         'src/watch.ts:1-5  src:watch:Watcher  [typescript]',
         '',
         '     1  export class Watcher {',
@@ -35,7 +39,12 @@ describe('code CLI output contract', () => {
         '     4  }',
         '     5  ',
         '',
+        '═══ EVIDENCE CALIBRATION ═══',
+        '  Source bodies are exact current working-tree text. Compiler identity and binding closure apply only within their reported semantic coverage.',
         'Text freshness: 1/1 returned source body(ies) read from current working-tree bytes; semantic overlay 0 aligned, 0 stale, 1 unavailable.',
+        '',
+        '═══ COVERAGE ═══',
+        '  One exact selector resolved to the complete source body shown. Source identity does not establish callers or runtime relationships.',
         '',
       ].join('\n'),
     );
@@ -134,12 +143,21 @@ describe('code CLI output contract', () => {
     expect(invocation.status).toBe(0);
     expect(invocation.stdout).toBe(
       [
+        '═══ REQUEST ═══',
+        '  resolved-selector=src/watch.ts:2-3',
+        '',
+        '═══ OBSERVED FACTS ═══',
         'src/watch.ts:2-3  src/watch.ts:2-3  [typescript]',
         '',
         '     2    start() { return true; }',
         '     3    stop() { return false; }',
         '',
+        '═══ EVIDENCE CALIBRATION ═══',
+        '  Source bodies are exact current working-tree text. Compiler identity and binding closure apply only within their reported semantic coverage.',
         'Text freshness: 1/1 returned source body(ies) read from current working-tree bytes; semantic overlay 0 aligned, 0 stale, 1 unavailable.',
+        '',
+        '═══ COVERAGE ═══',
+        '  One exact selector resolved to the complete source body shown. Source identity does not establish callers or runtime relationships.',
         '',
       ].join('\n'),
     );
@@ -169,10 +187,12 @@ describe('code CLI output contract', () => {
 
     expect(invocation.status).toBe(0);
     expect(invocation.stderr).toBe('');
-    expect(invocation.stdout).toContain('═══ DEFINITIONS (2 requested: 2 matched, 0 ambiguous, 0 missing) ═══');
+    expect(invocation.stdout).toContain('═══ REQUEST ═══');
+    expect(invocation.stdout).toContain('═══ OBSERVED FACTS (2 requested: 2 matched, 0 ambiguous, 0 missing) ═══');
     expect(invocation.stdout).toContain('src/watch.ts:2-2  src:watch:Watcher:start()');
     expect(invocation.stdout).toContain('src/watch.ts:3-3  src/watch.ts:3-3');
-    expect(invocation.stdout).toContain('Coverage: 2/2 selectors resolved');
+    expect(invocation.stdout).toContain('═══ COVERAGE ═══');
+    expect(invocation.stdout).toContain('2/2 selectors resolved');
     expect(invocation.stdout).toContain('dynamic calls and references outside the requested lines are not claimed');
   });
 

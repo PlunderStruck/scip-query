@@ -16,6 +16,7 @@ import {
   sourceReadSemanticContract,
 } from '../command-kit/command-spec-builders.js';
 import { GRAPH_EVIDENCE_FAMILIES } from '../../domain/graph-exploration-contract.js';
+import { GRAPH_EVIDENCE_STRENGTH_DEFINITIONS } from '../../domain/graph-relation-providers.js';
 import {
   booleanOptionValue,
   budgetedDbCommand,
@@ -303,17 +304,39 @@ function sourceSearchSections(result: queries.SourceSearchResult): ReportSection
   const recoveryCommands = identityCoverage.mode === 'complete' ? sourceSearchRecoveryCommands(result, identities) : [];
   const textCoverage = result.textCoverage;
   const exactTextComplete = sourceSearchTextCoverageComplete(result);
+  const recoveryRows =
+    identityCoverage.mode === 'bounded'
+      ? sourceSearchScopeRows(result)
+      : recoveryCommands.length > 0
+        ? [
+            `  Recover every unmaterialized owning unit in ${recoveryCommands.length} bounded batch command(s):`,
+            ...recoveryCommands.map((command) => `  ${command}`),
+            `  Or inspect any chosen locations together at behavior level: scip-query inspect --at 'path:line' --at 'path:line' --view behavior`,
+          ]
+        : ['  Every matching source window was materialized; no drilldown remains.'];
   return [
     {
-      title: `MATCH IDENTITIES (${identities.length}/${result.matchingLines}, ${identityCoverage.mode.toUpperCase()})`,
+      title: 'REQUEST',
+      rows: [`  exact-text=${JSON.stringify(result.pattern)}; mode=${result.mode}`],
+    },
+    {
+      title: `OBSERVED MATCH IDENTITIES (${identities.length}/${result.matchingLines}, ${identityCoverage.mode.toUpperCase()})`,
       rows: identityRows,
     },
     {
-      title: `REPRESENTATIVE SOURCE (${result.matches.length}/${result.matchingLines} WINDOWS)`,
+      title: `OBSERVED SOURCE (${result.matches.length}/${result.matchingLines} WINDOWS)`,
       rows: sourceRows,
     },
     {
-      title: 'SEARCH COVERAGE',
+      title: 'EVIDENCE CALIBRATION',
+      rows: [
+        `  ${exactTextComplete ? 'Exact' : 'Observed'} cardinality comes from current project text scanned at query time.`,
+        '  Compiler ownership is an aligned semantic overlay; unavailable or stale overlays do not change exact text identity.',
+        '  Structural ordering and co-occurrence do not establish task relevance or a graph relationship.',
+      ],
+    },
+    {
+      title: 'COVERAGE',
       rows: [
         `  ${exactTextComplete ? 'Exact' : 'Observed'} cardinality: ${result.matchingLines} matching line(s) across ${result.matchingFiles ?? result.fileCoverage?.length ?? 0} file(s).`,
         `  Identity manifest: ${identities.length}/${result.matchingLines} matching line(s); ${identityCoverage.mode === 'complete' ? 'complete' : `${identityCoverage.omitted} lower-ranked identities withheld before rendering`}.`,
@@ -328,17 +351,9 @@ function sourceSearchSections(result: queries.SourceSearchResult): ReportSection
                 : ['  Text coverage is incomplete: unreadable or oversized text may contain additional matches.']),
             ]
           : []),
-        ...(identityCoverage.mode === 'bounded'
-          ? sourceSearchScopeRows(result)
-          : recoveryCommands.length > 0
-            ? [
-                `  Recover every unmaterialized owning unit in ${recoveryCommands.length} bounded batch command(s):`,
-                ...recoveryCommands.map((command) => `  ${command}`),
-                `  Or inspect any chosen locations together at behavior level: scip-query inspect --at 'path:line' --at 'path:line' --view behavior`,
-              ]
-            : ['  Every matching source window was materialized; no drilldown remains.']),
       ],
     },
+    { title: 'RECOVERY', rows: recoveryRows },
   ];
 }
 
@@ -758,18 +773,27 @@ function sourceInspectionSections(result: queries.SourceInspectionResult): Repor
       ]
     : [];
   return [
-    { title: 'SEARCH COVERAGE', rows: searchRows, skipIfEmpty: true },
-    { title: 'LOCATION COVERAGE', rows: locationRows, skipIfEmpty: true },
-    { title: 'SYMBOL RESOLUTION', rows: resolutionRows, skipIfEmpty: true },
-    { title: 'EVIDENCE PACKET', rows: sourceRows, skipIfEmpty: true },
-    { title: 'LITERAL VALUES', rows: bindingRows, skipIfEmpty: true },
-    { title: 'OMISSION LEDGER', rows: omissionRows, skipIfEmpty: true },
-    { title: 'NEXT CAUSAL FRONTIER', rows: causalFrontierRows, skipIfEmpty: true },
     {
-      title: 'PACKET COVERAGE',
-      rows: packetRows,
+      title: 'REQUEST',
+      rows: [
+        ...searchRows.map((row) => `  search ${row.trimStart()}`),
+        ...locationRows.map((row) => `  location ${row.trimStart()}`),
+        ...resolutionRows.map((row) => `  symbol ${row.trimStart()}`),
+      ],
     },
-    { title: 'QUERY COMPLETION', rows: stoppingRows, skipIfEmpty: true },
+    { title: 'OBSERVED FACTS', rows: [...sourceRows, ...bindingRows], skipIfEmpty: true },
+    {
+      title: 'EVIDENCE CALIBRATION',
+      rows: [
+        `  view=${result.view}; exact source is current working-tree text; behavioral outlines label whether they are statement-complete, partial, or verbatim source units.`,
+        '  Source co-location and references do not become executable reachability. Runtime facts retain their displayed strength and resolution.',
+      ],
+    },
+    {
+      title: 'COVERAGE',
+      rows: [...packetRows, ...stoppingRows],
+    },
+    { title: 'RECOVERY', rows: [...omissionRows, ...causalFrontierRows], skipIfEmpty: true },
   ];
 }
 
@@ -844,7 +868,14 @@ function sourceInspectionUnitRow(unit: queries.SourceInspectionUnit): string {
       const owner = unit.ownerShort ? `  in ${unit.ownerShort}` : '';
       if (unit.behavior) {
         const coverage = unit.behavior.coverage;
+        const representation =
+          coverage.omittedStatements > 0
+            ? 'partial behavioral outline'
+            : coverage.copiedStatements === coverage.sourceStatements
+              ? 'verbatim source unit (not compressed)'
+              : 'statement-complete behavioral outline';
         const evidenceRows = [
+          `    representation: ${representation}`,
           `    ${unit.behavior.constructKind}: ${unit.behavior.signature}`,
           ...unit.behavior.lines.map(
             (line) =>
@@ -1005,36 +1036,35 @@ function evidenceCommandSections(result: EvidenceCommandResult): ReportSection[]
     inventoryOnly: false,
     foldIds: [],
   };
-  const selectionRows = [
+  const requestRows = [
     `  direction=${selection.direction}; subtypes=${selection.subtypes.length > 0 ? selection.subtypes.join(',') : 'all'}; ` +
       `operation=${selection.connecting ? 'connecting' : 'reachability'}; materialization=${selection.inventoryOnly ? 'inventory-only' : selection.foldIds.length > 0 ? `folds(${selection.foldIds.join(',')})` : 'edges'}`,
+    ...result.graph.targets.map((target) => {
+      const omitted = target.omittedCandidates > 0 ? `; ${target.omittedCandidates} candidate(s) omitted` : '';
+      return `  selector [${target.status}] ${target.kind} ${target.query}${omitted}`;
+    }),
   ];
-  const targetRows = result.graph.targets.map((target) => {
-    const omitted = target.omittedCandidates > 0 ? `; ${target.omittedCandidates} candidate(s) omitted` : '';
-    return `  [${target.status}] ${target.kind} ${target.query}${omitted}`;
-  });
   const relationshipRows = queries.GRAPH_EVIDENCE_FAMILIES.flatMap((family) => {
     const edges = result.graph.edges.filter((edge) => edge.family === family);
     if (edges.length === 0) return [];
     return [`  ${family} (${edges.length})`, ...edges.map((edge) => `    ${graphEvidenceEdgeRow(edge)}`)];
   });
   const inventoryRows = (result.graph.inventory ?? []).map(
-    (row) => `  ${row.family}/${row.subtype}: incoming=${row.incoming}; outgoing=${row.outgoing}; both=${row.both}`,
+    (row) =>
+      `  inventory ${row.family}/${row.subtype}: incoming=${row.incoming}; outgoing=${row.outgoing}; both=${row.both}`,
   );
+  if (inventoryRows.length > 0) {
+    inventoryRows.unshift(
+      '  Inventory basis: incoming and outgoing are separately deduplicated reachable-edge sets around the selected roots; both is their deduplicated union, so it need not equal their sum.',
+    );
+  }
   const foldRows = graphEvidenceFoldRows(result.graph.folds ?? []);
+  const calibrationRows = graphEvidenceCalibrationRows(result.graph.edges);
   const coverage = result.graph.coverage;
   const coverageRows = [
     `  ${coverage.status}: ${coverage.returnedEdges}/${coverage.eligibleEdges} materialized relationship(s); ${coverage.matchedEdges ?? coverage.eligibleEdges} matched the projection; depth <= ${coverage.maxDepth}; ${coverage.frontierGroups} accounted frontier group(s); ${coverage.unsupportedFrontiers} unsupported frontier(s).`,
     `  ${coverage.explanation}`,
-    ...(coverage.omittedEdges > 0 && foldRows.length === 0
-      ? [
-          `  Expand the same selectors only if an omitted relationship is material: add --max-edges ${coverage.eligibleEdges}.`,
-        ]
-      : []),
-    ...coverage.blindSpots.slice(0, 3).map((blindSpot) => `  Blind spot: ${blindSpot}`),
-    ...(coverage.blindSpots.length > 3
-      ? [`  ${coverage.blindSpots.length - 3} additional blind spot(s) remain in --json.`]
-      : []),
+    ...uniqueStrings(coverage.blindSpots).map((blindSpot) => `  Unsupported or unavailable: ${blindSpot}`),
   ];
   const sourceSections = result.source.flatMap((item) => {
     if (item.kind !== 'matched') {
@@ -1045,21 +1075,27 @@ function evidenceCommandSections(result: EvidenceCommandResult): ReportSection[]
       title: `${item.shortName} — ${section.title}`,
     }));
   });
-  const sourceRecoveryRows = result.sourceRecovery
-    ? [
-        `  Graph traversal stays graph-sized; ${result.sourceRecovery.selectors} requested source selector(s) were not embedded.`,
-        `  Read the named source gap separately: ${result.sourceRecovery.command}`,
-      ]
-    : [];
+  const recoveryRows = [
+    ...foldRows,
+    ...(coverage.omittedEdges > 0 && foldRows.length === 0
+      ? [
+          `  Expand the same selectors only if an omitted relationship is material: add --max-edges ${coverage.eligibleEdges}.`,
+        ]
+      : []),
+    ...(result.sourceRecovery
+      ? [
+          `  Graph traversal stays graph-sized; ${result.sourceRecovery.selectors} requested source selector(s) were not embedded.`,
+          `  Read the named source gap separately: ${result.sourceRecovery.command}`,
+        ]
+      : []),
+  ];
   return [
-    { title: 'EXPLICIT PROJECTION', rows: selectionRows },
-    { title: 'EXACT SELECTORS', rows: targetRows, skipIfEmpty: true },
-    { title: 'EDGE INVENTORY', rows: inventoryRows, skipIfEmpty: true },
-    { title: 'TYPED RELATIONSHIPS', rows: relationshipRows, skipIfEmpty: true },
-    { title: 'FOLDED RELATIONSHIPS', rows: foldRows, skipIfEmpty: true },
-    { title: 'GRAPH COVERAGE', rows: coverageRows },
-    { title: 'SOURCE MATERIALIZATION DEFERRED', rows: sourceRecoveryRows, skipIfEmpty: true },
+    { title: 'REQUEST', rows: requestRows },
+    { title: 'OBSERVED FACTS', rows: [...inventoryRows, ...relationshipRows], skipIfEmpty: true },
     ...sourceSections,
+    { title: 'EVIDENCE CALIBRATION', rows: calibrationRows },
+    { title: 'COVERAGE', rows: coverageRows },
+    { title: 'RECOVERY', rows: recoveryRows, skipIfEmpty: true },
   ];
 }
 
@@ -1078,9 +1114,35 @@ function graphEvidenceFoldRows(folds: readonly queries.GraphEvidenceFold[]): str
       return `  ${fold.id}  ${fold.family}/${subtypeSummary}  ${fold.edgeCount} edge(s), ${fold.nodeIds.length} node(s), ${fold.mode}  @ ${fold.region ?? 'unscoped'}`;
     });
   return [
-    '  Recovery: rerun the same selectors and bounds with --fold <id>; each ID materializes exactly that row.',
+    '  Rerun the same selectors and bounds with --fold <id>; each ID materializes exactly that folded edge set.',
     ...rows,
   ];
+}
+
+function graphEvidenceCalibrationRows(edges: readonly queries.GraphEvidenceEdge[]): string[] {
+  const strengths = uniqueStrings(edges.map((edge) => edge.evidenceStrength));
+  const rows =
+    strengths.length === 0
+      ? ['  No relationships were materialized, so no edge evidence strength is claimed.']
+      : strengths.map((strength) => `  ${strength}: ${GRAPH_EVIDENCE_STRENGTH_DEFINITIONS[strength]}`);
+  const contracts = new Map<string, string>();
+  for (const edge of edges) {
+    const constituents = (
+      edge.evidenceConstituents ?? edge.evidenceMethods.map((method) => ({ method, strength: edge.evidenceStrength }))
+    )
+      .map((constituent) => `${constituent.method}=${constituent.strength}`)
+      .join(', ');
+    const key = `${edge.family}/${edge.subtype}\0${edge.providerId}\0${edge.evidenceStrength}\0${constituents}`;
+    contracts.set(
+      key,
+      `  ${edge.family}/${edge.subtype} [${edge.evidenceStrength}] provider=${edge.providerId}; ceiling=${edge.supportCeiling}; constituents=${constituents || 'none reported'}; establishes=${edge.establishes}; does-not-establish=${edge.nonClaims.join(' ') || 'no additional provider non-claim'}`,
+    );
+  }
+  return [...rows, ...contracts.values()];
+}
+
+function uniqueStrings<T extends string>(values: readonly T[]): T[] {
+  return [...new Set(values)];
 }
 
 function graphEvidenceEdgeRow(edge: queries.GraphEvidenceEdge): string {

@@ -71,6 +71,13 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
         expect(result.folds).toEqual(expect.arrayContaining([expect.objectContaining({ family: 'temporal' })]));
       }
       expect(result.edges.some((edge) => edge.from.location || edge.to.location)).toBe(true);
+      expect(
+        result.edges.every(
+          (edge) =>
+            (edge.evidenceConstituents?.length ?? 0) > 0 &&
+            edge.evidenceConstituents?.every((constituent) => constituent.method && constituent.strength),
+        ),
+      ).toBe(true);
       expect(result.coverage).toMatchObject({ maxDepth: 2, maxEdges: 40, returnedEdges: result.edges.length });
     } finally {
       db.close();

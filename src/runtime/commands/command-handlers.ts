@@ -90,6 +90,7 @@ import {
 import { printIsolatedAnalysisResult } from '../isolated-analysis-runner.js';
 import { GENERATED_EXPLORATION_CONTROLS } from '../generated-agent-command-catalog.js';
 import { explorationRelationshipManualRows } from '../command-kit/exploration-manual.js';
+import { GRAPH_EVIDENCE_STRENGTH_DEFINITIONS } from '../../domain/graph-relation-providers.js';
 import { sanitizeTerminalLine } from '../../platform/terminal-output.js';
 import { reindexConfiguredProject } from '../project-reindex.js';
 import { evaluateArchitectureStop, renderArchitectureStopOutput } from './architecture-stop-hook.js';
@@ -1368,6 +1369,10 @@ function renderCapabilityReport(
     console.log(`             Strengths: ${row.evidenceStrengths.join(', ') || 'none registered'}`);
     console.log(`             Provider ceilings: ${row.supportCeilings.join(', ') || 'none registered'}`);
     console.log(`             Does not establish: ${row.nonClaim}`);
+  }
+  console.log('\nEvidence strength legend:');
+  for (const [strength, meaning] of Object.entries(GRAPH_EVIDENCE_STRENGTH_DEFINITIONS)) {
+    console.log(`  ${strength.toUpperCase().padEnd(11)} ${meaning}`);
   }
   console.log(
     '\nThe agent chooses a question, family, and direction; this command reports support and does not infer intent.',

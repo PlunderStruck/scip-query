@@ -106,6 +106,7 @@ export interface GraphEvidenceEdge {
   recoverWith: readonly string[];
   evidenceStrength: ExplorationEvidenceStrength;
   evidenceMethods: string[];
+  evidenceConstituents?: Array<{ method: string; strength: ExplorationEvidenceStrength }>;
   context: ProgramEdgeSemantic['context'] | null;
   attributes: ProgramEdgeSemantic['attributes'] | null;
 }
@@ -327,11 +328,20 @@ function graphEdgesFor(
         recoverWith: [...providerContract.relation.recoverWith],
         evidenceStrength: combinedEvidenceStrength(edge),
         evidenceMethods: uniqueNonEmpty(edge.evidence.map((source) => source.method)),
+        evidenceConstituents: uniqueEvidenceConstituents(edge.evidence),
         context: semantic.context ? { ...semantic.context } : null,
         attributes: semantic.attributes ? { ...semantic.attributes } : null,
       },
     ];
   });
+}
+
+function uniqueEvidenceConstituents(
+  evidence: Readonly<ExplorationTopologyEdge['evidence']>,
+): Array<{ method: string; strength: ExplorationEvidenceStrength }> {
+  const rows = new Map<string, { method: string; strength: ExplorationEvidenceStrength }>();
+  for (const source of evidence) rows.set(`${source.method}\0${source.strength}`, source);
+  return [...rows.values()].map(({ method, strength }) => ({ method, strength }));
 }
 
 function graphFamilyFor(semantic: ProgramEdgeSemantic): GraphEvidenceFamily | null {

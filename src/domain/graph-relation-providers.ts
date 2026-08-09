@@ -4,6 +4,17 @@ export type GraphRelationEvidenceStrength = 'exact' | 'derived' | 'candidate' | 
 export type GraphRelationSupportCeiling = 'exact' | 'partial' | 'candidate';
 export type GraphRelationProviderRequirement = 'indexed-graph' | 'source-facts' | 'typescript-semantic';
 
+export const GRAPH_EVIDENCE_STRENGTH_DEFINITIONS: Readonly<Record<GraphRelationEvidenceStrength, string>> = {
+  exact: "Direct compiler or source evidence establishes this relationship within the provider's reported coverage.",
+  derived:
+    'A deterministic analysis computed this relationship from reported input facts; it was not directly observed.',
+  candidate: 'Ambiguous or heuristic evidence identifies a lead that requires exact graph or source confirmation.',
+  mixed:
+    'The relationship combines evidence of different strengths; its constituent methods and strengths remain disclosed.',
+  unknown:
+    'The relationship has no calibrated evidence strength and cannot support a stronger claim than its raw observation.',
+};
+
 /**
  * One relationship that a concrete analyzer can emit. The subtype matcher
  * connects runtime edge values to the provider that created them; the support

@@ -365,9 +365,19 @@ const handleEntryPoints = dbCommand(({ db, args, opts }) => {
     });
     return;
   }
+  const scope = stringOptionValue(opts, 'scope');
+  console.log(`═══ REQUEST ═══\n  text=${search ? JSON.stringify(search) : '<all>'}; scope=${scope ?? '<repository>'}`);
   if (results.length === 0) {
-    return render.empty(search ? `No detected entry point matched '${search}'.` : 'No entry points were detected.');
+    console.log(
+      `\n═══ OBSERVED FACTS ═══\n  ${search ? `No detected entry candidate matched ${JSON.stringify(search)}.` : 'No entry candidates were detected.'}`,
+    );
+    console.log(
+      '\n═══ EVIDENCE CALIBRATION ═══\n  Absence from this detector does not prove that the repository has no runtime ingress.',
+    );
+    console.log("\n═══ COVERAGE ═══\n  Complete within the detector's indexed source/compiler entry evidence.");
+    return;
   }
+  console.log('\n═══ OBSERVED FACTS ═══');
   render.list(
     results,
     (entry) =>
@@ -375,7 +385,13 @@ const handleEntryPoints = dbCommand(({ db, args, opts }) => {
       `    evidence: ${entry.evidence.join(', ')}; indexed callers: ${entry.indexedCallerCount}\n` +
       `    symbol: ${entry.symbol}`,
   );
-  console.log(`\n${results.length} detected entry point(s).`);
+  console.log(
+    '\n═══ EVIDENCE CALIBRATION ═══\n  [root] has configured, framework-dispatched, Rust public-library, or entry-surface evidence. [candidate] is package-public or lacks indexed callers; neither label proves a runtime invocation.',
+  );
+  console.log(`\n═══ COVERAGE ═══\n  ${results.length} entry candidate(s); complete within indexed detector evidence.`);
+  console.log(
+    '\n═══ RECOVERY ═══\n  Any printed exact symbol can be projected with scip-query evidence using the family and direction required by the material question.',
+  );
 });
 
 const handleEntryMap = dbCommand(({ db, args, opts }) => {

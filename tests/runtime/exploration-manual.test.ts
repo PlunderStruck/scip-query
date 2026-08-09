@@ -46,6 +46,8 @@ describe('exploration manual', () => {
     expect(markdown).toContain('Evidence ceiling');
     expect(markdown).toContain('Does not establish');
     expect(markdown).toContain('Provider ceilings');
+    expect(markdown).toContain('Evidence strength legend');
+    expect(markdown).toContain('no calibrated evidence strength');
     expect(markdown).toContain('Who can call or reach this?');
     expect(markdown).not.toContain('recommended next');
     expect(markdown).not.toContain('task relevance score');
