@@ -46,6 +46,10 @@
         "paths": ["src/queries/cleanup/**"]
       },
       {
+        "name": "queries-compatibility",
+        "paths": ["src/queries/compatibility/**"]
+      },
+      {
         "name": "queries-facade",
         "paths": ["src/queries/index.ts", "src/queries/public-query-entries.ts"]
       },
@@ -243,8 +247,10 @@
         "symbols-graph",
         "symbols-references"
       ],
+      "queries-compatibility": ["domain"],
       "queries-facade": [
         "queries-cleanup",
+        "queries-compatibility",
         "queries-frontend",
         "queries-graph",
         "queries-health",

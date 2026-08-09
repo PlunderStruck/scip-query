@@ -4,7 +4,7 @@
 
 Make the current exploration, indexing, and cache-lifecycle branch safe to fast-forward into `main`. Existing public consumers receive every feasible compatibility bridge, authoritative contracts describe only current durable state, public command semantics are explicit rather than inferred, repeated worktrees and edits prove bounded cache growth and cleanup, and all repository gates pass from the final tree.
 
-This program does not reopen the intentionally narrow architecture Stop hook or require every stochastic benchmark sample to beat control. The later architecture program explicitly owns the hook, and the held benchmark record already exposes and investigates run variance while establishing aggregate non-inferiority.
+This program does not reopen the intentionally narrow architecture Stop hook or require every stochastic benchmark sample to beat control. The later primary-exploration-surface program explicitly owns and validates the hook (`docs/plans/2026-08-02-primary-exploration-surface.md:106`), and the held benchmark record already exposes and investigates run variance while establishing aggregate non-inferiority.
 
 ## Completion evidence
 
@@ -12,7 +12,9 @@ This program does not reopen the intentionally narrow architecture Stop hook or 
 - Historical outcome-event data types remain readable without recreating the removed journal. The API evolution and durability standards now describe that retirement and the remaining durable owners accurately.
 - Every registered command descriptor owns an explicit semantic contract. The type system rejects omitted semantics, registry tests inspect raw declarations, and generated command documentation and skills use the same declarations.
 - `scripts/cache-lifecycle-soak.ts` and the shared-worktree integration suite provide the missing deterministic lifecycle proof. The real eight-cycle daemon run held managed storage at exactly 403,330 bytes, used incremental one-document publication in every cycle, retained two local generations and one fragment generation, collected every removed checkout and aged generation, and preserved the active baseline (`docs/validation/2026-08-09-cache-lifecycle-soak.md`).
-- The six pre-existing Markdown diff-hygiene defects are repaired. Final repository-wide gates remain the last slice before declaring this program complete.
+- The six pre-existing Markdown diff-hygiene defects are repaired. The final repository-wide and packed-install gates pass from the completed tree (`docs/validation/2026-08-09-merge-readiness-gates.md`).
+
+Status: complete on 2026-08-09.
 
 ## Implementation slices
 

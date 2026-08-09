@@ -63,6 +63,7 @@ their established work profile.
 | `platform`               | Host, toolchain, process, cache, and verified-binary mechanisms                         |
 | `public-api`             | Published library exports                                                               |
 | `queries-cleanup`        | Cleanup detectors and candidate production                                              |
+| `queries-compatibility`  | Deprecated type-only contracts retained for bounded source compatibility                |
 | `queries-facade`         | Public query aggregation and export registration                                        |
 | `queries-frontend`       | Framework-specific analysis products                                                    |
 | `queries-graph`          | Architecture and graph reports                                                          |
