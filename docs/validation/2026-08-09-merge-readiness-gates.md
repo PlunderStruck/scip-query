@@ -26,6 +26,8 @@ The blocker-remediation tree passed the required repository and package gates on
 
 The first architecture run found the restored historical outcome-event type file outside every declared boundary. The final configuration gives deprecated, type-only contracts their own `queries-compatibility` boundary. That boundary may depend only on `domain`, and `queries-facade` may re-export it. The focused architecture and CLI suites then passed 67/67 tests before the final complete suite.
 
+The first final-tree full-suite repetition also exposed a wall-clock assumption in the asynchronous process-lock test: a 5 ms release timer could be delivered after its 100 ms acquisition deadline under suite-wide process load. The test now queues the owner release as a microtask, which deterministically proves that acquisition yields the event loop. The corrected assertion passed 20 isolated repetitions before the final complete suite.
+
 ## Related evidence
 
 - `docs/plans/2026-08-09-merge-readiness-blocker-remediation.md`

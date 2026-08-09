@@ -58,15 +58,15 @@ describe('repository cache lifecycle policy', () => {
     const owner = acquireRepositoryCacheLock(repositoryDir);
     expect(owner).not.toBeNull();
     const repositoryLockPath = join(repositoryDir, 'gc.lock');
-    let timerFired = false;
-    setTimeout(() => {
-      timerFired = true;
+    let eventLoopYielded = false;
+    queueMicrotask(() => {
+      eventLoopYielded = true;
       owner!.release();
-    }, 5);
+    });
 
     const waiter = await acquireProcessFileLockAsync(repositoryLockPath, { waitMs: 100, pollMs: 1 });
 
-    expect(timerFired).toBe(true);
+    expect(eventLoopYielded).toBe(true);
     expect(waiter).not.toBeNull();
     waiter!.release();
     expect(existsSync(repositoryLockPath)).toBe(false);
