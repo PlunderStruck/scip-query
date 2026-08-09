@@ -71,7 +71,7 @@ describe('setupAgent', () => {
     expect(agentsMd).toContain('Resolve exact constant values');
     expect(agentsMd).toContain('scip-query inspect');
     expect(agentsMd).toContain('scip-query code <symbol-or-range>');
-    expect(agentsMd).toContain('scip-query context <target>');
+    expect(agentsMd).not.toContain('scip-query context <target>');
     expect(agentsMd).toContain('scip-query diff-impact');
     expect(agentsMd).toContain('scip-query architecture');
     expect(agentsMd).toContain('React, Vue, duplication, complexity, drift, and cleanup candidates');

@@ -162,12 +162,12 @@ export function repositoryContextDecisionSections(
     { title: 'TARGET', rows: targetRows(result) },
     { title: 'CURRENT FLOW', rows: currentFlowRows(result, limit), skipIfEmpty: true },
     { title: 'AFFECTED CONSUMERS', rows: decisionConsumerRows(result, limit), skipIfEmpty: true },
-    { title: 'REUSE DECISIONS', rows: reuseRows(result, Math.min(limit, 12)), skipIfEmpty: true },
+    { title: 'SIMILARITY CANDIDATES', rows: similarityCandidateRows(result, Math.min(limit, 12)), skipIfEmpty: true },
     { title: 'CHANGE CONSTRAINTS', rows: changeConstraintRows(result, limit), skipIfEmpty: true },
-    { title: 'READ NEXT', rows: nextReadRows(result, limit), skipIfEmpty: true },
+    { title: 'RELATED SOURCE IDENTITIES', rows: relatedSourceIdentityRows(result, limit), skipIfEmpty: true },
     { title: 'SOURCE PACKET', rows: sourcePacketRows(result), skipIfEmpty: true },
     {
-      title: 'COVERAGE AND NEXT ACTION',
+      title: 'COVERAGE AND RECOVERY',
       rows: decisionCoverageRows(result, target, impactDepth, sliceDepth),
     },
   ];
@@ -180,7 +180,7 @@ function detailedRepositoryContextSections(result: queries.RepositoryContextResu
     { title: 'REFERENCES', rows: referenceRows(result, limit), skipIfEmpty: true },
     { title: 'CALL GRAPH', rows: callGraphRows(result, limit), skipIfEmpty: true },
     { title: 'DATAFLOW', rows: dataflowRows(result, limit), skipIfEmpty: true },
-    { title: 'REUSE OPTIONS', rows: reuseRows(result, limit), skipIfEmpty: true },
+    { title: 'SIMILARITY CANDIDATES', rows: similarityCandidateRows(result, limit), skipIfEmpty: true },
     { title: 'SOURCE PACKET', rows: sourcePacketRows(result), skipIfEmpty: true },
     { title: 'DEPENDENCIES', rows: dependencyRows(result, limit), skipIfEmpty: true },
     { title: 'SURFACE', rows: surfaceRows(result, limit), skipIfEmpty: true },
@@ -226,7 +226,7 @@ function changeConstraintRows(result: queries.RepositoryContextResult, limit: nu
   return withOmitted(cappedRows(rows, limit));
 }
 
-function nextReadRows(result: queries.RepositoryContextResult, limit: number): string[] {
+function relatedSourceIdentityRows(result: queries.RepositoryContextResult, limit: number): string[] {
   const candidates = [
     ...result.trace.definitions.map((definition) => definition.relativePath),
     ...result.trace.referencedBy.map((reference) => reference.relativePath),
@@ -359,15 +359,15 @@ function repositoryContextAgentResult(result: queries.RepositoryContextResult) {
   };
 }
 
-function reuseRows(result: queries.RepositoryContextResult, limit: number): string[] {
+function similarityCandidateRows(result: queries.RepositoryContextResult, limit: number): string[] {
   const targetRows = (result.reuseCandidates ?? []).flatMap((candidate) => [
-    `  target    ${reuseDecisionLabel(candidate.actionTier)}  ${Math.round(candidate.similarity * 100)}%  ${candidate.shortNameB}  ${candidate.fileB}`,
-    `                    ${candidate.recommendation}`,
+    `  target    ${Math.round(candidate.similarity * 100)}%  ${candidate.evidenceClass}  ${candidate.shortNameB}  ${candidate.fileB}`,
+    `                    basis=${candidate.similarityBasis ?? 'unknown'}; ${candidate.evidenceClassReasons.join('; ')}`,
   ]);
   const consumerReuse = repositoryContextConsumerReuse(result);
   const consumerRows = consumerReuse.candidates.flatMap(({ candidate, consumers }) => [
-    `  consumer  ${reuseDecisionLabel(candidate.actionTier)}  ${Math.round(candidate.similarity * 100)}%  ${candidate.shortNameB}  ${candidate.fileB}`,
-    `                    found from ${consumers.map((consumer) => consumer.shortName).join(', ')}; ${candidate.recommendation}`,
+    `  consumer  ${Math.round(candidate.similarity * 100)}%  ${candidate.evidenceClass}  ${candidate.shortNameB}  ${candidate.fileB}`,
+    `                    basis=${candidate.similarityBasis ?? 'unknown'}; observed from ${consumers.map((consumer) => consumer.shortName).join(', ')}; ${candidate.evidenceClassReasons.join('; ')}`,
   ]);
   const coverage = consumerReuse.coverage;
   const coverageRows =
@@ -378,10 +378,6 @@ function reuseRows(result: queries.RepositoryContextResult, limit: number): stri
       : [];
   const rows = [...targetRows, ...coverageRows, ...consumerRows];
   return withOmitted(cappedRows(rows, limit));
-}
-
-function reuseDecisionLabel(tier: queries.SimilarActionTier): string {
-  return tier === 'direct' ? 'decide' : 'review';
 }
 
 function targetRows(result: queries.RepositoryContextResult): string[] {

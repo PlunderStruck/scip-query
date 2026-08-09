@@ -13,11 +13,11 @@ describe('context decision packet', () => {
       'TARGET',
       'CURRENT FLOW',
       'AFFECTED CONSUMERS',
-      'REUSE DECISIONS',
+      'SIMILARITY CANDIDATES',
       'CHANGE CONSTRAINTS',
-      'READ NEXT',
+      'RELATED SOURCE IDENTITIES',
       'SOURCE PACKET',
-      'COVERAGE AND NEXT ACTION',
+      'COVERAGE AND RECOVERY',
     ]);
     expect(output).toContain('src/run-task.ts:11-14');
     expect(output).toContain('direct  src/consumer.ts:8');
@@ -28,7 +28,8 @@ describe('context decision packet', () => {
     expect(output).toContain('Source packet: 1/1 slice(s)');
     expect(output).toContain('src/run-task.ts:11');
     expect(output).not.toContain('sharedCallees');
-    expect(sections.find((section) => section.title === 'READ NEXT')?.rows).not.toContain('  ');
+    expect(sections.find((section) => section.title === 'RELATED SOURCE IDENTITIES')?.rows).not.toContain('  ');
+    expect(output).not.toContain('decide');
   });
 });
 

@@ -1360,7 +1360,7 @@ function renderCapabilityReport(report: ReturnType<typeof getProjectCapabilities
     '  Repeat --edge for each selected family; never materialize all families merely to discover what exists.',
   );
   console.log("  Read behavior last: scip-query inspect --at 'path/to/file.ts:line' --view behavior");
-  console.log('  Anchors are optional fallback discovery when no exact referent is known.');
+  console.log('  These operations report evidence and provider support; they do not rank task relevance.');
   console.log('\nRelationship support:');
   for (const relation of report.relations) {
     console.log(`  ${relation.status.toUpperCase().padEnd(11)} ${relation.family}`);

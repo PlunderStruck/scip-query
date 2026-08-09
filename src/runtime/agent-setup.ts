@@ -91,7 +91,6 @@ function writeInstructionsBlock(projectRoot: string, result: SetupAgentResult): 
     '- For a multi-step mutation, preserve later compaction, rollback, and cleanup. For every event, log, or outbox write, preserve its operation and record identity. For coordination, state the lock scope and which checks and writes occur inside it. State whether interruption is prevented, atomic, rolled back, or repaired later. Resolve exact constant values when they can change the answer.',
     '- For a tiered policy or dispatcher, preserve the precedence of its tiers and the exact scope of every bypass; never imply that a later bypass can skip an earlier hard rejection unless the rendered condition proves it.',
     '- For a stateful owner, preserve its lifetime and sharing scope, including whether it is a singleton, shared registry, per-session instance, or per-invocation value.',
-    '- Use `scip-query context <target>` to map flow, consumers, reuse options, constraints, and relevant source before a nonlocal change.',
     '- Use `scip-query diff-impact` to map changed symbols and downstream consumers after a nontrivial edit.',
     '- Use `scip-query architecture` to inspect explicit structural rules.',
     '- Use `scip-query health` to find React, Vue, duplication, complexity, drift, and cleanup candidates.',

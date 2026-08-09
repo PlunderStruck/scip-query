@@ -15,7 +15,7 @@ const AGENT_SETUP_COMMAND_GROUPS = [
   { label: 'Locate', ids: ['search', 'outline', 'entrypoints'] },
   { label: 'Project', ids: ['evidence'] },
   { label: 'Read', ids: ['inspect', 'code'] },
-  { label: 'Analyze', ids: ['context', 'diff-impact', 'architecture', 'health'] },
+  { label: 'Check changes', ids: ['diff-impact', 'architecture', 'health'] },
 ] as const;
 
 export function renderAgentSetupCommandCatalogSource(

@@ -149,9 +149,10 @@ describe('Codex exploration trial core', () => {
   it('makes explicit, bounded, query-neutral graph exploration the treatment contract', () => {
     const prompt = treatmentPrompt('How does the path work?', 4);
     expect(prompt).toContain('scip-query as the only repository exploration surface');
-    expect(prompt).toContain('efficiency against a target of 4 queries');
-    expect(prompt).toContain('this is not a correctness cutoff');
-    expect(prompt).toContain('status --capabilities only if');
+    expect(prompt).toContain('records semantic-query efficiency externally');
+    expect(prompt).toContain('no query count is a correctness cutoff');
+    expect(prompt).toContain('scip-query capabilities only if');
+    expect(prompt).not.toContain('target of 4 queries');
     expect(prompt).not.toContain('First run scip-query status');
     expect(prompt).toContain('Prefer one batched query to locate exact referents');
     expect(prompt).toContain('Batch compatible selected roots into a scip-query evidence call');
@@ -165,8 +166,10 @@ describe('Codex exploration trial core', () => {
     expect(prompt).toContain('Data, state, temporal, contract, identity, ownership, and dependency edges');
     expect(prompt).toContain('A named constant is not an established value');
     expect(prompt).toContain('evidence seen but omitted from the answer is not recovered');
-    expect(prompt).toContain('ordering is candidate presentation, not inferred relevance');
-    expect(prompt).toContain('Do not use anchor groups, selection terms, automatic routes, next-anchor scores');
+    expect(prompt).not.toContain('may anchors be used');
+    expect(prompt).toContain(
+      'Do not use deprecated anchor groups, selection terms, automatic routes, next-anchor scores',
+    );
     expect(prompt).not.toContain('first ranked eligible set');
     expect(prompt).not.toContain('printed system-map command');
     expect(prompt).toContain('Do not use rg');

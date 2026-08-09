@@ -14,8 +14,6 @@ commands:
     when: 'Read connected behavior for a named implementation gap.'
   - template: 'scip-query code <selector>'
     when: 'Read exact source only when syntax itself can change the decision.'
-  - template: 'scip-query context <target>'
-    when: 'Map consumers, constraints, and reuse before a nonlocal change.'
   - template: 'scip-query diff-impact'
     when: 'Map changed symbols and downstream consumers after an edit.'
   - template: 'scip-query architecture'
@@ -37,7 +35,6 @@ commands:
 | `scip-query evidence --symbol <symbol> --edge <family> --direction <direction> --depth <n> --max-edges <n>` | Traverse selected typed relationships around exact referents; recover source separately when needed | batched exact selectors and typed graph relationships; compact endpoints with exact locations and follow-up commands; coverage and recoverable omissions; exact source-recovery command when source was requested with a graph projection; explicit ambiguity failure with exact rerun commands | `bounded` | Project explicitly selected typed relationships from one exact root. |
 | `scip-query inspect --at <file:line> --view behavior` | Batch related searches, symbols, and source locations into one deduplicated source packet | one ranked, deduplicated semantic packet plus exact selector cardinality and explicit expansion coverage | `bounded` | Read connected behavior for a named implementation gap. |
 | `scip-query code <selector>` | Read exact definitions, ranges with local call closure, or file export surfaces | per-selector resolution, complete definition source, exact ranges with statically attributed same-file call closure, file export surfaces, omitted-local ledgers, and line ranges | `complete` | Read exact source only when syntax itself can change the decision. |
-| `scip-query context <target>` | Compiler-backed context for a symbol, file, or module | definitions and references; callers and callees; dataflow producers and consumers; backward and forward slices; affected symbols; change-surface risk; dependencies and reverse dependencies; module files and exports; external surface use; complexity; churn; co-change partners; active suppressions; reuse candidates with evidence class and action tier; possible shared owners found from a bounded scan of affected consumers | `bounded` | Map consumers, constraints, and reuse before a nonlocal change. |
 | `scip-query diff-impact` | Map changed symbols and downstream consumers from the current git diff | changed symbols, downstream consumer identities, and impact paths | `bounded` | Map changed symbols and downstream consumers after an edit. |
 | `scip-query architecture` | Evaluate project-owned architectural boundaries and dependency rules | boundary coverage and dependency-rule violations | `complete` | Validate declared structural boundaries. |
 | `scip-query health --full` | Composite repository health report with React, Vue, and general cleanup findings | health score, findings, priorities, baselines, and coverage notes | `bounded` | Run configured cleanup and quality detectors. |
