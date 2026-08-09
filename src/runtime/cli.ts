@@ -1,4 +1,4 @@
-import { program } from 'commander';
+import { Help, program } from 'commander';
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { cliVersion, renderHeuristicNotice } from './cli-support.js';
@@ -7,6 +7,7 @@ import {
   normalizeLegacyEvidenceInvocation,
 } from './commands/invocation-command-descriptors.js';
 import { registerCommandDescriptors } from './commands/command-registry.js';
+import { renderRootCommandHelp } from './commands/command-panels.js';
 import {
   activateCliProjectContext,
   resolveCliProjectContext,
@@ -50,11 +51,17 @@ program
   )
   .option('--output-cursor <cursor>', 'Continue a bounded output page')
   .option('--no-session', 'Disable the explicit exploration evidence ledger')
-  .option('--reemit', 'Recovery only: render source and graph evidence again instead of citing session receipts');
+  .option('--reemit', 'Recovery only: render source and graph evidence again instead of citing session receipts')
+  .option('--help-all', 'Display every command, including compatibility and deprecated controls');
 
 if (cliEntrypoint) normalizeLegacyEvidenceInvocation(process.argv);
 const commandDescriptors = await loadInvocationCommandDescriptors(cliEntrypoint ? process.argv[2] : undefined);
 registerCommandDescriptors(program, commandDescriptors);
+const defaultHelp = new Help();
+program.configureHelp({
+  formatHelp: (command, helper) =>
+    command === program ? renderRootCommandHelp(program, commandDescriptors) : defaultHelp.formatHelp(command, helper),
+});
 program.hook('preAction', async (_thisCommand, actionCommand) => {
   const commandName = actionCommand.name();
   const prepareSharedCache = sharedCachePreparationEligible(commandName);
@@ -131,7 +138,11 @@ function initializeProfileContext(): void {
 export { program, renderHeuristicNotice };
 
 if (cliEntrypoint) {
-  await program.parseAsync();
+  if (process.argv.includes('--help-all')) {
+    process.stdout.write(renderRootCommandHelp(program, commandDescriptors, { includeCompatibility: true }));
+  } else {
+    await program.parseAsync();
+  }
 }
 
 function isCliEntrypoint(): boolean {

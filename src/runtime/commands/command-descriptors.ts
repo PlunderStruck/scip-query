@@ -402,14 +402,19 @@ export const commandDescriptors: CommandDescriptor[] = [
     command: 'status',
     agent: agentContract(
       'Is the index fresh, complete, and usable for this project?',
-      'freshness, generation, language shards, watcher, and optional capabilities',
+      'freshness, generation, language shards, and watcher state',
       [],
       'complete',
       'repository',
       commandOperation('environment-observation'),
     ),
     description: 'Show index status for this project',
-    options: withJsonOption([option('--capabilities', 'Include the project capability matrix')]),
+    options: withJsonOption([
+      {
+        ...option('--capabilities', 'Compatibility: include a concise capability-readiness summary'),
+        hidden: true,
+      },
+    ]),
     renderShape: 'custom',
     docs: doc('Maintenance'),
     handler: handlers.handleStatus,

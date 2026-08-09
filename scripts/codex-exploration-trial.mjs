@@ -72,6 +72,7 @@ async function main() {
         observedCommit: sandbox.commit,
         indexPrepared: indexSetup !== null,
         indexDurationMs: indexSetup?.durationMs ?? null,
+        agentGuidancePrepared: indexSetup?.agentGuidancePrepared ?? false,
         cleaned: sandbox.kind === 'live-repository',
       },
       tool: {
@@ -207,12 +208,21 @@ function createCliShim(cliPath) {
 
 async function prepareTreatmentIndex(repository, environment) {
   const startedAt = Date.now();
-  const execution = await runProcess('scip-query', ['reindex', '--force'], {
+  const indexExecution = await runProcess('scip-query', ['reindex', '--force'], {
     cwd: repository,
     env: environment,
     forwardStderr: true,
   });
-  return { durationMs: Date.now() - startedAt, stderrCharacters: execution.stderr.length };
+  const guidanceExecution = await runProcess('scip-query', ['setup-agent'], {
+    cwd: repository,
+    env: environment,
+    forwardStderr: true,
+  });
+  return {
+    durationMs: Date.now() - startedAt,
+    stderrCharacters: indexExecution.stderr.length + guidanceExecution.stderr.length,
+    agentGuidancePrepared: true,
+  };
 }
 
 function runCodex({ repository, environment, model, reasoning, prompt }) {

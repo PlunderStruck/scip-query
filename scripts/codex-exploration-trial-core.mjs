@@ -23,39 +23,26 @@ const MIXED_NATIVE_READ = new RegExp(
 );
 
 export function treatmentPrompt(question, _maxSemanticQueries = 4) {
-  return `You are running a read-only codebase-exploration benchmark. Answer this question accurately:
-
-${question}
-
-  Use scip-query as the only repository exploration surface for tracked nonbinary content. Do not use rg, grep, find, fd, ls, tree, cat, sed, awk, head, tail, nl, bat, less, more, perl, git show, git grep, git ls-files, Python/Node file reads, or direct source-reading tools. Do not edit files or inspect benchmark definitions, evaluation fixtures, rubrics, or recorded answers.
-
-  The benchmark records semantic-query efficiency externally; no query count is a correctness cutoff. Never leave a known, recoverable material claim unresolved to reduce query count. Run scip-query capabilities only if current provider support is needed to choose a command; the skill already defines the ordinary workflow. A capabilities call and an unchanged scip-query continuation are transport/setup rather than semantic exploration. Never restart a running command or run a process-listing command to check it.
-
-  Before querying, privately list the few material claims the answer must establish. Preserve behavior-changing predicates, authorization checks, data reshaping, hard bounds and defaults, runtime crossings, durable state changes, emitted notifications, returned values, relevant sibling outcomes, and externally visible ordering when the question depends on them. For dispatch, preserve precedence, eligibility, fallback, and exception conversion. For coordination, preserve owner lifetime, lock scope, and interruption behavior. A named constant is not an established value.
-
-  Prefer one batched query to locate exact referents. Use search for trustworthy exact text, outline when the file is known, or entrypoints when the question begins at an external entry. If the first locator does not expose a referent capable of establishing a named material claim, issue the narrowest additional exact locator that can. Select exact symbols or file:line constructs yourself. Do not use query-vocabulary ranking, automatic route selection, or next-target scoring.
-
-  Batch compatible selected roots into a scip-query evidence call. The CLI requires repeated --edge flags, explicit --direction, --depth, and --max-edges; for example: scip-query evidence --symbol '<exact>' --edge execution --edge dataflow --direction both --depth 2 --max-edges 32. Explicitly choose incoming, outgoing, or both, and select only edge families or exact subtypes capable of establishing the material claims; never request complete, all, or every family merely to discover what exists. Include the initiating owner as a root, or select incoming execution when it must be discovered; do not assume a core type is the ingress. Use --connecting only when connectivity between roots is required. Keep graph projection separate from source materialization: do not add --include to a graph request; use one later batched inspect only for named behavioral gaps. Calls and exact runtime handoffs establish executable reachability. Data, state, temporal, contract, identity, ownership, and dependency edges establish their named relationships but do not become call claims. Read the inventory, provider provenance, evidence strength, coverage, unsupported gaps, and stable folds as part of the result; missing output is not evidence of absence. Run another projection only when the previous evidence exposes a new exact root or relationship needed by a still-unresolved claim.
-
-  Stop as soon as every material claim is established, explicitly unsupported by the available providers, or justified as immaterial. Otherwise use a batched inspect --view behavior for exact unresolved constructs, then follow the narrowest printed fold, exact identity, code range, or additional projection that can close a still-material gap. Repeat only while a named claim remains unresolved and an exact in-scope recovery path exists. Never reread evidence already rendered, expand every frontier, or issue serial one-symbol queries when the roots can be batched. Before answering, audit the draft against the material claims; evidence seen but omitted from the answer is not recovered. If output emits Continue exactly:, run it unchanged until transport completes.
-
-  Return a concise explanation with concrete symbol and file/line evidence and state any material coverage limitation.`;
+  return treatmentBenchmarkPrompt(question);
 }
 
 export function minimalTreatmentPrompt(question) {
-  return `You are running a read-only codebase-exploration benchmark. Answer this question accurately:\n\n${question}\n\nUse scip-query as the only repository exploration surface for tracked nonbinary content. Do not use rg, grep, find, fd, ls, tree, cat, sed, awk, head, tail, nl, bat, git show, git grep, git ls-files, Python/Node file reads, or direct source-reading tools. Do not edit files. Do not inspect benchmark definitions, evaluation fixtures, rubrics, or recorded answers. First run scip-query status --capabilities once, then use whatever scip-query commands you judge necessary.\n\nReturn a concise explanation with concrete symbol and file/line evidence and state any material coverage limitation.`;
+  return treatmentBenchmarkPrompt(question);
 }
 
 export function directGraphTreatmentPrompt(question) {
+  return treatmentBenchmarkPrompt(
+    question,
+    'When the answer depends on code relationships, use the explicit evidence family and direction taught by the repository guidance.',
+  );
+}
+
+function treatmentBenchmarkPrompt(question, additionalGuidance = '') {
   return `You are running a read-only codebase-exploration benchmark. Answer this question accurately:
 
 ${question}
 
-Use scip-query as the only repository exploration surface for tracked nonbinary content. Do not use rg, grep, find, fd, ls, tree, cat, sed, awk, head, tail, nl, bat, less, more, perl, git show, git grep, git ls-files, Python/Node file reads, or direct source-reading tools. Do not edit files or inspect benchmark definitions, evaluation fixtures, rubrics, or recorded answers.
-
-Before exploring the repository, read the scip-explore and scip-query SKILL.md instruction files once with cat. These two instruction reads are the only exemptions from the repository-source ban. scip-explore defines the investigation purpose, evidence ledger, and stopping rule; scip-query defines command and evidence semantics. Follow both.
-
-First run scip-query status --capabilities once. There is no fixed semantic-query allowance. Continue while a material claim remains unresolved and an exact relevant recovery path is available; do not spend queries on facts that cannot change the answer, reread returned evidence, or treat a tool packet's completion as completion of the user's task. If output emits Continue exactly:, run it unchanged until transport completes.
+Use scip-query as the only repository exploration surface for tracked nonbinary content and follow the installed repository scip-query guidance. Do not use native repository search or source-reading tools. Do not edit files or inspect benchmark definitions, evaluation fixtures, rubrics, or recorded answers. There is no query-count correctness cutoff; continue while the installed guidance identifies a material, recoverable gap. ${additionalGuidance}
 
 Return a concise explanation with concrete symbol and file/line evidence and state any material coverage limitation.`;
 }

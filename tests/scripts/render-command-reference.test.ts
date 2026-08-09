@@ -134,16 +134,15 @@ describe('validateSkillCommand', () => {
 });
 
 describe('renderSkillCommandsMarkdown', () => {
-  it('renders a marker-delimited table with purpose pulled from the descriptor', () => {
+  it('renders a concise marker-delimited command chooser', () => {
     const markdown = renderSkillCommandsMarkdown([
       { template: 'scip-query refs <symbol>', when: 'Find consumers before editing.' },
     ]);
     expect(markdown).toContain('<!-- BEGIN GENERATED SKILL COMMANDS -->');
     expect(markdown).toContain('<!-- END GENERATED SKILL COMMANDS -->');
     expect(markdown).toContain('`scip-query refs <symbol>`');
-    expect(markdown).toContain('Find all files referencing a symbol');
-    expect(markdown).toContain('referencing file paths; reference line numbers grouped by file');
-    expect(markdown).toContain('`bounded`');
+    expect(markdown).toContain('| Command | When |');
+    expect(markdown).not.toContain('referencing file paths; reference line numbers grouped by file');
     expect(markdown).toContain('Find consumers before editing.');
     expect(markdown).toContain("Run a command's `--help` only when a named uncertainty needs another option.");
   });
@@ -190,7 +189,7 @@ describe('renderAgentSetupCommandCatalogSource', () => {
     expect(source).toContain('scip-query inspect');
     expect(source).toContain('GENERATED_EXPLORATION_CONTROLS');
     expect(source.toLowerCase()).toContain('typed edges only to each registered provider ceiling');
-    expect(source).toContain('Relationship controls:');
+    expect(source).toContain('Choose graph controls explicitly:');
     expect(source).not.toContain('appendEvent');
     expect(source).not.toContain('scip-query anchors');
     expect(source).not.toContain('scip-query system-map');

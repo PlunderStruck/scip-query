@@ -146,39 +146,24 @@ describe('Codex exploration trial core', () => {
     expect(classifyExplorationCommand('pwd')).toEqual({ surface: 'other', kind: 'other' });
   });
 
-  it('makes explicit, bounded, query-neutral graph exploration the treatment contract', () => {
+  it('delegates exploration semantics to installed repository guidance', () => {
     const prompt = treatmentPrompt('How does the path work?', 4);
     expect(prompt).toContain('scip-query as the only repository exploration surface');
-    expect(prompt).toContain('records semantic-query efficiency externally');
-    expect(prompt).toContain('no query count is a correctness cutoff');
-    expect(prompt).toContain('scip-query capabilities only if');
+    expect(prompt).toContain('follow the installed repository scip-query guidance');
+    expect(prompt).toContain('no query-count correctness cutoff');
     expect(prompt).not.toContain('target of 4 queries');
     expect(prompt).not.toContain('First run scip-query status');
-    expect(prompt).toContain('Prefer one batched query to locate exact referents');
-    expect(prompt).toContain('Batch compatible selected roots into a scip-query evidence call');
-    expect(prompt).toContain('Keep graph projection separate from source materialization');
-    expect(prompt).toContain('do not add --include to a graph request');
-    expect(prompt).toContain('Repeat only while a named claim remains unresolved');
-    expect(prompt).toContain('Explicitly choose incoming, outgoing, or both');
-    expect(prompt).toContain('edge families or exact subtypes');
-    expect(prompt).toContain('provider provenance');
-    expect(prompt).toContain('stable folds');
-    expect(prompt).toContain('Data, state, temporal, contract, identity, ownership, and dependency edges');
-    expect(prompt).toContain('A named constant is not an established value');
-    expect(prompt).toContain('evidence seen but omitted from the answer is not recovered');
-    expect(prompt).not.toContain('anchors');
-    expect(prompt).not.toContain('system-map');
-    expect(prompt).toContain('Do not use query-vocabulary ranking, automatic route selection, or next-target scoring');
-    expect(prompt).not.toContain('first ranked eligible set');
-    expect(prompt).not.toContain('printed system-map command');
-    expect(prompt).toContain('Do not use rg');
-    expect(prompt).toContain('Never restart a running command');
+    expect(prompt).not.toContain('Prefer one batched query');
+    expect(prompt).not.toContain('Batch compatible selected roots');
+    expect(prompt).not.toContain('provider provenance');
+    expect(prompt).toContain('Do not use native repository search or source-reading tools');
+    expect(prompt.length).toBeLessThan(1_400);
   });
 
   it('supports prompt ablations without leaking task-specific navigation', () => {
     const minimal = minimalTreatmentPrompt('How does the path work?');
     expect(minimal).toContain('scip-query as the only repository exploration surface');
-    expect(minimal).toContain('whatever scip-query commands you judge necessary');
+    expect(minimal).toContain('installed repository scip-query guidance');
     expect(minimal).not.toContain('exactly one initial locator');
 
     const disciplined = disciplinedControlPrompt('How does the path work?');
@@ -191,12 +176,9 @@ describe('Codex exploration trial core', () => {
   it('supports direct graph navigation without requiring anchor discovery', () => {
     const prompt = directGraphTreatmentPrompt('How does the path work?');
 
-    expect(prompt).toContain('read the scip-explore and scip-query SKILL.md instruction files once');
-    expect(prompt).toContain('scip-explore defines the investigation purpose, evidence ledger, and stopping rule');
-    expect(prompt).toContain('scip-query defines command and evidence semantics');
-    expect(prompt).toContain('There is no fixed semantic-query allowance');
-    expect(prompt).toContain('a material claim remains unresolved and an exact relevant recovery path is available');
-    expect(prompt).toContain("a tool packet's completion as completion of the user's task");
+    expect(prompt).toContain('follow the installed repository scip-query guidance');
+    expect(prompt).toContain('use the explicit evidence family and direction');
+    expect(prompt).toContain('no query-count correctness cutoff');
     expect(prompt).not.toContain('The normal exploration budget is');
     expect(prompt).not.toContain("scip-query evidence --symbol '<first>'");
     expect(prompt).not.toContain("Run the chosen set's printed system-map command unchanged");

@@ -475,10 +475,10 @@ describe('CLI contract', () => {
     expect(readSkill('scip-query')).toContain('scip-query inspect');
     expect(readSkill('scip-query')).toContain('scip-query evidence');
     expect(readSkill('scip-query')).not.toContain('scip-query context');
-    expect(readSkill('scip-query')).toMatch(/React, Vue/);
+    expect(readSkill('scip-query')).toContain('scip-query health --full');
     expect(readSkill('scip-query')).not.toMatch(/diff-gate|Stop hook|Gherkin/i);
-    expect(readSkill('scip-query')).toContain('not a second workflow layered on top of grep');
-    expect(readSkill('scip-query')).toContain('a suggested command count is an efficiency heuristic only');
+    expect(readSkill('scip-query')).toContain('rather than a parallel grep/read workflow');
+    expect(readSkill('scip-query')).toContain('query count is never a correctness cutoff');
     expect(readSkill('scip-explore')).toContain('An exploration is a code-reading investigation');
     expect(readSkill('scip-explore')).toContain('Accuracy determines when to stop');
     expect(readSkill('scip-explore')).toContain('private evidence ledger');

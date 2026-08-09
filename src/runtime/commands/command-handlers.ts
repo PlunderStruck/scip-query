@@ -1147,7 +1147,7 @@ function renderDoctorReport(
   console.log(
     `  Freshness: ${report.freshness.state}${report.freshness.remedy ? ` (${report.freshness.remedy})` : ''}`,
   );
-  renderCapabilityReport(report.capabilities);
+  renderOperationalCapabilitySummary(report.capabilities);
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
@@ -1192,8 +1192,33 @@ function renderStatusReport(
   renderStatusStats(report.exists);
   if (opts.capabilities) {
     console.log('');
-    renderCapabilityReport(report.capabilities);
+    renderOperationalCapabilitySummary(report.capabilities);
+    console.log('Run `scip-query capabilities` for the semantic control manual.');
   }
+}
+
+function renderOperationalCapabilitySummary(report: ReturnType<typeof getProjectCapabilities>): void {
+  const capabilityCounts = countCapabilityStatuses(report.capabilities);
+  const relationCounts = countCapabilityStatuses(report.relations);
+  console.log(`  Languages: ${report.languages.join(', ') || '(none detected)'}`);
+  console.log(
+    `  Analysis readiness: ${capabilityCounts.available} available, ${capabilityCounts.partial} partial, ${capabilityCounts.unavailable} unavailable`,
+  );
+  console.log(
+    `  Relationship providers: ${relationCounts.available} available, ${relationCounts.partial} partial, ${relationCounts.unavailable} unavailable`,
+  );
+}
+
+function countCapabilityStatuses(rows: readonly { status: string }[]): {
+  available: number;
+  partial: number;
+  unavailable: number;
+} {
+  return {
+    available: rows.filter((row) => row.status === 'available').length,
+    partial: rows.filter((row) => row.status === 'partial').length,
+    unavailable: rows.filter((row) => row.status !== 'available' && row.status !== 'partial').length,
+  };
 }
 
 function renderSharedCacheStatus(status: SharedCacheStatus): void {

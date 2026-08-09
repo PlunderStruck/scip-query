@@ -276,6 +276,6 @@ The operator chooses the material question and deliberately selects a control. T
 | `setup-agent` | Write concise scip-query mapping and cleanup guidance to AGENTS.md and CLAUDE.md | variable | - | - |
 | `uninstall` | Remove selected scip-query-owned skills or project guidance | variable | - | `--global`<br>`--project`<br>`--dry-run`<br>`--verbose`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `watch` | Watch in the foreground or manage the project refresh service | variable | - | `--daemon`<br>`--status`<br>`--stop`<br>`--debounce <ms>`<br>`--cooldown <ms>`<br>`--git-poll <ms>`<br>`--idle-timeout <ms>`<br>`--json`<br>`--result-only`<br>`--compact` |
-| `status` | Show index status for this project | variable | - | `--capabilities`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `status` | Show index status for this project | variable | - | `--json`<br>`--result-only`<br>`--compact` |
 
 <!-- END GENERATED COMMAND REFERENCE -->

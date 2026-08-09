@@ -126,20 +126,37 @@ export function renderExplorationManualMarkdown(descriptors: readonly CommandDes
 
 export function renderExplorationManualAgentLines(descriptors: readonly CommandDescriptor[]): readonly string[] {
   const controls = explorationControlManualRows(descriptors).map(
-    (row) =>
-      `- ${capitalize(row.stage)} control \`scip-query ${row.command}\`: ${row.question} Input: ${row.requiredInput} Returns: ${row.returnedFact} Ceiling: ${row.evidenceCeiling} Does not establish: ${row.nonClaim} Cost: ${row.outputCost}. Contrast: ${row.contrasts.join(' ') || 'none'}. Close disclosed gaps with: ${row.gapClosingCommands.join(', ') || 'none'}.`,
+    (row) => `- \`scip-query ${row.command}\` — ${row.question} Requires: ${row.requiredInput}`,
   );
   const relationships = explorationRelationshipManualRows()
     .map((row) => `\`${row.family} ${row.direction}\` — ${row.question}`)
     .join('; ');
-  const strengths = Object.entries(GRAPH_EVIDENCE_STRENGTH_DEFINITIONS)
-    .map(([strength, meaning]) => `\`${strength}\`: ${meaning}`)
-    .join(' ');
   return [
     ...controls,
-    `- Relationship controls: ${relationships}. Choose these explicitly; the CLI does not infer them from English intent.`,
-    `- Evidence strengths: ${strengths}`,
+    `- Choose graph controls explicitly: ${relationships}. The CLI does not infer them from English intent.`,
+    '- Calibration: exact is directly observed; derived is deterministically computed; candidate needs confirmation; mixed discloses its constituents; unknown cannot support a stronger claim. Read coverage and recovery before making absence claims.',
+    '- Run `scip-query capabilities` for the complete evidence ceilings, non-claims, contrasts, and current provider support.',
   ];
+}
+
+export function renderExplorationSkillGuideMarkdown(descriptors: readonly CommandDescriptor[]): string {
+  explorationControlManualRows(descriptors);
+  const lines = [
+    '### Choose a relationship deliberately',
+    '',
+    '| Question | Evidence family | Direction |',
+    '|---|---|---|',
+  ];
+  for (const row of explorationRelationshipManualRows()) {
+    lines.push(`| ${escapeCell(row.question)} | \`${row.family}\` | \`${row.direction}\` |`);
+  }
+  lines.push(
+    '',
+    'Use exact evidence as an observed fact only within its coverage. Derived evidence is deterministically computed; candidate evidence is a lead; mixed evidence must retain its constituent strengths; unknown evidence cannot support a stronger claim. Missing output is not evidence of absence.',
+    '',
+    'Run `scip-query capabilities` for the complete control contracts, provider ceilings, contrasts, and project support matrix.',
+  );
+  return lines.join('\n');
 }
 
 function unique<T>(values: readonly T[]): T[] {
@@ -156,8 +173,4 @@ function escapeCode(value: string): string {
 
 function escapeCell(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('`', '\\`').replaceAll('|', '\\|');
-}
-
-function capitalize(value: string): string {
-  return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 }
