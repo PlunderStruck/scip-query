@@ -271,9 +271,10 @@
         "symbols-core",
         "symbols-graph"
       ],
-      "queries-health": [
-        "analysis",
-        "queries-cleanup",
+        "queries-health": [
+          "analysis",
+          "domain",
+          "queries-cleanup",
         "queries-frontend",
         "queries-graph",
         "queries-internal",

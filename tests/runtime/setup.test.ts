@@ -63,6 +63,29 @@ describe('skill installation', () => {
     }
   });
 
+  it('can install into an isolated home for a clean smoke test', async () => {
+    const { module, symlinkSync } = await loadSetup();
+
+    module.installSkills({ quiet: true, homeDir: '/home/test' });
+
+    expect(symlinkSync).toHaveBeenCalledWith('/pkg/skills/scip-query', '/home/test/.codex/skills/scip-query', 'dir');
+  });
+
+  it('uses the scoped skill-home override for packaged smoke tests', async () => {
+    const prior = process.env.SCIP_QUERY_SKILLS_HOME;
+    process.env.SCIP_QUERY_SKILLS_HOME = '/home/test';
+    try {
+      const { module, symlinkSync } = await loadSetup();
+
+      module.installSkills({ quiet: true });
+
+      expect(symlinkSync).toHaveBeenCalledWith('/pkg/skills/scip-query', '/home/test/.codex/skills/scip-query', 'dir');
+    } finally {
+      if (prior === undefined) delete process.env.SCIP_QUERY_SKILLS_HOME;
+      else process.env.SCIP_QUERY_SKILLS_HOME = prior;
+    }
+  });
+
   it('prunes stale scip-query skill links without touching unrelated links', async () => {
     const { module, readlinkSync, readdirSync, unlinkSync } = await loadSetup();
     readdirSync.mockImplementation((target: string) =>

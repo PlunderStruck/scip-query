@@ -29,16 +29,13 @@ export interface UninstallSkillsResult {
  * Uses symlinks (junctions on Windows)
  * so skills auto-update when the package updates.
  */
-export function installSkills(opts: { quiet?: boolean } = {}): InstallSkillsResult {
+export function installSkills(opts: { quiet?: boolean; homeDir?: string } = {}): InstallSkillsResult {
   const log = opts.quiet ? () => {} : console.log;
   const thisFile = fileURLToPath(import.meta.url);
   const skillsSource = resolve(dirname(thisFile), '..', 'skills');
 
-  const targets = [
-    join(homedir(), '.claude', 'skills'),
-    join(homedir(), '.codex', 'skills'),
-    join(homedir(), '.agents', 'skills'),
-  ];
+  const home = opts.homeDir ?? process.env.SCIP_QUERY_SKILLS_HOME ?? homedir();
+  const targets = [join(home, '.claude', 'skills'), join(home, '.codex', 'skills'), join(home, '.agents', 'skills')];
 
   const result: InstallSkillsResult = {
     installed: [],
@@ -121,7 +118,7 @@ function pruneStaleOwnedSkillLinks(
 export function uninstallSkills(opts: { dryRun?: boolean; homeDir?: string } = {}): UninstallSkillsResult {
   const thisFile = fileURLToPath(import.meta.url);
   const skillsSource = resolve(dirname(thisFile), '..', 'skills');
-  const home = opts.homeDir ?? homedir();
+  const home = opts.homeDir ?? process.env.SCIP_QUERY_SKILLS_HOME ?? homedir();
   const targets = [join(home, '.claude', 'skills'), join(home, '.codex', 'skills'), join(home, '.agents', 'skills')];
   const result: UninstallSkillsResult = { removed: [], left: [], skipped: [] };
 
