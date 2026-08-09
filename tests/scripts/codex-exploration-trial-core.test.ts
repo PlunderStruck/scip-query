@@ -151,6 +151,8 @@ describe('Codex exploration trial core', () => {
     expect(prompt).toContain('scip-query as the only repository exploration surface');
     expect(prompt).toContain('efficiency against a target of 4 queries');
     expect(prompt).toContain('this is not a correctness cutoff');
+    expect(prompt).toContain('status --capabilities only if');
+    expect(prompt).not.toContain('First run scip-query status');
     expect(prompt).toContain('Prefer one batched query to locate exact referents');
     expect(prompt).toContain('Batch compatible selected roots into a scip-query evidence call');
     expect(prompt).toContain('Repeat only while a named claim remains unresolved');
