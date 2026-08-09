@@ -110,16 +110,48 @@ The persistent fixture contains `values.push(...)` and `values.slice(...)` insid
 
 The packaged check is repeatable with `npm run verify:identity-collision-cli`. Its temporary repository and private cache are removed by the script.
 
+## Sol-medium model-generalization follow-up
+
+After Phase 8 completed, two additional treatment/control pairs ran against the final CLI binary with `gpt-5.6-sol` at `medium` reasoning. They reused the frozen TSLint and OpenCode definitions and commits above. Every arm used a detached worktree; treatment received a fresh private index plus the installed scip-query and scip-explore guidance, control received no index or scip-query executable, and all four sandboxes and caches were removed. The treatment CLI SHA-256 was `1c8c52bed4f90f2af62195b274d19d28d784c398c5871a508aad0923d69c521b`.
+
+| Repository and task | Condition | Manual strict | Automatic | Total tokens | Uncached input | Rendered evidence | Exploration calls | Native reads | Duration |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| TSLint config inheritance | Sol control | 5/7 | 4/7 | 284,772 | 48,471 | 102,420 chars | 7 | 7 | 89.0 s |
+| TSLint config inheritance | Sol treatment | 6/7 | 2/7 | 211,154 | 40,476 | 73,931 chars | 9 | 0 | 151.4 s |
+| OpenCode session compaction | Sol control | 2/7 | 1/7 | 572,411 | 70,210 | 177,268 chars | 10 | 10 | 143.1 s |
+| OpenCode session compaction | Sol treatment | 3/7 | 1/7 | 573,614 | 65,547 | 112,063 chars | 10 | 0 | 205.5 s |
+
+Relative treatment changes:
+
+| Task | Total tokens | Uncached input | Rendered evidence | Accuracy relation | Interaction relation |
+|---|---:|---:|---:|---|---|
+| TSLint | -25.8% | -16.5% | -27.8% | +1 strict compound fact | 9 queries instead of 7 reads; 70.1% longer wall time |
+| OpenCode | +0.2% | -6.6% | -36.8% | +1 strict compound fact | 10 queries instead of 10 reads; 43.6% longer wall time |
+
+For TSLint, both answers establish per-folder reuse, search order, extends resolution, depth-first ordering, and severity/rule-directory behavior. Treatment additionally preserves `require.cache` eviction. Neither states the separately merged `linterOptions` behavior required by the derived-precedence fact.
+
+For OpenCode, treatment strictly establishes the overflow threshold, queued compaction work, and bounded retained tail. Control strictly establishes queued work and the retained tail; its wording does not establish that the 20,000-token bound caps the fallback output-token allowance. Both answers omit at least one required clause from summary execution, success/resume, later-context reconstruction, and pruning. In particular, neither completely states prior compaction-pair hiding plus cloned-history plugin transformation and compaction-mode markers; the `compaction_continue` marker; that durable history is retained rather than deleted; and every pruning stop condition.
+
+Artifacts:
+
+- `/tmp/tslint-calibrated-sol-medium-control-r1.json`
+- `/tmp/tslint-calibrated-sol-medium-treatment-r1.json`
+- `/tmp/opencode-compaction-calibrated-sol-medium-control-r1.json`
+- `/tmp/opencode-compaction-calibrated-sol-medium-treatment-r1.json`
+
 ## What was established
 
 For these four fixed repositories, commits, questions, and Luna-max runs, aggregate manual strict accuracy is non-inferior. Individual-run variance is real: the second meta-harness treatment loses one strict fact against its paired control, but the two-run means are equal; OpenCode treatment is equal or better in both pairs. Every pair lowers uncached input and rendered repository evidence. Every TypeScript pair lowers total tokens; the Rust pair increases total tokens by 7.0% while lowering uncached input by 17.6% and rendered evidence by 60.5%. No treatment used native tracked-source exploration, and every sandbox/cache cleanup completed.
 
 The most plausible causal contribution is that scoped source materialization and statement-complete behavior packets replace broad file reads while preserving selected implementation behavior. That mechanism predicts lower rendered evidence and is directly visible in all three traces. The evidence-audit instruction also changed the final TSLint answer in the predicted direction by preserving cache invalidation that was present but previously omitted.
 
+The two post-completion Sol-medium pairs extend the observed model scope. Treatment recovers one additional strict compound fact in each task and lowers uncached input and rendered evidence in both. Total tokens fall materially for TSLint and are effectively equal for OpenCode. This establishes favorable results for these two fixed Sol-medium pairs, not a model-independent effect.
+
 ## What was not established
 
 - Four task shapes, including one Rust task, do not prove arbitrary-task or arbitrary-language performance.
 - Two meta-harness and OpenCode pairs expose substantial Luna variance but still do not characterize the full score distribution.
+- One Sol-medium pair per task does not characterize Sol variance or establish that the result transfers to the other held tasks.
 - The runs do not isolate which calibrated component caused each difference; treatment changes the available surface and its instructions together.
 - The automatic matcher is not a valid sole accuracy gate. Its OpenCode 0/7 scores contradict obvious semantic coverage in both answers.
 - The OpenCode trace does not establish low interaction overhead; it establishes token/evidence compression despite high interaction count.
