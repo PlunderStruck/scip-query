@@ -46,6 +46,8 @@ export interface ReindexRunActivity {
 
 export interface ReindexRunLanguageActivity {
   result: 'rebuilt' | 'reused';
+  strategy?: 'reused' | 'incremental' | 'full';
+  fallbackReason?: string;
   /** Size of the top-level cached SCIP shard after this run. */
   outputBytes: number;
   /** Bytes newly produced by this run. Reused shards always contribute zero. */
@@ -446,6 +448,8 @@ function summarizeLanguageActivity(
         diagnostics.filter((shard) => !shard.reused).reduce((total, shard) => total + shard.durationMs, 0));
     byLanguage[language] = {
       result: reused ? 'reused' : 'rebuilt',
+      strategy: reused ? 'reused' : (topLevel?.strategy ?? 'full'),
+      ...(topLevel?.strategy === 'full' && topLevel.missReason ? { fallbackReason: topLevel.missReason } : {}),
       outputBytes,
       producedOutputBytes: reused ? 0 : outputBytes,
       durationMs,
@@ -485,6 +489,11 @@ function isValidLanguageActivity(value: unknown): value is ReindexRunLanguageAct
   const detail = value as Partial<ReindexRunLanguageActivity>;
   return (
     (detail.result === 'rebuilt' || detail.result === 'reused') &&
+    (detail.strategy === undefined ||
+      detail.strategy === 'reused' ||
+      detail.strategy === 'incremental' ||
+      detail.strategy === 'full') &&
+    (detail.fallbackReason === undefined || typeof detail.fallbackReason === 'string') &&
     isNonNegativeInteger(detail.outputBytes) &&
     isNonNegativeInteger(detail.producedOutputBytes) &&
     isNonNegativeFiniteNumber(detail.durationMs) &&

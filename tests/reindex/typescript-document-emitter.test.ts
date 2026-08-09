@@ -81,6 +81,38 @@ describe('TypeScriptDocumentEmitter', () => {
     expect(second.stats.sourceNodesReplaced).toBe(2);
     expect(second.stats.symbolEntriesPruned).toBeGreaterThan(first.stats.symbolEntriesPruned);
   });
+
+  test('initializes a cold compiler without emitting unrelated documents', () => {
+    const availability = loadTypeScriptDocumentRuntime();
+    expect(availability.available).toBe(true);
+    if (!availability.available) return;
+
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'scip-query-document-emitter-cold-')));
+    writeFixture(root);
+    const created = createTypeScriptDocumentEmitter({
+      workspaceRoot: root,
+      tsconfigPath: 'tsconfig.json',
+      projectRoot: '.',
+      runtime: availability.runtime,
+    });
+    expect(created.available).toBe(true);
+    if (!created.available) return;
+
+    writeFileSync(
+      join(root, 'src/a.ts'),
+      [
+        'export interface Shape { point: { x: number; y: number; z: number } }',
+        'export const origin: Shape = { point: { x: 0, y: 0, z: 0 } };',
+        '',
+      ].join('\n'),
+    );
+    const result = created.emitter.advance({ modifiedFiles: ['src/a.ts'], affectedFiles: ['src/b.ts'] });
+    const oracle = cleanOracle(root, availability.runtime);
+
+    expect(result.fragments.map((fragment) => fragment.relativePath)).toEqual(['src/b.ts']);
+    expectFragmentsEqual(result.fragments, oracle);
+    expect(result.stats).toMatchObject({ initializations: 1, programUpdates: 0, documentsEmitted: 1 });
+  });
 });
 
 function writeFixture(root: string): void {

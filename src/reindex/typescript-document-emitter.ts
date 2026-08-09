@@ -274,14 +274,10 @@ export class TypeScriptDocumentEmitter {
   // scip-query: ignore-twin — initialization lifecycle belongs to this emitter's compiler state.
   initialize(): TypeScriptDocumentAdvanceResult {
     const startedAt = performance.now();
-    const config = this.config ?? readTypeScriptConfig(this.runtime.typescript, this.tsconfigPath);
-    this.includedFiles = new Set(config.fileNames.map(normalizedAbsolutePath));
-    this.program = this.runtime.typescript.createProgram(config.fileNames, config.options, this.host.compilerHost);
-    this.checker = this.program.getTypeChecker();
-    this.stats.initializations += 1;
+    this.initializeProgram();
 
     const fragments: TypeScriptDocumentFragment[] = [];
-    for (const sourceFile of this.program.getSourceFiles()) {
+    for (const sourceFile of this.program!.getSourceFiles()) {
       if (!this.includedFiles.has(normalizedAbsolutePath(sourceFile.fileName))) continue;
       fragments.push(this.emitSourceFile(sourceFile));
     }
@@ -340,15 +336,25 @@ export class TypeScriptDocumentEmitter {
   }
 
   private initializeAndAdvance(input: TypeScriptDocumentAdvanceInput): TypeScriptDocumentAdvanceResult {
-    const initial = this.initialize();
+    const startedAt = performance.now();
+    this.initializeProgram();
     const modifiedFiles = normalizedUniqueRelativePaths(input.modifiedFiles);
     const affectedFiles = normalizedUniqueRelativePaths(input.affectedFiles);
     this.validateIncrementalPaths(modifiedFiles, affectedFiles);
-    const affected = new Set(affectedFiles);
-    return {
-      ...initial,
-      fragments: initial.fragments.filter((fragment) => affected.has(fragment.relativePath)),
-    };
+    const fragments = affectedFiles.map((relativePath) => {
+      const sourceFile = this.program!.getSourceFile(resolveWithin(this.workspaceRoot, relativePath));
+      if (!sourceFile) throw new Error(`affected TypeScript source is unavailable: ${relativePath}`);
+      return this.emitSourceFile(sourceFile);
+    });
+    return this.result(fragments, startedAt);
+  }
+
+  private initializeProgram(): void {
+    const config = this.config ?? readTypeScriptConfig(this.runtime.typescript, this.tsconfigPath);
+    this.includedFiles = new Set(config.fileNames.map(normalizedAbsolutePath));
+    this.program = this.runtime.typescript.createProgram(config.fileNames, config.options, this.host.compilerHost);
+    this.checker = this.program.getTypeChecker();
+    this.stats.initializations += 1;
   }
 
   private validateIncrementalPaths(modifiedFiles: readonly string[], affectedFiles: readonly string[]): void {

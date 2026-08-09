@@ -181,12 +181,14 @@ describe('reindex activity', () => {
     expect(raw.byLanguage).toEqual({
       typescript: {
         result: 'rebuilt',
+        strategy: 'full',
         outputBytes: 10,
         producedOutputBytes: 10,
         durationMs: 8,
       },
       rust: {
         result: 'reused',
+        strategy: 'reused',
         outputBytes: 4,
         producedOutputBytes: 0,
         durationMs: 0,

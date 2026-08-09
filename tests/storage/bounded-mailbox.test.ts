@@ -135,6 +135,26 @@ describe('bounded filesystem mailbox', () => {
     );
   });
 
+  it('deduplicates a retained completion larger than the metadata read ceiling by its content-addressed name', () => {
+    const paths = fixture();
+    const request = operation('large-completion', NOW, NOW + 10_000);
+    enqueueBoundedMailboxRequest(paths, request, { nowMs: NOW });
+    const [claim] = claimBoundedMailboxRequests(paths, { ownerId: 'server-a', nowMs: NOW });
+
+    completeBoundedMailboxClaim(
+      paths,
+      claim!,
+      { ok: true, id: request.id, payload: 'x'.repeat(9 * 1024 * 1024) },
+      { nowMs: NOW + 1 },
+    );
+
+    expect(
+      enqueueBoundedMailboxRequest(paths, operation('large-completion', NOW + 2, NOW + 20_000), {
+        nowMs: NOW + 2,
+      }),
+    ).toEqual(expect.objectContaining({ disposition: 'duplicate' }));
+  });
+
   it('keeps the first completion authoritative when an expired owner finishes late', () => {
     const paths = fixture();
     const request = operation('race', NOW, NOW + 100);

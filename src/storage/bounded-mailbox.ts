@@ -897,10 +897,19 @@ function existingOperation(paths: BoundedMailboxPaths, requestId: string): strin
 
 function assertMatchingOperation(path: string, operationKey: string, requestId: string): RequestHeader {
   const header = readRequestHeader(path);
-  if (!header || header.operationKey !== operationKey) {
-    throw new Error(`Mailbox operation ${requestId} conflicts with an existing retained record.`);
+  if (header?.operationKey === operationKey) return header;
+
+  // Completed responses may legitimately be larger than the bounded metadata
+  // reader. Their immutable filename is still the SHA-256 operation identity:
+  // enqueue validation requires id === boundedMailboxRequestId(operationKey),
+  // and publication keeps that exact basename. Treat that content-addressed
+  // name as the retained identity; the protocol-specific client still validates
+  // the operation key in the complete response before consuming its payload.
+  if (basename(path) === `${boundedMailboxRequestId(operationKey)}.json`) {
+    return { id: requestId, operationKey };
   }
-  return header;
+
+  throw new Error(`Mailbox operation ${requestId} conflicts with an existing retained record.`);
 }
 
 function validateRequestIdentity(request: BoundedMailboxRequestIdentity): void {

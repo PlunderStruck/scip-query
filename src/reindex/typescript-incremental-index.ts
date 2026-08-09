@@ -84,6 +84,8 @@ export interface MaterializeTypeScriptIncrementalInput {
   currentSnapshot: ProjectInputSnapshot;
   projectMode: TypeScriptProjectMode | undefined;
   onStatus: (message: string) => void;
+  /** Receives the exact reason that made the safe incremental path unavailable. */
+  onUnavailable?: (reason: string) => void;
 }
 
 // scip-query: ignore-stale — reviewed S1 owned contract; this names the materialized incremental-index result.
@@ -413,9 +415,9 @@ export function tryMaterializeTypeScriptIncrementalIndex(
     );
     return result;
   } catch (error) {
-    input.onStatus(
-      `Incremental TypeScript index unavailable: ${error instanceof Error ? error.message : String(error)}. Falling back to the whole-project indexer.`,
-    );
+    const reason = error instanceof Error ? error.message : String(error);
+    input.onUnavailable?.(reason);
+    input.onStatus(`Incremental TypeScript index unavailable: ${reason}. Falling back to the whole-project indexer.`);
     return null;
   }
 }

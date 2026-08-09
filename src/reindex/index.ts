@@ -165,6 +165,8 @@ export interface ReindexShardDiagnostic {
   language: SupportedLanguage;
   /** True when the cached shard was reused without rerunning its indexer. */
   reused: boolean;
+  /** How this shard was obtained during the refresh. */
+  strategy: 'reused' | 'incremental' | 'full';
   /** Present only when `reused` is false: why the cached shard could not be used. */
   missReason?: string;
   /** Short hash of this shard's fingerprint inputs (source content + indexer options). */
@@ -733,6 +735,7 @@ function buildFullyReusedShardDiagnostics(
     id: language,
     language,
     reused: true,
+    strategy: 'reused',
     fingerprint: hashFingerprint(fingerprints[language]),
     outputBytes: fileSizeOrNull(languageShardPath(paths.outputDb, language)),
     durationMs: 0,
@@ -942,6 +945,7 @@ async function runLanguageIndexersForFreshReindex(
   const baseShardCurrent =
     acceptedMetadata?.scipCompanion !== 'deferred' &&
     (acceptedGeneration.state !== 'current' || acceptedGeneration.generation.publication?.scipCompanion !== 'deferred');
+  let typescriptIncrementalUnavailableReason: string | undefined;
   const incrementalTypeScript =
     typescriptClassification && !typescriptClassification.reused && incrementalGenerationUsable
       ? tryMaterializeTypeScriptIncrementalIndex({
@@ -957,6 +961,9 @@ async function runLanguageIndexersForFreshReindex(
           currentSnapshot: opts.fingerprint,
           projectMode: opts.opts.typescriptProjectMode,
           onStatus: opts.onStatus,
+          onUnavailable: (reason) => {
+            typescriptIncrementalUnavailableReason = reason;
+          },
         })
       : null;
   const incrementallyIndexed = new Set<SupportedLanguage>(incrementalTypeScript ? ['typescript'] : []);
@@ -1045,6 +1052,7 @@ async function runLanguageIndexersForFreshReindex(
     classification,
     [...runResults, ...incrementalRunResults],
     tsProjectShards ? { outputDb: opts.paths.outputDb, classification: tsProjectShards.classification } : undefined,
+    typescriptIncrementalUnavailableReason,
   );
   return {
     indexedOutputs: allIndexedOutputs,
@@ -1289,6 +1297,7 @@ function buildFreshReindexShardDiagnostics(
   classification: ReadonlyMap<SupportedLanguage, LanguageShardClassification>,
   runResults: readonly IndexerRunResult[],
   typescriptProjects?: TypeScriptProjectShardDiagnosticsContext,
+  typescriptIncrementalUnavailableReason?: string,
 ): ReindexShardDiagnostic[] {
   const diagnostics: ReindexShardDiagnostic[] = [];
   for (const [language, info] of classification) {
@@ -1297,6 +1306,7 @@ function buildFreshReindexShardDiagnostics(
       id: language,
       language,
       reused: true,
+      strategy: 'reused',
       fingerprint: hashFingerprint(info.fingerprint),
       outputBytes: fileSizeOrNull(info.scipPath),
       durationMs: 0,
@@ -1310,7 +1320,12 @@ function buildFreshReindexShardDiagnostics(
       id: run.id,
       language: run.language,
       reused: false,
-      missReason: projectInfo?.reason ?? info?.reason ?? run.skipped?.reason,
+      strategy: run.command === 'watch-service:typescript-index' ? 'incremental' : 'full',
+      missReason:
+        (run.language === 'typescript' ? typescriptIncrementalUnavailableReason : undefined) ??
+        projectInfo?.reason ??
+        info?.reason ??
+        run.skipped?.reason,
       fingerprint: projectInfo
         ? hashFingerprint(projectInfo.fingerprint)
         : info
@@ -1328,6 +1343,7 @@ function buildFreshReindexShardDiagnostics(
         id: `typescript:${project}`,
         language: 'typescript',
         reused: true,
+        strategy: 'reused',
         fingerprint: hashFingerprint(info.fingerprint),
         outputBytes: fileSizeOrNull(typescriptProjectShardPath(typescriptProjects.outputDb, project)),
         durationMs: 0,
