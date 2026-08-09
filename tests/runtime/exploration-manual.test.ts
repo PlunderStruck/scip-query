@@ -4,7 +4,9 @@ import { commandDescriptors } from '../../src/runtime/commands/command-descripto
 import {
   explorationControlManualRows,
   explorationRelationshipManualRows,
+  renderExplorationManualAgentLines,
   renderExplorationManualMarkdown,
+  renderExplorationSkillGuideMarkdown,
 } from '../../src/runtime/command-kit/exploration-manual.js';
 
 describe('exploration manual', () => {
@@ -51,5 +53,16 @@ describe('exploration manual', () => {
     expect(markdown).toContain('Who can call or reach this?');
     expect(markdown).not.toContain('recommended next');
     expect(markdown).not.toContain('task relevance score');
+  });
+
+  it('does not turn the exhaustive capability panel into a routine orientation step', () => {
+    const agentLines = renderExplorationManualAgentLines(commandDescriptors).join('\n');
+    const skillGuide = renderExplorationSkillGuideMarkdown(commandDescriptors);
+
+    for (const guidance of [agentLines, skillGuide]) {
+      expect(guidance).toContain('complete for ordinary exploration');
+      expect(guidance).toContain('only when a named claim depends on uncertain provider support');
+      expect(guidance).not.toContain('Run `scip-query capabilities` for');
+    }
   });
 });

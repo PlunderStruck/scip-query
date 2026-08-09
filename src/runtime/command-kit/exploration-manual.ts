@@ -135,7 +135,7 @@ export function renderExplorationManualAgentLines(descriptors: readonly CommandD
     ...controls,
     `- Choose graph controls explicitly: ${relationships}. The CLI does not infer them from English intent.`,
     '- Calibration: exact is directly observed; derived is deterministically computed; candidate needs confirmation; mixed discloses its constituents; unknown cannot support a stronger claim. Read coverage and recovery before making absence claims.',
-    '- Run `scip-query capabilities` for the complete evidence ceilings, non-claims, contrasts, and current provider support.',
+    '- The controls above are complete for ordinary exploration. Run `scip-query capabilities --matrix` only when a named claim depends on uncertain provider support; do not run it for routine orientation.',
   ];
 }
 
@@ -154,7 +154,7 @@ export function renderExplorationSkillGuideMarkdown(descriptors: readonly Comman
     '',
     'Use exact evidence as an observed fact only within its coverage. Derived evidence is deterministically computed; candidate evidence is a lead; mixed evidence must retain its constituent strengths; unknown evidence cannot support a stronger claim. Missing output is not evidence of absence.',
     '',
-    'Run `scip-query capabilities` for the complete control contracts, provider ceilings, contrasts, and project support matrix.',
+    'The controls above are complete for ordinary exploration. Run `scip-query capabilities --matrix` only when a named claim depends on uncertain provider support; do not run it for routine orientation.',
   );
   return lines.join('\n');
 }

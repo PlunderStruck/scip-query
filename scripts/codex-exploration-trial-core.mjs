@@ -48,6 +48,25 @@ export function pathWithoutExecutable(pathValue, executable) {
     .join(delimiter);
 }
 
+export function codexExplorationExecArgs({ repository, model, reasoning }) {
+  return [
+    'exec',
+    '--ephemeral',
+    '--json',
+    '--ignore-user-config',
+    '--ignore-rules',
+    '-m',
+    model,
+    '-c',
+    `model_reasoning_effort=${JSON.stringify(reasoning)}`,
+    '-s',
+    'danger-full-access',
+    '-C',
+    repository,
+    '-',
+  ];
+}
+
 function treatmentBenchmarkPrompt(question, additionalGuidance = '') {
   return `You are running a read-only codebase-exploration benchmark. Answer this question accurately:
 

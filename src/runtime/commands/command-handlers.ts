@@ -1376,8 +1376,35 @@ function renderCapabilityReport(
   console.log(`Exploration capabilities for: ${report.languages.join(', ') || '(no detected languages)'}`);
   console.log('\nPrimary controls:');
   for (const control of GENERATED_EXPLORATION_CONTROLS) {
-    console.log(`  ${control.stage.toUpperCase().padEnd(8)} scip-query ${control.command} [${control.outputCost}]`);
-    console.log(`             Answers: ${control.question}`);
+    console.log(
+      `  ${control.stage.toUpperCase().padEnd(8)} scip-query ${control.command} [${control.outputCost}] — ${control.question}`,
+    );
+  }
+  console.log('\nRelationship controls:');
+  for (const row of explorationRelationshipManualRows()) {
+    const relation = report.relations.find((candidate) => candidate.family === row.family);
+    const status = relation?.status ?? 'unsupported';
+    console.log(`  ${status.toUpperCase().padEnd(11)} ${row.family} ${row.direction} — ${row.question}`);
+  }
+  console.log(
+    `\nStrengths: ${Object.keys(GRAPH_EVIDENCE_STRENGTH_DEFINITIONS).join(', ')}. Unavailable analyses: ${GRAPH_RELATION_UNAVAILABLE_FRONTIERS.map((frontier) => frontier.id).join(', ')}.`,
+  );
+  console.log(
+    '\nThe agent chooses a question, family, and direction; this command reports support and does not infer intent.',
+  );
+  if (!options.matrix) {
+    console.log('Run `scip-query capabilities --matrix` only when a named claim needs contract or provider details.');
+    return;
+  }
+
+  renderCapabilityContractDetails(report);
+  renderCapabilityMatrix(report);
+}
+
+function renderCapabilityContractDetails(report: ReturnType<typeof getProjectCapabilities>): void {
+  console.log('\nControl contracts:');
+  for (const control of GENERATED_EXPLORATION_CONTROLS) {
+    console.log(`  scip-query ${control.command}`);
     console.log(`             Input: ${control.requiredInput}`);
     console.log(`             Returns: ${control.returnedFact}`);
     console.log(`             Ceiling: ${control.evidenceCeiling}`);
@@ -1387,11 +1414,11 @@ function renderCapabilityReport(
       console.log(`             Close disclosed gaps with: ${control.gapClosingCommands.join(', ')}`);
     }
   }
-  console.log('\nRelationship controls:');
+  console.log('\nRelationship contracts:');
   for (const row of explorationRelationshipManualRows()) {
     const relation = report.relations.find((candidate) => candidate.family === row.family);
     const status = relation?.status ?? 'unsupported';
-    console.log(`  ${status.toUpperCase().padEnd(11)} ${row.family} ${row.direction} — ${row.question}`);
+    console.log(`  ${status.toUpperCase().padEnd(11)} ${row.family} ${row.direction}`);
     console.log(`             Establishes: ${row.establishes}`);
     console.log(`             Strengths: ${row.evidenceStrengths.join(', ') || 'none registered'}`);
     console.log(`             Provider ceilings: ${row.supportCeilings.join(', ') || 'none registered'}`);
@@ -1408,15 +1435,6 @@ function renderCapabilityReport(
     console.log(`             Consequence: ${frontier.consequence}`);
     console.log(`             Recover selected paths with: ${frontier.recoverWith.join(', ')}`);
   }
-  console.log(
-    '\nThe agent chooses a question, family, and direction; this command reports support and does not infer intent.',
-  );
-  if (!options.matrix) {
-    console.log('Run `scip-query capabilities --matrix` for provider and language details.');
-    return;
-  }
-
-  renderCapabilityMatrix(report);
 }
 
 function renderCapabilityMatrix(report: ReturnType<typeof getProjectCapabilities>): void {

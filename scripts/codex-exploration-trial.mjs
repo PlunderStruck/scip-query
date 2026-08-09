@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { createExplorationSandbox } from './codex-exploration-sandbox.mjs';
 import { evaluateExplorationTrial, validateExplorationBenchmarkDefinition } from './exploration-benchmark-core.mjs';
 import {
+  codexExplorationExecArgs,
   controlPrompt,
   directGraphTreatmentPrompt,
   disciplinedControlPrompt,
@@ -237,24 +238,7 @@ async function prepareTreatmentIndex(repository, environment) {
 }
 
 function runCodex({ repository, environment, model, reasoning, prompt }) {
-  const args = [
-    'exec',
-    '--ephemeral',
-    '--json',
-    '--ignore-user-config',
-    '--ignore-rules',
-    '-c',
-    'project_doc_max_bytes=0',
-    '-m',
-    model,
-    '-c',
-    `model_reasoning_effort=${JSON.stringify(reasoning)}`,
-    '-s',
-    'danger-full-access',
-    '-C',
-    repository,
-    '-',
-  ];
+  const args = codexExplorationExecArgs({ repository, model, reasoning });
   return runProcess('codex', args, {
     cwd: repository,
     env: environment,

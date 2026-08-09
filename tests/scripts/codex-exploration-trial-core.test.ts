@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 // @ts-expect-error native script modules do not ship TypeScript declarations
 import {
   classifyExplorationCommand,
+  codexExplorationExecArgs,
   directGraphTreatmentPrompt,
   disciplinedControlPrompt,
   minimalTreatmentPrompt,
@@ -201,5 +202,13 @@ describe('Codex exploration trial core', () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  it('loads checkout-local project guidance in benchmark sessions', () => {
+    const args = codexExplorationExecArgs({ repository: '/repo', model: 'model', reasoning: 'high' });
+
+    expect(args).not.toContain('project_doc_max_bytes=0');
+    expect(args).toContain('/repo');
+    expect(args).toContain('model_reasoning_effort="high"');
   });
 });

@@ -9,7 +9,7 @@ export const GENERATED_AGENT_COMMAND_CATALOG = [
   '- `scip-query code <selectors...>` — What exact source defines these symbols, ranges, or file surfaces? Requires: One or more exact symbols, file:line ranges, or file paths.',
   '- Choose graph controls explicitly: `execution incoming` — Who can call or reach this?; `execution outgoing` — What can this call or reach?; `dataflow incoming` — Where can this value come from?; `dataflow outgoing` — Where can this value go?; `runtime both` — Which producer and consumer rendezvous?; `state both` — What resource is observed or changed?; `temporal both` — What occurs before or after this?; `contract both` — What interface constrains this?; `identity both` — Are these observations the same entity?; `ownership both` — What contains or owns this?; `dependencies outgoing` — What does this statically rely on?. The CLI does not infer them from English intent.',
   '- Calibration: exact is directly observed; derived is deterministically computed; candidate needs confirmation; mixed discloses its constituents; unknown cannot support a stronger claim. Read coverage and recovery before making absence claims.',
-  '- Run `scip-query capabilities` for the complete evidence ceilings, non-claims, contrasts, and current provider support.',
+  '- The controls above are complete for ordinary exploration. Run `scip-query capabilities --matrix` only when a named claim depends on uncertain provider support; do not run it for routine orientation.',
 ] as const;
 
 // prettier-ignore
