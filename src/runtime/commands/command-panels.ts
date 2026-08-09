@@ -81,8 +81,9 @@ export function commandPanels(
           : 0,
       ),
   }));
+  const defaultPanelIds = new Set<CommandPanelId>(['primary-exploration', 'maintenance']);
   return panels.filter(
-    (panel) => panel.commands.length > 0 && (options.includeCompatibility || panel.id !== 'compatibility'),
+    (panel) => panel.commands.length > 0 && (options.includeCompatibility || defaultPanelIds.has(panel.id)),
   );
 }
 
@@ -106,7 +107,7 @@ export function renderRootCommandHelp(
     }
   }
   if (!options.includeCompatibility) {
-    lines.push('', 'Run `scip-query --help-all` to include compatibility and deprecated controls.');
+    lines.push('', 'Run `scip-query --help-all` to include advanced, compatibility, and deprecated controls.');
   }
   lines.push("Run `scip-query <command> --help` for one control's options and examples.", '');
   return lines.join('\n');

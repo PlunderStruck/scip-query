@@ -498,8 +498,8 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     readiness,
     capabilities,
     freshness,
-      health,
-      healthSelected: opts.runHealth === true,
+    health,
+    healthSelected: opts.runHealth === true,
     agentResult,
     watchConfig,
     watchService,
@@ -813,8 +813,8 @@ function buildSetupSmokeTests(opts: {
   readiness: ProjectReadiness;
   capabilities: ProjectCapabilityReport;
   freshness: IndexFreshness;
-    health: ProjectSetupHealthSummary;
-    healthSelected: boolean;
+  health: ProjectSetupHealthSummary;
+  healthSelected: boolean;
   agentResult: SetupAgentResult | null;
   watchConfig: ReturnType<typeof resolveWatchConfig>;
   watchService: WatchServiceEnsureResult | null;
@@ -863,11 +863,11 @@ function buildSetupSmokeTests(opts: {
           ? capabilityMatrixSmokeEvidence(opts.capabilities)
           : 'No detected languages produced capability rows.',
     },
-      {
-        id: 'health',
-        command: 'scip-query health',
-        status: opts.health.score === null ? 'unavailable' : 'pass',
-        optional: !opts.healthSelected,
+    {
+      id: 'health',
+      command: 'scip-query health',
+      status: opts.health.score === null ? 'unavailable' : 'pass',
+      optional: !opts.healthSelected,
       evidence:
         opts.health.score === null
           ? (opts.health.unavailableReason ?? 'Health report was not available.')

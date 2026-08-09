@@ -16,7 +16,7 @@ describe('command cockpit panels', () => {
     );
   });
 
-  it('keeps compatibility controls out of ordinary help and exposes them explicitly', () => {
+  it('keeps advanced and compatibility controls out of ordinary help and exposes them explicitly', () => {
     const program = new Command().name('scip-query').description('Repository exploration surface');
     program.option('--help-all', 'Display every command');
 
@@ -24,12 +24,15 @@ describe('command cockpit panels', () => {
     const complete = renderRootCommandHelp(program, commandDescriptors, { includeCompatibility: true });
 
     expect(ordinary).toContain('Primary exploration:');
-    expect(ordinary).toContain('Specialized analysis:');
-    expect(ordinary).toContain('Quality and cleanup:');
     expect(ordinary).toContain('Maintenance:');
-    expect(ordinary).toContain('Formal modeling:');
+    expect(ordinary).not.toContain('Specialized analysis:');
+    expect(ordinary).not.toContain('Quality and cleanup:');
+    expect(ordinary).not.toContain('Formal modeling:');
     expect(ordinary).not.toContain('Compatibility and deprecated controls:');
     expect(ordinary).not.toContain('anchors <question>');
+    expect(complete).toContain('Specialized analysis:');
+    expect(complete).toContain('Quality and cleanup:');
+    expect(complete).toContain('Formal modeling:');
     expect(complete).toContain('Compatibility and deprecated controls:');
     expect(complete).toContain('anchors <question>');
   });
