@@ -80,6 +80,7 @@ describe('setupAgent', () => {
     expect(agentsMd).not.toContain('stop-ready');
     expect(agentsMd).not.toContain('Run the emitted `Expand together:`');
     expect(agentsMd).toContain('.scipquery/suppressions/*.json');
+    expect(agentsMd).toContain('audit the final answer itself against every established ledger row');
     expect(agentsMd).not.toMatch(/diff-gate|Gherkin|goal record|obligation/i);
     expect(readFileSync(join(projectRoot, 'CLAUDE.md'), 'utf8')).toContain('@AGENTS.md');
   });
