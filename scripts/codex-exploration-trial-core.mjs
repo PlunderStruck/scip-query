@@ -72,7 +72,7 @@ function treatmentBenchmarkPrompt(question, additionalGuidance = '') {
 
 ${question}
 
-Use scip-query as the only repository exploration surface for tracked nonbinary content and follow the installed repository scip-query guidance. Do not use native repository search or source-reading tools. Do not edit files or inspect benchmark definitions, evaluation fixtures, rubrics, or recorded answers. There is no query-count correctness cutoff; continue while the installed guidance identifies a material, recoverable gap. ${additionalGuidance}
+Use the installed scip-query and scip-explore guidance, with scip-query as the only repository exploration surface for tracked nonbinary content. Do not use native repository search or source-reading tools. Do not edit files or inspect benchmark definitions, evaluation fixtures, rubrics, or recorded answers. Stop as soon as every material claim is supported. Query count is measurement only, not a reason to omit a known recoverable gap. Before any new query, check whether evidence already in context establishes the missing claim; if it does, update the answer instead of querying again. ${additionalGuidance}
 
 Return a concise explanation with concrete symbol and file/line evidence and state any material coverage limitation.`;
 }

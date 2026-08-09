@@ -1625,7 +1625,8 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
           ],
           {
             ranking: 'identity-only',
-            manualInput: 'One exact text literal or deliberately bounded regular expression.',
+            manualInput:
+              'One exact text literal or deliberately bounded regular expression; insert `--` before a literal that starts with a dash.',
             evidenceCeiling:
               'Exact current-text cardinality and locations within reported text coverage; compiler ownership only where aligned.',
           },
@@ -1639,7 +1640,11 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
         },
       ],
     },
-    docs: doc('Navigation', ["scip-query search 'eventName'", "scip-query search 'send.*event' --regexp --scope src"]),
+    docs: doc('Navigation', [
+      "scip-query search 'eventName'",
+      "scip-query search -- '--config'",
+      "scip-query search 'send.*event' --regexp --scope src",
+    ]),
     query: ({ db, args, opts }) =>
       queries.searchSource(db, stringArg(args, 0), {
         scope: stringOptionValue(opts, 'scope'),

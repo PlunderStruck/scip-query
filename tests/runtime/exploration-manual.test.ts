@@ -14,6 +14,7 @@ describe('exploration manual', () => {
     const rows = explorationControlManualRows(commandDescriptors);
 
     expect(rows.map((row) => row.id)).toEqual(['search', 'outline', 'entrypoints', 'evidence', 'inspect', 'code']);
+    expect(rows.find((row) => row.id === 'search')?.requiredInput).toContain('starts with a dash');
     for (const row of rows) {
       expect(row.requiredInput.length, row.id).toBeGreaterThan(0);
       expect(row.returnedFact.length, row.id).toBeGreaterThan(0);
