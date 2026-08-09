@@ -125,9 +125,14 @@ The most plausible causal contribution is that scoped source materialization and
 - The OpenCode trace does not establish low interaction overhead; it establishes token/evidence compression despite high interaction count.
 - No result justifies an agent-visible query cap or a relevance oracle.
 
-## Remaining release evidence
+## Final release gates
 
-Before Phase 8 is complete:
+Phase 8 passed the following gates from the final implementation tree:
 
-1. Run formatting, typecheck, lint, API compatibility, architecture, full tests, collision verification, and packaged-install smoke tests from the final tree.
-2. Preserve the strict manual audit and do not replace it with literal phrase matching.
+- TypeScript typecheck, formatting, ESLint, build, API compatibility, the public API consumer, and skill-link validation pass.
+- Architecture maps 474/474 indexed files into 36 declared boundaries, declares all 36 dependency rows, and reports no forbidden dependency edge.
+- The complete test suite passes with bounded host concurrency: 288 files and 2,362 tests. An initial unbounded run passed 2,360 tests but oversubscribed two process-spawning CLI tests past their 5- and 10-second limits and triggered a Vitest worker-RPC timeout. Those files then passed 33/33 alone, and both passed inside the bounded complete run.
+- `npm run verify:identity-collision-cli` passes against the packaged false-identity corpus.
+- A clean consumer installed the `scip-query@0.20.0` tarball produced by `npm pack`; the installed `scip-query --help` and `scip-query capabilities` commands both ran successfully.
+
+The strict manual audit remains the accuracy gate. Literal phrase matching remains only a reproducible diagnostic.

@@ -159,6 +159,9 @@
       {
         "name": "test-fixtures",
         "paths": [
+          "tests/fixtures/exploration-benchmark/identity-collision/src/push.ts",
+          "tests/fixtures/exploration-benchmark/identity-collision/src/slice.ts",
+          "tests/fixtures/exploration-benchmark/identity-collision/src/source.ts",
           "tests/fixtures/invocation-coverage-contract/index.ts",
           "tests/fixtures/protocol-state-contract/index.ts",
           "tests/fixtures/public-api-consumer/index.ts"
