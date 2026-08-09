@@ -2,7 +2,10 @@ import { program } from 'commander';
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { cliVersion, renderHeuristicNotice } from './cli-support.js';
-import { loadInvocationCommandDescriptors } from './commands/invocation-command-descriptors.js';
+import {
+  loadInvocationCommandDescriptors,
+  normalizeLegacyEvidenceInvocation,
+} from './commands/invocation-command-descriptors.js';
 import { registerCommandDescriptors } from './commands/command-registry.js';
 import {
   activateCliProjectContext,
@@ -49,6 +52,7 @@ program
   .option('--no-session', 'Disable the explicit exploration evidence ledger')
   .option('--reemit', 'Recovery only: render source and graph evidence again instead of citing session receipts');
 
+if (cliEntrypoint) normalizeLegacyEvidenceInvocation(process.argv);
 const commandDescriptors = await loadInvocationCommandDescriptors(cliEntrypoint ? process.argv[2] : undefined);
 registerCommandDescriptors(program, commandDescriptors);
 program.hook('preAction', async (_thisCommand, actionCommand) => {

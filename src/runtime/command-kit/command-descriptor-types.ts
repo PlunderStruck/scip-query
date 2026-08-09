@@ -20,6 +20,8 @@ export interface CommandOptionDescriptor {
   description: string;
   parser?: CommandOptionParser;
   defaultValue?: unknown;
+  /** Parse for compatibility without advertising the option in ordinary help or generated docs. */
+  hidden?: boolean;
 }
 
 export interface CommandDocumentation {

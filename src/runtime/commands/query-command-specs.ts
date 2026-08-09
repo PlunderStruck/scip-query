@@ -19,6 +19,7 @@ const queryCommandOrder = [
   'refs',
   'trace',
   'evidence',
+  'evidence-source',
   'deps',
   'rdeps',
   'system',

@@ -166,10 +166,9 @@ describe('Codex exploration trial core', () => {
     expect(prompt).toContain('Data, state, temporal, contract, identity, ownership, and dependency edges');
     expect(prompt).toContain('A named constant is not an established value');
     expect(prompt).toContain('evidence seen but omitted from the answer is not recovered');
-    expect(prompt).not.toContain('may anchors be used');
-    expect(prompt).toContain(
-      'Do not use deprecated anchor groups, selection terms, automatic routes, next-anchor scores',
-    );
+    expect(prompt).not.toContain('anchors');
+    expect(prompt).not.toContain('system-map');
+    expect(prompt).toContain('Do not use query-vocabulary ranking, automatic route selection, or next-target scoring');
     expect(prompt).not.toContain('first ranked eligible set');
     expect(prompt).not.toContain('printed system-map command');
     expect(prompt).toContain('Do not use rg');

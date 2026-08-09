@@ -63,8 +63,8 @@ describe('setupAgent', () => {
     expect(agentsMd).toContain('never makes a known recoverable material fact optional');
     expect(agentsMd).toContain('repeat only while a named fact remains unresolved');
     expect(agentsMd).toContain('batch independent roots and gaps');
-    expect(agentsMd).toContain('system-map` and `scip-query anchors` are compatibility views');
-    expect(agentsMd).toContain('no next target is automatically recommended');
+    expect(agentsMd).not.toContain('scip-query system-map');
+    expect(agentsMd).not.toContain('scip-query anchors');
     expect(agentsMd).not.toContain('fallback discovery');
     expect(agentsMd).toContain('singleton, shared registry, per-session instance, or per-invocation value');
     expect(agentsMd).toContain('exact scope of every bypass');

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   directNavigationCommandEligible,
   loadInvocationCommandDescriptors,
+  normalizeLegacyEvidenceInvocation,
 } from '../../src/runtime/commands/invocation-command-descriptors.js';
 
 describe('invocation command descriptors', () => {
@@ -20,5 +21,19 @@ describe('invocation command descriptors', () => {
     const descriptors = await loadInvocationCommandDescriptors('--help');
     expect(descriptors.length).toBeGreaterThan(3);
     expect(descriptors.map((descriptor) => descriptor.id)).toEqual(expect.arrayContaining(['code', 'outline', 'refs']));
+  });
+
+  it('routes legacy evidence source reads away from the canonical graph control', () => {
+    const sourceArgv = ['node', 'scip-query', 'evidence', 'appendEvent', '--include', 'definition'];
+    normalizeLegacyEvidenceInvocation(sourceArgv);
+    expect(sourceArgv).toEqual(['node', 'scip-query', 'evidence-source', 'appendEvent', '--include', 'definition']);
+
+    const graphArgv = ['node', 'scip-query', 'evidence', 'appendEvent', '--edge', 'execution'];
+    normalizeLegacyEvidenceInvocation(graphArgv);
+    expect(graphArgv).toEqual(['node', 'scip-query', 'evidence', '--symbol', 'appendEvent', '--edge', 'execution']);
+
+    const canonicalArgv = ['node', 'scip-query', 'evidence', '--symbol', 'appendEvent'];
+    normalizeLegacyEvidenceInvocation(canonicalArgv);
+    expect(canonicalArgv).toEqual(['node', 'scip-query', 'evidence', '--symbol', 'appendEvent']);
   });
 });

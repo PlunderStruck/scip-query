@@ -1738,6 +1738,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'deep-chains',
     command: 'deep-chains',
+    hidden: true,
     description: 'Deprecated alias for dependency-depth',
     agent: agentContract(
       'Which dependency chains are deepest and riskiest?',
@@ -1783,13 +1784,26 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'entrypoints',
     command: 'entrypoints [text]',
     description: 'Find callables where control may enter from outside the indexed call graph',
-    agent: agentContract(
-      'Which detected external roots or entry-surface candidates match this text?',
-      'entry symbols with files, confidence, evidence, and indexed caller counts',
-      ['pattern'],
-      'complete',
-      'repository',
-    ),
+    agent: {
+      ...agentContract(
+        'Which detected external roots or entry-surface candidates match this text?',
+        'entry symbols with files, confidence, evidence, and indexed caller counts',
+        ['pattern'],
+        'complete',
+        'repository',
+      ),
+      contrasts: [
+        {
+          command: 'entry-map',
+          distinction:
+            'entrypoints locates possible external roots; entry-map traverses static calls from one selected root.',
+        },
+        {
+          command: 'search',
+          distinction: 'entrypoints classifies callable roots; search only locates exact text and ownership.',
+        },
+      ],
+    },
     options: withJsonOption([option('-s, --scope <path>', 'Limit to files matching path')]),
     renderShape: 'custom',
     docs: doc('Graph', ['scip-query entrypoints', 'scip-query entrypoints work-session']),
@@ -1799,22 +1813,35 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'entry-map',
     command: 'entry-map <entry>',
     description: 'Map the complete indexed call graph from one detected entry point, collapsed by file',
-    agent: agentContract(
-      'What statically reachable call structure begins at this detected entry point?',
-      'all reachable file regions, cross-region call edges, coverage, and selected expanded symbol details',
-      ['symbol'],
-      'complete',
-      undefined,
-      REPOSITORY_OBSERVATION_OPERATION,
-      graphProjectionSemanticContract({
-        rootKinds: ['symbol', 'construct'],
-        edgeFamilies: ['execution'],
-        directions: ['outgoing'],
-        operations: ['reachability'],
-        compression: ['topology'],
-        nonClaims: ['Static may-call reachability does not establish runtime execution.'],
-      }),
-    ),
+    agent: {
+      ...agentContract(
+        'What statically reachable call structure begins at this detected entry point?',
+        'all reachable file regions, cross-region call edges, coverage, and selected expanded symbol details',
+        ['symbol'],
+        'complete',
+        undefined,
+        REPOSITORY_OBSERVATION_OPERATION,
+        graphProjectionSemanticContract({
+          rootKinds: ['symbol', 'construct'],
+          edgeFamilies: ['execution'],
+          directions: ['outgoing'],
+          operations: ['reachability'],
+          compression: ['topology'],
+          nonClaims: ['Static may-call reachability does not establish runtime execution.'],
+        }),
+      ),
+      contrasts: [
+        {
+          command: 'entrypoints',
+          distinction: 'entry-map traverses one selected root; entrypoints locates and classifies candidate roots.',
+        },
+        {
+          command: 'evidence',
+          distinction:
+            'entry-map is outgoing execution reachability; evidence projects explicitly selected families and directions.',
+        },
+      ],
+    },
     options: withJsonOption([
       option('--expand <region-id>', 'Expand one file region; repeat to expand several together', collectValues, []),
     ]),
@@ -1828,6 +1855,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'system-map',
     command: 'system-map',
+    hidden: true,
     description: 'Deprecated compatibility view for collapsed regions and legacy route catalogues; use evidence',
     agent: agentContract(
       'Which components and proven compiler or runtime relationships connect these explicit literals or symbols?',

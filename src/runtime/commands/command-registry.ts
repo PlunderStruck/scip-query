@@ -1,4 +1,4 @@
-import type { Command } from 'commander';
+import { Option, type Command } from 'commander';
 import type { CommandDescriptor, CommandResultUnitPolicy } from '../command-kit/command-descriptor-types.js';
 import {
   runWithCommandOperationRole,
@@ -56,7 +56,14 @@ export function registerCommandDescriptors(
     }
 
     for (const option of descriptor.options ?? []) {
-      if (option.parser && Object.hasOwn(option, 'defaultValue')) {
+      if (option.hidden) {
+        const compatibilityOption = new Option(option.flags, option.description).hideHelp();
+        if (option.parser) compatibilityOption.argParser(option.parser);
+        if (Object.hasOwn(option, 'defaultValue')) {
+          compatibilityOption.default(option.defaultValue as PlainCommanderDefault);
+        }
+        command.addOption(compatibilityOption);
+      } else if (option.parser && Object.hasOwn(option, 'defaultValue')) {
         command.option(option.flags, option.description, option.parser, option.defaultValue);
       } else if (option.parser) {
         command.option(option.flags, option.description, option.parser);

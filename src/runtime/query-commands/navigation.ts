@@ -1426,21 +1426,33 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       option('--full', 'Return all selector matches and materialized units, and run unbounded semantic analysis'),
     ],
     budget: 'semantic',
-    agent: agentContract(
-      'Which related source units across several known text, symbol, or location anchors should be read together?',
-      'one ranked, deduplicated semantic packet plus exact selector cardinality and explicit expansion coverage',
-      [],
-      'bounded',
-      'repository',
-      REPOSITORY_OBSERVATION_OPERATION,
-      sourceReadSemanticContract(
-        ['behavior', 'construct', 'exact-source'],
-        [
-          'A source packet does not choose which implementation details are relevant to the user task.',
-          'A reference mention does not establish executable reachability.',
-        ],
+    agent: {
+      ...agentContract(
+        'Which related source units across several known text, symbol, or location anchors should be read together?',
+        'one ranked, deduplicated semantic packet plus exact selector cardinality and explicit expansion coverage',
+        [],
+        'bounded',
+        'repository',
+        REPOSITORY_OBSERVATION_OPERATION,
+        sourceReadSemanticContract(
+          ['behavior', 'construct', 'exact-source'],
+          [
+            'A source packet does not choose which implementation details are relevant to the user task.',
+            'A reference mention does not establish executable reachability.',
+          ],
+        ),
       ),
-    ),
+      contrasts: [
+        {
+          command: 'code',
+          distinction: 'inspect batches bounded behavior or source gaps; code materializes complete exact source.',
+        },
+        {
+          command: 'evidence',
+          distinction: 'inspect reads implementation units; evidence projects typed relationships without source.',
+        },
+      ],
+    },
     docs: doc('Navigation', [
       "scip-query inspect --search sessionStreamEvents --search work_session_stream_events --search 'agent:work_session' --view behavior",
       'scip-query inspect --symbol appendEvent --symbol publishEvent --include definition,references,callers,callees',
@@ -1529,21 +1541,30 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       option('--regexp', 'Treat the search text as a bounded regular expression'),
       option('-i, --ignore-case', 'Ignore case'),
     ],
-    agent: agentContract(
-      'Where does this exact text occur in current project text, and which aligned compiler symbol owns each line?',
-      'exact cardinality, bounded identities and source, and scope commands that recover withheld matches',
-      ['pattern'],
-      'bounded',
-      undefined,
-      REPOSITORY_OBSERVATION_OPERATION,
-      locatorSemanticContract(
-        ['text', 'symbol', 'construct', 'runtime-key'],
-        [
-          'Structural source ranking orders exact matches but does not establish task relevance.',
-          'A literal co-occurrence does not establish a graph relationship.',
-        ],
+    agent: {
+      ...agentContract(
+        'Where does this exact text occur in current project text, and which aligned compiler symbol owns each line?',
+        'exact cardinality, bounded identities and source, and scope commands that recover withheld matches',
+        ['pattern'],
+        'bounded',
+        undefined,
+        REPOSITORY_OBSERVATION_OPERATION,
+        locatorSemanticContract(
+          ['text', 'symbol', 'construct', 'runtime-key'],
+          [
+            'Structural source ranking orders exact matches but does not establish task relevance.',
+            'A literal co-occurrence does not establish a graph relationship.',
+          ],
+        ),
       ),
-    ),
+      contrasts: [
+        {
+          command: 'outline',
+          distinction:
+            'search locates exact text across files; outline enumerates compiler-owned constructs in one known file.',
+        },
+      ],
+    },
     docs: doc('Navigation', ["scip-query search 'eventName'", "scip-query search 'send.*event' --regexp --scope src"]),
     query: ({ db, args, opts }) =>
       queries.searchSource(db, stringArg(args, 0), {
@@ -1585,6 +1606,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   sectionedQueryCommand({
     id: 'anchors',
     command: 'anchors <question>',
+    hidden: true,
     description:
       'Deprecated compatibility view for query-vocabulary candidate groups; use exact locators plus evidence',
     options: [
@@ -1734,7 +1756,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   }),
   budgetedSectionedQueryCommand({
     id: 'evidence',
-    command: 'evidence [symbol]',
+    command: 'evidence',
     description: 'Traverse selected typed relationships around exact referents; recover source separately when needed',
     options: [
       option('--symbol <symbol>', 'Add an exact compiler symbol; repeat to batch', collectValues, []),
@@ -1764,14 +1786,15 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       ),
       option('--depth <n>', 'Required maximum graph traversal depth', parseNonNegativeInteger),
       option('--max-edges <n>', 'Required maximum typed relationships to render', parsePositiveInteger),
-      option(
-        '--include <part>',
-        'Legacy positional source evidence; graph projections defer it to an exact inspect recovery command',
-        collectValues,
-        [],
-      ),
-      option('-C, --context <n>', 'Source lines before and after each reference', parseNonNegativeInteger, 2),
-      option('--related-source-lines <n>', 'Maximum source lines for each caller or callee', parsePositiveInteger, 80),
+      {
+        ...option(
+          '--include <part>',
+          'Compatibility only: defer requested source parts to an exact inspect recovery command',
+          collectValues,
+          [],
+        ),
+        hidden: true,
+      },
       option('--full', 'Run unbounded semantic analysis on large indexes'),
     ],
     budget: 'semantic',
@@ -1788,7 +1811,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
         'exact source-recovery command when source was requested with a graph projection',
         'explicit ambiguity failure with exact rerun commands',
       ],
-      inputs: ['symbol'],
+      inputs: [],
       scope: 'repository',
       coverage: 'bounded',
       semantic: graphProjectionSemanticContract({
@@ -1802,17 +1825,36 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
           'Reference, dependency, data, state, temporal, contract, and identity edges do not become execution claims.',
         ],
       }),
+      contrasts: [
+        {
+          command: 'refs',
+          distinction:
+            'refs enumerates direct reference sites; evidence traverses explicitly selected typed relationships.',
+        },
+        {
+          command: 'call-graph',
+          distinction:
+            'call-graph specializes in static calls; evidence can combine execution with other selected families.',
+        },
+        {
+          command: 'value-flow',
+          distinction:
+            'value-flow specializes in proved transfers; evidence projects bounded dataflow alongside other families.',
+        },
+        {
+          command: 'dependence-slice',
+          distinction:
+            'dependence-slice computes a program-dependence slice; evidence performs bounded graph projection.',
+        },
+      ],
     },
     docs: doc('Navigation', [
-      'scip-query evidence appendEvent',
       "scip-query evidence --symbol 'exact-symbol' --edge execution --edge dataflow --direction both --depth 2 --max-edges 32",
       "scip-query evidence --symbol 'first' --symbol 'second' --edge runtime --direction both --depth 3 --max-edges 32 --connecting",
       "scip-query evidence --at 'src/file.ts:40' --edge runtime --edge state --edge contract --direction outgoing --depth 2 --inventory-only",
-      'scip-query evidence appendEvent --include definition,references,callers,callees',
     ]),
-    query: ({ db, args, opts, budget }): EvidenceCommandResult => {
-      const positional = typeof args[0] === 'string' && args[0].trim() !== '' ? [args[0]] : [];
-      const symbols = [...positional, ...stringArrayOptionValue(opts, 'symbol')];
+    query: ({ db, opts }): EvidenceGraphPacket => {
+      const symbols = stringArrayOptionValue(opts, 'symbol');
       const locations = stringArrayOptionValue(opts, 'at');
       const searches = stringArrayOptionValue(opts, 'search');
       const view = graphEvidenceView(stringOptionValue(opts, 'view'));
@@ -1824,26 +1866,6 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       const foldIds = stringArrayOptionValue(opts, 'fold');
       const maxDepth = numberOptionValue(opts, 'depth');
       const maxEdges = numberOptionValue(opts, 'maxEdges');
-      const graphRequested =
-        view !== undefined ||
-        families !== undefined ||
-        direction !== undefined ||
-        subtypes !== undefined ||
-        connecting ||
-        inventoryOnly ||
-        foldIds.length > 0 ||
-        stringArrayOptionValue(opts, 'symbol').length > 0 ||
-        locations.length > 0 ||
-        searches.length > 0;
-      if (!graphRequested) {
-        assertNavigationDetailAllowed(db.config.projectRoot, 'evidence', opts['session'] !== false);
-        return queries.qualifiedEvidence(db, stringArg(args, 0), {
-          parts: selectedEvidenceParts(stringArrayOptionValue(opts, 'include')),
-          referenceContext: definedNumberOption(opts, 'context', 2),
-          relatedSourceLines: definedNumberOption(opts, 'relatedSourceLines', 80),
-          semantic: budget.semantic,
-        });
-      }
       if (families === undefined) {
         throw new Error(
           'Graph evidence requires at least one explicit --edge <family>; repeat --edge to select several relationship families.',
@@ -1895,53 +1917,80 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
         sourceRecovery,
       };
     },
-    emptyMessage: (result) => (result.kind === 'graph-packet' ? undefined : evidenceFailureMessage(result)),
     before: (result) => {
-      if (result.kind === 'graph-packet') {
-        if (result.graph.targets.some((target) => target.status !== 'matched')) process.exitCode = 1;
-        return;
+      if (result.graph.targets.some((target) => target.status !== 'matched')) process.exitCode = 1;
+    },
+    coverage: (result) => {
+      const returned = result.graph.edges.length;
+      const targetsComplete = result.graph.targets.every((target) => target.status === 'matched');
+      const sourceDeferred = result.sourceRecovery !== null;
+      const complete = result.graph.coverage.status === 'accounted' && targetsComplete && !sourceDeferred;
+      if (complete) return { complete: true, totalKnown: true, returned, total: returned, omitted: 0 };
+      if (result.graph.coverage.status === 'incomplete' || !targetsComplete || sourceDeferred) {
+        return { complete: false, totalKnown: false, returned };
       }
+      return {
+        complete: false,
+        totalKnown: true,
+        returned,
+        total: returned + result.graph.coverage.omittedEdges,
+        omitted: result.graph.coverage.omittedEdges,
+      };
+    },
+    agentResult: (result) => ({
+      view: result.graph.view,
+      families: result.graph.families,
+      selection: result.graph.selection,
+      targets: result.graph.targets,
+      inventory: result.graph.inventory,
+      relationshipCount: result.graph.edges.length,
+      coverage: result.graph.coverage,
+      sourceSelectors: result.source.length,
+      sourceRecovery: result.sourceRecovery,
+    }),
+    sections: evidenceCommandSections,
+  }),
+  budgetedSectionedQueryCommand({
+    id: 'evidence-source',
+    command: 'evidence-source <symbol>',
+    description: 'Deprecated compatibility path for positional source evidence; use inspect or code',
+    hidden: true,
+    options: [
+      option('--include <part>', 'Source parts to include', collectValues, []),
+      option('-C, --context <n>', 'Source lines before and after each reference', parseNonNegativeInteger, 2),
+      option('--related-source-lines <n>', 'Maximum source lines for each caller or callee', parsePositiveInteger, 80),
+      option('--full', 'Run unbounded semantic analysis on large indexes'),
+    ],
+    budget: 'semantic',
+    agent: {
+      operation: REPOSITORY_OBSERVATION_OPERATION,
+      answers: [
+        'Which legacy definition, reference, caller, callee, dependency, and consumer source surrounds this symbol?',
+      ],
+      returns: ['deprecated qualified source-evidence packet'],
+      inputs: ['symbol'],
+      coverage: 'bounded',
+      semantic: sourceReadSemanticContract(
+        ['construct', 'exact-source'],
+        ['This compatibility read does not establish graph reachability beyond its rendered evidence.'],
+        'deprecated',
+      ),
+    },
+    docs: doc('Compatibility'),
+    query: ({ db, args, opts, budget }): queries.QualifiedEvidenceResult => {
+      assertNavigationDetailAllowed(db.config.projectRoot, 'evidence', opts['session'] !== false);
+      return queries.qualifiedEvidence(db, stringArg(args, 0), {
+        parts: selectedEvidenceParts(stringArrayOptionValue(opts, 'include')),
+        referenceContext: definedNumberOption(opts, 'context', 2),
+        relatedSourceLines: definedNumberOption(opts, 'relatedSourceLines', 80),
+        semantic: budget.semantic,
+      });
+    },
+    emptyMessage: (result) => evidenceFailureMessage(result),
+    before: (result) => {
       if (result.kind !== 'matched') process.exitCode = 1;
     },
     coverage: (result, { budget }) => {
-      if (result.kind === 'graph-packet') {
-        const returned =
-          result.graph.edges.length +
-          result.source.reduce(
-            (total, item) =>
-              total +
-              (item.kind === 'matched'
-                ? (item.definition ? 1 : 0) +
-                  item.referenceWindows.length +
-                  item.callers.length +
-                  item.callees.length +
-                  item.dependencies.length +
-                  item.consumers.length
-                : 0),
-            0,
-          );
-        const targetsComplete = result.graph.targets.every((target) => target.status === 'matched');
-        const sourceMayBeBudgeted = result.source.length > 0 && Boolean(budget.analysisBudget);
-        const sourceDeferred = result.sourceRecovery !== null;
-        const complete =
-          result.graph.coverage.status === 'accounted' && targetsComplete && !sourceMayBeBudgeted && !sourceDeferred;
-        if (complete) return { complete: true, totalKnown: true, returned, total: returned, omitted: 0 };
-        if (
-          result.graph.coverage.status === 'incomplete' ||
-          !targetsComplete ||
-          sourceMayBeBudgeted ||
-          sourceDeferred
-        ) {
-          return { complete: false, totalKnown: false, returned };
-        }
-        return {
-          complete: false,
-          totalKnown: true,
-          returned,
-          total: returned + result.graph.coverage.omittedEdges,
-          omitted: result.graph.coverage.omittedEdges,
-        };
-      }
       if (result.kind !== 'matched') return { complete: true, totalKnown: true, returned: 0, total: 0, omitted: 0 };
       const returned =
         (result.definition ? 1 : 0) +
@@ -1955,32 +2004,20 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
         : { complete: true, totalKnown: true, returned, total: returned, omitted: 0 };
     },
     agentResult: (result) =>
-      result.kind === 'graph-packet'
+      result.kind === 'matched'
         ? {
-            view: result.graph.view,
-            families: result.graph.families,
-            selection: result.graph.selection,
-            targets: result.graph.targets,
-            inventory: result.graph.inventory,
-            relationshipCount: result.graph.edges.length,
-            coverage: result.graph.coverage,
-            sourceSelectors: result.source.length,
-            sourceRecovery: result.sourceRecovery,
+            symbol: result.symbol,
+            file: result.file,
+            parts: result.parts,
+            referenceSites: result.referenceWindows.reduce((total, window) => total + window.references.length, 0),
+            sourceWindows: result.referenceWindows.length,
+            callers: result.callers.length,
+            callees: result.callees.length,
+            dependencies: result.dependencies.length,
+            consumers: result.consumers.length,
           }
-        : result.kind === 'matched'
-          ? {
-              symbol: result.symbol,
-              file: result.file,
-              parts: result.parts,
-              referenceSites: result.referenceWindows.reduce((total, window) => total + window.references.length, 0),
-              sourceWindows: result.referenceWindows.length,
-              callers: result.callers.length,
-              callees: result.callees.length,
-              dependencies: result.dependencies.length,
-              consumers: result.consumers.length,
-            }
-          : result,
-    sections: evidenceCommandSections,
+        : result,
+    sections: evidenceSections,
   }),
   listQueryCommand({
     id: 'deps',
@@ -2190,6 +2227,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'dataflow',
     command: 'dataflow <symbol>',
+    hidden: true,
     description: 'Deprecated compatibility alias for a reference/call neighborhood; use value-flow',
     agent: agentContract(
       'What definitions, references, incoming calls, and outgoing calls surround this symbol?',
@@ -2240,6 +2278,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'slice',
     command: 'slice <symbol>',
+    hidden: true,
     description: 'Deprecated compatibility alias for reference/call reachability; use dependence-slice',
     agent: agentContract(
       'Which calls or reference owners are reachable from this symbol under the legacy traversal?',

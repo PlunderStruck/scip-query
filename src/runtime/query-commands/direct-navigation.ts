@@ -832,18 +832,31 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'outline',
     command: 'outline <file>',
     description: 'Tree view of symbols in a file, with line ranges',
-    agent: agentContract(
-      'What symbols and nesting exist in this file?',
-      'symbol names, nesting, and line ranges',
-      ['file'],
-      'complete',
-      undefined,
-      REPOSITORY_OBSERVATION_OPERATION,
-      locatorSemanticContract(
-        ['file', 'symbol', 'construct'],
-        ['File ownership and nesting do not establish execution or task relevance.'],
+    agent: {
+      ...agentContract(
+        'What symbols and nesting exist in this file?',
+        'symbol names, nesting, and line ranges',
+        ['file'],
+        'complete',
+        undefined,
+        REPOSITORY_OBSERVATION_OPERATION,
+        locatorSemanticContract(
+          ['file', 'symbol', 'construct'],
+          ['File ownership and nesting do not establish execution or task relevance.'],
+        ),
       ),
-    ),
+      contrasts: [
+        {
+          command: 'search',
+          distinction:
+            'outline enumerates constructs in one known file; search locates exact text across current project text.',
+        },
+        {
+          command: 'code',
+          distinction: 'outline returns identities and ranges; code materializes exact source for selected identities.',
+        },
+      ],
+    },
     options: withJsonOption([option('--signatures', 'Show trimmed symbol signatures')]),
     renderShape: 'custom',
     docs: doc('Navigation'),
@@ -867,6 +880,17 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
         ),
       ),
       resultUnits: { kind: 'field', field: 'code' },
+      contrasts: [
+        {
+          command: 'inspect',
+          distinction: 'code materializes complete exact source; inspect batches bounded behavior or source gaps.',
+        },
+        {
+          command: 'outline',
+          distinction:
+            'code reads selected implementations; outline enumerates file structure without reading every body.',
+        },
+      ],
     },
     options: withJsonOption([
       option('-C, --context <n>', 'Extra lines of context above/below', parseNonNegativeInteger, 0),

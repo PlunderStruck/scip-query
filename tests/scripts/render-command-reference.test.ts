@@ -186,7 +186,7 @@ describe('renderAgentSetupCommandCatalogSource', () => {
   it('generates the canonical nondeprecated catalogue from command descriptors', () => {
     const source = renderAgentSetupCommandCatalogSource();
 
-    expect(source).toContain('scip-query evidence [symbol]');
+    expect(source).toContain('scip-query evidence`');
     expect(source).toContain('scip-query inspect');
     expect(source).toContain('[bounded; bounded coverage]');
     expect(source).not.toContain('appendEvent');

@@ -136,6 +136,30 @@ describe('CLI contract', () => {
     );
   });
 
+  it('presents evidence as one graph-only control and hides compatibility commands', () => {
+    const evidenceHelp = command('evidence').helpInformation();
+    expect(evidenceHelp).toContain('--edge <family>');
+    expect(evidenceHelp).toContain('--direction <direction>');
+    expect(evidenceHelp).not.toContain('evidence [symbol]');
+    expect(evidenceHelp).not.toContain('--include <part>');
+    expect(evidenceHelp).not.toContain('--context <n>');
+    expect(evidenceHelp).not.toContain('--related-source-lines <n>');
+
+    const defaultHelp = program.helpInformation();
+    for (const compatibilityCommand of [
+      'anchors',
+      'system-map',
+      'dataflow',
+      'slice',
+      'deep-chains',
+      'convergence',
+      'evidence-source',
+    ]) {
+      expect(defaultHelp).not.toMatch(new RegExp(`^\\s+${compatibilityCommand}(?:\\s|$)`, 'mu'));
+      expect(commandDescriptors.find((descriptor) => descriptor.id === compatibilityCommand)?.hidden).toBe(true);
+    }
+  });
+
   it('does not silently choose canonical graph projection bounds or direction', () => {
     const evidence = command('evidence');
     for (const flag of ['--direction <direction>', '--depth <n>', '--max-edges <n>']) {
@@ -290,6 +314,13 @@ describe('CLI contract', () => {
     });
   });
 
+  it('declares contrasts for each canonical exploration control', () => {
+    for (const commandId of ['search', 'outline', 'entrypoints', 'evidence', 'inspect', 'code']) {
+      const descriptor = commandDescriptors.find((entry) => entry.id === commandId);
+      expect(descriptor?.agent?.contrasts?.length, commandId).toBeGreaterThan(0);
+    }
+  });
+
   it('selects operation roles from parsed invocation values before execution', () => {
     const health = commandDescriptors.find((descriptor) => descriptor.id === 'health')!.agent!.operation;
     const setup = commandDescriptors.find((descriptor) => descriptor.id === 'setup')!.agent!.operation;
@@ -351,6 +382,8 @@ describe('CLI contract', () => {
       '--result-only',
       '--compact',
     ]);
+    expect(docs.find((entry) => entry.id === 'evidence')?.command).toBe('evidence');
+    expect(docs.find((entry) => entry.id === 'evidence')?.options).not.toContain('--include <part>');
     expect(docs.find((entry) => entry.id === 'setup')?.options).toEqual([
       '--guided',
       '--yes',
@@ -404,7 +437,6 @@ describe('CLI contract', () => {
       'context',
       'diff-impact',
       'health',
-      'system-map',
     ]);
     expect(mixed.every((entry) => (entry.claims.families?.length ?? 0) > 0)).toBe(true);
   });
@@ -442,7 +474,7 @@ describe('CLI contract', () => {
     expect(readSkill('scip-query')).toContain('scip-query search');
     expect(readSkill('scip-query')).toContain('scip-query inspect');
     expect(readSkill('scip-query')).toContain('scip-query evidence');
-    expect(readSkill('scip-query')).toContain('scip-query context');
+    expect(readSkill('scip-query')).not.toContain('scip-query context');
     expect(readSkill('scip-query')).toMatch(/React, Vue/);
     expect(readSkill('scip-query')).not.toMatch(/diff-gate|Stop hook|Gherkin/i);
     expect(readSkill('scip-query')).toContain('not a second workflow layered on top of grep');

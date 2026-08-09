@@ -12,45 +12,39 @@ then retrieve exact current source only where full implementation detail can
 change the decision.
 
 For a cross-layer or end-to-end question, first reduce the question to the few
-material claims the answer must establish. Use at most one locating search to
-identify the smallest independent exact owners, then make one system map the
-first graph or detail operation. Do not run `inspect`, `evidence`, `code`, or
-command help before the map. A source-owned search identity remains a
-`--search` selector; use `--symbol` only for a printed compiler identity, and
-never pass the same loose term to both selectors. A distinctive route, event,
-table, or message literal plus one exact callable can be useful when each names
-a different referent; a generic term should be omitted:
+material claims the answer must establish. Locate exact referents with `search`,
+`outline`, or `entrypoints`, then choose the relationship families and directions
+capable of establishing each claim. Use `--symbol` only for a printed compiler
+identity and `--at` for an exact construct location. Batch independent roots:
 
 ```bash
-scip-query system-map --search <literal> --symbol <symbol>
+scip-query evidence \
+  --symbol <symbol> \
+  --edge execution \
+  --edge runtime \
+  --direction both \
+  --depth 2 \
+  --max-edges 32
 ```
 
-Read its anchor status, connector graph, connected behavior, accounted
-frontiers, and query completion together. Connected behavior is already source
-evidence. If its lines and transitions establish every material claim, answer
-immediately even when unrelated recovery commands remain. Otherwise name the
-exact missing claim and resolve it with one batched behavioral `inspect` or
-exact-source query. Repeat `--symbol` or `--at` for multiple inspect selectors;
-positional selectors are not accepted. Do not enumerate helpers, examples,
-tests, or implementation families the question did not ask about. The normal
-allowance is one locator, one map, and at most one batched gap query; exceed it
-only when the latest evidence explicitly leaves another material claim
-unresolved.
+Read the returned facts, evidence strength, provider support, coverage, folds,
+and recovery paths together. Query completion accounts for the requested bounded
+projection; it does not mean the user's task is complete. If a material claim
+still requires implementation behavior, resolve its exact constructs with one
+batched `inspect --view behavior` call. Use `code` only when exact syntax can
+change the decision. Do not enumerate unrelated helpers, examples, tests, or
+frontiers. Query count measures efficiency but never makes a recoverable material
+claim optional.
 
 Before sending the answer, audit the draft itself against the material claims.
 Evidence seen but left implicit in the draft is not recovered. Copy returned
 file and line identities exactly instead of reconstructing citation paths.
 
-A broad literal is counted exactly but withheld before graph traversal. Use
-its representative identities and ranked scoped searches to narrow it. Use
-`--full-literal-traversal` only when every exact match can change the decision.
-
-`selection-complete`, `connector-complete`, and `frontier-accounted` describe
-the current query's evidence obligation; none says the user's task is finished.
-`coverage-incomplete` names unresolved evidence. Exact built-in edges are facts
-within reported coverage. Candidates and unsupported dynamic frontiers require
-another distinctive literal, exact range, or known participant—not an absence
-claim.
+A broad literal is counted exactly and returned with recoverable structural
+scopes. Narrow only when a named material claim requires one of those scopes.
+Exact edges are facts within their reported coverage. Derived or candidate edges
+and unsupported dynamic frontiers require the displayed source, another exact
+referent, or an explicit limitation—not an absence claim.
 
 When one known target is already the center of the change, run the aggregate
 context query:

@@ -633,6 +633,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'convergence',
     command: 'convergence <symbol1> <symbol2>',
+    hidden: true,
     agent: agentContract(
       'How should these two similar symbols converge?',
       'deprecated alias result for a two-symbol similarity plan',

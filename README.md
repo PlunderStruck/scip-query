@@ -47,52 +47,42 @@ Check a setup with:
 
 ```bash
 scip-query doctor
-scip-query status --capabilities
+scip-query capabilities
 ```
 
 ## The normal workflow
 
-Use scip-query as the primary reading surface for indexed source. For a
-cross-layer or end-to-end question, reduce the question to its material claims,
-use at most one search to locate the smallest independent exact owners, and
-make `system-map` the first graph or detail operation. Do not run `inspect`,
-`evidence`, or `code` before that map. Keep a source-owned search identity as
-`--search`; use `--symbol` only for a printed compiler identity, and never pass
-the same loose term to both selectors merely to widen output. It shows every observed structural
-region at once, compiler-resolved and exact runtime-boundary relationships
-between regions, unresolved candidate frontiers, and the limits of the
-observation. Read the anchor status, connector graph, connected behavior,
-accounted frontiers, and query completion together. Connected behavior is
-already source evidence. If it establishes every material claim, answer
-immediately. Otherwise name the exact missing claim and use one batched
-`inspect` or exact-source query that can resolve it. Do not enumerate unrelated
-helpers, tests, examples, or frontiers. The result lists child files with complete mapped counts and ranked
-source anchors rather than printing every relationship. Its behavioral view
-reads selected anchors together using raw source for compact units and complete
-normalized outlines for larger units when normalization is materially cheaper.
-Use `code` afterward only when one exact unit's complete implementation can
-change the decision.
+Use scip-query as the primary reading surface for indexed source. First name the
+few material repository facts the answer depends on. Locate exact referents with
+`search` for trustworthy text, `outline` for a known file, or `entrypoints` for
+an external callable surface. Then select exact symbols or file/line constructs
+and project only the relationship families and directions capable of establishing
+those facts. scip-query resolves identity, typed edges, evidence strength, provider
+support, and bounded coverage; it does not decide which facts matter to the task.
+
+```bash
+scip-query search 'work_session_stream_events'
+scip-query evidence \
+  --symbol 'appendWorkSessionStreamEvents' \
+  --edge execution \
+  --edge runtime \
+  --direction both \
+  --depth 2 \
+  --max-edges 32
+```
+
+Treat the evidence inventory, facts, calibration, coverage, and recovery paths as
+one contract. Missing output is not evidence of absence. If a material fact still
+requires implementation behavior, batch its exact constructs into `inspect --view
+behavior`. Use `code` only when exact syntax can change the decision. Do not reread
+source already rendered by either command, and do not expand unrelated frontiers.
 
 Before answering, audit the draft itself against the material claims. A fact
 seen in evidence but left implicit in the answer is not recovered. Copy returned
 file and line identities exactly rather than reconstructing citation paths.
 
-A broad literal is counted exactly but withheld before graph traversal. The
-anchor reports representative identities and ranked scoped searches so the
-agent can narrow it without losing recovery. Use `--full-literal-traversal`
-only when every exact match can change the decision.
-
-```bash
-scip-query system-map \
-  --search work_session_stream_events \
-  --symbol appendWorkSessionStreamEvents
-
-scip-query system-map \
-  --search work_session_stream_events \
-  --symbol appendWorkSessionStreamEvents \
-  --expand 'region:apps/api:modules/sessions' \
-  --expand 'region:apps/web:components/sessions'
-```
+A broad literal is counted exactly and returned with recoverable structural scopes.
+Narrow only when a named material fact requires one of those scopes.
 
 `code` accepts up to 24 exact symbols, ranges, or indexed file paths. A file
 path returns its exported definitions—or its top-level definitions when the
@@ -250,7 +240,7 @@ focused query when one unresolved relationship can change the decision:
 scip-query refs SomeSymbol --full
 scip-query trace SomeSymbol
 scip-query call-graph SomeSymbol
-scip-query dataflow SomeSymbol
+scip-query value-flow SomeSymbol
 scip-query affected SomeSymbol --full
 scip-query system src/payments
 scip-query surface src/payments

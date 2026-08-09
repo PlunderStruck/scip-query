@@ -26,7 +26,7 @@ export function commandDocEntries(descriptors: readonly CommandDescriptor[]): Co
       command: descriptor.command,
       description: descriptor.description,
       category: descriptor.docs?.category ?? 'Uncategorized',
-      options: (descriptor.options ?? []).map((option) => option.flags),
+      options: (descriptor.options ?? []).filter((option) => !option.hidden).map((option) => option.flags),
       hidden: Boolean(descriptor.hidden),
       heuristic: Boolean(descriptor.heuristic),
       evidence: descriptorEvidenceTier(descriptor),
