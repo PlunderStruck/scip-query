@@ -177,6 +177,11 @@ interface EvidenceGraphPacket {
   kind: 'graph-packet';
   graph: queries.GraphEvidenceResult;
   source: queries.QualifiedEvidenceResult[];
+  sourceRecovery: {
+    parts: queries.EvidencePart[];
+    selectors: number;
+    command: string;
+  } | null;
 }
 
 type EvidenceCommandResult = queries.QualifiedEvidenceResult | EvidenceGraphPacket;
@@ -462,60 +467,76 @@ function sourceSearchScopeRows(result: queries.SourceSearchResult): string[] {
     rows.push(identity);
     identitiesByFile.set(identity.relativePath, rows);
   }
-  const byScope = new Map<string, queries.SourceSearchFileCoverage[]>();
-  for (const file of files) {
-    const separator = file.relativePath.lastIndexOf('/');
-    const scope = separator < 0 ? '<root>' : file.relativePath.slice(0, separator);
-    const rows = byScope.get(scope) ?? [];
-    rows.push(file);
-    byScope.set(scope, rows);
-  }
-  const manifestRows = [...byScope]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .flatMap(([scope, scopeFiles]) => {
-      const orderedFiles = [...scopeFiles].sort((left, right) => left.relativePath.localeCompare(right.relativePath));
-      const matchingLines = orderedFiles.reduce((total, file) => total + file.matchingLines, 0);
-      if (orderedFiles.length > 12) {
+  const maxScopeDepth = files.reduce((maximum, file) => {
+    const directories = file.relativePath.split('/').slice(0, -1);
+    return Math.max(maximum, directories.length);
+  }, 1);
+  const manifestAtDepth = (depth: number): string[] => {
+    const byScope = new Map<string, queries.SourceSearchFileCoverage[]>();
+    for (const file of files) {
+      const directories = file.relativePath.split('/').slice(0, -1);
+      const scope = directories.length === 0 ? '<root>' : directories.slice(0, depth).join('/');
+      const rows = byScope.get(scope) ?? [];
+      rows.push(file);
+      byScope.set(scope, rows);
+    }
+    return [...byScope]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .flatMap(([scope, scopeFiles]) => {
+        const orderedFiles = [...scopeFiles].sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+        const matchingLines = orderedFiles.reduce((total, file) => total + file.matchingLines, 0);
+        if (orderedFiles.length > 12) {
+          const recovery =
+            scope === '<root>'
+              ? `scip-query search ${shellArgument(result.pattern)}`
+              : `scip-query search ${shellArgument(result.pattern)} --scope ${shellArgument(scope)}`;
+          return [
+            `    ${scope}: ${matchingLines} matching line(s) across ${orderedFiles.length} file(s); expand this structural region with ${recovery}`,
+          ];
+        }
         return [
-          `    ${scope}: ${matchingLines} matching line(s) across ${orderedFiles.length} file(s); expand this structural region with scip-query search ${shellArgument(result.pattern)} --scope ${shellArgument(scope)}`,
+          `    ${scope}: ${matchingLines} matching line(s) across ${orderedFiles.length} file(s)`,
+          ...orderedFiles.map((file) => {
+            const owners = [...(identitiesByFile.get(file.relativePath) ?? [])]
+              .sort((left, right) => left.focusLine - right.focusLine)
+              .filter(
+                (identity, index, rows) =>
+                  rows.findIndex(
+                    (candidate) =>
+                      candidate.ownerSymbol === identity.ownerSymbol &&
+                      candidate.ownerStartLine === identity.ownerStartLine,
+                  ) === index,
+              );
+            const visibleOwners = owners.slice(0, 2).map((identity) => {
+              const label = identity.ownerShort ?? '<file scope>';
+              const line = displayLine(identity.ownerStartLine ?? identity.focusLine);
+              return `${label} @ ${line}`;
+            });
+            const omittedOwners = Math.max(0, owners.length - visibleOwners.length);
+            const ownerSummary =
+              visibleOwners.length === 0
+                ? ''
+                : `; exact starting construct(s): ${visibleOwners.join('; ')}${
+                    omittedOwners > 0
+                      ? `; +${omittedOwners} more via scip-query outline ${shellArgument(file.relativePath)}`
+                      : ''
+                  }`;
+            return `      ${file.relativePath}: ${file.matchingLines} match(es)${ownerSummary}`;
+          }),
         ];
-      }
-      return [
-        `    ${scope}: ${matchingLines} matching line(s) across ${orderedFiles.length} file(s)`,
-        ...orderedFiles.map((file) => {
-          const owners = [...(identitiesByFile.get(file.relativePath) ?? [])]
-            .sort((left, right) => left.focusLine - right.focusLine)
-            .filter(
-              (identity, index, rows) =>
-                rows.findIndex(
-                  (candidate) =>
-                    candidate.ownerSymbol === identity.ownerSymbol &&
-                    candidate.ownerStartLine === identity.ownerStartLine,
-                ) === index,
-            );
-          const visibleOwners = owners.slice(0, 2).map((identity) => {
-            const label = identity.ownerShort ?? '<file scope>';
-            const line = displayLine(identity.ownerStartLine ?? identity.focusLine);
-            return `${label} @ ${line}`;
-          });
-          const omittedOwners = Math.max(0, owners.length - visibleOwners.length);
-          const ownerSummary =
-            visibleOwners.length === 0
-              ? ''
-              : `; exact starting construct(s): ${visibleOwners.join('; ')}${
-                  omittedOwners > 0
-                    ? `; +${omittedOwners} more via scip-query outline ${shellArgument(file.relativePath)}`
-                    : ''
-                }`;
-          return `      ${file.relativePath}: ${file.matchingLines} match(es)${ownerSummary}`;
-        }),
-      ];
-    });
+      });
+  };
+  let manifestDepth = maxScopeDepth;
+  let manifestRows = manifestAtDepth(manifestDepth);
+  while (manifestDepth > 1 && manifestRows.join('\n').length > 12_000) {
+    manifestDepth -= 1;
+    manifestRows = manifestAtDepth(manifestDepth);
+  }
   return [
     '  Broad selector: identity enumeration stopped before output transport; there is no cursor to drain.',
     ...(manifestRows.length > 0
       ? [
-          '  Complete structural file manifest; small regions expose exact starting constructs and large regions remain recoverable as one scope:',
+          `  Complete structural file manifest at directory depth ${manifestDepth}; small regions expose exact starting constructs and large regions remain recoverable as one scope:`,
           ...manifestRows,
         ]
       : []),
@@ -1024,6 +1045,12 @@ function evidenceCommandSections(result: EvidenceCommandResult): ReportSection[]
       title: `${item.shortName} — ${section.title}`,
     }));
   });
+  const sourceRecoveryRows = result.sourceRecovery
+    ? [
+        `  Graph traversal stays graph-sized; ${result.sourceRecovery.selectors} requested source selector(s) were not embedded.`,
+        `  Read the named source gap separately: ${result.sourceRecovery.command}`,
+      ]
+    : [];
   return [
     { title: 'EXPLICIT PROJECTION', rows: selectionRows },
     { title: 'EXACT SELECTORS', rows: targetRows, skipIfEmpty: true },
@@ -1031,6 +1058,7 @@ function evidenceCommandSections(result: EvidenceCommandResult): ReportSection[]
     { title: 'TYPED RELATIONSHIPS', rows: relationshipRows, skipIfEmpty: true },
     { title: 'FOLDED RELATIONSHIPS', rows: foldRows, skipIfEmpty: true },
     { title: 'GRAPH COVERAGE', rows: coverageRows },
+    { title: 'SOURCE MATERIALIZATION DEFERRED', rows: sourceRecoveryRows, skipIfEmpty: true },
     ...sourceSections,
   ];
 }
@@ -1707,7 +1735,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   budgetedSectionedQueryCommand({
     id: 'evidence',
     command: 'evidence [symbol]',
-    description: 'Traverse selected typed relationships around exact referents, with optional source evidence',
+    description: 'Traverse selected typed relationships around exact referents; recover source separately when needed',
     options: [
       option('--symbol <symbol>', 'Add an exact compiler symbol; repeat to batch', collectValues, []),
       option(
@@ -1738,7 +1766,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       option('--max-edges <n>', 'Required maximum typed relationships to render', parsePositiveInteger),
       option(
         '--include <part>',
-        'Add definition, references, callers, callees, dependencies, consumers, or all; repeat or comma-separate',
+        'Legacy positional source evidence; graph projections defer it to an exact inspect recovery command',
         collectValues,
         [],
       ),
@@ -1757,7 +1785,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
         'batched exact selectors and typed graph relationships',
         'compact endpoints with exact locations and follow-up commands',
         'coverage and recoverable omissions',
-        'optional definition and reference-centered source',
+        'exact source-recovery command when source was requested with a graph projection',
         'explicit ambiguity failure with exact rerun commands',
       ],
       inputs: ['symbol'],
@@ -1832,6 +1860,20 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       }
       const sourceParts = selectedEvidenceParts(stringArrayOptionValue(opts, 'include'));
       const sourceSelectors = [...symbols, ...locations];
+      const sourceRecovery =
+        sourceParts === undefined
+          ? null
+          : {
+              parts: sourceParts,
+              selectors: sourceSelectors.length,
+              command: [
+                'scip-query inspect',
+                ...symbols.map((symbol) => `--symbol ${shellArgument(symbol)}`),
+                ...locations.map((location) => `--at ${shellArgument(location)}`),
+                '--view source',
+                `--include ${shellArgument(sourceParts.join(','))}`,
+              ].join(' '),
+            };
       return {
         kind: 'graph-packet',
         graph: queries.graphEvidence(
@@ -1849,17 +1891,8 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
             maxEdges: maxEdges ?? 1,
           },
         ),
-        source:
-          sourceParts === undefined
-            ? []
-            : sourceSelectors.map((selector) =>
-                queries.qualifiedEvidence(db, selector, {
-                  parts: sourceParts,
-                  referenceContext: definedNumberOption(opts, 'context', 2),
-                  relatedSourceLines: definedNumberOption(opts, 'relatedSourceLines', 80),
-                  semantic: budget.semantic,
-                }),
-              ),
+        source: [],
+        sourceRecovery,
       };
     },
     emptyMessage: (result) => (result.kind === 'graph-packet' ? undefined : evidenceFailureMessage(result)),
@@ -1889,9 +1922,16 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
           );
         const targetsComplete = result.graph.targets.every((target) => target.status === 'matched');
         const sourceMayBeBudgeted = result.source.length > 0 && Boolean(budget.analysisBudget);
-        const complete = result.graph.coverage.status === 'accounted' && targetsComplete && !sourceMayBeBudgeted;
+        const sourceDeferred = result.sourceRecovery !== null;
+        const complete =
+          result.graph.coverage.status === 'accounted' && targetsComplete && !sourceMayBeBudgeted && !sourceDeferred;
         if (complete) return { complete: true, totalKnown: true, returned, total: returned, omitted: 0 };
-        if (result.graph.coverage.status === 'incomplete' || !targetsComplete || sourceMayBeBudgeted) {
+        if (
+          result.graph.coverage.status === 'incomplete' ||
+          !targetsComplete ||
+          sourceMayBeBudgeted ||
+          sourceDeferred
+        ) {
           return { complete: false, totalKnown: false, returned };
         }
         return {
@@ -1925,6 +1965,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
             relationshipCount: result.graph.edges.length,
             coverage: result.graph.coverage,
             sourceSelectors: result.source.length,
+            sourceRecovery: result.sourceRecovery,
           }
         : result.kind === 'matched'
           ? {

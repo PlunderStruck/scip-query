@@ -155,6 +155,8 @@ describe('Codex exploration trial core', () => {
     expect(prompt).not.toContain('First run scip-query status');
     expect(prompt).toContain('Prefer one batched query to locate exact referents');
     expect(prompt).toContain('Batch compatible selected roots into a scip-query evidence call');
+    expect(prompt).toContain('Keep graph projection separate from source materialization');
+    expect(prompt).toContain('do not add --include to a graph request');
     expect(prompt).toContain('Repeat only while a named claim remains unresolved');
     expect(prompt).toContain('Explicitly choose incoming, outgoing, or both');
     expect(prompt).toContain('edge families or exact subtypes');

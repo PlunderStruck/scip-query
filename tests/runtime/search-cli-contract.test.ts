@@ -19,7 +19,7 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
       fixture.document(index, 'typescript', relativePath);
     }
     for (let index = 31; index <= 180; index += 1) {
-      const group = String(Math.floor((index - 31) / 15) + 1).padStart(2, '0');
+      const group = String(index - 30).padStart(3, '0');
       const relativePath = `src/broad-${group}/match-${String(index).padStart(3, '0')}.ts`;
       files[relativePath] = `export const broadValue${index} = 'broad_selector_token';\n`;
       fixture.document(index, 'typescript', relativePath);
@@ -167,9 +167,33 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
     expect(invocation.stdout).toContain('MATCH IDENTITIES (64/150, BOUNDED)');
     expect(invocation.stdout).toContain('Exact cardinality: 150 matching line(s) across 150 file(s).');
     expect(invocation.stdout).toContain('Broad selector: identity enumeration stopped before output transport');
-    expect(invocation.stdout).toContain("scip-query search 'broad_selector_token' --scope 'src/broad-");
+    expect(invocation.stdout).toContain("scip-query search 'broad_selector_token' --scope 'src'");
     expect(invocation.stdout).not.toContain('[scip-query output page:');
     expect(invocation.stdout.length).toBeLessThan(32_000);
+  });
+
+  it('keeps graph traversal graph-sized when source inclusion was requested', () => {
+    const invocation = runCommand('evidence', [
+      '--at',
+      'src/expansive-flow.ts:1',
+      '--edge',
+      'execution',
+      '--direction',
+      'both',
+      '--depth',
+      '1',
+      '--max-edges',
+      '4',
+      '--include',
+      'definition',
+    ]);
+
+    expect(invocation.status).toBe(0);
+    expect(invocation.stdout).toContain('SOURCE MATERIALIZATION DEFERRED');
+    expect(invocation.stdout).toContain('Graph traversal stays graph-sized');
+    expect(invocation.stdout).toContain("scip-query inspect --at 'src/expansive-flow.ts:1' --view source");
+    expect(invocation.stdout).not.toContain('mechanically irrelevant padding');
+    expect(invocation.stdout).not.toContain('[scip-query output page:');
   });
 
   it('reports bounded machine-readable coverage for a broad selector', () => {
