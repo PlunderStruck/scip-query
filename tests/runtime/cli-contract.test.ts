@@ -31,6 +31,7 @@ const PRIVATE_QUERY_MODULES = [
   'boundary-evidence',
   'callable-contracts',
   'coverage-contracts',
+  'outcome-events',
   'dead-exclusions',
   'documentation-policy',
   'doc-citation-context',
@@ -66,6 +67,7 @@ const PRIVATE_QUERY_SOURCE_PATHS = {
   'health-report': 'src/queries/health/health-report.ts',
   'health-types': 'src/queries/health/health-types.ts',
   'newly-unreferenced-residue': 'src/queries/impact/newly-unreferenced-residue.ts',
+  'outcome-events': 'src/queries/compatibility/outcome-events.ts',
   'public-query-entries': 'src/queries/public-query-entries.ts',
   'query-utils': 'src/queries/query-utils.ts',
   'source-inspection-selection': 'src/queries/navigation/source-inspection-selection.ts',
@@ -285,7 +287,9 @@ describe('CLI contract', () => {
     const outputCosts = new Set(['small', 'bounded', 'potentially-large', 'variable']);
     const commandIds = new Set(commandDescriptors.map((entry) => entry.id));
     for (const descriptor of commandDescriptors.filter((entry) => !entry.hidden)) {
-      const semantic = descriptorSemanticContract(descriptor);
+      const semantic = descriptor.agent?.semantic;
+      expect(semantic, `${descriptor.id}: descriptor-owned semantic contract`).toBeDefined();
+      if (!semantic) continue;
       expect(semanticKinds.has(semantic.kind), descriptor.id).toBe(true);
       expect(semantic.nonClaims.length, `${descriptor.id}: semantic non-claims`).toBeGreaterThan(0);
       expect(outputCosts.has(semantic.outputCost), `${descriptor.id}: output cost`).toBe(true);

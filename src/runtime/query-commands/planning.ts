@@ -2,6 +2,7 @@ import * as queries from '../../queries/index.js';
 import { REPOSITORY_OBSERVATION_OPERATION } from '../command-operation.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
 import {
+  analysisSemanticContract,
   doc,
   fixedClaimFamily,
   mixedClaimContract,
@@ -137,6 +138,13 @@ export const planningQueryCommandDescriptors: CommandDescriptor[] = [
       // Every section is capped by --limit (default 20), and traversal by
       // --impact-depth / --slice-depth (default 3). Always disclose the caps.
       coverage: 'bounded',
+      semantic: analysisSemanticContract(
+        'Assemble bounded compiler, semantic, history, and heuristic context around one explicit target.',
+        'A multi-section repository context report with each evidence family kept distinct.',
+        [
+          'This composite report does not infer task relevance or prove that every returned candidate affects the requested change.',
+        ],
+      ),
       contrasts: [
         {
           command: 'change-surface',

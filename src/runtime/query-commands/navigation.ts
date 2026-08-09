@@ -3,6 +3,8 @@ import { REPOSITORY_OBSERVATION_OPERATION } from '../command-operation.js';
 import type { CommandDescriptor, InvocationCoverage } from '../command-kit/command-descriptor-types.js';
 import {
   agentContract,
+  analysisAgentContract,
+  analysisSemanticContract,
   collectValues,
   compactOption,
   doc,
@@ -1414,7 +1416,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'files',
     command: 'files <pattern>',
     description: 'Find current project files matching a path pattern',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which current project files match this path pattern?',
       'matching file paths',
       ['pattern'],
@@ -1778,7 +1780,12 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     description: 'List methods of one exactly resolved class; ambiguity and missing targets fail explicitly',
     options: withJsonOption(),
     agent: {
-      ...agentContract('Which methods belong to this class?', 'method names and line ranges', ['symbol'], 'complete'),
+      ...analysisAgentContract(
+        'Which methods belong to this class?',
+        'method names and line ranges',
+        ['symbol'],
+        'complete',
+      ),
       resultUnits: { kind: 'field', field: 'methods' },
     },
     docs: doc('Navigation'),
@@ -1797,6 +1804,11 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       returns: ['definition sites with source and signature', 'referencing files with line numbers'],
       inputs: ['symbol'],
       coverage: 'bounded',
+      semantic: analysisSemanticContract(
+        'Resolve one symbol definition and its indexed reference sites.',
+        'Definition source and signatures plus referencing files and line numbers.',
+        ['Flat reference sites do not establish runtime calls, data flow, or task relevance.'],
+      ),
       contrasts: [
         {
           command: 'refs',
@@ -2106,7 +2118,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'deps',
     command: 'deps <file>',
     description: 'Files this file depends on (internal)',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which internal files does this file depend on?',
       'dependency file paths',
       ['file'],
@@ -2120,7 +2132,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'rdeps',
     command: 'rdeps <file>',
     description: 'Files that depend on this file/module',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which internal files depend on this file?',
       'reverse-dependency file paths',
       ['file'],
@@ -2150,6 +2162,11 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       inputs: ['module'],
       // No budget and no row cap: every section is the whole set.
       coverage: 'complete',
+      semantic: analysisSemanticContract(
+        'Summarize files, documented symbols, and one-hop file reference dependencies for a module selector.',
+        'Matched files, documented indexed symbols, dependencies, and reverse dependencies.',
+        ['A one-hop module summary does not establish runtime execution or complete transitive behavior.'],
+      ),
       contrasts: [
         {
           command: 'surface',
@@ -2195,7 +2212,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'surface',
     command: 'surface <module>',
     description: 'What symbols consumers actually use from this module',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which exported symbols do external consumers actually use?',
       'consumer paths and consumed symbol identities',
       ['module'],
@@ -2209,7 +2226,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'imports',
     command: 'imports <file>',
     description: 'What symbols does this file import?',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which symbols does this file import?',
       'imported symbol identities and source files',
       ['file'],
@@ -2225,7 +2242,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'imported-by',
     command: 'imported-by <symbol>',
     description: 'Which files import this symbol?',
-    agent: agentContract('Which files import this symbol?', 'importing file paths', ['symbol'], 'complete'),
+    agent: analysisAgentContract('Which files import this symbol?', 'importing file paths', ['symbol'], 'complete'),
     docs: doc('Navigation'),
     query: ({ db, args }) => queries.importedBy(db, stringArg(args, 0)),
     format: (r) => `  ${r.fromFile}`,
@@ -2234,7 +2251,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'members',
     command: 'members <symbol>',
     description: 'All children of a symbol (methods, fields, nested types)',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which members or nested symbols belong to this symbol?',
       'child symbol identities, kinds, and ranges',
       ['symbol'],
@@ -2251,7 +2268,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'by-kind',
     command: 'by-kind <kind>',
     description: 'Find symbols by SCIP kind (class, interface, enum, function, etc.)',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which symbols have this SCIP kind?',
       'symbol identities, kinds, files, and ranges',
       ['pattern'],
@@ -2277,7 +2294,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'kind-counts',
     command: 'kind-counts',
     description: 'Histogram of symbol kinds in the codebase',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'How many indexed symbols exist for each kind?',
       'symbol-kind counts',
       [],
@@ -2294,7 +2311,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'hierarchy',
     command: 'hierarchy <symbol>',
     description: "Show a symbol's ancestry chain (method → class → module)",
-    agent: agentContract(
+    agent: analysisAgentContract(
       'What lexical ownership chain contains this symbol?',
       'ancestor symbol identities and depths',
       ['symbol'],
@@ -2312,7 +2329,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     command: 'dataflow <symbol>',
     hidden: true,
     description: 'Deprecated compatibility alias for a reference/call neighborhood; use value-flow',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'What definitions, references, incoming calls, and outgoing calls surround this symbol?',
       'legacy reference sites and call-neighborhood rows; no value-flow claim',
       ['symbol'],
@@ -2328,7 +2345,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'reference-neighborhood',
     command: 'reference-neighborhood <symbol>',
     description: 'Show definition/reference sites and incoming/outgoing static calls without value-flow claims',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'What exact references and static calls surround this symbol?',
       'definition sites, reference sites, incoming calls, and outgoing calls',
       ['symbol'],
@@ -2344,7 +2361,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'value-flow',
     command: 'value-flow <symbol>',
     description: 'Show only proved argument/parameter and bounded static-value transfers around a symbol',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which values are proved to flow into or through this symbol?',
       'typed value-transfer edges with evidence strength and explicit unsupported relations',
       ['symbol'],
@@ -2363,7 +2380,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     command: 'slice <symbol>',
     hidden: true,
     description: 'Deprecated compatibility alias for reference/call reachability; use dependence-slice',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which calls or reference owners are reachable from this symbol under the legacy traversal?',
       'legacy connected symbols; no program-dependence claim',
       ['symbol'],
@@ -2383,7 +2400,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'reference-reachability',
     command: 'reference-reachability <symbol>',
     description: 'Traverse legacy callee or reference-owner reachability without calling it a program slice',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which call/reference nodes are reachable from this symbol?',
       'connected symbols with relationship and traversal depth',
       ['symbol'],
@@ -2403,7 +2420,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'dependence-slice',
     command: 'dependence-slice <symbol-or-location>',
     description: 'Directional slice over proved data/control dependencies with explicit supporting call edges',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'What proved program dependencies can affect this criterion, or be affected by it?',
       'directional dependence edges, supporting connectors, and coverage limits',
       [['symbol', 'path']],

@@ -7,13 +7,15 @@ import {
 } from '../../queries/navigation/code.js';
 import { outline } from '../../queries/navigation/outline.js';
 import { refs } from '../../queries/navigation/refs.js';
-import { REPOSITORY_OBSERVATION_OPERATION } from '../command-operation.js';
+import { commandOperation, REPOSITORY_OBSERVATION_OPERATION } from '../command-operation.js';
 import { compareReferenceKey, referencePage } from '../refs-pagination.js';
 import type { CommandDescriptor, InvocationCoverage } from '../command-kit/command-descriptor-types.js';
 import {
   doc,
   agentContract,
+  analysisSemanticContract,
   locatorSemanticContract,
+  maintenanceAgentContract,
   option,
   parseNonNegativeInteger,
   parsePositiveInteger,
@@ -822,12 +824,15 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
     command: 'session',
     description: 'Show evidence already delivered in this agent exploration session',
     options: [option('--reset', 'Clear this agent exploration-session ledger')],
-    agent: agentContract(
+    agent: maintenanceAgentContract(
       'Which indexed source ranges and graph facts have already been delivered in this exploration session?',
       'prior command ordinals, exact source ranges, and content-bound graph receipts',
       [],
       'complete',
       'repository',
+      commandOperation('repository-observation', [
+        { when: { kind: 'option', name: 'reset', equals: true }, role: 'mutation' },
+      ]),
     ),
     renderShape: 'custom',
     docs: doc('Navigation'),
@@ -850,6 +855,11 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
       inputs: ['symbol'],
       // Semantic analysis is budgeted on large indexes; --full lifts the cap.
       coverage: 'bounded',
+      semantic: analysisSemanticContract(
+        'Resolve the exact reference sites attributed to one compiler symbol identity.',
+        'Referencing file paths and reference line numbers grouped by file.',
+        ['Reference sites do not establish runtime execution, data flow, or task relevance.'],
+      ),
       contrasts: [
         {
           command: 'imported-by',

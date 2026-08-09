@@ -10,6 +10,7 @@ import type { CommandDescriptor } from '../command-kit/command-descriptor-types.
 import type { CommandOptions } from '../command-kit/command-execution.js';
 import {
   agentContract,
+  analysisAgentContract,
   graphProjectionSemanticContract,
   locatorSemanticContract,
   collectValues,
@@ -1587,7 +1588,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'hotspots',
     command: 'hotspots',
     description: 'Rank symbols by cross-file reference count; a reference metric, not runtime contention',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which symbols have the most observed cross-file reference evidence?',
       'ranked symbol identities with explicit evidence basis and counting units',
       [],
@@ -1642,7 +1643,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'fan-out',
     command: 'fan-out [file]',
     description: 'How many external symbols a file uses (or top fan-out across codebase)',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'How many external symbols does this file use, or which files have highest fan-out?',
       'files with external-symbol counts',
       ['file'],
@@ -1662,7 +1663,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'coupling',
     command: 'coupling [file1] [file2]',
     description: 'Count shared-symbol coupling between two files, or rank file pairs by that metric',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'How strongly are these files coupled, or which pairs are most coupled?',
       'file pairs with coupling evidence and scores',
       ['file', 'file'],
@@ -1682,7 +1683,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'cycles',
     command: 'cycles',
     description: 'Find every cyclic file-dependency component and show one deterministic witness for each',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which file dependency cycles exist?',
       'dependency-cycle file chains',
       [],
@@ -1707,7 +1708,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'architecture',
     command: 'architecture',
     description: 'Evaluate project-owned architectural boundaries and dependency rules',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Does the repository obey its declared architecture boundaries?',
       'boundary coverage and dependency-rule violations',
       [],
@@ -1732,7 +1733,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'bottlenecks',
     command: 'bottlenecks',
     description: 'Rank coordination hubs by incoming evidence files × outgoing cross-file callable targets',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which callable symbols are high-connectivity coordination hubs?',
       'ranked callable symbols with incoming evidence-file and outgoing callable-target counts',
       [],
@@ -1756,7 +1757,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     command: 'deep-chains',
     hidden: true,
     description: 'Deprecated alias for dependency-depth',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which dependency chains are deepest and riskiest?',
       'ranked component chains with depth, risk, and recommendation',
       [],
@@ -1778,7 +1779,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'dependency-depth',
     command: 'dependency-depth',
     description: 'Find longest paths through the SCC-condensed file dependency graph',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which file dependency paths have the greatest condensed depth?',
       'ranked component paths with full cycle membership, edge basis, and condensed depth',
       [],
@@ -1992,7 +1993,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'call-graph',
     command: 'call-graph <symbol>',
     description: 'Show static may-call edges with exact/candidate evidence and explicit blind spots',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Who calls this symbol and what does it call?',
       'caller and callee symbol identities, files, evidence strengths, and static-analysis blind spots',
       ['symbol'],

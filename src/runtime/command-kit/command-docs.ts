@@ -44,27 +44,7 @@ export function descriptorSemanticContract(descriptor: CommandDescriptor): Comma
   if (!descriptor.agent) {
     throw new Error(`Public command ${descriptor.id} must declare an agent contract before semantic rendering.`);
   }
-  if (descriptor.agent.semantic) return descriptor.agent.semantic;
-  const roles = commandOperationRoles(descriptor.agent.operation);
-  if (roles.some((role) => role !== 'repository-observation' && role !== 'repository-preview')) {
-    return {
-      kind: 'maintenance',
-      effect: descriptor.agent.returns.join('; '),
-      nonClaims: [
-        'This command does not establish repository graph relationships unless its result says so explicitly.',
-      ],
-      outputCost: 'variable',
-      frontierClosure: [],
-    };
-  }
-  return {
-    kind: 'analysis',
-    analysis: descriptor.agent.answers.join(' '),
-    resultMeaning: descriptor.agent.returns.join('; '),
-    nonClaims: ['This command establishes only its declared result units and evidence contract.'],
-    outputCost: descriptor.agent.coverage === 'complete' ? 'bounded' : 'variable',
-    frontierClosure: ['inspect', 'code'],
-  };
+  return descriptor.agent.semantic;
 }
 
 // scip-query: ignore-wrapper — shared evidence-tier policy consumed by both

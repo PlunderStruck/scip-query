@@ -1,12 +1,13 @@
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
 import { commandOperation } from '../command-operation.js';
 import {
-  agentContract,
+  analysisAgentContract,
   collectValues,
   doc,
   fieldClaimFamily,
   fixedClaimContract,
   fixedClaimFamily,
+  maintenanceAgentContract,
   mixedClaimContract,
   option,
   parseNonNegativeInteger,
@@ -25,7 +26,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     id: 'hook-architecture-stop',
     command: 'hook-architecture-stop',
     hidden: true,
-    agent: agentContract(
+    agent: maintenanceAgentContract(
       'Did indexed source changes preserve the repository architecture policy?',
       'architecture policy decision and enforced finding identities',
       [],
@@ -40,7 +41,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'reindex',
     command: 'reindex',
-    agent: agentContract(
+    agent: maintenanceAgentContract(
       'Can the repository index be refreshed, and which language shards succeeded?',
       'index generation, shard statuses, reuse diagnostics, and failures',
       [],
@@ -65,7 +66,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'augment-sources',
     command: 'augment-sources',
-    agent: agentContract(
+    agent: maintenanceAgentContract(
       'Can source files omitted by upstream indexers be added to the index?',
       'added document counts and augmentation status',
       [],
@@ -81,7 +82,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'augment-vue',
     command: 'augment-vue',
-    agent: agentContract(
+    agent: maintenanceAgentContract(
       'Can Vue SFC references be compiler-resolved and added to the index?',
       'Vue augmentation counts, project, and diagnostics',
       [],
@@ -111,7 +112,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'diff-impact',
     command: 'diff-impact',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which symbols changed in this diff and which downstream consumers are affected?',
       'changed symbols, downstream consumer identities, and impact paths',
       [],
@@ -149,7 +150,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'health',
     command: 'health',
-    agent: agentContract(
+    agent: maintenanceAgentContract(
       'Where has this repository accumulated drift, duplication, complexity, or cleanup pressure?',
       'health score, findings, priorities, baselines, and coverage notes',
       [],
@@ -184,7 +185,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'install-skills',
     command: 'install-skills',
-    agent: agentContract(
+    agent: maintenanceAgentContract(
       'Which scip-query skills were installed, updated, skipped, or conflicted?',
       'skill target paths and install outcomes',
       [],
@@ -200,7 +201,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'check-deps',
     command: 'check-deps',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which scip-query and language-indexer dependencies are runnable?',
       'dependency readiness statuses and remediation',
       [],
@@ -216,7 +217,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'capabilities',
     command: 'capabilities',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which repository-mapping and analysis capabilities are available here?',
       'capability matrix with availability and reasons',
       [],
@@ -233,7 +234,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'init',
     command: 'init',
-    agent: agentContract(
+    agent: maintenanceAgentContract(
       'Can a starter scip-query configuration be created for this project?',
       'configuration path and creation outcome',
       [],
@@ -249,7 +250,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'config-validate',
     command: 'config-validate',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Is this project configuration valid and internally consistent?',
       'validation diagnostics with configuration paths',
       [],
@@ -266,7 +267,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'suppress',
     command: 'suppress <id>',
-    agent: agentContract(
+    agent: maintenanceAgentContract(
       'Can this accepted finding be recorded with an auditable reason?',
       'suppression identity, path, scope, and expiry',
       ['finding'],
@@ -291,7 +292,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'doctor',
     command: 'doctor',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Why is scip-query unhealthy or unavailable in this project?',
       'configuration, freshness, dependency, and capability diagnostics',
       [],
@@ -308,7 +309,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'setup',
     command: 'setup',
-    agent: agentContract(
+    agent: maintenanceAgentContract(
       'Can scip-query be bootstrapped end to end in this project?',
       'setup step outcomes, files, capabilities, smoke tests, and warnings',
       [],
@@ -333,7 +334,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'setup-agent',
     command: 'setup-agent',
-    agent: agentContract(
+    agent: maintenanceAgentContract(
       'Can concise project guidance for scip-query be written?',
       'written, unchanged, and skipped agent instruction files',
       [],
@@ -349,7 +350,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'uninstall',
     command: 'uninstall',
-    agent: agentContract(
+    agent: maintenanceAgentContract(
       'Which scip-query-owned integrations can be removed without touching user-owned files?',
       'removed, retained, skipped, and dry-run targets',
       [],
@@ -373,7 +374,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'watch',
     command: 'watch',
-    agent: agentContract(
+    agent: maintenanceAgentContract(
       'What is the watcher doing, or can its background service be started or stopped?',
       'watcher state, generation, activity, and errors',
       [],
@@ -400,7 +401,7 @@ export const commandDescriptors: CommandDescriptor[] = [
   {
     id: 'status',
     command: 'status',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Is the index fresh, complete, and usable for this project?',
       'freshness, generation, language shards, and watcher state',
       [],

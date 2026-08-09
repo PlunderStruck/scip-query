@@ -3,7 +3,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
 import type { CommandHandler } from '../command-kit/command-descriptor-types.js';
 import {
-  agentContract,
+  maintenanceAgentContract,
   collectValues,
   doc,
   option,
@@ -414,7 +414,7 @@ export const tlaQueryCommandDescriptors: CommandDescriptor[] = [
     command: 'tla <operation> [spec]',
     description:
       'TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation',
-    agent: agentContract(
+    agent: maintenanceAgentContract(
       'Does this TLA+ model and code mapping agree, or can the requested model artifact be generated?',
       'checker status, conformance findings, trace coverage, or generated artifact paths',
       ['action', 'path'],

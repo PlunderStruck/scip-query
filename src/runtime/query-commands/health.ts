@@ -1,6 +1,12 @@
 import * as queries from '../../queries/index.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
-import { agentContract, doc, option, parseInteger, withJsonOption } from '../command-kit/command-spec-builders.js';
+import {
+  analysisAgentContract,
+  doc,
+  option,
+  parseInteger,
+  withJsonOption,
+} from '../command-kit/command-spec-builders.js';
 import {
   booleanOptionValue,
   budgetedDbCommand,
@@ -74,7 +80,7 @@ export const healthQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'self-audit',
     command: 'self-audit',
     description: 'Score cheap evidence paths against the best available semantic/source oracle on sampled symbols',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'How accurate are the fast evidence paths on a sample?',
       'sample coverage, agreement scores, and disagreements',
       [],
@@ -93,7 +99,7 @@ export const healthQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'complexity',
     command: 'complexity <symbol>',
     description: 'Per-symbol complexity: branches, cyclomatic estimate, fan-in/out, callees',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'How structurally complex and connected is this symbol?',
       'LOC, branch, complexity, callee, fan-in, and fan-out counts',
       ['symbol'],

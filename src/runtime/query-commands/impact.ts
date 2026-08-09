@@ -1,7 +1,7 @@
 import * as queries from '../../queries/index.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
 import {
-  agentContract,
+  analysisAgentContract,
   doc,
   fixedClaimFamily,
   mixedClaimContract,
@@ -236,7 +236,7 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'affected',
     command: 'affected <symbol>',
     description: 'Conservative reverse caller/reference closure of symbols that may be impacted by a change',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which downstream symbols are statically reachable as possible change impacts?',
       'possible-impact symbol identities, files, and traversal depths; not predicted failures',
       ['symbol'],
@@ -255,7 +255,7 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'change-surface',
     command: 'change-surface <file>',
     description: 'Pre-change briefing: consumers, published API, operational roots, and explained change risk',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'What public surface and consumers make this file risky to change?',
       'defined symbols, external consumer counts, and risk levels',
       ['file'],
@@ -272,7 +272,7 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     command: 'incomplete-migration',
     description:
       'Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Did this diff leave a helper extraction only partly migrated?',
       'new helpers and similar unmigrated call sites',
       [],
@@ -295,7 +295,7 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'co-change',
     command: 'co-change [file]',
     description: 'Files that change together in git history without a dependency edge — hidden coupling candidates',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which files repeatedly change together without a declared dependency?',
       'file pairs, co-change counts, confidence, and history context',
       ['file'],

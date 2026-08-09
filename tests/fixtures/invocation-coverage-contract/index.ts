@@ -1,4 +1,7 @@
-import type { InvocationCoverage } from '../../../src/runtime/command-kit/command-descriptor-types.js';
+import type {
+  CommandAgentContract,
+  InvocationCoverage,
+} from '../../../src/runtime/command-kit/command-descriptor-types.js';
 
 const complete: InvocationCoverage = {
   complete: true,
@@ -50,6 +53,31 @@ const unknownWithIdentities: InvocationCoverage = {
   omittedIdentities: ['a'],
 };
 
+const completeAgentContract: CommandAgentContract = {
+  answers: ['What does this explicit test analysis establish?'],
+  returns: ['one typed result'],
+  inputs: ['symbol'],
+  coverage: 'complete',
+  operation: { defaultRole: 'repository-observation' },
+  semantic: {
+    kind: 'analysis',
+    analysis: 'Exercise the compile-time semantic contract.',
+    resultMeaning: 'One typed result.',
+    nonClaims: ['The fixture establishes no repository fact.'],
+    outputCost: 'small',
+    frontierClosure: [],
+  },
+};
+
+// @ts-expect-error every agent-visible command must own an explicit semantic contract
+const missingSemanticAgentContract: CommandAgentContract = {
+  answers: ['What does this incomplete test analysis establish?'],
+  returns: ['one untyped result'],
+  inputs: ['symbol'],
+  coverage: 'complete',
+  operation: { defaultRole: 'repository-observation' },
+};
+
 void [
   complete,
   knownIncomplete,
@@ -59,4 +87,6 @@ void [
   nullKnownTotal,
   unknownWithTotal,
   unknownWithIdentities,
+  completeAgentContract,
+  missingSemanticAgentContract,
 ];

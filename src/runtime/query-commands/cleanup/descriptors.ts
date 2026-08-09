@@ -3,7 +3,7 @@ import type { CommandDescriptor } from '../../command-kit/command-descriptor-typ
 import { commandOperation } from '../../command-operation.js';
 import { definedLimitOption, stringOptionValue } from '../../command-kit/command-execution.js';
 import {
-  agentContract,
+  analysisAgentContract,
   doc,
   option,
   parseInteger,
@@ -77,7 +77,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'unused-params',
     command: 'unused-params',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which trailing parameters are never read by their bodies?',
       'candidate parameters with callable and file identities',
       [],
@@ -99,7 +99,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'cleanup-plan',
     command: 'cleanup-plan',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'What code can be deleted safely, and in what dependency order?',
       'ordered cleanup batches, evidence, and optional verification outcomes',
       [],
@@ -124,7 +124,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'recent-duplicates',
     command: 'recent-duplicates',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Did recent code reimplement established code?',
       'recent and established symbol pairs with similarity evidence',
       [],
@@ -149,7 +149,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'doc-drift',
     command: 'doc-drift [doc]',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which documentation may be stale relative to changing code?',
       'document paths, coupled code subjects, and history evidence',
       ['path'],
@@ -170,7 +170,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'dead',
     command: 'dead [scope]',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which symbols have no repository use or only file-internal use?',
       'symbol identities, ranges, liveness classes, and evidence',
       ['path'],
@@ -195,7 +195,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'unused-imports',
     command: 'unused-imports <file>',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which imports in this file are unused?',
       'import symbol identities and source ranges',
       ['file'],
@@ -210,7 +210,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'isolated',
     command: 'isolated',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which symbols are disconnected from the repository reference graph?',
       'isolated symbol identities and files',
       [],
@@ -230,7 +230,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'similar',
     command: 'similar [symbol] [other]',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which callable resembles this one, or how similar are these two?',
       'symbol pairs, similarity scores, and shared evidence',
       ['symbol', 'symbol'],
@@ -255,7 +255,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'similar-files',
     command: 'similar-files [file]',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which files have similar callable structure?',
       'file pairs with similarity scores and shared symbols',
       ['file'],
@@ -277,7 +277,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'react-component-duplicates',
     command: 'react-component-duplicates [file]',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which React components appear to duplicate one another?',
       'component pairs with structural similarity evidence',
       ['file'],
@@ -301,7 +301,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'react-hook-candidates',
     command: 'react-hook-candidates [file]',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which repeated React logic could become a custom hook?',
       'component groups and shared hook-shaped behavior',
       ['file'],
@@ -324,7 +324,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'react-large-component-pressure',
     command: 'react-large-component-pressure [file]',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which React components have evidence of being too large or overloaded?',
       'component identities with size and responsibility pressure',
       ['file'],
@@ -350,7 +350,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'vue-component-duplicates',
     command: 'vue-component-duplicates [file]',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which Vue components appear to duplicate one another?',
       'component pairs with structural similarity evidence',
       ['file'],
@@ -374,7 +374,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'vue-composable-candidates',
     command: 'vue-composable-candidates [file]',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which repeated Vue logic could become a composable?',
       'component groups and shared composable-shaped behavior',
       ['file'],
@@ -398,7 +398,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'vue-large-view-pressure',
     command: 'vue-large-view-pressure [file]',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which Vue views have evidence of being too large or overloaded?',
       'view identities with size and responsibility pressure',
       ['file'],
@@ -425,7 +425,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'similar-chains',
     command: 'similar-chains',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which transitive chains of similar symbols suggest repeated designs?',
       'similarity-connected symbol chains and scores',
       [],
@@ -448,7 +448,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'extract-candidates',
     command: 'extract-candidates',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which cohesive code regions are strong extraction candidates?',
       'symbol identities with cohesion, reuse, and extraction evidence',
       [],
@@ -471,7 +471,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'locality-candidates',
     command: 'locality-candidates [symbol-or-file]',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which definitions live far from most of their consumers?',
       'symbols, current homes, consumer locality, and suggested homes',
       [['symbol', 'file']],
@@ -498,7 +498,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'drift',
     command: 'drift [module]',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Where has a module or abstraction drifted across parallel implementations?',
       'drifted symbol families, files, and evidence',
       ['module'],
@@ -537,7 +537,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'wrapper-candidates',
     command: 'wrapper-candidates',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which callables are unnecessary forwarding wrappers?',
       'wrapper identities, targets, and forwarding evidence',
       [],
@@ -560,7 +560,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'passthrough-candidates',
     command: 'passthrough-candidates',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which parameters are passed through layers without local use?',
       'parameter paths across call chains',
       [],
@@ -582,7 +582,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'stale-abstractions',
     command: 'stale-abstractions',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which abstractions no longer earn their indirection?',
       'abstraction identities with usage, change, and replacement evidence',
       [],
@@ -611,7 +611,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'complexity-hotspots',
     command: 'complexity-hotspots',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which symbols combine high complexity with high change pressure?',
       'ranked symbols with complexity and churn evidence',
       [],
@@ -634,7 +634,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'convergence',
     command: 'convergence <symbol1> <symbol2>',
     hidden: true,
-    agent: agentContract(
+    agent: analysisAgentContract(
       'How should these two similar symbols converge?',
       'deprecated alias result for a two-symbol similarity plan',
       ['symbol', 'symbol'],
@@ -650,7 +650,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   groupedQueryCommand({
     id: 'redundant-reexports',
     command: 'redundant-reexports',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which re-exports add no useful API boundary?',
       're-export sites, original definitions, and consumer evidence',
       [],
@@ -681,7 +681,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'duplicate-bodies',
     command: 'duplicate-bodies',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which callable bodies are exact duplicates?',
       'callable groups with exact normalized-body identity',
       [],
@@ -704,7 +704,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'twin-drift',
     command: 'twin-drift',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which same-concept twin implementations have drifted?',
       'twin symbol pairs, history, and divergence evidence',
       [],
@@ -733,7 +733,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'not-implemented',
     command: 'not-implemented',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which callables are placeholders rather than real implementations?',
       'callable identities and placeholder evidence',
       [],
@@ -756,7 +756,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   heuristicCleanupCommand({
     id: 'decorative-checkers',
     command: 'decorative-checkers',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which validation checks cannot meaningfully fail?',
       'checker identities, call sites, and decorative behavior evidence',
       [],
@@ -779,7 +779,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'test-quality',
     command: 'test-quality',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which tests have weak assertions or poor production-code reach?',
       'test identities with assertion and reachability evidence',
       [],
@@ -803,7 +803,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'twin-ab',
     command: 'twin-ab <symbolA> <symbolB>',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'How do these two twin implementations differ in structure and behavior?',
       'side-by-side symbol evidence and divergence classification',
       ['symbol', 'symbol'],
@@ -828,7 +828,7 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
   cleanupCommand({
     id: 'similar-signatures',
     command: 'similar-signatures',
-    agent: agentContract(
+    agent: analysisAgentContract(
       'Which callables have suspiciously similar signatures?',
       'callable pairs with signature similarity evidence',
       [],

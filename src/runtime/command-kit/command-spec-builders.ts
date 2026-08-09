@@ -136,9 +136,9 @@ export function agentContract(
   returns: string | readonly string[],
   inputs: readonly CommandInputSlot[],
   coverage: CoveragePolicy,
-  scope?: CommandScope,
-  operation: CommandOperationSelector = REPOSITORY_OBSERVATION_OPERATION,
-  semantic?: CommandAgentContract['semantic'],
+  scope: CommandScope | undefined,
+  operation: CommandOperationSelector,
+  semantic: CommandAgentContract['semantic'],
 ): CommandAgentContract {
   return {
     answers: typeof answers === 'string' ? [answers] : answers,
@@ -146,9 +146,65 @@ export function agentContract(
     inputs,
     coverage,
     operation,
-    ...(semantic ? { semantic } : {}),
+    semantic,
     ...(scope ? { scope } : {}),
   };
+}
+
+/**
+ * Declare an ordinary repository analysis explicitly. The descriptor's own
+ * question and result-unit prose remain the command-specific meaning; this
+ * helper supplies only the shared conservative limits of that semantic class.
+ */
+export function analysisAgentContract(
+  answers: string | readonly string[],
+  returns: string | readonly string[],
+  inputs: readonly CommandInputSlot[],
+  coverage: CoveragePolicy,
+  scope?: CommandScope,
+  operation: CommandOperationSelector = REPOSITORY_OBSERVATION_OPERATION,
+): CommandAgentContract {
+  const normalizedAnswers = typeof answers === 'string' ? [answers] : answers;
+  const normalizedReturns = typeof returns === 'string' ? [returns] : returns;
+  return agentContract(
+    normalizedAnswers,
+    normalizedReturns,
+    inputs,
+    coverage,
+    scope,
+    operation,
+    analysisSemanticContract(
+      normalizedAnswers.join(' '),
+      normalizedReturns.join('; '),
+      ['This command establishes only its declared result units and evidence contract.'],
+      undefined,
+      { outputCost: coverage === 'complete' ? 'bounded' : 'variable' },
+    ),
+  );
+}
+
+/** Declare an operational or repository-mutating control explicitly. */
+export function maintenanceAgentContract(
+  answers: string | readonly string[],
+  returns: string | readonly string[],
+  inputs: readonly CommandInputSlot[],
+  coverage: CoveragePolicy,
+  scope?: CommandScope,
+  operation: CommandOperationSelector = REPOSITORY_OBSERVATION_OPERATION,
+): CommandAgentContract {
+  const normalizedAnswers = typeof answers === 'string' ? [answers] : answers;
+  const normalizedReturns = typeof returns === 'string' ? [returns] : returns;
+  return agentContract(
+    normalizedAnswers,
+    normalizedReturns,
+    inputs,
+    coverage,
+    scope,
+    operation,
+    maintenanceSemanticContract(normalizedReturns.join('; '), [
+      'This command does not establish repository graph relationships unless its result says so explicitly.',
+    ]),
+  );
 }
 
 export function locatorSemanticContract(

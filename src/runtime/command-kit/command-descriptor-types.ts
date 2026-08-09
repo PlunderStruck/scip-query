@@ -229,8 +229,12 @@ export interface CommandAgentContract {
    * independent from evidence origin and result coverage.
    */
   operation: CommandOperationSelector;
-  /** Executable meaning used to generate the compact agent capability surface. */
-  semantic?: CommandSemanticContract;
+  /**
+   * Executable meaning used to generate the compact agent capability surface.
+   * Every agent-visible descriptor owns this declaration; renderers never
+   * infer semantic kind from prose or operation roles.
+   */
+  semantic: CommandSemanticContract;
   /**
    * Descriptor-owned semantic unit extraction. When omitted, registration
    * derives rows vs. one report from the descriptor's render shape.
