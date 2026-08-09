@@ -23,6 +23,7 @@ This is branching by immutable generation, not copying another worktree's curren
 - Suppression uses immutable index-generation identity plus hashes for cited evidence instead of snapshotting the entire repository. The Vega failure-path measurement fell from about 30.6 seconds to 0.38 seconds.
 - Runtime-boundary direct observations carry per-file coverage. An incremental collection re-extracts affected files, removes deleted-file observations, and reuses exact unchanged-file observations.
 - Shared worktree generations already publish, attach, and fork an exact committed-`HEAD` baseline. Integration tests cover simultaneous cold worktrees, dirty private overlays, peer import, and rejection of a dirty peer cache.
+- The deterministic eight-generation cache-lifecycle soak passed. Every disposable worktree attached the shared baseline, incrementally patched one changed TypeScript document through the real watch service, retained two local SQLite generations and one fragment generation, disappeared after removal, and aged out its unreferenced shared generation. Managed bytes returned to the exact 403,330-byte warm baseline after every cycle while the active cache survived (`docs/validation/2026-08-09-cache-lifecycle-soak.md`).
 - Runtime call recovery now uses one cached compiler-resolved call-site view. Direct argument-to-parameter transfers and finite static values are shared graph facts with proof spans and explicit unknowns.
 - Workspace affected closures are partitioned by owning TypeScript project, and the compiler service retains one warm session per project.
 - TypeScript fingerprints now contain compiler-selected project inputs instead of every TypeScript-looking repository file. Tracked deletions are recorded as deletions rather than permanent `unreadable` inputs, and nested projects use the most-specific owning `tsconfig` with the root as fallback.
@@ -39,7 +40,6 @@ This is branching by immutable generation, not copying another worktree's curren
 ### Still required
 
 - A multi-task Luna comparison remains outstanding. Two completed same-task comparisons are retained as negative baselines; no token-efficiency claim is currently supported.
-- A longer disposable-worktree cache plateau soak remains outstanding; lifecycle integration tests and one real harness cleanup already prove that completed trial workspaces are removed.
 - The cold multi-project path is correct but not yet a latency win: 13.7 seconds versus a 9.9-second full refresh in this repository. The immediately repeated warm update took 7.4 seconds. Smaller ordinary closures still need measurement; the tested central file affected 45 documents.
 - Automatic refresh was paused during the live probe by the existing rebuild budget after seven debugging rebuilds in one window. Normal daemon operation remains debounce-driven; budget classification should eventually distinguish cheap incremental publications from expensive full rebuilds.
 

@@ -1,6 +1,15 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -8,7 +17,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { resolveIndexStoragePaths } from '../../src/platform/cache-layout.js';
 import { loadProjectConfig } from '../../src/runtime/config.js';
 import { getIndexFreshness } from '../../src/runtime/index-freshness.js';
-import { inspectSharedCacheStatus } from '../../src/runtime/repository-cache-lifecycle.js';
+import {
+  DEFAULT_SHARED_GENERATION_TTL_MS,
+  inspectSharedCacheStatus,
+  maybeSweepRepositoryCache,
+} from '../../src/runtime/repository-cache-lifecycle.js';
 import { resolveGitWorktreeContext } from '../../src/platform/git-worktree.js';
 import { reindex } from '../../src/reindex/index.js';
 import {
@@ -17,6 +30,7 @@ import {
   readSharedGeneration,
 } from '../../src/reindex/shared-generation-store.js';
 import { buildProjectInputFingerprint } from '../../src/platform/project-files.js';
+import { inspectLocalSqliteGenerationRetention } from '../../src/reindex/sqlite-generation-store.js';
 
 const tempDirs: string[] = [];
 const originalEnvironment = {
@@ -278,6 +292,105 @@ describe('shared Git worktree cache integration', () => {
     );
     expect(existsSync(linkedPaths.dbPath)).toBe(false);
   }, 60_000);
+
+  it('plateaus after repeated committed disposable-worktree generations age out', async () => {
+    const root = temporaryDirectory('scip-query-shared-plateau-');
+    process.env['XDG_CACHE_HOME'] = join(root, 'xdg-cache');
+    delete process.env['SCIP_QUERY_SHARED_CACHE'];
+    const primary = join(root, 'primary');
+    createTypeScriptRepository(primary);
+    const primaryPaths = resolveIndexStoragePaths(primary, {});
+    await reindex({
+      projectRoot: primary,
+      languages: ['typescript'],
+      outputScip: primaryPaths.indexPath,
+      outputDb: primaryPaths.dbPath,
+      skipIfUnchanged: true,
+      onStatus: () => undefined,
+    });
+
+    const primaryContext = resolveGitWorktreeContext(primary)!;
+    const baseline = buildSharedGenerationSnapshot(
+      primaryContext,
+      buildProjectInputFingerprint(primary, ['typescript'], {}),
+    )!;
+    const generationsDir = join(baseline.repositoryCacheDir, 'generations');
+    const projectsDir = join(process.env['XDG_CACHE_HOME']!, 'scip-query', 'projects');
+    const baselineProjectCaches = directoryNames(projectsDir);
+    const baselineManagedBytes = directorySize(primaryPaths.cacheDir) + directorySize(generationsDir);
+    const startedAt = Date.now();
+
+    for (let cycle = 0; cycle < 8; cycle += 1) {
+      const disposable = join(root, `disposable-${cycle}`);
+      git(primary, ['worktree', 'add', '--detach', disposable, 'HEAD']);
+      const disposablePaths = resolveIndexStoragePaths(disposable, {});
+      const attachStatuses: string[] = [];
+      const attached = await reindex({
+        projectRoot: disposable,
+        languages: ['typescript'],
+        outputScip: disposablePaths.indexPath,
+        outputDb: disposablePaths.dbPath,
+        skipIfUnchanged: true,
+        onStatus: (message) => attachStatuses.push(message),
+      });
+      expect(attached.reused, `cycle ${cycle}: committed baseline attach`).toBe(true);
+      expect(
+        attachStatuses.some((message) => message.includes('Attached shared generation')),
+        `cycle ${cycle}: shared attach evidence`,
+      ).toBe(true);
+
+      writeFileSync(join(disposable, 'src/value.ts'), `export const value = ${cycle + 2};\n`);
+      git(disposable, ['add', 'src/value.ts']);
+      git(disposable, ['commit', '-qm', `cycle ${cycle}`]);
+      const generation = buildSharedGenerationSnapshot(
+        resolveGitWorktreeContext(disposable)!,
+        buildProjectInputFingerprint(disposable, ['typescript'], {}),
+      )!;
+      const updateStatuses: string[] = [];
+      const updated = await reindex({
+        projectRoot: disposable,
+        languages: ['typescript'],
+        outputScip: disposablePaths.indexPath,
+        outputDb: disposablePaths.dbPath,
+        skipIfUnchanged: true,
+        onStatus: (message) => updateStatuses.push(message),
+      });
+
+      expect(updated.reused, `cycle ${cycle}: changed committed tree`).toBe(false);
+      expect(
+        updateStatuses.some((message) => message.includes('Published shared generation')),
+        `cycle ${cycle}: clean generation publication`,
+      ).toBe(true);
+      expect(existsSync(join(generationsDir, generation.generationId))).toBe(true);
+      expect(inspectLocalSqliteGenerationRetention(disposablePaths.dbPath)).toEqual(
+        expect.objectContaining({ state: 'managed', generationCount: 2 }),
+      );
+      git(primary, ['worktree', 'remove', '--force', disposable]);
+      const removedAt = startedAt + cycle * (DEFAULT_SHARED_GENERATION_TTL_MS + 1);
+      expect(maybeSweepRepositoryCache(primary, 'test', { force: true, now: () => removedAt })).toEqual(
+        expect.objectContaining({ kind: 'swept', deletedWorktrees: 1, deletedGenerations: 0 }),
+      );
+      expect(existsSync(disposablePaths.cacheDir)).toBe(false);
+      expect(existsSync(join(generationsDir, generation.generationId))).toBe(true);
+
+      expect(
+        maybeSweepRepositoryCache(primary, 'test', {
+          force: true,
+          now: () => removedAt + DEFAULT_SHARED_GENERATION_TTL_MS,
+        }),
+      ).toEqual(expect.objectContaining({ kind: 'swept', deletedGenerations: 1 }));
+      expect(existsSync(join(generationsDir, generation.generationId))).toBe(false);
+      expect(existsSync(primaryPaths.cacheDir), `cycle ${cycle}: active cache survives`).toBe(true);
+      expect(existsSync(join(generationsDir, baseline.generationId)), `cycle ${cycle}: active baseline survives`).toBe(
+        true,
+      );
+      expect(directoryNames(projectsDir), `cycle ${cycle}: no retained checkout cache`).toEqual(baselineProjectCaches);
+      expect(
+        directorySize(primaryPaths.cacheDir) + directorySize(generationsDir),
+        `cycle ${cycle}: managed disk plateau`,
+      ).toBe(baselineManagedBytes);
+    }
+  }, 240_000);
 });
 
 function createTypeScriptRepository(root: string): void {
@@ -311,6 +424,18 @@ function documentPaths(path: string): string[] {
 
 function fileHash(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
+
+function directoryNames(path: string): string[] {
+  return existsSync(path) ? readdirSync(path).sort() : [];
+}
+
+function directorySize(path: string): number {
+  if (!existsSync(path)) return 0;
+  return readdirSync(path, { withFileTypes: true }).reduce((total, entry) => {
+    const entryPath = join(path, entry.name);
+    return total + (entry.isDirectory() ? directorySize(entryPath) : statSync(entryPath).size);
+  }, 0);
 }
 
 function temporaryDirectory(prefix: string): string {
