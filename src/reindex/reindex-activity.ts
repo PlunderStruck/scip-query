@@ -449,7 +449,9 @@ function summarizeLanguageActivity(
     byLanguage[language] = {
       result: reused ? 'reused' : 'rebuilt',
       strategy: reused ? 'reused' : (topLevel?.strategy ?? 'full'),
-      ...(topLevel?.strategy === 'full' && topLevel.missReason ? { fallbackReason: topLevel.missReason } : {}),
+      ...(topLevel?.strategy === 'full' && (topLevel.fallbackReason ?? topLevel.missReason)
+        ? { fallbackReason: topLevel.fallbackReason ?? topLevel.missReason }
+        : {}),
       outputBytes,
       producedOutputBytes: reused ? 0 : outputBytes,
       durationMs,

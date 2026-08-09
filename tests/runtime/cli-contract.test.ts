@@ -64,6 +64,7 @@ const PRIVATE_QUERY_SOURCE_PATHS = {
   'doc-terms': 'src/queries/cleanup/doc-terms.ts',
   'health-baseline': 'src/queries/health/health-baseline.ts',
   'health-cache-control': 'src/queries/health/health-cache-control.ts',
+  'detector-evidence-contracts': 'src/queries/health/detector-evidence-contracts.ts',
   'health-report': 'src/queries/health/health-report.ts',
   'health-types': 'src/queries/health/health-types.ts',
   'newly-unreferenced-residue': 'src/queries/impact/newly-unreferenced-residue.ts',

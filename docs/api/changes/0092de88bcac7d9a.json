@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-08-09T21:02:43.296Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "0092de88bcac7d9a7c47f901ec905f2f4da91fff6a8aaa695740de5e5b63efca",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ReindexShardDiagnostic changed from interface ReindexShardDiagnostic { id: string; language: SupportedLanguage; reused: boolean; strategy: 'reused' | 'incremental' | 'full'; missReason?: string; fingerprint: strin... to interface ReindexShardDiagnostic { id: string; language: SupportedLanguage; reused: boolean; strategy: 'reused' | 'incremental' | 'full'; missReason?: string; fallbackReason?: s....",
+      "target": "./reindex:ReindexShardDiagnostic"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "474cdb66a2ca08c64d168459faa3eba424e27d21391211f5a5025b968ca4be32",
+  "reason": "Add an optional shard fallbackReason so cache misses remain distinct from a failed preferred refresh strategy.",
+  "schemaVersion": 1
+}

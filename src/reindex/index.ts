@@ -169,6 +169,8 @@ export interface ReindexShardDiagnostic {
   strategy: 'reused' | 'incremental' | 'full';
   /** Present only when `reused` is false: why the cached shard could not be used. */
   missReason?: string;
+  /** Present when a preferred refresh strategy failed and the shard was rebuilt another way. */
+  fallbackReason?: string;
   /** Short hash of this shard's fingerprint inputs (source content + indexer options). */
   fingerprint: string;
   /** Size in bytes of the shard's cached SCIP output, or null when unavailable. */
@@ -1321,11 +1323,8 @@ function buildFreshReindexShardDiagnostics(
       language: run.language,
       reused: false,
       strategy: run.command === 'watch-service:typescript-index' ? 'incremental' : 'full',
-      missReason:
-        (run.language === 'typescript' ? typescriptIncrementalUnavailableReason : undefined) ??
-        projectInfo?.reason ??
-        info?.reason ??
-        run.skipped?.reason,
+      missReason: projectInfo?.reason ?? info?.reason ?? run.skipped?.reason,
+      fallbackReason: run.language === 'typescript' ? typescriptIncrementalUnavailableReason : undefined,
       fingerprint: projectInfo
         ? hashFingerprint(projectInfo.fingerprint)
         : info

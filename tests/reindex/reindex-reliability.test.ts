@@ -331,6 +331,7 @@ describe('reindex reliability', () => {
         id: 'typescript',
         reused: false,
         missReason: expect.stringMatching(/inputs changed/i),
+        fallbackReason: 'file is not a database',
       }),
     );
     expect(typescript?.command).toContain('typescript-indexer');
