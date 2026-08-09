@@ -1,0 +1,163 @@
+{
+  "acceptedAt": "2026-08-09T20:56:42.254Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "474cdb66a2ca08c64d168459faa3eba424e27d21391211f5a5025b968ca4be32",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "HealthAction changed from interface HealthAction { category: string; description: string; effort: 'low' | 'medium' | 'high'; impact: 'low' | 'medium' | 'high'; count: number; locRecoverable: number; evid... to interface HealthAction { category: string; description: string; effort: 'low' | 'medium' | 'high'; impact: 'low' | 'medium' | 'high'; count: number; locRecoverable: number; evid....",
+      "target": "./queries:HealthAction"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HealthReport changed from interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes... to interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes....",
+      "target": "./queries:HealthReport"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/dependence-slice; review their variance and runtime meaning.",
+      "target": "./queries/dependence-slice"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/health; review their variance and runtime meaning.",
+      "target": "./queries/health"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "HealthAction changed from interface HealthAction { category: string; description: string; effort: 'low' | 'medium' | 'high'; impact: 'low' | 'medium' | 'high'; count: number; locRecoverable: number; evid... to interface HealthAction { category: string; description: string; effort: 'low' | 'medium' | 'high'; impact: 'low' | 'medium' | 'high'; count: number; locRecoverable: number; evid....",
+      "target": "./queries/index:HealthAction"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HealthReport changed from interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes... to interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes....",
+      "target": "./queries/index:HealthReport"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/value-flow; review their variance and runtime meaning.",
+      "target": "./queries/value-flow"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ReindexShardDiagnostic changed from interface ReindexShardDiagnostic { id: string; language: SupportedLanguage; reused: boolean; missReason?: string; fingerprint: string; outputBytes: number | null; durationMs: nu... to interface ReindexShardDiagnostic { id: string; language: SupportedLanguage; reused: boolean; strategy: 'reused' | 'incremental' | 'full'; missReason?: string; fingerprint: strin....",
+      "target": "./reindex:ReindexShardDiagnostic"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "installSkills changed from declare function installSkills(opts?: { quiet?: boolean; }): InstallSkillsResult; to declare function installSkills(opts?: { quiet?: boolean; homeDir?: string; }): InstallSkillsResult;.",
+      "target": "./runtime:installSkills"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "c changed from declare const GRAPH_EVIDENCE_FAMILIES: readonly [ \"execution\", \"runtime\", \"dataflow\", \"state\", \"temporal\", \"contract\", \"identity\", \"ownership\", \"dependencies\" ]; to declare const GRAPH_EVIDENCE_VIEWS: readonly [ \"causal\", \"structure\", \"complete\" ];.",
+      "target": "graph-evidence-<hash>.d.ts:c"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "d changed from declare const GRAPH_EVIDENCE_VIEWS: readonly [ \"causal\", \"structure\", \"complete\" ]; to interface GraphEvidenceFold { id: string; mode: 'linear' | 'scc' | 'topology'; family: GraphEvidenceFamily; subtype: string; subtypes?: string[]; region?: string; edgeCount: num....",
+      "target": "graph-evidence-<hash>.d.ts:d"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "e changed from type GraphEvidenceFamily = (typeof GRAPH_EVIDENCE_FAMILIES)[number]; to interface GraphEvidenceInventoryRow { family: GraphEvidenceFamily; subtype: string; incoming: number; outgoing: number; both: number; }.",
+      "target": "graph-evidence-<hash>.d.ts:e"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "f changed from interface GraphEvidenceFold { id: string; mode: 'linear' | 'scc' | 'topology'; family: GraphEvidenceFamily; subtype: string; subtypes?: string[]; region?: string; edgeCount: num... to interface GraphEvidenceNode { id: string; kind: string; label: string; symbol: string | null; location: ExplorationSourceLocation | null; }.",
+      "target": "graph-evidence-<hash>.d.ts:f"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "g changed from interface GraphEvidenceInventoryRow { family: GraphEvidenceFamily; subtype: string; incoming: number; outgoing: number; both: number; } to interface GraphEvidenceOptions { view?: GraphEvidenceView; families?: readonly GraphEvidenceFamily[]; direction?: GraphProjectionDirection; subtypes?: readonly string[]; connect....",
+      "target": "graph-evidence-<hash>.d.ts:g"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "h changed from interface GraphEvidenceNode { id: string; kind: string; label: string; symbol: string | null; location: ExplorationSourceLocation | null; } to interface GraphEvidenceResult { kind: 'graph'; view: GraphEvidenceView | 'custom'; families: GraphEvidenceFamily[]; selection?: GraphEvidenceSelection; targets: GraphEvidenceTar....",
+      "target": "graph-evidence-<hash>.d.ts:h"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "i changed from interface GraphEvidenceOptions { view?: GraphEvidenceView; families?: readonly GraphEvidenceFamily[]; direction?: GraphProjectionDirection; subtypes?: readonly string[]; connect... to interface GraphEvidenceSelection { direction: GraphProjectionDirection; subtypes: string[]; connecting: boolean; inventoryOnly: boolean; foldIds: string[]; }.",
+      "target": "graph-evidence-<hash>.d.ts:i"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "j changed from interface GraphEvidenceResult { kind: 'graph'; view: GraphEvidenceView | 'custom'; families: GraphEvidenceFamily[]; selection?: GraphEvidenceSelection; targets: GraphEvidenceTar... to interface GraphEvidenceSelectors { symbols?: readonly string[]; locations?: readonly string[]; searches?: readonly string[]; }.",
+      "target": "graph-evidence-<hash>.d.ts:j"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "k changed from interface GraphEvidenceSelection { direction: GraphProjectionDirection; subtypes: string[]; connecting: boolean; inventoryOnly: boolean; foldIds: string[]; } to type GraphEvidenceView = (typeof GRAPH_EVIDENCE_VIEWS)[number];.",
+      "target": "graph-evidence-<hash>.d.ts:k"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "l changed from interface GraphEvidenceSelectors { symbols?: readonly string[]; locations?: readonly string[]; searches?: readonly string[]; } to declare function graphEvidence(db: ScipDatabase, selectors: GraphEvidenceSelectors, options?: GraphEvidenceOptions): GraphEvidenceResult;.",
+      "target": "graph-evidence-<hash>.d.ts:l"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration m.",
+      "target": "graph-evidence-<hash>.d.ts:m"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration n.",
+      "target": "graph-evidence-<hash>.d.ts:n"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration o.",
+      "target": "graph-evidence-<hash>.d.ts:o"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module graph-exploration-contract-<hash>.d.ts was added or renamed.",
+      "target": "graph-exploration-contract-<hash>.d.ts"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "a changed from interface HealthAction { category: string; description: string; effort: 'low' | 'medium' | 'high'; impact: 'low' | 'medium' | 'high'; count: number; locRecoverable: number; evid... to interface HealthAction { category: string; description: string; effort: 'low' | 'medium' | 'high'; impact: 'low' | 'medium' | 'high'; count: number; locRecoverable: number; evid....",
+      "target": "health-<hash>.d.ts:a"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "b changed from interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes... to interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes....",
+      "target": "health-<hash>.d.ts:b"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "28ebc54917989c34e26356ebcc8534e088f5a164e37550b3222f2765540af3f3",
+  "reason": "Expose an optional installSkills homeDir test seam; old callers remain valid, and remaining declaration-chunk alias shifts are generated ordering noise without export removals.",
+  "schemaVersion": 1
+}
