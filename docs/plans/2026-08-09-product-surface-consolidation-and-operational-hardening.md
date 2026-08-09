@@ -2,7 +2,7 @@
 
 Date: 2026-08-09
 
-Status: active goal program
+Status: implementation and validation complete; release blocked by the held accuracy/token gate
 
 ## Outcome
 
