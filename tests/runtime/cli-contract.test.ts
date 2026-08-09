@@ -394,12 +394,15 @@ describe('CLI contract', () => {
       '--no-skills',
       '--no-parsers',
       '--install-missing',
-      '--no-health',
+      '--health',
       '--dossier-dir <path>',
       '--json',
       '--result-only',
       '--compact',
     ]);
+    expect(commandDescriptors.find((descriptor) => descriptor.id === 'setup')?.options).toContainEqual(
+      expect.objectContaining({ flags: '--no-health', hidden: true }),
+    );
     expect(docs.find((entry) => entry.id === 'suppress')?.options).toEqual([
       '--reason <text>',
       '--reason-code <code>',
@@ -445,6 +448,17 @@ describe('CLI contract', () => {
     expect(mixed.every((entry) => (entry.claims.families?.length ?? 0) > 0)).toBe(true);
   });
 
+  it('keeps suppression on the current observation receipt without health or reindex work', () => {
+    const source = readFileSync(join(process.cwd(), 'src/runtime/commands/command-handlers.ts'), 'utf8');
+    const start = source.indexOf('export function handleSuppress');
+    const end = source.indexOf('export function handleDoctor', start);
+    const handler = source.slice(start, end);
+
+    expect(handler).toContain('currentCliIndexGenerationObservationReceipt()');
+    expect(handler).toContain('writeSuppressionFile(');
+    expect(handler).not.toMatch(/runIsolatedHealthReport|runProjectSetup|reindex\s*\(/u);
+  });
+
   it('keeps public command references descriptor-backed', () => {
     const publicCommandIds = new Set(
       commandDescriptors.filter((descriptor) => !descriptor.hidden).map((descriptor) => descriptor.id),
@@ -466,7 +480,7 @@ describe('CLI contract', () => {
     const skillMentionedCommands = readSkillMentionedCommands();
 
     expect(
-        ['inspect', 'search', 'evidence', 'diff-impact', 'architecture', 'health'].filter(
+      ['inspect', 'search', 'evidence', 'diff-impact', 'architecture', 'health'].filter(
         (command) => !skillMentionedCommands.has(command),
       ),
     ).toEqual([]);

@@ -591,7 +591,7 @@ export async function handleSetup(rawOpts: unknown): Promise<void> {
     const installMissing = booleanOptionValue(opts, 'installMissing');
     let setupOptions: ProjectSetupOptions = {
       dossierDir: stringOptionValue(opts, 'dossierDir'),
-      runHealth: yes ? false : opts['health'] !== false,
+      runHealth: opts['health'] === true,
       installSkills: opts['skills'] !== false,
       installIndexers: installMissing,
       installAstParsers: installMissing && opts['parsers'] !== false,
@@ -670,13 +670,17 @@ async function guidedProjectSetupOptions(
       scope: 'analysis',
       label: 'Run full health analysis and write dossier',
       reason: 'Optional and can take much longer than indexing.',
-      selected: false,
+      selected: base.runHealth === true,
     },
   );
   const interactive = !opts.json && process.stdin.isTTY && process.stdout.isTTY;
   const selected = interactive
     ? await promptSetupChecklist([...languageChoices, ...actionChoices])
-    : new Set([...recommendedGuidedActions(plan.actions), ...languageChoices.map((choice) => choice.id)]);
+    : new Set([
+        ...recommendedGuidedActions(plan.actions),
+        ...languageChoices.map((choice) => choice.id),
+        ...(base.runHealth === true ? ['run-health-analysis'] : []),
+      ]);
   if (interactive) renderGuidedSelection(plan.actions, selected);
   const agentActionSelected = selected.has('create-agent-guidance') || selected.has('update-agent-guidance');
   const automaticRefreshAction = plan.actions.some((action) => action.id === 'enable-automatic-refresh');

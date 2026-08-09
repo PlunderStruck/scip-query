@@ -420,7 +420,7 @@ describe('runProjectSetup', () => {
       ensureWatchService,
     } = await loadProjectSetup();
 
-    const report = await module.runProjectSetup();
+    const report = await module.runProjectSetup({ runHealth: true });
 
     expect(report.health.score).toBe(91);
     expect(report.health.issuesNeedAttention).toEqual([
@@ -492,6 +492,25 @@ describe('runProjectSetup', () => {
     );
     expect(lines.findIndex((line) => line === 'Items that need attention:')).toBeLessThan(
       lines.findIndex((line) => line === 'Setup steps:'),
+    );
+  });
+
+  it('skips health and dossier work by default while reporting the explicit recovery command', async () => {
+    const { module, runIsolatedHealthReport } = await loadProjectSetup();
+
+    const report = await module.runProjectSetup();
+
+    expect(runIsolatedHealthReport).not.toHaveBeenCalled();
+    expect(report.healthDossier).toBeNull();
+    expect(report.health.unavailableReason).toContain('scip-query health --full');
+    expect(report.steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'health', status: 'skipped', optional: true }),
+        expect.objectContaining({ id: 'health-dossier', status: 'skipped', optional: true }),
+      ]),
+    );
+    expect(report.smokeTests).toContainEqual(
+      expect.objectContaining({ id: 'health', status: 'unavailable', optional: true }),
     );
   });
 
@@ -664,7 +683,7 @@ describe('runProjectSetup', () => {
 
   it('reports the default durable Rust transport and fails invalid selection', async () => {
     const passing = await loadProjectSetup({ languages: ['rust'] });
-    const passingReport = await passing.module.runProjectSetup();
+    const passingReport = await passing.module.runProjectSetup({ runHealth: true });
 
     expect(passing.runIsolatedHealthReport.mock.invocationCallOrder[0]).toBeLessThan(
       passing.rustSemanticSessionStatus.mock.invocationCallOrder[0]!,

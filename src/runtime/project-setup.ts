@@ -60,6 +60,7 @@ export interface ProjectSetupStep {
   id: string;
   label: string;
   status: ProjectSetupStepStatus;
+  optional?: boolean;
   message?: string;
   details?: string[];
 }
@@ -101,6 +102,7 @@ export interface ProjectSetupSmokeTest {
   id: string;
   command: string;
   status: ProjectSetupSmokeStatus;
+  optional?: boolean;
   evidence: string;
 }
 
@@ -446,8 +448,10 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     message: capabilitySummary(capabilities),
   });
 
-  opts.onStatus?.(opts.runHealth === false ? 'Skipping optional full health audit.' : 'Running full health audit…');
-  const health = opts.runHealth === false ? skippedSetupHealth(steps) : await runSetupHealth(paths.dbPath, steps);
+  opts.onStatus?.(
+    opts.runHealth === true ? 'Running optional full health audit…' : 'Skipping optional full health audit.',
+  );
+  const health = opts.runHealth === true ? await runSetupHealth(paths.dbPath, steps) : skippedSetupHealth(steps);
   const rustSemanticSession = readiness.languages.includes('rust')
     ? rustSemanticSessionStatus(projectRoot, process.env['SCIP_RUST_SEMANTIC_DURABLE_SESSION'])
     : null;
@@ -494,7 +498,8 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     readiness,
     capabilities,
     freshness,
-    health,
+      health,
+      healthSelected: opts.runHealth === true,
     agentResult,
     watchConfig,
     watchService,
@@ -549,11 +554,12 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     verdict: setupVerdict(steps, readiness),
   };
 
-  if (opts.runHealth === false) {
+  if (opts.runHealth !== true) {
     addStep(steps, {
       id: 'health-dossier',
       label: 'Health dossier',
       status: 'skipped',
+      optional: true,
       message: 'Skipped because the optional health audit was not selected.',
     });
     report.verdict = setupVerdict(steps, readiness);
@@ -807,7 +813,8 @@ function buildSetupSmokeTests(opts: {
   readiness: ProjectReadiness;
   capabilities: ProjectCapabilityReport;
   freshness: IndexFreshness;
-  health: ProjectSetupHealthSummary;
+    health: ProjectSetupHealthSummary;
+    healthSelected: boolean;
   agentResult: SetupAgentResult | null;
   watchConfig: ReturnType<typeof resolveWatchConfig>;
   watchService: WatchServiceEnsureResult | null;
@@ -856,10 +863,11 @@ function buildSetupSmokeTests(opts: {
           ? capabilityMatrixSmokeEvidence(opts.capabilities)
           : 'No detected languages produced capability rows.',
     },
-    {
-      id: 'health',
-      command: 'scip-query health',
-      status: opts.health.score === null ? 'unavailable' : 'pass',
+      {
+        id: 'health',
+        command: 'scip-query health',
+        status: opts.health.score === null ? 'unavailable' : 'pass',
+        optional: !opts.healthSelected,
       evidence:
         opts.health.score === null
           ? (opts.health.unavailableReason ?? 'Health report was not available.')
@@ -910,7 +918,7 @@ function buildSetupSmokeTests(opts: {
 
 function smokeStepStatus(smokeTests: readonly ProjectSetupSmokeTest[]): ProjectSetupStepStatus {
   if (smokeTests.some((test) => test.status === 'fail')) return 'failed';
-  if (smokeTests.some((test) => test.status === 'unavailable')) return 'warn';
+  if (smokeTests.some((test) => test.status === 'unavailable' && test.optional !== true)) return 'warn';
   return 'ok';
 }
 
@@ -1088,7 +1096,7 @@ async function runSetupHealth(dbPath: string, steps: ProjectSetupStep[]): Promis
 
 function skippedSetupHealth(steps: ProjectSetupStep[]): ProjectSetupHealthSummary {
   const reason = 'Skipped by setup choice; run `scip-query health --full` when wanted.';
-  addStep(steps, { id: 'health', label: 'Health audit', status: 'skipped', message: reason });
+  addStep(steps, { id: 'health', label: 'Health audit', status: 'skipped', optional: true, message: reason });
   return emptyHealthSummary(reason);
 }
 
@@ -1132,7 +1140,9 @@ function emptyHealthSummary(unavailableReason: string): ProjectSetupHealthSummar
 function setupVerdict(steps: readonly ProjectSetupStep[], readiness: ProjectReadiness): ProjectSetupVerdict {
   if (steps.some((step) => step.status === 'failed')) return 'blocked';
   if (readiness.indexers.some((indexer) => !indexer.runnable)) return 'partial';
-  if (steps.some((step) => step.status === 'warn' || step.status === 'skipped')) return 'partial';
+  if (steps.some((step) => step.status === 'warn' || (step.status === 'skipped' && step.optional !== true))) {
+    return 'partial';
+  }
   return 'ready';
 }
 
