@@ -1,7 +1,7 @@
 # Open-Ended Typed Subgraph Exploration
 
-**Date:** 2026-08-08  
-**Status:** Current design direction  
+**Date:** 2026-08-08
+**Status:** Current design direction
 **Supersedes:** [`2026-08-08-agent-exploration-kernel.md`](./2026-08-08-agent-exploration-kernel.md)
 
 ## Outcome

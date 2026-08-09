@@ -212,6 +212,10 @@
       "import": "./dist/queries/passthrough-candidates.js",
       "types": "./dist/queries/passthrough-candidates.d.ts"
     },
+    "./queries/plan-context": {
+      "import": "./dist/queries/plan-context.js",
+      "types": "./dist/queries/plan-context.d.ts"
+    },
     "./queries/context": {
       "import": "./dist/queries/context.js",
       "types": "./dist/queries/context.d.ts"

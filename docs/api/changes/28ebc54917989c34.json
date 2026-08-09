@@ -1,0 +1,127 @@
+{
+  "acceptedAt": "2026-08-09T17:05:02.108Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "28ebc54917989c34e26356ebcc8534e088f5a164e37550b3222f2765540af3f3",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OutcomeEvent.",
+      "target": "./queries:OutcomeEvent"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OutcomeEventKind.",
+      "target": "./queries:OutcomeEventKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OutcomeObserverAuthority.",
+      "target": "./queries:OutcomeObserverAuthority"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OutcomeObserverKind.",
+      "target": "./queries:OutcomeObserverKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OutcomeObserverProvenance.",
+      "target": "./queries:OutcomeObserverProvenance"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextHistory.",
+      "target": "./queries:PlanContextHistory"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextOptions.",
+      "target": "./queries:PlanContextOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextResult.",
+      "target": "./queries:PlanContextResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export planContext.",
+      "target": "./queries:planContext"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OutcomeEvent.",
+      "target": "./queries/index:OutcomeEvent"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OutcomeEventKind.",
+      "target": "./queries/index:OutcomeEventKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OutcomeObserverAuthority.",
+      "target": "./queries/index:OutcomeObserverAuthority"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OutcomeObserverKind.",
+      "target": "./queries/index:OutcomeObserverKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export OutcomeObserverProvenance.",
+      "target": "./queries/index:OutcomeObserverProvenance"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextHistory.",
+      "target": "./queries/index:PlanContextHistory"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextOptions.",
+      "target": "./queries/index:PlanContextOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export PlanContextResult.",
+      "target": "./queries/index:PlanContextResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export planContext.",
+      "target": "./queries/index:planContext"
+    },
+    {
+      "classification": "additive",
+      "kind": "entry-added",
+      "message": "Added public declaration path ./queries/plan-context.",
+      "target": "./queries/plan-context"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "d37c6227f0187cee132b4eae4803006a45ee4bec8a4c97e502a3976270d3bfeb",
+  "reason": "Restore deprecated plan-context aliases and historical outcome record types for one minor compatibility window.",
+  "schemaVersion": 1
+}

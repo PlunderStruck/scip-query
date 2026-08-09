@@ -1,7 +1,7 @@
 # Agent Exploration Kernel
 
-**Date:** 2026-08-08  
-**Status:** Superseded by [`2026-08-08-open-ended-typed-subgraph-exploration.md`](./2026-08-08-open-ended-typed-subgraph-exploration.md)  
+**Date:** 2026-08-08
+**Status:** Superseded by [`2026-08-08-open-ended-typed-subgraph-exploration.md`](./2026-08-08-open-ended-typed-subgraph-exploration.md)
 **Mission:** Let an agent accurately answer arbitrary questions about an indexed repository using no more exploration tokens than native text-search and source-reading tools.
 
 > **Decision correction:** The proof-obligation and proof-path-selection design below would still require scip-query to infer task relevance and guide the model's next move. The successor plan retains the compact surface, honest evidence, and transport separation, but replaces relevance inference with agent-selected typed subgraph projections and topology-preserving compression. This document remains as decision history.

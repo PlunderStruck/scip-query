@@ -1,7 +1,7 @@
 # Causal Edge Algebra and Current SkipQuery Capabilities
 
-**Status:** Design direction and current-state inventory  
-**Date:** 2026-08-07  
+**Status:** Design direction and current-state inventory
+**Date:** 2026-08-07
 **Purpose:** Define the repository-independent relationship model that should drive accurate, token-efficient exploration, record what SkipQuery can already derive, and identify the machinery still missing.
 
 ## The decision

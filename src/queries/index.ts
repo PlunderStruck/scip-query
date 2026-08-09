@@ -54,6 +54,8 @@ export { decorativeCheckers } from './cleanup/decorative-checkers.js';
 export { testQuality } from './cleanup/test-quality.js';
 export { recentDuplicates } from './cleanup/recent-duplicates.js';
 export { repositoryContext } from './impact/context.js';
+/** @deprecated Use `repositoryContext`. */
+export { planContext } from './impact/plan-context.js';
 export { checkHealthBaseline, collectBaselineFindings, writeHealthBaseline } from './health/health-baseline.js';
 export { checkArchitectureBaseline } from './graph/architecture-baseline.js';
 export {
@@ -390,6 +392,8 @@ export type {
   RepositoryContextSourcePacket,
   RepositoryContextSourceSlice,
 } from './impact/context.js';
+/** @deprecated Use the corresponding `RepositoryContext*` types. */
+export type { PlanContextHistory, PlanContextOptions, PlanContextResult } from './impact/plan-context.js';
 export type {
   BaseContentGitRuntime,
   BaseContentLookupOptions,
@@ -407,3 +411,11 @@ export type {
 export type { RedundantReexport, RedundantReexportActionTier } from './cleanup/redundant-reexports.js';
 export type { AuditDisagreement, AuditQuestionScore, SelfAuditResult } from './quality/self-audit.js';
 export type { SimilarSignatureGroup } from './cleanup/similar-signatures.js';
+/** @deprecated Historical outcome-event record types; the journal itself was retired. */
+export type {
+  OutcomeEvent,
+  OutcomeEventKind,
+  OutcomeObserverAuthority,
+  OutcomeObserverKind,
+  OutcomeObserverProvenance,
+} from './compatibility/outcome-events.js';

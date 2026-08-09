@@ -114,4 +114,3 @@ Add a descriptor-generated exploration manual, a relationship decision table, de
 - Human output contains every material limitation needed to interpret the result.
 - The agent-visible prompt contains no query-count target, anchor fallback, automatic route, or next-symbol recommendation.
 - Held treatment accuracy must not regress. Equal accuracy should cost no more than baseline when practical; a modest token increase is acceptable only for a material, repeatable accuracy gain.
-

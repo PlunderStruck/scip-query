@@ -1,7 +1,7 @@
 # Worktree cache fork validation
 
-Date: 2026-07-29  
-Host: macOS / APFS development machine  
+Date: 2026-07-29
+Host: macOS / APFS development machine
 Package version under test: `scip-query@0.20.0`
 
 ## Question

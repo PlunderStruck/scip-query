@@ -1,6 +1,6 @@
 # Navigation Inference Retirement
 
-**Date:** 2026-08-08  
+**Date:** 2026-08-08
 **Status:** Implementation repaired after held failures; acceptance rerun pending
 **Scope:** Remove inferred task relevance from the canonical exploration path while preserving exact graph facts, explicit projections, lossless compression, and public compatibility.
 

@@ -57,6 +57,12 @@ list. Do not edit the generated manifest or an acceptance record by hand.
 
 - Keep a deprecated export or adapter for at least one minor release before
   removal when a feasible compatibility path exists.
+- When preserving behavior would reintroduce a deliberately retired subsystem,
+  record a versioned compatibility exception beside the API change. The record
+  must name the removed referents, explain why an adapter would give consumers
+  false semantics, preserve any independently useful serialized types, and
+  identify the supported replacement. A generated breaking-change acceptance
+  record alone is not that justification.
 - Add optional fields instead of making old consumers construct new required
   state.
 - Treat parameter optionality, union membership, generic constraints, and

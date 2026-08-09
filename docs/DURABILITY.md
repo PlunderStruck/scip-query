@@ -112,7 +112,6 @@ could not confirm the stronger durability guarantee.
 | Watch refresh request, claim, and completion records | Durable immutable admission and acknowledgement                    | Accepted intent survives activity replacement and owner crashes; exclusive claims may be recovered only by the next lock owner                                                                 |
 | Cache ownership credential                           | Directory-durable where supported                                  | A complete file is flushed privately, hardening is revalidated, the public credential is linked exclusively, and its directory is flushed before detailed publication success                  |
 | npm release state                                    | Directory-durable where supported; file-flushed on bounded hosts   | The registry is freshly reconciled and remains external authority; the local coordinate-pair recovery record reports its exact achieved guarantee                                              |
-| Outcome event                                        | File publication locally; repository-durable only after Git commit | The event becomes shared history through the committed repository record, not merely because a checkout-local file exists                                                                      |
 | TypeScript fragment/overlay manifests                | Visibility-atomic                                                  | Content-addressed cache artifacts are validated and rebuildable                                                                                                                                |
 | Repository GC state                                  | Visibility-atomic                                                  | Sweep history can be reconstructed conservatively                                                                                                                                              |
 | Affected-set shadow latest record                    | Visibility-atomic                                                  | Calibration telemetry does not control publication                                                                                                                                             |
@@ -125,6 +124,13 @@ stable compatibility mirrors, and their crash ordering are defined in
 [Local Index Generations](INDEX_GENERATIONS.md). Durable watch demand,
 idempotency, claim recovery, and acknowledgement ordering are defined in
 [Watch Refresh Requests](WATCH_REFRESH_REQUESTS.md).
+
+The outcome-event journal was retired in version `0.20.0` together with
+autonomous completion state. Current scip-query neither writes nor reads those
+records and therefore makes no current durability claim for them. Git history
+retains the removed repository records; deprecated record-shape types remain
+temporarily available only for consumer-owned historical data. See
+[Workflow API retirement compatibility](api/compatibility/2026-08-09-workflow-retirement.md).
 
 ## Executable crash model
 
