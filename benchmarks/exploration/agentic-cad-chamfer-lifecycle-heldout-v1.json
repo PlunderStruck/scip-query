@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "id": "agentic-cad-chamfer-lifecycle-heldout-v1",
+  "question": "In agentic_cad, what happens end to end when a chamfer is applied to selected geometry: where can the command originate, how is its scope chosen, how does it change and render the body, and how do undo and redo restore it?",
+  "requiredFacts": [
+    {
+      "id": "command-origins",
+      "description": "The face and edge UI controls send ChamferSelected with the current chamfer distance, the clear-edge control sends distance zero, and the agent's chamfer tool requires a numeric distance and produces the same CadCommand.",
+      "answerEvidenceAlternatives": [
+        ["face", "edge", "ChamferSelected", "distance", "zero", "agent"],
+        ["Apply Chamfer", "Clear Edge Op", "0.0", "missing distance"],
+        ["UI", "chamfer tool", "CadCommand", "distance"]
+      ]
+    },
+    {
+      "id": "event-and-selected-body-dispatch",
+      "description": "CommandPlugin registers CadCommand as a Bevy event, OperationsPlugin registers process_chamfer in Update, and that system ignores other variants and applies each chamfer command only to queried ExtrudedBody entities carrying SelectedBody.",
+      "answerEvidenceAlternatives": [
+        ["CommandPlugin", "event", "OperationsPlugin", "process_chamfer", "SelectedBody"],
+        ["add_event", "Update", "other", "continue", "With<SelectedBody>"],
+        ["CadCommand", "Bevy", "selected bodies", "ignores other"]
+      ]
+    },
+    {
+      "id": "selection-precedence",
+      "description": "A nonempty SelectedEdges list wins and its indices are reduced modulo the base-point count; otherwise top or bottom face means every edge, a side face means its modulo-normalized edge, and no sub-selection also means every edge.",
+      "answerEvidenceAlternatives": [
+        ["SelectedEdges", "modulo", "top", "bottom", "side", "all edges"],
+        ["indices", "% n", "SelectedFace::Top", "SelectedFace::Bottom", "SelectedFace::Side"],
+        ["edge selection", "face selection", "no sub-selection", "every edge"]
+      ]
+    },
+    {
+      "id": "edge-op-mutation",
+      "description": "Before mutation process_chamfer clones the complete prior edge_ops vector; it replaces only resolved indices with EdgeOp::Chamfer(distance) when distance is positive or EdgeOp::None when it is zero or negative, preserving both the previous and complete new vectors.",
+      "answerEvidenceAlternatives": [
+        ["previous_ops", "clone", "resolved", "EdgeOp::Chamfer", "EdgeOp::None", "new_ops"],
+        ["only selected", "positive", "zero", "edge_ops"],
+        ["prior vector", "distance", "clear", "new vector"]
+      ]
+    },
+    {
+      "id": "mesh-regeneration",
+      "description": "The body mesh is regenerated from base points, height, and per-edge operations; chamfer inset is capped at 40% of height, adjacent edge insets shape top vertices, the chamfer strip joins side height to the inset top, and the new Mesh replaces the asset behind the body's existing Mesh3d handle.",
+      "answerEvidenceAlternatives": [
+        ["generate_body_mesh", "40%", "adjacent", "chamfer strip", "Mesh3d"],
+        ["h * 0.4", "top_points", "EdgeOp::Chamfer", "meshes.insert"],
+        ["base points", "per-edge", "inset top", "existing mesh handle"]
+      ]
+    },
+    {
+      "id": "history-recording",
+      "description": "After mesh replacement the operation pushes one HistoryEntry::EdgeOp containing the entity plus previous and new operation vectors; push_undo evicts the oldest entry at the 200-entry limit and clears the redo stack before recording the new undo entry.",
+      "answerEvidenceAlternatives": [
+        ["HistoryEntry::EdgeOp", "entity", "previous_ops", "new_ops", "200", "redo"],
+        ["push_undo", "MAX_HISTORY", "pop_front", "redo_stack.clear"],
+        ["history", "previous vector", "new vector", "oldest", "clears redo"]
+      ]
+    },
+    {
+      "id": "undo-redo-application",
+      "description": "Undo queues a deferred EdgeOpUndoCommand with previous_ops and moves the entry to redo; redo queues the same command with new_ops and returns the entry to undo; when applied, the command replaces edge_ops only if the entity still has ExtrudedBody, regenerates its mesh, and updates the existing mesh asset only when the Mesh3d handle and Assets resource are available.",
+      "answerEvidenceAlternatives": [
+        ["undo", "previous_ops", "redo", "new_ops", "EdgeOpUndoCommand", "regenerates"],
+        ["commands.queue", "redo_stack", "undo_stack", "world.get_mut", "meshes.insert"],
+        ["deferred", "entity still exists", "mesh handle", "Assets<Mesh>"]
+      ]
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "chamfer-replaces-body-entity",
+      "answerIncludesAny": [
+        "chamfer despawns and replaces the body entity",
+        "a new body entity is created for each chamfer"
+      ]
+    },
+    {
+      "id": "selection-is-edge-only",
+      "answerIncludesAny": [
+        "chamfer requires an explicitly selected edge",
+        "face and body selection cannot apply chamfer"
+      ]
+    },
+    {
+      "id": "undo-stores-mesh-copy",
+      "answerIncludesAny": ["undo restores a stored mesh snapshot", "history stores the generated Mesh"]
+    }
+  ],
+  "budgets": {
+    "maxToolCalls": 64,
+    "maxSemanticQueries": 64,
+    "maxRenderedCharacters": 500000,
+    "maxNativeExplorationReads": 0
+  }
+}

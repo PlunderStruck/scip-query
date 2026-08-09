@@ -30,6 +30,8 @@ The automatic matcher requires one literal phrase bundle for each fact. It is re
 | meta-harness bash lifecycle | treatment | 3/7 | 3/7 | 411,792 | 57,883 | 96,694 chars | 27 | 0 | 244.7 s |
 | OpenCode session compaction | control | 1/7 | 0/7 | 2,317,547 | 144,272 | 387,388 chars | 26 | 26 | 370.6 s |
 | OpenCode session compaction | treatment | 3/7 | 0/7 | 1,787,958 | 112,664 | 313,594 chars | 50 | 0 | 476.8 s |
+| agentic_cad chamfer lifecycle (Rust) | control | 0/7 | 0/7 | 1,091,236 | 100,783 | 404,004 chars | 19 | 19 | 252.0 s |
+| agentic_cad chamfer lifecycle (Rust) | treatment | 0/7 | 1/7 | 1,167,703 | 83,052 | 159,767 chars | 23 | 0 | 335.3 s |
 
 Relative treatment changes:
 
@@ -38,6 +40,7 @@ Relative treatment changes:
 | TSLint | -47.7% | -34.2% | -75.5% | strict parity | 13 queries instead of 22 reads; 47.6% longer wall time |
 | meta-harness | -53.7% | -51.0% | -71.0% | +1 strict compound fact | 27 queries instead of 13 reads; equal wall time |
 | OpenCode | -22.9% | -21.9% | -19.1% | +2 strict compound facts | 50 queries instead of 26 reads; 28.7% longer wall time |
+| agentic_cad (Rust) | +7.0% | -17.6% | -60.5% | strict parity | 23 queries instead of 19 reads; 33.0% longer wall time |
 
 ## Manual adjudication
 
@@ -80,15 +83,32 @@ Artifacts:
 - `/tmp/opencode-compaction-calibrated-luna-max-control-r1.json`
 - `/tmp/opencode-compaction-calibrated-luna-max-treatment-r1.json`
 
+### agentic_cad (Rust)
+
+Both answers identify the correct end-to-end path: UI and agent command origins, Bevy event handling, edge/face/body selection precedence, per-edge operation mutation, mesh regeneration, and deferred undo/redo. Under the frozen all-conjunct rule, both score 0/7 because every paragraph omits at least one explicit guard or bound. Treatment omissions include the clear-edge UI origin, modulo normalization, the 200-entry history eviction, adjacent-edge maximum inset, and the entity/resource existence guards in the deferred command. Control omissions overlap substantially.
+
+The treatment renders 60.5% less repository evidence and uses 17.6% fewer uncached input tokens, establishing that the Rust semantic/source surface also compresses selected evidence. It nevertheless uses 7.0% more total tokens because it takes more accumulated-context turns. This is strict accuracy parity, not a total-token win.
+
+Artifacts:
+
+- `/tmp/agentic-cad-chamfer-luna-max-control-r1.json`
+- `/tmp/agentic-cad-chamfer-luna-max-treatment-r1.json`
+
+### False-identity collision corpus
+
+The persistent fixture contains `values.push(...)` and `values.slice(...)` inside `transform`, plus unrelated top-level functions named `push` and `slice` in separate files. The packaged CLI indexed the fixture and projected outgoing execution from `transform`; it emitted the local return relationship and no exact execution edge to either unrelated same-leaf function. The focused internal collision suite also passed 15/15 tests.
+
+The packaged check is repeatable with `npm run verify:identity-collision-cli`. Its temporary repository and private cache are removed by the script.
+
 ## What was established
 
-For these three fixed repositories, commits, questions, and Luna-max runs, the calibrated treatment was never less accurate under manual strict adjudication and reduced total tokens by 22.9–53.7%, uncached input by 21.9–51.0%, and rendered repository evidence by 19.1–75.5%. No treatment used native tracked-source exploration, and every sandbox/cache cleanup completed.
+For these four fixed repositories, commits, questions, and Luna-max runs, the calibrated treatment was never less accurate under manual strict adjudication. It reduced uncached input by 17.6–51.0% and rendered repository evidence by 19.1–75.5% in every task. It reduced total tokens by 22.9–53.7% in the three TypeScript tasks and increased them by 7.0% in the Rust task. No treatment used native tracked-source exploration, and every sandbox/cache cleanup completed.
 
 The most plausible causal contribution is that scoped source materialization and statement-complete behavior packets replace broad file reads while preserving selected implementation behavior. That mechanism predicts lower rendered evidence and is directly visible in all three traces. The evidence-audit instruction also changed the final TSLint answer in the predicted direction by preserving cache invalidation that was present but previously omitted.
 
 ## What was not established
 
-- Three task shapes do not prove arbitrary-task or arbitrary-language performance.
+- Four task shapes, including one Rust task, do not prove arbitrary-task or arbitrary-language performance.
 - One control per task and one final treatment per meta-harness/OpenCode task do not characterize Luna variance.
 - The runs do not isolate which calibrated component caused each difference; treatment changes the available surface and its instructions together.
 - The automatic matcher is not a valid sole accuracy gate. Its OpenCode 0/7 scores contradict obvious semantic coverage in both answers.
@@ -99,8 +119,6 @@ The most plausible causal contribution is that scoped source materialization and
 
 Before Phase 8 is complete:
 
-1. Run the false-identity collision benchmark/corpus through the packaged CLI and record that no colliding lexical name becomes an exact compiler identity or executable edge.
-2. Add and run one held task whose primary implementation language is not TypeScript/JavaScript.
-3. Repeat at least the meta-harness and OpenCode treatment/control pairs, or run equivalent independent tasks, to expose variance rather than treating one pair as a stable estimate.
-4. Run formatting, typecheck, lint, API compatibility, architecture, full tests, and packaged-install smoke tests from the final tree.
-5. Preserve the strict manual audit and do not replace it with literal phrase matching.
+1. Repeat at least the meta-harness and OpenCode treatment/control pairs, or run equivalent independent tasks, to expose variance rather than treating one pair as a stable estimate.
+2. Run formatting, typecheck, lint, API compatibility, architecture, full tests, collision verification, and packaged-install smoke tests from the final tree.
+3. Preserve the strict manual audit and do not replace it with literal phrase matching.
