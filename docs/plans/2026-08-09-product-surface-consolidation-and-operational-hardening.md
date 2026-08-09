@@ -201,6 +201,18 @@ Record per pair: strict material facts, total tokens, uncached input, output whe
 - Retired TLA artifacts have an explicit keep/remove decision and no stale ownership ambiguity.
 - Final tests, package smoke tests, operational soaks, and benchmark records pass from the exact committed tree.
 
+## Final validation record
+
+- Formatting, ESLint, build, declaration generation, API manifest, public consumer, and skill-link checks pass.
+- The bounded-worker full suite passes: 2,373/2,373 tests across 290 files.
+- Architecture maps 477/477 files across 37/37 declared boundaries with no forbidden dependency edge.
+- The packed 0.20.0 artifact contains 399 files and ten bundled skill files; it contains no retired diff-gate or `FindingOutcomeLedger` artifact.
+- The exact packed artifact is installed globally at `/opt/homebrew/bin/scip-query`; its version, compact default help, complete `--help-all`, fifteen installed skill links, project status, and an exact source search were smoke-tested successfully.
+- The live project index reports a current incremental generation with 14 affected documents, nine changed documents, and a current SCIP companion.
+- Temporary package staging, benchmark worktrees, benchmark-private caches, generated health dossiers, and synthetic suppression probes were removed after their checks.
+
 ## Deferred register
 
-Nothing is deferred at program start. A later deferral must name the verified blocking fact, the affected public behavior, and the condition that permits resumption.
+The matched held benchmark remains the release blocker. Treatment recovered 22/56 strict facts versus control's 19/56 in aggregate, but one Luna TypeScript open-ended pair lost 2/7 versus 3/7. Treatment also used 59.3% more total tokens, 3.7% more uncached input, and 31.2% more output, despite rendering 39.3% fewer evidence characters and making 15.3% fewer exploration calls. The complete per-pair record is `docs/benchmarks/2026-08-09-product-surface-final-matrix.md`.
+
+Do not publish a new npm release from this result. Resume only with a preregistered cross-repository hypothesis that can recover omitted terminal outcomes without restoring task-relevance inference; rerun the full held matrix rather than accepting an aggregate that hides a losing pair.
