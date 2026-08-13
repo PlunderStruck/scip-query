@@ -8,6 +8,7 @@ import { deriveCarrierDiscriminators } from './carrier-discriminators.js';
 import { composeHttpMountsWithCoverage } from './http-mounts.js';
 import { propagateCompilerResolvedHttpSummaries } from './http-summaries.js';
 import { deriveDatabaseWorkQueueObservations } from './database-work-queues.js';
+import { deduplicateFrontiers } from './frontiers.js';
 import type {
   BoundaryEvidenceStrength,
   BoundaryFrontier,
@@ -482,12 +483,6 @@ function groupHasAmbiguousCounterpart(group: BoundaryRelationGroup): boolean {
   if (!rule?.requireUniquePair) return false;
   const fromIds = rule.linkFrom === 'declaration' ? group.declarationIds : group.producerIds;
   return fromIds.length > 0 && group.consumerIds.length > 0 && (fromIds.length !== 1 || group.consumerIds.length !== 1);
-}
-
-function deduplicateFrontiers(frontiers: readonly BoundaryFrontier[]): BoundaryFrontier[] {
-  return [...new Map(frontiers.map((frontier) => [frontier.observationId, frontier])).values()].sort((left, right) =>
-    left.observationId.localeCompare(right.observationId),
-  );
 }
 
 function resolvedKeys(observation: BoundaryObservation, keyNames: readonly string[]): BoundaryKeyPart[] | null {

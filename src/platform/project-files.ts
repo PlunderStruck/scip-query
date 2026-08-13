@@ -22,7 +22,7 @@ import {
   UnsafeProjectPathError,
 } from '../domain/path-normalization.js';
 import type { SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
-import { hashFileWithinLimit } from './bounded-file.js';
+import { assertNonNegativeByteLimit, hashFileWithinLimit } from '../filesystem/bounded-file.js';
 import {
   projectSnapshotFile,
   projectSnapshotFingerprint,
@@ -231,12 +231,6 @@ export function projectFileExists(projectRoot: string, candidatePath: string): b
   } catch (error) {
     if (isMissingProjectFileError(error)) return false;
     throw error;
-  }
-}
-
-function assertNonNegativeByteLimit(maxBytes: number): void {
-  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
-    throw new RangeError(`maxBytes must be a non-negative safe integer; received ${maxBytes}`);
   }
 }
 

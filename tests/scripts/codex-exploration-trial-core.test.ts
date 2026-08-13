@@ -154,9 +154,9 @@ describe('Codex exploration trial core', () => {
   it('delegates exploration semantics to installed repository guidance', () => {
     const prompt = treatmentPrompt('How does the path work?');
     expect(prompt).toContain('scip-query as the only repository exploration surface');
-    expect(prompt).toContain('installed scip-query guidance');
-    expect(prompt).toContain('Query count is measurement only');
-    expect(prompt).toContain('update the answer instead of querying again');
+    expect(prompt).toContain('installed scip-query skill and generated repository guidance');
+    expect(prompt).not.toContain('Query count is measurement only');
+    expect(prompt).not.toContain('update the answer instead of querying again');
     expect(prompt).not.toContain('target of 4 queries');
     expect(prompt).not.toContain('First run scip-query status');
     expect(prompt).not.toContain('Prefer one batched query');
@@ -169,7 +169,7 @@ describe('Codex exploration trial core', () => {
   it('supports prompt ablations without leaking task-specific navigation', () => {
     const minimal = minimalTreatmentPrompt('How does the path work?');
     expect(minimal).toContain('scip-query as the only repository exploration surface');
-    expect(minimal).toContain('installed scip-query guidance');
+    expect(minimal).toContain('installed scip-query skill and generated repository guidance');
     expect(minimal).not.toContain('exactly one initial locator');
 
     const disciplined = disciplinedControlPrompt('How does the path work?');
@@ -182,9 +182,9 @@ describe('Codex exploration trial core', () => {
   it('supports direct graph navigation without requiring anchor discovery', () => {
     const prompt = directGraphTreatmentPrompt('How does the path work?');
 
-    expect(prompt).toContain('installed scip-query guidance');
+    expect(prompt).toContain('installed scip-query skill and generated repository guidance');
     expect(prompt).toContain('use the explicit evidence family and direction');
-    expect(prompt).toContain('Query count is measurement only');
+    expect(prompt).not.toContain('Query count is measurement only');
     expect(prompt).not.toContain('The normal exploration budget is');
     expect(prompt).not.toContain("scip-query evidence --symbol '<first>'");
     expect(prompt).not.toContain("Run the chosen set's printed system-map command unchanged");

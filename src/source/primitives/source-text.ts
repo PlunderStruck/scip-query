@@ -30,6 +30,14 @@ export function getSourceText(db: ScipDatabase, relativePath: string): string {
   });
 }
 
+/** Split source text into lines without a trailing empty line from a final newline. */
+export function splitSearchableSourceLines(text: string): string[] {
+  if (text.length === 0) return [];
+  const lines = text.split('\n');
+  if (text.endsWith('\n')) lines.pop();
+  return lines;
+}
+
 export function getSourceLines(db: ScipDatabase, relativePath: string): readonly string[] {
   const normalized = relativePath.replace(/\\/g, '/');
   return SOURCE_LINES_CACHE.get(db, normalized, () => {

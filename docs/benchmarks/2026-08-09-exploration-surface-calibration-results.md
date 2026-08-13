@@ -139,6 +139,34 @@ Artifacts:
 - `/tmp/opencode-compaction-calibrated-sol-medium-control-r1.json`
 - `/tmp/opencode-compaction-calibrated-sol-medium-treatment-r1.json`
 
+## Capability-manual skill rewrite follow-up
+
+The exploration skill was then rewritten as a command/question manual: it removed the private evidence ledger and final-answer audit, retained exact syntax plus relationship-family questions, and told the agent that scip-query is a set of explicit controls rather than a relevance oracle. The treatment prompt was reduced to isolation constraints so the installed skill, rather than duplicated harness instructions, owned exploration behavior.
+
+All four runs below used `gpt-5.6-sol` at `medium` reasoning, the frozen OpenCode definition and commit `1a8e94dc8e7462d3d0d860e1337b448c71947f6b`, detached worktrees, and automatic sandbox/private-cache cleanup. The native control was run once because treatment-only skill edits cannot affect it. Each treatment row is a distinct skill revision, not a repeated sample of one revision.
+
+| Condition | Manual strict | Automatic | Total tokens | Uncached input | Rendered evidence | Exploration calls | Native reads | Duration |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Fresh native control | 2/7 | 1/7 | 488,534 | 67,935 | 164,161 chars | 9 | 9 | 119.2 s |
+| Capability manual v1 | 0/7 | 0/7 | 1,038,896 | 92,075 | 268,448 chars | 49 | 0 | 277.8 s |
+| Capability manual v2 | 2/7 | 1/7 | 892,662 | 68,180 | 160,553 chars | 26 | 0 | 243.5 s |
+| Capability manual v3 | 0/7 | 1/7 | 1,125,614 | 95,235 | 165,441 chars | 37 | 0 | 277.9 s |
+
+Manual strict adjudication follows the frozen compound-fact rule rather than the literal matcher. The control and v2 treatment completely state queued compaction work and bounded retained-tail selection. Their other sections are substantively useful but omit at least one frozen conjunct: the no-context-limit threshold branch; cloned-history plugin transformation; the successful `tail_start_id` update and `compaction_continue` marker; explicit durable-history retention; or the pruning scan's skill-result protection, 20,000-token eligibility threshold, and stop conditions.
+
+The v1 and v3 treatments selected the real but different `packages/core` V2 implementation and relegated the rubric's `packages/opencode` implementation to a coverage note. They therefore receive no strict legacy-path fact credit even where the two implementations share constants or broad behavior. The automatic matcher credits v3's shared 20,000-token vocabulary, demonstrating again that phrase bundles cannot distinguish two semantically different implementations.
+
+The v2 instruction that commands are controls rather than a checklist and that competing implementations must be distinguished reduced the first treatment by 46.9% in calls, 40.2% in rendered evidence, and 14.1% in total tokens while restoring strict parity. Against native control, however, v2 still used 82.7% more total tokens and 188.9% more exploration calls; uncached input was effectively equal (+0.4%) and rendered evidence was slightly lower (-2.2%). A further locator-reuse wording change did not reproduce the selection improvement and was reverted.
+
+This follow-up does not establish that the capability-manual rewrite is an improvement. It establishes a narrower failure: when two genuine implementations share vocabulary, skill prose alone did not reliably cause Sol medium to identify the product-active path, and a failed candidate-only connecting projection did not close that gap. The next discriminating work belongs in the exploration surface's entry/caller/runtime evidence and recovery, not additional task-specific skill wording. The v2 skill remains an uncommitted experiment pending broader evidence.
+
+Artifacts:
+
+- `/tmp/opencode-session-compaction-capability-manual-control-sol-medium.json`
+- `/tmp/opencode-session-compaction-capability-manual-treatment-sol-medium.json`
+- `/tmp/opencode-session-compaction-capability-manual-v2-treatment-sol-medium.json`
+- `/tmp/opencode-session-compaction-capability-manual-v3-treatment-sol-medium.json`
+
 ## What was established
 
 For these four fixed repositories, commits, questions, and Luna-max runs, aggregate manual strict accuracy is non-inferior. Individual-run variance is real: the second meta-harness treatment loses one strict fact against its paired control, but the two-run means are equal; OpenCode treatment is equal or better in both pairs. Every pair lowers uncached input and rendered repository evidence. Every TypeScript pair lowers total tokens; the Rust pair increases total tokens by 7.0% while lowering uncached input by 17.6% and rendered evidence by 60.5%. No treatment used native tracked-source exploration, and every sandbox/cache cleanup completed.

@@ -34,8 +34,56 @@ describe('evidence command freshness', () => {
     expect(dependencies.reindex).not.toHaveBeenCalled();
   });
 
-  it('waits inside the evidence command for an accepted watcher refresh', async () => {
-    const dependencies = fixtureDependencies([freshness('stale'), freshness('fresh')]);
+  it('answers from a stale readable index without waiting or starting a second reindex', async () => {
+    const dependencies = fixtureDependencies([freshness('stale')]);
+
+    await expect(ensureEvidenceCommandFreshness(workspace(), dependencies)).resolves.toMatchObject({
+      source: 'stale',
+    });
+
+    expect(dependencies.requestRefresh).toHaveBeenCalledOnce();
+    expect(dependencies.wait).not.toHaveBeenCalled();
+    expect(dependencies.reindex).not.toHaveBeenCalled();
+  });
+
+  it('does not start a competing reindex when the watcher is paused over a stale index', async () => {
+    const dependencies = fixtureDependencies([freshness('stale')], 'budget-paused');
+
+    await expect(ensureEvidenceCommandFreshness(workspace(), dependencies)).resolves.toMatchObject({
+      source: 'stale',
+    });
+
+    expect(dependencies.requestRefresh).toHaveBeenCalledOnce();
+    expect(dependencies.wait).not.toHaveBeenCalled();
+    expect(dependencies.reindex).not.toHaveBeenCalled();
+  });
+
+  it('does not wait on the cache lock when a rebuild is already running over a readable index', async () => {
+    const dependencies = fixtureDependencies([freshness('stale')], 'indexing');
+
+    await expect(ensureEvidenceCommandFreshness(workspace(), dependencies)).resolves.toMatchObject({
+      source: 'stale',
+    });
+
+    expect(dependencies.reindex).not.toHaveBeenCalled();
+  });
+
+  it('still rebuilds when the stale generation requires repair and the watcher is idle', async () => {
+    const dependencies = fixtureDependencies([
+      freshness('stale', 'SQLite generation requires repair: generation checksum drifted'),
+      freshness('fresh'),
+    ]);
+
+    await expect(
+      ensureEvidenceCommandFreshness(workspace(), dependencies, { waitMs: 0 }),
+    ).resolves.toMatchObject({ source: 'synchronous-reindex' });
+
+    expect(dependencies.requestRefresh).toHaveBeenCalledOnce();
+    expect(dependencies.reindex).toHaveBeenCalledOnce();
+  });
+
+  it('waits for a missing index only until the watcher publishes one', async () => {
+    const dependencies = fixtureDependencies([freshness('missing'), freshness('fresh')]);
 
     await expect(
       ensureEvidenceCommandFreshness(workspace(), dependencies, { waitMs: 20, pollMs: 10 }),
@@ -46,16 +94,22 @@ describe('evidence command freshness', () => {
     expect(dependencies.reindex).not.toHaveBeenCalled();
   });
 
-  it('falls back immediately when the watcher resource budget is paused', async () => {
-    const dependencies = fixtureDependencies([freshness('stale'), freshness('fresh')], 'budget-paused');
+  it('fails fast when no readable index exists and the watcher is already rebuilding', async () => {
+    const dependencies = fixtureDependencies([freshness('missing')], 'indexing');
 
-    await expect(ensureEvidenceCommandFreshness(workspace(), dependencies)).resolves.toMatchObject({
-      source: 'synchronous-reindex',
-    });
+    await expect(ensureEvidenceCommandFreshness(workspace(), dependencies)).rejects.toThrow(
+      'index remained missing (missing fixture) while the watcher is indexing',
+    );
+    expect(dependencies.reindex).not.toHaveBeenCalled();
+  });
 
-    expect(dependencies.requestRefresh).toHaveBeenCalledOnce();
-    expect(dependencies.wait).not.toHaveBeenCalled();
-    expect(dependencies.reindex).toHaveBeenCalledOnce();
+  it('fails fast when no readable index exists and the watcher budget is paused', async () => {
+    const dependencies = fixtureDependencies([freshness('missing')], 'budget-paused');
+
+    await expect(ensureEvidenceCommandFreshness(workspace(), dependencies)).rejects.toThrow(
+      'index remained missing (missing fixture) while the watcher is budget-paused',
+    );
+    expect(dependencies.reindex).not.toHaveBeenCalled();
   });
 
   it('uses the same synchronous fallback when the watch service cannot start', async () => {
@@ -71,7 +125,7 @@ describe('evidence command freshness', () => {
   });
 
   it('fails in the same command with the refresh cause instead of delegating recovery to the agent', async () => {
-    const dependencies = fixtureDependencies([freshness('stale')], 'failed');
+    const dependencies = fixtureDependencies([freshness('missing')], 'failed');
     vi.mocked(dependencies.reindex).mockRejectedValueOnce(new Error('indexer unavailable'));
 
     await expect(ensureEvidenceCommandFreshness(workspace(), dependencies)).rejects.toThrow(
@@ -97,7 +151,7 @@ function workspace() {
 
 function fixtureDependencies(
   freshnessStates: IndexFreshness[],
-  serviceState: 'idle' | 'budget-paused' | 'failed' = 'idle',
+  serviceState: 'idle' | 'budget-paused' | 'indexing' | 'failed' = 'idle',
 ): EvidenceCommandFreshnessDependencies {
   let now = 0;
   const nextFreshness = vi.fn(() => freshnessStates.shift() ?? freshness('stale'));
@@ -120,7 +174,9 @@ function fixtureDependencies(
                       rebuilt: 3,
                       estimatedWriteBytes: 1_000,
                     }
-                  : { state: 'idle' },
+                  : serviceState === 'indexing'
+                    ? { state: 'indexing', startedAt: 1 }
+                    : { state: 'idle' },
             },
           } as ReturnType<EvidenceCommandFreshnessDependencies['ensureService']>),
     ),
@@ -134,11 +190,11 @@ function fixtureDependencies(
   };
 }
 
-function freshness(state: IndexFreshness['state']): IndexFreshness {
+function freshness(state: IndexFreshness['state'], reason = `${state} fixture`): IndexFreshness {
   return {
     state,
     checkedAt: '2026-08-01T00:00:00.000Z',
     metaPath: '/cache/meta.json',
-    reason: `${state} fixture`,
+    reason,
   };
 }

@@ -1,4 +1,4 @@
 interface:
   display_name: 'SCIP Plan'
   short_description: 'Write concise repository-grounded implementation plans'
-  default_prompt: 'Use $scip-plan to write a concise evidence-backed implementation plan.'
+  default_prompt: 'Use $scip-plan to explore the relevant system with scip-query and write a concise implementation plan grounded in exact symbol and file/line references.'

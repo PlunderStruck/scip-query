@@ -1,5 +1,5 @@
-import { statSync } from 'node:fs';
-import { basename, isAbsolute, join, relative } from 'node:path';
+import { existsSync, lstatSync, readFileSync, statSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { watch } from 'chokidar';
 import ignore from 'ignore';
 import type {
@@ -58,6 +58,8 @@ export interface ReindexRunRequest {
   clojureConfigPath?: string;
   indexerConcurrency?: number;
   trigger: RefreshTrigger;
+  /** When false, skip full language indexers and keep the previous shard. Default true. */
+  allowExpensiveRebuild?: boolean;
 }
 
 export interface ReindexWorkerLaunch {
@@ -176,6 +178,11 @@ export class Watcher {
   private sourcePollingFallbackStarted = false;
   private gitPollTimer: WatchTimer | null = null;
   private lastGitState: GitStateSnapshot | null = null;
+  /** When unset, idle Git polls read HEAD/index from the filesystem instead of spawning git. */
+  private preferFilesystemGitState = true;
+  private watchGitLayout: WatchGitLayout | null = null;
+  /** Project-relative cache directory; ignored so reindex artifacts do not wake the watcher. */
+  private localCacheWatchPath: string | undefined;
   private gitignoreFilter: ReturnType<typeof createGitignoreFilter>;
   private extraIgnore: ReturnType<typeof ignore>;
   private stopped = false;
@@ -185,6 +192,8 @@ export class Watcher {
     this.config = opts.config;
     this.watchConfig = resolveWatchConfig(opts.config);
     this.outputDb = opts.outputDb ?? join(resolveCacheDirPath(this.projectRoot, opts.config), 'index.db');
+    this.preferFilesystemGitState = opts.gitReader === undefined;
+    this.localCacheWatchPath = localCacheWatchPath(this.projectRoot, dirname(this.outputDb));
     this.languages = opts.languages;
     this.pnpmWorkspaces = opts.config.indexer?.typescript?.pnpmWorkspaces ?? false;
     this.typescriptProjectMode = opts.config.indexer?.typescript?.projectMode;
@@ -294,9 +303,10 @@ export class Watcher {
   private startSourceWatcher(usePolling = false): void {
     const watcher = this.subscriptionFactory(this.projectRoot, {
       ignoreInitial: true,
-      ignored: (path, stats) => this.isIgnoredWatchPath(path, stats?.isDirectory() ?? false),
-      usePolling,
-      ...(usePolling ? { interval: 500, binaryInterval: 1_000 } : {}),
+        ignored: (path, stats) => this.isIgnoredWatchPath(path, stats?.isDirectory() ?? false),
+        usePolling,
+        ignorePermissionErrors: true,
+      ...(usePolling ? { interval: 5_000, binaryInterval: 10_000 } : {}),
     });
     watcher.on('all', (event, path) => {
       if (!this.stopped && event !== 'addDir' && event !== 'unlinkDir') this.handleFileChange(path);
@@ -324,9 +334,9 @@ export class Watcher {
   private isIgnoredWatchPath(path: string, isDirectory: boolean): boolean {
     const relativePath = this.relativeWatchPath(path);
     if (!relativePath) return false;
+    if (isCheapIgnoredWatchPath(relativePath, this.localCacheWatchPath)) return true;
 
     const candidate = isDirectory ? `${relativePath}/` : relativePath;
-    if (candidate === '.git/' || candidate.startsWith('.git/')) return true;
     return this.gitignoreFilter.isIgnored(candidate) || this.extraIgnore.ignores(candidate);
   }
 
@@ -334,7 +344,7 @@ export class Watcher {
     // Filter: skip gitignored files and extra ignore patterns
     const rel = this.relativeWatchPath(filename);
     if (!rel || rel === '..' || rel.startsWith('../')) return;
-    if (rel === '.git' || rel.startsWith('.git/')) return;
+    if (isCheapIgnoredWatchPath(rel, this.localCacheWatchPath)) return;
     if (this.gitignoreFilter.isIgnored(rel)) return;
     if (this.extraIgnore.ignores(rel)) return;
     // Skip the index files themselves
@@ -403,7 +413,8 @@ export class Watcher {
     if (this.reindexInFlight || this.stopped) return;
 
     const budget = this.inspectBudget();
-    if (budget.state === 'paused') {
+    const allowExpensiveRebuild = budget.state !== 'paused';
+    if (budget.state === 'paused' && budget.reason !== 'rebuild-count') {
       this.dirty = true;
       const until = Math.max(this.wallNow() + 1, budget.until);
       this.setStatus({
@@ -455,7 +466,7 @@ export class Watcher {
     this.setStatus({ state: 'indexing', startedAt });
 
     // Run reindex in a child process so it doesn't block the watcher
-    const operation = this.reindexRunner.start(this.reindexRequest(trigger));
+    const operation = this.reindexRunner.start(this.reindexRequest(trigger, allowExpensiveRebuild));
     this.activeOperation = operation;
     operation.completion
       .then((durationMs) => {
@@ -591,19 +602,20 @@ export class Watcher {
     }
   }
 
-  private reindexRequest(trigger: RefreshTrigger): ReindexRunRequest {
-    return {
-      projectRoot: this.projectRoot,
-      config: this.config,
-      languages: this.languages,
-      pnpmWorkspaces: this.pnpmWorkspaces,
-      typescriptProjectMode: this.typescriptProjectMode,
-      typescriptProjects: this.typescriptProjects,
-      clojureConfigPath: this.clojureConfigPath,
-      indexerConcurrency: this.indexerConcurrency,
-      trigger,
-    };
-  }
+    private reindexRequest(trigger: RefreshTrigger, allowExpensiveRebuild = true): ReindexRunRequest {
+      return {
+        projectRoot: this.projectRoot,
+        config: this.config,
+        languages: this.languages,
+        pnpmWorkspaces: this.pnpmWorkspaces,
+        typescriptProjectMode: this.typescriptProjectMode,
+        typescriptProjects: this.typescriptProjects,
+        clojureConfigPath: this.clojureConfigPath,
+        indexerConcurrency: this.indexerConcurrency,
+        trigger,
+        allowExpensiveRebuild,
+      };
+    }
 
   private setStatus(status: WatcherStatus): void {
     this.status = status;
@@ -643,6 +655,7 @@ export class Watcher {
   }
 
   private pollGitState(): void {
+    if (this.reindexInFlight || this.stopped) return;
     const previous = this.lastGitState;
     const next = this.readGitState();
     if (!previous || !next || this.stopped) {
@@ -695,26 +708,31 @@ export class Watcher {
   }
 
   private readGitState(): GitStateSnapshot | null {
+    if (this.preferFilesystemGitState) {
+      const filesystem = this.readFilesystemGitState();
+      if (filesystem) return filesystem;
+    }
+    return this.readGitStateFromGit();
+  }
+
+  private readFilesystemGitState(): GitStateSnapshot | null {
+    const layout = this.watchGitLayout ?? resolveWatchGitLayout(this.projectRoot);
+    if (!layout) return null;
+    this.watchGitLayout = layout;
+    const head = readWatchGitHeadOid(layout.gitDir);
+    if (!head) return null;
+    return gitStateFromIndexPath(head, layout.indexPath);
+  }
+
+  private readGitStateFromGit(): GitStateSnapshot | null {
     const gitReader = watcherInputState(this).gitReader;
     const rawIndexPath = gitOutput(this.projectRoot, ['rev-parse', '--git-path', 'index'], gitReader);
     if (!rawIndexPath) return null;
     const indexPath = resolveGitPath(this.projectRoot, rawIndexPath);
-
-    const snapshot: GitStateSnapshot = {
-      head: gitOutput(this.projectRoot, ['rev-parse', '--verify', 'HEAD'], gitReader),
+    return gitStateFromIndexPath(
+      gitOutput(this.projectRoot, ['rev-parse', '--verify', 'HEAD'], gitReader),
       indexPath,
-    };
-
-    try {
-      const indexStat = statSync(indexPath);
-      snapshot.indexMtimeMs = indexStat.mtimeMs;
-      snapshot.indexSize = indexStat.size;
-    } catch {
-      snapshot.indexMtimeMs = undefined;
-      snapshot.indexSize = undefined;
-    }
-
-    return snapshot;
+    );
   }
 
   private clearGitPollTimer(): void {
@@ -832,6 +850,7 @@ export function resolveReindexWorkerLaunch(
       SCIP_REINDEX_CLOJURE_CONFIG_PATH: latestClojure?.configPath ?? clojureConfigPath ?? '',
       SCIP_REINDEX_TRIGGER_KIND: trigger.kind,
       SCIP_REINDEX_TRIGGER_DETAIL: trigger.detail ?? '',
+      SCIP_REINDEX_ALLOW_EXPENSIVE: request.allowExpensiveRebuild === false ? '0' : '1',
       SCIP_REINDEX_PROCESS_GROUP_LEADER: '1',
       SCIP_REINDEX_PARENT_IDENTITY: JSON.stringify(parentIdentity),
     },
@@ -956,6 +975,118 @@ function isFileDescriptorLimitError(error: unknown): boolean {
     (error instanceof Error && 'code' in error && error.code === 'EMFILE') ||
     String(error).includes('EMFILE: too many open files')
   );
+}
+
+interface WatchGitLayout {
+  gitDir: string;
+  indexPath: string;
+}
+
+const GIT_OBJECT_ID = /^[0-9a-f]{40,64}$/i;
+
+export function isCheapIgnoredWatchPath(relativePath: string, cacheRelativePath?: string): boolean {
+  if (relativePath === '.git' || relativePath.startsWith('.git/')) return true;
+  if (
+    relativePath === 'node_modules' ||
+    relativePath.startsWith('node_modules/') ||
+    relativePath.endsWith('/node_modules') ||
+    relativePath.includes('/node_modules/')
+  ) {
+    return true;
+  }
+  return (
+    cacheRelativePath !== undefined &&
+    (relativePath === cacheRelativePath || relativePath.startsWith(`${cacheRelativePath}/`))
+  );
+}
+
+export function resolveWatchGitLayout(projectRoot: string): WatchGitLayout | null {
+  const marker = join(projectRoot, '.git');
+  try {
+    const stats = lstatSync(marker);
+    let gitDir: string;
+    if (stats.isDirectory()) {
+      gitDir = marker;
+    } else if (stats.isFile()) {
+      const match = /^gitdir:\s*(.+)\s*$/m.exec(readFileSync(marker, 'utf8'));
+      if (!match?.[1]) return null;
+      const rawGitDir = match[1].trim();
+      gitDir = isAbsolute(rawGitDir) ? rawGitDir : resolve(projectRoot, rawGitDir);
+    } else {
+      return null;
+    }
+    if (!existsSync(gitDir)) return null;
+    return { gitDir, indexPath: join(gitDir, 'index') };
+  } catch {
+    return null;
+  }
+}
+
+export function readWatchGitHeadOid(gitDir: string): string | undefined {
+  let head: string;
+  try {
+    head = readFileSync(join(gitDir, 'HEAD'), 'utf8').trim();
+  } catch {
+    return undefined;
+  }
+  if (GIT_OBJECT_ID.test(head)) return head.toLowerCase();
+  const ref = /^ref:\s*(.+)$/.exec(head)?.[1]?.trim();
+  if (!ref) return undefined;
+  const commonDir = readGitCommonDir(gitDir);
+  return readGitRefOid(gitDir, ref) ?? readGitRefOid(commonDir, ref) ?? readPackedGitRefOid(commonDir, ref);
+}
+
+function readGitCommonDir(gitDir: string): string {
+  try {
+    const raw = readFileSync(join(gitDir, 'commondir'), 'utf8').trim();
+    if (!raw) return gitDir;
+    return isAbsolute(raw) ? raw : resolve(gitDir, raw);
+  } catch {
+    return gitDir;
+  }
+}
+
+function readGitRefOid(directory: string, ref: string): string | undefined {
+  try {
+    const oid = readFileSync(join(directory, ref), 'utf8').trim();
+    return GIT_OBJECT_ID.test(oid) ? oid.toLowerCase() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readPackedGitRefOid(commonDir: string, ref: string): string | undefined {
+  try {
+    for (const line of readFileSync(join(commonDir, 'packed-refs'), 'utf8').split('\n')) {
+      if (line.startsWith('#') || line.startsWith('^')) continue;
+      const separator = line.indexOf(' ');
+      if (separator === -1) continue;
+      const oid = line.slice(0, separator);
+      if (line.slice(separator + 1).trim() === ref && GIT_OBJECT_ID.test(oid)) return oid.toLowerCase();
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+function gitStateFromIndexPath(head: string | undefined, indexPath: string): GitStateSnapshot {
+  const snapshot: GitStateSnapshot = { head, indexPath };
+  try {
+    const indexStat = statSync(indexPath);
+    snapshot.indexMtimeMs = indexStat.mtimeMs;
+    snapshot.indexSize = indexStat.size;
+  } catch {
+    snapshot.indexMtimeMs = undefined;
+    snapshot.indexSize = undefined;
+  }
+  return snapshot;
+}
+
+function localCacheWatchPath(projectRoot: string, cacheDir: string): string | undefined {
+  const relativePath = relative(projectRoot, cacheDir).replaceAll('\\', '/');
+  if (!relativePath || relativePath === '..' || relativePath.startsWith('../')) return undefined;
+  return relativePath;
 }
 
 function positiveDuration(value: number, label: string): number {

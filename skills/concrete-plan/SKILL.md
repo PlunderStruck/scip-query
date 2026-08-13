@@ -5,4 +5,4 @@ description: Compatibility alias for the canonical scip-plan skill. Use only whe
 
 # Concrete Plan compatibility alias
 
-This name remains for a transition period so existing agent prompts do not fail. Apply `$scip-plan`; it contains the current evidence-backed planning workflow and current scip-query command contracts. Do not combine the two skills.
+This name remains for a transition period so existing agent prompts do not fail. Apply `$scip-plan`; it contains the canonical command/question manual and code-grounded planning format. Do not combine the two skills.

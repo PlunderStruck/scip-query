@@ -6,7 +6,6 @@ import type { CommandDescriptor } from '../src/runtime/command-kit/command-descr
 import {
   explorationControlManualRows,
   renderExplorationManualAgentLines,
-  renderExplorationManualMarkdown,
   renderExplorationSkillGuideMarkdown,
 } from '../src/runtime/command-kit/exploration-manual.js';
 import { commandOperationRoles } from '../src/runtime/command-operation.js';
@@ -49,18 +48,20 @@ function replaceGeneratedBlock(path: string, label: string, content: string): vo
 
 // ── Per-skill command allowlist (Plan 3, 19.1) ─────────────────────────────
 //
-// Each skill's SKILL.md frontmatter may declare a `commands:` list of exact
-// invocation templates, e.g.:
+// Each skill's SKILL.md frontmatter may declare a `metadata.commands:` list of
+// exact invocation templates, e.g.:
 //
-//   commands:
-//     - template: "scip-query twin-drift -s <scope> --json"
-//       when: "Run the detector over the group's scope."
+//   metadata:
+//     commands:
+//       - template: "scip-query twin-drift -s <scope> --json"
+//         when: "Run the detector over the group's scope."
 //
 // This generator validates every template's base command and flags against
 // `commandDescriptors` (unknown command/flag fails the build — the same
 // guarantee the full catalog has) and renders a marker-delimited
 // "## Commands for this skill" block into the skill body. Skills without a
-// `commands:` key are skipped.
+// `metadata.commands:` key are skipped. The parser still accepts the former
+// top-level key so an older installed skill can be regenerated during upgrade.
 
 export interface SkillCommandEntry {
   template: string;
@@ -94,21 +95,31 @@ export function parseSkillCommands(raw: string, sourceLabel: string): SkillComma
   if (!frontmatterMatch) return [];
   const frontmatter = frontmatterMatch[1] ?? '';
   const lines = frontmatter.split('\n');
-  const startIndex = lines.findIndex((line) => /^commands:\s*$/.test(line));
+  const topLevelStart = lines.findIndex((line) => /^commands:\s*$/.test(line));
+  const metadataStart = lines.findIndex((line) => /^metadata:\s*$/.test(line));
+  const metadataCommandsStart =
+    metadataStart === -1
+      ? -1
+      : lines.findIndex((line, index) => index > metadataStart && /^  commands:\s*$/.test(line));
+  const startIndex = topLevelStart !== -1 ? topLevelStart : metadataCommandsStart;
   if (startIndex === -1) return [];
+  const commandIndent = lines[startIndex]?.match(/^\s*/)?.[0].length ?? 0;
+  const entryIndent = ' '.repeat(commandIndent + 2);
+  const propertyIndent = ' '.repeat(commandIndent + 4);
 
   const entries: SkillCommandEntry[] = [];
   let current: Partial<SkillCommandEntry> | null = null;
   for (const line of lines.slice(startIndex + 1)) {
-    if (/^\S/.test(line)) break; // dedent — next top-level frontmatter key
+    const lineIndent = line.match(/^\s*/)?.[0].length ?? 0;
+    if (line.trim().length > 0 && lineIndent <= commandIndent) break;
     // Quote style is not ours to control here: `npm run format` (prettier's
     // YAML formatter) rewrites frontmatter string quoting per-line — single
     // quotes by default, double only when the value itself contains an
     // apostrophe (e.g. "the model's Next relation"). Both quote styles must
     // parse, or a plain `prettier --write` silently empties a skill's
     // commands list (this once broke a routed TLA+ skill preview row).
-    const templateMatch = line.match(/^  - template:\s*(?:"(.*)"|'(.*)')\s*$/);
-    const whenMatch = line.match(/^    when:\s*(?:"(.*)"|'(.*)')\s*$/);
+    const templateMatch = line.match(new RegExp(`^${entryIndent}- template:\\s*(?:"(.*)"|'(.*)')\\s*$`));
+    const whenMatch = line.match(new RegExp(`^${propertyIndent}when:\\s*(?:"(.*)"|'(.*)')\\s*$`));
     if (templateMatch) {
       if (current?.template) entries.push(finishSkillCommandEntry(current, sourceLabel));
       current = { template: templateMatch[1] ?? templateMatch[2] };
@@ -199,13 +210,13 @@ export function renderAgentContractCatalogMarkdown(
 export function renderSkillCommandsMarkdown(commands: readonly SkillCommandEntry[]): string {
   const rows = [
     SKILL_COMMANDS_BEGIN,
-    '## Commands for this skill',
+    '## Command and question manual',
     '',
-    '| Command | When |',
+    '| Command syntax | Question it answers |',
     '| --- | --- |',
     ...commands.map((entry) => `| \`${entry.template}\` | ${escapeSkillTableCell(entry.when)} |`),
     '',
-    "Use this shortlist first. Run a command's `--help` only when a named uncertainty needs another option.",
+    "These commands are controls, not a checklist. Use every capability needed by the task, but make each query answer a distinct question. There is no required sequence or query limit. Run a command's `--help` when you need a flag not shown in its template.",
     SKILL_COMMANDS_END,
   ];
   return rows.join('\n');
@@ -238,15 +249,17 @@ if (!isTestImport && process.argv.includes('--write')) {
     join(process.cwd(), 'src/runtime/generated-agent-command-catalog.ts'),
     renderAgentSetupCommandCatalogSource(commandDescriptors),
   );
-  replaceGeneratedBlock(
-    join(process.cwd(), 'skills/scip-query/SKILL.md'),
-    'EXPLORATION MANUAL',
-    [
-      '<!-- BEGIN GENERATED EXPLORATION MANUAL -->',
-      renderExplorationSkillGuideMarkdown(commandDescriptors),
-      '<!-- END GENERATED EXPLORATION MANUAL -->',
-    ].join('\n'),
-  );
+  for (const skill of ['scip-query', 'scip-plan']) {
+    replaceGeneratedBlock(
+      join(process.cwd(), 'skills', skill, 'SKILL.md'),
+      'EXPLORATION MANUAL',
+      [
+        '<!-- BEGIN GENERATED EXPLORATION MANUAL -->',
+        renderExplorationSkillGuideMarkdown(commandDescriptors),
+        '<!-- END GENERATED EXPLORATION MANUAL -->',
+      ].join('\n'),
+    );
+  }
   writeSkillCommandBlocks(join(process.cwd(), 'skills'));
 } else if (!isTestImport) {
   console.log(generated);

@@ -1,5 +1,6 @@
 import { getReExports, getSourceImports } from '../../language-parsers/index.js';
 import { getAst } from '../../source/ast/ast-core.js';
+import { unwrapExpression, walkNamedSyntax as walk } from '../../source/ast/ast-callables.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
 import type { ScipDatabase } from '../../storage/db.js';
@@ -227,17 +228,6 @@ function findVariableInitializer(root: SyntaxNode, name: string): SyntaxNode | n
   return result;
 }
 
-function unwrapExpression(input: SyntaxNode): SyntaxNode {
-  let node = input;
-  while (
-    ['as_expression', 'satisfies_expression', 'type_assertion', 'parenthesized_expression'].includes(node.type) &&
-    node.namedChildren.length > 0
-  ) {
-    node = node.namedChildren[0]!;
-  }
-  return node;
-}
-
 function propertyName(node: SyntaxNode | null | undefined): string | null {
   return node?.text.replace(/^['"`]|['"`]$/gu, '') ?? null;
 }
@@ -248,9 +238,4 @@ function compactExpression(value: string): string {
 
 function deduplicateDefinitions(values: readonly IndexedDefinition[]): IndexedDefinition[] {
   return [...new Map(values.map((value) => [value.symbol, value])).values()];
-}
-
-function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {
-  visit(node);
-  for (const child of node.namedChildren) walk(child, visit);
 }

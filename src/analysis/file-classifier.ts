@@ -24,7 +24,7 @@ import { isExplicitPackageSurfaceFile, isPackageSurfaceFile } from './package-su
 import { isRustPublicLibrarySymbol } from './rust-package-surface.js';
 import { classifyFile } from '../source/primitives/file-kind.js';
 
-export { classifyFile, type FileKind } from '../source/primitives/file-kind.js';
+export { classifyFile, fileKindRank, type FileKind } from '../source/primitives/file-kind.js';
 
 // ── Convenience predicates ───────────────────────────────────────
 

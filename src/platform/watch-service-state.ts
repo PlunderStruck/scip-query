@@ -227,6 +227,7 @@ function validReindexActivitySummary(value: unknown): value is ReindexActivitySu
     !isValidWatchServiceTimestamp(summary.windowEndedAt) ||
     !isNonNegativeInteger(summary.runs) ||
     !isNonNegativeInteger(summary.rebuilt) ||
+    (summary.fullRebuilds !== undefined && !isNonNegativeInteger(summary.fullRebuilds)) ||
     !isNonNegativeInteger(summary.reused) ||
     !isNonNegativeInteger(summary.failed) ||
     !isNonNegativeInteger(summary.suppressed) ||

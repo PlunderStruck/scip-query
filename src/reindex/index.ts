@@ -152,6 +152,8 @@ export interface ReindexOptions {
   indexerConcurrency?: number;
   /** Source that requested this refresh, persisted for status and setup diagnostics. */
   trigger?: RefreshTrigger;
+  /** When false, skip full language indexers after incremental misses. Default true. */
+  allowExpensiveRebuild?: boolean;
   /** Cancel this reindex and every bounded child process. */
   signal?: AbortSignal;
 }
@@ -970,13 +972,28 @@ async function runLanguageIndexersForFreshReindex(
       : null;
   const incrementallyIndexed = new Set<SupportedLanguage>(incrementalTypeScript ? ['typescript'] : []);
 
+  if (opts.opts.allowExpensiveRebuild === false) {
+    for (const language of opts.languages) {
+      if (reused.has(language) || incrementallyIndexed.has(language)) continue;
+      const info = classification.get(language);
+      if (info && existsSync(info.scipPath)) {
+        reusableOutputs.push({ language, scipPath: info.scipPath });
+        reused.add(language);
+        opts.onStatus(
+          `Skipping expensive ${language} full rebuild because the watch full-rebuild budget is exhausted.`,
+        );
+      }
+    }
+  }
+
   // Plan6 per-project TS shard caching (2.2): only relevant when the whole
   // typescript language shard missed in workspace mode — an untouched
   // typescript language shard already proves every project unchanged
   // (invariant: the language fingerprint covers the same files every
   // project's fingerprint is built from), so the classification below is
   // skipped entirely on that path (today's behavior, untouched).
-  const tsProjectShards = incrementalTypeScript ? undefined : planTypeScriptProjectShardReuse(opts, classification);
+  const tsProjectShards =
+    incrementalTypeScript || reused.has('typescript') ? undefined : planTypeScriptProjectShardReuse(opts, classification);
 
   const {
     preparedRuns: preparedRunsAll,

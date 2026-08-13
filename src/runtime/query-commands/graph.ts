@@ -22,6 +22,8 @@ import {
   withJsonOption,
 } from '../command-kit/command-spec-builders.js';
 import { GRAPH_EVIDENCE_FAMILIES } from '../../domain/graph-exploration-contract.js';
+import { groupBy } from '../../domain/group-by.js';
+import { compareSystemMapDrilldownSymbols } from '../../domain/system-map-origin-rank.js';
 import { REPOSITORY_OBSERVATION_OPERATION } from '../command-operation.js';
 import {
   budgetedTableCommand,
@@ -1443,8 +1445,8 @@ function shellArgument(value: string): string {
 }
 
 function printSystemMapChildFiles(region: ReturnType<typeof queries.systemMap>['regions'][number]): void {
-  const symbolsByFile = groupMapValues(region.symbols, (symbol) => symbol.file);
-  const hitsByFile = groupMapValues(region.literalHits, (hit) => hit.file);
+    const symbolsByFile = groupBy(region.symbols, (symbol) => symbol.file);
+    const hitsByFile = groupBy(region.literalHits, (hit) => hit.file);
   const relationsByFile = new Map<string, typeof region.relations>();
   for (const relation of region.relations) {
     for (const file of new Set([relation.fromFile, relation.toFile])) {
@@ -1545,37 +1547,6 @@ function compactSystemMapRelationEvidence(value: string): string {
       'indexed-or-source-reference': 'R',
     }[value] ?? value
   );
-}
-
-function groupMapValues<T>(values: readonly T[], keyFor: (value: T) => string): Map<string, T[]> {
-  const grouped = new Map<string, T[]>();
-  for (const value of values) {
-    const key = keyFor(value);
-    const bucket = grouped.get(key) ?? [];
-    bucket.push(value);
-    grouped.set(key, bucket);
-  }
-  return grouped;
-}
-
-function compareSystemMapDrilldownSymbols(
-  left: ReturnType<typeof queries.systemMap>['regions'][number]['symbols'][number],
-  right: ReturnType<typeof queries.systemMap>['regions'][number]['symbols'][number],
-): number {
-  return (
-    systemMapOriginRank(left.origins) - systemMapOriginRank(right.origins) ||
-    left.depth - right.depth ||
-    left.startLine - right.startLine ||
-    left.shortName.localeCompare(right.shortName)
-  );
-}
-
-function systemMapOriginRank(origins: readonly string[]): number {
-  if (origins.includes('symbol-anchor')) return 0;
-  if (origins.includes('literal-owner')) return 1;
-  if (origins.some((origin) => origin.startsWith('boundary-import:'))) return 2;
-  if (origins.includes('reference-owner')) return 3;
-  return 4;
 }
 
 function summarizeMapValues(values: readonly string[], limit: number): string {

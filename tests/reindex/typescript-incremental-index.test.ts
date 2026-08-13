@@ -67,7 +67,7 @@ describe('TypeScript incremental index eligibility', () => {
           files: [...input.currentSnapshot.files, { path: 'src/added.ts', size: 1, hash: 'added' }],
         },
       }),
-      reason: 'change is not a modified TypeScript source file',
+      reason: 'TypeScript project membership changed',
     },
     {
       label: 'missing graph',
@@ -82,6 +82,44 @@ describe('TypeScript incremental index eligibility', () => {
   ])('falls back for $label', ({ mutate, reason }) => {
     const result = planTypeScriptIncrementalUpdate(mutate(fixture()));
     expect(result).toEqual({ eligible: false, reason });
+  });
+
+  test('ignores non-compiler inputs when the TypeScript delta is only modified source files', () => {
+    const previous = snapshot({ a: 'a1', b: 'b1', config: 'c1' });
+    const current = snapshot({ a: 'a2', b: 'b1', config: 'c1' });
+    const result = planTypeScriptIncrementalUpdate({
+      projectMode: 'single',
+      previousSnapshot: {
+        ...previous,
+        files: [...previous.files, { path: 'README.md', size: 1, hash: 'readme-1' }],
+      },
+      currentSnapshot: {
+        ...current,
+        files: [...current.files, { path: 'README.md', size: 1, hash: 'readme-2' }],
+      },
+      projectFiles: ['src/a.ts', 'src/b.ts'],
+      graph: new Map([['src/b.ts', new Set(['src/a.ts'])]]),
+      producerIdentity: 'scip-typescript:0.4.0:test',
+      rootTsconfigExists: true,
+    });
+
+    expect(result.eligible).toBe(true);
+    if (!result.eligible) return;
+    expect(result.plan.changedFiles).toEqual(['src/a.ts']);
+  });
+
+  test('falls back when tsconfig changes alongside modified TypeScript source', () => {
+    const result = planTypeScriptIncrementalUpdate({
+      projectMode: 'single',
+      previousSnapshot: snapshot({ a: 'a1', b: 'b1', config: 'c1' }),
+      currentSnapshot: snapshot({ a: 'a2', b: 'b1', config: 'c2' }),
+      projectFiles: ['src/a.ts', 'src/b.ts'],
+      graph: new Map([['src/b.ts', new Set(['src/a.ts'])]]),
+      producerIdentity: 'scip-typescript:0.4.0:test',
+      rootTsconfigExists: true,
+    });
+
+    expect(result).toEqual({ eligible: false, reason: 'TypeScript fragment project identity changed' });
   });
 
   test('partitions a cross-project closure and carries changed dependencies into each compiler request', () => {

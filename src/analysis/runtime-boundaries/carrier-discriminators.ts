@@ -1,4 +1,10 @@
 import type { IndexedDefinition } from '../../domain/types.js';
+import {
+  callableParameterNames as callableParameterNamesFromNode,
+  smallestCoveringCallable,
+  unwrapExpression,
+  walkNamedSyntax as walk,
+} from '../../source/ast/ast-callables.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import { getSourceFiles } from '../../source/primitives/source-fileset.js';
 import { getSourceText } from '../../source/primitives/source-text.js';
@@ -65,10 +71,6 @@ export function deriveCarrierDiscriminators(
     filesInspected: bodySummaryCollection.filesInspected,
     errors,
   };
-}
-
-export function collectBodySummaries(db: ScipDatabase, errors: string[] = []): Map<string, BodyCallableSummary> {
-  return collectBodySummaryResult(db, errors).summaries;
 }
 
 function collectBodySummaryResult(db: ScipDatabase, errors: string[]): BodySummaryCollectionResult {
@@ -477,29 +479,6 @@ function callableParameterNames(context: BoundaryFileContext, definition: Indexe
   return callable ? callableParameterNamesFromNode(callable) : [];
 }
 
-function callableParameterNamesFromNode(callable: SyntaxNode): Array<string | null> {
-  const parameters =
-    callable.childForFieldName('parameters') ?? callable.namedChildren.find((child) => /parameters/u.test(child.type));
-  return parameters?.namedChildren.map(parameterName) ?? [];
-}
-
-function parameterName(node: SyntaxNode): string | null {
-  if (node.type === 'identifier') return node.text;
-  const named = node.childForFieldName('name') ?? node.childForFieldName('pattern');
-  if (named) return parameterName(named);
-  return node.namedChildren.find((child) => child.type === 'identifier')?.text ?? null;
-}
-
-function smallestCoveringCallable(root: SyntaxNode, startLine: number, endLine: number): SyntaxNode | null {
-  let match: SyntaxNode | null = null;
-  walk(root, (node) => {
-    if (!/(?:function|method|lambda)/u.test(node.type) && node.type !== 'arrow_function') return;
-    if (node.startPosition.row > startLine || node.endPosition.row < endLine) return;
-    if (!match || node.endIndex - node.startIndex < match.endIndex - match.startIndex) match = node;
-  });
-  return match;
-}
-
 function smallestNodeCoveringLine(root: SyntaxNode, line: number): SyntaxNode | null {
   let match: SyntaxNode | null = null;
   walk(root, (node) => {
@@ -559,17 +538,6 @@ function pairValue(pair: SyntaxNode): SyntaxNode | null {
   return pair.childForFieldName('value') ?? pair.namedChild(1);
 }
 
-function unwrapExpression(input: SyntaxNode): SyntaxNode {
-  let node = input;
-  while (
-    ['as_expression', 'satisfies_expression', 'type_assertion', 'parenthesized_expression'].includes(node.type) &&
-    node.namedChildren.length > 0
-  ) {
-    node = node.namedChildren[0]!;
-  }
-  return node;
-}
-
 function addReferencedParameters(node: SyntaxNode, parameters: readonly (string | null)[], output: Set<string>): void {
   const identifiers = new Set(node.text.match(/[A-Za-z_$][\w$]*/gu) ?? []);
   for (const parameter of parameters) if (parameter && identifiers.has(parameter)) output.add(parameter);
@@ -589,9 +557,4 @@ function escapeRegExp(value: string): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {
-  visit(node);
-  for (const child of node.namedChildren) walk(child, visit);
 }

@@ -1,5 +1,10 @@
 import { getSourceImports } from '../../language-parsers/index.js';
 import { getAst } from '../../source/ast/ast-core.js';
+import {
+  smallestCoveringCallable,
+  unwrapExpression,
+  walkNamedSyntax as walk,
+} from '../../source/ast/ast-callables.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
@@ -418,30 +423,4 @@ function objectMemberValue(object: SyntaxNode, property: string): SyntaxNode | n
     return pair.childForFieldName('value') ?? pair.namedChild(1);
   }
   return null;
-}
-
-function unwrapExpression(input: SyntaxNode): SyntaxNode {
-  let node = input;
-  while (
-    ['as_expression', 'satisfies_expression', 'type_assertion', 'parenthesized_expression'].includes(node.type) &&
-    node.namedChildren.length > 0
-  ) {
-    node = node.namedChildren[0]!;
-  }
-  return node;
-}
-
-function smallestCoveringCallable(root: SyntaxNode, startLine: number, endLine: number): SyntaxNode | null {
-  let match: SyntaxNode | null = null;
-  walk(root, (node) => {
-    if (!/(?:function|method|lambda)/u.test(node.type) && node.type !== 'arrow_function') return;
-    if (node.startPosition.row > startLine || node.endPosition.row < endLine) return;
-    if (!match || node.endIndex - node.startIndex < match.endIndex - match.startIndex) match = node;
-  });
-  return match;
-}
-
-function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {
-  visit(node);
-  for (const child of node.namedChildren) walk(child, visit);
 }

@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto';
 import type { IndexedDefinition } from '../../domain/types.js';
+import {
+  callableParameterNames,
+  smallestCoveringCallable,
+  walkNamedSyntax as walk,
+} from '../../source/ast/ast-callables.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
@@ -11,6 +16,7 @@ import {
 import { forwardedCallerParameterPositions, parameterValueFlowAtCall } from '../../symbols/graph/value-flow.js';
 import { boundaryFileContext, createBoundaryObservation, type BoundaryFileContext } from './extractors.js';
 import { evaluateStaticValue as evaluateBoundaryValue } from '../../symbols/graph/static-value-flow.js';
+import { deduplicateFrontiers } from './frontiers.js';
 import { runtimeBoundarySourceScope } from './source-scope.js';
 import type { BoundaryFrontier, BoundaryKeyPart, BoundaryObservation, BoundarySourceLocation } from './types.js';
 
@@ -150,12 +156,6 @@ function httpCallResolutionFrontier(summary: HttpCallableSummary, site: Unresolv
     missingKeyParts: missingKeyParts.length > 0 ? missingKeyParts : ['call'],
     sourceScope: runtimeBoundarySourceScope(site.file),
   };
-}
-
-function deduplicateFrontiers(frontiers: readonly BoundaryFrontier[]): BoundaryFrontier[] {
-  return [...new Map(frontiers.map((frontier) => [frontier.observationId, frontier])).values()].sort((left, right) =>
-    left.observationId.localeCompare(right.observationId),
-  );
 }
 
 function instantiateSummaryAtCall(
@@ -332,29 +332,6 @@ function addReferencedParameters(
   }
 }
 
-function callableParameterNames(callable: SyntaxNode): Array<string | null> {
-  const parameters =
-    callable.childForFieldName('parameters') ?? callable.namedChildren.find((child) => /parameters/u.test(child.type));
-  return parameters?.namedChildren.map(parameterName) ?? [];
-}
-
-function parameterName(node: SyntaxNode): string | null {
-  if (node.type === 'identifier') return node.text;
-  const named = node.childForFieldName('name') ?? node.childForFieldName('pattern');
-  if (named) return parameterName(named);
-  return node.namedChildren.find((child) => child.type === 'identifier')?.text ?? null;
-}
-
-function smallestCoveringCallable(root: SyntaxNode, startLine: number, endLine: number): SyntaxNode | null {
-  let match: SyntaxNode | null = null;
-  walk(root, (node) => {
-    if (!/(?:function|method|lambda)/u.test(node.type) && node.type !== 'arrow_function') return;
-    if (node.startPosition.row > startLine || node.endPosition.row < endLine) return;
-    if (!match || node.endIndex - node.startIndex < match.endIndex - match.startIndex) match = node;
-  });
-  return match;
-}
-
 function callArguments(node: SyntaxNode): SyntaxNode[] {
   const args = node.childForFieldName('arguments') ?? node.namedChildren.find((child) => child.type === 'arguments');
   return args?.namedChildren ?? [];
@@ -370,9 +347,4 @@ function uniqueSortedNumbers(values: readonly number[]): number[] {
 
 function uniqueSortedStrings(values: readonly string[]): string[] {
   return [...new Set(values)].sort();
-}
-
-function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {
-  visit(node);
-  for (const child of node.namedChildren) walk(child, visit);
 }

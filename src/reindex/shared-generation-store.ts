@@ -506,10 +506,13 @@ export function hydrateSharedGeneration(input: {
   now?: () => Date;
   action?: WorktreeCacheLease['lastAction'];
   persistLease?: boolean;
+  lockWaitMs?: number;
 }): void {
   const generationDir = sharedGenerationDirectory(input.snapshot);
   mkdirSync(input.targetCacheDir, { recursive: true });
-  const hydrationLock = acquireProcessFileLock(join(input.targetCacheDir, 'cache-lifecycle.lock'), { waitMs: 30_000 });
+  const hydrationLock = acquireProcessFileLock(join(input.targetCacheDir, 'cache-lifecycle.lock'), {
+    waitMs: input.lockWaitMs ?? 30_000,
+  });
   if (!hydrationLock) throw new Error('timed out waiting for another cache hydration');
   let stagingDir: string | undefined;
   let rollback: HydrationRollback | undefined;
@@ -593,8 +596,26 @@ export function prepareSharedGenerationForProject(
     const context = resolvedContext ?? resolveGitWorktreeContext(projectRoot);
     if (!context) return { kind: 'missed', reason: 'Git worktree identity is unavailable' };
     if (!context.clean) {
-      writeManagedWorktreeLease(context, paths.cacheDir, 'missed', undefined, 'worktree has uncommitted changes');
-      return { kind: 'missed', reason: 'worktree has uncommitted changes' };
+      if (existsSync(paths.dbPath)) {
+        writeManagedWorktreeLease(context, paths.cacheDir, 'missed', undefined, 'worktree has uncommitted changes');
+        return { kind: 'missed', reason: 'worktree has uncommitted changes' };
+      }
+      const languages = config.languages ?? detectLanguages(projectRoot);
+      const baseline = findSharedBaselineGeneration(context, languages, configFingerprintOptions(config));
+      if (!baseline) {
+        writeManagedWorktreeLease(context, paths.cacheDir, 'missed', undefined, 'worktree has uncommitted changes');
+        return { kind: 'missed', reason: 'worktree has uncommitted changes' };
+      }
+      hydrateSharedGeneration({
+        snapshot: baseline.snapshot,
+        manifest: baseline.manifest,
+        targetCacheDir: paths.cacheDir,
+        targetProjectRoot: projectRoot,
+        persistLease: false,
+        lockWaitMs: 0,
+      });
+      writeWorktreeOverlayLease(baseline.snapshot, paths.cacheDir);
+      return { kind: 'overlay' };
     }
     const languages = config.languages ?? detectLanguages(projectRoot);
     const fingerprint = buildProjectInputFingerprint(projectRoot, languages, configFingerprintOptions(config));

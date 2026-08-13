@@ -6,7 +6,13 @@ import { fileURLToPath } from 'node:url';
 const IS_WINDOWS = platform() === 'win32';
 export const BUILTIN_SKILLS = ['scip-query', 'scip-plan', 'scip-setup'] as const;
 export const COMPATIBILITY_SKILLS = ['scip-explore', 'concrete-plan'] as const;
-const INSTALLABLE_SKILLS = [...BUILTIN_SKILLS, ...COMPATIBILITY_SKILLS] as const;
+export const INSTALLABLE_SKILLS = [
+  'scip-query',
+  'scip-plan',
+  'scip-setup',
+  'scip-explore',
+  'concrete-plan',
+] as const;
 // ── Skills Installation ────────────────────────────────────
 
 export interface InstallSkillsResult {

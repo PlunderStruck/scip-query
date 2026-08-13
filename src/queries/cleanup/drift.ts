@@ -374,12 +374,12 @@ function isLikelyTypeOnlyDep(dep: string): boolean {
 
 function hasSemanticImportUse(db: ScipDatabase, file: string, dep: string): boolean {
   const imports = semanticImportUsage(db, file).filter((entry) => entry.sourcePath === dep);
-  return imports.length > 0 && imports.some((entry) => entry.isUsed);
+    return imports.some((entry) => entry.isUsed);
 }
 
 function hasUsedSourceImport(db: ScipDatabase, file: string, dep: string): boolean {
   const imports = getSourceImports(db, file).filter((entry) => entry.sourcePath === dep);
-  return imports.length > 0 && imports.some((entry) => entry.used);
+    return imports.some((entry) => entry.used);
 }
 
 function isTypeOnlyImport(db: ScipDatabase, file: string, dep: string): boolean {

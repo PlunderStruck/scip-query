@@ -8,7 +8,7 @@ import {
   type BehaviorSignal,
   type BehaviorSkeleton,
 } from '../../source/facts/behavior-skeleton.js';
-import { classifyFile, type FileKind } from '../../source/primitives/file-kind.js';
+import { classifyFile, fileKindRank, type FileKind } from '../../source/primitives/file-kind.js';
 import { getSourceLines } from '../../source/primitives/source-text.js';
 import { resolveIndexedFile } from '../internal/file-resolution.js';
 import { evidence, type EvidenceOptions, type EvidenceResult } from './evidence.js';
@@ -730,19 +730,6 @@ function compareCandidates(left: CandidateUnit, right: CandidateUnit): number {
     fileKindRank(classifyFile(left.relativePath)) - fileKindRank(classifyFile(right.relativePath)) ||
     left.sequence - right.sequence
   );
-}
-
-function fileKindRank(kind: FileKind): number {
-  switch (kind) {
-    case 'entry':
-    case 'source':
-    case 'worker':
-      return 0;
-    case 'barrel':
-      return 1;
-    case 'test':
-      return 2;
-  }
 }
 
 interface SelectionCandidate {

@@ -68,6 +68,12 @@ export interface ReindexActivitySummary {
   windowEndedAt: string;
   runs: number;
   rebuilt: number;
+  /**
+   * Rebuilt runs whose language shards used a full indexer. Incremental SQLite
+   * patches do not consume automatic rebuild slots. Absent on legacy watch-state
+   * records; budget evaluation then falls back to `rebuilt`.
+   */
+  fullRebuilds?: number;
   reused: number;
   failed: number;
   suppressed: number;

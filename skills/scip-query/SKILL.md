@@ -1,33 +1,34 @@
 ---
 name: scip-query
 description: Use FIRST for codebase work when compiler-resolved identity, runtime boundaries, callers, dependencies, consumers, architecture, change impact, or cleanup relationships can affect the answer. It exposes exact referents, explicit typed-graph projections, and source evidence; it does not infer task relevance.
-commands:
-  - template: 'scip-query search <text>'
-    when: 'Locate exact repository text, a runtime key, or a compiler symbol; use `scip-query search -- <text>` when the literal starts with a dash.'
-  - template: 'scip-query outline <file>'
-    when: 'Locate compiler-owned constructs in a known file.'
-  - template: 'scip-query entrypoints <text>'
-    when: 'Locate an external callable root when its entry surface is known.'
-  - template: 'scip-query evidence --symbol <symbol> --edge <family> --direction <direction> --depth <n> --max-edges <n>'
-    when: 'Project explicitly selected typed relationships from one exact root.'
-  - template: 'scip-query inspect --at <file:line> --view behavior'
-    when: 'Read connected behavior for a named implementation gap.'
-  - template: 'scip-query code <selector>'
-    when: 'Read exact source only when syntax itself can change the decision.'
-  - template: 'scip-query diff-impact'
-    when: 'Map changed symbols and downstream consumers after an edit.'
-  - template: 'scip-query architecture'
-    when: 'Validate declared structural boundaries.'
-  - template: 'scip-query health --full'
-    when: 'Run configured cleanup and quality detectors.'
+metadata:
+  commands:
+    - template: 'scip-query search <text>'
+      when: 'Locate exact repository text, a runtime key, or a compiler symbol; use `scip-query search -- <text>` when the literal starts with a dash.'
+    - template: 'scip-query outline <file>'
+      when: 'Locate compiler-owned constructs in a known file.'
+    - template: 'scip-query entrypoints <text>'
+      when: 'Locate an external callable root when its entry surface is known.'
+    - template: 'scip-query evidence --symbol <symbol> --edge <family> --direction <direction> --depth <n> --max-edges <n>'
+      when: 'Project explicitly selected typed relationships from one exact root.'
+    - template: 'scip-query inspect --at <file:line> --view behavior'
+      when: 'Read connected behavior for a named implementation gap.'
+    - template: 'scip-query code <selector>'
+      when: 'Read exact source only when syntax itself can change the decision.'
+    - template: 'scip-query diff-impact'
+      when: 'Map changed symbols and downstream consumers after an edit.'
+    - template: 'scip-query architecture'
+      when: 'Validate declared structural boundaries.'
+    - template: 'scip-query health --full'
+      when: 'Run configured cleanup and quality detectors.'
 ---
 
 # scip-query
 
 <!-- BEGIN GENERATED SKILL COMMANDS -->
-## Commands for this skill
+## Command and question manual
 
-| Command | When |
+| Command syntax | Question it answers |
 | --- | --- |
 | `scip-query search <text>` | Locate exact repository text, a runtime key, or a compiler symbol; use \`scip-query search -- <text>\` when the literal starts with a dash. |
 | `scip-query outline <file>` | Locate compiler-owned constructs in a known file. |
@@ -39,7 +40,7 @@ commands:
 | `scip-query architecture` | Validate declared structural boundaries. |
 | `scip-query health --full` | Run configured cleanup and quality detectors. |
 
-Use this shortlist first. Run a command's `--help` only when a named uncertainty needs another option.
+These commands are controls, not a checklist. Use every capability needed by the task, but make each query answer a distinct question. There is no required sequence or query limit. Run a command's `--help` when you need a flag not shown in its template.
 <!-- END GENERATED SKILL COMMANDS -->
 
 <!-- BEGIN GENERATED EXPLORATION MANUAL -->
@@ -64,18 +65,14 @@ Use exact evidence as an observed fact only within its coverage. Derived evidenc
 The controls above are complete for ordinary exploration. Run `scip-query capabilities --matrix` only when a named claim depends on uncertain provider support; do not run it for routine orientation.
 <!-- END GENERATED EXPLORATION MANUAL -->
 
-scip-query is a repository exploration surface: an indexed code reader that joins exact current text to compiler-owned constructs, typed relationships, compressed behavior, exact source, and recoverable omissions. It performs the graph or read operation the agent selects; it does not infer task relevance, choose a subsystem, or decide that the user's question is complete.
+scip-query is a repository exploration surface: an indexed code reader that joins exact current text to compiler-owned identities and typed relationships. Native text and file tools expose matches and slices; scip-query additionally exposes how code units call, carry data, cross runtime boundaries, observe or change state, occur in order, satisfy contracts, share identity, contain one another, and depend on one another. It performs the control you select; it does not infer task relevance or decide what the user meant.
 
-An exploration is a code-reading investigation that builds a source-supported causal account of the behavior the user asked about. It connects the initiating input, the code that owns it, the decisions that alter it, the state and effects it produces, and the consumers that observe those effects. The goal is an accurate answer at the resolution the request requires; a short or inexpensive exploration that leaves a known material gap is incomplete.
+Use scip-query as the primary exploration surface for tracked repository text. Treat its commands as controls, not a checklist. Use every capability needed by the task, but make each query answer a distinct repository question. There is no mandatory sequence, required anchor phase, or query-count limit. Thoroughness means understanding the relevant system end to end, not exhausting the repository.
 
-Before querying, reduce the request to a small private evidence ledger. Each row is a concrete fact whose condition, outcome, or qualifier could change the answer. Mark it `unresolved`, then change it only to `established` with exact evidence, `unsupported` with the specific provider limitation, or `excluded` with the reason it cannot change the answer. Do not use one row for an entire function or owner: when a selected material unit has several behavior-changing branches or terminal outcomes, give each one its own row so a generic verb such as “deduplicates,” “validates,” or “reconciles” cannot hide distinct behavior. For an end-to-end explanation, ask what initiates the path; who owns and receives it; which predicates, authorization checks, bounds, or sibling branches change it; how data is reshaped; which runtime boundaries it crosses; which durable state or external effects change and in what order; what result or notification is observed; and what retry, rollback, cleanup, or later repair follows failure. These are completeness questions, not assumed stages.
+Use one discriminating exact `search`, `outline`, or `entrypoints` locator, then reuse every returned symbol or `file:line` as an `evidence` root. Do not repeat generic synonym searches after usable candidates exist. Locator ordering does not establish relevance. When several implementations match the same vocabulary, do not select one by path, naming, apparent recency, or result order. Compare their entry surfaces, incoming execution, ownership, callers, or runtime connections; if the repository does not establish one as authoritative, explain the alternatives and their scopes.
 
-Accuracy determines when to stop. Query count, elapsed time, and token cost determine how to gather evidence efficiently; they never make a known recoverable material claim optional.
+An evidence projection accepts repeated `--symbol`, `--at`, or `--search` roots and repeated `--edge <family>` flags; always choose `--direction incoming|outgoing|both`, `--depth <n>`, and `--max-edges <n>` explicitly. Use `--subtype <subtype>` to narrow a family, `--connecting` when the selected roots themselves must be connected, and `--inventory-only` when counts alone can choose the next bounded projection.
 
-Locate the smallest owner or entry with `search`, `outline`, or `entrypoints`; choose the relationship and direction that can establish each ledger row; batch compatible roots into `evidence`; then use one batched `inspect` or exact `code` read only for named implementation gaps. There is no anchor-discovery phase or mandatory map. A locator presents exact candidates but does not rank their relevance. Do not locate every ledger row independently: a symbol or file/line returned by the first successful locator is already a graph root. When the question supplies several exact literals or independent participants, pass repeated `--search`, `--symbol`, or `--at` selectors directly to one `evidence` command. Do not run `capabilities` or command help merely to orient yourself; the command table and templates above are the normal operating manual.
+Read each command's request, observed facts, evidence calibration, coverage, and recovery together. Exact observations are facts only within their reported coverage. Derived observations are deterministic computations. Candidate observations require confirmation. Missing or bounded output is not evidence of absence. Follow a relevant printed recovery or unchanged `Continue exactly:` command when its omitted information matters.
 
-Read request, observed facts, calibration, coverage, and recovery together. After every packet, update the ledger and preserve material conditions, outcomes, bounds, defaults, invocation arguments, ownership, lifetime, state-transition order, loop-stopping conditions, and sibling branches. A completed bounded projection is not a completed user task. Continue while a material fact remains unresolved and an exact in-scope recovery path exists; query count is never a correctness cutoff. Before every new query, check whether the missing fact is already present in an earlier packet; if it is, update the ledger or draft instead of querying again. Treat rendered source as already read, batch independent gaps, and run an unchanged `Continue exactly:` command until transport completes. Do not inspect tests, documentation, or examples after current implementation source has established the fact unless a named ambiguity specifically requires corroboration.
-
-Before answering, compare the draft to the selected statement-complete behavior—not merely to a remembered narrative. Audit the final answer itself against every established ledger row: explicitly state each material condition, outcome, qualifier, bound, sibling branch, and failure/cleanup behavior instead of relying on implication or a citation to carry an omitted clause. Preserve every observed behavior-changing predicate, returned default, separately merged field, cache invalidation, and cleanup effect that is material to the question. When two named fields use different merge or lifecycle operations, do not collapse them into a generic word such as “properties.” If the evidence already contains a missing detail, repair the answer; do not reopen exploration.
-
-Use scip-query rather than a parallel grep/read workflow for tracked text. Native tools are for edits, checks, binary content, or an explicitly reported unsupported gap. After edits, use `diff-impact` when consumers matter, `architecture` for declared boundaries, and `health` for quality or cleanup analysis.
+`inspect --view behavior` returns connected behavior for named units; `code` returns exact source. Treat source rendered by either command as already read. Batch independent roots and source gaps when practical. Use native tools only for edits, checks, binary content, or a specific unsupported gap reported by scip-query. After edits, use `diff-impact` when downstream consumers matter, `architecture` for declared boundaries, and `health` for configured quality or cleanup detectors.

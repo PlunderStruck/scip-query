@@ -5,4 +5,4 @@ description: Compatibility alias for the canonical scip-query exploration skill.
 
 # SCIP Explore compatibility alias
 
-This name remains for a transition period so existing agent prompts do not fail. Apply `$scip-query`; it now contains the complete evidence-ledger, typed-relationship, gap-reading, coverage, and final-audit workflow. Do not combine the two skills or treat this alias as a separate exploration phase.
+This name remains for a transition period so existing agent prompts do not fail. Apply `$scip-query`; it contains the canonical command/question manual, typed-relationship controls, source-reading controls, and coverage semantics. Do not combine the two skills or treat this alias as a separate exploration phase.

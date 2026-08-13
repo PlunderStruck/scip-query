@@ -47,6 +47,7 @@ describe('reindex activity', () => {
             id: 'typescript',
             language: 'typescript',
             reused: false,
+            strategy: 'full',
             fingerprint: 'abc',
             outputBytes: 10,
             durationMs: 3,
@@ -79,6 +80,7 @@ describe('reindex activity', () => {
         invalidRecords: 0,
         runs: 2,
         rebuilt: 1,
+        fullRebuilds: 1,
         reused: 1,
         failed: 0,
         suppressed: 1,
@@ -103,6 +105,40 @@ describe('reindex activity', () => {
         },
         byTrigger: { 'manual-cli': 2, 'watch-source': 1 },
       }),
+    );
+  });
+
+  it('classifies incremental language shards as cheap rebuilt runs', () => {
+    const cacheDir = createCache();
+    const outputDb = join(cacheDir, 'index.db');
+    const outputScip = join(cacheDir, 'index.scip');
+    writeFileSync(outputDb, 'database');
+    writeFileSync(outputScip, 'scip');
+
+    recordReindexRunActivity(
+      outputDb,
+      result({
+        outputDb,
+        outputScip,
+        completedAt: '2026-07-24T12:00:00.000Z',
+        result: 'rebuilt',
+        reused: false,
+        shards: [
+          {
+            id: 'typescript',
+            language: 'typescript',
+            reused: false,
+            strategy: 'incremental',
+            fingerprint: 'abc',
+            outputBytes: 10,
+            durationMs: 3,
+          },
+        ],
+      }),
+    );
+
+    expect(readReindexActivitySummary(outputDb, new Date('2026-07-24T12:01:00.000Z'))).toEqual(
+      expect.objectContaining({ rebuilt: 1, fullRebuilds: 0 }),
     );
   });
 
@@ -444,7 +480,7 @@ describe('reindex activity', () => {
       until: Date.parse('2026-07-24T12:16:00.000Z'),
       rebuilt: 8,
       estimatedWriteBytes: 900,
-      detail: '8/8 automatic rebuild slots consumed',
+        detail: '8/8 expensive full rebuild slots consumed',
     });
     expect(
       evaluateReindexActivityBudget({ ...summary, rebuilt: 1, estimatedWriteBytes: 1_000 }, config, nowMs),
@@ -520,7 +556,7 @@ describe('reindex activity', () => {
       until: Date.parse('2026-07-24T12:16:00.000Z'),
       rebuilt: 4,
       estimatedWriteBytes: 40,
-      detail: '4/4 automatic rebuild slots consumed',
+        detail: '4/4 expensive full rebuild slots consumed',
     });
   });
 
@@ -547,13 +583,45 @@ describe('reindex activity', () => {
     expect(evaluateReindexActivityBudget(summary, config, 0)).toEqual(
       expect.objectContaining({ state: 'paused', reason: 'activity-evidence' }),
     );
-    expect(evaluateReindexActivityBudget(summary, { ...config, enabled: false }, 0)).toEqual({
-      state: 'allowed',
-      rebuilt: 0,
-      estimatedWriteBytes: 0,
+      expect(evaluateReindexActivityBudget(summary, { ...config, enabled: false }, 0)).toEqual({
+        state: 'allowed',
+        rebuilt: 0,
+        estimatedWriteBytes: 0,
+      });
+    });
+
+    it('does not spend expensive rebuild slots on incremental TypeScript patches', () => {
+      const nowMs = Date.parse('2026-07-24T12:15:00.000Z');
+      const config = {
+        enabled: true,
+        windowMs: 15 * 60_000,
+        maxRebuilds: 2,
+        maxEstimatedWriteBytes: 1_000_000,
+      };
+      const summary = {
+        confidence: 'complete' as const,
+        windowStartedAt: '2026-07-24T12:00:00.000Z',
+        windowEndedAt: '2026-07-24T12:15:00.000Z',
+        runs: 4,
+        rebuilt: 4,
+        fullRebuilds: 2,
+        reused: 0,
+        failed: 0,
+        suppressed: 0,
+        estimatedLogicalOutputBytes: 400,
+        estimatedWriteBytes: 400,
+        oldestRebuildAt: '2026-07-24T12:01:00.000Z',
+        byTrigger: {},
+      };
+
+      expect(evaluateReindexActivityBudget(summary, config, nowMs)).toEqual(
+        expect.objectContaining({ state: 'paused', reason: 'rebuild-count', rebuilt: 2 }),
+      );
+      expect(evaluateReindexActivityBudget({ ...summary, fullRebuilds: 1 }, config, nowMs)).toEqual(
+        expect.objectContaining({ state: 'allowed', rebuilt: 1 }),
+      );
     });
   });
-});
 
 function createCache(): string {
   const dir = mkdtempSync(join(tmpdir(), 'scip-query-reindex-activity-'));

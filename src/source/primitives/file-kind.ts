@@ -7,6 +7,20 @@ import { normalizePathSeparators as normalizePath } from '../../domain/path-norm
  */
 export type FileKind = 'entry' | 'barrel' | 'worker' | 'test' | 'source';
 
+/** Rank file kinds for search and inspection presentation: implementation first, tests last. */
+export function fileKindRank(kind: FileKind): number {
+  switch (kind) {
+    case 'entry':
+    case 'source':
+    case 'worker':
+      return 0;
+    case 'barrel':
+      return 1;
+    case 'test':
+      return 2;
+  }
+}
+
 /** Classify a source path by its structural role without consulting project state. */
 export function classifyFile(file: string): FileKind {
   const normalized = normalizePath(file);

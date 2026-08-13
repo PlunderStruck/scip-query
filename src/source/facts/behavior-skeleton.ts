@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import type { ParserControlRelationSubtype } from '../../domain/graph-relation-providers.js';
 import { getAst } from '../ast/ast-core.js';
+import { smallestNodeCoveringLines } from '../ast/ast-callables.js';
 import type { SyntaxNode } from '../ast/ast-types.js';
 import { classifyFile } from '../primitives/file-kind.js';
 import { getSourceLines } from '../primitives/source-text.js';
@@ -1373,15 +1374,6 @@ function smallestCoveringCallable(
       (left, right) =>
         left.endLine - left.startLine - (right.endLine - right.startLine) || left.startLine - right.startLine,
     )[0];
-}
-
-function smallestNodeCoveringLines(node: SyntaxNode, startLine: number, endLine: number): SyntaxNode | null {
-  if (node.startPosition.row > startLine || node.endPosition.row < endLine) return null;
-  for (const child of node.namedChildren) {
-    const match = smallestNodeCoveringLines(child, startLine, endLine);
-    if (match) return match;
-  }
-  return node;
 }
 
 function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {

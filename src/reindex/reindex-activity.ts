@@ -174,6 +174,7 @@ export function readReindexActivitySummary(
     windowEndedAt: now.toISOString(),
     runs: 0,
     rebuilt: 0,
+    fullRebuilds: 0,
     reused: 0,
     failed: 0,
     suppressed: 0,
@@ -258,8 +259,11 @@ export function readReindexActivitySummary(
       languageSummary.producedOutputBytes += detail.producedOutputBytes;
       languageSummary.durationMs += detail.durationMs;
     }
-    if (record.result === 'rebuilt' && summary.oldestRebuildAt === undefined) {
+    if (isExpensiveRebuild(record) && summary.oldestRebuildAt === undefined) {
       summary.oldestRebuildAt = record.recordedAt;
+    }
+    if (isExpensiveRebuild(record)) {
+      summary.fullRebuilds = (summary.fullRebuilds ?? 0) + 1;
     }
     if ((record.estimatedWriteBytes ?? record.estimatedLogicalOutputBytes) > 0 && summary.oldestWriteAt === undefined) {
       summary.oldestWriteAt = record.recordedAt;
@@ -371,7 +375,8 @@ export function evaluateReindexActivityBudget(
   nowMs: number,
 ): ReindexActivityBudgetDecision {
   const estimatedWriteBytes = summary.estimatedWriteBytes ?? summary.estimatedLogicalOutputBytes;
-  const consumption = { rebuilt: summary.rebuilt, estimatedWriteBytes };
+  const expensiveRebuilds = summary.fullRebuilds ?? summary.rebuilt;
+  const consumption = { rebuilt: expensiveRebuilds, estimatedWriteBytes };
   if (!config.enabled) return { state: 'allowed', ...consumption };
   if (summary.confidence !== undefined && summary.confidence !== 'complete') {
     return {
@@ -382,13 +387,13 @@ export function evaluateReindexActivityBudget(
       detail: `reindex activity evidence is ${summary.confidence}`,
     };
   }
-  if (summary.rebuilt >= config.maxRebuilds) {
+  if (expensiveRebuilds >= config.maxRebuilds) {
     return {
       state: 'paused',
       reason: 'rebuild-count',
       until: budgetRetryAt(summary.oldestRebuildAt, config.windowMs, nowMs),
       ...consumption,
-      detail: `${summary.rebuilt}/${config.maxRebuilds} automatic rebuild slots consumed`,
+      detail: `${expensiveRebuilds}/${config.maxRebuilds} expensive full rebuild slots consumed`,
     };
   }
   if (estimatedWriteBytes >= config.maxEstimatedWriteBytes) {
@@ -401,6 +406,15 @@ export function evaluateReindexActivityBudget(
     };
   }
   return { state: 'allowed', ...consumption };
+}
+
+function isExpensiveRebuild(record: ReindexRunActivity): boolean {
+  if (record.result !== 'rebuilt') return false;
+  const languages = typedLanguageEntries(record.byLanguage);
+  if (languages.length === 0) return true;
+  return languages.some(
+    ([, detail]) => detail.result === 'rebuilt' && detail.strategy !== 'incremental' && detail.strategy !== 'reused',
+  );
 }
 
 function budgetRetryAt(oldestContributingRecord: string | undefined, windowMs: number, nowMs: number): number {

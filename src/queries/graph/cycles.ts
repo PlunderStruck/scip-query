@@ -198,7 +198,7 @@ function classifyCycle(path: string[]): 'real' | 'module-hierarchy' {
 // each other — child uses items from parent's scope, parent re-exports
 // items from child — and that bidirectional traffic isn't a true cycle.
 function isRustSubmodulePair(child: string, parent: string): boolean {
-  if (!/\.rs$/.test(child) || !/\.rs$/.test(parent)) return false;
+    if (!child.endsWith('.rs') || !parent.endsWith('.rs')) return false;
   const parentDir = parent.replace(/\.rs$/, '/');
   // child must live directly under the parent's stem-named directory:
   // parent.rs ↔ parent/child.rs.
@@ -213,7 +213,7 @@ function isRustSubmodulePair(child: string, parent: string): boolean {
 // the two common Rust idioms: `foo_tests.rs` next to `foo.rs`, and
 // `tests/foo.rs` integration test for `src/foo.rs`.
 function isRustTestSibling(tests: string, parent: string): boolean {
-  if (!/\.rs$/.test(tests) || !/\.rs$/.test(parent)) return false;
+    if (!tests.endsWith('.rs') || !parent.endsWith('.rs')) return false;
   const testBase = tests.replace(/\.rs$/, '');
   const parentBase = parent.replace(/\.rs$/, '');
   if (testBase === parentBase + '_tests') return true;

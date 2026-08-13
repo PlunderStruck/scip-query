@@ -41,8 +41,11 @@ describe('skill installation', () => {
   it('keeps the builtin skill list in lockstep with the shipped directories', async () => {
     const { module } = await loadSetup();
     expect([...module.BUILTIN_SKILLS].sort()).toEqual(['scip-plan', 'scip-query', 'scip-setup']);
-    expect(readdirSync(join(process.cwd(), 'skills')).sort()).toEqual(
-      ['concrete-plan', 'scip-explore', 'scip-plan', 'scip-query', 'scip-setup'].sort(),
+    expect([...module.INSTALLABLE_SKILLS].sort()).toEqual(
+      [...module.BUILTIN_SKILLS, ...module.COMPATIBILITY_SKILLS].sort(),
+    );
+    expect([...module.INSTALLABLE_SKILLS].sort()).toEqual(
+      readdirSync(join(process.cwd(), 'skills')).sort(),
     );
   });
 

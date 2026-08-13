@@ -489,28 +489,33 @@ describe('CLI contract', () => {
 
   it('keeps one exploration skill and two concise workflow skills without work-state ceremony', () => {
     const readSkill = (name: string) => readFileSync(join(process.cwd(), 'skills', name, 'SKILL.md'), 'utf8');
+    const exploration = readSkill('scip-query');
+    const planning = readSkill('scip-plan');
 
-    expect(readSkill('scip-query')).toContain('scip-query search');
-    expect(readSkill('scip-query')).toContain('scip-query inspect');
-    expect(readSkill('scip-query')).toContain('scip-query evidence');
-    expect(readSkill('scip-query')).not.toContain('scip-query context');
-    expect(readSkill('scip-query')).toContain('scip-query health --full');
-    expect(readSkill('scip-query')).not.toMatch(/diff-gate|Stop hook|Gherkin/i);
-    expect(readSkill('scip-query')).toContain('rather than a parallel grep/read workflow');
-    expect(readSkill('scip-query')).toContain('query count is never a correctness cutoff');
-    expect(readSkill('scip-query')).toContain('An exploration is a code-reading investigation');
-    expect(readSkill('scip-query')).toContain('Accuracy determines when to stop');
-    expect(readSkill('scip-query')).toContain('private evidence ledger');
-    expect(readSkill('scip-query')).toContain('never make a known recoverable material claim optional');
-    expect(readSkill('scip-plan')).toContain('Direct evidence');
-    expect(readSkill('scip-plan')).toMatch(/\| Change\s+\| Direct evidence\s+\| Preserve\s+\| Retire\s+\| Prove\s+\|/);
+    expect(exploration).toContain('scip-query search');
+    expect(exploration).toContain('scip-query inspect');
+    expect(exploration).toContain('scip-query evidence');
+    expect(exploration).not.toContain('scip-query context');
+    expect(exploration).toContain('scip-query health --full');
+    expect(exploration).not.toMatch(/diff-gate|Stop hook|Gherkin/i);
+    expect(exploration).toContain('primary exploration surface for tracked repository text');
+    expect(exploration).toContain('Treat its commands as controls, not a checklist');
+    expect(exploration).toContain('make each query answer a distinct repository question');
+    expect(exploration).toContain('Thoroughness means understanding the relevant system end to end');
+      expect(exploration).toContain('do not select one by path, naming, apparent recency, or result order');
+    expect(exploration).toContain('Native text and file tools expose matches and slices');
+    expect(exploration).not.toMatch(/evidence ledger|final-audit|proof obligation/i);
+    expect(planning).toContain('scip-query evidence');
+      expect(planning).toContain('Treat its commands as controls, not a checklist');
+      expect(planning).toContain('When several implementations match');
+    expect(planning).toContain('exact symbol and file/line references');
+    expect(planning).toMatch(/\| Step\s+\| Code reference\s+\| Change\s+\| Preserve or retire\s+\| Verify\s+\|/);
+    expect(planning).not.toMatch(/evidence ledger|progress bookkeeping/i);
     expect(readSkill('scip-setup')).toContain('scip-query doctor');
     expect(readSkill('scip-setup')).toContain('scip-query status');
     expect(readSkill('scip-explore')).toContain('compatibility alias');
     expect(readSkill('concrete-plan')).toContain('compatibility alias');
-    expect(`${readSkill('scip-query')}\n${readSkill('scip-plan')}\n${readSkill('scip-setup')}`).not.toMatch(
-      /diff-gate|Gherkin/i,
-    );
+    expect(`${exploration}\n${planning}\n${readSkill('scip-setup')}`).not.toMatch(/diff-gate|Gherkin/i);
   });
 
   it('keeps command reference syntax generated from descriptors', () => {

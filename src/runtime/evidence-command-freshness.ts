@@ -1,7 +1,7 @@
 import type { ProjectConfig } from '../domain/types.js';
 import type { GitWorktreeContext } from '../platform/git-worktree.js';
 import type { resolveIndexStoragePaths } from '../platform/cache-layout.js';
-import { getIndexFreshness, type IndexFreshness } from './index-freshness.js';
+import { getIndexFreshness, indexCanAnswerQueries, type IndexFreshness } from './index-freshness.js';
 import { prepareWorktreeIndex } from './cli-context.js';
 import type { reindexConfiguredProject } from './project-reindex.js';
 import {
@@ -27,7 +27,7 @@ interface EvidenceCommandWorkspace {
 }
 
 export interface EvidenceCommandFreshnessResult {
-  source: 'explicit-index' | 'existing' | 'shared-generation' | 'watcher' | 'synchronous-reindex';
+  source: 'explicit-index' | 'existing' | 'shared-generation' | 'watcher' | 'stale' | 'synchronous-reindex';
   service: WatchServiceAutoEnsureResult;
 }
 
@@ -59,9 +59,9 @@ const DEFAULT_DEPENDENCIES: EvidenceCommandFreshnessDependencies = {
 };
 
 /**
- * An evidence command owns index freshness as one internal transaction. It
- * first reuses local/shared/watcher work, then performs one synchronous
- * fallback when background refresh cannot make progress within the bound.
+ * Evidence commands reuse a readable SQLite generation immediately. They ask
+ * the watcher to refresh in the background and only reindex synchronously when
+ * no queryable database exists and no rebuild is already running or paused.
  */
 export async function ensureEvidenceCommandFreshness(
   workspace: EvidenceCommandWorkspace,
@@ -93,13 +93,28 @@ export async function ensureEvidenceCommandFreshness(
     };
   }
 
-  if (service.kind === 'started' || service.kind === 'reused') {
+  const watcherReady = service.kind === 'started' || service.kind === 'reused';
+  if (watcherReady) {
     dependencies.requestRefresh(
       watchServicePaths(workspace.paths.cacheDir).activityPath,
       `evidence command ${workspace.commandName} requires a fresh generation`,
     );
+  }
+
+  if (indexCanAnswerQueries(freshness)) {
+    return { source: 'stale', service };
+  }
+
+  if (watcherReady) {
+    const watcherState = service.state.watcher.state;
+    if (watcherState === 'budget-paused' || watcherState === 'indexing') {
+      throw new Error(
+        `Could not prepare fresh evidence for scip-query ${workspace.commandName}: index remained ${freshness.state} (${freshness.reason}) while the watcher is ${watcherState}`,
+      );
+    }
     freshness = await waitForFreshness(workspace, freshness, dependencies, options, service);
     if (freshness.state === 'fresh') return { source: 'watcher', service };
+    if (indexCanAnswerQueries(freshness)) return { source: 'stale', service };
   }
 
   try {
@@ -116,7 +131,7 @@ export async function ensureEvidenceCommandFreshness(
     );
   }
   freshness = dependencies.freshness(workspace.projectRoot, workspace.config, workspace.paths);
-  if (freshness.state !== 'fresh') {
+  if (freshness.state !== 'fresh' && !indexCanAnswerQueries(freshness)) {
     throw new Error(
       `Could not prepare fresh evidence for scip-query ${workspace.commandName}: index remained ${freshness.state} (${freshness.reason})`,
     );

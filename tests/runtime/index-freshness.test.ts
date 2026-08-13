@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ProjectConfig, SupportedLanguage } from '../../src/domain/types.js';
 import { fingerprintProjectFiles } from '../../src/platform/project-files.js';
-import { getIndexFreshness } from '../../src/runtime/index-freshness.js';
+import { getIndexFreshness, indexCanAnswerQueries } from '../../src/runtime/index-freshness.js';
 import { FUTURE_REINDEX_METADATA } from '../fixtures/reindex-metadata.js';
 
 function writeMeta(
@@ -50,6 +50,33 @@ function writeMeta(
 }
 
 describe('index freshness', () => {
+  it('lets queries read a stale fingerprint but not a generation that requires repair', () => {
+    expect(
+      indexCanAnswerQueries({
+        state: 'stale',
+        checkedAt: '2026-08-13T00:00:00.000Z',
+        metaPath: '/cache/meta.json',
+        reason: 'Index metadata fingerprint differs from current source files.',
+      }),
+    ).toBe(true);
+    expect(
+      indexCanAnswerQueries({
+        state: 'stale',
+        checkedAt: '2026-08-13T00:00:00.000Z',
+        metaPath: '/cache/meta.json',
+        reason: 'SQLite generation requires repair: generation checksum drifted',
+      }),
+    ).toBe(false);
+    expect(
+      indexCanAnswerQueries({
+        state: 'missing',
+        checkedAt: '2026-08-13T00:00:00.000Z',
+        metaPath: '/cache/meta.json',
+        reason: 'No SQLite index database exists.',
+      }),
+    ).toBe(false);
+  });
+
   it('reports a future metadata version explicitly instead of treating it as a stale current record', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-freshness-future-'));
     try {

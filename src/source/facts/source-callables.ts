@@ -207,3 +207,18 @@ function isPassthroughBody(fnNode: SyntaxNode, language: AstLanguage): boolean {
   }
   return true;
 }
+
+/** Smallest callable whose range covers `line`, or null when none does. */
+export function smallestSourceCallableAtLine<T extends { startLine: number; endLine: number }>(
+  callables: readonly T[],
+  line: number,
+): T | null {
+  return (
+    callables
+      .filter((callable) => callable.startLine <= line && callable.endLine >= line)
+      .sort(
+        (left, right) =>
+          left.endLine - left.startLine - (right.endLine - right.startLine) || left.startLine - right.startLine,
+      )[0] ?? null
+  );
+}

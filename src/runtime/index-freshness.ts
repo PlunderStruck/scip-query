@@ -18,6 +18,13 @@ export interface IndexFreshness {
   lastRefresh?: LastRefreshMetadata;
 }
 
+/** True when a query can read the current SQLite generation even if the fingerprint is stale. */
+export function indexCanAnswerQueries(freshness: IndexFreshness): boolean {
+  if (freshness.state === 'fresh') return true;
+  if (freshness.state !== 'stale') return false;
+  return !freshness.reason.startsWith('SQLite generation requires repair');
+}
+
 export function getIndexFreshness(
   projectRoot: string,
   config: ProjectConfig,

@@ -1,7 +1,7 @@
 import { pathsResolveSame } from '../../domain/path-normalization.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
 import { getSourceImports } from '../../language-parsers/index.js';
-import { getAst, getCallableSites, getCallSites, type SyntaxNode } from '../../source/ast.js';
+import { getAst, getCallableSites, getCallSites, smallestCoveringCallable, type SyntaxNode } from '../../source/ast.js';
 import { getSourceText } from '../../source/primitives/source-text.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../definition-catalog.js';
@@ -844,16 +844,6 @@ function resolveCallableTargetDefinitions(
   return (getCallableSites(db, targetFile) ?? [])
     .filter((callable) => callable.name === importedName)
     .map((callable) => ({ ...callable, relativePath: targetFile }));
-}
-
-function smallestCoveringCallable(root: SyntaxNode, startLine: number, endLine: number): SyntaxNode | null {
-  let result: SyntaxNode | null = null;
-  walk(root, (node) => {
-    if (!/(?:function|method|lambda)/u.test(node.type) && node.type !== 'arrow_function') return;
-    if (node.startPosition.row > startLine || node.endPosition.row < endLine) return;
-    if (!result || node.endIndex - node.startIndex < result.endIndex - result.startIndex) result = node;
-  });
-  return result;
 }
 
 function syntaxContainsCallableValue(node: SyntaxNode): boolean {

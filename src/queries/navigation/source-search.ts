@@ -1,11 +1,13 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { compileBoundedRegExp } from '../../domain/bounded-regexp.js';
-import { classifyFile, type FileKind } from '../../source/primitives/file-kind.js';
+import { classifyFile, fileKindRank, type FileKind } from '../../source/primitives/file-kind.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
+import { smallestSourceCallableAtLine } from '../../source/facts/source-callables.js';
 import { focusedSourceConstructRange } from '../../source/facts/source-construct.js';
 import { getDefinitionsForFile, findEnclosingDefinition } from '../../symbols/definition-catalog.js';
 import { isModuleLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { repositoryTextInventory, type SourceObservationFreshness } from '../../source/primitives/repository-text.js';
+import { splitSearchableSourceLines } from '../../source/primitives/source-text.js';
 import { selectInspectionCandidates } from './source-inspection-selection.js';
 import type { SourceSnippet } from './source-snippet.js';
 
@@ -119,7 +121,7 @@ export function searchSource(db: ScipDatabase, pattern: string, opts: SourceSear
 
   for (const file of inventory.files) {
     const relativePath = file.relativePath;
-    const lines = searchableSourceLines(file.text);
+    const lines = splitSearchableSourceLines(file.text);
     if (lines.length === 0) continue;
     const definitions =
       file.freshness.semantic.state !== 'stale' && file.freshness.semantic.basis !== 'no-compiler-document'
@@ -136,7 +138,7 @@ export function searchSource(db: ScipDatabase, pattern: string, opts: SourceSear
       if (!matched) continue;
       fileMatchingLines += 1;
       const owner = findEnclosingDefinition(definitions, line);
-      const callableOwner = smallestSourceCallable(sourceCallables, line);
+      const callableOwner = smallestSourceCallableAtLine(sourceCallables, line);
       const preciseCompilerOwner = owner && !isModuleLikeSymbol(owner.symbol) ? owner : null;
       const enclosingStartLine =
         preciseCompilerOwner?.startLine ?? callableOwner?.startLine ?? owner?.startLine ?? line;
@@ -227,20 +229,6 @@ export function searchSource(db: ScipDatabase, pattern: string, opts: SourceSear
   };
 }
 
-function smallestSourceCallable(
-  callables: readonly { name: string; startLine: number; endLine: number }[],
-  line: number,
-): { name: string; startLine: number; endLine: number } | null {
-  return (
-    callables
-      .filter((callable) => callable.startLine <= line && callable.endLine >= line)
-      .sort(
-        (left, right) =>
-          left.endLine - left.startLine - (right.endLine - right.startLine) || left.startLine - right.startLine,
-      )[0] ?? null
-  );
-}
-
 function sourceSnippetFromText(
   relativePath: string,
   text: string,
@@ -259,13 +247,6 @@ function sourceSnippetFromText(
     focusLine,
     source: lines.slice(startLine, endLine + 1).join('\n'),
   };
-}
-
-function searchableSourceLines(text: string): string[] {
-  if (text.length === 0) return [];
-  const lines = text.split('\n');
-  if (text.endsWith('\n')) lines.pop();
-  return lines;
 }
 
 function sourceSearchScopeHints(files: readonly SourceSearchFileCoverage[]): SourceSearchScopeHint[] {
@@ -336,17 +317,4 @@ function compareSearchIdentities(left: SourceSearchIdentity, right: SourceSearch
     left.relativePath.localeCompare(right.relativePath) ||
     left.focusLine - right.focusLine
   );
-}
-
-function fileKindRank(kind: FileKind): number {
-  switch (kind) {
-    case 'entry':
-    case 'source':
-    case 'worker':
-      return 0;
-    case 'barrel':
-      return 1;
-    case 'test':
-      return 2;
-  }
 }

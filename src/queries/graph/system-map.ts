@@ -9,11 +9,14 @@ import { readRuntimeBoundaryGraph } from '../../analysis/runtime-boundaries/inde
 import type { BoundaryObservation } from '../../analysis/runtime-boundaries/types.js';
 import { runtimeBoundarySourceScope } from '../../analysis/runtime-boundaries/source-scope.js';
 import type { BoundarySourceScope } from '../../analysis/runtime-boundaries/types.js';
+import { groupBy } from '../../domain/group-by.js';
+import { compareSystemMapDrilldownSymbols, systemMapOriginRank } from '../../domain/system-map-origin-rank.js';
 import type { IndexedDefinition, SymbolMatch, SymbolResolutionCandidate } from '../../domain/types.js';
 import { getSourceImports } from '../../language-parsers/index.js';
 import { getSourceLines } from '../../source/primitives/source-text.js';
 import { getAst, type SyntaxNode } from '../../source/ast.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
+import { smallestSourceCallableAtLine } from '../../source/facts/source-callables.js';
 import { behaviorConstructRange, governingBehaviorControlLines } from '../../source/facts/behavior-skeleton.js';
 import { focusedSourceConstructRange, readableSourceUnitRange } from '../../source/facts/source-construct.js';
 import type { ScipDatabase } from '../../storage/db.js';
@@ -1930,7 +1933,7 @@ function sourceConstructIdentity(construct: SystemMapSourceConstruct): SystemMap
  * slice instead of repeating the enclosing function for every callsite.
  */
 function canonicalSourceConstruct(db: ScipDatabase, construct: SystemMapSourceConstruct): SystemMapSourceConstruct {
-  const callable = smallestSourceCallable(getSourceFacts(db, construct.file)?.callables ?? [], construct.startLine);
+  const callable = smallestSourceCallableAtLine(getSourceFacts(db, construct.file)?.callables ?? [], construct.startLine);
   if (callable && callable.endLine >= construct.endLine) {
     return {
       file: construct.file,
@@ -2830,7 +2833,7 @@ function buildSystemMapDrilldown(regions: readonly SystemMapRegion[]): SystemMap
       compareDrilldownFiles(left, right, symbolsByFile, hitsByFile),
     );
     for (const file of rankedFiles) {
-      const symbol = (symbolsByFile.get(file.file) ?? []).sort(compareDrilldownSymbols)[0];
+      const symbol = (symbolsByFile.get(file.file) ?? []).sort(compareSystemMapDrilldownSymbols)[0];
       if (symbol) {
         candidates.push({
           kind: 'symbol',
@@ -2912,7 +2915,7 @@ function compareDrilldownFiles(
     (hitsByFile.get(file.file) ?? []).some((hit) => hit.traversalSeed) ? 0 : 1;
   const originRank = (file: SystemMapFile): number => {
     const symbols = symbolsByFile.get(file.file) ?? [];
-    return Math.min(5, ...symbols.map((symbol) => notableOriginRank(symbol.origins)));
+    return Math.min(5, ...symbols.map((symbol) => systemMapOriginRank(symbol.origins)));
   };
   return (
     kindRank(left) - kindRank(right) ||
@@ -2920,15 +2923,6 @@ function compareDrilldownFiles(
     originRank(left) - originRank(right) ||
     left.depth - right.depth ||
     left.file.localeCompare(right.file)
-  );
-}
-
-function compareDrilldownSymbols(left: SystemMapSymbol, right: SystemMapSymbol): number {
-  return (
-    notableOriginRank(left.origins) - notableOriginRank(right.origins) ||
-    left.depth - right.depth ||
-    left.startLine - right.startLine ||
-    left.shortName.localeCompare(right.shortName)
   );
 }
 
@@ -2964,7 +2958,7 @@ function systemMapLiteralMatches(
       const sourceLine = lines[line] ?? '';
       if (!sourceLine.includes(pattern)) continue;
       const owner = findEnclosingDefinition(definitions, line);
-      const callableOwner = smallestSourceCallable(callables, line);
+      const callableOwner = smallestSourceCallableAtLine(callables, line);
       const preciseCompilerOwner = owner && !isModuleLikeSymbol(owner.symbol) ? owner : null;
       const enclosingStartLine =
         preciseCompilerOwner?.startLine ?? callableOwner?.startLine ?? owner?.startLine ?? line;
@@ -3004,26 +2998,12 @@ function literalMatchIdentity(match: LiteralMatch): string {
   return `${match.relativePath}\0${match.line}`;
 }
 
-function smallestSourceCallable(
-  callables: readonly { name: string; startLine: number; endLine: number }[],
-  line: number,
-): { name: string; startLine: number; endLine: number } | null {
-  return (
-    callables
-      .filter((callable) => callable.startLine <= line && callable.endLine >= line)
-      .sort(
-        (left, right) =>
-          left.endLine - left.startLine - (right.endLine - right.startLine) || left.startLine - right.startLine,
-      )[0] ?? null
-  );
-}
-
 function sourceOwnerConstructAtLine(
   db: ScipDatabase,
   relativePath: string,
   line: number,
 ): SystemMapSourceConstruct | null {
-  const callable = smallestSourceCallable(getSourceFacts(db, relativePath)?.callables ?? [], line);
+  const callable = smallestSourceCallableAtLine(getSourceFacts(db, relativePath)?.callables ?? [], line);
   const owner = callable ?? sourceBindingOwnerAtLine(db, relativePath, line);
   if (!owner) return null;
   const range = focusedSourceConstructRange(db, relativePath, line, owner.startLine, owner.endLine);
@@ -3743,17 +3723,6 @@ function uniqueSorted<T extends string>(values: readonly T[]): T[] {
   return [...new Set(values)].sort();
 }
 
-function groupBy<T>(values: readonly T[], keyFor: (value: T) => string): Map<string, T[]> {
-  const grouped = new Map<string, T[]>();
-  for (const value of values) {
-    const key = keyFor(value);
-    const bucket = grouped.get(key) ?? [];
-    bucket.push(value);
-    grouped.set(key, bucket);
-  }
-  return grouped;
-}
-
 function compareRelations(left: SystemMapRelation, right: SystemMapRelation): number {
   return (
     left.fromRegionId.localeCompare(right.fromRegionId) ||
@@ -3767,16 +3736,8 @@ function compareRelations(left: SystemMapRelation, right: SystemMapRelation): nu
 
 function compareNotableSymbols(left: SystemMapNotableSymbol, right: SystemMapNotableSymbol): number {
   return (
-    notableOriginRank(left.origins) - notableOriginRank(right.origins) || left.shortName.localeCompare(right.shortName)
+    systemMapOriginRank(left.origins) - systemMapOriginRank(right.origins) || left.shortName.localeCompare(right.shortName)
   );
-}
-
-function notableOriginRank(origins: readonly string[]): number {
-  if (origins.includes('symbol-anchor')) return 0;
-  if (origins.includes('literal-owner')) return 1;
-  if (origins.some((origin) => origin.startsWith('boundary-import:'))) return 2;
-  if (origins.includes('reference-owner')) return 3;
-  return 4;
 }
 
 function compareFiles(left: SystemMapFile, right: SystemMapFile): number {

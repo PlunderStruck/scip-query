@@ -28,6 +28,7 @@ import {
   hydrateSharedGeneration,
   parseSharedGenerationManifest,
   publishFreshLocalGenerationForProject,
+  prepareSharedGenerationForProject,
   publishSharedGeneration,
   readSharedGeneration,
   sharedCacheBypassReason,
@@ -127,6 +128,86 @@ describe('shared generation store', () => {
           snapshot: expect.objectContaining({ generationId: olderSnapshot.generationId }),
         }),
       );
+    } finally {
+      if (previousCacheHome === undefined) delete process.env['XDG_CACHE_HOME'];
+      else process.env['XDG_CACHE_HOME'] = previousCacheHome;
+    }
+  });
+
+  it('forks a matching HEAD generation into a dirty worktree that has no local database', () => {
+    const root = temporaryDirectory('scip-query-shared-overlay-');
+    const cacheHome = temporaryDirectory('scip-query-shared-overlay-cache-');
+    const previousCacheHome = process.env['XDG_CACHE_HOME'];
+    process.env['XDG_CACHE_HOME'] = cacheHome;
+    try {
+      git(root, ['init', '-q', '-b', 'main']);
+      git(root, ['config', 'user.email', 'test@example.com']);
+      git(root, ['config', 'user.name', 'Test User']);
+      writeFileSync(join(root, 'value.ts'), 'export const value = 1;\n');
+      git(root, ['add', '.']);
+      git(root, ['commit', '-qm', 'initial']);
+      const cleanContext = resolveGitWorktreeContext(root)!;
+      const fingerprint = buildProjectInputFingerprint(root, ['typescript'], {});
+      const snapshot = buildSharedGenerationSnapshot(cleanContext, fingerprint)!;
+      const sourceCache = join(root, 'source-cache');
+      createCache(sourceCache, root, 'head-baseline', { fingerprint });
+      publishSharedGeneration({
+        snapshot,
+        sourceCacheDir: sourceCache,
+        sourceProjectRoot: root,
+      });
+
+      writeFileSync(join(root, 'value.ts'), 'export const value = 2;\n');
+      const dirtyContext = resolveGitWorktreeContext(root)!;
+      expect(dirtyContext.clean).toBe(false);
+      const paths = resolveIndexStoragePaths(root, { languages: ['typescript'] });
+      expect(existsSync(paths.dbPath)).toBe(false);
+
+      expect(prepareSharedGenerationForProject(root, { languages: ['typescript'] }, paths, dirtyContext)).toEqual({
+        kind: 'overlay',
+      });
+      expect(existsSync(paths.dbPath)).toBe(true);
+      expect(readValue(paths.dbPath)).toBe('head-baseline');
+    } finally {
+      if (previousCacheHome === undefined) delete process.env['XDG_CACHE_HOME'];
+      else process.env['XDG_CACHE_HOME'] = previousCacheHome;
+    }
+  });
+
+  it('keeps an existing dirty local database instead of overlaying a shared HEAD generation', () => {
+    const root = temporaryDirectory('scip-query-shared-overlay-keep-');
+    const cacheHome = temporaryDirectory('scip-query-shared-overlay-keep-cache-');
+    const previousCacheHome = process.env['XDG_CACHE_HOME'];
+    process.env['XDG_CACHE_HOME'] = cacheHome;
+    try {
+      git(root, ['init', '-q', '-b', 'main']);
+      git(root, ['config', 'user.email', 'test@example.com']);
+      git(root, ['config', 'user.name', 'Test User']);
+      writeFileSync(join(root, 'value.ts'), 'export const value = 1;\n');
+      git(root, ['add', '.']);
+      git(root, ['commit', '-qm', 'initial']);
+      const cleanContext = resolveGitWorktreeContext(root)!;
+      const fingerprint = buildProjectInputFingerprint(root, ['typescript'], {});
+      const snapshot = buildSharedGenerationSnapshot(cleanContext, fingerprint)!;
+      const sourceCache = join(root, 'source-cache');
+      createCache(sourceCache, root, 'head-baseline', { fingerprint });
+      publishSharedGeneration({
+        snapshot,
+        sourceCacheDir: sourceCache,
+        sourceProjectRoot: root,
+      });
+
+      writeFileSync(join(root, 'value.ts'), 'export const value = 2;\n');
+      const dirtyContext = resolveGitWorktreeContext(root)!;
+      const paths = resolveIndexStoragePaths(root, { languages: ['typescript'] });
+      mkdirSync(paths.cacheDir, { recursive: true });
+      writeFileSync(paths.dbPath, 'local-stale');
+
+      expect(prepareSharedGenerationForProject(root, { languages: ['typescript'] }, paths, dirtyContext)).toEqual({
+        kind: 'missed',
+        reason: 'worktree has uncommitted changes',
+      });
+      expect(readFileSync(paths.dbPath, 'utf8')).toBe('local-stale');
     } finally {
       if (previousCacheHome === undefined) delete process.env['XDG_CACHE_HOME'];
       else process.env['XDG_CACHE_HOME'] = previousCacheHome;

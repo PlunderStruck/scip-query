@@ -1,5 +1,6 @@
 import { isExportedDefinition } from '../internal/exported-definition.js';
 import { isEntrySurface, rootedSymbolEvidence, type RootedSymbolEvidence } from '../../analysis/file-classifier.js';
+import { groupBy } from '../../domain/group-by.js';
 import type { IndexedDefinition, SymbolResolutionCandidate } from '../../domain/types.js';
 import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 import type { ScipDatabase } from '../../storage/db.js';
@@ -492,17 +493,6 @@ function collapseRegionEdges(edges: readonly EntryMapSymbolEdge[]): EntryMapRegi
       };
     })
     .sort((left, right) => left.fromFile.localeCompare(right.fromFile) || left.toFile.localeCompare(right.toFile));
-}
-
-function groupBy<T>(rows: readonly T[], keyFor: (row: T) => string): Map<string, T[]> {
-  const grouped = new Map<string, T[]>();
-  for (const row of rows) {
-    const key = keyFor(row);
-    const bucket = grouped.get(key) ?? [];
-    bucket.push(row);
-    grouped.set(key, bucket);
-  }
-  return grouped;
 }
 
 function regionId(file: string): string {

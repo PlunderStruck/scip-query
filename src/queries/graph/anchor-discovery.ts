@@ -4,8 +4,9 @@ import { readRuntimeBoundaryGraph } from '../../analysis/runtime-boundaries/inde
 import type { BoundaryLink, BoundaryObservation } from '../../analysis/runtime-boundaries/types.js';
 import { behaviorConstructRange } from '../../source/facts/behavior-skeleton.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
-import { getSourceLines } from '../../source/primitives/source-text.js';
-import { classifyFile, type FileKind } from '../../source/primitives/file-kind.js';
+import { smallestSourceCallableAtLine } from '../../source/facts/source-callables.js';
+import { getSourceLines, splitSearchableSourceLines } from '../../source/primitives/source-text.js';
+import { classifyFile, fileKindRank, type FileKind } from '../../source/primitives/file-kind.js';
 import { repositoryTextInventory, type RepositoryTextFile } from '../../source/primitives/repository-text.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { findEnclosingDefinition, getDefinitionsForFile } from '../../symbols/definition-catalog.js';
@@ -246,7 +247,7 @@ export function discoverAnchors(
     const indexedFileDefinitions = getDefinitionsForFile(db, file.relativePath);
     const fileDefinitions = indexedFileDefinitions.filter((definition) => !isModuleLikeSymbol(definition.symbol));
     if (fileDefinitions.length === 0) continue;
-    const lines = searchableLines(file.text);
+    const lines = splitSearchableSourceLines(file.text);
     for (let line = 0; line < lines.length; line += 1) {
       const lineTerms = normalizedWordSet(lines[line] ?? '');
       const matched = normalizedTerms.filter((term) => lineTerms.has(term));
@@ -290,12 +291,12 @@ export function discoverAnchors(
       if (normalizedTerms.some((term) => leafTerms.has(term))) sourceDefinitionFor(callable);
     }
     if (callables.length === 0) continue;
-    const lines = searchableLines(file.text);
+    const lines = splitSearchableSourceLines(file.text);
     for (let line = 0; line < lines.length; line += 1) {
       const lineTerms = normalizedWordSet(lines[line] ?? '');
       const matched = normalizedTerms.filter((term) => lineTerms.has(term));
       if (matched.length === 0) continue;
-      const callable = smallestSourceCallable(callables, line);
+      const callable = smallestSourceCallableAtLine(callables, line);
       const sourceDefinition = callable ? sourceDefinitionFor(callable) : null;
       if (!sourceDefinition) continue;
       const compilerOwner = smallestEnclosingDefinition(fileDefinitions, line);
@@ -535,18 +536,6 @@ function selectSourceCandidateFiles(
     .slice(0, MAX_PATH_SOURCE_CANDIDATE_FILES);
   for (const candidate of pathCandidates) selectedPaths.add(candidate.file.relativePath);
   return files.filter((file) => selectedPaths.has(file.relativePath));
-}
-
-function smallestSourceCallable<T extends { startLine: number; endLine: number }>(
-  callables: readonly T[],
-  line: number,
-): T | undefined {
-  return callables
-    .filter((callable) => callable.startLine <= line && callable.endLine >= line)
-    .sort(
-      (left, right) =>
-        left.endLine - left.startLine - (right.endLine - right.startLine) || left.startLine - right.startLine,
-    )[0];
 }
 
 function indexSourceConstructDefinitions(
@@ -2420,13 +2409,6 @@ function undoubleFinalConsonant(value: string): string {
   return last === before && !'aeiou'.includes(last) ? value.slice(0, -1) : value;
 }
 
-function searchableLines(text: string): string[] {
-  if (text.length === 0) return [];
-  const lines = text.split('\n');
-  if (text.endsWith('\n')) lines.pop();
-  return lines;
-}
-
 function compareMatchSources(left: AnchorDiscoveryMatchSource, right: AnchorDiscoveryMatchSource): number {
   return matchSourceRank(left) - matchSourceRank(right);
 }
@@ -2446,19 +2428,6 @@ function matchSourceRank(source: AnchorDiscoveryMatchSource): number {
 
 function candidateKindRank(kind: AnchorDiscoveryCandidate['kind']): number {
   return kind === 'callable' ? 0 : kind === 'type' ? 1 : 2;
-}
-
-function fileKindRank(kind: FileKind): number {
-  switch (kind) {
-    case 'entry':
-    case 'source':
-    case 'worker':
-      return 0;
-    case 'barrel':
-      return 1;
-    case 'test':
-      return 2;
-  }
 }
 
 function calleeStrength(source: CalleeEvidenceSource): 'exact' | 'derived' {

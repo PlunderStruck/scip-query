@@ -4,7 +4,7 @@ import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../internal/project-index.js';
 import { stripCommentsAndStrings } from '../../source/primitives/source-stripper.js';
-import { getAst, type SyntaxNode } from '../../source/ast.js';
+import { getAst, smallestNodeCoveringLines, type SyntaxNode, walkNamedSyntax } from '../../source/ast.js';
 import type { SymbolMatch } from '../../domain/symbol-types.js';
 
 export interface ComplexityResult {
@@ -199,7 +199,7 @@ function fanOutForCallees(callees: ReadonlyArray<{ symbol: string; file: string 
  */
 export function countBranchesFromAst(node: SyntaxNode): number {
   let count = 0;
-  walkAst(node, (current) => {
+  walkNamedSyntax(node, (current) => {
     count += branchContribution(current);
   });
   return count;
@@ -213,7 +213,7 @@ function addAstBranchEstimates(
   const sorted = [...definitions].sort(
     (left, right) => left.startLine - right.startLine || right.endLine - left.endLine,
   );
-  walkAst(root, (current) => {
+  walkNamedSyntax(root, (current) => {
     const contribution = branchContribution(current);
     if (contribution === 0) return;
 
@@ -226,20 +226,6 @@ function addAstBranchEstimates(
       if (estimate) estimate.branches += contribution;
     }
   });
-}
-
-function walkAst(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {
-  visit(node);
-  for (const child of node.namedChildren) walkAst(child, visit);
-}
-
-function smallestNodeCoveringLines(node: SyntaxNode, startLine: number, endLine: number): SyntaxNode | null {
-  if (node.startPosition.row > startLine || node.endPosition.row < endLine) return null;
-  for (const child of node.namedChildren) {
-    const match = smallestNodeCoveringLines(child, startLine, endLine);
-    if (match) return match;
-  }
-  return node;
 }
 
 const AST_BRANCH_NODE_TYPES = new Set([

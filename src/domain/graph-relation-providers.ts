@@ -307,25 +307,23 @@ export const GRAPH_RELATION_PROVIDER_CONTRACTS: readonly GraphRelationProviderCo
     label: 'compiler callsites and bounded static value evaluation',
     requirements: ['indexed-graph', 'source-facts'],
     relations: [
-      ...[
-        'argument-to-parameter',
-        'constant-to-parameter',
-        'property-to-parameter',
-        'return-to-parameter',
-        'return-to-call-result',
-      ].map((subtype) =>
-        relation(
-          'dataflow',
-          subtype,
-          'The reported value may reach the target through the evidenced callsite transfer.',
-          {
-            strengths: ['exact', 'derived', 'mixed'],
-            nonClaims: ['This provider does not establish general local definition-use, alias, field, or heap flow.'],
-            recoverWith: ['value-flow', 'dependence-slice', 'inspect', 'code'],
-          },
-        ),
+      'argument-to-parameter',
+      'constant-to-parameter',
+      'property-to-parameter',
+      'return-to-parameter',
+      'return-to-call-result',
+    ].map((subtype) =>
+      relation(
+        'dataflow',
+        subtype,
+        'The reported value may reach the target through the evidenced callsite transfer.',
+        {
+          strengths: ['exact', 'derived', 'mixed'],
+          nonClaims: ['This provider does not establish general local definition-use, alias, field, or heap flow.'],
+          recoverWith: ['value-flow', 'dependence-slice', 'inspect', 'code'],
+        },
       ),
-    ],
+    ),
   },
   {
     id: 'typescript-local-dependence',

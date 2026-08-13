@@ -1,17 +1,21 @@
 import { EventEmitter } from 'node:events';
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GitReader } from '../../src/platform/git-worktree.js';
-import type {
-  ReindexDiagnostics,
-  ReindexOperation,
-  ReindexRunner,
-  ReindexRunRequest,
-  WatchClock,
-  WatchSubscription,
-  WatchSubscriptionFactory,
+import {
+  isCheapIgnoredWatchPath,
+  readWatchGitHeadOid,
+  resolveWatchGitLayout,
+  type ReindexDiagnostics,
+  type ReindexOperation,
+  type ReindexRunner,
+  type ReindexRunRequest,
+  type WatchClock,
+  type WatchSubscription,
+  type WatchSubscriptionFactory,
 } from '../../src/runtime/watch.js';
 
 const tempDirs: string[] = [];
@@ -22,6 +26,10 @@ function createProject(): string {
   mkdirSync(join(projectRoot, 'src'), { recursive: true });
   writeFileSync(join(projectRoot, 'src', 'a.ts'), 'export const a = 1;\n');
   return projectRoot;
+}
+
+function git(cwd: string, args: readonly string[]): string {
+  return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf-8' }).trim();
 }
 
 function controlledReindexRunner(): {
@@ -114,6 +122,35 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+describe('watch CPU filters', () => {
+  it('ignores Git, dependency, and in-repo cache paths without gitignore', () => {
+    expect(isCheapIgnoredWatchPath('.git/index')).toBe(true);
+    expect(isCheapIgnoredWatchPath('node_modules/left-pad/index.js')).toBe(true);
+    expect(isCheapIgnoredWatchPath('packages/app/node_modules/pkg/index.js')).toBe(true);
+    expect(isCheapIgnoredWatchPath('src/a.ts')).toBe(false);
+    expect(isCheapIgnoredWatchPath('.cache/scip-query/index.db', '.cache/scip-query')).toBe(true);
+    expect(isCheapIgnoredWatchPath('src/a.ts', '.cache/scip-query')).toBe(false);
+  });
+
+  it('reads HEAD and the index path from Git files', () => {
+    const projectRoot = createProject();
+    git(projectRoot, ['init', '-q', '-b', 'main']);
+    git(projectRoot, ['config', 'user.email', 'test@example.com']);
+    git(projectRoot, ['config', 'user.name', 'Test User']);
+    git(projectRoot, ['add', '.']);
+    git(projectRoot, ['commit', '-qm', 'initial']);
+    const layout = resolveWatchGitLayout(projectRoot);
+    expect(layout).toEqual(
+      expect.objectContaining({
+        gitDir: expect.stringContaining('.git'),
+        indexPath: expect.stringContaining(`${join('.git', 'index')}`),
+      }),
+    );
+    expect(readWatchGitHeadOid(layout!.gitDir)).toMatch(/^[0-9a-f]{40}$/);
+    expect(existsSync(layout!.indexPath)).toBe(true);
+  });
 });
 
 describe('Watcher', () => {
@@ -247,11 +284,11 @@ describe('Watcher', () => {
         paused
           ? {
               state: 'paused',
-              reason: 'rebuild-count',
+              reason: 'estimated-write-bytes',
               until: now.getTime() + 1_000,
-              rebuilt: 8,
+              rebuilt: 1,
               estimatedWriteBytes: 512,
-              detail: '8/8 automatic rebuild slots consumed',
+              detail: 'write budget consumed',
             }
           : { state: 'allowed', rebuilt: 0, estimatedWriteBytes: 0 },
       onStatus: (status) => statuses.push(status),
@@ -271,6 +308,33 @@ describe('Watcher', () => {
     await watcher.stop();
   });
 
+  it('still starts a cheap refresh after expensive full-rebuild slots are exhausted', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-29T12:00:00.000Z'));
+    const projectRoot = createProject();
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { debounceMs: 250, cooldownMs: 0, gitPollMs: 60_000 } },
+      reindexRunner: { start: run },
+      budgetInspector: () => ({
+        state: 'paused',
+        reason: 'rebuild-count',
+        until: Date.parse('2026-07-29T12:15:00.000Z'),
+        rebuilt: 2,
+        estimatedWriteBytes: 512,
+        detail: '2/2 expensive full rebuild slots consumed',
+      }),
+    });
+
+    watcher.requestRefresh({ kind: 'watch-source', detail: 'src/a.ts' }, { immediate: true });
+
+    expect(run).toHaveBeenCalledOnce();
+    expect(run.mock.calls[0]?.[0]).toEqual(expect.objectContaining({ allowExpensiveRebuild: false }));
+    await watcher.stop();
+  });
+
   it('cancels a resource-budget retry when the watcher stops', async () => {
     vi.useFakeTimers();
     const projectRoot = createProject();
@@ -282,11 +346,11 @@ describe('Watcher', () => {
       reindexRunner: { start: run },
       budgetInspector: (_outputDb, _config, now) => ({
         state: 'paused',
-        reason: 'rebuild-count',
+        reason: 'estimated-write-bytes',
         until: now.getTime() + 1_000,
-        rebuilt: 8,
+        rebuilt: 1,
         estimatedWriteBytes: 512,
-        detail: '8/8 automatic rebuild slots consumed',
+        detail: 'write budget consumed',
       }),
     });
 
@@ -420,6 +484,7 @@ describe('Watcher', () => {
         }),
         SCIP_REINDEX_TRIGGER_KIND: 'watch-source',
         SCIP_REINDEX_TRIGGER_DETAIL: 'src/a.ts',
+        SCIP_REINDEX_ALLOW_EXPENSIVE: '1',
         SCIP_REINDEX_PARENT_IDENTITY: expect.any(String),
       }),
     );
@@ -442,6 +507,30 @@ describe('Watcher', () => {
 
     watcher.start();
     subscription.emitAll('change', '.git/index');
+    await vi.runAllTimersAsync();
+
+    expect(run).not.toHaveBeenCalled();
+    await watcher.stop();
+  });
+
+  it('ignores dependency and cache directories before consulting gitignore', async () => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const subscription = sourceSubscriptionHarness();
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { gitPollMs: 60_000 } },
+      languages: ['typescript'],
+      reindexRunner: { start: run },
+      subscriptionFactory: subscription.factory,
+    });
+
+    watcher.start();
+    subscription.emitAll('change', 'node_modules/left-pad/index.js');
+    subscription.emitAll('change', 'packages/app/node_modules/pkg/index.js');
+    subscription.emitAll('change', '.cache/scip-query/index.db');
     await vi.runAllTimersAsync();
 
     expect(run).not.toHaveBeenCalled();
@@ -669,6 +758,45 @@ describe('Watcher', () => {
     await watcher.stop();
   });
 
+  it('does not spawn Git while a rebuild is already running', async () => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    const indexPath = join(projectRoot, '.git-index');
+    writeFileSync(indexPath, 'index');
+    let head = 'a'.repeat(40);
+    let gitRuns = 0;
+    const gitReader: GitReader = {
+      run: (_root, args) => {
+        gitRuns += 1;
+        if (args.includes('--git-path')) return indexPath;
+        if (args.includes('HEAD')) return head;
+        return undefined;
+      },
+      runResult: () => ({ kind: 'error', message: 'git diff failed' }),
+    };
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const { runner, run } = controlledReindexRunner();
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { debounceMs: 250, cooldownMs: 0, gitPollMs: 1_000 } },
+      languages: ['typescript'],
+      gitReader,
+      reindexRunner: runner,
+      subscriptionFactory: sourceSubscriptionHarness().factory,
+    });
+
+    watcher.start();
+    const gitRunsAfterStart = gitRuns;
+    watcher.requestRefresh({ kind: 'watch-startup', detail: 'test' }, { immediate: true });
+    expect(run).toHaveBeenCalledOnce();
+
+    head = 'b'.repeat(40);
+    await vi.advanceTimersByTimeAsync(1_250);
+    expect(run).toHaveBeenCalledOnce();
+    expect(gitRuns).toBe(gitRunsAfterStart);
+    await watcher.stop();
+  });
+
   it('reports draining and waits for both subscription close and active-worker cancellation', async () => {
     const projectRoot = createProject();
     const completion = deferred<number>();
@@ -791,7 +919,9 @@ describe('Watcher', () => {
     watcher.start();
     nativeEvents.emit('error', Object.assign(new Error('too many files'), { code: 'EMFILE' }));
     expect(factory).toHaveBeenCalledTimes(2);
-    expect(factory.mock.calls[1]?.[1]).toEqual(expect.objectContaining({ usePolling: true }));
+    expect(factory.mock.calls[1]?.[1]).toEqual(
+      expect.objectContaining({ usePolling: true, interval: 5_000, binaryInterval: 10_000 }),
+    );
 
     const stopPromise = watcher.stop();
     let stopped = false;

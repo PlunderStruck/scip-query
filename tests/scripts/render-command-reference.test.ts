@@ -16,11 +16,12 @@ import {
 const SKILL_MD_WITH_COMMANDS = `---
 name: example-skill
 description: An example skill.
-commands:
-  - template: "scip-query refs <symbol>"
-    when: "Find consumers before editing."
-  - template: "scip-query twin-drift -s <scope> --json"
-    when: "Run the detector over the scope."
+metadata:
+  commands:
+    - template: "scip-query refs <symbol>"
+      when: "Find consumers before editing."
+    - template: "scip-query twin-drift -s <scope> --json"
+      when: "Run the detector over the scope."
 ---
 
 # example-skill
@@ -44,11 +45,12 @@ description: A skill with no commands frontmatter.
 const SKILL_MD_WITH_MIXED_QUOTES = `---
 name: mixed-quote-skill
 description: A skill whose frontmatter prettier reformatted to single quotes.
-commands:
-  - template: 'scip-query refs <symbol>'
-    when: 'Find consumers before editing.'
-  - template: 'scip-query tla verify <spec>'
-    when: "Checks the model's Next relation."
+metadata:
+  commands:
+    - template: 'scip-query refs <symbol>'
+      when: 'Find consumers before editing.'
+    - template: 'scip-query tla verify <spec>'
+      when: "Checks the model's Next relation."
 ---
 
 # mixed-quote-skill
@@ -141,10 +143,13 @@ describe('renderSkillCommandsMarkdown', () => {
     expect(markdown).toContain('<!-- BEGIN GENERATED SKILL COMMANDS -->');
     expect(markdown).toContain('<!-- END GENERATED SKILL COMMANDS -->');
     expect(markdown).toContain('`scip-query refs <symbol>`');
-    expect(markdown).toContain('| Command | When |');
+    expect(markdown).toContain('| Command syntax | Question it answers |');
     expect(markdown).not.toContain('referencing file paths; reference line numbers grouped by file');
     expect(markdown).toContain('Find consumers before editing.');
-    expect(markdown).toContain("Run a command's `--help` only when a named uncertainty needs another option.");
+    expect(markdown).toContain('These commands are controls, not a checklist.');
+    expect(markdown).toContain('make each query answer a distinct question');
+    expect(markdown).toContain('There is no required sequence or query limit.');
+    expect(markdown).toContain("Run a command's `--help` when you need a flag not shown in its template.");
   });
 });
 

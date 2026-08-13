@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { getAst } from '../../source/ast/ast-core.js';
+import { parameterName } from '../../source/ast/ast-callables.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
 import { getSourceText } from '../../source/primitives/source-text.js';
@@ -1020,13 +1021,6 @@ function persistenceTransactionReceivers(root: SyntaxNode): Set<string> {
     }
   });
   return receivers;
-}
-
-function parameterName(node: SyntaxNode): string | null {
-  if (node.type === 'identifier') return node.text;
-  const named = node.childForFieldName('name') ?? node.childForFieldName('pattern');
-  if (named) return parameterName(named);
-  return node.namedChildren.find((child) => child.type === 'identifier')?.text ?? null;
 }
 
 function sqlPersistenceResource(sql: string): Omit<BoundaryKeyPart, 'name'> | null {

@@ -37,15 +37,15 @@ import { maintainBoundedMailbox } from '../storage/bounded-mailbox.js';
 import { createTypeScriptIndexMailboxLane, createTypeScriptSemanticMailboxLane } from './typescript-mailbox-lanes.js';
 
 const HEARTBEAT_INTERVAL_MS = 1_000;
-const ACTIVITY_POLL_INTERVAL_MS = 250;
+const ACTIVITY_POLL_INTERVAL_MS = 1_000;
 const MAILBOX_MAINTENANCE_INTERVAL_MS = 60_000;
 const BUSY_SERVICE_LOOP_INTERVAL_MS = 10;
 const IDLE_SERVICE_LOOP_INTERVAL_MS = 50;
-const MAX_IDLE_SERVICE_LOOP_INTERVAL_MS = 250;
+const MAX_IDLE_SERVICE_LOOP_INTERVAL_MS = 2_000;
 
 export function watchServiceLoopDelayMs(processedRequests: number, consecutiveIdlePolls = 1): number {
   if (processedRequests > 0) return BUSY_SERVICE_LOOP_INTERVAL_MS;
-  const exponent = Math.max(0, Math.min(3, consecutiveIdlePolls - 1));
+  const exponent = Math.max(0, Math.min(6, consecutiveIdlePolls - 1));
   return Math.min(MAX_IDLE_SERVICE_LOOP_INTERVAL_MS, IDLE_SERVICE_LOOP_INTERVAL_MS * 2 ** exponent);
 }
 

@@ -22,14 +22,6 @@ export interface HttpMountCompositionResult {
   mounts: number;
 }
 
-/** Compose proved framework mount prefixes onto route registrations. */
-export function composeHttpMounts(
-  db: ScipDatabase,
-  observations: readonly BoundaryObservation[],
-): BoundaryObservation[] {
-  return composeHttpMountsWithCoverage(db, observations).observations;
-}
-
 export function composeHttpMountsWithCoverage(
   db: ScipDatabase,
   observations: readonly BoundaryObservation[],
@@ -119,7 +111,7 @@ function collectHttpMounts(db: ScipDatabase): { mounts: HttpMount[]; filesInspec
     walk(context.root, (node) => {
       if (node.type !== 'call_expression') return;
       const target = node.childForFieldName('function') ?? node.namedChild(0);
-      if (!target || !/\.use$/u.test(target.text.replace(/\s+/gu, ''))) return;
+      if (!target || !target.text.replace(/\s+/gu, '').endsWith('.use')) return;
       const args = callArguments(node);
       if (args.length < 2) return;
       const prefix = evaluateBoundaryValue(context, args[0]);

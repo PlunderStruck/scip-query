@@ -20,7 +20,15 @@ import type {
   ExplorationTopologyEdge,
   ExplorationTopologyNode,
 } from '../internal/exploration-topology.js';
-import type { SystemMapRelation } from './system-map.js';
+
+interface SystemMapCallRelation {
+  kind: string;
+  fromFile: string;
+  fromSymbol: string | null;
+  toFile: string;
+  toSymbol: string | null;
+  line: number | null;
+}
 
 export interface ProgramDataElements {
   nodes: ExplorationTopologyNode[];
@@ -161,7 +169,7 @@ export function programDataElementsForParameterFlow(
 /** Enrich proved system-map calls without relabeling reference co-occurrence as value flow. */
 export function programDataElementsForSystemMapRelations(
   db: ScipDatabase,
-  relations: readonly SystemMapRelation[],
+  relations: readonly SystemMapCallRelation[],
   topologyNodes: readonly ExplorationTopologyNode[] = [],
 ): ProgramDataElements {
   const result = emptyElements();

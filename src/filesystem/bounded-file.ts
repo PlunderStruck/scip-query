@@ -38,7 +38,7 @@ export interface BoundedFileReadOptions {
  * concurrent replacement or growth from bypassing the pre-allocation bound.
  */
 export function readFileWithinLimit(path: PathLike, options: BoundedFileReadOptions): Buffer {
-  validateLimit(options.maxBytes);
+  assertNonNegativeByteLimit(options.maxBytes);
   const displayPath = String(path);
   const descriptor = openSync(path, 'r');
   try {
@@ -91,7 +91,7 @@ export function readProfileArtifactText(path: PathLike, inputKind: string): stri
  * the declared byte budget. Ownership of the descriptor stays with the caller.
  */
 export function readFileDescriptorWithinLimit(descriptor: number, options: BoundedFileReadOptions): Buffer {
-  validateLimit(options.maxBytes);
+  assertNonNegativeByteLimit(options.maxBytes);
   const chunks: Buffer[] = [];
   const buffer = Buffer.allocUnsafe(64 * 1024);
   let totalBytes = 0;
@@ -152,7 +152,7 @@ export function hashFileWithinLimit(
   options: BoundedFileReadOptions,
   update: (chunk: Buffer) => void,
 ): number {
-  validateLimit(options.maxBytes);
+  assertNonNegativeByteLimit(options.maxBytes);
   const displayPath = String(path);
   const descriptor = openSync(path, 'r');
   try {
@@ -201,7 +201,7 @@ function assertReadableIdentity(
   }
 }
 
-function validateLimit(maxBytes: number): void {
+export function assertNonNegativeByteLimit(maxBytes: number): void {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
     throw new RangeError(`maxBytes must be a non-negative safe integer; received ${maxBytes}`);
   }

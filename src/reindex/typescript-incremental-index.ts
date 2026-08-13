@@ -131,14 +131,17 @@ export function planTypeScriptIncrementalUpdate(
 
   const manifest = buildProjectChangeManifest(input.previousSnapshot, input.currentSnapshot);
   if (manifest.changes.length === 0) return { eligible: false, reason: 'no changed project inputs' };
-  if (
-    manifest.changes.some(
-      (change) => change.kind !== 'modified' || change.inputKind !== 'source' || !isTypeScriptLike(change.path),
-    )
-  ) {
+  const typescriptSourceChanges = manifest.changes.filter(
+    (change) => change.inputKind === 'source' && isTypeScriptLike(change.path),
+  );
+  if (typescriptSourceChanges.some((change) => change.kind !== 'modified')) {
+    return { eligible: false, reason: 'TypeScript project membership changed' };
+  }
+  if (typescriptSourceChanges.length === 0) {
     return { eligible: false, reason: 'change is not a modified TypeScript source file' };
   }
-  const plan = planAffectedFiles(manifest, input.graph, input.projectFiles);
+  const incrementalManifest = { ...manifest, changes: typescriptSourceChanges };
+  const plan = planAffectedFiles(incrementalManifest, input.graph, input.projectFiles);
   if (plan.mode !== 'closure' || plan.affectedFiles.length === 0) {
     return {
       eligible: false,
@@ -183,7 +186,7 @@ export function planTypeScriptIncrementalUpdate(
   const singleProject = projects.length === 1 ? projects[0] : undefined;
   return {
     eligible: true,
-    manifest,
+    manifest: incrementalManifest,
     plan,
     projectIdentity,
     previousFragmentGeneration: typeScriptFragmentGenerationIdentity(input.previousSnapshot, input.producerIdentity),
@@ -448,7 +451,10 @@ function typeScriptFragmentProjectIdentity(
   producerIdentity: string,
 ): string {
   const nonSourceInputs = snapshot.files
-    .filter((file) => classifyProjectInputPath(file.path, snapshot.languages) !== 'source')
+    .filter((file) => {
+      const kind = classifyProjectInputPath(file.path, snapshot.languages);
+      return kind === 'config' || kind === 'ambient';
+    })
     .map((file) => ({ path: file.path, size: file.size, hash: file.hash }))
     .sort((left, right) => left.path.localeCompare(right.path));
   return sha256(

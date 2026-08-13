@@ -6,7 +6,15 @@
  * facts live in smaller role-specific modules.
  */
 export { detectAstLanguage, isVueSfcPath } from './ast/ast-language.js';
-export { callableBodyNodeTypesForLanguage } from './ast/ast-callables.js';
+export {
+  callableBodyNodeTypesForLanguage,
+  callableParameterNames,
+  parameterName,
+  smallestCoveringCallable,
+  smallestNodeCoveringLines,
+  unwrapExpression,
+  walkNamedSyntax,
+} from './ast/ast-callables.js';
 export { getAst, parseAstSourceText } from './ast/ast-core.js';
 export { extractCallLeaf, getCallableSites, getCallSites, getTypeContainerMap } from './facts/ast-facts.js';
 export {

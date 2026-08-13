@@ -10,8 +10,9 @@ describe('watchServiceLoopDelayMs', () => {
     expect(watchServiceLoopDelayMs(0)).toBe(50);
     expect(watchServiceLoopDelayMs(0, 2)).toBe(100);
     expect(watchServiceLoopDelayMs(0, 3)).toBe(200);
-    expect(watchServiceLoopDelayMs(0, 4)).toBe(250);
-    expect(watchServiceLoopDelayMs(0, 100)).toBe(250);
+    expect(watchServiceLoopDelayMs(0, 4)).toBe(400);
+    expect(watchServiceLoopDelayMs(0, 7)).toBe(2_000);
+    expect(watchServiceLoopDelayMs(0, 100)).toBe(2_000);
   });
 
   it('keeps low latency while draining mailbox work', () => {

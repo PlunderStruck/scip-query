@@ -19,6 +19,7 @@ const typescriptConfig = parseTypeScriptWorkerConfig(process.env['SCIP_REINDEX_T
 const clojureConfigPath = process.env['SCIP_REINDEX_CLOJURE_CONFIG_PATH'] || undefined;
 const triggerKind = parseRefreshTriggerKind(process.env['SCIP_REINDEX_TRIGGER_KIND']);
 const triggerDetail = process.env['SCIP_REINDEX_TRIGGER_DETAIL'];
+const allowExpensiveRebuild = process.env['SCIP_REINDEX_ALLOW_EXPENSIVE'] !== '0';
 const parentIdentity = parseParentIdentity(process.env['SCIP_REINDEX_PARENT_IDENTITY']);
 
 if (!projectRoot || !outputScip || !outputDb || !parentIdentity) {
@@ -51,6 +52,7 @@ async function run(): Promise<void> {
       clojureConfigPath,
       indexerConcurrency,
       trigger: { kind: triggerKind, detail: triggerDetail || undefined },
+      allowExpensiveRebuild,
       signal: cancellation.signal,
       onStatus: (msg) => process.stderr.write(`[reindex] ${sanitizeTerminalLine(msg)}\n`),
     });

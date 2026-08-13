@@ -1,6 +1,9 @@
 import type { IndexedDefinition } from '../../domain/types.js';
 import { getAst } from '../../source/ast/ast-core.js';
-import type { SyntaxNode } from '../../source/ast/ast-types.js';
+import {
+  callableParameterNames,
+  smallestCoveringCallable,
+} from '../../source/ast/ast-callables.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { createPerDbCache } from '../../storage/per-db-cache.js';
 import type { ResolvedCallSite } from './resolved-call-sites.js';
@@ -149,32 +152,4 @@ function buildParameterValueFlow(db: ScipDatabase, site: ResolvedCallSite): Call
     }
   });
   return { callee: site.callee, caller: site.caller, call, transfers, unknown };
-}
-
-function smallestCoveringCallable(root: SyntaxNode, startLine: number, endLine: number): SyntaxNode | null {
-  let match: SyntaxNode | null = null;
-  walk(root, (node) => {
-    if (!/(?:function|method|lambda)/u.test(node.type) && node.type !== 'arrow_function') return;
-    if (node.startPosition.row > startLine || node.endPosition.row < endLine) return;
-    if (!match || node.endIndex - node.startIndex < match.endIndex - match.startIndex) match = node;
-  });
-  return match;
-}
-
-function callableParameterNames(callable: SyntaxNode): Array<string | null> {
-  const parameters =
-    callable.childForFieldName('parameters') ?? callable.namedChildren.find((child) => /parameters/u.test(child.type));
-  return parameters?.namedChildren.map(parameterName) ?? [];
-}
-
-function parameterName(node: SyntaxNode): string | null {
-  if (node.type === 'identifier') return node.text;
-  const named = node.childForFieldName('name') ?? node.childForFieldName('pattern');
-  if (named) return parameterName(named);
-  return node.namedChildren.find((child) => child.type === 'identifier')?.text ?? null;
-}
-
-function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {
-  visit(node);
-  for (const child of node.namedChildren) walk(child, visit);
 }

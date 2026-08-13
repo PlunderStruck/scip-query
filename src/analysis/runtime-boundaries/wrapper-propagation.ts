@@ -2,6 +2,11 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { referenceEvidenceForSymbol } from '../../symbols/references/reference-sites.js';
 import { leafName } from '../../symbols/symbol-parser.js';
+import {
+  parameterName,
+  smallestCoveringCallable,
+  walkNamedSyntax as walk,
+} from '../../source/ast/ast-callables.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import { boundaryFileContext, createBoundaryObservation, type BoundaryFileContext } from './extractors.js';
 import type { BoundaryKeyPart, BoundaryObservation } from './types.js';
@@ -122,24 +127,6 @@ function callableParameterNames(root: SyntaxNode, startLine: number, endLine: nu
   return parameters.namedChildren.map(parameterName);
 }
 
-function parameterName(node: SyntaxNode): string | null {
-  if (node.type === 'identifier') return node.text;
-  const named = node.childForFieldName('name') ?? node.childForFieldName('pattern');
-  if (named) return parameterName(named);
-  const identifier = node.namedChildren.find((child) => child.type === 'identifier');
-  return identifier?.text ?? null;
-}
-
-function smallestCoveringCallable(root: SyntaxNode, startLine: number, endLine: number): SyntaxNode | null {
-  let match: SyntaxNode | null = null;
-  walk(root, (node) => {
-    if (!/(?:function|method|lambda)/u.test(node.type) && node.type !== 'arrow_function') return;
-    if (node.startPosition.row > startLine || node.endPosition.row < endLine) return;
-    if (!match || node.endIndex - node.startIndex < match.endIndex - match.startIndex) match = node;
-  });
-  return match;
-}
-
 function matchingCallsAtLine(root: SyntaxNode, line: number, expectedLeaf: string): SyntaxNode[] {
   const calls: SyntaxNode[] = [];
   walk(root, (node) => {
@@ -170,9 +157,4 @@ function addressedArgument(
   }
   const constant = /^[A-Za-z_$][\w$]*$/u.test(text) ? constants.get(text) : undefined;
   return constant === undefined ? null : { value: constant, evidence: 'constant' };
-}
-
-function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {
-  visit(node);
-  for (const child of node.namedChildren) walk(child, visit);
 }
