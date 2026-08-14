@@ -1260,15 +1260,6 @@ function classifyLanguageShardReuse(opts: {
       });
       continue;
     }
-    if (language === 'typescript' && meta.scipCompanion === 'deferred') {
-      result.set(language, {
-        reused: false,
-        reason: 'whole TypeScript SCIP companion is deferred behind changed-document overlays',
-        fingerprint,
-        scipPath,
-      });
-      continue;
-    }
     if (!reindexMetadataCapabilities(meta).languageShardReuse || !meta.languageFingerprints) {
       result.set(language, {
         reused: false,
@@ -1411,9 +1402,15 @@ async function publishFreshReindexArtifacts(
   throwIfSignalAborted(opts.opts.signal, 'Reindex cancelled by its owner.');
   const completeScipAvailable = !incrementalTypeScript || incrementalTypeScript.completeScipUpdated;
   let completeScipSanitized = false;
+  let publishOutputs = indexedOutputs;
   if (completeScipAvailable) {
-    cacheLanguageShards(opts.paths.outputDb, indexedOutputs, opts.writeTelemetry);
-    completeScipSanitized = materializeScipOutput(indexedOutputs, opts.tempPaths.tempOutputScip, opts.onStatus);
+    publishOutputs = materializeDeferredTypeScriptLanguageOutput({
+      run: opts,
+      indexedOutputs,
+      incrementalTypeScript,
+    });
+    cacheLanguageShards(opts.paths.outputDb, publishOutputs, opts.writeTelemetry);
+    completeScipSanitized = materializeScipOutput(publishOutputs, opts.tempPaths.tempOutputScip, opts.onStatus);
   }
   const sqliteMaterialization = await materializeSqliteOutput({
     run: opts,
@@ -1525,14 +1522,12 @@ async function publishFreshReindexArtifacts(
   });
   const deferredScipCompanion =
     sqliteMaterialization.mode === 'incremental' && sqliteMaterialization.scipCompanion === 'deferred';
-  const publishedLanguageFingerprints = { ...languageFingerprints };
-  if (deferredScipCompanion) delete publishedLanguageFingerprints.typescript;
   const { metadata, pruneProjects } = buildPublishedReindexMetadata({
     run: opts,
     indexedOutputs,
     skippedLanguages,
     reusedLanguages,
-    languageFingerprints: publishedLanguageFingerprints,
+    languageFingerprints,
     typescriptProjectShardContext,
     lastRefresh,
   });
@@ -1789,6 +1784,35 @@ function typescriptProjectShardFilesToDelete(
 ): string[] {
   const keep = new Set(currentProjects.map((project) => `${projectShardSlug(project)}.scip`));
   return existingFiles.filter((file) => !keep.has(file));
+}
+
+function materializeDeferredTypeScriptLanguageOutput(opts: {
+  run: Parameters<typeof runFreshReindex>[0];
+  indexedOutputs: readonly IndexedOutput[];
+  incrementalTypeScript: MaterializedTypeScriptIncrementalIndex | undefined;
+}): IndexedOutput[] {
+  if (opts.incrementalTypeScript?.completeScipUpdated) return [...opts.indexedOutputs];
+  const typescriptOutput = opts.indexedOutputs.find((output) => output.language === 'typescript');
+  if (!typescriptOutput) return [...opts.indexedOutputs];
+  const generation = inspectSqliteGeneration(opts.run.paths.outputDb, opts.run.paths.metaPath);
+  const overlayGeneration =
+    generation.state === 'current' ? generation.generation.publication?.typescriptOverlayGeneration : undefined;
+  const companionDeferred =
+    generation.state === 'current'
+      ? generation.generation.publication?.scipCompanion === 'deferred'
+      : readReindexMetaOrNull(opts.run.paths.metaPath)?.scipCompanion === 'deferred';
+  if (!companionDeferred || !overlayGeneration) return [...opts.indexedOutputs];
+  const candidateShardPath = tempScipPath(opts.run.tempPaths.tempOutputScip, 'typescript-deferred', 0);
+  opts.run.onStatus('Materializing the deferred whole TypeScript SCIP companion for complete publication...');
+  materializeDeferredTypeScriptIndex({
+    cacheDir: dirname(opts.run.paths.outputDb),
+    generationIdentity: overlayGeneration,
+    baseShardPath: typescriptOutput.scipPath,
+    candidateShardPath,
+  });
+  return opts.indexedOutputs.map((output) =>
+    output.language === 'typescript' ? { language: output.language, scipPath: candidateShardPath } : output,
+  );
 }
 
 function cacheLanguageShards(
@@ -2156,7 +2180,7 @@ async function materializeSqliteOutput(opts: {
         miniDbPath,
         opts.env,
         opts.run.onStatus,
-        false,
+        true,
         opts.run.opts.signal,
       );
       opts.run.onStatus(`Converted affected SCIP documents in ${(performance.now() - convertStartedAt).toFixed(0)}ms.`);

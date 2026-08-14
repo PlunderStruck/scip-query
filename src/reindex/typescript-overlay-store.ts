@@ -12,7 +12,8 @@ import type { TypeScriptDocumentFragment } from './typescript-document-emitter.j
 import { assembleTypeScriptIndex } from './typescript-fragment-store.js';
 
 export const TYPESCRIPT_OVERLAY_STORE_VERSION = 1;
-export const TYPESCRIPT_DEFERRED_SCIP_THRESHOLD_BYTES = 64 * 1024 * 1024;
+/** Incremental TypeScript never rewrites the complete language shard; overlays patch changed documents. */
+export const TYPESCRIPT_DEFERRED_SCIP_THRESHOLD_BYTES = 0;
 export const TYPESCRIPT_OVERLAY_STORE_DIRECTORY = 'typescript-scip-overlays';
 
 export interface TypeScriptOverlayRecord {

@@ -126,7 +126,7 @@ export function patchIncrementalSqliteGeneration(
     validateSchema(db, 'main', 'candidate SQLite generation');
     validateSchema(db, 'incremental', 'incremental SQLite mini database');
     prepareAffectedPaths(db, affectedFiles);
-    validateDocumentSets(db, affectedFiles.length);
+    const { priorAffectedCount } = validateDocumentSets(db, affectedFiles.length);
     const previousFactDigests = readAffectedFactDigests(db, 'main', true);
 
     const originalDocumentCount = scalarNumber(db, 'SELECT COUNT(*) AS value FROM main.documents');
@@ -140,7 +140,7 @@ export function patchIncrementalSqliteGeneration(
       insertAffectedDocumentRows(db!);
       input.onStage?.('after-insert');
       pruneReconciledOrphanSymbols(db!);
-      validatePatchedTransaction(db!, affectedFiles.length, originalDocumentCount);
+      validatePatchedTransaction(db!, affectedFiles.length, originalDocumentCount, priorAffectedCount);
       input.onStage?.('before-commit');
     });
     transaction.immediate();
@@ -277,9 +277,9 @@ function prepareAffectedPaths(db: Database.Database, affectedFiles: readonly str
   insertAll(affectedFiles);
 }
 
-function validateDocumentSets(db: Database.Database, affectedCount: number): void {
+function validateDocumentSets(db: Database.Database, affectedCount: number): { priorAffectedCount: number } {
   const miniCount = scalarNumber(db, 'SELECT COUNT(*) AS value FROM incremental.documents');
-  const priorCount = scalarNumber(
+  const priorAffectedCount = scalarNumber(
     db,
     `SELECT COUNT(*) AS value
      FROM main.documents d
@@ -305,14 +305,10 @@ function validateDocumentSets(db: Database.Database, affectedCount: number): voi
     )
     .pluck()
     .get();
-  if (
-    miniCount !== affectedCount ||
-    priorCount !== affectedCount ||
-    missing !== undefined ||
-    unexpected !== undefined
-  ) {
+  if (miniCount !== affectedCount || missing !== undefined || unexpected !== undefined) {
     throw new Error('incremental SQLite mini database does not exactly match the affected document set');
   }
+  return { priorAffectedCount };
 }
 
 function prepareSymbolOwnership(db: Database.Database): void {
@@ -497,7 +493,12 @@ function pruneReconciledOrphanSymbols(db: Database.Database): void {
   `);
 }
 
-function validatePatchedTransaction(db: Database.Database, affectedCount: number, originalDocumentCount: number): void {
+function validatePatchedTransaction(
+  db: Database.Database,
+  affectedCount: number,
+  originalDocumentCount: number,
+  priorAffectedCount: number,
+): void {
   const documentCount = scalarNumber(db, 'SELECT COUNT(*) AS value FROM main.documents');
   const affectedDocumentCount = scalarNumber(
     db,
@@ -505,7 +506,8 @@ function validatePatchedTransaction(db: Database.Database, affectedCount: number
      FROM main.documents d
      JOIN temp.incremental_affected_paths p ON p.relative_path = d.relative_path`,
   );
-  if (documentCount !== originalDocumentCount || affectedDocumentCount !== affectedCount) {
+  const expectedDocumentCount = originalDocumentCount - priorAffectedCount + affectedCount;
+  if (documentCount !== expectedDocumentCount || affectedDocumentCount !== affectedCount) {
     throw new Error('candidate SQLite document counts changed unexpectedly');
   }
   const duplicatePath = db

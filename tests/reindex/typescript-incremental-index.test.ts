@@ -49,26 +49,72 @@ describe('TypeScript incremental index eligibility', () => {
     expect(result.nextDocumentIdentities.has('packages/app/dist/generated.js')).toBe(false);
   });
 
-  test.each([
-    {
-      label: 'config edit',
-      mutate: (input: EligibilityFixture) => ({
-        ...input,
-        currentSnapshot: snapshot({ a: 'a1', b: 'b1', config: 'c2' }),
-      }),
-      reason: 'change is not a modified TypeScript source file',
-    },
-    {
-      label: 'added source',
-      mutate: (input: EligibilityFixture) => ({
+    test('accepts an added TypeScript source without other compiler edits', () => {
+      const previous = snapshot({ a: 'a1', b: 'b1', config: 'c1' });
+      const result = planTypeScriptIncrementalUpdate({
+        projectMode: 'single',
+        previousSnapshot: previous,
+        currentSnapshot: {
+          ...previous,
+          files: [...previous.files, { path: 'src/added.ts', size: 1, hash: 'added' }],
+        },
+        projectFiles: ['src/a.ts', 'src/b.ts'],
+        graph: new Map([['src/b.ts', new Set(['src/a.ts'])]]),
+        producerIdentity: 'scip-typescript:0.4.0:test',
+        rootTsconfigExists: true,
+      });
+      expect(result.eligible).toBe(true);
+      if (!result.eligible) return;
+      expect(result.plan).toEqual(
+        expect.objectContaining({
+          mode: 'closure',
+          changedFiles: ['src/added.ts'],
+          affectedFiles: ['src/added.ts'],
+        }),
+      );
+    });
+
+    test('accepts an added TypeScript source and includes reverse dependents of modified files', () => {
+      const input = fixture();
+      const result = planTypeScriptIncrementalUpdate({
         ...input,
         currentSnapshot: {
           ...input.currentSnapshot,
           files: [...input.currentSnapshot.files, { path: 'src/added.ts', size: 1, hash: 'added' }],
         },
-      }),
-      reason: 'TypeScript project membership changed',
-    },
+      });
+      expect(result.eligible).toBe(true);
+      if (!result.eligible) return;
+      expect(result.plan).toEqual(
+        expect.objectContaining({
+          mode: 'closure',
+          changedFiles: ['src/a.ts', 'src/added.ts'],
+          affectedFiles: ['src/a.ts', 'src/added.ts', 'src/b.ts'],
+        }),
+      );
+      expect(result.nextDocumentIdentities.has('src/added.ts')).toBe(true);
+    });
+
+    test.each([
+      {
+        label: 'config edit',
+        mutate: (input: EligibilityFixture) => ({
+          ...input,
+          currentSnapshot: snapshot({ a: 'a1', b: 'b1', config: 'c2' }),
+        }),
+        reason: 'change is not a modified TypeScript source file',
+      },
+      {
+        label: 'deleted source',
+        mutate: (input: EligibilityFixture) => ({
+          ...input,
+          currentSnapshot: {
+            ...input.currentSnapshot,
+            files: input.currentSnapshot.files.filter((file) => file.path !== 'src/b.ts'),
+          },
+        }),
+        reason: 'TypeScript project membership changed',
+      },
     {
       label: 'missing graph',
       mutate: (input: EligibilityFixture) => ({ ...input, graph: null }),

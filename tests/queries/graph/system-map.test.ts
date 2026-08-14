@@ -2710,6 +2710,22 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
           (region) => region.memberCallCandidateRelationCount > 0 && region.relationKinds.includes('call'),
         ),
       ).toBe(true);
+
+      const evidence = graphEvidence(
+        db,
+        { symbols: [symbols.memberRegistry] },
+        { families: ['execution'], maxDepth: 2, maxEdges: 80 },
+      );
+      expect(evidence.edges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            family: 'execution',
+            subtype: 'call',
+            evidenceStrength: 'candidate',
+            providerId: 'indexed-program-identity',
+          }),
+        ]),
+      );
     } finally {
       db.close();
     }

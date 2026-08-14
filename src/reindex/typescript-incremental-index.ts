@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
-import { existsSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   buildProjectChangeManifest,
   classifyProjectInputPath,
   type FileDependencyGraph,
   type ProjectChangeManifest,
+  type ProjectFileChange,
   type ProjectInputSnapshot,
 } from '../domain/project-input.js';
 import type { TypeScriptProjectMode } from '../domain/types.js';
@@ -17,17 +18,8 @@ import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import { buildFileDepGraph } from '../symbols/graph/file-dep-graph.js';
 import { planAffectedFiles, type AffectedFilePlan } from './affected-set.js';
 import { inspectTypeScriptDocumentProducer } from './typescript-document-emitter.js';
-import {
-  assembleAffectedTypeScriptFragments,
-  assembleTypeScriptIndexes,
-  commitTypeScriptFragmentGeneration,
-  ensureTypeScriptFragmentGeneration,
-} from './typescript-fragment-store.js';
-import {
-  commitTypeScriptOverlay,
-  materializeTypeScriptOverlay,
-  TYPESCRIPT_DEFERRED_SCIP_THRESHOLD_BYTES,
-} from './typescript-overlay-store.js';
+import { assembleAffectedTypeScriptFragments } from './typescript-fragment-store.js';
+import { commitTypeScriptOverlay, materializeTypeScriptOverlay } from './typescript-overlay-store.js';
 import { publishedTypeScriptIndexGeneration } from './typescript-index-protocol.js';
 import { TypeScriptIndexRequester } from './typescript-index-requester.js';
 import { discoverTypeScriptProjectRoots } from './typescript-projects.js';
@@ -134,20 +126,18 @@ export function planTypeScriptIncrementalUpdate(
   const typescriptSourceChanges = manifest.changes.filter(
     (change) => change.inputKind === 'source' && isTypeScriptLike(change.path),
   );
-  if (typescriptSourceChanges.some((change) => change.kind !== 'modified')) {
+  if (typescriptSourceChanges.some((change) => change.kind !== 'modified' && change.kind !== 'added')) {
     return { eligible: false, reason: 'TypeScript project membership changed' };
   }
   if (typescriptSourceChanges.length === 0) {
     return { eligible: false, reason: 'change is not a modified TypeScript source file' };
   }
+  const addedPaths = typescriptSourceChanges.filter((change) => change.kind === 'added').map((change) => change.path);
+  const modifiedChanges = typescriptSourceChanges.filter((change) => change.kind === 'modified');
   const incrementalManifest = { ...manifest, changes: typescriptSourceChanges };
-  const plan = planAffectedFiles(incrementalManifest, input.graph, input.projectFiles);
-  if (plan.mode !== 'closure' || plan.affectedFiles.length === 0) {
-    return {
-      eligible: false,
-      reason: plan.reasons.length > 0 ? `affected set widened: ${plan.reasons.join(', ')}` : 'empty affected set',
-    };
-  }
+  const affected = planTypeScriptIncrementalAffectedSet(modifiedChanges, addedPaths, input.graph, input.projectFiles);
+  if (!affected.eligible) return affected;
+  const plan = affected.plan;
   const projects = partitionWorkspacePlan(plan, workspaceProjects, input.graph);
   if (!projects) {
     return { eligible: false, reason: 'affected files cross or ambiguously match TypeScript projects' };
@@ -176,7 +166,7 @@ export function planTypeScriptIncrementalUpdate(
   if (!previousDocumentIdentities) return { eligible: false, reason: 'prior document identity unavailable' };
   const nextDocumentIdentities = documentIdentities(
     input.currentSnapshot,
-    input.projectFiles,
+    [...new Set([...input.projectFiles, ...addedPaths])],
     input.graph,
     input.producerIdentity,
     plan.affectedFiles,
@@ -197,6 +187,54 @@ export function planTypeScriptIncrementalUpdate(
     ...(singleProject
       ? { tsconfigPath: singleProject.tsconfigPath, projectArgument: singleProject.projectArgument }
       : {}),
+  };
+}
+
+function planTypeScriptIncrementalAffectedSet(
+  modifiedChanges: readonly ProjectFileChange[],
+  addedPaths: readonly string[],
+  graph: FileDependencyGraph,
+  projectFiles: readonly string[],
+): { eligible: true; plan: AffectedFilePlan } | { eligible: false; reason: string } {
+  if (modifiedChanges.length === 0) {
+    if (addedPaths.length === 0) return { eligible: false, reason: 'empty affected set' };
+    return {
+      eligible: true,
+      plan: {
+        mode: 'closure',
+        changedFiles: [...addedPaths].sort(),
+        affectedFiles: [...addedPaths].sort(),
+        reasons: [],
+      },
+    };
+  }
+  const modifiedPlan = planAffectedFiles(
+    {
+      version: 1,
+      changes: [...modifiedChanges],
+      projectIdentityChanged: false,
+      uncertainty: [],
+    },
+    graph,
+    projectFiles,
+  );
+  if (modifiedPlan.mode !== 'closure' || modifiedPlan.affectedFiles.length === 0) {
+    return {
+      eligible: false,
+      reason:
+        modifiedPlan.reasons.length > 0
+          ? `affected set widened: ${modifiedPlan.reasons.join(', ')}`
+          : 'empty affected set',
+    };
+  }
+  return {
+    eligible: true,
+    plan: {
+      mode: 'closure',
+      changedFiles: [...new Set([...modifiedPlan.changedFiles, ...addedPaths])].sort(),
+      affectedFiles: [...new Set([...modifiedPlan.affectedFiles, ...addedPaths])].sort(),
+      reasons: [],
+    },
   };
 }
 
@@ -329,67 +367,28 @@ export function tryMaterializeTypeScriptIncrementalIndex(
     );
     const fragments = responses.flatMap((response) => response.fragments);
     const requestMs = performance.now() - phaseStartedAt;
-    const deferCompleteScip = statSync(input.previousShardPath).size >= TYPESCRIPT_DEFERRED_SCIP_THRESHOLD_BYTES;
     phaseStartedAt = performance.now();
-    const baseIndexBytes = deferCompleteScip
-      ? null
-      : readFileWithinLimit(input.previousShardPath, {
-          inputKind: 'TypeScript base SCIP shard',
-          maxBytes: SCIP_ARTIFACT_MAX_BYTES,
-        });
-    const assembled = deferCompleteScip
-      ? {
-          completeIndexBytes: null,
-          affectedIndexBytes: assembleAffectedTypeScriptFragments(fragments),
-        }
-      : assembleTypeScriptIndexes({
-          packageVersion: availability.packageVersion,
-          baseIndexBytes: baseIndexBytes!,
-          fragments,
-        });
+    const affectedIndexBytes = assembleAffectedTypeScriptFragments(fragments);
     const assemblyMs = performance.now() - phaseStartedAt;
     phaseStartedAt = performance.now();
-    if (deferCompleteScip) {
-      commitTypeScriptOverlay({
-        cacheDir: input.cacheDir,
-        previousGenerationIdentity: eligibility.previousFragmentGeneration,
-        nextGenerationIdentity: eligibility.nextFragmentGeneration,
-        producerIdentity: availability.producerIdentity,
-        projectIdentity: eligibility.projectIdentity,
-        baseShardCurrent: input.baseShardCurrent,
-        fragments,
-      });
-    } else {
-      ensureTypeScriptFragmentGeneration({
-        cacheDir: input.cacheDir,
-        packageVersion: availability.packageVersion,
-        indexBytes: baseIndexBytes!,
-        producerIdentity: availability.producerIdentity,
-        projectIdentity: eligibility.projectIdentity,
-        generationIdentity: eligibility.previousFragmentGeneration,
-        documentIdentities: eligibility.previousDocumentIdentities,
-        allowUntrackedDocuments: true,
-      });
-      commitTypeScriptFragmentGeneration({
-        cacheDir: input.cacheDir,
-        previousGenerationIdentity: eligibility.previousFragmentGeneration,
-        producerIdentity: availability.producerIdentity,
-        projectIdentity: eligibility.projectIdentity,
-        generationIdentity: eligibility.nextFragmentGeneration,
-        fragments,
-        documentIdentities: eligibility.nextDocumentIdentities,
-      });
-    }
+    commitTypeScriptOverlay({
+      cacheDir: input.cacheDir,
+      previousGenerationIdentity: eligibility.previousFragmentGeneration,
+      nextGenerationIdentity: eligibility.nextFragmentGeneration,
+      producerIdentity: availability.producerIdentity,
+      projectIdentity: eligibility.projectIdentity,
+      baseShardCurrent: input.baseShardCurrent,
+      fragments,
+    });
     const fragmentStoreMs = performance.now() - phaseStartedAt;
     phaseStartedAt = performance.now();
-    if (assembled.completeIndexBytes) writeFileSync(input.candidateShardPath, assembled.completeIndexBytes);
-    writeFileSync(input.candidateAffectedScipPath, assembled.affectedIndexBytes);
+    writeFileSync(input.candidateAffectedScipPath, affectedIndexBytes);
     const writeMs = performance.now() - phaseStartedAt;
     const result = {
-      scipPath: deferCompleteScip ? input.previousShardPath : input.candidateShardPath,
+      scipPath: input.previousShardPath,
       candidateScipPath: input.candidateShardPath,
       affectedScipPath: input.candidateAffectedScipPath,
-      completeScipUpdated: !deferCompleteScip,
+      completeScipUpdated: false,
       durationMs: monotonicNowMs() - startedAt,
       cold: responses.some((response) => response.cold),
       changedFiles: eligibility.plan.changedFiles,
@@ -414,7 +413,7 @@ export function tryMaterializeTypeScriptIncrementalIndex(
       },
     };
     input.onStatus(
-      `Incremental TypeScript index emitted ${result.affectedFiles.length} affected document(s) across ${eligibility.projects.length} project(s) in ${(result.durationMs / 1000).toFixed(3)}s (${result.cold ? 'cold' : 'warm'} service; ${deferCompleteScip ? 'whole SCIP deferred' : 'whole SCIP current'}; runtime ${runtimeMs.toFixed(0)}ms, graph ${graphMs.toFixed(0)}ms, request ${requestMs.toFixed(0)}ms, assembly ${assemblyMs.toFixed(0)}ms, fragments ${fragmentStoreMs.toFixed(0)}ms, write ${writeMs.toFixed(0)}ms).`,
+      `Incremental TypeScript index emitted ${result.affectedFiles.length} affected document(s) across ${eligibility.projects.length} project(s) in ${(result.durationMs / 1000).toFixed(3)}s (${result.cold ? 'cold' : 'warm'} service; whole SCIP deferred; runtime ${runtimeMs.toFixed(0)}ms, graph ${graphMs.toFixed(0)}ms, request ${requestMs.toFixed(0)}ms, assembly ${assemblyMs.toFixed(0)}ms, fragments ${fragmentStoreMs.toFixed(0)}ms, write ${writeMs.toFixed(0)}ms).`,
     );
     return result;
   } catch (error) {

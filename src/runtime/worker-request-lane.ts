@@ -27,6 +27,8 @@ export interface WorkerRequestLaneOptions<Payload, Result, Status> {
   now?: () => number;
   setTimer?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   clearTimer?: (timer: ReturnType<typeof setTimeout>) => void;
+  /** Terminate an idle Worker after this many ms. Omit to keep it warm. */
+  idleTtlMs?: number;
   onComplete(request: WorkerLaneRequest<Payload>, result: Result, status: Status): void;
   onReject(request: WorkerLaneRequest<Payload>, reason: string, status?: Status): void;
   onStatus(status: Status): void;
@@ -52,6 +54,7 @@ export class WorkerRequestLane<Payload, Result, Status> {
   private terminating: Promise<boolean> | null = null;
   private closed = false;
   private workerGeneration = 0;
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private readonly options: WorkerRequestLaneOptions<Payload, Result, Status>) {
     this.now = options.now ?? Date.now;
@@ -65,6 +68,7 @@ export class WorkerRequestLane<Payload, Result, Status> {
 
   start(request: WorkerLaneRequest<Payload>): boolean {
     if (!this.canAccept()) return false;
+    this.clearIdleTimer();
     if (request.deadlineAtMs < this.now()) {
       try {
         this.options.onReject(request, `${this.options.name} request expired before processing.`);
@@ -90,6 +94,7 @@ export class WorkerRequestLane<Payload, Result, Status> {
 
   async close(reason = `${this.options.name} service is shutting down.`): Promise<void> {
     this.closed = true;
+    this.clearIdleTimer();
     if (this.active) {
       await this.failActiveAfterTermination(reason);
       return;
@@ -147,6 +152,7 @@ export class WorkerRequestLane<Payload, Result, Status> {
       return;
     }
     this.releaseActive(active);
+    this.scheduleIdleTermination();
   }
 
   private async failActiveAfterTermination(reason: string): Promise<void> {
@@ -186,7 +192,25 @@ export class WorkerRequestLane<Payload, Result, Status> {
     this.clearTimer(active.timer);
   }
 
+  private scheduleIdleTermination(): void {
+    const idleTtlMs = this.options.idleTtlMs;
+    if (!idleTtlMs || idleTtlMs <= 0 || this.closed || this.active || !this.worker) return;
+    this.clearIdleTimer();
+    this.idleTimer = this.setTimer(() => {
+      this.idleTimer = null;
+      if (this.closed || this.active || !this.worker) return;
+      void this.terminateWorker();
+    }, idleTtlMs);
+  }
+
+  private clearIdleTimer(): void {
+    if (!this.idleTimer) return;
+    this.clearTimer(this.idleTimer);
+    this.idleTimer = null;
+  }
+
   private async terminateWorker(): Promise<boolean> {
+    this.clearIdleTimer();
     if (this.terminating) {
       return this.terminating;
     }

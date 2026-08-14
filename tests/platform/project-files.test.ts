@@ -11,11 +11,16 @@ import {
   resolveProjectFile,
   UnsafeProjectPathError,
 } from '../../src/platform/project-files.js';
+import {
+  projectFileFingerprintCacheStats,
+  resetProjectFileFingerprintCacheForTest,
+} from '../../src/platform/fingerprint-stat-cache.js';
 import { LANGUAGE_INDEX_MARKERS } from '../../src/domain/project-input.js';
 
 const tempDirs: string[] = [];
 
 afterEach(() => {
+  resetProjectFileFingerprintCacheForTest();
   for (const path of tempDirs.splice(0)) rmSync(path, { recursive: true, force: true });
 });
 
@@ -183,6 +188,27 @@ describe('platform project file fingerprints', () => {
         markerFiles: LANGUAGE_INDEX_MARKERS.typescript,
       }),
     ).not.toEqual(typescript);
+  });
+
+  it('reuses content hashes when inode, size, mtime, and ctime are unchanged', () => {
+    const projectRoot = temporaryDirectory('scip-query-fingerprint-stat-cache-');
+    writeFileSync(join(projectRoot, 'value.ts'), 'export const value = 1;\n');
+
+    const first = fingerprintProjectFiles(projectRoot);
+    const afterFirst = projectFileFingerprintCacheStats(projectRoot);
+    expect(afterFirst.stores).toBeGreaterThan(0);
+    expect(first.find((file) => file.path === 'value.ts')?.hash).toMatch(/^[a-f0-9]{64}$/);
+
+    const second = fingerprintProjectFiles(projectRoot);
+    const afterSecond = projectFileFingerprintCacheStats(projectRoot);
+    expect(second).toEqual(first);
+    expect(afterSecond.hits).toBeGreaterThan(0);
+
+    writeFileSync(join(projectRoot, 'value.ts'), 'export const value = 2;\n');
+    const third = fingerprintProjectFiles(projectRoot);
+    expect(third.find((file) => file.path === 'value.ts')?.hash).not.toBe(
+      first.find((file) => file.path === 'value.ts')?.hash,
+    );
   });
 });
 

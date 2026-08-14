@@ -1,9 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
+  createPathChangeWake,
   runWatchServiceLoopIteration,
   terminateWatchServiceProcess,
   watchServiceLoopDelayMs,
 } from '../../src/runtime/watch-server.js';
+
+const tempDirs: string[] = [];
+
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 describe('watchServiceLoopDelayMs', () => {
   it('backs off while both mailboxes are idle', () => {
@@ -11,8 +23,9 @@ describe('watchServiceLoopDelayMs', () => {
     expect(watchServiceLoopDelayMs(0, 2)).toBe(100);
     expect(watchServiceLoopDelayMs(0, 3)).toBe(200);
     expect(watchServiceLoopDelayMs(0, 4)).toBe(400);
-    expect(watchServiceLoopDelayMs(0, 7)).toBe(2_000);
-    expect(watchServiceLoopDelayMs(0, 100)).toBe(2_000);
+    expect(watchServiceLoopDelayMs(0, 7)).toBe(3_200);
+    expect(watchServiceLoopDelayMs(0, 9)).toBe(10_000);
+    expect(watchServiceLoopDelayMs(0, 100)).toBe(10_000);
   });
 
   it('keeps low latency while draining mailbox work', () => {
@@ -114,5 +127,50 @@ describe('terminateWatchServiceProcess', () => {
       }),
     ).toThrow(exit);
     expect(events).toEqual(['report:watch-service: shutdown remained degraded', 'exit:1']);
+  });
+});
+
+describe('createPathChangeWake', () => {
+  it('wakes a pending wait when a watched path changes', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'scip-query-watch-wake-'));
+    tempDirs.push(dir);
+    const wake = createPathChangeWake([dir]);
+    try {
+      const pending = wake.wait(2_000);
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 25));
+      const startedAt = Date.now();
+      writeFileSync(join(dir, 'request.json'), '{}');
+      await pending;
+      expect(Date.now() - startedAt).toBeLessThan(500);
+    } finally {
+      wake.close();
+    }
+  });
+
+  it('returns immediately when a watched path changed before wait', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'scip-query-watch-latch-'));
+    tempDirs.push(dir);
+    const wake = createPathChangeWake([dir]);
+    try {
+      writeFileSync(join(dir, 'request.json'), '{}');
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 25));
+      const startedAt = Date.now();
+      await wake.wait(2_000);
+      expect(Date.now() - startedAt).toBeLessThan(500);
+    } finally {
+      wake.close();
+    }
+  });
+
+  it('aborts a pending wait when closed', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'scip-query-watch-close-'));
+    tempDirs.push(dir);
+    mkdirSync(join(dir, 'pending'));
+    const wake = createPathChangeWake([join(dir, 'pending')]);
+    const startedAt = Date.now();
+    const pending = wake.wait(2_000);
+    wake.close();
+    await pending;
+    expect(Date.now() - startedAt).toBeLessThan(500);
   });
 });

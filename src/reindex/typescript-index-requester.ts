@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { monotonicNowMs } from '../domain/time.js';
-import { readWatchServiceState, watchServicePaths, type WatchServiceState } from '../platform/watch-service-state.js';
+import {
+  WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS,
+  readWatchServiceState,
+  watchServicePaths,
+  type WatchServiceState,
+} from '../platform/watch-service-state.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
 import { readProcessIdentity, sameProcessIdentity, type ProcessIdentity } from '../platform/process-identity.js';
 import { canonicalPath } from '../platform/git-worktree.js';
@@ -20,6 +25,7 @@ import {
   type TypeScriptIndexDocumentRequest,
   type TypeScriptIndexDocumentResponse,
 } from './typescript-index-protocol.js';
+import { TypeScriptIndexServiceHost } from './typescript-index-service.js';
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 120_000;
 const REQUEST_POLL_INTERVAL_MS = 5;
@@ -39,6 +45,7 @@ export interface TypeScriptIndexRequesterOptions {
   timeoutMs?: number;
   runtime?: TypeScriptIndexRequesterRuntime;
   mailboxLimits?: Partial<BoundedMailboxLimits>;
+  emitLocally?: (request: TypeScriptIndexDocumentRequest) => RequestedTypeScriptDocuments;
 }
 
 export interface RequestedTypeScriptDocuments {
@@ -55,6 +62,8 @@ export class TypeScriptIndexRequester {
   private readonly timeoutMs: number;
   private readonly runtime: TypeScriptIndexRequesterRuntime;
   private readonly mailboxLimits: Partial<BoundedMailboxLimits>;
+  private readonly emitLocally?: (request: TypeScriptIndexDocumentRequest) => RequestedTypeScriptDocuments;
+  private localHost: TypeScriptIndexServiceHost | null = null;
 
   constructor(
     input: { projectRoot: string; cacheDir: string; baseGeneration: string },
@@ -66,6 +75,7 @@ export class TypeScriptIndexRequester {
     this.timeoutMs = opts.timeoutMs ?? configuredTimeoutMs();
     this.runtime = opts.runtime ?? DEFAULT_RUNTIME;
     this.mailboxLimits = opts.mailboxLimits ?? {};
+    this.emitLocally = opts.emitLocally;
   }
 
   // scip-query: ignore-twin — request clients target unrelated index, LSP, and semantic protocols.
@@ -74,7 +84,7 @@ export class TypeScriptIndexRequester {
     const mailboxPaths = typeScriptIndexMailboxPaths(this.cacheDir);
     const state = readWatchServiceState(servicePaths.statePath);
     if (!usableServiceState(state, this.projectRoot, this.runtime)) {
-      throw new Error('Compatible TypeScript index service is not running.');
+      return this.requestLocally(request);
     }
 
     const enqueuedAtMs = this.runtime.now();
@@ -117,11 +127,26 @@ export class TypeScriptIndexRequester {
       }
       const liveState = readWatchServiceState(servicePaths.statePath);
       if (!usableServiceState(liveState, this.projectRoot, this.runtime)) {
-        throw new Error('TypeScript index service stopped while processing a request.');
+        return this.requestLocally(request);
       }
       this.runtime.sleep(REQUEST_POLL_INTERVAL_MS);
     }
-    throw new Error(`TypeScript index service timed out after ${this.timeoutMs}ms.`);
+    return this.requestLocally(request);
+  }
+
+  private requestLocally(request: TypeScriptIndexDocumentRequest): RequestedTypeScriptDocuments {
+    if (this.emitLocally) {
+      return documentsFromResponse(this.emitLocally(request), request.producerIdentity, request.affectedFiles);
+    }
+    this.localHost ??= new TypeScriptIndexServiceHost({
+      projectRoot: this.projectRoot,
+      currentGeneration: () => this.baseGeneration,
+    });
+    return documentsFromResponse(
+      decodeDocumentResponse(this.localHost.handle(this.baseGeneration, request), request.producerIdentity),
+      request.producerIdentity,
+      request.affectedFiles,
+    );
   }
 }
 
@@ -132,11 +157,14 @@ function usableServiceState(
   runtime: TypeScriptIndexRequesterRuntime,
 ): state is WatchServiceState {
   const actualIdentity = state?.processIdentity ? runtime.readProcessIdentity?.(state.pid) : null;
+  const heartbeatAtMs = state ? Date.parse(state.heartbeatAt) : Number.NaN;
   return (
     state !== null &&
     state.projectRoot === projectRoot &&
     state.typescriptIndex?.protocolVersion === TYPESCRIPT_INDEX_PROTOCOL_VERSION &&
     runtime.isProcessAlive(state.pid) &&
+    Number.isFinite(heartbeatAtMs) &&
+    runtime.now() - heartbeatAtMs <= WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS &&
     (!state.processIdentity || (actualIdentity != null && sameProcessIdentity(state.processIdentity, actualIdentity)))
   );
 }
@@ -170,7 +198,21 @@ function parseResponse(
   if (response.ok !== true) {
     throw new Error(typeof response.error === 'string' ? response.error : 'TypeScript index service request failed.');
   }
-  const decoded = decodeDocumentResponse(response.response, producerIdentity);
+  return documentsFromResponse(
+    decodeDocumentResponse(response.response, producerIdentity),
+    producerIdentity,
+    affectedFiles,
+  );
+}
+
+function documentsFromResponse(
+  decoded: RequestedTypeScriptDocuments,
+  producerIdentity: string,
+  affectedFiles: readonly string[],
+): RequestedTypeScriptDocuments {
+  if (decoded.producerIdentity !== producerIdentity) {
+    throw new Error('TypeScript index service wrote an invalid response.');
+  }
   const expected = [...new Set(affectedFiles)].sort();
   const actual = decoded.fragments.map((fragment) => fragment.relativePath).sort();
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {

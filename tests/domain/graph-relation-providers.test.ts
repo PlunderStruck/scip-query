@@ -9,7 +9,13 @@ import {
 } from '../../src/domain/graph-relation-providers.js';
 
 describe('graph relation provider contracts', () => {
-  it('resolves every declared subtype back to one concrete provider', () => {
+    it('admits candidate may-call evidence from indexed program identity', () => {
+      const resolved = graphRelationProviderFor('execution', 'call');
+      expect(resolved?.provider.id).toBe('indexed-program-identity');
+      expect(resolved?.relation.evidenceStrengths).toContain('candidate');
+    });
+
+    it('resolves every declared subtype back to one concrete provider', () => {
     const providerIds = GRAPH_RELATION_PROVIDER_CONTRACTS.map((provider) => provider.id);
     expect(new Set(providerIds).size).toBe(providerIds.length);
 

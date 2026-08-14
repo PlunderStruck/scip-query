@@ -9,6 +9,7 @@ import {
   readFileSync,
   readlinkSync,
   realpathSync,
+  type Stats,
 } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
@@ -30,6 +31,11 @@ import {
   projectSnapshotPathState,
 } from './project-snapshot-context.js';
 import { typeScriptProjectInputPaths } from './typescript-projects.js';
+import {
+  lookupProjectFileFingerprint,
+  persistProjectFileFingerprintCache,
+  rememberProjectFileFingerprint,
+} from './fingerprint-stat-cache.js';
 
 export {
   normalizeSafeProjectRelativePath,
@@ -260,7 +266,7 @@ export function fingerprintProjectFiles(
     .filter((path) => !opts.includePath || opts.includePath(path))
     .sort();
   const canonicalProjectRoot = realpathSync(projectRoot);
-  return files.flatMap((relativePath): ProjectFileFingerprint[] => {
+  const fingerprints = files.flatMap((relativePath): ProjectFileFingerprint[] => {
     const snapshotFingerprint = projectSnapshotFingerprint(projectRoot, relativePath);
     if (snapshotFingerprint) {
       return [
@@ -285,20 +291,40 @@ export function fingerprintProjectFiles(
     }
     const absPath = join(projectRoot, relativePath);
     try {
-      if (lstatSync(absPath).isSymbolicLink()) {
+      const stats = lstatSync(absPath);
+      if (stats.isSymbolicLink()) {
+        const cached = lookupProjectFileFingerprint(
+          canonicalProjectRoot,
+          relativePath,
+          'symlink',
+          fileStatIdentity(stats),
+        );
+        if (cached) {
+          return [{ path: relativePath, size: cached.size, hash: cached.hash }];
+        }
         const targetPath = realpathSync(absPath);
         const relativeTarget = relative(canonicalProjectRoot, targetPath);
         if (relativeTarget === '..' || relativeTarget.startsWith(`..${sep}`) || isAbsolute(relativeTarget)) {
           throw new Error('external symlink');
         }
         const target = readlinkSync(absPath);
+        const hash = createHash('sha256').update('symlink\0').update(target).digest('hex');
+        const size = Buffer.byteLength(target);
+        rememberProjectFileFingerprint(canonicalProjectRoot, relativePath, 'symlink', fileStatIdentity(stats), {
+          hash,
+          size,
+        });
         return [
           {
             path: relativePath,
-            size: Buffer.byteLength(target),
-            hash: createHash('sha256').update('symlink\0').update(target).digest('hex'),
+            size,
+            hash,
           },
         ];
+      }
+      const cached = lookupProjectFileFingerprint(canonicalProjectRoot, relativePath, 'file', fileStatIdentity(stats));
+      if (cached) {
+        return [{ path: relativePath, size: cached.size, hash: cached.hash }];
       }
       const hash = createHash('sha256');
       const size = hashFileWithinLimit(
@@ -306,11 +332,16 @@ export function fingerprintProjectFiles(
         { inputKind: 'project fingerprint input', maxBytes: DEFAULT_PROJECT_SOURCE_LIMIT_BYTES },
         (chunk) => hash.update(chunk),
       );
+      const digest = hash.digest('hex');
+      rememberProjectFileFingerprint(canonicalProjectRoot, relativePath, 'file', fileStatIdentity(stats), {
+        hash: digest,
+        size,
+      });
       return [
         {
           path: relativePath,
           size,
-          hash: hash.digest('hex'),
+          hash: digest,
         },
       ];
     } catch (error) {
@@ -328,6 +359,24 @@ export function fingerprintProjectFiles(
       ];
     }
   });
+  persistProjectFileFingerprintCache(canonicalProjectRoot);
+  return fingerprints;
+}
+
+function fileStatIdentity(stats: Stats): {
+  dev: number;
+  ino: number;
+  mtimeMs: number;
+  ctimeMs: number;
+  size: number;
+} {
+  return {
+    dev: stats.dev,
+    ino: stats.ino,
+    mtimeMs: stats.mtimeMs,
+    ctimeMs: stats.ctimeMs,
+    size: stats.size,
+  };
 }
 
 export function buildProjectInputFingerprint(

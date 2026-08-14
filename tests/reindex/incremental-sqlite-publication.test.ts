@@ -59,6 +59,32 @@ describe('incremental SQLite publication', () => {
     expect(readFacts(paths.previous).get('src/a.ts')).toBeDefined();
   });
 
+  test('inserts a newly affected document that was absent from the previous generation', () => {
+    const paths = fixturePaths();
+    createDatabase(paths.previous, populatePrevious);
+    createDatabase(paths.mini, (db) => {
+      insertDocument(db, 1, 'src/c.ts', 'new c', 'new-c');
+      insertSymbol(db, 1, 'symbol/C', 'C', 'new C documentation');
+      insertDefinition(db, 1, 1, 1);
+    });
+
+    const result = patchIncrementalSqliteGeneration({
+      previousDbPath: paths.previous,
+      miniDbPath: paths.mini,
+      candidateDbPath: paths.candidate,
+      affectedFiles: ['src/c.ts'],
+    });
+
+    expect(result.affectedDocumentCount).toBe(1);
+    expect(result.changedDocumentPaths).toEqual(['src/c.ts']);
+    const candidate = new Database(paths.candidate, { readonly: true });
+    const pathsInDb = candidate.prepare('SELECT relative_path FROM documents ORDER BY relative_path').all();
+    const symbols = candidate.prepare('SELECT symbol FROM global_symbols ORDER BY symbol').all();
+    candidate.close();
+    expect(pathsInDb).toEqual([{ relative_path: 'src/a.ts' }, { relative_path: 'src/b.ts' }, { relative_path: 'src/c.ts' }]);
+    expect(symbols).toEqual([{ symbol: 'symbol/A' }, { symbol: 'symbol/B' }, { symbol: 'symbol/C' }]);
+  });
+
   test('rejects omitted affected documents, schema drift, corrupt input, and shared definitions', () => {
     const omitted = fixturePaths();
     createDatabase(omitted.previous, populatePrevious);

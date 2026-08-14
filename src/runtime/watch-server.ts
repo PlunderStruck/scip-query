@@ -1,5 +1,5 @@
 import process from 'node:process';
-import { rmSync } from 'node:fs';
+import { rmSync, watch, type FSWatcher } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { sanitizeTerminalLine } from '../platform/terminal-output.js';
@@ -31,22 +31,92 @@ import {
   writeWatchServiceState,
   type WatchServiceWatchOverrides,
 } from './watch-service.js';
-import { maybeSweepRepositoryCache } from './repository-cache-lifecycle.js';
+import { maybeSweepRepositoryCache, DEFAULT_REPOSITORY_SWEEP_INTERVAL_MS } from './repository-cache-lifecycle.js';
 import { WatchRefreshCoordinator } from './watch-refresh-coordinator.js';
 import { maintainBoundedMailbox } from '../storage/bounded-mailbox.js';
 import { createTypeScriptIndexMailboxLane, createTypeScriptSemanticMailboxLane } from './typescript-mailbox-lanes.js';
 
-const HEARTBEAT_INTERVAL_MS = 1_000;
-const ACTIVITY_POLL_INTERVAL_MS = 1_000;
+const HEARTBEAT_INTERVAL_MS = 2_000;
+const ACTIVITY_POLL_INTERVAL_MS = 5_000;
 const MAILBOX_MAINTENANCE_INTERVAL_MS = 60_000;
 const BUSY_SERVICE_LOOP_INTERVAL_MS = 10;
 const IDLE_SERVICE_LOOP_INTERVAL_MS = 50;
-const MAX_IDLE_SERVICE_LOOP_INTERVAL_MS = 2_000;
+const MAX_IDLE_SERVICE_LOOP_INTERVAL_MS = 10_000;
 
 export function watchServiceLoopDelayMs(processedRequests: number, consecutiveIdlePolls = 1): number {
   if (processedRequests > 0) return BUSY_SERVICE_LOOP_INTERVAL_MS;
-  const exponent = Math.max(0, Math.min(6, consecutiveIdlePolls - 1));
+  const exponent = Math.max(0, Math.min(8, consecutiveIdlePolls - 1));
   return Math.min(MAX_IDLE_SERVICE_LOOP_INTERVAL_MS, IDLE_SERVICE_LOOP_INTERVAL_MS * 2 ** exponent);
+}
+
+export interface PathChangeWake {
+  wait(durationMs: number): Promise<void>;
+  close(): void;
+}
+
+/**
+ * Sleep until `durationMs` elapses, a watched path changes, or `close()` runs.
+ * A change that arrives between polls is latched so the next wait returns
+ * immediately instead of sleeping a full idle interval.
+ */
+export function createPathChangeWake(paths: readonly string[]): PathChangeWake {
+  let closed = false;
+  let pendingNotify = false;
+  let wake: (() => void) | undefined;
+  const watchers: FSWatcher[] = [];
+  const notify = (): void => {
+    pendingNotify = true;
+    const current = wake;
+    wake = undefined;
+    current?.();
+  };
+  for (const path of new Set(paths)) {
+    try {
+      const watcher = watch(path, { persistent: false }, notify);
+      watcher.on('error', () => undefined);
+      watchers.push(watcher);
+    } catch {
+      // Missing directories still poll when the idle timeout fires.
+    }
+  }
+  return {
+    wait(durationMs) {
+      if (closed || durationMs <= 0) {
+        pendingNotify = false;
+        return Promise.resolve();
+      }
+      return new Promise((resolvePromise) => {
+        const timer = setTimeout(() => {
+          if (wake === resolveAndClear) wake = undefined;
+          resolvePromise();
+        }, durationMs);
+        const resolveAndClear = (): void => {
+          clearTimeout(timer);
+          if (wake === resolveAndClear) wake = undefined;
+          resolvePromise();
+        };
+        wake = resolveAndClear;
+        if (pendingNotify || closed) {
+          pendingNotify = false;
+          resolveAndClear();
+        }
+      });
+    },
+    close() {
+      if (!closed) {
+        closed = true;
+        for (const watcher of watchers) {
+          try {
+            watcher.close();
+          } catch {
+            // already closed
+          }
+        }
+        watchers.length = 0;
+      }
+      notify();
+    },
+  };
 }
 
 export interface WatchServiceLoopIterationRuntime {
@@ -156,6 +226,14 @@ export async function runWatchServiceServer(
   const indexMailboxPaths = typeScriptIndexMailboxPaths(indexPaths.cacheDir);
   initializeTypeScriptSemanticMailbox(semanticMailboxPaths);
   initializeTypeScriptIndexMailbox(indexMailboxPaths);
+  const mailboxWake = createPathChangeWake([
+    indexMailboxPaths.pendingDir,
+    indexMailboxPaths.legacyRequestDir,
+    semanticMailboxPaths.pendingDir,
+    semanticMailboxPaths.legacyRequestDir,
+    servicePaths.refreshRequestsPath,
+  ]);
+  let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
   const persistState = (
     force = false,
@@ -279,6 +357,7 @@ export async function runWatchServiceServer(
 
   const stop = (): void => {
     stopping = true;
+    mailboxWake.close();
   };
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);
@@ -293,10 +372,15 @@ export async function runWatchServiceServer(
     indexGeneration =
       freshness.state === 'fresh' ? (publishedGenerationIdentity(indexPaths.dbPath) ?? undefined) : undefined;
     const startupTrigger = startupRefreshTrigger(freshness.state);
-    if (startupTrigger) watcher.requestRefresh(startupTrigger, { immediate: true });
     recordActivity();
     ready = true;
     persistState(true);
+    heartbeatTimer = setInterval(() => persistState(), HEARTBEAT_INTERVAL_MS);
+    heartbeatTimer.unref?.();
+    // Advertise a live TypeScript index mailbox before the first refresh so
+    // the reindex worker can emit incrementally instead of falling back to
+    // scip-typescript because the watch state file does not exist yet.
+    if (startupTrigger) watcher.requestRefresh(startupTrigger, { immediate: true });
 
     while (!stopping) {
       const iteration = await runWatchServiceLoopIteration(consecutiveIdleMailboxPolls, {
@@ -309,7 +393,7 @@ export async function runWatchServiceServer(
             maintainBoundedMailbox(indexMailboxPaths);
             maintainBoundedMailbox(semanticMailboxPaths);
           }
-          if (nowMonotonicMs - lastCacheSweepAtMonotonicMs >= 60_000) {
+          if (nowMonotonicMs - lastCacheSweepAtMonotonicMs >= DEFAULT_REPOSITORY_SWEEP_INTERVAL_MS) {
             lastCacheSweepAtMonotonicMs = nowMonotonicMs;
             maybeSweepRepositoryCache(projectRoot, cliVersion);
           }
@@ -330,11 +414,11 @@ export async function runWatchServiceServer(
                 activity.refreshDetail ?? 'stale index observed by a legacy command',
               );
             }
-            refreshCoordinator.poll(watcherStatus, (detail) => {
-              recordActivity();
-              watcher.requestRefresh({ kind: 'watch-demand', detail }, { immediate: true });
-            });
           }
+          refreshCoordinator.poll(watcherStatus, (detail) => {
+            recordActivity();
+            watcher.requestRefresh({ kind: 'watch-demand', detail }, { immediate: true });
+          });
           if (processedRequests > 0) {
             recordActivity();
             persistState(true, 'visibility');
@@ -350,7 +434,7 @@ export async function runWatchServiceServer(
             nowMs: monotonicNowMs(),
             idleTimeoutMs: watchConfig.idleTimeoutMs,
           }),
-        wait: sleep,
+        wait: (durationMs) => mailboxWake.wait(durationMs),
       });
       consecutiveIdleMailboxPolls = iteration.consecutiveIdlePolls;
       if (iteration.stopped) break;
@@ -358,10 +442,12 @@ export async function runWatchServiceServer(
   } catch (error) {
     executionFailed = true;
     executionError = error;
-  } finally {
-    process.off('SIGINT', stop);
-    process.off('SIGTERM', stop);
-    await Promise.all([
+    } finally {
+      process.off('SIGINT', stop);
+      process.off('SIGTERM', stop);
+      if (heartbeatTimer !== undefined) clearInterval(heartbeatTimer);
+      mailboxWake.close();
+      await Promise.all([
       semanticLane.close('TypeScript semantic service stopped before completing the request.'),
       indexLane.close('TypeScript index service stopped before completing the request.'),
     ]);
@@ -388,11 +474,6 @@ export async function runWatchServiceServer(
   }
   if (executionFailed) throw executionError;
   if (shutdownError) throw shutdownError;
-}
-
-// scip-query: ignore-twin — independent process loops own their local timer primitive.
-function sleep(durationMs: number): Promise<void> {
-  return new Promise((resolvePromise) => setTimeout(resolvePromise, durationMs));
 }
 
 export function terminateWatchServiceProcess(

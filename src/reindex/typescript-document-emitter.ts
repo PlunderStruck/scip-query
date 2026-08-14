@@ -289,28 +289,32 @@ export class TypeScriptDocumentEmitter {
     const startedAt = performance.now();
     const modifiedFiles = normalizedUniqueRelativePaths(input.modifiedFiles);
     const affectedFiles = normalizedUniqueRelativePaths(input.affectedFiles);
-    this.validateIncrementalPaths(modifiedFiles, affectedFiles);
+    const config = readTypeScriptConfig(this.runtime.typescript, this.tsconfigPath);
+    this.config = config;
+    this.includedFiles = new Set(config.fileNames.map(normalizedAbsolutePath));
 
     const previousProgram = this.program;
     const previousNodes = new Map<string, TypeScript.SourceFile>();
     for (const relativePath of modifiedFiles) {
       const absolutePath = resolveWithin(this.workspaceRoot, relativePath);
       const sourceFile = previousProgram.getSourceFile(absolutePath);
-      if (!sourceFile) throw new Error(`modified TypeScript source is unavailable: ${relativePath}`);
-      previousNodes.set(relativePath, sourceFile);
-      this.stats.symbolEntriesPruned += pruneSourceFileEntries(this.symbolTable, sourceFile);
-      this.stats.symbolEntriesPruned += pruneSourceFileEntries(this.constructorTable, sourceFile);
+      if (sourceFile) {
+        previousNodes.set(relativePath, sourceFile);
+        this.stats.symbolEntriesPruned += pruneSourceFileEntries(this.symbolTable, sourceFile);
+        this.stats.symbolEntriesPruned += pruneSourceFileEntries(this.constructorTable, sourceFile);
+      }
       this.host.invalidate(absolutePath);
     }
 
     this.program = this.runtime.typescript.createProgram(
-      this.config.fileNames,
-      this.config.options,
+      config.fileNames,
+      config.options,
       this.host.compilerHost,
       previousProgram,
     );
     this.checker = this.program.getTypeChecker();
     this.stats.programUpdates += 1;
+    this.validateIncrementalPaths(modifiedFiles, affectedFiles);
     for (const [relativePath, previousNode] of previousNodes) {
       const currentNode = this.program.getSourceFile(resolveWithin(this.workspaceRoot, relativePath));
       if (currentNode === previousNode) this.stats.sourceNodesReused += 1;

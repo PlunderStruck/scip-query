@@ -40,7 +40,12 @@ afterEach(() => {
 describe('skill installation', () => {
   it('keeps the builtin skill list in lockstep with the shipped directories', async () => {
     const { module } = await loadSetup();
-    expect([...module.BUILTIN_SKILLS].sort()).toEqual(['scip-plan', 'scip-query', 'scip-setup']);
+    expect([...module.BUILTIN_SKILLS].sort()).toEqual([
+      'scip-integrity-audit',
+      'scip-plan',
+      'scip-query',
+      'scip-setup',
+    ]);
     expect([...module.INSTALLABLE_SKILLS].sort()).toEqual(
       [...module.BUILTIN_SKILLS, ...module.COMPATIBILITY_SKILLS].sort(),
     );
@@ -49,16 +54,23 @@ describe('skill installation', () => {
     );
   });
 
-  it('ships one primary router and two focused workflow skills', async () => {
+  it('ships the primary router, workflow skills, and integrity audit', async () => {
     const { module } = await loadSetup();
-    expect(module.BUILTIN_SKILLS).toEqual(['scip-query', 'scip-plan', 'scip-setup']);
+    expect(module.BUILTIN_SKILLS).toEqual(['scip-query', 'scip-plan', 'scip-setup', 'scip-integrity-audit']);
   });
 
   it('installs every bundled skill into Claude, Codex, and shared agent roots', async () => {
     const { module, symlinkSync } = await loadSetup();
     const result = module.installSkills({ quiet: true });
 
-    for (const skill of ['scip-query', 'scip-plan', 'scip-setup', 'scip-explore', 'concrete-plan']) {
+    for (const skill of [
+      'scip-query',
+      'scip-plan',
+      'scip-setup',
+      'scip-integrity-audit',
+      'scip-explore',
+      'concrete-plan',
+    ]) {
       expect(result.installed).toEqual(
         expect.arrayContaining([`Claude/${skill}`, `Codex/${skill}`, `Agents/${skill}`]),
       );

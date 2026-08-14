@@ -398,7 +398,10 @@ describe('reindex reliability', () => {
     expect(attempts.get('typescript')).toBe(1);
     expect(readFileSync(outputScip, 'utf8')).toBe(baseScip);
     expect(JSON.parse(readFileSync(metaPath, 'utf8'))).toEqual(
-      expect.objectContaining({ scipCompanion: 'deferred', languageFingerprints: {} }),
+      expect.objectContaining({
+        scipCompanion: 'deferred',
+        languageFingerprints: expect.objectContaining({ typescript: expect.any(Object) }),
+      }),
     );
     expect(JSON.parse(readFileSync(join(cacheDir, '.scipquery-generations/state.json'), 'utf8')).publication).toEqual(
       expect.objectContaining({
@@ -408,6 +411,32 @@ describe('reindex reliability', () => {
       }),
     );
     expect(fragmentPruneCalls.at(-1)).toEqual([]);
+  });
+
+  it('reuses a deferred TypeScript shard when only another language changed', async () => {
+    const projectRoot = createProject('scip-query-reindex-deferred-reuse-');
+    writeFileSync(join(projectRoot, 'src/main.rs'), 'pub const ANSWER: i32 = 42;\n');
+    writeFileSync(join(projectRoot, 'Cargo.toml'), '[package]\nname = "fixture"\nversion = "0.1.0"\n');
+    const cacheDir = join(projectRoot, '.scipquery-cache');
+    mkdirSync(cacheDir);
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+    const statuses: string[] = [];
+    const { reindex, attempts } = await loadReindexFixture({
+      languages: ['typescript', 'rust'],
+      deferredIncrementalTypeScript: true,
+    });
+
+    await reindex({ projectRoot, outputScip, outputDb, onStatus: () => undefined });
+    writeFileSync(join(projectRoot, 'src/main.ts'), 'export const answer = 43;\n');
+    await reindex({ projectRoot, outputScip, outputDb, onStatus: () => undefined });
+    writeFileSync(join(projectRoot, 'src/main.rs'), 'pub const ANSWER: i32 = 43;\n');
+    await reindex({ projectRoot, outputScip, outputDb, onStatus: (message) => statuses.push(message) });
+
+    expect(attempts.get('typescript')).toBe(1);
+    expect(attempts.get('rust')).toBe(2);
+    expect(statuses.join('\n')).toContain('Reusing cached typescript SCIP shard');
+    expect(statuses.join('\n')).toContain('Materializing the deferred whole TypeScript SCIP companion');
   });
 
   it('falls back to complete conversion when incremental SQLite publication rejects', async () => {

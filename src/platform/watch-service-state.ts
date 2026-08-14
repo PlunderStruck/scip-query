@@ -11,7 +11,7 @@ import { parseProcessIdentity, type ProcessIdentity } from './process-identity.j
 import { readSmallArtifactText } from './bounded-file.js';
 
 export const WATCH_SERVICE_PROTOCOL_VERSION = 6;
-export const WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS = 5_000;
+export const WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS = 10_000;
 export const WATCH_LOCK_FILE = 'watch.lock';
 export const WATCH_STATE_FILE = 'watch-state.json';
 export const WATCH_ACTIVITY_FILE = 'watch-activity.json';

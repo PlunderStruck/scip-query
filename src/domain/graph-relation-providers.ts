@@ -192,6 +192,7 @@ export const GRAPH_RELATION_PROVIDER_CONTRACTS: readonly GraphRelationProviderCo
     requirements: ['indexed-graph'],
     relations: [
       relation('execution', 'call', 'The source construct may call the resolved target.', {
+        strengths: ['exact', 'derived', 'candidate', 'mixed'],
         nonClaims: ['Static may-call reachability does not prove that an invocation occurred at runtime.'],
         recoverWith: ['call-graph', 'inspect', 'code'],
       }),

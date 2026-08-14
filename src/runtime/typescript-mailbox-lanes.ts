@@ -28,6 +28,9 @@ import {
 } from '../storage/bounded-mailbox.js';
 import { WorkerRequestLane, type RequestWorkerLike } from './worker-request-lane.js';
 
+/** Semantic query workers can exit when idle. Index workers stay warm so watch rebuilds stay incremental. */
+const TYPESCRIPT_SEMANTIC_MAILBOX_WORKER_IDLE_MS = 60_000;
+
 export interface TypeScriptMailboxWorkerLane<Status> {
   poll(): number;
   status(): Status;
@@ -167,6 +170,7 @@ export function createTypeScriptSemanticMailboxLane(
         { nowMs, limits: options.limits },
       );
     },
+    idleTtlMs: TYPESCRIPT_SEMANTIC_MAILBOX_WORKER_IDLE_MS,
     onBusy: options.onBusy,
     onFatal: options.onFatal,
   });
@@ -177,6 +181,7 @@ interface GenericMailboxLaneOptions<Envelope extends { id: string; deadlineAtMs:
   paths: TypeScriptIndexMailboxPaths | TypeScriptSemanticMailboxPaths;
   now?: () => number;
   limits?: Partial<BoundedMailboxLimits>;
+  idleTtlMs?: number;
   initialStatus(): Status;
   parseEnvelope(value: string): Envelope;
   createWorker(): RequestWorkerLike;
@@ -210,6 +215,7 @@ function createTypeScriptMailboxLane<Envelope extends { id: string; deadlineAtMs
     name: options.name,
     createWorker: options.createWorker,
     now,
+    idleTtlMs: options.idleTtlMs,
     onComplete(request, result, status) {
       const claimed = requireCurrent(request.requestId);
       serviceStatus = status;

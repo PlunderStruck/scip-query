@@ -59,7 +59,7 @@ describe('loadProjectConfig', () => {
       debounceMs: 2_000,
       cooldownMs: 5_000,
       gitPollMs: 2_000,
-      idleTimeoutMs: 180_000,
+      idleTimeoutMs: 900_000,
       autoRefresh: true,
       resourceBudget: {
         enabled: true,
@@ -176,7 +176,7 @@ describe('automatic indexing config setup', () => {
         enabled: true,
         autoRefresh: true,
         debounceMs: 2_000,
-        idleTimeoutMs: 180_000,
+        idleTimeoutMs: 900_000,
         resourceBudget: {
           enabled: true,
           windowMs: 15 * 60_000,

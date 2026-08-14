@@ -418,7 +418,7 @@ export interface WatchConfig {
   cooldownMs?: number;
   /** Ms between Git HEAD/index state checks (default: 2000) */
   gitPollMs?: number;
-  /** Ms of clean inactivity before the background watcher exits; 0 keeps it running (default: 180000) */
+  /** Ms of clean inactivity before the background watcher exits; 0 keeps it running (default: 900000) */
   idleTimeoutMs?: number;
   /** Let project agent hooks refresh stale indexes without a live watch process (default: true) */
   autoRefresh?: boolean;

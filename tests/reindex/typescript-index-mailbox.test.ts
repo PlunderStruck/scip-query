@@ -15,6 +15,7 @@ import { afterEach, describe, expect, test } from 'vitest';
 import { loadTypeScriptDocumentRuntime } from '../../src/reindex/typescript-document-emitter.js';
 import {
   TypeScriptIndexRequester,
+  type RequestedTypeScriptDocuments,
   type TypeScriptIndexRequesterRuntime,
 } from '../../src/reindex/typescript-index-requester.js';
 import {
@@ -68,17 +69,93 @@ describe('TypeScript index service mailbox', () => {
       now: () => NOW,
     });
     writeLiveState(fixture.cacheDir, fixture.projectRoot, host.status(), SERVICE_PROCESS_IDENTITY);
-    const requester = requesterWithRuntime(fixture, {
-      now: () => NOW + 365 * 86_400_000,
-      randomId: () => 'reused-pid',
-      isProcessAlive: () => true,
-      readProcessIdentity: () => ({ ...SERVICE_PROCESS_IDENTITY, startToken: 'successor' }),
-      sleep: () => {
-        throw new Error('request should not be admitted');
+    let localCalls = 0;
+    const requester = new TypeScriptIndexRequester(
+      { projectRoot: fixture.projectRoot, cacheDir: fixture.cacheDir, baseGeneration: 'base' },
+      {
+        timeoutMs: 1_000,
+        emitLocally: (request) => {
+          localCalls += 1;
+          return {
+            producerIdentity: request.producerIdentity,
+            cold: true,
+            durationMs: 1,
+            fragments: [
+              {
+                relativePath: 'src/a.ts',
+                bytes: new Uint8Array([1]),
+                occurrences: 1,
+                symbols: 1,
+                referenceFragments: [],
+              },
+            ],
+          };
+        },
+        runtime: {
+          now: () => NOW + 365 * 86_400_000,
+          randomId: () => 'reused-pid',
+          isProcessAlive: () => true,
+          readProcessIdentity: () => ({ ...SERVICE_PROCESS_IDENTITY, startToken: 'successor' }),
+          sleep: () => {
+            throw new Error('request should not be admitted');
+          },
+        },
       },
-    });
+    );
 
-    expect(() => requester.request(indexRequest('producer'))).toThrow('Compatible TypeScript index service');
+    expect(requester.request(indexRequest('producer'))).toEqual(
+      expect.objectContaining({
+        producerIdentity: 'producer',
+        cold: true,
+        fragments: [expect.objectContaining({ relativePath: 'src/a.ts' })],
+      }),
+    );
+    expect(localCalls).toBe(1);
+  });
+
+  test('emits locally when the watch service heartbeat is stale', () => {
+    const fixture = serviceFixture();
+    const host = new TypeScriptIndexServiceHost({
+      projectRoot: fixture.projectRoot,
+      currentGeneration: () => 'base',
+      now: () => NOW,
+    });
+    writeLiveState(fixture.cacheDir, fixture.projectRoot, host.status());
+    let localCalls = 0;
+    const requester = new TypeScriptIndexRequester(
+      { projectRoot: fixture.projectRoot, cacheDir: fixture.cacheDir, baseGeneration: 'base' },
+      {
+        timeoutMs: 1_000,
+        emitLocally: (request) => {
+          localCalls += 1;
+          return {
+            producerIdentity: request.producerIdentity,
+            cold: true,
+            durationMs: 1,
+            fragments: [
+              {
+                relativePath: 'src/a.ts',
+                bytes: new Uint8Array([1]),
+                occurrences: 1,
+                symbols: 1,
+                referenceFragments: [],
+              },
+            ],
+          };
+        },
+        runtime: {
+          now: () => NOW + 30_000,
+          randomId: () => 'stale-heartbeat',
+          isProcessAlive: () => true,
+          sleep: () => {
+            throw new Error('stale watch service should not be polled');
+          },
+        },
+      },
+    );
+
+    expect(requester.request(indexRequest('producer')).cold).toBe(true);
+    expect(localCalls).toBe(1);
   });
 
   test('processes a cold request and a warm requester update with exact identities', () => {
@@ -260,33 +337,45 @@ describe('TypeScript index service mailbox', () => {
     expect(() => missingReferences.request(indexRequest('producer-missing'))).toThrow('invalid fragment');
 
     const statePath = watchServicePaths(fixture.cacheDir).statePath;
-    const crashed = requesterWithRuntime(fixture, {
-      now: () => NOW,
-      randomId: () => 'crash',
-      isProcessAlive: () => true,
-      sleep: () => rmSync(statePath, { force: true }),
-    });
-    expect(() => crashed.request(indexRequest('producer-crash'))).toThrow('stopped while processing');
+    const crashed = new TypeScriptIndexRequester(
+      { projectRoot: fixture.projectRoot, cacheDir: fixture.cacheDir, baseGeneration: 'base' },
+      {
+        timeoutMs: 1_000,
+        emitLocally: localEmit,
+        runtime: {
+          now: () => NOW,
+          randomId: () => 'crash',
+          isProcessAlive: () => true,
+          sleep: () => rmSync(statePath, { force: true }),
+        },
+      },
+    );
+    expect(crashed.request(indexRequest('producer-crash'))).toEqual(
+      expect.objectContaining({ producerIdentity: 'producer-crash', cold: true }),
+    );
     expect(readdirSync(paths.pendingDir).filter((entry) => entry.endsWith('.json'))).toHaveLength(1);
 
     writeLiveState(fixture.cacheDir, fixture.projectRoot, host.status());
-    let nowMs = NOW;
     let monotonicNowMs = 0;
-    const timedOut = requesterWithRuntime(
-      fixture,
+    const timedOut = new TypeScriptIndexRequester(
+      { projectRoot: fixture.projectRoot, cacheDir: fixture.cacheDir, baseGeneration: 'base' },
       {
-        now: () => nowMs,
-        monotonicNow: () => monotonicNowMs,
-        randomId: () => 'timeout',
-        isProcessAlive: () => true,
-        sleep: (durationMs) => {
-          monotonicNowMs += durationMs;
-          nowMs = nowMs === NOW ? NOW - 86_400_000 : NOW + 86_400_000;
+        timeoutMs: 20,
+        emitLocally: localEmit,
+        runtime: {
+          now: () => NOW,
+          monotonicNow: () => monotonicNowMs,
+          randomId: () => 'timeout',
+          isProcessAlive: () => true,
+          sleep: (durationMs) => {
+            monotonicNowMs += durationMs;
+          },
         },
       },
-      20,
     );
-    expect(() => timedOut.request(indexRequest('producer-timeout'))).toThrow('timed out');
+    expect(timedOut.request(indexRequest('producer-timeout'))).toEqual(
+      expect.objectContaining({ producerIdentity: 'producer-timeout', cold: true }),
+    );
     expect(monotonicNowMs).toBeGreaterThanOrEqual(20);
     expect(readdirSync(paths.pendingDir).filter((entry) => entry.endsWith('.json'))).toHaveLength(2);
   });
@@ -600,6 +689,23 @@ function writeLiveState(
     typescriptIndex,
   };
   writeWatchServiceState(watchServicePaths(cacheDir).statePath, state);
+}
+
+function localEmit(request: TypeScriptIndexDocumentRequest): RequestedTypeScriptDocuments {
+  return {
+    producerIdentity: request.producerIdentity,
+    cold: true,
+    durationMs: 1,
+    fragments: [
+      {
+        relativePath: 'src/a.ts',
+        bytes: new Uint8Array([1]),
+        occurrences: 1,
+        symbols: 1,
+        referenceFragments: [],
+      },
+    ],
+  };
 }
 
 function requesterWithRuntime(

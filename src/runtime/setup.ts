@@ -4,12 +4,13 @@ import { homedir, platform } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const IS_WINDOWS = platform() === 'win32';
-export const BUILTIN_SKILLS = ['scip-query', 'scip-plan', 'scip-setup'] as const;
+export const BUILTIN_SKILLS = ['scip-query', 'scip-plan', 'scip-setup', 'scip-integrity-audit'] as const;
 export const COMPATIBILITY_SKILLS = ['scip-explore', 'concrete-plan'] as const;
 export const INSTALLABLE_SKILLS = [
   'scip-query',
   'scip-plan',
   'scip-setup',
+  'scip-integrity-audit',
   'scip-explore',
   'concrete-plan',
 ] as const;

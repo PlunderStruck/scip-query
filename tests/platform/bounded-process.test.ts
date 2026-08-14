@@ -141,6 +141,42 @@ describe('runBoundedProcess', () => {
     expect(descendantPid).toBeGreaterThan(0);
     expect(processExists(descendantPid)).toBe(false);
   });
+
+  it.runIf(process.platform !== 'win32')(
+    'keeps nested children in an inherited process group and still reaps them',
+    async () => {
+      const previous = process.env['SCIP_REINDEX_PROCESS_GROUP_LEADER'];
+      process.env['SCIP_REINDEX_PROCESS_GROUP_LEADER'] = '1';
+      try {
+        const fixture = [
+          "const { spawn } = require('node:child_process');",
+          "const descendant = spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);\"], { stdio: 'ignore' });",
+          'process.stdout.write(String(descendant.pid));',
+          "process.on('SIGTERM', () => {});",
+          'setInterval(() => {}, 1000);',
+        ].join('\n');
+
+        let failure: BoundedProcessError | null = null;
+        try {
+          await nodeProcess(fixture, {
+            timeoutMs: 300,
+            terminationGraceMs: 50,
+            terminationForceMs: 200,
+          });
+        } catch (error) {
+          failure = error as BoundedProcessError;
+        }
+
+        expect(failure).toMatchObject({ kind: 'timeout', reaped: true });
+        const descendantPid = Number(failure?.stdout);
+        expect(descendantPid).toBeGreaterThan(0);
+        expect(processExists(descendantPid)).toBe(false);
+      } finally {
+        if (previous === undefined) delete process.env['SCIP_REINDEX_PROCESS_GROUP_LEADER'];
+        else process.env['SCIP_REINDEX_PROCESS_GROUP_LEADER'] = previous;
+      }
+    },
+  );
 });
 
 function processExists(pid: number): boolean {

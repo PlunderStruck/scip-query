@@ -122,11 +122,16 @@ export function runBoundedProcess(opts: BoundedProcessOptions): Promise<BoundedP
 
   return new Promise((resolve, reject) => {
     const startedAt = performance.now();
+    // Watch reindex workers already lead a process group. Nested indexers must
+    // stay in that group so cancel/stop can reap scip-typescript without
+    // leaving PPID-1 children. CLI runs still detach so -pid cannot hit us.
+    const inheritOwnedProcessGroup =
+      hostPlatform() !== 'win32' && process.env['SCIP_REINDEX_PROCESS_GROUP_LEADER'] === '1';
+    const ownsProcessGroup = hostPlatform() !== 'win32' && !inheritOwnedProcessGroup;
     let child: ChildProcessWithoutNullStreams;
     try {
       // scip-query: process-lifetime-reviewed -- this central runner owns the
       // deadline, bounded drains, TERM-to-KILL escalation, and close/reap wait.
-      const ownsProcessGroup = hostPlatform() !== 'win32';
       child = spawn(opts.command, [...(opts.args ?? [])], {
         cwd: opts.cwd,
         env: opts.env,
@@ -151,7 +156,6 @@ export function runBoundedProcess(opts: BoundedProcessOptions): Promise<BoundedP
     let stderrTruncated = false;
     let failure: PendingFailure | null = null;
     let settled = false;
-    const ownsProcessGroup = hostPlatform() !== 'win32';
     const tree = child.pid === undefined ? null : createOwnedProcessTree(child.pid, ownsProcessGroup);
 
     const clearLifecycle = (): void => {

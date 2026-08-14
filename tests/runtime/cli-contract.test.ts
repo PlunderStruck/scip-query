@@ -487,7 +487,7 @@ describe('CLI contract', () => {
     ).toEqual([]);
   });
 
-  it('keeps one exploration skill and two concise workflow skills without work-state ceremony', () => {
+  it('keeps the exploration, workflow, and integrity skills without work-state ceremony', () => {
     const readSkill = (name: string) => readFileSync(join(process.cwd(), 'skills', name, 'SKILL.md'), 'utf8');
     const exploration = readSkill('scip-query');
     const planning = readSkill('scip-plan');
@@ -513,9 +513,15 @@ describe('CLI contract', () => {
     expect(planning).not.toMatch(/evidence ledger|progress bookkeeping/i);
     expect(readSkill('scip-setup')).toContain('scip-query doctor');
     expect(readSkill('scip-setup')).toContain('scip-query status');
+    expect(readSkill('scip-integrity-audit')).toContain('is this real');
+    expect(readSkill('scip-integrity-audit')).toContain('decorative-checkers');
+    expect(readSkill('scip-integrity-audit')).toContain('not-implemented');
+    expect(readSkill('scip-integrity-audit')).toContain('test-quality');
     expect(readSkill('scip-explore')).toContain('compatibility alias');
     expect(readSkill('concrete-plan')).toContain('compatibility alias');
-    expect(`${exploration}\n${planning}\n${readSkill('scip-setup')}`).not.toMatch(/diff-gate|Gherkin/i);
+    expect(`${exploration}\n${planning}\n${readSkill('scip-setup')}\n${readSkill('scip-integrity-audit')}`).not.toMatch(
+      /diff-gate|Gherkin/i,
+    );
   });
 
   it('keeps command reference syntax generated from descriptors', () => {

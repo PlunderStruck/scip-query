@@ -80,6 +80,13 @@ describe('TypeScriptDocumentEmitter', () => {
     expect(second.stats.programUpdates).toBe(2);
     expect(second.stats.sourceNodesReplaced).toBe(2);
     expect(second.stats.symbolEntriesPruned).toBeGreaterThan(first.stats.symbolEntriesPruned);
+
+    writeFileSync(join(root, 'src/c.ts'), 'export const extra = 1;\n');
+    const added = emitter.advance({ modifiedFiles: ['src/c.ts'], affectedFiles: ['src/c.ts'] });
+    const addedOracle = cleanOracle(root, availability.runtime);
+    expect(added.fragments.map((fragment) => fragment.relativePath)).toEqual(['src/c.ts']);
+    expectFragmentsEqual(added.fragments, addedOracle);
+    expect(added.stats.programUpdates).toBe(3);
   });
 
   test('initializes a cold compiler without emitting unrelated documents', () => {

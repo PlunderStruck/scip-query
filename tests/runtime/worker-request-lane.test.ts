@@ -172,6 +172,43 @@ describe('WorkerRequestLane', () => {
     expect(second.posts).toHaveLength(1);
   });
 
+  it('terminates an idle Worker after its idle TTL and admits a later request on a new Worker', async () => {
+    const first = new FakeWorker();
+    const second = new FakeWorker();
+    const workers = [first, second];
+    let idle: (() => void) | undefined;
+    const lane = new WorkerRequestLane<Payload, string, Status>({
+      name: 'test lane',
+      createWorker: () => workers.shift()!,
+      idleTtlMs: 30_000,
+      setTimer: (callback, delayMs) => {
+        if (delayMs === 30_000) idle = callback;
+        return delayMs as unknown as ReturnType<typeof setTimeout>;
+      },
+      clearTimer: () => {},
+      onComplete: () => {},
+      onReject: () => {},
+      onStatus: () => {},
+      onFatal: (error) => {
+        throw error;
+      },
+    });
+
+    expect(lane.start(request('one'))).toBe(true);
+    first.emitMessage(success('one', 'done', 1));
+    expect(first.terminateCalls).toBe(0);
+    expect(idle).toBeTypeOf('function');
+    idle!();
+    await first.termination;
+    await Promise.resolve();
+    expect(first.terminateCalls).toBe(1);
+    expect(lane.canAccept()).toBe(true);
+    expect(lane.start(request('two'))).toBe(true);
+    expect(second.posts).toHaveLength(1);
+
+    await lane.close();
+  });
+
   it('joins termination before rejecting an active request during close', async () => {
     const worker = new FakeWorker();
     const termination = deferred<number>();

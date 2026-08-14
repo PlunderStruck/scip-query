@@ -314,9 +314,9 @@ function graphEdgesFor(
     }
     const evidenceStrength = combinedEvidenceStrength(edge);
     if (!providerContract.relation.evidenceStrengths.includes(evidenceStrength)) {
-      throw new Error(
-        `Graph relation provider ${providerContract.provider.id} does not admit ${evidenceStrength} evidence for ${family}/${semantic.subtype}.`,
-      );
+      // Topology construction can attach a lead the selected provider does not
+      // claim. Omit it from the projection instead of aborting the command.
+      return [];
     }
     return [
       {
