@@ -14,6 +14,7 @@ import type {
   ExplorationTopologyNode,
   ProgramEdgeSemantic,
 } from '../internal/exploration-topology.js';
+import { uniqueNonEmpty } from '../query-utils.js';
 import { systemMapTopology } from './system-map.js';
 
 export { GRAPH_EVIDENCE_FAMILIES } from '../../domain/graph-exploration-contract.js';
@@ -713,6 +714,3 @@ function evidenceStrengthRank(strength: ExplorationEvidenceStrength): number {
   }
 }
 
-function uniqueNonEmpty<T extends string>(values: readonly T[]): T[] {
-  return [...new Set(values.map((value) => value.trim()).filter(Boolean) as T[])];
-}

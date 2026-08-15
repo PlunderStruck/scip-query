@@ -29,7 +29,7 @@ import { sanitizeTerminalLine } from '../platform/terminal-output.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
 import { quoteShellArgument } from '../platform/shell-arguments.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
-import { isNonNegativeInteger, isRecordObject } from '../domain/record-validation.js';
+import { isNonNegativeInteger, isRecordObject, isSha256Hex } from '../domain/record-validation.js';
 import { finalizeSourceEmission, runWithSourceEmissionInvocation } from './source-emission-session.js';
 import { assertNavigationMapCanStart, recordNavigationOutputDelivery } from './navigation-session.js';
 
@@ -206,7 +206,7 @@ export function decodeCliOutputPageEnvelope(input: unknown): DecodedCliOutputPag
     'omittedCharacters',
     'remainingCharacters',
   ] as const;
-  if (integerFields.some((field) => !isNonNegativeInteger(page[field])) || !isSha256(page['outputHash'])) {
+  if (integerFields.some((field) => !isNonNegativeInteger(page[field])) || !isSha256Hex(page['outputHash'])) {
     return { kind: 'malformed', reason: 'Output page counts or output hash are invalid.' };
   }
   const offset = Number(page['offset']);
@@ -959,7 +959,7 @@ function isOutputSnapshotMetadata(value: unknown): value is OutputSnapshotMetada
     metadata.version === OUTPUT_SNAPSHOT_VERSION &&
     typeof metadata.snapshotId === 'string' &&
     isOutputSnapshotId(metadata.snapshotId) &&
-    isSha256(metadata.invocationHash) &&
+    isSha256Hex(metadata.invocationHash) &&
     isInvocationPrefix(metadata.invocationPrefix) &&
     typeof metadata.command === 'string' &&
     metadata.command.length > 0 &&
@@ -970,7 +970,7 @@ function isOutputSnapshotMetadata(value: unknown): value is OutputSnapshotMetada
     isInvocationArgv(metadata.argv) &&
     hashInvocation(metadata.command, metadata.cwd, metadata.invocationPrefix, metadata.argv) ===
       metadata.invocationHash &&
-    isSha256(metadata.outputHash) &&
+    isSha256Hex(metadata.outputHash) &&
     Number.isSafeInteger(metadata.pageSize) &&
     (metadata.pageSize ?? 0) >= MIN_OUTPUT_PAGE_SIZE &&
     (metadata.pageSize ?? 0) <= MAX_OUTPUT_PAGE_SIZE &&
@@ -1002,7 +1002,7 @@ function isOutputSnapshotPage(value: unknown): value is OutputSnapshotPage {
     (page.byteOffset ?? -1) >= 0 &&
     Number.isSafeInteger(page.byteLength) &&
     (page.byteLength ?? 0) > 0 &&
-    isSha256(page.hash)
+    isSha256Hex(page.hash)
   );
 }
 
@@ -1370,13 +1370,13 @@ function isLegacyOutputCursorPayload(value: unknown): value is LegacyOutputCurso
   const cursor = value as Partial<LegacyOutputCursorPayload>;
   return (
     cursor.version === 3 &&
-    isSha256(cursor.invocationHash) &&
+    isSha256Hex(cursor.invocationHash) &&
     Number.isSafeInteger(cursor.pageIndex) &&
     (cursor.pageIndex ?? -1) >= 1 &&
     Number.isSafeInteger(cursor.pageSize) &&
     (cursor.pageSize ?? 0) >= MIN_OUTPUT_PAGE_SIZE &&
     (cursor.pageSize ?? 0) <= MAX_OUTPUT_PAGE_SIZE &&
-    isSha256(cursor.outputHash) &&
+    isSha256Hex(cursor.outputHash) &&
     typeof cursor.snapshotId === 'string' &&
     isOutputSnapshotId(cursor.snapshotId)
   );
@@ -1399,9 +1399,6 @@ function isOutputSnapshotId(value: unknown): value is string {
   return typeof value === 'string' && (SHORT_OUTPUT_SNAPSHOT_ID.test(value) || LEGACY_OUTPUT_SNAPSHOT_ID.test(value));
 }
 
-function isSha256(value: unknown): value is string {
-  return typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value);
-}
 
 function hashInvocation(
   command: string,

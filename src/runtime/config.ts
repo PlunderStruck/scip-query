@@ -162,6 +162,38 @@ export function validateProjectConfig(
 ): ConfigDiagnostic[] {
   const diagnostics: ConfigDiagnostic[] = [];
   reportUnknownConfigKeys(config, diagnostics);
+  validateProjectHeaderConfig(config, diagnostics);
+  validateWatchConfig(config, diagnostics);
+  validateIndexerAndSemanticConfig(config, diagnostics, opts);
+  validateLocalityConfig(config, diagnostics);
+  validateArchitectureConfig(config, diagnostics);
+  validateDeclaredCouplings(config, diagnostics, opts);
+  validateSuppressions(config, diagnostics, opts);
+  validateCoverageContracts(config, diagnostics, opts);
+  validateDocsConfig(config, diagnostics);
+  return diagnostics;
+}
+
+function reportContainedConfigPath(
+  diagnostics: ConfigDiagnostic[],
+  path: string,
+  value: string,
+  projectRoot: string | undefined,
+  messages: { outside: string; missing: string },
+): void {
+  if (!projectRoot) return;
+  const resolved = resolve(projectRoot, value);
+  const relativePath = relative(projectRoot, resolved);
+  if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
+    diagnostics.push({ level: 'error', path, message: messages.outside });
+    return;
+  }
+  if (!existsSync(resolved)) {
+    diagnostics.push({ level: 'warning', path, message: messages.missing });
+  }
+}
+
+function validateProjectHeaderConfig(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
   const configRecord = config as unknown as Record<string, unknown>;
   if (
     configRecord['schemaVersion'] !== undefined &&
@@ -220,6 +252,9 @@ export function validateProjectConfig(
       message: 'Must be a positive integer.',
     });
   }
+}
+
+function validateWatchConfig(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
   if (config.watch?.debounceMs !== undefined && config.watch.debounceMs <= 0) {
     diagnostics.push({ level: 'error', path: 'watch.debounceMs', message: 'Must be greater than 0.' });
   }
@@ -272,6 +307,13 @@ export function validateProjectConfig(
       });
     }
   }
+}
+
+function validateIndexerAndSemanticConfig(
+  config: ProjectConfig,
+  diagnostics: ConfigDiagnostic[],
+  opts: { projectRoot?: string },
+): void {
   const typescriptIndexer = config.indexer?.typescript;
   if (
     typescriptIndexer?.projectMode !== undefined &&
@@ -292,14 +334,11 @@ export function validateProjectConfig(
         const path = `indexer.typescript.projects[${index}]`;
         if (typeof project !== 'string' || project.trim() === '') {
           diagnostics.push({ level: 'error', path, message: 'Project path must be a non-empty string.' });
-        } else if (opts.projectRoot) {
-          const resolved = resolve(opts.projectRoot, project);
-          const relativePath = relative(opts.projectRoot, resolved);
-          if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
-            diagnostics.push({ level: 'error', path, message: 'Project path must stay inside the project root.' });
-          } else if (!existsSync(resolved)) {
-            diagnostics.push({ level: 'warning', path, message: `TypeScript project path does not exist: ${project}` });
-          }
+        } else {
+          reportContainedConfigPath(diagnostics, path, project, opts.projectRoot, {
+            outside: 'Project path must stay inside the project root.',
+            missing: `TypeScript project path does not exist: ${project}`,
+          });
         }
       }
     }
@@ -327,94 +366,101 @@ export function validateProjectConfig(
     const path = 'indexer.clojure.configPath';
     if (typeof clojureIndexer.configPath !== 'string' || clojureIndexer.configPath.trim() === '') {
       diagnostics.push({ level: 'error', path, message: 'Config path must be a non-empty string.' });
-    } else if (opts.projectRoot) {
-      const resolved = resolve(opts.projectRoot, clojureIndexer.configPath);
-      const relativePath = relative(opts.projectRoot, resolved);
-      if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
-        diagnostics.push({ level: 'error', path, message: 'Config path must stay inside the project root.' });
-      } else if (!existsSync(resolved)) {
-        diagnostics.push({
-          level: 'warning',
-          path,
-          message: `Clojure indexer config path does not exist: ${clojureIndexer.configPath}`,
-        });
-      }
-    }
-  }
-  if (config.locality !== undefined) {
-    if (!isRecordObject(config.locality)) {
-      diagnostics.push({ level: 'error', path: 'locality', message: 'Must be an object.' });
     } else {
-      const segments = config.locality.architecturalBoundarySegments as unknown;
-      if (segments !== undefined) {
-        if (!Array.isArray(segments)) {
-          diagnostics.push({
-            level: 'error',
-            path: 'locality.architecturalBoundarySegments',
-            message: 'Must be an array.',
-          });
-        } else {
-          for (const [index, segment] of segments.entries()) {
-            const path = `locality.architecturalBoundarySegments[${index}]`;
-            if (typeof segment !== 'string' || segment.trim() === '') {
-              diagnostics.push({
-                level: 'error',
-                path,
-                message: 'Boundary segment must be a non-empty string.',
-              });
-            } else if (segment.includes('/') || segment.includes('\\')) {
-              diagnostics.push({
-                level: 'error',
-                path,
-                message: 'Boundary segment must be a single folder name, not a path.',
-              });
-            }
-          }
-        }
-      }
+      reportContainedConfigPath(diagnostics, path, clojureIndexer.configPath, opts.projectRoot, {
+        outside: 'Config path must stay inside the project root.',
+        missing: `Clojure indexer config path does not exist: ${clojureIndexer.configPath}`,
+      });
     }
   }
-  validateArchitectureConfig(config, diagnostics);
+}
+
+function validateLocalityConfig(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
+  if (config.locality === undefined) return;
+  if (!isRecordObject(config.locality)) {
+    diagnostics.push({ level: 'error', path: 'locality', message: 'Must be an object.' });
+    return;
+  }
+  const segments = config.locality.architecturalBoundarySegments as unknown;
+  if (segments === undefined) return;
+  if (!Array.isArray(segments)) {
+    diagnostics.push({
+      level: 'error',
+      path: 'locality.architecturalBoundarySegments',
+      message: 'Must be an array.',
+    });
+    return;
+  }
+  for (const [index, segment] of segments.entries()) {
+    const path = `locality.architecturalBoundarySegments[${index}]`;
+    if (typeof segment !== 'string' || segment.trim() === '') {
+      diagnostics.push({
+        level: 'error',
+        path,
+        message: 'Boundary segment must be a non-empty string.',
+      });
+    } else if (segment.includes('/') || segment.includes('\\')) {
+      diagnostics.push({
+        level: 'error',
+        path,
+        message: 'Boundary segment must be a single folder name, not a path.',
+      });
+    }
+  }
+}
+
+function validateDeclaredCouplings(
+  config: ProjectConfig,
+  diagnostics: ConfigDiagnostic[],
+  opts: { projectRoot?: string },
+): void {
   if (config.declaredCouplings !== undefined && !Array.isArray(config.declaredCouplings)) {
     diagnostics.push({ level: 'error', path: 'declaredCouplings', message: 'Must be an array.' });
-  } else {
-    for (const [index, coupling] of (config.declaredCouplings ?? []).entries()) {
-      const path = `declaredCouplings[${index}]`;
-      if (!coupling.name || coupling.name.trim() === '') {
-        diagnostics.push({ level: 'error', path: `${path}.name`, message: 'Declared coupling name is required.' });
-      }
-      if (!Array.isArray(coupling.files) || coupling.files.length < 2) {
-        diagnostics.push({
-          level: 'error',
-          path: `${path}.files`,
-          message: 'Declared coupling needs at least two files.',
-        });
-      } else {
-        for (const [fileIndex, file] of coupling.files.entries()) {
-          if (!file || file.trim() === '') {
-            diagnostics.push({
-              level: 'error',
-              path: `${path}.files[${fileIndex}]`,
-              message: 'Declared coupling file path is required.',
-            });
-          } else if (opts.projectRoot && !existsSync(join(opts.projectRoot, file))) {
-            diagnostics.push({
-              level: 'warning',
-              path: `${path}.files[${fileIndex}]`,
-              message: `Declared coupling file does not exist: ${file}`,
-            });
-          }
+    return;
+  }
+  for (const [index, coupling] of (config.declaredCouplings ?? []).entries()) {
+    const path = `declaredCouplings[${index}]`;
+    if (!coupling.name || coupling.name.trim() === '') {
+      diagnostics.push({ level: 'error', path: `${path}.name`, message: 'Declared coupling name is required.' });
+    }
+    if (!Array.isArray(coupling.files) || coupling.files.length < 2) {
+      diagnostics.push({
+        level: 'error',
+        path: `${path}.files`,
+        message: 'Declared coupling needs at least two files.',
+      });
+    } else {
+      for (const [fileIndex, file] of coupling.files.entries()) {
+        if (!file || file.trim() === '') {
+          diagnostics.push({
+            level: 'error',
+            path: `${path}.files[${fileIndex}]`,
+            message: 'Declared coupling file path is required.',
+          });
+        } else if (opts.projectRoot && !existsSync(join(opts.projectRoot, file))) {
+          diagnostics.push({
+            level: 'warning',
+            path: `${path}.files[${fileIndex}]`,
+            message: `Declared coupling file does not exist: ${file}`,
+          });
         }
       }
-      if (coupling.reason !== undefined && coupling.reason.trim() === '') {
-        diagnostics.push({
-          level: 'error',
-          path: `${path}.reason`,
-          message: 'Declared coupling reason cannot be blank.',
-        });
-      }
+    }
+    if (coupling.reason !== undefined && coupling.reason.trim() === '') {
+      diagnostics.push({
+        level: 'error',
+        path: `${path}.reason`,
+        message: 'Declared coupling reason cannot be blank.',
+      });
     }
   }
+}
+
+function validateSuppressions(
+  config: ProjectConfig,
+  diagnostics: ConfigDiagnostic[],
+  opts: { now?: Date; projectRoot?: string },
+): void {
   const now = opts.now ?? new Date();
   if (config.suppressions !== undefined && !Array.isArray(config.suppressions)) {
     diagnostics.push({ level: 'error', path: 'suppressions', message: 'Must be an array.' });
@@ -481,9 +527,6 @@ export function validateProjectConfig(
       }
     }
   }
-  validateCoverageContracts(config, diagnostics, opts);
-  validateDocsConfig(config, diagnostics);
-  return diagnostics;
 }
 
 function validateArchitectureConfig(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {

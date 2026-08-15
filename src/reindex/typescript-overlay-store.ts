@@ -1,13 +1,14 @@
-import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
+import { sha256Hex as sha256 } from '../storage/evidence-cache.js';
 import {
   readFileWithinLimit,
   readTextFileWithinLimit,
   SMALL_ARTIFACT_MAX_BYTES,
   SOURCE_ARTIFACT_MAX_BYTES,
 } from '../platform/bounded-file.js';
+import { persistHashedScipDocumentBlob } from './typescript-document-blob.js';
 import type { TypeScriptDocumentFragment } from './typescript-document-emitter.js';
 import { assembleTypeScriptIndex } from './typescript-fragment-store.js';
 
@@ -153,22 +154,13 @@ function persistOverlayFragment(cacheDir: string, fragment: TypeScriptDocumentFr
   if (fragment.bytes === null) return { relativePath, blobHash: null, byteLength: 0 };
   const bytes = Buffer.from(fragment.bytes);
   const blobHash = sha256(bytes);
-  const blobDir = join(overlayRoot(cacheDir), 'blobs');
-  mkdirSync(blobDir, { recursive: true });
-  const path = join(blobDir, `${blobHash}.scipdoc`);
-  if (existsSync(path)) {
-    const existing = readFileWithinLimit(path, {
-      maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
-      inputKind: 'TypeScript overlay blob',
-    });
-    if (existing.byteLength !== bytes.byteLength || sha256(existing) !== blobHash) {
-      throw new Error(`existing TypeScript overlay blob is corrupt: ${relativePath}`);
-    }
-  } else {
-    const temporary = `${path}.${process.pid}.${Date.now()}.tmp`;
-    writeFileSync(temporary, bytes);
-    renameSync(temporary, path);
-  }
+  persistHashedScipDocumentBlob({
+    blobDir: join(overlayRoot(cacheDir), 'blobs'),
+    blobHash,
+    bytes,
+    relativePath,
+    inputKind: 'TypeScript overlay blob',
+  });
   return { relativePath, blobHash, byteLength: bytes.byteLength };
 }
 
@@ -260,8 +252,4 @@ function validateRelativePath(value: string): string {
   }
   if (value.split('/').includes('..')) throw new Error(`invalid TypeScript overlay path: ${value}`);
   return value;
-}
-
-function sha256(value: string | Uint8Array): string {
-  return createHash('sha256').update(value).digest('hex');
 }

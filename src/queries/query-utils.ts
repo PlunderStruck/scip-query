@@ -25,3 +25,11 @@ export function uniqueSymbolFileRows<T extends { symbol: string; file: string }>
   }
   return out;
 }
+
+export function uniqueNonEmpty<T extends string>(values: readonly T[] | undefined): T[] {
+  return [...new Set((values ?? []).map((value) => value.trim()).filter(Boolean) as T[])];
+}
+
+export function normalizedCallableLeaf(value: string): string {
+  return value.replace(/^#/u, '').replace(/\(\)$/u, '');
+}

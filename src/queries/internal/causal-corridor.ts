@@ -1,5 +1,4 @@
 import type {
-  CausalCorridorAudit,
   CausalCorridorObligation,
   CausalCorridorStatus,
   ExplorationFrontierGroup,
@@ -11,6 +10,13 @@ import type {
   ProgramEdgeFamily,
   ProgramEdgeSemantic,
 } from './exploration-topology.js';
+
+export interface CausalCorridorAudit {
+  status: CausalCorridorStatus;
+  missingObligations: CausalCorridorObligation[];
+  unexpectedNodeIds: string[];
+  unexpectedEdgeIds: string[];
+}
 
 const TRAVERSAL_FAMILIES: ReadonlySet<ProgramEdgeFamily> = new Set(['control', 'data', 'state', 'temporal']);
 const OWNERSHIP_SUBTYPES: ReadonlySet<string> = new Set([

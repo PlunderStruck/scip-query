@@ -6,6 +6,7 @@ import {
   walkNamedSyntax as walk,
 } from '../../source/ast/ast-callables.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
+import { escapeRegex } from '../../source/primitives/regex-utils.js';
 import { getSourceFiles } from '../../source/primitives/source-fileset.js';
 import { getSourceText } from '../../source/primitives/source-text.js';
 import type { ScipDatabase } from '../../storage/db.js';
@@ -368,14 +369,14 @@ export function bodyFieldForLocal(
 ): string | null {
   const callable = smallestCoveringCallable(context.root, definition.startLine, definition.endLine);
   if (!callable) return null;
-  const direct = new RegExp(`\\.body\\??\\.${escapeRegExp(local)}\\b`, 'u');
+  const direct = new RegExp(`\\.body\\??\\.${escapeRegex(local)}\\b`, 'u');
   if (direct.test(callable.text)) return local;
   let helperExpression: string | null = null;
   walk(callable, (node) => {
     if (helperExpression || node.type !== 'variable_declarator') return;
     const name = node.childForFieldName('name') ?? node.namedChild(0);
     const value = node.childForFieldName('value') ?? node.namedChild(1);
-    if (!name || !value || !new RegExp(`(?:^|[,{}])\\s*${escapeRegExp(local)}\\s*(?:[,}]|$)`, 'u').test(name.text))
+    if (!name || !value || !new RegExp(`(?:^|[,{}])\\s*${escapeRegex(local)}\\s*(?:[,}]|$)`, 'u').test(name.text))
       return;
     if (value.type !== 'call_expression') return;
     helperExpression = callTargetNode(value)?.text ?? null;
@@ -389,7 +390,7 @@ export function bodyFieldForLocal(
     : null;
   return helperCallable &&
     direct.test(helperCallable.text) &&
-    new RegExp(`\\b${escapeRegExp(local)}\\s*[,}]`, 'u').test(helperCallable.text)
+    new RegExp(`\\b${escapeRegex(local)}\\s*[,}]`, 'u').test(helperCallable.text)
     ? local
     : null;
 }
@@ -551,9 +552,6 @@ function deduplicateObservations(values: readonly BoundaryObservation[]): Bounda
   return [...new Map(values.map((value) => [value.id, value])).values()];
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

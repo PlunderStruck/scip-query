@@ -2,6 +2,7 @@ import { basename, join } from 'node:path';
 import type { ScipDatabase } from '../storage/db.js';
 import type { IndexedDefinition } from '../domain/symbol-types.js';
 import { readProjectFileText } from '../platform/project-files.js';
+import { escapeRegex } from '../source/primitives/regex-utils.js';
 import { getDefinitionsForFile } from '../symbols/definition-catalog.js';
 import { collectReadsForRange, collectWritesForRange, type VariableAlias } from './conformance.js';
 
@@ -277,7 +278,7 @@ function inferDomainAndInit(
   leaf: string,
   declaration: string,
 ): { domainTla: string | null; domainBasis: ScaffoldVariable['domainBasis']; initTla: string | null } {
-  const typeMatch = declaration.match(new RegExp(`\\b${escapeRegExpLocal(leaf)}\\s*:\\s*([^=;]+)`));
+  const typeMatch = declaration.match(new RegExp(`\\b${escapeRegex(leaf)}\\s*:\\s*([^=;]+)`));
   const typeText = typeMatch?.[1]?.trim() ?? null;
   const initMatch = declaration.match(/=\s*([^;]+)/);
   const initText = initMatch?.[1]?.trim() ?? null;
@@ -448,6 +449,3 @@ function renderMap(
   return `${JSON.stringify(contract, null, 2)}\n`;
 }
 
-function escapeRegExpLocal(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}

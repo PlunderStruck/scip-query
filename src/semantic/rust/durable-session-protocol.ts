@@ -5,9 +5,10 @@ import {
   isNonNegativeFiniteNumber,
   isNonNegativeInteger,
   isNonEmptyString,
-  isPositiveInteger,
-  isRecordObject,
-  isStringOrNullRecord,
+    isPositiveInteger,
+    isRecordObject,
+    isSha256Hex,
+    isStringOrNullRecord,
 } from '../../domain/record-validation.js';
 import { stableJson } from '../../domain/stable-json.js';
 import type { IndexedDefinition } from '../../domain/types.js';
@@ -310,7 +311,7 @@ function decodeCurrentCorrelation(
     typeof value.protocolVersion !== 'number' ||
     !Number.isInteger(value.protocolVersion) ||
     typeof value.operationKey !== 'string' ||
-    !isSha256(value.operationKey) ||
+    !isSha256Hex(value.operationKey) ||
     value.id !== boundedMailboxRequestId(value.operationKey) ||
     typeof value.clientId !== 'string' ||
     !value.clientId ||
@@ -320,7 +321,7 @@ function decodeCurrentCorrelation(
     !Number.isFinite(value.deadlineAtMs) ||
     value.deadlineAtMs < value.enqueuedAtMs ||
     (value.sessionIdentity !== undefined &&
-      (typeof value.sessionIdentity !== 'string' || !isSha256(value.sessionIdentity))) ||
+      (typeof value.sessionIdentity !== 'string' || !isSha256Hex(value.sessionIdentity))) ||
     (value.sessionIdentity === undefined && value.protocolVersion !== DURABLE_RUST_SESSION_PROTOCOL_VERSION)
   ) {
     return malformedRequest('Durable Rust semantic helper received an invalid mailbox lifecycle.');
@@ -556,9 +557,6 @@ function incompatibleResponse(error: string): Extract<DurableRustMailboxResponse
   return { ok: false, code: 'incompatible-response', error };
 }
 
-function isSha256(value: string): boolean {
-  return /^[a-f0-9]{64}$/.test(value);
-}
 
 function optionalPositiveInteger(value: unknown): boolean {
   return value === undefined || isPositiveInteger(value);

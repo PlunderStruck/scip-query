@@ -31,6 +31,13 @@ export function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 }
 
+const SHA256_HEX = /^[a-f0-9]{64}$/u;
+
+/** True only for a lowercase hex SHA-256 digest. */
+export function isSha256Hex(value: unknown): value is string {
+  return typeof value === 'string' && SHA256_HEX.test(value);
+}
+
 /**
  * True only for a non-empty, one-line record field whose bounded size keeps
  * diagnostics and durable identity tuples finite.

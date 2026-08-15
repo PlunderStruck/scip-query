@@ -8,7 +8,7 @@ import { stableJson } from '../domain/stable-json.js';
 import type { ProjectConfig, SupportedLanguage } from '../domain/types.js';
 import { readFileWithinLimit, SOURCE_ARTIFACT_MAX_BYTES } from '../filesystem/bounded-file.js';
 import type { GitWorktreeContext } from './git-worktree.js';
-import { buildProjectInputFingerprint } from './project-files.js';
+import { buildProjectInputFingerprint, isMissingProjectFileError } from './project-files.js';
 import { type ProjectSnapshotFile, withProjectSnapshot } from './project-snapshot-context.js';
 
 export const REPOSITORY_CONTENT_SNAPSHOT_VERSION = 1;
@@ -181,7 +181,7 @@ function captureGitOverlaySnapshot(
     try {
       before = lstatSync(sourcePath);
     } catch (error) {
-      if (isMissingFileError(error)) {
+      if (isMissingProjectFileError(error)) {
         missing.add(relativePath);
         contentEntries.push({ path: relativePath, kind: 'deleted' });
         continue;
@@ -263,7 +263,7 @@ function captureWholeFilesystemSnapshot(
     try {
       before = lstatSync(sourcePath);
     } catch (error) {
-      if (isMissingFileError(error)) {
+      if (isMissingProjectFileError(error)) {
         missing.add(relativePath);
         contentEntries.push({ path: relativePath, kind: 'deleted' });
         continue;
@@ -574,11 +574,6 @@ function samePaths(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((path, index) => path === right[index]);
 }
 
-function isMissingFileError(error: unknown): boolean {
-  const code = (error as NodeJS.ErrnoException | undefined)?.code;
-  return code === 'ENOENT' || code === 'ENOTDIR';
-}
-
 function configuredInputPaths(projectRoot: string, config: ProjectConfig): string[] {
   const candidates = [
     ...(config.indexer?.typescript?.projects ?? []),
@@ -598,7 +593,7 @@ function isConfiguredInputDirectory(projectRoot: string, relativePath: string): 
   try {
     return statSync(join(projectRoot, relativePath)).isDirectory();
   } catch (error) {
-    if (isMissingFileError(error)) return false;
+    if (isMissingProjectFileError(error)) return false;
     throw error;
   }
 }

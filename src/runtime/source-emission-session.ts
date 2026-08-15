@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
+import { isSha256Hex } from '../domain/record-validation.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
 import { tryAcquireProcessFileLock, type ProcessFileLock } from '../platform/process-file-lock.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
@@ -648,7 +649,7 @@ function validPersistedRange(value: unknown): value is PersistedSourceRange {
     (range.policy === 'exact-unit' || range.policy === 'preview') &&
     Array.isArray(range.lineHashes) &&
     range.lineHashes.length === (range.endLine ?? 0) - (range.startLine ?? 0) + 1 &&
-    range.lineHashes.every(isSha256) &&
+    range.lineHashes.every(isSha256Hex) &&
     (range.ownerSymbol === undefined || typeof range.ownerSymbol === 'string')
   );
 }
@@ -661,7 +662,7 @@ function validPersistedEvidenceItem(value: unknown): value is PersistedEvidenceI
     typeof item.identity === 'string' &&
     item.identity !== '' &&
     typeof item.contentHash === 'string' &&
-    isSha256(item.contentHash) &&
+    isSha256Hex(item.contentHash) &&
     typeof item.receiptId === 'string' &&
     /^ev-[0-9a-f]{12}$/u.test(item.receiptId) &&
     Number.isSafeInteger(item.ordinal) &&
@@ -794,6 +795,3 @@ function findLastMatching<T>(values: readonly T[], predicate: (value: T) => bool
   return undefined;
 }
 
-function isSha256(value: unknown): value is string {
-  return typeof value === 'string' && /^[0-9a-f]{64}$/u.test(value);
-}

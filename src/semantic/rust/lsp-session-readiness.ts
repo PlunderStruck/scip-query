@@ -167,6 +167,6 @@ function assertUsableQuiescentStatus(status: RustAnalyzerServerStatus, phase: st
   }
 }
 
-function sleep(delayMs: number): Promise<void> {
+export function sleep(delayMs: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, delayMs));
 }

@@ -167,21 +167,26 @@ function relativeDossierJsonPath(report: HealthDossierReport): string {
 }
 
 function writeIfChanged(path: string, content: string, result: ProjectSetupHealthDossier): void {
-  mkdirSync(dirname(path), { recursive: true });
-  const current = existsSync(path) ? readSmallArtifactText(path, 'health dossier Markdown') : null;
-  if (current === content) {
-    result.unchanged.push(path);
-    return;
-  }
-  writeFileSync(path, content);
-  result.written.push(path);
+  writeDossierArtifactIfChanged(path, content, result, 'health dossier Markdown', (current) => current === content);
 }
 
 function writeJsonIfChanged(path: string, payload: HealthDossierReport, result: ProjectSetupHealthDossier): void {
-  mkdirSync(dirname(path), { recursive: true });
   const content = `${JSON.stringify(payload, null, 2)}\n`;
-  const current = existsSync(path) ? readSmallArtifactText(path, 'health dossier JSON') : null;
-  if (current && jsonEqualIgnoringGeneratedAt(current, content)) {
+  writeDossierArtifactIfChanged(path, content, result, 'health dossier JSON', (current) =>
+    jsonEqualIgnoringGeneratedAt(current, content),
+  );
+}
+
+function writeDossierArtifactIfChanged(
+  path: string,
+  content: string,
+  result: ProjectSetupHealthDossier,
+  inputKind: string,
+  unchanged: (current: string) => boolean,
+): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const current = existsSync(path) ? readSmallArtifactText(path, inputKind) : null;
+  if (current !== null && unchanged(current)) {
     result.unchanged.push(path);
     return;
   }

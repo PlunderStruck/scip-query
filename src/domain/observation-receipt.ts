@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { isBoundedRecordString, isRecordObject } from './record-validation.js';
+import { isBoundedRecordString, isPositiveInteger, isRecordObject, isSha256Hex } from './record-validation.js';
 
 export const LEGACY_OBSERVATION_RECEIPT_SCHEMA_VERSION = 1 as const;
 export const OBSERVATION_RECEIPT_SCHEMA_VERSION = 2 as const;
@@ -195,7 +195,7 @@ export function createObservationIdentity(
   projectionVersion: number,
   canonicalValue: string,
 ): ObservationIdentity {
-  if (!isBoundedRecordString(projectionName) || !isPositiveSafeInteger(projectionVersion)) {
+  if (!isBoundedRecordString(projectionName) || !isPositiveInteger(projectionVersion)) {
     throw new Error('Observation identity requires a bounded projection name and positive projection version.');
   }
   return {
@@ -633,9 +633,8 @@ function isObservationIdentity(value: unknown): value is ObservationIdentity {
     value['canonicalizationVersion'] === OBSERVATION_IDENTITY_CANONICALIZATION_VERSION &&
     value['hashAlgorithm'] === OBSERVATION_IDENTITY_HASH_ALGORITHM &&
     isBoundedRecordString(value['projection']['name']) &&
-    isPositiveSafeInteger(value['projection']['version']) &&
-    typeof value['digest'] === 'string' &&
-    /^[a-f0-9]{64}$/u.test(value['digest'])
+    isPositiveInteger(value['projection']['version']) &&
+      isSha256Hex(value['digest'])
   );
 }
 
@@ -722,10 +721,6 @@ function isObservationSourceKind(value: unknown): value is ObservationSourceKind
 
 function isTimestamp(value: unknown): value is string {
   return typeof value === 'string' && !Number.isNaN(Date.parse(value));
-}
-
-function isPositiveSafeInteger(value: unknown): value is number {
-  return Number.isSafeInteger(value) && (value as number) > 0;
 }
 
 function uniqueBy<T>(values: readonly T[], key: (value: T) => string): boolean {

@@ -4,8 +4,9 @@ import {
   isBoundedRecordString,
   isNonNegativeFiniteNumber,
   isNonNegativeInteger,
-  isPositiveInteger,
-  isRecordObject,
+    isPositiveInteger,
+    isRecordObject,
+    isSha256Hex,
   isStringOrNullRecord,
   isValidRecordTimestamp,
 } from '../../src/domain/record-validation.js';
@@ -41,7 +42,14 @@ describe('decoded-record validation primitives', () => {
     expect(isValidRecordTimestamp(0)).toBe(false);
   });
 
-  it('bounds one-line identity and name fields', () => {
+    it('accepts only lowercase 64-character hex SHA-256 digests', () => {
+      expect(isSha256Hex('a'.repeat(64))).toBe(true);
+      expect(isSha256Hex('A'.repeat(64))).toBe(false);
+      expect(isSha256Hex('a'.repeat(63))).toBe(false);
+      expect(isSha256Hex(42)).toBe(false);
+    });
+
+    it('bounds one-line identity and name fields', () => {
     expect(isBoundedRecordString('identity')).toBe(true);
     expect(isBoundedRecordString('')).toBe(false);
     expect(isBoundedRecordString('x'.repeat(257))).toBe(false);

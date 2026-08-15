@@ -280,13 +280,6 @@ export interface ExplorationCausalCorridor {
   explanation: string;
 }
 
-export interface CausalCorridorAudit {
-  status: CausalCorridorStatus;
-  missingObligations: CausalCorridorObligation[];
-  unexpectedNodeIds: string[];
-  unexpectedEdgeIds: string[];
-}
-
 export type ExplorationUpstreamEndpointKind = 'public-entry' | 'runtime-boundary' | 'traversal-root';
 
 export interface ExplorationRoute {

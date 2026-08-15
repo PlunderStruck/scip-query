@@ -1,5 +1,4 @@
-import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { create, fromBinary, toBinary } from '@bufbuild/protobuf';
 import { deserializeSCIP, DocumentSchema, IndexSchema, serializeSCIP } from '@c4312/scip';
@@ -11,6 +10,8 @@ import {
   SOURCE_ARTIFACT_MAX_BYTES,
 } from '../platform/bounded-file.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
+import { sha256Hex as sha256 } from '../storage/evidence-cache.js';
+import { persistHashedScipDocumentBlob } from './typescript-document-blob.js';
 import type { TypeScriptDocumentFragment, TypeScriptDocumentRuntime } from './typescript-document-emitter.js';
 
 export const TYPESCRIPT_FRAGMENT_STORE_VERSION = 1;
@@ -211,8 +212,9 @@ export function commitTypeScriptFragmentGeneration(
     const relativePath = validateRelativePath(fragment.relativePath);
     if (replacements.has(relativePath)) throw new Error(`duplicate TypeScript fragment replacement: ${relativePath}`);
     replacements.add(relativePath);
-    if (!records.has(relativePath))
-      throw new Error(`TypeScript fragment replacement has no prior document: ${relativePath}`);
+    if (!records.has(relativePath) && fragment.bytes === null) {
+      throw new Error(`TypeScript fragment deletion has no prior document: ${relativePath}`);
+    }
     const documentIdentity = input.documentIdentities.get(relativePath);
     if (!documentIdentity) throw new Error(`missing TypeScript document identity: ${relativePath}`);
     if (fragment.bytes === null) records.delete(relativePath);
@@ -323,17 +325,30 @@ function prepareTypeScriptIndexAssembly(input: AssembleTypeScriptIndexInput): {
       deletedAffectedPaths.push(relativePath);
       continue;
     }
-    const nextDocument = fromBinary(DocumentSchema, replacement.bytes);
-    if (nextDocument.relativePath !== relativePath) {
-      throw new Error(`TypeScript fragment path mismatch: expected ${relativePath}, got ${nextDocument.relativePath}`);
-    }
+    const nextDocument = documentFromFragmentBytes(relativePath, replacement.bytes);
     completeDocuments.push(nextDocument);
     affectedDocuments.push(nextDocument);
   }
-  if (replacements.size > 0) {
-    throw new Error(`TypeScript fragment replacement has no prior document: ${[...replacements.keys()].sort()[0]}`);
+  for (const relativePath of [...replacements.keys()].sort()) {
+    const replacement = replacements.get(relativePath)!;
+    if (replacement.bytes === null) {
+      throw new Error(`TypeScript fragment deletion has no prior document: ${relativePath}`);
+    }
+    if (seen.has(relativePath)) throw new Error(`duplicate TypeScript SCIP document path: ${relativePath}`);
+    seen.add(relativePath);
+    const nextDocument = documentFromFragmentBytes(relativePath, replacement.bytes);
+    completeDocuments.push(nextDocument);
+    affectedDocuments.push(nextDocument);
   }
   return { baseIndex: index, completeDocuments, affectedDocuments, deletedAffectedPaths };
+}
+
+function documentFromFragmentBytes(relativePath: string, bytes: Uint8Array): Document {
+  const nextDocument = fromBinary(DocumentSchema, bytes);
+  if (nextDocument.relativePath !== relativePath) {
+    throw new Error(`TypeScript fragment path mismatch: expected ${relativePath}, got ${nextDocument.relativePath}`);
+  }
+  return nextDocument;
 }
 
 function serializeTypeScriptIndex(
@@ -391,22 +406,13 @@ function persistFragment(
   const relativePath = validateRelativePath(fragment.relativePath);
   const bytes = Buffer.from(fragment.bytes);
   const blobHash = sha256(bytes);
-  const paths = typeScriptFragmentStorePaths(cacheDir);
-  mkdirSync(paths.blobDir, { recursive: true });
-  const blobPath = join(paths.blobDir, `${blobHash}.scipdoc`);
-  if (existsSync(blobPath)) {
-    const existing = readFileWithinLimit(blobPath, {
-      maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
-      inputKind: 'TypeScript fragment blob',
-    });
-    if (existing.byteLength !== bytes.byteLength || sha256(existing) !== blobHash) {
-      throw new Error(`existing TypeScript fragment blob is corrupt: ${relativePath}`);
-    }
-  } else {
-    const temporaryPath = `${blobPath}.${process.pid}.${Date.now()}.tmp`;
-    writeFileSync(temporaryPath, bytes);
-    renameSync(temporaryPath, blobPath);
-  }
+  persistHashedScipDocumentBlob({
+    blobDir: typeScriptFragmentStorePaths(cacheDir).blobDir,
+    blobHash,
+    bytes,
+    relativePath,
+    inputKind: 'TypeScript fragment blob',
+  });
   return { relativePath, blobHash, byteLength: bytes.byteLength, documentIdentity };
 }
 
@@ -550,8 +556,4 @@ function validateRelativePath(value: string): string {
     throw new Error(`invalid TypeScript SCIP document path: ${value}`);
   }
   return value;
-}
-
-function sha256(value: string | Uint8Array): string {
-  return createHash('sha256').update(value).digest('hex');
 }

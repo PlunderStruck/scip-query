@@ -1,4 +1,4 @@
-import { isRecordObject } from '../domain/record-validation.js';
+import { isPositiveInteger, isRecordObject } from '../domain/record-validation.js';
 import { isObservationReceipt, type ObservationReceipt } from '../domain/observation-receipt.js';
 import { isCommandOperationRole, type CommandOperationRole } from './command-operation.js';
 import { isClaimQualificationV1, type ClaimQualificationV1 } from './claim-qualification.js';
@@ -112,7 +112,7 @@ export function createCliJsonEnvelope<Result>(
   },
 ): CliJsonEnvelopeV1<Result> {
   const resultSchemaVersion = input.resultSchemaVersion ?? DEFAULT_CLI_RESULT_SCHEMA_VERSION;
-  if (!isPositiveSafeInteger(resultSchemaVersion)) {
+  if (!isPositiveInteger(resultSchemaVersion)) {
     throw new Error('CLI result schema version must be a positive safe integer.');
   }
   const { producerVersion, ...fields } = input;
@@ -180,7 +180,7 @@ export function decodeCliJsonEnvelope<Result = unknown>(input: unknown): Decoded
       reason: 'CLI JSON envelope v1: producer must identify scip-query and its non-empty version.',
     };
   }
-  if (!isPositiveSafeInteger(input['resultSchemaVersion'])) {
+  if (!isPositiveInteger(input['resultSchemaVersion'])) {
     return {
       kind: 'malformed',
       reason: 'CLI JSON envelope v1: resultSchemaVersion must be a positive safe integer.',
@@ -272,10 +272,6 @@ function isProducer(value: unknown): value is { name: 'scip-query'; version: str
     typeof value['version'] === 'string' &&
     value['version'].length > 0
   );
-}
-
-function isPositiveSafeInteger(value: unknown): value is number {
-  return Number.isSafeInteger(value) && Number(value) > 0;
 }
 
 function isCliEvidenceContextV1(value: unknown): value is CliEvidenceContextV1 {

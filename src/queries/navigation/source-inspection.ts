@@ -10,6 +10,7 @@ import {
 } from '../../source/facts/behavior-skeleton.js';
 import { classifyFile, fileKindRank, type FileKind } from '../../source/primitives/file-kind.js';
 import { getSourceLines } from '../../source/primitives/source-text.js';
+import { uniqueNonEmpty } from '../query-utils.js';
 import { resolveIndexedFile } from '../internal/file-resolution.js';
 import { evidence, type EvidenceOptions, type EvidenceResult } from './evidence.js';
 import { SOURCE_INSPECTION_MAX_SELECTORS } from '../../domain/source-inspection-limits.js';
@@ -1272,9 +1273,6 @@ function parseLocation(target: string): { path: string; line: number } | null {
   return Number.isSafeInteger(line) && line > 0 ? { path: match[1]!, line } : null;
 }
 
-function uniqueNonEmpty(values: readonly string[] | undefined): string[] {
-  return unique((values ?? []).map((value) => value.trim()).filter(Boolean));
-}
 
 function unique<T>(values: readonly T[]): T[] {
   return [...new Set(values)];

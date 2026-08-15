@@ -35,6 +35,7 @@ import { resolveImportedDefinitions } from '../../symbols/imported-definitions.j
 import { findIdentifierLines } from '../../symbols/identifier-index.js';
 import { resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { isModuleLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
+import { uniqueNonEmpty } from '../query-utils.js';
 import { ProjectIndex } from '../internal/project-index.js';
 import { isExportedDefinition } from '../internal/exported-definition.js';
 import { SOURCE_INSPECTION_MAX_SELECTORS } from '../../domain/source-inspection-limits.js';
@@ -2046,8 +2047,8 @@ function syntaxDeclarationOwnersAtLine(
   return owners;
 }
 
-function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopology {
-  const sourceConstructHits = [
+function systemMapTopologySourceConstructHits(input: SystemMapTopologyInput): SourceConstructHit[] {
+  return [
     ...new Map(
       [...input.sourceConstructStates.values()]
         .map((state) => canonicalSourceConstruct(input.db, state))
@@ -2057,7 +2058,13 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     (left, right) =>
       left.file.localeCompare(right.file) || left.startLine - right.startLine || left.endLine - right.endLine,
   );
-  const anchors: ExplorationTopologyAnchor[] = input.anchors.map((anchor, index) => {
+}
+
+function systemMapTopologyAnchors(
+  input: SystemMapTopologyInput,
+  sourceConstructHits: readonly SourceConstructHit[],
+): ExplorationTopologyAnchor[] {
+  return input.anchors.map((anchor, index) => {
     const id = topologyId('anchor', String(index), anchor.kind, anchor.query);
     const symbolNodeIds = [...input.symbolStates.values()]
       .filter((state) => state.anchorQueries.has(anchor.query))
@@ -2109,6 +2116,9 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
       omittedCandidates: anchor.omittedSymbolCandidates ?? 0,
     };
   });
+}
+
+function indexTopologyAnchorIdsByNode(anchors: readonly ExplorationTopologyAnchor[]): Map<string, string[]> {
   const anchorIdsByNode = new Map<string, string[]>();
   for (const anchor of anchors) {
     for (const nodeId of [...anchor.nodeIds, ...anchor.candidateNodeIds]) {
@@ -2117,6 +2127,14 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
       anchorIdsByNode.set(nodeId, ids);
     }
   }
+  return anchorIdsByNode;
+}
+
+function systemMapTopologyOwnerNodes(
+  input: SystemMapTopologyInput,
+  sourceConstructHits: readonly SourceConstructHit[],
+  anchorIdsByNode: ReadonlyMap<string, string[]>,
+): ExplorationTopologyNode[] {
   const boundaryOwnerNames = input.relations.flatMap((relation) =>
     [relation.fromBoundaryParticipant, relation.toBoundaryParticipant].flatMap((participant) =>
       participant?.ownerName ? [participant] : [],
@@ -2233,6 +2251,49 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
       },
     });
   }
+  return nodes;
+}
+
+function systemMapTopologyRelationEndpoint(
+  db: ScipDatabase,
+  knownNodeIds: ReadonlySet<string>,
+  sourceConstructsByFile: ReadonlyMap<string, SourceConstructHit[]>,
+  symbol: string | null,
+  participant: SystemMapBoundaryParticipant | undefined,
+  explicitSourceConstruct: SystemMapSourceConstruct | undefined,
+  regionId: string,
+  file: string,
+  line: number | null,
+  preferParticipant = false,
+): string {
+  const symbolNodeId = symbol ? symbolTopologyNodeId(symbol) : null;
+  if (symbolNodeId && knownNodeIds.has(symbolNodeId) && !isModuleLikeSymbol(symbol!)) return symbolNodeId;
+  const participantNodeId = participant ? runtimeBoundaryParticipantTopologyNodeId(participant.observationId) : null;
+  if (preferParticipant && participantNodeId && knownNodeIds.has(participantNodeId)) return participantNodeId;
+  const explicitSourceNodeId = explicitSourceConstruct
+    ? sourceConstructTopologyNodeId(canonicalSourceConstruct(db, explicitSourceConstruct))
+    : null;
+  if (explicitSourceNodeId && knownNodeIds.has(explicitSourceNodeId)) return explicitSourceNodeId;
+  if (participantNodeId && knownNodeIds.has(participantNodeId)) return participantNodeId;
+  const sourceConstruct =
+    line === null
+      ? null
+      : ((sourceConstructsByFile.get(file) ?? [])
+          .filter((hit) => hit.startLine <= line && hit.endLine >= line)
+          .sort(
+            (left, right) =>
+              left.endLine - left.startLine - (right.endLine - right.startLine) || left.startLine - right.startLine,
+          )[0] ?? null);
+  if (sourceConstruct) return sourceConstructTopologyNodeId(sourceConstruct);
+  if (symbolNodeId && knownNodeIds.has(symbolNodeId)) return symbolNodeId;
+  return regionId;
+}
+
+function systemMapTopologyRelationEdges(
+  input: SystemMapTopologyInput,
+  nodes: readonly ExplorationTopologyNode[],
+  sourceConstructHits: readonly SourceConstructHit[],
+): ExplorationTopologyEdge[] {
   const knownNodeIds = new Set(nodes.map((node) => node.id));
   const sourceConstructsByFile = groupBy(sourceConstructHits, (hit) => hit.file);
   const relationEndpoint = (
@@ -2243,29 +2304,19 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     file: string,
     line: number | null,
     preferParticipant = false,
-  ): string => {
-    const symbolNodeId = symbol ? symbolTopologyNodeId(symbol) : null;
-    if (symbolNodeId && knownNodeIds.has(symbolNodeId) && !isModuleLikeSymbol(symbol!)) return symbolNodeId;
-    const participantNodeId = participant ? runtimeBoundaryParticipantTopologyNodeId(participant.observationId) : null;
-    if (preferParticipant && participantNodeId && knownNodeIds.has(participantNodeId)) return participantNodeId;
-    const explicitSourceNodeId = explicitSourceConstruct
-      ? sourceConstructTopologyNodeId(canonicalSourceConstruct(input.db, explicitSourceConstruct))
-      : null;
-    if (explicitSourceNodeId && knownNodeIds.has(explicitSourceNodeId)) return explicitSourceNodeId;
-    if (participantNodeId && knownNodeIds.has(participantNodeId)) return participantNodeId;
-    const sourceConstruct =
-      line === null
-        ? null
-        : ((sourceConstructsByFile.get(file) ?? [])
-            .filter((hit) => hit.startLine <= line && hit.endLine >= line)
-            .sort(
-              (left, right) =>
-                left.endLine - left.startLine - (right.endLine - right.startLine) || left.startLine - right.startLine,
-            )[0] ?? null);
-    if (sourceConstruct) return sourceConstructTopologyNodeId(sourceConstruct);
-    if (symbolNodeId && knownNodeIds.has(symbolNodeId)) return symbolNodeId;
-    return regionId;
-  };
+  ): string =>
+    systemMapTopologyRelationEndpoint(
+      input.db,
+      knownNodeIds,
+      sourceConstructsByFile,
+      symbol,
+      participant,
+      explicitSourceConstruct,
+      regionId,
+      file,
+      line,
+      preferParticipant,
+    );
   const edges: ExplorationTopologyEdge[] = [];
   for (const state of input.symbolStates.values()) {
     const regionId = input.regionForFile.get(state.definition.relativePath)?.id;
@@ -2376,7 +2427,14 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
       ),
     });
   }
+  return edges;
+}
 
+function appendSystemMapExternalBoundariesAndFrontiers(
+  input: SystemMapTopologyInput,
+  nodes: ExplorationTopologyNode[],
+  edges: ExplorationTopologyEdge[],
+): ExplorationFrontierGroup[] {
   for (const boundary of input.externalBoundaries) {
     const nodeId = topologyId('external', boundary.kind, boundary.name);
     const fromNodeIds = uniqueSorted(boundary.fromRegionIds);
@@ -2460,20 +2518,13 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
       expansion: null,
     });
   });
+  return frontiers;
+}
 
-  const completeTopology = createExplorationTopology({
-    anchors,
-    nodes,
-    edges,
-    paths: [],
-    frontiers,
-    scope: `explicit anchors; relations ${input.requestedRelationKinds.join(', ')}; depth ${input.maxDepth}; evidence floor ${input.evidenceFloor}; source scopes ${input.includedSourceScopes.join(', ')}`,
-    blindSpots: [...input.blindSpots],
-    incompleteReasons:
-      input.closureStatus === 'incomplete'
-        ? [`${input.omittedSymbolCandidates} ambiguous symbol candidate(s) were omitted`]
-        : [],
-  });
+function selectAndAugmentSystemMapTopology(
+  completeTopology: ExplorationTopology,
+  input: SystemMapTopologyInput,
+): ExplorationTopology {
   const expandProgramFacts = input.topologyFrontiers.some((frontierId) => frontierId === 'frontier:program-facts');
   const selectedTopology = selectExplorationTopology(completeTopology, {
     expandedFrontierIds: input.topologyFrontiers.filter((frontierId) => frontierId !== 'frontier:program-facts'),
@@ -2535,6 +2586,30 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
     frontier.expansion = systemMapFrontierExpansionCommand(input, frontier.id);
   }
   return augmentedTopology;
+}
+
+function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopology {
+  const sourceConstructHits = systemMapTopologySourceConstructHits(input);
+  const anchors = systemMapTopologyAnchors(input, sourceConstructHits);
+  const nodes = systemMapTopologyOwnerNodes(input, sourceConstructHits, indexTopologyAnchorIdsByNode(anchors));
+  const edges = systemMapTopologyRelationEdges(input, nodes, sourceConstructHits);
+  const frontiers = appendSystemMapExternalBoundariesAndFrontiers(input, nodes, edges);
+  return selectAndAugmentSystemMapTopology(
+    createExplorationTopology({
+      anchors,
+      nodes,
+      edges,
+      paths: [],
+      frontiers,
+      scope: `explicit anchors; relations ${input.requestedRelationKinds.join(', ')}; depth ${input.maxDepth}; evidence floor ${input.evidenceFloor}; source scopes ${input.includedSourceScopes.join(', ')}`,
+      blindSpots: [...input.blindSpots],
+      incompleteReasons:
+        input.closureStatus === 'incomplete'
+          ? [`${input.omittedSymbolCandidates} ambiguous symbol candidate(s) were omitted`]
+          : [],
+    }),
+    input,
+  );
 }
 
 function relationTouchesSelectedOwner(relation: SystemMapRelation, node: ExplorationTopologyNode): boolean {
@@ -3715,9 +3790,6 @@ function renderBoundaryAddress(observation: BoundaryObservation): string {
   return observation.keyParts.map((part) => `${part.name}=${part.value}`).join(' ');
 }
 
-function uniqueNonEmpty(values: readonly string[]): string[] {
-  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
-}
 
 function uniqueSorted<T extends string>(values: readonly T[]): T[] {
   return [...new Set(values)].sort();

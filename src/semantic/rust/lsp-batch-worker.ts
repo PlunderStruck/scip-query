@@ -13,7 +13,7 @@ import {
   type RustAnalyzerRequestOptions,
 } from './lsp-client.js';
 import type { LspCallHierarchyItem, LspCallHierarchyOutgoingCall, LspHover, LspMarkedString } from './lsp-types.js';
-import { waitForRustAnalyzerDelayWithinDeadline } from './lsp-session-readiness.js';
+import { sleep, waitForRustAnalyzerDelayWithinDeadline } from './lsp-session-readiness.js';
 import {
   dedupeSemanticReferences,
   definitionToReferenceParams,
@@ -497,11 +497,6 @@ function dedupeSemanticCallees(callees: readonly SemanticCallee[]): SemanticCall
     out.push(callee);
   }
   return out.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.symbol.localeCompare(b.symbol));
-}
-
-export function sleep(ms: number): Promise<void> {
-  if (ms <= 0) return Promise.resolve();
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function isInsideOrEqual(root: string, candidate: string): boolean {

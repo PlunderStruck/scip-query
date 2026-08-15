@@ -16,6 +16,7 @@ import {
   type DurableRustSessionServerState,
 } from './durable-session.js';
 import { createWorkerRustAnalyzerSessionRequester } from './lsp-session.js';
+import { sleep } from './lsp-session-readiness.js';
 import { writeJsonAtomic, writeJsonDurable } from '../../storage/atomic-json.js';
 import {
   boundedMailboxPaths,
@@ -259,9 +260,6 @@ function configuredIdleTimeoutMs(): number {
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : DEFAULT_IDLE_TIMEOUT_MS;
 }
 
-function sleep(durationMs: number): Promise<void> {
-  return new Promise((resolvePromise) => setTimeout(resolvePromise, durationMs));
-}
 
 const invokedPath = process.argv[1] ? pathToFileURL(resolve(process.argv[1])).href : null;
 if (invokedPath === import.meta.url) {

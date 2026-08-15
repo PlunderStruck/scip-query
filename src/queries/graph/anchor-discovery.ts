@@ -1,5 +1,6 @@
 /** Deprecated compatibility discovery; canonical evidence traversal starts from explicit referents. */
 import type { IndexedDefinition } from '../../domain/types.js';
+import { normalizedCallableLeaf } from '../query-utils.js';
 import { readRuntimeBoundaryGraph } from '../../analysis/runtime-boundaries/index.js';
 import type { BoundaryLink, BoundaryObservation } from '../../analysis/runtime-boundaries/types.js';
 import { behaviorConstructRange } from '../../source/facts/behavior-skeleton.js';
@@ -848,9 +849,6 @@ function astCallsiteConfirmsTarget(
   );
 }
 
-function normalizedCallableLeaf(value: string): string {
-  return value.replace(/^#/u, '').replace(/\(\)$/u, '');
-}
 
 function connectedRootGroups(
   neighborhoods: readonly RootNeighborhood[],
