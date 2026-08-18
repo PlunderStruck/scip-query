@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
-import { program, renderHeuristicNotice } from '../../src/runtime/cli.js';
+import { program, renderHeuristicNotice } from '../../src/runtime/cli-main.js';
 import { commandDescriptors } from '../../src/runtime/commands/command-descriptors.js';
 import { commandResultUnitPolicy } from '../../src/runtime/commands/command-registry.js';
 import {
@@ -502,12 +502,12 @@ describe('CLI contract', () => {
     expect(exploration).toContain('Treat its commands as controls, not a checklist');
     expect(exploration).toContain('make each query answer a distinct repository question');
     expect(exploration).toContain('Thoroughness means understanding the relevant system end to end');
-      expect(exploration).toContain('do not select one by path, naming, apparent recency, or result order');
+    expect(exploration).toContain('do not select one by path, naming, apparent recency, or result order');
     expect(exploration).toContain('Native text and file tools expose matches and slices');
     expect(exploration).not.toMatch(/evidence ledger|final-audit|proof obligation/i);
     expect(planning).toContain('scip-query evidence');
-      expect(planning).toContain('Treat its commands as controls, not a checklist');
-      expect(planning).toContain('When several implementations match');
+    expect(planning).toContain('Treat its commands as controls, not a checklist');
+    expect(planning).toContain('When several implementations match');
     expect(planning).toContain('exact symbol and file/line references');
     expect(planning).toMatch(/\| Step\s+\| Code reference\s+\| Change\s+\| Preserve or retire\s+\| Verify\s+\|/);
     expect(planning).not.toMatch(/evidence ledger|progress bookkeeping/i);

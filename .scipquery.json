@@ -111,7 +111,7 @@
       },
       {
         "name": "runtime-entry",
-        "paths": ["src/runtime/cli.ts", "src/runtime/index.ts", "src/runtime/postinstall.ts"]
+        "paths": ["src/runtime/cli.ts", "src/runtime/cli-main.ts", "src/runtime/index.ts", "src/runtime/postinstall.ts"]
       },
       {
         "name": "runtime-query-commands",
@@ -143,6 +143,9 @@
           "src/runtime/project-readiness.ts",
           "src/runtime/project-reindex.ts",
           "src/runtime/project-setup.ts",
+          "src/runtime/query-service.ts",
+          "src/runtime/query-service-fastpath.ts",
+          "src/runtime/query-service-server.ts",
           "src/runtime/refs-pagination.ts",
           "src/runtime/render.ts",
           "src/runtime/result-pagination.ts",
@@ -162,7 +165,7 @@
           "src/runtime/watch.ts",
           "src/runtime/worker-request-lane.ts"
         ],
-        "maxFiles": 41
+        "maxFiles": 44
       },
       {
         "name": "test-fixtures",

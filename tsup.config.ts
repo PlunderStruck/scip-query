@@ -23,7 +23,7 @@ export default defineConfig([
     target: 'node22',
   },
   {
-    entry: { cli: 'src/runtime/cli.ts' },
+    entry: { cli: 'src/runtime/cli.ts', 'cli-main': 'src/runtime/cli-main.ts' },
     format: ['esm'],
     sourcemap: true,
     minify: true,
@@ -40,6 +40,7 @@ export default defineConfig([
       'rust-semantic-session-worker': 'src/semantic/rust/lsp-session-worker.ts',
       'rust-semantic-session-server': 'src/semantic/rust/durable-session-server.ts',
       'typescript-mailbox-worker': 'src/runtime/typescript-mailbox-worker.ts',
+      'query-service-server': 'src/runtime/query-service-server.ts',
       'watch-server': 'src/runtime/watch-server.ts',
       postinstall: 'src/runtime/postinstall.ts',
     },

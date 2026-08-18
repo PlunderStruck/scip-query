@@ -1,11 +1,16 @@
-import type { CommandDescriptor } from './command-descriptor-types.js';
+import type { CommandDescriptor, InvocationCoverage } from './command-descriptor-types.js';
+import type { ReportSection } from '../render.js';
 import { withJsonOption as appendJsonOption } from './command-spec-builders.js';
 import {
   budgetedSectionedReportCommand,
   groupedByFileCommand,
   listCommand,
+  precomputedSectionedReportCommand,
   sectionedReportCommand,
   tableCommand,
+  type CommandContext,
+  type DbCommandContext,
+  type PrecomputedCommandResult,
 } from './command-execution.js';
 
 type QueryCommandMetadata = Omit<CommandDescriptor, 'handler' | 'renderShape'>;
@@ -141,6 +146,50 @@ export function sectionedQueryCommand<Result>({
       agentResult,
       after,
     }),
+  };
+}
+
+export function precomputedSectionedQueryCommand<Result>({
+  query,
+  precomputed,
+  emptyMessage,
+  heuristicLabel,
+  sections,
+  before,
+  toJson,
+  coverage,
+  agentResult,
+  after,
+  ...metadata
+}: QueryCommandMetadata & {
+  query: (ctx: DbCommandContext) => Result;
+  precomputed: (ctx: CommandContext) => PrecomputedCommandResult<Result> | null;
+  emptyMessage?: (result: Result, ctx: CommandContext) => string | undefined;
+  heuristicLabel?: string;
+  sections: (result: Result, ctx: CommandContext) => readonly ReportSection[];
+  before?: (result: Result, ctx: CommandContext) => void;
+  toJson?: (result: Result, ctx: CommandContext) => unknown;
+  coverage?: (result: Result, ctx: CommandContext) => InvocationCoverage;
+  agentResult?: (result: Result, ctx: CommandContext) => unknown;
+  after?: (result: Result, ctx: CommandContext) => void;
+}): CommandDescriptor {
+  const commandMetadata = withMetadataJsonOption(metadata);
+  const presentation = {
+    commandName: commandMetadata.id,
+    emptyMessage,
+    heuristicLabel,
+    sections,
+    before,
+    toJson,
+    coverage,
+    agentResult,
+    after,
+  };
+  const fallback = sectionedReportCommand({ ...presentation, query });
+  return {
+    ...commandMetadata,
+    renderShape: 'sectioned-report',
+    handler: precomputedSectionedReportCommand(presentation, precomputed, fallback),
   };
 }
 

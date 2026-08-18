@@ -35,6 +35,7 @@ import {
 import {
   budgetedSectionedQueryCommand,
   listQueryCommand,
+  precomputedSectionedQueryCommand,
   sectionedQueryCommand,
   tableQueryCommand,
 } from '../command-kit/query-command-builders.js';
@@ -53,11 +54,25 @@ import {
   SOURCE_INSPECTION_SAFE_CHARACTERS,
 } from '../../domain/source-inspection-limits.js';
 import { assertNavigationDetailAllowed, stageNavigationMapCommands } from '../navigation-session.js';
+import { trySearchSourceWithQueryService } from '../query-service.js';
+import { resolveProjectRoot } from '../cli-context.js';
+import type { SourceSearchOptions } from '../../queries/navigation/source-search.js';
 
 export function inspectSearchLimitOption(opts: Readonly<Record<string, unknown>>): number | undefined {
   const full = booleanOptionValue(opts, 'full');
   const searchLimit = definedLimitOption(opts, 'limit', 12);
   return full ? undefined : searchLimit;
+}
+
+function sourceSearchQueryOptions(opts: Readonly<Record<string, unknown>>): SourceSearchOptions {
+  return {
+    scope: stringOptionValue(opts, 'scope'),
+    context: definedNumberOption(opts, 'context', 2),
+    limit: definedLimitOption(opts, 'limit', 6),
+    regexp: booleanOptionValue(opts, 'regexp'),
+    ignoreCase: booleanOptionValue(opts, 'ignoreCase'),
+    ranking: 'structural',
+  };
 }
 
 export function inspectViewOption(opts: Readonly<Record<string, unknown>>): queries.SourceInspectionView {
@@ -1589,7 +1604,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     }),
     sections: sourceInspectionSections,
   }),
-  sectionedQueryCommand({
+  precomputedSectionedQueryCommand({
     id: 'search',
     command: 'search <exact-text>',
     description: 'Count current project text matches and preview a bounded, recoverable identity and source manifest',
@@ -1647,15 +1662,9 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       "scip-query search -- '--config'",
       "scip-query search 'send.*event' --regexp --scope src",
     ]),
-    query: ({ db, args, opts }) =>
-      queries.searchSource(db, stringArg(args, 0), {
-        scope: stringOptionValue(opts, 'scope'),
-        context: definedNumberOption(opts, 'context', 2),
-        limit: definedLimitOption(opts, 'limit', 6),
-        regexp: booleanOptionValue(opts, 'regexp'),
-        ignoreCase: booleanOptionValue(opts, 'ignoreCase'),
-        ranking: 'structural',
-      }),
+    query: ({ db, args, opts }) => queries.searchSource(db, stringArg(args, 0), sourceSearchQueryOptions(opts)),
+    precomputed: ({ args, opts }) =>
+      trySearchSourceWithQueryService(resolveProjectRoot(), stringArg(args, 0), sourceSearchQueryOptions(opts)),
     emptyMessage: (result) =>
       result.matchingLines === 0
         ? `${sourceSearchTextCoverageComplete(result) ? 'No current project text line' : 'No scanned project text line'} matched '${result.pattern}'.`

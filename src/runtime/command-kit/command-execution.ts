@@ -62,17 +62,21 @@ export function setCommandClaimContractMap(entries: ReadonlyMap<string, CommandC
   commandClaimContractById = new Map(entries);
 }
 
-export interface DbCommandContext {
-  db: ScipDatabase;
+export interface CommandContext {
   args: readonly unknown[];
   opts: CommandOptions;
+  observationReceipt?: ObservationReceiptV2;
+}
+
+export interface DbCommandContext extends CommandContext {
+  db: ScipDatabase;
 }
 
 export interface BudgetedCommandContext extends DbCommandContext {
   budget: ReturnType<typeof commandAnalysisBudget>;
 }
 
-interface RowCommandSpec<Row, Ctx extends DbCommandContext> {
+interface RowCommandSpec<Row, Ctx extends CommandContext> {
   commandName?: string;
   query: (ctx: Ctx) => readonly Row[];
   format: (row: Row, ctx: Ctx) => string;
@@ -85,12 +89,12 @@ interface RowCommandSpec<Row, Ctx extends DbCommandContext> {
   after?: (rows: readonly Row[], ctx: Ctx) => void;
 }
 
-type RowRenderer<Row, Ctx extends DbCommandContext> =
+type RowRenderer<Row, Ctx extends CommandContext> =
   | { kind: 'list' }
   | { kind: 'table'; headers: readonly string[]; dashWidths?: readonly number[] }
   | { kind: 'grouped'; key?: (row: Row, ctx: Ctx) => string };
 
-export interface ReportCommandSpec<Result, Ctx extends DbCommandContext = DbCommandContext> {
+export interface ReportCommandSpec<Result, Ctx extends CommandContext = DbCommandContext> {
   commandName?: string;
   query: (ctx: Ctx) => Result;
   emptyMessage?: (result: Result, ctx: Ctx) => string | undefined;
@@ -103,7 +107,7 @@ export interface ReportCommandSpec<Result, Ctx extends DbCommandContext = DbComm
   after?: (result: Result, ctx: Ctx) => void;
 }
 
-export interface SectionedReportCommandSpec<Result, Ctx extends DbCommandContext = DbCommandContext> {
+export interface SectionedReportCommandSpec<Result, Ctx extends CommandContext = DbCommandContext> {
   commandName?: string;
   query: (ctx: Ctx) => Result;
   emptyMessage?: (result: Result, ctx: Ctx) => string | undefined;
@@ -116,7 +120,7 @@ export interface SectionedReportCommandSpec<Result, Ctx extends DbCommandContext
   after?: (result: Result, ctx: Ctx) => void;
 }
 
-interface CommandOutputSpec<Output, Ctx extends DbCommandContext> {
+interface CommandOutputSpec<Output, Ctx extends CommandContext> {
   commandName?: string;
   query: (ctx: Ctx) => Output;
   emptyMessage?: (output: Output, ctx: Ctx) => string | undefined;
@@ -188,6 +192,38 @@ export function sectionedReportCommand<Result>(spec: SectionedReportCommandSpec<
     agentResult: spec.agentResult,
     after: spec.after,
   });
+}
+
+export interface PrecomputedCommandResult<Result> {
+  result: Result;
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
+export function precomputedSectionedReportCommand<Result>(
+  spec: Omit<SectionedReportCommandSpec<Result, CommandContext>, 'query'>,
+  resolvePrecomputed: (ctx: CommandContext) => PrecomputedCommandResult<Result> | null,
+  fallback: CommandHandler,
+): CommandHandler {
+  return (...rawArgs: unknown[]) => {
+    const { args, opts } = splitCommanderActionArgs(rawArgs);
+    const resolved = resolvePrecomputed({ args, opts });
+    if (!resolved) return fallback(...rawArgs);
+    bindSourceEmissionGeneration(resolved.generationIdentity);
+    const ctx: CommandContext = { args, opts, observationReceipt: resolved.observationReceipt };
+    runCommandOutput(ctx, {
+      commandName: spec.commandName,
+      query: () => resolved.result,
+      emptyMessage: spec.emptyMessage,
+      heuristicLabel: spec.heuristicLabel,
+      before: spec.before,
+      render: (result, commandCtx) => render.sectionedReport(spec.sections(result, commandCtx)),
+      toJson: spec.toJson,
+      coverage: spec.coverage,
+      agentResult: spec.agentResult,
+      after: spec.after,
+    });
+  };
 }
 
 export function budgetedReportCommand<Result>(
@@ -307,7 +343,7 @@ export function optionValueSource(opts: CommandOptions, key: string): string | u
   return (opts as CommandOptionsWithSources)[OPTION_VALUE_SOURCE]?.(key);
 }
 
-function renderRows<Row, Ctx extends DbCommandContext>(
+function renderRows<Row, Ctx extends CommandContext>(
   ctx: Ctx,
   spec: RowCommandSpec<Row, Ctx>,
   renderer: RowRenderer<Row, Ctx>,
@@ -343,7 +379,7 @@ function renderRows<Row, Ctx extends DbCommandContext>(
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
-function runCommandOutput<Output, Ctx extends DbCommandContext>(ctx: Ctx, spec: CommandOutputSpec<Output, Ctx>): void {
+function runCommandOutput<Output, Ctx extends CommandContext>(ctx: Ctx, spec: CommandOutputSpec<Output, Ctx>): void {
   const output = spec.query(ctx);
   if (booleanOptionValue(ctx.opts, 'json')) {
     if (!spec.commandName) {
@@ -353,6 +389,7 @@ function runCommandOutput<Output, Ctx extends DbCommandContext>(ctx: Ctx, spec: 
       analysisBudget: budgetedContextAnalysisBudget(ctx),
       coverage: spec.coverage?.(output, ctx),
       agentResult: spec.agentResult?.(output, ctx),
+      observationReceipt: ctx.observationReceipt,
     });
     return;
   }
@@ -374,7 +411,7 @@ function runCommandOutput<Output, Ctx extends DbCommandContext>(ctx: Ctx, spec: 
  * command that goes through the shared `runCommandOutput`/`renderRows`
  * pipeline gets the disclosure "for free," the same way `evidence` does.
  */
-function budgetedContextAnalysisBudget(ctx: DbCommandContext): AnalysisBudgetDisclosure | undefined {
+function budgetedContextAnalysisBudget(ctx: CommandContext): AnalysisBudgetDisclosure | undefined {
   const budget = (ctx as Partial<BudgetedCommandContext>).budget;
   return budget?.analysisBudget;
 }
