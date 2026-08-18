@@ -21,6 +21,7 @@ import {
 } from '../storage/bounded-mailbox.js';
 import { writeJsonAtomic, writeJsonDurable } from '../storage/atomic-json.js';
 import { openProjectDb } from './cli-context.js';
+import { isLargeCommandIndex } from './cli-support.js';
 import { buildObservationReceipt } from './observation-receipt.js';
 import {
   QUERY_SERVICE_PROTOCOL_VERSION,
@@ -247,6 +248,23 @@ async function executeRequest(
     const { byKind, kindCounts } = await import('../queries/navigation/by-kind.js');
     return request.kind === 'by-kind' ? byKind(db, request.kindQuery) : kindCounts(db);
   }
+  if (request.kind === 'refs') {
+    const [{ refs }, { compareReferenceKey }, { withSymbolResolutionJson }] = await Promise.all([
+      import('../queries/navigation/refs.js'),
+      import('./refs-pagination.js'),
+      import('./query-commands/symbol-resolution.js'),
+    ]);
+    const semantic = defaultSemanticEnrichment(db);
+    const rows = refs(db, request.symbolPattern, { semantic }).sort(compareReferenceKey);
+    return {
+      ...withSymbolResolutionJson(db, request.symbolPattern, rows, 'references'),
+      pagination: { cursorVersion: 2, producer: 'complete-only', semanticEnrichment: semantic },
+    };
+  }
+  if (request.kind === 'imports') {
+    const { imports } = await import('../queries/navigation/imports.js');
+    return imports(db, request.filePattern, { semantic: defaultSemanticEnrichment(db) });
+  }
   const [{ codeBatch }, { codeBatchResultOnlyJsonForSelectors }] = await Promise.all([
     import('../queries/navigation/code.js'),
     import('../queries/navigation/code-result-json.js'),
@@ -378,7 +396,11 @@ function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServi
       },
     };
   }
-  if (requestRecord['kind'] === 'imported-by' || requestRecord['kind'] === 'hierarchy') {
+  if (
+    requestRecord['kind'] === 'imported-by' ||
+    requestRecord['kind'] === 'hierarchy' ||
+    requestRecord['kind'] === 'refs'
+  ) {
     if (typeof requestRecord['symbolPattern'] !== 'string') {
       throw new Error(`Invalid query service ${requestRecord['kind']} request.`);
     }
@@ -408,6 +430,19 @@ function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServi
     return {
       ...envelope,
       request: { kind: 'kind-counts', expectedGeneration: requestRecord['expectedGeneration'] },
+    };
+  }
+  if (requestRecord['kind'] === 'imports') {
+    if (typeof requestRecord['filePattern'] !== 'string') {
+      throw new Error('Invalid query service imports request.');
+    }
+    return {
+      ...envelope,
+      request: {
+        kind: 'imports',
+        expectedGeneration: requestRecord['expectedGeneration'],
+        filePattern: requestRecord['filePattern'],
+      },
     };
   }
   if (requestRecord['kind'] === 'code') {
@@ -509,6 +544,16 @@ function requiredNonNegativeInteger(value: unknown, name: string): number {
     throw new Error(`Query service option ${name} must be a non-negative safe integer.`);
   }
   return value as number;
+}
+
+const semanticEnrichmentByDb = new WeakMap<object, boolean>();
+
+function defaultSemanticEnrichment(db: ReturnType<typeof openProjectDb>): boolean {
+  const cached = semanticEnrichmentByDb.get(db);
+  if (cached !== undefined) return cached;
+  const semantic = !isLargeCommandIndex(db);
+  semanticEnrichmentByDb.set(db, semantic);
+  return semantic;
 }
 
 function requiredPositiveInteger(value: unknown, name: string): number {

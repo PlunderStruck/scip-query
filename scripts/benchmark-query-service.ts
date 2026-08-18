@@ -136,7 +136,13 @@ function benchmarkArguments(): string[] {
   if (benchmarkCommand === 'members') return ['members', operand, '--json', '--result-only', '--compact'];
   if (benchmarkCommand === 'methods') return ['methods', operand, '--json', '--result-only', '--compact'];
   if (benchmarkCommand === 'kind-counts') return ['kind-counts', '--json', '--result-only', '--compact'];
-  if (benchmarkCommand === 'imported-by' || benchmarkCommand === 'hierarchy' || benchmarkCommand === 'by-kind') {
+  if (
+    benchmarkCommand === 'imported-by' ||
+    benchmarkCommand === 'hierarchy' ||
+    benchmarkCommand === 'by-kind' ||
+    benchmarkCommand === 'refs' ||
+    benchmarkCommand === 'imports'
+  ) {
     return [benchmarkCommand, operand, '--json', '--result-only', '--compact'];
   }
   if (benchmarkCommand === 'deps' || benchmarkCommand === 'rdeps') {
@@ -202,13 +208,16 @@ type BenchmarkCommand =
   | 'imported-by'
   | 'hierarchy'
   | 'by-kind'
-  | 'kind-counts';
+  | 'kind-counts'
+  | 'refs'
+  | 'imports';
 
 function defaultOperand(command: BenchmarkCommand): string {
   if (command === 'outline') return 'src/runtime/cli.ts';
   if (command === 'files') return 'src/runtime';
   if (command === 'members' || command === 'methods') return 'ScipDatabase';
   if (command === 'deps' || command === 'rdeps') return 'src/runtime/query-service.ts';
+  if (command === 'imports') return 'src/runtime/query-service.ts';
   if (command === 'by-kind') return 'function';
   if (command === 'kind-counts') return '';
   return 'queryServiceSessionIdentity';
@@ -229,11 +238,13 @@ function parseBenchmarkCommand(configured: string | undefined): BenchmarkCommand
     configured === 'imported-by' ||
     configured === 'hierarchy' ||
     configured === 'by-kind' ||
-    configured === 'kind-counts'
+    configured === 'kind-counts' ||
+    configured === 'refs' ||
+    configured === 'imports'
   ) {
     return configured;
   }
   throw new Error(
-    'SCIP_QUERY_BENCH_COMMAND must be search, outline, code, entrypoints, files, stats, members, methods, deps, rdeps, imported-by, hierarchy, by-kind, or kind-counts.',
+    'SCIP_QUERY_BENCH_COMMAND must be search, outline, code, entrypoints, files, stats, members, methods, deps, rdeps, imported-by, hierarchy, by-kind, kind-counts, refs, or imports.',
   );
 }

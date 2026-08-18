@@ -39,7 +39,9 @@ function mayUseQueryServiceFastPath(argv: readonly string[]): boolean {
       argv[0] === 'imported-by' ||
       argv[0] === 'hierarchy' ||
       argv[0] === 'by-kind' ||
-      argv[0] === 'kind-counts') &&
+      argv[0] === 'kind-counts' ||
+      argv[0] === 'refs' ||
+      argv[0] === 'imports') &&
     argv.includes('--json') &&
     argv.includes('--result-only') &&
     argv.includes('--compact') &&

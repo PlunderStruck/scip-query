@@ -24,6 +24,7 @@ import type { DepResult } from '../queries/navigation/deps.js';
 import type { ByKindResult } from '../queries/navigation/by-kind.js';
 import type { HierarchyNode } from '../queries/navigation/hierarchy.js';
 import type { ImportResult } from '../queries/navigation/imports.js';
+import type { RefResult } from '../queries/navigation/refs.js';
 import type { MemberResult } from '../queries/navigation/members.js';
 import type { MethodsResolution } from '../queries/navigation/methods.js';
 import type { SourceSearchOptions, SourceSearchResult } from '../queries/navigation/source-search.js';
@@ -40,10 +41,11 @@ import { resolveCliProjectContext } from './cli-context.js';
 import { cliVersion } from './cli-support.js';
 import { inspectWatchService, trustedWatchServiceIndexGeneration } from './watch-service.js';
 
-export const QUERY_SERVICE_PROTOCOL_VERSION = 8;
+export const QUERY_SERVICE_PROTOCOL_VERSION = 9;
 
 const QUERY_SERVICE_POOL_SIZE = 6;
 const QUERY_SERVICE_CATALOG_POOL_SIZE = 4;
+const QUERY_SERVICE_SEMANTIC_NAVIGATION_POOL_SIZE = 5;
 const QUERY_SERVICE_MAX_POOL_SIZE = 8;
 const QUERY_SERVICE_TIMEOUT_MS = 30_000;
 const QUERY_SERVICE_STARTUP_TIMEOUT_MS = 5_000;
@@ -139,6 +141,18 @@ export interface QueryServiceKindCountsRequest {
   expectedGeneration: string;
 }
 
+export interface QueryServiceRefsRequest {
+  kind: 'refs';
+  expectedGeneration: string;
+  symbolPattern: string;
+}
+
+export interface QueryServiceImportsRequest {
+  kind: 'imports';
+  expectedGeneration: string;
+  filePattern: string;
+}
+
 export interface QueryServiceEntryPointsOptions {
   search?: string;
   scope?: string;
@@ -171,6 +185,10 @@ export interface QueryServiceStatsTransportResult {
 
 export type QueryServiceMembersTransportResult = SymbolResolutionJson & { members: MemberResult[] };
 export type QueryServiceHierarchyTransportResult = SymbolResolutionJson & { hierarchy: HierarchyNode[] };
+export type QueryServiceRefsTransportResult = SymbolResolutionJson & {
+  references: RefResult[];
+  pagination: { cursorVersion: 2; producer: 'complete-only'; semanticEnrichment: boolean };
+};
 export type QueryServiceKindCountTransportResult = { kind: number; kindName: string; count: number };
 
 export type QueryServiceRequest =
@@ -186,7 +204,9 @@ export type QueryServiceRequest =
   | QueryServiceImportedByRequest
   | QueryServiceHierarchyRequest
   | QueryServiceByKindRequest
-  | QueryServiceKindCountsRequest;
+  | QueryServiceKindCountsRequest
+  | QueryServiceRefsRequest
+  | QueryServiceImportsRequest;
 
 export interface QueryServiceEnvelope {
   mailboxVersion: typeof BOUNDED_MAILBOX_VERSION;
@@ -297,6 +317,18 @@ export interface QueryServiceByKindResult {
 
 export interface QueryServiceKindCountsResult {
   result: QueryServiceKindCountTransportResult[];
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
+export interface QueryServiceRefsResult {
+  result: QueryServiceRefsTransportResult;
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
+export interface QueryServiceImportsResult {
+  result: ImportResult[];
   generationIdentity: string;
   observationReceipt: ObservationReceiptV2;
 }
@@ -469,6 +501,34 @@ export function tryKindCountsWithQueryService(
   );
 }
 
+export function tryRefsWithQueryService(
+  projectRoot: string,
+  symbolPattern: string,
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceRefsResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'refs', expectedGeneration, symbolPattern }),
+    isRefsResult,
+    'refs result',
+    policy,
+  );
+}
+
+export function tryImportsWithQueryService(
+  projectRoot: string,
+  filePattern: string,
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceImportsResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'imports', expectedGeneration, filePattern }),
+    isImportedByResult,
+    'imports result',
+    policy,
+  );
+}
+
 export function tryCodeWithQueryService(
   projectRoot: string,
   selectors: readonly string[],
@@ -622,7 +682,7 @@ function requestQuery<Result>(
   const deadlineAtMs = startedAtMs + QUERY_SERVICE_TIMEOUT_MS;
   const monotonicDeadlineAtMs = monotonicNowMs() + QUERY_SERVICE_TIMEOUT_MS;
   const clientId = randomUUID();
-  const operationKey = boundedMailboxOperationKey('query-service-v8', { clientId, request });
+  const operationKey = boundedMailboxOperationKey('query-service-v9', { clientId, request });
   const id = boundedMailboxRequestId(operationKey);
   const sessionIdentity = queryServiceSessionIdentity(sessionDir);
   const admitted = enqueueBoundedMailboxRequest(
@@ -931,6 +991,27 @@ function isKindCountRow(value: unknown): value is QueryServiceKindCountTransport
   );
 }
 
+function isRefsResult(value: unknown): value is QueryServiceRefsTransportResult {
+  if (!isSymbolResolutionResult(value)) return false;
+  const record = value as unknown as Record<string, unknown>;
+  const references = record['references'];
+  const pagination = record['pagination'];
+  if (!Array.isArray(references) || !references.every(isRefResult)) return false;
+  if (!pagination || typeof pagination !== 'object' || Array.isArray(pagination)) return false;
+  const page = pagination as Record<string, unknown>;
+  return (
+    page['cursorVersion'] === 2 &&
+    page['producer'] === 'complete-only' &&
+    typeof page['semanticEnrichment'] === 'boolean'
+  );
+}
+
+function isRefResult(value: unknown): value is RefResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return typeof record['relativePath'] === 'string' && isNonNegativeSafeInteger(record['line']);
+}
+
 function isMemberResult(value: unknown): value is MemberResult {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
@@ -1083,6 +1164,9 @@ function configuredPoolSize(): number {
 
 function requestPoolSize(request: QueryServiceRequest): number {
   const configured = configuredPoolSize();
+  if (request.kind === 'refs' || request.kind === 'imports') {
+    return Math.min(configured, QUERY_SERVICE_SEMANTIC_NAVIGATION_POOL_SIZE);
+  }
   return request.kind === 'imported-by' ||
     request.kind === 'hierarchy' ||
     request.kind === 'by-kind' ||

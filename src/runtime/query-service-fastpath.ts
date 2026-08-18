@@ -11,11 +11,13 @@ import {
   tryFileDependenciesWithQueryService,
   tryFilesWithQueryService,
   tryHierarchyWithQueryService,
+  tryImportsWithQueryService,
   tryImportedByWithQueryService,
   tryKindCountsWithQueryService,
   type QueryServiceEntryPointsOptions,
   tryMembersWithQueryService,
   tryMethodsWithQueryService,
+  tryRefsWithQueryService,
   tryOutlineWithQueryService,
   trySearchSourceWithQueryService,
   tryStatsWithQueryService,
@@ -91,6 +93,16 @@ interface KindCountsFastPathInvocation {
   kind: 'kind-counts';
 }
 
+interface RefsFastPathInvocation {
+  kind: 'refs';
+  symbolPattern: string;
+}
+
+interface ImportsFastPathInvocation {
+  kind: 'imports';
+  filePattern: string;
+}
+
 type FastPathInvocation =
   | SourceSearchFastPathInvocation
   | OutlineFastPathInvocation
@@ -104,7 +116,9 @@ type FastPathInvocation =
   | ImportedByFastPathInvocation
   | HierarchyFastPathInvocation
   | ByKindFastPathInvocation
-  | KindCountsFastPathInvocation;
+  | KindCountsFastPathInvocation
+  | RefsFastPathInvocation
+  | ImportsFastPathInvocation;
 
 /**
  * Serve eligible machine-oriented navigation forms before loading the full CLI
@@ -173,6 +187,16 @@ export function tryRunQueryServiceFastPath(argv: readonly string[]): boolean {
     if (!response || !writeUnpagedJsonResult(response.result)) return false;
     return true;
   }
+  if (invocation.kind === 'refs') {
+    const response = tryRefsWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true });
+    if (!response || !writeUnpagedJsonResult(response.result)) return false;
+    return true;
+  }
+  if (invocation.kind === 'imports') {
+    const response = tryImportsWithQueryService(projectRoot, invocation.filePattern, { allowDefault: true });
+    if (!response || !writeUnpagedJsonResult(response.result)) return false;
+    return true;
+  }
   if (invocation.kind === 'stats') {
     const response = tryStatsWithQueryService(projectRoot, { allowDefault: true });
     if (!response) return false;
@@ -209,6 +233,8 @@ export function parseFastPathInvocation(argv: readonly string[]): FastPathInvoca
   if (argv[0] === 'imported-by') return parseImportedByInvocation(argv);
   if (argv[0] === 'hierarchy') return parseHierarchyInvocation(argv);
   if (argv[0] === 'by-kind') return parseByKindInvocation(argv);
+  if (argv[0] === 'refs') return parseRefsInvocation(argv);
+  if (argv[0] === 'imports') return parseImportsInvocation(argv);
   return null;
 }
 
@@ -242,6 +268,16 @@ function parseHierarchyInvocation(argv: readonly string[]): HierarchyFastPathInv
 function parseByKindInvocation(argv: readonly string[]): ByKindFastPathInvocation | null {
   const kindQuery = parseExactCompactOperand(argv);
   return kindQuery === null ? null : { kind: 'by-kind', kindQuery };
+}
+
+function parseRefsInvocation(argv: readonly string[]): RefsFastPathInvocation | null {
+  const symbolPattern = parseExactCompactOperand(argv);
+  return symbolPattern === null ? null : { kind: 'refs', symbolPattern };
+}
+
+function parseImportsInvocation(argv: readonly string[]): ImportsFastPathInvocation | null {
+  const filePattern = parseExactCompactOperand(argv);
+  return filePattern === null ? null : { kind: 'imports', filePattern };
 }
 
 function parseExactCompactOperand(argv: readonly string[]): string | null {

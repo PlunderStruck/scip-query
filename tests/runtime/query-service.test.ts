@@ -158,6 +158,16 @@ describe('query service fast path', () => {
     expect(parseFastPathInvocation(['kind-counts', '--json', '--result-only', '--compact'])).toEqual({
       kind: 'kind-counts',
     });
+    expect(
+      parseFastPathInvocation(['refs', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact']),
+    ).toEqual({
+      kind: 'refs',
+      symbolPattern: 'queryServiceSessionIdentity',
+    });
+    expect(parseFastPathInvocation(['imports', 'src/runtime/cli.ts', '--json', '--result-only', '--compact'])).toEqual({
+      kind: 'imports',
+      filePattern: 'src/runtime/cli.ts',
+    });
   });
 
   it.each([
@@ -193,6 +203,11 @@ describe('query service fast path', () => {
     ['by-kind', 'function', '--limit', '10', '--json', '--result-only', '--compact'],
     ['kind-counts', '--scope', 'src', '--json', '--result-only', '--compact'],
     ['kind-counts', 'function', '--json', '--result-only', '--compact'],
+    ['refs', 'queryServiceSessionIdentity', '--limit', '10', '--json', '--result-only', '--compact'],
+    ['refs', 'queryServiceSessionIdentity', '--cursor', 'next', '--json', '--result-only', '--compact'],
+    ['refs', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact', '--full'],
+    ['imports', 'src/runtime/cli.ts', '--json', '--result-only', '--compact', '--full'],
+    ['imports', '--json', '--result-only', '--compact'],
   ])('falls through for an ambiguous or unsupported invocation: %j', (...argv) => {
     expect(parseFastPathInvocation(argv)).toBeNull();
   });
