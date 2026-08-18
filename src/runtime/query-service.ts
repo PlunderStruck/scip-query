@@ -20,6 +20,7 @@ import {
 import type { OutlineNode } from '../queries/navigation/outline.js';
 import type { CodeFileMemberMode } from '../queries/navigation/code.js';
 import type { SymbolResolutionJson } from '../queries/navigation/code-result-json.js';
+import type { DepResult } from '../queries/navigation/deps.js';
 import type { MemberResult } from '../queries/navigation/members.js';
 import type { MethodsResolution } from '../queries/navigation/methods.js';
 import type { SourceSearchOptions, SourceSearchResult } from '../queries/navigation/source-search.js';
@@ -36,7 +37,7 @@ import { resolveCliProjectContext } from './cli-context.js';
 import { cliVersion } from './cli-support.js';
 import { inspectWatchService, trustedWatchServiceIndexGeneration } from './watch-service.js';
 
-export const QUERY_SERVICE_PROTOCOL_VERSION = 6;
+export const QUERY_SERVICE_PROTOCOL_VERSION = 7;
 
 const QUERY_SERVICE_POOL_SIZE = 6;
 const QUERY_SERVICE_MAX_POOL_SIZE = 8;
@@ -104,6 +105,13 @@ export interface QueryServiceMethodsRequest {
   className: string;
 }
 
+export interface QueryServiceFileDependenciesRequest {
+  kind: 'file-dependencies';
+  expectedGeneration: string;
+  direction: 'outgoing' | 'incoming';
+  filePattern: string;
+}
+
 export interface QueryServiceEntryPointsOptions {
   search?: string;
   scope?: string;
@@ -144,7 +152,8 @@ export type QueryServiceRequest =
   | QueryServiceFilesRequest
   | QueryServiceStatsRequest
   | QueryServiceMembersRequest
-  | QueryServiceMethodsRequest;
+  | QueryServiceMethodsRequest
+  | QueryServiceFileDependenciesRequest;
 
 export interface QueryServiceEnvelope {
   mailboxVersion: typeof BOUNDED_MAILBOX_VERSION;
@@ -225,6 +234,12 @@ export interface QueryServiceMembersResult {
 
 export interface QueryServiceMethodsResult {
   result: MethodsResolution;
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
+export interface QueryServiceFileDependenciesResult {
+  result: DepResult[];
   generationIdentity: string;
   observationReceipt: ObservationReceiptV2;
 }
@@ -323,6 +338,21 @@ export function tryMethodsWithQueryService(
     (expectedGeneration) => ({ kind: 'methods', expectedGeneration, className }),
     isMethodsResult,
     'methods result',
+    policy,
+  );
+}
+
+export function tryFileDependenciesWithQueryService(
+  projectRoot: string,
+  direction: 'outgoing' | 'incoming',
+  filePattern: string,
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceFileDependenciesResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'file-dependencies', expectedGeneration, direction, filePattern }),
+    isFileDependenciesResult,
+    'file dependencies result',
     policy,
   );
 }
@@ -480,7 +510,7 @@ function requestQuery<Result>(
   const deadlineAtMs = startedAtMs + QUERY_SERVICE_TIMEOUT_MS;
   const monotonicDeadlineAtMs = monotonicNowMs() + QUERY_SERVICE_TIMEOUT_MS;
   const clientId = randomUUID();
-  const operationKey = boundedMailboxOperationKey('query-service-v6', { clientId, request });
+  const operationKey = boundedMailboxOperationKey('query-service-v7', { clientId, request });
   const id = boundedMailboxRequestId(operationKey);
   const sessionIdentity = queryServiceSessionIdentity(sessionDir);
   const admitted = enqueueBoundedMailboxRequest(
@@ -712,6 +742,20 @@ function isMethodsResult(value: unknown): value is MethodsResolution {
     Array.isArray(record['methods']) &&
     record['methods'].every(isMethodResult)
   );
+}
+
+function isFileDependenciesResult(value: unknown): value is DepResult[] {
+  if (!Array.isArray(value)) return false;
+  return value.every((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+    const record = item as Record<string, unknown>;
+    return (
+      typeof record['relativePath'] === 'string' &&
+      (record['edgeBasis'] === undefined || record['edgeBasis'] === 'symbol-references') &&
+      (record['evidence'] === undefined ||
+        record['evidence'] === 'cross-file SCIP references plus resolved source imports')
+    );
+  });
 }
 
 function isMemberResult(value: unknown): value is MemberResult {

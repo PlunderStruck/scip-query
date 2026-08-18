@@ -228,6 +228,10 @@ async function executeRequest(
     const { resolveMethods } = await import('../queries/navigation/methods.js');
     return resolveMethods(db, { className: request.className });
   }
+  if (request.kind === 'file-dependencies') {
+    const { deps, rdeps } = await import('../queries/navigation/deps.js');
+    return request.direction === 'outgoing' ? deps(db, request.filePattern) : rdeps(db, request.filePattern);
+  }
   const [{ codeBatch }, { codeBatchResultOnlyJsonForSelectors }] = await Promise.all([
     import('../queries/navigation/code.js'),
     import('../queries/navigation/code-result-json.js'),
@@ -339,6 +343,23 @@ function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServi
         kind: 'methods',
         expectedGeneration: requestRecord['expectedGeneration'],
         className: requestRecord['className'],
+      },
+    };
+  }
+  if (requestRecord['kind'] === 'file-dependencies') {
+    if (
+      (requestRecord['direction'] !== 'outgoing' && requestRecord['direction'] !== 'incoming') ||
+      typeof requestRecord['filePattern'] !== 'string'
+    ) {
+      throw new Error('Invalid query service file dependencies request.');
+    }
+    return {
+      ...envelope,
+      request: {
+        kind: 'file-dependencies',
+        expectedGeneration: requestRecord['expectedGeneration'],
+        direction: requestRecord['direction'],
+        filePattern: requestRecord['filePattern'],
       },
     };
   }

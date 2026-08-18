@@ -129,6 +129,21 @@ describe('query service fast path', () => {
     });
   });
 
+  it('parses the complete machine-readable dependency forms', () => {
+    expect(
+      parseFastPathInvocation(['deps', 'src/runtime/query-service.ts', '--json', '--result-only', '--compact']),
+    ).toEqual({
+      kind: 'file-dependencies',
+      direction: 'outgoing',
+      filePattern: 'src/runtime/query-service.ts',
+    });
+    expect(parseFastPathInvocation(['rdeps', '--json', '--result-only', '--compact', '--', '--generated.ts'])).toEqual({
+      kind: 'file-dependencies',
+      direction: 'incoming',
+      filePattern: '--generated.ts',
+    });
+  });
+
   it.each([
     ['search', 'needle', '--json', '--result-only'],
     ['search', 'needle', '--json', '--result-only', '--compact', '--full'],
@@ -152,6 +167,10 @@ describe('query service fast path', () => {
     ['members', 'ScipDatabase', '--json', '--result-only'],
     ['methods', 'ScipDatabase', '--json', '--result-only', '--compact', '--full'],
     ['methods', '--json', '--result-only', '--compact'],
+    ['deps', 'first.ts', 'second.ts', '--json', '--result-only', '--compact'],
+    ['deps', 'src/runtime/query-service.ts', '--json', '--result-only'],
+    ['rdeps', 'src/runtime/query-service.ts', '--json', '--result-only', '--compact', '--full'],
+    ['rdeps', '--json', '--result-only', '--compact'],
   ])('falls through for an ambiguous or unsupported invocation: %j', (...argv) => {
     expect(parseFastPathInvocation(argv)).toBeNull();
   });

@@ -7,6 +7,7 @@ import { assertNavigationDetailAllowed } from './navigation-session.js';
 import {
   tryCodeWithQueryService,
   tryEntryPointsWithQueryService,
+  tryFileDependenciesWithQueryService,
   tryFilesWithQueryService,
   type QueryServiceEntryPointsOptions,
   tryMembersWithQueryService,
@@ -61,6 +62,12 @@ interface MethodsFastPathInvocation {
   className: string;
 }
 
+interface FileDependenciesFastPathInvocation {
+  kind: 'file-dependencies';
+  direction: 'outgoing' | 'incoming';
+  filePattern: string;
+}
+
 type FastPathInvocation =
   | SourceSearchFastPathInvocation
   | OutlineFastPathInvocation
@@ -69,7 +76,8 @@ type FastPathInvocation =
   | FilesFastPathInvocation
   | StatsFastPathInvocation
   | MembersFastPathInvocation
-  | MethodsFastPathInvocation;
+  | MethodsFastPathInvocation
+  | FileDependenciesFastPathInvocation;
 
 /**
  * Serve eligible machine-oriented navigation forms before loading the full CLI
@@ -111,6 +119,13 @@ export function tryRunQueryServiceFastPath(argv: readonly string[]): boolean {
     if (response.result.kind !== 'matched') process.exitCode = 1;
     return true;
   }
+  if (invocation.kind === 'file-dependencies') {
+    const response = tryFileDependenciesWithQueryService(projectRoot, invocation.direction, invocation.filePattern, {
+      allowDefault: true,
+    });
+    if (!response || !writeUnpagedJsonResult(response.result)) return false;
+    return true;
+  }
   if (invocation.kind === 'stats') {
     const response = tryStatsWithQueryService(projectRoot, { allowDefault: true });
     if (!response) return false;
@@ -141,6 +156,8 @@ export function parseFastPathInvocation(argv: readonly string[]): FastPathInvoca
   if (argv[0] === 'stats') return parseStatsInvocation(argv);
   if (argv[0] === 'members') return parseSymbolQueryInvocation(argv, 'members');
   if (argv[0] === 'methods') return parseSymbolQueryInvocation(argv, 'methods');
+  if (argv[0] === 'deps') return parseFileDependenciesInvocation(argv, 'outgoing');
+  if (argv[0] === 'rdeps') return parseFileDependenciesInvocation(argv, 'incoming');
   return null;
 }
 
@@ -148,6 +165,20 @@ function parseSymbolQueryInvocation(
   argv: readonly string[],
   kind: 'members' | 'methods',
 ): MembersFastPathInvocation | MethodsFastPathInvocation | null {
+  const query = parseExactCompactOperand(argv);
+  if (query === null) return null;
+  return kind === 'members' ? { kind, symbolPattern: query } : { kind, className: query };
+}
+
+function parseFileDependenciesInvocation(
+  argv: readonly string[],
+  direction: 'outgoing' | 'incoming',
+): FileDependenciesFastPathInvocation | null {
+  const filePattern = parseExactCompactOperand(argv);
+  return filePattern === null ? null : { kind: 'file-dependencies', direction, filePattern };
+}
+
+function parseExactCompactOperand(argv: readonly string[]): string | null {
   let query: string | undefined;
   let json = false;
   let resultOnly = false;
@@ -178,7 +209,7 @@ function parseSymbolQueryInvocation(
   }
 
   if (!json || !resultOnly || !compact || query === undefined) return null;
-  return kind === 'members' ? { kind, symbolPattern: query } : { kind, className: query };
+  return query;
 }
 
 function writeUnpagedJsonResult(result: unknown): boolean {
