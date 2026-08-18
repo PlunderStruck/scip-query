@@ -3,22 +3,9 @@ import { nearestSymbolNames, resolveSymbol } from '../../symbols/symbol-lookup.j
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import type { SymbolResolution } from '../../domain/types.js';
 import { displayLine } from '../render.js';
+import { symbolResolutionJson, type SymbolResolutionJson } from '../../queries/navigation/code-result-json.js';
 
-export interface SymbolResolutionJson {
-  matched: boolean;
-  resolved?: {
-    symbol: string;
-    shortName: string;
-    relativePath: string;
-  };
-  otherMatches?: Array<{
-    shortName: string;
-    relativePath: string;
-    startLine: number;
-  }>;
-  totalMatches?: number;
-  suggestions?: string[];
-}
+export { symbolResolutionJson, type SymbolResolutionJson } from '../../queries/navigation/code-result-json.js';
 
 export function symbolResolutionBefore(db: ScipDatabase, query: string): void {
   const resolution = resolveSymbol(db, query);
@@ -43,30 +30,6 @@ export function withSymbolResolutionJson<T>(
   return {
     ...symbolResolutionJson(db, query),
     [payloadKey]: payload,
-  };
-}
-
-export function symbolResolutionJson(db: ScipDatabase, query: string): SymbolResolutionJson {
-  const resolution = resolveSymbol(db, query);
-  if (!resolution.match) {
-    return {
-      matched: false,
-      suggestions: nearestSymbolNames(db, query, 5),
-    };
-  }
-  return {
-    matched: true,
-    resolved: {
-      symbol: resolution.match.symbol,
-      shortName: shortenSymbol(resolution.match.symbol),
-      relativePath: resolution.match.relativePath,
-    },
-    otherMatches: resolution.candidates.map((candidate) => ({
-      shortName: candidate.shortName,
-      relativePath: candidate.relativePath,
-      startLine: candidate.startLine,
-    })),
-    totalMatches: resolution.total,
   };
 }
 

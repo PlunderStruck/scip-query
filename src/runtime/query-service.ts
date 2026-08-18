@@ -18,6 +18,7 @@ import {
   type ProcessIdentity,
 } from '../platform/process-identity.js';
 import type { OutlineNode } from '../queries/navigation/outline.js';
+import type { CodeFileMemberMode } from '../queries/navigation/code.js';
 import type { SourceSearchOptions, SourceSearchResult } from '../queries/navigation/source-search.js';
 import {
   BOUNDED_MAILBOX_VERSION,
@@ -32,7 +33,7 @@ import { resolveCliProjectContext } from './cli-context.js';
 import { cliVersion } from './cli-support.js';
 import { inspectWatchService, trustedWatchServiceIndexGeneration } from './watch-service.js';
 
-export const QUERY_SERVICE_PROTOCOL_VERSION = 2;
+export const QUERY_SERVICE_PROTOCOL_VERSION = 3;
 
 const QUERY_SERVICE_POOL_SIZE = 6;
 const QUERY_SERVICE_MAX_POOL_SIZE = 8;
@@ -61,7 +62,20 @@ export interface QueryServiceOutlineRequest {
   filePattern: string;
 }
 
-export type QueryServiceRequest = QueryServiceSourceSearchRequest | QueryServiceOutlineRequest;
+export interface QueryServiceCodeRequest {
+  kind: 'code';
+  expectedGeneration: string;
+  selectors: string[];
+  options: {
+    context: number;
+    members: CodeFileMemberMode;
+  };
+}
+
+export type QueryServiceRequest =
+  | QueryServiceSourceSearchRequest
+  | QueryServiceOutlineRequest
+  | QueryServiceCodeRequest;
 
 export interface QueryServiceEnvelope {
   mailboxVersion: typeof BOUNDED_MAILBOX_VERSION;
@@ -105,6 +119,17 @@ export interface QueryServiceOutlineResult {
   observationReceipt: ObservationReceiptV2;
 }
 
+export interface QueryServiceSerializedResult {
+  serializedJson: string;
+  sha256: string;
+}
+
+export interface QueryServiceCodeResult {
+  result: QueryServiceSerializedResult;
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
 export function trySearchSourceWithQueryService(
   projectRoot: string,
   pattern: string,
@@ -130,6 +155,21 @@ export function tryOutlineWithQueryService(
     (expectedGeneration) => ({ kind: 'outline', expectedGeneration, filePattern }),
     isOutlineResult,
     'outline result',
+    policy,
+  );
+}
+
+export function tryCodeWithQueryService(
+  projectRoot: string,
+  selectors: readonly string[],
+  options: { context: number; members: CodeFileMemberMode },
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceCodeResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'code', expectedGeneration, selectors: [...selectors], options }),
+    isSerializedJsonResult,
+    'serialized code result',
     policy,
   );
 }
@@ -272,7 +312,7 @@ function requestQuery<Result>(
   const deadlineAtMs = startedAtMs + QUERY_SERVICE_TIMEOUT_MS;
   const monotonicDeadlineAtMs = monotonicNowMs() + QUERY_SERVICE_TIMEOUT_MS;
   const clientId = randomUUID();
-  const operationKey = boundedMailboxOperationKey('query-service-v2', { clientId, request });
+  const operationKey = boundedMailboxOperationKey('query-service-v3', { clientId, request });
   const id = boundedMailboxRequestId(operationKey);
   const sessionIdentity = queryServiceSessionIdentity(sessionDir);
   const admitted = enqueueBoundedMailboxRequest(
@@ -427,6 +467,20 @@ function isSourceSearchResult(value: unknown): value is SourceSearchResult {
     Number.isSafeInteger(record['scannedFiles']) &&
     record['scannedFiles'] >= 0
   );
+}
+
+function isSerializedJsonResult(value: unknown): value is QueryServiceSerializedResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  if (typeof record['serializedJson'] !== 'string' || typeof record['sha256'] !== 'string') return false;
+  if (record['serializedJson'].length > QUERY_SERVICE_MAX_ITEM_BYTES) return false;
+  if (createHash('sha256').update(record['serializedJson']).digest('hex') !== record['sha256']) return false;
+  try {
+    const parsed = JSON.parse(record['serializedJson']) as unknown;
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed);
+  } catch {
+    return false;
+  }
 }
 
 function queryServiceSessionDirectory(

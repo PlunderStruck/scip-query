@@ -47,10 +47,14 @@ import {
   noMatchMessage,
   symbolResolutionBefore,
   symbolResolutionEmptyMessage,
-  symbolResolutionJson,
   withSymbolResolutionJson,
 } from './symbol-resolution.js';
 import { assertNavigationDetailAllowed } from '../navigation-session.js';
+import {
+  codeBatchResultOnlyJson,
+  codeResultOnlyJson,
+  singleExactCodeResult,
+} from '../../queries/navigation/code-result-json.js';
 
 const handleOutline = dbCommand(({ db, args, opts }) => {
   const filePattern = stringArg(args, 0);
@@ -355,17 +359,6 @@ function codeFileMemberMode(opts: Readonly<Record<string, unknown>>): CodeFileMe
   const value = stringOptionValue(opts, 'members') ?? 'exported';
   if (value === 'exported' || value === 'all') return value;
   throw new RangeError(`--members must be "exported" or "all", got "${value}".`);
-}
-
-function singleExactCodeResult(result: CodeBatchResult): CodeResult | null {
-  const entry = result.entries[0];
-  return result.requested === 1 &&
-    entry?.status === 'matched' &&
-    entry.kind === 'source' &&
-    (!entry.rangeCoverage || entry.rangeCoverage.referencedDefinitions === 0) &&
-    entry.results.length === 1
-    ? entry.results[0]!
-    : null;
 }
 
 function codeBatchText(result: CodeBatchResult, sessionAware = false): string {
@@ -744,69 +737,6 @@ function codeInvocation(
     ...(options.members === 'all' ? ['--members', 'all'] : []),
     ...(options.context > 0 ? ['--context', String(options.context)] : []),
   ].join(' ');
-}
-
-function codeResultOnlyJson(db: Parameters<typeof codeBatch>[0], query: string, result: CodeResult | null): unknown {
-  if (!result) return symbolResolutionJson(db, query);
-  const projected = {
-    file: result.relativePath,
-    symbol: result.shortName,
-    language: result.language ?? 'unknown',
-    range: {
-      startLine: displayLine(result.startLine),
-      endLine: displayLine(result.endLine),
-    },
-    ...(result.freshness ? { freshness: result.freshness } : {}),
-    lines: result.source.split('\n').map((text, index) => ({
-      line: displayLine(result.startLine + index),
-      text,
-    })),
-  };
-  const resolution = symbolResolutionJson(db, query);
-  const totalMatches = resolution.totalMatches ?? 0;
-  if (!resolution.matched || !resolution.resolved || totalMatches <= 1) return projected;
-  return {
-    ...projected,
-    resolution: {
-      selected: resolution.resolved,
-      alternatives: resolution.otherMatches ?? [],
-      totalMatches,
-    },
-  };
-}
-
-function codeBatchResultOnlyJson(result: CodeBatchResult): unknown {
-  return {
-    requested: result.requested,
-    matched: result.matched,
-    ambiguous: result.ambiguous,
-    missing: result.missing,
-    entries: result.entries.map((entry) => ({
-      selector: entry.selector,
-      status: entry.status,
-      kind: entry.kind,
-      totalCandidates: entry.totalCandidates,
-      sources: entry.results.map((source) => ({
-        file: source.relativePath,
-        symbol: source.shortName,
-        language: source.language ?? 'unknown',
-        range: { startLine: displayLine(source.startLine), endLine: displayLine(source.endLine) },
-        ...(source.freshness ? { freshness: source.freshness } : {}),
-        lines: source.source.split('\n').map((text, index) => ({
-          line: displayLine(source.startLine + index),
-          text,
-        })),
-      })),
-      definitions: entry.definitions,
-      ...(entry.fileCoverage ? { fileCoverage: entry.fileCoverage } : {}),
-      ...(entry.rangeCoverage ? { rangeCoverage: entry.rangeCoverage } : {}),
-      candidates: entry.candidates,
-      omittedCandidates: entry.omittedCandidates,
-      suggestions: entry.suggestions,
-      ...(entry.reason ? { reason: entry.reason } : {}),
-    })),
-    literalValues: result.bindingClosure.inline,
-  };
 }
 
 function shellArgument(value: string): string {

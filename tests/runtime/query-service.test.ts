@@ -60,6 +60,28 @@ describe('query service fast path', () => {
     ).toEqual({ kind: 'outline', filePattern: 'src/runtime/cli.ts' });
   });
 
+  it('parses the bounded machine-readable code form with local session policy', () => {
+    expect(
+      parseFastPathInvocation([
+        'code',
+        'firstSymbol',
+        'src/runtime/cli.ts',
+        '--context=3',
+        '--members',
+        'all',
+        '--json',
+        '--result-only',
+        '--compact',
+        '--no-session',
+      ]),
+    ).toEqual({
+      kind: 'code',
+      selectors: ['firstSymbol', 'src/runtime/cli.ts'],
+      options: { context: 3, members: 'all' },
+      session: false,
+    });
+  });
+
   it.each([
     ['search', 'needle', '--json', '--result-only'],
     ['search', 'needle', '--json', '--result-only', '--compact', '--full'],
@@ -68,6 +90,11 @@ describe('query service fast path', () => {
     ['outline', 'src/runtime/cli.ts', '--json', '--result-only'],
     ['outline', 'first.ts', 'second.ts', '--json', '--result-only', '--compact'],
     ['outline', 'src/runtime/cli.ts', '--json', '--result-only', '--compact', '--full'],
+    ['code', 'symbol', '--json', '--result-only'],
+    ['code', 'symbol', '--json', '--result-only', '--compact', '-m', 'all'],
+    ['code', 'symbol', '--json', '--result-only', '--compact', '--members', 'private'],
+    ['code', 'symbol', '--json', '--result-only', '--compact', '--context', '-1'],
+    ['code', '--json', '--result-only', '--compact'],
   ])('falls through for an ambiguous or unsupported invocation: %j', (...argv) => {
     expect(parseFastPathInvocation(argv)).toBeNull();
   });

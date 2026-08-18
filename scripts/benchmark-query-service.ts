@@ -6,7 +6,7 @@ import { performance } from 'node:perf_hooks';
 const projectRoot = resolve(process.argv[2] ?? process.cwd());
 const benchmarkCommand = parseBenchmarkCommand(process.env.SCIP_QUERY_BENCH_COMMAND);
 const operand =
-  process.argv[3] ?? (benchmarkCommand === 'search' ? 'queryServiceSessionIdentity' : 'src/runtime/cli.ts');
+  process.argv[3] ?? (benchmarkCommand === 'outline' ? 'src/runtime/cli.ts' : 'queryServiceSessionIdentity');
 const cliPath = resolve(projectRoot, 'dist/cli.js');
 const configuredPoolSize = process.env.SCIP_QUERY_QUERY_SERVICE_POOL_SIZE;
 const poolSize = configuredPoolSize === undefined ? 'default' : Number.parseInt(configuredPoolSize, 10);
@@ -127,9 +127,11 @@ function startClient(service: boolean): {
 }
 
 function benchmarkArguments(): string[] {
-  return benchmarkCommand === 'search'
-    ? ['search', operand, '--limit', '1', '--context', '0', '--json', '--result-only', '--compact']
-    : ['outline', operand, '--json', '--result-only', '--compact'];
+  if (benchmarkCommand === 'search') {
+    return ['search', operand, '--limit', '1', '--context', '0', '--json', '--result-only', '--compact'];
+  }
+  if (benchmarkCommand === 'outline') return ['outline', operand, '--json', '--result-only', '--compact'];
+  return ['code', operand, '--json', '--result-only', '--compact', '--no-session'];
 }
 
 function processSnapshot(): Array<{ pid: number; rssKiB: number; command: string }> {
@@ -175,8 +177,8 @@ function parseConcurrencyLevels(configured: string | undefined): number[] {
   return levels;
 }
 
-function parseBenchmarkCommand(configured: string | undefined): 'search' | 'outline' {
+function parseBenchmarkCommand(configured: string | undefined): 'search' | 'outline' | 'code' {
   if (configured === undefined || configured === 'search') return 'search';
-  if (configured === 'outline') return configured;
-  throw new Error('SCIP_QUERY_BENCH_COMMAND must be search or outline.');
+  if (configured === 'outline' || configured === 'code') return configured;
+  throw new Error('SCIP_QUERY_BENCH_COMMAND must be search, outline, or code.');
 }

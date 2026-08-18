@@ -1,7 +1,14 @@
 import type { SourceSearchOptions } from '../queries/navigation/source-search.js';
+import type { CodeFileMemberMode } from '../queries/navigation/code.js';
+import { SOURCE_INSPECTION_MAX_SELECTORS } from '../domain/source-inspection-limits.js';
 import { writeSerializedJson } from '../platform/terminal-output.js';
 import { resolveProjectRoot } from './cli-context.js';
-import { tryOutlineWithQueryService, trySearchSourceWithQueryService } from './query-service.js';
+import { assertNavigationDetailAllowed } from './navigation-session.js';
+import {
+  tryCodeWithQueryService,
+  tryOutlineWithQueryService,
+  trySearchSourceWithQueryService,
+} from './query-service.js';
 
 interface SourceSearchFastPathInvocation {
   kind: 'source-search';
@@ -14,7 +21,17 @@ interface OutlineFastPathInvocation {
   filePattern: string;
 }
 
-type FastPathInvocation = SourceSearchFastPathInvocation | OutlineFastPathInvocation;
+interface CodeFastPathInvocation {
+  kind: 'code';
+  selectors: string[];
+  options: {
+    context: number;
+    members: CodeFileMemberMode;
+  };
+  session: boolean;
+}
+
+type FastPathInvocation = SourceSearchFastPathInvocation | OutlineFastPathInvocation | CodeFastPathInvocation;
 
 /**
  * Serve eligible machine-oriented navigation forms before loading the full CLI
@@ -26,6 +43,19 @@ export function tryRunQueryServiceFastPath(argv: readonly string[]): boolean {
   const invocation = parseFastPathInvocation(argv);
   if (!invocation) return false;
   const projectRoot = resolveProjectRoot();
+  if (invocation.kind === 'code') {
+    try {
+      assertNavigationDetailAllowed(projectRoot, 'code', invocation.session);
+    } catch {
+      return false;
+    }
+    const response = tryCodeWithQueryService(projectRoot, invocation.selectors, invocation.options, {
+      allowDefault: true,
+    });
+    if (!response) return false;
+    writeSerializedJson(response.result.serializedJson);
+    return true;
+  }
   const response =
     invocation.kind === 'source-search'
       ? trySearchSourceWithQueryService(projectRoot, invocation.pattern, invocation.options, { allowDefault: true })
@@ -38,7 +68,71 @@ export function tryRunQueryServiceFastPath(argv: readonly string[]): boolean {
 export function parseFastPathInvocation(argv: readonly string[]): FastPathInvocation | null {
   if (argv[0] === 'search') return parseSourceSearchInvocation(argv);
   if (argv[0] === 'outline') return parseOutlineInvocation(argv);
+  if (argv[0] === 'code') return parseCodeInvocation(argv);
   return null;
+}
+
+function parseCodeInvocation(argv: readonly string[]): CodeFastPathInvocation | null {
+  const selectors: string[] = [];
+  let context = 0;
+  let members: CodeFileMemberMode = 'exported';
+  let session = true;
+  let json = false;
+  let resultOnly = false;
+  let compact = false;
+
+  for (let index = 1; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--') {
+      selectors.push(...argv.slice(index + 1));
+      break;
+    }
+    if (arg === '--json') {
+      json = true;
+      continue;
+    }
+    if (arg === '--result-only') {
+      resultOnly = true;
+      continue;
+    }
+    if (arg === '--compact') {
+      compact = true;
+      continue;
+    }
+    if (arg === '--no-session') {
+      session = false;
+      continue;
+    }
+    const contextOption = optionValue(argv, index, arg, '--context', '-C');
+    if (contextOption) {
+      const parsed = parseInteger(contextOption.value, 0);
+      if (parsed === null) return null;
+      context = parsed;
+      index = contextOption.nextIndex;
+      continue;
+    }
+    const membersOption = optionValue(argv, index, arg, '--members');
+    if (membersOption) {
+      if (membersOption.value !== 'exported' && membersOption.value !== 'all') return null;
+      members = membersOption.value;
+      index = membersOption.nextIndex;
+      continue;
+    }
+    if (arg.startsWith('-')) return null;
+    selectors.push(arg);
+  }
+
+  if (
+    !json ||
+    !resultOnly ||
+    !compact ||
+    selectors.length < 1 ||
+    selectors.length > SOURCE_INSPECTION_MAX_SELECTORS ||
+    selectors.some((selector) => selector.length === 0)
+  ) {
+    return null;
+  }
+  return { kind: 'code', selectors, options: { context, members }, session };
 }
 
 function parseSourceSearchInvocation(argv: readonly string[]): SourceSearchFastPathInvocation | null {
@@ -154,10 +248,10 @@ function optionValue(
   index: number,
   arg: string,
   longName: string,
-  shortName: string,
+  shortName?: string,
 ): { value: string; nextIndex: number } | null {
   if (arg.startsWith(`${longName}=`)) return { value: arg.slice(longName.length + 1), nextIndex: index };
-  if (arg !== longName && arg !== shortName) return null;
+  if (arg !== longName && (shortName === undefined || arg !== shortName)) return null;
   const value = argv[index + 1];
   if (value === undefined) return null;
   return { value, nextIndex: index + 1 };

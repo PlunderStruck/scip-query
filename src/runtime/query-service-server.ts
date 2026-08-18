@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -9,6 +9,7 @@ import { isProcessAlive } from '../platform/process-liveness.js';
 import { tryAcquireProcessFileLock } from '../platform/process-file-lock.js';
 import { outline } from '../queries/navigation/outline.js';
 import { searchSource } from '../queries/navigation/source-search.js';
+import { SOURCE_INSPECTION_MAX_SELECTORS } from '../domain/source-inspection-limits.js';
 import {
   boundedMailboxPaths,
   completeBoundedMailboxClaim,
@@ -90,7 +91,7 @@ export async function runQueryServiceServer(sessionDir: string, projectRoot: str
     writeState(true);
     const idleTimeoutMs = configuredIdleTimeoutMs();
     while (!stopping && !stopAfterRequest && monotonicNowMs() - lastActivityAtMs < idleTimeoutMs) {
-      const processed = processRequests(paths, db, sessionIdentity, () => {
+      const processed = await processRequests(paths, db, sessionIdentity, () => {
         stopAfterRequest = true;
       });
       if (processed > 0) {
@@ -110,12 +111,12 @@ export async function runQueryServiceServer(sessionDir: string, projectRoot: str
   }
 }
 
-function processRequests(
+async function processRequests(
   paths: ReturnType<typeof boundedMailboxPaths>,
   db: ReturnType<typeof openProjectDb>,
   sessionIdentity: string,
   onGenerationMismatch: () => void,
-): number {
+): Promise<number> {
   const claims = pollBoundedMailboxRequests(paths, {
     ownerId: QUERY_SERVICE_MAILBOX_OWNER,
     nowMs: Date.now(),
@@ -156,10 +157,7 @@ function processRequests(
         processed += 1;
         continue;
       }
-      const result =
-        envelope.request.kind === 'source-search'
-          ? searchSource(db, envelope.request.pattern, envelope.request.options)
-          : outline(db, envelope.request.filePattern);
+      const result = await executeRequest(db, envelope.request);
       const observationReceipt = buildObservationReceipt({
         projectRoot: db.config.projectRoot,
         db,
@@ -199,6 +197,24 @@ function processRequests(
     processed += 1;
   }
   return processed;
+}
+
+async function executeRequest(
+  db: ReturnType<typeof openProjectDb>,
+  request: QueryServiceEnvelope['request'],
+): Promise<unknown> {
+  if (request.kind === 'source-search') return searchSource(db, request.pattern, request.options);
+  if (request.kind === 'outline') return outline(db, request.filePattern);
+  const [{ codeBatch }, { codeBatchResultOnlyJsonForSelectors }] = await Promise.all([
+    import('../queries/navigation/code.js'),
+    import('../queries/navigation/code-result-json.js'),
+  ]);
+  const result = codeBatch(db, request.selectors, request.options);
+  const serializedJson = JSON.stringify(codeBatchResultOnlyJsonForSelectors(db, request.selectors, result));
+  return {
+    serializedJson,
+    sha256: createHash('sha256').update(serializedJson).digest('hex'),
+  };
 }
 
 function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServiceEnvelope {
@@ -252,6 +268,36 @@ function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServi
         kind: 'outline',
         expectedGeneration: requestRecord['expectedGeneration'],
         filePattern: requestRecord['filePattern'],
+      },
+    };
+  }
+  if (requestRecord['kind'] === 'code') {
+    if (
+      !Array.isArray(requestRecord['selectors']) ||
+      requestRecord['selectors'].length < 1 ||
+      requestRecord['selectors'].length > SOURCE_INSPECTION_MAX_SELECTORS ||
+      requestRecord['selectors'].some((selector) => typeof selector !== 'string' || selector.length === 0) ||
+      !requestRecord['options'] ||
+      typeof requestRecord['options'] !== 'object' ||
+      Array.isArray(requestRecord['options'])
+    ) {
+      throw new Error('Invalid query service code request.');
+    }
+    const optionsRecord = requestRecord['options'] as Record<string, unknown>;
+    const members = optionsRecord['members'];
+    if (members !== 'exported' && members !== 'all') {
+      throw new Error('Query service code members must be exported or all.');
+    }
+    return {
+      ...envelope,
+      request: {
+        kind: 'code',
+        expectedGeneration: requestRecord['expectedGeneration'],
+        selectors: requestRecord['selectors'] as string[],
+        options: {
+          context: requiredNonNegativeInteger(optionsRecord['context'], 'context'),
+          members,
+        },
       },
     };
   }
