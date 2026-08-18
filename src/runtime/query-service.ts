@@ -21,6 +21,9 @@ import type { OutlineNode } from '../queries/navigation/outline.js';
 import type { CodeFileMemberMode } from '../queries/navigation/code.js';
 import type { SymbolResolutionJson } from '../queries/navigation/code-result-json.js';
 import type { DepResult } from '../queries/navigation/deps.js';
+import type { ByKindResult } from '../queries/navigation/by-kind.js';
+import type { HierarchyNode } from '../queries/navigation/hierarchy.js';
+import type { ImportResult } from '../queries/navigation/imports.js';
 import type { MemberResult } from '../queries/navigation/members.js';
 import type { MethodsResolution } from '../queries/navigation/methods.js';
 import type { SourceSearchOptions, SourceSearchResult } from '../queries/navigation/source-search.js';
@@ -37,9 +40,10 @@ import { resolveCliProjectContext } from './cli-context.js';
 import { cliVersion } from './cli-support.js';
 import { inspectWatchService, trustedWatchServiceIndexGeneration } from './watch-service.js';
 
-export const QUERY_SERVICE_PROTOCOL_VERSION = 7;
+export const QUERY_SERVICE_PROTOCOL_VERSION = 8;
 
 const QUERY_SERVICE_POOL_SIZE = 6;
+const QUERY_SERVICE_CATALOG_POOL_SIZE = 4;
 const QUERY_SERVICE_MAX_POOL_SIZE = 8;
 const QUERY_SERVICE_TIMEOUT_MS = 30_000;
 const QUERY_SERVICE_STARTUP_TIMEOUT_MS = 5_000;
@@ -112,6 +116,29 @@ export interface QueryServiceFileDependenciesRequest {
   filePattern: string;
 }
 
+export interface QueryServiceImportedByRequest {
+  kind: 'imported-by';
+  expectedGeneration: string;
+  symbolPattern: string;
+}
+
+export interface QueryServiceHierarchyRequest {
+  kind: 'hierarchy';
+  expectedGeneration: string;
+  symbolPattern: string;
+}
+
+export interface QueryServiceByKindRequest {
+  kind: 'by-kind';
+  expectedGeneration: string;
+  kindQuery: string;
+}
+
+export interface QueryServiceKindCountsRequest {
+  kind: 'kind-counts';
+  expectedGeneration: string;
+}
+
 export interface QueryServiceEntryPointsOptions {
   search?: string;
   scope?: string;
@@ -143,6 +170,8 @@ export interface QueryServiceStatsTransportResult {
 }
 
 export type QueryServiceMembersTransportResult = SymbolResolutionJson & { members: MemberResult[] };
+export type QueryServiceHierarchyTransportResult = SymbolResolutionJson & { hierarchy: HierarchyNode[] };
+export type QueryServiceKindCountTransportResult = { kind: number; kindName: string; count: number };
 
 export type QueryServiceRequest =
   | QueryServiceSourceSearchRequest
@@ -153,7 +182,11 @@ export type QueryServiceRequest =
   | QueryServiceStatsRequest
   | QueryServiceMembersRequest
   | QueryServiceMethodsRequest
-  | QueryServiceFileDependenciesRequest;
+  | QueryServiceFileDependenciesRequest
+  | QueryServiceImportedByRequest
+  | QueryServiceHierarchyRequest
+  | QueryServiceByKindRequest
+  | QueryServiceKindCountsRequest;
 
 export interface QueryServiceEnvelope {
   mailboxVersion: typeof BOUNDED_MAILBOX_VERSION;
@@ -240,6 +273,30 @@ export interface QueryServiceMethodsResult {
 
 export interface QueryServiceFileDependenciesResult {
   result: DepResult[];
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
+export interface QueryServiceImportedByResult {
+  result: ImportResult[];
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
+export interface QueryServiceHierarchyResult {
+  result: QueryServiceHierarchyTransportResult;
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
+export interface QueryServiceByKindResult {
+  result: ByKindResult[];
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
+export interface QueryServiceKindCountsResult {
+  result: QueryServiceKindCountTransportResult[];
   generationIdentity: string;
   observationReceipt: ObservationReceiptV2;
 }
@@ -353,6 +410,61 @@ export function tryFileDependenciesWithQueryService(
     (expectedGeneration) => ({ kind: 'file-dependencies', expectedGeneration, direction, filePattern }),
     isFileDependenciesResult,
     'file dependencies result',
+    policy,
+  );
+}
+
+export function tryImportedByWithQueryService(
+  projectRoot: string,
+  symbolPattern: string,
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceImportedByResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'imported-by', expectedGeneration, symbolPattern }),
+    isImportedByResult,
+    'imported-by result',
+    policy,
+  );
+}
+
+export function tryHierarchyWithQueryService(
+  projectRoot: string,
+  symbolPattern: string,
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceHierarchyResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'hierarchy', expectedGeneration, symbolPattern }),
+    isHierarchyResult,
+    'hierarchy result',
+    policy,
+  );
+}
+
+export function tryByKindWithQueryService(
+  projectRoot: string,
+  kindQuery: string,
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceByKindResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'by-kind', expectedGeneration, kindQuery }),
+    isByKindResult,
+    'by-kind result',
+    policy,
+  );
+}
+
+export function tryKindCountsWithQueryService(
+  projectRoot: string,
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceKindCountsResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'kind-counts', expectedGeneration }),
+    isKindCountsResult,
+    'kind-counts result',
     policy,
   );
 }
@@ -503,14 +615,14 @@ function requestQuery<Result>(
   const serverPath = queryServiceServerPath();
   if (!existsSync(serverPath)) throw new Error('Query service server executable is unavailable.');
 
-  const lane = Math.abs(process.pid) % configuredPoolSize();
+  const lane = Math.abs(process.pid) % requestPoolSize(request);
   const sessionDir = queryServiceSessionDirectory(context, serverPath, lane);
   const paths = boundedMailboxPaths(sessionDir);
   const startedAtMs = Date.now();
   const deadlineAtMs = startedAtMs + QUERY_SERVICE_TIMEOUT_MS;
   const monotonicDeadlineAtMs = monotonicNowMs() + QUERY_SERVICE_TIMEOUT_MS;
   const clientId = randomUUID();
-  const operationKey = boundedMailboxOperationKey('query-service-v7', { clientId, request });
+  const operationKey = boundedMailboxOperationKey('query-service-v8', { clientId, request });
   const id = boundedMailboxRequestId(operationKey);
   const sessionIdentity = queryServiceSessionIdentity(sessionDir);
   const admitted = enqueueBoundedMailboxRequest(
@@ -758,6 +870,67 @@ function isFileDependenciesResult(value: unknown): value is DepResult[] {
   });
 }
 
+function isImportedByResult(value: unknown): value is ImportResult[] {
+  return Array.isArray(value) && value.every(isImportResult);
+}
+
+function isImportResult(value: unknown): value is ImportResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record['symbol'] === 'string' &&
+    typeof record['shortName'] === 'string' &&
+    typeof record['fromFile'] === 'string'
+  );
+}
+
+function isHierarchyResult(value: unknown): value is QueryServiceHierarchyTransportResult {
+  if (!isSymbolResolutionResult(value)) return false;
+  const hierarchy = (value as unknown as Record<string, unknown>)['hierarchy'];
+  return Array.isArray(hierarchy) && hierarchy.every(isHierarchyNode);
+}
+
+function isHierarchyNode(value: unknown): value is HierarchyNode {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record['symbol'] === 'string' &&
+    typeof record['shortName'] === 'string' &&
+    isNonNegativeSafeInteger(record['depth'])
+  );
+}
+
+function isByKindResult(value: unknown): value is ByKindResult[] {
+  return Array.isArray(value) && value.every(isByKindRow);
+}
+
+function isByKindRow(value: unknown): value is ByKindResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record['symbol'] === 'string' &&
+    typeof record['shortName'] === 'string' &&
+    isNonNegativeSafeInteger(record['kind']) &&
+    typeof record['kindName'] === 'string' &&
+    typeof record['relativePath'] === 'string' &&
+    isSourceRange(record)
+  );
+}
+
+function isKindCountsResult(value: unknown): value is QueryServiceKindCountTransportResult[] {
+  return Array.isArray(value) && value.every(isKindCountRow);
+}
+
+function isKindCountRow(value: unknown): value is QueryServiceKindCountTransportResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    isNonNegativeSafeInteger(record['kind']) &&
+    typeof record['kindName'] === 'string' &&
+    isNonNegativeSafeInteger(record['count'])
+  );
+}
+
 function isMemberResult(value: unknown): value is MemberResult {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
@@ -906,6 +1079,16 @@ function configuredPoolSize(): number {
   return Number.isInteger(parsed) && parsed >= 1 && parsed <= QUERY_SERVICE_MAX_POOL_SIZE
     ? parsed
     : QUERY_SERVICE_POOL_SIZE;
+}
+
+function requestPoolSize(request: QueryServiceRequest): number {
+  const configured = configuredPoolSize();
+  return request.kind === 'imported-by' ||
+    request.kind === 'hierarchy' ||
+    request.kind === 'by-kind' ||
+    request.kind === 'kind-counts'
+    ? Math.min(configured, QUERY_SERVICE_CATALOG_POOL_SIZE)
+    : configured;
 }
 
 function canonicalPath(path: string): string {

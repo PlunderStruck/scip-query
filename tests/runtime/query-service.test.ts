@@ -144,6 +144,22 @@ describe('query service fast path', () => {
     });
   });
 
+  it('parses the complete machine-readable catalog forms', () => {
+    expect(
+      parseFastPathInvocation(['imported-by', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact']),
+    ).toEqual({ kind: 'imported-by', symbolPattern: 'queryServiceSessionIdentity' });
+    expect(
+      parseFastPathInvocation(['hierarchy', '--json', '--result-only', '--compact', 'queryServiceSessionIdentity']),
+    ).toEqual({ kind: 'hierarchy', symbolPattern: 'queryServiceSessionIdentity' });
+    expect(parseFastPathInvocation(['by-kind', 'function', '--json', '--result-only', '--compact'])).toEqual({
+      kind: 'by-kind',
+      kindQuery: 'function',
+    });
+    expect(parseFastPathInvocation(['kind-counts', '--json', '--result-only', '--compact'])).toEqual({
+      kind: 'kind-counts',
+    });
+  });
+
   it.each([
     ['search', 'needle', '--json', '--result-only'],
     ['search', 'needle', '--json', '--result-only', '--compact', '--full'],
@@ -171,6 +187,12 @@ describe('query service fast path', () => {
     ['deps', 'src/runtime/query-service.ts', '--json', '--result-only'],
     ['rdeps', 'src/runtime/query-service.ts', '--json', '--result-only', '--compact', '--full'],
     ['rdeps', '--json', '--result-only', '--compact'],
+    ['imported-by', '--json', '--result-only', '--compact'],
+    ['hierarchy', 'first', 'second', '--json', '--result-only', '--compact'],
+    ['by-kind', 'function', '--scope', 'src', '--json', '--result-only', '--compact'],
+    ['by-kind', 'function', '--limit', '10', '--json', '--result-only', '--compact'],
+    ['kind-counts', '--scope', 'src', '--json', '--result-only', '--compact'],
+    ['kind-counts', 'function', '--json', '--result-only', '--compact'],
   ])('falls through for an ambiguous or unsupported invocation: %j', (...argv) => {
     expect(parseFastPathInvocation(argv)).toBeNull();
   });

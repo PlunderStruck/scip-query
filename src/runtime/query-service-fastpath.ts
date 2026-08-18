@@ -6,9 +6,13 @@ import { resolveProjectRoot } from './cli-context.js';
 import { assertNavigationDetailAllowed } from './navigation-session.js';
 import {
   tryCodeWithQueryService,
+  tryByKindWithQueryService,
   tryEntryPointsWithQueryService,
   tryFileDependenciesWithQueryService,
   tryFilesWithQueryService,
+  tryHierarchyWithQueryService,
+  tryImportedByWithQueryService,
+  tryKindCountsWithQueryService,
   type QueryServiceEntryPointsOptions,
   tryMembersWithQueryService,
   tryMethodsWithQueryService,
@@ -68,6 +72,25 @@ interface FileDependenciesFastPathInvocation {
   filePattern: string;
 }
 
+interface ImportedByFastPathInvocation {
+  kind: 'imported-by';
+  symbolPattern: string;
+}
+
+interface HierarchyFastPathInvocation {
+  kind: 'hierarchy';
+  symbolPattern: string;
+}
+
+interface ByKindFastPathInvocation {
+  kind: 'by-kind';
+  kindQuery: string;
+}
+
+interface KindCountsFastPathInvocation {
+  kind: 'kind-counts';
+}
+
 type FastPathInvocation =
   | SourceSearchFastPathInvocation
   | OutlineFastPathInvocation
@@ -77,7 +100,11 @@ type FastPathInvocation =
   | StatsFastPathInvocation
   | MembersFastPathInvocation
   | MethodsFastPathInvocation
-  | FileDependenciesFastPathInvocation;
+  | FileDependenciesFastPathInvocation
+  | ImportedByFastPathInvocation
+  | HierarchyFastPathInvocation
+  | ByKindFastPathInvocation
+  | KindCountsFastPathInvocation;
 
 /**
  * Serve eligible machine-oriented navigation forms before loading the full CLI
@@ -126,6 +153,26 @@ export function tryRunQueryServiceFastPath(argv: readonly string[]): boolean {
     if (!response || !writeUnpagedJsonResult(response.result)) return false;
     return true;
   }
+  if (invocation.kind === 'imported-by') {
+    const response = tryImportedByWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true });
+    if (!response || !writeUnpagedJsonResult(response.result)) return false;
+    return true;
+  }
+  if (invocation.kind === 'hierarchy') {
+    const response = tryHierarchyWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true });
+    if (!response || !writeUnpagedJsonResult(response.result)) return false;
+    return true;
+  }
+  if (invocation.kind === 'by-kind') {
+    const response = tryByKindWithQueryService(projectRoot, invocation.kindQuery, { allowDefault: true });
+    if (!response || !writeUnpagedJsonResult(response.result)) return false;
+    return true;
+  }
+  if (invocation.kind === 'kind-counts') {
+    const response = tryKindCountsWithQueryService(projectRoot, { allowDefault: true });
+    if (!response || !writeUnpagedJsonResult(response.result)) return false;
+    return true;
+  }
   if (invocation.kind === 'stats') {
     const response = tryStatsWithQueryService(projectRoot, { allowDefault: true });
     if (!response) return false;
@@ -153,11 +200,15 @@ export function parseFastPathInvocation(argv: readonly string[]): FastPathInvoca
   if (argv[0] === 'code') return parseCodeInvocation(argv);
   if (argv[0] === 'entrypoints') return parseEntryPointsInvocation(argv);
   if (argv[0] === 'files') return parseFilesInvocation(argv);
-  if (argv[0] === 'stats') return parseStatsInvocation(argv);
+  if (argv[0] === 'stats') return parseNoOperandInvocation(argv, 'stats');
+  if (argv[0] === 'kind-counts') return parseNoOperandInvocation(argv, 'kind-counts');
   if (argv[0] === 'members') return parseSymbolQueryInvocation(argv, 'members');
   if (argv[0] === 'methods') return parseSymbolQueryInvocation(argv, 'methods');
   if (argv[0] === 'deps') return parseFileDependenciesInvocation(argv, 'outgoing');
   if (argv[0] === 'rdeps') return parseFileDependenciesInvocation(argv, 'incoming');
+  if (argv[0] === 'imported-by') return parseImportedByInvocation(argv);
+  if (argv[0] === 'hierarchy') return parseHierarchyInvocation(argv);
+  if (argv[0] === 'by-kind') return parseByKindInvocation(argv);
   return null;
 }
 
@@ -176,6 +227,21 @@ function parseFileDependenciesInvocation(
 ): FileDependenciesFastPathInvocation | null {
   const filePattern = parseExactCompactOperand(argv);
   return filePattern === null ? null : { kind: 'file-dependencies', direction, filePattern };
+}
+
+function parseImportedByInvocation(argv: readonly string[]): ImportedByFastPathInvocation | null {
+  const symbolPattern = parseExactCompactOperand(argv);
+  return symbolPattern === null ? null : { kind: 'imported-by', symbolPattern };
+}
+
+function parseHierarchyInvocation(argv: readonly string[]): HierarchyFastPathInvocation | null {
+  const symbolPattern = parseExactCompactOperand(argv);
+  return symbolPattern === null ? null : { kind: 'hierarchy', symbolPattern };
+}
+
+function parseByKindInvocation(argv: readonly string[]): ByKindFastPathInvocation | null {
+  const kindQuery = parseExactCompactOperand(argv);
+  return kindQuery === null ? null : { kind: 'by-kind', kindQuery };
 }
 
 function parseExactCompactOperand(argv: readonly string[]): string | null {
@@ -255,7 +321,10 @@ function parseFilesInvocation(argv: readonly string[]): FilesFastPathInvocation 
   return { kind: 'files', pattern };
 }
 
-function parseStatsInvocation(argv: readonly string[]): StatsFastPathInvocation | null {
+function parseNoOperandInvocation(
+  argv: readonly string[],
+  kind: 'stats' | 'kind-counts',
+): StatsFastPathInvocation | KindCountsFastPathInvocation | null {
   let json = false;
   let resultOnly = false;
   let compact = false;
@@ -277,7 +346,7 @@ function parseStatsInvocation(argv: readonly string[]): StatsFastPathInvocation 
     return null;
   }
 
-  return json && resultOnly && compact ? { kind: 'stats' } : null;
+  return json && resultOnly && compact ? { kind } : null;
 }
 
 function parseEntryPointsInvocation(argv: readonly string[]): EntryPointsFastPathInvocation | null {

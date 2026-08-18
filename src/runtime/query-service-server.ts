@@ -232,6 +232,21 @@ async function executeRequest(
     const { deps, rdeps } = await import('../queries/navigation/deps.js');
     return request.direction === 'outgoing' ? deps(db, request.filePattern) : rdeps(db, request.filePattern);
   }
+  if (request.kind === 'imported-by') {
+    const { importedBy } = await import('../queries/navigation/imports.js');
+    return importedBy(db, request.symbolPattern);
+  }
+  if (request.kind === 'hierarchy') {
+    const [{ hierarchy }, { withSymbolResolutionJson }] = await Promise.all([
+      import('../queries/navigation/hierarchy.js'),
+      import('./query-commands/symbol-resolution.js'),
+    ]);
+    return withSymbolResolutionJson(db, request.symbolPattern, hierarchy(db, request.symbolPattern), 'hierarchy');
+  }
+  if (request.kind === 'by-kind' || request.kind === 'kind-counts') {
+    const { byKind, kindCounts } = await import('../queries/navigation/by-kind.js');
+    return request.kind === 'by-kind' ? byKind(db, request.kindQuery) : kindCounts(db);
+  }
   const [{ codeBatch }, { codeBatchResultOnlyJsonForSelectors }] = await Promise.all([
     import('../queries/navigation/code.js'),
     import('../queries/navigation/code-result-json.js'),
@@ -361,6 +376,38 @@ function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServi
         direction: requestRecord['direction'],
         filePattern: requestRecord['filePattern'],
       },
+    };
+  }
+  if (requestRecord['kind'] === 'imported-by' || requestRecord['kind'] === 'hierarchy') {
+    if (typeof requestRecord['symbolPattern'] !== 'string') {
+      throw new Error(`Invalid query service ${requestRecord['kind']} request.`);
+    }
+    return {
+      ...envelope,
+      request: {
+        kind: requestRecord['kind'],
+        expectedGeneration: requestRecord['expectedGeneration'],
+        symbolPattern: requestRecord['symbolPattern'],
+      },
+    };
+  }
+  if (requestRecord['kind'] === 'by-kind') {
+    if (typeof requestRecord['kindQuery'] !== 'string') {
+      throw new Error('Invalid query service by-kind request.');
+    }
+    return {
+      ...envelope,
+      request: {
+        kind: 'by-kind',
+        expectedGeneration: requestRecord['expectedGeneration'],
+        kindQuery: requestRecord['kindQuery'],
+      },
+    };
+  }
+  if (requestRecord['kind'] === 'kind-counts') {
+    return {
+      ...envelope,
+      request: { kind: 'kind-counts', expectedGeneration: requestRecord['expectedGeneration'] },
     };
   }
   if (requestRecord['kind'] === 'code') {
