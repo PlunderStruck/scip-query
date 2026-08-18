@@ -217,6 +217,17 @@ async function executeRequest(
     const { stats } = await import('../queries/navigation/stats.js');
     return stats(db);
   }
+  if (request.kind === 'members') {
+    const [{ members }, { symbolResolutionJson }] = await Promise.all([
+      import('../queries/navigation/members.js'),
+      import('../queries/navigation/code-result-json.js'),
+    ]);
+    return { ...symbolResolutionJson(db, request.symbolPattern), members: members(db, request.symbolPattern) };
+  }
+  if (request.kind === 'methods') {
+    const { resolveMethods } = await import('../queries/navigation/methods.js');
+    return resolveMethods(db, { className: request.className });
+  }
   const [{ codeBatch }, { codeBatchResultOnlyJsonForSelectors }] = await Promise.all([
     import('../queries/navigation/code.js'),
     import('../queries/navigation/code-result-json.js'),
@@ -302,6 +313,32 @@ function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServi
       request: {
         kind: 'stats',
         expectedGeneration: requestRecord['expectedGeneration'],
+      },
+    };
+  }
+  if (requestRecord['kind'] === 'members') {
+    if (typeof requestRecord['symbolPattern'] !== 'string') {
+      throw new Error('Invalid query service members request.');
+    }
+    return {
+      ...envelope,
+      request: {
+        kind: 'members',
+        expectedGeneration: requestRecord['expectedGeneration'],
+        symbolPattern: requestRecord['symbolPattern'],
+      },
+    };
+  }
+  if (requestRecord['kind'] === 'methods') {
+    if (typeof requestRecord['className'] !== 'string') {
+      throw new Error('Invalid query service methods request.');
+    }
+    return {
+      ...envelope,
+      request: {
+        kind: 'methods',
+        expectedGeneration: requestRecord['expectedGeneration'],
+        className: requestRecord['className'],
       },
     };
   }

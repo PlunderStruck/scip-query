@@ -9,6 +9,8 @@ import {
   tryEntryPointsWithQueryService,
   tryFilesWithQueryService,
   type QueryServiceEntryPointsOptions,
+  tryMembersWithQueryService,
+  tryMethodsWithQueryService,
   tryOutlineWithQueryService,
   trySearchSourceWithQueryService,
   tryStatsWithQueryService,
@@ -49,13 +51,25 @@ interface StatsFastPathInvocation {
   kind: 'stats';
 }
 
+interface MembersFastPathInvocation {
+  kind: 'members';
+  symbolPattern: string;
+}
+
+interface MethodsFastPathInvocation {
+  kind: 'methods';
+  className: string;
+}
+
 type FastPathInvocation =
   | SourceSearchFastPathInvocation
   | OutlineFastPathInvocation
   | CodeFastPathInvocation
   | EntryPointsFastPathInvocation
   | FilesFastPathInvocation
-  | StatsFastPathInvocation;
+  | StatsFastPathInvocation
+  | MembersFastPathInvocation
+  | MethodsFastPathInvocation;
 
 /**
  * Serve eligible machine-oriented navigation forms before loading the full CLI
@@ -83,11 +97,18 @@ export function tryRunQueryServiceFastPath(argv: readonly string[]): boolean {
   if (invocation.kind === 'files') {
     const response = tryFilesWithQueryService(projectRoot, invocation.pattern, { allowDefault: true });
     if (!response) return false;
-    const serialized = JSON.stringify(response.result);
-    // The full CLI owns pagination warnings. Fall through when it needs to emit
-    // them rather than silently changing stderr on the lightweight path.
-    if (serialized.length + 1 > DEFAULT_OUTPUT_PAGE_SIZE) return false;
-    writeSerializedJson(serialized);
+    if (!writeUnpagedJsonResult(response.result)) return false;
+    return true;
+  }
+  if (invocation.kind === 'members') {
+    const response = tryMembersWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true });
+    if (!response || !writeUnpagedJsonResult(response.result)) return false;
+    return true;
+  }
+  if (invocation.kind === 'methods') {
+    const response = tryMethodsWithQueryService(projectRoot, invocation.className, { allowDefault: true });
+    if (!response || !writeUnpagedJsonResult(response.result)) return false;
+    if (response.result.kind !== 'matched') process.exitCode = 1;
     return true;
   }
   if (invocation.kind === 'stats') {
@@ -118,7 +139,55 @@ export function parseFastPathInvocation(argv: readonly string[]): FastPathInvoca
   if (argv[0] === 'entrypoints') return parseEntryPointsInvocation(argv);
   if (argv[0] === 'files') return parseFilesInvocation(argv);
   if (argv[0] === 'stats') return parseStatsInvocation(argv);
+  if (argv[0] === 'members') return parseSymbolQueryInvocation(argv, 'members');
+  if (argv[0] === 'methods') return parseSymbolQueryInvocation(argv, 'methods');
   return null;
+}
+
+function parseSymbolQueryInvocation(
+  argv: readonly string[],
+  kind: 'members' | 'methods',
+): MembersFastPathInvocation | MethodsFastPathInvocation | null {
+  let query: string | undefined;
+  let json = false;
+  let resultOnly = false;
+  let compact = false;
+
+  for (let index = 1; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--') {
+      const remaining = argv.slice(index + 1);
+      if (remaining.length !== 1 || query !== undefined) return null;
+      query = remaining[0];
+      break;
+    }
+    if (arg === '--json') {
+      json = true;
+      continue;
+    }
+    if (arg === '--result-only') {
+      resultOnly = true;
+      continue;
+    }
+    if (arg === '--compact') {
+      compact = true;
+      continue;
+    }
+    if (arg.startsWith('-') || query !== undefined) return null;
+    query = arg;
+  }
+
+  if (!json || !resultOnly || !compact || query === undefined) return null;
+  return kind === 'members' ? { kind, symbolPattern: query } : { kind, className: query };
+}
+
+function writeUnpagedJsonResult(result: unknown): boolean {
+  const serialized = JSON.stringify(result);
+  // The full CLI owns pagination warnings. Fall through when it needs to emit
+  // them rather than silently changing stderr on the lightweight path.
+  if (serialized.length + 1 > DEFAULT_OUTPUT_PAGE_SIZE) return false;
+  writeSerializedJson(serialized);
+  return true;
 }
 
 function parseFilesInvocation(argv: readonly string[]): FilesFastPathInvocation | null {

@@ -114,6 +114,21 @@ describe('query service fast path', () => {
     expect(parseFastPathInvocation(['stats', '--json', '--result-only', '--compact'])).toEqual({ kind: 'stats' });
   });
 
+  it('parses the complete machine-readable members and methods forms', () => {
+    expect(parseFastPathInvocation(['members', '--json', '--result-only', '--compact', 'ScipDatabase'])).toEqual({
+      kind: 'members',
+      symbolPattern: 'ScipDatabase',
+    });
+    expect(parseFastPathInvocation(['methods', '--json', '--result-only', '--compact', 'ScipDatabase'])).toEqual({
+      kind: 'methods',
+      className: 'ScipDatabase',
+    });
+    expect(parseFastPathInvocation(['members', '--json', '--result-only', '--compact', '--', '--owner'])).toEqual({
+      kind: 'members',
+      symbolPattern: '--owner',
+    });
+  });
+
   it.each([
     ['search', 'needle', '--json', '--result-only'],
     ['search', 'needle', '--json', '--result-only', '--compact', '--full'],
@@ -133,6 +148,10 @@ describe('query service fast path', () => {
     ['files', 'src', '--json', '--result-only'],
     ['stats', '--json', '--result-only'],
     ['stats', 'unexpected', '--json', '--result-only', '--compact'],
+    ['members', 'first', 'second', '--json', '--result-only', '--compact'],
+    ['members', 'ScipDatabase', '--json', '--result-only'],
+    ['methods', 'ScipDatabase', '--json', '--result-only', '--compact', '--full'],
+    ['methods', '--json', '--result-only', '--compact'],
   ])('falls through for an ambiguous or unsupported invocation: %j', (...argv) => {
     expect(parseFastPathInvocation(argv)).toBeNull();
   });

@@ -31,7 +31,9 @@ function mayUseQueryServiceFastPath(argv: readonly string[]): boolean {
       argv[0] === 'code' ||
       argv[0] === 'entrypoints' ||
       argv[0] === 'files' ||
-      argv[0] === 'stats') &&
+      argv[0] === 'stats' ||
+      argv[0] === 'members' ||
+      argv[0] === 'methods') &&
     argv.includes('--json') &&
     argv.includes('--result-only') &&
     argv.includes('--compact') &&

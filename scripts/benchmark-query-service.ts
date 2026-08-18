@@ -133,6 +133,8 @@ function benchmarkArguments(): string[] {
   if (benchmarkCommand === 'entrypoints') return ['entrypoints', operand, '--json', '--result-only', '--compact'];
   if (benchmarkCommand === 'files') return ['files', operand, '--json', '--result-only', '--compact'];
   if (benchmarkCommand === 'stats') return ['stats', '--json', '--result-only', '--compact'];
+  if (benchmarkCommand === 'members') return ['members', operand, '--json', '--result-only', '--compact'];
+  if (benchmarkCommand === 'methods') return ['methods', operand, '--json', '--result-only', '--compact'];
   return ['code', operand, '--json', '--result-only', '--compact', '--no-session'];
 }
 
@@ -179,11 +181,12 @@ function parseConcurrencyLevels(configured: string | undefined): number[] {
   return levels;
 }
 
-type BenchmarkCommand = 'search' | 'outline' | 'code' | 'entrypoints' | 'files' | 'stats';
+type BenchmarkCommand = 'search' | 'outline' | 'code' | 'entrypoints' | 'files' | 'stats' | 'members' | 'methods';
 
 function defaultOperand(command: BenchmarkCommand): string {
   if (command === 'outline') return 'src/runtime/cli.ts';
   if (command === 'files') return 'src/runtime';
+  if (command === 'members' || command === 'methods') return 'ScipDatabase';
   return 'queryServiceSessionIdentity';
 }
 
@@ -194,9 +197,13 @@ function parseBenchmarkCommand(configured: string | undefined): BenchmarkCommand
     configured === 'code' ||
     configured === 'entrypoints' ||
     configured === 'files' ||
-    configured === 'stats'
+    configured === 'stats' ||
+    configured === 'members' ||
+    configured === 'methods'
   ) {
     return configured;
   }
-  throw new Error('SCIP_QUERY_BENCH_COMMAND must be search, outline, code, entrypoints, files, or stats.');
+  throw new Error(
+    'SCIP_QUERY_BENCH_COMMAND must be search, outline, code, entrypoints, files, stats, members, or methods.',
+  );
 }

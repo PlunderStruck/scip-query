@@ -19,6 +19,9 @@ import {
 } from '../platform/process-identity.js';
 import type { OutlineNode } from '../queries/navigation/outline.js';
 import type { CodeFileMemberMode } from '../queries/navigation/code.js';
+import type { SymbolResolutionJson } from '../queries/navigation/code-result-json.js';
+import type { MemberResult } from '../queries/navigation/members.js';
+import type { MethodsResolution } from '../queries/navigation/methods.js';
 import type { SourceSearchOptions, SourceSearchResult } from '../queries/navigation/source-search.js';
 import {
   BOUNDED_MAILBOX_VERSION,
@@ -33,7 +36,7 @@ import { resolveCliProjectContext } from './cli-context.js';
 import { cliVersion } from './cli-support.js';
 import { inspectWatchService, trustedWatchServiceIndexGeneration } from './watch-service.js';
 
-export const QUERY_SERVICE_PROTOCOL_VERSION = 5;
+export const QUERY_SERVICE_PROTOCOL_VERSION = 6;
 
 const QUERY_SERVICE_POOL_SIZE = 6;
 const QUERY_SERVICE_MAX_POOL_SIZE = 8;
@@ -89,6 +92,18 @@ export interface QueryServiceStatsRequest {
   expectedGeneration: string;
 }
 
+export interface QueryServiceMembersRequest {
+  kind: 'members';
+  expectedGeneration: string;
+  symbolPattern: string;
+}
+
+export interface QueryServiceMethodsRequest {
+  kind: 'methods';
+  expectedGeneration: string;
+  className: string;
+}
+
 export interface QueryServiceEntryPointsOptions {
   search?: string;
   scope?: string;
@@ -119,13 +134,17 @@ export interface QueryServiceStatsTransportResult {
   lastBuilt: string | null;
 }
 
+export type QueryServiceMembersTransportResult = SymbolResolutionJson & { members: MemberResult[] };
+
 export type QueryServiceRequest =
   | QueryServiceSourceSearchRequest
   | QueryServiceOutlineRequest
   | QueryServiceCodeRequest
   | QueryServiceEntryPointsRequest
   | QueryServiceFilesRequest
-  | QueryServiceStatsRequest;
+  | QueryServiceStatsRequest
+  | QueryServiceMembersRequest
+  | QueryServiceMethodsRequest;
 
 export interface QueryServiceEnvelope {
   mailboxVersion: typeof BOUNDED_MAILBOX_VERSION;
@@ -198,6 +217,18 @@ export interface QueryServiceStatsResult {
   observationReceipt: ObservationReceiptV2;
 }
 
+export interface QueryServiceMembersResult {
+  result: QueryServiceMembersTransportResult;
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
+export interface QueryServiceMethodsResult {
+  result: MethodsResolution;
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
 export function trySearchSourceWithQueryService(
   projectRoot: string,
   pattern: string,
@@ -264,6 +295,34 @@ export function tryStatsWithQueryService(
     (expectedGeneration) => ({ kind: 'stats', expectedGeneration }),
     isStatsResult,
     'stats result',
+    policy,
+  );
+}
+
+export function tryMembersWithQueryService(
+  projectRoot: string,
+  symbolPattern: string,
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceMembersResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'members', expectedGeneration, symbolPattern }),
+    isMembersResult,
+    'members result',
+    policy,
+  );
+}
+
+export function tryMethodsWithQueryService(
+  projectRoot: string,
+  className: string,
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceMethodsResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'methods', expectedGeneration, className }),
+    isMethodsResult,
+    'methods result',
     policy,
   );
 }
@@ -421,7 +480,7 @@ function requestQuery<Result>(
   const deadlineAtMs = startedAtMs + QUERY_SERVICE_TIMEOUT_MS;
   const monotonicDeadlineAtMs = monotonicNowMs() + QUERY_SERVICE_TIMEOUT_MS;
   const clientId = randomUUID();
-  const operationKey = boundedMailboxOperationKey('query-service-v5', { clientId, request });
+  const operationKey = boundedMailboxOperationKey('query-service-v6', { clientId, request });
   const id = boundedMailboxRequestId(operationKey);
   const sessionIdentity = queryServiceSessionIdentity(sessionDir);
   const admitted = enqueueBoundedMailboxRequest(
@@ -600,6 +659,126 @@ function isStatsResult(value: unknown): value is QueryServiceStatsTransportResul
     isNonNegativeSafeInteger(record['references']) &&
     isNonNegativeSafeInteger(record['indexSizeBytes']) &&
     (record['lastBuilt'] === null || typeof record['lastBuilt'] === 'string')
+  );
+}
+
+function isMembersResult(value: unknown): value is QueryServiceMembersTransportResult {
+  if (!isSymbolResolutionResult(value)) return false;
+  const members = (value as unknown as Record<string, unknown>)['members'];
+  return Array.isArray(members) && members.every(isMemberResult);
+}
+
+function isSymbolResolutionResult(value: unknown): value is SymbolResolutionJson {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  if (record['matched'] === false) {
+    return (
+      record['resolved'] === undefined &&
+      record['otherMatches'] === undefined &&
+      record['totalMatches'] === undefined &&
+      Array.isArray(record['suggestions']) &&
+      record['suggestions'].every((suggestion) => typeof suggestion === 'string')
+    );
+  }
+  return (
+    record['matched'] === true &&
+    isResolvedSymbol(record['resolved']) &&
+    Array.isArray(record['otherMatches']) &&
+    record['otherMatches'].every(isSymbolResolutionAlternative) &&
+    isNonNegativeSafeInteger(record['totalMatches']) &&
+    (record['totalMatches'] as number) >= 1 &&
+    record['suggestions'] === undefined
+  );
+}
+
+function isMethodsResult(value: unknown): value is MethodsResolution {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  if (typeof record['query'] !== 'string') return false;
+  if (record['kind'] === 'missing') {
+    return Array.isArray(record['suggestions']) && record['suggestions'].every((item) => typeof item === 'string');
+  }
+  if (record['kind'] === 'ambiguous') {
+    return (
+      isNonNegativeSafeInteger(record['total']) &&
+      (record['total'] as number) > 1 &&
+      Array.isArray(record['candidates']) &&
+      record['candidates'].every(isMethodsCandidate)
+    );
+  }
+  return (
+    record['kind'] === 'matched' &&
+    isMethodsOwner(record['owner']) &&
+    Array.isArray(record['methods']) &&
+    record['methods'].every(isMethodResult)
+  );
+}
+
+function isMemberResult(value: unknown): value is MemberResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record['symbol'] === 'string' &&
+    typeof record['shortName'] === 'string' &&
+    typeof record['kind'] === 'string' &&
+    isSourceRange(record)
+  );
+}
+
+function isMethodResult(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return typeof record['name'] === 'string' && isSourceRange(record);
+}
+
+function isMethodsOwner(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record['symbol'] === 'string' &&
+    typeof record['shortName'] === 'string' &&
+    typeof record['relativePath'] === 'string' &&
+    isSourceRange(record)
+  );
+}
+
+function isResolvedSymbol(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record['symbol'] === 'string' &&
+    typeof record['shortName'] === 'string' &&
+    typeof record['relativePath'] === 'string'
+  );
+}
+
+function isSymbolResolutionAlternative(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record['shortName'] === 'string' &&
+    typeof record['relativePath'] === 'string' &&
+    isNonNegativeSafeInteger(record['startLine']) &&
+    record['symbol'] === undefined
+  );
+}
+
+function isMethodsCandidate(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record['symbol'] === 'string' &&
+    typeof record['shortName'] === 'string' &&
+    typeof record['relativePath'] === 'string' &&
+    isNonNegativeSafeInteger(record['startLine'])
+  );
+}
+
+function isSourceRange(record: Record<string, unknown>): boolean {
+  return (
+    isNonNegativeSafeInteger(record['startLine']) &&
+    isNonNegativeSafeInteger(record['endLine']) &&
+    (record['endLine'] as number) >= (record['startLine'] as number)
   );
 }
 
