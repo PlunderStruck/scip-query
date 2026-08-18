@@ -1,0 +1,4 @@
+interface:
+  display_name: "SCIP Hyper Optimization"
+  short_description: "Measurement-driven performance optimization"
+  default_prompt: "Use $scip-hyper-optimization to establish cold and warm baselines, profile the dominant span hierarchically, preserve output and recovery contracts, and keep only proven runtime or memory improvements."

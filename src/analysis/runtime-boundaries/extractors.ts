@@ -26,11 +26,20 @@ export interface BoundaryExtractor {
   extract(context: BoundaryFileContext): BoundaryObservation[];
 }
 
+export interface RuntimeBoundaryProfileSpan {
+  <T>(name: string, run: () => T, metadata?: { readonly file: string }): T;
+}
+
 const HTTP_METHODS = new Set(['delete', 'get', 'head', 'options', 'patch', 'post', 'put']);
 const HTTP_RECEIVER_PATTERN = /(?:^|\.)(?:app|router|server)$/u;
 const READ_METHODS = new Set(['findFirst', 'findMany', 'findUnique', 'from', 'get', 'select']);
 const WRITE_METHODS = new Set(['create', 'delete', 'insert', 'remove', 'update', 'upsert']);
 const SQL_EXECUTE_METHODS = new Set(['execute', 'query', 'raw']);
+const CAPABILITY_DESCRIPTOR_IDENTITY = /(?:\b(?:name|id)|['"`](?:name|id)['"`])\s*:/u;
+const CAPABILITY_DESCRIPTOR_HANDLER = /\b(?:execute|handler|invoke|run)\s*(?:[:(])/u;
+const CAPABILITY_REFERENCE_WITH_SEPARATOR = /\b[A-Za-z_$][\w$-]*[_-][\w$-]*\s*\(/u;
+const CAPABILITY_INSTRUCTION_REFERENCE =
+  /\b(?:use|call|invoke|run|via|with|read|stop)(?:\s+the)?(?:\s+(?:tool|capability|command))?\s+[A-Za-z_$][\w$-]*\s*\(/iu;
 
 export const BOUNDARY_EXTRACTORS: readonly BoundaryExtractor[] = [
   httpExtractor(),
@@ -140,20 +149,42 @@ function nodeChildProcessBindings(source: string): {
   return { direct, namespaces };
 }
 
-export function boundaryFileContext(db: ScipDatabase, file: string): BoundaryFileContext | null {
-  const root = getAst(db, file)?.rootNode;
+export function boundaryFileContext(
+  db: ScipDatabase,
+  file: string,
+  knownSource?: string,
+  profileSpan?: RuntimeBoundaryProfileSpan,
+): BoundaryFileContext | null {
+  const root = profileBoundaryWork(
+    profileSpan,
+    'runtime-boundaries.context.ast',
+    file,
+    () => getAst(db, file)?.rootNode,
+  );
   if (!root) return null;
-  const source = getSourceText(db, file);
-  const definitions = getDefinitionsForFile(db, file);
-  const callables = getSourceFacts(db, file)?.callables ?? [];
+  const source = knownSource ?? getSourceText(db, file);
+  let definitions: ReturnType<typeof getDefinitionsForFile> | undefined;
+  let callables: NonNullable<ReturnType<typeof getSourceFacts>>['callables'] | undefined;
+  let constants: ReadonlyMap<string, string> | undefined;
   return {
     db,
     file,
     source,
     root,
-    constants: literalConstants(root),
+    get constants() {
+      constants ??= profileBoundaryWork(profileSpan, 'runtime-boundaries.context.constants', file, () =>
+        literalConstants(root),
+      );
+      return constants;
+    },
     ownerAt: (line) => {
-      const definition = definitions
+      const definitionsForFile = (definitions ??= profileBoundaryWork(
+        profileSpan,
+        'runtime-boundaries.context.definitions',
+        file,
+        () => getDefinitionsForFile(db, file),
+      ));
+      const definition = definitionsForFile
         .filter((candidate) => candidate.startLine <= line && candidate.endLine >= line)
         .sort(
           (left, right) =>
@@ -168,7 +199,13 @@ export function boundaryFileContext(db: ScipDatabase, file: string): BoundaryFil
           endLine: definition.endLine,
         };
       }
-      const callable = callables
+      const callablesForFile = (callables ??= profileBoundaryWork(
+        profileSpan,
+        'runtime-boundaries.context.source-facts',
+        file,
+        () => getSourceFacts(db, file)?.callables ?? [],
+      ));
+      const callable = callablesForFile
         .filter((candidate) => candidate.startLine <= line && candidate.endLine >= line)
         .sort(
           (left, right) =>
@@ -183,6 +220,15 @@ export function boundaryFileContext(db: ScipDatabase, file: string): BoundaryFil
       };
     },
   };
+}
+
+function profileBoundaryWork<T>(
+  profileSpan: RuntimeBoundaryProfileSpan | undefined,
+  name: string,
+  file: string,
+  run: () => T,
+): T {
+  return profileSpan ? profileSpan(name, run, { file }) : run();
 }
 
 /**
@@ -503,8 +549,9 @@ function capabilityRegistryExtractor(): BoundaryExtractor {
   return {
     id: 'builtin.capability-registry',
     supports: (source) =>
-      /\b(?:execute|handler|invoke|run)\s*(?:[:(])/u.test(source) ||
-      /['"`][^'"`\n]{0,256}\b[A-Za-z_$][\w$-]*\s*\(/u.test(source),
+      (CAPABILITY_DESCRIPTOR_IDENTITY.test(source) && CAPABILITY_DESCRIPTOR_HANDLER.test(source)) ||
+      CAPABILITY_REFERENCE_WITH_SEPARATOR.test(source) ||
+      CAPABILITY_INSTRUCTION_REFERENCE.test(source),
     extract: (context) => {
       const observations: BoundaryObservation[] = [];
       const seen = new Set<string>();

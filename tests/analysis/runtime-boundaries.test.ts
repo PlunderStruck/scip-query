@@ -303,6 +303,7 @@ describe('runtime-boundary evidence', () => {
         '  },',
         '};',
       ],
+      'src/irrelevant.ts': ['export function run() {', '  return "Formatting issue()";', '}'],
     };
     writeFixtureFiles(tempDir, files);
     const builder = evidenceFixtureDb(join(tempDir, 'index.db'));
@@ -347,6 +348,9 @@ describe('runtime-boundary evidence', () => {
       );
       expect(capabilityReferences).toHaveLength(1);
       expect(capabilityReferences[0]?.keyParts[0]?.value).toBe('kill_process');
+      expect(
+        graph.coverage.extractors.find((extractor) => extractor.id === 'builtin.capability-registry')?.applicableFiles,
+      ).toBe(2);
     } finally {
       db.close();
     }

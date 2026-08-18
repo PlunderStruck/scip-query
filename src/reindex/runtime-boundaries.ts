@@ -5,6 +5,7 @@ import {
   RUNTIME_BOUNDARY_EXTRACTOR_VERSION,
   writeRuntimeBoundaryGraph,
 } from '../analysis/runtime-boundaries/index.js';
+import { profileSpan } from '../instrumentation/profile.js';
 import { ScipDatabase } from '../storage/db.js';
 import type { PostIndexAugmentationStage } from './augmentation/post-index-augmentation.js';
 
@@ -43,6 +44,7 @@ export function runtimeBoundaryAugmentationStage(
           graph = collectRuntimeBoundaryGraph(index, {
             ...(stored ? { previousGraph: stored } : {}),
             ...(opts.affectedFiles ? { affectedFiles: opts.affectedFiles } : {}),
+            profileSpan,
           });
           incrementallyUpdated = (graph.coverage.filesReused ?? 0) > 0;
         }

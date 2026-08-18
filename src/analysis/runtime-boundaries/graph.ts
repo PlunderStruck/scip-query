@@ -4,6 +4,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { getSourceFiles } from '../../source/primitives/source-fileset.js';
 import { getSourceText } from '../../source/primitives/source-text.js';
 import { BOUNDARY_EXTRACTORS, boundaryFileContext } from './extractors.js';
+import type { RuntimeBoundaryProfileSpan } from './extractors.js';
 import { deriveCarrierDiscriminators } from './carrier-discriminators.js';
 import { composeHttpMountsWithCoverage } from './http-mounts.js';
 import { propagateCompilerResolvedHttpSummaries } from './http-summaries.js';
@@ -107,6 +108,7 @@ const MAX_MATERIALIZED_PAIRS_PER_GROUP = 64;
 export interface RuntimeBoundaryCollectionOptions {
   previousGraph?: RuntimeBoundaryGraph;
   affectedFiles?: readonly string[];
+  profileSpan?: RuntimeBoundaryProfileSpan;
 }
 
 /** Extract changed-file facts, retain covered unchanged-file facts, and globally refactor their relationships. */
@@ -137,7 +139,7 @@ export function collectRuntimeBoundaryGraph(
   const previousDirectObservationCount =
     previousFileCoverage?.reduce((total, entry) => total + entry.observationIds.length, 0) ?? 0;
   let phaseStartedAt = performance.now();
-  const extracted = extractBoundaryFiles(db, filesToExtract);
+  const extracted = extractBoundaryFiles(db, filesToExtract, opts.profileSpan);
   recordPhase(phases, 'direct-extraction', phaseStartedAt, filesToExtract.length, extracted.observations.length, {
     filesVisited: filesToExtract.length,
     filesReused: retainedFileCoverage.length,
@@ -236,13 +238,14 @@ function recordPhase(
 function extractBoundaryFiles(
   db: ScipDatabase,
   files: readonly string[],
+  profileSpan?: RuntimeBoundaryProfileSpan,
 ): { observations: BoundaryObservation[]; fileCoverage: RuntimeBoundaryFileCoverage[] } {
   const observations: BoundaryObservation[] = [];
   const fileCoverage: RuntimeBoundaryFileCoverage[] = [];
   for (const file of files) {
     const source = getSourceText(db, file);
     const applicableExtractors = BOUNDARY_EXTRACTORS.filter((extractor) => extractor.supports(source));
-    const context = applicableExtractors.length > 0 ? boundaryFileContext(db, file) : null;
+    const context = applicableExtractors.length > 0 ? boundaryFileContext(db, file, source, profileSpan) : null;
     const coverage: RuntimeBoundaryFileCoverage = {
       file,
       hasAst: context !== null || boundaryAstEligible(file, source),
@@ -254,7 +257,9 @@ function extractBoundaryFiles(
       for (const extractor of applicableExtractors) {
         const extractorCoverage = { id: extractor.id, applicableFiles: 1, observations: 0, errors: 0 };
         try {
-          const extracted = extractor.extract(context);
+          const extracted = profileBoundaryWork(profileSpan, `runtime-boundaries.extractor.${extractor.id}`, file, () =>
+            extractor.extract(context),
+          );
           extractorCoverage.observations = extracted.length;
           observations.push(...extracted);
           coverage.observationIds.push(...extracted.map((observation) => observation.id));
@@ -270,6 +275,15 @@ function extractBoundaryFiles(
     fileCoverage.push(coverage);
   }
   return { observations, fileCoverage };
+}
+
+function profileBoundaryWork<T>(
+  profileSpan: RuntimeBoundaryProfileSpan | undefined,
+  name: string,
+  file: string,
+  run: () => T,
+): T {
+  return profileSpan ? profileSpan(name, run, { file }) : run();
 }
 
 function boundaryAstEligible(file: string, source: string): boolean {
