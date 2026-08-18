@@ -9,10 +9,13 @@ export {
   InputTooLargeError,
   isMissingProjectFileError,
   projectFileExists,
+  probeProjectFileBytes,
   readProjectFile,
   readProjectFileText,
   resolveProjectFile,
   type ProjectFileReadOptions,
+  type ProjectFileByteProbe,
+  type ProjectFileByteProbeOptions,
   type ResolvedProjectFile,
 } from '../../platform/project-files.js';
 export {

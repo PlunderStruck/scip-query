@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { codeBatch } from '../../../src/queries/navigation/code.js';
 import { files } from '../../../src/queries/navigation/files.js';
 import { searchSource } from '../../../src/queries/navigation/source-search.js';
+import { scanRepositoryText } from '../../../src/source/primitives/repository-text.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { evidenceFixtureDb } from '../../fixtures/evidence-fixture.js';
 
@@ -106,6 +107,20 @@ describe('lossless repository text sensor', () => {
       skippedOversizedPaths: [],
       semanticFiles: { aligned: 1, stale: 0, unavailable: 3 },
     });
+  });
+
+  it('keeps streaming literal prefilter output identical to materialized byte filtering', () => {
+    const literal = Buffer.from('sensorNeedle');
+    const streamingFiles: unknown[] = [];
+    const materializedFiles: unknown[] = [];
+    const streaming = scanRepositoryText(db, { literalBytes: literal }, (file) => streamingFiles.push(file));
+    const materialized = scanRepositoryText(
+      db,
+      { includeBytes: (_relativePath, bytes) => bytes.includes(literal) },
+      (file) => materializedFiles.push(file),
+    );
+
+    expect({ scan: streaming, files: streamingFiles }).toEqual({ scan: materialized, files: materializedFiles });
   });
 
   it('returns exact current ranges and whole files without compiler facts', () => {

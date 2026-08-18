@@ -6,8 +6,9 @@ import { performance } from 'node:perf_hooks';
 const projectRoot = resolve(process.argv[2] ?? process.cwd());
 const pattern = process.argv[3] ?? 'queryServiceSessionIdentity';
 const cliPath = resolve(projectRoot, 'dist/cli.js');
-const poolSize = Number.parseInt(process.env.SCIP_QUERY_QUERY_SERVICE_POOL_SIZE ?? '6', 10);
-const concurrencyLevels = [1, 8, 32] as const;
+const configuredPoolSize = process.env.SCIP_QUERY_QUERY_SERVICE_POOL_SIZE;
+const poolSize = configuredPoolSize === undefined ? 'default' : Number.parseInt(configuredPoolSize, 10);
+const concurrencyLevels = parseConcurrencyLevels(process.env.SCIP_QUERY_BENCH_CONCURRENCY);
 const serviceModes = process.env.SCIP_QUERY_BENCH_SERVICE_ONLY === '1' ? [true] : [false, true];
 const scenarios = [];
 
@@ -89,9 +90,10 @@ function startClient(service: boolean): {
   const startedAt = performance.now();
   const env = {
     ...process.env,
-    SCIP_QUERY_QUERY_SERVICE_POOL_SIZE: String(poolSize),
     SCIP_QUERY_QUERY_SERVICE_IDLE_MS: '10000',
   };
+  if (configuredPoolSize === undefined) delete env.SCIP_QUERY_QUERY_SERVICE_POOL_SIZE;
+  else env.SCIP_QUERY_QUERY_SERVICE_POOL_SIZE = configuredPoolSize;
   if (service) delete env.SCIP_QUERY_QUERY_SERVICE;
   else env.SCIP_QUERY_QUERY_SERVICE = '0';
   const child = spawn(
@@ -157,4 +159,12 @@ function sha256(value: string): string {
 
 function round(value: number): number {
   return Number(value.toFixed(3));
+}
+
+function parseConcurrencyLevels(configured: string | undefined): number[] {
+  const levels = (configured ?? '1,8,32').split(',').map((value) => Number.parseInt(value, 10));
+  if (levels.length === 0 || levels.some((value) => !Number.isSafeInteger(value) || value < 1 || value > 256)) {
+    throw new Error('SCIP_QUERY_BENCH_CONCURRENCY must contain comma-separated integers between 1 and 256.');
+  }
+  return levels;
 }

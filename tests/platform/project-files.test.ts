@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +9,7 @@ import {
   buildProjectInputFingerprintFromJournal,
   fingerprintProjectFiles,
   InputTooLargeError,
+  probeProjectFileBytes,
   readProjectFileText,
   resolveProjectFile,
   UnsafeProjectPathError,
@@ -397,6 +399,40 @@ describe('project file authority boundary', () => {
       }),
     );
     expect(readProjectFileText(projectRoot, 'source.ts', { maxBytes: 5 })).toBe('12345');
+  });
+
+  it('probes UTF-8 literals across read-buffer boundaries without materializing misses', () => {
+    const projectRoot = temporaryDirectory('scip-query-project-probe-');
+    const bufferBytes = 1024 * 1024;
+    const source = `${'a'.repeat(bufferBytes - 1)}🙂${'b'.repeat(bufferBytes - 6)}needle-tail`;
+    writeFileSync(join(projectRoot, 'source.ts'), source);
+    writeFileSync(join(projectRoot, 'binary.bin'), Buffer.from([0, 110, 101, 101, 100, 108, 101]));
+    writeFileSync(join(projectRoot, 'invalid-utf8.bin'), Buffer.from([0xc3]));
+
+    const match = probeProjectFileBytes(projectRoot, 'source.ts', Buffer.from('needle'), { computeSha256: true });
+    expect(match).toMatchObject({
+      byteLength: Buffer.byteLength(source),
+      isUtf8Text: true,
+      includesLiteral: true,
+      sha256: createHash('sha256').update(source).digest('hex'),
+    });
+    expect(match.bytes?.toString('utf8')).toBe(source);
+    expect(probeProjectFileBytes(projectRoot, 'source.ts', Buffer.from('absent')).bytes).toBeNull();
+    expect(() =>
+      probeProjectFileBytes(projectRoot, 'source.ts', Buffer.from('needle'), {
+        maxBytes: Buffer.byteLength(source) - 1,
+      }),
+    ).toThrow(InputTooLargeError);
+    expect(probeProjectFileBytes(projectRoot, 'binary.bin', Buffer.from('needle'))).toMatchObject({
+      isUtf8Text: false,
+      includesLiteral: false,
+      bytes: null,
+    });
+    expect(probeProjectFileBytes(projectRoot, 'invalid-utf8.bin', Buffer.from('needle'))).toMatchObject({
+      isUtf8Text: false,
+      includesLiteral: false,
+      bytes: null,
+    });
   });
 });
 

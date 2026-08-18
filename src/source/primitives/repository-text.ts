@@ -8,6 +8,7 @@ import {
   InputTooLargeError,
   isMissingProjectFileError,
   normalizeSafeProjectRelativePath,
+  probeProjectFileBytes,
   readProjectFile,
 } from './project-file-boundary.js';
 
@@ -54,6 +55,7 @@ export interface RepositoryTextScanResult extends Omit<RepositoryTextInventory, 
 export interface RepositoryTextScanOptions {
   scope?: string;
   includeBytes?: (relativePath: string, bytes: Buffer) => boolean;
+  literalBytes?: Buffer;
 }
 
 const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true });
@@ -111,11 +113,33 @@ export function scanRepositoryText(
   let scannedBytes = 0;
   let scannedTextFiles = 0;
   const semanticFiles: Record<SourceSemanticFreshnessState, number> = { aligned: 0, stale: 0, unavailable: 0 };
+  const literalScratchBuffer = opts.literalBytes ? Buffer.allocUnsafe(1024 * 1024) : undefined;
 
   for (const relativePath of paths) {
     let bytes: Buffer;
+    let knownSha256: string | undefined;
+    const indexed = indexedDocuments.has(relativePath);
     try {
-      bytes = readProjectFile(db.config.projectRoot, relativePath, { inputKind: 'repository text file' });
+      if (opts.literalBytes) {
+        const probe = probeProjectFileBytes(db.config.projectRoot, relativePath, opts.literalBytes, {
+          inputKind: 'repository text file',
+          computeSha256: indexed,
+          scratchBuffer: literalScratchBuffer,
+        });
+        if (!probe.isUtf8Text) {
+          skippedBinaryPaths.push(relativePath);
+          continue;
+        }
+        scannedBytes += probe.byteLength;
+        scannedTextFiles += 1;
+        knownSha256 = probe.sha256;
+        const semantic = semanticFreshness(relativePath, knownSha256, fingerprints, indexedDocuments);
+        semanticFiles[semantic.state] += 1;
+        if (!probe.includesLiteral || !probe.bytes) continue;
+        bytes = probe.bytes;
+      } else {
+        bytes = readProjectFile(db.config.projectRoot, relativePath, { inputKind: 'repository text file' });
+      }
     } catch (error) {
       if (error instanceof InputTooLargeError) {
         skippedOversizedPaths.push(relativePath);
@@ -125,19 +149,20 @@ export function scanRepositoryText(
       skippedUnreadablePaths.push(relativePath);
       continue;
     }
-    if (!isTextBytes(bytes)) {
+    if (!opts.literalBytes && !isTextBytes(bytes)) {
       skippedBinaryPaths.push(relativePath);
       continue;
     }
-    scannedBytes += bytes.byteLength;
-    scannedTextFiles += 1;
-    const indexed = indexedDocuments.has(relativePath);
-    const sha256 = indexed ? hashBytes(bytes) : undefined;
-    const semantic = semanticFreshness(relativePath, sha256, fingerprints, indexedDocuments);
-    semanticFiles[semantic.state] += 1;
+    if (!opts.literalBytes) {
+      scannedBytes += bytes.byteLength;
+      scannedTextFiles += 1;
+      knownSha256 = indexed ? hashBytes(bytes) : undefined;
+      const semantic = semanticFreshness(relativePath, knownSha256, fingerprints, indexedDocuments);
+      semanticFiles[semantic.state] += 1;
+    }
     if (opts.includeBytes && !opts.includeBytes(relativePath, bytes)) continue;
     const text = UTF8_DECODER.decode(bytes);
-    visit(repositoryTextFile(relativePath, bytes, text, fingerprints, indexedDocuments, sha256));
+    visit(repositoryTextFile(relativePath, bytes, text, fingerprints, indexedDocuments, knownSha256));
   }
 
   return {

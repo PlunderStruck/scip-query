@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { isUtf8 } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import {
   closeSync,
@@ -7,6 +8,7 @@ import {
   openSync,
   readdirSync,
   readFileSync,
+  readSync,
   readlinkSync,
   realpathSync,
   type Stats,
@@ -46,6 +48,7 @@ export {
 } from '../domain/path-normalization.js';
 
 export const DEFAULT_PROJECT_SOURCE_LIMIT_BYTES = 64 * 1024 * 1024;
+const PROJECT_FILE_PROBE_BUFFER_BYTES = 1024 * 1024;
 
 /**
  * A project-file proof identifies one existing regular file whose canonical
@@ -85,6 +88,19 @@ export class InputTooLargeError extends Error {
 export interface ProjectFileReadOptions {
   maxBytes?: number;
   inputKind?: string;
+}
+
+export interface ProjectFileByteProbeOptions extends ProjectFileReadOptions {
+  computeSha256?: boolean;
+  scratchBuffer?: Buffer;
+}
+
+export interface ProjectFileByteProbe {
+  byteLength: number;
+  isUtf8Text: boolean;
+  includesLiteral: boolean;
+  bytes: Buffer | null;
+  sha256?: string;
 }
 
 export interface ProjectInputFingerprint {
@@ -191,29 +207,114 @@ export function readProjectFile(projectRoot: string, candidatePath: string, opts
   const descriptor = openSync(resolvedFile.absolutePath, 'r');
   try {
     const before = fstatSync(descriptor);
-    if (
-      !before.isFile() ||
-      before.dev !== resolvedFile.device ||
-      before.ino !== resolvedFile.inode ||
-      before.size !== resolvedFile.size
-    ) {
-      throw new UnsafeProjectPathError(candidatePath, 'changed-during-read');
-    }
+    assertResolvedProjectFileIdentity(before, resolvedFile, candidatePath);
     if (before.size > maxBytes) {
       throw new InputTooLargeError(opts.inputKind ?? 'project file', resolvedFile.relativePath, before.size, maxBytes);
     }
 
     const content = readFileSync(descriptor);
     const after = fstatSync(descriptor);
-    if (
-      after.dev !== before.dev ||
-      after.ino !== before.ino ||
-      after.size !== before.size ||
-      content.byteLength !== before.size
-    ) {
+    assertResolvedProjectFileIdentity(after, resolvedFile, candidatePath);
+    if (content.byteLength !== before.size) {
       throw new UnsafeProjectPathError(candidatePath, 'changed-during-read');
     }
     return content;
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
+/**
+ * Inspect one project file through the authority boundary while keeping only a
+ * fixed-size read buffer. Full bytes are materialized only when the file is
+ * UTF-8 text containing the requested literal.
+ */
+export function probeProjectFileBytes(
+  projectRoot: string,
+  candidatePath: string,
+  literal: Buffer,
+  opts: ProjectFileByteProbeOptions = {},
+): ProjectFileByteProbe {
+  if (literal.byteLength === 0) throw new Error('Project file probe literal must not be empty.');
+  const relativePath = normalizeSafeProjectRelativePath(candidatePath);
+  const snapshotState = projectSnapshotPathState(projectRoot, relativePath);
+  if (snapshotState) {
+    if (snapshotState === 'missing') {
+      throw Object.assign(new Error(`Snapshot project file ${JSON.stringify(relativePath)} does not exist.`), {
+        code: 'ENOENT',
+      });
+    }
+    const snapshotFile = projectSnapshotFile(projectRoot, relativePath);
+    if (!snapshotFile) throw new UnsafeProjectPathError(relativePath, 'changed-during-read');
+    const maxBytes = opts.maxBytes ?? DEFAULT_PROJECT_SOURCE_LIMIT_BYTES;
+    assertNonNegativeByteLimit(maxBytes);
+    if (snapshotFile.size > maxBytes) {
+      throw new InputTooLargeError(opts.inputKind ?? 'project file', relativePath, snapshotFile.size, maxBytes);
+    }
+    const isUtf8Text = !snapshotFile.content.includes(0) && isUtf8(snapshotFile.content);
+    const includesLiteral = isUtf8Text && snapshotFile.content.includes(literal);
+    return {
+      byteLength: snapshotFile.size,
+      isUtf8Text,
+      includesLiteral,
+      bytes: includesLiteral ? Buffer.from(snapshotFile.content) : null,
+      ...(opts.computeSha256 ? { sha256: snapshotFile.sha256 } : {}),
+    };
+  }
+
+  const resolvedFile = resolveProjectFile(projectRoot, candidatePath, opts);
+  const descriptor = openSync(resolvedFile.absolutePath, 'r');
+  try {
+    const before = fstatSync(descriptor);
+    assertResolvedProjectFileIdentity(before, resolvedFile, candidatePath);
+    const hash = opts.computeSha256 ? createHash('sha256') : null;
+    const scratch = opts.scratchBuffer ?? Buffer.allocUnsafe(PROJECT_FILE_PROBE_BUFFER_BYTES);
+    if (scratch.byteLength === 0) throw new Error('Project file probe scratch buffer must not be empty.');
+    let offset = 0;
+    let includesLiteral = false;
+    let containsNul = false;
+    let validUtf8 = true;
+    let utf8Carry: Buffer = Buffer.alloc(0);
+    let literalTail: Buffer = Buffer.alloc(0);
+
+    while (offset < before.size) {
+      const bytesRead = readSync(descriptor, scratch, 0, Math.min(scratch.byteLength, before.size - offset), offset);
+      if (bytesRead <= 0) throw new UnsafeProjectPathError(candidatePath, 'changed-during-read');
+      const chunk = scratch.subarray(0, bytesRead);
+      hash?.update(chunk);
+      containsNul ||= chunk.includes(0);
+      if (validUtf8) {
+        const validationBytes = utf8Carry.byteLength > 0 ? Buffer.concat([utf8Carry, chunk]) : chunk;
+        const completePrefixLength = completeUtf8PrefixLength(validationBytes);
+        validUtf8 = isUtf8(validationBytes.subarray(0, completePrefixLength));
+        utf8Carry = Buffer.from(validationBytes.subarray(completePrefixLength));
+      }
+      if (!includesLiteral) includesLiteral = chunkIncludesLiteral(chunk, literal, literalTail);
+      literalTail = nextLiteralTail(chunk, literal, literalTail);
+      offset += bytesRead;
+    }
+
+    validUtf8 &&= utf8Carry.byteLength === 0;
+    assertResolvedProjectFileIdentity(fstatSync(descriptor), resolvedFile, candidatePath);
+    const isUtf8Text = !containsNul && validUtf8;
+    let bytes: Buffer | null = null;
+    if (isUtf8Text && includesLiteral) {
+      bytes = Buffer.allocUnsafe(before.size);
+      let materialized = 0;
+      while (materialized < bytes.byteLength) {
+        const bytesRead = readSync(descriptor, bytes, materialized, bytes.byteLength - materialized, materialized);
+        if (bytesRead <= 0) throw new UnsafeProjectPathError(candidatePath, 'changed-during-read');
+        materialized += bytesRead;
+      }
+      assertResolvedProjectFileIdentity(fstatSync(descriptor), resolvedFile, candidatePath);
+    }
+    return {
+      byteLength: before.size,
+      isUtf8Text,
+      includesLiteral: isUtf8Text && includesLiteral,
+      bytes,
+      ...(hash ? { sha256: hash.digest('hex') } : {}),
+    };
   } finally {
     closeSync(descriptor);
   }
@@ -225,6 +326,51 @@ export function readProjectFileText(
   opts: ProjectFileReadOptions = {},
 ): string {
   return readProjectFile(projectRoot, candidatePath, opts).toString('utf8');
+}
+
+function assertResolvedProjectFileIdentity(
+  stat: Stats,
+  resolvedFile: ResolvedProjectFile,
+  candidatePath: string,
+): void {
+  if (
+    !stat.isFile() ||
+    stat.dev !== resolvedFile.device ||
+    stat.ino !== resolvedFile.inode ||
+    stat.size !== resolvedFile.size
+  ) {
+    throw new UnsafeProjectPathError(candidatePath, 'changed-during-read');
+  }
+}
+
+function completeUtf8PrefixLength(bytes: Buffer): number {
+  if (bytes.byteLength === 0) return 0;
+  let leadIndex = bytes.byteLength - 1;
+  let continuationBytes = 0;
+  while (leadIndex >= 0 && continuationBytes < 3 && (bytes[leadIndex]! & 0xc0) === 0x80) {
+    continuationBytes += 1;
+    leadIndex -= 1;
+  }
+  if (leadIndex < 0) return bytes.byteLength;
+  const lead = bytes[leadIndex]!;
+  const expectedBytes =
+    (lead & 0x80) === 0 ? 1 : (lead & 0xe0) === 0xc0 ? 2 : (lead & 0xf0) === 0xe0 ? 3 : (lead & 0xf8) === 0xf0 ? 4 : 0;
+  return expectedBytes > bytes.byteLength - leadIndex ? leadIndex : bytes.byteLength;
+}
+
+function chunkIncludesLiteral(chunk: Buffer, literal: Buffer, previousTail: Buffer): boolean {
+  if (chunk.includes(literal)) return true;
+  if (previousTail.byteLength === 0 || literal.byteLength === 1) return false;
+  const prefix = chunk.subarray(0, Math.min(chunk.byteLength, literal.byteLength - 1));
+  return Buffer.concat([previousTail, prefix]).includes(literal);
+}
+
+function nextLiteralTail(chunk: Buffer, literal: Buffer, previousTail: Buffer): Buffer {
+  const tailBytes = literal.byteLength - 1;
+  if (tailBytes === 0) return Buffer.alloc(0);
+  if (chunk.byteLength >= tailBytes) return Buffer.from(chunk.subarray(chunk.byteLength - tailBytes));
+  const combined = Buffer.concat([previousTail, chunk]);
+  return Buffer.from(combined.subarray(Math.max(0, combined.byteLength - tailBytes)));
 }
 
 export function isMissingProjectFileError(error: unknown): boolean {

@@ -124,7 +124,7 @@ export function searchSource(db: ScipDatabase, pattern: string, opts: SourceSear
     db,
     {
       scope: opts.scope,
-      includeBytes: literalBytes ? (_relativePath, bytes) => bytes.includes(literalBytes) : undefined,
+      literalBytes: literalBytes ?? undefined,
     },
     (file) => {
       const relativePath = file.relativePath;
