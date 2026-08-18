@@ -494,6 +494,18 @@ interface StructuralWorkspace {
   relativeDir: string;
 }
 
+interface SystemMapGenerationContext {
+  fileGraph: ReadonlyMap<string, ReadonlySet<string>>;
+  reverseFileGraph: ReadonlyMap<string, ReadonlySet<string>>;
+  workspaces: readonly StructuralWorkspace[];
+  runtimeBoundaries: ReturnType<typeof readRuntimeBoundaryGraph>;
+}
+
+// A ScipDatabase is pinned to one immutable published generation for its
+// lifetime. Reuse generation-wide structure within that lifetime, and let the
+// weak key release it with the database instead of sharing it across refreshes.
+const SYSTEM_MAP_GENERATION_CONTEXTS = new WeakMap<ScipDatabase, SystemMapGenerationContext>();
+
 /**
  * Build a layered repository map from explicit literal and symbol anchors.
  *
@@ -570,10 +582,7 @@ function executeSystemMap(
   }
 
   const index = new ProjectIndex(db);
-  const fileGraph = index.fileDependencyGraph();
-  const reverseFileGraph = reverseFileDependencyGraph(fileGraph);
-  const workspaces = inferIndexedWorkspaces(index.sourceFiles());
-  const runtimeBoundaries = readRuntimeBoundaryGraph(db);
+  const { fileGraph, reverseFileGraph, workspaces, runtimeBoundaries } = systemMapGenerationContext(db, index);
   const boundaryObservations = new Map(
     (runtimeBoundaries?.observations ?? []).map((observation) => [observation.id, observation]),
   );
@@ -3566,6 +3575,20 @@ function widerReferenceScope(left: SystemMapReferenceScope, right: SystemMapRefe
     all: 3,
   };
   return rank[left] >= rank[right] ? left : right;
+}
+
+function systemMapGenerationContext(db: ScipDatabase, index: ProjectIndex): SystemMapGenerationContext {
+  const cached = SYSTEM_MAP_GENERATION_CONTEXTS.get(db);
+  if (cached) return cached;
+  const fileGraph = index.fileDependencyGraph();
+  const context: SystemMapGenerationContext = {
+    fileGraph,
+    reverseFileGraph: reverseFileDependencyGraph(fileGraph),
+    workspaces: inferIndexedWorkspaces(index.sourceFiles()),
+    runtimeBoundaries: readRuntimeBoundaryGraph(db),
+  };
+  SYSTEM_MAP_GENERATION_CONTEXTS.set(db, context);
+  return context;
 }
 
 function reverseFileDependencyGraph(graph: ReadonlyMap<string, ReadonlySet<string>>): Map<string, Set<string>> {

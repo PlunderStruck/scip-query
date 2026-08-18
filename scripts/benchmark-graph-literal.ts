@@ -9,7 +9,7 @@ import { ScipDatabase } from '../src/storage/db.js';
 
 const projectRoot = resolve(process.argv[2] ?? process.cwd());
 const pattern = process.argv[3] ?? 'producedOutputBytes';
-const iterations = 5;
+const iterations = 15;
 const paths = resolveIndexStoragePaths(projectRoot, loadProjectConfig(projectRoot));
 const db = new ScipDatabase({ projectRoot, dbPath: paths.dbPath, indexPath: paths.indexPath });
 const options = {
@@ -20,7 +20,9 @@ const options = {
 };
 
 try {
+  const initialStartedAt = performance.now();
   const warmup = graphEvidence(db, { searches: [pattern] }, options);
+  const initialMs = rounded(performance.now() - initialStartedAt);
   const expectedIdentity = resultIdentity(warmup);
   const durations: number[] = [];
   let maxObservedRssBytes = process.memoryUsage().rss;
@@ -41,6 +43,7 @@ try {
       projectRoot,
       pattern,
       cacheState: 'warm-in-process',
+      initialMs,
       timingMs: summarize(durations),
       maxObservedRssBytes,
       output: {
