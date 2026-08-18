@@ -7,6 +7,7 @@ import { monotonicNowMs } from '../domain/time.js';
 import { readProcessIdentity } from '../platform/process-identity.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
 import { tryAcquireProcessFileLock } from '../platform/process-file-lock.js';
+import { outline } from '../queries/navigation/outline.js';
 import { searchSource } from '../queries/navigation/source-search.js';
 import {
   boundedMailboxPaths,
@@ -155,7 +156,10 @@ function processRequests(
         processed += 1;
         continue;
       }
-      const result = searchSource(db, envelope.request.pattern, envelope.request.options);
+      const result =
+        envelope.request.kind === 'source-search'
+          ? searchSource(db, envelope.request.pattern, envelope.request.options)
+          : outline(db, envelope.request.filePattern);
       const observationReceipt = buildObservationReceipt({
         projectRoot: db.config.projectRoot,
         db,
@@ -225,9 +229,34 @@ function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServi
     throw new Error('Invalid query service request envelope.');
   }
   const requestRecord = request as Record<string, unknown>;
+  if (typeof requestRecord['expectedGeneration'] !== 'string') {
+    throw new Error('Invalid query service request generation.');
+  }
+  const envelope = {
+    mailboxVersion: 1,
+    protocolVersion: QUERY_SERVICE_PROTOCOL_VERSION,
+    id: record['id'],
+    operationKey: record['operationKey'],
+    clientId: record['clientId'],
+    enqueuedAtMs: record['enqueuedAtMs'],
+    deadlineAtMs: record['deadlineAtMs'],
+    sessionIdentity: expectedSessionIdentity,
+  } as const;
+  if (requestRecord['kind'] === 'outline') {
+    if (typeof requestRecord['filePattern'] !== 'string') {
+      throw new Error('Invalid query service outline request.');
+    }
+    return {
+      ...envelope,
+      request: {
+        kind: 'outline',
+        expectedGeneration: requestRecord['expectedGeneration'],
+        filePattern: requestRecord['filePattern'],
+      },
+    };
+  }
   if (
     requestRecord['kind'] !== 'source-search' ||
-    typeof requestRecord['expectedGeneration'] !== 'string' ||
     typeof requestRecord['pattern'] !== 'string' ||
     requestRecord['pattern'].length === 0 ||
     !requestRecord['options'] ||
@@ -252,14 +281,7 @@ function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServi
     ...(optionsRecord['ranking'] === undefined ? {} : { ranking: requiredStructuralRanking(optionsRecord['ranking']) }),
   };
   return {
-    mailboxVersion: 1,
-    protocolVersion: QUERY_SERVICE_PROTOCOL_VERSION,
-    id: record['id'],
-    operationKey: record['operationKey'],
-    clientId: record['clientId'],
-    enqueuedAtMs: record['enqueuedAtMs'],
-    deadlineAtMs: record['deadlineAtMs'],
-    sessionIdentity: expectedSessionIdentity,
+    ...envelope,
     request: {
       kind: 'source-search',
       expectedGeneration: requestRecord['expectedGeneration'],

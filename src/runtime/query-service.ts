@@ -17,6 +17,7 @@ import {
   sameProcessIdentity,
   type ProcessIdentity,
 } from '../platform/process-identity.js';
+import type { OutlineNode } from '../queries/navigation/outline.js';
 import type { SourceSearchOptions, SourceSearchResult } from '../queries/navigation/source-search.js';
 import {
   BOUNDED_MAILBOX_VERSION,
@@ -31,7 +32,7 @@ import { resolveCliProjectContext } from './cli-context.js';
 import { cliVersion } from './cli-support.js';
 import { inspectWatchService, trustedWatchServiceIndexGeneration } from './watch-service.js';
 
-export const QUERY_SERVICE_PROTOCOL_VERSION = 1;
+export const QUERY_SERVICE_PROTOCOL_VERSION = 2;
 
 const QUERY_SERVICE_POOL_SIZE = 6;
 const QUERY_SERVICE_MAX_POOL_SIZE = 8;
@@ -54,6 +55,14 @@ export interface QueryServiceSourceSearchRequest {
   options: SourceSearchOptions;
 }
 
+export interface QueryServiceOutlineRequest {
+  kind: 'outline';
+  expectedGeneration: string;
+  filePattern: string;
+}
+
+export type QueryServiceRequest = QueryServiceSourceSearchRequest | QueryServiceOutlineRequest;
+
 export interface QueryServiceEnvelope {
   mailboxVersion: typeof BOUNDED_MAILBOX_VERSION;
   protocolVersion: typeof QUERY_SERVICE_PROTOCOL_VERSION;
@@ -63,7 +72,7 @@ export interface QueryServiceEnvelope {
   enqueuedAtMs: number;
   deadlineAtMs: number;
   sessionIdentity: string;
-  request: QueryServiceSourceSearchRequest;
+  request: QueryServiceRequest;
 }
 
 export interface QueryServiceServerState {
@@ -75,17 +84,23 @@ export interface QueryServiceServerState {
   heartbeatAtMs: number;
 }
 
-interface QueryServiceResponse {
+interface QueryServiceResponse<Result> {
   ok: true;
   protocolVersion: typeof QUERY_SERVICE_PROTOCOL_VERSION;
   id: string;
   generation: string;
-  result: SourceSearchResult;
+  result: Result;
   observationReceipt: ObservationReceiptV2;
 }
 
 export interface QueryServiceSearchResult {
   result: SourceSearchResult;
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
+export interface QueryServiceOutlineResult {
+  result: OutlineNode[];
   generationIdentity: string;
   observationReceipt: ObservationReceiptV2;
 }
@@ -96,6 +111,36 @@ export function trySearchSourceWithQueryService(
   options: SourceSearchOptions = {},
   policy: { allowDefault?: boolean } = {},
 ): QueryServiceSearchResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'source-search', expectedGeneration, pattern, options }),
+    isSourceSearchResult,
+    'search result',
+    policy,
+  );
+}
+
+export function tryOutlineWithQueryService(
+  projectRoot: string,
+  filePattern: string,
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceOutlineResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'outline', expectedGeneration, filePattern }),
+    isOutlineResult,
+    'outline result',
+    policy,
+  );
+}
+
+function tryQueryWithService<Result>(
+  projectRoot: string,
+  requestForGeneration: (expectedGeneration: string) => QueryServiceRequest,
+  isResult: (value: unknown) => value is Result,
+  resultName: string,
+  policy: { allowDefault?: boolean },
+): { result: Result; generationIdentity: string; observationReceipt: ObservationReceiptV2 } | null {
   if (!queryServiceEnabled(policy.allowDefault === true)) return null;
   try {
     const gitContext = resolveGitWorktreeContext(projectRoot);
@@ -110,14 +155,15 @@ export function trySearchSourceWithQueryService(
     ) {
       return null;
     }
-    const response = requestSourceSearch(
+    const response = requestQuery(
       {
         projectRoot: project.projectRoot,
         dbPath: project.dbPath,
         generationIdentity,
       },
-      pattern,
-      options,
+      requestForGeneration(generationIdentity),
+      isResult,
+      resultName,
     );
     return {
       result: response.result,
@@ -210,11 +256,12 @@ export function isQueryServiceServerStateLive(state: QueryServiceServerState): b
   return actual !== null && sameProcessIdentity(state.processIdentity, actual);
 }
 
-function requestSourceSearch(
+function requestQuery<Result>(
   context: { projectRoot: string; dbPath: string; generationIdentity: string },
-  pattern: string,
-  options: SourceSearchOptions,
-): QueryServiceResponse {
+  request: QueryServiceRequest,
+  isResult: (value: unknown) => value is Result,
+  resultName: string,
+): QueryServiceResponse<Result> {
   const serverPath = queryServiceServerPath();
   if (!existsSync(serverPath)) throw new Error('Query service server executable is unavailable.');
 
@@ -225,13 +272,7 @@ function requestSourceSearch(
   const deadlineAtMs = startedAtMs + QUERY_SERVICE_TIMEOUT_MS;
   const monotonicDeadlineAtMs = monotonicNowMs() + QUERY_SERVICE_TIMEOUT_MS;
   const clientId = randomUUID();
-  const request: QueryServiceSourceSearchRequest = {
-    kind: 'source-search',
-    expectedGeneration: context.generationIdentity,
-    pattern,
-    options,
-  };
-  const operationKey = boundedMailboxOperationKey('query-service-v1', { clientId, request });
+  const operationKey = boundedMailboxOperationKey('query-service-v2', { clientId, request });
   const id = boundedMailboxRequestId(operationKey);
   const sessionIdentity = queryServiceSessionIdentity(sessionDir);
   const admitted = enqueueBoundedMailboxRequest(
@@ -265,6 +306,8 @@ function requestSourceSearch(
           deadlineAtMs: admitted.authoritativeDeadlineAtMs,
           generation: context.generationIdentity,
         },
+        isResult,
+        resultName,
       );
     }
     const state = readQueryServiceServerState(sessionDir);
@@ -304,10 +347,12 @@ function ensureQueryServiceServer(
   throw new Error('Persistent query service did not become ready within 5s.');
 }
 
-function parseQueryServiceResponse(
+function parseQueryServiceResponse<Result>(
   raw: string,
   expected: { id: string; operationKey: string; clientId: string; deadlineAtMs: number; generation: string },
-): QueryServiceResponse {
+  isResult: (value: unknown) => value is Result,
+  resultName: string,
+): QueryServiceResponse<Result> {
   const value = JSON.parse(raw) as unknown;
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid query service response.');
   const record = value as Record<string, unknown>;
@@ -327,8 +372,7 @@ function parseQueryServiceResponse(
     );
   }
   if (record['generation'] !== expected.generation) throw new Error('Persistent query service generation changed.');
-  if (!isSourceSearchResult(record['result']))
-    throw new Error('Persistent query service returned an invalid search result.');
+  if (!isResult(record['result'])) throw new Error(`Persistent query service returned an invalid ${resultName}.`);
   const receipt = decodeObservationReceipt(record['observationReceipt']);
   if (receipt.kind !== 'supported')
     throw new Error('Persistent query service returned an invalid observation receipt.');
@@ -340,6 +384,30 @@ function parseQueryServiceResponse(
     result: record['result'],
     observationReceipt: receipt.receipt,
   };
+}
+
+function isOutlineResult(value: unknown): value is OutlineNode[] {
+  if (!Array.isArray(value)) return false;
+  const pending: unknown[] = [...value];
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (!node || typeof node !== 'object' || Array.isArray(node)) return false;
+    const record = node as Record<string, unknown>;
+    if (
+      typeof record['symbol'] !== 'string' ||
+      typeof record['shortName'] !== 'string' ||
+      !Number.isSafeInteger(record['startLine']) ||
+      (record['startLine'] as number) < 0 ||
+      !Number.isSafeInteger(record['endLine']) ||
+      (record['endLine'] as number) < (record['startLine'] as number) ||
+      (record['signature'] !== null && typeof record['signature'] !== 'string') ||
+      !Array.isArray(record['children'])
+    ) {
+      return false;
+    }
+    pending.push(...record['children']);
+  }
+  return true;
 }
 
 function isSourceSearchResult(value: unknown): value is SourceSearchResult {

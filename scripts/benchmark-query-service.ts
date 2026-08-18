@@ -4,7 +4,9 @@ import { resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 
 const projectRoot = resolve(process.argv[2] ?? process.cwd());
-const pattern = process.argv[3] ?? 'queryServiceSessionIdentity';
+const benchmarkCommand = parseBenchmarkCommand(process.env.SCIP_QUERY_BENCH_COMMAND);
+const operand =
+  process.argv[3] ?? (benchmarkCommand === 'search' ? 'queryServiceSessionIdentity' : 'src/runtime/cli.ts');
 const cliPath = resolve(projectRoot, 'dist/cli.js');
 const configuredPoolSize = process.env.SCIP_QUERY_QUERY_SERVICE_POOL_SIZE;
 const poolSize = configuredPoolSize === undefined ? 'default' : Number.parseInt(configuredPoolSize, 10);
@@ -30,7 +32,9 @@ process.stdout.write(
   `${JSON.stringify({
     benchmark: 'persistent-query-service-cli',
     projectRoot,
-    pattern,
+    command: benchmarkCommand,
+    operand,
+    ...(benchmarkCommand === 'search' ? { pattern: operand } : {}),
     poolSize,
     scenarios,
   })}\n`,
@@ -90,21 +94,17 @@ function startClient(service: boolean): {
   const startedAt = performance.now();
   const env = {
     ...process.env,
-    SCIP_QUERY_QUERY_SERVICE_IDLE_MS: '10000',
+    SCIP_QUERY_QUERY_SERVICE_IDLE_MS: process.env.SCIP_QUERY_QUERY_SERVICE_IDLE_MS ?? '10000',
   };
   if (configuredPoolSize === undefined) delete env.SCIP_QUERY_QUERY_SERVICE_POOL_SIZE;
   else env.SCIP_QUERY_QUERY_SERVICE_POOL_SIZE = configuredPoolSize;
   if (service) delete env.SCIP_QUERY_QUERY_SERVICE;
   else env.SCIP_QUERY_QUERY_SERVICE = '0';
-  const child = spawn(
-    process.execPath,
-    [cliPath, 'search', pattern, '--limit', '1', '--context', '0', '--json', '--result-only', '--compact'],
-    {
-      cwd: projectRoot,
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
-  );
+  const child = spawn(process.execPath, [cliPath, ...benchmarkArguments()], {
+    cwd: projectRoot,
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
   if (child.pid === undefined) throw new Error('CLI benchmark child did not receive a pid.');
   let stdout = '';
   let stderr = '';
@@ -124,6 +124,12 @@ function startClient(service: boolean): {
       });
     }),
   };
+}
+
+function benchmarkArguments(): string[] {
+  return benchmarkCommand === 'search'
+    ? ['search', operand, '--limit', '1', '--context', '0', '--json', '--result-only', '--compact']
+    : ['outline', operand, '--json', '--result-only', '--compact'];
 }
 
 function processSnapshot(): Array<{ pid: number; rssKiB: number; command: string }> {
@@ -167,4 +173,10 @@ function parseConcurrencyLevels(configured: string | undefined): number[] {
     throw new Error('SCIP_QUERY_BENCH_CONCURRENCY must contain comma-separated integers between 1 and 256.');
   }
   return levels;
+}
+
+function parseBenchmarkCommand(configured: string | undefined): 'search' | 'outline' {
+  if (configured === undefined || configured === 'search') return 'search';
+  if (configured === 'outline') return configured;
+  throw new Error('SCIP_QUERY_BENCH_COMMAND must be search or outline.');
 }

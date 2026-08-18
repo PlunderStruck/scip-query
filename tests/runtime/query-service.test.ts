@@ -28,6 +28,7 @@ describe('query service fast path', () => {
         'needle.*value',
       ]),
     ).toEqual({
+      kind: 'source-search',
       pattern: 'needle.*value',
       options: {
         scope: 'src/runtime',
@@ -46,12 +47,27 @@ describe('query service fast path', () => {
     );
   });
 
+  it('parses the bounded machine-readable outline form', () => {
+    expect(
+      parseFastPathInvocation([
+        'outline',
+        '--json',
+        '--result-only',
+        '--compact',
+        '--signatures',
+        'src/runtime/cli.ts',
+      ]),
+    ).toEqual({ kind: 'outline', filePattern: 'src/runtime/cli.ts' });
+  });
+
   it.each([
     ['search', 'needle', '--json', '--result-only'],
     ['search', 'needle', '--json', '--result-only', '--compact', '--full'],
     ['search', 'needle', '--json', '--result-only', '--compact', '--context', '-1'],
     ['search', 'first', 'second', '--json', '--result-only', '--compact'],
-    ['outline', 'src/runtime/cli.ts', '--json', '--result-only', '--compact'],
+    ['outline', 'src/runtime/cli.ts', '--json', '--result-only'],
+    ['outline', 'first.ts', 'second.ts', '--json', '--result-only', '--compact'],
+    ['outline', 'src/runtime/cli.ts', '--json', '--result-only', '--compact', '--full'],
   ])('falls through for an ambiguous or unsupported invocation: %j', (...argv) => {
     expect(parseFastPathInvocation(argv)).toBeNull();
   });

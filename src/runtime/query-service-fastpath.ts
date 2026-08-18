@@ -1,32 +1,47 @@
 import type { SourceSearchOptions } from '../queries/navigation/source-search.js';
 import { writeSerializedJson } from '../platform/terminal-output.js';
 import { resolveProjectRoot } from './cli-context.js';
-import { trySearchSourceWithQueryService } from './query-service.js';
+import { tryOutlineWithQueryService, trySearchSourceWithQueryService } from './query-service.js';
 
-interface FastPathInvocation {
+interface SourceSearchFastPathInvocation {
+  kind: 'source-search';
   pattern: string;
   options: SourceSearchOptions;
 }
 
+interface OutlineFastPathInvocation {
+  kind: 'outline';
+  filePattern: string;
+}
+
+type FastPathInvocation = SourceSearchFastPathInvocation | OutlineFastPathInvocation;
+
 /**
- * Serve the machine-oriented search form before loading the full CLI command
- * registry. Any ambiguity falls through to Commander so errors and uncommon
- * invocations retain the canonical CLI behavior.
+ * Serve eligible machine-oriented navigation forms before loading the full CLI
+ * command registry. Any ambiguity falls through to Commander so errors and
+ * uncommon invocations retain the canonical CLI behavior.
  */
 export function tryRunQueryServiceFastPath(argv: readonly string[]): boolean {
   if (process.env['SCIP_QUERY_PROFILE'] === '1' || process.env['SCIP_QUERY_PROFILE'] === 'true') return false;
   const invocation = parseFastPathInvocation(argv);
   if (!invocation) return false;
-  const response = trySearchSourceWithQueryService(resolveProjectRoot(), invocation.pattern, invocation.options, {
-    allowDefault: true,
-  });
+  const projectRoot = resolveProjectRoot();
+  const response =
+    invocation.kind === 'source-search'
+      ? trySearchSourceWithQueryService(projectRoot, invocation.pattern, invocation.options, { allowDefault: true })
+      : tryOutlineWithQueryService(projectRoot, invocation.filePattern, { allowDefault: true });
   if (!response) return false;
   writeSerializedJson(JSON.stringify(response.result));
   return true;
 }
 
 export function parseFastPathInvocation(argv: readonly string[]): FastPathInvocation | null {
-  if (argv[0] !== 'search') return null;
+  if (argv[0] === 'search') return parseSourceSearchInvocation(argv);
+  if (argv[0] === 'outline') return parseOutlineInvocation(argv);
+  return null;
+}
+
+function parseSourceSearchInvocation(argv: readonly string[]): SourceSearchFastPathInvocation | null {
   let pattern: string | undefined;
   let scope: string | undefined;
   let context = 2;
@@ -93,9 +108,45 @@ export function parseFastPathInvocation(argv: readonly string[]): FastPathInvoca
 
   if (!json || !resultOnly || !compact || pattern === undefined) return null;
   return {
+    kind: 'source-search',
     pattern,
     options: { scope, context, limit, regexp, ignoreCase, ranking: 'structural' },
   };
+}
+
+function parseOutlineInvocation(argv: readonly string[]): OutlineFastPathInvocation | null {
+  let filePattern: string | undefined;
+  let json = false;
+  let resultOnly = false;
+  let compact = false;
+
+  for (let index = 1; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--') {
+      const remaining = argv.slice(index + 1);
+      if (remaining.length !== 1 || filePattern !== undefined) return null;
+      filePattern = remaining[0];
+      break;
+    }
+    if (arg === '--json') {
+      json = true;
+      continue;
+    }
+    if (arg === '--result-only') {
+      resultOnly = true;
+      continue;
+    }
+    if (arg === '--compact') {
+      compact = true;
+      continue;
+    }
+    if (arg === '--signatures') continue;
+    if (arg.startsWith('-') || filePattern !== undefined) return null;
+    filePattern = arg;
+  }
+
+  if (!json || !resultOnly || !compact || filePattern === undefined) return null;
+  return { kind: 'outline', filePattern };
 }
 
 function optionValue(
