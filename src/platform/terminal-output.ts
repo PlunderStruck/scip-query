@@ -6,6 +6,9 @@ const CONTROL_PICTURES = new Map<number, string>([
   [0x0d, '\u240D'],
 ]);
 
+/** Shared boundary for unpaged JSON output and its canonical oversize warning. */
+export const DEFAULT_OUTPUT_PAGE_SIZE = 32_000;
+
 export interface TerminalSanitizationOptions {
   allowNewlines?: boolean;
   allowTabs?: boolean;

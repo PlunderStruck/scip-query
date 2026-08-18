@@ -209,6 +209,14 @@ async function executeRequest(
     const { entryPoints } = await import('../queries/graph/entry-map.js');
     return entryPoints(db, request.options);
   }
+  if (request.kind === 'files') {
+    const { files } = await import('../queries/navigation/files.js');
+    return files(db, request.pattern);
+  }
+  if (request.kind === 'stats') {
+    const { stats } = await import('../queries/navigation/stats.js');
+    return stats(db);
+  }
   const [{ codeBatch }, { codeBatchResultOnlyJsonForSelectors }] = await Promise.all([
     import('../queries/navigation/code.js'),
     import('../queries/navigation/code-result-json.js'),
@@ -272,6 +280,28 @@ function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServi
         kind: 'outline',
         expectedGeneration: requestRecord['expectedGeneration'],
         filePattern: requestRecord['filePattern'],
+      },
+    };
+  }
+  if (requestRecord['kind'] === 'files') {
+    if (typeof requestRecord['pattern'] !== 'string') {
+      throw new Error('Invalid query service files request.');
+    }
+    return {
+      ...envelope,
+      request: {
+        kind: 'files',
+        expectedGeneration: requestRecord['expectedGeneration'],
+        pattern: requestRecord['pattern'],
+      },
+    };
+  }
+  if (requestRecord['kind'] === 'stats') {
+    return {
+      ...envelope,
+      request: {
+        kind: 'stats',
+        expectedGeneration: requestRecord['expectedGeneration'],
       },
     };
   }

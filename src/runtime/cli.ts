@@ -26,7 +26,12 @@ function isCliEntrypoint(): boolean {
 
 function mayUseQueryServiceFastPath(argv: readonly string[]): boolean {
   return (
-    (argv[0] === 'search' || argv[0] === 'outline' || argv[0] === 'code' || argv[0] === 'entrypoints') &&
+    (argv[0] === 'search' ||
+      argv[0] === 'outline' ||
+      argv[0] === 'code' ||
+      argv[0] === 'entrypoints' ||
+      argv[0] === 'files' ||
+      argv[0] === 'stats') &&
     argv.includes('--json') &&
     argv.includes('--result-only') &&
     argv.includes('--compact') &&

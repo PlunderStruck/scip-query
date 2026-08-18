@@ -5,8 +5,7 @@ import { performance } from 'node:perf_hooks';
 
 const projectRoot = resolve(process.argv[2] ?? process.cwd());
 const benchmarkCommand = parseBenchmarkCommand(process.env.SCIP_QUERY_BENCH_COMMAND);
-const operand =
-  process.argv[3] ?? (benchmarkCommand === 'outline' ? 'src/runtime/cli.ts' : 'queryServiceSessionIdentity');
+const operand = process.argv[3] ?? defaultOperand(benchmarkCommand);
 const cliPath = resolve(projectRoot, 'dist/cli.js');
 const configuredPoolSize = process.env.SCIP_QUERY_QUERY_SERVICE_POOL_SIZE;
 const poolSize = configuredPoolSize === undefined ? 'default' : Number.parseInt(configuredPoolSize, 10);
@@ -132,6 +131,8 @@ function benchmarkArguments(): string[] {
   }
   if (benchmarkCommand === 'outline') return ['outline', operand, '--json', '--result-only', '--compact'];
   if (benchmarkCommand === 'entrypoints') return ['entrypoints', operand, '--json', '--result-only', '--compact'];
+  if (benchmarkCommand === 'files') return ['files', operand, '--json', '--result-only', '--compact'];
+  if (benchmarkCommand === 'stats') return ['stats', '--json', '--result-only', '--compact'];
   return ['code', operand, '--json', '--result-only', '--compact', '--no-session'];
 }
 
@@ -178,8 +179,24 @@ function parseConcurrencyLevels(configured: string | undefined): number[] {
   return levels;
 }
 
-function parseBenchmarkCommand(configured: string | undefined): 'search' | 'outline' | 'code' | 'entrypoints' {
+type BenchmarkCommand = 'search' | 'outline' | 'code' | 'entrypoints' | 'files' | 'stats';
+
+function defaultOperand(command: BenchmarkCommand): string {
+  if (command === 'outline') return 'src/runtime/cli.ts';
+  if (command === 'files') return 'src/runtime';
+  return 'queryServiceSessionIdentity';
+}
+
+function parseBenchmarkCommand(configured: string | undefined): BenchmarkCommand {
   if (configured === undefined || configured === 'search') return 'search';
-  if (configured === 'outline' || configured === 'code' || configured === 'entrypoints') return configured;
-  throw new Error('SCIP_QUERY_BENCH_COMMAND must be search, outline, code, or entrypoints.');
+  if (
+    configured === 'outline' ||
+    configured === 'code' ||
+    configured === 'entrypoints' ||
+    configured === 'files' ||
+    configured === 'stats'
+  ) {
+    return configured;
+  }
+  throw new Error('SCIP_QUERY_BENCH_COMMAND must be search, outline, code, entrypoints, files, or stats.');
 }

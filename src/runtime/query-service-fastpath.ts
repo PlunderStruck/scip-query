@@ -1,15 +1,17 @@
 import type { SourceSearchOptions } from '../queries/navigation/source-search.js';
 import type { CodeFileMemberMode } from '../queries/navigation/code.js';
 import { SOURCE_INSPECTION_MAX_SELECTORS } from '../domain/source-inspection-limits.js';
-import { writeSerializedJson } from '../platform/terminal-output.js';
+import { DEFAULT_OUTPUT_PAGE_SIZE, writeSerializedJson } from '../platform/terminal-output.js';
 import { resolveProjectRoot } from './cli-context.js';
 import { assertNavigationDetailAllowed } from './navigation-session.js';
 import {
   tryCodeWithQueryService,
   tryEntryPointsWithQueryService,
+  tryFilesWithQueryService,
   type QueryServiceEntryPointsOptions,
   tryOutlineWithQueryService,
   trySearchSourceWithQueryService,
+  tryStatsWithQueryService,
 } from './query-service.js';
 
 interface SourceSearchFastPathInvocation {
@@ -38,11 +40,22 @@ interface EntryPointsFastPathInvocation {
   options: QueryServiceEntryPointsOptions;
 }
 
+interface FilesFastPathInvocation {
+  kind: 'files';
+  pattern: string;
+}
+
+interface StatsFastPathInvocation {
+  kind: 'stats';
+}
+
 type FastPathInvocation =
   | SourceSearchFastPathInvocation
   | OutlineFastPathInvocation
   | CodeFastPathInvocation
-  | EntryPointsFastPathInvocation;
+  | EntryPointsFastPathInvocation
+  | FilesFastPathInvocation
+  | StatsFastPathInvocation;
 
 /**
  * Serve eligible machine-oriented navigation forms before loading the full CLI
@@ -67,6 +80,22 @@ export function tryRunQueryServiceFastPath(argv: readonly string[]): boolean {
     writeSerializedJson(response.result.serializedJson);
     return true;
   }
+  if (invocation.kind === 'files') {
+    const response = tryFilesWithQueryService(projectRoot, invocation.pattern, { allowDefault: true });
+    if (!response) return false;
+    const serialized = JSON.stringify(response.result);
+    // The full CLI owns pagination warnings. Fall through when it needs to emit
+    // them rather than silently changing stderr on the lightweight path.
+    if (serialized.length + 1 > DEFAULT_OUTPUT_PAGE_SIZE) return false;
+    writeSerializedJson(serialized);
+    return true;
+  }
+  if (invocation.kind === 'stats') {
+    const response = tryStatsWithQueryService(projectRoot, { allowDefault: true });
+    if (!response) return false;
+    writeSerializedJson(JSON.stringify(response.result));
+    return true;
+  }
   if (invocation.kind === 'entrypoints') {
     const response = tryEntryPointsWithQueryService(projectRoot, invocation.options, { allowDefault: true });
     if (!response) return false;
@@ -87,7 +116,68 @@ export function parseFastPathInvocation(argv: readonly string[]): FastPathInvoca
   if (argv[0] === 'outline') return parseOutlineInvocation(argv);
   if (argv[0] === 'code') return parseCodeInvocation(argv);
   if (argv[0] === 'entrypoints') return parseEntryPointsInvocation(argv);
+  if (argv[0] === 'files') return parseFilesInvocation(argv);
+  if (argv[0] === 'stats') return parseStatsInvocation(argv);
   return null;
+}
+
+function parseFilesInvocation(argv: readonly string[]): FilesFastPathInvocation | null {
+  let pattern: string | undefined;
+  let json = false;
+  let resultOnly = false;
+  let compact = false;
+
+  for (let index = 1; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--') {
+      const remaining = argv.slice(index + 1);
+      if (remaining.length !== 1 || pattern !== undefined) return null;
+      pattern = remaining[0];
+      break;
+    }
+    if (arg === '--json') {
+      json = true;
+      continue;
+    }
+    if (arg === '--result-only') {
+      resultOnly = true;
+      continue;
+    }
+    if (arg === '--compact') {
+      compact = true;
+      continue;
+    }
+    if (arg.startsWith('-') || pattern !== undefined) return null;
+    pattern = arg;
+  }
+
+  if (!json || !resultOnly || !compact || pattern === undefined) return null;
+  return { kind: 'files', pattern };
+}
+
+function parseStatsInvocation(argv: readonly string[]): StatsFastPathInvocation | null {
+  let json = false;
+  let resultOnly = false;
+  let compact = false;
+
+  for (let index = 1; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--json') {
+      json = true;
+      continue;
+    }
+    if (arg === '--result-only') {
+      resultOnly = true;
+      continue;
+    }
+    if (arg === '--compact') {
+      compact = true;
+      continue;
+    }
+    return null;
+  }
+
+  return json && resultOnly && compact ? { kind: 'stats' } : null;
 }
 
 function parseEntryPointsInvocation(argv: readonly string[]): EntryPointsFastPathInvocation | null {

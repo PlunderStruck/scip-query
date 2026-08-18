@@ -25,18 +25,18 @@ import {
 } from '../platform/process-identity.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
 import { tryAcquireProcessFileLock } from '../platform/process-file-lock.js';
-import { sanitizeTerminalLine } from '../platform/terminal-output.js';
+import { DEFAULT_OUTPUT_PAGE_SIZE, sanitizeTerminalLine } from '../platform/terminal-output.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
 import { quoteShellArgument } from '../platform/shell-arguments.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import { isNonNegativeInteger, isRecordObject, isSha256Hex } from '../domain/record-validation.js';
 import { finalizeSourceEmission, runWithSourceEmissionInvocation } from './source-emission-session.js';
 import { assertNavigationMapCanStart, recordNavigationOutputDelivery } from './navigation-session.js';
+export { DEFAULT_OUTPUT_PAGE_SIZE } from '../platform/terminal-output.js';
 
 export const CLI_OUTPUT_PAGE_KIND = 'scip-query-output-page' as const;
 export const CLI_OUTPUT_PAGE_SCHEMA_VERSION = 1 as const;
 export const CLI_OUTPUT_CONTINUATION_COMMAND = 'continue' as const;
-export const DEFAULT_OUTPUT_PAGE_SIZE = 32_000;
 export const MIN_OUTPUT_PAGE_SIZE = 256;
 export const MAX_OUTPUT_PAGE_SIZE = 100_000;
 export const MAX_OUTPUT_CURSOR_LENGTH = 4_096;
@@ -1398,7 +1398,6 @@ function cursorTokenToSnapshotId(token: string): string | null {
 function isOutputSnapshotId(value: unknown): value is string {
   return typeof value === 'string' && (SHORT_OUTPUT_SNAPSHOT_ID.test(value) || LEGACY_OUTPUT_SNAPSHOT_ID.test(value));
 }
-
 
 function hashInvocation(
   command: string,

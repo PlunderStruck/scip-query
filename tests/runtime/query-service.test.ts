@@ -102,6 +102,18 @@ describe('query service fast path', () => {
     });
   });
 
+  it('parses the complete machine-readable files and stats forms', () => {
+    expect(parseFastPathInvocation(['files', '--json', '--result-only', '--compact', 'src/runtime'])).toEqual({
+      kind: 'files',
+      pattern: 'src/runtime',
+    });
+    expect(parseFastPathInvocation(['files', '--json', '--result-only', '--compact', '--', '--generated'])).toEqual({
+      kind: 'files',
+      pattern: '--generated',
+    });
+    expect(parseFastPathInvocation(['stats', '--json', '--result-only', '--compact'])).toEqual({ kind: 'stats' });
+  });
+
   it.each([
     ['search', 'needle', '--json', '--result-only'],
     ['search', 'needle', '--json', '--result-only', '--compact', '--full'],
@@ -117,6 +129,10 @@ describe('query service fast path', () => {
     ['code', '--json', '--result-only', '--compact'],
     ['entrypoints', 'first', 'second', '--json', '--result-only', '--compact'],
     ['entrypoints', '--json', '--result-only', '--compact', '--full'],
+    ['files', 'first', 'second', '--json', '--result-only', '--compact'],
+    ['files', 'src', '--json', '--result-only'],
+    ['stats', '--json', '--result-only'],
+    ['stats', 'unexpected', '--json', '--result-only', '--compact'],
   ])('falls through for an ambiguous or unsupported invocation: %j', (...argv) => {
     expect(parseFastPathInvocation(argv)).toBeNull();
   });

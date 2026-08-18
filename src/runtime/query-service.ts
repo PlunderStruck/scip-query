@@ -33,7 +33,7 @@ import { resolveCliProjectContext } from './cli-context.js';
 import { cliVersion } from './cli-support.js';
 import { inspectWatchService, trustedWatchServiceIndexGeneration } from './watch-service.js';
 
-export const QUERY_SERVICE_PROTOCOL_VERSION = 4;
+export const QUERY_SERVICE_PROTOCOL_VERSION = 5;
 
 const QUERY_SERVICE_POOL_SIZE = 6;
 const QUERY_SERVICE_MAX_POOL_SIZE = 8;
@@ -78,6 +78,17 @@ export interface QueryServiceEntryPointsRequest {
   options: QueryServiceEntryPointsOptions;
 }
 
+export interface QueryServiceFilesRequest {
+  kind: 'files';
+  expectedGeneration: string;
+  pattern: string;
+}
+
+export interface QueryServiceStatsRequest {
+  kind: 'stats';
+  expectedGeneration: string;
+}
+
 export interface QueryServiceEntryPointsOptions {
   search?: string;
   scope?: string;
@@ -95,11 +106,26 @@ export interface QueryServiceEntryPointResult {
   indexedCallerCount: number;
 }
 
+export interface QueryServiceFileResult {
+  relativePath: string;
+}
+
+export interface QueryServiceStatsTransportResult {
+  documents: number;
+  symbols: number;
+  definitions: number;
+  references: number;
+  indexSizeBytes: number;
+  lastBuilt: string | null;
+}
+
 export type QueryServiceRequest =
   | QueryServiceSourceSearchRequest
   | QueryServiceOutlineRequest
   | QueryServiceCodeRequest
-  | QueryServiceEntryPointsRequest;
+  | QueryServiceEntryPointsRequest
+  | QueryServiceFilesRequest
+  | QueryServiceStatsRequest;
 
 export interface QueryServiceEnvelope {
   mailboxVersion: typeof BOUNDED_MAILBOX_VERSION;
@@ -160,6 +186,18 @@ export interface QueryServiceEntryPointsResult {
   observationReceipt: ObservationReceiptV2;
 }
 
+export interface QueryServiceFilesResult {
+  result: QueryServiceFileResult[];
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
+export interface QueryServiceStatsResult {
+  result: QueryServiceStatsTransportResult;
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
 export function trySearchSourceWithQueryService(
   projectRoot: string,
   pattern: string,
@@ -199,6 +237,33 @@ export function tryEntryPointsWithQueryService(
     (expectedGeneration) => ({ kind: 'entrypoints', expectedGeneration, options }),
     isEntryPointResult,
     'entrypoints result',
+    policy,
+  );
+}
+
+export function tryFilesWithQueryService(
+  projectRoot: string,
+  pattern: string,
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceFilesResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'files', expectedGeneration, pattern }),
+    isFilesResult,
+    'files result',
+    policy,
+  );
+}
+
+export function tryStatsWithQueryService(
+  projectRoot: string,
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceStatsResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'stats', expectedGeneration }),
+    isStatsResult,
+    'stats result',
     policy,
   );
 }
@@ -356,7 +421,7 @@ function requestQuery<Result>(
   const deadlineAtMs = startedAtMs + QUERY_SERVICE_TIMEOUT_MS;
   const monotonicDeadlineAtMs = monotonicNowMs() + QUERY_SERVICE_TIMEOUT_MS;
   const clientId = randomUUID();
-  const operationKey = boundedMailboxOperationKey('query-service-v4', { clientId, request });
+  const operationKey = boundedMailboxOperationKey('query-service-v5', { clientId, request });
   const id = boundedMailboxRequestId(operationKey);
   const sessionIdentity = queryServiceSessionIdentity(sessionDir);
   const admitted = enqueueBoundedMailboxRequest(
@@ -515,6 +580,31 @@ function isEntryPointResult(value: unknown): value is QueryServiceEntryPointResu
       (record['indexedCallerCount'] as number) >= 0
     );
   });
+}
+
+function isFilesResult(value: unknown): value is QueryServiceFileResult[] {
+  if (!Array.isArray(value)) return false;
+  return value.every((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+    return typeof (entry as Record<string, unknown>)['relativePath'] === 'string';
+  });
+}
+
+function isStatsResult(value: unknown): value is QueryServiceStatsTransportResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    isNonNegativeSafeInteger(record['documents']) &&
+    isNonNegativeSafeInteger(record['symbols']) &&
+    isNonNegativeSafeInteger(record['definitions']) &&
+    isNonNegativeSafeInteger(record['references']) &&
+    isNonNegativeSafeInteger(record['indexSizeBytes']) &&
+    (record['lastBuilt'] === null || typeof record['lastBuilt'] === 'string')
+  );
+}
+
+function isNonNegativeSafeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
 function isSourceSearchResult(value: unknown): value is SourceSearchResult {
