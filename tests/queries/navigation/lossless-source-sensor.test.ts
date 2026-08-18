@@ -28,6 +28,7 @@ describe('lossless repository text sensor', () => {
     const binaryPath = join(projectRoot, 'assets/logo.bin');
     mkdirSync(dirname(binaryPath), { recursive: true });
     writeFileSync(binaryPath, Buffer.from([0, 1, 2, 3]));
+    writeFileSync(join(projectRoot, 'assets/invalid-utf8.bin'), Buffer.from([0xff, 0xfe]));
 
     const dbPath = join(fixtureRoot, 'index.db');
     evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/aligned.ts').write();
@@ -68,7 +69,10 @@ describe('lossless repository text sensor', () => {
   it('matches a native filesystem oracle across indexed, unindexed, and extensionless text', () => {
     expect(files(db, '*.md')).toEqual([{ relativePath: 'docs/architecture.md' }]);
     expect(files(db, 'Dockerfile')).toEqual([{ relativePath: 'Dockerfile' }]);
-    expect(files(db, '*.bin')).toEqual([{ relativePath: 'assets/logo.bin' }]);
+    expect(files(db, '*.bin')).toEqual([
+      { relativePath: 'assets/invalid-utf8.bin' },
+      { relativePath: 'assets/logo.bin' },
+    ]);
 
     const literal = searchSource(db, 'sensorNeedle', { context: 0, limit: Number.MAX_SAFE_INTEGER });
     const regexp = searchSource(db, 'sensor(?:Needle|Branch)', {
@@ -94,10 +98,10 @@ describe('lossless repository text sensor', () => {
     );
     expect(literal.textCoverage).toMatchObject({
       basis: 'current-project-text-files',
-      candidateFiles: 5,
+      candidateFiles: 6,
       scannedTextFiles: 4,
       scannedBytes: Object.values(sources).reduce((sum, source) => sum + Buffer.byteLength(source), 0),
-      skippedBinaryPaths: ['assets/logo.bin'],
+      skippedBinaryPaths: ['assets/invalid-utf8.bin', 'assets/logo.bin'],
       skippedUnreadablePaths: [],
       skippedOversizedPaths: [],
       semanticFiles: { aligned: 1, stale: 0, unavailable: 3 },

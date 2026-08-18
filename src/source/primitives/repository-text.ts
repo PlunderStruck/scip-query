@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isUtf8 } from 'node:buffer';
 import { TextDecoder } from 'node:util';
 import { decodeReindexMetadata } from '../../domain/reindex-metadata.js';
 import { listProjectFiles } from '../../platform/project-files.js';
@@ -45,6 +46,16 @@ export interface RepositoryTextInventory {
   skippedOversizedPaths: string[];
 }
 
+export interface RepositoryTextScanResult extends Omit<RepositoryTextInventory, 'files'> {
+  scannedTextFiles: number;
+  semanticFiles: Record<SourceSemanticFreshnessState, number>;
+}
+
+export interface RepositoryTextScanOptions {
+  scope?: string;
+  includeBytes?: (relativePath: string, bytes: Buffer) => boolean;
+}
+
 const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true });
 
 /** Enumerate the current project paths used by the lossless path sensor. */
@@ -73,14 +84,33 @@ export function readRepositoryTextFile(db: ScipDatabase, candidatePath: string):
  * absence claim.
  */
 export function repositoryTextInventory(db: ScipDatabase, opts: { scope?: string } = {}): RepositoryTextInventory {
+  const files: RepositoryTextFile[] = [];
+  const scan = scanRepositoryText(db, opts, (file) => files.push(file));
+  return {
+    files,
+    candidateFiles: scan.candidateFiles,
+    scannedBytes: scan.scannedBytes,
+    skippedBinaryPaths: scan.skippedBinaryPaths,
+    skippedUnreadablePaths: scan.skippedUnreadablePaths,
+    skippedOversizedPaths: scan.skippedOversizedPaths,
+  };
+}
+
+/** Visits current UTF-8 project files without retaining every file body in memory. */
+export function scanRepositoryText(
+  db: ScipDatabase,
+  opts: RepositoryTextScanOptions,
+  visit: (file: RepositoryTextFile) => void,
+): RepositoryTextScanResult {
   const paths = repositoryProjectPaths(db).filter((relativePath) => !opts.scope || relativePath.includes(opts.scope));
   const fingerprints = indexedFingerprintMap(db);
   const indexedDocuments = indexedDocumentSet(db);
-  const files: RepositoryTextFile[] = [];
   const skippedBinaryPaths: string[] = [];
   const skippedUnreadablePaths: string[] = [];
   const skippedOversizedPaths: string[] = [];
   let scannedBytes = 0;
+  let scannedTextFiles = 0;
+  const semanticFiles: Record<SourceSemanticFreshnessState, number> = { aligned: 0, stale: 0, unavailable: 0 };
 
   for (const relativePath of paths) {
     let bytes: Buffer;
@@ -95,18 +125,25 @@ export function repositoryTextInventory(db: ScipDatabase, opts: { scope?: string
       skippedUnreadablePaths.push(relativePath);
       continue;
     }
-    const text = decodeText(bytes);
-    if (text === null) {
+    if (!isTextBytes(bytes)) {
       skippedBinaryPaths.push(relativePath);
       continue;
     }
     scannedBytes += bytes.byteLength;
-    files.push(repositoryTextFile(relativePath, bytes, text, fingerprints, indexedDocuments));
+    scannedTextFiles += 1;
+    const indexed = indexedDocuments.has(relativePath);
+    const sha256 = indexed ? hashBytes(bytes) : undefined;
+    const semantic = semanticFreshness(relativePath, sha256, fingerprints, indexedDocuments);
+    semanticFiles[semantic.state] += 1;
+    if (opts.includeBytes && !opts.includeBytes(relativePath, bytes)) continue;
+    const text = UTF8_DECODER.decode(bytes);
+    visit(repositoryTextFile(relativePath, bytes, text, fingerprints, indexedDocuments, sha256));
   }
 
   return {
-    files,
     candidateFiles: paths.length,
+    scannedTextFiles,
+    semanticFiles,
     scannedBytes,
     skippedBinaryPaths,
     skippedUnreadablePaths,
@@ -120,8 +157,9 @@ function repositoryTextFile(
   text: string,
   fingerprints: ReadonlyMap<string, string>,
   indexedDocuments: ReadonlySet<string>,
+  knownSha256?: string,
 ): RepositoryTextFile {
-  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  const sha256 = knownSha256 ?? hashBytes(bytes);
   return {
     relativePath,
     text,
@@ -135,13 +173,13 @@ function repositoryTextFile(
 
 function semanticFreshness(
   relativePath: string,
-  sha256: string,
+  sha256: string | undefined,
   fingerprints: ReadonlyMap<string, string>,
   indexedDocuments: ReadonlySet<string>,
 ): SourceObservationFreshness['semantic'] {
   if (!indexedDocuments.has(relativePath)) return { state: 'unavailable', basis: 'no-compiler-document' };
   const indexedHash = fingerprints.get(relativePath);
-  if (!indexedHash) return { state: 'unavailable', basis: 'fingerprint-unavailable' };
+  if (!indexedHash || !sha256) return { state: 'unavailable', basis: 'fingerprint-unavailable' };
   return {
     state: indexedHash === sha256 ? 'aligned' : 'stale',
     basis: 'indexed-input-fingerprint',
@@ -173,12 +211,15 @@ function indexedFingerprintMap(db: ScipDatabase): Map<string, string> {
 }
 
 function decodeText(bytes: Buffer): string | null {
-  if (bytes.includes(0)) return null;
-  try {
-    return UTF8_DECODER.decode(bytes);
-  } catch {
-    return null;
-  }
+  return isTextBytes(bytes) ? UTF8_DECODER.decode(bytes) : null;
+}
+
+function isTextBytes(bytes: Buffer): boolean {
+  return !bytes.includes(0) && isUtf8(bytes);
+}
+
+function hashBytes(bytes: Buffer): string {
+  return createHash('sha256').update(bytes).digest('hex');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

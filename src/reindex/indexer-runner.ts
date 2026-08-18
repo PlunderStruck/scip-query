@@ -51,6 +51,8 @@ export interface IndexerRunResult {
   command: string;
   /** Size in bytes of the produced SCIP shard; absent when the run failed. */
   outputBytes?: number;
+  /** Bytes newly emitted by this run when outputBytes names a larger accepted base shard. */
+  producedOutputBytes?: number;
   skipped?: { language: SupportedLanguage; reason: string };
 }
 

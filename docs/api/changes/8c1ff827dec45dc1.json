@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-08-18T18:11:15.591Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "8c1ff827dec45dc140f7b4b51c0d688d0cd3fbd0dc631fcf8ee30bea33cbb251",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ReindexShardDiagnostic changed from interface ReindexShardDiagnostic { id: string; language: SupportedLanguage; reused: boolean; strategy: 'reused' | 'incremental' | 'full'; missReason?: string; fallbackReason?: s... to interface ReindexShardDiagnostic { id: string; language: SupportedLanguage; reused: boolean; strategy: 'reused' | 'incremental' | 'full'; missReason?: string; fallbackReason?: s....",
+      "target": "./reindex:ReindexShardDiagnostic"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "3dc3d36129e31363f2385a895d50e81e47d3f419639d366e532e980cf3aa2884",
+  "reason": "Expose optional newly produced shard bytes while preserving existing outputBytes semantics and older producers.",
+  "schemaVersion": 1
+}

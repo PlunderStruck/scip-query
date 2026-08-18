@@ -1934,7 +1934,10 @@ function sourceConstructIdentity(construct: SystemMapSourceConstruct): SystemMap
  * slice instead of repeating the enclosing function for every callsite.
  */
 function canonicalSourceConstruct(db: ScipDatabase, construct: SystemMapSourceConstruct): SystemMapSourceConstruct {
-  const callable = smallestSourceCallableAtLine(getSourceFacts(db, construct.file)?.callables ?? [], construct.startLine);
+  const callable = smallestSourceCallableAtLine(
+    getSourceFacts(db, construct.file)?.callables ?? [],
+    construct.startLine,
+  );
   if (callable && callable.endLine >= construct.endLine) {
     return {
       file: construct.file,
@@ -3027,11 +3030,15 @@ function systemMapLiteralMatches(
   for (const relativePath of indexedDocumentPaths(db, { includeIgnored: false })) {
     const lines = getSourceLines(db, relativePath);
     if (lines.length === 0) continue;
-    const definitions = index.definitionsForFile(relativePath);
-    const callables = getSourceFacts(db, relativePath)?.callables ?? [];
+    const literalLines: Array<{ line: number; sourceLine: string }> = [];
     for (let line = 0; line < lines.length; line += 1) {
       const sourceLine = lines[line] ?? '';
-      if (!sourceLine.includes(pattern)) continue;
+      if (sourceLine.includes(pattern)) literalLines.push({ line, sourceLine });
+    }
+    if (literalLines.length === 0) continue;
+    const definitions = index.definitionsForFile(relativePath);
+    const callables = getSourceFacts(db, relativePath)?.callables ?? [];
+    for (const { line, sourceLine } of literalLines) {
       const owner = findEnclosingDefinition(definitions, line);
       const callableOwner = smallestSourceCallableAtLine(callables, line);
       const preciseCompilerOwner = owner && !isModuleLikeSymbol(owner.symbol) ? owner : null;
@@ -3790,7 +3797,6 @@ function renderBoundaryAddress(observation: BoundaryObservation): string {
   return observation.keyParts.map((part) => `${part.name}=${part.value}`).join(' ');
 }
 
-
 function uniqueSorted<T extends string>(values: readonly T[]): T[] {
   return [...new Set(values)].sort();
 }
@@ -3808,7 +3814,8 @@ function compareRelations(left: SystemMapRelation, right: SystemMapRelation): nu
 
 function compareNotableSymbols(left: SystemMapNotableSymbol, right: SystemMapNotableSymbol): number {
   return (
-    systemMapOriginRank(left.origins) - systemMapOriginRank(right.origins) || left.shortName.localeCompare(right.shortName)
+    systemMapOriginRank(left.origins) - systemMapOriginRank(right.origins) ||
+    left.shortName.localeCompare(right.shortName)
   );
 }
 

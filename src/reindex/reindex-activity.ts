@@ -77,9 +77,13 @@ export function reindexActivityPath(outputDb: string): string {
 
 export function estimateReindexLogicalOutputBytes(result: ReindexResult): number {
   if (result.reused) return 0;
-  let bytes = fileSize(result.indexPath) + fileSize(result.dbPath);
+  const completeScipDeferred =
+    result.shards?.some((shard) => !shard.reused && shard.strategy === 'incremental') ?? false;
+  let bytes = (completeScipDeferred ? 0 : fileSize(result.indexPath)) + fileSize(result.dbPath);
   for (const shard of result.shards ?? []) {
-    if (!shard.reused && shard.outputBytes !== null) bytes += shard.outputBytes;
+    if (shard.reused) continue;
+    const producedBytes = shard.producedOutputBytes ?? shard.outputBytes;
+    if (producedBytes !== null) bytes += producedBytes;
   }
   return bytes;
 }
@@ -467,7 +471,7 @@ function summarizeLanguageActivity(
         ? { fallbackReason: topLevel.fallbackReason ?? topLevel.missReason }
         : {}),
       outputBytes,
-      producedOutputBytes: reused ? 0 : outputBytes,
+      producedOutputBytes: reused ? 0 : (topLevel?.producedOutputBytes ?? outputBytes),
       durationMs,
     };
   }

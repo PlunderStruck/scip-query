@@ -6,7 +6,7 @@ import { smallestSourceCallableAtLine } from '../../source/facts/source-callable
 import { focusedSourceConstructRange } from '../../source/facts/source-construct.js';
 import { getDefinitionsForFile, findEnclosingDefinition } from '../../symbols/definition-catalog.js';
 import { isModuleLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
-import { repositoryTextInventory, type SourceObservationFreshness } from '../../source/primitives/repository-text.js';
+import { scanRepositoryText, type SourceObservationFreshness } from '../../source/primitives/repository-text.js';
 import { splitSearchableSourceLines } from '../../source/primitives/source-text.js';
 import { selectInspectionCandidates } from './source-inspection-selection.js';
 import type { SourceSnippet } from './source-snippet.js';
@@ -115,57 +115,67 @@ export function searchSource(db: ScipDatabase, pattern: string, opts: SourceSear
     ? compileBoundedRegExp(pattern, 'source search pattern', opts.ignoreCase ? 'iu' : 'u')
     : null;
   const literal = opts.ignoreCase ? pattern.toLocaleLowerCase() : pattern;
-  const inventory = repositoryTextInventory(db, { scope: opts.scope });
   const identities: SourceSearchIdentity[] = [];
   const fileCoverage: SourceSearchFileCoverage[] = [];
+  const textByPath = new Map<string, string>();
+  const literalBytes = !regexp && !opts.ignoreCase ? Buffer.from(pattern, 'utf8') : null;
 
-  for (const file of inventory.files) {
-    const relativePath = file.relativePath;
-    const lines = splitSearchableSourceLines(file.text);
-    if (lines.length === 0) continue;
-    const definitions =
-      file.freshness.semantic.state !== 'stale' && file.freshness.semantic.basis !== 'no-compiler-document'
-        ? getDefinitionsForFile(db, relativePath)
-        : [];
-    const sourceCallables = getSourceFacts(db, relativePath)?.callables ?? [];
-    let fileMatchingLines = 0;
-    for (let line = 0; line < lines.length; line += 1) {
-      const rawText = lines[line] ?? '';
-      const text = rawText.endsWith('\r') ? rawText.slice(0, -1) : rawText;
-      const matched = regexp
-        ? regexp.test(text)
-        : (opts.ignoreCase ? text.toLocaleLowerCase() : text).includes(literal);
-      if (!matched) continue;
-      fileMatchingLines += 1;
-      const owner = findEnclosingDefinition(definitions, line);
-      const callableOwner = smallestSourceCallableAtLine(sourceCallables, line);
-      const preciseCompilerOwner = owner && !isModuleLikeSymbol(owner.symbol) ? owner : null;
-      const enclosingStartLine =
-        preciseCompilerOwner?.startLine ?? callableOwner?.startLine ?? owner?.startLine ?? line;
-      const enclosingEndLine = preciseCompilerOwner?.endLine ?? callableOwner?.endLine ?? owner?.endLine ?? line;
-      const focusedOwner = focusedSourceConstructRange(db, relativePath, line, enclosingStartLine, enclosingEndLine);
-      identities.push({
-        relativePath,
-        focusLine: line,
-        ownerSymbol: preciseCompilerOwner?.symbol ?? null,
-        ownerShort: preciseCompilerOwner
-          ? shortenSymbol(preciseCompilerOwner.symbol)
-          : (callableOwner?.name ?? (owner ? shortenSymbol(owner.symbol) : null)),
-        ownerStartLine: focusedOwner.startLine,
-        ownerEndLine: focusedOwner.endLine,
-        fileKind: classifyFile(relativePath),
-        freshness: file.freshness,
-      });
-    }
-    if (fileMatchingLines > 0) {
+  const inventory = scanRepositoryText(
+    db,
+    {
+      scope: opts.scope,
+      includeBytes: literalBytes ? (_relativePath, bytes) => bytes.includes(literalBytes) : undefined,
+    },
+    (file) => {
+      const relativePath = file.relativePath;
+      const lines = splitSearchableSourceLines(file.text);
+      if (lines.length === 0) return;
+      const matchingLineNumbers: number[] = [];
+      for (let line = 0; line < lines.length; line += 1) {
+        const rawText = lines[line] ?? '';
+        const text = rawText.endsWith('\r') ? rawText.slice(0, -1) : rawText;
+        const matched = regexp
+          ? regexp.test(text)
+          : (opts.ignoreCase ? text.toLocaleLowerCase() : text).includes(literal);
+        if (matched) matchingLineNumbers.push(line);
+      }
+      if (matchingLineNumbers.length === 0) return;
+
+      textByPath.set(relativePath, file.text);
+      const definitions =
+        file.freshness.semantic.state !== 'stale' && file.freshness.semantic.basis !== 'no-compiler-document'
+          ? getDefinitionsForFile(db, relativePath)
+          : [];
+      const sourceCallables = getSourceFacts(db, relativePath)?.callables ?? [];
+      for (const line of matchingLineNumbers) {
+        const owner = findEnclosingDefinition(definitions, line);
+        const callableOwner = smallestSourceCallableAtLine(sourceCallables, line);
+        const preciseCompilerOwner = owner && !isModuleLikeSymbol(owner.symbol) ? owner : null;
+        const enclosingStartLine =
+          preciseCompilerOwner?.startLine ?? callableOwner?.startLine ?? owner?.startLine ?? line;
+        const enclosingEndLine = preciseCompilerOwner?.endLine ?? callableOwner?.endLine ?? owner?.endLine ?? line;
+        const focusedOwner = focusedSourceConstructRange(db, relativePath, line, enclosingStartLine, enclosingEndLine);
+        identities.push({
+          relativePath,
+          focusLine: line,
+          ownerSymbol: preciseCompilerOwner?.symbol ?? null,
+          ownerShort: preciseCompilerOwner
+            ? shortenSymbol(preciseCompilerOwner.symbol)
+            : (callableOwner?.name ?? (owner ? shortenSymbol(owner.symbol) : null)),
+          ownerStartLine: focusedOwner.startLine,
+          ownerEndLine: focusedOwner.endLine,
+          fileKind: classifyFile(relativePath),
+          freshness: file.freshness,
+        });
+      }
       fileCoverage.push({
         relativePath,
-        matchingLines: fileMatchingLines,
+        matchingLines: matchingLineNumbers.length,
         returnedMatches: 0,
         freshness: file.freshness,
       });
-    }
-  }
+    },
+  );
 
   identities.sort(compareSearchIdentities);
   const reportedIdentities =
@@ -178,7 +188,6 @@ export function searchSource(db: ScipDatabase, pattern: string, opts: SourceSear
       : opts.ranking
         ? selectRepresentativeIdentities(identities, limit)
         : identities.slice(0, limit);
-  const textByPath = new Map(inventory.files.map((file) => [file.relativePath, file.text] as const));
   const matches = materializedIdentities.flatMap((identity) => {
     const source = textByPath.get(identity.relativePath);
     const snippet =
@@ -211,20 +220,16 @@ export function searchSource(db: ScipDatabase, pattern: string, opts: SourceSear
     fileCoverage,
     scopeHints: allScopeHints.slice(0, SOURCE_SEARCH_SCOPE_HINT_LIMIT),
     omittedScopeHints: Math.max(0, allScopeHints.length - SOURCE_SEARCH_SCOPE_HINT_LIMIT),
-    scannedFiles: inventory.files.length,
+    scannedFiles: inventory.scannedTextFiles,
     textCoverage: {
       basis: 'current-project-text-files',
       candidateFiles: inventory.candidateFiles,
-      scannedTextFiles: inventory.files.length,
+      scannedTextFiles: inventory.scannedTextFiles,
       scannedBytes: inventory.scannedBytes,
       skippedBinaryPaths: inventory.skippedBinaryPaths,
       skippedUnreadablePaths: inventory.skippedUnreadablePaths,
       skippedOversizedPaths: inventory.skippedOversizedPaths,
-      semanticFiles: {
-        aligned: inventory.files.filter((file) => file.freshness.semantic.state === 'aligned').length,
-        stale: inventory.files.filter((file) => file.freshness.semantic.state === 'stale').length,
-        unavailable: inventory.files.filter((file) => file.freshness.semantic.state === 'unavailable').length,
-      },
+      semanticFiles: inventory.semanticFiles,
     },
   };
 }

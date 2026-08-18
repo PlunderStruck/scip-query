@@ -183,6 +183,8 @@ export interface ReindexShardDiagnostic {
   fingerprint: string;
   /** Size in bytes of the shard's cached SCIP output, or null when unavailable. */
   outputBytes: number | null;
+  /** Bytes newly emitted by this run; absent when outputBytes is already the produced size. */
+  producedOutputBytes?: number;
   /** Wall time spent producing this shard; 0 when reused. */
   durationMs: number;
   /** Indexer command invoked to produce this shard; absent when reused. */
@@ -1123,6 +1125,7 @@ async function runLanguageIndexersForFreshReindex(
           durationMs: incrementalTypeScript.durationMs,
           command: 'watch-service:typescript-index',
           outputBytes: fileSizeOrNull(incrementalTypeScript.scipPath) ?? undefined,
+          producedOutputBytes: fileSizeOrNull(incrementalTypeScript.affectedScipPath) ?? undefined,
         },
       ]
     : [];
@@ -1399,6 +1402,7 @@ function buildFreshReindexShardDiagnostics(
           ? hashFingerprint(info.fingerprint)
           : 'unknown',
       outputBytes: run.outputBytes ?? null,
+      producedOutputBytes: run.producedOutputBytes,
       durationMs: run.durationMs,
       command: run.command,
     });
