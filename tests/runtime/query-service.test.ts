@@ -82,6 +82,26 @@ describe('query service fast path', () => {
     });
   });
 
+  it('parses the complete machine-readable entrypoints form', () => {
+    expect(
+      parseFastPathInvocation([
+        'entrypoints',
+        '--scope=src/runtime',
+        '--json',
+        '--result-only',
+        '--compact',
+        'queryServiceSessionIdentity',
+      ]),
+    ).toEqual({
+      kind: 'entrypoints',
+      options: { search: 'queryServiceSessionIdentity', scope: 'src/runtime' },
+    });
+    expect(parseFastPathInvocation(['entrypoints', '--json', '--result-only', '--compact'])).toEqual({
+      kind: 'entrypoints',
+      options: {},
+    });
+  });
+
   it.each([
     ['search', 'needle', '--json', '--result-only'],
     ['search', 'needle', '--json', '--result-only', '--compact', '--full'],
@@ -95,6 +115,8 @@ describe('query service fast path', () => {
     ['code', 'symbol', '--json', '--result-only', '--compact', '--members', 'private'],
     ['code', 'symbol', '--json', '--result-only', '--compact', '--context', '-1'],
     ['code', '--json', '--result-only', '--compact'],
+    ['entrypoints', 'first', 'second', '--json', '--result-only', '--compact'],
+    ['entrypoints', '--json', '--result-only', '--compact', '--full'],
   ])('falls through for an ambiguous or unsupported invocation: %j', (...argv) => {
     expect(parseFastPathInvocation(argv)).toBeNull();
   });

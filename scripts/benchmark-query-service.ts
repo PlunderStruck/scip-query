@@ -131,6 +131,7 @@ function benchmarkArguments(): string[] {
     return ['search', operand, '--limit', '1', '--context', '0', '--json', '--result-only', '--compact'];
   }
   if (benchmarkCommand === 'outline') return ['outline', operand, '--json', '--result-only', '--compact'];
+  if (benchmarkCommand === 'entrypoints') return ['entrypoints', operand, '--json', '--result-only', '--compact'];
   return ['code', operand, '--json', '--result-only', '--compact', '--no-session'];
 }
 
@@ -177,8 +178,8 @@ function parseConcurrencyLevels(configured: string | undefined): number[] {
   return levels;
 }
 
-function parseBenchmarkCommand(configured: string | undefined): 'search' | 'outline' | 'code' {
+function parseBenchmarkCommand(configured: string | undefined): 'search' | 'outline' | 'code' | 'entrypoints' {
   if (configured === undefined || configured === 'search') return 'search';
-  if (configured === 'outline' || configured === 'code') return configured;
-  throw new Error('SCIP_QUERY_BENCH_COMMAND must be search, outline, or code.');
+  if (configured === 'outline' || configured === 'code' || configured === 'entrypoints') return configured;
+  throw new Error('SCIP_QUERY_BENCH_COMMAND must be search, outline, code, or entrypoints.');
 }

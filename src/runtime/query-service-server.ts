@@ -205,6 +205,10 @@ async function executeRequest(
 ): Promise<unknown> {
   if (request.kind === 'source-search') return searchSource(db, request.pattern, request.options);
   if (request.kind === 'outline') return outline(db, request.filePattern);
+  if (request.kind === 'entrypoints') {
+    const { entryPoints } = await import('../queries/graph/entry-map.js');
+    return entryPoints(db, request.options);
+  }
   const [{ codeBatch }, { codeBatchResultOnlyJsonForSelectors }] = await Promise.all([
     import('../queries/navigation/code.js'),
     import('../queries/navigation/code-result-json.js'),
@@ -297,6 +301,29 @@ function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServi
         options: {
           context: requiredNonNegativeInteger(optionsRecord['context'], 'context'),
           members,
+        },
+      },
+    };
+  }
+  if (requestRecord['kind'] === 'entrypoints') {
+    if (
+      !requestRecord['options'] ||
+      typeof requestRecord['options'] !== 'object' ||
+      Array.isArray(requestRecord['options'])
+    ) {
+      throw new Error('Invalid query service entrypoints request.');
+    }
+    const optionsRecord = requestRecord['options'] as Record<string, unknown>;
+    return {
+      ...envelope,
+      request: {
+        kind: 'entrypoints',
+        expectedGeneration: requestRecord['expectedGeneration'],
+        options: {
+          ...(optionsRecord['search'] === undefined
+            ? {}
+            : { search: requiredString(optionsRecord['search'], 'search') }),
+          ...(optionsRecord['scope'] === undefined ? {} : { scope: requiredString(optionsRecord['scope'], 'scope') }),
         },
       },
     };

@@ -6,6 +6,8 @@ import { resolveProjectRoot } from './cli-context.js';
 import { assertNavigationDetailAllowed } from './navigation-session.js';
 import {
   tryCodeWithQueryService,
+  tryEntryPointsWithQueryService,
+  type QueryServiceEntryPointsOptions,
   tryOutlineWithQueryService,
   trySearchSourceWithQueryService,
 } from './query-service.js';
@@ -31,7 +33,16 @@ interface CodeFastPathInvocation {
   session: boolean;
 }
 
-type FastPathInvocation = SourceSearchFastPathInvocation | OutlineFastPathInvocation | CodeFastPathInvocation;
+interface EntryPointsFastPathInvocation {
+  kind: 'entrypoints';
+  options: QueryServiceEntryPointsOptions;
+}
+
+type FastPathInvocation =
+  | SourceSearchFastPathInvocation
+  | OutlineFastPathInvocation
+  | CodeFastPathInvocation
+  | EntryPointsFastPathInvocation;
 
 /**
  * Serve eligible machine-oriented navigation forms before loading the full CLI
@@ -56,6 +67,12 @@ export function tryRunQueryServiceFastPath(argv: readonly string[]): boolean {
     writeSerializedJson(response.result.serializedJson);
     return true;
   }
+  if (invocation.kind === 'entrypoints') {
+    const response = tryEntryPointsWithQueryService(projectRoot, invocation.options, { allowDefault: true });
+    if (!response) return false;
+    writeSerializedJson(JSON.stringify(response.result));
+    return true;
+  }
   const response =
     invocation.kind === 'source-search'
       ? trySearchSourceWithQueryService(projectRoot, invocation.pattern, invocation.options, { allowDefault: true })
@@ -69,7 +86,55 @@ export function parseFastPathInvocation(argv: readonly string[]): FastPathInvoca
   if (argv[0] === 'search') return parseSourceSearchInvocation(argv);
   if (argv[0] === 'outline') return parseOutlineInvocation(argv);
   if (argv[0] === 'code') return parseCodeInvocation(argv);
+  if (argv[0] === 'entrypoints') return parseEntryPointsInvocation(argv);
   return null;
+}
+
+function parseEntryPointsInvocation(argv: readonly string[]): EntryPointsFastPathInvocation | null {
+  let search: string | undefined;
+  let scope: string | undefined;
+  let json = false;
+  let resultOnly = false;
+  let compact = false;
+
+  for (let index = 1; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--') {
+      const remaining = argv.slice(index + 1);
+      if (remaining.length !== 1 || search !== undefined) return null;
+      search = remaining[0];
+      break;
+    }
+    if (arg === '--json') {
+      json = true;
+      continue;
+    }
+    if (arg === '--result-only') {
+      resultOnly = true;
+      continue;
+    }
+    if (arg === '--compact') {
+      compact = true;
+      continue;
+    }
+    const scopeOption = optionValue(argv, index, arg, '--scope', '-s');
+    if (scopeOption) {
+      scope = scopeOption.value;
+      index = scopeOption.nextIndex;
+      continue;
+    }
+    if (arg.startsWith('-') || search !== undefined) return null;
+    search = arg;
+  }
+
+  if (!json || !resultOnly || !compact) return null;
+  return {
+    kind: 'entrypoints',
+    options: {
+      ...(search === undefined ? {} : { search }),
+      ...(scope === undefined ? {} : { scope }),
+    },
+  };
 }
 
 function parseCodeInvocation(argv: readonly string[]): CodeFastPathInvocation | null {

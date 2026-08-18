@@ -33,7 +33,7 @@ import { resolveCliProjectContext } from './cli-context.js';
 import { cliVersion } from './cli-support.js';
 import { inspectWatchService, trustedWatchServiceIndexGeneration } from './watch-service.js';
 
-export const QUERY_SERVICE_PROTOCOL_VERSION = 3;
+export const QUERY_SERVICE_PROTOCOL_VERSION = 4;
 
 const QUERY_SERVICE_POOL_SIZE = 6;
 const QUERY_SERVICE_MAX_POOL_SIZE = 8;
@@ -72,10 +72,34 @@ export interface QueryServiceCodeRequest {
   };
 }
 
+export interface QueryServiceEntryPointsRequest {
+  kind: 'entrypoints';
+  expectedGeneration: string;
+  options: QueryServiceEntryPointsOptions;
+}
+
+export interface QueryServiceEntryPointsOptions {
+  search?: string;
+  scope?: string;
+}
+
+export interface QueryServiceEntryPointResult {
+  symbol: string;
+  shortName: string;
+  file: string;
+  startLine: number;
+  endLine: number;
+  documentation: string | null;
+  confidence: 'root' | 'candidate';
+  evidence: string[];
+  indexedCallerCount: number;
+}
+
 export type QueryServiceRequest =
   | QueryServiceSourceSearchRequest
   | QueryServiceOutlineRequest
-  | QueryServiceCodeRequest;
+  | QueryServiceCodeRequest
+  | QueryServiceEntryPointsRequest;
 
 export interface QueryServiceEnvelope {
   mailboxVersion: typeof BOUNDED_MAILBOX_VERSION;
@@ -130,6 +154,12 @@ export interface QueryServiceCodeResult {
   observationReceipt: ObservationReceiptV2;
 }
 
+export interface QueryServiceEntryPointsResult {
+  result: QueryServiceEntryPointResult[];
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
 export function trySearchSourceWithQueryService(
   projectRoot: string,
   pattern: string,
@@ -155,6 +185,20 @@ export function tryOutlineWithQueryService(
     (expectedGeneration) => ({ kind: 'outline', expectedGeneration, filePattern }),
     isOutlineResult,
     'outline result',
+    policy,
+  );
+}
+
+export function tryEntryPointsWithQueryService(
+  projectRoot: string,
+  options: QueryServiceEntryPointsOptions = {},
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceEntryPointsResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'entrypoints', expectedGeneration, options }),
+    isEntryPointResult,
+    'entrypoints result',
     policy,
   );
 }
@@ -312,7 +356,7 @@ function requestQuery<Result>(
   const deadlineAtMs = startedAtMs + QUERY_SERVICE_TIMEOUT_MS;
   const monotonicDeadlineAtMs = monotonicNowMs() + QUERY_SERVICE_TIMEOUT_MS;
   const clientId = randomUUID();
-  const operationKey = boundedMailboxOperationKey('query-service-v3', { clientId, request });
+  const operationKey = boundedMailboxOperationKey('query-service-v4', { clientId, request });
   const id = boundedMailboxRequestId(operationKey);
   const sessionIdentity = queryServiceSessionIdentity(sessionDir);
   const admitted = enqueueBoundedMailboxRequest(
@@ -448,6 +492,29 @@ function isOutlineResult(value: unknown): value is OutlineNode[] {
     pending.push(...record['children']);
   }
   return true;
+}
+
+function isEntryPointResult(value: unknown): value is QueryServiceEntryPointResult[] {
+  if (!Array.isArray(value)) return false;
+  return value.every((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+    const record = entry as Record<string, unknown>;
+    return (
+      typeof record['symbol'] === 'string' &&
+      typeof record['shortName'] === 'string' &&
+      typeof record['file'] === 'string' &&
+      Number.isSafeInteger(record['startLine']) &&
+      (record['startLine'] as number) >= 0 &&
+      Number.isSafeInteger(record['endLine']) &&
+      (record['endLine'] as number) >= (record['startLine'] as number) &&
+      (record['documentation'] === null || typeof record['documentation'] === 'string') &&
+      (record['confidence'] === 'root' || record['confidence'] === 'candidate') &&
+      Array.isArray(record['evidence']) &&
+      record['evidence'].every((item) => typeof item === 'string') &&
+      Number.isSafeInteger(record['indexedCallerCount']) &&
+      (record['indexedCallerCount'] as number) >= 0
+    );
+  });
 }
 
 function isSourceSearchResult(value: unknown): value is SourceSearchResult {
