@@ -3,8 +3,9 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { getAst } from '../../source/ast/ast-core.js';
 import { parameterName } from '../../source/ast/ast-callables.js';
+import { detectAstLanguage } from '../../source/ast/ast-language.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
-import { getSourceFacts } from '../../source/facts/source-facts.js';
+import { callableSitesFromRoot, getCallableSites, type CallableSite } from '../../source/facts/ast-facts.js';
 import { getSourceText } from '../../source/primitives/source-text.js';
 import { resolveCallableExpression } from './object-members.js';
 import { runtimeBoundarySourceScope } from './source-scope.js';
@@ -36,7 +37,8 @@ const READ_METHODS = new Set(['findFirst', 'findMany', 'findUnique', 'from', 'ge
 const WRITE_METHODS = new Set(['create', 'delete', 'insert', 'remove', 'update', 'upsert']);
 const SQL_EXECUTE_METHODS = new Set(['execute', 'query', 'raw']);
 const CAPABILITY_DESCRIPTOR_IDENTITY = /(?:\b(?:name|id)|['"`](?:name|id)['"`])\s*:/u;
-const CAPABILITY_DESCRIPTOR_HANDLER = /\b(?:execute|handler|invoke|run)\s*(?:[:(])/u;
+const CAPABILITY_DESCRIPTOR_HANDLER =
+  /(?:^\s*|[,{]\s*)(?:async\s+)?['"`]?(?:execute|handler|invoke|run)['"`]?\s*(?::|\([^)]*\)\s*\{)/mu;
 const CAPABILITY_REFERENCE_WITH_SEPARATOR = /\b[A-Za-z_$][\w$-]*[_-][\w$-]*\s*\(/u;
 const CAPABILITY_INSTRUCTION_REFERENCE =
   /\b(?:use|call|invoke|run|via|with|read|stop)(?:\s+the)?(?:\s+(?:tool|capability|command))?\s+[A-Za-z_$][\w$-]*\s*\(/iu;
@@ -70,8 +72,7 @@ function nodeChildProcessExtractor(): BoundaryExtractor {
     extract: (context) => {
       const bindings = nodeChildProcessBindings(context.source);
       const observations: BoundaryObservation[] = [];
-      walk(context.root, (node) => {
-        if (node.type !== 'call_expression') return;
+      visitDescendantsOfType(context.root, 'call_expression', (node) => {
         const callee = callTarget(node);
         if (!callee) return;
         const directOperation = bindings.direct.get(callee);
@@ -164,8 +165,17 @@ export function boundaryFileContext(
   if (!root) return null;
   const source = knownSource ?? getSourceText(db, file);
   let definitions: ReturnType<typeof getDefinitionsForFile> | undefined;
-  let callables: NonNullable<ReturnType<typeof getSourceFacts>>['callables'] | undefined;
+  let callables: readonly CallableSite[] | null | undefined;
   let constants: ReadonlyMap<string, string> | undefined;
+  const callableSites = (): readonly CallableSite[] | null => {
+    if (callables !== undefined) return callables;
+    callables = profileBoundaryWork(profileSpan, 'runtime-boundaries.context.callable-sites', file, () => {
+      const language = detectAstLanguage(file);
+      const fromRoot = language ? callableSitesFromRoot(root, language) : null;
+      return fromRoot ?? getCallableSites(db, file);
+    });
+    return callables;
+  };
   return {
     db,
     file,
@@ -182,7 +192,14 @@ export function boundaryFileContext(
         profileSpan,
         'runtime-boundaries.context.definitions',
         file,
-        () => getDefinitionsForFile(db, file),
+        () =>
+          getDefinitionsForFile(
+            db,
+            file,
+            { rangeCorrectionEvidence: { source, callables: callableSites() } },
+            (phase, run) =>
+              profileBoundaryWork(profileSpan, `runtime-boundaries.context.definitions.${phase}`, file, run),
+          ),
       ));
       const definition = definitionsForFile
         .filter((candidate) => candidate.startLine <= line && candidate.endLine >= line)
@@ -199,12 +216,7 @@ export function boundaryFileContext(
           endLine: definition.endLine,
         };
       }
-      const callablesForFile = (callables ??= profileBoundaryWork(
-        profileSpan,
-        'runtime-boundaries.context.source-facts',
-        file,
-        () => getSourceFacts(db, file)?.callables ?? [],
-      ));
+      const callablesForFile = callableSites() ?? [];
       const callable = callablesForFile
         .filter((candidate) => candidate.startLine <= line && candidate.endLine >= line)
         .sort(
@@ -249,8 +261,7 @@ function effectHttpApiExtractor(): BoundaryExtractor {
       const groupBindings = effectHttpApiImportedBindings(context.source, 'HttpApiGroup');
       const builderBindings = effectHttpApiImportedBindings(context.source, 'HttpApiBuilder');
 
-      walk(context.root, (node) => {
-        if (node.type !== 'call_expression') return;
+      visitDescendantsOfType(context.root, 'call_expression', (node) => {
         const callee = callMember(node);
         if (!callee) return;
         const args = callArguments(node);
@@ -424,7 +435,7 @@ function httpExtractor(): BoundaryExtractor {
       /\b(?:FastAPI|Flask|APIRouter|axum|Router::new)\b/u.test(source),
     extract: (context) => {
       const observations: BoundaryObservation[] = [];
-      walk(context.root, (node) => {
+      visitDescendantsOfType(context.root, ['decorator', 'call_expression'], (node) => {
         if (node.type === 'decorator') {
           const match = /^@[^\s(]+\.(get|post|put|patch|delete|options|head)\s*\(\s*(['"`])([^'"`]+)\2/iu.exec(
             node.text.trim(),
@@ -555,7 +566,17 @@ function capabilityRegistryExtractor(): BoundaryExtractor {
     extract: (context) => {
       const observations: BoundaryObservation[] = [];
       const seen = new Set<string>();
-      walk(context.root, (node) => {
+      const nodeTypes: string[] = [];
+      if (CAPABILITY_DESCRIPTOR_IDENTITY.test(context.source) && CAPABILITY_DESCRIPTOR_HANDLER.test(context.source)) {
+        nodeTypes.push('pair');
+      }
+      if (
+        CAPABILITY_REFERENCE_WITH_SEPARATOR.test(context.source) ||
+        CAPABILITY_INSTRUCTION_REFERENCE.test(context.source)
+      ) {
+        nodeTypes.push('string', 'string_literal', 'template_string');
+      }
+      visitDescendantsOfType(context.root, nodeTypes, (node) => {
         if (node.type === 'pair') {
           const keyNode = node.childForFieldName('key') ?? node.namedChild(0);
           const valueNode = node.childForFieldName('value') ?? node.namedChild(1);
@@ -620,7 +641,7 @@ function registryExtractor(): BoundaryExtractor {
     supports: (source) => /(?:Handlers?|Registry|Routes?)\b/iu.test(source),
     extract: (context) => {
       const observations: BoundaryObservation[] = [];
-      walk(context.root, (node) => {
+      visitDescendantsOfType(context.root, ['pair', 'call_expression'], (node) => {
         if (node.type === 'pair') {
           const container = registryContainerName(node);
           if (!container) return;
@@ -680,8 +701,7 @@ function persistenceExtractor(): BoundaryExtractor {
     extract: (context) => {
       const observations: BoundaryObservation[] = [];
       const transactionReceivers = persistenceTransactionReceivers(context.root);
-      walk(context.root, (node) => {
-        if (node.type !== 'call_expression') return;
+      visitDescendantsOfType(context.root, 'call_expression', (node) => {
         const callee = callTarget(node);
         if (!callee) return;
         const parts = callee.split('.');
@@ -742,8 +762,7 @@ function queueExtractor(): BoundaryExtractor {
       /\.(?:sendToQueue|consume|send|subscribe)\s*\(/u.test(source),
     extract: (context) => {
       const observations: BoundaryObservation[] = [];
-      walk(context.root, (node) => {
-        if (node.type !== 'call_expression') return;
+      visitDescendantsOfType(context.root, 'call_expression', (node) => {
         const callee = callTarget(node);
         if (!callee) return;
         const leaf = callee.split('.').at(-1) ?? '';
@@ -1051,8 +1070,7 @@ function persistenceAction(leaf: string, sql: string): 'database.read' | 'databa
 
 function persistenceTransactionReceivers(root: SyntaxNode): Set<string> {
   const receivers = new Set<string>();
-  walk(root, (node) => {
-    if (node.type !== 'call_expression') return;
+  visitDescendantsOfType(root, 'call_expression', (node) => {
     const target = callTarget(node);
     if (!target) return;
     const parts = target.split('.');
@@ -1107,4 +1125,8 @@ function sqlResource(sql: string): string | null {
 function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {
   visit(node);
   for (const child of node.namedChildren) walk(child, visit);
+}
+
+function visitDescendantsOfType(root: SyntaxNode, type: string | string[], visit: (node: SyntaxNode) => void): void {
+  for (const node of root.descendantsOfType(type)) visit(node);
 }

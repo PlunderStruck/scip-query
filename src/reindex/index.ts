@@ -22,7 +22,7 @@ import {
 import { CURRENT_SQLITE_QUERY_LAYOUT_VERSION } from '../domain/sqlite-query-layout.js';
 import { monotonicNowMs } from '../domain/time.js';
 import type { ProjectInputChangeJournal } from '../domain/project-input-change-journal.js';
-import { profileAsyncSpan, profileSpan } from '../instrumentation/profile.js';
+import { profileAsyncSpan, profileEnabled, profileSpan, writeProfileEvent } from '../instrumentation/profile.js';
 import { hardenOwnedCacheTreeIfOwned } from '../platform/cache-layout.js';
 import { resolveScipBinary, tryInstallScipCli } from '../platform/scip-cli.js';
 import {
@@ -1073,6 +1073,20 @@ async function runLanguageIndexersForFreshReindex(
     opts.opts.indexerConcurrency,
     opts.opts.signal,
   );
+  if (profileEnabled()) {
+    for (const result of runResults) {
+      writeProfileEvent({
+        type: 'span',
+        name: `reindex.language-indexer.${result.id}`,
+        durationMs: Math.round(result.durationMs),
+        ok: !result.skipped,
+        language: result.language,
+        indexerCommand: result.command,
+        outputBytes: result.outputBytes,
+        measurement: 'indexer-run-result',
+      });
+    }
+  }
 
   // Cache freshly produced project shards BEFORE collectIndexerOutputs runs
   // — a single-run group gets renameSync'd into its outputScipPath, which
@@ -1449,61 +1463,71 @@ async function publishFreshReindexArtifacts(
   const completeScipAvailable = !incrementalTypeScript || incrementalTypeScript.completeScipUpdated;
   let completeScipSanitized = false;
   if (completeScipAvailable) {
-    const publishOutputs = materializeDeferredTypeScriptLanguageOutput({
-      run: opts,
-      indexedOutputs,
-      incrementalTypeScript,
-    });
-    cacheLanguageShards(opts.paths.outputDb, publishOutputs, opts.writeTelemetry);
-    completeScipSanitized = materializeScipOutput(publishOutputs, opts.tempPaths.tempOutputScip, opts.onStatus);
-  }
-  const sqliteMaterialization = await materializeSqliteOutput({
-    run: opts,
-    env,
-    indexedOutputs,
-    skippedLanguages,
-    reusedLanguages,
-    incrementalTypeScript,
-    completeScipAvailable,
-    completeScipSanitized,
-    materializeFullFallback: async () => {
-      throwIfSignalAborted(opts.opts.signal, 'Reindex cancelled by its owner.');
-      if (!incrementalTypeScript || incrementalTypeScript.completeScipUpdated) {
-        return completeScipSanitized;
-      }
-      opts.onStatus('Materializing the deferred whole TypeScript SCIP companion for full conversion...');
-      materializeDeferredTypeScriptIndex({
-        cacheDir: dirname(opts.paths.outputDb),
-        generationIdentity: incrementalTypeScript.nextFragmentGeneration,
-        baseShardPath: incrementalTypeScript.scipPath,
-        candidateShardPath: incrementalTypeScript.candidateScipPath,
+    completeScipSanitized = profileSpan('reindex.publish.scip-output', () => {
+      const publishOutputs = materializeDeferredTypeScriptLanguageOutput({
+        run: opts,
+        indexedOutputs,
+        incrementalTypeScript,
       });
-      const completeOutputs = indexedOutputs.map((output) =>
-        output.language === 'typescript'
-          ? { language: output.language, scipPath: incrementalTypeScript.candidateScipPath }
-          : output,
-      );
-      cacheLanguageShards(opts.paths.outputDb, completeOutputs, opts.writeTelemetry);
-      completeScipSanitized = materializeScipOutput(completeOutputs, opts.tempPaths.tempOutputScip, opts.onStatus);
-      return completeScipSanitized;
-    },
-  });
+      cacheLanguageShards(opts.paths.outputDb, publishOutputs, opts.writeTelemetry);
+      return materializeScipOutput(publishOutputs, opts.tempPaths.tempOutputScip, opts.onStatus);
+    });
+  }
+  const sqliteMaterialization = await profileAsyncSpan('reindex.publish.sqlite-output', () =>
+    materializeSqliteOutput({
+      run: opts,
+      env,
+      indexedOutputs,
+      skippedLanguages,
+      reusedLanguages,
+      incrementalTypeScript,
+      completeScipAvailable,
+      completeScipSanitized,
+      materializeFullFallback: async () => {
+        throwIfSignalAborted(opts.opts.signal, 'Reindex cancelled by its owner.');
+        if (!incrementalTypeScript || incrementalTypeScript.completeScipUpdated) {
+          return completeScipSanitized;
+        }
+        opts.onStatus('Materializing the deferred whole TypeScript SCIP companion for full conversion...');
+        materializeDeferredTypeScriptIndex({
+          cacheDir: dirname(opts.paths.outputDb),
+          generationIdentity: incrementalTypeScript.nextFragmentGeneration,
+          baseShardPath: incrementalTypeScript.scipPath,
+          candidateShardPath: incrementalTypeScript.candidateScipPath,
+        });
+        const completeOutputs = indexedOutputs.map((output) =>
+          output.language === 'typescript'
+            ? { language: output.language, scipPath: incrementalTypeScript.candidateScipPath }
+            : output,
+        );
+        cacheLanguageShards(opts.paths.outputDb, completeOutputs, opts.writeTelemetry);
+        completeScipSanitized = materializeScipOutput(completeOutputs, opts.tempPaths.tempOutputScip, opts.onStatus);
+        return completeScipSanitized;
+      },
+    }),
+  );
 
   throwIfSignalAborted(opts.opts.signal, 'Reindex cancelled by its owner.');
-  runPostIndexAugmentation(auxiliaryDocumentsAugmentationStage(), {
-    projectRoot: opts.projectRoot,
-    dbPath: opts.tempPaths.tempOutputDb,
-    onStatus: opts.onStatus,
+  profileSpan('reindex.publish.auxiliary-documents', () => {
+    runPostIndexAugmentation(auxiliaryDocumentsAugmentationStage(), {
+      projectRoot: opts.projectRoot,
+      dbPath: opts.tempPaths.tempOutputDb,
+      onStatus: opts.onStatus,
+    });
   });
-  runRuntimeBoundaryAugmentation(
-    opts.projectRoot,
-    opts.tempPaths.tempOutputDb,
-    opts.tempPaths.tempOutputScip,
-    opts.onStatus,
-    false,
-    incrementalTypeScript?.affectedFiles,
+  profileSpan('reindex.publish.runtime-boundaries', () =>
+    runRuntimeBoundaryAugmentation(
+      opts.projectRoot,
+      opts.tempPaths.tempOutputDb,
+      opts.tempPaths.tempOutputScip,
+      opts.onStatus,
+      false,
+      incrementalTypeScript?.affectedFiles,
+    ),
   );
-  const indexMaintenance = optimizeSqliteQueryLayout(opts.tempPaths.tempOutputDb);
+  const indexMaintenance = profileSpan('reindex.publish.sqlite-layout', () =>
+    optimizeSqliteQueryLayout(opts.tempPaths.tempOutputDb),
+  );
   if (indexMaintenance.added.length > 0) {
     opts.onStatus(`Added SQLite query indexes: ${indexMaintenance.added.join(', ')}`);
   }

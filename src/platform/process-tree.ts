@@ -19,6 +19,11 @@ export interface ProcessTreeTerminationResult {
   detail?: string;
 }
 
+export interface ProcessTreeMemorySample {
+  rssBytes: number;
+  processCount: number;
+}
+
 // scip-query: ignore-stale -- Capability port isolates platform-specific process-tree effects for testing.
 export interface ProcessTreeRuntime {
   platform: NodeJS.Platform;
@@ -54,6 +59,50 @@ export function createOwnedProcessTree(
   const knownMembers = new Map<number, ProcessIdentity>();
   if (rootIdentity) knownMembers.set(rootPid, rootIdentity);
   return { rootPid, rootIdentity, ownsProcessGroup, knownMembers };
+}
+
+/**
+ * Samples the resident memory held by a POSIX process and all descendants that
+ * exist in the same process-table snapshot. Returns null when the platform or
+ * process table cannot provide complete tree coverage.
+ */
+export function sampleProcessTreeMemory(rootPid: number = process.pid): ProcessTreeMemorySample | null {
+  if (hostPlatform() === 'win32') return null;
+  try {
+    const output = readPosixProcessTable(true);
+    return parsePosixProcessTreeMemory(output, rootPid);
+  } catch {
+    return null;
+  }
+}
+
+export function parsePosixProcessTreeMemory(output: string, rootPid: number): ProcessTreeMemorySample | null {
+  const childrenByParent = new Map<number, number[]>();
+  const rssByPid = new Map<number, number>();
+  for (const line of output.split(/\r?\n/)) {
+    const match = /^\s*(\d+)\s+(\d+)\s+(\d+)\s*$/.exec(line);
+    if (!match) continue;
+    const pid = Number(match[1]);
+    const parentPid = Number(match[2]);
+    const rssKiB = Number(match[3]);
+    rssByPid.set(pid, rssKiB);
+    const children = childrenByParent.get(parentPid) ?? [];
+    children.push(pid);
+    childrenByParent.set(parentPid, children);
+  }
+  if (!rssByPid.has(rootPid)) return null;
+
+  let rssKiB = 0;
+  const pending = [rootPid];
+  const seen = new Set<number>();
+  while (pending.length > 0) {
+    const pid = pending.pop()!;
+    if (seen.has(pid)) continue;
+    seen.add(pid);
+    rssKiB += rssByPid.get(pid) ?? 0;
+    pending.push(...(childrenByParent.get(pid) ?? []));
+  }
+  return { rssBytes: rssKiB * 1024, processCount: seen.size };
 }
 
 export async function terminateOwnedProcessTree(
@@ -197,13 +246,7 @@ function treeIsAlive(tree: OwnedProcessTree, runtime: ProcessTreeRuntime): boole
 }
 
 function listPosixDescendantPids(rootPid: number): readonly number[] {
-  const output = execFileSync('ps', ['-axo', 'pid=,ppid='], {
-    encoding: 'utf8',
-    timeout: PROCESS_LIST_TIMEOUT_MS,
-    maxBuffer: PROCESS_LIST_MAX_BYTES,
-    env: { ...process.env, LC_ALL: 'C', LANG: 'C' },
-    stdio: ['ignore', 'pipe', 'ignore'],
-  });
+  const output = readPosixProcessTable(false);
   const childrenByParent = new Map<number, number[]>();
   for (const line of output.split(/\r?\n/)) {
     const match = /^\s*(\d+)\s+(\d+)\s*$/.exec(line);
@@ -226,6 +269,16 @@ function listPosixDescendantPids(rootPid: number): readonly number[] {
     pending.push(...(childrenByParent.get(pid) ?? []));
   }
   return descendants;
+}
+
+function readPosixProcessTable(includeRss: boolean): string {
+  return execFileSync('ps', ['-axo', includeRss ? 'pid=,ppid=,rss=' : 'pid=,ppid='], {
+    encoding: 'utf8',
+    timeout: PROCESS_LIST_TIMEOUT_MS,
+    maxBuffer: PROCESS_LIST_MAX_BYTES,
+    env: { ...process.env, LC_ALL: 'C', LANG: 'C' },
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
 }
 
 function isMissingProcessError(error: unknown): boolean {

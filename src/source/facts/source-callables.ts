@@ -2,15 +2,33 @@ import type { AstLanguage } from '../ast/ast-language.js';
 import type { SyntaxNode } from '../ast/ast-types.js';
 import { isCommentNode } from './source-node-kinds.js';
 
-const JAVASCRIPT_NAMED_CALLABLE_TYPES = new Set([
+const JAVASCRIPT_NAMED_CALLABLE_TYPES = [
   'function_declaration',
   'generator_function_declaration',
   'method_definition',
   'method_signature',
   'function_signature',
-]);
+] as const;
+const JAVASCRIPT_NAMED_CALLABLE_TYPE_SET = new Set<string>(JAVASCRIPT_NAMED_CALLABLE_TYPES);
+const JAVASCRIPT_CALLABLE_FACT_NODE_TYPES = [
+  ...JAVASCRIPT_NAMED_CALLABLE_TYPES,
+  'variable_declarator',
+  'public_field_definition',
+] as const;
+const RUST_CALLABLE_FACT_NODE_TYPES = ['function_item', 'function_signature_item'] as const;
+const PYTHON_CALLABLE_FACT_NODE_TYPES = ['function_definition'] as const;
+const NO_CALLABLE_FACT_NODE_TYPES: readonly string[] = [];
 
 const JAVASCRIPT_FUNCTION_VALUE_TYPES = new Set(['arrow_function', 'function_expression', 'generator_function']);
+
+export function callableFactNodeTypes(language: AstLanguage): readonly string[] {
+  if (language === 'rust') return RUST_CALLABLE_FACT_NODE_TYPES;
+  if (language === 'python') return PYTHON_CALLABLE_FACT_NODE_TYPES;
+  if (language === 'typescript' || language === 'tsx' || language === 'javascript') {
+    return JAVASCRIPT_CALLABLE_FACT_NODE_TYPES;
+  }
+  return NO_CALLABLE_FACT_NODE_TYPES;
+}
 
 export interface CallableParamFact {
   name: string;
@@ -91,7 +109,7 @@ function isNamedCallableType(nodeType: string, language: AstLanguage): boolean {
   if (language === 'rust') return nodeType === 'function_item' || nodeType === 'function_signature_item';
   if (language === 'python') return nodeType === 'function_definition';
   if (language === 'typescript' || language === 'tsx' || language === 'javascript') {
-    return JAVASCRIPT_NAMED_CALLABLE_TYPES.has(nodeType);
+    return JAVASCRIPT_NAMED_CALLABLE_TYPE_SET.has(nodeType);
   }
   return false;
 }

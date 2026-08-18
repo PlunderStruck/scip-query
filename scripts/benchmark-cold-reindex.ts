@@ -9,6 +9,7 @@ import type { ReindexResult } from '../src/reindex/index.js';
 import { detectLanguages } from '../src/reindex/detect.js';
 import { reindex } from '../src/reindex/index.js';
 import { loadProjectConfig } from '../src/runtime/config.js';
+import { sampleProcessTreeMemory } from '../src/platform/process-tree.js';
 
 interface BenchmarkOptions {
   projectRoot: string;
@@ -16,6 +17,8 @@ interface BenchmarkOptions {
   maxHeapMb: number;
   profile: boolean;
   keepArtifacts: boolean;
+  processTreeMemory: boolean;
+  indexerConcurrency?: number;
   jsonlPath?: string;
 }
 
@@ -30,6 +33,9 @@ interface ReindexMeasurement {
   wallMs: number;
   reportedMs: number;
   coordinatorPeakRssMb: number;
+  processTreePeakRssMb?: number;
+  processTreeProcessCountAtPeak?: number;
+  processTreeMemorySamples?: number;
   reused: boolean;
   languages: readonly string[];
   skipped: ReindexResult['skipped'];
@@ -107,8 +113,10 @@ const result = {
   coldState:
     'fresh isolated output directory: no accepted SQLite generation, language shards, reindex metadata, or shared-generation attachment; operating-system and package caches are not cleared',
   warmState: 'immediate unchanged reindex against the isolated cold result',
-  memoryScope:
-    'coordinatorPeakRssMb samples this Node.js process only; language indexer and SCIP converter child-process memory is excluded',
+  memoryScope: options.processTreeMemory
+    ? 'coordinatorPeakRssMb samples this Node.js process; processTreePeakRssMb samples it plus all live descendants from a POSIX process-table snapshot every 100ms'
+    : 'coordinatorPeakRssMb samples this Node.js process only; pass --process-tree-memory to include language indexer and SCIP converter children on POSIX',
+  indexerConcurrency: options.indexerConcurrency ?? config.indexerConcurrency ?? 1,
   profileEnabled: options.profile,
   coldWarmArtifactIdentityPreserved: true,
   cold,
@@ -148,9 +156,27 @@ async function measureReindex(input: {
   }
 
   let peakRss = process.memoryUsage().rss;
-  const memorySampler = setInterval(() => {
+  let processTreePeakRss = 0;
+  let processTreeProcessCountAtPeak = 0;
+  let processTreeMemorySamples = 0;
+  const sampleMemory = (): void => {
     peakRss = Math.max(peakRss, process.memoryUsage().rss);
-  }, 10);
+    if (!options.processTreeMemory) return;
+    const sample = sampleProcessTreeMemory();
+    if (!sample) return;
+    processTreeMemorySamples += 1;
+    if (sample.rssBytes > processTreePeakRss) {
+      processTreePeakRss = sample.rssBytes;
+      processTreeProcessCountAtPeak = sample.processCount;
+    }
+  };
+  sampleMemory();
+  const memorySampler = setInterval(
+    () => {
+      sampleMemory();
+    },
+    options.processTreeMemory ? 100 : 10,
+  );
   memorySampler.unref();
   const started = performance.now();
 
@@ -166,7 +192,7 @@ async function measureReindex(input: {
       typescriptProjectMode: typeScript?.projectMode,
       typescriptProjects: typeScript?.projects,
       clojureConfigPath: input.config.indexer?.clojure?.configPath,
-      indexerConcurrency: input.config.indexerConcurrency,
+      indexerConcurrency: options.indexerConcurrency ?? input.config.indexerConcurrency,
       skipAutoInstall: true,
       skipIfUnchanged: input.skipIfUnchanged,
       onStatus: (message) => status.push(message),
@@ -174,7 +200,7 @@ async function measureReindex(input: {
     });
     const wallMs = performance.now() - started;
     clearInterval(memorySampler);
-    peakRss = Math.max(peakRss, process.memoryUsage().rss);
+    sampleMemory();
     const [index, database] = await Promise.all([hashArtifact(input.outputScip), hashArtifact(input.outputDb)]);
     return {
       state: input.state,
@@ -182,6 +208,13 @@ async function measureReindex(input: {
       wallMs: rounded(wallMs),
       reportedMs: rounded(result.durationMs),
       coordinatorPeakRssMb: rounded(peakRss / (1024 * 1024)),
+      ...(processTreeMemorySamples > 0
+        ? {
+            processTreePeakRssMb: rounded(processTreePeakRss / (1024 * 1024)),
+            processTreeProcessCountAtPeak,
+            processTreeMemorySamples,
+          }
+        : {}),
       reused: result.reused,
       languages: result.languages,
       skipped: result.skipped,
@@ -210,13 +243,18 @@ function summarize(values: readonly ReindexMeasurement[]): {
   wallMs: ReturnType<typeof summarizeNumbers>;
   reportedMs: ReturnType<typeof summarizeNumbers>;
   coordinatorPeakRssMb: ReturnType<typeof summarizeNumbers>;
+  processTreePeakRssMb?: ReturnType<typeof summarizeNumbers>;
   indexByteIdentityStable: boolean;
   databaseByteIdentityStable: boolean;
 } {
+  const processTreeValues = values.flatMap((value) =>
+    value.processTreePeakRssMb === undefined ? [] : [value.processTreePeakRssMb],
+  );
   return {
     wallMs: summarizeNumbers(values.map((value) => value.wallMs)),
     reportedMs: summarizeNumbers(values.map((value) => value.reportedMs)),
     coordinatorPeakRssMb: summarizeNumbers(values.map((value) => value.coordinatorPeakRssMb)),
+    ...(processTreeValues.length > 0 ? { processTreePeakRssMb: summarizeNumbers(processTreeValues) } : {}),
     indexByteIdentityStable: new Set(values.map((value) => value.index.sha256)).size <= 1,
     databaseByteIdentityStable: new Set(values.map((value) => value.database.sha256)).size <= 1,
   };
@@ -255,17 +293,22 @@ function parseOptions(args: readonly string[]): BenchmarkOptions {
   let maxHeapMb = 4096;
   let profile = false;
   let keepArtifacts = false;
+  let processTreeMemory = false;
+  let indexerConcurrency: number | undefined;
   let jsonlPath: string | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index]!;
     if (argument === '--profile') profile = true;
     else if (argument === '--keep-artifacts') keepArtifacts = true;
+    else if (argument === '--process-tree-memory') processTreeMemory = true;
     else if (argument === '--project') projectRoot = requiredValue(args, ++index, argument);
     else if (argument === '--iterations')
       iterations = positiveInteger(requiredValue(args, ++index, argument), argument);
     else if (argument === '--max-heap-mb')
       maxHeapMb = positiveInteger(requiredValue(args, ++index, argument), argument);
+    else if (argument === '--indexer-concurrency')
+      indexerConcurrency = positiveInteger(requiredValue(args, ++index, argument), argument);
     else if (argument === '--jsonl') jsonlPath = resolve(requiredValue(args, ++index, argument));
     else throw new Error(`Unknown benchmark argument: ${argument}`);
   }
@@ -273,7 +316,16 @@ function parseOptions(args: readonly string[]): BenchmarkOptions {
   if (profile && !keepArtifacts) {
     throw new Error('--profile requires --keep-artifacts so the reported JSONL paths remain readable.');
   }
-  return { projectRoot: resolve(projectRoot), iterations, maxHeapMb, profile, keepArtifacts, jsonlPath };
+  return {
+    projectRoot: resolve(projectRoot),
+    iterations,
+    maxHeapMb,
+    profile,
+    keepArtifacts,
+    processTreeMemory,
+    indexerConcurrency,
+    jsonlPath,
+  };
 }
 
 function requiredValue(args: readonly string[], index: number, flag: string): string {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createOwnedProcessTree,
+  parsePosixProcessTreeMemory,
   terminateOwnedProcessTree,
   type ProcessTreeRuntime,
 } from '../../src/platform/process-tree.js';
@@ -127,5 +128,26 @@ describe('owned process-tree termination', () => {
       reason: 'terminated',
     });
     expect(terminated).toEqual([41]);
+  });
+});
+
+describe('process-tree memory sampling', () => {
+  it('sums the root and transitive descendants without including siblings', () => {
+    const sample = parsePosixProcessTreeMemory(
+      ['41 1 100', '42 41 200', '43 42 300', '44 1 400', '45 41 500'].join('\n'),
+      41,
+    );
+
+    expect(sample).toEqual({ rssBytes: 1_100 * 1024, processCount: 4 });
+  });
+
+  it('returns null when the root is absent from the snapshot', () => {
+    expect(parsePosixProcessTreeMemory('42 41 200\n', 41)).toBeNull();
+  });
+
+  it('does not count a repeated process-table edge twice', () => {
+    const sample = parsePosixProcessTreeMemory(['41 1 100', '42 41 200', '42 41 200'].join('\n'), 41);
+
+    expect(sample).toEqual({ rssBytes: 300 * 1024, processCount: 2 });
   });
 });

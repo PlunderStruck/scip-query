@@ -24,7 +24,7 @@ export function sanitizeScipFile(path: string): SanitizeScipResult {
   }
   const result = sanitizeScipIndex(index);
   if (result.removedDefinitionOccurrences > 0) {
-    writeFileSync(path, Buffer.from(serializeSCIP(result.index)));
+    writeFileSync(path, serializeSCIP(result.index));
   }
   return {
     removedDefinitionOccurrences: result.removedDefinitionOccurrences,

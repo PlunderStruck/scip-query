@@ -16,7 +16,13 @@ export {
   walkNamedSyntax,
 } from './ast/ast-callables.js';
 export { getAst, parseAstSourceText } from './ast/ast-core.js';
-export { extractCallLeaf, getCallableSites, getCallSites, getTypeContainerMap } from './facts/ast-facts.js';
+export {
+  callableSitesFromRoot,
+  extractCallLeaf,
+  getCallableSites,
+  getCallSites,
+  getTypeContainerMap,
+} from './facts/ast-facts.js';
 export {
   getCrossLanguageDispatchNames,
   getRustAttrReferencedNames,
@@ -32,7 +38,7 @@ export { frontendBehaviorProduct } from './frontend-behavior-products.js';
 export { frameworkSourceReferences } from './facts/source-references.js';
 export { compileQuery } from './ast/ast-runtime.js';
 export type { AstLanguage } from './ast/ast-language.js';
-export type { CallSite } from './facts/ast-facts.js';
+export type { CallableSite, CallSite } from './facts/ast-facts.js';
 export type { FrameworkSourceReference, FrameworkSourceReferenceKind } from './facts/source-references.js';
 export type { SourceFacts } from './facts/source-facts.js';
 export type {

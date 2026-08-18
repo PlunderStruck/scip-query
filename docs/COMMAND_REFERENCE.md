@@ -32,8 +32,8 @@ The operator chooses the material question and deliberately selects a control. T
 
 | Material question | Family | Direction | Establishes | Reported strengths | Provider ceilings | Does not establish |
 |---|---|---|---|---|---|---|
-| Who can call or reach this? | `execution` | `incoming` | Static may-call reachability between resolved program constructs. | `exact`, `derived`, `mixed` | `partial` | A may-call edge does not prove that a runtime invocation occurred. |
-| What can this call or reach? | `execution` | `outgoing` | Static may-call reachability between resolved program constructs. | `exact`, `derived`, `mixed` | `partial` | A may-call edge does not prove that a runtime invocation occurred. |
+| Who can call or reach this? | `execution` | `incoming` | Static may-call reachability between resolved program constructs. | `exact`, `derived`, `candidate`, `mixed` | `partial` | A may-call edge does not prove that a runtime invocation occurred. |
+| What can this call or reach? | `execution` | `outgoing` | Static may-call reachability between resolved program constructs. | `exact`, `derived`, `candidate`, `mixed` | `partial` | A may-call edge does not prove that a runtime invocation occurred. |
 | Where can this value come from? | `dataflow` | `incoming` | A value, definition, argument, parameter, return, or statically resolved value may flow to another construct. | `exact`, `derived`, `mixed`, `candidate` | `partial`, `candidate` | Current partial providers do not establish general interprocedural definition-use coverage. |
 | Where can this value go? | `dataflow` | `outgoing` | A value, definition, argument, parameter, return, or statically resolved value may flow to another construct. | `exact`, `derived`, `mixed`, `candidate` | `partial`, `candidate` | Current partial providers do not establish general interprocedural definition-use coverage. |
 | Which producer and consumer rendezvous? | `runtime` | `both` | A source-grounded handoff between producer and consumer participants through a runtime mechanism. | `exact`, `derived`, `candidate`, `mixed` | `partial` | An unresolved or candidate join does not prove a runtime handoff. |

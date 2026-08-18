@@ -26,7 +26,7 @@
  * symbol evidence modules and many query commands.
  */
 import type { ScipDatabase } from '../storage/db.js';
-import { getCallableSites } from '../source/ast.js';
+import { getCallableSites, type CallableSite } from '../source/ast.js';
 import { sourceEvidence } from '../language-parsers/source-evidence.js';
 import {
   isFunctionLikeSymbol,
@@ -116,6 +116,20 @@ export interface GetDefinitionsForFileOptions {
    * docs/plans/2026-07-02-catalog-class-members.md (K1).
    */
   includeClassMemberFallbacks?: boolean;
+  /**
+   * Optional source evidence already obtained by the caller from this exact
+   * database/file snapshot. It changes only how ranges are computed, not their
+   * policy, and avoids rebuilding the full source-facts bundle when an AST
+   * consumer already has the narrower callable-site projection.
+   */
+  rangeCorrectionEvidence?: {
+    source: string | null;
+    callables: readonly CallableSite[] | null;
+  };
+}
+
+export interface DefinitionCatalogProfileSpan {
+  <T>(phase: string, run: () => T): T;
 }
 
 // scip-query: ignore-extract — this is the definition-catalog read path:
@@ -125,23 +139,26 @@ export function getDefinitionsForFile(
   db: ScipDatabase,
   relativePath: string,
   opts: GetDefinitionsForFileOptions = {},
+  profileSpan?: DefinitionCatalogProfileSpan,
 ): IndexedDefinition[] {
   if (opts.includeClassMemberFallbacks) {
-    return computeDefinitionsForFile(db, relativePath, undefined, { includeClassMemberFallbacks: true });
+    return computeDefinitionsForFile(db, relativePath, undefined, { includeClassMemberFallbacks: true }, profileSpan);
   }
   return FILE_DEFINITION_CACHE.get(db, relativePath, () => {
-    const cached = readDefinitionEvidence(db, relativePath);
+    const cached = profileDefinitionWork(profileSpan, 'evidence-read', () => readDefinitionEvidence(db, relativePath));
     if (cached) return cached;
 
-    const definitions = computeDefinitionsForFile(db, relativePath);
-    const projectFingerprint = projectEvidenceFingerprint(db);
-    const source = sourceEvidence(db).forFile(relativePath, { text: true }).text;
-    if (projectFingerprint && source) {
-      FILE_DEFINITIONS_PRODUCT.write(db, relativePath, fileContentHash(db, relativePath, source), {
-        projectFingerprint,
-        definitions: definitions.map((definition) => ({ ...definition })),
-      });
-    }
+    const definitions = computeDefinitionsForFile(db, relativePath, undefined, opts, profileSpan);
+    profileDefinitionWork(profileSpan, 'evidence-write', () => {
+      const projectFingerprint = projectEvidenceFingerprint(db);
+      const source = sourceEvidence(db).forFile(relativePath, { text: true }).text;
+      if (projectFingerprint && source) {
+        FILE_DEFINITIONS_PRODUCT.write(db, relativePath, fileContentHash(db, relativePath, source), {
+          projectFingerprint,
+          definitions: definitions.map((definition) => ({ ...definition })),
+        });
+      }
+    });
     return definitions;
   });
 }
@@ -255,14 +272,32 @@ function computeDefinitionsForFile(
   relativePath: string,
   filter?: (definition: IndexedDefinition) => boolean,
   mergeOpts: GetDefinitionsForFileOptions = {},
+  profileSpan?: DefinitionCatalogProfileSpan,
 ): IndexedDefinition[] {
-  let definitions = mergeMixedSymbolQueryRows(
+  const primaryRows = profileDefinitionWork(profileSpan, 'primary-rows', () =>
     loadPrimaryDefinitionRows(db, relativePath),
+  );
+  const fallbackRows = profileDefinitionWork(profileSpan, 'fallback-rows', () =>
     loadFallbackDefinitionRows(db, relativePath),
-    { sort: true, includeClassMemberFallbacks: mergeOpts.includeClassMemberFallbacks },
-  ).map(indexedDefinitionFromRow);
+  );
+  let definitions = profileDefinitionWork(profileSpan, 'merge-rows', () =>
+    mergeMixedSymbolQueryRows(primaryRows, fallbackRows, {
+      sort: true,
+      includeClassMemberFallbacks: mergeOpts.includeClassMemberFallbacks,
+    }).map(indexedDefinitionFromRow),
+  );
   if (filter) definitions = definitions.filter(filter);
-  return correctDefinitionRangesFromSource(db, relativePath, definitions);
+  return profileDefinitionWork(profileSpan, 'range-correction', () =>
+    correctDefinitionRangesFromSource(db, relativePath, definitions, profileSpan, mergeOpts.rangeCorrectionEvidence),
+  );
+}
+
+function profileDefinitionWork<T>(
+  profileSpan: DefinitionCatalogProfileSpan | undefined,
+  phase: string,
+  run: () => T,
+): T {
+  return profileSpan ? profileSpan(phase, run) : run();
 }
 
 function loadPrimaryDefinitionRows(db: ScipDatabase, relativePath: string): SymbolQueryRow[] {
@@ -615,15 +650,25 @@ export function correctDefinitionRangesFromSource(
   db: ScipDatabase,
   relativePath: string,
   definitions: IndexedDefinition[],
+  profileSpan?: DefinitionCatalogProfileSpan,
+  rangeCorrectionEvidence?: GetDefinitionsForFileOptions['rangeCorrectionEvidence'],
 ): IndexedDefinition[] {
-  const source = sourceEvidence(db).forFile(relativePath, { text: true }).text;
+  const source = profileDefinitionWork(profileSpan, 'range-correction.source-text', () =>
+    rangeCorrectionEvidence
+      ? rangeCorrectionEvidence.source
+      : sourceEvidence(db).forFile(relativePath, { text: true }).text,
+  );
 
   // Tree-sitter path: gives both startLine and endLine in one shot from the
   // parsed AST, so no brace-counting or regex sweeps are needed. This is the
   // primary path for Rust / TS / JS / Python.
-  const callables = getCallableSites(db, relativePath);
+  const callables = profileDefinitionWork(profileSpan, 'range-correction.callable-sites', () =>
+    rangeCorrectionEvidence ? rangeCorrectionEvidence.callables : getCallableSites(db, relativePath),
+  );
   if (callables) {
-    return correctDefinitionRangesFromAst(definitions, callables, source);
+    return profileDefinitionWork(profileSpan, 'range-correction.ast-correction', () =>
+      correctDefinitionRangesFromAst(definitions, callables, source),
+    );
   }
 
   // Regex fallback for languages without tree-sitter support.
@@ -631,7 +676,9 @@ export function correctDefinitionRangesFromSource(
     return definitions;
   }
 
-  return correctDefinitionRangesWithRegexFallback(definitions, source);
+  return profileDefinitionWork(profileSpan, 'range-correction.regex-fallback', () =>
+    correctDefinitionRangesWithRegexFallback(definitions, source),
+  );
 }
 
 function correctDefinitionRangesWithRegexFallback(

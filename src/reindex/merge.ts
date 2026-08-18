@@ -9,8 +9,9 @@ import {
   SymbolInformationSchema,
 } from '@c4312/scip';
 import type { Document, Index, Occurrence, Relationship, SymbolInformation } from '@c4312/scip';
-import { sanitizeScipIndex } from './sanitize.js';
+import { profileSpan } from '../instrumentation/profile.js';
 import { readFileWithinLimit, SCIP_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
+import { sanitizeScipIndex } from './sanitize.js';
 
 export interface MergeScipResult {
   documentCount: number;
@@ -60,7 +61,7 @@ export function mergeScipFiles(inputPaths: readonly string[], outputPath: string
     deserializeSCIP(readFileWithinLimit(path, { inputKind: 'SCIP merge input', maxBytes: SCIP_ARTIFACT_MAX_BYTES })),
   );
   const merged = mergeScipIndexes(indexes);
-  writeFileSync(outputPath, Buffer.from(serializeSCIP(merged)));
+  writeFileSync(outputPath, serializeSCIP(merged));
 
   return {
     documentCount: merged.documents.length,
@@ -74,11 +75,14 @@ export function mergeAndSanitizeScipFiles(
   outputPath: string,
 ): MergeAndSanitizeScipResult {
   if (inputPaths.length === 0) throw new Error('Cannot merge zero SCIP files');
-  const indexes = inputPaths.map((path) =>
-    deserializeSCIP(readFileWithinLimit(path, { inputKind: 'SCIP merge input', maxBytes: SCIP_ARTIFACT_MAX_BYTES })),
+  const indexes = profileSpan('reindex.publish.scip-output.deserialize', () =>
+    inputPaths.map((path) =>
+      deserializeSCIP(readFileWithinLimit(path, { inputKind: 'SCIP merge input', maxBytes: SCIP_ARTIFACT_MAX_BYTES })),
+    ),
   );
-  const sanitized = sanitizeScipIndex(mergeScipIndexes(indexes));
-  writeFileSync(outputPath, Buffer.from(serializeSCIP(sanitized.index)));
+  const merged = profileSpan('reindex.publish.scip-output.merge', () => mergeScipIndexes(indexes));
+  const sanitized = profileSpan('reindex.publish.scip-output.sanitize', () => sanitizeScipIndex(merged));
+  profileSpan('reindex.publish.scip-output.serialize', () => writeFileSync(outputPath, serializeSCIP(sanitized.index)));
   return {
     documentCount: sanitized.index.documents.length,
     externalSymbolCount: sanitized.index.externalSymbols.length,
@@ -106,7 +110,7 @@ export function rebaseScipFileProjectRoot(path: string, expectedProjectRoot: str
     readFileWithinLimit(path, { inputKind: 'SCIP normalization input', maxBytes: SCIP_ARTIFACT_MAX_BYTES }),
   );
   const rebased = rebaseScipProjectRoot(index, expectedProjectRoot, targetProjectRoot);
-  writeFileSync(path, Buffer.from(serializeSCIP(rebased)));
+  writeFileSync(path, serializeSCIP(rebased));
 }
 
 function mergeMetadata(indexes: readonly Index[]): Index['metadata'] {
