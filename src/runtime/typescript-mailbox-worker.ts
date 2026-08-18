@@ -18,7 +18,13 @@ import type {
 import { TypeScriptSemanticServiceHost } from '../semantic/typescript/session-service.js';
 
 type TypeScriptMailboxWorkerData =
-  | { kind: 'index'; projectRoot: string; dbPath: string }
+  | {
+      kind: 'index';
+      projectRoot: string;
+      dbPath: string;
+      maxActiveSessions?: number;
+      softMemoryLimitMb?: number;
+    }
   | { kind: 'semantic'; projectRoot: string };
 
 type TypeScriptMailboxWorkerRequest =
@@ -32,6 +38,8 @@ if (data.kind === 'index') {
   const host = new TypeScriptIndexServiceHost({
     projectRoot: data.projectRoot,
     currentGeneration: () => publishedTypeScriptIndexGeneration(data.dbPath),
+    ...(data.maxActiveSessions === undefined ? {} : { maxActiveSessions: data.maxActiveSessions }),
+    ...(data.softMemoryLimitMb === undefined ? {} : { softMemoryLimitMb: data.softMemoryLimitMb }),
   });
   parentPort.on('message', (value: unknown) => {
     const message = parseWorkerRequest<TypeScriptIndexEnvelope>(value);
@@ -87,13 +95,29 @@ function runAndRespond<Result, Status>(
 function parseWorkerData(value: unknown): TypeScriptMailboxWorkerData {
   if (!value || typeof value !== 'object') throw new Error('TypeScript mailbox worker data is missing.');
   const data = value as Partial<TypeScriptMailboxWorkerData>;
-  if (data.kind === 'index' && typeof data.projectRoot === 'string' && typeof data.dbPath === 'string') {
-    return { kind: 'index', projectRoot: data.projectRoot, dbPath: data.dbPath };
+  if (
+    data.kind === 'index' &&
+    typeof data.projectRoot === 'string' &&
+    typeof data.dbPath === 'string' &&
+    optionalPositiveInteger(data.maxActiveSessions) &&
+    optionalPositiveInteger(data.softMemoryLimitMb)
+  ) {
+    return {
+      kind: 'index',
+      projectRoot: data.projectRoot,
+      dbPath: data.dbPath,
+      ...(data.maxActiveSessions === undefined ? {} : { maxActiveSessions: data.maxActiveSessions }),
+      ...(data.softMemoryLimitMb === undefined ? {} : { softMemoryLimitMb: data.softMemoryLimitMb }),
+    };
   }
   if (data.kind === 'semantic' && typeof data.projectRoot === 'string') {
     return { kind: 'semantic', projectRoot: data.projectRoot };
   }
   throw new Error('TypeScript mailbox worker data is invalid.');
+}
+
+function optionalPositiveInteger(value: unknown): value is number | undefined {
+  return value === undefined || (Number.isInteger(value) && (value as number) > 0);
 }
 
 function parseWorkerRequest<Payload>(value: unknown): {

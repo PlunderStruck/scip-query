@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { getHeapStatistics } from 'node:v8';
 import { monotonicNowMs } from '../domain/time.js';
 import { readProcessIdentity } from '../platform/process-identity.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
@@ -35,6 +36,17 @@ export interface TypeScriptIndexServiceHostOptions {
   now?: () => number;
   wallNow?: () => number;
   monotonicNow?: () => number;
+  /** Maximum compiler programs retained between requests (default: 8). */
+  maxActiveSessions?: number;
+  /** Ask the parent to retire this worker after a response reaches this heap usage, in MiB. */
+  softMemoryLimitMb?: number;
+  /** Test seam for isolate-local V8 heap telemetry. */
+  memoryUsage?: () => TypeScriptIndexMemoryUsage;
+}
+
+export interface TypeScriptIndexMemoryUsage {
+  heapUsedBytes: number;
+  heapLimitBytes: number;
 }
 
 interface ActiveEmitter {
@@ -48,10 +60,14 @@ export class TypeScriptIndexServiceHost {
   private readonly createEmitter: (opts: TypeScriptDocumentEmitterOptions) => TypeScriptDocumentEmitterCreation;
   private readonly wallNow: () => number;
   private readonly monotonicNow: () => number;
+  private readonly maxActiveSessions: number;
+  private readonly softMemoryLimitBytes: number | null;
+  private readonly memoryUsage: () => TypeScriptIndexMemoryUsage;
   private readonly active = new Map<string, ActiveEmitter>();
   private requests = 0;
   private sessionsCreated = 0;
   private sessionsReplaced = 0;
+  private sessionsEvicted = 0;
   private lastRequestAtMs: number | null = null;
   private lastDurationMs: number | null = null;
   private lastError: string | null = null;
@@ -63,6 +79,26 @@ export class TypeScriptIndexServiceHost {
     this.createEmitter = opts.createEmitter ?? createTypeScriptDocumentEmitter;
     this.wallNow = opts.wallNow ?? opts.now ?? Date.now;
     this.monotonicNow = opts.monotonicNow ?? opts.now ?? monotonicNowMs;
+    if (
+      opts.maxActiveSessions !== undefined &&
+      (!Number.isInteger(opts.maxActiveSessions) || opts.maxActiveSessions < 1)
+    ) {
+      throw new Error('TypeScript index maxActiveSessions must be a positive integer.');
+    }
+    this.maxActiveSessions = opts.maxActiveSessions ?? 8;
+    if (
+      opts.softMemoryLimitMb !== undefined &&
+      (!Number.isInteger(opts.softMemoryLimitMb) || opts.softMemoryLimitMb < 1)
+    ) {
+      throw new Error('TypeScript index softMemoryLimitMb must be a positive integer.');
+    }
+    this.softMemoryLimitBytes = opts.softMemoryLimitMb === undefined ? null : opts.softMemoryLimitMb * 1024 * 1024;
+    this.memoryUsage =
+      opts.memoryUsage ??
+      (() => ({
+        heapUsedBytes: process.memoryUsage().heapUsed,
+        heapLimitBytes: getHeapStatistics().heap_size_limit,
+      }));
   }
 
   // scip-query: ignore-twin — protocol hosts share lifecycle names but serve different request schemas.
@@ -109,12 +145,21 @@ export class TypeScriptIndexServiceHost {
   status(mailbox?: BoundedMailboxStatus): TypeScriptIndexServiceStatus {
     const stats = [...this.active.values()].map((active) => active.emitter.snapshotStats());
     const total = (field: keyof (typeof stats)[number]): number => stats.reduce((sum, entry) => sum + entry[field], 0);
+    const memory = this.memoryUsage();
+    const retireRequested = this.softMemoryLimitBytes !== null && memory.heapUsedBytes >= this.softMemoryLimitBytes;
     return {
       protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
       state: this.unavailable ? 'unavailable' : this.lastError ? 'error' : this.active.size > 0 ? 'ready' : 'idle',
       requests: this.requests,
       sessionsCreated: this.sessionsCreated,
       sessionsReplaced: this.sessionsReplaced,
+      sessionsEvicted: this.sessionsEvicted,
+      activeSessions: this.active.size,
+      maxActiveSessions: this.maxActiveSessions,
+      heapUsedBytes: memory.heapUsedBytes,
+      heapLimitBytes: memory.heapLimitBytes,
+      ...(this.softMemoryLimitBytes === null ? {} : { softMemoryLimitBytes: this.softMemoryLimitBytes }),
+      retireRequested,
       initializations: total('initializations'),
       programUpdates: total('programUpdates'),
       documentsEmitted: total('documentsEmitted'),
@@ -134,7 +179,24 @@ export class TypeScriptIndexServiceHost {
   private emitterFor(request: TypeScriptIndexDocumentRequest): ActiveEmitter {
     const sessionKey = `${request.tsconfigPath}\0${request.projectArgument}`;
     const current = this.active.get(sessionKey);
-    if (current?.projectIdentity === request.projectIdentity) return current;
+    if (current?.projectIdentity === request.projectIdentity) {
+      this.active.delete(sessionKey);
+      this.active.set(sessionKey, current);
+      return current;
+    }
+    if (current) {
+      // Drop the stale compiler graph before constructing its replacement so
+      // the worker never intentionally holds both whole-program graphs.
+      this.active.delete(sessionKey);
+    } else if (this.active.size >= this.maxActiveSessions) {
+      // LRU eviction must precede allocation. Evicting after create causes a
+      // transient cap+1 heap peak, which is exactly where large repos OOM.
+      const oldestSessionKey = this.active.keys().next().value as string | undefined;
+      if (oldestSessionKey !== undefined) {
+        this.active.delete(oldestSessionKey);
+        this.sessionsEvicted += 1;
+      }
+    }
     const created = this.createEmitter({
       workspaceRoot: this.projectRoot,
       tsconfigPath: request.tsconfigPath,

@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-08-18T15:05:14.554Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "3dc3d36129e31363f2385a895d50e81e47d3f419639d366e532e980cf3aa2884",
+  "changes": [
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-changed",
+      "message": "Non-exported declarations changed in referenced module config-types-<hash>.d.ts.",
+      "target": "config-types-<hash>.d.ts"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "93a1c2bf1ac7bcaebf9bde89478fa09d13189c4aa4a9a14ddea491c9fb1fe0f9",
+  "reason": "The checker reports an uncertain referenced declaration change; the concrete IndexerOverrides change only adds optional fields with runtime defaults, so existing configs and TypeScript callers remain valid.",
+  "schemaVersion": 1
+}

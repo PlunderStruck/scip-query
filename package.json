@@ -379,6 +379,7 @@
     "bench:exploration": "node scripts/exploration-benchmark.mjs",
     "bench:exploration:codex": "node scripts/codex-exploration-trial.mjs",
     "bench:exploration:compare": "node scripts/compare-exploration-trials.mjs",
+    "bench:edit-latency": "vite-node scripts/benchmark-edit-latency.ts",
     "bench:native-symbol-leaf": "node scripts/bench-native-symbol-leaf.mjs",
     "calibrate": "node scripts/accuracy-calibration.mjs",
     "docs:commands": "vite-node scripts/render-command-reference.ts --write",

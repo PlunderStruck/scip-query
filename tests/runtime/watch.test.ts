@@ -96,6 +96,7 @@ function deferred<T>(): {
 function sourceSubscriptionHarness(): {
   factory: WatchSubscriptionFactory;
   emitAll(eventName: string, path: string): void;
+  emitError(error: Error): void;
 } {
   const emitter = new EventEmitter();
   const subscription = {
@@ -108,6 +109,7 @@ function sourceSubscriptionHarness(): {
   return {
     factory: () => subscription,
     emitAll: (eventName, path) => emitter.emit('all', eventName, path),
+    emitError: (error) => emitter.emit('error', error),
   };
 }
 
@@ -488,6 +490,13 @@ describe('Watcher', () => {
         SCIP_REINDEX_PARENT_IDENTITY: expect.any(String),
       }),
     );
+    expect(JSON.parse(launch.env['SCIP_REINDEX_CHANGE_JOURNAL']!)).toEqual({
+      version: 1,
+      baseGeneration: null,
+      complete: false,
+      incompleteReason: 'unstructured-trigger:watch-source',
+      entries: [],
+    });
     await watcher.stop();
   });
 
@@ -599,6 +608,84 @@ describe('Watcher', () => {
     expect(run).toHaveBeenCalledWith(
       expect.objectContaining({
         trigger: { kind: 'watch-source', detail: 'multiple changes' },
+      }),
+    );
+    await watcher.stop();
+  });
+
+  it('preserves coalesced source changes in a complete generation-based journal', async () => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    const outputDb = join(projectRoot, 'index.db');
+    writeFileSync(outputDb, 'fixture generation');
+    writeFileSync(join(projectRoot, 'meta.json'), '{}');
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const subscription = sourceSubscriptionHarness();
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+    const watcher = new Watcher({
+      projectRoot,
+      outputDb,
+      config: { watch: { debounceMs: 250, gitPollMs: 60_000 } },
+      languages: ['typescript'],
+      reindexRunner: { start: run },
+      subscriptionFactory: subscription.factory,
+    });
+
+    watcher.start();
+    subscription.emitAll('change', 'src/a.ts');
+    subscription.emitAll('add', 'src/new.ts');
+    subscription.emitAll('change', 'src/new.ts');
+    subscription.emitAll('add', 'src/transient.ts');
+    subscription.emitAll('unlink', 'src/transient.ts');
+    subscription.emitAll('unlink', 'src/deleted.ts');
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changeJournal: {
+          version: 1,
+          baseGeneration: expect.any(String),
+          complete: true,
+          entries: [
+            { path: 'src/a.ts', kind: 'change' },
+            { path: 'src/deleted.ts', kind: 'delete' },
+            { path: 'src/new.ts', kind: 'add' },
+          ],
+        },
+      }),
+    );
+    await watcher.stop();
+  });
+
+  it('marks the next change journal incomplete after a source watcher error', async () => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    const outputDb = join(projectRoot, 'index.db');
+    writeFileSync(outputDb, 'fixture generation');
+    writeFileSync(join(projectRoot, 'meta.json'), '{}');
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const subscription = sourceSubscriptionHarness();
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+    const watcher = new Watcher({
+      projectRoot,
+      outputDb,
+      config: { watch: { debounceMs: 250, gitPollMs: 60_000 } },
+      languages: ['typescript'],
+      reindexRunner: { start: run },
+      subscriptionFactory: subscription.factory,
+      onError: () => undefined,
+    });
+
+    watcher.start();
+    subscription.emitError(new Error('watch stream failed'));
+    subscription.emitAll('change', 'src/a.ts');
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(run.mock.calls[0]?.[0].changeJournal).toEqual(
+      expect.objectContaining({
+        complete: false,
+        incompleteReason: 'source-watcher-error',
+        entries: [{ path: 'src/a.ts', kind: 'change' }],
       }),
     );
     await watcher.stop();

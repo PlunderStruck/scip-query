@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildProjectInputFingerprint,
+  buildProjectInputFingerprintFromJournal,
   fingerprintProjectFiles,
   InputTooLargeError,
   readProjectFileText,
@@ -210,6 +211,137 @@ describe('platform project file fingerprints', () => {
       first.find((file) => file.path === 'value.ts')?.hash,
     );
   });
+
+  it('derives the exact full fingerprint by replacing only a changed existing source', () => {
+    const projectRoot = temporaryDirectory('scip-query-delta-project-fingerprint-');
+    mkdirSync(join(projectRoot, 'src'));
+    writeFileSync(join(projectRoot, 'tsconfig.json'), '{"include":["src/**/*.ts"]}\n');
+    writeFileSync(join(projectRoot, 'src/a.ts'), 'export const a = 1;\n');
+    writeFileSync(join(projectRoot, 'src/b.ts'), 'export const b = 1;\n');
+    const previous = buildProjectInputFingerprint(projectRoot, ['typescript'], {});
+
+    writeFileSync(join(projectRoot, 'src/a.ts'), 'export const a = 2;\n');
+    const result = buildProjectInputFingerprintFromJournal(
+      projectRoot,
+      ['typescript'],
+      {},
+      previous,
+      {
+        version: 1,
+        baseGeneration: 'generation-a',
+        complete: true,
+        entries: [{ path: 'src/a.ts', kind: 'change' }],
+      },
+      'generation-a',
+    );
+
+    expect(result).toEqual({
+      mode: 'delta',
+      fingerprint: buildProjectInputFingerprint(projectRoot, ['typescript'], {}),
+      changedPaths: ['src/a.ts'],
+    });
+  });
+
+  it.each(['add', 'delete'] as const)('derives the exact full fingerprint for a source %s', (kind) => {
+    const projectRoot = temporaryDirectory('scip-query-delta-add-delete-fingerprint-');
+    mkdirSync(join(projectRoot, 'src'));
+    writeFileSync(join(projectRoot, 'tsconfig.json'), '{"include":["src/**/*.ts"]}\n');
+    writeFileSync(join(projectRoot, 'src/a.ts'), 'export const a = 1;\n');
+    const previous = buildProjectInputFingerprint(projectRoot, ['typescript'], {});
+    const changedPath = kind === 'add' ? 'src/b.ts' : 'src/a.ts';
+    if (kind === 'add') writeFileSync(join(projectRoot, changedPath), 'export const b = 1;\n');
+    else rmSync(join(projectRoot, changedPath));
+
+    const result = buildProjectInputFingerprintFromJournal(
+      projectRoot,
+      ['typescript'],
+      {},
+      previous,
+      {
+        version: 1,
+        baseGeneration: 'generation-a',
+        complete: true,
+        entries: [{ path: changedPath, kind }],
+      },
+      'generation-a',
+    );
+
+    expect(result).toEqual({
+      mode: 'delta',
+      fingerprint: buildProjectInputFingerprint(projectRoot, ['typescript'], {}),
+      changedPaths: [changedPath],
+    });
+  });
+
+  it('reuses the accepted snapshot when watcher coalescing proves a net-empty change set', () => {
+    const projectRoot = temporaryDirectory('scip-query-delta-empty-fingerprint-');
+    mkdirSync(join(projectRoot, 'src'));
+    writeFileSync(join(projectRoot, 'src/a.ts'), 'export const a = 1;\n');
+    const previous = buildProjectInputFingerprint(projectRoot, ['typescript'], {});
+
+    expect(
+      buildProjectInputFingerprintFromJournal(
+        projectRoot,
+        ['typescript'],
+        {},
+        previous,
+        { version: 1, baseGeneration: 'generation-a', complete: true, entries: [] },
+        'generation-a',
+      ),
+    ).toEqual({ mode: 'delta', fingerprint: previous, changedPaths: [] });
+  });
+
+  it.each([
+    ['incomplete journal', false, 'generation-a', 'src/a.ts', 'change', 'change-journal-incomplete:test-gap'],
+    ['wrong base', true, 'generation-b', 'src/a.ts', 'change', 'change-journal-base-mismatch'],
+    ['configuration input', true, 'generation-a', 'tsconfig.json', 'change', 'non-source-project-input-changed'],
+    [
+      'existing source reported as added',
+      true,
+      'generation-a',
+      'src/a.ts',
+      'add',
+      'added-path-already-in-prior-project-input-snapshot',
+    ],
+    [
+      'unknown source reported as deleted',
+      true,
+      'generation-a',
+      'src/missing.ts',
+      'delete',
+      'deleted-path-not-in-prior-project-input-snapshot',
+    ],
+  ] as const)(
+    'uses a named full-scan fallback for %s',
+    (_label, complete, baseGeneration, path, kind, expectedReason) => {
+      const projectRoot = temporaryDirectory('scip-query-delta-fallback-');
+      mkdirSync(join(projectRoot, 'src'));
+      writeFileSync(join(projectRoot, 'tsconfig.json'), '{"include":["src/**/*.ts"]}\n');
+      writeFileSync(join(projectRoot, 'src/a.ts'), 'export const a = 1;\n');
+      const previous = buildProjectInputFingerprint(projectRoot, ['typescript'], {});
+      if (kind === 'add' && path !== 'src/a.ts') writeFileSync(join(projectRoot, path), 'export const added = 1;\n');
+      if (kind === 'delete' && path === 'src/a.ts') rmSync(join(projectRoot, path));
+
+      const result = buildProjectInputFingerprintFromJournal(
+        projectRoot,
+        ['typescript'],
+        {},
+        previous,
+        {
+          version: 1,
+          baseGeneration,
+          complete,
+          ...(complete ? {} : { incompleteReason: 'test-gap' }),
+          entries: [{ path, kind }],
+        },
+        'generation-a',
+      );
+
+      expect(result.mode).toBe('full');
+      expect(result).toEqual(expect.objectContaining({ reason: expectedReason }));
+      expect(result.fingerprint).toEqual(buildProjectInputFingerprint(projectRoot, ['typescript'], {}));
+    },
+  );
 });
 
 describe('project file authority boundary', () => {

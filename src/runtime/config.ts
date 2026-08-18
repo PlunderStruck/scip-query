@@ -92,7 +92,15 @@ const SEMANTIC_CONFIG_KEYS = new Set(['typescript', 'rust']);
 const TYPESCRIPT_SEMANTIC_CONFIG_KEYS = new Set(['tsconfigs']);
 const RUST_SEMANTIC_CONFIG_KEYS = new Set(['rustAnalyzerPath']);
 const INDEXER_CONFIG_KEYS = new Set(SUPPORTED_LANGUAGES);
-const INDEXER_OVERRIDE_CONFIG_KEYS = new Set(['pnpmWorkspaces', 'projectMode', 'projects', 'configPath']);
+const INDEXER_OVERRIDE_CONFIG_KEYS = new Set([
+  'pnpmWorkspaces',
+  'projectMode',
+  'projects',
+  'configPath',
+  'maxWarmSessions',
+  'workerIdleMs',
+  'workerSoftMemoryMb',
+]);
 const LOCALITY_CONFIG_KEYS = new Set(['architecturalBoundarySegments']);
 const ARCHITECTURE_CONFIG_KEYS = new Set([
   'boundaries',
@@ -348,6 +356,28 @@ function validateIndexerAndSemanticConfig(
       level: 'warning',
       path: 'indexer.typescript.pnpmWorkspaces',
       message: 'Ignored when projectMode is "workspace"; explicit TypeScript projects are indexed directly.',
+    });
+  }
+  for (const [key, value] of [
+    ['maxWarmSessions', typescriptIndexer?.maxWarmSessions],
+    ['workerSoftMemoryMb', typescriptIndexer?.workerSoftMemoryMb],
+  ] as const) {
+    if (value !== undefined && (!Number.isInteger(value) || value <= 0)) {
+      diagnostics.push({
+        level: 'error',
+        path: `indexer.typescript.${key}`,
+        message: 'Must be a positive integer.',
+      });
+    }
+  }
+  if (
+    typescriptIndexer?.workerIdleMs !== undefined &&
+    (!Number.isInteger(typescriptIndexer.workerIdleMs) || typescriptIndexer.workerIdleMs < 0)
+  ) {
+    diagnostics.push({
+      level: 'error',
+      path: 'indexer.typescript.workerIdleMs',
+      message: 'Must be a non-negative integer.',
     });
   }
   const rustSemantic = config.semantic?.rust;

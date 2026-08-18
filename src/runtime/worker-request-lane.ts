@@ -29,6 +29,10 @@ export interface WorkerRequestLaneOptions<Payload, Result, Status> {
   clearTimer?: (timer: ReturnType<typeof setTimeout>) => void;
   /** Terminate an idle Worker after this many ms. Omit to keep it warm. */
   idleTtlMs?: number;
+  /** Recreate the Worker and replay the same request after this many Worker failures. */
+  maxWorkerFailureRetries?: number;
+  /** Retire the Worker after its current response has been durably settled. */
+  retireAfterResponse?(status: Status): boolean;
   onComplete(request: WorkerLaneRequest<Payload>, result: Result, status: Status): void;
   onReject(request: WorkerLaneRequest<Payload>, reason: string, status?: Status): void;
   onStatus(status: Status): void;
@@ -38,6 +42,8 @@ export interface WorkerRequestLaneOptions<Payload, Result, Status> {
 interface ActiveWorkerRequest<Payload> {
   request: WorkerLaneRequest<Payload>;
   timer: ReturnType<typeof setTimeout>;
+  workerFailureRetries: number;
+  workerFailureReasons: string[];
 }
 
 /**
@@ -60,10 +66,20 @@ export class WorkerRequestLane<Payload, Result, Status> {
     this.now = options.now ?? Date.now;
     this.setTimer = options.setTimer ?? setTimeout;
     this.clearTimer = options.clearTimer ?? clearTimeout;
+    if (
+      options.maxWorkerFailureRetries !== undefined &&
+      (!Number.isInteger(options.maxWorkerFailureRetries) || options.maxWorkerFailureRetries < 0)
+    ) {
+      throw new Error('Worker maxWorkerFailureRetries must be a non-negative integer.');
+    }
   }
 
   canAccept(): boolean {
     return !this.closed && this.active === null && this.terminating === null;
+  }
+
+  hasWorker(): boolean {
+    return this.worker !== null;
   }
 
   start(request: WorkerLaneRequest<Payload>): boolean {
@@ -79,15 +95,12 @@ export class WorkerRequestLane<Payload, Result, Status> {
       return true;
     }
     const worker = this.ensureWorker();
-    const delayMs = Math.max(1, Math.min(2_147_483_647, request.deadlineAtMs - this.now()));
-    const timer = this.setTimer(() => {
-      void this.failActiveAfterTermination(`${this.options.name} request exceeded its deadline.`);
-    }, delayMs);
-    this.active = { request, timer };
+    const timer = this.deadlineTimer(request);
+    this.active = { request, timer, workerFailureRetries: 0, workerFailureReasons: [] };
     try {
       worker.postMessage({ kind: 'request', ...request });
     } catch (error) {
-      void this.failActiveAfterTermination(errorMessage(error));
+      void this.failActiveAfterTermination(errorMessage(error), true);
     }
     return true;
   }
@@ -109,13 +122,16 @@ export class WorkerRequestLane<Payload, Result, Status> {
     worker.on('message', (message) => this.handleMessage(generation, message));
     worker.on('error', (error) => {
       if (generation !== this.workerGeneration) return;
-      void this.failActiveAfterTermination(`${this.options.name} worker failed: ${error.message}`);
+      void this.failActiveAfterTermination(`${this.options.name} worker failed: ${error.message}`, true);
     });
     worker.on('exit', (code) => {
       if (generation !== this.workerGeneration || this.terminating) return;
       this.worker = null;
       if (this.active) {
-        void this.failActiveAfterTermination(`${this.options.name} worker exited unexpectedly with code ${code}.`);
+        void this.failActiveAfterTermination(
+          `${this.options.name} worker exited unexpectedly with code ${code}.`,
+          true,
+        );
       }
     });
     this.worker = worker;
@@ -138,6 +154,7 @@ export class WorkerRequestLane<Payload, Result, Status> {
       return;
     }
     const active = this.active;
+    let retireWorker: boolean;
     try {
       this.options.onStatus(response.status);
       if (response.ok) {
@@ -145,6 +162,7 @@ export class WorkerRequestLane<Payload, Result, Status> {
       } else {
         this.options.onReject(active.request, response.error, response.status);
       }
+      retireWorker = this.options.retireAfterResponse?.(response.status) ?? false;
     } catch (error) {
       this.closed = true;
       this.clearTimer(active.timer);
@@ -152,10 +170,11 @@ export class WorkerRequestLane<Payload, Result, Status> {
       return;
     }
     this.releaseActive(active);
-    this.scheduleIdleTermination();
+    if (retireWorker) void this.terminateWorker();
+    else this.scheduleIdleTermination();
   }
 
-  private async failActiveAfterTermination(reason: string): Promise<void> {
+  private async failActiveAfterTermination(reason: string, retryWorker = false): Promise<void> {
     if (this.activeFailure) {
       await this.activeFailure;
       return;
@@ -166,11 +185,37 @@ export class WorkerRequestLane<Payload, Result, Status> {
       return;
     }
     this.clearTimer(active.timer);
+    if (retryWorker) active.workerFailureReasons.push(reason);
     const failure = (async (): Promise<void> => {
       const terminated = await this.terminateWorker();
       if (!terminated) return;
+      const maxRetries = this.options.maxWorkerFailureRetries ?? 0;
+      if (
+        retryWorker &&
+        !this.closed &&
+        active.workerFailureRetries < maxRetries &&
+        this.now() <= active.request.deadlineAtMs
+      ) {
+        active.workerFailureRetries += 1;
+        try {
+          const worker = this.ensureWorker();
+          active.timer = this.deadlineTimer(active.request);
+          worker.postMessage({ kind: 'request', ...active.request });
+          return;
+        } catch (retryError) {
+          const retryReason = `Cold Worker retry failed: ${errorMessage(retryError)}`;
+          active.workerFailureReasons.push(retryReason);
+          reason = `${reason} ${retryReason}`;
+          const retryTerminated = await this.terminateWorker();
+          if (!retryTerminated) return;
+        }
+      }
+      const terminalReason =
+        active.workerFailureReasons.length === 0
+          ? reason
+          : [...new Set([...active.workerFailureReasons, reason])].join(' Cold Worker retry: ');
       try {
-        this.options.onReject(active.request, reason);
+        this.options.onReject(active.request, terminalReason);
       } catch (error) {
         this.closed = true;
         this.options.onFatal(asError(error));
@@ -184,6 +229,13 @@ export class WorkerRequestLane<Payload, Result, Status> {
     } finally {
       if (this.activeFailure === failure) this.activeFailure = null;
     }
+  }
+
+  private deadlineTimer(request: WorkerLaneRequest<Payload>): ReturnType<typeof setTimeout> {
+    const delayMs = Math.max(1, Math.min(2_147_483_647, request.deadlineAtMs - this.now()));
+    return this.setTimer(() => {
+      void this.failActiveAfterTermination(`${this.options.name} request exceeded its deadline.`);
+    }, delayMs);
   }
 
   private releaseActive(active: ActiveWorkerRequest<Payload>): void {

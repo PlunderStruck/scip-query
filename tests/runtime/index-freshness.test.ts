@@ -4,7 +4,11 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ProjectConfig, SupportedLanguage } from '../../src/domain/types.js';
 import { fingerprintProjectFiles } from '../../src/platform/project-files.js';
-import { getIndexFreshness, indexCanAnswerQueries } from '../../src/runtime/index-freshness.js';
+import {
+  getIndexFreshness,
+  getPublishedIndexFreshness,
+  indexCanAnswerQueries,
+} from '../../src/runtime/index-freshness.js';
 import { FUTURE_REINDEX_METADATA } from '../fixtures/reindex-metadata.js';
 
 function writeMeta(
@@ -168,6 +172,30 @@ describe('index freshness', () => {
       };
 
       expect(getIndexFreshness(root, config, { dbPath, metaPath }).state).toBe('fresh');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('validates a just-published generation without rescanning source files', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-published-freshness-'));
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(join(root, 'tsconfig.json'), '{}');
+      writeFileSync(join(root, 'src', 'a.ts'), 'export const a = 1;\n');
+      const dbPath = join(root, 'index.db');
+      const metaPath = join(root, 'meta.json');
+      writeFileSync(dbPath, 'published database');
+      writeMeta(root, metaPath, ['typescript'], 3);
+
+      writeFileSync(join(root, 'src', 'a.ts'), 'export const a = 2;\n');
+      expect(getPublishedIndexFreshness({ dbPath, metaPath })).toEqual(
+        expect.objectContaining({
+          state: 'fresh',
+          reason: expect.stringContaining('no later changes pending'),
+        }),
+      );
+      expect(getIndexFreshness(root, { languages: ['typescript'] }, { dbPath, metaPath }).state).toBe('stale');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

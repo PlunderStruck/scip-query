@@ -13,7 +13,7 @@ import {
   type SharedGenerationSnapshot,
 } from '../src/reindex/shared-generation-store.js';
 import { inspectLocalSqliteGenerationRetention } from '../src/reindex/sqlite-generation-store.js';
-import { typeScriptFragmentStorePaths } from '../src/reindex/typescript-fragment-store.js';
+import { TYPESCRIPT_OVERLAY_STORE_DIRECTORY } from '../src/reindex/typescript-overlay-store.js';
 import {
   DEFAULT_SHARED_GENERATION_TTL_MS,
   maybeSweepRepositoryCache,
@@ -92,8 +92,8 @@ try {
     const localRetention = inspectLocalSqliteGenerationRetention(paths.dbPath);
     assert.equal(localRetention.state, 'managed');
     assert.equal(localRetention.generationCount, 2, `cycle ${cycle}: local generations were not bounded`);
-    const fragmentGenerations = directoryNames(typeScriptFragmentStorePaths(paths.cacheDir).generationDir);
-    assert.equal(fragmentGenerations.length, 1, `cycle ${cycle}: obsolete TypeScript fragments were retained`);
+    const overlayGenerations = directoryNames(join(paths.cacheDir, TYPESCRIPT_OVERLAY_STORE_DIRECTORY, 'generations'));
+    assert.equal(overlayGenerations.length, 1, `cycle ${cycle}: TypeScript overlays were not bounded`);
     assert(existsSync(join(generationsDir, generation.generationId)));
 
     watchCli(disposable, ['--stop', '--json']);
@@ -127,7 +127,7 @@ try {
       updateDurationMs: updated.durationMs,
       incrementalPublication: patched,
       localGenerationCount: localRetention.generationCount,
-      fragmentGenerationCount: fragmentGenerations.length,
+      overlayGenerationCount: overlayGenerations.length,
       removedWorktreeCaches: removed.deletedWorktrees,
       agedSharedGenerations: aged.deletedGenerations,
       managedBytes,

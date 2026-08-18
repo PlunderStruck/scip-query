@@ -3,6 +3,7 @@ export { loadProjectConfig, initProjectConfig } from './config.js';
 export { Watcher, createReindexRunner, resolveReindexWorkerLaunch } from './watch.js';
 export type {
   ReindexCancellationResult,
+  ReindexCompletionContext,
   ReindexDiagnostics,
   ReindexOperation,
   ReindexRunner,

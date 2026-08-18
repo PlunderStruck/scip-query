@@ -28,8 +28,9 @@ import {
 } from '../storage/bounded-mailbox.js';
 import { WorkerRequestLane, type RequestWorkerLike } from './worker-request-lane.js';
 
-/** Semantic query workers can exit when idle. Index workers stay warm so watch rebuilds stay incremental. */
+/** Semantic query workers exit quickly; index workers retain a longer interactive warm window. */
 const TYPESCRIPT_SEMANTIC_MAILBOX_WORKER_IDLE_MS = 60_000;
+const TYPESCRIPT_INDEX_MAILBOX_WORKER_IDLE_MS = 10 * 60_000;
 
 export interface TypeScriptMailboxWorkerLane<Status> {
   poll(): number;
@@ -50,6 +51,9 @@ export interface TypeScriptIndexMailboxLaneOptions extends TypeScriptMailboxLane
   paths: TypeScriptIndexMailboxPaths;
   projectRoot: string;
   dbPath: string;
+  maxActiveSessions?: number;
+  workerIdleMs?: number;
+  workerSoftMemoryMb?: number;
 }
 
 export interface TypeScriptSemanticMailboxLaneOptions extends TypeScriptMailboxLaneCommonOptions {
@@ -60,12 +64,19 @@ export interface TypeScriptSemanticMailboxLaneOptions extends TypeScriptMailboxL
 export function createTypeScriptIndexMailboxLane(
   options: TypeScriptIndexMailboxLaneOptions,
 ): TypeScriptMailboxWorkerLane<TypeScriptIndexServiceStatus> {
+  const maxActiveSessions = options.maxActiveSessions ?? 8;
+  const softMemoryLimitMb = options.workerSoftMemoryMb ?? typescriptWorkerSoftMemoryMb();
   const initialStatus = (): TypeScriptIndexServiceStatus => ({
     protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
     state: 'idle',
     requests: 0,
     sessionsCreated: 0,
     sessionsReplaced: 0,
+    sessionsEvicted: 0,
+    activeSessions: 0,
+    maxActiveSessions,
+    softMemoryLimitBytes: softMemoryLimitMb * 1024 * 1024,
+    retireRequested: false,
     initializations: 0,
     programUpdates: 0,
     documentsEmitted: 0,
@@ -87,6 +98,8 @@ export function createTypeScriptIndexMailboxLane(
         kind: 'index',
         projectRoot: options.projectRoot,
         dbPath: options.dbPath,
+        maxActiveSessions,
+        softMemoryLimitMb,
       }),
     complete(claim, envelope, response, nowMs) {
       completeBoundedMailboxClaim(
@@ -116,6 +129,16 @@ export function createTypeScriptIndexMailboxLane(
         { nowMs, limits: options.limits },
       );
     },
+    idleTtlMs: options.workerIdleMs ?? TYPESCRIPT_INDEX_MAILBOX_WORKER_IDLE_MS,
+    maxWorkerFailureRetries: 1,
+    retireAfterResponse: (status) => status.retireRequested === true,
+    statusWhenWorkerAbsent: (status) => ({
+      ...status,
+      state: 'idle',
+      activeSessions: 0,
+      heapUsedBytes: 0,
+      retireRequested: false,
+    }),
     onBusy: options.onBusy,
     onFatal: options.onFatal,
   });
@@ -182,6 +205,9 @@ interface GenericMailboxLaneOptions<Envelope extends { id: string; deadlineAtMs:
   now?: () => number;
   limits?: Partial<BoundedMailboxLimits>;
   idleTtlMs?: number;
+  maxWorkerFailureRetries?: number;
+  retireAfterResponse?(status: Status): boolean;
+  statusWhenWorkerAbsent?(status: Status): Status;
   initialStatus(): Status;
   parseEnvelope(value: string): Envelope;
   createWorker(): RequestWorkerLike;
@@ -216,6 +242,8 @@ function createTypeScriptMailboxLane<Envelope extends { id: string; deadlineAtMs
     createWorker: options.createWorker,
     now,
     idleTtlMs: options.idleTtlMs,
+    maxWorkerFailureRetries: options.maxWorkerFailureRetries,
+    retireAfterResponse: options.retireAfterResponse,
     onComplete(request, result, status) {
       const claimed = requireCurrent(request.requestId);
       serviceStatus = status;
@@ -273,7 +301,9 @@ function createTypeScriptMailboxLane<Envelope extends { id: string; deadlineAtMs
     },
     status(): Status {
       return {
-        ...(serviceStatus as object),
+        ...((workerLane.hasWorker() || !options.statusWhenWorkerAbsent
+          ? serviceStatus
+          : options.statusWhenWorkerAbsent(serviceStatus)) as object),
         mailbox: inspectBoundedMailbox(options.paths),
       } as Status;
     },
@@ -297,10 +327,34 @@ function createTypeScriptMailboxLane<Envelope extends { id: string; deadlineAtMs
   }
 }
 
+/**
+ * The incremental TypeScript index holds a whole-program type graph inside this
+ * worker. Without an explicit limit the worker inherits V8's default old-space
+ * cap (~4 GB), which large projects exhaust: the worker dies with "Worker
+ * terminated due to reaching memory limit", `tryMaterializeTypeScriptIncrementalIndex`
+ * reports it unavailable, and every watch trigger falls back to a whole-project
+ * rebuild costing minutes instead of seconds. Match the full indexer's heap
+ * budget (`maxHeapMb` in reindex/index.ts) so the incremental path survives the
+ * projects it exists to serve.
+ */
+const DEFAULT_TYPESCRIPT_WORKER_HEAP_MB = 8192;
+
+function typescriptWorkerHeapMb(): number {
+  const configured = Number.parseInt(process.env['SCIP_TS_WORKER_HEAP_MB'] ?? '', 10);
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_TYPESCRIPT_WORKER_HEAP_MB;
+}
+
+function typescriptWorkerSoftMemoryMb(): number {
+  return Math.max(1, Math.floor(typescriptWorkerHeapMb() * 0.7));
+}
+
 function createWorker(options: TypeScriptMailboxLaneCommonOptions, workerData: unknown): RequestWorkerLike {
   if (options.createWorker) return options.createWorker(workerData);
   const workerUrl = options.workerUrl ?? new URL('./typescript-mailbox-worker.js', import.meta.url);
-  return new Worker(workerUrl, { workerData }) as RequestWorkerLike;
+  return new Worker(workerUrl, {
+    workerData,
+    resourceLimits: { maxOldGenerationSizeMb: typescriptWorkerHeapMb() },
+  }) as RequestWorkerLike;
 }
 
 function asError(error: unknown): Error {

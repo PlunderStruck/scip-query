@@ -5,6 +5,7 @@ import { platform } from 'node:os';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
 import { runBoundedProcess } from '../platform/bounded-process.js';
 import {
+  isLanguageRelevantProjectInputPath,
   projectInputSnapshotOrNull,
   type ProjectFileFingerprint,
   type ProjectInputSnapshot,
@@ -20,6 +21,7 @@ import {
 } from '../domain/reindex-metadata.js';
 import { CURRENT_SQLITE_QUERY_LAYOUT_VERSION } from '../domain/sqlite-query-layout.js';
 import { monotonicNowMs } from '../domain/time.js';
+import type { ProjectInputChangeJournal } from '../domain/project-input-change-journal.js';
 import { profileAsyncSpan, profileSpan } from '../instrumentation/profile.js';
 import { hardenOwnedCacheTreeIfOwned } from '../platform/cache-layout.js';
 import { resolveScipBinary, tryInstallScipCli } from '../platform/scip-cli.js';
@@ -50,10 +52,11 @@ import {
 import { throwIfSignalAborted } from '../platform/abort-signal.js';
 import {
   buildProjectInputFingerprint,
-  fingerprintProjectFiles,
+  buildProjectInputFingerprintFromJournal,
   normalizeTypeScriptProjects,
   type ProjectInputFingerprint,
 } from '../platform/project-files.js';
+import { publishedSqliteGenerationIdentity } from '../storage/sqlite-generation.js';
 import type { LastRefreshMetadata, RefreshTrigger, SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
 import {
   cloneFileWithFallback,
@@ -64,6 +67,7 @@ import {
 import { writeJsonDurable } from '../storage/atomic-json.js';
 import { ScipDatabase } from '../storage/db.js';
 import { seedTypeScriptReferenceFragments } from '../semantic/typescript/reference-fragment-shadow.js';
+import { carryFileDependencyGraph } from '../symbols/graph/file-dep-graph.js';
 import { auxiliaryDocumentsAugmentationStage } from './augmentation/augment.js';
 import { runtimeBoundaryAugmentationStage } from './runtime-boundaries.js';
 import {
@@ -152,6 +156,8 @@ export interface ReindexOptions {
   indexerConcurrency?: number;
   /** Source that requested this refresh, persisted for status and setup diagnostics. */
   trigger?: RefreshTrigger;
+  /** Exact watcher-observed changes since one accepted immutable generation. */
+  changeJournal?: ProjectInputChangeJournal;
   /** When false, skip full language indexers after incremental misses. Default true. */
   allowExpensiveRebuild?: boolean;
   /** Cancel this reindex and every bounded child process. */
@@ -331,16 +337,36 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
 
   onStatus(`Detected languages: ${languages.join(', ')}`);
 
-  const fingerprint = profileSpan(
+  const previousFingerprint = previousProjectInputSnapshot(paths.metaPath);
+  let fingerprintBuild = profileSpan(
     'reindex.fingerprint',
     () =>
-      buildProjectInputFingerprint(projectRoot, languages, {
-        pnpmWorkspaces: opts.pnpmWorkspaces,
-        typescriptProjectMode: opts.typescriptProjectMode,
-        typescriptProjects: opts.typescriptProjects,
-        clojureConfigPath: opts.clojureConfigPath,
-      }),
+      buildProjectInputFingerprintFromJournal(
+        projectRoot,
+        languages,
+        {
+          pnpmWorkspaces: opts.pnpmWorkspaces,
+          typescriptProjectMode: opts.typescriptProjectMode,
+          typescriptProjects: opts.typescriptProjects,
+          clojureConfigPath: opts.clojureConfigPath,
+        },
+        previousFingerprint,
+        opts.changeJournal,
+        publishedSqliteGenerationIdentity(paths.outputDb),
+      ),
     { languages: languages.length },
+  );
+  let fingerprint = fingerprintBuild.fingerprint;
+  const changedAcceptedPaths =
+    fingerprintBuild.mode === 'delta'
+      ? (opts.changeJournal?.entries.filter((entry) => entry.kind !== 'add').length ?? 0)
+      : 0;
+  const reusedFingerprintCount = Math.max(0, (previousFingerprint?.files.length ?? 0) - changedAcceptedPaths);
+  onStatus(
+    fingerprintBuild.mode === 'delta'
+      ? `Project fingerprint revalidated ${fingerprintBuild.changedPaths.length} changed path(s), ` +
+          `reused ${reusedFingerprintCount} accepted file fingerprint(s), and accepted ${fingerprint.files.length} input(s)`
+      : `Project fingerprint used full scan: ${fingerprintBuild.reason}`,
   );
   let sharedSnapshot: SharedGenerationSnapshot | undefined;
   let releaseSharedBuildLock: (() => void) | undefined;
@@ -443,6 +469,22 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
   const writeTelemetry = createReindexWriteTelemetry();
 
   try {
+    if (
+      fingerprintBuild.mode === 'delta' &&
+      publishedSqliteGenerationIdentity(paths.outputDb) !== opts.changeJournal?.baseGeneration
+    ) {
+      fingerprint = buildProjectInputFingerprint(projectRoot, languages, {
+        pnpmWorkspaces: opts.pnpmWorkspaces,
+        typescriptProjectMode: opts.typescriptProjectMode,
+        typescriptProjects: opts.typescriptProjects,
+        clojureConfigPath: opts.clojureConfigPath,
+      });
+      fingerprintBuild = { mode: 'full', fingerprint, reason: 'accepted-generation-changed-before-lock' };
+      sharedSnapshot = undefined;
+      releaseSharedBuildLock?.();
+      releaseSharedBuildLock = undefined;
+      onStatus('Project fingerprint used full scan: accepted-generation-changed-before-lock');
+    }
     ensureImmutableSqliteGeneration(paths.outputDb, paths.outputScip, paths.metaPath);
     const staleRunCleanup = pruneStaleReindexRunDirectories(dirname(paths.outputDb));
     if (staleRunCleanup.removed > 0) {
@@ -715,7 +757,7 @@ function reuseExistingIndexIfPossible(opts: {
     reused: true,
     skipped: [],
     lastRefresh,
-    shards: buildFullyReusedShardDiagnostics(opts.paths, opts.opts.projectRoot, opts.languages, opts.opts),
+    shards: buildFullyReusedShardDiagnostics(opts.paths, opts.languages, opts.opts, opts.fingerprint),
   };
 }
 
@@ -725,7 +767,6 @@ function reuseExistingIndexIfPossible(opts: {
 // indexer command or miss reason.
 function buildFullyReusedShardDiagnostics(
   paths: ReindexOutputPaths,
-  projectRoot: string,
   languages: readonly SupportedLanguage[],
   opts: {
     pnpmWorkspaces?: boolean;
@@ -733,8 +774,9 @@ function buildFullyReusedShardDiagnostics(
     typescriptProjects?: readonly string[];
     clojureConfigPath?: string;
   },
+  projectFingerprint: ReindexFingerprint,
 ): ReindexShardDiagnostic[] {
-  const fingerprints = computeLanguageFingerprints(projectRoot, languages, opts);
+  const fingerprints = computeLanguageFingerprints(projectFingerprint, languages, opts);
   return languages.map((language) => ({
     id: language,
     language,
@@ -929,6 +971,7 @@ async function runLanguageIndexersForFreshReindex(
     typescriptProjectMode: opts.opts.typescriptProjectMode,
     typescriptProjects: opts.opts.typescriptProjects,
     clojureConfigPath: opts.opts.clojureConfigPath,
+    projectFingerprint: opts.fingerprint,
   });
   const reusableOutputs: IndexedOutput[] = [];
   const reused = new Set<SupportedLanguage>();
@@ -993,7 +1036,9 @@ async function runLanguageIndexersForFreshReindex(
   // project's fingerprint is built from), so the classification below is
   // skipped entirely on that path (today's behavior, untouched).
   const tsProjectShards =
-    incrementalTypeScript || reused.has('typescript') ? undefined : planTypeScriptProjectShardReuse(opts, classification);
+    incrementalTypeScript || reused.has('typescript')
+      ? undefined
+      : planTypeScriptProjectShardReuse(opts, classification);
 
   const {
     preparedRuns: preparedRunsAll,
@@ -1240,9 +1285,10 @@ function classifyLanguageShardReuse(opts: {
   typescriptProjectMode?: TypeScriptProjectMode;
   typescriptProjects?: readonly string[];
   clojureConfigPath?: string;
+  projectFingerprint: ReindexFingerprint;
 }): Map<SupportedLanguage, LanguageShardClassification> {
   const meta = readReindexMetaOrNull(opts.paths.metaPath);
-  const current = computeLanguageFingerprints(opts.projectRoot, opts.languages, opts);
+  const current = computeLanguageFingerprints(opts.projectFingerprint, opts.languages, opts);
   const result = new Map<SupportedLanguage, LanguageShardClassification>();
   for (const language of opts.languages) {
     const scipPath = languageShardPath(opts.paths.outputDb, language);
@@ -1402,9 +1448,8 @@ async function publishFreshReindexArtifacts(
   throwIfSignalAborted(opts.opts.signal, 'Reindex cancelled by its owner.');
   const completeScipAvailable = !incrementalTypeScript || incrementalTypeScript.completeScipUpdated;
   let completeScipSanitized = false;
-  let publishOutputs = indexedOutputs;
   if (completeScipAvailable) {
-    publishOutputs = materializeDeferredTypeScriptLanguageOutput({
+    const publishOutputs = materializeDeferredTypeScriptLanguageOutput({
       run: opts,
       indexedOutputs,
       incrementalTypeScript,
@@ -1572,6 +1617,33 @@ async function publishFreshReindexArtifacts(
       `Published local generation ${localGenerationPublication.currentGeneration.slice(0, 12)} ` +
         '(file-flushed; directory sync unsupported)',
     );
+  }
+  if (sqliteMaterialization.mode === 'incremental' && incrementalTypeScript) {
+    let acceptedDb: ScipDatabase | null = null;
+    try {
+      acceptedDb = new ScipDatabase({
+        projectRoot: opts.projectRoot,
+        dbPath: opts.paths.outputDb,
+        indexPath: opts.paths.outputScip,
+      });
+      const carried = carryFileDependencyGraph(
+        acceptedDb,
+        incrementalTypeScript.dependencyGraphSnapshot,
+        incrementalTypeScript.affectedFiles,
+      );
+      opts.onStatus(
+        carried
+          ? `Carried the dependency graph forward by replacing ${incrementalTypeScript.affectedFiles.length} affected document(s).`
+          : 'Dependency graph carry-forward was ineligible; the next graph consumer will rebuild it.',
+      );
+    } catch (error) {
+      opts.onStatus(
+        `Dependency graph carry-forward unavailable: ${error instanceof Error ? error.message : String(error)}. ` +
+          'The next graph consumer will rebuild it.',
+      );
+    } finally {
+      acceptedDb?.close();
+    }
   }
   pruneTypeScriptOverlays(
     dirname(opts.paths.outputDb),
@@ -2554,7 +2626,7 @@ type ReindexFingerprint = ProjectInputFingerprint;
 
 // scip-query: ignore-similar - per-language fingerprints intentionally reuse the project fingerprint inputs by language.
 function computeLanguageFingerprints(
-  projectRoot: string,
+  projectFingerprint: ReindexFingerprint,
   languages: readonly SupportedLanguage[],
   opts: {
     pnpmWorkspaces?: boolean;
@@ -2588,7 +2660,9 @@ function computeLanguageFingerprints(
           pnpmWorkspaces: language === 'typescript' && effectivePnpmWorkspaces(opts),
           ...typeScriptOptions,
           clojureConfigPath,
-          files: fingerprintProjectFiles(projectRoot, { language, markerFiles }),
+          files: projectFingerprint.files.filter((file) =>
+            isLanguageRelevantProjectInputPath(file.path, language, markerFiles),
+          ),
         },
       ];
     }),

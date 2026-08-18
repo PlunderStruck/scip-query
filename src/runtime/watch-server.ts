@@ -13,7 +13,7 @@ import {
   type WatchServiceState,
 } from '../platform/watch-service-state.js';
 import { loadProjectConfig, resolveWatchConfig } from './config.js';
-import { getIndexFreshness, type IndexFreshnessState } from './index-freshness.js';
+import { getIndexFreshness, getPublishedIndexFreshness, type IndexFreshnessState } from './index-freshness.js';
 import { Watcher } from './watch.js';
 import { initializeTypeScriptSemanticMailbox } from '../semantic/typescript/session-service.js';
 import {
@@ -303,6 +303,15 @@ export async function runWatchServiceServer(
     paths: indexMailboxPaths,
     projectRoot,
     dbPath: indexPaths.dbPath,
+    ...(config.indexer?.typescript?.maxWarmSessions === undefined
+      ? {}
+      : { maxActiveSessions: config.indexer.typescript.maxWarmSessions }),
+    ...(config.indexer?.typescript?.workerIdleMs === undefined
+      ? {}
+      : { workerIdleMs: config.indexer.typescript.workerIdleMs }),
+    ...(config.indexer?.typescript?.workerSoftMemoryMb === undefined
+      ? {}
+      : { workerSoftMemoryMb: config.indexer.typescript.workerSoftMemoryMb }),
     onBusy(deadlineAtMs) {
       indexBusyUntilMs = deadlineAtMs === undefined ? undefined : deadlineAtMs + 5_000;
       persistState(true, 'visibility');
@@ -321,9 +330,12 @@ export async function runWatchServiceServer(
       if (status.state !== 'idle') recordActivity();
       persistState(true);
     },
-    onReindexComplete() {
+    onReindexComplete(_durationMs, _trigger, context) {
       recordActivity();
-      const freshness = getIndexFreshness(projectRoot, config, indexPaths);
+      const freshness =
+        context?.pendingChanges !== false
+          ? getIndexFreshness(projectRoot, config, indexPaths)
+          : getPublishedIndexFreshness(indexPaths);
       lastRefresh = freshness.lastRefresh;
       indexGeneration =
         freshness.state === 'fresh' ? (publishedGenerationIdentity(indexPaths.dbPath) ?? undefined) : undefined;
@@ -442,12 +454,12 @@ export async function runWatchServiceServer(
   } catch (error) {
     executionFailed = true;
     executionError = error;
-    } finally {
-      process.off('SIGINT', stop);
-      process.off('SIGTERM', stop);
-      if (heartbeatTimer !== undefined) clearInterval(heartbeatTimer);
-      mailboxWake.close();
-      await Promise.all([
+  } finally {
+    process.off('SIGINT', stop);
+    process.off('SIGTERM', stop);
+    if (heartbeatTimer !== undefined) clearInterval(heartbeatTimer);
+    mailboxWake.close();
+    await Promise.all([
       semanticLane.close('TypeScript semantic service stopped before completing the request.'),
       indexLane.close('TypeScript index service stopped before completing the request.'),
     ]);

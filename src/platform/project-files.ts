@@ -16,7 +16,9 @@ import {
   classifyProjectInputPath,
   isLanguageRelevantProjectInputPath,
   type ProjectFileFingerprint,
+  type ProjectInputSnapshot,
 } from '../domain/project-input.js';
+import type { ProjectInputChangeJournal } from '../domain/project-input-change-journal.js';
 import {
   isPathInsideProject,
   normalizeSafeProjectRelativePath,
@@ -104,6 +106,10 @@ export interface ProjectInputFingerprintOptions {
 }
 
 export type ProjectInputFingerprintConfiguration = Omit<ProjectInputFingerprint, 'files'>;
+
+export type ProjectInputFingerprintBuild =
+  | { mode: 'delta'; fingerprint: ProjectInputFingerprint; changedPaths: string[] }
+  | { mode: 'full'; fingerprint: ProjectInputFingerprint; reason: string };
 
 /**
  * Dedupe, trim, and sort a `typescript.projects` config list — shared by the
@@ -266,101 +272,85 @@ export function fingerprintProjectFiles(
     .filter((path) => !opts.includePath || opts.includePath(path))
     .sort();
   const canonicalProjectRoot = realpathSync(projectRoot);
-  const fingerprints = files.flatMap((relativePath): ProjectFileFingerprint[] => {
-    const snapshotFingerprint = projectSnapshotFingerprint(projectRoot, relativePath);
-    if (snapshotFingerprint) {
-      return [
-        {
-          path: relativePath,
-          size: snapshotFingerprint.fingerprintSize ?? snapshotFingerprint.size,
-          hash: snapshotFingerprint.sha256,
-        },
-      ];
-    }
-    if (projectSnapshotPathState(projectRoot, relativePath) === 'present') {
-      const snapshotFile = projectSnapshotFile(projectRoot, relativePath);
-      if (snapshotFile) {
-        return [
-          {
-            path: relativePath,
-            size: snapshotFile.fingerprintSize ?? snapshotFile.size,
-            hash: snapshotFile.sha256,
-          },
-        ];
-      }
-    }
-    const absPath = join(projectRoot, relativePath);
-    try {
-      const stats = lstatSync(absPath);
-      if (stats.isSymbolicLink()) {
-        const cached = lookupProjectFileFingerprint(
-          canonicalProjectRoot,
-          relativePath,
-          'symlink',
-          fileStatIdentity(stats),
-        );
-        if (cached) {
-          return [{ path: relativePath, size: cached.size, hash: cached.hash }];
-        }
-        const targetPath = realpathSync(absPath);
-        const relativeTarget = relative(canonicalProjectRoot, targetPath);
-        if (relativeTarget === '..' || relativeTarget.startsWith(`..${sep}`) || isAbsolute(relativeTarget)) {
-          throw new Error('external symlink');
-        }
-        const target = readlinkSync(absPath);
-        const hash = createHash('sha256').update('symlink\0').update(target).digest('hex');
-        const size = Buffer.byteLength(target);
-        rememberProjectFileFingerprint(canonicalProjectRoot, relativePath, 'symlink', fileStatIdentity(stats), {
-          hash,
-          size,
-        });
-        return [
-          {
-            path: relativePath,
-            size,
-            hash,
-          },
-        ];
-      }
-      const cached = lookupProjectFileFingerprint(canonicalProjectRoot, relativePath, 'file', fileStatIdentity(stats));
-      if (cached) {
-        return [{ path: relativePath, size: cached.size, hash: cached.hash }];
-      }
-      const hash = createHash('sha256');
-      const size = hashFileWithinLimit(
-        absPath,
-        { inputKind: 'project fingerprint input', maxBytes: DEFAULT_PROJECT_SOURCE_LIMIT_BYTES },
-        (chunk) => hash.update(chunk),
-      );
-      const digest = hash.digest('hex');
-      rememberProjectFileFingerprint(canonicalProjectRoot, relativePath, 'file', fileStatIdentity(stats), {
-        hash: digest,
-        size,
-      });
-      return [
-        {
-          path: relativePath,
-          size,
-          hash: digest,
-        },
-      ];
-    } catch (error) {
-      // `git ls-files` includes tracked paths deleted in the working tree.
-      // Their absence is a proved deletion, not unreadable input. Omitting the
-      // current fingerprint lets buildProjectChangeManifest report `deleted`
-      // while real I/O failures continue to widen the affected set safely.
-      if (isMissingProjectFileError(error)) return [];
-      return [
-        {
-          path: relativePath,
-          size: -1,
-          hash: 'unreadable',
-        },
-      ];
-    }
-  });
+  const fingerprints = files.flatMap((relativePath) =>
+    fingerprintProjectFile(projectRoot, canonicalProjectRoot, relativePath),
+  );
   persistProjectFileFingerprintCache(canonicalProjectRoot);
   return fingerprints;
+}
+
+function fingerprintProjectFile(
+  projectRoot: string,
+  canonicalProjectRoot: string,
+  relativePath: string,
+): ProjectFileFingerprint[] {
+  const snapshotFingerprint = projectSnapshotFingerprint(projectRoot, relativePath);
+  if (snapshotFingerprint) {
+    return [
+      {
+        path: relativePath,
+        size: snapshotFingerprint.fingerprintSize ?? snapshotFingerprint.size,
+        hash: snapshotFingerprint.sha256,
+      },
+    ];
+  }
+  if (projectSnapshotPathState(projectRoot, relativePath) === 'present') {
+    const snapshotFile = projectSnapshotFile(projectRoot, relativePath);
+    if (snapshotFile) {
+      return [
+        {
+          path: relativePath,
+          size: snapshotFile.fingerprintSize ?? snapshotFile.size,
+          hash: snapshotFile.sha256,
+        },
+      ];
+    }
+  }
+  const absPath = join(projectRoot, relativePath);
+  try {
+    const stats = lstatSync(absPath);
+    if (stats.isSymbolicLink()) {
+      const cached = lookupProjectFileFingerprint(
+        canonicalProjectRoot,
+        relativePath,
+        'symlink',
+        fileStatIdentity(stats),
+      );
+      if (cached) return [{ path: relativePath, size: cached.size, hash: cached.hash }];
+      const targetPath = realpathSync(absPath);
+      const relativeTarget = relative(canonicalProjectRoot, targetPath);
+      if (relativeTarget === '..' || relativeTarget.startsWith(`..${sep}`) || isAbsolute(relativeTarget)) {
+        throw new Error('external symlink');
+      }
+      const target = readlinkSync(absPath);
+      const hash = createHash('sha256').update('symlink\0').update(target).digest('hex');
+      const size = Buffer.byteLength(target);
+      rememberProjectFileFingerprint(canonicalProjectRoot, relativePath, 'symlink', fileStatIdentity(stats), {
+        hash,
+        size,
+      });
+      return [{ path: relativePath, size, hash }];
+    }
+    const cached = lookupProjectFileFingerprint(canonicalProjectRoot, relativePath, 'file', fileStatIdentity(stats));
+    if (cached) return [{ path: relativePath, size: cached.size, hash: cached.hash }];
+    const hash = createHash('sha256');
+    const size = hashFileWithinLimit(
+      absPath,
+      { inputKind: 'project fingerprint input', maxBytes: DEFAULT_PROJECT_SOURCE_LIMIT_BYTES },
+      (chunk) => hash.update(chunk),
+    );
+    const digest = hash.digest('hex');
+    rememberProjectFileFingerprint(canonicalProjectRoot, relativePath, 'file', fileStatIdentity(stats), {
+      hash: digest,
+      size,
+    });
+    return [{ path: relativePath, size, hash: digest }];
+  } catch (error) {
+    // `git ls-files` includes tracked paths deleted in the working tree. Their
+    // absence is a proved deletion; other I/O failures remain conservative.
+    if (isMissingProjectFileError(error)) return [];
+    return [{ path: relativePath, size: -1, hash: 'unreadable' }];
+  }
 }
 
 function fileStatIdentity(stats: Stats): {
@@ -404,6 +394,98 @@ export function buildProjectInputFingerprint(
       includePaths: configuredMarkerFiles,
     }),
   };
+}
+
+/**
+ * A delta fingerprint is the next project-input identity derived from an
+ * accepted snapshot by applying only watcher-proved source-file mutations.
+ * Configuration and ambient mutations return the ordinary full fingerprint
+ * together with the reason that made enumeration necessary.
+ */
+export function buildProjectInputFingerprintFromJournal(
+  projectRoot: string,
+  languages: readonly SupportedLanguage[],
+  opts: ProjectInputFingerprintOptions,
+  previous: ProjectInputSnapshot | null,
+  journal: ProjectInputChangeJournal | undefined,
+  acceptedGeneration: string | null,
+): ProjectInputFingerprintBuild {
+  const full = (reason: string): ProjectInputFingerprintBuild => ({
+    mode: 'full',
+    fingerprint: buildProjectInputFingerprint(projectRoot, languages, opts),
+    reason,
+  });
+  if (!journal) return full('change-journal-unavailable');
+  if (!journal.complete) return full(`change-journal-incomplete:${journal.incompleteReason ?? 'unknown'}`);
+  if (!acceptedGeneration) return full('accepted-generation-unavailable');
+  if (journal.baseGeneration !== acceptedGeneration) return full('change-journal-base-mismatch');
+  if (!previous) return full('prior-project-input-snapshot-unavailable');
+
+  const configuration = normalizeProjectInputFingerprintConfiguration(languages, opts);
+  if (!sameProjectInputConfiguration(previous, configuration)) return full('project-input-configuration-changed');
+  if (new Set(previous.files.map((file) => file.path)).size !== previous.files.length) {
+    return full('prior-project-input-snapshot-has-duplicate-paths');
+  }
+  if (journal.entries.length === 0) {
+    return {
+      mode: 'delta',
+      fingerprint: { ...configuration, files: [...previous.files].sort((a, b) => a.path.localeCompare(b.path)) },
+      changedPaths: [],
+    };
+  }
+
+  const configuredMarkerFiles = [
+    // Keep configured paths as classification markers even after deletion.
+    // Directory-valued project entries cannot collide with a source file below them
+    // because marker matching is exact rather than prefix-based.
+    ...configuration.typescriptProjects,
+    ...(configuration.clojureConfigPath ? [configuration.clojureConfigPath] : []),
+  ];
+  const previousFiles = new Map(previous.files.map((file) => [file.path, file]));
+  for (const entry of journal.entries) {
+    const prior = previousFiles.get(entry.path);
+    if (classifyProjectInputPath(entry.path, languages, configuredMarkerFiles) !== 'source') {
+      return full('non-source-project-input-changed');
+    }
+    if (entry.kind === 'add' && prior) return full('added-path-already-in-prior-project-input-snapshot');
+    if (entry.kind === 'delete' && !prior) return full('deleted-path-not-in-prior-project-input-snapshot');
+    if (entry.kind === 'change' && !prior) return full('changed-path-not-in-prior-project-input-snapshot');
+    if (prior && (prior.hash === 'unreadable' || prior.size < 0)) return full('changed-path-was-unreadable');
+  }
+
+  const canonicalProjectRoot = realpathSync(projectRoot);
+  for (const entry of journal.entries) {
+    const current = fingerprintProjectFile(projectRoot, canonicalProjectRoot, entry.path);
+    if (entry.kind === 'delete') {
+      if (current.length !== 0) return full('deleted-source-is-still-readable');
+      previousFiles.delete(entry.path);
+      continue;
+    }
+    if (current.length !== 1 || current[0]!.hash === 'unreadable' || current[0]!.size < 0) {
+      return full(entry.kind === 'add' ? 'added-source-is-not-readable' : 'changed-source-no-longer-readable');
+    }
+    previousFiles.set(entry.path, current[0]!);
+  }
+  persistProjectFileFingerprintCache(canonicalProjectRoot);
+  return {
+    mode: 'delta',
+    fingerprint: { ...configuration, files: [...previousFiles.values()].sort((a, b) => a.path.localeCompare(b.path)) },
+    changedPaths: journal.entries.map((entry) => entry.path).sort(),
+  };
+}
+
+function sameProjectInputConfiguration(
+  previous: ProjectInputSnapshot,
+  current: ProjectInputFingerprintConfiguration,
+): boolean {
+  return (
+    previous.version === current.version &&
+    JSON.stringify([...previous.languages].sort()) === JSON.stringify(current.languages) &&
+    previous.pnpmWorkspaces === current.pnpmWorkspaces &&
+    previous.typescriptProjectMode === current.typescriptProjectMode &&
+    JSON.stringify([...previous.typescriptProjects].sort()) === JSON.stringify(current.typescriptProjects) &&
+    previous.clojureConfigPath === current.clojureConfigPath
+  );
 }
 
 function isTypeScriptSourcePath(path: string): boolean {

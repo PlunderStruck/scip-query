@@ -56,6 +56,20 @@ export interface TypeScriptIndexServiceStatus {
   requests: number;
   sessionsCreated: number;
   sessionsReplaced: number;
+  /** Present in services that enforce a warm compiler-session budget. */
+  sessionsEvicted?: number;
+  /** Present in services that report their current warm compiler-session footprint. */
+  activeSessions?: number;
+  /** Present in services that enforce a warm compiler-session budget. */
+  maxActiveSessions?: number;
+  /** Heap bytes currently retained by the TypeScript worker isolate. */
+  heapUsedBytes?: number;
+  /** Maximum heap bytes available to the TypeScript worker isolate. */
+  heapLimitBytes?: number;
+  /** Heap high-water mark after which the parent retires this worker. */
+  softMemoryLimitBytes?: number;
+  /** True when the parent should retire this worker after settling its current response. */
+  retireRequested?: boolean;
   initializations: number;
   programUpdates: number;
   documentsEmitted: number;

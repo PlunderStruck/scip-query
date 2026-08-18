@@ -1,0 +1,49 @@
+{
+  "acceptedAt": "2026-08-18T13:58:47.219Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "93a1c2bf1ac7bcaebf9bde89478fa09d13189c4aa4a9a14ddea491c9fb1fe0f9",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ReindexOptions changed from interface ReindexOptions { projectRoot: string; languages?: SupportedLanguage[]; outputScip?: string; outputDb?: string; maxHeapMb?: number; onStatus?: (message: string) => void... to interface ReindexOptions { projectRoot: string; languages?: SupportedLanguage[]; outputScip?: string; outputDb?: string; maxHeapMb?: number; onStatus?: (message: string) => void....",
+      "target": "./reindex:ReindexOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ReindexCompletionContext.",
+      "target": "./runtime:ReindexCompletionContext"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ReindexRunRequest changed from interface ReindexRunRequest { projectRoot: string; config: ProjectConfig; languages?: SupportedLanguage[]; pnpmWorkspaces: boolean; typescriptProjectMode?: TypeScriptProjectMode... to interface ReindexRunRequest { projectRoot: string; config: ProjectConfig; languages?: SupportedLanguage[]; pnpmWorkspaces: boolean; typescriptProjectMode?: TypeScriptProjectMode....",
+      "target": "./runtime:ReindexRunRequest"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "Watcher changed from declare class Watcher { private projectRoot; private config; private watchConfig; private outputDb; private languages?; private pnpmWorkspaces; private typescriptProjectMode?; p... to declare class Watcher { private projectRoot; private config; private watchConfig; private outputDb; private languages?; private pnpmWorkspaces; private typescriptProjectMode?; p....",
+      "target": "./runtime:Watcher"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "WatcherOptions changed from interface WatcherOptions { projectRoot: string; config: ProjectConfig; languages?: SupportedLanguage[]; reindexRunner?: ReindexRunner; subscriptionFactory?: WatchSubscriptionFac... to interface WatcherOptions { projectRoot: string; config: ProjectConfig; languages?: SupportedLanguage[]; reindexRunner?: ReindexRunner; subscriptionFactory?: WatchSubscriptionFac....",
+      "target": "./runtime:WatcherOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration P.",
+      "target": "scip-cli-<hash>.d.ts:P"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "0092de88bcac7d9a7c47f901ec905f2f4da91fff6a8aaa695740de5e5b63efca",
+  "reason": "The checker sees exported Watcher private-state changes, but the callable change is compatible: journal fields and the completion-context parameter are optional, and legacy callers retain the prior behavior.",
+  "schemaVersion": 1
+}

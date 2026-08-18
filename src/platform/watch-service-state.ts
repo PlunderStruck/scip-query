@@ -47,6 +47,13 @@ export interface TypeScriptIndexServiceStatusSnapshot {
   requests: number;
   sessionsCreated: number;
   sessionsReplaced: number;
+  sessionsEvicted?: number;
+  activeSessions?: number;
+  maxActiveSessions?: number;
+  heapUsedBytes?: number;
+  heapLimitBytes?: number;
+  softMemoryLimitBytes?: number;
+  retireRequested?: boolean;
   initializations: number;
   programUpdates: number;
   documentsEmitted: number;
@@ -328,6 +335,13 @@ function validTypeScriptIndexStatus(value: unknown): value is TypeScriptIndexSer
     isNonNegativeInteger(status.requests) &&
     isNonNegativeInteger(status.sessionsCreated) &&
     isNonNegativeInteger(status.sessionsReplaced) &&
+    (status.sessionsEvicted === undefined || isNonNegativeInteger(status.sessionsEvicted)) &&
+    (status.activeSessions === undefined || isNonNegativeInteger(status.activeSessions)) &&
+    (status.maxActiveSessions === undefined || isNonNegativeInteger(status.maxActiveSessions)) &&
+    (status.heapUsedBytes === undefined || isNonNegativeInteger(status.heapUsedBytes)) &&
+    (status.heapLimitBytes === undefined || isNonNegativeInteger(status.heapLimitBytes)) &&
+    (status.softMemoryLimitBytes === undefined || isNonNegativeInteger(status.softMemoryLimitBytes)) &&
+    (status.retireRequested === undefined || typeof status.retireRequested === 'boolean') &&
     isNonNegativeInteger(status.initializations) &&
     isNonNegativeInteger(status.programUpdates) &&
     isNonNegativeInteger(status.documentsEmitted) &&

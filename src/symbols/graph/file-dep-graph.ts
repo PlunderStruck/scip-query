@@ -7,11 +7,19 @@ import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { profileSpan } from '../../instrumentation/profile.js';
 
 interface FileDependencyGraphPayload {
-  sourceDependencyFingerprint: string;
+  version: 2;
+  construction: 'full' | 'carried';
+  sourceDependencyFingerprint: string | null;
   sourceFileCount: number;
-  sourceEdgeCount: number;
-  scipEdgeCount: number;
+  sourceEdgeCount: number | null;
+  scipEdgeCount: number | null;
+  edgeCount: number;
   graph: Array<[string, string[]]>;
+}
+
+export interface FileDependencyGraphSnapshot {
+  cacheKey: string;
+  graph: Map<string, Set<string>>;
 }
 
 interface SourceDependencyEdge {
@@ -60,11 +68,12 @@ export function buildFileDepGraph(
     const indexedFiles = new Set(indexedDocumentPaths(db, { includeIgnored: false }));
     const projectFingerprint = projectEvidenceFingerprint(db);
     let sourceFileCount = 0;
-    let sourceEdgeCount = 0;
+    let sourceEdgeCount: number | null = 0;
     let sourceDependencyFingerprintValue: string | null = null;
     let hit = false;
-    let scipEdgeCount = 0;
+    let scipEdgeCount: number | null = 0;
     let graphFileCount = 0;
+    let construction: FileDependencyGraphPayload['construction'] | null = null;
 
     return profileSpan(
       'file-dep-graph.product',
@@ -73,6 +82,7 @@ export function buildFileDepGraph(
           const cached = FILE_DEPENDENCY_GRAPH_PRODUCT.read(db, cacheKey, projectFingerprint);
           if (cached) {
             hit = true;
+            construction = cached.construction;
             const graph = graphFromPayload(cached);
             sourceFileCount = cached.sourceFileCount;
             sourceEdgeCount = cached.sourceEdgeCount;
@@ -103,7 +113,7 @@ export function buildFileDepGraph(
           'file-dep-graph.scip-edges',
           () => {
             for (const edge of scipFileDepEdges(db, scope, scipEdges)) {
-              scipEdgeCount += 1;
+              scipEdgeCount = (scipEdgeCount ?? 0) + 1;
               addEdge(edge.from_file, edge.to_file);
             }
           },
@@ -114,11 +124,15 @@ export function buildFileDepGraph(
         graphFileCount = graph.size;
 
         if (projectFingerprint) {
+          construction = 'full';
           FILE_DEPENDENCY_GRAPH_PRODUCT.write(db, cacheKey, projectFingerprint, {
+            version: 2,
+            construction: 'full',
             sourceDependencyFingerprint: sourceDependencies.fingerprint,
             sourceFileCount: sourceDependencies.files.length,
             sourceEdgeCount: sourceDependencies.edges.length,
             scipEdgeCount,
+            edgeCount: graphEdgeCount(graph),
             graph: graphPayloadFromGraph(graph),
           });
         }
@@ -129,6 +143,7 @@ export function buildFileDepGraph(
         scope: scope ?? null,
         available: projectFingerprint !== null,
         hit,
+        construction,
         files: sourceFileCount,
         sourceEdges: sourceEdgeCount,
         sourceEdgeMode: sourceEdges,
@@ -138,6 +153,61 @@ export function buildFileDepGraph(
       }),
     );
   });
+}
+
+/**
+ * Captures one complete dependency product so a later immutable generation can
+ * replace only the outgoing edges of documents it re-emitted.
+ */
+export function captureFileDependencyGraph(db: ScipDatabase): FileDependencyGraphSnapshot {
+  const cacheKey = fileDependencyGraphCacheKey(undefined, 'all-references', 'imports-only');
+  const graph = buildFileDepGraph(db);
+  return { cacheKey, graph: cloneGraph(graph) };
+}
+
+/**
+ * A carried dependency graph is the next generation's complete graph produced
+ * by retaining untouched outgoing edges and rereading the re-emitted documents
+ * from the accepted candidate database.
+ */
+export function carryFileDependencyGraph(
+  db: ScipDatabase,
+  previous: FileDependencyGraphSnapshot,
+  replacedPaths: readonly string[],
+): boolean {
+  const projectFingerprint = projectEvidenceFingerprint(db);
+  if (!projectFingerprint) return false;
+  const expectedCacheKey = fileDependencyGraphCacheKey(undefined, 'all-references', 'imports-only');
+  if (previous.cacheKey !== expectedCacheKey) return false;
+
+  const indexedFiles = new Set(indexedDocumentPaths(db, { includeIgnored: false }));
+  const replaced = new Set(replacedPaths);
+  const graph = new Map<string, Set<string>>();
+  for (const [fromFile, dependencies] of previous.graph) {
+    if (replaced.has(fromFile) || !indexedFiles.has(fromFile)) continue;
+    for (const toFile of dependencies) addFileDepEdge(db, graph, indexedFiles, fromFile, toFile);
+  }
+  for (const edge of scipFileDepEdgesForFiles(db, replaced, 'all-references')) {
+    addFileDepEdge(db, graph, indexedFiles, edge.from_file, edge.to_file);
+  }
+  for (const fromFile of replaced) {
+    if (!indexedFiles.has(fromFile)) continue;
+    for (const entry of getSourceImports(db, fromFile)) {
+      if (entry.sourcePath) addFileDepEdge(db, graph, indexedFiles, fromFile, entry.sourcePath);
+    }
+  }
+
+  FILE_DEPENDENCY_GRAPH_PRODUCT.write(db, expectedCacheKey, projectFingerprint, {
+    version: 2,
+    construction: 'carried',
+    sourceDependencyFingerprint: null,
+    sourceFileCount: indexedFiles.size,
+    sourceEdgeCount: null,
+    scipEdgeCount: null,
+    edgeCount: graphEdgeCount(graph),
+    graph: graphPayloadFromGraph(graph),
+  });
+  return true;
 }
 
 function collectSourceDependencyEdges(
@@ -180,13 +250,15 @@ function fileDependencyGraphCacheKey(
   scipEdges: 'all-references' | 'imports-only',
   sourceEdges: SourceDependencyEdgeMode,
 ): string {
-  // v3 separates source import-only graphs from architecture's re-export-aware
-  // graph, so a warm result from either mode can never satisfy the other.
-  return `edge-mode-v3:${scipEdges}:${sourceEdges}:${scope ?? '<all>'}`;
+  // v4 separates the carried-forward payload schema from earlier full-build
+  // products while retaining the source-edge-mode separation introduced in v3.
+  return `edge-mode-v4:${scipEdges}:${sourceEdges}:${scope ?? '<all>'}`;
 }
 
 function graphPayloadFromGraph(graph: Map<string, Set<string>>): Array<[string, string[]]> {
-  return [...graph].map(([file, deps]) => [file, [...deps]]);
+  return [...graph]
+    .map(([file, deps]): [string, string[]] => [file, [...deps].sort()])
+    .sort(([left], [right]) => left.localeCompare(right));
 }
 
 function graphFromPayload(payload: FileDependencyGraphPayload): Map<string, Set<string>> {
@@ -203,13 +275,26 @@ function isFileDependencyGraphPayload(value: unknown): value is FileDependencyGr
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<FileDependencyGraphPayload>;
   return (
-    typeof candidate.sourceDependencyFingerprint === 'string' &&
+    candidate.version === 2 &&
+    (candidate.construction === 'full' || candidate.construction === 'carried') &&
+    (candidate.sourceDependencyFingerprint === null || typeof candidate.sourceDependencyFingerprint === 'string') &&
     typeof candidate.sourceFileCount === 'number' &&
-    typeof candidate.sourceEdgeCount === 'number' &&
-    typeof candidate.scipEdgeCount === 'number' &&
+    (candidate.sourceEdgeCount === null || typeof candidate.sourceEdgeCount === 'number') &&
+    (candidate.scipEdgeCount === null || typeof candidate.scipEdgeCount === 'number') &&
+    typeof candidate.edgeCount === 'number' &&
     Array.isArray(candidate.graph) &&
     candidate.graph.every(isGraphPayloadEntry)
   );
+}
+
+function cloneGraph(graph: ReadonlyMap<string, ReadonlySet<string>>): Map<string, Set<string>> {
+  return new Map([...graph].map(([file, dependencies]) => [file, new Set(dependencies)]));
+}
+
+function graphEdgeCount(graph: ReadonlyMap<string, ReadonlySet<string>>): number {
+  let count = 0;
+  for (const dependencies of graph.values()) count += dependencies.size;
+  return count;
 }
 
 function isGraphPayloadEntry(value: unknown): value is [string, string[]] {
@@ -252,6 +337,46 @@ function scipFileDepEdges(
 	      ${scopeFilter}`,
     ...scopeParams,
   );
+}
+
+function scipFileDepEdgesForFiles(
+  db: ScipDatabase,
+  relativePaths: ReadonlySet<string>,
+  edgeMode: 'all-references' | 'imports-only',
+): Array<{ from_file: string; to_file: string }> {
+  const paths = [...relativePaths].sort();
+  if (paths.length === 0) return [];
+  const roleFilter = edgeMode === 'imports-only' ? 'AND m.role = 2' : 'AND m.role != 1';
+  const result: Array<{ from_file: string; to_file: string }> = [];
+  for (let offset = 0; offset < paths.length; offset += 500) {
+    const batch = paths.slice(offset, offset + 500);
+    const placeholders = batch.map(() => '?').join(', ');
+    result.push(
+      ...db.all<{ from_file: string; to_file: string }>(
+        `SELECT DISTINCT
+          d1.relative_path AS from_file,
+          d2.relative_path AS to_file
+        FROM mentions m
+        JOIN chunks c ON m.chunk_id = c.id
+        JOIN documents d1 ON c.document_id = d1.id
+        JOIN global_symbols gs ON m.symbol_id = gs.id
+        JOIN (
+          SELECT m2.symbol_id, c2.document_id
+          FROM mentions m2
+          JOIN chunks c2 ON m2.chunk_id = c2.id
+          WHERE m2.role = 1
+          GROUP BY m2.symbol_id
+        ) sym_def ON sym_def.symbol_id = gs.id
+        JOIN documents d2 ON sym_def.document_id = d2.id
+        WHERE d1.id != d2.id
+          ${roleFilter}
+          ${db.pathExclusionsFor('d1', 'd2')}
+          AND d1.relative_path IN (${placeholders})`,
+        ...batch,
+      ),
+    );
+  }
+  return result;
 }
 
 function addFileDepEdge(

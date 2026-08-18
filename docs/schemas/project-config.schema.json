@@ -111,7 +111,10 @@
         "pnpmWorkspaces": { "type": "boolean" },
         "projectMode": { "enum": ["single", "workspace"] },
         "projects": { "$ref": "#/$defs/stringArray" },
-        "configPath": { "type": "string", "minLength": 1 }
+        "configPath": { "type": "string", "minLength": 1 },
+        "maxWarmSessions": { "type": "integer", "exclusiveMinimum": 0 },
+        "workerIdleMs": { "type": "integer", "minimum": 0 },
+        "workerSoftMemoryMb": { "type": "integer", "exclusiveMinimum": 0 }
       }
     },
     "entryRoots": {

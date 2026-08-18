@@ -448,4 +448,10 @@ export interface IndexerOverrides {
   projects?: string[];
   /** Indexer-specific config file path, relative to project root */
   configPath?: string;
+  /** Maximum TypeScript compiler programs retained by the watch worker (default: 8). */
+  maxWarmSessions?: number;
+  /** Retire an idle TypeScript index worker after this many milliseconds (default: 600000; 0 keeps it warm). */
+  workerIdleMs?: number;
+  /** Retire the TypeScript index worker after a response reaches this heap usage, in MiB. */
+  workerSoftMemoryMb?: number;
 }

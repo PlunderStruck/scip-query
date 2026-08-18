@@ -12,8 +12,12 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
-import { loadTypeScriptDocumentRuntime } from '../../src/reindex/typescript-document-emitter.js';
 import {
+  createTypeScriptDocumentEmitter,
+  loadTypeScriptDocumentRuntime,
+} from '../../src/reindex/typescript-document-emitter.js';
+import {
+  TypeScriptIndexMemoryPressureError,
   TypeScriptIndexRequester,
   type RequestedTypeScriptDocuments,
   type TypeScriptIndexRequesterRuntime,
@@ -261,6 +265,110 @@ describe('TypeScript index service mailbox', () => {
     expect(host.status().requests).toBe(4);
   });
 
+  test('keeps recently used compiler sessions warm within a fixed memory budget', () => {
+    const availability = loadTypeScriptDocumentRuntime();
+    expect(availability.available).toBe(true);
+    if (!availability.available) return;
+    const fixture = serviceFixture();
+    const activeSessionsAtCreation: number[] = [];
+    const hostRef: { current: TypeScriptIndexServiceHost | null } = { current: null };
+    const host = new TypeScriptIndexServiceHost({
+      projectRoot: fixture.projectRoot,
+      currentGeneration: () => 'base',
+      maxActiveSessions: 2,
+      createEmitter: (options) => {
+        activeSessionsAtCreation.push(hostRef.current?.status().activeSessions ?? -1);
+        return createTypeScriptDocumentEmitter(options);
+      },
+    });
+    hostRef.current = host;
+    const requestFor = (project: string): TypeScriptIndexDocumentRequest => {
+      const sourcePath = `${project}/src/value.ts`;
+      mkdirSync(join(fixture.projectRoot, project, 'src'), { recursive: true });
+      writeFileSync(join(fixture.projectRoot, sourcePath), `export const value = '${project}';\n`);
+      writeFileSync(
+        join(fixture.projectRoot, project, 'tsconfig.json'),
+        JSON.stringify({ compilerOptions: { target: 'ES2022', module: 'ESNext' }, include: ['src/**/*.ts'] }),
+      );
+      return {
+        kind: 'emit-documents',
+        tsconfigPath: `${project}/tsconfig.json`,
+        projectArgument: project,
+        projectIdentity: 'fixture-project-v1',
+        producerIdentity: availability.producerIdentity,
+        modifiedFiles: [sourcePath],
+        affectedFiles: [sourcePath],
+      };
+    };
+
+    const first = requestFor('packages/first');
+    const second = requestFor('packages/second');
+    const third = requestFor('packages/third');
+    expect(host.handle('base', first).cold).toBe(true);
+    expect(host.handle('base', second).cold).toBe(true);
+    expect(host.handle('base', first).cold).toBe(false);
+    expect(host.handle('base', third).cold).toBe(true);
+    expect(host.handle('base', second).cold).toBe(true);
+    expect(host.status()).toEqual(
+      expect.objectContaining({
+        sessionsCreated: 4,
+        sessionsEvicted: 2,
+        activeSessions: 2,
+        maxActiveSessions: 2,
+      }),
+    );
+    expect(activeSessionsAtCreation).toEqual([0, 1, 1, 1]);
+  });
+
+  test('reports heap high-water pressure so the parent can retire the Worker after its response', () => {
+    const fixture = serviceFixture();
+    const mebibyte = 1024 * 1024;
+    const host = new TypeScriptIndexServiceHost({
+      projectRoot: fixture.projectRoot,
+      currentGeneration: () => 'base',
+      softMemoryLimitMb: 600,
+      memoryUsage: () => ({ heapUsedBytes: 700 * mebibyte, heapLimitBytes: 1024 * mebibyte }),
+    });
+
+    expect(host.status()).toEqual(
+      expect.objectContaining({
+        heapUsedBytes: 700 * mebibyte,
+        heapLimitBytes: 1024 * mebibyte,
+        softMemoryLimitBytes: 600 * mebibyte,
+        retireRequested: true,
+      }),
+    );
+  });
+
+  test('classifies terminal Worker OOM responses as memory pressure', () => {
+    const fixture = serviceFixture();
+    const paths = typeScriptIndexMailboxPaths(fixture.cacheDir);
+    initializeTypeScriptIndexMailbox(paths);
+    const host = new TypeScriptIndexServiceHost({
+      projectRoot: fixture.projectRoot,
+      currentGeneration: () => 'base',
+    });
+    writeLiveState(fixture.cacheDir, fixture.projectRoot, host.status());
+    const requester = requesterWithRuntime(fixture, {
+      now: () => NOW,
+      randomId: () => 'oom',
+      isProcessAlive: () => true,
+      sleep: () => {
+        const envelope = onlyPendingEnvelope(paths.pendingDir);
+        writeJsonAtomic(join(paths.responseDir, `${envelope.id}.json`), {
+          ok: false,
+          protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
+          id: envelope.id,
+          operationKey: envelope.operationKey,
+          error: 'TypeScript index worker failed: Worker terminated due to reaching memory limit',
+        });
+        rmSync(envelope.requestPath, { force: true });
+      },
+    });
+
+    expect(() => requester.request(indexRequest('producer-oom'))).toThrow(TypeScriptIndexMemoryPressureError);
+  });
+
   test('rejects malformed/expired work and bounds requester crash and timeout paths', () => {
     const fixture = serviceFixture();
     const paths = typeScriptIndexMailboxPaths(fixture.cacheDir);
@@ -484,18 +592,27 @@ describe('TypeScript index service mailbox', () => {
     initializeTypeScriptIndexMailbox(paths);
     writeRequest(paths.requestDir, 'isolated', 'base', indexRequest('producer'));
     const worker = new FakeIndexWorker();
+    let workerData: unknown;
     const lane = createTypeScriptIndexMailboxLane({
       paths,
       projectRoot: fixture.projectRoot,
       dbPath: join(fixture.cacheDir, 'index.db'),
+      maxActiveSessions: 2,
+      workerSoftMemoryMb: 6144,
       now: () => NOW,
-      createWorker: () => worker,
+      createWorker: (data) => {
+        workerData = data;
+        return worker;
+      },
       onFatal: (error) => {
         throw error;
       },
     });
 
     expect(lane.poll()).toBe(1);
+    expect(workerData).toEqual(
+      expect.objectContaining({ kind: 'index', maxActiveSessions: 2, softMemoryLimitMb: 6144 }),
+    );
     expect(worker.posts).toHaveLength(1);
     expect(existsSync(join(paths.responseDir, 'isolated.json'))).toBe(false);
     const status = new TypeScriptIndexServiceHost({

@@ -15,13 +15,13 @@ import { createTypeScriptSemanticIdentityBuilder } from '../semantic/typescript/
 import { isTypeScriptLike } from '../semantic/typescript/source-kinds.js';
 import { ScipDatabase } from '../storage/db.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
-import { buildFileDepGraph } from '../symbols/graph/file-dep-graph.js';
+import { captureFileDependencyGraph, type FileDependencyGraphSnapshot } from '../symbols/graph/file-dep-graph.js';
 import { planAffectedFiles, type AffectedFilePlan } from './affected-set.js';
 import { inspectTypeScriptDocumentProducer } from './typescript-document-emitter.js';
 import { assembleAffectedTypeScriptFragments } from './typescript-fragment-store.js';
 import { commitTypeScriptOverlay, materializeTypeScriptOverlay } from './typescript-overlay-store.js';
 import { publishedTypeScriptIndexGeneration } from './typescript-index-protocol.js';
-import { TypeScriptIndexRequester } from './typescript-index-requester.js';
+import { TypeScriptIndexMemoryPressureError, TypeScriptIndexRequester } from './typescript-index-requester.js';
 import { discoverTypeScriptProjectRoots } from './typescript-projects.js';
 import type { SemanticReferenceFragment } from '../semantic/types.js';
 import { readFileWithinLimit, SCIP_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
@@ -97,6 +97,8 @@ export interface MaterializedTypeScriptIncrementalIndex {
   manifest: ProjectChangeManifest;
   plan: AffectedFilePlan;
   projectFileCount: number;
+  /** Exact dependency graph used to plan this update, retained for next-generation carry-forward. */
+  dependencyGraphSnapshot: FileDependencyGraphSnapshot;
   referenceFragmentsByFile: Map<string, SemanticReferenceFragment[]>;
   timings: {
     runtimeMs: number;
@@ -324,9 +326,11 @@ export function tryMaterializeTypeScriptIncrementalIndex(
     });
     let projectFiles: string[];
     let graph: FileDependencyGraph;
+    let dependencyGraphSnapshot: FileDependencyGraphSnapshot;
     try {
       projectFiles = indexedDocumentPaths(db, { includeIgnored: false }).filter(isTypeScriptLike).sort();
-      graph = buildFileDepGraph(db);
+      dependencyGraphSnapshot = captureFileDependencyGraph(db);
+      graph = dependencyGraphSnapshot.graph;
     } finally {
       db.close();
     }
@@ -399,6 +403,7 @@ export function tryMaterializeTypeScriptIncrementalIndex(
       manifest: eligibility.manifest,
       plan: eligibility.plan,
       projectFileCount: projectFiles.length,
+      dependencyGraphSnapshot,
       referenceFragmentsByFile: new Map(
         fragments.map((fragment) => [fragment.relativePath, fragment.referenceFragments]),
       ),
@@ -419,6 +424,12 @@ export function tryMaterializeTypeScriptIncrementalIndex(
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     input.onUnavailable?.(reason);
+    if (error instanceof TypeScriptIndexMemoryPressureError) {
+      input.onStatus(
+        `Incremental TypeScript index stopped after memory pressure survived one cold Worker retry: ${reason}. Preserving the accepted index instead of starting a memory-heavier whole-project rebuild.`,
+      );
+      throw error;
+    }
     input.onStatus(`Incremental TypeScript index unavailable: ${reason}. Falling back to the whole-project indexer.`);
     return null;
   }

@@ -1,9 +1,14 @@
+import Database from 'better-sqlite3';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ScipDatabase } from '../../src/storage/db.js';
-import { buildFileDepGraph } from '../../src/symbols/graph/file-dep-graph.js';
+import {
+  buildFileDepGraph,
+  captureFileDependencyGraph,
+  carryFileDependencyGraph,
+} from '../../src/symbols/graph/file-dep-graph.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
 const PROFILE_ENV_KEYS = ['SCIP_QUERY_PROFILE', 'SCIP_QUERY_PROFILE_OUT', 'SCIP_QUERY_PROFILE_COMMAND'] as const;
@@ -165,6 +170,55 @@ describe('file dependency graph evidence', () => {
       } finally {
         db2.close();
       }
+    });
+  });
+
+  it('carries an exact graph forward by replacing only affected outgoing edges', () => {
+    withFixture((openDb, profilePath) => {
+      const db1 = openDb();
+      const snapshot = captureFileDependencyGraph(db1);
+      db1.close();
+
+      writeFileSync(
+        join(tempDir!, 'project/src/c.ts'),
+        "import { a } from './a';\nexport function c(): string { return a(); }\n",
+      );
+      const sqlite = new Database(join(tempDir!, 'index.db'));
+      sqlite.prepare('UPDATE mentions SET symbol_id = ? WHERE chunk_id = ? AND role = ?').run(1, 3, 0);
+      sqlite.close();
+
+      const metadataPath = join(tempDir!, 'meta.json');
+      const metadata = JSON.parse(readFileSync(metadataPath, 'utf8')) as {
+        fingerprint: { files: Array<{ path: string; size: number; hash: string }> };
+      };
+      const changed = metadata.fingerprint.files.find((file) => file.path === 'src/c.ts');
+      if (!changed) throw new Error('fixture metadata is missing src/c.ts');
+      changed.hash = 'c-next';
+      writeFileSync(metadataPath, JSON.stringify(metadata));
+
+      const db2 = openDb();
+      try {
+        expect(carryFileDependencyGraph(db2, snapshot, ['src/c.ts'])).toBe(true);
+      } finally {
+        db2.close();
+      }
+
+      const db3 = openDb();
+      try {
+        expect(graphShape(buildFileDepGraph(db3))).toEqual([
+          ['src/a.ts', ['src/b.ts']],
+          ['src/c.ts', ['src/a.ts']],
+        ]);
+      } finally {
+        db3.close();
+      }
+
+      const productEvents = readFileSync(profilePath, 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line) as Record<string, unknown>)
+        .filter((event) => event.name === 'file-dep-graph.product');
+      expect(productEvents.at(-1)).toMatchObject({ hit: true, construction: 'carried', graphFiles: 2 });
     });
   });
 });

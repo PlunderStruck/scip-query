@@ -25,7 +25,7 @@ import {
   validateProjectConfig,
   SUPPORTED_LANGUAGES,
 } from '../config.js';
-import { getIndexFreshness, type IndexFreshness } from '../index-freshness.js';
+import { getIndexFreshness, getPublishedIndexFreshness, type IndexFreshness } from '../index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from '../project-readiness.js';
 import { Watcher } from '../watch.js';
 import {
@@ -899,9 +899,14 @@ export function handleWatch(rawOpts: unknown): void {
     onStatus: (status) => {
       process.stdout.write(`\r\x1b[K${sanitizeTerminalLine(formatStatus(status))}`);
     },
-    onReindexComplete: (durationMs) => {
+    onReindexComplete: (durationMs, _trigger, context) => {
       console.log(`\nReindex complete in ${(durationMs / 1000).toFixed(1)}s`);
-      return getIndexFreshness(projectRoot, config, paths).state === 'fresh';
+      return (
+        (context?.pendingChanges !== false
+          ? getIndexFreshness(projectRoot, config, paths)
+          : getPublishedIndexFreshness(paths)
+        ).state === 'fresh'
+      );
     },
     onRefreshSuppressed: (trigger) => {
       const activityWrite = recordSuppressedReindexActivity(paths.dbPath, trigger);
@@ -1077,9 +1082,22 @@ function renderWatchServiceReport(report: ReturnType<typeof watchServiceReport>)
   }
   if ('typescriptIndex' in report && report.typescriptIndex) {
     const index = report.typescriptIndex;
+    const sessionBudget =
+      index.activeSessions === undefined || index.maxActiveSessions === undefined
+        ? ''
+        : `, ${index.activeSessions}/${index.maxActiveSessions} warm sessions`;
     console.log(
-      `TypeScript index: ${index.state} (${index.initializations} warmups, ${index.programUpdates} updates, ${index.requests} requests)`,
+      `TypeScript index: ${index.state} (${index.initializations} warmups, ${index.programUpdates} updates, ${index.requests} requests${sessionBudget}` +
+        `${index.sessionsEvicted ? `, ${index.sessionsEvicted} evicted` : ''})`,
     );
+    if (index.heapUsedBytes !== undefined) {
+      console.log(
+        `TypeScript index memory: ${formatBytes(index.heapUsedBytes)}` +
+          `${index.heapLimitBytes === undefined ? '' : ` / ${formatBytes(index.heapLimitBytes)} heap`}` +
+          `${index.softMemoryLimitBytes === undefined ? '' : `; ${formatBytes(index.softMemoryLimitBytes)} retirement mark`}` +
+          `${index.retireRequested ? '; retirement requested' : ''}`,
+      );
+    }
   }
 }
 

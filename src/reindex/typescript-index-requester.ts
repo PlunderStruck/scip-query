@@ -30,6 +30,11 @@ import { TypeScriptIndexServiceHost } from './typescript-index-service.js';
 const DEFAULT_REQUEST_TIMEOUT_MS = 120_000;
 const REQUEST_POLL_INTERVAL_MS = 5;
 
+/** A Worker memory failure that must not be escalated into a more expensive full index. */
+export class TypeScriptIndexMemoryPressureError extends Error {
+  override readonly name = 'TypeScriptIndexMemoryPressureError';
+}
+
 export interface TypeScriptIndexRequesterRuntime {
   /** Civil time used only in persisted cross-process request records. */
   now(): number;
@@ -196,12 +201,24 @@ function parseResponse(
     throw new Error('TypeScript index service wrote an incompatible response.');
   }
   if (response.ok !== true) {
-    throw new Error(typeof response.error === 'string' ? response.error : 'TypeScript index service request failed.');
+    const reason = typeof response.error === 'string' ? response.error : 'TypeScript index service request failed.';
+    if (isMemoryPressureReason(reason)) throw new TypeScriptIndexMemoryPressureError(reason);
+    throw new Error(reason);
   }
   return documentsFromResponse(
     decodeDocumentResponse(response.response, producerIdentity),
     producerIdentity,
     affectedFiles,
+  );
+}
+
+function isMemoryPressureReason(reason: string): boolean {
+  const normalized = reason.toLowerCase();
+  return (
+    normalized.includes('out of memory') ||
+    normalized.includes('memory limit') ||
+    normalized.includes('allocation failed') ||
+    normalized.includes('err_worker_out_of_memory')
   );
 }
 

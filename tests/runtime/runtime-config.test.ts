@@ -981,6 +981,44 @@ describe('validateProjectConfig', () => {
     );
   });
 
+  it('validates TypeScript watch Worker memory controls', () => {
+    expect(
+      validateProjectConfig({
+        indexer: {
+          typescript: {
+            maxWarmSessions: 0,
+            workerIdleMs: -1,
+            workerSoftMemoryMb: 1.5,
+          },
+        },
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        path: 'indexer.typescript.maxWarmSessions',
+        message: 'Must be a positive integer.',
+      }),
+      expect.objectContaining({
+        level: 'error',
+        path: 'indexer.typescript.workerSoftMemoryMb',
+        message: 'Must be a positive integer.',
+      }),
+      expect.objectContaining({
+        level: 'error',
+        path: 'indexer.typescript.workerIdleMs',
+        message: 'Must be a non-negative integer.',
+      }),
+    ]);
+
+    expect(
+      validateProjectConfig({
+        indexer: {
+          typescript: { maxWarmSessions: 2, workerIdleMs: 0, workerSoftMemoryMb: 4096 },
+        },
+      }),
+    ).toEqual([]);
+  });
+
   it('accepts Clojure as a configured language and validates its indexer config path', () => {
     const projectRoot = createProject();
     writeFileSync(join(projectRoot, '.scip-clojure.json'), '{}\n');

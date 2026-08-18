@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { decodeReindexMetadata } from '../domain/reindex-metadata.js';
+import { projectInputSnapshotOrNull } from '../domain/project-input.js';
 import type { LastRefreshMetadata, ProjectConfig, SupportedLanguage } from '../domain/types.js';
 import { buildProjectInputFingerprint, type ProjectInputFingerprint } from '../platform/project-files.js';
 import { detectLanguages } from '../reindex/detect.js';
@@ -92,6 +93,86 @@ export function getIndexFreshness(
         : fresh
           ? 'Index metadata fingerprint matches current source files.'
           : 'Index metadata fingerprint differs from current source files.',
+      remedy: accepted ? undefined : 'Run: scip-query reindex',
+    };
+  } catch (error) {
+    return {
+      state: 'unknown',
+      checkedAt,
+      metaPath: paths.metaPath,
+      reason: `Could not read reindex metadata: ${error instanceof Error ? error.message : String(error)}`,
+      remedy: 'Run: scip-query reindex',
+    };
+  }
+}
+
+/**
+ * Checks the accepted publication artifacts without observing project files.
+ * This is valid only immediately after the owning watcher completed a reindex
+ * and proved that no later filesystem event is pending.
+ */
+export function getPublishedIndexFreshness(paths: { dbPath: string; metaPath: string }): IndexFreshness {
+  const checkedAt = new Date().toISOString();
+  if (!existsSync(paths.dbPath)) {
+    return {
+      state: 'missing',
+      checkedAt,
+      metaPath: paths.metaPath,
+      reason: 'No SQLite index database exists.',
+      remedy: 'Run: scip-query reindex',
+    };
+  }
+  if (!existsSync(paths.metaPath)) {
+    return {
+      state: 'unknown',
+      checkedAt,
+      metaPath: paths.metaPath,
+      reason: 'No reindex metadata file exists next to the SQLite index.',
+      remedy: 'Run: scip-query reindex',
+    };
+  }
+  try {
+    const decoded = decodeReindexMetadata(readSmallArtifactText(paths.metaPath, 'reindex metadata'));
+    if (decoded.kind === 'unsupported') {
+      return {
+        state: 'unknown',
+        checkedAt,
+        metaPath: paths.metaPath,
+        reason: `Reindex metadata version ${decoded.version} is unsupported by this scip-query build.`,
+        remedy: 'Upgrade scip-query or run: scip-query reindex',
+      };
+    }
+    if (decoded.kind === 'malformed') {
+      return {
+        state: 'unknown',
+        checkedAt,
+        metaPath: paths.metaPath,
+        reason: `Could not decode reindex metadata: ${decoded.reason}`,
+        remedy: 'Run: scip-query reindex',
+      };
+    }
+    const metadata = decoded.metadata;
+    const metadataLanguages = [...(metadata.indexedLanguages ?? [])].sort();
+    const fingerprint = projectInputSnapshotOrNull(metadata.fingerprint);
+    const fingerprintLanguages = [...(fingerprint?.languages ?? [])].sort();
+    const publishable =
+      decoded.capabilities.publishableGeneration &&
+      fingerprint !== null &&
+      JSON.stringify(metadataLanguages) === JSON.stringify(fingerprintLanguages);
+    const generation = inspectSqliteGeneration(paths.dbPath, paths.metaPath);
+    const generationDrift = generation.state === 'invalid' || generation.state === 'drifted';
+    const accepted = publishable && !generationDrift;
+    return {
+      state: accepted ? 'fresh' : 'stale',
+      checkedAt,
+      metaPath: paths.metaPath,
+      updatedAt: metadata.updatedAt,
+      lastRefresh: metadata.lastRefresh,
+      reason: generationDrift
+        ? `SQLite generation requires repair: ${generation.reason}`
+        : publishable
+          ? 'Watcher accepted the newly published index generation with no later changes pending.'
+          : 'Published index metadata is not a complete queryable generation.',
       remedy: accepted ? undefined : 'Run: scip-query reindex',
     };
   } catch (error) {

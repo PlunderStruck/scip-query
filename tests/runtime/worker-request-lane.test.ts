@@ -13,6 +13,7 @@ interface Payload {
 
 interface Status {
   requests: number;
+  retire?: boolean;
 }
 
 describe('WorkerRequestLane', () => {
@@ -170,6 +171,73 @@ describe('WorkerRequestLane', () => {
     expect(lane.canAccept()).toBe(true);
     expect(lane.start(request('replacement'))).toBe(true);
     expect(second.posts).toHaveLength(1);
+  });
+
+  it('replays one failed request on a cold Worker before rejecting it', async () => {
+    const first = new FakeWorker();
+    const second = new FakeWorker();
+    const workers = [first, second];
+    const rejected = deferred<string>();
+    const lane = new WorkerRequestLane<Payload, string, Status>({
+      name: 'test lane',
+      createWorker: () => workers.shift()!,
+      maxWorkerFailureRetries: 1,
+      onComplete: () => {},
+      onReject: (_request, reason) => rejected.resolve(reason),
+      onStatus: () => {},
+      onFatal: (error) => {
+        throw error;
+      },
+    });
+
+    expect(lane.start(request('one'))).toBe(true);
+    first.emitError(new Error('terminated due to reaching memory limit'));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(first.terminateCalls).toBe(1);
+    expect(second.posts).toEqual(first.posts);
+    expect(lane.canAccept()).toBe(false);
+
+    second.emitError(new Error('unrelated cold Worker crash'));
+    expect(await rejected.promise).toContain('memory limit');
+    expect(second.terminateCalls).toBe(1);
+    expect(lane.canAccept()).toBe(true);
+    await lane.close();
+  });
+
+  it('retires a high-water Worker only after its response is settled', async () => {
+    const first = new FakeWorker();
+    const second = new FakeWorker();
+    const workers = [first, second];
+    const completions: string[] = [];
+    const lane = new WorkerRequestLane<Payload, string, Status>({
+      name: 'test lane',
+      createWorker: () => workers.shift()!,
+      retireAfterResponse: (status) => status.retire === true,
+      onComplete: (_request, result) => completions.push(result),
+      onReject: () => {},
+      onStatus: () => {},
+      onFatal: (error) => {
+        throw error;
+      },
+    });
+
+    expect(lane.start(request('one'))).toBe(true);
+    first.emitMessage({
+      kind: 'response',
+      requestId: 'one',
+      ok: true,
+      result: 'done',
+      status: { requests: 1, retire: true },
+    } satisfies WorkerLaneResponse<string, Status>);
+    await first.termination;
+    await Promise.resolve();
+
+    expect(completions).toEqual(['done']);
+    expect(first.terminateCalls).toBe(1);
+    expect(lane.start(request('two'))).toBe(true);
+    expect(second.posts).toHaveLength(1);
+    await lane.close();
   });
 
   it('terminates an idle Worker after its idle TTL and admits a later request on a new Worker', async () => {
@@ -338,6 +406,14 @@ class FakeWorker implements RequestWorkerLike {
 
   emitMessage(value: unknown): void {
     for (const listener of this.messageListeners) listener(value);
+  }
+
+  emitError(error: Error): void {
+    for (const listener of this.errorListeners) listener(error);
+  }
+
+  emitExit(code: number): void {
+    for (const listener of this.exitListeners) listener(code);
   }
 }
 

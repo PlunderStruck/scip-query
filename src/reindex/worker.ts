@@ -8,6 +8,7 @@ import { parsePositiveInteger } from '../domain/number-parsing.js';
 import { monitorParentProcess } from '../platform/parent-process-monitor.js';
 import { parseProcessIdentity } from '../platform/process-identity.js';
 import { sanitizeTerminalLine } from '../platform/terminal-output.js';
+import { parseProjectInputChangeJournal } from '../domain/project-input-change-journal.js';
 
 const projectRoot = process.env['SCIP_REINDEX_PROJECT_ROOT'];
 const outputScip = process.env['SCIP_REINDEX_OUTPUT_SCIP'];
@@ -19,6 +20,7 @@ const typescriptConfig = parseTypeScriptWorkerConfig(process.env['SCIP_REINDEX_T
 const clojureConfigPath = process.env['SCIP_REINDEX_CLOJURE_CONFIG_PATH'] || undefined;
 const triggerKind = parseRefreshTriggerKind(process.env['SCIP_REINDEX_TRIGGER_KIND']);
 const triggerDetail = process.env['SCIP_REINDEX_TRIGGER_DETAIL'];
+const changeJournal = parseProjectInputChangeJournal(process.env['SCIP_REINDEX_CHANGE_JOURNAL']);
 const allowExpensiveRebuild = process.env['SCIP_REINDEX_ALLOW_EXPENSIVE'] !== '0';
 const parentIdentity = parseParentIdentity(process.env['SCIP_REINDEX_PARENT_IDENTITY']);
 
@@ -52,6 +54,7 @@ async function run(): Promise<void> {
       clojureConfigPath,
       indexerConcurrency,
       trigger: { kind: triggerKind, detail: triggerDetail || undefined },
+      changeJournal,
       allowExpensiveRebuild,
       signal: cancellation.signal,
       onStatus: (msg) => process.stderr.write(`[reindex] ${sanitizeTerminalLine(msg)}\n`),

@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, statSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { watch } from 'chokidar';
 import ignore from 'ignore';
@@ -10,8 +10,17 @@ import type {
   TypeScriptProjectMode,
 } from '../domain/types.js';
 import { classifyProjectInputPath } from '../domain/project-input.js';
+import { readSmallArtifactText } from '../platform/bounded-file.js';
 import type { ProcessIdentity } from '../domain/process-identity.js';
 import { monotonicNowMs } from '../domain/time.js';
+import {
+  MAX_PROJECT_INPUT_CHANGE_ENTRIES,
+  PROJECT_INPUT_CHANGE_JOURNAL_VERSION,
+  serializeProjectInputChangeJournal,
+  type ProjectInputChangeEntry,
+  type ProjectInputChangeJournal,
+  type ProjectInputChangeKind,
+} from '../domain/project-input-change-journal.js';
 import { resolveCacheDirPath, resolveIndexStoragePaths } from '../platform/cache-layout.js';
 import { loadProjectConfig, resolveWatchConfig, SUPPORTED_LANGUAGES, type ResolvedWatchConfig } from './config.js';
 import { createGitignoreFilter } from '../source/primitives/gitignore-filter.js';
@@ -23,6 +32,7 @@ import {
 } from '../reindex/reindex-activity.js';
 import { BoundedProcessError, runBoundedProcess } from '../platform/bounded-process.js';
 import { readProcessIdentity } from '../platform/process-identity.js';
+import { publishedSqliteGenerationIdentity } from '../storage/sqlite-generation.js';
 
 export interface WatcherOptions {
   projectRoot: string;
@@ -36,10 +46,19 @@ export interface WatcherOptions {
   clock?: WatchClock;
   stopTimeoutMs?: number;
   onStatus?: (status: WatcherStatus) => void;
-  onReindexComplete?: (durationMs: number, trigger: RefreshTrigger) => boolean | void;
+  onReindexComplete?: (
+    durationMs: number,
+    trigger: RefreshTrigger,
+    context?: ReindexCompletionContext,
+  ) => boolean | void;
   onReindexError?: (error: Error, trigger: RefreshTrigger) => void;
   onRefreshSuppressed?: (trigger: RefreshTrigger) => void;
   onError?: (error: Error) => void;
+}
+
+export interface ReindexCompletionContext {
+  /** True when a filesystem or refresh event arrived after this run began. */
+  pendingChanges: boolean;
 }
 
 export type WatchBudgetInspector = (
@@ -58,6 +77,8 @@ export interface ReindexRunRequest {
   clojureConfigPath?: string;
   indexerConcurrency?: number;
   trigger: RefreshTrigger;
+  /** Exact watcher changes since the immutable generation named by the journal. */
+  changeJournal?: ProjectInputChangeJournal;
   /** When false, skip full language indexers and keep the previous shard. Default true. */
   allowExpensiveRebuild?: boolean;
 }
@@ -150,7 +171,11 @@ export class Watcher {
   private indexerConcurrency?: number;
 
   private onStatus: (status: WatcherStatus) => void;
-  private onReindexComplete: (durationMs: number, trigger: RefreshTrigger) => boolean | void;
+  private onReindexComplete: (
+    durationMs: number,
+    trigger: RefreshTrigger,
+    context?: ReindexCompletionContext,
+  ) => boolean | void;
   private onReindexError: (error: Error, trigger: RefreshTrigger) => void;
   private onRefreshSuppressed: (trigger: RefreshTrigger) => void;
   private onError: (error: Error) => void;
@@ -170,6 +195,9 @@ export class Watcher {
   private dirty = false;
   private changedFiles = 0;
   private pendingTrigger: RefreshTrigger | null = null;
+  private pendingChanges = new Map<string, ProjectInputChangeKind>();
+  private pendingChangesComplete = true;
+  private pendingChangesIncompleteReason: string | undefined;
   private reindexInFlight = false;
   private lastReindexEnd = 0;
 
@@ -283,6 +311,7 @@ export class Watcher {
   /** Request a refresh through the same single-flight/coalescing state machine used by file events. */
   requestRefresh(trigger: RefreshTrigger, opts: { immediate?: boolean } = {}): void {
     if (this.stopped) return;
+    this.markPendingChangesIncomplete(`unstructured-trigger:${trigger.kind}`);
     if (
       !opts.immediate ||
       this.reindexInFlight ||
@@ -303,19 +332,20 @@ export class Watcher {
   private startSourceWatcher(usePolling = false): void {
     const watcher = this.subscriptionFactory(this.projectRoot, {
       ignoreInitial: true,
-        ignored: (path, stats) => this.isIgnoredWatchPath(path, stats?.isDirectory() ?? false),
-        usePolling,
-        ignorePermissionErrors: true,
+      ignored: (path, stats) => this.isIgnoredWatchPath(path, stats?.isDirectory() ?? false),
+      usePolling,
+      ignorePermissionErrors: true,
       ...(usePolling ? { interval: 5_000, binaryInterval: 10_000 } : {}),
     });
     watcher.on('all', (event, path) => {
-      if (!this.stopped && event !== 'addDir' && event !== 'unlinkDir') this.handleFileChange(path);
+      if (!this.stopped && event !== 'addDir' && event !== 'unlinkDir') this.handleFileChange(event, path);
     });
     watcher.on('error', (error) => this.handleSourceWatcherError(watcher, error, usePolling));
     this.fsWatchers.push(watcher);
   }
 
   private handleSourceWatcherError(watcher: WatchSubscription, error: unknown, usePolling: boolean): void {
+    this.markPendingChangesIncomplete('source-watcher-error');
     if (usePolling || this.sourcePollingFallbackStarted || !isFileDescriptorLimitError(error) || this.stopped) {
       this.onError(new Error(`Failed to watch ${this.projectRoot}: ${String(error)}`));
       return;
@@ -340,7 +370,7 @@ export class Watcher {
     return this.gitignoreFilter.isIgnored(candidate) || this.extraIgnore.ignores(candidate);
   }
 
-  private handleFileChange(filename: string): void {
+  private handleFileChange(event: string, filename: string): void {
     // Filter: skip gitignored files and extra ignore patterns
     const rel = this.relativeWatchPath(filename);
     if (!rel || rel === '..' || rel.startsWith('../')) return;
@@ -360,7 +390,13 @@ export class Watcher {
     if (rel === '.scipquery.json') refreshWatchInputLanguages(this, this.projectRoot);
     if (!isWatcherIndexInput(this, rel)) return;
 
-    this.scheduleReindex({ kind: 'watch-source', detail: rel });
+    const changeKind = sourceWatchChangeKind(event);
+    if (!changeKind) this.markPendingChangesIncomplete(`unsupported-source-event:${event}`);
+    this.scheduleReindex(
+      { kind: 'watch-source', detail: rel },
+      changeKind ? [{ path: rel, kind: changeKind }] : undefined,
+      changeKind !== undefined,
+    );
   }
 
   private relativeWatchPath(path: string): string {
@@ -368,8 +404,14 @@ export class Watcher {
     return relative(this.projectRoot, absolutePath).replaceAll('\\', '/');
   }
 
-  private scheduleReindex(trigger: RefreshTrigger): void {
+  private scheduleReindex(
+    trigger: RefreshTrigger,
+    changes?: readonly ProjectInputChangeEntry[],
+    changesComplete = false,
+  ): void {
     this.pendingTrigger = mergeRefreshTrigger(this.pendingTrigger, trigger);
+    if (!changesComplete) this.markPendingChangesIncomplete(`unstructured-trigger:${trigger.kind}`);
+    for (const change of changes ?? []) this.recordPendingChange(change);
     this.changedFiles++;
 
     if (this.reindexInFlight) {
@@ -462,11 +504,12 @@ export class Watcher {
     this.changedFiles = 0;
     const trigger = this.pendingTrigger ?? { kind: 'watch-source' };
     this.pendingTrigger = null;
+    const changeJournal = this.consumePendingChangeJournal();
     const startedAt = this.wallNow();
     this.setStatus({ state: 'indexing', startedAt });
 
     // Run reindex in a child process so it doesn't block the watcher
-    const operation = this.reindexRunner.start(this.reindexRequest(trigger, allowExpensiveRebuild));
+    const operation = this.reindexRunner.start(this.reindexRequest(trigger, allowExpensiveRebuild, changeJournal));
     this.activeOperation = operation;
     operation.completion
       .then((durationMs) => {
@@ -475,7 +518,7 @@ export class Watcher {
         if (this.stopped) return;
         let completedIndexIsFresh = false;
         try {
-          completedIndexIsFresh = this.onReindexComplete(durationMs, trigger) === true;
+          completedIndexIsFresh = this.onReindexComplete(durationMs, trigger, { pendingChanges: this.dirty }) === true;
         } catch (error) {
           this.onError(error instanceof Error ? error : new Error(String(error)));
         }
@@ -486,6 +529,7 @@ export class Watcher {
             this.dirty = false;
             this.changedFiles = 0;
             this.pendingTrigger = null;
+            this.resetPendingChanges();
             this.onRefreshSuppressed(suppressedTrigger);
             this.setStatus({ state: 'idle' });
             return;
@@ -512,6 +556,7 @@ export class Watcher {
         this.lastReindexEnd = this.clock.now();
         if (this.stopped) return;
         const error = err instanceof Error ? err : new Error(String(err));
+        this.restorePendingChangeJournal(changeJournal);
         this.onReindexError(error, trigger);
         this.onError(error);
         this.setStatus({ state: 'idle' });
@@ -602,24 +647,94 @@ export class Watcher {
     }
   }
 
-    private reindexRequest(trigger: RefreshTrigger, allowExpensiveRebuild = true): ReindexRunRequest {
-      return {
-        projectRoot: this.projectRoot,
-        config: this.config,
-        languages: this.languages,
-        pnpmWorkspaces: this.pnpmWorkspaces,
-        typescriptProjectMode: this.typescriptProjectMode,
-        typescriptProjects: this.typescriptProjects,
-        clojureConfigPath: this.clojureConfigPath,
-        indexerConcurrency: this.indexerConcurrency,
-        trigger,
-        allowExpensiveRebuild,
-      };
-    }
+  private reindexRequest(
+    trigger: RefreshTrigger,
+    allowExpensiveRebuild = true,
+    changeJournal?: ProjectInputChangeJournal,
+  ): ReindexRunRequest {
+    return {
+      projectRoot: this.projectRoot,
+      config: this.config,
+      languages: this.languages,
+      pnpmWorkspaces: this.pnpmWorkspaces,
+      typescriptProjectMode: this.typescriptProjectMode,
+      typescriptProjects: this.typescriptProjects,
+      clojureConfigPath: this.clojureConfigPath,
+      indexerConcurrency: this.indexerConcurrency,
+      trigger,
+      changeJournal,
+      allowExpensiveRebuild,
+    };
+  }
 
   private setStatus(status: WatcherStatus): void {
     this.status = status;
     this.onStatus(status);
+  }
+
+  private recordPendingChange(change: ProjectInputChangeEntry): void {
+    if (this.pendingChanges.size >= MAX_PROJECT_INPUT_CHANGE_ENTRIES && !this.pendingChanges.has(change.path)) {
+      this.pendingChanges.clear();
+      this.markPendingChangesIncomplete('change-entry-limit');
+      return;
+    }
+    const previous = this.pendingChanges.get(change.path);
+    const merged = mergeProjectInputChangeKind(previous, change.kind);
+    if (merged === null) this.pendingChanges.delete(change.path);
+    else this.pendingChanges.set(change.path, merged);
+  }
+
+  private markPendingChangesIncomplete(reason: string): void {
+    this.pendingChangesComplete = false;
+    this.pendingChangesIncompleteReason ??= reason;
+  }
+
+  private consumePendingChangeJournal(): ProjectInputChangeJournal {
+    const baseGeneration = publishedSqliteGenerationIdentity(this.outputDb);
+    const entries = [...this.pendingChanges.entries()]
+      .map(([path, kind]) => ({ path, kind }))
+      .sort((a, b) => a.path.localeCompare(b.path));
+    let complete = this.pendingChangesComplete;
+    let incompleteReason = this.pendingChangesIncompleteReason;
+    if (!baseGeneration) {
+      complete = false;
+      incompleteReason ??= 'accepted-generation-unavailable';
+    }
+    let journal: ProjectInputChangeJournal = {
+      version: PROJECT_INPUT_CHANGE_JOURNAL_VERSION,
+      baseGeneration,
+      complete,
+      ...(incompleteReason ? { incompleteReason } : {}),
+      entries,
+    };
+    if (!serializeProjectInputChangeJournal(journal)) {
+      journal = {
+        version: PROJECT_INPUT_CHANGE_JOURNAL_VERSION,
+        baseGeneration,
+        complete: false,
+        incompleteReason: 'change-journal-byte-limit',
+        entries: [],
+      };
+    }
+    this.resetPendingChanges();
+    return journal;
+  }
+
+  private restorePendingChangeJournal(journal: ProjectInputChangeJournal): void {
+    const laterEntries = [...this.pendingChanges.entries()].map(([path, kind]) => ({ path, kind }));
+    const laterComplete = this.pendingChangesComplete;
+    const laterIncompleteReason = this.pendingChangesIncompleteReason;
+    this.resetPendingChanges();
+    if (!journal.complete) this.markPendingChangesIncomplete(journal.incompleteReason ?? 'failed-reindex');
+    for (const entry of journal.entries) this.recordPendingChange(entry);
+    if (!laterComplete) this.markPendingChangesIncomplete(laterIncompleteReason ?? 'failed-reindex');
+    for (const entry of laterEntries) this.recordPendingChange(entry);
+  }
+
+  private resetPendingChanges(): void {
+    this.pendingChanges.clear();
+    this.pendingChangesComplete = true;
+    this.pendingChangesIncompleteReason = undefined;
   }
 
   private clearDebounceTimer(): void {
@@ -691,19 +806,35 @@ export class Watcher {
       relevantPaths = changedPaths.filter((path) => isWatcherIndexInput(this, path));
       if (relevantPaths.length === 0) return;
     }
+    const changes = relevantPaths?.map<ProjectInputChangeEntry>((path) => ({
+      path,
+      kind: existsSync(join(this.projectRoot, path)) ? 'change' : 'delete',
+    }));
 
     if (headChanged && indexChanged) {
-      this.scheduleReindex({
-        kind: 'watch-git-state',
-        detail: gitChangeDetail('HEAD and index changed', relevantPaths),
-      });
+      this.scheduleReindex(
+        {
+          kind: 'watch-git-state',
+          detail: gitChangeDetail('HEAD and index changed', relevantPaths),
+        },
+        changes,
+        changes !== undefined,
+      );
     } else if (headChanged) {
-      this.scheduleReindex({ kind: 'watch-git-head', detail: gitChangeDetail('HEAD changed', relevantPaths) });
+      this.scheduleReindex(
+        { kind: 'watch-git-head', detail: gitChangeDetail('HEAD changed', relevantPaths) },
+        changes,
+        changes !== undefined,
+      );
     } else if (indexChanged) {
-      this.scheduleReindex({
-        kind: 'watch-git-index',
-        detail: gitChangeDetail(next.indexPath ?? 'index changed', relevantPaths),
-      });
+      this.scheduleReindex(
+        {
+          kind: 'watch-git-index',
+          detail: gitChangeDetail(next.indexPath ?? 'index changed', relevantPaths),
+        },
+        changes,
+        changes !== undefined,
+      );
     }
   }
 
@@ -729,10 +860,7 @@ export class Watcher {
     const rawIndexPath = gitOutput(this.projectRoot, ['rev-parse', '--git-path', 'index'], gitReader);
     if (!rawIndexPath) return null;
     const indexPath = resolveGitPath(this.projectRoot, rawIndexPath);
-    return gitStateFromIndexPath(
-      gitOutput(this.projectRoot, ['rev-parse', '--verify', 'HEAD'], gitReader),
-      indexPath,
-    );
+    return gitStateFromIndexPath(gitOutput(this.projectRoot, ['rev-parse', '--verify', 'HEAD'], gitReader), indexPath);
   }
 
   private clearGitPollTimer(): void {
@@ -850,6 +978,9 @@ export function resolveReindexWorkerLaunch(
       SCIP_REINDEX_CLOJURE_CONFIG_PATH: latestClojure?.configPath ?? clojureConfigPath ?? '',
       SCIP_REINDEX_TRIGGER_KIND: trigger.kind,
       SCIP_REINDEX_TRIGGER_DETAIL: trigger.detail ?? '',
+      SCIP_REINDEX_CHANGE_JOURNAL: request.changeJournal
+        ? (serializeProjectInputChangeJournal(request.changeJournal) ?? '')
+        : '',
       SCIP_REINDEX_ALLOW_EXPENSIVE: request.allowExpensiveRebuild === false ? '0' : '1',
       SCIP_REINDEX_PROCESS_GROUP_LEADER: '1',
       SCIP_REINDEX_PARENT_IDENTITY: JSON.stringify(parentIdentity),
@@ -970,6 +1101,23 @@ function mergeRefreshTrigger(current: RefreshTrigger | null, next: RefreshTrigge
   return { kind: 'watch-git-state', detail: `${current.kind}, ${next.kind}` };
 }
 
+function sourceWatchChangeKind(event: string): ProjectInputChangeKind | undefined {
+  if (event === 'add') return 'add';
+  if (event === 'change') return 'change';
+  if (event === 'unlink') return 'delete';
+  return undefined;
+}
+
+function mergeProjectInputChangeKind(
+  previous: ProjectInputChangeKind | undefined,
+  next: ProjectInputChangeKind,
+): ProjectInputChangeKind | null {
+  if (!previous) return next;
+  if (previous === 'add') return next === 'delete' ? null : 'add';
+  if (previous === 'delete') return next === 'add' ? 'change' : next;
+  return next;
+}
+
 function isFileDescriptorLimitError(error: unknown): boolean {
   return (
     (error instanceof Error && 'code' in error && error.code === 'EMFILE') ||
@@ -1008,7 +1156,7 @@ export function resolveWatchGitLayout(projectRoot: string): WatchGitLayout | nul
     if (stats.isDirectory()) {
       gitDir = marker;
     } else if (stats.isFile()) {
-      const match = /^gitdir:\s*(.+)\s*$/m.exec(readFileSync(marker, 'utf8'));
+      const match = /^gitdir:\s*(.+)\s*$/m.exec(readSmallArtifactText(marker, 'Git directory marker'));
       if (!match?.[1]) return null;
       const rawGitDir = match[1].trim();
       gitDir = isAbsolute(rawGitDir) ? rawGitDir : resolve(projectRoot, rawGitDir);
@@ -1025,7 +1173,7 @@ export function resolveWatchGitLayout(projectRoot: string): WatchGitLayout | nul
 export function readWatchGitHeadOid(gitDir: string): string | undefined {
   let head: string;
   try {
-    head = readFileSync(join(gitDir, 'HEAD'), 'utf8').trim();
+    head = readSmallArtifactText(join(gitDir, 'HEAD'), 'Git HEAD').trim();
   } catch {
     return undefined;
   }
@@ -1038,7 +1186,7 @@ export function readWatchGitHeadOid(gitDir: string): string | undefined {
 
 function readGitCommonDir(gitDir: string): string {
   try {
-    const raw = readFileSync(join(gitDir, 'commondir'), 'utf8').trim();
+    const raw = readSmallArtifactText(join(gitDir, 'commondir'), 'Git common-directory marker').trim();
     if (!raw) return gitDir;
     return isAbsolute(raw) ? raw : resolve(gitDir, raw);
   } catch {
@@ -1048,7 +1196,7 @@ function readGitCommonDir(gitDir: string): string {
 
 function readGitRefOid(directory: string, ref: string): string | undefined {
   try {
-    const oid = readFileSync(join(directory, ref), 'utf8').trim();
+    const oid = readSmallArtifactText(join(directory, ref), 'Git reference').trim();
     return GIT_OBJECT_ID.test(oid) ? oid.toLowerCase() : undefined;
   } catch {
     return undefined;
@@ -1057,7 +1205,7 @@ function readGitRefOid(directory: string, ref: string): string | undefined {
 
 function readPackedGitRefOid(commonDir: string, ref: string): string | undefined {
   try {
-    for (const line of readFileSync(join(commonDir, 'packed-refs'), 'utf8').split('\n')) {
+    for (const line of readSmallArtifactText(join(commonDir, 'packed-refs'), 'Git packed references').split('\n')) {
       if (line.startsWith('#') || line.startsWith('^')) continue;
       const separator = line.indexOf(' ');
       if (separator === -1) continue;

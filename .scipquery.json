@@ -2,17 +2,21 @@
   "$schema": "./node_modules/scip-query/docs/schemas/project-config.schema.json",
   "schemaVersion": 2,
   "collaborationDomainId": "5ea57d1a-936c-4c91-b58f-5d61e45173a5",
+  "indexerConcurrency": 2,
   "watch": {
     "enabled": true,
     "autoRefresh": true,
     "debounceMs": 2000,
     "cooldownMs": 5000,
-    "idleTimeoutMs": 180000,
+    "idleTimeoutMs": 0,
     "gitPollMs": 2000
   },
   "indexer": {
     "typescript": {
-      "projectMode": "workspace"
+      "projectMode": "workspace",
+      "maxWarmSessions": 2,
+      "workerIdleMs": 300000,
+      "workerSoftMemoryMb": 6144
     }
   },
   "architecture": {
