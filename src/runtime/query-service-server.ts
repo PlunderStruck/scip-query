@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { monotonicNowMs } from '../domain/time.js';
+import { createPathChangeWake } from '../platform/path-change-wake.js';
 import { readProcessIdentity } from '../platform/process-identity.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
 import { tryAcquireProcessFileLock } from '../platform/process-file-lock.js';
@@ -61,6 +62,7 @@ export async function runQueryServiceServer(sessionDir: string, projectRoot: str
     lockResult.lock.release();
     throw error;
   }
+  const mailboxWake = createPathChangeWake([paths.pendingDir, paths.legacyRequestDir]);
   const statePath = join(sessionDir, 'server.json');
   const sessionIdentity = queryServiceSessionIdentity(sessionDir);
   const processIdentity = readProcessIdentity(process.pid);
@@ -106,9 +108,10 @@ export async function runQueryServiceServer(sessionDir: string, projectRoot: str
         consecutiveIdlePolls += 1;
         writeState();
       }
-      await sleep(loopDelayMs(processed, consecutiveIdlePolls));
+      await mailboxWake.wait(loopDelayMs(processed, consecutiveIdlePolls));
     }
   } finally {
+    mailboxWake.close();
     db.close();
     rmSync(statePath, { force: true });
     lockResult.lock.release();
@@ -788,10 +791,6 @@ function loopDelayMs(processedRequests: number, consecutiveIdlePolls: number): n
   if (processedRequests > 0) return POLL_INTERVAL_MS;
   const exponent = Math.max(0, Math.min(5, consecutiveIdlePolls - 1));
   return Math.min(MAX_IDLE_POLL_INTERVAL_MS, POLL_INTERVAL_MS * 2 ** exponent);
-}
-
-function sleep(durationMs: number): Promise<void> {
-  return new Promise((resolvePromise) => setTimeout(resolvePromise, durationMs));
 }
 
 const QUERY_SERVICE_MAILBOX_OWNER = `query-service-${process.pid}-${randomUUID()}`;

@@ -1,11 +1,12 @@
 import process from 'node:process';
-import { rmSync, watch, type FSWatcher } from 'node:fs';
+import { rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { sanitizeTerminalLine } from '../platform/terminal-output.js';
 import { monotonicNowMs } from '../domain/time.js';
 import type { RefreshTrigger, WatcherStatus } from '../domain/types.js';
 import { resolveIndexStoragePaths } from '../platform/cache-layout.js';
+import { createPathChangeWake } from '../platform/path-change-wake.js';
 import { readProcessIdentity } from '../platform/process-identity.js';
 import {
   WATCH_SERVICE_PROTOCOL_VERSION,
@@ -49,75 +50,7 @@ export function watchServiceLoopDelayMs(processedRequests: number, consecutiveId
   return Math.min(MAX_IDLE_SERVICE_LOOP_INTERVAL_MS, IDLE_SERVICE_LOOP_INTERVAL_MS * 2 ** exponent);
 }
 
-export interface PathChangeWake {
-  wait(durationMs: number): Promise<void>;
-  close(): void;
-}
-
-/**
- * Sleep until `durationMs` elapses, a watched path changes, or `close()` runs.
- * A change that arrives between polls is latched so the next wait returns
- * immediately instead of sleeping a full idle interval.
- */
-export function createPathChangeWake(paths: readonly string[]): PathChangeWake {
-  let closed = false;
-  let pendingNotify = false;
-  let wake: (() => void) | undefined;
-  const watchers: FSWatcher[] = [];
-  const notify = (): void => {
-    pendingNotify = true;
-    const current = wake;
-    wake = undefined;
-    current?.();
-  };
-  for (const path of new Set(paths)) {
-    try {
-      const watcher = watch(path, { persistent: false }, notify);
-      watcher.on('error', () => undefined);
-      watchers.push(watcher);
-    } catch {
-      // Missing directories still poll when the idle timeout fires.
-    }
-  }
-  return {
-    wait(durationMs) {
-      if (closed || durationMs <= 0) {
-        pendingNotify = false;
-        return Promise.resolve();
-      }
-      return new Promise((resolvePromise) => {
-        const timer = setTimeout(() => {
-          if (wake === resolveAndClear) wake = undefined;
-          resolvePromise();
-        }, durationMs);
-        const resolveAndClear = (): void => {
-          clearTimeout(timer);
-          if (wake === resolveAndClear) wake = undefined;
-          resolvePromise();
-        };
-        wake = resolveAndClear;
-        if (pendingNotify || closed) {
-          pendingNotify = false;
-          resolveAndClear();
-        }
-      });
-    },
-    close() {
-      if (!closed) {
-        closed = true;
-        for (const watcher of watchers) {
-          try {
-            watcher.close();
-          } catch {
-            // already closed
-          }
-        }
-        watchers.length = 0;
-      }
-      notify();
-    },
-  };
-}
+export { createPathChangeWake } from '../platform/path-change-wake.js';
 
 export interface WatchServiceLoopIterationRuntime {
   processIndexRequests(): number;
