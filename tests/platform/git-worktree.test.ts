@@ -4,6 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  cachedGitProjectFileInventory,
+  withProjectFileListingCache,
+} from '../../src/platform/project-file-inventory-context.js';
+import {
   findGitRoot,
   gitIndexAllowsTreeFingerprintReuse,
   listGitWorktrees,
@@ -281,6 +285,50 @@ describe('Git worktree identity', () => {
     expect(gitIndexAllowsTreeFingerprintReuse(root)).toBe(false);
     git(root, ['update-index', '--no-skip-worktree', sourcePath]);
     expect(gitIndexAllowsTreeFingerprintReuse(root)).toBe(true);
+  });
+
+  it('reuses tagged index visibility only when inventory follows status', () => {
+    const root = createRepository();
+    const loadInventory = () =>
+      execFileSync('git', ['-C', root, 'ls-files', '-co', '-v', '-z', '--exclude-standard', '--', '.'], {
+        encoding: 'utf8',
+      });
+
+    withProjectFileListingCache(() => {
+      const observation = observeGitWorktreeContext(root)!;
+      const inventory = cachedGitProjectFileInventory(root, 1024 * 1024, loadInventory);
+      expect(inventory.indexAllowsTreeFingerprintReuse).toBe(true);
+      expect(
+        gitIndexAllowsTreeFingerprintReuse(root, undefined, {
+          cachedInventoryAfterSequence: observation.projectFileInventorySequence,
+        }),
+      ).toBe(true);
+    });
+
+    git(root, ['update-index', '--assume-unchanged', 'src/value.ts']);
+    withProjectFileListingCache(() => {
+      const observation = observeGitWorktreeContext(root)!;
+      const inventory = cachedGitProjectFileInventory(root, 1024 * 1024, loadInventory);
+      expect(inventory.indexAllowsTreeFingerprintReuse).toBe(false);
+      expect(
+        gitIndexAllowsTreeFingerprintReuse(root, undefined, {
+          cachedInventoryAfterSequence: observation.projectFileInventorySequence,
+        }),
+      ).toBe(false);
+    });
+    git(root, ['update-index', '--no-assume-unchanged', 'src/value.ts']);
+
+    withProjectFileListingCache(() => {
+      cachedGitProjectFileInventory(root, 1024 * 1024, loadInventory);
+      git(root, ['update-index', '--assume-unchanged', 'src/value.ts']);
+      const observation = observeGitWorktreeContext(root)!;
+      expect(
+        gitIndexAllowsTreeFingerprintReuse(root, undefined, {
+          cachedInventoryAfterSequence: observation.projectFileInventorySequence,
+        }),
+      ).toBe(false);
+    });
+    git(root, ['update-index', '--no-assume-unchanged', 'src/value.ts']);
   });
 
   it('gives linked worktrees one repository identity and distinct worktree identities', () => {

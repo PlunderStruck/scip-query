@@ -107,8 +107,15 @@ export function getIndexFreshness(
           ? opts.gitContext
           : refreshGitWorktreeContext(opts.gitContext)
         : undefined;
+    const cachedInventoryAfterSequence =
+      opts.gitObservation && opts.gitObservation.context === opts.gitContext
+        ? opts.gitObservation.projectFileInventorySequence
+        : undefined;
     const currentGitContext =
-      observedGitContext?.clean && gitIndexAllowsTreeFingerprintReuse(projectRoot) ? observedGitContext : undefined;
+      observedGitContext?.clean &&
+      gitIndexAllowsTreeFingerprintReuse(projectRoot, undefined, { cachedInventoryAfterSequence })
+        ? observedGitContext
+        : undefined;
     const current =
       paths.cacheDir &&
       currentGitContext &&

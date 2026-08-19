@@ -40,7 +40,11 @@ import {
   persistProjectFileFingerprintCache,
   rememberProjectFileFingerprint,
 } from './fingerprint-stat-cache.js';
-import { cachedCanonicalProjectRoot, cachedProjectFileListing } from './project-file-inventory-context.js';
+import {
+  cachedCanonicalProjectRoot,
+  cachedGitProjectFileInventory,
+  gitProjectFileInventoryPaths,
+} from './project-file-inventory-context.js';
 
 export {
   normalizeSafeProjectRelativePath,
@@ -756,17 +760,16 @@ function normalizeOptionalPath(path: string | undefined): string | undefined {
 
 function listGitProjectFiles(projectRoot: string): string[] | null {
   try {
-    return cachedProjectFileListing(projectRoot, 50 * 1024 * 1024, () =>
-      execFileSync('git', ['-C', projectRoot, 'ls-files', '-co', '--exclude-standard', '--', '.'], {
+    const inventory = cachedGitProjectFileInventory(projectRoot, 50 * 1024 * 1024, () =>
+      execFileSync('git', ['-C', projectRoot, 'ls-files', '-co', '-v', '-z', '--exclude-standard', '--', '.'], {
         encoding: 'utf-8',
-        maxBuffer: 50 * 1024 * 1024,
+        maxBuffer: 100 * 1024 * 1024,
         stdio: ['ignore', 'pipe', 'ignore'],
         timeout: 30_000,
         killSignal: 'SIGKILL',
       }),
-    )
-      .split('\n')
-      .filter(Boolean);
+    );
+    return [...gitProjectFileInventoryPaths(inventory)];
   } catch {
     return null;
   }

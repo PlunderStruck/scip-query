@@ -22,7 +22,7 @@ describe('evidence command freshness', () => {
 
   it('reuses a fresh generation and keeps the watcher ready for later edits', async () => {
     const currentWorkspace = workspace();
-    const gitObservation = { context: currentWorkspace.gitContext };
+    const gitObservation = { context: currentWorkspace.gitContext, projectFileInventorySequence: 0 };
     const observedWorkspace = { ...currentWorkspace, gitObservation };
     const dependencies = fixtureDependencies([freshness('fresh')]);
 

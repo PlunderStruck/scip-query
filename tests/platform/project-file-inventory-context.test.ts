@@ -1,10 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import {
   cachedCanonicalProjectRoot,
-  cachedProjectFileListing,
+  cachedGitProjectFileIndexVisibilityAfter,
+  cachedGitProjectFileInventory,
   enterProjectFileListingCache,
+  gitProjectFileInventoryPaths,
+  gitProjectFileInventorySequence,
   withProjectFileListingCache,
 } from '../../src/platform/project-file-inventory-context.js';
+
+function cachedProjectFileListing(projectRoot: string, maxBytes: number, load: () => string): string {
+  const inventory = cachedGitProjectFileInventory(projectRoot, maxBytes, () =>
+    load()
+      .split('\n')
+      .filter(Boolean)
+      .map((path) => `H ${path}\0`)
+      .join(''),
+  );
+  return [...gitProjectFileInventoryPaths(inventory)].map((path) => `${path}\n`).join('');
+}
 
 describe('project file inventory context', () => {
   it('reuses one listing throughout a command scope', () => {
@@ -58,12 +72,12 @@ describe('project file inventory context', () => {
           return 'long-name.ts\n';
         }),
       ).toBe('long-name.ts\n');
-      expect(
+      expect(() =>
         cachedProjectFileListing('/large-repo', 4, () => {
           loads += 1;
           return 'fallback.ts\n';
         }),
-      ).toBe('fallback.ts\n');
+      ).toThrow('exceeded 4 path bytes');
     });
 
     expect(loads).toBe(2);
@@ -73,9 +87,9 @@ describe('project file inventory context', () => {
     let loads = 0;
 
     withProjectFileListingCache(() => {
-      expect(cachedProjectFileListing('/repo', 1024, () => `load-${++loads}`)).toBe('load-1');
+      expect(cachedProjectFileListing('/repo', 1024, () => `load-${++loads}`)).toBe('load-1\n');
       withProjectFileListingCache(() => {
-        expect(cachedProjectFileListing('/repo', 1024, () => `load-${++loads}`)).toBe('load-1');
+        expect(cachedProjectFileListing('/repo', 1024, () => `load-${++loads}`)).toBe('load-1\n');
       });
     });
 
@@ -108,5 +122,35 @@ describe('project file inventory context', () => {
     }
 
     expect(cachedProjectFileListing('/repo', 1024, () => 'next-command.ts\n')).toBe('next-command.ts\n');
+  });
+
+  it('preserves NUL-delimited paths and exposes visibility only after an earlier boundary', () => {
+    withProjectFileListingCache(() => {
+      const boundary = gitProjectFileInventorySequence();
+      const inventory = cachedGitProjectFileInventory(
+        '/repo',
+        1024,
+        () => 'H src/normal.ts\0H src/line\nbreak.ts\0? src/untracked.ts\0',
+      );
+
+      expect([...gitProjectFileInventoryPaths(inventory)]).toEqual([
+        'src/normal.ts',
+        'src/line\nbreak.ts',
+        'src/untracked.ts',
+      ]);
+      expect(cachedGitProjectFileIndexVisibilityAfter('/repo', boundary)).toBe(true);
+      expect(cachedGitProjectFileIndexVisibilityAfter('/repo', inventory.sequence)).toBeUndefined();
+    });
+  });
+
+  it('rejects hidden tracked entries and malformed tagged output', () => {
+    withProjectFileListingCache(() => {
+      const boundary = gitProjectFileInventorySequence();
+      cachedGitProjectFileInventory('/repo', 1024, () => 'h src/assumed.ts\0S src/skipped.ts\0');
+      expect(cachedGitProjectFileIndexVisibilityAfter('/repo', boundary)).toBe(false);
+      expect(() => cachedGitProjectFileInventory('/malformed', 1024, () => 'src/value.ts\0')).toThrow(
+        'malformed tagged project file listing',
+      );
+    });
   });
 });

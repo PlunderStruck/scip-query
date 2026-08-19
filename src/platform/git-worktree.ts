@@ -2,6 +2,10 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
+import {
+  cachedGitProjectFileIndexVisibilityAfter,
+  gitProjectFileInventorySequence,
+} from './project-file-inventory-context.js';
 
 // scip-query: ignore-stale — reviewed S1 owned contract; worktree resolution uses this injectable Git boundary.
 export interface GitReader {
@@ -42,6 +46,7 @@ export interface GitWorktreeContext {
  */
 export interface GitWorktreeContextObservation {
   context: GitWorktreeContext;
+  projectFileInventorySequence: number;
 }
 
 export type GitWorktreeIdentity = Pick<GitWorktreeContext, 'projectRoot' | 'gitDir' | 'worktreeId'>;
@@ -102,11 +107,11 @@ export function observeGitWorktreeContext(
     const metadata = parseBatchedWorktreeContext(batchedResult.output);
     if (metadata) {
       const context = resolveGitWorktreeContextFromMetadata(metadata, git);
-      if (context) return { context };
+      if (context) return gitWorktreeContextObservation(context);
     }
   }
   const context = resolveGitWorktreeContextIndividually(projectRoot, git);
-  return context ? { context } : undefined;
+  return context ? gitWorktreeContextObservation(context) : undefined;
 }
 
 /**
@@ -131,13 +136,26 @@ export function refreshGitWorktreeContext(
  * skip-worktree entries can hide byte changes from a clean status result, so
  * they cannot support tree-only freshness reuse.
  */
-export function gitIndexAllowsTreeFingerprintReuse(projectRoot: string, git: GitReader = DEFAULT_GIT_READER): boolean {
+export function gitIndexAllowsTreeFingerprintReuse(
+  projectRoot: string,
+  git: GitReader = DEFAULT_GIT_READER,
+  opts: { cachedInventoryAfterSequence?: number } = {},
+): boolean {
+  const cached =
+    git === DEFAULT_GIT_READER && opts.cachedInventoryAfterSequence !== undefined
+      ? cachedGitProjectFileIndexVisibilityAfter(projectRoot, opts.cachedInventoryAfterSequence)
+      : undefined;
+  if (cached !== undefined) return cached;
   const entries = git.run(projectRoot, ['ls-files', '-v', '-z']);
   if (entries === undefined) return false;
   return entries
     .split('\0')
     .filter(Boolean)
     .every((entry) => entry.startsWith('H '));
+}
+
+function gitWorktreeContextObservation(context: GitWorktreeContext): GitWorktreeContextObservation {
+  return { context, projectFileInventorySequence: gitProjectFileInventorySequence() };
 }
 
 interface GitWorktreeContextMetadata {
