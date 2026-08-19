@@ -127,6 +127,7 @@ async function processRequests(
     limits: MAILBOX_LIMITS,
     owner: QUERY_SERVICE_MAILBOX_PROCESS_OWNER,
     liveness: QUERY_SERVICE_MAILBOX_LIVENESS,
+    durability: 'visibility',
   });
   let processed = 0;
   for (const claim of claims) {

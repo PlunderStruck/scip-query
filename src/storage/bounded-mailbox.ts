@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, lstatSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
 import { stableJson } from '../domain/stable-json.js';
@@ -15,7 +15,7 @@ import {
   type AtomicFileDurability,
   type DirectorySyncStatus,
 } from './atomic-file.js';
-import { writeJsonDurable } from './atomic-json.js';
+import { writeJsonAtomic, writeJsonDurable } from './atomic-json.js';
 
 export const BOUNDED_MAILBOX_VERSION = 1;
 
@@ -99,7 +99,7 @@ export interface BoundedMailboxClaim {
   enqueuedAtMs?: number;
   deadlineAtMs?: number;
   legacy: boolean;
-  directorySync?: Exclude<DirectorySyncStatus, 'not-requested'>;
+  directorySync?: DirectorySyncStatus;
 }
 
 export interface BoundedMailboxStatus {
@@ -332,6 +332,8 @@ export function claimBoundedMailboxRequests(
     monotonicNow?: () => number;
     liveness?: MailboxLivenessRuntime;
     owner?: MailboxClaimOwner;
+    /** Visibility is for ephemeral work whose caller can safely recompute after a host crash. */
+    durability?: AtomicFileDurability;
     /** @internal deterministic crash-boundary probe for persistence tests. */
     onClaimStage?: (stage: BoundedMailboxClaimStage) => void;
   },
@@ -349,17 +351,24 @@ export function claimBoundedMailboxRequests(
   const limits = resolveBoundedMailboxLimits(options.limits);
   const mailboxDirectorySync = initializeBoundedMailbox(paths);
   try {
-    return withMailboxAdmissionLock(paths, limits, 2_000, options.monotonicNow ?? monotonicNowMs, 'durable', () =>
-      claimBoundedMailboxRequestsUnlocked(
-        paths,
-        options.ownerId,
-        nowMs,
-        limits,
-        options.liveness ?? DEFAULT_MAILBOX_LIVENESS_RUNTIME,
-        options.owner ?? { pid: process.pid },
-        mailboxDirectorySync,
-        options.onClaimStage,
-      ),
+    return withMailboxAdmissionLock(
+      paths,
+      limits,
+      2_000,
+      options.monotonicNow ?? monotonicNowMs,
+      options.durability ?? 'durable',
+      () =>
+        claimBoundedMailboxRequestsUnlocked(
+          paths,
+          options.ownerId,
+          nowMs,
+          limits,
+          options.liveness ?? DEFAULT_MAILBOX_LIVENESS_RUNTIME,
+          options.owner ?? { pid: process.pid },
+          mailboxDirectorySync,
+          options.durability ?? 'durable',
+          options.onClaimStage,
+        ),
     );
   } catch (error) {
     if (error instanceof MailboxBackpressureError && error.code === 'admission-busy') return [];
@@ -390,6 +399,7 @@ function claimBoundedMailboxRequestsUnlocked(
   liveness: MailboxLivenessRuntime,
   owner: MailboxClaimOwner,
   mailboxDirectorySync: Exclude<DirectorySyncStatus, 'not-requested'>,
+  durability: AtomicFileDurability,
   onClaimStage: ((stage: BoundedMailboxClaimStage) => void) | undefined,
 ): BoundedMailboxClaim[] {
   maintainBoundedMailboxUnlocked(paths, nowMs, limits, liveness);
@@ -403,11 +413,15 @@ function claimBoundedMailboxRequestsUnlocked(
       left.header.id.localeCompare(right.header.id) ||
       left.path.localeCompare(right.path),
   );
-  let ownerDirectorySync = mailboxDirectorySync;
+  let ownerDirectorySync: DirectorySyncStatus = durability === 'durable' ? mailboxDirectorySync : 'not-requested';
   if (candidates.length > 0) {
-    ownerDirectorySync = mergeDirectorySyncStatus(ownerDirectorySync, ensureDirectoryDurable(ownerDirectory));
+    if (durability === 'durable') {
+      ownerDirectorySync = mergeDirectorySyncStatus(ownerDirectorySync, ensureDirectoryDurable(ownerDirectory));
+    } else {
+      mkdirSync(ownerDirectory, { recursive: true });
+    }
     onClaimStage?.('after-owner-directory-durable');
-    ensureMailboxOwnerRecord(ownerDirectory, ownerId, owner);
+    ensureMailboxOwnerRecord(ownerDirectory, ownerId, owner, durability);
     onClaimStage?.('after-owner-record-published');
   }
   const claims: BoundedMailboxClaim[] = [];
@@ -429,9 +443,10 @@ function claimBoundedMailboxRequestsUnlocked(
       throw error;
     }
     onClaimStage?.('after-claim-renamed');
-    const sourceDirectorySync = syncDirectoryDurable(dirname(candidate.path));
+    const sourceDirectorySync =
+      durability === 'durable' ? syncDirectoryDurable(dirname(candidate.path)) : 'not-requested';
     onClaimStage?.('after-source-directory-synced');
-    const destinationDirectorySync = syncDirectoryDurable(ownerDirectory);
+    const destinationDirectorySync = durability === 'durable' ? syncDirectoryDurable(ownerDirectory) : 'not-requested';
     onClaimStage?.('after-destination-directory-synced');
     const directorySync = mergeDirectorySyncStatus(ownerDirectorySync, sourceDirectorySync, destinationDirectorySync);
     claims.push({
@@ -849,7 +864,12 @@ function processIsAlive(pid: number): boolean {
   }
 }
 
-function ensureMailboxOwnerRecord(ownerDirectory: string, ownerId: string, owner: MailboxClaimOwner): void {
+function ensureMailboxOwnerRecord(
+  ownerDirectory: string,
+  ownerId: string,
+  owner: MailboxClaimOwner,
+  durability: AtomicFileDurability,
+): void {
   const path = join(ownerDirectory, MAILBOX_OWNER_FILE);
   const processIdentity = owner.processIdentity;
   const current = readMailboxOwnerRecord(path);
@@ -865,12 +885,14 @@ function ensureMailboxOwnerRecord(ownerDirectory: string, ownerId: string, owner
   if (regularFiles(ownerDirectory).some((entry) => entry.endsWith('.claim'))) {
     throw new Error(`Mailbox owner identity ${ownerId} collides with retained work from another process instance.`);
   }
-  writeJsonDurable(path, {
+  const record = {
     version: 1,
     ownerId,
     pid: owner.pid,
     ...(processIdentity ? { processIdentity } : {}),
-  } satisfies MailboxOwnerRecord);
+  } satisfies MailboxOwnerRecord;
+  if (durability === 'durable') writeJsonDurable(path, record);
+  else writeJsonAtomic(path, record);
 }
 
 function mailboxOwnerState(

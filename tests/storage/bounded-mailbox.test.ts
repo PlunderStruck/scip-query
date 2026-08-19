@@ -153,12 +153,35 @@ describe('bounded filesystem mailbox', () => {
       }),
     );
 
-    const [claim] = claimBoundedMailboxRequests(paths, {
+    const [abandoned] = claimBoundedMailboxRequests(paths, {
       ownerId: 'ephemeral-server',
       nowMs: NOW + 1,
+      limits: { claimLeaseMs: 100 },
+      durability: 'visibility',
     });
-    expect(claim).toEqual(expect.objectContaining({ requestId: request.id }));
-    expect(readBoundedMailboxClaim(claim!)).toContain('"clientId":"client-ephemeral"');
+    expect(abandoned).toEqual(
+      expect.objectContaining({
+        requestId: request.id,
+        directorySync: 'not-requested',
+      }),
+    );
+
+    const [reclaimed] = claimBoundedMailboxRequests(paths, {
+      ownerId: 'replacement-server',
+      nowMs: NOW + 15_001,
+      limits: { claimLeaseMs: 100 },
+      liveness: {
+        isProcessAlive: () => false,
+        readProcessIdentity: () => null,
+      },
+    });
+    expect(reclaimed).toEqual(
+      expect.objectContaining({
+        requestId: request.id,
+        ownerId: 'replacement-server',
+      }),
+    );
+    expect(readBoundedMailboxClaim(reclaimed!)).toContain('"clientId":"client-ephemeral"');
   });
 
   it('deduplicates a retained completion larger than the metadata read ceiling by its content-addressed name', () => {
