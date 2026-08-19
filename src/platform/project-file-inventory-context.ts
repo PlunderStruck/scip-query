@@ -38,7 +38,6 @@ export function cachedProjectFileListing(projectRoot: string, maxBytes: number, 
   const listings = projectFileListingState.active;
   const cached = listings?.get(projectRoot);
   if (cached !== undefined) {
-    listings?.delete(projectRoot);
     if (Buffer.byteLength(cached, 'utf8') <= maxBytes) return cached;
   }
 

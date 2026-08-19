@@ -6,7 +6,7 @@ import {
 } from '../../src/platform/project-file-inventory-context.js';
 
 describe('project file inventory context', () => {
-  it('hands off one command-scoped listing once', () => {
+  it('reuses one listing throughout a command scope', () => {
     let loads = 0;
 
     withProjectFileListingCache(() => {
@@ -16,15 +16,10 @@ describe('project file inventory context', () => {
       });
 
       expect(cachedProjectFileListing('/repo', 1024, () => 'unexpected.ts\n')).toBe(first);
-      expect(
-        cachedProjectFileListing('/repo', 1024, () => {
-          loads += 1;
-          return 'reloaded.ts\n';
-        }),
-      ).toBe('reloaded.ts\n');
+      expect(cachedProjectFileListing('/repo', 1024, () => 'still-unexpected.ts\n')).toBe(first);
     });
 
-    expect(loads).toBe(2);
+    expect(loads).toBe(1);
   });
 
   it('keeps repositories separate and does not leak inventories beyond the command', () => {
